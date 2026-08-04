@@ -10,3 +10,6 @@ All notable repository-governance and technical-source changes are recorded here
 - Add repository safety and workflow-policy validation.
 - Add sanitized Zoho Books chart-of-accounts reference.
 - Preserve a non-executable review record for the historical Zoho Catalyst billing gateway while excluding the supplied handler and deployment files from the public repository.
+- Add a proposed sanitized Zoho Billing webhook gateway replacement with repository-level tests, a variable-name registry attested against the supplied export and replacement source, a proposed durable Data Store schema, a Node.js 24 baseline, an exact-version dependency lock, and explicit Development/Production gates.
+- Add product-owned standards for Billing, Catalyst, Creator/Forms/Sites, WorkDrive/Contracts/Sign, Mail, Analytics, and portable accounting practices.
+- Add a machine-readable Zoho suite ownership registry and distinguish official product support, advertised MCP contracts, and effective tenant capability.

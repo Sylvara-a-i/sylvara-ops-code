@@ -8,7 +8,9 @@ List the meaningful implementation, documentation, or repository changes.
 
 ## Source Of Truth Check
 
-Confirm that the change preserves system ownership: CRM for relationships, Zoho Books for accounting, Zoho Billing for approved subscription lifecycle, Creator for approved workflow UI, Catalyst for secure middleware, Retell for voice runtime, Make for non-critical orchestration, and GitHub for sanitized source. Call out any exception.
+Confirm that the change preserves system ownership: CRM for relationships; Books for accounting; Billing for approved subscription lifecycle; Creator for approved workflow UI; Forms/Sites for bounded intake and public presentation; WorkDrive for private documents; Contracts/Sign for legal lifecycle and execution evidence; Mail for mailbox/delivery state; Analytics for derived reporting; Catalyst for secure middleware; Retell for voice runtime; Make for non-critical orchestration; and GitHub for sanitized source. Call out any exception.
+
+For a governed Zoho artifact, state its owning product, authoritative source, sanitized schema or rule version, trigger, inputs, preconditions, idempotency key, side effects, failure behavior, readback, rollback, deployment status, and private evidence location.
 
 ## Validation
 
@@ -23,7 +25,7 @@ List the exact tests, lint, builds, and manual checks run. Do not claim checks t
 
 ## Manual Zoho Setup Required
 
-List any CRM, Books, Billing, Creator, Catalyst, OAuth, webhook, or environment configuration that must be completed manually. State `None` when no Zoho setup is required.
+List any CRM module/field/layout, Books accounting/configuration, Billing plan/webhook, Creator app/report/workflow, Forms integration, WorkDrive hierarchy, Contracts/Sign template or signer routing, Sites setup, Mail sender/webhook, Analytics source/refresh/access, Catalyst table/route/environment, OAuth connection, or MCP identity that must be configured manually. State `None` when no Zoho setup is required.
 
 ## Deployment Status
 

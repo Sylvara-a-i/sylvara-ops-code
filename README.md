@@ -16,6 +16,11 @@ GitHub owns versioned code and sanitized technical context. It does not own live
 | Voice-agent runtime | Retell or the approved voice platform |
 | Non-critical workflow orchestration | Make or the approved automation platform |
 | Custom workflow UI and records | Zoho Creator only for an explicitly approved use case |
+| Private document storage and versions | Zoho WorkDrive |
+| Contract drafting, approval, execution, and evidence | Zoho Contracts and Zoho Sign, with separate lifecycle ownership |
+| Lightweight intake and public doorway | Zoho Forms and Zoho Sites, without becoming systems of record |
+| Mailbox message and delivery state | Zoho Mail |
+| Derived reporting and dashboards | Zoho Analytics, never transactional authority |
 | Secure middleware, webhook verification, and retry controls | Zoho Catalyst or the approved middleware runtime |
 | Credentials and tokens | Platform secret stores only |
 | Sanitized code, tests, schemas, runbooks, and decisions | This repository |
@@ -34,10 +39,12 @@ tools/safety/  Public-repository and workflow-policy validation
 
 Current governed artifacts:
 
-- [`docs/zoho/`](docs/zoho/) defines portable Zoho MCP, CRM schema, Deluge, and product-ownership standards without copying another tenant's fields or configuration.
+- [`docs/zoho/`](docs/zoho/) defines portable product ownership, accounting, CRM schema, Deluge, webhook, document, intake, mail, analytics, and MCP standards without copying another tenant's fields or configuration.
+- [`docs/zoho/suite-registry.json`](docs/zoho/suite-registry.json) is the machine-readable Zoho ownership and evidence-status map. Official product support, an advertised MCP tool, and effective tenant access remain separate capability layers.
 - [`docs/zoho/mcp/observed-tool-inventory.json`](docs/zoho/mcp/observed-tool-inventory.json) preserves one sanitized row for each of 403 tool contracts observed on 2026-08-03; it is a dated capability snapshot, not a Sylvara allowlist or proof of access.
 - [`src/zoho-books/reference/chart-of-accounts.csv`](src/zoho-books/reference/chart-of-accounts.csv) is a sanitized reference with system IDs and bank-account suffixes removed.
-- [`archive/zoho-catalyst/billing-webhook-gateway`](archive/zoho-catalyst/billing-webhook-gateway) preserves a non-executable review record and source hashes. The supplied handler and deployment files are excluded because current route and deployment status are unverified.
+- [`src/zoho-catalyst/billing-webhook-gateway`](src/zoho-catalyst/billing-webhook-gateway) contains a proposed sanitized replacement for the historical Billing gateway, repository-level unit tests, a variable-name registry attested against the supplied export and replacement source, and a proposed Data Store schema. It is not platform-validated, live-tested, deployed, or deployment-approved.
+- [`archive/zoho-catalyst/billing-webhook-gateway`](archive/zoho-catalyst/billing-webhook-gateway) preserves the original export's non-executable review record and source hashes. The supplied handler, private manifest metadata, installed dependencies, and deployment configuration remain excluded.
 
 ## Operating Rules
 
@@ -57,9 +64,11 @@ python -m venv .codex-tmp\safety-venv
 .\.codex-tmp\safety-venv\Scripts\python.exe tools/safety/pre-commit-safety-check.py
 .\.codex-tmp\safety-venv\Scripts\python.exe tools/safety/validate_workflows.py
 .\.codex-tmp\safety-venv\Scripts\python.exe -m unittest discover -s tools/safety/tests -p "test_*.py" -v
+npm ci --ignore-scripts --prefix src\zoho-catalyst\billing-webhook-gateway
+npm run ci --prefix src\zoho-catalyst\billing-webhook-gateway
 ```
 
-Use 64-bit CPython 3.12 on Windows for the documented local path; CI runs the equivalent checks on CPython 3.12 for Linux. Dependency installation is hash-pinned and fails closed on an unsupported wheel.
+Use 64-bit CPython 3.12 and Node.js 24 on Windows for the documented local path; CI runs the equivalent checks on Linux. Python dependency installation is hash-pinned, and the gateway uses an exact npm dependency version plus a committed integrity lockfile.
 
 ## Commercial Constraint
 

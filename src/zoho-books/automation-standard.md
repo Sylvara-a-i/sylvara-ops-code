@@ -1,10 +1,25 @@
 # Zoho Books Automation Standard
 
+## Status
+
+- Repository standard: **Proposed**
+- Official capability evidence: current Zoho Books API documentation, subject to operation-specific verification
+- Advertised MCP evidence: dated 2026-08-03 contract snapshot only
+- Sylvara Books organization, accounting configuration, records, permissions, and effective MCP access: **Unknown**
+
+This standard governs engineering controls. It does not establish a live accounting fact, approve accounting treatment, or authorize a Books mutation.
+
 ## Risk Boundary
 
 Zoho Books is Sylvara's accounting source of truth. A tool that can create, update, apply, void, reconcile, approve, publish, or lock accounting state is high-risk even when the API operation appears routine.
 
 This standard governs MCP tools, Deluge functions, Catalyst middleware, and other integrations that read or change Books. It does not authorize a live accounting change.
+
+## Ownership
+
+Zoho Books owns Sylvara's general ledger, subledgers, recorded invoices and payments, credits, reconciliations, and financial reporting. Billing may own an approved subscription lifecycle, CRM owns commercial relationships, and middleware may verify and route events; none may silently replace or independently recreate the accounting outcome recorded in Books.
+
+The authorized financial owner and qualified professional, when appropriate, retain responsibility for accounting policy, tax treatment, entity classification, period close, and material corrections. Automation enforces an approved treatment; it does not invent one.
 
 ## Required Control Layer
 
@@ -52,13 +67,15 @@ Each transaction class has one owner. Generic invoice, payment, credit, refund, 
 
 Dry-run or non-posting mode is the default. Posting, sending, applying, approving, voiding, or reconciling requires a separate explicit enablement and smoke test.
 
-## Response And Failure Handling
+## Failure And Readback
 
 The observed MCP responses are untyped. Validate the Zoho response code, required returned fields, object status, amounts, links, and side effects. A `success` transport flag alone is insufficient.
 
 Stop on the first mismatch. Authorization failure, partial response, malformed data, rate limit, stale state, or missing evidence is not an empty result and must not be converted into a write.
 
-## Verification Matrix
+After an approved mutation, use the independent audit identity to read the exact transaction, account, status, totals, currency, tax treatment, linked records, and audit trail. Reconcile the result to the relevant subledger, account, report, or bank state. An ambiguous timeout requires authoritative search and reconciliation before any retry or corrective entry.
+
+## Validation
 
 Every workflow needs synthetic or Development coverage for:
 
@@ -76,3 +93,18 @@ Production smoke tests require separate approval and must use the smallest rever
 ## Repository Boundary
 
 Never commit organization IDs, account IDs or suffixes, balances, transactions, tax details, bank-feed rows, invoices, attachments, OAuth material, or raw exports. The sanitized chart of accounts is reference material only; it is not an import contract and does not prove current live configuration.
+
+GitHub may contain sanitized control logic, account-purpose descriptions, synthetic tests, decision tables, and setup or rollback runbooks. Logs and public evidence must exclude private identifiers, counterparties, amounts, source documents, raw responses, and financial state.
+
+## Manual Setup
+
+All live setup is currently **Unknown**. Before relying on an automation, verify or configure:
+
+- the exact Books organization, data center, accounting method, base currency, fiscal period, tax settings, and authoritative financial owner;
+- least-privilege audit, bookkeeping, and controller identities with a fixed organization and environment;
+- approved transaction ownership, evidence requirements, duplicate keys, posting versus draft behavior, locks, reconciliation, and materiality rules;
+- durable idempotency, serialization, private write ledger, ambiguous-outcome reconciliation, and independent readback;
+- synthetic or Development tests, dry-run controls, monitoring, rollback or safe containment, and support escalation; and
+- a private approval and deployment record binding the immutable plan, exact prestate, proposed accounting effect, source revision, and readback result.
+
+Repository review does not authorize posting, sending, applying, approving, voiding, reconciling, locking, or changing accounting configuration.

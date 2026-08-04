@@ -33,6 +33,10 @@ Use synthetic examples and explicit placeholders. When source material contains 
 - Zoho Billing owns subscription lifecycle and billing events only where that workflow is explicitly approved.
 - Zoho Creator is a workflow layer; it must not silently become accounting truth or an unapproved client-portal platform.
 - Zoho Catalyst is secure middleware for verification, normalization, idempotency, retry control, and API mediation.
+- Zoho Forms is bounded lightweight intake; Zoho Sites is a public doorway. Neither is authoritative operational state.
+- Zoho WorkDrive owns private document content and versions; Zoho Contracts owns drafting and approval; Zoho Sign owns execution evidence.
+- Zoho Mail owns mailbox and delivery state, not CRM relationship truth.
+- Zoho Analytics is derived reporting and must never become transactional or reverse-write authority.
 - Retell or the approved voice platform owns live voice-agent runtime configuration and call artifacts.
 - Make or the approved automation platform handles non-critical orchestration; keep it out of the critical conversational path when practical.
 - GitHub owns sanitized source and documentation, not live configuration or deployment state.
@@ -54,13 +58,17 @@ Repository approval is not live-system approval. Before any production Zoho or e
 
 ## Zoho Work
 
-- Read [`docs/zoho/README.md`](docs/zoho/README.md) before CRM schema, MCP, Deluge, WorkDrive, Catalyst, or Books work.
+- Read [`docs/zoho/README.md`](docs/zoho/README.md) before work involving CRM, Books, Billing, Creator, Forms, WorkDrive, Contracts, Sign, Sites, Mail, Analytics, Catalyst, Deluge, or Zoho MCP.
 - Use only the named Zoho MCP server and tool authorized for the task. Do not substitute Browser, direct REST, shell automation, or a different connector when a capability is missing.
 - Verify organization, environment, and role through the least-sensitive identity call before any tenant-specific read or write.
+- Keep official product API support, an advertised MCP tool contract, and effective tenant access as separate evidence layers. Never infer one from another.
 - Treat live metadata and returned `api_name` values as authoritative. Repository catalogs and display labels are not proof of live configuration.
 - Sylvara field selection must come from Sylvara requirements. Do not copy fields, layouts, rules, IDs, or business logic from another tenant.
 - An advertised or untyped write tool is not a safe payload contract. Stop when prerequisites, field types, subform behavior, response completeness, or rollback are unverified.
 - Begin Books work read-only. Financial writes require fixed-organization binding, fresh prestate, immutable approved input, idempotency, serialization, independent readback, and reconciliation.
+- Place real sanitized artifacts under the owning product path only when a concrete workflow exists. Do not create empty suite scaffolding or copy official Zoho documentation wholesale; preserve Sylvara decisions, schemas, interfaces, source, tests, and current official links.
+- A public variable registry may record names, classifications, safe defaults, and rules. Secret values, endpoints, private hosts, live paths, platform IDs, connection names, and populated environment files remain outside GitHub and runtime logs.
+- Webhook verification is product-specific. Do not reuse Billing, Books, Sign, Mail, WorkDrive, Forms, or CRM assumptions across providers without an official contract and Development fixture.
 
 ## Change Workflow
 

@@ -1,0 +1,536 @@
+{
+  "schema_version": 1,
+  "status": "proposed",
+  "live_state": "unknown",
+  "scope": "Reviewed variable-name registry attested to cover the supplied export and proposed replacement",
+  "coverage_attestation": "Locally compared with the privately supplied export on 2026-08-04; public readers cannot independently reproduce that source comparison.",
+  "rules": {
+    "public_registry": "Names, classifications, rules, and explicitly safe defaults are versioned here.",
+    "secret_values": "Secret values exist only in the platform secret store and are never committed or logged.",
+    "private_values": "Routes, hosts, table names, OAuth identity, and deployment topology remain private even when not credentials.",
+    "runtime_logging": "Only variables marked value may appear in runtime logs; presence-only is permitted only for a future reviewed diagnostic that emits a boolean.",
+    "unknowns": "A documented variable does not prove that a live value exists or is correct."
+  },
+  "variables": [
+    {
+      "name": "DEPLOYMENT_ENVIRONMENT",
+      "status": "active",
+      "classification": "safe-enum",
+      "required_when": "always",
+      "safe_default": "development",
+      "repository_value_policy": "safe-example-only",
+      "runtime_log_policy": "never",
+      "description": "Declared environment cross-checked against Catalyst SDK runtime metadata before Data Store access; this revision code-blocks Production."
+    },
+    {
+      "name": "BILLING_SOURCE_TIER",
+      "status": "active",
+      "classification": "safe-enum",
+      "required_when": "always",
+      "safe_default": "test",
+      "repository_value_policy": "safe-example-only",
+      "runtime_log_policy": "never",
+      "description": "Test organization for Development or live organization for Production; the HMAC secret and private source alias must bind one exact organization."
+    },
+    {
+      "name": "SOURCE_REVISION",
+      "status": "active",
+      "classification": "public-build-identity",
+      "required_when": "always",
+      "repository_value_policy": "reviewed-commit-or-artifact-id-allowed",
+      "runtime_log_policy": "value",
+      "description": "Immutable reviewed source revision used for audit correlation."
+    },
+    {
+      "name": "ALLOWED_PATH",
+      "status": "active",
+      "classification": "private-deployment-routing",
+      "required_when": "always",
+      "safe_default": "/billing/events",
+      "repository_value_policy": "synthetic-example-only",
+      "runtime_log_policy": "never",
+      "description": "One exact inbound path; query strings are prohibited."
+    },
+    {
+      "name": "BILLING_CONTENT_TYPE",
+      "status": "active",
+      "classification": "public-protocol-setting",
+      "required_when": "always",
+      "safe_default": "application/json",
+      "repository_value_policy": "value-allowed",
+      "runtime_log_policy": "never",
+      "description": "Exact body format configured in Zoho Billing."
+    },
+    {
+      "name": "BILLING_SIGNATURE_ENCODING",
+      "status": "active-development-gate",
+      "classification": "security-protocol-setting",
+      "required_when": "always",
+      "repository_value_policy": "verified-fixture-value-only",
+      "runtime_log_policy": "never",
+      "description": "Hex or Base64 only after a synthetic Billing test-organization delivery proves the provider encoding."
+    },
+    {
+      "name": "BILLING_WEBHOOK_SECRET",
+      "status": "active",
+      "classification": "secret",
+      "required_when": "always",
+      "repository_value_policy": "name-only",
+      "runtime_log_policy": "never",
+      "description": "Current 12-50 character alphanumeric Zoho Billing HMAC key."
+    },
+    {
+      "name": "BILLING_WEBHOOK_SECRET_PREVIOUS",
+      "status": "active-optional",
+      "classification": "secret",
+      "required_when": "during-controlled-rotation-only",
+      "repository_value_policy": "name-only",
+      "runtime_log_policy": "never",
+      "description": "Previous HMAC key retained only for a bounded rotation window."
+    },
+    {
+      "name": "BILLING_WEBHOOK_SECRET_PREVIOUS_EXPIRES_AT",
+      "status": "active-conditional",
+      "classification": "private-security-configuration",
+      "required_when": "previous-webhook-secret-present",
+      "repository_value_policy": "name-only",
+      "runtime_log_policy": "never",
+      "description": "ISO-8601 expiry enforcing a maximum seven-day overlap; an expired prior key is ignored."
+    },
+    {
+      "name": "BILLING_EVENT_FINGERPRINT_SECRET",
+      "status": "active",
+      "classification": "secret",
+      "required_when": "always",
+      "repository_value_policy": "name-only",
+      "runtime_log_policy": "never",
+      "description": "Stable HMAC key for semantic duplicate fingerprints; retain for at least the inbox retention period and rotate only with an approved migration."
+    },
+    {
+      "name": "BILLING_SOURCE_KEY",
+      "status": "active",
+      "classification": "private-source-identity",
+      "required_when": "always",
+      "repository_value_policy": "synthetic-example-only",
+      "runtime_log_policy": "never",
+      "description": "Stable private alias that binds event keys to one Billing source."
+    },
+    {
+      "name": "ALLOWED_EVENT_TYPES",
+      "status": "active",
+      "classification": "business-policy",
+      "required_when": "always",
+      "repository_value_policy": "sanitized-reviewed-value-allowed",
+      "runtime_log_policy": "never",
+      "description": "Exact subset of documented Billing event names approved for this workflow."
+    },
+    {
+      "name": "BILLING_MAX_EVENT_AGE_SECONDS",
+      "status": "active",
+      "classification": "security-policy",
+      "required_when": "optional",
+      "safe_default": 604800,
+      "repository_value_policy": "value-allowed",
+      "runtime_log_policy": "never",
+      "description": "Maximum signed event age; older manual resends require private reconciliation."
+    },
+    {
+      "name": "BILLING_MAX_FUTURE_SKEW_SECONDS",
+      "status": "active",
+      "classification": "security-policy",
+      "required_when": "optional",
+      "safe_default": 300,
+      "repository_value_policy": "value-allowed",
+      "runtime_log_policy": "never",
+      "description": "Maximum future clock skew accepted for the signed Billing event timestamp."
+    },
+    {
+      "name": "MAX_BODY_BYTES",
+      "status": "active",
+      "classification": "safe-bounded-scalar",
+      "required_when": "optional",
+      "safe_default": 262144,
+      "repository_value_policy": "value-allowed",
+      "runtime_log_policy": "never",
+      "description": "Maximum declared and streamed inbound body size."
+    },
+    {
+      "name": "INBOUND_BODY_TIMEOUT_MS",
+      "status": "active",
+      "classification": "safe-bounded-scalar",
+      "required_when": "optional",
+      "safe_default": 5000,
+      "repository_value_policy": "value-allowed",
+      "runtime_log_policy": "never",
+      "description": "Maximum time allowed to receive the raw request body."
+    },
+    {
+      "name": "PLATFORM_OPERATION_TIMEOUT_MS",
+      "status": "active",
+      "classification": "safe-bounded-scalar",
+      "required_when": "optional",
+      "safe_default": 3000,
+      "repository_value_policy": "value-allowed",
+      "runtime_log_policy": "never",
+      "description": "Per-operation limit for Catalyst Data Store, ZCQL, and Connection calls."
+    },
+    {
+      "name": "EXECUTION_BUDGET_MS",
+      "status": "active",
+      "classification": "security-and-reliability-policy",
+      "required_when": "optional",
+      "safe_default": 25000,
+      "repository_value_policy": "value-allowed",
+      "runtime_log_policy": "never",
+      "description": "Composite operation budget capped below Catalyst's 30-second Advanced I/O limit."
+    },
+    {
+      "name": "EVENT_INBOX_TABLE",
+      "status": "active",
+      "classification": "private-deployment-identifier",
+      "required_when": "always",
+      "repository_value_policy": "synthetic-reference-only",
+      "runtime_log_policy": "never",
+      "description": "Catalyst Data Store table API name with a unique EVENT_KEY column."
+    },
+    {
+      "name": "DATASTORE_DUPLICATE_ERROR_CODES",
+      "status": "active-development-gate",
+      "classification": "verified-platform-contract",
+      "required_when": "always",
+      "repository_value_policy": "sanitized-verified-value-allowed",
+      "runtime_log_policy": "never",
+      "description": "Exact SDK conflict codes proven by concurrent Development tests; unknown errors fail closed."
+    },
+    {
+      "name": "DELIVERY_MODE",
+      "status": "active",
+      "classification": "safe-enum",
+      "required_when": "always",
+      "safe_default": "register-only",
+      "repository_value_policy": "value-allowed",
+      "runtime_log_policy": "never",
+      "description": "Development registration-only or candidate Creator delivery; this source revision rejects every Production configuration."
+    },
+    {
+      "name": "CREATOR_FIELD_ALLOWLIST",
+      "status": "active",
+      "classification": "private-data-contract",
+      "required_when": "optional-creator-extra-fields",
+      "repository_value_policy": "sanitized-non-sensitive-schema-allowed",
+      "runtime_log_policy": "never",
+      "description": "Optional bounded scalar paths already present in the configured JSON body; Billing's string-valued payload is not parsed."
+    },
+    {
+      "name": "CREATOR_FORWARD_URL",
+      "status": "active",
+      "classification": "private-endpoint",
+      "required_when": "creator-delivery",
+      "repository_value_policy": "name-only",
+      "runtime_log_policy": "never",
+      "description": "Exact HTTPS endpoint implementing the idempotent acknowledgment contract."
+    },
+    {
+      "name": "CREATOR_ALLOWED_HOSTS",
+      "status": "active",
+      "classification": "private-outbound-allowlist",
+      "required_when": "creator-delivery",
+      "repository_value_policy": "name-only",
+      "runtime_log_policy": "never",
+      "description": "Exact Creator hostnames; suffix matching is prohibited."
+    },
+    {
+      "name": "CREATOR_ENDPOINT_KIND",
+      "status": "active",
+      "classification": "public-protocol-setting",
+      "required_when": "creator-delivery",
+      "safe_default": "custom-api",
+      "repository_value_policy": "value-allowed",
+      "runtime_log_policy": "never",
+      "description": "Only an OAuth-protected Creator Custom API implementing the readback contract is supported."
+    },
+    {
+      "name": "CREATOR_TARGET_ENVIRONMENT",
+      "status": "active",
+      "classification": "safe-enum",
+      "required_when": "creator-delivery",
+      "safe_default": "development",
+      "repository_value_policy": "safe-example-only",
+      "runtime_log_policy": "never",
+      "description": "Asserted Creator target: Development or Stage from Catalyst Development, and Production only from Catalyst Production; live verification remains required."
+    },
+    {
+      "name": "CREATOR_CONNECTION_LINK_NAME",
+      "status": "active",
+      "classification": "private-deployment-identifier",
+      "required_when": "creator-delivery",
+      "repository_value_policy": "name-only",
+      "runtime_log_policy": "never",
+      "description": "Private candidate Connection link name; current Creator credential retrieval is unsupported until the exact pinned-SDK path is proven in Catalyst Development."
+    },
+    {
+      "name": "CREATOR_ENVIRONMENT",
+      "status": "retired-before-release",
+      "classification": "safe-enum",
+      "required_when": "never",
+      "repository_value_policy": "name-only",
+      "runtime_log_policy": "never",
+      "description": "Retired because a Creator Custom API does not use the v2.1 Data API environment header; any value causes startup failure."
+    },
+    {
+      "name": "ZOHO_ACCOUNTS_URL",
+      "status": "retired",
+      "classification": "private-endpoint",
+      "required_when": "never",
+      "repository_value_policy": "name-only",
+      "runtime_log_policy": "never",
+      "description": "Raw token refresh is replaced by Catalyst Connections; any value causes startup failure."
+    },
+    {
+      "name": "ACCOUNTS_ALLOWED_HOSTS",
+      "status": "retired",
+      "classification": "private-outbound-allowlist",
+      "required_when": "never",
+      "repository_value_policy": "name-only",
+      "runtime_log_policy": "never",
+      "description": "Raw token refresh is replaced by Catalyst Connections; any value causes startup failure."
+    },
+    {
+      "name": "ZOHO_CLIENT_ID",
+      "status": "retired-runtime-secret",
+      "classification": "private-oauth-identity",
+      "required_when": "never",
+      "repository_value_policy": "name-only",
+      "runtime_log_policy": "never",
+      "description": "Original variable name retained for audit; Catalyst Connection owns the live OAuth identity."
+    },
+    {
+      "name": "ZOHO_CLIENT_SECRET",
+      "status": "retired-runtime-secret",
+      "classification": "secret",
+      "required_when": "never",
+      "repository_value_policy": "name-only",
+      "runtime_log_policy": "never",
+      "description": "Original variable name retained for audit; any value causes startup failure."
+    },
+    {
+      "name": "ZOHO_REFRESH_TOKEN",
+      "status": "retired-runtime-secret",
+      "classification": "secret",
+      "required_when": "never",
+      "repository_value_policy": "name-only",
+      "runtime_log_policy": "never",
+      "description": "Original variable name retained for audit; Catalyst Connection manages token lifecycle."
+    },
+    {
+      "name": "OUTBOUND_TIMEOUT_MS",
+      "status": "active",
+      "classification": "safe-bounded-scalar",
+      "required_when": "optional",
+      "safe_default": 5000,
+      "repository_value_policy": "value-allowed",
+      "runtime_log_policy": "never",
+      "description": "Maximum side-effecting Creator Custom API request duration."
+    },
+    {
+      "name": "MAX_OUTBOUND_BODY_BYTES",
+      "status": "active",
+      "classification": "safe-bounded-scalar",
+      "required_when": "optional",
+      "safe_default": 65536,
+      "repository_value_policy": "value-allowed",
+      "runtime_log_policy": "never",
+      "description": "Maximum OAuth or Creator response body size."
+    },
+    {
+      "name": "OAUTH_TOKEN_SKEW_SECONDS",
+      "status": "retired-before-release",
+      "classification": "safe-bounded-scalar",
+      "required_when": "never",
+      "repository_value_policy": "name-only",
+      "runtime_log_policy": "never",
+      "description": "No in-process OAuth cache remains; any value causes startup failure."
+    },
+    {
+      "name": "REQUIRE_SHARED_HEADER",
+      "status": "active-optional-defense",
+      "classification": "security-policy",
+      "required_when": "optional",
+      "safe_default": false,
+      "repository_value_policy": "value-allowed",
+      "runtime_log_policy": "never",
+      "description": "Enables one additional constant-time custom-header check; HMAC remains mandatory."
+    },
+    {
+      "name": "SHARED_HEADER_NAME",
+      "status": "active-conditional",
+      "classification": "private-security-configuration",
+      "required_when": "shared-header-enabled",
+      "repository_value_policy": "name-only",
+      "runtime_log_policy": "never",
+      "description": "Exact lower-case custom header name."
+    },
+    {
+      "name": "SHARED_HEADER_VALUE",
+      "status": "active-conditional",
+      "classification": "secret",
+      "required_when": "shared-header-enabled",
+      "repository_value_policy": "name-only",
+      "runtime_log_policy": "never",
+      "description": "Additional shared-header secret."
+    },
+    {
+      "name": "ENABLE_REPLAY_DEFENSE",
+      "status": "compatibility-guard",
+      "classification": "safe-boolean",
+      "required_when": "legacy-environment-only",
+      "repository_value_policy": "name-and-required-true-only",
+      "runtime_log_policy": "never",
+      "description": "May not disable durable idempotency; false causes startup failure."
+    },
+    {
+      "name": "FORWARD_RAW_PAYLOAD",
+      "status": "compatibility-guard",
+      "classification": "safe-boolean",
+      "required_when": "legacy-environment-only",
+      "repository_value_policy": "name-and-required-false-only",
+      "runtime_log_policy": "never",
+      "description": "Raw forwarding is prohibited; true causes startup failure."
+    },
+    {
+      "name": "REQUIRE_JSON",
+      "status": "compatibility-guard",
+      "classification": "safe-boolean",
+      "required_when": "legacy-environment-only",
+      "repository_value_policy": "name-and-required-true-only",
+      "runtime_log_policy": "never",
+      "description": "JSON enforcement cannot be disabled."
+    },
+    {
+      "name": "REQUIRE_SIGNATURE",
+      "status": "compatibility-guard",
+      "classification": "safe-boolean",
+      "required_when": "legacy-environment-only",
+      "repository_value_policy": "name-and-required-true-only",
+      "runtime_log_policy": "never",
+      "description": "Signature verification cannot be disabled."
+    },
+    {
+      "name": "CATALYST_ENV",
+      "status": "runtime-only-ignored",
+      "classification": "runtime-metadata",
+      "required_when": "never",
+      "repository_value_policy": "name-only",
+      "runtime_log_policy": "never",
+      "description": "Legacy runtime label is not trusted for routing or event identity."
+    },
+    {
+      "name": "ENVIRONMENT",
+      "status": "runtime-only-ignored",
+      "classification": "runtime-metadata",
+      "required_when": "never",
+      "repository_value_policy": "name-only",
+      "runtime_log_policy": "never",
+      "description": "Legacy environment label is not trusted."
+    },
+    {
+      "name": "ACCOUNTS_ALLOWED_HOST_SUFFIXES",
+      "status": "retired",
+      "classification": "private-outbound-allowlist",
+      "required_when": "never",
+      "repository_value_policy": "name-only",
+      "runtime_log_policy": "never",
+      "description": "Replaced by exact ACCOUNTS_ALLOWED_HOSTS; any value causes startup failure."
+    },
+    {
+      "name": "ALLOWED_PATHS",
+      "status": "retired",
+      "classification": "private-deployment-routing",
+      "required_when": "never",
+      "repository_value_policy": "name-only",
+      "runtime_log_policy": "never",
+      "description": "Multiple route candidates are not accepted; any value causes startup failure."
+    },
+    {
+      "name": "CREATOR_ALLOWED_HOST_SUFFIXES",
+      "status": "retired",
+      "classification": "private-outbound-allowlist",
+      "required_when": "never",
+      "repository_value_policy": "name-only",
+      "runtime_log_policy": "never",
+      "description": "Replaced by exact CREATOR_ALLOWED_HOSTS; any value causes startup failure."
+    },
+    {
+      "name": "ENABLE_PING",
+      "status": "retired",
+      "classification": "safe-boolean",
+      "required_when": "never",
+      "repository_value_policy": "name-only",
+      "runtime_log_policy": "never",
+      "description": "The unauthenticated special route was removed."
+    },
+    {
+      "name": "FORWARD_PARSED_BILLING",
+      "status": "retired",
+      "classification": "safe-boolean",
+      "required_when": "never",
+      "repository_value_policy": "name-only",
+      "runtime_log_policy": "never",
+      "description": "Replaced by mandatory scalar allowlisting and normalization."
+    },
+    {
+      "name": "PING_TOKEN",
+      "status": "retired",
+      "classification": "secret",
+      "required_when": "never",
+      "repository_value_policy": "name-only",
+      "runtime_log_policy": "never",
+      "description": "Removed with the ping bypass."
+    },
+    {
+      "name": "REPLAY_CACHE_SEGMENT_ID",
+      "status": "retired",
+      "classification": "private-deployment-identifier",
+      "required_when": "never",
+      "repository_value_policy": "name-only",
+      "runtime_log_policy": "never",
+      "description": "Ephemeral Cache is not the idempotency ledger."
+    },
+    {
+      "name": "REPLAY_KEY_PREFIX",
+      "status": "retired",
+      "classification": "private-security-configuration",
+      "required_when": "never",
+      "repository_value_policy": "name-only",
+      "runtime_log_policy": "never",
+      "description": "Replaced by the stable source-bound event-key derivation."
+    },
+    {
+      "name": "REPLAY_WINDOW_SECONDS",
+      "status": "retired",
+      "classification": "safe-bounded-scalar",
+      "required_when": "never",
+      "repository_value_policy": "name-only",
+      "runtime_log_policy": "never",
+      "description": "A time-limited cache window cannot establish durable idempotency."
+    },
+    {
+      "name": "ZOHO_ACCOUNTS_DOMAIN",
+      "status": "retired",
+      "classification": "private-endpoint",
+      "required_when": "never",
+      "repository_value_policy": "name-only",
+      "runtime_log_policy": "never",
+      "description": "Replaced by an exact HTTPS URL and exact-host allowlist."
+    },
+    {
+      "name": "GATEWAY_VERSION",
+      "status": "retired",
+      "classification": "public-build-identity",
+      "required_when": "never",
+      "repository_value_policy": "name-only",
+      "runtime_log_policy": "never",
+      "description": "Replaced by immutable SOURCE_REVISION."
+    }
+  ]
+}
