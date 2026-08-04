@@ -10,3 +10,14 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: "chore(actions)"
+
+  - package-ecosystem: npm
+    directory: /src/zoho-catalyst/billing-webhook-gateway
+    schedule:
+      interval: weekly
+      day: monday
+      time: "13:30"
+      timezone: America/Chicago
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(zoho-catalyst)"

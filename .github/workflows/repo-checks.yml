@@ -111,5 +111,10 @@ jobs:
           npm ci --ignore-scripts --no-audit --no-fund
           --prefix src/zoho-catalyst/billing-webhook-gateway
 
+      - name: Audit production gateway dependencies
+        run: >-
+          npm audit --omit=dev --audit-level=high
+          --prefix src/zoho-catalyst/billing-webhook-gateway
+
       - name: Run Billing gateway checks and tests
         run: npm run ci --prefix src/zoho-catalyst/billing-webhook-gateway
