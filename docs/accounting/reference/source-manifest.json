@@ -1,0 +1,454 @@
+{
+  "schema_version": 1,
+  "created_on": "2026-08-04",
+  "verified_on": "2026-08-04",
+  "classification": "portable-original-synthesis",
+  "raw_source_copied": false,
+  "live_accounting_state": "unknown",
+  "authority_scope": {
+    "included": [
+      "general United States federal business accounting and recordkeeping research",
+      "United States GAAP topic navigation and licensing controls",
+      "system-neutral evidence, policy, posting, reconciliation, close, and review controls"
+    ],
+    "excluded": [
+      "Kansas and other state or local tax or legal conclusions",
+      "rental, property, landlord, tenant, mortgage, escrow, and security-deposit rules",
+      "another entity's facts, elections, policies, accounts, transactions, identifiers, or reporting conclusions",
+      "copied standards, publications, forms, sourcebooks, PDFs, screenshots, or licensed commentary",
+      "period-specific thresholds, rates, deadlines, elections, and form editions as permanent policy"
+    ]
+  },
+  "origin_review": {
+    "source_repository": "GH-Real-Estate/gh-real-estate-ops-code",
+    "source_commit": "7e26796bd946e63abbace0f7256a9957594e6a35",
+    "source_branch": "main",
+    "review_purpose": "Extract portable governance patterns only, rewrite them as Sylvara-original controls, and reverify current primary authorities.",
+    "portable_source_paths": [
+      "accounting/README.md",
+      "accounting/PROJECT_INSTRUCTIONS.md",
+      "accounting/CURRENT_AUTHORITY_INDEX.md",
+      "accounting/FASB_APPLICABILITY_INDEX.md",
+      "accounting/ACCOUNTING_POLICY_MATRIX.md",
+      "accounting/SOURCE_GAPS.md",
+      "accounting/policies/FASB_RESEARCH_AND_LICENSING_POLICY.md",
+      "accounting/schemas/accounting-authority-record.schema.json"
+    ],
+    "excluded_source_families": [
+      "accounting/chart-of-accounts/**",
+      "accounting/generated/project-sources/**",
+      "accounting/text/current/02_*",
+      "accounting/text/current/03_*",
+      "legal/**",
+      "entity-specific release files, source hashes, PDFs, rates, thresholds, and conclusions"
+    ]
+  },
+  "official_sources": [
+    {
+      "id": "irc-6001",
+      "title": "26 U.S.C. section 6001",
+      "publisher": "United States House of Representatives",
+      "authority_class": "statute",
+      "url": "https://uscode.house.gov/view.xhtml?edition=prelim&num=0&req=granuleid%3AUSC-prelim-title26-section6001",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "irs-pub-583",
+      "title": "IRS Publication 583",
+      "publisher": "Internal Revenue Service",
+      "authority_class": "administrative-guidance",
+      "url": "https://www.irs.gov/publications/p583",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "irs-recordkeeping",
+      "title": "IRS recordkeeping guidance",
+      "publisher": "Internal Revenue Service",
+      "authority_class": "administrative-guidance",
+      "url": "https://www.irs.gov/businesses/small-businesses-self-employed/recordkeeping",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "irc-446",
+      "title": "26 U.S.C. section 446",
+      "publisher": "United States House of Representatives",
+      "authority_class": "statute",
+      "url": "https://uscode.house.gov/view.xhtml?edition=prelim&num=0&req=granuleid%3AUSC-prelim-title26-section446",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "irc-448",
+      "title": "26 U.S.C. section 448",
+      "publisher": "United States House of Representatives",
+      "authority_class": "statute",
+      "url": "https://uscode.house.gov/view.xhtml?edition=prelim&num=0&req=granuleid%3AUSC-prelim-title26-section448",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "irs-pub-538",
+      "title": "IRS Publication 538",
+      "publisher": "Internal Revenue Service",
+      "authority_class": "administrative-guidance",
+      "url": "https://www.irs.gov/publications/p538",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "irs-form-3115",
+      "title": "IRS Form 3115 information",
+      "publisher": "Internal Revenue Service",
+      "authority_class": "administrative-guidance",
+      "url": "https://www.irs.gov/forms-pubs/about-form-3115",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "irc-162",
+      "title": "26 U.S.C. section 162",
+      "publisher": "United States House of Representatives",
+      "authority_class": "statute",
+      "url": "https://uscode.house.gov/view.xhtml?edition=prelim&num=0&req=granuleid%3AUSC-prelim-title26-section162",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "irs-pub-334",
+      "title": "IRS Publication 334",
+      "publisher": "Internal Revenue Service",
+      "authority_class": "administrative-guidance",
+      "url": "https://www.irs.gov/publications/p334",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "irc-263",
+      "title": "26 U.S.C. section 263",
+      "publisher": "United States House of Representatives",
+      "authority_class": "statute",
+      "url": "https://uscode.house.gov/view.xhtml?edition=prelim&num=0&req=granuleid%3AUSC-prelim-title26-section263",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "irc-163",
+      "title": "26 U.S.C. section 163",
+      "publisher": "United States House of Representatives",
+      "authority_class": "statute",
+      "url": "https://uscode.house.gov/view.xhtml?edition=prelim&num=0&req=granuleid%3AUSC-prelim-title26-section163",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "irc-167",
+      "title": "26 U.S.C. section 167",
+      "publisher": "United States House of Representatives",
+      "authority_class": "statute",
+      "url": "https://uscode.house.gov/view.xhtml?edition=prelim&num=0&req=granuleid%3AUSC-prelim-title26-section167",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "irc-168",
+      "title": "26 U.S.C. section 168",
+      "publisher": "United States House of Representatives",
+      "authority_class": "statute",
+      "url": "https://uscode.house.gov/view.xhtml?edition=prelim&num=0&req=granuleid%3AUSC-prelim-title26-section168",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "irc-179",
+      "title": "26 U.S.C. section 179",
+      "publisher": "United States House of Representatives",
+      "authority_class": "statute",
+      "url": "https://uscode.house.gov/view.xhtml?edition=prelim&num=0&req=granuleid%3AUSC-prelim-title26-section179",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "irc-274",
+      "title": "26 U.S.C. section 274",
+      "publisher": "United States House of Representatives",
+      "authority_class": "statute",
+      "url": "https://uscode.house.gov/view.xhtml?edition=prelim&num=0&req=granuleid%3AUSC-prelim-title26-section274",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "cfr-1-263-a-1",
+      "title": "26 CFR section 1.263(a)-1",
+      "publisher": "United States Government Publishing Office",
+      "authority_class": "regulation",
+      "url": "https://www.ecfr.gov/current/title-26/chapter-I/subchapter-A/part-1/subject-group-ECFR210006225231fb0/section-1.263%28a%29-1",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "cfr-1-263-a-2",
+      "title": "26 CFR section 1.263(a)-2",
+      "publisher": "United States Government Publishing Office",
+      "authority_class": "regulation",
+      "url": "https://www.ecfr.gov/current/title-26/chapter-I/subchapter-A/part-1/subject-group-ECFR210006225231fb0/section-1.263%28a%29-2",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "cfr-1-263-a-3",
+      "title": "26 CFR section 1.263(a)-3",
+      "publisher": "United States Government Publishing Office",
+      "authority_class": "regulation",
+      "url": "https://www.ecfr.gov/current/title-26/chapter-I/subchapter-A/part-1/subject-group-ECFR210006225231fb0/section-1.263%28a%29-3",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "irs-tangible-property",
+      "title": "IRS tangible-property regulations guidance",
+      "publisher": "Internal Revenue Service",
+      "authority_class": "administrative-guidance",
+      "url": "https://www.irs.gov/businesses/small-businesses-self-employed/tangible-property-final-regulations",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "irs-pub-946",
+      "title": "IRS Publication 946",
+      "publisher": "Internal Revenue Service",
+      "authority_class": "administrative-guidance",
+      "url": "https://www.irs.gov/publications/p946",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "irs-pub-551",
+      "title": "IRS Publication 551",
+      "publisher": "Internal Revenue Service",
+      "authority_class": "administrative-guidance",
+      "url": "https://www.irs.gov/publications/p551",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "irc-174",
+      "title": "26 U.S.C. section 174",
+      "publisher": "United States House of Representatives",
+      "authority_class": "statute",
+      "url": "https://uscode.house.gov/view.xhtml?edition=prelim&num=0&req=granuleid%3AUSC-prelim-title26-section174",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "irc-174a",
+      "title": "26 U.S.C. section 174A",
+      "publisher": "United States House of Representatives",
+      "authority_class": "statute",
+      "url": "https://uscode.house.gov/view.xhtml?req=%28title%3A26+section%3A174a+edition%3Aprelim%29",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "cfr-1-62-2",
+      "title": "26 CFR section 1.62-2",
+      "publisher": "United States Government Publishing Office",
+      "authority_class": "regulation",
+      "url": "https://www.ecfr.gov/current/title-26/chapter-I/subchapter-A/part-1/subject-group-ECFR064ad1fa7d3cb20/section-1.62-2",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "irs-pub-15",
+      "title": "IRS Publication 15",
+      "publisher": "Internal Revenue Service",
+      "authority_class": "administrative-guidance",
+      "url": "https://www.irs.gov/publications/p15",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "irs-pub-463",
+      "title": "IRS Publication 463",
+      "publisher": "Internal Revenue Service",
+      "authority_class": "administrative-guidance",
+      "url": "https://www.irs.gov/publications/p463",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "irs-pub-15a",
+      "title": "IRS Publication 15-A",
+      "publisher": "Internal Revenue Service",
+      "authority_class": "administrative-guidance",
+      "url": "https://www.irs.gov/publications/p15a",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "irs-worker-classification",
+      "title": "IRS independent-contractor or employee guidance",
+      "publisher": "Internal Revenue Service",
+      "authority_class": "administrative-guidance",
+      "url": "https://www.irs.gov/businesses/small-businesses-self-employed/independent-contractor-self-employed-or-employee",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "irs-form-ss-8",
+      "title": "IRS Form SS-8 information",
+      "publisher": "Internal Revenue Service",
+      "authority_class": "administrative-guidance",
+      "url": "https://www.irs.gov/forms-pubs/about-form-ss-8",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "irs-pub-1099",
+      "title": "IRS Publication 1099",
+      "publisher": "Internal Revenue Service",
+      "authority_class": "administrative-guidance",
+      "url": "https://www.irs.gov/publications/p1099",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "irs-1099-misc-nec-instructions",
+      "title": "IRS Instructions for Forms 1099-MISC and 1099-NEC",
+      "publisher": "Internal Revenue Service",
+      "authority_class": "administrative-guidance",
+      "url": "https://www.irs.gov/instructions/i1099mec",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "irs-information-return-guide",
+      "title": "IRS information-return filing decision guide",
+      "publisher": "Internal Revenue Service",
+      "authority_class": "administrative-guidance",
+      "url": "https://www.irs.gov/businesses/small-businesses-self-employed/am-i-required-to-file-a-form-1099-or-other-information-return",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "irs-form-w-9-instructions",
+      "title": "IRS Instructions for Form W-9",
+      "publisher": "Internal Revenue Service",
+      "authority_class": "administrative-guidance",
+      "url": "https://www.irs.gov/instructions/iw9",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "irc-6050i",
+      "title": "26 U.S.C. section 6050I",
+      "publisher": "United States House of Representatives",
+      "authority_class": "statute",
+      "url": "https://uscode.house.gov/view.xhtml?edition=prelim&num=0&req=granuleid%3AUSC-prelim-title26-section6050I",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "irs-form-8300",
+      "title": "IRS Form 8300 information",
+      "publisher": "Internal Revenue Service",
+      "authority_class": "administrative-guidance",
+      "url": "https://www.irs.gov/forms-pubs/about-form-8300",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "fasb-standards",
+      "title": "FASB Standards",
+      "publisher": "Financial Accounting Standards Board",
+      "authority_class": "official-standards-navigation",
+      "url": "https://fasb.org/standards",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "fasb-codification-access",
+      "title": "FASB Codification access",
+      "publisher": "Financial Accounting Standards Board",
+      "authority_class": "authoritative-gaap-access",
+      "url": "https://fasb.org/page/PageContent?isStaticPage=true&pageId=%2Fstaticpages%2Fcodification-access.html",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "fasb-copyright-information",
+      "title": "FASB copyright information",
+      "publisher": "Financial Accounting Standards Board",
+      "authority_class": "publication-rights",
+      "url": "https://www.fasb.org/copyright-information",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "faf-terms-of-use",
+      "title": "Financial Accounting Foundation terms of use",
+      "publisher": "Financial Accounting Foundation",
+      "authority_class": "publication-rights",
+      "url": "https://accountingfoundation.org/page/detail?pageId=%2Fterms-of-use.html",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "fasb-asc-topic-index",
+      "title": "FASB Accounting Standards Codification topic locators",
+      "publisher": "Financial Accounting Standards Board",
+      "authority_class": "authoritative-gaap-access",
+      "url": "https://asc.fasb.org/",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "fasb-revenue-project",
+      "title": "FASB revenue recognition project",
+      "publisher": "Financial Accounting Standards Board",
+      "authority_class": "official-project-history",
+      "url": "https://fasb.org/projects/recently-completed-projects/revenue-recognition-summary",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "fasb-credit-losses-project",
+      "title": "FASB credit losses project",
+      "publisher": "Financial Accounting Standards Board",
+      "authority_class": "official-project-history",
+      "url": "https://fasb.org/projects/recently-completed-projects/accounting-standards-update-2016-13-financial-instrument-credit-losses",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "fasb-asu-2025-05-project",
+      "title": "FASB ASU 2025-05 project",
+      "publisher": "Financial Accounting Standards Board",
+      "authority_class": "standards-update",
+      "url": "https://fasb.org/page/PageContent?pageId=%2Fprojects%2Frecently-completed-projects%2Fcredit-losses-topic-606-receivables.html",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "fasb-asu-2018-15",
+      "title": "FASB ASU 2018-15",
+      "publisher": "Financial Accounting Standards Board",
+      "authority_class": "standards-update",
+      "url": "https://storage.fasb.org/ASU_2018-15.pdf",
+      "verified_on": "2026-08-04"
+    },
+    {
+      "id": "fasb-asu-2025-06",
+      "title": "FASB ASU 2025-06",
+      "publisher": "Financial Accounting Standards Board",
+      "authority_class": "standards-update",
+      "url": "https://storage.fasb.org/ASU%202025-06.pdf",
+      "verified_on": "2026-08-04"
+    }
+  ],
+  "source_coverage_rules": [
+    {
+      "id": "fasb-asc-topic-locators",
+      "manifest_source_id": "fasb-asc-topic-index",
+      "url_prefix": "https://asc.fasb.org/",
+      "path_pattern": "^/[0-9]{3}/$",
+      "scope": "Official Topic-level navigation only; exact scope, paragraphs, effective dates, transition, and applicability require authorized current Codification research."
+    }
+  ],
+  "public_artifacts": [
+    {
+      "path": "README.md",
+      "classification": "original-synthesis",
+      "rights_basis": "sylvara-original-synthesis",
+      "pii_review": "passed",
+      "raw_source_excerpt": false
+    },
+    {
+      "path": "authority-and-research.md",
+      "classification": "original-synthesis",
+      "rights_basis": "sylvara-original-synthesis",
+      "pii_review": "passed",
+      "raw_source_excerpt": false
+    },
+    {
+      "path": "federal-tax-reference.md",
+      "classification": "original-synthesis",
+      "rights_basis": "sylvara-original-synthesis",
+      "pii_review": "passed",
+      "raw_source_excerpt": false
+    },
+    {
+      "path": "operating-controls.md",
+      "classification": "original-synthesis",
+      "rights_basis": "sylvara-original-synthesis",
+      "pii_review": "passed",
+      "raw_source_excerpt": false
+    },
+    {
+      "path": "us-gaap-reference.md",
+      "classification": "original-synthesis",
+      "rights_basis": "sylvara-original-synthesis",
+      "pii_review": "passed",
+      "raw_source_excerpt": false
+    }
+  ]
+}

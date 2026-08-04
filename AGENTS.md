@@ -71,6 +71,17 @@ Repository approval is not live-system approval. Before any production Zoho or e
 - A public variable registry may record names, classifications, safe defaults, and rules. Secret values, endpoints, private hosts, live paths, platform IDs, connection names, and populated environment files remain outside GitHub and runtime logs.
 - Webhook verification is product-specific. Do not reuse Billing, Books, Sign, Mail, WorkDrive, Forms, or CRM assumptions across providers without an official contract and Development fixture.
 
+## Accounting Work
+
+- Read [`docs/accounting/README.md`](docs/accounting/README.md) before accounting-policy, bookkeeping-policy, federal-tax, financial-reporting, U.S. GAAP, capitalization, revenue, payroll, reimbursement, or close work.
+- Keep four layers distinct: controlling law and regulation, authoritative U.S. GAAP when applicable, approved Sylvara policy, and ledger or automation configuration. Zoho Books implements approved treatment; it does not determine it.
+- Use current primary sources and record the verification date. A search result, alert, copied sourcebook, repository note, prior-year publication, or inaccessible source is not a current conclusion.
+- Do not copy FASB Codification text, paid commentary, forms, publications, or another business's accounting conclusions into this public repository. Preserve topic locators, official links, original summaries, decisions, and review evidence.
+- Do not import another entity's chart of accounts, elections, thresholds, depreciation schedules, transactions, account identifiers, reporting conclusions, or industry-specific rules. Sylvara requirements and qualified review determine applicability.
+- Keep book and tax treatment separately documented. Never change a ledger method, tax election, capitalization policy, revenue conclusion, payroll treatment, or filing position merely to match software behavior.
+- Treat dollar thresholds, mileage rates, filing deadlines, depreciation rules, information-return rules, and effective dates as tax-year or reporting-period specific. Verify the current source instead of encoding a permanent number in policy.
+- Repository approval does not authorize a journal, reconciliation, close, tax filing, payroll correction, method change, financial statement assertion, or professional conclusion. Preserve scoped approval and independent readback for live financial work.
+
 ## Copywriting Work
 
 - Read [`docs/copywriting/README.md`](docs/copywriting/README.md) before drafting public, sales, marketing, advertising, lifecycle, or customer-facing copy.

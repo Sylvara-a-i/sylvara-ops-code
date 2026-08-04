@@ -4,6 +4,9 @@ All notable repository-governance and technical-source changes are recorded here
 
 ## Unreleased
 
+- Add a product-neutral accounting knowledge base with an authority hierarchy, federal tax source map, U.S. GAAP topic map, operating controls, and machine-readable provenance.
+- Carry forward only portable accounting governance from the authorized GH Real Estate source review; exclude property, rental, jurisdiction-specific, entity-specific, chart-of-accounts, transaction, threshold, and sourcebook material.
+- Add an archive index that distinguishes active source, reusable documentation, and historical non-executable review records.
 - Add an original, task-oriented copywriting reference library with briefing, positioning, conversion, channel, editing, claim, and publication controls.
 - Record the private source collection only through an aggregate sanitized manifest; exclude raw files, excerpts, filenames, paths, metadata, and unverified third-party publication rights.
 - Centralize reusable Zoho governance, standards, MCP evidence, and product references under `docs/zoho/` while keeping implementation-specific READMEs beside their source.

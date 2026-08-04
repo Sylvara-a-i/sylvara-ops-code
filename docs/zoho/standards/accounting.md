@@ -7,6 +7,8 @@
 
 This standard governs evidence, classification, reconciliation, and close practices around Zoho Books. It complements the automation controls without prescribing tax or legal conclusions. The official [Chart of Accounts API](https://www.zoho.com/books/api/v3/chart-of-accounts/), [Journals API](https://www.zoho.com/books/api/v3/journals/), [bank account API](https://www.zoho.com/books/api/v3/bank-accounts/), and [organization API](https://www.zoho.com/books/api/v3/organizations/) describe product capabilities, not approved accounting treatment.
 
+This is the Zoho Books implementation standard for the product-neutral [Sylvara Accounting Knowledge Base](../../accounting/README.md). Federal tax authority, U.S. GAAP topic research, and approved accounting policy take precedence over software configuration. A Books setting or automation is never evidence that a treatment is legally or professionally correct.
+
 ## Ownership
 
 Zoho Books owns Sylvara's general ledger, subledgers, recorded invoices and payments, credits, reconciliations, and financial reports. Bank, payment processor, vendor, customer, payroll, tax, and source documents provide evidence; they do not replace the Books ledger. Billing owns approved subscription lifecycle state, not general-ledger truth.

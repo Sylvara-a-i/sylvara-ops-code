@@ -19,17 +19,18 @@ Implementation-specific READMEs remain beside the code or artifact they govern s
 
 1. Read [System Ownership](governance/system-ownership.md) to identify the authoritative system.
 2. Read [Evidence And Publication](governance/evidence-and-publication.md) before relying on any reference or publishing a derivative.
-3. Read the relevant document under [`standards/`](standards/).
-4. Use the matching product handbook under [`reference/`](reference/) for platform vocabulary, API families, and official-source links.
-5. For MCP work, read the [MCP index](mcp/README.md) and keep its five evidence layers separate.
-6. Before a live change, verify the exact Sylvara organization, environment, role, metadata, permissions, and current state through the authorized tool.
+3. For accounting-policy, federal-tax, or U.S. GAAP questions, start with the product-neutral [Accounting Knowledge Base](../accounting/README.md).
+4. Read the relevant document under [`standards/`](standards/).
+5. Use the matching product handbook under [`reference/`](reference/) for platform vocabulary, API families, and official-source links.
+6. For MCP work, read the [MCP index](mcp/README.md) and keep its five evidence layers separate.
+7. Before a live change, verify the exact Sylvara organization, environment, role, metadata, permissions, and current state through the authorized tool.
 
 ## Standards Index
 
 - [CRM Schema](standards/crm-schema.md)
 - [Deluge Engineering](standards/deluge.md)
 - [Zoho Books Automation](standards/books-automation.md)
-- [Accounting Practices](standards/accounting.md)
+- [Accounting Practices — Zoho Books implementation](standards/accounting.md)
 - [Billing](standards/billing.md)
 - [Catalyst](standards/catalyst.md)
 - [Creator, Forms, And Sites Workflow And Intake](standards/workflow-and-intake.md)
@@ -55,7 +56,7 @@ The [product reference collection](reference/README.md) covers the currently gov
 - [Zoho Books implementation area](../../src/zoho-books/README.md)
 - [Sanitized chart-of-accounts reference](../../src/zoho-books/reference/README.md)
 - [Proposed Billing webhook gateway](../../src/zoho-catalyst/billing-webhook-gateway/README.md)
-- [Legacy Billing gateway review record](../../archive/zoho-catalyst/billing-webhook-gateway/README.md)
+- [Historical, non-executable Billing gateway review record](../../archive/zoho-catalyst/billing-webhook-gateway/README.md)
 
 These files stay beside their artifacts because they describe exact source, validation, deployment, provenance, or rollback behavior. Reusable policy belongs here under `docs/zoho/`.
 
