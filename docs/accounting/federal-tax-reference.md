@@ -1,0 +1,49 @@
+# Federal Tax Reference For General Business Accounting
+
+## Status And Scope
+
+- Official links reviewed: **2026-08-04**.
+- Scope: general U.S. federal business recordkeeping and accounting research relevant to an AI automation and services business.
+- Not covered: state or local income, franchise, sales, use, payroll, privacy, or nexus law; industry-specific real-estate rules; entity-specific advice; or any Sylvara filing position.
+
+The Internal Revenue Code and Treasury regulations control over an IRS publication or form instruction. Official IRS guidance is still useful for administration and workflow, but its weight depends on the source. Verify the law, effective date, current form, and entity facts for the period at issue.
+
+## Primary Source Map
+
+| Question | Current official starting points | Sylvara control |
+|---|---|---|
+| Books, records, and substantiation | [26 U.S.C. §6001](https://uscode.house.gov/view.xhtml?edition=prelim&num=0&req=granuleid%3AUSC-prelim-title26-section6001), [IRS Publication 583](https://www.irs.gov/publications/p583), [IRS recordkeeping guidance](https://www.irs.gov/businesses/small-businesses-self-employed/recordkeeping) | Keep records that support income, deductions, credits, assets, payroll, and filed returns. A payment record alone does not establish business purpose or tax treatment. |
+| Accounting periods and methods | [26 U.S.C. §446](https://uscode.house.gov/view.xhtml?edition=prelim&num=0&req=granuleid%3AUSC-prelim-title26-section446), [26 U.S.C. §448](https://uscode.house.gov/view.xhtml?edition=prelim&num=0&req=granuleid%3AUSC-prelim-title26-section448), [IRS Publication 538](https://www.irs.gov/publications/p538), [Form 3115](https://www.irs.gov/forms-pubs/about-form-3115) | Use the approved method consistently and verify that it clearly reflects income. Treat a change in treatment of a material item as a possible accounting-method change, not a bookkeeping preference. |
+| Ordinary and necessary business expenses | [26 U.S.C. §162](https://uscode.house.gov/view.xhtml?edition=prelim&num=0&req=granuleid%3AUSC-prelim-title26-section162), [IRS Publication 334](https://www.irs.gov/publications/p334) | Record business purpose, payee, date, amount, approval, evidence, and business-versus-personal allocation. Do not infer deductibility from an account name or payment method. |
+| Capital costs, tangible property, basis, and depreciation | [26 U.S.C. §263](https://uscode.house.gov/view.xhtml?edition=prelim&num=0&req=granuleid%3AUSC-prelim-title26-section263), [26 CFR §1.263(a)-1](https://www.ecfr.gov/current/title-26/chapter-I/subchapter-A/part-1/subject-group-ECFR210006225231fb0/section-1.263%28a%29-1), [§1.263(a)-2](https://www.ecfr.gov/current/title-26/chapter-I/subchapter-A/part-1/subject-group-ECFR210006225231fb0/section-1.263%28a%29-2), [§1.263(a)-3](https://www.ecfr.gov/current/title-26/chapter-I/subchapter-A/part-1/subject-group-ECFR210006225231fb0/section-1.263%28a%29-3), [IRS tangible-property guidance](https://www.irs.gov/businesses/small-businesses-self-employed/tangible-property-final-regulations), [Publication 946](https://www.irs.gov/publications/p946), [Publication 551](https://www.irs.gov/publications/p551) | Maintain a private asset register with basis, placed-in-service facts, improvements, depreciation, elections, business use, and disposition. Verify current elections and limits; do not hardcode annual amounts as permanent policy. |
+| Software and research expenditures | [26 U.S.C. §174](https://uscode.house.gov/view.xhtml?edition=prelim&num=0&req=granuleid%3AUSC-prelim-title26-section174), [26 U.S.C. §174A](https://uscode.house.gov/view.xhtml?req=%28title%3A26+section%3A174a+edition%3Aprelim%29) | Treat software development and experimental work as a dedicated tax research trigger. Classification, location, transition, elections, credits, and pre-effective-date balances require tax-professional review. |
+| Employee and owner reimbursements | [26 CFR §1.62-2](https://www.ecfr.gov/current/title-26/chapter-I/subchapter-A/part-1/subject-group-ECFR064ad1fa7d3cb20/section-1.62-2), [IRS Publication 15](https://www.irs.gov/publications/p15), [Publication 463](https://www.irs.gov/publications/p463) | An accountable-plan workflow must require a business connection, timely substantiation, and return of excess. Preserve the written plan, evidence, approval, and settlement trail. |
+| Worker classification and employment tax | [IRS Publication 15-A](https://www.irs.gov/publications/p15a), [IRS worker-classification guidance](https://www.irs.gov/businesses/small-businesses-self-employed/independent-contractor-self-employed-or-employee), [Form SS-8](https://www.irs.gov/forms-pubs/about-form-ss-8) | Classify from the real relationship and right to control, not the contract label. Document behavioral, financial, and relationship facts and escalate ambiguity before onboarding or correction. |
+| Information returns | [IRS Publication 1099](https://www.irs.gov/publications/p1099), [current Forms 1099-MISC and 1099-NEC instructions](https://www.irs.gov/instructions/i1099mec), [IRS filing decision guide](https://www.irs.gov/businesses/small-businesses-self-employed/am-i-required-to-file-a-form-1099-or-other-information-return) | Obtain current payee documentation, record classification and payment method, reconcile reportable totals, and preserve corrections. Verify current thresholds, exceptions, deadlines, and electronic-filing rules for each filing year. |
+
+## Conditional Federal Research Triggers
+
+| Trigger | Current official starting points | Control |
+|---|---|---|
+| Borrowing, financing fees, or interest limitation | [26 U.S.C. §163](https://uscode.house.gov/view.xhtml?edition=prelim&num=0&req=granuleid%3AUSC-prelim-title26-section163) | Separate principal, interest, fees, discounts, related-party facts, and business use. Obtain professional review before applying a limitation or election. |
+| Travel, meals, gifts, listed property, or vehicle use | [26 U.S.C. §274](https://uscode.house.gov/view.xhtml?edition=prelim&num=0&req=granuleid%3AUSC-prelim-title26-section274), [IRS Publication 463](https://www.irs.gov/publications/p463) | Capture timely business purpose and the required substantiation. Verify current limitations and rates for the applicable tax year. |
+| Depreciable property or expensing election | [26 U.S.C. §167](https://uscode.house.gov/view.xhtml?edition=prelim&num=0&req=granuleid%3AUSC-prelim-title26-section167), [§168](https://uscode.house.gov/view.xhtml?edition=prelim&num=0&req=granuleid%3AUSC-prelim-title26-section168), [§179](https://uscode.house.gov/view.xhtml?edition=prelim&num=0&req=granuleid%3AUSC-prelim-title26-section179), [IRS Publication 946](https://www.irs.gov/publications/p946) | Preserve basis, placed-in-service date, class life, business use, election, method, accumulated depreciation, and disposition. Do not automate an annual election. |
+| Payee identity or tax classification | [current Form W-9 instructions](https://www.irs.gov/instructions/iw9) | Obtain current documentation before payment or reporting and keep tax identifiers out of GitHub and ordinary logs. |
+| Reportable cash receipt | [26 U.S.C. §6050I](https://uscode.house.gov/view.xhtml?edition=prelim&num=0&req=granuleid%3AUSC-prelim-title26-section6050I), [Form 8300](https://www.irs.gov/forms-pubs/about-form-8300) | Escalate immediately and verify the current amount, aggregation, deadline, identity, notification, and electronic-filing rules; do not encode a permanent threshold here. |
+
+## Operating Rules
+
+- Keep tax treatment distinct from U.S. GAAP and management reporting. Record book-tax differences in the approved private workpapers.
+- Use the tax year and entity facts that actually apply. Do not carry an election, safe harbor, filing threshold, mileage rate, depreciation percentage, or deadline forward without current verification.
+- Preserve gross activity. Do not classify only the net bank settlement when a processor, marketplace, or payroll provider withheld fees, refunds, taxes, reserves, or other components.
+- Separate business and personal activity. Do not turn an owner payment into a business expense, reimbursement, contribution, distribution, wage, or loan without evidence and approved policy.
+- Obtain current forms and payee or worker documentation before the workflow depends on them. Do not store populated forms or tax identifiers in GitHub.
+- Retain records according to the current controlling rule, filing limitations, asset-basis needs, employment-tax requirements, contract obligations, audit needs, and legal holds. There is no universal repository retention period.
+
+## Professional-Review-Only Decisions
+
+Require qualified tax review for entity classification, owner compensation or distributions, related-party treatment, accounting-method changes, software or research costs, capitalization and depreciation elections, accountable-plan treatment for owner-employees, worker classification, payroll corrections, information-return disputes, tax credits, amended returns, and any federal filing position not already governed by a current approved policy.
+
+## Research Boundary
+
+This document is a locator and control map. It does not reproduce the Code, regulations, forms, or publications and does not state that a listed rule applies to Sylvara. Use the [research standard](authority-and-research.md), capture the exact current authority in the private decision record, and obtain approval before changing a return position, ledger policy, payroll workflow, or live automation.
