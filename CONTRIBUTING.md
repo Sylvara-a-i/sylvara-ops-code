@@ -2,9 +2,16 @@
 
 Sylvara is not currently accepting public code, documentation, feature, or configuration contributions.
 
-- Do not open public issues containing security details, credentials, customer information, call data, or production configuration.
-- Do not submit pull requests containing client data, recordings, transcripts, raw payloads, production logs, tokens, keys, or secret-bearing URLs.
-- Pull requests are restricted to approved collaborators. Unsolicited public contributions are not accepted.
-- Report suspected vulnerabilities through GitHub private vulnerability reporting under the repository's **Security** tab.
+Authorized maintainers and approved automation must:
 
-Authorized maintainers and approved automation must work through short-lived branches and pull requests. Direct routine changes to `main` are prohibited.
+1. work on a focused short-lived branch;
+2. use synthetic or sanitized data only;
+3. run the documented safety and relevant product checks;
+4. document purpose, validation, production impact, rollback, and deferred work in the pull request;
+5. obtain required review and resolve all conversations;
+6. squash merge after checks pass; and
+7. verify the merged `main` state and branch cleanup.
+
+Do not submit secrets, customer or caller data, recordings, transcripts, raw payloads, production logs, payment or banking data, production identifiers, signed documents, or secret-bearing URLs.
+
+Report vulnerabilities through GitHub private vulnerability reporting, not a public issue.

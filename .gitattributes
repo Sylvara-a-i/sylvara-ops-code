@@ -1,0 +1,32 @@
+* text=auto eol=lf
+
+# Deterministic source, configuration, and documentation use LF everywhere.
+*.cjs text eol=lf
+*.css text eol=lf
+*.csv text eol=lf
+*.deluge text eol=lf
+*.html text eol=lf
+*.js text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.mjs text eol=lf
+*.py text eol=lf
+*.sh text eol=lf
+*.toml text eol=lf
+*.txt text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+.env.example text eol=lf
+
+# These formats are prohibited by the safety scanner unless a reviewed hash is
+# explicitly approved. Marking them binary also prevents misleading text diffs.
+*.docx binary
+*.gif binary
+*.jpeg binary
+*.jpg binary
+*.pdf binary
+*.png binary
+*.pptx binary
+*.xls binary
+*.xlsx binary
+*.zip binary

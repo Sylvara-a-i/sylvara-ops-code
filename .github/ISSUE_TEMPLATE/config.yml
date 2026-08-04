@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability privately
+    url: https://github.com/Sylvara-a-i/sylvara-ops-code/security/advisories/new
+    about: Do not disclose credentials, vulnerabilities, client data, or production details in a public issue.

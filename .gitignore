@@ -8,6 +8,10 @@
 *.pfx
 secrets/
 credentials/
+.npmrc
+.yarnrc*
+.pypirc
+.netrc
 
 # Node
 node_modules/
@@ -21,6 +25,11 @@ __pycache__/
 .venv/
 venv/
 .pytest_cache/
+.coverage
+htmlcov/
+.codex-tmp/
+.ci-deps/
+.pnpm-store/
 
 # Editors and OS
 .vscode/
@@ -38,4 +47,16 @@ logs/
 recordings/
 transcripts/
 production-data/
+raw-exports/
+exports/
 *.log
+
+# Raw business and accounting exports are private by default.
+*.xlsx
+*.xls
+*.xlsm
+*.docx
+*.pdf
+*.zip
+*.csv
+!src/zoho-books/reference/chart-of-accounts.csv

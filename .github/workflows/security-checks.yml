@@ -1,0 +1,56 @@
+name: Security Checks
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions: {}
+
+concurrency:
+  group: security-checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  workflow-policy:
+    name: Workflow security policy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact public commit without credentials
+        env:
+          COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$COMMIT_SHA" in
+            (*[!0-9a-f]*|'') echo "Invalid commit SHA" >&2; exit 1 ;;
+          esac
+          test "${#COMMIT_SHA}" -eq 40
+          git init .
+          git remote add origin "https://github.com/${REPOSITORY}.git"
+          git fetch --depth=1 --no-tags origin "$COMMIT_SHA"
+          test "$(git rev-parse FETCH_HEAD)" = "$COMMIT_SHA"
+          git checkout --detach FETCH_HEAD
+          git remote remove origin
+
+      - name: Verify hosted Python baseline
+        run: >-
+          python3 -c
+          "import sys; actual=sys.version_info[:2];
+          assert actual == (3, 12), f'expected Python 3.12, got {actual}'"
+
+      - name: Install hash-pinned validator dependency
+        run: >-
+          python3 -m pip install
+          --disable-pip-version-check
+          --only-binary=:all:
+          --require-hashes
+          --target .ci-deps
+          -r tools/safety/requirements.txt
+
+      - name: Validate workflow security policy
+        run: PYTHONPATH=.ci-deps python3 tools/safety/validate_workflows.py

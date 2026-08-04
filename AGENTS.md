@@ -1,51 +1,81 @@
 # Agent Instructions
 
-Optimize for first revenue, delivery reliability, maintainability, margin, and speed.
+Act as a senior technical operator for Sylvara. Optimize for first revenue, delivery reliability, maintainability, security, auditability, margin, and speed.
 
-## Commercial Constraints
+## Scope And Structure
 
-- Primary segment: independent residential plumbing companies with approximately 5–15 service trucks.
-- Primary offer: after-hours and overflow call recovery, not a generic AI receptionist.
-- Do not broaden to all contractors without attributable customer evidence.
-- Do not confuse positive feedback with willingness to pay.
-- Preserve the current offer until direct evidence justifies a change.
+- Inspect the repository and relevant instructions before editing.
+- Organize implementation by the system that owns it, such as `src/zoho-books/` or `src/zoho-catalyst/`; do not use a generic `automations/` bucket.
+- Keep documentation beside the code or system it explains.
+- Do not create empty scaffolding, speculative platforms, duplicate files, or unused abstractions.
+- Preserve public interfaces, environment-variable names, and deployment assumptions unless the change explicitly and safely replaces them.
+- Treat `archive/` as reference-only. Archived code is not active source, tested production code, or deployment authorization.
 
-## Engineering Constraints
+## Public Repository Boundary
 
-- Prefer managed services and the smallest reliable implementation.
-- Retell AI is the default voice runtime for the first paid pilots.
-- Make.com is the default post-call workflow layer for the first paid pilots.
-- Keep Make.com out of the critical conversational path where practical.
-- Do not build custom telephony, a general agent platform, or multi-tenant SaaS administration.
-- Add code only when a specific demo or paid pilot requires it.
+Treat every Git object and CI log as permanently public.
 
-## Security Constraints
+Never commit or print:
 
-Never request, store, expose, upload, or commit:
+- credentials, tokens, keys, MFA or recovery codes, populated environment files, or secret-bearing URLs;
+- customer, caller, employee, contractor, or prospect PII;
+- call recordings, transcripts, raw prompts, production payloads, or production logs;
+- bank details, account suffixes, balances, transactions, tax records, payment data, invoices, or signed agreements;
+- production organization, agent, workflow, webhook, tenant, account, or record identifiers;
+- exact production security controls when disclosure would materially enable abuse.
 
-- passwords, MFA codes, recovery codes, tokens, API keys, or private keys;
-- `.env` files;
-- call recordings, transcripts, phone numbers, addresses, or caller PII;
-- client credentials, raw production payloads, or production logs;
-- payment, banking, health, government-ID, or other sensitive records.
+Use synthetic examples and explicit placeholders. When source material contains private fields, create an allowlisted sanitized derivative and keep the source outside GitHub.
 
-Use environment-variable references and platform secret stores. Keep examples synthetic.
+## System Ownership
+
+- CRM owns prospect, customer, contact, and commercial relationship state.
+- Zoho Books owns the general ledger, accounting balances, reconciliation, and financial reporting.
+- Zoho Billing owns subscription lifecycle and billing events only where that workflow is explicitly approved.
+- Zoho Creator is a workflow layer; it must not silently become accounting truth or an unapproved client-portal platform.
+- Zoho Catalyst is secure middleware for verification, normalization, idempotency, retry control, and API mediation.
+- Retell or the approved voice platform owns live voice-agent runtime configuration and call artifacts.
+- Make or the approved automation platform handles non-critical orchestration; keep it out of the critical conversational path when practical.
+- GitHub owns sanitized source and documentation, not live configuration or deployment state.
+
+## High-Risk Automation Rules
+
+For billing, payment, webhook, customer-message, CRM, or production-data workflows:
+
+- fail closed on missing configuration, ambiguous identity, stale state, verification failure, or incomplete evidence;
+- verify webhook authenticity and timestamps, use atomic or durable idempotency, and make retries safe;
+- never acknowledge an event as complete before the durable downstream outcome is known;
+- use explicit timeouts, bounded retries, deterministic ordering, and response-code validation;
+- avoid logging raw payloads, access tokens, signatures, response bodies, PII, or financial data;
+- separate Development from Production and provide dry-run or registration-only modes when practical;
+- require a rollback path, smoke test, and independent readback for live changes;
+- do not infer payment status, balances, subscription state, or customer eligibility from incomplete data.
+
+Repository approval is not live-system approval. Before any production Zoho or external-system write, show the current state, proposed state, exact tool/API and parameters, rollback, and readback plan; obtain approval scoped to that action.
 
 ## Change Workflow
 
-1. Inspect current repository state.
-2. Make one focused change on a short-lived branch.
-3. Add or update tests and runbooks.
-4. Open a pull request into `main`.
-5. Run checks and resolve failures.
-6. Obtain explicit approval before production deployment or external publication.
-7. Merge by squash after checks pass.
-8. Delete the merged branch.
-9. Record any production-relevant deployment and rollback result.
+1. Inspect current state and preserve unrelated work.
+2. Create a focused short-lived `codex/` branch.
+3. Implement the smallest reliable change with appropriate tests and documentation.
+4. Run the local safety, workflow-policy, and relevant product checks.
+5. Review the complete diff for secrets, PII, production identifiers, accidental binaries, and unrelated changes.
+6. Open a draft pull request into `main` using the repository template.
+7. Resolve check failures and actionable review comments.
+8. Squash merge only after required checks pass and no safety or approval gate remains.
+9. Verify final `main` and remove the merged branch when tooling allows.
 
-## Public Repository Constraints
+Stop before merge when checks fail, secrets or private data are suspected, requested changes remain, live behavior is unverified, or a high-risk production decision still needs explicit approval.
 
-- Treat every commit and pull request as permanently disclosed.
-- Do not publish client-specific configuration, private sales research, pricing negotiations, production identifiers, exact production prompts that create abuse risk, or unapproved case-study material.
-- External contributors are not accepted unless Gabriel explicitly changes that policy.
-- Approved connectors must use branches and pull requests; they may not bypass `main` protections.
+## Completion Standard
+
+Report:
+
+1. what changed and why;
+2. files touched;
+3. checks actually run and their results;
+4. deployment or manual setup still required;
+5. security, privacy, financial, and operational risks;
+6. rollback steps;
+7. anything intentionally excluded or deferred.
+
+Never claim a test, deployment, live-state check, or merge succeeded unless it was independently verified.

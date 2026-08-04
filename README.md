@@ -1,82 +1,68 @@
-# Sylvara Ops Code
+# Sylvara Operations Code
 
-Public, sanitized technical source of truth for Sylvara's productized after-hours and overflow call-recovery service for independent residential plumbing companies.
+Public, sanitized technical source of truth for Sylvara's automation systems, integration standards, tests, and operating runbooks.
 
-## Repository Identity
+This repository is publicly viewable but is not open source. See [`NOTICE.md`](NOTICE.md).
+
+## Repository Boundary
+
+GitHub owns versioned code and sanitized technical context. It does not own live customer data, accounting records, call data, credentials, production configuration, or deployment state.
+
+| Area | Operational source of truth |
+|---|---|
+| Prospects, customers, and commercial relationships | Approved CRM |
+| General ledger, accounting balances, and financial reporting | Zoho Books |
+| Subscription lifecycle and billing events | Zoho Billing, when used for the approved workflow |
+| Voice-agent runtime | Retell or the approved voice platform |
+| Non-critical workflow orchestration | Make or the approved automation platform |
+| Custom workflow UI and records | Zoho Creator only for an explicitly approved use case |
+| Secure middleware, webhook verification, and retry controls | Zoho Catalyst or the approved middleware runtime |
+| Credentials and tokens | Platform secret stores only |
+| Sanitized code, tests, schemas, runbooks, and decisions | This repository |
+
+The detailed ownership map is in [`docs/architecture/system-overview.md`](docs/architecture/system-overview.md).
+
+## Current Contents
 
 ```text
-Owner: Sylvara-a-i
-Repository: sylvara-ops-code
-Visibility: Public
-Default branch: main
-Canonical URL: https://github.com/Sylvara-a-i/sylvara-ops-code
+.github/       Pull-request ownership, templates, dependency updates, and CI
+archive/       Sanitized historical references that are not deployment-approved
+docs/          Architecture, security, setup, and reusable runbooks
+src/           Active or governed system-specific technical artifacts
+tools/safety/  Public-repository and workflow-policy validation
 ```
 
-## Current Commercial Wedge
+Current governed artifacts:
 
-**Target:** Locally owned residential plumbing companies with approximately 5–15 service trucks, meaningful inbound lead volume, after-hours or no-answer leakage, capacity for more work, and no effective existing AI or human overflow system.
-
-**Offer:** Sylvara answers only approved after-hours, busy, and unanswered calls; applies plumbing-specific qualification and escalation rules; books or hands off eligible work; and reports each recovered opportunity against the pre-launch baseline.
-
-**Primary Outcome:** Recover more qualified plumbing opportunities without replacing the client's daytime front office.
-
-This is a testable commercial hypothesis, not a proven market conclusion. Public visibility does not make this repository open source; see `NOTICE.md`.
-
-## Source-Of-Truth Boundaries
-
-| Area | Source Of Truth |
-|---|---|
-| Prospect and customer records | Approved CRM |
-| Contracts, invoices, and payments | Approved business systems |
-| Voice agent runtime configuration | Retell AI or the approved runtime |
-| Workflow runtime configuration | Make.com or the approved runtime |
-| Credentials and tokens | Platform secret stores only |
-| Code, sanitized configuration, tests, runbooks, and decision records | This repository |
-| Call recordings, transcripts, caller PII, and raw production logs | Never this repository |
+- [`src/zoho-books/reference/chart-of-accounts.csv`](src/zoho-books/reference/chart-of-accounts.csv) is a sanitized reference with system IDs and bank-account suffixes removed.
+- [`archive/zoho-catalyst/billing-webhook-gateway`](archive/zoho-catalyst/billing-webhook-gateway) preserves a non-executable review record and source hashes. The supplied handler and deployment files are excluded because current route and deployment status are unverified.
 
 ## Operating Rules
 
-1. Sell and validate before building a broad platform.
-2. One vertical, one offer, and one controlled call path at a time.
-3. Do not commit secrets, caller data, client exports, recordings, transcripts, or production payloads.
-4. Every live change needs a rollback path and a test record.
-5. Client-specific configuration must be sanitized before it enters GitHub.
-6. No destructive, externally visible, financial, publishing, or production-data action without explicit approval.
+1. Keep changes focused and reviewable.
+2. Use short-lived branches and pull requests; do not make routine direct changes to `main`.
+3. Run repository and workflow safety checks before publication.
+4. Treat every public commit, branch, pull request, log, and artifact as permanently disclosed.
+5. Use synthetic examples only. Never commit secrets, customer data, call data, raw payloads, production identifiers, or financial records.
+6. A merged pull request does not authorize or perform a production deployment, live Zoho change, billing action, or customer communication.
+7. Live changes require an explicit deployment plan, scoped approval, rollback path, and independent readback.
 
-## Repository Map
+## Local Validation
 
-```text
-docs/
-  strategy/      ICP, offer, validation gates, and decisions
-  website/       Approved website copy and cleanup plan
-  sales/         Assessment, objections, and sales process
-  product/       Architecture, call flow, and QA plan
-  operations/    Onboarding, deployment, and rollback
-  security/      Data classification and credential rules
-integrations/
-  retell/        Sanitized agent configuration and integration notes
-  make/          Sanitized scenario maps and integration notes
-  telephony/     Forwarding and phone-system patterns
-scripts/         Local and CI safety checks
-src/             Runtime code only when a paid pilot requires it
+```powershell
+python -m venv .codex-tmp\safety-venv
+.\.codex-tmp\safety-venv\Scripts\python.exe -m pip install --disable-pip-version-check --only-binary=:all: --require-hashes -r tools/safety/requirements.txt
+.\.codex-tmp\safety-venv\Scripts\python.exe tools/safety/pre-commit-safety-check.py
+.\.codex-tmp\safety-venv\Scripts\python.exe tools/safety/validate_workflows.py
+.\.codex-tmp\safety-venv\Scripts\python.exe -m unittest discover -s tools/safety/tests -p "test_*.py" -v
 ```
 
-## First Milestone
+Use 64-bit CPython 3.12 on Windows for the documented local path; CI runs the equivalent checks on CPython 3.12 for Linux. Dependency installation is hash-pinned and fails closed on an unsupported wheel.
 
-A working plumbing demo that:
+## Commercial Constraint
 
-- receives a real inbound call;
-- handles one approved new-customer intake path;
-- identifies service area, job type, urgency, and callback details;
-- escalates approved emergencies;
-- sends a structured post-call summary;
-- passes the documented QA test plan.
+Build only what supports a validated demo, customer commitment, or paid delivery. Do not create a generalized agent platform, custom telephony stack, client portal, or multi-tenant SaaS layer without evidence that the simpler managed-service workflow is insufficient.
 
-Do not add a client portal, multi-tenant administration, generalized agent builder, complex analytics, or custom telephony platform before paid demand proves the need.
+## Security
 
-
-## Public Repository Boundary
-
-This repository is intentionally public for sanitized code review, connector compatibility, and operational transparency. Treat every commit as permanently disclosed. Never commit client-specific configuration, production prompts, phone numbers, recordings, transcripts, raw payloads, credentials, secret-bearing URLs, customer records, or unredacted logs. See `docs/security/PUBLIC_REPOSITORY_BOUNDARY.md`.
-
-External contributions are not currently accepted, and pull requests should be restricted to approved collaborators. Security reports should use GitHub private vulnerability reporting.
+Read [`SECURITY.md`](SECURITY.md) and [`docs/security/public-repository-boundary.md`](docs/security/public-repository-boundary.md) before adding code, configuration, exports, screenshots, logs, or integration examples.
