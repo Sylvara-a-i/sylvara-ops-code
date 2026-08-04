@@ -39,6 +39,7 @@ tools/safety/  Public-repository and workflow-policy validation
 
 Current governed artifacts:
 
+- [`docs/copywriting/`](docs/copywriting/) is the public front door for original copywriting principles, channel playbooks, structure cards, briefing, and claim review. It contains no raw swipe files, source passages, customer facts, or third-party publication claims.
 - [`docs/zoho/`](docs/zoho/) is the single front door for portable Zoho governance, operating standards, dated product references, and MCP evidence without copying another tenant's fields or configuration.
 - [`docs/zoho/governance/suite-registry.json`](docs/zoho/governance/suite-registry.json) is the machine-readable Zoho ownership and evidence-status map. Official product support, Tool Manual catalogs, preconfigured-template membership, advertised MCP contracts, and effective tenant access remain separate layers.
 - [`docs/zoho/mcp/snapshots/configured/2026-08-03/observed-tool-inventory.json`](docs/zoho/mcp/snapshots/configured/2026-08-03/observed-tool-inventory.json) preserves one sanitized row for each of 403 configured-session tool contracts; it is a dated snapshot, not a Sylvara allowlist or proof of access.

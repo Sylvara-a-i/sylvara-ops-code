@@ -71,6 +71,15 @@ Repository approval is not live-system approval. Before any production Zoho or e
 - A public variable registry may record names, classifications, safe defaults, and rules. Secret values, endpoints, private hosts, live paths, platform IDs, connection names, and populated environment files remain outside GitHub and runtime logs.
 - Webhook verification is product-specific. Do not reuse Billing, Books, Sign, Mail, WorkDrive, Forms, or CRM assumptions across providers without an official contract and Development fixture.
 
+## Copywriting Work
+
+- Read [`docs/copywriting/README.md`](docs/copywriting/README.md) before drafting public, sales, marketing, advertising, lifecycle, or customer-facing copy.
+- Complete the copy brief and evidence ledger before treating a draft as publishable. Keep verified facts, qualified claims, operator judgment, and unknowns visibly separate.
+- Treat private swipe files as research material, not publication authority. Do not reproduce source passages, make near-verbatim rewrites, imitate a living writer, or imply that Sylvara owns third-party material.
+- Do not invent testimonials, customer results, integrations, credentials, prices, guarantees, deadlines, capacity limits, scarcity, or urgency. Every material claim must have a current authoritative source and stay within that evidence.
+- Commit only Sylvara-original synthesis or material with documented publication rights. Do not add raw PDFs, documents, images, videos, emails, transcripts, private prompts, source metadata, or production customer facts.
+- Repository review does not authorize an advertisement, campaign send, website publication, commercial offer, or customer communication. Record final business and compliance approval separately.
+
 ## Change Workflow
 
 1. Inspect current state and preserve unrelated work.
