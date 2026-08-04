@@ -52,6 +52,16 @@ For billing, payment, webhook, customer-message, CRM, or production-data workflo
 
 Repository approval is not live-system approval. Before any production Zoho or external-system write, show the current state, proposed state, exact tool/API and parameters, rollback, and readback plan; obtain approval scoped to that action.
 
+## Zoho Work
+
+- Read [`docs/zoho/README.md`](docs/zoho/README.md) before CRM schema, MCP, Deluge, WorkDrive, Catalyst, or Books work.
+- Use only the named Zoho MCP server and tool authorized for the task. Do not substitute Browser, direct REST, shell automation, or a different connector when a capability is missing.
+- Verify organization, environment, and role through the least-sensitive identity call before any tenant-specific read or write.
+- Treat live metadata and returned `api_name` values as authoritative. Repository catalogs and display labels are not proof of live configuration.
+- Sylvara field selection must come from Sylvara requirements. Do not copy fields, layouts, rules, IDs, or business logic from another tenant.
+- An advertised or untyped write tool is not a safe payload contract. Stop when prerequisites, field types, subform behavior, response completeness, or rollback are unverified.
+- Begin Books work read-only. Financial writes require fixed-organization binding, fresh prestate, immutable approved input, idempotency, serialization, independent readback, and reconciliation.
+
 ## Change Workflow
 
 1. Inspect current state and preserve unrelated work.

@@ -1,0 +1,78 @@
+# Zoho Books Automation Standard
+
+## Risk Boundary
+
+Zoho Books is Sylvara's accounting source of truth. A tool that can create, update, apply, void, reconcile, approve, publish, or lock accounting state is high-risk even when the API operation appears routine.
+
+This standard governs MCP tools, Deluge functions, Catalyst middleware, and other integrations that read or change Books. It does not authorize a live accounting change.
+
+## Required Control Layer
+
+Native tool selection is insufficient. Every write path must add:
+
+1. **Fixed target binding:** hard-bind the approved organization, data center, and environment inside the server. Do not accept a caller-selected organization.
+2. **Fresh prestate:** reread the exact transaction, account, period, related records, and current user immediately before writing.
+3. **Immutable plan:** hash the normalized target, expected prestate, proposed mutation, approval scope, and short expiry.
+4. **Stale-state abort:** reject any material difference between approved and current state.
+5. **Stable idempotency:** derive a key from the business event and intended outcome; enforce it durably.
+6. **Serialization:** prevent conflicting writes to the same customer, document, payment, account, or reconciliation scope.
+7. **Durable ledger:** privately record plan hash, idempotency key, attempt, returned ID, outcome, and readback without sensitive payloads.
+8. **Ambiguous-timeout handling:** never blindly retry; search and reconcile authoritative Books state first.
+9. **Independent readback:** use a read-only audit identity to verify the created or changed object.
+10. **Reconciliation:** tie the result to the relevant subledger, account, report, or bank state before declaring completion.
+
+## Server Roles
+
+- **Audit:** read-only and always separated from mutation identities.
+- **Bookkeeping:** only the smallest approved routine draft or record operations; no broad controller authority.
+- **Controller:** disconnected or explicitly approval-gated for journals, credits, refunds, reconciliation, opening balances, tax/configuration, period state, and similar high-impact operations.
+
+Do not default to module-level `.ALL` operation scopes or assemble an all-modules grant. Avoid generic raw-request tools, generic delete or bulk-delete, journal approval/publication, and transaction-lock mutation unless a narrowly documented exceptional workflow proves the need and adds stronger independent approval. OAuth scopes are broader than individual tools, so select the exact documented module and operation scopes, then enforce narrower paths, verbs, payloads, and roles in code.
+
+Use the current official [Zoho Books OAuth scope reference](https://www.zoho.com/books/api/v3/oauth/) and [organization API reference](https://www.zoho.com/books/api/v3/organizations/) when designing access. A documented scope or `organization_id` parameter is API capability, not fixed-target enforcement.
+
+## Pre-Write Evidence
+
+A financial write requires:
+
+- exact organization and environment identity;
+- exact record IDs stored privately and fresh state;
+- source documents or authoritative transaction evidence;
+- duplicate search across relevant transaction classes;
+- open, reconciled, and locked-period checks;
+- the full accounting effect, including currency, tax, account, customer/vendor, and linked-document impact;
+- explicit proposed entries and totals; and
+- scoped approval for that one plan.
+
+Do not invent a monthly allocation from an annual total, infer payment status from an invoice alone, plug a balance to income or expense, or create a balancing record merely to force agreement.
+
+## Automation Ownership
+
+Each transaction class has one owner. Generic invoice, payment, credit, refund, or journal tools must reject a class already owned by a dedicated automation. This prevents overlapping schedules, double charging, duplicate sending, and conflicting corrections.
+
+Dry-run or non-posting mode is the default. Posting, sending, applying, approving, voiding, or reconciling requires a separate explicit enablement and smoke test.
+
+## Response And Failure Handling
+
+The observed MCP responses are untyped. Validate the Zoho response code, required returned fields, object status, amounts, links, and side effects. A `success` transport flag alone is insufficient.
+
+Stop on the first mismatch. Authorization failure, partial response, malformed data, rate limit, stale state, or missing evidence is not an empty result and must not be converted into a write.
+
+## Verification Matrix
+
+Every workflow needs synthetic or Development coverage for:
+
+- first execution and exact duplicate replay;
+- partial payment, credit, refund, tax, and multi-currency behavior where applicable;
+- zero, one, and multiple record matches;
+- locked, reconciled, voided, deleted, disputed, and stale states;
+- API rejection, rate limit, timeout before commit, and timeout after possible commit;
+- readback mismatch and reconciliation failure;
+- dry-run output and live-mode double guard; and
+- rollback or safe containment without deleting evidence.
+
+Production smoke tests require separate approval and must use the smallest reversible action available.
+
+## Repository Boundary
+
+Never commit organization IDs, account IDs or suffixes, balances, transactions, tax details, bank-feed rows, invoices, attachments, OAuth material, or raw exports. The sanitized chart of accounts is reference material only; it is not an import contract and does not prove current live configuration.
