@@ -2,9 +2,9 @@
 
 ## Decision
 
-**Deployment approval: BLOCKED. Public-source publication: BLOCKED.**
+**Supplied export deployment: BLOCKED. Supplied export publication: BLOCKED. Sanitized replacement deployment: BLOCKED pending Development evidence.**
 
-This is a sanitized design-level record derived from a historical local export. No live endpoint, route, middleware environment, downstream workflow, provider contract, secret store, retry behavior, or production log was tested. The original implementation is intentionally absent from this public repository.
+This is a sanitized design-level record derived from a historical local export. No live endpoint, route, middleware environment, downstream workflow, provider contract, secret store, retry behavior, or production log was tested. The original implementation is intentionally absent from this public repository. A separately written replacement is maintained at [`src/zoho-catalyst/billing-webhook-gateway`](../../../src/zoho-catalyst/billing-webhook-gateway/); its presence does not satisfy the release gates below.
 
 ## Findings To Resolve In A Replacement
 

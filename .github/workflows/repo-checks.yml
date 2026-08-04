@@ -86,3 +86,16 @@ jobs:
 
       - name: Run regression tests
         run: PYTHONPATH=.ci-deps python3 -m unittest discover -s tools/safety/tests -p 'test_*.py' -v
+
+      - name: Install the approved Node.js baseline
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+
+      - name: Install exact gateway dependencies without lifecycle scripts
+        run: >-
+          npm ci --ignore-scripts --no-audit --no-fund
+          --prefix src/zoho-catalyst/billing-webhook-gateway
+
+      - name: Run Billing gateway checks and tests
+        run: npm run ci --prefix src/zoho-catalyst/billing-webhook-gateway

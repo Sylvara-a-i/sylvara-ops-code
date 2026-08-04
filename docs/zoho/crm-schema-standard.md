@@ -1,10 +1,25 @@
 # Zoho CRM Schema Standard
 
+## Status
+
+- Repository standard: **Proposed**
+- Official capability evidence: Zoho CRM API V8 documentation, subject to current-product verification
+- Advertised MCP evidence: dated 2026-08-03 contract snapshot only
+- Sylvara CRM organization, edition, schema, permissions, workflows, and effective MCP access: **Unknown**
+
+This standard is reviewed design guidance. It is not proof of a live field, layout, tool capability, deployment, or approved CRM change.
+
 ## Scope
 
 This standard defines how Sylvara evaluates and changes Zoho CRM modules, fields, layouts, picklists, lookups, workflows, and records. It intentionally does not select Sylvara fields. Field selection follows Sylvara's sales and delivery requirements, not another tenant's schema.
 
 The current reference is Zoho CRM API V8. Verify the live organization, edition, API version, metadata, and connector schema before implementation because limits and capabilities can change.
+
+## Ownership
+
+Zoho CRM owns approved prospect, customer, contact, opportunity, and commercial relationship state. It does not own accounting balances, subscription billing truth, private document contents, legal execution evidence, credentials, or middleware deployment state.
+
+Each proposed module, field, workflow, or record must identify its authoritative owner and downstream consumers. CRM may index an external object by a private stable reference, but it must not silently duplicate facts owned by Books, Billing, WorkDrive, Contracts, Sign, Mail, or another approved system.
 
 ## Metadata-First Sequence
 
@@ -85,7 +100,13 @@ Use deterministic matching and an external or unique key where appropriate. Befo
 
 A write-capable tool's presence is not approval. Bulk updates, layout redesign, field deletion, duplicate cleanup, and record deletion require separate capability, impact, and authorization reviews.
 
-## Error And Evidence Rules
+## Repository Boundary
+
+GitHub may contain sanitized schema proposals, generic metadata catalogs, field-purpose descriptions, dependency maps, synthetic fixtures, migration plans, and reviewed API-name conventions. It must not contain live organization, module, layout, field, record, workflow, user, profile, pipeline, connection, or deployment identifiers; customer records; raw submissions; documents; financial data; credentials; or unredacted metadata exports.
+
+Repository schema is desired-state evidence only. Live metadata and returned `api_name` values remain authoritative for the exact Sylvara organization and environment.
+
+## Failure And Readback
 
 - `OAUTH_SCOPE_MISMATCH` is authorization failure, not an empty result.
 - A rejected projection or `PATTERN_NOT_MATCHED` permits at most one documented, bounded fallback supported by the tool contract.
@@ -94,4 +115,30 @@ A write-capable tool's presence is not approval. Bulk updates, layout redesign, 
 - A timeout after a write requires authoritative readback before any retry.
 - UI visibility is not an API security boundary; enforce permissions server-side.
 
-Keep customer records, raw form submissions, documents, identity data, financial data, and unredacted evidence out of GitHub.
+After an approved write, use the independent audit role to read the exact schema object or record, returned API name, type, permissions, layout placement, dependencies, and intended trigger state. Stop on any mismatch, partial response, duplicate, or unexpected downstream effect; do not apply a compensating mutation until its full impact and approval are established.
+
+## Validation
+
+Use synthetic proposals and Development metadata to verify:
+
+- zero, one, and multiple target matches;
+- label and API-name collisions, reserved names, and unsupported field types;
+- profile, layout, picklist, lookup, formula, workflow, and layout-rule dependencies where relevant;
+- required, unique, external-ID, encrypted, restricted, and read-only behavior;
+- stale metadata, missing prerequisites, rate limits, authorization failure, malformed responses, and ambiguous timeouts;
+- trigger behavior, exact readback, rollback, and safe containment; and
+- absence of customer data, private identifiers, credentials, and raw metadata exports from repository artifacts and logs.
+
+A local test or official API example does not prove that a live MCP write contract is typed, authorized, or complete.
+
+## Manual Setup
+
+All live setup is currently **Unknown**. Before relying on this standard for a Sylvara change, verify or configure:
+
+- the exact CRM organization, data center, edition, environment, administrators, and least-privilege audit/change identities;
+- module, layout, section, field, profile, workflow, picklist, lookup, and dependency metadata required by the change;
+- authoritative-system ownership, duplicate keys, trigger policy, migration/backfill behavior, retention, and reporting impact;
+- a typed write contract, one-change approval, rollback or containment procedure, and independent audit readback; and
+- a private deployment record containing the approved current/proposed diff and sanitized validation result.
+
+Repository review does not authorize a live schema or record mutation.

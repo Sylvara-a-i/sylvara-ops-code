@@ -2,7 +2,7 @@
 
 > **Public record only. No executable source, deployable configuration, dependency manifest, endpoint detail, or secret is stored here.**
 
-This directory records a sanitized review of an operator-supplied Zoho Catalyst webhook function. The original export remains outside this public repository because the current deployment and route status could not be independently verified.
+This directory records a sanitized review of an operator-supplied Zoho Catalyst webhook function. The original export remains outside this public repository because it contains private manifest metadata and its security, deployment, and route state could not be independently verified.
 
 The record is useful for preserving design lessons without publishing an implementation that may still resemble a live integration. It is not an application, a reusable gateway, or evidence of any current environment.
 
@@ -11,7 +11,7 @@ The record is useful for preserving design lessons without publishing an impleme
 - The JavaScript handler, dependency manifests, lockfile, installed dependencies, and Catalyst configuration are excluded.
 - Provider-specific headers, request wrappers, routes, environment names, function names, and downstream schemas are excluded.
 - No endpoint URL, credential, token, signature, payload, log, customer record, or production identifier is included.
-- Any future gateway must be implemented as new reviewed code under `src/`, using synthetic fixtures and a separate deployment approval.
+- A new sanitized replacement is maintained at [`src/zoho-catalyst/billing-webhook-gateway`](../../../src/zoho-catalyst/billing-webhook-gateway/). It uses synthetic fixtures and remains subject to separate deployment approval.
 
 ## Source Provenance
 
@@ -28,4 +28,4 @@ These hashes establish review lineage only. They do not prove that the source is
 
 ## Decision
 
-Deployment and public-source publication are both blocked. See [SECURITY_REVIEW.md](SECURITY_REVIEW.md) for the durable design requirements that must govern any replacement.
+Deployment and publication of the supplied export remain blocked. The new sanitized replacement may be reviewed as public source, but it is not deployed or deployment-approved. See [SECURITY_REVIEW.md](SECURITY_REVIEW.md) for the durable design requirements governing that replacement.

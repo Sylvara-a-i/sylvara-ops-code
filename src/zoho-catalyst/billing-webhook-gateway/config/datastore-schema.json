@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "status": "proposed",
+  "live_state": "unknown",
+  "table": {
+    "public_reference_name": "Billing_Webhook_Inbox",
+    "runtime_variable": "EVENT_INBOX_TABLE",
+    "data_classification": "restricted-operational-metadata",
+    "contains_direct_customer_fields": false,
+    "contains_sensitive_derived_data": true,
+    "required_unique_column": "EVENT_KEY",
+    "columns": [
+      {
+        "api_name": "EVENT_KEY",
+        "type": "varchar",
+        "display_type": "Var Char",
+        "max_length": 64,
+        "is_mandatory": true,
+        "is_unique": true,
+        "pii_ephi": true,
+        "content": "Source-bound SHA-256 correlation key; never logged"
+      },
+      {
+        "api_name": "EVENT_FINGERPRINT",
+        "type": "varchar",
+        "display_type": "Var Char",
+        "max_length": 64,
+        "is_mandatory": true,
+        "is_unique": false,
+        "pii_ephi": true,
+        "content": "Keyed payload integrity fingerprint; restricted and never logged"
+      },
+      {
+        "api_name": "SOURCE_EVENT_ID",
+        "type": "varchar",
+        "display_type": "Var Char",
+        "max_length": 160,
+        "is_mandatory": true,
+        "is_unique": false,
+        "pii_ephi": true,
+        "content": "Restricted Zoho Billing event reference required for reconciliation"
+      },
+      {
+        "api_name": "STATUS",
+        "type": "varchar",
+        "display_type": "Var Char",
+        "max_length": 32,
+        "is_mandatory": true,
+        "is_unique": false,
+        "allowed_values": [
+          "processing",
+          "completed",
+          "failed",
+          "reconciliation_required"
+        ]
+      },
+      {
+        "api_name": "EVENT_TYPE",
+        "type": "varchar",
+        "display_type": "Var Char",
+        "max_length": 80,
+        "is_mandatory": true,
+        "is_unique": false,
+        "content": "Allowlisted Zoho Billing event name"
+      },
+      {
+        "api_name": "SOURCE_REVISION",
+        "type": "varchar",
+        "display_type": "Var Char",
+        "max_length": 80,
+        "is_mandatory": true,
+        "is_unique": false,
+        "content": "Reviewed public source revision"
+      },
+      {
+        "api_name": "SOURCE_ENVIRONMENT",
+        "type": "varchar",
+        "display_type": "Var Char",
+        "max_length": 16,
+        "is_mandatory": true,
+        "is_unique": false,
+        "allowed_values": [
+          "development",
+          "production"
+        ]
+      },
+      {
+        "api_name": "LAST_OUTCOME",
+        "type": "varchar",
+        "display_type": "Var Char",
+        "max_length": 80,
+        "is_mandatory": true,
+        "is_unique": false,
+        "content": "Coarse non-sensitive outcome class"
+      }
+    ],
+    "platform_columns_used": [
+      "ROWID",
+      "CREATEDTIME",
+      "MODIFIEDTIME"
+    ]
+  },
+  "retention": {
+    "minimum_days": 180,
+    "reason": "Keep reconciliation evidence through the current Billing event retrieval window.",
+    "approval_required_to_change": true
+  },
+  "constraints": [
+    "Create the table manually in the correct Catalyst project and environment.",
+    "Verify Var Char, IsMandatory, IsUnique, Max Length, and PII/ePHI metadata after creation.",
+    "Verify the unique-conflict code and SDK response shapes in Development before activation.",
+    "Do not add raw payloads, signatures, customer fields, OAuth data, endpoints, or unrelated production identifiers.",
+    "Restrict source references and fingerprints to the reconciliation role; never emit them to logs.",
+    "Recovery and operator access require a separately approved private runbook."
+  ]
+}

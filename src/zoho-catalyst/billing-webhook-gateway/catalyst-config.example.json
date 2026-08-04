@@ -1,0 +1,10 @@
+{
+  "deployment": {
+    "name": "billing_webhook_gateway_reference",
+    "stack": "node24",
+    "type": "advancedio"
+  },
+  "execution": {
+    "main": "index.js"
+  }
+}

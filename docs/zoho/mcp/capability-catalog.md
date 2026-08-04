@@ -6,6 +6,18 @@ This catalog is a sanitized snapshot of the Zoho tool contracts advertised to Co
 
 The complete one-row-per-tool snapshot is in [`observed-tool-inventory.json`](observed-tool-inventory.json). Runtime source namespaces and endpoints were removed because they identify another business and are not portable. Normalized tool IDs are retained only as dated observations; generated or hashed names may change when a connector is regenerated.
 
+## Capability Evidence Layers
+
+Keep these evidence layers separate when designing, documenting, or approving a Sylvara integration:
+
+| Evidence layer | What it establishes | What it does not establish |
+|---|---|---|
+| Official Zoho product or API documentation | A generally documented product capability, endpoint, scope, limit, or behavior | That Codex has an MCP tool for it, that the feature is enabled for Sylvara, or that a specific identity is authorized |
+| Advertised MCP tool contract | The name, description, and input shape exposed by one inspected MCP server at a recorded time | Successful execution, complete response data, correct tenant binding, effective OAuth scope, plan availability, or safe write semantics |
+| Effective Sylvara tenant capability | Current access for an exact server identity, tenant, environment, role, grant, plan, and feature configuration | Permission for unrelated operations or continuing access after configuration, authorization, or product state changes |
+
+Record the evidence layer and observation date with every capability claim. Effective tenant capability requires a least-sensitive identity check, a bounded acceptance call when authorized, response validation, and authoritative readback. A lower layer must never be promoted to a higher one by assumption.
+
 ## Observed Surface
 
 | Neutral server role | Read | Write / action | Total | Risk note |
@@ -92,4 +104,4 @@ Recommended progression:
 
 ## Unknown Surfaces
 
-No Creator, Forms, Billing, Contracts, Sign, Sites, or Mail server role was observed. Their current Codex availability and OAuth coverage remain **Unknown** until a named server, advertised tools, target identity, and effective grants are tested.
+No Creator, Forms, Billing, Contracts, Sign, Sites, Mail, or Analytics server role was observed. Their current Codex availability and OAuth coverage remain **Unknown** until a named server, advertised tools, target identity, and effective grants are tested.

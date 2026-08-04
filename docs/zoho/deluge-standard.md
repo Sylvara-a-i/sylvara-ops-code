@@ -1,10 +1,24 @@
 # Deluge Engineering Standard
 
+## Status
+
+- Repository standard: **Proposed**
+- Official capability evidence: current Deluge task and statement documentation, subject to owning-product verification
+- Sylvara functions, connections, schedules, runtime limits, deployments, and effective permissions: **Unknown**
+
+This standard defines portable engineering behavior. It does not prove that a function imports, saves, is connected, is scheduled, or is deployed in any Zoho environment.
+
 ## Objective
 
 Deluge functions must be importable, readable, fail-closed, and owned by one Zoho product and one business workflow. This standard applies to CRM functions, Books custom functions, Creator workflows, and cross-product integration tasks.
 
 Do not copy another organization's field names, connection names, IDs, endpoints, schedules, fee rules, or transaction logic into Sylvara.
+
+## Ownership
+
+Deluge is an execution language, not a system of record. Each function must have one owning Zoho product and one bounded business workflow. CRM, Books, Billing, Creator, WorkDrive, or another approved product retains ownership of its authoritative state; Deluge may validate, coordinate, or mutate that state only through an explicitly approved contract.
+
+Cross-product orchestration must define direction, conflict handling, duplicate ownership, and the authoritative readback system. A Deluge function must not create a second accounting, subscription, relationship, document, or legal source of truth.
 
 ## Required File Header
 
@@ -63,11 +77,13 @@ For every external call:
 - redact authentication and response bodies; and
 - do not retry an ambiguous create or update until authoritative state is read.
 
-## Error Handling
+## Failure And Readback
 
 Use explicit result checks and [try-catch](https://www.zoho.com/deluge/help/misc-statements/try-catch.html) around operations that can fail. Classify failures as validation, authorization, rate limit, dependency, transient transport, ambiguous outcome, or permanent business rejection.
 
 Retries must be bounded, delayed where supported, limited to demonstrably retry-safe failures, and protected by idempotency. Never convert an error into a successful result merely to keep a schedule green.
+
+After an approved side effect, read the authoritative object independently and compare the idempotency key, returned identifier, status, intended fields, linked records, and expected downstream effects. A timeout or malformed success response remains unresolved until readback establishes the outcome; never blindly repeat a create, send, payment, credit, or record mutation.
 
 ## Logging And Privacy
 
@@ -81,7 +97,13 @@ Default to dry-run or non-posting mode. Creating invoices, applying payments or 
 
 Each transaction or communication class has one owning automation. Do not let two schedules or functions independently create the same business outcome.
 
-## Verification
+## Repository Boundary
+
+GitHub may contain sanitized `.deluge` source, function headers, typed input contracts, decision tables, synthetic fixtures, setup instructions, and rollback runbooks. It must not contain live connection names, organization or record IDs, private endpoints, schedules that disclose production behavior, credentials, tokens, raw payloads, customer or employee data, document contents, financial records, or production logs.
+
+Repository source is reviewed intent, not proof of import, save, connection, schedule, execution, or deployment. Environment-specific configuration and private evidence stay in approved Zoho and audit systems.
+
+## Validation
 
 Before deployment, record:
 
@@ -94,3 +116,16 @@ Before deployment, record:
 - the deployed immutable source revision in the private deployment record.
 
 If Deluge cannot be unit-tested outside Zoho, use a documented decision matrix and repeatable Development smoke test. Do not invent a test result or claim that a saved function is deployed.
+
+## Manual Setup
+
+All live setup is currently **Unknown**. Before relying on a function, verify or configure:
+
+- the owning Zoho product, Development and Production locations, function name, trigger, schedule, runtime limits, and administrator;
+- exact input API names, authoritative records, allowed statuses, idempotency storage, and duplicate rules;
+- least-privilege Zoho Connections, permitted hosts and methods, environment-specific variables, and secret storage;
+- dry-run or non-posting defaults, failure alerts, monitoring, support owner, and bounded retry behavior;
+- repeatable import/syntax validation, Development fixtures, readback, rollback or containment, and disabled-state behavior; and
+- a private deployment record tying the reviewed source revision to the exact saved and activated function.
+
+Repository review does not authorize a live connection, schedule, function activation, or business-system write.

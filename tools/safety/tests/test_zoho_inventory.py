@@ -44,6 +44,7 @@ INVENTORY_ONLY_MARKERS = SOURCE_IDENTITY_MARKERS + (
     "https" + "://",
 )
 OFFICIAL_DOCUMENTATION_HOSTS = {
+    "help.zoho.com",
     "docs.catalyst.zoho.com",
     "learn.chatgpt.com",
     "workdrive.zoho.com",
