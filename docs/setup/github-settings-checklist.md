@@ -34,11 +34,13 @@ Do not create or document access links to unrelated business identities. Use onl
 
 - [x] No people or teams have organization-based repository access; organization owners retain inherent administration.
 - [x] No base organization role is assigned.
-- [ ] **UNVERIFIED:** Repository creation, deletion, transfer, and visibility changes are restricted to approved owners.
+- [x] Repository deletion, transfer, and visibility changes are restricted to organization owners. The organization currently has one approved member/owner; public repository creation remains plan-limited.
 - [x] The required GitHub App is installed only on the selected Sylvara repository.
 - [x] The installed GitHub App has no repository administration, organization administration, secrets, billing, or ruleset-bypass permission.
+- [x] OAuth App access is restricted, classic personal access tokens are blocked, no fine-grained personal access token is active, and new fine-grained tokens require administrator approval with a 90-day maximum lifetime.
+- [x] No repository or organization webhook, deploy key, self-hosted runner, or deployment environment is configured.
 - [ ] **UNVERIFIED:** Unused collaborators, teams, deploy keys, OAuth apps, GitHub Apps, and tokens have been revoked.
-- [ ] **UNVERIFIED:** Organization two-factor authentication requirements are enabled and enforced.
+- [x] Organization two-factor authentication and secure two-factor methods are required.
 
 ## Actions
 
@@ -48,7 +50,7 @@ Do not create or document access links to unrelated business identities. Use onl
 - [x] Workflows cannot create or approve pull requests unless separately justified.
 - [x] Fork pull-request workflows require approval for all external contributors.
 - [ ] **UNVERIFIED:** Workflow logs and artifacts cannot expose secrets or production data.
-- [ ] **UNVERIFIED:** Required repository safety checks exist and pass on a controlled test pull request.
+- [x] Required repository safety checks passed on controlled pull request #4 and again on the resulting `main` commit.
 
 ## Protect `main`
 
@@ -74,15 +76,15 @@ Do not create or document access links to unrelated business identities. Use onl
 - [x] Secret scanning is enabled.
 - [x] Push protection is enabled.
 - [x] CodeQL default setup is enabled for detected GitHub Actions, JavaScript/TypeScript, and Python code.
+- [x] The `main` ruleset requires CodeQL results for high-or-higher security alerts and error-level standard alerts.
+- [x] CodeQL completed successfully on setup, pull request #4, and the resulting `main` commit. Two intentional synthetic credential fixtures were classified as used in tests with sanitized dismissal comments; zero alerts remain open.
 - [x] Private vulnerability reporting is enabled.
 - [x] Public interaction settings match the no-external-contributions policy; pull requests remain available for controlled change review.
 
 ## Environments And Deployment
 
-- [ ] **UNVERIFIED:** Production environments, if any, require explicit approval.
-- [ ] **UNVERIFIED:** Environment secrets are stored only in approved encrypted stores.
-- [ ] **UNVERIFIED:** Deployment credentials are environment-scoped and least privilege.
-- [ ] **UNVERIFIED:** A merge to `main` cannot implicitly deploy to production without the approved deployment gate.
+- [x] No GitHub deployment environment, environment secret, deployment credential, or self-hosted runner is configured.
+- [x] The current workflows perform repository validation only; a merge to `main` does not deploy to production.
 - [ ] **UNVERIFIED:** Deployment and rollback produce sanitized audit evidence.
 
 ## Verification Record
@@ -91,4 +93,4 @@ Record the completed review in a private audit system. In this public file, reco
 
 | Date | Reviewer role | Sanitized outcome |
 | --- | --- | --- |
-| 2026-08-04 | Organization owner / repository administrator | Enabled protected-main, least-privilege app scope, hardened Actions, dependency and secret protections, and CodeQL. Independent approval remains deferred until a second trusted reviewer or distinct PR-authoring identity exists. |
+| 2026-08-04 | Organization owner / repository administrator | Enabled protected-main, least-privilege app and token scope, hardened Actions, dependency and secret protections, and CodeQL gating. Verified the controlled PR and final `main` checks; independent approval remains deferred until a second trusted reviewer or distinct PR-authoring identity exists. |
