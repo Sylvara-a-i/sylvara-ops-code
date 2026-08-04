@@ -177,6 +177,42 @@ def _string_uses_secrets_context(value: str) -> bool:
             return False
 
 
+def _string_uses_github_token_context(value: str) -> bool:
+    """Return whether an expression can expose the implicit GitHub token."""
+    patterns = (
+        re.compile(r"github\s*\.\s*token\b", re.IGNORECASE),
+        re.compile(r"github\s*\[\s*'token'\s*\]", re.IGNORECASE),
+        re.compile(r"tojson\s*\(\s*github\s*\)", re.IGNORECASE),
+    )
+    search_from = 0
+    while True:
+        expression_start = value.find("${{", search_from)
+        if expression_start < 0:
+            return False
+
+        index = expression_start + 3
+        in_string = False
+        while index < len(value):
+            character = value[index]
+            if character == "'":
+                if in_string and index + 1 < len(value) and value[index + 1] == "'":
+                    index += 2
+                    continue
+                in_string = not in_string
+                index += 1
+                continue
+
+            if not in_string:
+                if value.startswith("}}", index):
+                    search_from = index + 2
+                    break
+                if any(pattern.match(value, index) for pattern in patterns):
+                    return True
+            index += 1
+        else:
+            return False
+
+
 def _uses_secrets_context(value: object, visited: set[int] | None = None) -> bool:
     """Recursively inspect all workflow scalar values and mapping keys."""
     if isinstance(value, str):
@@ -200,6 +236,31 @@ def _uses_secrets_context(value: object, visited: set[int] | None = None) -> boo
     return any(_uses_secrets_context(item, visited) for item in value)
 
 
+def _uses_github_token_context(
+    value: object, visited: set[int] | None = None
+) -> bool:
+    """Recursively inspect workflow scalars for implicit-token access."""
+    if isinstance(value, str):
+        return _string_uses_github_token_context(value)
+    if not isinstance(value, (Mapping, list)):
+        return False
+
+    if visited is None:
+        visited = set()
+    object_id = id(value)
+    if object_id in visited:
+        return False
+    visited.add(object_id)
+
+    if isinstance(value, Mapping):
+        return any(
+            _uses_github_token_context(key, visited)
+            or _uses_github_token_context(item, visited)
+            for key, item in value.items()
+        )
+    return any(_uses_github_token_context(item, visited) for item in value)
+
+
 def validate_workflow(path: Path, text: str) -> list[str]:
     rel = path.as_posix()
     problems: list[str] = []
@@ -212,6 +273,8 @@ def validate_workflow(path: Path, text: str) -> list[str]:
 
     if _uses_secrets_context(document):
         problems.append("GitHub Actions secrets context is prohibited")
+    if _uses_github_token_context(document):
+        problems.append("GitHub token context is prohibited")
 
     top_permissions_raw = document.get("permissions")
     top_permissions = _permissions(top_permissions_raw)
@@ -220,8 +283,8 @@ def validate_workflow(path: Path, text: str) -> list[str]:
         top_permissions = {}
     else:
         problems.extend(_validate_permission_mapping(top_permissions, "top-level"))
-    if top_permissions.get("contents") != "read":
-        problems.append("top-level permissions must include contents: read")
+    if top_permissions:
+        problems.append("top-level permissions must be empty")
 
     if "pull_request_target" in _trigger_names(document.get("on")):
         problems.append("pull_request_target is prohibited")
@@ -259,6 +322,8 @@ def validate_workflow(path: Path, text: str) -> list[str]:
             problems.extend(
                 _validate_permission_mapping(job_permissions, f"job {job_name}")
             )
+        if job_permissions:
+            problems.append(f"job {job_name} permissions must be empty")
 
         if "uses" in raw_job:
             problems.extend(

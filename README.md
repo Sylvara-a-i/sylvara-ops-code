@@ -57,7 +57,7 @@ python -m venv .codex-tmp\safety-venv
 .\.codex-tmp\safety-venv\Scripts\python.exe -m unittest discover -s tools/safety/tests -p "test_*.py" -v
 ```
 
-Use 64-bit CPython 3.12 on Windows for the documented local path; CI runs the equivalent checks on CPython 3.13 for Linux. Dependency installation is hash-pinned and fails closed on an unsupported wheel.
+Use 64-bit CPython 3.12 on Windows for the documented local path; CI runs the equivalent checks on CPython 3.12 for Linux. Dependency installation is hash-pinned and fails closed on an unsupported wheel.
 
 ## Commercial Constraint
 

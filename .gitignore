@@ -28,6 +28,7 @@ venv/
 .coverage
 htmlcov/
 .codex-tmp/
+.ci-deps/
 .pnpm-store/
 
 # Editors and OS

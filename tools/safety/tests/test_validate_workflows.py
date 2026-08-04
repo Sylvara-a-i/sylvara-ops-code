@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import importlib.util
+import shutil
+import subprocess
+import sys
 import unittest
 import unittest.mock as mock
 from pathlib import Path
@@ -23,8 +26,7 @@ def workflow(job: str, trigger: str = "pull_request") -> str:
 on:
   {trigger}:
 
-permissions:
-  contents: read
+permissions: {{}}
 
 jobs:
 {job}
@@ -71,9 +73,11 @@ class WorkflowPolicyTests(unittest.TestCase):
 
     def test_top_level_permissions_are_required_and_write_is_blocked(self) -> None:
         missing = workflow(hardened_job()).replace(
-            "permissions:\n  contents: read\n\n", ""
+            "permissions: {}\n\n", ""
         )
-        writable = workflow(hardened_job()).replace("contents: read", "contents: write")
+        writable = workflow(hardened_job()).replace(
+            "permissions: {}", "permissions:\n  contents: write"
+        )
         self.assertTrue(
             any(
                 "explicit mapping" in item
@@ -123,6 +127,25 @@ class WorkflowPolicyTests(unittest.TestCase):
         )
         self.assertEqual([], problems)
 
+    def test_github_token_context_is_blocked(self) -> None:
+        expressions = (
+            "${{ github.token }}",
+            "${{ github['token'] }}",
+            "${{ toJSON(github) }}",
+        )
+        for expression in expressions:
+            with self.subTest(expression=expression):
+                steps = f"""      - name: Attempt token access
+        run: echo blocked
+        env:
+          TOKEN_VALUE: \"{expression}\""""
+                problems = validate_workflows.validate_workflow(
+                    self.path, workflow(hardened_job(steps))
+                )
+                self.assertTrue(
+                    any("GitHub token context is prohibited" in item for item in problems)
+                )
+
     def test_job_containers_and_services_are_blocked(self) -> None:
         additions = (
             "    container: python:3.13\n",
@@ -137,6 +160,48 @@ class WorkflowPolicyTests(unittest.TestCase):
                 self.assertTrue(
                     any("usage is not approved" in item for item in problems)
                 )
+
+    def test_credential_free_checkout_scripts_are_valid_bash(self) -> None:
+        bash = shutil.which("bash")
+        if bash is None:
+            windows_bash = Path(r"C:\Program Files\Git\bin\bash.exe")
+            if windows_bash.is_file():
+                bash = str(windows_bash)
+        if bash is None:
+            self.skipTest("Bash is not installed")
+
+        root = Path(__file__).resolve().parents[3]
+        scripts: list[tuple[Path, str, str]] = []
+        for workflow_path in sorted((root / ".github" / "workflows").glob("*.yml")):
+            document = validate_workflows.yaml.load(
+                workflow_path.read_text(encoding="utf-8"),
+                Loader=validate_workflows.GitHubActionsLoader,
+            )
+            for job_name, job in document["jobs"].items():
+                for step in job["steps"]:
+                    script = step.get("run")
+                    if isinstance(script, str) and "git init ." in script:
+                        scripts.append((workflow_path, str(job_name), script))
+
+        self.assertEqual(3, len(scripts))
+        for workflow_path, job_name, script in scripts:
+            result = subprocess.run(
+                [bash, "-n"],
+                input=script,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
+            if sys.platform == "win32" and result.returncode != 0 and not result.stderr:
+                self.skipTest(
+                    "Git Bash is unavailable to Python child processes in this Windows sandbox"
+                )
+            self.assertEqual(
+                0,
+                result.returncode,
+                f"{workflow_path}:{job_name}: {result.stderr}",
+            )
 
     def test_checkout_must_drop_persisted_credentials(self) -> None:
         steps = f"""      - uses: {CHECKOUT}"""
