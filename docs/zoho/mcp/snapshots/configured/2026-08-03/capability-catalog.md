@@ -44,7 +44,7 @@ Every observed endpoint returns an untyped data object with a transport status. 
 
 ### Zoho Books
 
-The Books surface contains 296 tools across audit, bookkeeping, and controller roles. Almost every observed call accepts `organization_id` at request time instead of enforcing one fixed organization in the server contract. Do not copy that weakness into Sylvara. Bind organization and data center inside the control layer, reject caller-supplied target changes, and use the controls in the [Books Automation Standard](../../../src/zoho-books/automation-standard.md).
+The Books surface contains 296 tools across audit, bookkeeping, and controller roles. Almost every observed call accepts `organization_id` at request time instead of enforcing one fixed organization in the server contract. Do not copy that weakness into Sylvara. Bind organization and data center inside the control layer, reject caller-supplied target changes, and use the controls in the [Books Automation Standard](../../../../standards/books-automation.md).
 
 Forty-one Books audit contracts explicitly advertise a report-metadata preflight requirement. Those reports must use the required metadata call, validate requested fields and periods, and fail closed when metadata is missing or stale. The snapshot does not assign a complete report taxonomy, so it does not claim a total number of report-like tools.
 

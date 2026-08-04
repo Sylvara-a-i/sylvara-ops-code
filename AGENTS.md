@@ -67,6 +67,7 @@ Repository approval is not live-system approval. Before any production Zoho or e
 - An advertised or untyped write tool is not a safe payload contract. Stop when prerequisites, field types, subform behavior, response completeness, or rollback are unverified.
 - Begin Books work read-only. Financial writes require fixed-organization binding, fresh prestate, immutable approved input, idempotency, serialization, independent readback, and reconciliation.
 - Place real sanitized artifacts under the owning product path only when a concrete workflow exists. Do not create empty suite scaffolding or copy official Zoho documentation wholesale; preserve Sylvara decisions, schemas, interfaces, source, tests, and current official links.
+- Place reusable Zoho governance, standards, and product references under `docs/zoho/`. Keep only implementation-specific deployment, validation, provenance, and rollback documentation beside the code or artifact, and link it from the central Zoho index instead of duplicating it.
 - A public variable registry may record names, classifications, safe defaults, and rules. Secret values, endpoints, private hosts, live paths, platform IDs, connection names, and populated environment files remain outside GitHub and runtime logs.
 - Webhook verification is product-specific. Do not reuse Billing, Books, Sign, Mail, WorkDrive, Forms, or CRM assumptions across providers without an official contract and Development fixture.
 

@@ -9,29 +9,42 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 ZOHO_DOCS = ROOT / "docs" / "zoho"
 README = ZOHO_DOCS / "README.md"
-CATALOG = ZOHO_DOCS / "mcp" / "capability-catalog.md"
-SUITE_REGISTRY = ZOHO_DOCS / "suite-registry.json"
+CATALOG = (
+    ZOHO_DOCS
+    / "mcp"
+    / "snapshots"
+    / "configured"
+    / "2026-08-03"
+    / "capability-catalog.md"
+)
+SUITE_REGISTRY = ZOHO_DOCS / "governance" / "suite-registry.json"
+SOURCE_MANIFEST = ZOHO_DOCS / "reference" / "source-manifest.json"
 
 GOVERNED_STANDARDS = {
-    "crm-schema-standard.md",
-    "deluge-standard.md",
-    "billing-standard.md",
-    "catalyst-standard.md",
-    "workflow-and-intake-standard.md",
-    "document-lifecycle-standard.md",
-    "mail-standard.md",
-    "analytics-standard.md",
-    "accounting-practices-standard.md",
-    "../../src/zoho-books/automation-standard.md",
+    "standards/crm-schema.md",
+    "standards/deluge.md",
+    "standards/billing.md",
+    "standards/catalyst.md",
+    "standards/workflow-and-intake.md",
+    "standards/document-lifecycle.md",
+    "standards/mail.md",
+    "standards/analytics.md",
+    "standards/accounting.md",
+    "standards/books-automation.md",
 }
 REQUIRED_README_HEADINGS = {
     "Purpose",
-    "Portability Boundary",
+    "Directory Map",
+    "Start Here",
     "Standards Index",
-    "System Ownership",
+    "Product Reference Index",
+    "MCP Index",
+    "Code-Adjacent Zoho Artifacts",
+    "Portability Boundary",
     "Governed Artifact Contract",
-    "Evidence Rules",
-    "Current Snapshot",
+    "Evidence Status",
+    "Current MCP Snapshot",
+    "Live Change Boundary",
 }
 REQUIRED_STANDARD_HEADINGS = {
     "Status",
@@ -49,7 +62,8 @@ REQUIRED_PRODUCTS = {
     "WorkDrive",
     "Catalyst",
     "Forms",
-    "Contracts / Sign",
+    "Contracts",
+    "Sign",
     "Sites",
     "Mail",
     "Analytics",
@@ -68,7 +82,69 @@ REQUIRED_REGISTRY_IDS = {
     "mail",
     "analytics",
 }
+REFERENCE_ONLY_IDS = {
+    "api-console",
+    "one",
+    "bookings",
+    "calendar",
+    "checkout",
+    "flow",
+    "meeting",
+    "payments",
+    "people",
+    "todo",
+    "voice",
+}
+CAPABILITY_LAYERS = (
+    "official-product-capability",
+    "tool-manual-catalog",
+    "preconfigured-template-membership",
+    "advertised-mcp-tool-contract",
+    "effective-tenant-capability",
+)
+PRODUCT_REFERENCE_FILES = {
+    "zoho-analytics.md",
+    "zoho-api-console.md",
+    "zoho-billing.md",
+    "zoho-bookings.md",
+    "zoho-books.md",
+    "zoho-calendar.md",
+    "zoho-catalyst.md",
+    "zoho-checkout.md",
+    "zoho-contracts.md",
+    "zoho-creator.md",
+    "zoho-crm.md",
+    "zoho-flow.md",
+    "zoho-forms.md",
+    "zoho-mail.md",
+    "zoho-meeting.md",
+    "zoho-one.md",
+    "zoho-payments.md",
+    "zoho-people.md",
+    "zoho-sign.md",
+    "zoho-sites.md",
+    "zoho-todo.md",
+    "zoho-voice.md",
+    "zoho-workdrive.md",
+}
+OLD_PATHS = {
+    "docs/zoho/suite-registry.json",
+    "docs/zoho/crm-schema-standard.md",
+    "docs/zoho/accounting-practices-standard.md",
+    "docs/zoho/billing-standard.md",
+    "docs/zoho/catalyst-standard.md",
+    "docs/zoho/deluge-standard.md",
+    "docs/zoho/workflow-and-intake-standard.md",
+    "docs/zoho/document-lifecycle-standard.md",
+    "docs/zoho/mail-standard.md",
+    "docs/zoho/analytics-standard.md",
+    "docs/zoho/mcp/capability-catalog.md",
+    "docs/zoho/mcp/observed-tool-inventory.json",
+    "src/zoho-books/automation-standard.md",
+}
 MARKDOWN_LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
+TEXT_SUFFIXES = {".md", ".py", ".json", ".yml", ".yaml"}
+SKIPPED_PARTS = {".git", ".codex-tmp", "node_modules"}
 
 
 def headings(text: str, level: int) -> set[str]:
@@ -77,6 +153,15 @@ def headings(text: str, level: int) -> set[str]:
         line.removeprefix(prefix).strip()
         for line in text.splitlines()
         if line.startswith(prefix) and not line.startswith(prefix + "#")
+    }
+
+
+def relative_markdown_targets(text: str) -> set[str]:
+    return {
+        target.strip("<>").split("#", 1)[0]
+        for target in MARKDOWN_LINK_RE.findall(text)
+        if target
+        and not target.startswith(("http://", "https://", "mailto:", "#"))
     }
 
 
@@ -92,21 +177,12 @@ class ZohoStandardsTests(unittest.TestCase):
         catalog_headings = headings(CATALOG.read_text(encoding="utf-8"), 2)
         self.assertIn("Capability Evidence Layers", catalog_headings)
 
-    def test_all_governed_standards_are_linked_and_links_resolve(self) -> None:
-        relative_links = {
-            target.split("#", 1)[0]
-            for target in MARKDOWN_LINK_RE.findall(self.readme_text)
-            if not target.startswith(("http://", "https://", "#"))
-        }
-        self.assertTrue(GOVERNED_STANDARDS.issubset(relative_links))
+    def test_all_governed_standards_are_linked_and_have_contract_headings(self) -> None:
+        root_links = relative_markdown_targets(self.readme_text)
+        self.assertTrue(GOVERNED_STANDARDS.issubset(root_links))
 
-        for target in relative_links:
-            with self.subTest(target=target):
-                self.assertTrue((README.parent / target).resolve().is_file())
-
-    def test_governed_standard_documents_have_required_headings(self) -> None:
-        for filename in sorted(GOVERNED_STANDARDS):
-            path = ZOHO_DOCS / filename
+        for relative_path in sorted(GOVERNED_STANDARDS):
+            path = ZOHO_DOCS / relative_path
             with self.subTest(path=path):
                 text = path.read_text(encoding="utf-8")
                 self.assertEqual(1, len(headings(text, 1)))
@@ -114,37 +190,87 @@ class ZohoStandardsTests(unittest.TestCase):
                     REQUIRED_STANDARD_HEADINGS.issubset(headings(text, 2))
                 )
 
+    def test_every_relative_link_under_zoho_docs_resolves(self) -> None:
+        for path in sorted(ZOHO_DOCS.rglob("*.md")):
+            for target in sorted(relative_markdown_targets(path.read_text(encoding="utf-8"))):
+                with self.subTest(path=path, target=target):
+                    self.assertTrue((path.parent / target).resolve().exists())
+
     def test_ownership_map_includes_every_governed_zoho_product(self) -> None:
         ownership_section = self.readme_text.split(
             "## System Ownership", 1
-        )[1].split("\n## ", 1)[0]
+        )[1].split("\n## ", 1)[0] if "## System Ownership" in self.readme_text else (
+            (ZOHO_DOCS / "governance" / "system-ownership.md")
+            .read_text(encoding="utf-8")
+            .split("## Ownership Map", 1)[1]
+            .split("\n## ", 1)[0]
+        )
         products = {
-            cells[0]
+            cells[0].removeprefix("Zoho ")
             for line in ownership_section.splitlines()
             if line.startswith("|")
-            and len(
-                cells := [
-                    cell.strip() for cell in line.strip("|").split("|")
-                ]
-            )
-            == 3
-            and cells[0] not in {"Zoho product", "---"}
+            and len(cells := [cell.strip() for cell in line.strip("|").split("|")]) == 3
+            and cells[0] not in {"Product", "Zoho product", "---"}
         }
         self.assertTrue(REQUIRED_PRODUCTS.issubset(products))
 
     def test_machine_readable_suite_registry_is_complete_and_resolvable(self) -> None:
         registry = json.loads(SUITE_REGISTRY.read_text(encoding="utf-8"))
-        self.assertEqual(1, registry["schema_version"])
+        self.assertEqual(2, registry["schema_version"])
+        self.assertEqual("docs/zoho", registry["path_base"])
         self.assertEqual("unknown", registry["live_state"])
+        self.assertEqual(list(CAPABILITY_LAYERS), registry["capability_layers"])
+
         products = registry["products"]
         self.assertEqual(len(products), len({row["id"] for row in products}))
         self.assertEqual(REQUIRED_REGISTRY_IDS, {row["id"] for row in products})
         for row in products:
             with self.subTest(product=row["id"]):
                 self.assertEqual("unknown", row["effective_tenant_capability"])
-                self.assertIsInstance(row["repository_artifacts"], list)
                 for target in (*row["standards"], *row["repository_artifacts"]):
                     self.assertTrue((ZOHO_DOCS / target).resolve().is_file())
+
+        references = registry["reference_only_products"]
+        self.assertEqual(REFERENCE_ONLY_IDS, {row["id"] for row in references})
+        for row in references:
+            with self.subTest(reference=row["id"]):
+                self.assertEqual("unknown", row["adoption_status"])
+                self.assertTrue((ZOHO_DOCS / row["reference"]).is_file())
+
+    def test_product_reference_collection_is_complete_and_fail_closed(self) -> None:
+        product_dir = ZOHO_DOCS / "reference" / "products"
+        self.assertEqual(PRODUCT_REFERENCE_FILES, {path.name for path in product_dir.glob("*.md")})
+        references = [*product_dir.glob("*.md"), ZOHO_DOCS / "reference" / "deluge" / "master-knowledge-base.md"]
+        for path in references:
+            with self.subTest(path=path):
+                text = path.read_text(encoding="utf-8").lower()
+                self.assertIn("2026-07-20", text)
+                self.assertIn("reference", text)
+                self.assertIn("unknown", text)
+                self.assertIn("official", text)
+
+    def test_source_manifest_lists_every_reference_and_resolves(self) -> None:
+        manifest = json.loads(SOURCE_MANIFEST.read_text(encoding="utf-8"))
+        self.assertEqual(1, manifest["schema_version"])
+        self.assertEqual(24, len(manifest["product_references"]))
+        self.assertEqual(24, len(set(manifest["product_references"])))
+        for target in manifest["product_references"]:
+            with self.subTest(target=target):
+                self.assertTrue((SOURCE_MANIFEST.parent / target).is_file())
+
+    def test_retired_zoho_paths_do_not_remain_in_repository_text_locations(self) -> None:
+        for path in ROOT.rglob("*"):
+            if (
+                not path.is_file()
+                or path.resolve() == Path(__file__).resolve()
+                or path.suffix not in TEXT_SUFFIXES
+                or any(part in SKIPPED_PARTS for part in path.parts)
+            ):
+                continue
+            text = path.read_text(encoding="utf-8", errors="ignore")
+            for old_path in OLD_PATHS:
+                with self.subTest(path=path, old_path=old_path):
+                    self.assertNotIn(old_path, text)
 
 
 if __name__ == "__main__":
