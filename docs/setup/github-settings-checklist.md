@@ -2,74 +2,80 @@
 
 ## Status
 
-All live settings below are **UNVERIFIED**. Every checkbox intentionally starts unchecked. Confirm each item in the Sylvara organization and repository before marking it complete; repository files do not prove live configuration.
+Last live review: **2026-08-04**
+
+Reviewer role: **Sylvara organization owner / repository administrator**
+
+Outcome: **Core public-repository hardening enabled; deliberate exceptions and organization-level unknowns remain below.**
+
+Checked items were read back from the live GitHub administration interface during the review. Unchecked items are either unverified or intentionally deferred; the notes explain deliberate exceptions. Repository files alone do not prove that a live setting remains unchanged after this review.
 
 Do not create or document access links to unrelated business identities. Use only Sylvara-approved accounts, teams, and app installations.
 
 ## Repository Identity
 
-- [ ] **UNVERIFIED:** Repository owner and name match the approved Sylvara repository.
-- [ ] **UNVERIFIED:** Visibility is intentionally Public.
-- [ ] **UNVERIFIED:** Default branch is `main`.
+- [x] Repository owner and name match the approved Sylvara repository.
+- [x] Visibility is intentionally Public.
+- [x] Default branch is `main`.
 - [ ] **UNVERIFIED:** Description, website, and topics contain only approved public information.
 - [ ] **UNVERIFIED:** No open-source license is present unless separately approved.
 
 ## General Settings
 
-- [ ] **UNVERIFIED:** Issues are disabled unless a public issue process is explicitly approved.
-- [ ] **UNVERIFIED:** Discussions, Wiki, and Projects are disabled unless required.
-- [ ] **UNVERIFIED:** Squash merge is enabled.
-- [ ] **UNVERIFIED:** Merge commits are disabled.
-- [ ] **UNVERIFIED:** Rebase merging is disabled.
-- [ ] **UNVERIFIED:** Automatic head-branch deletion is enabled.
-- [ ] **UNVERIFIED:** GitHub Pages is disabled unless a separate publication approval exists.
+- [x] Issues are disabled unless a public issue process is explicitly approved.
+- [x] Discussions, Wiki, and Projects are disabled unless required.
+- [x] Squash merge is enabled.
+- [x] Merge commits are disabled.
+- [x] Rebase merging is disabled.
+- [x] Automatic head-branch deletion is enabled.
+- [x] GitHub Pages is disabled unless a separate publication approval exists.
 
 ## Collaborators And Apps
 
-- [ ] **UNVERIFIED:** Every collaborator is a currently approved Sylvara identity.
-- [ ] **UNVERIFIED:** Base organization permission is the minimum practical level.
+- [x] No people or teams have organization-based repository access; organization owners retain inherent administration.
+- [x] No base organization role is assigned.
 - [ ] **UNVERIFIED:** Repository creation, deletion, transfer, and visibility changes are restricted to approved owners.
-- [ ] **UNVERIFIED:** GitHub Apps are installed only on selected required repositories.
-- [ ] **UNVERIFIED:** Write-capable apps lack repository administration, organization administration, secrets, billing, and ruleset-bypass access.
+- [x] The required GitHub App is installed only on the selected Sylvara repository.
+- [x] The installed GitHub App has no repository administration, organization administration, secrets, billing, or ruleset-bypass permission.
 - [ ] **UNVERIFIED:** Unused collaborators, teams, deploy keys, OAuth apps, GitHub Apps, and tokens have been revoked.
 - [ ] **UNVERIFIED:** Organization two-factor authentication requirements are enabled and enforced.
 
 ## Actions
 
-- [ ] **UNVERIFIED:** Actions policy permits only required, reviewed actions.
-- [ ] **UNVERIFIED:** Third-party actions are pinned to full immutable commit SHAs.
-- [ ] **UNVERIFIED:** Default workflow token permissions are read-only.
-- [ ] **UNVERIFIED:** Workflows cannot create or approve pull requests unless separately justified.
-- [ ] **UNVERIFIED:** Fork pull-request workflows require approval.
+- [x] Actions policy permits only required, reviewed actions.
+- [x] Third-party actions are pinned to full immutable commit SHAs.
+- [x] Default workflow token permissions are read-only.
+- [x] Workflows cannot create or approve pull requests unless separately justified.
+- [x] Fork pull-request workflows require approval for all external contributors.
 - [ ] **UNVERIFIED:** Workflow logs and artifacts cannot expose secrets or production data.
 - [ ] **UNVERIFIED:** Required repository safety checks exist and pass on a controlled test pull request.
 
 ## Protect `main`
 
-- [ ] **UNVERIFIED:** An active ruleset targets the default branch.
-- [ ] **UNVERIFIED:** Direct pushes are blocked for routine work.
-- [ ] **UNVERIFIED:** Pull requests are required before merge.
-- [ ] **UNVERIFIED:** At least one independent approval is required.
-- [ ] **UNVERIFIED:** Stale approvals are dismissed after reviewable changes.
-- [ ] **UNVERIFIED:** The most recent reviewable push requires approval.
-- [ ] **UNVERIFIED:** Required conversations must be resolved.
-- [ ] **UNVERIFIED:** Required status checks are configured and branches must be current.
+- [x] An active ruleset targets the default branch.
+- [x] Direct pushes are blocked for routine work.
+- [x] Pull requests are required before merge.
+- [ ] **DEFERRED:** At least one independent approval is required. The repository currently has one trusted human identity, so requiring approval would deadlock same-identity pull requests. Enable one approval after adding a second trusted reviewer or a distinct PR-authoring app identity.
+- [ ] **DEFERRED:** Stale approvals are dismissed after reviewable changes. Enable with the independent-review requirement.
+- [ ] **DEFERRED:** The most recent reviewable push requires approval. Enable with the independent-review requirement.
+- [x] Required conversations must be resolved.
+- [x] Required status checks are configured and branches must be current.
   - `Public repository safety scan`
   - `Safety regression tests`
   - `Workflow security policy`
-- [ ] **UNVERIFIED:** Force pushes and branch deletion are blocked.
-- [ ] **UNVERIFIED:** Linear history is required.
-- [ ] **UNVERIFIED:** No connector, app, team, or routine administrator path can bypass protections.
+- [x] Force pushes and branch deletion are blocked.
+- [x] Linear history is required.
+- [x] No connector, app, team, or routine administrator is listed for ruleset bypass.
 
 ## Security And Analysis
 
-- [ ] **UNVERIFIED:** Dependency graph is enabled.
-- [ ] **UNVERIFIED:** Dependabot alerts and security updates are enabled where supported.
-- [ ] **UNVERIFIED:** Secret scanning is enabled.
-- [ ] **UNVERIFIED:** Push protection is enabled.
-- [ ] **UNVERIFIED:** Code scanning is enabled for supported languages when useful.
-- [ ] **UNVERIFIED:** Private vulnerability reporting is enabled.
-- [ ] **UNVERIFIED:** Public interaction and code-review limits match the no-external-contributions policy.
+- [x] Dependency graph is enabled.
+- [x] Dependabot alerts, malware alerts, security updates, and grouped security updates are enabled.
+- [x] Secret scanning is enabled.
+- [x] Push protection is enabled.
+- [x] CodeQL default setup is enabled for detected GitHub Actions, JavaScript/TypeScript, and Python code.
+- [x] Private vulnerability reporting is enabled.
+- [x] Public interaction settings match the no-external-contributions policy; pull requests remain available for controlled change review.
 
 ## Environments And Deployment
 
@@ -82,3 +88,7 @@ Do not create or document access links to unrelated business identities. Use onl
 ## Verification Record
 
 Record the completed review in a private audit system. In this public file, record only a sanitized review date, reviewer role, and outcome; do not list personal identifiers, app installation IDs, token metadata, or production configuration.
+
+| Date | Reviewer role | Sanitized outcome |
+| --- | --- | --- |
+| 2026-08-04 | Organization owner / repository administrator | Enabled protected-main, least-privilege app scope, hardened Actions, dependency and secret protections, and CodeQL. Independent approval remains deferred until a second trusted reviewer or distinct PR-authoring identity exists. |
