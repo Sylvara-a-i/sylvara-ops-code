@@ -1,0 +1,16 @@
+# @Sylvara-ai is the verified repository administrator account. The repository
+# itself is owned by the separate Sylvara-a-i organization.
+# Default ownership prevents new paths from silently bypassing review.
+* @Sylvara-ai
+
+# Public-boundary and repository security controls.
+/.github/ @Sylvara-ai
+/SECURITY.md @Sylvara-ai
+/CONTRIBUTING.md @Sylvara-ai
+/NOTICE.md @Sylvara-ai
+/tools/safety/ @Sylvara-ai
+
+# Automation source and sanitized historical references.
+/src/ @Sylvara-ai
+/archive/ @Sylvara-ai
+/docs/ @Sylvara-ai

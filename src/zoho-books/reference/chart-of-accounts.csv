@@ -1,0 +1,73 @@
+Account Name,Account Code,Description,Account Type,Account Status,Currency,Parent Account
+Other Charges,4590,Miscellaneous charges like adjustments made to the invoice can be recorded in this account. Catch-all for non-operating income not tied to core services.,Income,Active,USD,
+Lodging,,Any expense related to putting up at motels etc while on business travel can be entered here.,Expense,Active,USD,
+Undeposited Funds,,Record funds received by your company yet to be deposited in a bank as undeposited funds and group them as a current asset in your balance sheet.,Cash,Active,USD,
+Petty Cash,,It is a small amount of cash that is used to pay your minor or casual expenses rather than writing a check.,Cash,Active,USD,
+Accounts Receivable,,The money that customers owe you becomes the accounts receivable. A good example of this is a payment expected from an invoice sent to your customer.,Accounts Receivable,Active,USD,
+Furniture and Equipment,,Purchases of furniture and equipment for your office that can be used for a long period of time usually exceeding one year can be tracked with this account.,Fixed Asset,Active,USD,
+Advance Tax,,"Any tax which is paid in advance is recorded into the advance tax account. This advance tax payment could be a quarterly, half yearly or yearly payment.",Other Current Asset,Active,USD,
+Accounts Payable,,"This is an account of all the money which you owe to others like a pending bill payment to a vendor,etc.",Accounts Payable,Active,USD,
+Tax Payable,,The amount of money which you owe to your tax authority is recorded under the tax payable account. This amount is a sum of your outstanding in taxes and the tax charged on sales.,Other Current Liability,Active,USD,
+Retained Earnings,,The earnings of your company which are not distributed among the share holders is accounted as retained earnings.,Equity,Active,USD,
+Owner's Equity,,The owners rights to the assets of a company can be quantified in the owner''s equity account.,Equity,Active,USD,
+Opening Balance Offset,,This is an account where you can record the balance from your previous years earning or the amount set aside for some activities. It is like a buffer account for your funds.,Equity,Active,USD,
+Sales,4000,The income from the sales in your business is recorded under the sales account.,Income,Active,USD,
+Subscriptions,4100,Parent grouping for all recurring subscription revenue.,Income,Active,USD,Sales
+AI Receptionist Subscriptions,4110,Monthly/annual recurring fees for AI Receptionist plans (MRR/ARR).,Income,Active,USD,Subscriptions
+AI Receptionist Add-Ons,4120,"Recurring add-ons (extra lines, extra users, extra numbers, after-hours, etc.).",Income,Active,USD,Subscriptions
+One-Time Services,4200,Parent grouping for setup fees and project work.,Income,Active,USD,Sales
+AI Receptionist Setup / Onboarding,4210,"One-time implementation, onboarding, configuration, activation fees.",Income,Active,USD,One-Time Services
+General Income,,A general category of account where you can record any income which cannot be recorded into any other category.,Income,Active,USD,
+Unearned Revenue,,"A liability account that reports amounts received in advance of providing goods or services. When the goods or services are provided, this account balance is decreased and a revenue account is increased.",Other Current Liability,Active,USD,
+Interest Income,4500,A percentage of your balances and deposits are given as interest to you by your banks and financial institutions. This interest is recorded into the interest income account.,Income,Active,USD,
+Credit Union Dividend,4510,Interest or dividends earned from credit union business savings accounts.,Income,Active,USD,Interest Income
+Late Fee Income,4520,Any late fee income is recorded into the late fee income account. The late fee is levied when the payment for an invoice is not received by the due date.,Income,Active,USD,
+Sales Discounts,,"Discounts, promotions, credits that reduce revenue. This should typically be negative.",Income,Active,USD,
+Bank Fees and Charges,,"Any bank fees levied is recorded into the bank fees and charges account. A bank account maintenance fee, transaction charges, a late payment fee are some examples.",Expense,Active,USD,
+Exchange Gain or Loss,,Changing the conversion rate can result in a gain or a loss. You can record this into the exchange gain or loss account.,Other Expense,Active,USD,
+Shipping Charge,,Shipping charges made to the invoice will be recorded in this account.,Income,Active,USD,
+Bad Debt,,Any amount which is lost and is unrecoverable is recorded into the bad debt account.,Expense,Active,USD,
+Employee Advance,,Money paid out to an employee in advance can be tracked here till it's repaid or shown to be spent for company purposes.,Other Current Asset,Active,USD,
+Opening Balance Adjustments,,This account will hold the difference in the debits and credits entered during the opening balance.,Other Current Liability,Active,USD,
+Employee Reimbursements,,This account can be used to track the reimbursements that are due to be paid out to employees.,Other Current Liability,Active,USD,
+Uncategorized,,This account can be used to temporarily track expenses that are yet to be identified and classified into a particular category,Expense,Active,USD,
+Salaries and Employee Wages,,Salaries for your employees and the wages paid to workers are recorded under the salaries and wages account.,Expense,Active,USD,
+Dimension Adjustments,,"This adjustment account tracks the transfers between different dimensions like tags, branches.",Other Liability,Active,USD,
+Other Expenses,6990.00,Any minor expense on activities unrelated to primary business operations is recorded under the other expense account.,Expense,Active,USD,
+Software Subscriptions,6990.07,"Recurring SaaS platforms and software tools used to operate and deliver Sylvara.ai services, including AI, automation, CRM, analytics, and integration platforms.",Expense,Active,USD,Other Expenses
+Payment Processing Fees,6990.04,,Expense,Active,USD,Other Expenses
+Stripe Fees,6990.04.01,,Expense,Active,USD,Payment Processing Fees
+Education,6990.01,"Courses, training, professional education",Expense,Active,USD,Other Expenses
+Employee Gym Memberships,6990.02,Employee Gym Memberships,Expense,Active,USD,Other Expenses
+Gifts / Donations,6990.03,Business gifts and charitable donations,Expense,Active,USD,Other Expenses
+Purchase Adjustments,6990.06,"Vendor refunds, adjustments",Expense,Active,USD,Other Expenses
+Inventory Asset,,An account which tracks the value of goods in your inventory.,Stock,Active,USD,
+Cost of Goods Sold,,An expense account which tracks the value of the goods sold.,Cost Of Goods Sold,Active,USD,
+Drawings,,The money withdrawn from a business by its owner can be tracked with this account.,Equity,Active,USD,
+Purchase Discounts,,Tracks any reduction that your vendor offers on your purchases. Some vendors also provide them to encourage quick payment settlement.,Expense,Active,USD,
+Prepaid Expenses,,An asset account that reports amounts paid in advance while purchasing goods or services from a vendor.,Other Current Asset,Active,USD,
+Business Savings,,,Bank,Active,USD,
+Business Checking,,,Bank,Active,USD,
+Stripe Clearing,,,Payment Clearing,Active,USD,
+Zoho Payments Clearing,,,Payment Clearing,Active,USD,
+Advertising,6000.00,Parent account for all advertising and marketing expenses,Expense,Active,USD,
+Online Advertising,6000.01,"Paid online ads such as Google Ads, LinkedIn Ads, Meta Ads",Expense,Active,USD,Advertising
+Photography / Videography,6000.02,Media creation for marketing and brand assets,Expense,Active,USD,Advertising
+Print Advertising,6000.03,"Physical advertising such as flyers, mailers, print ads",Expense,Active,USD,Advertising
+Promotions & Giveaways,6000.04,"Promotional items, swag, incentives",Expense,Active,USD,Advertising
+Signage,6000.05,Physical signage and branding materials,Expense,Active,USD,Advertising
+Legal And Professional Fees,6060.00,Professional services required to operate the business.,Expense,Active,USD,
+Accounting Fees,6060.01,"CPA, tax preparation, bookkeeping services",Expense,Active,USD,Legal And Professional Fees
+Bookkeeping Services,6060.02,Ongoing bookkeeping or financial admin services,Expense,Active,USD,Legal And Professional Fees
+Consulting Fees,6060.03,"Business, technical, or strategic consulting",Expense,Active,USD,Legal And Professional Fees
+Legal Fees,6060.04,"Attorney fees, contract review, legal advice",Expense,Active,USD,Legal And Professional Fees
+Licensing Fees,6060.05,"Business licenses, regulatory or compliance fees",Expense,Active,USD,Legal And Professional Fees
+Utilities,6150.00,Communication and infrastructure utilities.,Expense,Active,USD,
+Cable / TV,6150.01,Media subscriptions related to operations,Expense,Active,USD,Utilities
+Electricity,6150.02,,Expense,Active,USD,Utilities
+Gas,6150.03,,Expense,Active,USD,Utilities
+Internet,6150.04,,Expense,Active,USD,Utilities
+Phone,6150.05,,Expense,Active,USD,Utilities
+Trash And Recycling,6150.06,,Expense,Active,USD,Utilities
+Wastewater,6150.07,,Expense,Active,USD,Utilities
+Water Supply,6150.08,,Expense,Active,USD,Utilities
