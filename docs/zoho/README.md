@@ -1,94 +1,116 @@
-# Zoho Engineering Standards
+# Zoho Knowledge Base
 
 ## Purpose
 
-This area preserves reusable Zoho engineering behavior for Sylvara without copying another business's configuration. It documents how to discover capabilities, design least-privilege MCP servers, govern CRM schemas, write Deluge, and control accounting automation.
+This directory is the single front door for Sylvara's reusable Zoho knowledge. It contains operating standards, product references, MCP evidence, ownership rules, and publication controls without copying another organization's configuration or treating documentation as live-state proof.
 
-These documents are public technical standards. They are not exports of a live Zoho tenant, proof that a connection works, or authorization to change Zoho.
+Implementation-specific READMEs remain beside the code or artifact they govern so deployment, validation, and rollback instructions do not drift. Those exceptions are indexed here and are not duplicate standards.
+
+## Directory Map
+
+| Area | Purpose | Authority |
+|---|---|---|
+| [`governance/`](governance/) | System ownership, evidence rules, publication boundaries, and the machine-readable suite registry | Sylvara repository policy |
+| [`standards/`](standards/) | Reusable engineering and operating standards | Governs proposed Sylvara work, subject to live verification |
+| [`reference/`](reference/) | Dated product handbooks distilled from authorized research and current official links | Reference only; adoption and live access remain Unknown |
+| [`mcp/`](mcp/) | MCP server design, dated catalogs, and currently advertised tool snapshots | Evidence-layer specific; never an implicit tool allowlist |
+
+## Start Here
+
+1. Read [System Ownership](governance/system-ownership.md) to identify the authoritative system.
+2. Read [Evidence And Publication](governance/evidence-and-publication.md) before relying on any reference or publishing a derivative.
+3. Read the relevant document under [`standards/`](standards/).
+4. Use the matching product handbook under [`reference/`](reference/) for platform vocabulary, API families, and official-source links.
+5. For MCP work, read the [MCP index](mcp/README.md) and keep its five evidence layers separate.
+6. Before a live change, verify the exact Sylvara organization, environment, role, metadata, permissions, and current state through the authorized tool.
+
+## Standards Index
+
+- [CRM Schema](standards/crm-schema.md)
+- [Deluge Engineering](standards/deluge.md)
+- [Zoho Books Automation](standards/books-automation.md)
+- [Accounting Practices](standards/accounting.md)
+- [Billing](standards/billing.md)
+- [Catalyst](standards/catalyst.md)
+- [Creator, Forms, And Sites Workflow And Intake](standards/workflow-and-intake.md)
+- [WorkDrive, Contracts, And Sign Document Lifecycle](standards/document-lifecycle.md)
+- [Mail](standards/mail.md)
+- [Analytics](standards/analytics.md)
+
+## Product Reference Index
+
+The [product reference collection](reference/README.md) covers the currently governed suite plus reference-only products that may become relevant later. Every handbook is dated, links to official sources, and remains non-authoritative until current Sylvara requirements and live metadata verify adoption.
+
+## MCP Index
+
+- [MCP Evidence And Navigation](mcp/README.md)
+- [MCP Server Standard](mcp/server-standard.md)
+- [Configured-session capability catalog, 2026-08-03](mcp/snapshots/configured/2026-08-03/capability-catalog.md)
+- [Configured-session machine-readable inventory, 2026-08-03](mcp/snapshots/configured/2026-08-03/observed-tool-inventory.json)
+- [Tool Manual service catalog, 2026-07-24](mcp/reference/tool-manual-service-catalog-2026-07-24.md)
+- [Preconfigured template catalog, 2026-07-25](mcp/reference/preconfigured-template-catalog-2026-07-25.md)
+
+## Code-Adjacent Zoho Artifacts
+
+- [Zoho Books implementation area](../../src/zoho-books/README.md)
+- [Sanitized chart-of-accounts reference](../../src/zoho-books/reference/README.md)
+- [Proposed Billing webhook gateway](../../src/zoho-catalyst/billing-webhook-gateway/README.md)
+- [Legacy Billing gateway review record](../../archive/zoho-catalyst/billing-webhook-gateway/README.md)
+
+These files stay beside their artifacts because they describe exact source, validation, deployment, provenance, or rollback behavior. Reusable policy belongs here under `docs/zoho/`.
 
 ## Portability Boundary
 
 Portable knowledge includes:
 
+- product vocabulary, documented API families, and current official links;
 - metadata-first discovery and use of returned API names;
 - read/write separation, fixed-target binding, approval gates, and independent readback;
 - generic field-type, layout, lookup, picklist, workflow, and subform constraints;
 - Deluge validation, error handling, redaction, idempotency, and test conventions;
-- Books accounting controls and evidence requirements; and
-- WorkDrive and Catalyst capability boundaries.
+- accounting, document, webhook, and customer-communication controls; and
+- provider-neutral retry, reconciliation, rollback, and evidence rules.
 
 The following are deliberately excluded:
 
-- field selections, modules, layouts, rules, and business logic chosen for another organization;
-- source MCP server names, private endpoints, connection names, OAuth grants, and credentials;
-- organization, project, account, record, resource, deployment, and workflow identifiers;
-- records, documents, logs, payloads, reports, screenshots, and personal or financial data; and
-- any assumption that an advertised tool is authorized, callable, complete, or safe for Sylvara.
+- another organization's fields, modules, layouts, rules, workflows, prompts, or business logic;
+- server names, private endpoints, connection aliases, OAuth grants, credentials, or live routes;
+- organization, project, account, record, resource, deployment, workflow, customer, property, or financial identifiers;
+- records, documents, screenshots, logs, payloads, reports, exports, or private source artifacts; and
+- any claim that a documented API, tool name, template, or archived artifact is enabled or safe for Sylvara.
 
-Sylvara's CRM fields will be selected from Sylvara requirements after live metadata and collision checks. No field catalog from another tenant is an input to that decision.
-
-## Standards Index
-
-- [MCP Server Standard](mcp/server-standard.md)
-- [Observed MCP Capability Catalog](mcp/capability-catalog.md)
-- [CRM Schema Standard](crm-schema-standard.md)
-- [Deluge Engineering Standard](deluge-standard.md)
-- [Billing Standard](billing-standard.md)
-- [Catalyst Standard](catalyst-standard.md)
-- [Workflow And Intake Standard](workflow-and-intake-standard.md) for Creator, Forms, and Sites
-- [Document Lifecycle Standard](document-lifecycle-standard.md) for WorkDrive, Contracts, and Sign
-- [Mail Standard](mail-standard.md)
-- [Analytics Standard](analytics-standard.md)
-- [Accounting Practices Standard](accounting-practices-standard.md)
-- [Zoho Books Automation Standard](../../src/zoho-books/automation-standard.md)
-- [Machine-readable observed tool inventory](mcp/observed-tool-inventory.json)
-- [Machine-readable Zoho suite ownership registry](suite-registry.json)
-
-## System Ownership
-
-| Zoho product | Intended ownership | Boundary |
-|---|---|---|
-| CRM | Prospects, customers, contacts, opportunities, and approved relationship state | Not accounting truth, a document vault, or a secret store |
-| Books | General ledger, accounting balances, invoices recorded in Books, payments, credits, and reconciliation | Not CRM relationship ownership or workflow source code |
-| Billing | Subscription lifecycle and entitlements only where explicitly adopted | Must not silently duplicate Books accounting ownership |
-| Creator | Approved forms, workflow UI, human tasks, and operational views | Must not recreate Books or become an unapproved platform |
-| WorkDrive | Approved private document storage and immutable resource references | Public links and raw documents do not belong in CRM or GitHub |
-| Catalyst | Verification, normalization, idempotency, durable retry state, API mediation, and approved release artifacts | Not the owner of CRM or accounting facts |
-| Forms | Lightweight external intake when Creator is unnecessary | Not a system of record unless explicitly approved |
-| Contracts / Sign | Legal document generation, routing, execution, and evidence | Legal templates and signer data remain private |
-| Sites | Public doorway when adopted | Not a source of operational truth |
-| Mail | Mailbox messages, delivery state, and approved mail administration | Not CRM relationship truth; message bodies and attachments remain private |
-| Analytics | Reporting models, dashboards, and derived analytical data | Not a transactional source of truth; synchronized data may be stale |
+Sylvara field selection and workflow design must come from Sylvara requirements. No field catalog or business process from another tenant is an input to that decision.
 
 ## Governed Artifact Contract
 
-A reusable Zoho artifact is governed only when it makes the following review boundaries explicit:
+A reusable Zoho artifact is governed only when it states:
 
-1. its purpose, owning product, operational source of truth, and systems it must not replace;
-2. its evidence status and observation date, including whether it is Verified, Proposed, Legacy, or Unknown;
-3. its capability layer: official Zoho API support, an advertised MCP tool contract, or effective access in the intended Sylvara tenant;
-4. its prerequisites, accepted inputs, expected outcomes, side effects, failure behavior, and idempotency requirements;
-5. its public-repository and logging rules, using synthetic examples and excluding secrets, private identifiers, PII, financial data, and document contents;
-6. its reproducible validation, independent readback, rollback, and required manual setup; and
-7. its deployment and approval boundary, including an explicit statement that repository review is not authorization for a live change.
+1. its purpose, owning product, source of truth, and prohibited ownership;
+2. its evidence status and observation date;
+3. whether a claim comes from official documentation, a Tool Manual catalog, a preconfigured template, an advertised MCP contract, or verified effective access;
+4. prerequisites, inputs, side effects, failure behavior, idempotency, and reconciliation rules;
+5. public-repository, logging, privacy, and secret-handling boundaries;
+6. reproducible validation, readback, rollback, and manual setup; and
+7. the exact deployment and approval boundary.
 
-An archived file, example, tool inventory, or official API link does not become a governed production artifact by association. If a required part of this contract is missing or stale, the artifact remains **Proposed**, **Legacy**, or **Unknown** and must fail closed for live use.
+If any required element is missing or stale, the artifact remains **Reference**, **Proposed**, **Legacy**, or **Unknown** and must fail closed for live use.
 
-## Evidence Rules
+## Evidence Status
 
-Use the repository's status labels consistently:
-
-- **Verified:** confirmed through current, dated, read-only evidence;
-- **Proposed:** designed but not proven configured or deployed;
-- **Legacy:** retained only as historical reference; and
+- **Verified:** confirmed through current, dated, read-only evidence for the exact target.
+- **Reference:** portable product knowledge with no claim of adoption or effective access.
+- **Proposed:** designed for Sylvara but not proven configured or deployed.
+- **Legacy:** retained only for historical or forensic reference.
 - **Unknown:** missing, stale, ambiguous, truncated, or incomplete evidence.
 
-Live metadata outranks this repository. An MCP tool's presence proves only that a contract was advertised in the inspected session. It does not prove OAuth scope, target identity, permissions, response completeness, or successful execution.
+Official documentation establishes general product capability. A Tool Manual name establishes a documented tool name. A preconfigured template establishes dated template membership. An advertised MCP contract establishes what one inspected server exposed. Only an exact identity check and authorized acceptance call can establish effective Sylvara access.
 
-Official API documentation proves general product capability, not that an MCP tool exists. An advertised MCP tool proves only the inspected tool contract, not effective tenant access. Effective tenant scope requires a current identity binding, least-privilege grant, plan and feature availability, a safe acceptance call, and authoritative readback. See the [capability evidence layers](mcp/capability-catalog.md#capability-evidence-layers).
+## Current MCP Snapshot
 
-## Current Snapshot
+On 2026-08-03, read-only discovery found 10 enabled Zoho MCP server roles and 403 advertised tools: 245 reads and 158 write-capable actions. No Zoho tool was called. Source namespaces, endpoints, and production target identifiers were excluded.
 
-On 2026-08-03, read-only discovery found 10 enabled Zoho MCP server roles and 403 advertised tools: 245 reads and 158 write-capable actions. No Zoho tool was called. Source server identities, endpoints, and production target identifiers were excluded. Dated, normalized tool IDs were retained only to distinguish the advertised contracts and are not stable names or live identifiers.
+Creator, Forms, Billing, Contracts, Sign, Sites, Mail, and Analytics were not observed in that configured session. Their MCP availability is **Unknown**, not unsupported.
 
-No Creator, Forms, Billing, Contracts, Sign, Sites, Mail, or Analytics MCP role was observed in that inspection. Their availability is **Unknown**, not unsupported.
+## Live Change Boundary
+
+Repository review is not live-system approval. Before any production Zoho write, show the exact current state, proposed state, authorized server/tool and parameters, rollback, and readback plan; obtain approval scoped to that action. Stop on missing capability, ambiguous identity, stale evidence, incomplete responses, or unsafe rollback.

@@ -8,7 +8,16 @@ from urllib.parse import urlparse
 
 
 ROOT = Path(__file__).resolve().parents[3]
-INVENTORY = ROOT / "docs" / "zoho" / "mcp" / "observed-tool-inventory.json"
+INVENTORY = (
+    ROOT
+    / "docs"
+    / "zoho"
+    / "mcp"
+    / "snapshots"
+    / "configured"
+    / "2026-08-03"
+    / "observed-tool-inventory.json"
+)
 ZOHO_DOCS = ROOT / "docs" / "zoho"
 
 EXPECTED_COUNTS = {

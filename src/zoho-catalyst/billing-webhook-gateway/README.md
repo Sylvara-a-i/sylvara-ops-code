@@ -1,5 +1,7 @@
 # Zoho Billing Webhook Gateway
 
+Reusable policy is centralized in the [Billing Standard](../../../docs/zoho/standards/billing.md), [Catalyst Standard](../../../docs/zoho/standards/catalyst.md), and [Zoho knowledge base](../../../docs/zoho/README.md). This file remains beside the package because it governs this exact implementation, deployment gates, validation, containment, and rollback.
+
 **Repository status: Proposed sanitized replacement. Live state: Unknown. Deployment status: Not deployed, not deployment-approved, and code-blocked from Production.**
 
 This package is the public, reviewable successor to the historical Billing-to-Creator Catalyst export recorded in [`archive/zoho-catalyst/billing-webhook-gateway`](../../../archive/zoho-catalyst/billing-webhook-gateway/). It preserves the intended inbound workflow as new source while removing private deployment identity, personal metadata, raw payload forwarding, cache-only replay marking, broad host suffixes, raw OAuth refresh logic, and unsafe logging.

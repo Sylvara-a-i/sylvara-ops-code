@@ -1,10 +1,13 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "as_of": "2026-08-04",
+  "path_base": "docs/zoho",
   "repository_status": "proposed-governance",
   "live_state": "unknown",
   "capability_layers": [
     "official-product-capability",
+    "tool-manual-catalog",
+    "preconfigured-template-membership",
     "advertised-mcp-tool-contract",
     "effective-tenant-capability"
   ],
@@ -14,10 +17,12 @@
       "authoritative_for": "prospect, customer, contact, opportunity, and approved relationship state",
       "must_not_own": "accounting, document contents, secrets, or raw integration payloads",
       "standards": [
-        "crm-schema-standard.md",
-        "deluge-standard.md"
+        "standards/crm-schema.md",
+        "standards/deluge.md"
       ],
-      "repository_artifacts": [],
+      "repository_artifacts": [
+        "reference/products/zoho-crm.md"
+      ],
       "mcp_observation": "advertised-contracts-observed-2026-08-03",
       "effective_tenant_capability": "unknown"
     },
@@ -26,11 +31,12 @@
       "authoritative_for": "general ledger, accounting balances, reconciliation, and financial reporting",
       "must_not_own": "relationship state, subscription entitlement, or source code",
       "standards": [
-        "accounting-practices-standard.md",
-        "../../src/zoho-books/automation-standard.md"
+        "standards/accounting.md",
+        "standards/books-automation.md"
       ],
       "repository_artifacts": [
-        "../../src/zoho-books/reference/chart-of-accounts.csv"
+        "../../src/zoho-books/reference/chart-of-accounts.csv",
+        "reference/products/zoho-books.md"
       ],
       "mcp_observation": "advertised-contracts-observed-2026-08-03",
       "effective_tenant_capability": "unknown"
@@ -40,10 +46,11 @@
       "authoritative_for": "approved subscription lifecycle and entitlement events",
       "must_not_own": "general-ledger truth or duplicate Books outcomes",
       "standards": [
-        "billing-standard.md"
+        "standards/billing.md"
       ],
       "repository_artifacts": [
-        "../../src/zoho-catalyst/billing-webhook-gateway/README.md"
+        "../../src/zoho-catalyst/billing-webhook-gateway/README.md",
+        "reference/products/zoho-billing.md"
       ],
       "mcp_observation": "not-observed-2026-08-03",
       "effective_tenant_capability": "unknown"
@@ -53,10 +60,11 @@
       "authoritative_for": "middleware verification, normalization, durable idempotency, retry state, and API mediation",
       "must_not_own": "CRM, subscription, accounting, legal-document, or mailbox facts",
       "standards": [
-        "catalyst-standard.md"
+        "standards/catalyst.md"
       ],
       "repository_artifacts": [
-        "../../src/zoho-catalyst/billing-webhook-gateway/README.md"
+        "../../src/zoho-catalyst/billing-webhook-gateway/README.md",
+        "reference/products/zoho-catalyst.md"
       ],
       "mcp_observation": "advertised-contracts-observed-2026-08-03",
       "effective_tenant_capability": "unknown"
@@ -66,10 +74,12 @@
       "authoritative_for": "explicitly approved workflow UI, human tasks, and Creator-native operational state",
       "must_not_own": "Books accounting or duplicated CRM relationship truth",
       "standards": [
-        "workflow-and-intake-standard.md",
-        "deluge-standard.md"
+        "standards/workflow-and-intake.md",
+        "standards/deluge.md"
       ],
-      "repository_artifacts": [],
+      "repository_artifacts": [
+        "reference/products/zoho-creator.md"
+      ],
       "mcp_observation": "not-observed-2026-08-03",
       "effective_tenant_capability": "unknown"
     },
@@ -78,9 +88,11 @@
       "authoritative_for": "bounded external intake before authoritative acceptance",
       "must_not_own": "relationship, accounting, or subscription truth",
       "standards": [
-        "workflow-and-intake-standard.md"
+        "standards/workflow-and-intake.md"
       ],
-      "repository_artifacts": [],
+      "repository_artifacts": [
+        "reference/products/zoho-forms.md"
+      ],
       "mcp_observation": "not-observed-2026-08-03",
       "effective_tenant_capability": "unknown"
     },
@@ -89,9 +101,11 @@
       "authoritative_for": "private document storage, versions, and controlled sharing metadata",
       "must_not_own": "CRM relationship or accounting facts",
       "standards": [
-        "document-lifecycle-standard.md"
+        "standards/document-lifecycle.md"
       ],
-      "repository_artifacts": [],
+      "repository_artifacts": [
+        "reference/products/zoho-workdrive.md"
+      ],
       "mcp_observation": "advertised-contracts-observed-2026-08-03",
       "effective_tenant_capability": "unknown"
     },
@@ -100,9 +114,11 @@
       "authoritative_for": "contract drafting, clause, approval, and legal lifecycle state",
       "must_not_own": "executed-signature evidence or public document storage",
       "standards": [
-        "document-lifecycle-standard.md"
+        "standards/document-lifecycle.md"
       ],
-      "repository_artifacts": [],
+      "repository_artifacts": [
+        "reference/products/zoho-contracts.md"
+      ],
       "mcp_observation": "not-observed-2026-08-03",
       "effective_tenant_capability": "unknown"
     },
@@ -111,9 +127,11 @@
       "authoritative_for": "signature routing, execution status, and execution evidence",
       "must_not_own": "contract drafting or CRM relationship truth",
       "standards": [
-        "document-lifecycle-standard.md"
+        "standards/document-lifecycle.md"
       ],
-      "repository_artifacts": [],
+      "repository_artifacts": [
+        "reference/products/zoho-sign.md"
+      ],
       "mcp_observation": "not-observed-2026-08-03",
       "effective_tenant_capability": "unknown"
     },
@@ -122,9 +140,11 @@
       "authoritative_for": "public presentation and approved doorway behavior",
       "must_not_own": "operational, relationship, subscription, or accounting truth",
       "standards": [
-        "workflow-and-intake-standard.md"
+        "standards/workflow-and-intake.md"
       ],
-      "repository_artifacts": [],
+      "repository_artifacts": [
+        "reference/products/zoho-sites.md"
+      ],
       "mcp_observation": "not-observed-2026-08-03",
       "effective_tenant_capability": "unknown"
     },
@@ -133,9 +153,11 @@
       "authoritative_for": "mailbox message and delivery state",
       "must_not_own": "CRM relationship or financial truth",
       "standards": [
-        "mail-standard.md"
+        "standards/mail.md"
       ],
-      "repository_artifacts": [],
+      "repository_artifacts": [
+        "reference/products/zoho-mail.md"
+      ],
       "mcp_observation": "not-observed-2026-08-03",
       "effective_tenant_capability": "unknown"
     },
@@ -144,11 +166,26 @@
       "authoritative_for": "derived reporting models and dashboards",
       "must_not_own": "transactional state or reverse-write decisions",
       "standards": [
-        "analytics-standard.md"
+        "standards/analytics.md"
       ],
-      "repository_artifacts": [],
+      "repository_artifacts": [
+        "reference/products/zoho-analytics.md"
+      ],
       "mcp_observation": "not-observed-2026-08-03",
       "effective_tenant_capability": "unknown"
     }
+  ],
+  "reference_only_products": [
+    {"id": "api-console", "reference": "reference/products/zoho-api-console.md", "adoption_status": "unknown"},
+    {"id": "one", "reference": "reference/products/zoho-one.md", "adoption_status": "unknown"},
+    {"id": "bookings", "reference": "reference/products/zoho-bookings.md", "adoption_status": "unknown"},
+    {"id": "calendar", "reference": "reference/products/zoho-calendar.md", "adoption_status": "unknown"},
+    {"id": "checkout", "reference": "reference/products/zoho-checkout.md", "adoption_status": "unknown"},
+    {"id": "flow", "reference": "reference/products/zoho-flow.md", "adoption_status": "unknown"},
+    {"id": "meeting", "reference": "reference/products/zoho-meeting.md", "adoption_status": "unknown"},
+    {"id": "payments", "reference": "reference/products/zoho-payments.md", "adoption_status": "unknown"},
+    {"id": "people", "reference": "reference/products/zoho-people.md", "adoption_status": "unknown"},
+    {"id": "todo", "reference": "reference/products/zoho-todo.md", "adoption_status": "unknown"},
+    {"id": "voice", "reference": "reference/products/zoho-voice.md", "adoption_status": "unknown"}
   ]
 }

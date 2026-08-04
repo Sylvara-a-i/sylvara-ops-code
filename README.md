@@ -39,9 +39,9 @@ tools/safety/  Public-repository and workflow-policy validation
 
 Current governed artifacts:
 
-- [`docs/zoho/`](docs/zoho/) defines portable product ownership, accounting, CRM schema, Deluge, webhook, document, intake, mail, analytics, and MCP standards without copying another tenant's fields or configuration.
-- [`docs/zoho/suite-registry.json`](docs/zoho/suite-registry.json) is the machine-readable Zoho ownership and evidence-status map. Official product support, an advertised MCP tool, and effective tenant access remain separate capability layers.
-- [`docs/zoho/mcp/observed-tool-inventory.json`](docs/zoho/mcp/observed-tool-inventory.json) preserves one sanitized row for each of 403 tool contracts observed on 2026-08-03; it is a dated capability snapshot, not a Sylvara allowlist or proof of access.
+- [`docs/zoho/`](docs/zoho/) is the single front door for portable Zoho governance, operating standards, dated product references, and MCP evidence without copying another tenant's fields or configuration.
+- [`docs/zoho/governance/suite-registry.json`](docs/zoho/governance/suite-registry.json) is the machine-readable Zoho ownership and evidence-status map. Official product support, Tool Manual catalogs, preconfigured-template membership, advertised MCP contracts, and effective tenant access remain separate layers.
+- [`docs/zoho/mcp/snapshots/configured/2026-08-03/observed-tool-inventory.json`](docs/zoho/mcp/snapshots/configured/2026-08-03/observed-tool-inventory.json) preserves one sanitized row for each of 403 configured-session tool contracts; it is a dated snapshot, not a Sylvara allowlist or proof of access.
 - [`src/zoho-books/reference/chart-of-accounts.csv`](src/zoho-books/reference/chart-of-accounts.csv) is a sanitized reference with system IDs and bank-account suffixes removed.
 - [`src/zoho-catalyst/billing-webhook-gateway`](src/zoho-catalyst/billing-webhook-gateway) contains a proposed sanitized replacement for the historical Billing gateway, repository-level unit tests, a variable-name registry attested against the supplied export and replacement source, and a proposed Data Store schema. It is not platform-validated, live-tested, deployed, or deployment-approved.
 - [`archive/zoho-catalyst/billing-webhook-gateway`](archive/zoho-catalyst/billing-webhook-gateway) preserves the original export's non-executable review record and source hashes. The supplied handler, private manifest metadata, installed dependencies, and deployment configuration remain excluded.
