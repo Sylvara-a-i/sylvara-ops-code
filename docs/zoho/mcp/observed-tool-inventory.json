@@ -1,0 +1,4454 @@
+{
+  "schema_version": 1,
+  "observed_on": "2026-08-03",
+  "total_tools": 403,
+  "read_tools": 245,
+  "write_or_action_tools": 158,
+  "observation_method": "Read-only inspection of the configured Codex MCP list and tool metadata. No Zoho records or configuration were read or changed.",
+  "publication_boundary": "One row is retained for every advertised tool. Source server names, endpoints, credentials, organization IDs, record IDs, and cross-business configuration are intentionally omitted.",
+  "interpretation": "Advertised means present in this session's tool metadata. Tool IDs can be generated and unstable. Presence does not prove current OAuth scope, target identity, callability, response completeness, safety, or suitability for Sylvara.",
+  "roles": [
+    {
+      "role": "books-audit",
+      "product": "Zoho Books",
+      "access_class": "read-only",
+      "observed_status": "advertised-not-call-verified",
+      "read_count": 168,
+      "write_or_action_count": 0,
+      "tool_count": 168,
+      "capabilities": [
+        {
+          "catalog_id": "books-audit-001",
+          "observed_tool_id": "zohobooks_0273ea045aa1",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Financial ratio analysis report for the selected period. entity_type is ratio_analysis for this report. Call GET /reports/metadata with that entity_type before this report."
+        },
+        {
+          "catalog_id": "books-audit-002",
+          "observed_tool_id": "zohobooks_03908d6a7334",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Fixed Asset Register for the selected filters and period. entity_type is fixed_asset_register for this report. Call GET /reports/metadata with that entity_type before this report."
+        },
+        {
+          "catalog_id": "books-audit-003",
+          "observed_tool_id": "zohobooks_0430f913709b",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get the details of a vendor payment."
+        },
+        {
+          "catalog_id": "books-audit-004",
+          "observed_tool_id": "zohobooks_0490e43bba7a",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get the details of a sales receipt."
+        },
+        {
+          "catalog_id": "books-audit-005",
+          "observed_tool_id": "zohobooks_060ea41701eb",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Customer balance summary report. entity_type is customer_balance_summary for this report. Call GET /reports/metadata with that entity_type before this report."
+        },
+        {
+          "catalog_id": "books-audit-006",
+          "observed_tool_id": "zohobooks_063fb0395451",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "List all sales orders."
+        },
+        {
+          "catalog_id": "books-audit-007",
+          "observed_tool_id": "zohobooks_075e1b77eb94",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Accounts receivable aging detail report. entity_type is ar_aging_details for this report. Call GET /reports/metadata with that entity_type before this report."
+        },
+        {
+          "catalog_id": "books-audit-008",
+          "observed_tool_id": "zohobooks_07709ea819b7",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Realized Gain Or Loss for the selected filters and period. entity_type is realized_gain_or_loss for this report. Call GET /reports/metadata with that entity_type before this report."
+        },
+        {
+          "catalog_id": "books-audit-009",
+          "observed_tool_id": "zohobooks_0914c06a01ca",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Retrieve the details of a bank reconciliation."
+        },
+        {
+          "catalog_id": "books-audit-010",
+          "observed_tool_id": "zohobooks_09769d7adaf8",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Customer Payments for the selected filters and period. entity_type is customer_payments for this report. Call GET /reports/metadata with that entity_type before this report."
+        },
+        {
+          "catalog_id": "books-audit-011",
+          "observed_tool_id": "zohobooks_0a5b6a62b0d4",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get opening balance."
+        },
+        {
+          "catalog_id": "books-audit-012",
+          "observed_tool_id": "zohobooks_0cb784a83c18",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "List of tax authorities. Note: You have to enable Sales Tax in order to perform tax related operations."
+        },
+        {
+          "catalog_id": "books-audit-013",
+          "observed_tool_id": "zohobooks_0dc05758c264",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get the complete history and comments of a recurring invoice."
+        },
+        {
+          "catalog_id": "books-audit-014",
+          "observed_tool_id": "zohobooks_119356658908",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "List all estimates with pagination."
+        },
+        {
+          "catalog_id": "books-audit-015",
+          "observed_tool_id": "zohobooks_120b9f3a3d72",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "List all refunds with pagination."
+        },
+        {
+          "catalog_id": "books-audit-016",
+          "observed_tool_id": "zohobooks_13c562afbe19",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Gets the journal view of a transaction."
+        },
+        {
+          "catalog_id": "books-audit-017",
+          "observed_tool_id": "zohobooks_15e8148ee738",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Provide criteria to search for matching uncategorised transactions. The list of transactions can also include invoices/bills/credit-notes which will not be matched directly. Instead, a new (payment/refund) transaction is recorded and matched."
+        },
+        {
+          "catalog_id": "books-audit-018",
+          "observed_tool_id": "zohobooks_162de8fc21d5",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "List all transaction locks with pagination."
+        },
+        {
+          "catalog_id": "books-audit-019",
+          "observed_tool_id": "zohobooks_16dd7b2ea95d",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "List the reconciliations of a bank account."
+        },
+        {
+          "catalog_id": "books-audit-020",
+          "observed_tool_id": "zohobooks_1bcc01deda19",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "List all the Expenses with pagination."
+        },
+        {
+          "catalog_id": "books-audit-021",
+          "observed_tool_id": "zohobooks_1bebb380b121",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Retrieve a document attached to a bank reconciliation."
+        },
+        {
+          "catalog_id": "books-audit-022",
+          "observed_tool_id": "zohobooks_1c153be41d11",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "General Ledger Details for the selected filters and period. entity_type is general_ledger_details for this report. Call GET /reports/metadata with that entity_type before this report."
+        },
+        {
+          "catalog_id": "books-audit-023",
+          "observed_tool_id": "zohobooks_1e547a0f10a2",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get a detailed look of the account specified."
+        },
+        {
+          "catalog_id": "books-audit-024",
+          "observed_tool_id": "zohobooks_2330b43682b8",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Accounts payable aging summary report. entity_type is ap_aging_summary for this report. Call GET /reports/metadata with that entity_type before this report."
+        },
+        {
+          "catalog_id": "books-audit-025",
+          "observed_tool_id": "zohobooks_2389e8b34242",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "List all retainer invoices with pagination."
+        },
+        {
+          "catalog_id": "books-audit-026",
+          "observed_tool_id": "zohobooks_23d739e0006e",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "List all chart of accounts along with pagination."
+        },
+        {
+          "catalog_id": "books-audit-027",
+          "observed_tool_id": "zohobooks_23de0eaba2fc",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "List all the payments made to your vendor."
+        },
+        {
+          "catalog_id": "books-audit-028",
+          "observed_tool_id": "zohobooks_23f081128b6c",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "List of accounts having transaction with effect to the given exchange rate."
+        },
+        {
+          "catalog_id": "books-audit-029",
+          "observed_tool_id": "zohobooks_240a493b8036",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Purchases By Vendor for the selected filters and period. entity_type is purchases_by_vendor for this report. Call GET /reports/metadata with that entity_type before this report."
+        },
+        {
+          "catalog_id": "books-audit-030",
+          "observed_tool_id": "zohobooks_2875c97dc7e3",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get field metadata for a specific entity type, including all available field types and configurations."
+        },
+        {
+          "catalog_id": "books-audit-031",
+          "observed_tool_id": "zohobooks_2c88c72cf726",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Report 1099 Vendor Payments for the selected filters and period. entity_type is report_1099_vendor_payments for this report. Call GET /reports/metadata with that entity_type before this report."
+        },
+        {
+          "catalog_id": "books-audit-032",
+          "observed_tool_id": "zohobooks_2cf5429df71a",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Receivable transaction detail report. entity_type is receivable_details for this report. Call GET /reports/metadata with that entity_type before this report."
+        },
+        {
+          "catalog_id": "books-audit-033",
+          "observed_tool_id": "zohobooks_2f931048fd1b",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "List all the refunds pertaining to an existing customer payment."
+        },
+        {
+          "catalog_id": "books-audit-034",
+          "observed_tool_id": "zohobooks_3183700aa1a1",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Obtain details of a particular refund of a vendor payment."
+        },
+        {
+          "catalog_id": "books-audit-035",
+          "observed_tool_id": "zohobooks_323a1998d271",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Retrieve the balance breakdown of a bank account."
+        },
+        {
+          "catalog_id": "books-audit-036",
+          "observed_tool_id": "zohobooks_3472d20dce6b",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "List all the refunds pertaining to an existing vendor payment."
+        },
+        {
+          "catalog_id": "books-audit-037",
+          "observed_tool_id": "zohobooks_36f65b839c19",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get the options and its criteria details of a reporting tag. For each page, you can retrieve only 200 options."
+        },
+        {
+          "catalog_id": "books-audit-038",
+          "observed_tool_id": "zohobooks_378e9e46c8db",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Accounts receivable aging summary. entity_type is ar_aging_summary for this report. Call GET /reports/metadata with that entity_type before this report."
+        },
+        {
+          "catalog_id": "books-audit-039",
+          "observed_tool_id": "zohobooks_3a1eced91b72",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Lists all recurring journals."
+        },
+        {
+          "catalog_id": "books-audit-040",
+          "observed_tool_id": "zohobooks_403b96b68f32",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Fetch all the rules created in the organization."
+        },
+        {
+          "catalog_id": "books-audit-041",
+          "observed_tool_id": "zohobooks_42f758608ea4",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get the details of the recurring expense."
+        },
+        {
+          "catalog_id": "books-audit-042",
+          "observed_tool_id": "zohobooks_4412a053ff22",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "List all refunds with pagination."
+        },
+        {
+          "catalog_id": "books-audit-043",
+          "observed_tool_id": "zohobooks_4512a31e9265",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get the details of a specific custom function execution history entry."
+        },
+        {
+          "catalog_id": "books-audit-044",
+          "observed_tool_id": "zohobooks_4640b43f06d9",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Retrieve the statement summary of a bank account."
+        },
+        {
+          "catalog_id": "books-audit-045",
+          "observed_tool_id": "zohobooks_478f998691d4",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get history and comments of expense."
+        },
+        {
+          "catalog_id": "books-audit-046",
+          "observed_tool_id": "zohobooks_4997b31bc417",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get the list of credits applied for an invoice."
+        },
+        {
+          "catalog_id": "books-audit-047",
+          "observed_tool_id": "zohobooks_49df3ef641e9",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "List all sales receipts."
+        },
+        {
+          "catalog_id": "books-audit-048",
+          "observed_tool_id": "zohobooks_524c59a4b263",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Detailed invoice lines for receivables. entity_type is invoice_details for this report. Call GET /reports/metadata with that entity_type before this report."
+        },
+        {
+          "catalog_id": "books-audit-049",
+          "observed_tool_id": "zohobooks_527eb31f51a3",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get all options for a reporting tag."
+        },
+        {
+          "catalog_id": "books-audit-050",
+          "observed_tool_id": "zohobooks_562e0c67b257",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Lists base currency adjustment."
+        },
+        {
+          "catalog_id": "books-audit-051",
+          "observed_tool_id": "zohobooks_592de61fe7a0",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get refund of a particular credit note."
+        },
+        {
+          "catalog_id": "books-audit-052",
+          "observed_tool_id": "zohobooks_5adce2127b93",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get the details of financial transaction locking."
+        },
+        {
+          "catalog_id": "books-audit-053",
+          "observed_tool_id": "zohobooks_5b56c42358e0",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Balance sheet report for the selected period. entity_type is balance_sheet for this report. Call GET /reports/metadata with that entity_type before this report."
+        },
+        {
+          "catalog_id": "books-audit-054",
+          "observed_tool_id": "zohobooks_5e2d51ddad46",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get details of a specific rule."
+        },
+        {
+          "catalog_id": "books-audit-055",
+          "observed_tool_id": "zohobooks_5f0f1168e64f",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "List the imported statements of a bank account."
+        },
+        {
+          "catalog_id": "books-audit-056",
+          "observed_tool_id": "zohobooks_62bfd2ce6850",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get all the transaction details involved in an account."
+        },
+        {
+          "catalog_id": "books-audit-057",
+          "observed_tool_id": "zohobooks_6396812061ee",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "List the transactions of a bank account."
+        },
+        {
+          "catalog_id": "books-audit-058",
+          "observed_tool_id": "zohobooks_63fd257e5632",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Exception Report for the selected filters and period. entity_type is exception_report for this report. Call GET /reports/metadata with that entity_type before this report."
+        },
+        {
+          "catalog_id": "books-audit-059",
+          "observed_tool_id": "zohobooks_647df171060a",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "List of tax exemptions. Note: You have to enable Sales Tax in order to perform tax related operations."
+        },
+        {
+          "catalog_id": "books-audit-060",
+          "observed_tool_id": "zohobooks_64cfa7759d67",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "List the unreviewed statement transactions of a bank account."
+        },
+        {
+          "catalog_id": "books-audit-061",
+          "observed_tool_id": "zohobooks_68c956ebd801",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get the details of the fixed asset."
+        },
+        {
+          "catalog_id": "books-audit-062",
+          "observed_tool_id": "zohobooks_68cc0878a0a9",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Returns metadata for a report: <code>entity_fields</code> for tabular params (<code>select_columns</code>, <code>group_by</code>, <code>rule</code>, <code>sort_column</code>, <code>date_filter</code>) and <code>report_details</code> for chart view, defaults, and export options. Use <code>entity_fields</code> flags per parameter; for <code>chart_view</code> true, use <code>report_details.chart_type[]</code> for..."
+        },
+        {
+          "catalog_id": "books-audit-063",
+          "observed_tool_id": "zohobooks_6b318c3b6dc9",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "List all recurring bills with pagination."
+        },
+        {
+          "catalog_id": "books-audit-064",
+          "observed_tool_id": "zohobooks_70af6cfbef96",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get list of currencies configured."
+        },
+        {
+          "catalog_id": "books-audit-065",
+          "observed_tool_id": "zohobooks_71b2a3cc0d01",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Workflow Logs for the selected filters and period. entity_type is workflow_logs for this report. Call GET /reports/metadata with that entity_type before this report."
+        },
+        {
+          "catalog_id": "books-audit-066",
+          "observed_tool_id": "zohobooks_7281dc176b9f",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Vendor payments report for accounts payable. entity_type is vendor_payments for this report. Call GET /reports/metadata with that entity_type before this report."
+        },
+        {
+          "catalog_id": "books-audit-067",
+          "observed_tool_id": "zohobooks_745818e859f5",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get the details of a specific custom function."
+        },
+        {
+          "catalog_id": "books-audit-068",
+          "observed_tool_id": "zohobooks_746cef4f5717",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get a list of all custom functions configured in your organization."
+        },
+        {
+          "catalog_id": "books-audit-069",
+          "observed_tool_id": "zohobooks_77e090898c67",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Expenses By Category for the selected filters and period. entity_type is expenses_by_category for this report. Call GET /reports/metadata with that entity_type before this report."
+        },
+        {
+          "catalog_id": "books-audit-070",
+          "observed_tool_id": "zohobooks_7bcbd1b61eee",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "List all the Expenses with pagination."
+        },
+        {
+          "catalog_id": "books-audit-071",
+          "observed_tool_id": "zohobooks_7f59eaa330f3",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Activity Logs for the selected filters and period. entity_type is activity_logs for this report. Call GET /reports/metadata with that entity_type before this report."
+        },
+        {
+          "catalog_id": "books-audit-072",
+          "observed_tool_id": "zohobooks_7fb961cde563",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get a list of workflow execution logs."
+        },
+        {
+          "catalog_id": "books-audit-073",
+          "observed_tool_id": "zohobooks_802528f41c21",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Retrieve a paginated list of vendor credits with comprehensive filtering, sorting, and search capabilities. Use query parameters to filter by date, status, amount, vendor details, items, taxes, and custom fields."
+        },
+        {
+          "catalog_id": "books-audit-074",
+          "observed_tool_id": "zohobooks_816da0548088",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Details of an existing creditnote."
+        },
+        {
+          "catalog_id": "books-audit-075",
+          "observed_tool_id": "zohobooks_85c133949228",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Unrealized Gain Or Loss for the selected filters and period. entity_type is unrealized_gain_or_loss for this report. Call GET /reports/metadata with that entity_type before this report."
+        },
+        {
+          "catalog_id": "books-audit-076",
+          "observed_tool_id": "zohobooks_86d3c4f74b83",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Retrieve details of a single bulk action on the account register, including affected transactions."
+        },
+        {
+          "catalog_id": "books-audit-077",
+          "observed_tool_id": "zohobooks_88aaacd7afdf",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get a list of webhook execution history records."
+        },
+        {
+          "catalog_id": "books-audit-078",
+          "observed_tool_id": "zohobooks_89013f77c538",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get the detailed execution log of a specific workflow run."
+        },
+        {
+          "catalog_id": "books-audit-079",
+          "observed_tool_id": "zohobooks_895a3671a5dc",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Lists the opening balance transactions for a specific account."
+        },
+        {
+          "catalog_id": "books-audit-080",
+          "observed_tool_id": "zohobooks_8b1eaf17ac3a",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get the details of a recurring invoice."
+        },
+        {
+          "catalog_id": "books-audit-081",
+          "observed_tool_id": "zohobooks_8ca9ee4bca3d",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Retrieve only customers with filters and pagination.Use this endpoint when the user asks for customers. Do not use for single customer details; use get_contact. ALWAYS validate all parameters and enum casing before sending. If any parameter is invalid or mismatched, MUST correct it. DO NOT GUESS enum values."
+        },
+        {
+          "catalog_id": "books-audit-082",
+          "observed_tool_id": "zohobooks_8cbc206bba58",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Fetch the details of a transaction by specifying the transaction_id."
+        },
+        {
+          "catalog_id": "books-audit-083",
+          "observed_tool_id": "zohobooks_8edcfd1140a1",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Account Type Summary for the selected filters and period. entity_type is account_type_summary for this report. Call GET /reports/metadata with that entity_type before this report."
+        },
+        {
+          "catalog_id": "books-audit-084",
+          "observed_tool_id": "zohobooks_908340a4183d",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get journal list."
+        },
+        {
+          "catalog_id": "books-audit-085",
+          "observed_tool_id": "zohobooks_90c1740d4b74",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "List all bank and credit card accounts for your organization."
+        },
+        {
+          "catalog_id": "books-audit-086",
+          "observed_tool_id": "zohobooks_92d0a189b828",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Account Type Transactions for the selected filters and period. entity_type is account_type_transactions for this report. Call GET /reports/metadata with that entity_type before this report."
+        },
+        {
+          "catalog_id": "books-audit-087",
+          "observed_tool_id": "zohobooks_92e14a7743db",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get the list of payments made for an invoice."
+        },
+        {
+          "catalog_id": "books-audit-088",
+          "observed_tool_id": "zohobooks_9524e1e718bc",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Budget Vs Actuals for the selected filters and period. entity_type is budget_vs_actuals for this report. Call GET /reports/metadata with that entity_type before this report."
+        },
+        {
+          "catalog_id": "books-audit-089",
+          "observed_tool_id": "zohobooks_98afb8a4c199",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "List all the available locations in your zoho inventory."
+        },
+        {
+          "catalog_id": "books-audit-090",
+          "observed_tool_id": "zohobooks_99996f8b3471",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "List all purchase orders."
+        },
+        {
+          "catalog_id": "books-audit-091",
+          "observed_tool_id": "zohobooks_99a7b8fa8d82",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get the details of previously imported statement for the account."
+        },
+        {
+          "catalog_id": "books-audit-092",
+          "observed_tool_id": "zohobooks_9a3388dcbc3f",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Gets the details of an account."
+        },
+        {
+          "catalog_id": "books-audit-093",
+          "observed_tool_id": "zohobooks_9a60b0a62ce3",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "List all custom fields for a specific entity type in a simplified format."
+        },
+        {
+          "catalog_id": "books-audit-094",
+          "observed_tool_id": "zohobooks_9d3fd4124ce8",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Obtain details of a particular refund of a customer payment."
+        },
+        {
+          "catalog_id": "books-audit-095",
+          "observed_tool_id": "zohobooks_9dfd229ef4c6",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "List all the payments made by your customer."
+        },
+        {
+          "catalog_id": "books-audit-096",
+          "observed_tool_id": "zohobooks_a07c93803faf",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Movement of equity report for the selected period. entity_type is movement_of_equity for this report. Call GET /reports/metadata with that entity_type before this report."
+        },
+        {
+          "catalog_id": "books-audit-097",
+          "observed_tool_id": "zohobooks_a09180c993d4",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "List of exchange rates configured for the currency."
+        },
+        {
+          "catalog_id": "books-audit-098",
+          "observed_tool_id": "zohobooks_a360a098d7d5",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "fixed asset type list."
+        },
+        {
+          "catalog_id": "books-audit-099",
+          "observed_tool_id": "zohobooks_a61dc4ef16d1",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Vendor balance summary report for accounts payable. entity_type is vendor_balance_summary for this report. Call GET /reports/metadata with that entity_type before this report."
+        },
+        {
+          "catalog_id": "books-audit-100",
+          "observed_tool_id": "zohobooks_a6b55e33b623",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get the details of a retainer invoice."
+        },
+        {
+          "catalog_id": "books-audit-101",
+          "observed_tool_id": "zohobooks_a870b285c505",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Profit and loss report for the selected period. entity_type is profit_and_loss for this report. Call GET /reports/metadata with that entity_type before this report."
+        },
+        {
+          "catalog_id": "books-audit-102",
+          "observed_tool_id": "zohobooks_a87805439085",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Retrieve the balances of all bank accounts."
+        },
+        {
+          "catalog_id": "books-audit-103",
+          "observed_tool_id": "zohobooks_a8a8696072b4",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get the list of payments made for a bill."
+        },
+        {
+          "catalog_id": "books-audit-104",
+          "observed_tool_id": "zohobooks_aa236f389735",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Lists all child journals created from a recurring journal."
+        },
+        {
+          "catalog_id": "books-audit-105",
+          "observed_tool_id": "zohobooks_ac105152084e",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get a list of all webhook configurations in your organization."
+        },
+        {
+          "catalog_id": "books-audit-106",
+          "observed_tool_id": "zohobooks_ad520ef1889b",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get the details of the current user."
+        },
+        {
+          "catalog_id": "books-audit-107",
+          "observed_tool_id": "zohobooks_aecdb674506b",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get the details of a specific webhook execution history entry."
+        },
+        {
+          "catalog_id": "books-audit-108",
+          "observed_tool_id": "zohobooks_b06716a1c27a",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Retrieve a paginated list of credit notes with comprehensive filtering, sorting, and search capabilities. Use query parameters to filter by date, status, amount, customer details, items, taxes, and custom fields."
+        },
+        {
+          "catalog_id": "books-audit-109",
+          "observed_tool_id": "zohobooks_b1002a2b88bb",
+          "effect": "read",
+          "input_sections": [
+            "untyped-map"
+          ],
+          "response_typed": false,
+          "summary": "Get the list of organizations."
+        },
+        {
+          "catalog_id": "books-audit-110",
+          "observed_tool_id": "zohobooks_b3f149c20c44",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get the complete history and comments of a bill."
+        },
+        {
+          "catalog_id": "books-audit-111",
+          "observed_tool_id": "zohobooks_b556432fc7b8",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "General Ledger for the selected filters and period. entity_type is general_ledger for this report. Call GET /reports/metadata with that entity_type before this report."
+        },
+        {
+          "catalog_id": "books-audit-112",
+          "observed_tool_id": "zohobooks_b66ecfaaefc1",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "List the match filters used to identify bank transactions for rules."
+        },
+        {
+          "catalog_id": "books-audit-113",
+          "observed_tool_id": "zohobooks_b79f6a40e0e6",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Retrieve the unused customer credits available for a contact."
+        },
+        {
+          "catalog_id": "books-audit-114",
+          "observed_tool_id": "zohobooks_b84df534657f",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get the details of a recurring bill."
+        },
+        {
+          "catalog_id": "books-audit-115",
+          "observed_tool_id": "zohobooks_ba22c2924c64",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get the details of a purchase order."
+        },
+        {
+          "catalog_id": "books-audit-116",
+          "observed_tool_id": "zohobooks_ba87b3e3a68e",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Gets the details of a recurring journal."
+        },
+        {
+          "catalog_id": "books-audit-117",
+          "observed_tool_id": "zohobooks_bbda2af69351",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get history and comments of a recurring bill."
+        },
+        {
+          "catalog_id": "books-audit-118",
+          "observed_tool_id": "zohobooks_bcd30644929a",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "List the details of all recurring invoice."
+        },
+        {
+          "catalog_id": "books-audit-119",
+          "observed_tool_id": "zohobooks_bd0160f61fdf",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Cash flow forecast report for the selected period. entity_type is cash_flow_forecast for this report. Call GET /reports/metadata with that entity_type before this report."
+        },
+        {
+          "catalog_id": "books-audit-120",
+          "observed_tool_id": "zohobooks_bd4f7de86c00",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Payable details report for vendors and bills. entity_type is payable_details for this report. Call GET /reports/metadata with that entity_type before this report."
+        },
+        {
+          "catalog_id": "books-audit-121",
+          "observed_tool_id": "zohobooks_c49e0d8fcf27",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "fixed asset list."
+        },
+        {
+          "catalog_id": "books-audit-122",
+          "observed_tool_id": "zohobooks_c53365b4aa33",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "It displays a detailed summary of the asset's future depreciation rates."
+        },
+        {
+          "catalog_id": "books-audit-123",
+          "observed_tool_id": "zohobooks_c58abc6723dc",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Retrieve the list of invoices generated from a recurring invoice profile. Use the filter and search parameters to narrow the results."
+        },
+        {
+          "catalog_id": "books-audit-124",
+          "observed_tool_id": "zohobooks_c69b275211db",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Account Transactions for the selected filters and period. entity_type is account_transactions for this report. Call GET /reports/metadata with that entity_type before this report."
+        },
+        {
+          "catalog_id": "books-audit-125",
+          "observed_tool_id": "zohobooks_c845496afb72",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Payable summary report for accounts payable. entity_type is payable_summary for this report. Call GET /reports/metadata with that entity_type before this report."
+        },
+        {
+          "catalog_id": "books-audit-126",
+          "observed_tool_id": "zohobooks_c9e2630dafe3",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get transaction locking details for an accounting period."
+        },
+        {
+          "catalog_id": "books-audit-127",
+          "observed_tool_id": "zohobooks_cf7de33f5111",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Bill details report for payables. entity_type is bill_details for this report. Call GET /reports/metadata with that entity_type before this report."
+        },
+        {
+          "catalog_id": "books-audit-128",
+          "observed_tool_id": "zohobooks_d180799ef777",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Retrieve a comprehensive list of all contacts with advanced filters. This operation supports multiple search criteria including contact name, company name, address, email, phone, and general text search. You can filter contacts by status (active, inactive, duplicate, CRM) and sort by various fields. The response includes essential contact information, financial data including outstanding amounts and credit..."
+        },
+        {
+          "catalog_id": "books-audit-129",
+          "observed_tool_id": "zohobooks_d185ea557cee",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Retrieve information about unused retainer payments for a specific contact. This endpoint returns details of retainer payments that have been made but not yet applied to invoices, providing insight into available credit balances from retainer payments."
+        },
+        {
+          "catalog_id": "books-audit-130",
+          "observed_tool_id": "zohobooks_d2e02c825910",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get the base currency adjustment details."
+        },
+        {
+          "catalog_id": "books-audit-131",
+          "observed_tool_id": "zohobooks_d82b821e211b",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Journal Report for the selected filters and period. entity_type is journal_report for this report. Call GET /reports/metadata with that entity_type before this report."
+        },
+        {
+          "catalog_id": "books-audit-132",
+          "observed_tool_id": "zohobooks_d8b1157c4dd8",
+          "effect": "read",
+          "input_sections": [
+            "path_variables"
+          ],
+          "response_typed": false,
+          "summary": "Get the details of an organization."
+        },
+        {
+          "catalog_id": "books-audit-133",
+          "observed_tool_id": "zohobooks_da6aaa96f2f6",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get refund of a particular vendor credit."
+        },
+        {
+          "catalog_id": "books-audit-134",
+          "observed_tool_id": "zohobooks_df4852ecd876",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Sales Summary for the selected filters and period. entity_type is sales_summary for this report. Call GET /reports/metadata with that entity_type before this report."
+        },
+        {
+          "catalog_id": "books-audit-135",
+          "observed_tool_id": "zohobooks_e0bfb0cec01c",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Retrieve the balance of a bank account."
+        },
+        {
+          "catalog_id": "books-audit-136",
+          "observed_tool_id": "zohobooks_e25c0c4f60d8",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "It displays a detailed summary of the asset from acquisition till write off."
+        },
+        {
+          "catalog_id": "books-audit-137",
+          "observed_tool_id": "zohobooks_e3cbcac09250",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get details of a vendor credit."
+        },
+        {
+          "catalog_id": "books-audit-138",
+          "observed_tool_id": "zohobooks_e426932143ae",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Lists the opening balance details for a specific account."
+        },
+        {
+          "catalog_id": "books-audit-139",
+          "observed_tool_id": "zohobooks_e5ff2117f753",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "List all involved transactions for the given account."
+        },
+        {
+          "catalog_id": "books-audit-140",
+          "observed_tool_id": "zohobooks_ebb410225eae",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Day Book for the selected filters and period. entity_type is day_book for this report. Call GET /reports/metadata with that entity_type before this report."
+        },
+        {
+          "catalog_id": "books-audit-141",
+          "observed_tool_id": "zohobooks_ec6a0f008797",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get a list of invoices with helpful pagination, filtering, search, and sorting features. Perfect for viewing your invoice data in organized ways, whether you need to find specific invoices or browse through your records."
+        },
+        {
+          "catalog_id": "books-audit-142",
+          "observed_tool_id": "zohobooks_ed8092e5842c",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Retrieve transactions for a chart of accounts register (account) as a report view with optional grouping, column selection, and print preferences."
+        },
+        {
+          "catalog_id": "books-audit-143",
+          "observed_tool_id": "zohobooks_efa6ad3b79c5",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "List child expenses created from recurring expense."
+        },
+        {
+          "catalog_id": "books-audit-144",
+          "observed_tool_id": "zohobooks_f066ad090702",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Receivable summary report. entity_type is receivable_summary for this report. Call GET /reports/metadata with that entity_type before this report."
+        },
+        {
+          "catalog_id": "books-audit-145",
+          "observed_tool_id": "zohobooks_f123d7ed5bed",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Bank charges report for receivables. entity_type is bank_charges for this report. Call GET /reports/metadata with that entity_type before this report."
+        },
+        {
+          "catalog_id": "books-audit-146",
+          "observed_tool_id": "zohobooks_f350b2c22428",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get history and comments of a recurring expense."
+        },
+        {
+          "catalog_id": "books-audit-147",
+          "observed_tool_id": "zohobooks_f4d99dac076f",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Accounts payable aging details report. entity_type is ap_aging_details for this report. Call GET /reports/metadata with that entity_type before this report."
+        },
+        {
+          "catalog_id": "books-audit-148",
+          "observed_tool_id": "zohobooks_f61e8e0db2c5",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get a list of all workflow rules configured in your organization."
+        },
+        {
+          "catalog_id": "books-audit-149",
+          "observed_tool_id": "zohobooks_f9a726f3972d",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get the details of a sales order."
+        },
+        {
+          "catalog_id": "books-audit-150",
+          "observed_tool_id": "zohobooks_fa253c17c67c",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Cash flow report for the selected period. entity_type is cash_flow for this report. Call GET /reports/metadata with that entity_type before this report."
+        },
+        {
+          "catalog_id": "books-audit-151",
+          "observed_tool_id": "zohobooks_fd1f8e6813c3",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get a list of custom function execution history records."
+        },
+        {
+          "catalog_id": "books-audit-152",
+          "observed_tool_id": "zohobooks_fd7718b992e3",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Details of an existing payment."
+        },
+        {
+          "catalog_id": "books-audit-153",
+          "observed_tool_id": "zohobooks_fdca334bb2ea",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Trial Balance for the selected filters and period. entity_type is trial_balance for this report. Call GET /reports/metadata with that entity_type before this report."
+        },
+        {
+          "catalog_id": "books-audit-154",
+          "observed_tool_id": "zohobooks_fe5cd17fcaf1",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Expense Details for the selected filters and period. entity_type is expense_details for this report. Call GET /reports/metadata with that entity_type before this report."
+        },
+        {
+          "catalog_id": "books-audit-155",
+          "observed_tool_id": "zohobooks_get_bill",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get the details of a bill."
+        },
+        {
+          "catalog_id": "books-audit-156",
+          "observed_tool_id": "zohobooks_get_contact",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Retrieve comprehensive details of a specific contact. This operation provides complete contact details such as basic information, addresses, contact persons, payment terms, tax settings, custom fields, and financial data including outstanding amounts, credit limits, and transaction history.Retrieve the complete details of a single contact by its contact_id, including addresses, contact persons, tax info, and..."
+        },
+        {
+          "catalog_id": "books-audit-157",
+          "observed_tool_id": "zohobooks_get_estimate",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get the details of an estimate."
+        },
+        {
+          "catalog_id": "books-audit-158",
+          "observed_tool_id": "zohobooks_get_expense",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get the details of the Expense."
+        },
+        {
+          "catalog_id": "books-audit-159",
+          "observed_tool_id": "zohobooks_get_invoice",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get the details of an invoice."
+        },
+        {
+          "catalog_id": "books-audit-160",
+          "observed_tool_id": "zohobooks_get_item",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Details of an existing item."
+        },
+        {
+          "catalog_id": "books-audit-161",
+          "observed_tool_id": "zohobooks_get_journal",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get the details of the journal."
+        },
+        {
+          "catalog_id": "books-audit-162",
+          "observed_tool_id": "zohobooks_get_tags",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get a list of all reporting tags in the preferred order that you can set."
+        },
+        {
+          "catalog_id": "books-audit-163",
+          "observed_tool_id": "zohobooks_get_webhook",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get the details of a specific webhook configuration."
+        },
+        {
+          "catalog_id": "books-audit-164",
+          "observed_tool_id": "zohobooks_get_workflow",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get the details of a specific workflow rule."
+        },
+        {
+          "catalog_id": "books-audit-165",
+          "observed_tool_id": "zohobooks_list_bills",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "List all bills with pagination."
+        },
+        {
+          "catalog_id": "books-audit-166",
+          "observed_tool_id": "zohobooks_list_items",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get the list of all active items with pagination."
+        },
+        {
+          "catalog_id": "books-audit-167",
+          "observed_tool_id": "zohobooks_list_taxes",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "List of simple and compound taxes with pagination. Note: You have to enable Sales Tax in order to perform tax related operations."
+        },
+        {
+          "catalog_id": "books-audit-168",
+          "observed_tool_id": "zohobooks_list_vendors",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Retrieve only vendors with filters and pagination.Use this endpoint when the user asks for vendors. Prefer dedicated startswith/contains parameters over search_text. Use search_text only as fallback when no dedicated filter matches user intent. Do not use for single vendor details; use get_contact. ALWAYS validate all parameters and enum casing before sending. If any parameter is invalid or mismatched, MUST..."
+        }
+      ]
+    },
+    {
+      "role": "books-bookkeeping",
+      "product": "Zoho Books",
+      "access_class": "mixed-read-write",
+      "observed_status": "advertised-not-call-verified",
+      "read_count": 7,
+      "write_or_action_count": 56,
+      "tool_count": 63,
+      "capabilities": [
+        {
+          "catalog_id": "books-bookkeeping-001",
+          "observed_tool_id": "zohobo_01ebd1e7bd75",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Updates the fixed asset with given information."
+        },
+        {
+          "catalog_id": "books-bookkeeping-002",
+          "observed_tool_id": "zohobo_022acf8caff3",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Attach a document to a specific document slot of an invoice."
+        },
+        {
+          "catalog_id": "books-bookkeeping-003",
+          "observed_tool_id": "zohobo_0867e23f4842",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Updates the billing address for this purchase order alone."
+        },
+        {
+          "catalog_id": "books-bookkeeping-004",
+          "observed_tool_id": "zohobo_0980e345cd4d",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Save the progress of a bank reconciliation as a draft."
+        },
+        {
+          "catalog_id": "books-bookkeeping-005",
+          "observed_tool_id": "zohobo_0d7d15a84c31",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Categorize an uncategorized transaction as Customer Payment."
+        },
+        {
+          "catalog_id": "books-bookkeeping-006",
+          "observed_tool_id": "zohobo_0fcfc9a0830b",
+          "effect": "write/action",
+          "input_sections": [
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Create a new credit note to record credits issued to customers for returned items, overpayments, or adjustments. Supports multi-currency transactions, custom line items, tax calculations, and workflows."
+        },
+        {
+          "catalog_id": "books-bookkeeping-007",
+          "observed_tool_id": "zohobo_1108d3d9d6f3",
+          "effect": "write/action",
+          "input_sections": [
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Create a new vendor credit to record credits issued by vendors for returned items, overpayments, or adjustments. Supports multi-currency transactions, custom line items, tax calculations, and workflows."
+        },
+        {
+          "catalog_id": "books-bookkeeping-008",
+          "observed_tool_id": "zohobo_15bb832ce16a",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Mark a reporting tag's option as active."
+        },
+        {
+          "catalog_id": "books-bookkeeping-009",
+          "observed_tool_id": "zohobo_20dc164829b8",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Attach a file to a bank reconciliation."
+        },
+        {
+          "catalog_id": "books-bookkeeping-010",
+          "observed_tool_id": "zohobo_28bfb49b28de",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Update the visibility conditions (or filter in some places) of a reporting tag. You can set other tags or location as filters for a tag. Check our help document to know about the requirements of a tag to be associated as a filter to another tag."
+        },
+        {
+          "catalog_id": "books-bookkeeping-011",
+          "observed_tool_id": "zohobo_28d1ec7271ac",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Create, update or delete the options of a reporting tag. Reorder and arrange them in an hierarchical structure as per your organization requirements. <br><b>NOTE:</b> <br><ol> <li>An option cannot be a child option beyond five hierarchical level.</li> <li>The overall children of an option cannot exceed 500 options.</li></ol>."
+        },
+        {
+          "catalog_id": "books-bookkeeping-012",
+          "observed_tool_id": "zohobo_291798398037",
+          "effect": "write/action",
+          "input_sections": [
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Create a purchase order for your vendor."
+        },
+        {
+          "catalog_id": "books-bookkeeping-013",
+          "observed_tool_id": "zohobo_2ab04b148d2e",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Details of an existing creditnote."
+        },
+        {
+          "catalog_id": "books-bookkeeping-014",
+          "observed_tool_id": "zohobo_2c7e812d357c",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Attach a file to a contact."
+        },
+        {
+          "catalog_id": "books-bookkeeping-015",
+          "observed_tool_id": "zohobo_30f62ba14aed",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Match an uncategorized transaction with an existing transaction in the account."
+        },
+        {
+          "catalog_id": "books-bookkeeping-016",
+          "observed_tool_id": "zohobo_31993694567f",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Add a comment for an invoice."
+        },
+        {
+          "catalog_id": "books-bookkeeping-017",
+          "observed_tool_id": "zohobo_356b666cdd58",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "List all purchase orders."
+        },
+        {
+          "catalog_id": "books-bookkeeping-018",
+          "observed_tool_id": "zohobo_3cce3399c99d",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Fetch the details of a transaction by specifying the transaction_id."
+        },
+        {
+          "catalog_id": "books-bookkeeping-019",
+          "observed_tool_id": "zohobo_448413efa536",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Categorize an Uncategorized transaction as a refund from a credit note."
+        },
+        {
+          "catalog_id": "books-bookkeeping-020",
+          "observed_tool_id": "zohobo_470ab190a1ea",
+          "effect": "write/action",
+          "input_sections": [
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Create billable or non-billable expense."
+        },
+        {
+          "catalog_id": "books-bookkeeping-021",
+          "observed_tool_id": "zohobo_47969a0ebc94",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Add a comment for a purchase order."
+        },
+        {
+          "catalog_id": "books-bookkeeping-022",
+          "observed_tool_id": "zohobo_4b010225544c",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Apply the advance payments collected against a retainer invoice to one or more invoices."
+        },
+        {
+          "catalog_id": "books-bookkeeping-023",
+          "observed_tool_id": "zohobo_4f4a7f04e354",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Categorize an uncategorized transaction by creating a new transaction."
+        },
+        {
+          "catalog_id": "books-bookkeeping-024",
+          "observed_tool_id": "zohobo_50a46cbd29a3",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Mark a reporting tag as active so that you can use it on entities which you allowed. A newly created tag will be in draft state. Use this to mark that tag as ready."
+        },
+        {
+          "catalog_id": "books-bookkeeping-025",
+          "observed_tool_id": "zohobo_5550aacf772e",
+          "effect": "write/action",
+          "input_sections": [
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Create an invoice for your customer."
+        },
+        {
+          "catalog_id": "books-bookkeeping-026",
+          "observed_tool_id": "zohobo_5cf7fe1d38ab",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get the details of a purchase order."
+        },
+        {
+          "catalog_id": "books-bookkeeping-027",
+          "observed_tool_id": "zohobo_65560c3a73ba",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "List all bills with pagination."
+        },
+        {
+          "catalog_id": "books-bookkeeping-028",
+          "observed_tool_id": "zohobo_6594e42ef3da",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Exclude a transaction from your bank or credit card account."
+        },
+        {
+          "catalog_id": "books-bookkeeping-029",
+          "observed_tool_id": "zohobo_677d54686e64",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Update the reporting tags associated with a contact."
+        },
+        {
+          "catalog_id": "books-bookkeeping-030",
+          "observed_tool_id": "zohobo_6ca46643d8c1",
+          "effect": "write/action",
+          "input_sections": [
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Create a recurring bill."
+        },
+        {
+          "catalog_id": "books-bookkeeping-031",
+          "observed_tool_id": "zohobo_6e295d81d17f",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Revert a categorized transaction as uncategorized."
+        },
+        {
+          "catalog_id": "books-bookkeeping-032",
+          "observed_tool_id": "zohobo_7a235ed6706d",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "List all recurring bills with pagination."
+        },
+        {
+          "catalog_id": "books-bookkeeping-033",
+          "observed_tool_id": "zohobo_7b9ec51deb6b",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Mark a reporting tag as inactive."
+        },
+        {
+          "catalog_id": "books-bookkeeping-034",
+          "observed_tool_id": "zohobo_8082fb31c9e4",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Make changes in the applicable fields of a transaction and update it."
+        },
+        {
+          "catalog_id": "books-bookkeeping-035",
+          "observed_tool_id": "zohobo_8757a4002396",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Update an existing Expense."
+        },
+        {
+          "catalog_id": "books-bookkeeping-036",
+          "observed_tool_id": "zohobo_8f285cbd3e6d",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Update a reporting tag."
+        },
+        {
+          "catalog_id": "books-bookkeeping-037",
+          "observed_tool_id": "zohobo_9d1e63664198",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Update an existing purchase order."
+        },
+        {
+          "catalog_id": "books-bookkeeping-038",
+          "observed_tool_id": "zohobo_a1fa9c7b78dc",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Mark a void bill as open."
+        },
+        {
+          "catalog_id": "books-bookkeeping-039",
+          "observed_tool_id": "zohobo_a4a6de35794f",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Updates the journal with given information."
+        },
+        {
+          "catalog_id": "books-bookkeeping-040",
+          "observed_tool_id": "zohobo_abc8ff14149e",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Update a bill. To delete a line item just remove it from the line_items list."
+        },
+        {
+          "catalog_id": "books-bookkeeping-041",
+          "observed_tool_id": "zohobo_b2630bda265c",
+          "effect": "write/action",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Create a bill for the selected purchase orders. Use this api to fetch the Bill payload by passing the purchaseorder_ids in the query parameters and then use the create bill api and pass the payload to create a bill <br> <a href=/books/api/v3/bills/#create-a-bill>Create bill API Endpoint</a>."
+        },
+        {
+          "catalog_id": "books-bookkeeping-042",
+          "observed_tool_id": "zohobo_b55cd37ac039",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Update a recurring bill. To delete a line item just remove it from the line_items list."
+        },
+        {
+          "catalog_id": "books-bookkeeping-043",
+          "observed_tool_id": "zohobo_bc42121ef35f",
+          "effect": "write/action",
+          "input_sections": [
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Create a journal."
+        },
+        {
+          "catalog_id": "books-bookkeeping-044",
+          "observed_tool_id": "zohobo_cc81a9464c0f",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Categorize an uncategorized transaction as a refund from a vendor credit."
+        },
+        {
+          "catalog_id": "books-bookkeeping-045",
+          "observed_tool_id": "zohobo_d26e422e70d2",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Add a comment for a journal."
+        },
+        {
+          "catalog_id": "books-bookkeeping-046",
+          "observed_tool_id": "zohobo_d3aad14b23c8",
+          "effect": "write/action",
+          "input_sections": [
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Create a reporting tag."
+        },
+        {
+          "catalog_id": "books-bookkeeping-047",
+          "observed_tool_id": "zohobo_d4af524566b3",
+          "effect": "write/action",
+          "input_sections": [
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Create a fixed asset."
+        },
+        {
+          "catalog_id": "books-bookkeeping-048",
+          "observed_tool_id": "zohobo_da0a61d2c99f",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Categorize an uncategorized transaction as Vendor Payment."
+        },
+        {
+          "catalog_id": "books-bookkeeping-049",
+          "observed_tool_id": "zohobo_de4d668fec84",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Update an existing vendor credit."
+        },
+        {
+          "catalog_id": "books-bookkeeping-050",
+          "observed_tool_id": "zohobo_df6e61b4034c",
+          "effect": "write/action",
+          "input_sections": [
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Create a recurring expense."
+        },
+        {
+          "catalog_id": "books-bookkeeping-051",
+          "observed_tool_id": "zohobo_e01212dde805",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Categorizing bank transactions as Payment Refund."
+        },
+        {
+          "catalog_id": "books-bookkeeping-052",
+          "observed_tool_id": "zohobo_e115a8c2e3fa",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Update an existing invoice. To delete a line item just remove it from the line_items list."
+        },
+        {
+          "catalog_id": "books-bookkeeping-053",
+          "observed_tool_id": "zohobo_e74b2c56f1c0",
+          "effect": "write/action",
+          "input_sections": [
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Create a bill received from your vendor."
+        },
+        {
+          "catalog_id": "books-bookkeeping-054",
+          "observed_tool_id": "zohobo_e7cba215bfaa",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Categorize an Uncategorized transaction as expense."
+        },
+        {
+          "catalog_id": "books-bookkeeping-055",
+          "observed_tool_id": "zohobo_ea3eea3b9050",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Categorizing bank transactions as Vendor Payment Refund."
+        },
+        {
+          "catalog_id": "books-bookkeeping-056",
+          "observed_tool_id": "zohobo_ea92736b1705",
+          "effect": "write/action",
+          "input_sections": [
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Reorder the reporting tags in your organization. The order of tags will be followed in transactions and reports."
+        },
+        {
+          "catalog_id": "books-bookkeeping-057",
+          "observed_tool_id": "zohobo_f0e99055853f",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get the list of payments made for a bill."
+        },
+        {
+          "catalog_id": "books-bookkeeping-058",
+          "observed_tool_id": "zohobo_f1a001b781fd",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Add a comment for a retainer invoice."
+        },
+        {
+          "catalog_id": "books-bookkeeping-059",
+          "observed_tool_id": "zohobo_f2ddc0107ace",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Update a recurring expense."
+        },
+        {
+          "catalog_id": "books-bookkeeping-060",
+          "observed_tool_id": "zohobo_f401e1ce7ce6",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Mark a bill status as void."
+        },
+        {
+          "catalog_id": "books-bookkeeping-061",
+          "observed_tool_id": "zohobo_f6df1b1cb0bd",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Attach a file to a credit note."
+        },
+        {
+          "catalog_id": "books-bookkeeping-062",
+          "observed_tool_id": "zohobo_fcd6807b9778",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Mark a reporting tag's option as inactive."
+        },
+        {
+          "catalog_id": "books-bookkeeping-063",
+          "observed_tool_id": "zohobooks_get_bill",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Get the details of a bill."
+        }
+      ]
+    },
+    {
+      "role": "books-controller",
+      "product": "Zoho Books",
+      "access_class": "high-risk-mixed",
+      "observed_status": "advertised-not-call-verified",
+      "read_count": 1,
+      "write_or_action_count": 64,
+      "tool_count": 65,
+      "capabilities": [
+        {
+          "catalog_id": "books-controller-001",
+          "observed_tool_id": "zohobooks_appl_6be423db4047",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Apply the vendor credits from excess vendor payments to a bill. Multiple credits can be applied at once."
+        },
+        {
+          "catalog_id": "books-controller-002",
+          "observed_tool_id": "zohobooks_appl_9934a9732efa",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Apply credit note to existing invoices."
+        },
+        {
+          "catalog_id": "books-controller-003",
+          "observed_tool_id": "zohobooks_appl_dc774196cb41",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Apply the advance payments collected against a retainer invoice to one or more invoices."
+        },
+        {
+          "catalog_id": "books-controller-004",
+          "observed_tool_id": "zohobooks_approve_journal",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Approves a journal."
+        },
+        {
+          "catalog_id": "books-controller-005",
+          "observed_tool_id": "zohobooks_canc_eaed2d623d9b",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Cancel the write off amount of an invoice."
+        },
+        {
+          "catalog_id": "books-controller-006",
+          "observed_tool_id": "zohobooks_crea_06042bb1b1fc",
+          "effect": "write/action",
+          "input_sections": [
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Create a new payment."
+        },
+        {
+          "catalog_id": "books-controller-007",
+          "observed_tool_id": "zohobooks_crea_238c2efda2e7",
+          "effect": "write/action",
+          "input_sections": [
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Create a payment made to your vendor and you can also apply them to bills either partially or fully."
+        },
+        {
+          "catalog_id": "books-controller-008",
+          "observed_tool_id": "zohobooks_crea_3a08cad0679b",
+          "effect": "write/action",
+          "input_sections": [
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Creates a base currency adjustment for the given information."
+        },
+        {
+          "catalog_id": "books-controller-009",
+          "observed_tool_id": "zohobooks_crea_3e355a670521",
+          "effect": "write/action",
+          "input_sections": [
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Create a rule and apply it on deposit/withdrawal for bank accounts and on refund/charges for credit card accounts."
+        },
+        {
+          "catalog_id": "books-controller-010",
+          "observed_tool_id": "zohobooks_crea_4b24f05f6902",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Refund the excess amount paid by the customer."
+        },
+        {
+          "catalog_id": "books-controller-011",
+          "observed_tool_id": "zohobooks_crea_4c65c3ee981b",
+          "effect": "write/action",
+          "input_sections": [
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Creates opening balance with the given information."
+        },
+        {
+          "catalog_id": "books-controller-012",
+          "observed_tool_id": "zohobooks_crea_4f47e5aa3552",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Create an exchange rate for the specified currency."
+        },
+        {
+          "catalog_id": "books-controller-013",
+          "observed_tool_id": "zohobooks_crea_5abda94074e6",
+          "effect": "write/action",
+          "input_sections": [
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Creates an account with the given account type."
+        },
+        {
+          "catalog_id": "books-controller-014",
+          "observed_tool_id": "zohobooks_crea_61a290c02cdf",
+          "effect": "write/action",
+          "input_sections": [
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Create a bank transaction based on the allowed transaction types."
+        },
+        {
+          "catalog_id": "books-controller-015",
+          "observed_tool_id": "zohobooks_crea_aed7419beeda",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Reconcile the transactions of a bank account for a statement period."
+        },
+        {
+          "catalog_id": "books-controller-016",
+          "observed_tool_id": "zohobooks_crea_bed205688333",
+          "effect": "write/action",
+          "input_sections": [
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Create a new custom field for a specific entity."
+        },
+        {
+          "catalog_id": "books-controller-017",
+          "observed_tool_id": "zohobooks_crea_c16848048b6b",
+          "effect": "write/action",
+          "input_sections": [
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Create a retainer invoice for your customer."
+        },
+        {
+          "catalog_id": "books-controller-018",
+          "observed_tool_id": "zohobooks_crea_d502b2513ab8",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Refund credit note amount."
+        },
+        {
+          "catalog_id": "books-controller-019",
+          "observed_tool_id": "zohobooks_crea_f4cdfeaa18eb",
+          "effect": "write/action",
+          "input_sections": [
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Create a bank account or a credit card account for your organization."
+        },
+        {
+          "catalog_id": "books-controller-020",
+          "observed_tool_id": "zohobooks_create_contact",
+          "effect": "write/action",
+          "input_sections": [
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Create a new contact with comprehensive business information. This operation allows you to create a customer or vendor by providing details such as contact name, company information, addresses, contact persons, payment terms, tax settings, and custom fields. The created contact can be used for generating invoices, bills, estimates, and other business transactions. The system automatically assigns a unique contact ID."
+        },
+        {
+          "catalog_id": "books-controller-021",
+          "observed_tool_id": "zohobooks_create_currency",
+          "effect": "write/action",
+          "input_sections": [
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Create a currency for transaction."
+        },
+        {
+          "catalog_id": "books-controller-022",
+          "observed_tool_id": "zohobooks_create_item",
+          "effect": "write/action",
+          "input_sections": [
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Create a new item."
+        },
+        {
+          "catalog_id": "books-controller-023",
+          "observed_tool_id": "zohobooks_create_location",
+          "effect": "write/action",
+          "input_sections": [
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Create a location."
+        },
+        {
+          "catalog_id": "books-controller-024",
+          "observed_tool_id": "zohobooks_create_tag",
+          "effect": "write/action",
+          "input_sections": [
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Create a reporting tag."
+        },
+        {
+          "catalog_id": "books-controller-025",
+          "observed_tool_id": "zohobooks_create_tax",
+          "effect": "write/action",
+          "input_sections": [
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Create a tax which can be associated with an item. Note: You have to enable Sales Tax in order to perform tax related operations."
+        },
+        {
+          "catalog_id": "books-controller-026",
+          "observed_tool_id": "zohobooks_dele_1c0099e5ad29",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Delete a retainer invoice payment that was applied to an invoice."
+        },
+        {
+          "catalog_id": "books-controller-027",
+          "observed_tool_id": "zohobooks_excl_d50227203224",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Exclude a transaction from your bank or credit card account."
+        },
+        {
+          "catalog_id": "books-controller-028",
+          "observed_tool_id": "zohobooks_get__e7dc2ebfd373",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Retrieve information about unused retainer payments for a specific contact. This endpoint returns details of retainer payments that have been made but not yet applied to invoices, providing insight into available credit balances from retainer payments."
+        },
+        {
+          "catalog_id": "books-controller-029",
+          "observed_tool_id": "zohobooks_mark_67ad02a2a986",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Mark the credit note as Void."
+        },
+        {
+          "catalog_id": "books-controller-030",
+          "observed_tool_id": "zohobooks_mark_67af06e75d05",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Mark an existing vendor credit as void."
+        },
+        {
+          "catalog_id": "books-controller-031",
+          "observed_tool_id": "zohobooks_mark_84ce9de22f6f",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Mark the fixed asset as draft."
+        },
+        {
+          "catalog_id": "books-controller-032",
+          "observed_tool_id": "zohobooks_mark_b6be2c5c1269",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Mark a voided retainer invoice as draft."
+        },
+        {
+          "catalog_id": "books-controller-033",
+          "observed_tool_id": "zohobooks_mark_bill_void",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Mark a bill status as void."
+        },
+        {
+          "catalog_id": "books-controller-034",
+          "observed_tool_id": "zohobooks_mark_c3c5cef90691",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Mark an invoice status as void. Upon voiding, the payments and credits associated with the retainer invoices will be unassociated and will be under customer credits."
+        },
+        {
+          "catalog_id": "books-controller-035",
+          "observed_tool_id": "zohobooks_mark_c41d5bd54c6b",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Mark a draft journal as published."
+        },
+        {
+          "catalog_id": "books-controller-036",
+          "observed_tool_id": "zohobooks_mark_e94bf880a910",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Mark the fixed asset as active to start calculating depreciation for the asset."
+        },
+        {
+          "catalog_id": "books-controller-037",
+          "observed_tool_id": "zohobooks_mark_invoice_void",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Mark an invoice status as void. Upon voiding, the payments and credits associated with the invoices will be unassociated and will be under customer credits."
+        },
+        {
+          "catalog_id": "books-controller-038",
+          "observed_tool_id": "zohobooks_refu_36907fc962b6",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Refund the excess amount paid to the vendor."
+        },
+        {
+          "catalog_id": "books-controller-039",
+          "observed_tool_id": "zohobooks_refu_92ec5695eb1a",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Refund vendor credit amount."
+        },
+        {
+          "catalog_id": "books-controller-040",
+          "observed_tool_id": "zohobooks_rest_5fa97c7907e8",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Restore an excluded transaction in your account."
+        },
+        {
+          "catalog_id": "books-controller-041",
+          "observed_tool_id": "zohobooks_reverse_journal",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Reverses a journal entry."
+        },
+        {
+          "catalog_id": "books-controller-042",
+          "observed_tool_id": "zohobooks_sell_fixed_asset",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Sell the fixed asset."
+        },
+        {
+          "catalog_id": "books-controller-043",
+          "observed_tool_id": "zohobooks_subm_4a919dadf2f0",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Submits a journal for approval."
+        },
+        {
+          "catalog_id": "books-controller-044",
+          "observed_tool_id": "zohobooks_unca_8f801f36b124",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Revert a categorized transaction as uncategorized."
+        },
+        {
+          "catalog_id": "books-controller-045",
+          "observed_tool_id": "zohobooks_unma_8d0d1eef4490",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Unmatch a transaction that was previously matched and make it uncategorized."
+        },
+        {
+          "catalog_id": "books-controller-046",
+          "observed_tool_id": "zohobooks_upda_04e6ccb69773",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Update an existing payment information."
+        },
+        {
+          "catalog_id": "books-controller-047",
+          "observed_tool_id": "zohobooks_upda_0af8d7dafd9b",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Modify the account that was created."
+        },
+        {
+          "catalog_id": "books-controller-048",
+          "observed_tool_id": "zohobooks_upda_4ae2194620f7",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Updates the account information."
+        },
+        {
+          "catalog_id": "books-controller-049",
+          "observed_tool_id": "zohobooks_upda_5b4a7aa37d6e",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Update an existing invoice."
+        },
+        {
+          "catalog_id": "books-controller-050",
+          "observed_tool_id": "zohobooks_upda_673845bb65cd",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Update the details of exchange rate for a currency."
+        },
+        {
+          "catalog_id": "books-controller-051",
+          "observed_tool_id": "zohobooks_upda_780930a04898",
+          "effect": "write/action",
+          "input_sections": [
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Updates the existing opening balance information."
+        },
+        {
+          "catalog_id": "books-controller-052",
+          "observed_tool_id": "zohobooks_upda_88e85ab1df2c",
+          "effect": "write/action",
+          "input_sections": [
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Update transaction lock settings."
+        },
+        {
+          "catalog_id": "books-controller-053",
+          "observed_tool_id": "zohobooks_upda_8f51e2b5f0cd",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Update an existing custom field."
+        },
+        {
+          "catalog_id": "books-controller-054",
+          "observed_tool_id": "zohobooks_upda_ac378cb11af7",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Update an existing vendor payment. You can also modify the amount applied to the bills."
+        },
+        {
+          "catalog_id": "books-controller-055",
+          "observed_tool_id": "zohobooks_upda_ad027242df7e",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Create, update or delete the options of a reporting tag. Reorder and arrange them in an hierarchical structure as per your organization requirements. <br><b>NOTE:</b> <br><ol> <li>An option cannot be a child option beyond five hierarchical level.</li> <li>The overall children of an option cannot exceed 500 options.</li></ol>."
+        },
+        {
+          "catalog_id": "books-controller-056",
+          "observed_tool_id": "zohobooks_upda_f0124a9ca44c",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Make changes to the rule, add or modify it and update."
+        },
+        {
+          "catalog_id": "books-controller-057",
+          "observed_tool_id": "zohobooks_upda_f4aeaef3d4dd",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Update a bank reconciliation."
+        },
+        {
+          "catalog_id": "books-controller-058",
+          "observed_tool_id": "zohobooks_update_contact",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Update an existing contact with comprehensive business information. This operation allows you to modify all contact details including basic information, addresses, contact persons, payment terms, tax settings, and custom fields. For contact person, you can add new contact persons, update existing ones, or remove them by excluding them from the contact_persons list."
+        },
+        {
+          "catalog_id": "books-controller-059",
+          "observed_tool_id": "zohobooks_update_currency",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Update the details of a currency."
+        },
+        {
+          "catalog_id": "books-controller-060",
+          "observed_tool_id": "zohobooks_update_item",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Update the details of an item."
+        },
+        {
+          "catalog_id": "books-controller-061",
+          "observed_tool_id": "zohobooks_update_location",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Update location."
+        },
+        {
+          "catalog_id": "books-controller-062",
+          "observed_tool_id": "zohobooks_update_tag",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Update a reporting tag."
+        },
+        {
+          "catalog_id": "books-controller-063",
+          "observed_tool_id": "zohobooks_update_tax",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Update the details of a simple or compound tax. Note: You have to enable Sales Tax in order to perform tax related operations."
+        },
+        {
+          "catalog_id": "books-controller-064",
+          "observed_tool_id": "zohobooks_writ_be8dcf5ff9de",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Write off the fixed asset."
+        },
+        {
+          "catalog_id": "books-controller-065",
+          "observed_tool_id": "zohobooks_write_off_invoice",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Write off the invoice balance amount of an invoice."
+        }
+      ]
+    },
+    {
+      "role": "catalyst-audit",
+      "product": "Zoho Catalyst",
+      "access_class": "read-only-sensitive",
+      "observed_status": "advertised-not-call-verified",
+      "read_count": 15,
+      "write_or_action_count": 0,
+      "tool_count": 15,
+      "capabilities": [
+        {
+          "catalog_id": "catalyst-audit-001",
+          "observed_tool_id": "catalystb_098b760b6863",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Retrieves the value of a cache item by its key from the specified segment."
+        },
+        {
+          "catalog_id": "catalyst-audit-002",
+          "observed_tool_id": "catalystb_13ebbc148b14",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Retrieves all functions configured in the specified Catalyst project. Supports pagination, sorting, filtering by function type or integration service, and searching by function name."
+        },
+        {
+          "catalog_id": "catalyst-audit-003",
+          "observed_tool_id": "catalystb_3493b46f7590",
+          "effect": "read",
+          "input_sections": [
+            "path_variables"
+          ],
+          "response_typed": false,
+          "summary": "Retrieves all cache segments configured in the specified Catalyst project. Segments are logical partitions used to organize cached data."
+        },
+        {
+          "catalog_id": "catalyst-audit-004",
+          "observed_tool_id": "catalystb_397c388f58a3",
+          "effect": "read",
+          "input_sections": [
+            "path_variables"
+          ],
+          "response_typed": false,
+          "summary": "Retrieves all environment variables configured for a specific deployment resource. Returns the list of key-value pairs and associated metadata for the deployment's environment configuration.This tool must not be called without the resourceId (deployment ID). First call the 'List All Deployments' tool to get the deployments. If no deployments exist, inform the user and stop. If deployments exist, ask the user to..."
+        },
+        {
+          "catalog_id": "catalyst-audit-005",
+          "observed_tool_id": "catalystb_4ad55b0f3e2b",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Retrieves logs for the specified Catalyst project with support for filtering by resource, log level, date range, and other criteria. Supports pagination via start and end limits, and allows grouping and time-slicing for aggregated log analysis."
+        },
+        {
+          "catalog_id": "catalyst-audit-006",
+          "observed_tool_id": "catalystb_5ec96ca5d989",
+          "effect": "read",
+          "input_sections": [
+            "path_variables"
+          ],
+          "response_typed": false,
+          "summary": "Retrieves detailed information about a specific project by its unique identifier."
+        },
+        {
+          "catalog_id": "catalyst-audit-007",
+          "observed_tool_id": "catalystb_68fcc5deada2",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Retrieves a list of APIs configured in the API Gateway of the specified Catalyst project. Supports pagination, partial name search, filtering by creation source, and optional enhanced response details."
+        },
+        {
+          "catalog_id": "catalyst-audit-008",
+          "observed_tool_id": "catalystb_6e81afabecd6",
+          "effect": "read",
+          "input_sections": [
+            "path_variables"
+          ],
+          "response_typed": false,
+          "summary": "Retrieves all deployments associated with a specific application within a project. Returns a list of deployment details including metadata and status information."
+        },
+        {
+          "catalog_id": "catalyst-audit-009",
+          "observed_tool_id": "catalystb_71d2aa62ba3f",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Retrieves a list of all projects accessible to the authenticated user with optional filtering by IDs."
+        },
+        {
+          "catalog_id": "catalyst-audit-010",
+          "observed_tool_id": "catalystb_73a69a6935a3",
+          "effect": "read",
+          "input_sections": [
+            "path_variables"
+          ],
+          "response_typed": false,
+          "summary": "Retrieves the details of a specific function in the specified Catalyst project by its unique identifier. Use the 'List All Functions' tool first to retrieve available functions and their IDs."
+        },
+        {
+          "catalog_id": "catalyst-audit-011",
+          "observed_tool_id": "catalystb_79aee453e07e",
+          "effect": "read",
+          "input_sections": [
+            "path_variables"
+          ],
+          "response_typed": false,
+          "summary": "Retrieves all CI/CD pipelines configured for the project. Returns pipeline configurations including their triggers, stages, and deployment targets."
+        },
+        {
+          "catalog_id": "catalyst-audit-012",
+          "observed_tool_id": "catalystb_acc5c3e33cda",
+          "effect": "read",
+          "input_sections": [
+            "path_variables"
+          ],
+          "response_typed": false,
+          "summary": "Retrieves the details of a specific API route configured in the API Gateway of the specified Catalyst project."
+        },
+        {
+          "catalog_id": "catalyst-audit-013",
+          "observed_tool_id": "catalystb_c149a010737b",
+          "effect": "read",
+          "input_sections": [
+            "untyped-map"
+          ],
+          "response_typed": false,
+          "summary": "Retrieves all organizations associated with the authenticated user's Catalyst account. Returns a list of organization details including their identifiers and configuration."
+        },
+        {
+          "catalog_id": "catalyst-audit-014",
+          "observed_tool_id": "catalystb_cb512a0e1cd8",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Retrieves the details of a specific deployment by its resource identifier. Returns deployment metadata, status, and configuration information."
+        },
+        {
+          "catalog_id": "catalyst-audit-015",
+          "observed_tool_id": "catalystb_e56e2a903f9d",
+          "effect": "read",
+          "input_sections": [
+            "path_variables"
+          ],
+          "response_typed": false,
+          "summary": "Retrieves detailed information about a specific pipeline including its configuration, stages, triggers, and recent execution history."
+        }
+      ]
+    },
+    {
+      "role": "catalyst-break-glass",
+      "product": "Zoho Catalyst",
+      "access_class": "emergency-write",
+      "observed_status": "advertised-not-call-verified",
+      "read_count": 0,
+      "write_or_action_count": 5,
+      "tool_count": 5,
+      "capabilities": [
+        {
+          "catalog_id": "catalyst-break-glass-001",
+          "observed_tool_id": "cata_67e2b519153e",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Creates a new set of environment variables for a specific deployment resource. Allows defining key-value pairs that will be available to the deployed application at runtime.This tool must not be called without the resourceId (deployment ID). First call the 'List All Deployments' tool to get the deployments. If no deployments exist, inform the user and stop. If deployments exist, ask the user to select a..."
+        },
+        {
+          "catalog_id": "catalyst-break-glass-002",
+          "observed_tool_id": "cata_747465b3123d",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Partially updates the configuration of a specified pipeline in the Catalyst project. Supports updating the pipeline name and enabling or disabling the pipeline via query parameters."
+        },
+        {
+          "catalog_id": "catalyst-break-glass-003",
+          "observed_tool_id": "cata_7600de4a0e79",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Creates a new API endpoint in the API Gateway of the specified Catalyst project. The API configuration defines the route, method, and backend target for incoming requests."
+        },
+        {
+          "catalog_id": "catalyst-break-glass-004",
+          "observed_tool_id": "cata_cc46f4548293",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Creates a new pipeline in the specified Catalyst project. Pipelines define automated workflows for processing and transforming data."
+        },
+        {
+          "catalog_id": "catalyst-break-glass-005",
+          "observed_tool_id": "cata_e1b390f3043f",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Creates or sets environment variable configurations for a specific function in the Catalyst project. These configuration key-value pairs are accessible at runtime within the function's execution context."
+        }
+      ]
+    },
+    {
+      "role": "catalyst-release",
+      "product": "Zoho Catalyst",
+      "access_class": "release-action",
+      "observed_status": "advertised-not-call-verified",
+      "read_count": 0,
+      "write_or_action_count": 7,
+      "tool_count": 7,
+      "capabilities": [
+        {
+          "catalog_id": "catalyst-release-001",
+          "observed_tool_id": "catalys_0c55b828b685",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables"
+          ],
+          "response_typed": false,
+          "summary": "Executes the serverless function with HTTP POST method. The most common method for triggering function execution with request body data."
+        },
+        {
+          "catalog_id": "catalyst-release-002",
+          "observed_tool_id": "catalys_40e7e3b58db5",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables"
+          ],
+          "response_typed": false,
+          "summary": "Triggers the execution of an automation test suite. Returns execution details including run ID for tracking test progress and results."
+        },
+        {
+          "catalog_id": "catalyst-release-003",
+          "observed_tool_id": "catalys_4106975bd531",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables"
+          ],
+          "response_typed": false,
+          "summary": "Initiates a rollback operation for a specific application deployment, reverting it to a previous version or state. This updates the deployment resource to restore a prior configuration.Before calling this tool, use the 'List All Deployments' or 'Get Deployment' tool to retrieve the deployment ID (resourceId). Do not ask the user for the deployment ID directly."
+        },
+        {
+          "catalog_id": "catalyst-release-004",
+          "observed_tool_id": "catalys_6368edb9b0eb",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Updates a serverless function in the specified Catalyst project. Before calling this tool, first use the 'List All Functions' tool to retrieve all available functions and present them to the user. Ask the user which function they want to update. Only 'stack' and 'memory' are updatable fields. The 'name' and 'type' must be sent in the request but are identifiers taken from the existing function details returned by..."
+        },
+        {
+          "catalog_id": "catalyst-release-005",
+          "observed_tool_id": "catalys_81c450e8bf9b",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Manually triggers a pipeline execution. Useful for on-demand builds and deployments outside of automated triggers such as code commits or webhooks."
+        },
+        {
+          "catalog_id": "catalyst-release-006",
+          "observed_tool_id": "catalys_d971d46f596c",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Triggers a redeployment of a previously deployed application resource. Allows specifying a particular commit to redeploy from, enabling rollback or targeted release scenarios.Before calling this tool, use the 'List All Deployments' or 'Get Deployment' tool to retrieve the deployment ID (resourceId). Do not ask the user for the deployment ID directly. Send an empty JSON body {}."
+        },
+        {
+          "catalog_id": "catalyst-release-007",
+          "observed_tool_id": "catalys_e1a89b49e2e8",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables"
+          ],
+          "response_typed": false,
+          "summary": "Cancels an in-progress build for a specific deployment resource within an application. This stops the build process and prevents further execution of the build pipeline."
+        }
+      ]
+    },
+    {
+      "role": "crm-audit",
+      "product": "Zoho CRM",
+      "access_class": "read-only-mixed-metadata-record",
+      "observed_status": "advertised-not-call-verified",
+      "read_count": 19,
+      "write_or_action_count": 0,
+      "tool_count": 19,
+      "capabilities": [
+        {
+          "catalog_id": "crm-audit-001",
+          "observed_tool_id": "zohocrm__111c36b64980",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Retrieves the available triggers, actions, and related trigger details for a specific module. Use this endpoint before creating or updating workflow rules to discover which triggers and actions are supported, their per-type limits, scheduling compatibility, and related module triggers. The response includes three sections: triggers (events that fire the rule), actions (operations executed when the rule fires),..."
+        },
+        {
+          "catalog_id": "crm-audit-002",
+          "observed_tool_id": "zohocrm__165015d08eae",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "PURPOSE: Retrieves a paginated list of field update actions. OPTIONAL FILTERS: module (string - filter by module api_name), related_module (string - filter by related module api_name), feature_type ('workflow'), sort_by, sort_order, page, per_page. Use this to discover field update IDs before associating them with workflow rules via the associate action."
+        },
+        {
+          "catalog_id": "crm-audit-003",
+          "observed_tool_id": "zohocrm__1c9a65307041",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Retrieve metadata of a specific custom field in a module using the field ID."
+        },
+        {
+          "catalog_id": "crm-audit-004",
+          "observed_tool_id": "zohocrm__3ae659039236",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Layout rule get for particular record."
+        },
+        {
+          "catalog_id": "crm-audit-005",
+          "observed_tool_id": "zohocrm__40c88b062b9c",
+          "effect": "read",
+          "input_sections": [
+            "untyped-map"
+          ],
+          "response_typed": false,
+          "summary": "To get the Company Details."
+        },
+        {
+          "catalog_id": "crm-audit-006",
+          "observed_tool_id": "zohocrm__5fd397ea322c",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Retrieves complete metadata for a specific CRM module identified by its API name. Returns comprehensive configuration including fields, layouts, profiles, related lists, custom views, and module capabilities."
+        },
+        {
+          "catalog_id": "crm-audit-007",
+          "observed_tool_id": "zohocrm__61a573ee96ef",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "PURPOSE: Retrieves a paginated list of workflow rules. OPTIONAL FILTERS: module (string - filter by module api_name), status_active (boolean - true for active, false for inactive), execute_on (string - filter by trigger type), filter (JSON - search by rule name using contains comparator). KEY PARAMETER: include_inner_details to get full condition details, criteria, and action configurations (default returns only..."
+        },
+        {
+          "catalog_id": "crm-audit-008",
+          "observed_tool_id": "zohocrm__6d14c63d232a",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Retrieves associations of picklist values with modules, fields, and layouts for a given global picklist ID."
+        },
+        {
+          "catalog_id": "crm-audit-009",
+          "observed_tool_id": "zohocrm__7ff77ce1c6dd",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Fetches the global picklist for given id along with their pick_list_values. used_in_modules, and associated_fields_count can be included in the response based on the 'include' query parameter. A 204 is returned when no global picklists exist."
+        },
+        {
+          "catalog_id": "crm-audit-010",
+          "observed_tool_id": "zohocrm__92f13d164e10",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "PURPOSE: Retrieves full details of a specific field update action. MANDATORY: id path parameter. KEY PARAMETER: include_inner_details=true for additional field metadata. Returns field configuration, module context, value, dependent fields, and audit details. Use before PUT to inspect current state."
+        },
+        {
+          "catalog_id": "crm-audit-011",
+          "observed_tool_id": "zohocrm__d0f678e6bab2",
+          "effect": "read",
+          "input_sections": [
+            "path_variables"
+          ],
+          "response_typed": false,
+          "summary": "PURPOSE: Retrieves the full details of a specific workflow rule including trigger configuration, conditions, criteria, instant and scheduled actions, lock status, and usage metadata. MANDATORY: id path parameter (string - workflow rule ID). Returns complete rule structure - use this to inspect the current state before updating via PUT."
+        },
+        {
+          "catalog_id": "crm-audit-012",
+          "observed_tool_id": "zohocrm__eced1dc0dca1",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "PURPOSE: Retrieves a paginated list of automation task definitions. Supports filtering by module, feature_type, and name (via filter param). PAGINATION: page (default 1), per_page (default 200, max 200). Use info.more_records to determine if additional pages exist. A 204 response indicates no tasks match the supplied filters. Use this before PUT/DELETE to discover task IDs."
+        },
+        {
+          "catalog_id": "crm-audit-013",
+          "observed_tool_id": "zohocrm__f1f98d26c06d",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Fetches the list of global picklists available in the organization along with their details. pick_list_values, used_in_modules, and associated_fields_count can be included in the response based on the 'include' query parameter. A 204 is returned when no global picklists exist."
+        },
+        {
+          "catalog_id": "crm-audit-014",
+          "observed_tool_id": "zohocrm__f701ae66af80",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Layout rules get api for module."
+        },
+        {
+          "catalog_id": "crm-audit-015",
+          "observed_tool_id": "zohocrm_getfields",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Retrieve all fields metadata for modules. Examples and schemas derived from provided sample and schema files."
+        },
+        {
+          "catalog_id": "crm-audit-016",
+          "observed_tool_id": "zohocrm_getlayoutbyid",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Retrieves comprehensive details of a specific layout by its unique identifier for a specified module in your Zoho CRM account. Returns layout configuration including sections, fields, profiles, and permissions."
+        },
+        {
+          "catalog_id": "crm-audit-017",
+          "observed_tool_id": "zohocrm_getlayouts",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Retrieves comprehensive details of all layouts associated with a specified module in your Zoho CRM account. Returns layout configuration including sections, fields, profiles, and permissions in a single response without pagination."
+        },
+        {
+          "catalog_id": "crm-audit-018",
+          "observed_tool_id": "zohocrm_getmodules",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Fetches metadata for CRM modules including configuration, capabilities, and structural information. Supports filtering by feature name to retrieve modules associated with specific features, or by status (e.g., system_hidden) to return modules matching that status. When both status and feature_name are provided, modules must satisfy both criteria (AND logic). Expected latency: ~60ms."
+        },
+        {
+          "catalog_id": "crm-audit-019",
+          "observed_tool_id": "zohocrm_getrecord",
+          "effect": "read",
+          "input_sections": [
+            "path_variables"
+          ],
+          "response_typed": false,
+          "summary": "To get the details of a specific record with its unique record ID."
+        }
+      ]
+    },
+    {
+      "role": "crm-changes",
+      "product": "Zoho CRM",
+      "access_class": "mixed-read-write",
+      "observed_status": "advertised-not-call-verified",
+      "read_count": 8,
+      "write_or_action_count": 19,
+      "tool_count": 27,
+      "capabilities": [
+        {
+          "catalog_id": "crm-changes-001",
+          "observed_tool_id": "zohocr_16f064a0d986",
+          "effect": "read",
+          "input_sections": [
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Executes a COQL select query to fetch records data."
+        },
+        {
+          "catalog_id": "crm-changes-002",
+          "observed_tool_id": "zohocr_19f7298bd0e7",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "PURPOSE: Updates an existing field update action by path ID. PREREQUISITES: Same as POST - resolve field metadata, pipeline/layout/owner values from respective APIs. BEHAVIOR: Resend ALL required fields (name, module, field, type, value) - partial updates are not reliably supported. Dependency rules same as create. KEY CONSTRAINTS: Locked actions require privilege. Read-only actions cannot be modified."
+        },
+        {
+          "catalog_id": "crm-changes-003",
+          "observed_tool_id": "zohocr_290ba261b706",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Create a Record in a specific module."
+        },
+        {
+          "catalog_id": "crm-changes-004",
+          "observed_tool_id": "zohocr_2ff7ed0058e2",
+          "effect": "read",
+          "input_sections": [
+            "untyped-map"
+          ],
+          "response_typed": false,
+          "summary": "To get the Company Details."
+        },
+        {
+          "catalog_id": "crm-changes-005",
+          "observed_tool_id": "zohocr_44e5f893e2fb",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Searches records matching your criteria within a CRM module. Supports criteria queries, email/phone/word searches. At least one search parameter required. Max 2,000 records, 15 criteria conditions. Newly created records may have indexing delays."
+        },
+        {
+          "catalog_id": "crm-changes-006",
+          "observed_tool_id": "zohocr_494767cbb281",
+          "effect": "write/action",
+          "input_sections": [
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Creates a new global picklist with the specified display label, API name, description, and picklist values. The actual_label, customizable, modified_by, created_by, and presence properties are generated by the backend. In pick_list_values, only display_value and type are considered."
+        },
+        {
+          "catalog_id": "crm-changes-007",
+          "observed_tool_id": "zohocr_580b84bc7a59",
+          "effect": "write/action",
+          "input_sections": [
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Creates a workflow rule for a specified module. PREREQUISITES: (1) MUST call getWorkflowConfigurations FIRST -- trigger availability is module-specific (the trigger enum lists ALL triggers globally, not per-module -- using an unsupported trigger returns INVALID_DATA with no diagnostic detail). Do NOT construct the payload without configuration data. (2) MUST call getWorkflowRulesCount to discover org-specific..."
+        },
+        {
+          "catalog_id": "crm-changes-008",
+          "observed_tool_id": "zohocr_6991f0e6238a",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "PURPOSE: Updates an existing workflow rule identified by the path parameter ID. PREREQUISITES: (1) Call getWorkflowRuleById to obtain the current rule structure. (2) Call getWorkflowConfigurations to verify supported triggers and actions. BEHAVIOR: Supports partial updates - only include fields you want to change. Existing actions not included in the request are preserved. To remove an action, include it with..."
+        },
+        {
+          "catalog_id": "crm-changes-009",
+          "observed_tool_id": "zohocr_6d11d3f2b615",
+          "effect": "write/action",
+          "input_sections": [
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Layout rule update case."
+        },
+        {
+          "catalog_id": "crm-changes-010",
+          "observed_tool_id": "zohocr_6f95be244d78",
+          "effect": "write/action",
+          "input_sections": [
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "PURPOSE: Creates an automation task definition used by workflow rules, approval processes, blueprints, kiosks, scoring rules, and case escalation rules. PREREQUISITES: (1) Call GET /settings/automation/tasks to check existing task definitions and avoid duplicates. (2) Call GET /settings/layouts?module=Tasks to discover supported fields and identify mandatory fields where required: true in the field info...."
+        },
+        {
+          "catalog_id": "crm-changes-011",
+          "observed_tool_id": "zohocr_76bdba9fcbd4",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "To update existing entities or records in a specified module with the recordID."
+        },
+        {
+          "catalog_id": "crm-changes-012",
+          "observed_tool_id": "zohocr_78fcd46d8d32",
+          "effect": "write/action",
+          "input_sections": [
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Layout rule create api."
+        },
+        {
+          "catalog_id": "crm-changes-013",
+          "observed_tool_id": "zohocr_7f298a1d274a",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Partially updates a module's display labels (singular and plural) and associated profile permissions. This operation only modifies the specified fields without affecting other module configuration. The operation is idempotent - calling it multiple times with the same payload produces the same result. access_type cannot be updated through this API; once created as org_based or team_based, it remains unchanged."
+        },
+        {
+          "catalog_id": "crm-changes-014",
+          "observed_tool_id": "zohocr_819ba0d3e4ce",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Retrieves details of a specific record that is related to a parent record. Returns the record data along with pagination information if applicable."
+        },
+        {
+          "catalog_id": "crm-changes-015",
+          "observed_tool_id": "zohocr_893ca9237efe",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Updates an existing global picklist identified by the path parameter \\{id\\}. You can update display_label, api_name, description, pick_list_values_sorted_lexically, and pick_list_values. Backend-generated properties (actual_label, customizable, modified_by, created_by, presence) cannot be updated. For pick_list_values, you can add new values, update existing values (using id), move values between used/unused (one..."
+        },
+        {
+          "catalog_id": "crm-changes-016",
+          "observed_tool_id": "zohocr_8a666a1ba4ef",
+          "effect": "write/action",
+          "input_sections": [
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "PURPOSE: Creates a field update action that assigns a static value to a field when triggered by a workflow rule. PREREQUISITES: GET /settings/fields?module={api_name} for field id + api_name. For Pipeline: resolve values from GET /settings/pipeline?module={api_name}, include Stage in dependent_fields. For Layout: resolve from GET /settings/layouts, include dependent Pipeline. For Owner: GET /users for user id,..."
+        },
+        {
+          "catalog_id": "crm-changes-017",
+          "observed_tool_id": "zohocr_9547336c4584",
+          "effect": "write/action",
+          "input_sections": [
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "To create custom fields in a module in your Zoho CRM account."
+        },
+        {
+          "catalog_id": "crm-changes-018",
+          "observed_tool_id": "zohocr_a9122795fa35",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Retrieves the count of related records for a specific parent record. Supports filtering by various criteria including approval status, conversion status, and custom field filters. This operation is useful for analytics and UI display purposes where you need to show counts without fetching the actual related records."
+        },
+        {
+          "catalog_id": "crm-changes-019",
+          "observed_tool_id": "zohocr_b1e1e9ffa344",
+          "effect": "write/action",
+          "input_sections": [
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Creates a single custom module in the CRM. Permission requirement depends on access_type: Crm_Implied_Customize_Zoho_CRM for org_based (or when access_type is omitted), and Crm_Implied_Create_Team_Module for team_based. This operation is not idempotent; submitting the same api_name multiple times will result in validation errors. Only one module can be created per request; batch creation is not supported. The..."
+        },
+        {
+          "catalog_id": "crm-changes-020",
+          "observed_tool_id": "zohocr_bdd273c381b4",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Retrieves a paginated list of records from a specific related list of a parent record in a CRM module. Supports filtering by fields and conditional requests using If-Modified-Since header."
+        },
+        {
+          "catalog_id": "crm-changes-021",
+          "observed_tool_id": "zohocr_ca8e2597b13d",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "PURPOSE: Updates an existing automation task definition identified by the path parameter ID. PREREQUISITES: (1) Call GET /settings/automation/tasks/{id} to obtain the current task structure. (2) Call GET /settings/layouts?module=Tasks to verify supported fields and identify mandatory fields where required: true in the field info. BEHAVIOR: This is a full replacement - all field_mappings must be provided, not just..."
+        },
+        {
+          "catalog_id": "crm-changes-022",
+          "observed_tool_id": "zohocr_d4634c5843bb",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "To update existing entities or records in a specified module."
+        },
+        {
+          "catalog_id": "crm-changes-023",
+          "observed_tool_id": "zohocr_e84431ef2776",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Update a custom layout in Zoho CRM. You can rename the layout, add/remove profile permissions, enable/disable business card, create/update/delete sections, and add/update/delete/move fields within sections. Limits: Maximum 5 sections per request and maximum 5 fields total across all sections per request."
+        },
+        {
+          "catalog_id": "crm-changes-024",
+          "observed_tool_id": "zohocr_ff230ec3146c",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Enables users to update a specific field value across multiple records within a CRM module."
+        },
+        {
+          "catalog_id": "crm-changes-025",
+          "observed_tool_id": "zohocrm_getrecord",
+          "effect": "read",
+          "input_sections": [
+            "path_variables"
+          ],
+          "response_typed": false,
+          "summary": "To get the details of a specific record with its unique record ID."
+        },
+        {
+          "catalog_id": "crm-changes-026",
+          "observed_tool_id": "zohocrm_getrecords",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "To get the list of available records from a module."
+        },
+        {
+          "catalog_id": "crm-changes-027",
+          "observed_tool_id": "zohocrm_updatefield",
+          "effect": "write/action",
+          "input_sections": [
+            "query_params",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "To update custom fields in your Zoho CRM account."
+        }
+      ]
+    },
+    {
+      "role": "workdrive-audit",
+      "product": "Zoho WorkDrive",
+      "access_class": "read-only-content-capable",
+      "observed_status": "advertised-not-call-verified",
+      "read_count": 21,
+      "write_or_action_count": 0,
+      "tool_count": 21,
+      "capabilities": [
+        {
+          "catalog_id": "workdrive-audit-001",
+          "observed_tool_id": "zohoworkdrive_b_cc06ba24aae6",
+          "effect": "read",
+          "input_sections": [
+            "path_variables"
+          ],
+          "response_typed": false,
+          "summary": "Fetches the location and folder hierarchy of a file or folder."
+        },
+        {
+          "catalog_id": "workdrive-audit-002",
+          "observed_tool_id": "zohoworkdrive_d_432045fcba3a",
+          "effect": "read",
+          "input_sections": [
+            "path_variables"
+          ],
+          "response_typed": false,
+          "summary": "Downloads the content of a file using its resource ID. Returns binary data."
+        },
+        {
+          "catalog_id": "workdrive-audit-003",
+          "observed_tool_id": "zohoworkdrive_d_74262a125b60",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Downloads a specific version of a file in binary format."
+        },
+        {
+          "catalog_id": "workdrive-audit-004",
+          "observed_tool_id": "zohoworkdrive_d_eba2f3a33795",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Downloads file content in binary format using a common API for all file types."
+        },
+        {
+          "catalog_id": "workdrive-audit-005",
+          "observed_tool_id": "zohoworkdrive_f_725ac5ef5c49",
+          "effect": "read",
+          "input_sections": [
+            "path_variables"
+          ],
+          "response_typed": false,
+          "summary": "Supports Get File/Folder Info and Get File Thumbnail URL."
+        },
+        {
+          "catalog_id": "workdrive-audit-006",
+          "observed_tool_id": "zohoworkdrive_file_property",
+          "effect": "read",
+          "input_sections": [
+            "path_variables"
+          ],
+          "response_typed": false,
+          "summary": "Fetches additional file properties."
+        },
+        {
+          "catalog_id": "workdrive-audit-007",
+          "observed_tool_id": "zohoworkdrive_g_08bb6aeaa0bb",
+          "effect": "read",
+          "input_sections": [
+            "path_variables"
+          ],
+          "response_typed": false,
+          "summary": "Returns members and groups shared to the specified team folder, with support for filters, search, and pagination."
+        },
+        {
+          "catalog_id": "workdrive-audit-008",
+          "observed_tool_id": "zohoworkdrive_g_1c54589a82d1",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "This API is used to generate the starting point token, which is required to check the changes in the WorkDrive account. You can choose the time from the current time up to the last 31 days."
+        },
+        {
+          "catalog_id": "workdrive-audit-009",
+          "observed_tool_id": "zohoworkdrive_g_1f488e295c1c",
+          "effect": "read",
+          "input_sections": [
+            "path_variables"
+          ],
+          "response_typed": false,
+          "summary": "Returns detailed metadata for the specified team folder, including sharing settings, workspace attributes, and current configuration status."
+        },
+        {
+          "catalog_id": "workdrive-audit-010",
+          "observed_tool_id": "zohoworkdrive_g_2179ceed37af",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Returns the list of recent changes using the provided page token."
+        },
+        {
+          "catalog_id": "workdrive-audit-011",
+          "observed_tool_id": "zohoworkdrive_g_94dd0083314c",
+          "effect": "read",
+          "input_sections": [
+            "path_variables"
+          ],
+          "response_typed": false,
+          "summary": "Fetches all teams associated with a user."
+        },
+        {
+          "catalog_id": "workdrive-audit-012",
+          "observed_tool_id": "zohoworkdrive_g_a27309ed8a63",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Fetches all external share links of a file or folder."
+        },
+        {
+          "catalog_id": "workdrive-audit-013",
+          "observed_tool_id": "zohoworkdrive_g_a9c1247e2f5a",
+          "effect": "read",
+          "input_sections": [
+            "path_variables"
+          ],
+          "response_typed": false,
+          "summary": "Retrieves the current settings for the specified team folder, including external sharing, file conversion, viewer download permissions, and device access configurations."
+        },
+        {
+          "catalog_id": "workdrive-audit-014",
+          "observed_tool_id": "zohoworkdrive_g_ba709f58154a",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Returns all team folders in the specified team with optional type filtering and pagination."
+        },
+        {
+          "catalog_id": "workdrive-audit-015",
+          "observed_tool_id": "zohoworkdrive_g_d65db643cae2",
+          "effect": "read",
+          "input_sections": [
+            "path_variables"
+          ],
+          "response_typed": false,
+          "summary": "Returns the current authenticated user's membership details for the specified team."
+        },
+        {
+          "catalog_id": "workdrive-audit-016",
+          "observed_tool_id": "zohoworkdrive_g_df47d8be2f91",
+          "effect": "read",
+          "input_sections": [
+            "path_variables"
+          ],
+          "response_typed": false,
+          "summary": "Retrieves preview metadata of a file, including URLs and size."
+        },
+        {
+          "catalog_id": "workdrive-audit-017",
+          "observed_tool_id": "zohoworkdrive_g_ef30dfeb4c42",
+          "effect": "read",
+          "input_sections": [
+            "path_variables"
+          ],
+          "response_typed": false,
+          "summary": "Fetches all shared users of a file or folder."
+        },
+        {
+          "catalog_id": "workdrive-audit-018",
+          "observed_tool_id": "zohoworkdrive_get_file_list",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Lists all files and folders inside a specified folder."
+        },
+        {
+          "catalog_id": "workdrive-audit-019",
+          "observed_tool_id": "zohoworkdrive_get_user_info",
+          "effect": "read",
+          "input_sections": [
+            "untyped-map"
+          ],
+          "response_typed": false,
+          "summary": "Get current user details."
+        },
+        {
+          "catalog_id": "workdrive-audit-020",
+          "observed_tool_id": "zohoworkdrive_get_version",
+          "effect": "read",
+          "input_sections": [
+            "path_variables"
+          ],
+          "response_typed": false,
+          "summary": "Retrieves all available versions of a file."
+        },
+        {
+          "catalog_id": "workdrive-audit-021",
+          "observed_tool_id": "zohoworkdrive_search_records",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Supports Search in My Folders, Search across Team Folder, Search across Folder, Search across Team, Search based on Data Template and Search in Shared with Me."
+        }
+      ]
+    },
+    {
+      "role": "workdrive-changes",
+      "product": "Zoho WorkDrive",
+      "access_class": "mixed-read-write",
+      "observed_status": "advertised-not-call-verified",
+      "read_count": 6,
+      "write_or_action_count": 7,
+      "tool_count": 13,
+      "capabilities": [
+        {
+          "catalog_id": "workdrive-changes-001",
+          "observed_tool_id": "zohoworkdrive_1e2f9b1af63d",
+          "effect": "read",
+          "input_sections": [
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Use this API to check whether a stream upload is in progress or completed, and to fetch proper upload error responses using the upload-id value."
+        },
+        {
+          "catalog_id": "workdrive-changes-002",
+          "observed_tool_id": "zohoworkdrive_58a2e355901e",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Downloads a specific version of a file in binary format."
+        },
+        {
+          "catalog_id": "workdrive-changes-003",
+          "observed_tool_id": "zohoworkdrive_79fe5c6cd82e",
+          "effect": "read",
+          "input_sections": [
+            "path_variables"
+          ],
+          "response_typed": false,
+          "summary": "Downloads the content of a file using its resource ID. Returns binary data."
+        },
+        {
+          "catalog_id": "workdrive-changes-004",
+          "observed_tool_id": "zohoworkdrive_7da0237255d1",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Renames a file or folder to a new name."
+        },
+        {
+          "catalog_id": "workdrive-changes-005",
+          "observed_tool_id": "zohoworkdrive_8e4e1d699fbe",
+          "effect": "read",
+          "input_sections": [
+            "path_variables"
+          ],
+          "response_typed": false,
+          "summary": "Supports Get File/Folder Info and Get File Thumbnail URL."
+        },
+        {
+          "catalog_id": "workdrive-changes-006",
+          "observed_tool_id": "zohoworkdrive_a308f363a387",
+          "effect": "write/action",
+          "input_sections": [
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Compresses multiple files/folders into a ZIP file and saves it to the specified destination folder."
+        },
+        {
+          "catalog_id": "workdrive-changes-007",
+          "observed_tool_id": "zohoworkdrive_abe415325f13",
+          "effect": "write/action",
+          "input_sections": [
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "This API enables the creation of Zoho-formatted files, including documents using Zoho Writer, spreadsheets using Zoho Sheet, and presentations using Zoho Show."
+        },
+        {
+          "catalog_id": "workdrive-changes-008",
+          "observed_tool_id": "zohoworkdrive_b46b5457cf15",
+          "effect": "read",
+          "input_sections": [
+            "path_variables"
+          ],
+          "response_typed": false,
+          "summary": "Fetches the location and folder hierarchy of a file or folder."
+        },
+        {
+          "catalog_id": "workdrive-changes-009",
+          "observed_tool_id": "zohoworkdrive_bae6e56028d7",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Moves a file or folder to a new destination folder."
+        },
+        {
+          "catalog_id": "workdrive-changes-010",
+          "observed_tool_id": "zohoworkdrive_c4b3b00650c2",
+          "effect": "write/action",
+          "input_sections": [
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Creates a new folder in the specified parent folder."
+        },
+        {
+          "catalog_id": "workdrive-changes-011",
+          "observed_tool_id": "zohoworkdrive_da8c700c84f9",
+          "effect": "read",
+          "input_sections": [
+            "path_variables",
+            "query_params"
+          ],
+          "response_typed": false,
+          "summary": "Downloads file content in binary format using a common API for all file types."
+        },
+        {
+          "catalog_id": "workdrive-changes-012",
+          "observed_tool_id": "zohoworkdrive_un_zip_file",
+          "effect": "write/action",
+          "input_sections": [
+            "path_variables",
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Extracts ZIP content to a specified folder in WorkDrive."
+        },
+        {
+          "catalog_id": "workdrive-changes-013",
+          "observed_tool_id": "zohoworkdrive_upload_file",
+          "effect": "write/action",
+          "input_sections": [
+            "body"
+          ],
+          "response_typed": false,
+          "summary": "Uploads a file to a team folder or folder in WorkDrive."
+        }
+      ]
+    }
+  ]
+}

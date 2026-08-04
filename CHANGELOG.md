@@ -4,6 +4,8 @@ All notable repository-governance and technical-source changes are recorded here
 
 ## Unreleased
 
+- Add sanitized Zoho MCP, CRM schema, Deluge, and Books automation standards.
+- Add a dated, machine-checked inventory of all 403 Zoho MCP tool contracts observed on 2026-08-03 without source server identities, endpoints, credentials, or tenant configuration.
 - Establish the secure public-repository baseline.
 - Add repository safety and workflow-policy validation.
 - Add sanitized Zoho Books chart-of-accounts reference.

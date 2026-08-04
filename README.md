@@ -34,6 +34,8 @@ tools/safety/  Public-repository and workflow-policy validation
 
 Current governed artifacts:
 
+- [`docs/zoho/`](docs/zoho/) defines portable Zoho MCP, CRM schema, Deluge, and product-ownership standards without copying another tenant's fields or configuration.
+- [`docs/zoho/mcp/observed-tool-inventory.json`](docs/zoho/mcp/observed-tool-inventory.json) preserves one sanitized row for each of 403 tool contracts observed on 2026-08-03; it is a dated capability snapshot, not a Sylvara allowlist or proof of access.
 - [`src/zoho-books/reference/chart-of-accounts.csv`](src/zoho-books/reference/chart-of-accounts.csv) is a sanitized reference with system IDs and bank-account suffixes removed.
 - [`archive/zoho-catalyst/billing-webhook-gateway`](archive/zoho-catalyst/billing-webhook-gateway) preserves a non-executable review record and source hashes. The supplied handler and deployment files are excluded because current route and deployment status are unverified.
 
