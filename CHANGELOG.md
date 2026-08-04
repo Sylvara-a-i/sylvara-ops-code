@@ -4,6 +4,8 @@ All notable repository-governance and technical-source changes are recorded here
 
 ## Unreleased
 
+- Add an original, task-oriented copywriting reference library with briefing, positioning, conversion, channel, editing, claim, and publication controls.
+- Record the private source collection only through an aggregate sanitized manifest; exclude raw files, excerpts, filenames, paths, metadata, and unverified third-party publication rights.
 - Centralize reusable Zoho governance, standards, MCP evidence, and product references under `docs/zoho/` while keeping implementation-specific READMEs beside their source.
 - Add 24 sanitized product and Deluge reference handbooks derived from authorized portable research without carrying over another tenant's code, fields, identifiers, workflows, or business rules.
 - Add dated MCP evidence layers for Tool Manual service coverage, preconfigured templates, and the existing 403-contract configured-session snapshot.

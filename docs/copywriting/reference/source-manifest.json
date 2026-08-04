@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "created_on": "2026-08-04",
+  "inventory_observed_on": "2026-08-04",
+  "classification": "sanitized-original-synthesis",
+  "raw_assets_published": false,
+  "source_rights_status": "mixed-or-unverified",
+  "source_collection": {
+    "file_count": 1249,
+    "directory_count": 70,
+    "total_bytes": 2286898602,
+    "extension_counts": {
+      ".com": 2,
+      ".doc": 5,
+      ".docx": 19,
+      ".jpeg": 4,
+      ".jpg": 73,
+      ".mp4": 7,
+      ".pdf": 1114,
+      ".png": 23,
+      ".webp": 2
+    },
+    "semantic_review_scope": {
+      "method": "filename-and-folder inventory plus bounded representative text extraction",
+      "representative_files_extracted": 56,
+      "coverage": "representative-not-comprehensive"
+    },
+    "quality_observations": {
+      "empty_files": 7,
+      "extension_content_mismatches": 36,
+      "encrypted_pdfs": 84,
+      "parser_unreadable_pdf_signature_files": 213,
+      "exact_duplicate_groups": 17,
+      "redundant_files": 22,
+      "duplicate_bytes": 26860413,
+      "images_with_gps_exif": 1,
+      "docx_with_document_metadata": 18,
+      "pdfs_with_author_metadata": 552
+    }
+  },
+  "publication_boundary": {
+    "source_collection_disposition": "local-private-reference-only",
+    "included": [
+      "originally written principles",
+      "original structure cards",
+      "original operating checklists",
+      "aggregate inventory counts"
+    ],
+    "excluded": [
+      "raw files or binary derivatives",
+      "source passages or near-verbatim rewrites",
+      "source filenames or private paths",
+      "document metadata or fingerprints",
+      "customer facts, production payloads, or private communications"
+    ]
+  },
+  "public_artifacts": [
+    {
+      "path": "README.md",
+      "classification": "original-synthesis",
+      "rights_basis": "sylvara-original-synthesis",
+      "pii_review": "passed",
+      "raw_source_excerpt": false
+    },
+    {
+      "path": "originality-and-claims-standard.md",
+      "classification": "original-synthesis",
+      "rights_basis": "sylvara-original-synthesis",
+      "pii_review": "passed",
+      "raw_source_excerpt": false
+    },
+    {
+      "path": "playbooks/brief-and-research.md",
+      "classification": "original-synthesis",
+      "rights_basis": "sylvara-original-synthesis",
+      "pii_review": "passed",
+      "raw_source_excerpt": false
+    },
+    {
+      "path": "playbooks/channels.md",
+      "classification": "original-synthesis",
+      "rights_basis": "sylvara-original-synthesis",
+      "pii_review": "passed",
+      "raw_source_excerpt": false
+    },
+    {
+      "path": "playbooks/conversion-architecture.md",
+      "classification": "original-synthesis",
+      "rights_basis": "sylvara-original-synthesis",
+      "pii_review": "passed",
+      "raw_source_excerpt": false
+    },
+    {
+      "path": "playbooks/editing-and-qa.md",
+      "classification": "original-synthesis",
+      "rights_basis": "sylvara-original-synthesis",
+      "pii_review": "passed",
+      "raw_source_excerpt": false
+    },
+    {
+      "path": "playbooks/messaging-and-positioning.md",
+      "classification": "original-synthesis",
+      "rights_basis": "sylvara-original-synthesis",
+      "pii_review": "passed",
+      "raw_source_excerpt": false
+    },
+    {
+      "path": "reference/pattern-library.md",
+      "classification": "original-synthesis",
+      "rights_basis": "sylvara-original-synthesis",
+      "pii_review": "passed",
+      "raw_source_excerpt": false
+    },
+    {
+      "path": "templates/copy-brief.md",
+      "classification": "original-synthesis",
+      "rights_basis": "sylvara-original-synthesis",
+      "pii_review": "passed",
+      "raw_source_excerpt": false
+    }
+  ]
+}
