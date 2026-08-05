@@ -39,6 +39,7 @@ tools/safety/  Public-repository and workflow-policy validation
 
 Current governed artifacts:
 
+- [`docs/legal-compliance/`](docs/legal-compliance/) is the dated telephony, recording, consent, privacy, security, state-jurisdiction, regulated-use, vendor, and launch-control archive for the proposed AI receptionist. Its only proposed telephone profile is internal, non-sales QA by authorized staff/contractors using a carrier media gate, keypad assent, synthetic conversation data, and no retained content, outbound channel, real-world side effect, or production integration. Prospect-facing telephone demonstrations remain blocked. The archive is not legal advice or launch approval.
 - [`docs/accounting/`](docs/accounting/) is the product-neutral front door for Sylvara accounting authority, federal tax research, U.S. GAAP topic navigation, policy controls, and dated source provenance. It contains original operational summaries and official links, not copied standards text, tax advice, financial records, or another business's accounting conclusions.
 - [`docs/copywriting/`](docs/copywriting/) is the public front door for original copywriting principles, channel playbooks, structure cards, briefing, and claim review. It contains no raw swipe files, source passages, customer facts, or third-party publication claims.
 - [`docs/zoho/`](docs/zoho/) is the single front door for portable Zoho governance, operating standards, dated product references, and MCP evidence without copying another tenant's fields or configuration.
@@ -58,6 +59,7 @@ Current governed artifacts:
 5. Use synthetic examples only. Never commit secrets, customer data, call data, raw payloads, production identifiers, or financial records.
 6. A merged pull request does not authorize or perform a production deployment, live Zoho change, billing action, or customer communication.
 7. Live changes require an explicit deployment plan, scoped approval, rollback path, and independent readback.
+8. Voice, telephony, consent, recording, privacy, security, messaging, and regulated-workflow changes must satisfy [`docs/legal-compliance/`](docs/legal-compliance/) and a separately recorded qualified legal approval; repository review alone never authorizes a call.
 
 ## Local Validation
 

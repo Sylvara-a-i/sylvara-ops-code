@@ -32,8 +32,8 @@ This document defines ownership boundaries for Sylvara's public technical reposi
 | Zoho Mail | Mailbox messages, approved send transport, and delivery state | CRM relationship truth, consent truth, or financial state | Use, sender identities, scopes, webhooks, and integration state are unverified |
 | Zoho Analytics | Derived reporting models, refresh state, dashboards, and controlled exports | Transactional truth or reverse-write authority | Use, source lineage, refresh timing, access controls, and integration state are unverified |
 | Zoho Catalyst | Approved middleware, API gateway functions, webhook verification, retry-safe processing, and durable integration state when adopted | Business-system records owned by CRM, Books, or Billing; secret documentation; or proof that a Git commit is deployed | A sanitized Billing gateway replacement and proposed Data Store schema exist in GitHub; current Catalyst project, route, variables, deployment, and runtime state remain unverified |
-| Retell AI | Voice runtime behavior, call execution, and approved runtime configuration | CRM, accounting, subscription, source-control, or secret ownership | Default target voice runtime for initial pilots; exact live agents, prompts, numbers, and configuration are private and unverified |
-| Make.com | Approved post-call orchestration and system handoffs | Critical conversational availability, accounting truth, source code, or secret ownership | Default target post-call workflow layer for initial pilots; exact live scenarios are private and unverified |
+| Retell AI | Voice runtime behavior, call execution, and approved runtime configuration | CRM, accounting, subscription, legal approval, consent truth, source-control, or secret ownership | Candidate voice runtime only; vendor/legal approval and exact live agents, prompts, numbers, recording, retention, and training settings are private and unverified |
+| Make.com | Approved post-call orchestration and system handoffs | Critical conversational availability, accounting truth, legal approval, consent truth, source code, or secret ownership | Disabled in the proposed controlled demo; any future post-call workflow and exact live scenario remain unverified and separately gated |
 | Approved secret stores | Credential values, signing secrets, tokens, and environment-specific sensitive configuration | Business records, source code, deployment evidence, or public documentation | Secret values must remain in platform-native encrypted stores; the approved store inventory is unverified |
 
 ## Boundary Rules
@@ -54,7 +54,7 @@ Zoho Books owns accounting facts when adopted. Zoho Billing may own subscription
 
 ### Voice And Workflow Runtime
 
-Retell handles the real-time voice interaction. Make handles approved post-call work. A Make outage should not unnecessarily break an active conversation. Handoffs must be idempotent, validate required fields, avoid raw sensitive payloads, and route uncertain results to review instead of guessing.
+The [legal and compliance control archive](../legal-compliance/README.md) governs proposed voice, consent, recording, data, vendor, and launch boundaries. No voice runtime is legally approved merely because it is named in this architecture. The only proposed telephone test is internal, non-sales QA: it requires prior written tester authorization, a carrier-level one-way media gate and keypad assent before inbound audio reaches any AI/speech/model system, no retained call content, no outbound channel or production integration, and no post-call handoff. Prospect-facing telephone demonstrations remain blocked. A future approved pilot may use Retell for real-time voice and Make for bounded post-call work, but a Make outage should not unnecessarily break an active conversation. Approved handoffs must be idempotent, validate required fields, avoid raw sensitive payloads, and route uncertain results to review instead of guessing.
 
 ### Middleware
 

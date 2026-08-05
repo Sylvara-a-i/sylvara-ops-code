@@ -91,6 +91,17 @@ Repository approval is not live-system approval. Before any production Zoho or e
 - Commit only Sylvara-original synthesis or material with documented publication rights. Do not add raw PDFs, documents, images, videos, emails, transcripts, private prompts, source metadata, or production customer facts.
 - Repository review does not authorize an advertisement, campaign send, website publication, commercial offer, or customer communication. Record final business and compliance approval separately.
 
+## Telephony, AI Receptionist, Privacy, And Consent Work
+
+- Read [`docs/legal-compliance/README.md`](docs/legal-compliance/README.md) before changing a voice agent, call route, number, recording/transcript setting, message channel, caller field, vendor, integration, privacy/security claim, consent flow, or regulated workflow.
+- The only current telephone proposal is the controlled inbound internal-QA profile in [`docs/legal-compliance/demo-control-profile.json`](docs/legal-compliance/demo-control-profile.json); it is not launch-approved. A prospect/sales demo, open public demo, client pilot, or production call is a different workflow.
+- Require prior written tester authorization and a carrier-level one-way media gate so no inbound audio reaches an AI, speech, model, logging, support, or observability system until the static AI/data notice plays and keypad assent is received. Recording, retained transcription, monitoring, content logging, and model training remain off.
+- Keep outbound calls, callbacks, texts, emails, real appointments/dispatch, payments, regulated data/decisions, voiceprints, emergency handling, and production integrations technically disabled unless a separately scoped gate and qualified legal review are complete.
+- Use current primary sources and preserve the distinction among binding law when applicable, conditional law, official guidance, voluntary/contractual standards, and Sylvara controls. A proposed rule is not current law.
+- Do not default to Kansas or Missouri recording law for an interstate caller. Unknown jurisdiction, vendor behavior, consent, data use, or retention fails closed.
+- Repository policy and tests are public engineering controls, not legal advice, compliance certification, privilege, a privacy notice, contract approval, or production authorization. Keep client facts, caller data, consent events, contracts, legal advice, and live evidence in approved private systems.
+- Never claim TCPA, recording, HIPAA, PCI, privacy, security, zero-retention, or AI compliance without a precise scope, current evidence, qualified approval, and expiration.
+
 ## Change Workflow
 
 1. Inspect current state and preserve unrelated work.

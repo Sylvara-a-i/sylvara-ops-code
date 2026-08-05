@@ -4,6 +4,8 @@ All notable repository-governance and technical-source changes are recorded here
 
 ## Unreleased
 
+- Add a dated AI receptionist legal and compliance archive covering federal telephony and telemarketing, Kansas and Missouri law, representative interstate recording rules, privacy/security, biometrics, accessibility, regulated-use gates, vendor/client evidence, and a current primary-source manifest.
+- Define a machine-checked, fail-closed controlled inbound synthetic demo profile with AI disclosure and keypad assent before speech recognition; prohibit retained call content, outbound channels, real data, production integrations, and real-world side effects pending qualified approval.
 - Add a product-neutral accounting knowledge base with an authority hierarchy, federal tax source map, U.S. GAAP topic map, operating controls, and machine-readable provenance.
 - Carry forward only portable accounting governance from the authorized GH Real Estate source review; exclude property, rental, jurisdiction-specific, entity-specific, chart-of-accounts, transaction, threshold, and sourcebook material.
 - Add an archive index that distinguishes active source, reusable documentation, and historical non-executable review records.
