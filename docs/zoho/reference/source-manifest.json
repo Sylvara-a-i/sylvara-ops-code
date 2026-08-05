@@ -9,8 +9,9 @@
     "product_handbooks": "2026-07-20",
     "tool_manual_service_catalog": "2026-07-24",
     "preconfigured_template_catalog": "2026-07-25",
-    "configured_session_contracts": "2026-08-03"
+    "configured_session_advertised_names": "2026-08-04"
   },
+  "configured_session_scope": "Sylvara-only advertised Zoho role and operation names from a supplied Codex surface export, cross-checked against the current callable-tool registry without invoking Zoho",
   "transformations": [
     "Rewritten as Sylvara reference documentation rather than copied verbatim.",
     "Removed all source-business fields, modules, workflows, business rules, examples, identifiers, routes, aliases, and decisions.",

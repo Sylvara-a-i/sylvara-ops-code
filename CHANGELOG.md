@@ -11,10 +11,10 @@ All notable repository-governance and technical-source changes are recorded here
 - Record the private source collection only through an aggregate sanitized manifest; exclude raw files, excerpts, filenames, paths, metadata, and unverified third-party publication rights.
 - Centralize reusable Zoho governance, standards, MCP evidence, and product references under `docs/zoho/` while keeping implementation-specific READMEs beside their source.
 - Add 24 sanitized product and Deluge reference handbooks derived from authorized portable research without carrying over another tenant's code, fields, identifiers, workflows, or business rules.
-- Add dated MCP evidence layers for Tool Manual service coverage, preconfigured templates, and the existing 403-contract configured-session snapshot.
+- Add dated MCP evidence layers for Tool Manual service coverage, preconfigured templates, and the current Sylvara-only configured-session snapshot.
 - Add a source manifest and regression controls for Zoho documentation paths, links, reference status, and publication boundaries.
 - Add sanitized Zoho MCP, CRM schema, Deluge, and Books automation standards.
-- Add a dated, machine-checked inventory of all 403 Zoho MCP tool contracts observed on 2026-08-03 without source server identities, endpoints, credentials, or tenant configuration.
+- Replace the prior cross-business configured-session artifact with a dated, machine-checked inventory of all 294 Sylvara-only Zoho MCP tool names observed on 2026-08-04 across Billing, Books, Catalyst, Creator, CRM, Mail, Payments, and WorkDrive.
 - Establish the secure public-repository baseline.
 - Add repository safety and workflow-policy validation.
 - Add sanitized Zoho Books chart-of-accounts reference.

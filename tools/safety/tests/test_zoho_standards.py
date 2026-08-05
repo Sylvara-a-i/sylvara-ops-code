@@ -14,7 +14,7 @@ CATALOG = (
     / "mcp"
     / "snapshots"
     / "configured"
-    / "2026-08-03"
+    / "2026-08-04"
     / "capability-catalog.md"
 )
 SUITE_REGISTRY = ZOHO_DOCS / "governance" / "suite-registry.json"
@@ -81,6 +81,15 @@ REQUIRED_REGISTRY_IDS = {
     "sites",
     "mail",
     "analytics",
+}
+OBSERVED_PRODUCT_IDS = {
+    "crm",
+    "books",
+    "billing",
+    "catalyst",
+    "creator",
+    "workdrive",
+    "mail",
 }
 REFERENCE_ONLY_IDS = {
     "api-console",
@@ -227,6 +236,15 @@ class ZohoStandardsTests(unittest.TestCase):
         for row in products:
             with self.subTest(product=row["id"]):
                 self.assertEqual("unknown", row["effective_tenant_capability"])
+                expected_observation = (
+                    "advertised-tool-names-observed-2026-08-04"
+                    if row["id"] in OBSERVED_PRODUCT_IDS
+                    else "not-observed-2026-08-04"
+                )
+                self.assertEqual(
+                    expected_observation,
+                    row["mcp_observation"],
+                )
                 for target in (*row["standards"], *row["repository_artifacts"]):
                     self.assertTrue((ZOHO_DOCS / target).resolve().is_file())
 
@@ -236,6 +254,11 @@ class ZohoStandardsTests(unittest.TestCase):
             with self.subTest(reference=row["id"]):
                 self.assertEqual("unknown", row["adoption_status"])
                 self.assertTrue((ZOHO_DOCS / row["reference"]).is_file())
+                if row["id"] == "payments":
+                    self.assertEqual(
+                        "advertised-tool-names-observed-2026-08-04",
+                        row["mcp_observation"],
+                    )
 
     def test_product_reference_collection_is_complete_and_fail_closed(self) -> None:
         product_dir = ZOHO_DOCS / "reference" / "products"

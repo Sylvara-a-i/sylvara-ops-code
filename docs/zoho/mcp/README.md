@@ -11,19 +11,19 @@ This folder separates MCP design policy from dated evidence. A large catalog doe
 | Server design standard | [`server-standard.md`](server-standard.md) | How Sylvara should design least-privilege MCP roles |
 | Official Tool Manual snapshot | [`reference/tool-manual-service-catalog-2026-07-24.md`](reference/tool-manual-service-catalog-2026-07-24.md) | Dated service coverage and row counts documented by the provider |
 | Preconfigured portal templates | [`reference/preconfigured-template-catalog-2026-07-25.md`](reference/preconfigured-template-catalog-2026-07-25.md) | Dated template names and captured memberships, not a recommendation |
-| Configured-session contracts | [`snapshots/configured/2026-08-03/`](snapshots/configured/2026-08-03/) | Sanitized contracts advertised in one inspected session |
+| Configured-session advertised names | [`snapshots/configured/2026-08-04/`](snapshots/configured/2026-08-04/) | Sanitized Sylvara-only role and operation names advertised in one inspected session |
 | Effective Sylvara access | Not stored as a blanket claim | Requires a current identity check and authorized acceptance call |
 
 ## Current Configured Snapshot
 
-The 2026-08-03 snapshot contains 403 advertised contracts across 10 neutral server roles. It records 245 reads and 158 write/action tools. No Zoho operation was called during discovery, and source server identities and endpoints were removed.
+The 2026-08-04 snapshot contains 294 advertised Sylvara-only tool names across 18 neutral roles and eight products. It records 221 reads and 73 write/action tools. The supplied export was cross-checked against the current callable registry; no Zoho operation was called, and runtime server names, generated transport IDs, endpoints, authentication details, connection aliases, target identifiers, and returned data were removed.
 
-- [Capability analysis](snapshots/configured/2026-08-03/capability-catalog.md)
-- [Machine-readable inventory](snapshots/configured/2026-08-03/observed-tool-inventory.json)
+- [Capability analysis and broader official-family crosswalk](snapshots/configured/2026-08-04/capability-catalog.md)
+- [Complete machine-readable advertised-name inventory](snapshots/configured/2026-08-04/sylvara-observed-tool-inventory.json)
 
 ## Tool Manual Snapshot
 
-The dated Tool Manual catalog records 10,533 service-qualified rows across 59 documented services. The repository preserves the complete service/count index but does not republish the other repository's large name-level export. Exact names and contracts must be refreshed from the current official Tool Manual before server design. The configured-session snapshot separately preserves the 403 contracts that passed the public sanitization review.
+The dated Tool Manual catalog records 10,533 service-qualified rows across 59 documented services. Eight products in the current Sylvara snapshot account for 3,222 of those dated rows. The repository preserves the complete service/count index and links the relevant product handbooks instead of copying provider-owned manuals. Exact current names, parameters, scopes, and side effects must be refreshed from the official interactive Tool Manual before server design. The configured-session snapshot separately preserves all 294 role-qualified names that passed the public sanitization review.
 
 ## Server Design Sequence
 

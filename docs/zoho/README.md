@@ -46,8 +46,8 @@ The [product reference collection](reference/README.md) covers the currently gov
 
 - [MCP Evidence And Navigation](mcp/README.md)
 - [MCP Server Standard](mcp/server-standard.md)
-- [Configured-session capability catalog, 2026-08-03](mcp/snapshots/configured/2026-08-03/capability-catalog.md)
-- [Configured-session machine-readable inventory, 2026-08-03](mcp/snapshots/configured/2026-08-03/observed-tool-inventory.json)
+- [Sylvara configured-session capability catalog, 2026-08-04](mcp/snapshots/configured/2026-08-04/capability-catalog.md)
+- [Sylvara configured-session machine-readable inventory, 2026-08-04](mcp/snapshots/configured/2026-08-04/sylvara-observed-tool-inventory.json)
 - [Tool Manual service catalog, 2026-07-24](mcp/reference/tool-manual-service-catalog-2026-07-24.md)
 - [Preconfigured template catalog, 2026-07-25](mcp/reference/preconfigured-template-catalog-2026-07-25.md)
 
@@ -108,9 +108,9 @@ Official documentation establishes general product capability. A Tool Manual nam
 
 ## Current MCP Snapshot
 
-On 2026-08-03, read-only discovery found 10 enabled Zoho MCP server roles and 403 advertised tools: 245 reads and 158 write-capable actions. No Zoho tool was called. Source namespaces, endpoints, and production target identifiers were excluded.
+On 2026-08-04, configured-session discovery found 294 Sylvara-only Zoho tool names across 18 neutral roles and eight products: 221 reads and 73 write-capable actions. The supplied export and current callable registry agreed at the role-and-count level. No Zoho operation was called. Runtime namespaces, generated transport IDs, endpoints, authentication details, connection aliases, and production target identifiers were excluded.
 
-Creator, Forms, Billing, Contracts, Sign, Sites, Mail, and Analytics were not observed in that configured session. Their MCP availability is **Unknown**, not unsupported.
+Billing, Books, Catalyst, Creator, CRM, Mail, Payments, and WorkDrive were observed at the advertised-name layer. Forms, Contracts, Sign, Sites, and Analytics were not observed; their MCP availability is **Unknown**, not unsupported. Observation does not establish product adoption, tenant binding, effective authorization, or permission for live use.
 
 ## Live Change Boundary
 

@@ -11,7 +11,7 @@
 
 This catalog preserves the complete service/count index from a dated Tool Manual review. It does not republish a large account-adjacent name export or claim that any service is installed, licensed, configured, authorized, or safe for Sylvara.
 
-Before selecting a tool, inspect the current [Zoho MCP Tool Guide](https://help.zoho.com/portal/en/kb/mcp/mcp-tool-manual/articles/zoho-mcp-tool-guide), [implementation guide](https://help.zoho.com/portal/en/kb/mcp/implementation-guide/articles/zoho-mcp-implementation-guide), and [supported-services list](https://www.zoho.com/mcp/services/zoho-services.html). Verify the exact name, parameters, scopes, side effects, limits, data-center behavior, plan availability, and response contract in the current Tool Manual.
+Before selecting a tool, start from the current [Zoho MCP knowledge-base index](https://help.zoho.com/portal/en/kb/mcp), open its interactive Tool Manual, and inspect the [implementation guide](https://help.zoho.com/portal/en/kb/mcp/implementation-guide/articles/zoho-mcp-implementation-guide) and [supported-services list](https://www.zoho.com/mcp/services/zoho-services.html). Verify the exact name, parameters, scopes, side effects, limits, data-center behavior, plan availability, and response contract in the current Tool Manual. The previously captured direct Tool Guide article route returned HTTP 404 during the 2026-08-04 verification, so this repository links the stable knowledge-base index instead.
 
 ## Zoho Services
 
