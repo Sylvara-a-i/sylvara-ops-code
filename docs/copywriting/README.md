@@ -18,10 +18,11 @@ The source collection is inspiration and research evidence only. It is not a phr
 ## Start Here
 
 1. Read the [Originality And Claims Standard](originality-and-claims-standard.md).
-2. Complete the [Copy Brief Template](templates/copy-brief.md) with verified product, audience, offer, proof, voice, and channel facts in an approved private workspace.
-3. Choose the relevant playbooks and patterns from the task router below.
-4. Draft in original language from the approved brief; never imitate a source's distinctive phrasing.
-5. Run the [Editing And QA](playbooks/editing-and-qa.md) review before presenting or publishing copy.
+2. For Sylvara-specific work, read the current [Managed Receptionist Product Direction](../product/README.md) and preserve every `Proposed`, `Unknown`, and publication boundary it states.
+3. Complete the [Copy Brief Template](templates/copy-brief.md) with verified product, audience, offer, proof, voice, and channel facts in an approved private workspace.
+4. Choose the relevant playbooks and patterns from the task router below.
+5. Draft in original language from the approved brief; never imitate a source's distinctive phrasing.
+6. Run the [Editing And QA](playbooks/editing-and-qa.md) review before presenting or publishing copy.
 
 If critical facts are missing, stop drafting and list the exact Unknowns. Polished prose must not conceal an incomplete offer, unsupported claim, or unclear audience.
 

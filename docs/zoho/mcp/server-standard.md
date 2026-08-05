@@ -66,7 +66,7 @@ tool_timeout_sec = 60
 
 The example name is a role convention, not proof of a production connection. Actual endpoints, headers, scopes, and connection names stay private.
 
-`codex mcp login` works only when the streamable HTTP server supports Codex-managed OAuth. The 2026-08-03 source snapshot reported authentication as not managed by the CLI. Do not repeatedly retry that login path or substitute Browser automation; use the server's approved provisioning method and verify access afterward.
+`codex mcp login` works only when the streamable HTTP server supports Codex-managed OAuth. An advertised tool-name snapshot does not establish how a server authenticates. Use the approved private provisioning method for the exact server and verify access afterward; do not repeatedly retry an unsupported login path or substitute Browser automation.
 
 ## Acceptance Sequence
 

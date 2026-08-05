@@ -14,7 +14,7 @@ CATALOG = (
     / "mcp"
     / "snapshots"
     / "configured"
-    / "2026-08-03"
+    / "2026-08-04"
     / "capability-catalog.md"
 )
 SUITE_REGISTRY = ZOHO_DOCS / "governance" / "suite-registry.json"
@@ -82,6 +82,15 @@ REQUIRED_REGISTRY_IDS = {
     "mail",
     "analytics",
 }
+OBSERVED_PRODUCT_IDS = {
+    "crm",
+    "books",
+    "billing",
+    "catalyst",
+    "creator",
+    "workdrive",
+    "mail",
+}
 REFERENCE_ONLY_IDS = {
     "api-console",
     "one",
@@ -99,7 +108,7 @@ CAPABILITY_LAYERS = (
     "official-product-capability",
     "tool-manual-catalog",
     "preconfigured-template-membership",
-    "advertised-mcp-tool-contract",
+    "advertised-mcp-tool-name",
     "effective-tenant-capability",
 )
 PRODUCT_REFERENCE_FILES = {
@@ -140,6 +149,8 @@ OLD_PATHS = {
     "docs/zoho/analytics-standard.md",
     "docs/zoho/mcp/capability-catalog.md",
     "docs/zoho/mcp/observed-tool-inventory.json",
+    "docs/zoho/mcp/snapshots/configured/2026-08-03/capability-catalog.md",
+    "docs/zoho/mcp/snapshots/configured/2026-08-03/observed-tool-inventory.json",
     "src/zoho-books/automation-standard.md",
 }
 MARKDOWN_LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
@@ -227,6 +238,15 @@ class ZohoStandardsTests(unittest.TestCase):
         for row in products:
             with self.subTest(product=row["id"]):
                 self.assertEqual("unknown", row["effective_tenant_capability"])
+                expected_observation = (
+                    "advertised-tool-names-observed-2026-08-04"
+                    if row["id"] in OBSERVED_PRODUCT_IDS
+                    else "not-observed-2026-08-04"
+                )
+                self.assertEqual(
+                    expected_observation,
+                    row["mcp_observation"],
+                )
                 for target in (*row["standards"], *row["repository_artifacts"]):
                     self.assertTrue((ZOHO_DOCS / target).resolve().is_file())
 
@@ -236,6 +256,11 @@ class ZohoStandardsTests(unittest.TestCase):
             with self.subTest(reference=row["id"]):
                 self.assertEqual("unknown", row["adoption_status"])
                 self.assertTrue((ZOHO_DOCS / row["reference"]).is_file())
+                if row["id"] == "payments":
+                    self.assertEqual(
+                        "advertised-tool-names-observed-2026-08-04",
+                        row["mcp_observation"],
+                    )
 
     def test_product_reference_collection_is_complete_and_fail_closed(self) -> None:
         product_dir = ZOHO_DOCS / "reference" / "products"
@@ -259,6 +284,10 @@ class ZohoStandardsTests(unittest.TestCase):
                 self.assertTrue((SOURCE_MANIFEST.parent / target).is_file())
 
     def test_retired_zoho_paths_do_not_remain_in_repository_text_locations(self) -> None:
+        for old_path in OLD_PATHS:
+            with self.subTest(old_path=old_path):
+                self.assertFalse((ROOT / old_path).exists())
+
         for path in ROOT.rglob("*"):
             if (
                 not path.is_file()

@@ -4,7 +4,7 @@
 
 - Repository standard: **Proposed**
 - Official capability evidence: Zoho CRM API V8 documentation, subject to current-product verification
-- Advertised MCP evidence: dated 2026-08-03 contract snapshot only
+- Advertised MCP evidence: dated 2026-08-04 Sylvara tool-name snapshot only
 - Sylvara CRM organization, edition, schema, permissions, workflows, and effective MCP access: **Unknown**
 
 This standard is reviewed design guidance. It is not proof of a live field, layout, tool capability, deployment, or approved CRM change.
@@ -69,11 +69,11 @@ Subforms have separate edition and row limits, and their module/field API names 
 
 ## Current MCP Capability Limit
 
-In the 2026-08-03 observed snapshot, `ZohoCRM_createFields` declares its `fields` input as an untyped array. `ZohoCRM_updateLayout` advertises many field types but omits `subform`. Therefore:
+The 2026-08-04 Sylvara snapshot advertises CRM metadata and record reads plus bounded record and note changes. It does not advertise field, layout, module, workflow, or other schema-mutation operations, and the published inventory intentionally does not reproduce private runtime request schemas. Therefore:
 
-- do not guess a field-creation payload;
-- do not treat an update schema as a creation schema;
-- do not infer parent/child subform creation or placement; and
+- do not infer that official schema APIs are exposed through the active MCP roles;
+- do not guess a field, layout, workflow, module, or subform payload;
+- do not substitute a generic record-write tool for a configuration endpoint; and
 - do not write until a typed, target-verified contract and rollback path exist.
 
 Official API capability does not expand the active MCP tool contract.
