@@ -52,7 +52,7 @@ Template composition can change. Reopen the current portal modal and compare the
 
 ## Official References
 
-- [Zoho MCP Tool Guide](https://help.zoho.com/portal/en/kb/mcp/mcp-tool-manual/articles/zoho-mcp-tool-guide)
+- [Zoho MCP knowledge-base index and Tool Manual](https://help.zoho.com/portal/en/kb/mcp)
 - [Zoho MCP Implementation Guide](https://help.zoho.com/portal/en/kb/mcp/implementation-guide/articles/zoho-mcp-implementation-guide)
 - [Supported Zoho Services](https://www.zoho.com/mcp/services/zoho-services.html)
 - [Zoho CRM MCP Overview](https://www.zoho.com/crm/developer/docs/mcp/overview.html)

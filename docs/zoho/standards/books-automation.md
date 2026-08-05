@@ -4,7 +4,7 @@
 
 - Repository standard: **Proposed**
 - Official capability evidence: current Zoho Books API documentation, subject to operation-specific verification
-- Advertised MCP evidence: dated 2026-08-03 contract snapshot only
+- Advertised MCP evidence: dated 2026-08-04 Sylvara tool-name snapshot only
 - Sylvara Books organization, accounting configuration, records, permissions, and effective MCP access: **Unknown**
 
 This standard governs engineering controls. It does not establish a live accounting fact, approve accounting treatment, or authorize a Books mutation.
@@ -69,7 +69,7 @@ Dry-run or non-posting mode is the default. Posting, sending, applying, approvin
 
 ## Failure And Readback
 
-The observed MCP responses are untyped. Validate the Zoho response code, required returned fields, object status, amounts, links, and side effects. A `success` transport flag alone is insufficient.
+The public 2026-08-04 name inventory does not establish a complete response schema. Treat response typing and completeness as **Unknown** until the current private runtime contract is inspected. Validate the Zoho response code, required returned fields, object status, amounts, links, and side effects. A transport success indicator alone is insufficient.
 
 Stop on the first mismatch. Authorization failure, partial response, malformed data, rate limit, stale state, or missing evidence is not an empty result and must not be converted into a write.
 

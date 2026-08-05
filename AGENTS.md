@@ -11,6 +11,17 @@ Act as a senior technical operator for Sylvara. Optimize for first revenue, deli
 - Preserve public interfaces, environment-variable names, and deployment assumptions unless the change explicitly and safely replaces them.
 - Treat `archive/` as reference-only. Archived code is not active source, tested production code, or deployment authorization.
 
+## Current Product Direction
+
+- Read [`docs/product/README.md`](docs/product/README.md) before product, voice-agent, telephony, CRM, scheduling, dispatch, lead-response, customer-reporting, sales-support, or roadmap work.
+- Sylvara is validating a managed inbound receptionist and front-office service for independent residential plumbing companies, beginning in Kansas City. Start with after-hours and overflow call conversion; do not treat primary reception as the default rollout mode. Dispatch activity remains limited to separately approved intake, routing, and integration behavior.
+- Sell and build completion of bounded workflows, outcome attribution, managed quality, and safe exception handling. Generic voice-agent access, minutes, or natural speech are not the product strategy.
+- Prefer reusable trade workflows, structured business rules, progressive deployment, provider boundaries, tested fallback, and reconciliation with the customer's authoritative system.
+- Other home-service trades and property management are deferred until the residential-plumbing model is repeatable and a separate reviewed decision authorizes expansion. Do not launch multiple trades or verticals in parallel.
+- Reject broad custom-automation work by default. Accept a custom project only when it advances a reusable supported capability and its implementation and maintenance burden are explicitly covered.
+- Do not publish or infer the private strategy source, pricing, projections, competitor assessment, account lists, exact validation thresholds, or dated roadmap. Proposed capabilities remain proposals until the exact platform, access, test, and deployment evidence exists.
+- Repository approval does not authorize a sales offer, campaign, customer onboarding, live call route, platform purchase, or production integration.
+
 ## Public Repository Boundary
 
 Treat every Git object and CI log as permanently public.
@@ -90,6 +101,17 @@ Repository approval is not live-system approval. Before any production Zoho or e
 - Do not invent testimonials, customer results, integrations, credentials, prices, guarantees, deadlines, capacity limits, scarcity, or urgency. Every material claim must have a current authoritative source and stay within that evidence.
 - Commit only Sylvara-original synthesis or material with documented publication rights. Do not add raw PDFs, documents, images, videos, emails, transcripts, private prompts, source metadata, or production customer facts.
 - Repository review does not authorize an advertisement, campaign send, website publication, commercial offer, or customer communication. Record final business and compliance approval separately.
+
+## Telephony, AI Receptionist, Privacy, And Consent Work
+
+- Read [`docs/legal-compliance/README.md`](docs/legal-compliance/README.md) before changing a voice agent, call route, number, recording/transcript setting, message channel, caller field, vendor, integration, privacy/security claim, consent flow, or regulated workflow.
+- The only current telephone proposal is the controlled inbound internal-QA profile in [`docs/legal-compliance/demo-control-profile.json`](docs/legal-compliance/demo-control-profile.json); it is not launch-approved. A prospect/sales demo, open public demo, client pilot, or production call is a different workflow.
+- Require prior written tester authorization and a carrier-level one-way media gate so no inbound audio reaches an AI, speech, model, logging, support, or observability system until the static AI/data notice plays and keypad assent is received. Recording, retained transcription, monitoring, content logging, and model training remain off.
+- Keep outbound calls, callbacks, texts, emails, real appointments/dispatch, payments, regulated data/decisions, voiceprints, emergency handling, and production integrations technically disabled unless a separately scoped gate and qualified legal review are complete.
+- Use current primary sources and preserve the distinction among binding law when applicable, conditional law, official guidance, voluntary/contractual standards, and Sylvara controls. A proposed rule is not current law.
+- Do not default to Kansas or Missouri recording law for an interstate caller. Unknown jurisdiction, vendor behavior, consent, data use, or retention fails closed.
+- Repository policy and tests are public engineering controls, not legal advice, compliance certification, privilege, a privacy notice, contract approval, or production authorization. Keep client facts, caller data, consent events, contracts, legal advice, and live evidence in approved private systems.
+- Never claim TCPA, recording, HIPAA, PCI, privacy, security, zero-retention, or AI compliance without a precise scope, current evidence, qualified approval, and expiration.
 
 ## Change Workflow
 
