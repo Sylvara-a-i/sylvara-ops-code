@@ -20,6 +20,13 @@ INVENTORY = (
 )
 ZOHO_DOCS = ROOT / "docs" / "zoho"
 CAPABILITY_CATALOG = INVENTORY.parent / "capability-catalog.md"
+ENABLED_TOOL_CATALOG = INVENTORY.parent / "enabled-tool-catalog.md"
+TOOL_MANUAL_CATALOG = (
+    ZOHO_DOCS
+    / "mcp"
+    / "reference"
+    / "tool-manual-tool-catalog-2026-08-05.json"
+)
 
 EXPECTED_COUNTS = {
     "billing-audit": (32, 32, 0),
@@ -53,8 +60,8 @@ EXPECTED_PRODUCTS = {
 }
 CAPABILITY_KEYS = {
     "catalog_id",
-    "advertised_tool_name",
-    "operation_label",
+    "catalog_operation_key",
+    "annotated_tool_name",
     "effect",
     "contract_status",
 }
@@ -82,6 +89,8 @@ FORBIDDEN_INVENTORY_KEYS = {
     "account_id",
     "project_id",
     "record_id",
+    "advertised_tool_name",
+    "operation_label",
 }
 SOURCE_IDENTITY_MARKERS = (
     "gh" + "_zoho",
@@ -109,14 +118,21 @@ OFFICIAL_DOCUMENTATION_HOSTS = {
     "learn.chatgpt.com",
     "workdrive.zoho.com",
     "www.zoho.com",
+    "zoho-mcp-manual-tool-guide.onslate.in",
 }
 URL_RE = re.compile(r"https?://[^\s)>]+")
-TOOL_NAME_RE = re.compile(
-    r"^(?:"
-    r"Zoho(?:Billing|Books|Creator|CRM|Mail|Payments|Workdrive)_[A-Za-z0-9_]+"
-    r"|CatalystbyZoho_[A-Za-z0-9_]+"
-    r")$"
-)
+OPERATION_KEY_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+SERVICE_PREFIX_RE = re.compile(r"(?:Zoho[A-Za-z0-9]+|CatalystbyZoho)_")
+
+TOOL_MANUAL_SERVICE_NAMES = {
+    "Zoho Catalyst": "Catalyst by Zoho",
+    "Zoho WorkDrive": "Zoho Workdrive",
+}
+
+
+def annotate_operation_key(operation_key: str) -> str:
+    with_spaces = operation_key.replace("_", " ")
+    return re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", with_spaces).strip()
 
 
 def iter_keys(value: object):
@@ -134,15 +150,32 @@ class ZohoInventoryTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.raw = INVENTORY.read_text(encoding="utf-8")
         cls.catalog = json.loads(cls.raw)
+        cls.tool_manual_catalog = json.loads(
+            TOOL_MANUAL_CATALOG.read_text(encoding="utf-8")
+        )
+        cls.tool_manual_keys = {
+            service["service"]: {
+                row["operation_key"] for row in service["tools"]
+            }
+            for service in cls.tool_manual_catalog["services"]
+        }
 
     def test_snapshot_counts_scope_and_roles_are_exact(self) -> None:
-        self.assertEqual(1, self.catalog["schema_version"])
+        self.assertEqual(2, self.catalog["schema_version"])
         self.assertEqual("2026-08-04", self.catalog["observed_on"])
         self.assertEqual("sylvara-only", self.catalog["scope"])
         self.assertEqual(294, self.catalog["total_tools"])
         self.assertEqual(221, self.catalog["read_tools"])
         self.assertEqual(73, self.catalog["write_or_action_tools"])
-        self.assertEqual(257, self.catalog["unique_unqualified_tool_names"])
+        self.assertEqual(
+            257,
+            self.catalog["unique_service_qualified_operation_keys"],
+        )
+        self.assertEqual(257, self.catalog["unique_annotated_tool_names"])
+        self.assertEqual(
+            254,
+            self.catalog["unique_casefolded_annotated_tool_names"],
+        )
 
         observed = {
             role["role"]: (
@@ -160,9 +193,9 @@ class ZohoInventoryTests(unittest.TestCase):
 
     def test_possible_tool_surface_remains_reference_only(self) -> None:
         possible = self.catalog["official_possible_tool_surface"]
-        self.assertEqual("2026-07-24", possible["snapshot_on"])
+        self.assertEqual("2026-08-05", possible["snapshot_on"])
         self.assertEqual(8, possible["services"])
-        self.assertEqual(3222, possible["tool_manual_rows"])
+        self.assertEqual(3331, possible["tool_manual_rows"])
         self.assertEqual("reference", possible["evidence_status"])
 
     def test_human_catalog_role_summary_matches_machine_inventory(self) -> None:
@@ -206,13 +239,30 @@ class ZohoInventoryTests(unittest.TestCase):
             )
             for row in capabilities:
                 self.assertEqual(CAPABILITY_KEYS, set(row))
-                self.assertRegex(row["advertised_tool_name"], TOOL_NAME_RE)
-                self.assertNotIn(".", row["advertised_tool_name"])
-                self.assertTrue(row["operation_label"].strip())
+                operation_key = row["catalog_operation_key"]
+                annotation = row["annotated_tool_name"]
+                self.assertRegex(operation_key, OPERATION_KEY_RE)
+                self.assertNotRegex(operation_key, SERVICE_PREFIX_RE)
+                self.assertEqual(operation_key.strip(), operation_key)
+                self.assertTrue(annotation)
+                self.assertEqual(annotation.strip(), annotation)
+                self.assertNotIn("_", annotation)
+                self.assertNotRegex(annotation, SERVICE_PREFIX_RE)
+                self.assertEqual(
+                    annotate_operation_key(operation_key),
+                    annotation,
+                )
                 self.assertIn(row["effect"], {"read", "write/action"})
                 self.assertEqual(
-                    "advertised-not-call-verified",
+                    "configured-selection-not-call-verified",
                     row["contract_status"],
+                )
+                manual_service = TOOL_MANUAL_SERVICE_NAMES.get(
+                    role["product"], role["product"]
+                )
+                self.assertIn(
+                    operation_key,
+                    self.tool_manual_keys[manual_service],
                 )
                 rows.append((role["role"], row))
 
@@ -221,14 +271,39 @@ class ZohoInventoryTests(unittest.TestCase):
             294,
             len(
                 {
-                    (role, row["advertised_tool_name"])
+                    (role, row["catalog_operation_key"])
                     for role, row in rows
                 }
             ),
         )
         self.assertEqual(
             257,
-            len({row["advertised_tool_name"] for _, row in rows}),
+            len(
+                {
+                    (
+                        next(
+                            role["product"]
+                            for role in self.catalog["roles"]
+                            if role["role"] == role_name
+                        ),
+                        row["catalog_operation_key"],
+                    )
+                    for role_name, row in rows
+                }
+            ),
+        )
+        self.assertEqual(
+            257,
+            len({row["annotated_tool_name"] for _, row in rows}),
+        )
+        self.assertEqual(
+            254,
+            len(
+                {
+                    row["annotated_tool_name"].casefold()
+                    for _, row in rows
+                }
+            ),
         )
         self.assertEqual(
             self.catalog["read_tools"],
@@ -238,6 +313,24 @@ class ZohoInventoryTests(unittest.TestCase):
             self.catalog["write_or_action_tools"],
             sum(row["effect"] == "write/action" for _, row in rows),
         )
+
+    def test_human_enabled_catalog_lists_every_selection_without_prefixes(self) -> None:
+        enabled_text = ENABLED_TOOL_CATALOG.read_text(encoding="utf-8")
+        self.assertNotRegex(enabled_text, SERVICE_PREFIX_RE)
+        for role in self.catalog["roles"]:
+            self.assertIn(f"## `{role['role']}`", enabled_text)
+            for row in role["capabilities"]:
+                with self.subTest(
+                    role=role["role"],
+                    operation_key=row["catalog_operation_key"],
+                ):
+                    self.assertIn(
+                        "| "
+                        f"{row['annotated_tool_name']} | "
+                        f"`{row['catalog_operation_key']}` | "
+                        f"{row['effect']} |",
+                        enabled_text,
+                    )
 
     def test_audit_roles_are_read_only(self) -> None:
         for role in self.catalog["roles"]:

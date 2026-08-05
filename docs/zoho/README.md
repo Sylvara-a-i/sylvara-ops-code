@@ -13,7 +13,7 @@ Implementation-specific READMEs remain beside the code or artifact they govern s
 | [`governance/`](governance/) | System ownership, evidence rules, publication boundaries, and the machine-readable suite registry | Sylvara repository policy |
 | [`standards/`](standards/) | Reusable engineering and operating standards | Governs proposed Sylvara work, subject to live verification |
 | [`reference/`](reference/) | Dated product handbooks distilled from authorized research and current official links | Reference only; adoption and live access remain Unknown |
-| [`mcp/`](mcp/) | MCP server design, dated catalogs, and currently advertised tool snapshots | Evidence-layer specific; never an implicit tool allowlist |
+| [`mcp/`](mcp/) | MCP server design, complete dated tool-name catalogs, and configured-selection snapshots | Evidence-layer specific; never an implicit tool allowlist |
 
 ## Start Here
 
@@ -22,7 +22,7 @@ Implementation-specific READMEs remain beside the code or artifact they govern s
 3. For accounting-policy, federal-tax, or U.S. GAAP questions, start with the product-neutral [Accounting Knowledge Base](../accounting/README.md).
 4. Read the relevant document under [`standards/`](standards/).
 5. Use the matching product handbook under [`reference/`](reference/) for platform vocabulary, API families, and official-source links.
-6. For MCP work, read the [MCP index](mcp/README.md) and keep its five evidence layers separate.
+6. For MCP work, read the [MCP index](mcp/README.md) and keep its six evidence layers separate.
 7. Before a live change, verify the exact Sylvara organization, environment, role, metadata, permissions, and current state through the authorized tool.
 
 ## Standards Index
@@ -47,8 +47,11 @@ The [product reference collection](reference/README.md) covers the currently gov
 - [MCP Evidence And Navigation](mcp/README.md)
 - [MCP Server Standard](mcp/server-standard.md)
 - [Sylvara configured-session capability catalog, 2026-08-04](mcp/snapshots/configured/2026-08-04/capability-catalog.md)
+- [Sylvara enabled-tool catalog by neutral server role, 2026-08-04](mcp/snapshots/configured/2026-08-04/enabled-tool-catalog.md)
 - [Sylvara configured-session machine-readable inventory, 2026-08-04](mcp/snapshots/configured/2026-08-04/sylvara-observed-tool-inventory.json)
-- [Tool Manual service catalog, 2026-07-24](mcp/reference/tool-manual-service-catalog-2026-07-24.md)
+- [Current Tool Manual service catalog, 2026-08-05](mcp/reference/tool-manual-service-catalog-2026-08-05.md)
+- [Complete Tool Manual names-only catalog, 2026-08-05](mcp/reference/tool-manual-tool-catalog-2026-08-05.json)
+- [Historical Tool Manual service-count catalog, 2026-07-24](mcp/reference/tool-manual-service-catalog-2026-07-24.md)
 - [Preconfigured template catalog, 2026-07-25](mcp/reference/preconfigured-template-catalog-2026-07-25.md)
 
 ## Code-Adjacent Zoho Artifacts
@@ -88,7 +91,7 @@ A reusable Zoho artifact is governed only when it states:
 
 1. its purpose, owning product, source of truth, and prohibited ownership;
 2. its evidence status and observation date;
-3. whether a claim comes from official documentation, a Tool Manual catalog, a preconfigured template, an advertised MCP tool name, or verified effective access;
+3. whether a claim comes from official documentation, a Tool Manual catalog, a preconfigured template, a configured MCP selection, an advertised MCP contract, or verified effective access;
 4. prerequisites, inputs, side effects, failure behavior, idempotency, and reconciliation rules;
 5. public-repository, logging, privacy, and secret-handling boundaries;
 6. reproducible validation, readback, rollback, and manual setup; and
@@ -104,13 +107,13 @@ If any required element is missing or stale, the artifact remains **Reference**,
 - **Legacy:** retained only for historical or forensic reference.
 - **Unknown:** missing, stale, ambiguous, truncated, or incomplete evidence.
 
-Official documentation establishes general product capability. A Tool Manual name establishes a documented tool name. A preconfigured template establishes dated template membership. An advertised MCP tool name establishes only the operation name one inspected role exposed; it does not establish parameters, response schemas, side effects, authorization, or successful execution. Only an exact identity check, current private contract inspection, and authorized acceptance call can establish effective Sylvara access.
+Official documentation establishes general product capability. A Tool Manual row establishes a dated service-qualified operation key. A preconfigured template establishes dated template membership. A configured-selection snapshot establishes only that one inspected role contained the operation on the observation date; it does not establish current parameters, response schemas, side effects, authorization, or successful execution. Only an exact identity check, current private contract inspection, and authorized acceptance call can establish effective Sylvara access.
 
 ## Current MCP Snapshot
 
-On 2026-08-04, configured-session discovery found 294 Sylvara-only Zoho tool names across 18 neutral roles and eight products: 221 reads and 73 write-capable actions. The supplied export and current callable registry agreed at the role-and-count level. No Zoho operation was called. Runtime namespaces, generated transport IDs, endpoints, authentication details, connection aliases, and production target identifiers were excluded.
+On 2026-08-04, configured-session discovery found 294 Sylvara-only Zoho selections across 18 neutral roles and eight products: 221 reads and 73 write-capable actions. The supplied export and callable registry available on the observation date agreed at the role-and-count level. No Zoho operation was called. Each row now separates the exact prefix-free catalog operation key from its human annotation; product or server prefixes are not part of annotated tool names. Runtime namespaces, generated transport IDs, service-prefixed adapter labels, endpoints, authentication details, connection aliases, and production target identifiers were excluded.
 
-Billing, Books, Catalyst, Creator, CRM, Mail, Payments, and WorkDrive were observed at the advertised-name layer. Forms, Contracts, Sign, Sites, and Analytics were not observed; their MCP availability is **Unknown**, not unsupported. Observation does not establish product adoption, tenant binding, effective authorization, or permission for live use.
+Billing, Books, Catalyst, Creator, CRM, Mail, Payments, and WorkDrive were observed at the configured-selection layer. Forms, Contracts, Sign, Sites, and Analytics were not observed; their MCP availability is **Unknown**, not unsupported. Observation does not establish product adoption, tenant binding, effective authorization, or permission for live use.
 
 ## Live Change Boundary
 

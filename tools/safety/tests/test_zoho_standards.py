@@ -108,7 +108,8 @@ CAPABILITY_LAYERS = (
     "official-product-capability",
     "tool-manual-catalog",
     "preconfigured-template-membership",
-    "advertised-mcp-tool-name",
+    "configured-mcp-selection",
+    "advertised-mcp-contract",
     "effective-tenant-capability",
 )
 PRODUCT_REFERENCE_FILES = {
@@ -227,7 +228,7 @@ class ZohoStandardsTests(unittest.TestCase):
 
     def test_machine_readable_suite_registry_is_complete_and_resolvable(self) -> None:
         registry = json.loads(SUITE_REGISTRY.read_text(encoding="utf-8"))
-        self.assertEqual(2, registry["schema_version"])
+        self.assertEqual(3, registry["schema_version"])
         self.assertEqual("docs/zoho", registry["path_base"])
         self.assertEqual("unknown", registry["live_state"])
         self.assertEqual(list(CAPABILITY_LAYERS), registry["capability_layers"])
@@ -239,7 +240,7 @@ class ZohoStandardsTests(unittest.TestCase):
             with self.subTest(product=row["id"]):
                 self.assertEqual("unknown", row["effective_tenant_capability"])
                 expected_observation = (
-                    "advertised-tool-names-observed-2026-08-04"
+                    "configured-selections-observed-2026-08-04"
                     if row["id"] in OBSERVED_PRODUCT_IDS
                     else "not-observed-2026-08-04"
                 )
@@ -258,7 +259,7 @@ class ZohoStandardsTests(unittest.TestCase):
                 self.assertTrue((ZOHO_DOCS / row["reference"]).is_file())
                 if row["id"] == "payments":
                     self.assertEqual(
-                        "advertised-tool-names-observed-2026-08-04",
+                        "configured-selections-observed-2026-08-04",
                         row["mcp_observation"],
                     )
 
