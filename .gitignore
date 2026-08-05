@@ -60,5 +60,6 @@ exports/
 *.zip
 *.csv
 !src/zoho-books/reference/chart-of-accounts.csv
+!src/zoho-books/reference/final-chart-of-accounts-tax-preparer-2026-08-05.csv
 !src/zoho-books/reference/proposed-chart-of-accounts.csv
 !src/zoho-books/reference/schedule-c-tax-rollup-2026-08-05.csv
