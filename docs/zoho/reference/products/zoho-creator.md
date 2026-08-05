@@ -4,6 +4,7 @@
 
 - Artifact class: **Reference**
 - Research cutoff: **2026-07-20**
+- Field-model refresh: **2026-08-05**
 - Sylvara adoption: **Unknown**
 - Effective Sylvara access: **Unknown**
 - Evidence basis: official Zoho documentation reviewed in the audited source material.
@@ -61,6 +62,49 @@ Display labels are not API contracts. Never infer a link name, record identifier
 
 Use the metadata APIs before data APIs. Select record, file, bulk, or custom API operations only after confirming their current contract and capacity.
 
+## Field Metadata And Write Contract
+
+Creator's Get Fields API returns numeric `type` values. The current documented mapping is below; it is metadata vocabulary, not proof that a field is writable through a particular endpoint.
+
+| Code | Documented field type | Code | Documented field type |
+|---:|---|---:|---|
+| 1 | Single Line | 21 | Subform |
+| 2 | Multi Line | 22 | Zoho CRM (legacy) |
+| 3 | Email | 23 | Zoho CRM Link (legacy) |
+| 4 | Rich Text | 24 | Add Notes |
+| 5 | Number | 25 | Signature |
+| 6 | Decimal | 26 | Users |
+| 7 | Percent | 27 | Phone |
+| 8 | Currency | 29 | Name |
+| 9 | Auto Number | 30 | Address |
+| 10 | Date | 31 | Integration |
+| 11 | Date-Time | 32 | Audio |
+| 12 | Drop Down | 33 | Video |
+| 13 | Radio | 34 | Time |
+| 14 | Multi Select | 35 | OCR |
+| 15 | Checkbox | 36 | Object Detection |
+| 16 | Decision Box | 37 | Keyword Extraction |
+| 17 | URL | 38 | Sentiment Analysis |
+| 18 | Image | 39 | Prediction |
+| 19 | File Upload |  |  |
+| 20 | Formula |  |  |
+
+The current table does not assign code 28. Lookup fields use codes 12 through 15 according to their display type, so code alone is insufficient to distinguish a lookup from an ordinary choice field. Inspect the complete field object, including `link_name`, `field_config`, lookup target, display type, choices, subform metadata, and write capability.
+
+Use this handling contract when translating metadata into an implementation:
+
+| Family | Examples | Required handling |
+|---|---|---|
+| Scalar | Single Line, Multi Line, Email, Rich Text, Number, Decimal, Percent, Currency, Date, Date-Time, URL, Phone, Time | Confirm the endpoint's exact serialized format, null behavior, validation, locale, precision, and time zone |
+| Choice | Drop Down, Radio, Multi Select, Checkbox, Decision Box | Read allowed values and distinguish stored values, display values, single choice, and multiple choice |
+| Composite | Name, Address | Discover and map component link names; never send an assumed flat string |
+| Relationship | Lookup, Users, Integration, legacy CRM fields | Resolve the target, accepted identifier, permissions, display mode, and duplicate behavior |
+| Nested | Subform | Maintain a child-field dictionary and test row identity, insert, update, order, and deletion semantics |
+| File or media | Image, File Upload, Signature, Audio, Video | Use the documented specialized operation and enforce type, size, privacy, retention, and malware controls |
+| Computed or presentation | Auto Number, Formula, Add Notes, AI fields | Treat as non-writable unless the exact API contract and returned metadata prove otherwise |
+
+The current Update Records API documents up to 200 records per request. Workflows run by default. `skip_workflow` may name `form_workflow`, `schedules`, or `all`; blueprints cannot be skipped, and only authorized administrators or developers can use the option. State the intended workflow behavior explicitly, verify permissions, and test the exact application before relying on it.
+
 ## Automation And Webhooks
 
 Creator automation can run through local Deluge, cross-application tasks, workflows, schedules, batch workflows, custom APIs, or external callers using API v2.1. These surfaces have different trigger, transaction, permission, and limit behavior.
@@ -105,6 +149,7 @@ Record the reviewed source revision and live publication evidence privately. A s
 - [API limits](https://www.zoho.com/creator/help/api/v2.1/api-limits.html)
 - [Metadata: get forms](https://www.zoho.com/creator/help/api/v2.1/get-forms.html)
 - [Metadata: get fields](https://www.zoho.com/creator/help/api/v2.1/get-fields.html)
+- [Update records](https://www.zoho.com/creator/help/api/v2.1/update-records.html)
 - [Bulk API overview](https://www.zoho.com/creator/help/api/v2.1/bulk-api/overview.html)
 - [Creator environments](https://help.zoho.com/portal/en/kb/creator/developer-guide/environments/articles/understand-environments)
 - [Custom APIs](https://help.zoho.com/portal/en/kb/creator/developer-guide/microservices/custom-api/articles/understand-custom-apis)

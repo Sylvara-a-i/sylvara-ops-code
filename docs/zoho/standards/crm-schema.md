@@ -4,6 +4,7 @@
 
 - Repository standard: **Proposed**
 - Official capability evidence: Zoho CRM API V8 documentation, subject to current-product verification
+- Field-type documentation rechecked: **2026-08-05**
 - Advertised MCP evidence: dated 2026-08-04 Sylvara tool-name snapshot only
 - Sylvara CRM organization, edition, schema, permissions, workflows, and effective MCP access: **Unknown**
 
@@ -62,6 +63,111 @@ The general Fields Metadata response spans all layouts and does not establish la
 | File | file upload, image upload, profile image | Storage boundary, permissions, size, retention, PII; prefer WorkDrive for documents |
 | Repeating | subform and linking modules | Parent/child API contract, row limits, edition, duplicate rules, deletion semantics |
 | Compliance | encryption, restricted/private data, consent lookup | Legal basis, access profiles, export behavior, audit requirements |
+
+## CRM Field-Type Crosswalk
+
+Zoho's administrator-facing field label, Fields Metadata `data_type`, Create Custom Field API value, and formula return type are separate concepts. Do not use them interchangeably. The following is a portable working crosswalk, not proof that the type is enabled for a particular module, layout, edition, data center, or MCP role.
+
+| Administrator/UI type | API or metadata type | Design rule |
+|---|---|---|
+| Single Line / Text | `text` | Use for short text, codes, identifiers, and postal codes that may contain leading zeroes or non-numeric characters |
+| Multi-Line | `textarea` | Choose plain-small, plain-large, or rich-text subtype deliberately |
+| Email | `email` | Normalize only for matching under an approved policy; preserve the supplied value |
+| Phone | `phone` | Treat as text/contact data, not a number used for arithmetic |
+| URL | `website` | Validate scheme and destination; never place secrets in URLs |
+| Pick List | `picklist` | Record exact ordered values, scope, default, actual/reference values, history, and color behavior |
+| Multi-Select Pick List | `multiselectpicklist` | Use sparingly because queries, automation, reporting, retirement, and cross-product mappings are more complex |
+| Checkbox | `boolean` | Define the meaning of false, null, and default separately |
+| Number | `integer` | Whole-number quantity; do not use for identifiers |
+| Long Integer | `bigint` | Large whole number; text is still safer for non-arithmetic identifiers |
+| Decimal | `double` | Define allowed range, precision, scale, and rounding |
+| Currency | `currency` | Monetary amount only; name the owning currency and accounting source |
+| Percent | `percent` | Verify live metadata, range, storage, and display semantics before automation |
+| Date | `date` | Calendar date without an implied time or time zone |
+| Date/Time | `datetime` | Record the source time zone and normalization/display rule |
+| Lookup | `lookup` | Resolve target module API name, related-list behavior, filter, permissions, and deletion semantics |
+| User | `userlookup` | Distinguish a custom user lookup from the system owner field |
+| Multi-User | `multiuserlookup` | Define allowed users, cardinality, related-list behavior, permissions, limits, and create/update semantics separately from `userlookup` |
+| Auto-Number | `autonumber` | Define prefix, suffix, start, existing-record behavior, and external-reference suitability |
+| Formula | `formula` | Define expression, return type, null behavior, precision, dependencies, and refresh behavior |
+| Rollup Summary | `rollup_summary` | Define parent/related module, related list, function, criteria, return type, and stale/recalculation behavior |
+| File Upload | `fileupload` | Confirm count, size, extension, permissions, retention, and whether WorkDrive should own the document |
+| Image Upload | `imageupload` | Confirm count, size, portal exposure, retention, and image-content risk |
+| Multi-Select Lookup | `multiselectlookup` in metadata | Treat as a linking relationship with an explicit linking module and related lists; verify the creation contract live |
+| Subform | `subform` in metadata | Maintain a separate child-field dictionary and test row IDs, order, limits, updates, and deletion semantics |
+| Radio Button | UI field; API mapping requires live readback | Do not assume it is interchangeable with `picklist`; verify the created field's metadata and API behavior |
+| Address | UI/composite field; API mapping requires live readback | Do not assume one writable scalar field or cross-product compatibility; inspect its returned component model |
+
+Fields Metadata can also return system or component types such as `ownerlookup`, `profileimage`, and `territories`. Their presence does not make them valid custom-field creation types.
+
+The current [Create Custom Field API](https://www.zoho.com/crm/developer/docs/api/v8/create-custom-field.html) documents these configurable lengths or counts: text 1–255, textarea 2,000/32,000/50,000, email 1–100, phone 1–30, integer 1–9 digits, auto-number 1–255, currency 1–16 digits, percent 1–5 digits, bigint 1–18 digits, double 1–18 digits, website 1–450, file upload 1 or 5 files, and image upload 1–10 images. These are dated API-documentation facts, not safe defaults; recheck the exact module, edition, layout, and live metadata before use.
+
+### Multi-Line Subtypes
+
+| Subtype | Documented capacity | Important behavior |
+|---|---:|---|
+| Plain Text Small | Up to 2,000 characters | Can be mandatory, encrypted, and used in filters/criteria according to current help |
+| Plain Text Large | Up to 32,000 characters | Can be mandatory; current help says it is not encrypted or supported in filters/criteria |
+| Rich Text | Up to 50,000 characters including markup | Cannot be mandatory or encrypted and has substantial view, search, mobile, formula, export, and integration limitations |
+
+Do not default to Rich Text. Confirm allowed markup, template behavior, edition support, search/export behavior, and sanitization for the exact workflow.
+
+## Agent Module And Field Specification Contract
+
+When module creation, rename, mapping, or automation is in scope, identify it as `Display Label — Module Type` and provide:
+
+| Module Display Label — Module Type | Zoho Base Module | API Name | API Status | Purpose | Relationships |
+|---|---|---|---|---|---|
+
+When field creation or material revision is in scope, identify it as `Field Label — Field Type` and provide:
+
+| Field Label — Field Type | API Name | API Status | Required / Unique | Help Text | Default / Choices | Owner And Dependencies |
+|---|---|---|---|---|---|---|
+
+Use the returned `api_name` for an actual field. Use `TBD_FROM_ZOHO_METADATA` when unresolved. A proposed API name must remain in a separate `proposed_api_name` value and must not be used in code, Deluge, webhooks, merge maps, or environment variables until verified.
+
+For each proposed field, also record layout/section, source of truth, sensitivity, retention, profile access, external-ID behavior, integration mappings, migration/backfill behavior, and rollback or containment. A record export or screen label is not API-name or field-type evidence.
+
+### Help Text
+
+Use an internal maximum of 255 characters for field-creation help text. This is a Sylvara authoring constraint, not a claim that every Zoho interface uses the same limit. The current API documents `static_text` tooltips up to 35 characters and `info_icon` tooltips up to 255 characters. Name the tooltip mode and validate the saved/read-back text.
+
+Help text should tell the user what to enter, identify the authoritative source when ambiguous, explain special formatting, and avoid secrets, customer data, legal advice, or policy prose.
+
+### Choice Fields
+
+Every proposed picklist, multi-select picklist, Stage, radio-style choice, or similar choice field must specify:
+
+- exact values in entered order;
+- local, global, or standard-module scope;
+- exact default or `None`;
+- actual/reference-value behavior;
+- history-tracking decision;
+- retirement/replacement behavior; and
+- color behavior: either explicit `None` or, only when the verified field type supports it and an approved semantic/accessibility need exists, a six-digit `#RRGGBB` value for each affected option.
+
+The repository does not establish a brand palette. If color is supported and materially improves an approved workflow, the following optional semantic palette is a starting point; otherwise record `None` and omit color configuration:
+
+| Meaning | Hex |
+|---|---|
+| New or informational | `#2563EB` |
+| Waiting or pending | `#D97706` |
+| Contract or approval workflow | `#7C3AED` |
+| Approved, active, or complete | `#16A34A` |
+| Caution or nonstandard | `#EA580C` |
+| Failed, denied, terminated, or urgent | `#DC2626` |
+| Inactive, archived, unknown, or not applicable | `#6B7280` |
+
+This is not a Zoho default, brand palette, or proof of live colors. Verify contrast and non-color status cues. If live metadata returns no color, preserve that evidence; do not assign a cosmetic color merely to complete the specification.
+
+### Complex-Type Minimum Design
+
+- **Lookup/User/Multi-User:** target module or user population, verified API name, direction, related-list behavior, filters, cardinality, permissions, limits, and delete or deactivation behavior. Do not conflate `userlookup` with `multiuserlookup`.
+- **Formula:** exact expression, return type, precision, null handling, referenced API names, refresh behavior, workflow implications, and backfill/recalculation test.
+- **Auto-Number:** prefix/suffix, starting value, digit length, existing-record behavior, reset behavior, uniqueness, and whether external consumers may rely on it.
+- **Rollup Summary:** parent, related module/list, aggregation, source field, criteria, empty-set behavior, edition support, recalculation timing, and workflow-loop risk.
+- **File/Image Upload:** allowed count/types/size, malware/content controls, profile and portal permissions, sensitivity, retention, deletion, and WorkDrive ownership decision.
+- **Subform/Multi-Select Lookup:** separate child/linking schema, stable row/link keys, permissions, ordering, limits, create/update/delete semantics, and reconciliation.
 
 The [Create Custom Field API](https://www.zoho.com/crm/developer/docs/api/v8/create-custom-field.html) currently documents a maximum of five fields per call, no more than two unique fields per module, one auto-number field per module, and edition-dependent field limits. These are API documentation limits, not permission to create fields.
 

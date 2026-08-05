@@ -4,6 +4,7 @@
 
 - Artifact class: **Reference**
 - Research cutoff: **2026-07-20**
+- Field-family refresh: **2026-08-05**
 - Sylvara adoption: **Unknown**
 - Effective Sylvara access: **Unknown**
 - Evidence basis: official Zoho Forms documentation reviewed in the audited source material.
@@ -51,6 +52,37 @@ Connections can provide managed OAuth-capable access to supported services. Reso
 | Connection | Managed integration authorization | Use least privilege and separate environments |
 
 Maintain a field dictionary for every adopted form: business purpose, authoritative destination, link name, type, requiredness, sensitivity, validation, retention, downstream mapping, and deletion rule.
+
+## Field Families And Dictionary
+
+The current field-types overview groups the form builder's fields as follows. These are authoring categories, not a public arbitrary-submission API schema.
+
+| Family | Documented fields |
+|---|---|
+| Grid | 1-Column, 2-Column, 3-Column |
+| Basic Info | Name, Address, Phone, Email, Website |
+| Textbox | Single Line, Multi Line |
+| Number | Number, Decimal, Formula, Currency |
+| Choices | Dropdown, Radio, Checkbox, Multiple Choice, Image Choices |
+| Matrix Choices | Radio, Checkbox, Dropdown, Textbox, Number, Currency |
+| Date & Time | Date, Time, Date-Time, Month-Year |
+| Uploads | File Upload, Image Upload, Audio/Video Upload |
+| Rating Scales | Rating, Slider |
+| Instructions | Description, Audio/Video Embed |
+| Identifier | Unique ID, Random ID |
+| Legal and Consent | Terms & Conditions, Signature, Decision Box |
+| Page Elements | Section, Page Break |
+| Advanced | Subform, Zoho CRM, Payment |
+
+For each adopted field, record at minimum: display label, verified link name, family and exact type, business purpose, authoritative destination, required/optional/conditional state, default or choices, validation, sensitivity, encryption/personal-field classification, retention, conditional rules, prefill exposure, downstream mapping, and deletion behavior.
+
+Apply additional controls by family:
+
+- composite, matrix, and subform fields require a component or child schema rather than a flat-value assumption;
+- formulas, unique IDs, and random IDs require generation and read-only behavior to be verified;
+- uploads, signatures, payments, and CRM fields require the exact product-specific integration and privacy contract;
+- hidden, prefilled, and conditionally displayed values remain untrusted inputs; and
+- sections, page breaks, and instructional content are presentation elements, not submitted business facts unless the live export proves otherwise.
 
 ## Automation And Webhooks
 

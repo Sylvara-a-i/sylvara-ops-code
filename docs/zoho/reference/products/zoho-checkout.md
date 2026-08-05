@@ -2,6 +2,7 @@
 
 - **Reference ID:** `SYLVARA-ZOHO-CHECKOUT-REFERENCE`
 - **Research cutoff:** 2026-07-20
+- **Custom-field refresh:** 2026-08-05
 - **Repository status:** Reference only
 - **Sylvara adoption:** Unknown
 - **Effective organization, edition, permissions, and connector access:** Unknown
@@ -37,6 +38,14 @@ Checkout payment state is collection evidence, not the general ledger. Accountin
 - Custom fields can capture bounded metadata but should not collect confidential information.
 - Payments, refunds, recurring activity, reports, and backups provide operational evidence.
 - Gateway configuration controls available methods and settlement behavior.
+
+## Invoice Custom Fields
+
+The current Checkout preferences documentation identifies Text, Email, URL, Phone, Number, and Date as available invoice custom-field data types. A configured field can include a label, data type, help text, default value, mandatory setting, privacy classification, PDF visibility, and an API Field Name.
+
+Treat the saved API Field Name as the integration key; never derive it from the label. Before relying on a field, read the live configuration and verify its exact type, mandatory/default behavior, visibility, and supported API surface.
+
+Checkout currently lets operators classify Text, Email, URL, Phone, Number, and Date fields as personal information, and Text, Email, URL, Phone, and Date fields as electronic protected health information. Those switches are data-handling controls, not proof that collecting the data is necessary, lawful, or within Sylvara's approved product boundary. Default to collecting no confidential or regulated data on a payment page.
 
 ## Automation And Events
 
@@ -78,6 +87,7 @@ Use synthetic transactions where supported. Repository review is not authorizati
 - [Recurring payments](https://www.zoho.com/us/checkout/help/recurring-payments/view-recurring-payments/)
 - [Refunds](https://www.zoho.com/us/checkout/help/refunds/)
 - [URL parameter reference](https://www.zoho.com/checkout/faq/payment-pages/parameters.html)
+- [Invoice custom fields](https://www.zoho.com/us/checkout/help/settings/preferences/invoice-custom-fields/)
 - [Checkout and Billing comparison](https://www.zoho.com/checkout/faq/general/difference-between-checkout-and-billing.html)
 
 ## Exclusions

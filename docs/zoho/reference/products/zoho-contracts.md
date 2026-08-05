@@ -4,6 +4,7 @@
 
 - Artifact class: **Reference**
 - Research cutoff: **2026-07-20**
+- Field-metadata refresh: **2026-08-05**
 - Sylvara adoption: **Unknown**
 - Effective Sylvara access: **Unknown**
 - Evidence basis: official Zoho Contracts API and help documentation reviewed in the audited source material.
@@ -57,6 +58,31 @@ Never infer a contract-type, field, clause, participant, or organization identif
 
 Treat stage and system status as live product values. Retrieve before and after every transition; do not hardcode an assumed complete state machine.
 
+## Contract-Type Field Metadata
+
+Before building a create or update payload, call the selected contract type's documented `/allfields` metadata operation with the least-privilege `contracts.meta.READ` scope. Bind the response to the verified organization, contract-type API name, enabled state, and published version. The response's numeric values currently map as follows:
+
+| Metadata property | Value | Meaning |
+|---|---:|---|
+| `metaType` | 1 | System field |
+| `metaType` | 3 | Custom field |
+| `dataType` | 1 | Boolean |
+| `dataType` | 2 | Number |
+| `dataType` | 3 | String |
+| `dataType` | 4 | Date |
+| `dataType` | 5 | Index |
+| `dataType` | 6 | Text |
+| `dataType` | 7 | Currency |
+| `dataType` | 8 | Term |
+| `dataType` | 9 | Percent |
+| `dataType` | 10 | Phone |
+| `dataType` | 11 | Email |
+| `displayType` | 1 | Text, Number, Currency, Percent, Phone, or Email control |
+| `displayType` | 2 | Dropdown control |
+| `displayType` | 6 | Date control |
+
+Do not infer a payload from `dataType` alone. Preserve each returned API name, display label, required/default state, option set, metadata ownership, and other constraints. Reject unknown numeric values until current official documentation and live metadata establish their meaning.
+
 ## Automation And Webhooks
 
 Contracts supports REST operations for metadata, contracts, counterparties, departments, approvals, negotiation, obligations, and signature actions, subject to current endpoint and permission contracts.
@@ -99,6 +125,7 @@ Production publication, approval, negotiation, or signature requires a separate 
 
 ## Official Sources
 
+- [Get all fields for a contract-type template](https://www.zoho.com/contracts/api/contract-type/get-contract-type-template-all-fields.html)
 - [OAuth authentication](https://www.zoho.com/contracts/api/understanding-the-basics/oauth-authentication.html)
 - [Contracts OAuth scopes](https://www.zoho.com/contracts/api/understanding-the-basics/list-of-scopes.html)
 - [Data centers and base URI](https://www.zoho.com/contracts/api/understanding-the-basics/data-centers-vs-base-uri-structure.html)

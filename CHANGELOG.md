@@ -4,6 +4,9 @@ All notable repository-governance and technical-source changes are recorded here
 
 ## Unreleased
 
+- Add durable operator, task-mode, code-review, document-drafting, typography, and visual-QA instructions for future Codex and ChatGPT work.
+- Refresh portable CRM, Creator, Forms, Contracts, Sign, Checkout, and Flow field/type contracts from current official sources while preserving live-tenant and deployment boundaries.
+- Record an explicit Zoho documentation evidence order and nested agent behavior without importing another tenant's schemas, identifiers, business rules, or real-estate material.
 - Establish the managed inbound-reception product boundary for Kansas City residential-plumbing validation, including progressive deployment, structured workflow rules, outcome reconciliation, vendor portability, bounded human escalation, evidence-based expansion, and explicit non-goals.
 - Record the private strategy research only through Sylvara-original public decisions; exclude the raw report, source metadata, competitor assessment, commercial model, exact validation thresholds, and dated roadmap.
 - Add a dated AI receptionist legal and compliance archive covering federal telephony and telemarketing, Kansas and Missouri law, representative interstate recording rules, privacy/security, biometrics, accessibility, regulated-use gates, vendor/client evidence, and a current primary-source manifest.

@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "standard_id": "SYL-DOC-001",
+  "version": "1.0",
+  "effective_date": "2026-08-05",
+  "status": "active",
+  "scope": {
+    "user_facing_artifacts": true,
+    "plain_text_font_controlled_by_viewer": true,
+    "page_and_type_defaults_apply_to": [
+      "paged_us_letter_business_documents"
+    ],
+    "output_specific_overrides_allowed": true
+  },
+  "priority_order": [
+    "binding_law_mandatory_form_or_accessibility",
+    "approved_legal_finance_security_or_brand_requirement",
+    "application_and_output_constraints",
+    "syl_doc_001",
+    "document_specific_recorded_exception"
+  ],
+  "typography": {
+    "apple_interface_font": "San Francisco through the native system-font API only",
+    "portable_production_font": "Inter",
+    "apple_font_files_may_be_bundled": false,
+    "apple_font_files_may_be_embedded": false,
+    "css_stack": [
+      "-apple-system",
+      "BlinkMacSystemFont",
+      "Inter",
+      "sans-serif"
+    ],
+    "sizes_pt": {
+      "title": 18,
+      "status_kicker": 8.3,
+      "subtitle": 9.2,
+      "heading_1": 15,
+      "heading_2": 12,
+      "heading_3": 10.5,
+      "body": 10,
+      "dense_body_minimum": 9,
+      "table_typical_minimum": 7.5,
+      "table_typical_maximum": 8.8,
+      "header": 7.6,
+      "footer": 7.2
+    },
+    "body_spacing": {
+      "line_spacing": 1.08,
+      "space_before_pt": 0,
+      "space_after_pt": 5
+    }
+  },
+  "page": {
+    "size": "US Letter",
+    "width_in": 8.5,
+    "height_in": 11,
+    "margins_in": {
+      "top": 0.8,
+      "bottom": 0.78,
+      "left": 1.0,
+      "right": 1.0
+    },
+    "header_distance_in": 0.35,
+    "footer_distance_in": 0.34,
+    "widow_orphan_control": true,
+    "keep_headings_with_next": true
+  },
+  "brand": {
+    "palette_status": "not_defined_by_this_standard",
+    "color_only_meaning_allowed": false
+  },
+  "header": "Sylvara | [Short Document Name]",
+  "footer": "[Status] | Rev. YYYY-MM-DD | Page X of Y",
+  "quality_assurance": {
+    "render_every_page": true,
+    "visual_inspection_required": true,
+    "check_font_substitution": true,
+    "check_cross_references": true,
+    "check_merge_fields": true,
+    "check_headers_footers": true,
+    "check_accessibility_when_supported": true,
+    "record_private_hash_for_material_documents": true,
+    "unverified_artifact_status": "draft"
+  },
+  "authorities": {
+    "apple_fonts": "https://developer.apple.com/fonts/",
+    "inter_license": "https://github.com/rsms/inter/blob/master/LICENSE.txt"
+  }
+}
