@@ -2,6 +2,7 @@
 
 - **Reference ID:** `SYLVARA-ZOHO-FLOW-REFERENCE`
 - **Research cutoff:** 2026-07-20
+- **Custom-function refresh:** 2026-08-05
 - **Repository status:** Reference only
 - **Sylvara adoption:** Unknown
 - **Effective organization, edition, permissions, and connector access:** Unknown
@@ -37,6 +38,26 @@ Use Flow for understandable, supportable integration paths. Keep cryptographic v
 - Version history, execution history, diagnostics, rerun, and usage views support operations.
 - An on-premises agent can bridge approved internal services with additional security obligations.
 - Task consumption and execution limits affect cost and throughput.
+
+## Custom Function Type Contract
+
+Flow's current custom-function interface documents the following argument and return vocabulary:
+
+| Type | Use and control |
+|---|---|
+| `int` | Whole number; verify range and avoid using it for identifiers |
+| `float` | Decimal number; define precision and rounding before financial use |
+| `string` | Text; validate length, encoding, sensitivity, and accepted format |
+| `bool` | Boolean; define false, missing, and null behavior separately |
+| `date` | Date value; verify input format, locale, and time-zone assumptions |
+| `map` | Key/value object; validate required keys and reject unexpected structure where practical |
+| `list` | Ordered collection; validate element type, count, and empty behavior |
+| `file` | File value; enforce type, size, privacy, retention, and malware controls |
+| `void` | Return type only; it is not available as an input argument type |
+
+Declare inputs and return type explicitly, keep functions small, and treat mapped inputs as untrusted. App connections are not passed directly into the function; current guidance uses `invokeurl` for connection-backed calls. Confirm the named connection, scopes, regional host, timeout, response contract, and logging behavior before enabling such a call.
+
+Shared functions create cross-flow dependencies. Inventory dependent flows before editing or deletion, because deleting a shared function can affect every flow that references it.
 
 ## Automation And Events
 

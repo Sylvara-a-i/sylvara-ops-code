@@ -19,6 +19,7 @@ CATALOG = (
 )
 SUITE_REGISTRY = ZOHO_DOCS / "governance" / "suite-registry.json"
 SOURCE_MANIFEST = ZOHO_DOCS / "reference" / "source-manifest.json"
+PRODUCT_REFERENCE_DIR = ZOHO_DOCS / "reference" / "products"
 
 GOVERNED_STANDARDS = {
     "standards/crm-schema.md",
@@ -135,6 +136,15 @@ PRODUCT_REFERENCE_FILES = {
     "zoho-todo.md",
     "zoho-voice.md",
     "zoho-workdrive.md",
+}
+FIELD_CONTRACT_MARKERS = {
+    "standards/crm-schema.md": ("CRM Field-Type Crosswalk", "`multiselectpicklist`", "`multiuserlookup`"),
+    "reference/products/zoho-creator.md": ("Field Metadata And Write Contract", "| 39 | Prediction |"),
+    "reference/products/zoho-forms.md": ("Field Families And Dictionary", "1-Column", "Legal and Consent"),
+    "reference/products/zoho-contracts.md": ("Contract-Type Field Metadata", "`dataType` | 11 | Email"),
+    "reference/products/zoho-sign.md": ("Document Fields And Text Tags", "Split Text", "fewer than 75 pages"),
+    "reference/products/zoho-checkout.md": ("Invoice Custom Fields", "API Field Name"),
+    "reference/products/zoho-flow.md": ("Custom Function Type Contract", "`void`"),
 }
 OLD_PATHS = {
     "docs/zoho/suite-registry.json",
@@ -263,7 +273,7 @@ class ZohoStandardsTests(unittest.TestCase):
                     )
 
     def test_product_reference_collection_is_complete_and_fail_closed(self) -> None:
-        product_dir = ZOHO_DOCS / "reference" / "products"
+        product_dir = PRODUCT_REFERENCE_DIR
         self.assertEqual(PRODUCT_REFERENCE_FILES, {path.name for path in product_dir.glob("*.md")})
         references = [*product_dir.glob("*.md"), ZOHO_DOCS / "reference" / "deluge" / "master-knowledge-base.md"]
         for path in references:
@@ -277,11 +287,21 @@ class ZohoStandardsTests(unittest.TestCase):
     def test_source_manifest_lists_every_reference_and_resolves(self) -> None:
         manifest = json.loads(SOURCE_MANIFEST.read_text(encoding="utf-8"))
         self.assertEqual(1, manifest["schema_version"])
+        self.assertEqual("2026-08-05", manifest["last_reviewed_on"])
+        self.assertEqual("2026-08-05", manifest["research_cutoffs"]["field_type_refresh"])
         self.assertEqual(24, len(manifest["product_references"]))
         self.assertEqual(24, len(set(manifest["product_references"])))
         for target in manifest["product_references"]:
             with self.subTest(target=target):
                 self.assertTrue((SOURCE_MANIFEST.parent / target).is_file())
+
+    def test_refreshed_product_field_contracts_remain_complete(self) -> None:
+        for relative_path, markers in FIELD_CONTRACT_MARKERS.items():
+            text = (ZOHO_DOCS / relative_path).read_text(encoding="utf-8")
+            with self.subTest(relative_path=relative_path):
+                self.assertIn("2026-08-05", text)
+                for marker in markers:
+                    self.assertIn(marker, text)
 
     def test_retired_zoho_paths_do_not_remain_in_repository_text_locations(self) -> None:
         for old_path in OLD_PATHS:

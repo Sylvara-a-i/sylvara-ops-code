@@ -4,6 +4,7 @@
 
 - Artifact class: **Reference**
 - Research cutoff: **2026-07-20**
+- Document-field refresh: **2026-08-05**
 - Sylvara adoption: **Unknown**
 - Effective Sylvara access: **Unknown**
 - Evidence basis: official Zoho Sign API and help documentation reviewed in the audited source material.
@@ -51,6 +52,25 @@ All request, template, document, action, field-type, folder, and user identifier
 
 Treat unknown future request or action statuses as unresolved. Completion normally requires the expected request status plus all required action evidence retrieved from Sign.
 
+## Document Fields And Text Tags
+
+The current Sign field palette documents these signer or workflow controls:
+
+| Family | Documented fields |
+|---|---|
+| Execution | Signature, Initial, Stamp |
+| Identity and organization | Full Name, Email, Company, Job Title |
+| Date and data entry | Sign Date, Date, Text, Split Text |
+| Choice | Checkbox, Checkbox Group, Dropdown, Radio |
+| Evidence and content | Image, Attachment |
+| Calculation and payment | Formula, Payment |
+
+Each placed field must identify its intended action/recipient, type, mandatory state, page, position, dimensions, source document version, and any validation or option set. Do not infer that a visible field is assigned to the correct recipient or that an unassigned field will fail closed.
+
+Automatic field addition supports long and shorthand text-tag syntax. Keep each tag on one line, prefer shorthand when document-generation tools may insert line breaks, and name the intended recipient explicitly. If a tag omits the recipient, Sign assigns it to the first recipient; that fallback is unsafe for generated multi-party documents. The shorthand `*` marker makes supported text or checkbox fields mandatory. Current guidance limits text tags to documents of fewer than 75 pages; recheck this volatile limit before generation. Every generated template still requires a final merged-document test and Sign readback before release.
+
+Text tags are control markup, not authorization or identity proof. Freeze and checksum the exact rendered source document, confirm no tag text remains visible, then verify every field assignment and required state in the created request.
+
 ## Automation And Webhooks
 
 Sign supports direct document requests, templates, text tags, embedded signing, embedded sending, and plan-dependent bulk capabilities.
@@ -93,6 +113,8 @@ Use synthetic identities and documents to test:
 
 ## Official Sources
 
+- [Document fields](https://help.zoho.com/portal/en/kb/zoho-sign/user-guide/sending-a-document/articles/document-fields-in-zoho-sign)
+- [Automatic field addition and text tags](https://help.zoho.com/portal/en/kb/zoho-sign/user-guide/sending-a-document/articles/automatic-field-addition-in-zoho-sign)
 - [Zoho Sign API](https://www.zoho.com/sign/api/)
 - [OAuth](https://www.zoho.com/sign/api/oauth.html)
 - [API endpoints and data centers](https://www.zoho.com/sign/api/api-endpoint.html)

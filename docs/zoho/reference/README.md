@@ -4,6 +4,7 @@
 
 - Classification: **Reference**
 - Product research cutoff: **2026-07-20**
+- Targeted field-type refresh: **2026-08-05**
 - Sylvara adoption and effective tenant access: **Unknown unless separately verified**
 - Source: sanitized derivatives of authorized product research, with current official links retained where available
 
@@ -43,7 +44,7 @@ Reference-only means the product may be relevant to a future Sylvara workflow. I
 
 ## Use Rules
 
-1. Start with the product handbook for vocabulary, resource families, and current official links.
+1. Start with the product handbook for vocabulary, resource families, field-type contracts where documented, and current official links.
 2. Refresh official documentation before implementation when limits, endpoints, scopes, or features may have changed.
 3. Read the relevant operating standard under [`../standards/`](../standards/).
 4. Verify live Sylvara metadata and returned API names.
