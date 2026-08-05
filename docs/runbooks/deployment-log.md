@@ -8,7 +8,7 @@ A merged pull request is not a deployment. Record an entry only after an authori
 
 ## Current State
 
-The 2026-08-05 Sylvara Zoho Books chart deployment and its same-day Schedule C hierarchy amendment are the only production configuration events recorded here. They wrote chart metadata and active status only; no transaction record, journal, bank, clearing, tax-engine, or integration was written. Chart metadata can change historical report presentation even when transaction records remain unchanged.
+The 2026-08-05 Sylvara Zoho Books chart deployment, Schedule C hierarchy amendment, and final tax-preparer description correction are the only production configuration events recorded here. They wrote chart metadata and active status only; no transaction record, journal, bank, clearing, tax-engine, or integration was written. Chart metadata can change historical report presentation even when transaction records remain unchanged.
 
 ## 2026-08-05 — Zoho Books Chart Initial Attempt And Containment
 
@@ -65,6 +65,24 @@ Follow-up: reverify the final Schedule C for the filing year; configure any sepa
 ```
 
 Account activity and historical report-presentation effects were not reconciled in the chart-only amendment. No claim of zero historical financial activity is made.
+
+## 2026-08-05 â€” Zoho Books Tax-Preparer Description Correction
+
+```text
+Date (UTC): 2026-08-05T20:35:31Z
+Environment class: production
+Change reference: codex/finalize-tax-preparer-chart; repository publication pending
+Immutable artifact reference: final sanitized register SHA-256 e24ea2795d2bcb11828d510e5c6028a1f74ad92b1d5820a6a036c7742c695e3a
+Approval reference: owner standing chart authorization and current instruction to complete the final tax-preparer chart retained in the private Codex task
+Operator role: Sylvara Books Controller with separate Sylvara Books Audit readback
+Pre-deployment state: verified; 83 active and 11 inactive accounts, with exact prior descriptions captured privately for five custom accounts
+Action: configuration change; update five descriptions covering owner reimbursement, source-specific bank interest, carrier telecommunications, meals parent, and full-cost meals detail
+Smoke-test result: passed; all five Controller responses succeeded serially
+Readback result: matched; independent Audit returned all 83 active accounts and all five descriptions matched
+Rollback target: captured private five-description prestate; no name, code, type, parent, status, balance, transaction, tax setting, or organization setting changed
+Outcome: succeeded
+Follow-up: tax professional must still confirm the federal accounting method and filing-year workpapers; live Zoho remains configured accrual pending that review
+```
 
 ## Entry Template
 

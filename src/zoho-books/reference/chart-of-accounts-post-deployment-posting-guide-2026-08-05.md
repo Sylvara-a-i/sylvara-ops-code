@@ -13,12 +13,14 @@ This guide clarifies how the deployed chart should be used. It does not make an 
 
 | Fact pattern | Account | Control |
 |---|---|---|
-| Owner pays a substantiated Sylvara business cost and repayment is intended | `2130 Due to Owner - Substantiated Business Costs` | Debit the approved natural expense or asset; retain receipt, business purpose, date, vendor, and allocation evidence. This is not an employee accountable-plan reimbursement. |
+| Owner pays a substantiated Sylvara business cost and short-term repayment is intended | `2130 Due to Owner - Substantiated Business Costs` | Debit the approved natural expense or asset; retain receipt, business purpose, date, vendor, and allocation evidence. This is not an employee accountable-plan reimbursement or a substitute for documenting a bona fide owner loan. |
 | Owner pays a substantiated Sylvara business cost and repayment is not intended | `3010 Owner Contributions` | Debit the approved natural expense or asset and credit owner capital. |
 | Owner withdrawal or Sylvara payment of the owner's federal/Kansas estimated income or self-employment tax | `3020 Drawings` | Never post the disregarded owner's personal income or self-employment tax to wage, payroll-tax, `Advance Tax`, or business-tax expense. |
 | Actual employee compensation or reimbursement | Zoho employee/payroll controls after payroll setup | `6310 Salaries and Employee Wages` is no-post until Sylvara has an actual employee and approved payroll workflow; never use it for the disregarded owner. |
 
 The owner is self-employed rather than an employee of the disregarded entity. See [IRS single-member LLC guidance](https://www.irs.gov/businesses/small-businesses-self-employed/single-member-limited-liability-companies) and [IRS Publication 3402](https://www.irs.gov/pub/irs-pdf/p3402.pdf).
+
+Do not use `2130` for an actual financing arrangement. If the owner advances loan principal rather than paying a short-term reimbursable business cost, create a separate owner-loan liability only after the note, terms, funding evidence, interest treatment, maturity, and debt schedule are approved.
 
 ## Taxes, Licenses, And Compliance
 
@@ -45,17 +47,26 @@ Kansas telephone answering service remains highly likely taxable, including auto
 | `6500 Travel` and `6510 Business Lodging` | Require a business purpose, itinerary, dates, receipts, and allocation of any personal portion. The locked Zoho-seeded `Lodging` account is no-post for new activity. |
 | `6451 Internet` under `6450 Utilities` | Post only supported business charges or a documented owner business-use allocation. Owner-paid amounts follow the `Due to Owner`/`Owner Contributions` routing above; employee reimbursements require a separate employee policy. |
 | `6452 Phone` under `6450 Utilities` | Apply the same owner-versus-employee distinction and exclude unsupported personal use. The first residential line is not converted into a business expense by account coding. |
-| `6453 Voice and Telephony Usage` under `6450 Utilities` | Use for substantiated carrier and voice-runtime charges. Preserve provider evidence and a consistent allocation for shared usage. |
+| `6453 Voice and Telephony Usage` under `6450 Utilities` | Use for carrier, PSTN/SIP, phone-number, call-routing, and telecommunications-transport charges. AI voice-agent runtime, model inference, transcription, or orchestration belongs in `6990.10 AI Model and Automation Usage`. If a provider invoice cannot be reliably split, route it consistently to `6990.10` and preserve that allocation decision. |
 
 See [26 U.S.C. 162](https://uscode.house.gov/view.xhtml?edition=prelim&num=0&req=granuleid%3AUSC-prelim-title26-section162), [26 U.S.C. 262](https://uscode.house.gov/view.xhtml?req=%28title%3A26+section%3A262+edition%3Aprelim%29), and [26 U.S.C. 274](https://uscode.house.gov/view.xhtml?edition=prelim&num=0&req=granuleid%3AUSC-prelim-title26-section274).
 
 ## Software, Research, Startup, And Fixed Assets
 
-- Current AI usage, customer-delivery hosting, and customer software detail rolls up under Zoho system `Other Expenses` for Schedule C Part V. Current independent-contractor service, escalation, quality, and implementation labor rolls up under `6300 Contract Labor`. The locked `Cost of Goods Sold` root is no-post unless a later approved Part III or book COGS policy applies.
+- Current AI inference, transcription, automation, customer-delivery hosting, and customer software detail rolls up under Zoho system `Other Expenses` for Schedule C Part V. Current independent-contractor service, escalation, quality, and implementation labor rolls up under `6300 Contract Labor`; carrier/telecommunications transport rolls up under `6450 Utilities`. The locked `Cost Of Goods Sold` root is no-post unless a later approved merchandise, inventory, or other Part III fact pattern applies.
+- Customer minute usage or overage billing does not turn the related service-delivery costs into inventory or tax COGS. Use the custom management-report group `Direct Service Delivery Costs` for gross-margin analysis without changing the tax hierarchy. Create conditional `4130 Usage and Overage Revenue` only after pricing, contract language, invoice items, and Kansas sales-tax treatment are approved.
 - Create `1600 Capitalized Software Development Costs` only after the ledger reporting basis and capitalization/amortization policy are approved. Only costs capitalized under that ledger basis post there; tax-only differences stay in private tax workpapers.
 - Keep `1700 Deferred Startup and Pre-opening Costs` uncreated/no-post until the reporting basis, active-business date, source costs, and Section 195 method are approved.
-- Domestic and foreign research/software-development capture accounts do not establish a Section 174/174A method or a federal/Kansas research credit. Maintain project, activity, worker, and location support outside the GL.
+- Domestic and foreign research/software-development capture accounts do not establish a Section 174/174A method or a federal/Kansas research credit. Keep production customer usage out of R&E accounts and maintain project, uncertainty, experimentation, worker, rights, risk, and location support outside the GL.
 - Fixed-asset, depreciation, and amortization accounts remain trigger-only until ownership, placed-in-service date, cost basis, useful life, book method, and tax treatment are approved.
+
+## Tax-Preparer Method And Interest Controls
+
+- Live Zoho Books was independently read on 2026-08-05 as configured for accrual reporting. That setting is not proof of Sylvara's federal tax accounting method. Before preparing Schedule C, reconcile the prior return and any Form 3115 or method-election evidence to the tax professional's approved cash, accrual, or other method. Do not change Zoho merely to match a return field.
+- Map interest by source. Interest from an operating business checking account may be Schedule C line 6 business income; savings, certificate, or other deposit interest may instead require Schedule B or return-level treatment. Reconcile `4500 Interest Income` and `4510 Bank and Credit Union Interest` to each source statement rather than applying one default.
+- Payment-processing fees remain named Schedule C Part V expenses in the current chart. A preparer may instead select line 10 commissions and fees. The total deduction does not improve through line placement; do not reparent the accounts until settlement activity, dependencies, and the preparer's consistent presentation are reviewed.
+
+The complete live-chart register and every-line Schedule C crosswalk are in [`final-chart-of-accounts-tax-preparer-2026-08-05.csv`](final-chart-of-accounts-tax-preparer-2026-08-05.csv) and [`tax-preparer-handoff-2026-08-05.md`](tax-preparer-handoff-2026-08-05.md).
 
 ## Monthly Control
 
