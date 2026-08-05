@@ -238,8 +238,9 @@ class ZohoStandardsTests(unittest.TestCase):
     def test_machine_readable_suite_registry_is_complete_and_resolvable(self) -> None:
         registry = json.loads(SUITE_REGISTRY.read_text(encoding="utf-8"))
         self.assertEqual(2, registry["schema_version"])
+        self.assertEqual("2026-08-05", registry["as_of"])
         self.assertEqual("docs/zoho", registry["path_base"])
-        self.assertEqual("unknown", registry["live_state"])
+        self.assertEqual("partially-verified", registry["live_state"])
         self.assertEqual(list(CAPABILITY_LAYERS), registry["capability_layers"])
 
         products = registry["products"]
@@ -247,12 +248,19 @@ class ZohoStandardsTests(unittest.TestCase):
         self.assertEqual(REQUIRED_REGISTRY_IDS, {row["id"] for row in products})
         for row in products:
             with self.subTest(product=row["id"]):
-                self.assertEqual("unknown", row["effective_tenant_capability"])
-                expected_observation = (
-                    "advertised-tool-names-observed-2026-08-04"
-                    if row["id"] in OBSERVED_PRODUCT_IDS
-                    else "not-observed-2026-08-04"
-                )
+                if row["id"] == "books":
+                    self.assertEqual(
+                        "organization-identity-chart-read-and-scoped-chart-create-update-activate-inactivate-verified-2026-08-05",
+                        row["effective_tenant_capability"],
+                    )
+                    expected_observation = "books-roles-refreshed-2026-08-05"
+                else:
+                    self.assertEqual("unknown", row["effective_tenant_capability"])
+                    expected_observation = (
+                        "advertised-tool-names-observed-2026-08-04"
+                        if row["id"] in OBSERVED_PRODUCT_IDS
+                        else "not-observed-2026-08-04"
+                    )
                 self.assertEqual(
                     expected_observation,
                     row["mcp_observation"],

@@ -138,6 +138,7 @@ class ZohoInventoryTests(unittest.TestCase):
     def test_snapshot_counts_scope_and_roles_are_exact(self) -> None:
         self.assertEqual(1, self.catalog["schema_version"])
         self.assertEqual("2026-08-04", self.catalog["observed_on"])
+        self.assertEqual("2026-08-05", self.catalog["last_reconciled_on"])
         self.assertEqual("sylvara-only", self.catalog["scope"])
         self.assertEqual(294, self.catalog["total_tools"])
         self.assertEqual(221, self.catalog["read_tools"])
@@ -156,6 +157,31 @@ class ZohoInventoryTests(unittest.TestCase):
         self.assertEqual(
             EXPECTED_PRODUCTS,
             {role["product"] for role in self.catalog["roles"]},
+        )
+
+    def test_historical_export_reconciliation_records_books_chart_account_gap(self) -> None:
+        reconciliation = self.catalog["reconciliation"]
+        self.assertEqual(
+            "historical-export-no-advertised-name-delta",
+            reconciliation["result"],
+        )
+        gap = reconciliation["historical_export_books_chart_account_gap"]
+        self.assertEqual(
+            {
+                "ZohoBooks_get_chart_of_account",
+                "ZohoBooks_list_chart_of_accounts",
+                "ZohoBooks_list_chart_of_account_transactions",
+            },
+            set(gap["audit_reads_advertised_in_export"]),
+        )
+        self.assertEqual(
+            {
+                "create chart of account",
+                "update chart of account",
+                "mark chart account active",
+                "mark chart account inactive",
+            },
+            set(gap["controller_capabilities_not_advertised_in_export"]),
         )
 
     def test_possible_tool_surface_remains_reference_only(self) -> None:

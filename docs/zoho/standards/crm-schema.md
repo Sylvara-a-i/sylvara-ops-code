@@ -5,7 +5,7 @@
 - Repository standard: **Proposed**
 - Official capability evidence: Zoho CRM API V8 documentation, subject to current-product verification
 - Field-type documentation rechecked: **2026-08-05**
-- Advertised MCP evidence: dated 2026-08-04 Sylvara tool-name snapshot only
+- Advertised MCP evidence: dated 2026-08-04 Sylvara tool-name snapshot, reconciled unchanged on 2026-08-05
 - Sylvara CRM organization, edition, schema, permissions, workflows, and effective MCP access: **Unknown**
 
 This standard is reviewed design guidance. It is not proof of a live field, layout, tool capability, deployment, or approved CRM change.

@@ -2,7 +2,7 @@
 
 ## Scope And Evidence
 
-This catalog is a sanitized snapshot of the Zoho tool names advertised to Codex for Sylvara on 2026-08-04. The supplied configured-session export was filtered to Sylvara-owned Zoho roles and cross-checked against the current callable-tool registry. No Zoho identity, organization, record, report, configuration, content, or write operation was invoked.
+This catalog is a sanitized historical snapshot of the Zoho tool names advertised to Codex for Sylvara on 2026-08-04. An earlier 2026-08-05 export matched its 294 role-qualified names. A later same-day callable-registry refresh superseded the Books portion with 91 Books Audit, 24 Books Changes, and 67 Books Controller operations, including chart create, update, mark-active, and mark-inactive. The rows below intentionally preserve the dated snapshot and are not a current Books allowlist. No Zoho chart-of-accounts write was invoked during the initial capability reconciliation; a later separately approved deployment exercised the four bounded chart operations with independent Audit readback.
 
 The complete role-qualified name inventory is in [`sylvara-observed-tool-inventory.json`](sylvara-observed-tool-inventory.json). Runtime server names, generated transport IDs, endpoints, authentication details, connection aliases, organization or account identifiers, record identifiers, sample values, and returned data are excluded.
 
@@ -18,6 +18,20 @@ This is **advertised tool-name evidence**, not proof of effective tenant access.
 | Effective Sylvara capability | A specific identity, target, environment, role, grant, plan, and feature passed an authorized acceptance check | Permission for an adjacent tool, target, or future call |
 
 Never promote evidence to a higher layer by assumption.
+
+## Reconciliation On 2026-08-05
+
+The snapshot records 40 `books-audit`, 15 `books-changes`, and 32 `books-controller` operations. Those historical counts do not match the later 2026-08-05 callable registry described above.
+
+The specific chart-of-accounts surface is:
+
+| Neutral role | Advertised capability | Current status |
+|---|---|---|
+| `books-audit` | Get one account, list accounts, and list account transactions | Refreshed role advertised; organization, identity, and complete active/inactive chart reads verified |
+| `books-changes` | None | No chart capability advertised |
+| `books-controller` | Create, update, mark active, and mark inactive | Refreshed typed wrappers; scoped operations exercised on 2026-08-05 and final independent Audit readback matched |
+
+The official [Zoho Books Chart of Accounts API](https://www.zoho.com/books/api/v3/chart-of-accounts/) documents the same separate operations. The approved 2026-08-05 chart deployment established scoped effective access, but every future live mutation still requires fixed-organization binding, approved exact fields, fresh prestate, serialized writes, rollback, and independent Audit readback. Delete and bulk-status operations remain intentionally unnecessary.
 
 ## Observed Role Surface
 
@@ -71,7 +85,7 @@ Observed reads cover organizations, customers, products, plans, add-ons, subscri
 
 ### Zoho Books
 
-Observed reads cover identity and organization, contacts, items, estimates, invoices, bills, expenses, credit notes, customer payments, recurring invoices, bank transactions and accounts, chart-of-account transactions, locks, metadata, and financial reports. Routine changes are limited to contacts, estimates, and invoices. Controller actions include credit-note application, payment and refund operations, journal operations, bank reconciliation, voiding, write-off reversal, and bank-transaction state changes.
+The dated snapshot covers identity and organization, contacts, items, estimates, invoices, bills, expenses, credit notes, customer payments, recurring invoices, bank transactions and accounts, chart-of-account transactions, locks, metadata, and financial reports. The later 2026-08-05 refresh adds chart-account creation, update, activation, and inactivation through the Controller, while preserving Audit readback separation.
 
 ### Zoho Catalyst
 

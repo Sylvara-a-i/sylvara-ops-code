@@ -22,9 +22,13 @@ All notable repository-governance and technical-source changes are recorded here
 - Add a source manifest and regression controls for Zoho documentation paths, links, reference status, and publication boundaries.
 - Add sanitized Zoho MCP, CRM schema, Deluge, and Books automation standards.
 - Replace the prior cross-business configured-session artifact with a dated, machine-checked inventory of all 294 Sylvara-only Zoho MCP tool names observed on 2026-08-04 across Billing, Books, Catalyst, Creator, CRM, Mail, Payments, and WorkDrive.
+- Preserve the 2026-08-04 MCP inventory as historical evidence, record the later 2026-08-05 Books refresh at 91 Audit, 24 Changes, and 67 Controller operations, and verify read-side organization binding plus advertised chart create, update, activate, and inactivate contracts without claiming a live mutation.
+- Record the separately approved 2026-08-05 Zoho Books chart deployment: 18 creates, 34 existing-account updates, 11 reversible inactivations, and final 79 active and 11 inactive accounts. Preserve the 14-create inactivation/reactivation containment sequence, final matched full-chart reconciliation, and two unchanged Zoho-seeded defaults without publishing private identifiers or financial state.
+- Add a conservative post-deployment chart posting guide for disregarded-owner equity, owner-paid costs, Kansas sales tax, meals, gifts, travel, mixed-use phone/internet, software/research, startup costs, and conditional accounts; account coding does not establish deductibility or a tax election.
 - Establish the secure public-repository baseline.
 - Add repository safety and workflow-policy validation.
 - Add sanitized Zoho Books chart-of-accounts reference.
+- Add a current Sylvara chart-of-accounts audit and a 111-row trigger-based target register for a Kansas disregarded single-member LLC, including protected Zoho controls, owner-paid-cost treatment, Kansas sales-tax controls, tax-review categories, GAAP-readiness gates, rollback constraints, and live deployment approval boundaries.
 - Preserve a non-executable review record for the historical Zoho Catalyst billing gateway while excluding the supplied handler and deployment files from the public repository.
 - Add a proposed sanitized Zoho Billing webhook gateway replacement with repository-level tests, a variable-name registry attested against the supplied export and replacement source, a proposed durable Data Store schema, a Node.js 24 baseline, an exact-version dependency lock, and explicit Development/Production gates.
 - Add product-owned standards for Billing, Catalyst, Creator/Forms/Sites, WorkDrive/Contracts/Sign, Mail, Analytics, and portable accounting practices.

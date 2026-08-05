@@ -60,3 +60,4 @@ exports/
 *.zip
 *.csv
 !src/zoho-books/reference/chart-of-accounts.csv
+!src/zoho-books/reference/proposed-chart-of-accounts.csv
