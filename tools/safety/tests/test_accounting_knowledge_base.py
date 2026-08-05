@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import unittest
+from datetime import date
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -118,7 +119,7 @@ class AccountingKnowledgeBaseTests(unittest.TestCase):
         self.assertEqual(EXPECTED_MANIFEST_KEYS, set(self.manifest))
         self.assertEqual(1, self.manifest["schema_version"])
         self.assertEqual("2026-08-04", self.manifest["created_on"])
-        self.assertEqual("2026-08-04", self.manifest["verified_on"])
+        self.assertEqual("2026-08-05", self.manifest["verified_on"])
         self.assertEqual(
             "portable-original-synthesis", self.manifest["classification"]
         )
@@ -164,7 +165,13 @@ class AccountingKnowledgeBaseTests(unittest.TestCase):
         for row in sources:
             with self.subTest(source=row["id"]):
                 self.assertEqual(EXPECTED_SOURCE_KEYS, set(row))
-                self.assertEqual("2026-08-04", row["verified_on"])
+                verified_on = date.fromisoformat(row["verified_on"])
+                self.assertGreaterEqual(
+                    verified_on, date.fromisoformat(self.manifest["created_on"])
+                )
+                self.assertLessEqual(
+                    verified_on, date.fromisoformat(self.manifest["verified_on"])
+                )
                 parsed = urlparse(row["url"])
                 self.assertEqual("https", parsed.scheme)
                 self.assertIn(parsed.netloc, ALLOWED_OFFICIAL_DOMAINS)

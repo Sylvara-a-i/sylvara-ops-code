@@ -1,9 +1,9 @@
 {
   "schema_version": 2,
-  "as_of": "2026-08-04",
+  "as_of": "2026-08-05",
   "path_base": "docs/zoho",
   "repository_status": "proposed-governance",
-  "live_state": "unknown",
+  "live_state": "partially-verified",
   "capability_layers": [
     "official-product-capability",
     "tool-manual-catalog",
@@ -36,10 +36,14 @@
       ],
       "repository_artifacts": [
         "../../src/zoho-books/reference/chart-of-accounts.csv",
+        "../../src/zoho-books/reference/proposed-chart-of-accounts.csv",
+        "../../src/zoho-books/reference/chart-of-accounts-audit-2026-08-05.md",
+        "../../src/zoho-books/reference/chart-of-accounts-phase-1-change-plan-2026-08-05.md",
+        "../../src/zoho-books/reference/chart-of-accounts-post-deployment-posting-guide-2026-08-05.md",
         "reference/products/zoho-books.md"
       ],
-      "mcp_observation": "advertised-tool-names-observed-2026-08-04",
-      "effective_tenant_capability": "unknown"
+      "mcp_observation": "books-roles-refreshed-2026-08-05",
+      "effective_tenant_capability": "organization-identity-chart-read-and-scoped-chart-create-update-activate-inactivate-verified-2026-08-05"
     },
     {
       "id": "billing",

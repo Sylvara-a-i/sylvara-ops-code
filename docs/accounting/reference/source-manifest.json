@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "created_on": "2026-08-04",
-  "verified_on": "2026-08-04",
+  "verified_on": "2026-08-05",
   "classification": "portable-original-synthesis",
   "raw_source_copied": false,
   "live_accounting_state": "unknown",
@@ -115,6 +115,38 @@
       "authority_class": "administrative-guidance",
       "url": "https://www.irs.gov/publications/p334",
       "verified_on": "2026-08-04"
+    },
+    {
+      "id": "irs-single-member-llc",
+      "title": "IRS single-member limited liability company guidance",
+      "publisher": "Internal Revenue Service",
+      "authority_class": "administrative-guidance",
+      "url": "https://www.irs.gov/businesses/small-businesses-self-employed/single-member-limited-liability-companies",
+      "verified_on": "2026-08-05"
+    },
+    {
+      "id": "irs-schedule-c-2025",
+      "title": "Schedule C (Form 1040) for 2025",
+      "publisher": "Internal Revenue Service",
+      "authority_class": "final-tax-form",
+      "url": "https://www.irs.gov/pub/irs-pdf/f1040sc.pdf",
+      "verified_on": "2026-08-05"
+    },
+    {
+      "id": "irs-schedule-c-instructions-2025",
+      "title": "Instructions for Schedule C (Form 1040) for 2025",
+      "publisher": "Internal Revenue Service",
+      "authority_class": "final-form-instructions",
+      "url": "https://www.irs.gov/instructions/i1040sc",
+      "verified_on": "2026-08-05"
+    },
+    {
+      "id": "irs-schedule-c-draft-2026",
+      "title": "Draft Schedule C (Form 1040) for 2026",
+      "publisher": "Internal Revenue Service",
+      "authority_class": "draft-form-not-filing-authority",
+      "url": "https://www.irs.gov/pub/irs-dft/f1040sc--dft.pdf",
+      "verified_on": "2026-08-05"
     },
     {
       "id": "irc-263",
