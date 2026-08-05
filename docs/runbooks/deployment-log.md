@@ -8,7 +8,7 @@ A merged pull request is not a deployment. Record an entry only after an authori
 
 ## Current State
 
-The 2026-08-05 Sylvara Zoho Books chart deployment is the only production configuration event recorded here. It changed chart metadata and active status only; no transaction, balance, journal, bank, clearing, tax-engine, or integration state was changed.
+The 2026-08-05 Sylvara Zoho Books chart deployment and its same-day Schedule C hierarchy amendment are the only production configuration events recorded here. They wrote chart metadata and active status only; no transaction record, journal, bank, clearing, tax-engine, or integration was written. Chart metadata can change historical report presentation even when transaction records remain unchanged.
 
 ## 2026-08-05 — Zoho Books Chart Initial Attempt And Containment
 
@@ -45,6 +45,26 @@ Rollback target: captured private prestate; updates reverse to before-values, ne
 Outcome: succeeded; final chart contained 79 active and 11 inactive accounts
 Follow-up: bank/clearing reconciliation, tax-engine configuration, and all transaction-level work remain deferred
 ```
+
+## 2026-08-05 — Zoho Books Schedule C Hierarchy Amendment
+
+```text
+Date (UTC): 2026-08-05T19:30:57Z
+Environment class: production
+Change reference: codex/sylvara-chart-of-accounts-audit; repository publication pending
+Immutable artifact reference: Schedule C successor target SHA-256 6f3004a0c56aba7436a37298cc011b8345288082976b17a8211436f2b393c936
+Approval reference: owner standing chart-only authorization and express instruction to use federal tax-form parents retained in the private Codex task
+Operator role: Sylvara Books Controller with separate Sylvara Books Audit readback
+Pre-deployment state: verified; 79 active and 11 inactive accounts in the same active paid organization with Admin role
+Action: configuration change; create four accounts and update 18 existing editable accounts to use Schedule C category parents
+Smoke-test result: passed after one stopped payload-omission correction; the Internet code field was independently identified as the only omitted target field and then applied alone
+Readback result: every mutation matched independent Audit readback; final complete active/inactive chart and unchanged non-target reconciliation matched
+Rollback target: captured private prestate; reverse the 18 updates and inactivate Business Lodging before the three new roots
+Outcome: succeeded; final chart contained 83 active and 11 inactive accounts with maximum hierarchy depth two
+Follow-up: reverify the final Schedule C for the filing year; configure any separate management gross-margin report only after its reporting purpose is approved
+```
+
+Account activity and historical report-presentation effects were not reconciled in the chart-only amendment. No claim of zero historical financial activity is made.
 
 ## Entry Template
 

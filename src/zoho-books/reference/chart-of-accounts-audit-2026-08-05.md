@@ -10,9 +10,11 @@
 | Entity and operating location | Single-member LLC; Overland Park, Johnson County, Kansas |
 | Target chart | 111-row trigger-based design; bounded active subset deployed |
 | Accounting and tax policy approval | Owner-approved scoped chart presentation only; no professional tax, GAAP, election, or filing conclusion; fact-dependent policies remain unresolved |
-| Live deployment | Completed 2026-08-05: 18 creates, 34 existing-account updates, and 11 reversible inactivations; every mutation received Audit readback and final full-chart reconciliation matched after the initial response-schema omission was contained |
+| Live deployment | Initial deployment plus Schedule C successor amendment completed 2026-08-05; current sanitized state is 83 active and 11 inactive accounts with independent Audit reconciliation |
 
 This document is a sanitized audit and deployment record. It is not legal or tax advice, a U.S. GAAP assertion, a tax election, an import file, or continuing authorization to change the live ledger. Organization and account identifiers, balances, transactions, bank details, tax identifiers, and raw responses are intentionally excluded.
+
+The initial operational-root design and execution record below remain historical evidence. The later owner-requested P&L hierarchy is controlled by the [`Schedule C successor register`](schedule-c-tax-rollup-2026-08-05.csv) and [`exact amendment record`](chart-of-accounts-schedule-c-change-plan-2026-08-05.md). Those artifacts supersede the earlier P&L parent recommendations without changing the balance-sheet design or rewriting the first deployment result.
 
 ## Outcome
 

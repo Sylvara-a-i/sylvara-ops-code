@@ -186,8 +186,8 @@ class ZohoChartOfAccountsProposalTests(unittest.TestCase):
             "3020 Drawings",
             "never use it for the disregarded owner",
             "Tax Payable`; never revenue",
-            "6700 Taxes Licenses and Compliance` is a no-post parent",
-            "account coding alone does not establish deductibility",
+            "6700 Taxes and Licenses` is a no-post Schedule C parent",
+            "do not reduce the book posting to the expected tax deduction",
             "tax-only differences stay in private tax workpapers",
         }
         for control in required_controls:
