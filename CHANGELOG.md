@@ -4,6 +4,8 @@ All notable repository-governance and technical-source changes are recorded here
 
 ## Unreleased
 
+- Establish the managed inbound-reception product boundary for Kansas City home-service validation, including progressive deployment, structured workflow rules, outcome reconciliation, vendor portability, bounded human escalation, evidence-based expansion, and explicit non-goals.
+- Record the private strategy research only through Sylvara-original public decisions; exclude the raw report, source metadata, competitor assessment, commercial model, exact validation thresholds, and dated roadmap.
 - Add a product-neutral accounting knowledge base with an authority hierarchy, federal tax source map, U.S. GAAP topic map, operating controls, and machine-readable provenance.
 - Carry forward only portable accounting governance from the authorized GH Real Estate source review; exclude property, rental, jurisdiction-specific, entity-specific, chart-of-accounts, transaction, threshold, and sourcebook material.
 - Add an archive index that distinguishes active source, reusable documentation, and historical non-executable review records.

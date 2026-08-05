@@ -1,8 +1,14 @@
 # Sylvara Operations Code
 
-Public, sanitized technical source of truth for Sylvara's automation systems, integration standards, tests, and operating runbooks.
+Public, sanitized technical source of truth for Sylvara's managed inbound-reception product and the business systems that support its delivery.
 
 This repository is publicly viewable but is not open source. See [`NOTICE.md`](NOTICE.md).
+
+## Current Product Direction
+
+Sylvara is validating a managed reception and dispatch service for Kansas City home-service operators, beginning with after-hours and overflow calls that staff cannot answer reliably. The product must complete and attribute bounded business workflows; it is not a generic voice-agent subscription or a broad custom-automation agency.
+
+The canonical public boundary is [`docs/product/README.md`](docs/product/README.md), supported by [ADR 0002](docs/adr/0002-managed-home-service-receptionist-product-boundary.md). Those documents govern product scope, progressive rollout, explicit non-goals, evidence gates, and deferred verticals. They do not establish a live service, current pricing, a customer deployment, or approval for customer-facing publication.
 
 ## Repository Boundary
 
@@ -11,6 +17,10 @@ GitHub owns versioned code and sanitized technical context. It does not own live
 | Area | Operational source of truth |
 |---|---|
 | Prospects, customers, and commercial relationships | Approved CRM |
+| Structured call rules, workflow orchestration, outcome taxonomy, and quality evidence | Sylvara managed service layer when implemented; currently proposed and unverified |
+| Call transport and carrier delivery state | Approved telephony carrier for the selected deployment |
+| Services, appointment capacity, jobs, work orders, and dispatch state | Customer's approved field-service or scheduling system |
+| Human handling of explicitly escalated exceptions | Approved customer or partner destination for the selected coverage window |
 | General ledger, accounting balances, and financial reporting | Zoho Books |
 | Subscription lifecycle and billing events | Zoho Billing, when used for the approved workflow |
 | Voice-agent runtime | Retell or the approved voice platform |
@@ -39,6 +49,7 @@ tools/safety/  Public-repository and workflow-policy validation
 
 Current governed artifacts:
 
+- [`docs/product/README.md`](docs/product/README.md) is the public implementation filter for the managed home-service receptionist product. It records the initial audience and use case, progressive deployment model, proposed capability gates, validation dimensions, non-goals, and the private research boundary without publishing the source report or commercial model.
 - [`docs/accounting/`](docs/accounting/) is the product-neutral front door for Sylvara accounting authority, federal tax research, U.S. GAAP topic navigation, policy controls, and dated source provenance. It contains original operational summaries and official links, not copied standards text, tax advice, financial records, or another business's accounting conclusions.
 - [`docs/copywriting/`](docs/copywriting/) is the public front door for original copywriting principles, channel playbooks, structure cards, briefing, and claim review. It contains no raw swipe files, source passages, customer facts, or third-party publication claims.
 - [`docs/zoho/`](docs/zoho/) is the single front door for portable Zoho governance, operating standards, dated product references, and MCP evidence without copying another tenant's fields or configuration.
@@ -75,7 +86,9 @@ Use 64-bit CPython 3.12 and Node.js 24 on Windows for the documented local path;
 
 ## Commercial Constraint
 
-Build only what supports a validated demo, customer commitment, or paid delivery. Do not create a generalized agent platform, custom telephony stack, client portal, or multi-tenant SaaS layer without evidence that the simpler managed-service workflow is insufficient.
+Prioritize the initial managed home-service receptionist workflow. Build only what supports a validated demo, qualified pilot, customer commitment, or paid delivery inside that boundary. Custom work must strengthen a reusable vertical capability and justify its implementation and maintenance cost.
+
+Do not create a generalized agent platform, custom telephony stack, client portal, multi-tenant SaaS layer, simultaneous second vertical, or regulated call workflow without evidence that the simpler managed-service path is insufficient and a separate reviewed decision approves expansion.
 
 ## Security
 

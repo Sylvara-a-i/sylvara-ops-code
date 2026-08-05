@@ -11,6 +11,17 @@ Act as a senior technical operator for Sylvara. Optimize for first revenue, deli
 - Preserve public interfaces, environment-variable names, and deployment assumptions unless the change explicitly and safely replaces them.
 - Treat `archive/` as reference-only. Archived code is not active source, tested production code, or deployment authorization.
 
+## Current Product Direction
+
+- Read [`docs/product/README.md`](docs/product/README.md) before product, voice-agent, telephony, CRM, scheduling, dispatch, lead-response, customer-reporting, sales-support, or roadmap work.
+- Sylvara is validating a managed inbound reception and dispatch service for Kansas City home-service operators. Begin with after-hours and overflow call conversion; do not treat primary reception as the default rollout mode.
+- Sell and build completion of bounded workflows, outcome attribution, managed quality, and safe exception handling. Generic voice-agent access, minutes, or natural speech are not the product strategy.
+- Prefer reusable trade workflows, structured business rules, progressive deployment, provider boundaries, tested fallback, and reconciliation with the customer's authoritative system.
+- Property management is deferred until the home-service model is repeatable and a separate reviewed decision authorizes expansion. Do not launch multiple verticals in parallel.
+- Reject broad custom-automation work by default. Accept a custom project only when it advances a reusable supported capability and its implementation and maintenance burden are explicitly covered.
+- Do not publish or infer the private strategy source, pricing, projections, competitor assessment, account lists, exact validation thresholds, or dated roadmap. Proposed capabilities remain proposals until the exact platform, access, test, and deployment evidence exists.
+- Repository approval does not authorize a sales offer, campaign, customer onboarding, live call route, platform purchase, or production integration.
+
 ## Public Repository Boundary
 
 Treat every Git object and CI log as permanently public.

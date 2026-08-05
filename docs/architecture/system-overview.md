@@ -2,12 +2,16 @@
 
 ## Purpose
 
-This document defines ownership boundaries for Sylvara's public technical repository and connected business systems. It is a sanitized boundary model, not proof that any integration is deployed or that any live setting is configured.
+This document defines ownership boundaries for Sylvara's public technical repository, initial managed receptionist product, and connected business systems. The product scope is governed by [Managed Receptionist Product Direction](../product/README.md). This is a sanitized boundary model, not proof that any integration is deployed or that any live setting is configured.
 
 ## Operating Principles
 
 - Keep the customer-facing call path small and reliable.
+- Optimize the initial path for after-hours and overflow home-service calls; expand coverage only through the approved progressive-deployment gates.
+- Treat a completed and reconciled customer workflow as the outcome. An answered call or generated summary is intermediate evidence, not business completion.
+- Keep eligibility, service area, schedules, emergency conditions, routing, appointment types, and fallback behavior in validated structured rules rather than solely in prompts.
 - Use managed platforms before custom infrastructure.
+- Preserve explicit boundaries between telephony, voice runtime, Sylvara-owned workflow logic, and customer systems so one provider can be replaced without redefining the product.
 - Keep Make.com outside the critical conversational path where practical.
 - Give each business fact one authoritative owner.
 - Fail closed when identity, authorization, target, state, or response completeness is uncertain.
@@ -20,7 +24,10 @@ This document defines ownership boundaries for Sylvara's public technical reposi
 | System | Authoritative For | Not Authoritative For | Current Status |
 |---|---|---|---|
 | GitHub | Sanitized source code, tests, public runbooks, architecture decisions, schemas, and example configuration | Secrets, client records, call content, live platform configuration, production state, or proof of deployment | Repository security controls were reviewed and recorded on 2026-08-04; reverify after material settings, ownership, plan, or app-access changes |
+| Sylvara managed service layer | Approved structured call rules, workflow orchestration, outcome taxonomy, integration state, quality-control evidence, and bounded operational configuration when implemented | The customer's schedule, job, payment, relationship, or completed-revenue truth; voice transport; or proof that a proposed capability is live | Product boundary is accepted for validation; implementation, runtime, data model, and deployment are unverified |
+| Approved telephony carrier | Number routing, call transport, carrier events, and transport-level delivery state for the selected deployment | Customer eligibility, booking truth, dispatch policy, commercial relationship, or Sylvara source code | Carrier, number, forwarding behavior, regions, and live state are unverified |
 | Approved CRM | Account, contact, opportunity, and approved operational relationship records | Accounting balances, subscription billing, call recordings, secrets, or raw production payloads | CRM product, tenant, schema, and live integration are unverified |
+| Customer field-service or scheduling system | Approved services, service area, staff availability, appointment capacity, jobs, work orders, and dispatch state within that customer's operating contract | Voice behavior, Sylvara subscription state, accounting truth, or source code | Product, tenant, schema, permissions, and integration state are unverified; live metadata and readback are required per customer |
 | Zoho Books | General ledger, invoices, payments, credits, and accounting reconciliation | Voice behavior, CRM relationship ownership, subscription entitlement logic, or source code | A supplied chart-of-accounts export confirms prior configuration evidence; current organization, balances, and integration state remain unverified |
 | Zoho Billing | Subscription plans, subscription lifecycle, renewals, and entitlements when adopted | General ledger truth, payment reconciliation, CRM relationship ownership, or source code | Use and integration state are unverified; its boundary with Books must be documented before implementation |
 | Zoho Creator | Approved operational forms, portals, workflow views, and human task state when adopted | Accounting truth, secrets, raw call content, or canonical source code | Use and integration state are unverified |
@@ -32,8 +39,9 @@ This document defines ownership boundaries for Sylvara's public technical reposi
 | Zoho Mail | Mailbox messages, approved send transport, and delivery state | CRM relationship truth, consent truth, or financial state | Use, sender identities, scopes, webhooks, and integration state are unverified |
 | Zoho Analytics | Derived reporting models, refresh state, dashboards, and controlled exports | Transactional truth or reverse-write authority | Use, source lineage, refresh timing, access controls, and integration state are unverified |
 | Zoho Catalyst | Approved middleware, API gateway functions, webhook verification, retry-safe processing, and durable integration state when adopted | Business-system records owned by CRM, Books, or Billing; secret documentation; or proof that a Git commit is deployed | A sanitized Billing gateway replacement and proposed Data Store schema exist in GitHub; current Catalyst project, route, variables, deployment, and runtime state remain unverified |
-| Retell AI | Voice runtime behavior, call execution, and approved runtime configuration | CRM, accounting, subscription, source-control, or secret ownership | Default target voice runtime for initial pilots; exact live agents, prompts, numbers, and configuration are private and unverified |
+| Retell AI or approved voice platform | Voice runtime behavior, call execution, and approved runtime configuration for the selected deployment | Structured customer business-rule ownership, downstream job truth, CRM, accounting, subscription, source-control, or secret ownership | A provider may be selected for a validated workflow; exact provider, live agents, prompts, numbers, and configuration are private and unverified |
 | Make.com | Approved post-call orchestration and system handoffs | Critical conversational availability, accounting truth, source code, or secret ownership | Default target post-call workflow layer for initial pilots; exact live scenarios are private and unverified |
+| Approved human escalation destination | Human handling and disposition of explicitly transferred exceptions during the approved coverage window | Default handling of every call, Sylvara workflow truth, or downstream system-of-record state | Destination, coverage, privacy terms, transfer behavior, and capacity are unverified |
 | Approved secret stores | Credential values, signing secrets, tokens, and environment-specific sensitive configuration | Business records, source code, deployment evidence, or public documentation | Secret values must remain in platform-native encrypted stores; the approved store inventory is unverified |
 
 ## Boundary Rules
@@ -54,7 +62,13 @@ Zoho Books owns accounting facts when adopted. Zoho Billing may own subscription
 
 ### Voice And Workflow Runtime
 
-Retell handles the real-time voice interaction. Make handles approved post-call work. A Make outage should not unnecessarily break an active conversation. Handoffs must be idempotent, validate required fields, avoid raw sensitive payloads, and route uncertain results to review instead of guessing.
+The approved voice platform handles the real-time interaction and call artifacts. The telephony carrier owns transport state. Sylvara-owned logic must represent critical eligibility, routing, escalation, and outcome rules in structured, testable form; it must not bury the complete operating contract in one provider-specific prompt.
+
+Make or another approved automation platform may handle non-critical post-call work. An orchestration outage should not unnecessarily break an active conversation. Handoffs must be idempotent, validate required fields, minimize private data, and route uncertain results to review instead of guessing.
+
+New deployments begin with synthetic and shadow tests, then after-hours or overflow coverage, then selected call types. Primary reception requires separate sustained evidence and production approval. Each expansion preserves a tested fallback and a rollback route.
+
+Call disposition and estimated value are Sylvara operational evidence. A booking, work order, completed job, invoice, payment, or collected revenue becomes authoritative only in the customer system that owns that fact. Attribution must reconcile those layers rather than equate an answered call with revenue.
 
 ### Middleware
 
