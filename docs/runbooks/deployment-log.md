@@ -8,7 +8,26 @@ A merged pull request is not a deployment. Record an entry only after an authori
 
 ## Current State
 
-The 2026-08-05 Sylvara Zoho Books chart deployment, Schedule C hierarchy amendment, and final tax-preparer description correction are the only production configuration events recorded here. They wrote chart metadata and active status only; no transaction record, journal, bank, clearing, tax-engine, or integration was written. Chart metadata can change historical report presentation even when transaction records remain unchanged.
+The production configuration events recorded here are the 2026-08-05 Sylvara Zoho CRM schema/layout/address work and the same-day Zoho Books chart deployment, Schedule C hierarchy amendment, and final tax-preparer description correction. The CRM event changed scoped relationship-system metadata and migrated populated legacy address values; it did not deploy native Lead conversion or conversion automation. The Books events wrote chart metadata and active status only; no transaction record, journal, bank, clearing, tax-engine, or integration was written. Chart metadata can change historical report presentation even when transaction records remain unchanged.
+
+## 2026-08-05 — Zoho CRM Lead Schema, Layout, And Address Migration
+
+```text
+Date (UTC): 2026-08-05
+Environment class: production
+Change reference: codex/document-crm-schema-conversion; draft pull request pending
+Immutable artifact reference: modules 5b21ffef4d7a0434e612d039400a446b8fdbc9eff2ccdd6925c58332b6fcbb3d; fields 228e92a52009ab1556a70f51c218829807d73eed35ab89452125f808ab94176a; mappings 05b2f1c8d143105f76bfda2aa19f4cf6f0126a8e799f8e951ff118890ea22c09
+Approval reference: explicit owner approval retained in the private Codex task
+Evidence limitation: private prestate and readback remain task-local and require archival under an approved durable private-audit locator
+Operator role: scoped CRM change role with separate audit readback
+Pre-deployment state: verified for the affected Leads, Contacts, Accounts, Deals, layouts, fields, picklists, mappings, and populated legacy address values
+Action: configuration change; polish Leads, update Industry and Rating choices, organize layouts, add supported help text, and migrate populated legacy address values into the consolidated Address field
+Smoke-test result: passed for supported mutations; Zoho-managed compound, coordinate, and nearby-address components that rejected direct help-text mutation remained unchanged
+Readback result: matched for completed metadata changes and every migrated populated address; legacy schema fields were retained, and their migrated values were cleared after readback
+Rollback target: captured private prestate; restore prior labels, choices, help text, and layout placement, and reverse-copy consolidated components into retained legacy fields if reconciliation requires it
+Outcome: succeeded for the scoped schema, layout, and address work
+Follow-up: four unsafe current Lead mappings must be removed, 18 existing-target mappings added, 11 target fields created and mapped, and native pilot/subscription conversion automation verified and deployed through typed contracts; none of that follow-up was deployed
+```
 
 ## 2026-08-05 — Zoho Books Chart Initial Attempt And Containment
 

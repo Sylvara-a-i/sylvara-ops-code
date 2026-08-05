@@ -1,0 +1,361 @@
+schema_version,snapshot_date,source_module_label,source_module_api_name,source_field_label,source_field_api_name,source_data_type,source_usage_status,target_module_label,target_module_api_name,target_field_label,target_field_api_name,target_data_type,target_field_status,current_mapping_status,type_compatibility_status,choice_compatibility_status,mapping_review_status,review_reason_code,metadata_verification_status
+1,2026-08-05,Leads,Leads,Address,Address,textarea,used,Contacts,Contacts,Address,Address,textarea,existing_used,mapped,exact,not_choice,safe_keep,conditional_address,verified
+1,2026-08-05,Leads,Leads,Address,Address,textarea,used,Accounts,Accounts,Address,Address,textarea,existing_used,mapped,exact,not_choice,safe_keep,conditional_address,verified
+1,2026-08-05,Leads,Leads,Address,Address,textarea,used,Deals,Deals,Address,Address,textarea,existing_used,mapped,exact,not_choice,safe_keep,conditional_address,verified
+1,2026-08-05,Leads,Leads,Address - City,Address_City,text,used,Contacts,Contacts,Address - City,Address_City,text,existing_used,mapped,exact,not_choice,safe_keep,conditional_address,verified
+1,2026-08-05,Leads,Leads,Address - City,Address_City,text,used,Accounts,Accounts,Address - City,Address_City,text,existing_used,mapped,exact,not_choice,safe_keep,conditional_address,verified
+1,2026-08-05,Leads,Leads,Address - City,Address_City,text,used,Deals,Deals,Address - City,Address_City,text,existing_used,mapped,exact,not_choice,safe_keep,conditional_address,verified
+1,2026-08-05,Leads,Leads,Address - Coordinates,Address_Coordinates,textarea,used,Contacts,Contacts,Address - Coordinates,Address_Coordinates,textarea,existing_used,mapped,exact,not_choice,safe_keep,conditional_address,verified
+1,2026-08-05,Leads,Leads,Address - Coordinates,Address_Coordinates,textarea,used,Accounts,Accounts,Address - Coordinates,Address_Coordinates,textarea,existing_used,mapped,exact,not_choice,safe_keep,conditional_address,verified
+1,2026-08-05,Leads,Leads,Address - Coordinates,Address_Coordinates,textarea,used,Deals,Deals,Address - Coordinates,Address_Coordinates,textarea,existing_used,mapped,exact,not_choice,safe_keep,conditional_address,verified
+1,2026-08-05,Leads,Leads,Address - Latitude,Address_Coordinates_Latitude,double,used,Contacts,Contacts,Address - Latitude,Address_Coordinates_Latitude,double,existing_used,mapped,exact,not_choice,safe_keep,conditional_address,verified
+1,2026-08-05,Leads,Leads,Address - Latitude,Address_Coordinates_Latitude,double,used,Accounts,Accounts,Address - Latitude,Address_Coordinates_Latitude,double,existing_used,mapped,exact,not_choice,safe_keep,conditional_address,verified
+1,2026-08-05,Leads,Leads,Address - Latitude,Address_Coordinates_Latitude,double,used,Deals,Deals,Address - Latitude,Address_Coordinates_Latitude,double,existing_used,mapped,exact,not_choice,safe_keep,conditional_address,verified
+1,2026-08-05,Leads,Leads,Address - Longitude,Address_Coordinates_Longitude,double,used,Contacts,Contacts,Address - Longitude,Address_Coordinates_Longitude,double,existing_used,mapped,exact,not_choice,safe_keep,conditional_address,verified
+1,2026-08-05,Leads,Leads,Address - Longitude,Address_Coordinates_Longitude,double,used,Accounts,Accounts,Address - Longitude,Address_Coordinates_Longitude,double,existing_used,mapped,exact,not_choice,safe_keep,conditional_address,verified
+1,2026-08-05,Leads,Leads,Address - Longitude,Address_Coordinates_Longitude,double,used,Deals,Deals,Address - Longitude,Address_Coordinates_Longitude,double,existing_used,mapped,exact,not_choice,safe_keep,conditional_address,verified
+1,2026-08-05,Leads,Leads,Address - Country / Region,Address_Country_Region,picklist,used,Contacts,Contacts,Address - Country / Region,Address_Country_Region,picklist,existing_used,mapped,exact,exact,safe_keep,conditional_address,verified
+1,2026-08-05,Leads,Leads,Address - Country / Region,Address_Country_Region,picklist,used,Accounts,Accounts,Address - Country / Region,Address_Country_Region,picklist,existing_used,mapped,exact,exact,safe_keep,conditional_address,verified
+1,2026-08-05,Leads,Leads,Address - Country / Region,Address_Country_Region,picklist,used,Deals,Deals,Address - Country / Region,Address_Country_Region,picklist,existing_used,mapped,exact,exact,safe_keep,conditional_address,verified
+1,2026-08-05,Leads,Leads,Address - Flat / House No./ Building / Apartment Name,Address_Flat_House_No_Building_Apartment_Name,text,used,Contacts,Contacts,Address - Flat / House No./ Building / Apartment Name,Address_Flat_House_No_Building_Apartment_Name,text,existing_used,mapped,exact,not_choice,safe_keep,conditional_address,verified
+1,2026-08-05,Leads,Leads,Address - Flat / House No./ Building / Apartment Name,Address_Flat_House_No_Building_Apartment_Name,text,used,Accounts,Accounts,Address - Flat / House No./ Building / Apartment Name,Address_Flat_House_No_Building_Apartment_Name,text,existing_used,mapped,exact,not_choice,safe_keep,conditional_address,verified
+1,2026-08-05,Leads,Leads,Address - Flat / House No./ Building / Apartment Name,Address_Flat_House_No_Building_Apartment_Name,text,used,Deals,Deals,Address - Flat / House No./ Building / Apartment Name,Address_Flat_House_No_Building_Apartment_Name,text,existing_used,mapped,exact,not_choice,safe_keep,conditional_address,verified
+1,2026-08-05,Leads,Leads,Address - State / Province,Address_State_Province,picklist,used,Contacts,Contacts,Address - State / Province,Address_State_Province,picklist,existing_used,mapped,exact,exact,safe_keep,conditional_address,verified
+1,2026-08-05,Leads,Leads,Address - State / Province,Address_State_Province,picklist,used,Accounts,Accounts,Address - State / Province,Address_State_Province,picklist,existing_used,mapped,exact,exact,safe_keep,conditional_address,verified
+1,2026-08-05,Leads,Leads,Address - State / Province,Address_State_Province,picklist,used,Deals,Deals,Address - State / Province,Address_State_Province,picklist,existing_used,mapped,exact,exact,safe_keep,conditional_address,verified
+1,2026-08-05,Leads,Leads,Address - Street Address,Address_Street_Address,text,used,Contacts,Contacts,Address - Street Address,Address_Street_Address,text,existing_used,mapped,exact,not_choice,safe_keep,conditional_address,verified
+1,2026-08-05,Leads,Leads,Address - Street Address,Address_Street_Address,text,used,Accounts,Accounts,Address - Street Address,Address_Street_Address,text,existing_used,mapped,exact,not_choice,safe_keep,conditional_address,verified
+1,2026-08-05,Leads,Leads,Address - Street Address,Address_Street_Address,text,used,Deals,Deals,Address - Street Address,Address_Street_Address,text,existing_used,mapped,exact,not_choice,safe_keep,conditional_address,verified
+1,2026-08-05,Leads,Leads,Address - Zip / Postal Code,Address_Zip_Postal_Code,text,used,Contacts,Contacts,Address - Zip / Postal Code,Address_Zip_Postal_Code,text,existing_used,mapped,exact,not_choice,safe_keep,conditional_address,verified
+1,2026-08-05,Leads,Leads,Address - Zip / Postal Code,Address_Zip_Postal_Code,text,used,Accounts,Accounts,Address - Zip / Postal Code,Address_Zip_Postal_Code,text,existing_used,mapped,exact,not_choice,safe_keep,conditional_address,verified
+1,2026-08-05,Leads,Leads,Address - Zip / Postal Code,Address_Zip_Postal_Code,text,used,Deals,Deals,Address - Zip / Postal Code,Address_Zip_Postal_Code,text,existing_used,mapped,exact,not_choice,safe_keep,conditional_address,verified
+1,2026-08-05,Leads,Leads,After-Hours Audit At,After_Hours_Audit_At,datetime,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,After-Hours Audit At,After_Hours_Audit_At,datetime,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,After-Hours Audit At,After_Hours_Audit_At,datetime,used,Deals,Deals,,,,missing,unmapped,not_applicable,not_assessed,target_creation_required,target_missing,verified
+1,2026-08-05,Leads,Leads,After-Hours Audit Notes,After_Hours_Audit_Notes,textarea,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,After-Hours Audit Notes,After_Hours_Audit_Notes,textarea,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,After-Hours Audit Notes,After_Hours_Audit_Notes,textarea,used,Deals,Deals,,,,missing,unmapped,not_applicable,not_assessed,target_creation_required,target_missing,verified
+1,2026-08-05,Leads,Leads,After-Hours Audit Outcome,After_Hours_Audit_Outcome,picklist,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,After-Hours Audit Outcome,After_Hours_Audit_Outcome,picklist,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,After-Hours Audit Outcome,After_Hours_Audit_Outcome,picklist,used,Deals,Deals,,,,missing,unmapped,not_applicable,not_assessed,target_creation_required,target_missing,verified
+1,2026-08-05,Leads,Leads,After-Hours Call Band,After_Hours_Call_Band,picklist,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,After-Hours Call Band,After_Hours_Call_Band,picklist,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,After-Hours Call Band,After_Hours_Call_Band,picklist,used,Deals,Deals,After-Hours Call Band,After_Hours_Call_Band,picklist,existing_used,unmapped,exact,exact,safe_add,deal_owned,verified
+1,2026-08-05,Leads,Leads,Annual Revenue,Annual_Revenue,currency,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,company_owned,verified
+1,2026-08-05,Leads,Leads,Annual Revenue,Annual_Revenue,currency,used,Accounts,Accounts,Annual Revenue,Annual_Revenue,currency,existing_used,unmapped,exact,not_choice,safe_add,company_owned,verified
+1,2026-08-05,Leads,Leads,Annual Revenue,Annual_Revenue,currency,used,Deals,Deals,Amount,Amount,currency,existing_used,unmapped,exact,not_choice,intentional_unmapped,company_owned,verified
+1,2026-08-05,Leads,Leads,Average Job Value Band,Average_Job_Value_Band,picklist,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Average Job Value Band,Average_Job_Value_Band,picklist,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Average Job Value Band,Average_Job_Value_Band,picklist,used,Deals,Deals,Average Job Value Band,Average_Job_Value_Band,picklist,existing_used,unmapped,exact,exact,safe_add,deal_owned,verified
+1,2026-08-05,Leads,Leads,Average Time Spent (Minutes),Average_Time_Spent_Minutes,double,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Average Time Spent (Minutes),Average_Time_Spent_Minutes,double,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Average Time Spent (Minutes),Average_Time_Spent_Minutes,double,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Commercial Fit,Budget_Fit,picklist,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Commercial Fit,Budget_Fit,picklist,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Commercial Fit,Budget_Fit,picklist,used,Deals,Deals,Commercial Fit,Budget_Fit,picklist,existing_used,unmapped,exact,exact,safe_add,deal_owned,verified
+1,2026-08-05,Leads,Leads,Change Log Time,Change_Log_Time__s,datetime,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Change Log Time,Change_Log_Time__s,datetime,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Change Log Time,Change_Log_Time__s,datetime,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,City,City,text,unused,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,legacy_field,verified
+1,2026-08-05,Leads,Leads,City,City,text,unused,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,legacy_field,verified
+1,2026-08-05,Leads,Leads,City,City,text,unused,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,legacy_field,verified
+1,2026-08-05,Leads,Leads,Company,Company,text,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,company_owned,verified
+1,2026-08-05,Leads,Leads,Company,Company,text,used,Accounts,Accounts,Account Name,Account_Name,text,existing_used,mapped,exact,not_choice,safe_keep,exact_match,verified
+1,2026-08-05,Leads,Leads,Company,Company,text,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,company_owned,verified
+1,2026-08-05,Leads,Leads,Company Email,Company_Email,email,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,company_owned,verified
+1,2026-08-05,Leads,Leads,Company Email,Company_Email,email,used,Accounts,Accounts,Email,Email,email,existing_used,unmapped,exact,not_choice,safe_add,company_owned,verified
+1,2026-08-05,Leads,Leads,Company Email,Company_Email,email,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,company_owned,verified
+1,2026-08-05,Leads,Leads,Company Phone,Company_Phone,phone,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,company_owned,verified
+1,2026-08-05,Leads,Leads,Company Phone,Company_Phone,phone,used,Accounts,Accounts,Phone,Phone,phone,existing_used,unmapped,exact,not_choice,safe_add,company_owned,verified
+1,2026-08-05,Leads,Leads,Company Phone,Company_Phone,phone,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,company_owned,verified
+1,2026-08-05,Leads,Leads,Contact Location Link,Contact_Location_Relationship,picklist,used,Contacts,Contacts,,,,missing,unmapped,not_applicable,not_assessed,target_creation_required,target_missing,verified
+1,2026-08-05,Leads,Leads,Contact Location Link,Contact_Location_Relationship,picklist,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,person_owned,verified
+1,2026-08-05,Leads,Leads,Contact Location Link,Contact_Location_Relationship,picklist,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,person_owned,verified
+1,2026-08-05,Leads,Leads,Contact Source URL,Contact_Source_URL,website,used,Contacts,Contacts,,,,missing,unmapped,not_applicable,not_assessed,target_creation_required,target_missing,verified
+1,2026-08-05,Leads,Leads,Contact Source URL,Contact_Source_URL,website,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,person_owned,verified
+1,2026-08-05,Leads,Leads,Contact Source URL,Contact_Source_URL,website,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,person_owned,verified
+1,2026-08-05,Leads,Leads,Contact Verification,Contact_Verification_Status,picklist,used,Contacts,Contacts,,,,missing,unmapped,not_applicable,not_assessed,target_creation_required,target_missing,verified
+1,2026-08-05,Leads,Leads,Contact Verification,Contact_Verification_Status,picklist,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,person_owned,verified
+1,2026-08-05,Leads,Leads,Contact Verification,Contact_Verification_Status,picklist,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,person_owned,verified
+1,2026-08-05,Leads,Leads,Contact Verified At,Contact_Verified_At,datetime,used,Contacts,Contacts,,,,missing,unmapped,not_applicable,not_assessed,target_creation_required,target_missing,verified
+1,2026-08-05,Leads,Leads,Contact Verified At,Contact_Verified_At,datetime,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,person_owned,verified
+1,2026-08-05,Leads,Leads,Contact Verified At,Contact_Verified_At,datetime,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,person_owned,verified
+1,2026-08-05,Leads,Leads,Is Converted,Converted__s,boolean,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Is Converted,Converted__s,boolean,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Is Converted,Converted__s,boolean,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Converted Account,Converted_Account,lookup,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Converted Account,Converted_Account,lookup,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Converted Account,Converted_Account,lookup,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Converted Contact,Converted_Contact,lookup,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Converted Contact,Converted_Contact,lookup,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Converted Contact,Converted_Contact,lookup,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Converted Date Time,Converted_Date_Time,datetime,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Converted Date Time,Converted_Date_Time,datetime,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Converted Date Time,Converted_Date_Time,datetime,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Converted Deal,Converted_Deal,lookup,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Converted Deal,Converted_Deal,lookup,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Converted Deal,Converted_Deal,lookup,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Country,Country,text,unused,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,legacy_field,verified
+1,2026-08-05,Leads,Leads,Country,Country,text,unused,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,legacy_field,verified
+1,2026-08-05,Leads,Leads,Country,Country,text,unused,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,legacy_field,verified
+1,2026-08-05,Leads,Leads,Coverage Needs,Coverage_Needs,multiselectpicklist,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Coverage Needs,Coverage_Needs,multiselectpicklist,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Coverage Needs,Coverage_Needs,multiselectpicklist,used,Deals,Deals,Coverage Needs,Coverage_Needs,multiselectpicklist,existing_used,unmapped,exact,exact,safe_add,deal_owned,verified
+1,2026-08-05,Leads,Leads,Created By,Created_By,ownerlookup,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Created By,Created_By,ownerlookup,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Created By,Created_By,ownerlookup,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Created Time,Created_Time,datetime,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Created Time,Created_Time,datetime,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Created Time,Created_Time,datetime,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Current Call Handling,Current_Call_Handling,picklist,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Current Call Handling,Current_Call_Handling,picklist,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Current Call Handling,Current_Call_Handling,picklist,used,Deals,Deals,Current Call Handling,Current_Call_Handling,picklist,existing_used,unmapped,exact,exact,safe_add,deal_owned,verified
+1,2026-08-05,Leads,Leads,Days Visited,Days_Visited,integer,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Days Visited,Days_Visited,integer,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Days Visited,Days_Visited,integer,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Decision Authority,Decision_Authority,picklist,used,Contacts,Contacts,,,,missing,unmapped,not_applicable,not_assessed,target_creation_required,target_missing,verified
+1,2026-08-05,Leads,Leads,Decision Authority,Decision_Authority,picklist,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,person_owned,verified
+1,2026-08-05,Leads,Leads,Decision Authority,Decision_Authority,picklist,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,person_owned,verified
+1,2026-08-05,Leads,Leads,Decision-Maker Role,Decision_Maker_Role,picklist,used,Contacts,Contacts,,,,missing,unmapped,not_applicable,not_assessed,target_creation_required,target_missing,verified
+1,2026-08-05,Leads,Leads,Decision-Maker Role,Decision_Maker_Role,picklist,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,person_owned,verified
+1,2026-08-05,Leads,Leads,Decision-Maker Role,Decision_Maker_Role,picklist,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,person_owned,verified
+1,2026-08-05,Leads,Leads,Description,Description,textarea,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Description,Description,textarea,used,Accounts,Accounts,Description,Description,textarea,existing_used,mapped,exact,not_choice,safe_keep,exact_match,verified
+1,2026-08-05,Leads,Leads,Description,Description,textarea,used,Deals,Deals,Description,Description,textarea,existing_used,mapped,exact,not_choice,safe_keep,exact_match,verified
+1,2026-08-05,Leads,Leads,Designation,Designation,text,used,Contacts,Contacts,Title,Title,text,existing_used,mapped,exact,not_choice,safe_keep,exact_match,verified
+1,2026-08-05,Leads,Leads,Designation,Designation,text,used,Accounts,Accounts,Title,Title,text,existing_used,mapped,exact,not_choice,remove,person_company_mismatch,verified
+1,2026-08-05,Leads,Leads,Designation,Designation,text,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,person_owned,verified
+1,2026-08-05,Leads,Leads,Disqualification Reason,Disqualification_Reason,picklist,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,process_state_owned,verified
+1,2026-08-05,Leads,Leads,Disqualification Reason,Disqualification_Reason,picklist,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,process_state_owned,verified
+1,2026-08-05,Leads,Leads,Disqualification Reason,Disqualification_Reason,picklist,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,process_state_owned,verified
+1,2026-08-05,Leads,Leads,Distance to Anchor ZIP,Distance_to_Anchor_ZIP,double,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Distance to Anchor ZIP,Distance_to_Anchor_ZIP,double,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Distance to Anchor ZIP,Distance_to_Anchor_ZIP,double,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Email,Email,email,used,Contacts,Contacts,Email,Email,email,existing_used,mapped,exact,not_choice,safe_keep,exact_match,verified
+1,2026-08-05,Leads,Leads,Email,Email,email,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,person_owned,verified
+1,2026-08-05,Leads,Leads,Email,Email,email,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,person_owned,verified
+1,2026-08-05,Leads,Leads,Email Opt Out,Email_Opt_Out,boolean,used,Contacts,Contacts,Email Opt Out,Email_Opt_Out,boolean,existing_used,unmapped,exact,not_choice,safe_add,person_owned,verified
+1,2026-08-05,Leads,Leads,Email Opt Out,Email_Opt_Out,boolean,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,person_owned,verified
+1,2026-08-05,Leads,Leads,Email Opt Out,Email_Opt_Out,boolean,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,person_owned,verified
+1,2026-08-05,Leads,Leads,Enrich Status,Enrich_Status__s,picklist,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Enrich Status,Enrich_Status__s,picklist,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Enrich Status,Enrich_Status__s,picklist,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Fax,Fax,text,unused,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,legacy_field,verified
+1,2026-08-05,Leads,Leads,Fax,Fax,text,unused,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,legacy_field,verified
+1,2026-08-05,Leads,Leads,Fax,Fax,text,unused,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,legacy_field,verified
+1,2026-08-05,Leads,Leads,Field Team Size Band,Field_Team_Size_Band,picklist,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,company_owned,verified
+1,2026-08-05,Leads,Leads,Field Team Size Band,Field_Team_Size_Band,picklist,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Field Team Size Band,Field_Team_Size_Band,picklist,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,company_owned,verified
+1,2026-08-05,Leads,Leads,First Name,First_Name,text,used,Contacts,Contacts,First Name,First_Name,text,existing_used,mapped,exact,not_choice,safe_keep,exact_match,verified
+1,2026-08-05,Leads,Leads,First Name,First_Name,text,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,person_owned,verified
+1,2026-08-05,Leads,Leads,First Name,First_Name,text,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,person_owned,verified
+1,2026-08-05,Leads,Leads,First Visit,First_Visited_Time,datetime,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,First Visit,First_Visited_Time,datetime,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,First Visit,First_Visited_Time,datetime,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,First Page Visited,First_Visited_URL,website,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,First Page Visited,First_Visited_URL,website,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,First Page Visited,First_Visited_URL,website,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Full Name,Full_Name,text,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Full Name,Full_Name,text,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Full Name,Full_Name,text,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,ICP Fit,ICP_Fit,picklist,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,ICP Fit,ICP_Fit,picklist,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,ICP Fit,ICP_Fit,picklist,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Record Id,id,bigint,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Record Id,id,bigint,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Record Id,id,bigint,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Industry,Industry,picklist,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,company_owned,verified
+1,2026-08-05,Leads,Leads,Industry,Industry,picklist,used,Accounts,Accounts,Industry,Industry,picklist,existing_used,mapped,exact,exact,safe_keep,exact_match,verified
+1,2026-08-05,Leads,Leads,Industry,Industry,picklist,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,company_owned,verified
+1,2026-08-05,Leads,Leads,Integration Readiness,Integration_Readiness,picklist,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Integration Readiness,Integration_Readiness,picklist,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Integration Readiness,Integration_Readiness,picklist,used,Deals,Deals,Integration Readiness,Integration_Readiness,picklist,existing_used,unmapped,exact,exact,safe_add,deal_owned,verified
+1,2026-08-05,Leads,Leads,Last Activity Time,Last_Activity_Time,datetime,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Last Activity Time,Last_Activity_Time,datetime,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Last Activity Time,Last_Activity_Time,datetime,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Last Enriched Time,Last_Enriched_Time__s,datetime,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Last Enriched Time,Last_Enriched_Time__s,datetime,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Last Enriched Time,Last_Enriched_Time__s,datetime,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Last Name,Last_Name,text,used,Contacts,Contacts,Last Name,Last_Name,text,existing_used,mapped,exact,not_choice,safe_keep,exact_match,verified
+1,2026-08-05,Leads,Leads,Last Name,Last_Name,text,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,person_owned,verified
+1,2026-08-05,Leads,Leads,Last Name,Last_Name,text,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,person_owned,verified
+1,2026-08-05,Leads,Leads,Last Outreach At,Last_Outreach_At,datetime,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,process_state_owned,verified
+1,2026-08-05,Leads,Leads,Last Outreach At,Last_Outreach_At,datetime,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,process_state_owned,verified
+1,2026-08-05,Leads,Leads,Last Outreach At,Last_Outreach_At,datetime,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,process_state_owned,verified
+1,2026-08-05,Leads,Leads,Last Outreach Channel,Last_Outreach_Channel,picklist,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,process_state_owned,verified
+1,2026-08-05,Leads,Leads,Last Outreach Channel,Last_Outreach_Channel,picklist,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,process_state_owned,verified
+1,2026-08-05,Leads,Leads,Last Outreach Channel,Last_Outreach_Channel,picklist,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,process_state_owned,verified
+1,2026-08-05,Leads,Leads,Last Research Verified At,Last_Research_Verified_At,datetime,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Last Research Verified At,Last_Research_Verified_At,datetime,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Last Research Verified At,Last_Research_Verified_At,datetime,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Most Recent Visit,Last_Visited_Time,datetime,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Most Recent Visit,Last_Visited_Time,datetime,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Most Recent Visit,Last_Visited_Time,datetime,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Lead Conversion Time,Lead_Conversion_Time,integer,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Lead Conversion Time,Lead_Conversion_Time,integer,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Lead Conversion Time,Lead_Conversion_Time,integer,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Lead Source,Lead_Source,picklist,used,Contacts,Contacts,Lead Source,Lead_Source,picklist,existing_used,mapped,exact,exact,safe_keep,exact_match,verified
+1,2026-08-05,Leads,Leads,Lead Source,Lead_Source,picklist,used,Accounts,Accounts,Lead Source,Source_Channel,picklist,existing_used,mapped,exact,exact,safe_keep,exact_match,verified
+1,2026-08-05,Leads,Leads,Lead Source,Lead_Source,picklist,used,Deals,Deals,Lead Source,Lead_Source,picklist,existing_used,mapped,exact,exact,safe_keep,exact_match,verified
+1,2026-08-05,Leads,Leads,Lead Status,Lead_Status,picklist,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,process_state_owned,verified
+1,2026-08-05,Leads,Leads,Lead Status,Lead_Status,picklist,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,process_state_owned,verified
+1,2026-08-05,Leads,Leads,Lead Status,Lead_Status,picklist,used,Deals,Deals,Stage,Stage,picklist,existing_used,unmapped,exact,mismatch,intentional_unmapped,process_state_owned,verified
+1,2026-08-05,Leads,Leads,Social Lead ID,leadchain0__Social_Lead_ID,text,used,Contacts,Contacts,Social Lead ID,leadchain0__Social_Lead_ID,text,existing_used,mapped,exact,not_choice,safe_keep,exact_match,verified
+1,2026-08-05,Leads,Leads,Social Lead ID,leadchain0__Social_Lead_ID,text,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Social Lead ID,leadchain0__Social_Lead_ID,text,used,Deals,Deals,Social Lead ID,leadchain0__Social_Lead_ID,text,existing_used,mapped,exact,not_choice,safe_keep,exact_match,verified
+1,2026-08-05,Leads,Leads,Lifecycle Status,Lifecycle_Status,picklist,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,process_state_owned,verified
+1,2026-08-05,Leads,Leads,Lifecycle Status,Lifecycle_Status,picklist,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,process_state_owned,verified
+1,2026-08-05,Leads,Leads,Lifecycle Status,Lifecycle_Status,picklist,used,Deals,Deals,Stage,Stage,picklist,existing_used,unmapped,exact,mismatch,intentional_unmapped,process_state_owned,verified
+1,2026-08-05,Leads,Leads,LinkedIn,LinkedIn,website,used,Contacts,Contacts,LinkedIn,LinkedIn,website,existing_used,mapped,exact,not_choice,safe_keep,exact_match,verified
+1,2026-08-05,Leads,Leads,LinkedIn,LinkedIn,website,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,person_owned,verified
+1,2026-08-05,Leads,Leads,LinkedIn,LinkedIn,website,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,person_owned,verified
+1,2026-08-05,Leads,Leads,Location Source URL,Location_Source_URL,website,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Location Source URL,Location_Source_URL,website,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Location Source URL,Location_Source_URL,website,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Location Type,Location_Type,picklist,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Location Type,Location_Type,picklist,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Location Type,Location_Type,picklist,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Locked,Locked__s,boolean,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Locked,Locked__s,boolean,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Locked,Locked__s,boolean,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Mobile,Mobile,phone,used,Contacts,Contacts,Mobile,Mobile,phone,existing_used,mapped,exact,not_choice,safe_keep,exact_match,verified
+1,2026-08-05,Leads,Leads,Mobile,Mobile,phone,used,Accounts,Accounts,Mobile,Mobile,phone,existing_used,mapped,exact,not_choice,remove,person_company_mismatch,verified
+1,2026-08-05,Leads,Leads,Mobile,Mobile,phone,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,person_owned,verified
+1,2026-08-05,Leads,Leads,Modified By,Modified_By,ownerlookup,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Modified By,Modified_By,ownerlookup,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Modified By,Modified_By,ownerlookup,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Modified Time,Modified_Time,datetime,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Modified Time,Modified_Time,datetime,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Modified Time,Modified_Time,datetime,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Monthly Inbound Call Band,Monthly_Inbound_Call_Band,picklist,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Monthly Inbound Call Band,Monthly_Inbound_Call_Band,picklist,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Monthly Inbound Call Band,Monthly_Inbound_Call_Band,picklist,used,Deals,Deals,Monthly Inbound Call Band,Monthly_Inbound_Call_Band,picklist,existing_used,unmapped,exact,exact,safe_add,deal_owned,verified
+1,2026-08-05,Leads,Leads,Distance,nearby_distance__s,double,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Distance,nearby_distance__s,double,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Distance,nearby_distance__s,double,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Next Action,Next_Action,picklist,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,process_state_owned,verified
+1,2026-08-05,Leads,Leads,Next Action,Next_Action,picklist,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,process_state_owned,verified
+1,2026-08-05,Leads,Leads,Next Action,Next_Action,picklist,used,Deals,Deals,Next Action,Next_Steps,picklist,existing_used,unmapped,exact,mismatch,intentional_unmapped,process_state_owned,verified
+1,2026-08-05,Leads,Leads,Next Outreach At,Next_Outreach_At,datetime,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Next Outreach At,Next_Outreach_At,datetime,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Next Outreach At,Next_Outreach_At,datetime,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,No of Employees,No_of_Employees,integer,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,company_owned,verified
+1,2026-08-05,Leads,Leads,No of Employees,No_of_Employees,integer,used,Accounts,Accounts,Employees,Employees,integer,existing_used,unmapped,exact,not_choice,safe_add,company_owned,verified
+1,2026-08-05,Leads,Leads,No of Employees,No_of_Employees,integer,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,company_owned,verified
+1,2026-08-05,Leads,Leads,Number Of Chats,Number_Of_Chats,integer,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Number Of Chats,Number_Of_Chats,integer,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Number Of Chats,Number_Of_Chats,integer,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Number of Locations,Number_of_Locations,integer,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,company_owned,verified
+1,2026-08-05,Leads,Leads,Number of Locations,Number_of_Locations,integer,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Number of Locations,Number_of_Locations,integer,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,company_owned,verified
+1,2026-08-05,Leads,Leads,Nurture Reason,Nurture_Reason,picklist,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,process_state_owned,verified
+1,2026-08-05,Leads,Leads,Nurture Reason,Nurture_Reason,picklist,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,process_state_owned,verified
+1,2026-08-05,Leads,Leads,Nurture Reason,Nurture_Reason,picklist,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,process_state_owned,verified
+1,2026-08-05,Leads,Leads,Outreach Attempt Count,Outreach_Attempt_Count,integer,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,process_state_owned,verified
+1,2026-08-05,Leads,Leads,Outreach Attempt Count,Outreach_Attempt_Count,integer,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,process_state_owned,verified
+1,2026-08-05,Leads,Leads,Outreach Attempt Count,Outreach_Attempt_Count,integer,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,process_state_owned,verified
+1,2026-08-05,Leads,Leads,Lead Owner,Owner,ownerlookup,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Lead Owner,Owner,ownerlookup,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Lead Owner,Owner,ownerlookup,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Pain Summary,Pain_Point_Summary,textarea,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Pain Summary,Pain_Point_Summary,textarea,used,Accounts,Accounts,Pain Point Summary,Pain_Point_Summary,textarea,existing_used,mapped,exact,not_choice,safe_keep,exact_match,verified
+1,2026-08-05,Leads,Leads,Pain Summary,Pain_Point_Summary,textarea,used,Deals,Deals,Pain Summary,Pain_Point_Summary,textarea,existing_used,unmapped,exact,not_choice,safe_add,deal_owned,verified
+1,2026-08-05,Leads,Leads,Pain Signals,Pain_Signals,multiselectpicklist,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Pain Signals,Pain_Signals,multiselectpicklist,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Pain Signals,Pain_Signals,multiselectpicklist,used,Deals,Deals,,,,missing,unmapped,not_applicable,not_assessed,target_creation_required,target_missing,verified
+1,2026-08-05,Leads,Leads,Phone,Phone,phone,used,Contacts,Contacts,Phone,Phone,phone,existing_used,mapped,exact,not_choice,safe_keep,exact_match,verified
+1,2026-08-05,Leads,Leads,Phone,Phone,phone,used,Accounts,Accounts,Phone,Phone,phone,existing_used,mapped,exact,not_choice,remove,person_company_mismatch,verified
+1,2026-08-05,Leads,Leads,Phone,Phone,phone,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,person_owned,verified
+1,2026-08-05,Leads,Leads,Communication Preference,Preferred_Communication_Method,picklist,used,Contacts,Contacts,Preferred Communication Methods,Preferred_Communication_Methods,multiselectpicklist,existing_used,unmapped,incompatible,mismatch,intentional_unmapped,choice_value_mismatch,verified
+1,2026-08-05,Leads,Leads,Communication Preference,Preferred_Communication_Method,picklist,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,person_owned,verified
+1,2026-08-05,Leads,Leads,Communication Preference,Preferred_Communication_Method,picklist,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,person_owned,verified
+1,2026-08-05,Leads,Leads,Primary Operating System,Primary_Operating_System,picklist,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Primary Operating System,Primary_Operating_System,picklist,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Primary Operating System,Primary_Operating_System,picklist,used,Deals,Deals,Primary Operating System,Primary_Operating_System,picklist,existing_used,unmapped,exact,exact,safe_add,deal_owned,verified
+1,2026-08-05,Leads,Leads,Prospect Import Key,Prospect_Import_Key,text,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Prospect Import Key,Prospect_Import_Key,text,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Prospect Import Key,Prospect_Import_Key,text,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Rating,Rating,picklist,used,Contacts,Contacts,Priority,Priority,picklist,existing_used,unmapped,exact,mismatch,intentional_unmapped,process_state_owned,verified
+1,2026-08-05,Leads,Leads,Rating,Rating,picklist,used,Accounts,Accounts,Rating,Rating,picklist,existing_unused,unmapped,exact,mismatch,intentional_unmapped,process_state_owned,verified
+1,2026-08-05,Leads,Leads,Rating,Rating,picklist,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,process_state_owned,verified
+1,2026-08-05,Leads,Leads,Lead Image,Record_Image,profileimage,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Lead Image,Record_Image,profileimage,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Lead Image,Record_Image,profileimage,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Record Status,Record_Status__s,picklist,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Record Status,Record_Status__s,picklist,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Record Status,Record_Status__s,picklist,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Referral Source Contact,Referral_Source_Name,lookup,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Referral Source Contact,Referral_Source_Name,lookup,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Referral Source Contact,Referral_Source_Name,lookup,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Referrer,Referrer,website,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Referrer,Referrer,website,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Referrer,Referrer,website,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Research Notes,Research_Notes,textarea,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Research Notes,Research_Notes,textarea,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Research Notes,Research_Notes,textarea,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Salutation,Salutation,picklist,used,Contacts,Contacts,Salutation,Salutation,picklist,existing_used,unmapped,exact,source_subset,safe_add,person_owned,verified
+1,2026-08-05,Leads,Leads,Salutation,Salutation,picklist,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,person_owned,verified
+1,2026-08-05,Leads,Leads,Salutation,Salutation,picklist,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,person_owned,verified
+1,2026-08-05,Leads,Leads,Scheduling Process,Scheduling_Process,picklist,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Scheduling Process,Scheduling_Process,picklist,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Scheduling Process,Scheduling_Process,picklist,used,Deals,Deals,Scheduling Process,Scheduling_Process,picklist,existing_used,unmapped,exact,exact,safe_add,deal_owned,verified
+1,2026-08-05,Leads,Leads,Secondary Email,Secondary_Email,email,used,Contacts,Contacts,Secondary Email,Secondary_Email,email,existing_used,mapped,exact,not_choice,safe_keep,exact_match,verified
+1,2026-08-05,Leads,Leads,Secondary Email,Secondary_Email,email,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,person_owned,verified
+1,2026-08-05,Leads,Leads,Secondary Email,Secondary_Email,email,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,person_owned,verified
+1,2026-08-05,Leads,Leads,Service Interest,Service_Interest,multiselectpicklist,unused,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,legacy_field,verified
+1,2026-08-05,Leads,Leads,Service Interest,Service_Interest,multiselectpicklist,unused,Accounts,Accounts,Active Services,Active_Services,multiselectpicklist,existing_used,mapped,exact,mismatch,remove,interest_active_mismatch,verified
+1,2026-08-05,Leads,Leads,Service Interest,Service_Interest,multiselectpicklist,unused,Deals,Deals,Service Line,Service,picklist,existing_used,unmapped,incompatible,mismatch,intentional_unmapped,legacy_field,verified
+1,2026-08-05,Leads,Leads,Skype ID,Skype_ID,text,used,Contacts,Contacts,Skype ID,Skype_ID,text,existing_used,mapped,exact,not_choice,safe_keep,exact_match,verified
+1,2026-08-05,Leads,Leads,Skype ID,Skype_ID,text,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Skype ID,Skype_ID,text,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,State,State,text,unused,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,legacy_field,verified
+1,2026-08-05,Leads,Leads,State,State,text,unused,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,legacy_field,verified
+1,2026-08-05,Leads,Leads,State,State,text,unused,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,legacy_field,verified
+1,2026-08-05,Leads,Leads,Street,Street,text,unused,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,legacy_field,verified
+1,2026-08-05,Leads,Leads,Street,Street,text,unused,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,legacy_field,verified
+1,2026-08-05,Leads,Leads,Street,Street,text,unused,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,legacy_field,verified
+1,2026-08-05,Leads,Leads,Tag,Tag,text,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Tag,Tag,text,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Tag,Tag,text,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Target Anchor ZIP,Target_Anchor_ZIP,text,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Target Anchor ZIP,Target_Anchor_ZIP,text,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Target Anchor ZIP,Target_Anchor_ZIP,text,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Target Selection Basis,Target_Location_Selection_Basis,picklist,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Target Selection Basis,Target_Location_Selection_Basis,picklist,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Target Selection Basis,Target_Location_Selection_Basis,picklist,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Target Market Fit,Target_Market_Fit,picklist,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Target Market Fit,Target_Market_Fit,picklist,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Target Market Fit,Target_Market_Fit,picklist,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Text Opt Out,Text_Opt_Out,boolean,used,Contacts,Contacts,,,,missing,unmapped,not_applicable,not_assessed,target_creation_required,target_missing,verified
+1,2026-08-05,Leads,Leads,Text Opt Out,Text_Opt_Out,boolean,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,person_owned,verified
+1,2026-08-05,Leads,Leads,Text Opt Out,Text_Opt_Out,boolean,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,person_owned,verified
+1,2026-08-05,Leads,Leads,Time Zone,Time_Zone,picklist,used,Contacts,Contacts,Time Zone,Time_Zone,picklist,existing_used,unmapped,exact,exact,safe_add,person_owned,verified
+1,2026-08-05,Leads,Leads,Time Zone,Time_Zone,picklist,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Time Zone,Time_Zone,picklist,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Time Zone (IANA ID),Time_Zone_IANA_ID,text,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,workflow_derived,verified
+1,2026-08-05,Leads,Leads,Time Zone (IANA ID),Time_Zone_IANA_ID,text,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,workflow_derived,verified
+1,2026-08-05,Leads,Leads,Time Zone (IANA ID),Time_Zone_IANA_ID,text,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,workflow_derived,verified
+1,2026-08-05,Leads,Leads,Time Zone Normalized At,Time_Zone_Normalized_At,datetime,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,workflow_derived,verified
+1,2026-08-05,Leads,Leads,Time Zone Normalized At,Time_Zone_Normalized_At,datetime,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,workflow_derived,verified
+1,2026-08-05,Leads,Leads,Time Zone Normalized At,Time_Zone_Normalized_At,datetime,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,workflow_derived,verified
+1,2026-08-05,Leads,Leads,Timeline Fit,Timeline_Fit,picklist,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Timeline Fit,Timeline_Fit,picklist,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,source_record_retained,verified
+1,2026-08-05,Leads,Leads,Timeline Fit,Timeline_Fit,picklist,used,Deals,Deals,Timeline Fit,Timeline_Fit,picklist,existing_used,unmapped,exact,exact,safe_add,deal_owned,verified
+1,2026-08-05,Leads,Leads,Twitter,Twitter,text,unused,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,legacy_field,verified
+1,2026-08-05,Leads,Leads,Twitter,Twitter,text,unused,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,legacy_field,verified
+1,2026-08-05,Leads,Leads,Twitter,Twitter,text,unused,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,legacy_field,verified
+1,2026-08-05,Leads,Leads,Unsubscribed Mode,Unsubscribed_Mode,picklist,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Unsubscribed Mode,Unsubscribed_Mode,picklist,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Unsubscribed Mode,Unsubscribed_Mode,picklist,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Unsubscribed Time,Unsubscribed_Time,datetime,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Unsubscribed Time,Unsubscribed_Time,datetime,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Unsubscribed Time,Unsubscribed_Time,datetime,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Visitor Score,Visitor_Score,bigint,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Visitor Score,Visitor_Score,bigint,used,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Visitor Score,Visitor_Score,bigint,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,system_managed,verified
+1,2026-08-05,Leads,Leads,Website,Website,website,used,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,company_owned,verified
+1,2026-08-05,Leads,Leads,Website,Website,website,used,Accounts,Accounts,Website,Website,website,existing_used,mapped,exact,not_choice,safe_keep,exact_match,verified
+1,2026-08-05,Leads,Leads,Website,Website,website,used,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,company_owned,verified
+1,2026-08-05,Leads,Leads,Zip Code,Zip_Code,text,unused,Contacts,Contacts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,legacy_field,verified
+1,2026-08-05,Leads,Leads,Zip Code,Zip_Code,text,unused,Accounts,Accounts,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,legacy_field,verified
+1,2026-08-05,Leads,Leads,Zip Code,Zip_Code,text,unused,Deals,Deals,,,,not_applicable,unmapped,not_applicable,not_assessed,intentional_unmapped,legacy_field,verified

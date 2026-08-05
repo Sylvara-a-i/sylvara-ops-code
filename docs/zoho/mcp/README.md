@@ -16,9 +16,11 @@ This folder separates MCP design policy from dated evidence. A large catalog doe
 
 ## Current Configured Snapshot
 
-The complete 2026-08-04 snapshot contains 294 advertised Sylvara-only tool names across 18 neutral roles and eight products. It records 221 reads and 73 write/action tools. An earlier 2026-08-05 export matched that snapshot, but a later same-day callable-registry refresh superseded its Books portion with 91 Books Audit, 24 Books Changes, and 67 Books Controller operations. Runtime server names, generated transport IDs, endpoints, authentication details, connection aliases, target identifiers, and returned data are removed.
+The complete 2026-08-04 snapshot contains 294 advertised Sylvara-only tool names across 18 neutral roles and eight products. It records 221 reads and 73 write/action tools. An earlier 2026-08-05 export matched that snapshot, but later same-day callable-registry refreshes superseded its Books and CRM portions. Runtime server names, generated transport IDs, endpoints, authentication details, connection aliases, target identifiers, and returned data are removed.
 
 The refreshed Books Controller advertises chart-account create, update, mark-active, and mark-inactive operations. Same-organization Audit and Controller identity reads and all four bounded chart operations succeeded in the approved 2026-08-05 deployment, with independent Audit readback after every mutation. This is scoped effective-access evidence only; it does not prove or authorize other Books writes. The dated machine inventory remains useful historical evidence and must not be treated as the current Books allowlist.
+
+The separate CRM refresh verified scoped metadata, record, workflow, and conversion-map reads plus the exact bounded schema, picklist, layout, help-text, and record writes recorded in the [sanitized CRM package](../../../src/zoho-crm/README.md). It did not expose direct typed native conversion, conversion-map mutation, or workflow-rule mutation. The dated machine inventory is not a current CRM allowlist.
 
 - [Capability analysis and broader official-family crosswalk](snapshots/configured/2026-08-04/capability-catalog.md)
 - [Complete machine-readable advertised-name inventory](snapshots/configured/2026-08-04/sylvara-observed-tool-inventory.json)

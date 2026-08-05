@@ -4,6 +4,7 @@ All notable repository-governance and technical-source changes are recorded here
 
 ## Unreleased
 
+- Add the sanitized, live-verified 2026-08-05 Zoho CRM module catalog, 374-field dictionary, and 360-row Lead-conversion review matrix for Leads, Contacts, Accounts, and Deals; record the consolidated-address migration, distinguish 50 safe current mappings from four removals and 29 undeployed additions, and preserve the native-conversion tooling gap.
 - Add durable operator, task-mode, code-review, document-drafting, typography, and visual-QA instructions for future Codex and ChatGPT work.
 - Refresh portable CRM, Creator, Forms, Contracts, Sign, Checkout, and Flow field/type contracts from current official sources while preserving live-tenant and deployment boundaries.
 - Record an explicit Zoho documentation evidence order and nested agent behavior without importing another tenant's schemas, identifiers, business rules, or real-estate material.

@@ -17,13 +17,13 @@
     "configured_session_advertised_names": "2026-08-04",
     "configured_session_reconciled_on": "2026-08-05"
   },
-  "configured_session_scope": "Historical Sylvara-only advertised Zoho role and operation names from a supplied Codex surface export, cross-checked against the callable-tool registry without invoking Zoho; the later refreshed Books capability and scoped acceptance evidence are recorded separately.",
+  "configured_session_scope": "Historical Sylvara-only advertised Zoho role and operation names from a supplied Codex surface export, cross-checked against the callable-tool registry without invoking Zoho; the later refreshed Books and CRM capabilities and scoped acceptance evidence are recorded separately.",
   "transformations": [
     "Rewritten as Sylvara reference documentation rather than copied verbatim.",
     "Removed all source-business fields, modules, workflows, business rules, examples, identifiers, routes, aliases, and decisions.",
     "Retained portable product behavior, generic reliability controls, and official-source links.",
     "Refreshed portable CRM, Creator, Forms, Contracts, Sign, Checkout, and Flow field-type contracts against current official sources.",
-    "Marked Sylvara adoption and effective tenant access unknown except for the separately recorded bounded Books chart capability verified on 2026-08-05.",
+    "Marked Sylvara adoption and effective tenant access unknown except for the separately recorded bounded Books chart and CRM schema capabilities verified on 2026-08-05.",
     "Separated reusable references from Sylvara operating standards and live configuration."
   ],
   "product_references": [
