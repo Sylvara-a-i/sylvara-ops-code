@@ -5,10 +5,11 @@
 Keep these layers separate:
 
 1. **Official product capability** — a current official Zoho source documents a feature, endpoint, scope, limit, or behavior.
-2. **Tool Manual catalog** — a dated official Tool Manual snapshot lists a service-qualified tool name.
+2. **Tool Manual catalog** — a dated official Tool Manual snapshot lists a service, catalog operation key, and prefix-free annotation.
 3. **Preconfigured template membership** — a dated portal template lists a specific group of tools.
-4. **Advertised MCP contract** — one inspected server exposes a name, description, and input contract.
-5. **Effective Sylvara access** — an exact server identity, organization, environment, grant, plan, role, and feature configuration pass a current authorized acceptance check.
+4. **Configured MCP selection** — one inspected neutral role contains a service-plus-operation-key selection on the observation date.
+5. **Advertised MCP contract** — one inspected server exposes a description and input contract for that selected operation.
+6. **Effective Sylvara access** — an exact server identity, organization, environment, grant, plan, role, and feature configuration pass a current authorized acceptance check.
 
 Evidence at one layer never proves a higher layer. A repository reference, archived file, API link, or tool name is not deployment evidence.
 

@@ -20,6 +20,8 @@ INVENTORY = (
 )
 ZOHO_DOCS = ROOT / "docs" / "zoho"
 CAPABILITY_CATALOG = INVENTORY.parent / "capability-catalog.md"
+MCP_README = ZOHO_DOCS / "mcp" / "README.md"
+SERVER_STANDARD = ZOHO_DOCS / "mcp" / "server-standard.md"
 
 EXPECTED_COUNTS = {
     "billing-audit": (32, 32, 0),
@@ -53,8 +55,8 @@ EXPECTED_PRODUCTS = {
 }
 CAPABILITY_KEYS = {
     "catalog_id",
-    "advertised_tool_name",
-    "operation_label",
+    "catalog_operation_key",
+    "annotated_tool_name",
     "effect",
     "contract_status",
 }
@@ -82,6 +84,8 @@ FORBIDDEN_INVENTORY_KEYS = {
     "account_id",
     "project_id",
     "record_id",
+    "advertised_tool_name",
+    "operation_label",
 }
 SOURCE_IDENTITY_MARKERS = (
     "gh" + "_zoho",
@@ -111,12 +115,13 @@ OFFICIAL_DOCUMENTATION_HOSTS = {
     "www.zoho.com",
 }
 URL_RE = re.compile(r"https?://[^\s)>]+")
-TOOL_NAME_RE = re.compile(
-    r"^(?:"
-    r"Zoho(?:Billing|Books|Creator|CRM|Mail|Payments|Workdrive)_[A-Za-z0-9_]+"
-    r"|CatalystbyZoho_[A-Za-z0-9_]+"
-    r")$"
-)
+OPERATION_KEY_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+SERVICE_PREFIX_RE = re.compile(r"(?:Zoho[A-Za-z0-9]+|CatalystbyZoho)_")
+
+
+def annotate_operation_key(operation_key: str) -> str:
+    with_spaces = operation_key.replace("_", " ")
+    return re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", with_spaces).strip()
 
 
 def iter_keys(value: object):
@@ -136,14 +141,22 @@ class ZohoInventoryTests(unittest.TestCase):
         cls.catalog = json.loads(cls.raw)
 
     def test_snapshot_counts_scope_and_roles_are_exact(self) -> None:
-        self.assertEqual(1, self.catalog["schema_version"])
+        self.assertEqual(2, self.catalog["schema_version"])
         self.assertEqual("2026-08-04", self.catalog["observed_on"])
         self.assertEqual("2026-08-05", self.catalog["last_reconciled_on"])
         self.assertEqual("sylvara-only", self.catalog["scope"])
         self.assertEqual(294, self.catalog["total_tools"])
         self.assertEqual(221, self.catalog["read_tools"])
         self.assertEqual(73, self.catalog["write_or_action_tools"])
-        self.assertEqual(257, self.catalog["unique_unqualified_tool_names"])
+        self.assertEqual(
+            257,
+            self.catalog["unique_service_qualified_operation_keys"],
+        )
+        self.assertEqual(257, self.catalog["unique_annotated_tool_names"])
+        self.assertEqual(
+            254,
+            self.catalog["unique_casefolded_annotated_tool_names"],
+        )
 
         observed = {
             role["role"]: (
@@ -162,17 +175,17 @@ class ZohoInventoryTests(unittest.TestCase):
     def test_historical_export_reconciliation_records_books_chart_account_gap(self) -> None:
         reconciliation = self.catalog["reconciliation"]
         self.assertEqual(
-            "historical-export-no-advertised-name-delta",
+            "historical-export-no-configured-selection-delta",
             reconciliation["result"],
         )
         gap = reconciliation["historical_export_books_chart_account_gap"]
         self.assertEqual(
             {
-                "ZohoBooks_get_chart_of_account",
-                "ZohoBooks_list_chart_of_accounts",
-                "ZohoBooks_list_chart_of_account_transactions",
+                "get_chart_of_account",
+                "list_chart_of_accounts",
+                "list_chart_of_account_transactions",
             },
-            set(gap["audit_reads_advertised_in_export"]),
+            set(gap["audit_operation_keys_selected_in_export"]),
         )
         self.assertEqual(
             {
@@ -181,7 +194,31 @@ class ZohoInventoryTests(unittest.TestCase):
                 "mark chart account active",
                 "mark chart account inactive",
             },
-            set(gap["controller_capabilities_not_advertised_in_export"]),
+            set(gap["controller_capabilities_not_selected_in_export"]),
+        )
+
+    def test_schema_migration_is_recorded_without_changing_observation_date(self) -> None:
+        self.assertEqual("2026-08-04", self.catalog["observed_on"])
+        correction = self.catalog["publication_corrections"][-1]
+        self.assertEqual("2026-08-06", correction["corrected_on"])
+        self.assertIn("294", correction["scope"])
+        self.assertTrue(correction["reason"])
+        migration = correction["migration"]
+        self.assertEqual(1, migration["from_schema_version"])
+        self.assertEqual(2, migration["to_schema_version"])
+        self.assertEqual(
+            [
+                {"from": "advertised_tool_name", "to": "catalog_operation_key"},
+                {"from": "operation_label", "to": "annotated_tool_name"},
+            ],
+            migration["field_mappings"],
+        )
+        self.assertEqual(
+            {"rows_compared": 294, "mismatch_count": 0},
+            {
+                key: migration["semantic_preservation"][key]
+                for key in ("rows_compared", "mismatch_count")
+            },
         )
 
     def test_possible_tool_surface_remains_reference_only(self) -> None:
@@ -204,12 +241,36 @@ class ZohoInventoryTests(unittest.TestCase):
             catalog_text,
         )
 
+    def test_dated_snapshot_refresh_is_append_only(self) -> None:
+        index_text = MCP_README.read_text(encoding="utf-8")
+        catalog_text = CAPABILITY_CATALOG.read_text(encoding="utf-8")
+        for marker in (
+            "`<evidence-class>/YYYY-MM-DD`",
+            "creates a new dated directory",
+            "never silently overwrites an older observation",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, index_text)
+        self.assertIn("Create a new dated snapshot", catalog_text)
+        self.assertNotIn("Replace this dated snapshot", catalog_text)
+
+    def test_runtime_allowlist_is_distinct_from_configured_selection_key(self) -> None:
+        standard_text = SERVER_STANDARD.read_text(encoding="utf-8")
+        for marker in (
+            "service plus its prefix-free catalog operation key",
+            "`enabled_tools` allowlist",
+            "exact currently advertised runtime tool name",
+            "description and input schema",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, standard_text)
+
     def test_every_role_and_tool_is_complete_unique_and_role_qualified(self) -> None:
         self.assertEqual(
             list(EXPECTED_COUNTS),
             [role["role"] for role in self.catalog["roles"]],
         )
-        rows: list[tuple[str, dict[str, object]]] = []
+        rows: list[tuple[str, str, dict[str, object]]] = []
 
         for role in self.catalog["roles"]:
             self.assertEqual(ROLE_KEYS, set(role))
@@ -232,37 +293,62 @@ class ZohoInventoryTests(unittest.TestCase):
             )
             for row in capabilities:
                 self.assertEqual(CAPABILITY_KEYS, set(row))
-                self.assertRegex(row["advertised_tool_name"], TOOL_NAME_RE)
-                self.assertNotIn(".", row["advertised_tool_name"])
-                self.assertTrue(row["operation_label"].strip())
+                operation_key = row["catalog_operation_key"]
+                annotation = row["annotated_tool_name"]
+                self.assertRegex(operation_key, OPERATION_KEY_RE)
+                self.assertNotRegex(operation_key, SERVICE_PREFIX_RE)
+                self.assertEqual(operation_key.strip(), operation_key)
+                self.assertTrue(annotation)
+                self.assertEqual(annotation.strip(), annotation)
+                self.assertNotIn("_", annotation)
+                self.assertNotRegex(annotation, SERVICE_PREFIX_RE)
+                self.assertEqual(annotate_operation_key(operation_key), annotation)
                 self.assertIn(row["effect"], {"read", "write/action"})
                 self.assertEqual(
-                    "advertised-not-call-verified",
+                    "configured-selection-not-call-verified",
                     row["contract_status"],
                 )
-                rows.append((role["role"], row))
+                rows.append((role["role"], role["product"], row))
 
         self.assertEqual(294, len(rows))
         self.assertEqual(
             294,
             len(
                 {
-                    (role, row["advertised_tool_name"])
-                    for role, row in rows
+                    (role, row["catalog_operation_key"])
+                    for role, _, row in rows
                 }
             ),
         )
         self.assertEqual(
             257,
-            len({row["advertised_tool_name"] for _, row in rows}),
+            len(
+                {
+                    (product, row["catalog_operation_key"])
+                    for _, product, row in rows
+                }
+            ),
+        )
+        self.assertEqual(
+            257,
+            len({row["annotated_tool_name"] for _, _, row in rows}),
+        )
+        self.assertEqual(
+            254,
+            len(
+                {
+                    row["annotated_tool_name"].casefold()
+                    for _, _, row in rows
+                }
+            ),
         )
         self.assertEqual(
             self.catalog["read_tools"],
-            sum(row["effect"] == "read" for _, row in rows),
+            sum(row["effect"] == "read" for _, _, row in rows),
         )
         self.assertEqual(
             self.catalog["write_or_action_tools"],
-            sum(row["effect"] == "write/action" for _, row in rows),
+            sum(row["effect"] == "write/action" for _, _, row in rows),
         )
 
     def test_audit_roles_are_read_only(self) -> None:
@@ -274,6 +360,7 @@ class ZohoInventoryTests(unittest.TestCase):
 
     def test_public_snapshot_excludes_private_runtime_configuration(self) -> None:
         lowered = self.raw.lower()
+        self.assertNotRegex(self.raw, SERVICE_PREFIX_RE)
         for marker in INVENTORY_ONLY_MARKERS:
             with self.subTest(marker=marker):
                 self.assertNotIn(marker, lowered)

@@ -1,11 +1,11 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "created_on": "2026-08-04",
   "last_reviewed_on": "2026-08-05",
   "classification": "sanitized-derivative-manifest",
   "source_classes": {
     "portable_product_references": "authorized operating documentation from a separate business repository",
-    "configured_session_advertised_names": "Sylvara-only Codex surface export cross-checked against the then-current callable-tool registry"
+    "configured_session_tool_selections": "Sylvara-only Codex surface export cross-checked against the callable-tool registry available on the observation date"
   },
   "source_revision_policy": "Verify the authorized source revision privately during each refresh; do not publish its path, remote, or fingerprint.",
   "publication_boundary": "No source tenant configuration, identifiers, records, code, routes, aliases, screenshots, payloads, logs, or private artifacts are included.",
@@ -14,14 +14,15 @@
     "field_type_refresh": "2026-08-05",
     "tool_manual_service_catalog": "2026-07-24",
     "preconfigured_template_catalog": "2026-07-25",
-    "configured_session_advertised_names": "2026-08-04",
+    "configured_session_tool_selections": "2026-08-04",
     "configured_session_reconciled_on": "2026-08-05"
   },
-  "configured_session_scope": "Historical Sylvara-only advertised Zoho role and operation names from a supplied Codex surface export, cross-checked against the callable-tool registry without invoking Zoho; the later refreshed Books and CRM capabilities and scoped acceptance evidence are recorded separately.",
+  "configured_session_scope": "Historical Sylvara-only role membership, prefix-free catalog operation keys, and annotations from a supplied Codex surface export, cross-checked against the callable-tool registry available on the observation date without invoking Zoho; the later refreshed Books and CRM capabilities and scoped acceptance evidence are recorded separately.",
   "transformations": [
     "Rewritten as Sylvara reference documentation rather than copied verbatim.",
     "Removed all source-business fields, modules, workflows, business rules, examples, identifiers, routes, aliases, and decisions.",
     "Retained portable product behavior, generic reliability controls, and official-source links.",
+    "Separated each configured operation key from its prefix-free human annotation; product or server prefixes are not part of annotated tool names.",
     "Refreshed portable CRM, Creator, Forms, Contracts, Sign, Checkout, and Flow field-type contracts against current official sources.",
     "Marked Sylvara adoption and effective tenant access unknown except for the separately recorded bounded Books chart and CRM schema capabilities verified on 2026-08-05.",
     "Separated reusable references from Sylvara operating standards and live configuration."

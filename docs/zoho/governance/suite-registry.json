@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "as_of": "2026-08-05",
   "path_base": "docs/zoho",
   "repository_status": "proposed-governance",
@@ -8,7 +8,8 @@
     "official-product-capability",
     "tool-manual-catalog",
     "preconfigured-template-membership",
-    "advertised-mcp-tool-name",
+    "configured-mcp-selection",
+    "advertised-mcp-contract",
     "effective-tenant-capability"
   ],
   "products": [
@@ -61,7 +62,7 @@
         "../../src/zoho-catalyst/billing-webhook-gateway/README.md",
         "reference/products/zoho-billing.md"
       ],
-      "mcp_observation": "advertised-tool-names-observed-2026-08-04",
+      "mcp_observation": "configured-selections-observed-2026-08-04",
       "effective_tenant_capability": "unknown"
     },
     {
@@ -75,7 +76,7 @@
         "../../src/zoho-catalyst/billing-webhook-gateway/README.md",
         "reference/products/zoho-catalyst.md"
       ],
-      "mcp_observation": "advertised-tool-names-observed-2026-08-04",
+      "mcp_observation": "configured-selections-observed-2026-08-04",
       "effective_tenant_capability": "unknown"
     },
     {
@@ -89,7 +90,7 @@
       "repository_artifacts": [
         "reference/products/zoho-creator.md"
       ],
-      "mcp_observation": "advertised-tool-names-observed-2026-08-04",
+      "mcp_observation": "configured-selections-observed-2026-08-04",
       "effective_tenant_capability": "unknown"
     },
     {
@@ -115,7 +116,7 @@
       "repository_artifacts": [
         "reference/products/zoho-workdrive.md"
       ],
-      "mcp_observation": "advertised-tool-names-observed-2026-08-04",
+      "mcp_observation": "configured-selections-observed-2026-08-04",
       "effective_tenant_capability": "unknown"
     },
     {
@@ -167,7 +168,7 @@
       "repository_artifacts": [
         "reference/products/zoho-mail.md"
       ],
-      "mcp_observation": "advertised-tool-names-observed-2026-08-04",
+      "mcp_observation": "configured-selections-observed-2026-08-04",
       "effective_tenant_capability": "unknown"
     },
     {
@@ -192,7 +193,7 @@
     {"id": "checkout", "reference": "reference/products/zoho-checkout.md", "adoption_status": "unknown"},
     {"id": "flow", "reference": "reference/products/zoho-flow.md", "adoption_status": "unknown"},
     {"id": "meeting", "reference": "reference/products/zoho-meeting.md", "adoption_status": "unknown"},
-    {"id": "payments", "reference": "reference/products/zoho-payments.md", "adoption_status": "unknown", "mcp_observation": "advertised-tool-names-observed-2026-08-04"},
+    {"id": "payments", "reference": "reference/products/zoho-payments.md", "adoption_status": "unknown", "mcp_observation": "configured-selections-observed-2026-08-04"},
     {"id": "people", "reference": "reference/products/zoho-people.md", "adoption_status": "unknown"},
     {"id": "todo", "reference": "reference/products/zoho-todo.md", "adoption_status": "unknown"},
     {"id": "voice", "reference": "reference/products/zoho-voice.md", "adoption_status": "unknown"}

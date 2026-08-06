@@ -1,17 +1,49 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "observed_on": "2026-08-04",
   "last_reconciled_on": "2026-08-05",
+  "publication_corrections": [
+    {
+      "corrected_on": "2026-08-06",
+      "scope": "Schema and terminology for all 294 role-qualified configured-selection rows and their summary fields; the 2026-08-04 observation itself is unchanged.",
+      "reason": "Schema version 1 conflated configured-selection evidence with an advertised MCP contract and retained service-prefixed adapter labels instead of stable prefix-free catalog keys and annotations.",
+      "migration": {
+        "from_schema_version": 1,
+        "to_schema_version": 2,
+        "field_mappings": [
+          {
+            "from": "advertised_tool_name",
+            "to": "catalog_operation_key"
+          },
+          {
+            "from": "operation_label",
+            "to": "annotated_tool_name"
+          }
+        ],
+        "semantic_preservation": {
+          "rows_compared": 294,
+          "mismatch_count": 0,
+          "compared_dimensions": [
+            "role",
+            "product",
+            "operation-key",
+            "annotation",
+            "effect"
+          ]
+        }
+      }
+    }
+  ],
   "reconciliation": {
-    "result": "historical-export-no-advertised-name-delta",
-    "scope": "The supplied 2026-08-05 Sylvara-only export matched this dated 294-name inventory. Later callable-registry Books and CRM refreshes are recorded separately in the capability catalog, suite registry, and product-owned artifacts and are not merged into this historical inventory.",
+    "result": "historical-export-no-configured-selection-delta",
+    "scope": "The supplied 2026-08-05 Sylvara-only export matched this dated 294-selection inventory. Later callable-registry Books and CRM refreshes are recorded separately in the capability catalog, suite registry, and product-owned artifacts and are not merged into this historical inventory.",
     "historical_export_books_chart_account_gap": {
-      "audit_reads_advertised_in_export": [
-        "ZohoBooks_get_chart_of_account",
-        "ZohoBooks_list_chart_of_accounts",
-        "ZohoBooks_list_chart_of_account_transactions"
+      "audit_operation_keys_selected_in_export": [
+        "get_chart_of_account",
+        "list_chart_of_accounts",
+        "list_chart_of_account_transactions"
       ],
-      "controller_capabilities_not_advertised_in_export": [
+      "controller_capabilities_not_selected_in_export": [
         "create chart of account",
         "update chart of account",
         "mark chart account active",
@@ -23,250 +55,252 @@
   "total_tools": 294,
   "read_tools": 221,
   "write_or_action_tools": 73,
-  "unique_unqualified_tool_names": 257,
-  "observation_method": "The supplied configured-session export was filtered to Sylvara Zoho roles and cross-checked against the current callable-tool registry. No Zoho record, report, configuration, content, or identity operation was invoked.",
-  "publication_boundary": "One role-qualified row is retained for every advertised Sylvara Zoho tool. Runtime server names, generated transport IDs, endpoints, authentication details, connection aliases, organization or account identifiers, record identifiers, sample values, and returned data are intentionally omitted.",
-  "interpretation": "Advertised means present in the inspected Codex tool surface on the observation date. It does not prove tenant binding, current OAuth scope, effective callability, response completeness, plan availability, safe write semantics, or approval for live use.",
+  "unique_service_qualified_operation_keys": 257,
+  "unique_annotated_tool_names": 257,
+  "unique_casefolded_annotated_tool_names": 254,
+  "observation_method": "The supplied configured-session export was filtered to Sylvara Zoho roles and cross-checked by operation name against the callable registry available on the observation date. No Zoho record, report, configuration, content, or identity operation was invoked, and no description or input schema was treated as established by the selection alone.",
+  "publication_boundary": "One role-qualified row is retained for every configured Sylvara Zoho tool selection. The prefix-free catalog operation key and annotated tool name are retained; runtime server names, generated transport IDs, service-prefixed adapter labels, endpoints, authentication details, connection aliases, organization or account identifiers, record identifiers, sample values, and returned data are intentionally omitted.",
+  "interpretation": "Configured selection means the operation was present on the inspected Sylvara role on the observation date. It does not prove a current advertised description or input schema, tenant binding, OAuth scope, effective callability, response completeness, plan availability, safe write semantics, or approval for live use.",
   "official_possible_tool_surface": {
     "snapshot_on": "2026-07-24",
     "services": 8,
     "tool_manual_rows": 3222,
     "evidence_status": "reference",
-    "note": "The dated Tool Manual row total documents a broader provider catalog for these services, not enabled Sylvara tools. Refresh the official interactive Tool Manual before selecting or implementing a capability."
+    "note": "The dated Tool Manual row total documents a broader provider catalog for these services, not configured Sylvara selections. Refresh the official interactive Tool Manual before selecting or implementing a capability."
   },
   "roles": [
     {
       "role": "billing-audit",
       "product": "Zoho Billing",
       "access_class": "read-only",
-      "observed_status": "advertised-not-call-verified",
+      "observed_status": "configured-selection-not-call-verified",
       "read_count": 32,
       "write_or_action_count": 0,
       "tool_count": 32,
       "capabilities": [
         {
           "catalog_id": "billing-audit-001",
-          "advertised_tool_name": "ZohoBilling_Get_a_Customer",
-          "operation_label": "Get a Customer",
+          "catalog_operation_key": "Get_a_Customer",
+          "annotated_tool_name": "Get a Customer",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-audit-002",
-          "advertised_tool_name": "ZohoBilling_Get_a_Customer_by_Reference",
-          "operation_label": "Get a Customer by Reference",
+          "catalog_operation_key": "Get_a_Customer_by_Reference",
+          "annotated_tool_name": "Get a Customer by Reference",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-audit-003",
-          "advertised_tool_name": "ZohoBilling_Get_a_Payment",
-          "operation_label": "Get a Payment",
+          "catalog_operation_key": "Get_a_Payment",
+          "annotated_tool_name": "Get a Payment",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-audit-004",
-          "advertised_tool_name": "ZohoBilling_Get_a_Plan",
-          "operation_label": "Get a Plan",
+          "catalog_operation_key": "Get_a_Plan",
+          "annotated_tool_name": "Get a Plan",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-audit-005",
-          "advertised_tool_name": "ZohoBilling_Get_a_Product",
-          "operation_label": "Get a Product",
+          "catalog_operation_key": "Get_a_Product",
+          "annotated_tool_name": "Get a Product",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-audit-006",
-          "advertised_tool_name": "ZohoBilling_Get_a_Subscription",
-          "operation_label": "Get a Subscription",
+          "catalog_operation_key": "Get_a_Subscription",
+          "annotated_tool_name": "Get a Subscription",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-audit-007",
-          "advertised_tool_name": "ZohoBilling_Get_Active_Customers_Report",
-          "operation_label": "Get Active Customers Report",
+          "catalog_operation_key": "Get_Active_Customers_Report",
+          "annotated_tool_name": "Get Active Customers Report",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-audit-008",
-          "advertised_tool_name": "ZohoBilling_Get_an_Addon",
-          "operation_label": "Get an Addon",
+          "catalog_operation_key": "Get_an_Addon",
+          "annotated_tool_name": "Get an Addon",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-audit-009",
-          "advertised_tool_name": "ZohoBilling_Get_an_Event",
-          "operation_label": "Get an Event",
+          "catalog_operation_key": "Get_an_Event",
+          "annotated_tool_name": "Get an Event",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-audit-010",
-          "advertised_tool_name": "ZohoBilling_Get_an_Invoice",
-          "operation_label": "Get an Invoice",
+          "catalog_operation_key": "Get_an_Invoice",
+          "annotated_tool_name": "Get an Invoice",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-audit-011",
-          "advertised_tool_name": "ZohoBilling_Get_an_Organization",
-          "operation_label": "Get an Organization",
+          "catalog_operation_key": "Get_an_Organization",
+          "annotated_tool_name": "Get an Organization",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-audit-012",
-          "advertised_tool_name": "ZohoBilling_Get_ARR_Report",
-          "operation_label": "Get ARR Report",
+          "catalog_operation_key": "Get_ARR_Report",
+          "annotated_tool_name": "Get ARR Report",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-audit-013",
-          "advertised_tool_name": "ZohoBilling_Get_Churned_Subscriptions_Report",
-          "operation_label": "Get Churned Subscriptions Report",
+          "catalog_operation_key": "Get_Churned_Subscriptions_Report",
+          "annotated_tool_name": "Get Churned Subscriptions Report",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-audit-014",
-          "advertised_tool_name": "ZohoBilling_Get_MRR_Report",
-          "operation_label": "Get MRR Report",
+          "catalog_operation_key": "Get_MRR_Report",
+          "annotated_tool_name": "Get MRR Report",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-audit-015",
-          "advertised_tool_name": "ZohoBilling_Get_Payment_Failures_Report",
-          "operation_label": "Get Payment Failures Report",
+          "catalog_operation_key": "Get_Payment_Failures_Report",
+          "annotated_tool_name": "Get Payment Failures Report",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-audit-016",
-          "advertised_tool_name": "ZohoBilling_Get_Subscription_Custom_Fields",
-          "operation_label": "Get Subscription Custom Fields",
+          "catalog_operation_key": "Get_Subscription_Custom_Fields",
+          "annotated_tool_name": "Get Subscription Custom Fields",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-audit-017",
-          "advertised_tool_name": "ZohoBilling_Get_Subscriptions_Summary_Report",
-          "operation_label": "Get Subscriptions Summary Report",
+          "catalog_operation_key": "Get_Subscriptions_Summary_Report",
+          "annotated_tool_name": "Get Subscriptions Summary Report",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-audit-018",
-          "advertised_tool_name": "ZohoBilling_Get_Upcoming_Renewal_Details_Report",
-          "operation_label": "Get Upcoming Renewal Details Report",
+          "catalog_operation_key": "Get_Upcoming_Renewal_Details_Report",
+          "annotated_tool_name": "Get Upcoming Renewal Details Report",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-audit-019",
-          "advertised_tool_name": "ZohoBilling_List_all_Addons",
-          "operation_label": "List all Addons",
+          "catalog_operation_key": "List_all_Addons",
+          "annotated_tool_name": "List all Addons",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-audit-020",
-          "advertised_tool_name": "ZohoBilling_List_all_Customers",
-          "operation_label": "List all Customers",
+          "catalog_operation_key": "List_all_Customers",
+          "annotated_tool_name": "List all Customers",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-audit-021",
-          "advertised_tool_name": "ZohoBilling_List_all_Events",
-          "operation_label": "List all Events",
+          "catalog_operation_key": "List_all_Events",
+          "annotated_tool_name": "List all Events",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-audit-022",
-          "advertised_tool_name": "ZohoBilling_List_all_Invoices",
-          "operation_label": "List all Invoices",
+          "catalog_operation_key": "List_all_Invoices",
+          "annotated_tool_name": "List all Invoices",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-audit-023",
-          "advertised_tool_name": "ZohoBilling_List_all_Organizations",
-          "operation_label": "List all Organizations",
+          "catalog_operation_key": "List_all_Organizations",
+          "annotated_tool_name": "List all Organizations",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-audit-024",
-          "advertised_tool_name": "ZohoBilling_List_all_Payments",
-          "operation_label": "List all Payments",
+          "catalog_operation_key": "List_all_Payments",
+          "annotated_tool_name": "List all Payments",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-audit-025",
-          "advertised_tool_name": "ZohoBilling_List_all_Plans",
-          "operation_label": "List all Plans",
+          "catalog_operation_key": "List_all_Plans",
+          "annotated_tool_name": "List all Plans",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-audit-026",
-          "advertised_tool_name": "ZohoBilling_List_all_Products",
-          "operation_label": "List all Products",
+          "catalog_operation_key": "List_all_Products",
+          "annotated_tool_name": "List all Products",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-audit-027",
-          "advertised_tool_name": "ZohoBilling_List_all_Subscriptions",
-          "operation_label": "List all Subscriptions",
+          "catalog_operation_key": "List_all_Subscriptions",
+          "annotated_tool_name": "List all Subscriptions",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-audit-028",
-          "advertised_tool_name": "ZohoBilling_List_Recent_Activities_of_a_Subscription",
-          "operation_label": "List Recent Activities of a Subscription",
+          "catalog_operation_key": "List_Recent_Activities_of_a_Subscription",
+          "annotated_tool_name": "List Recent Activities of a Subscription",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-audit-029",
-          "advertised_tool_name": "ZohoBilling_Search_Customers",
-          "operation_label": "Search Customers",
+          "catalog_operation_key": "Search_Customers",
+          "annotated_tool_name": "Search Customers",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-audit-030",
-          "advertised_tool_name": "ZohoBilling_Search_Plans",
-          "operation_label": "Search Plans",
+          "catalog_operation_key": "Search_Plans",
+          "annotated_tool_name": "Search Plans",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-audit-031",
-          "advertised_tool_name": "ZohoBilling_Search_Products",
-          "operation_label": "Search Products",
+          "catalog_operation_key": "Search_Products",
+          "annotated_tool_name": "Search Products",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-audit-032",
-          "advertised_tool_name": "ZohoBilling_View_Scheduled_Changes_of_a_Subscription",
-          "operation_label": "View Scheduled Changes of a Subscription",
+          "catalog_operation_key": "View_Scheduled_Changes_of_a_Subscription",
+          "annotated_tool_name": "View Scheduled Changes of a Subscription",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         }
       ]
     },
@@ -274,143 +308,143 @@
       "role": "billing-changes",
       "product": "Zoho Billing",
       "access_class": "mixed-read-write",
-      "observed_status": "advertised-not-call-verified",
+      "observed_status": "configured-selection-not-call-verified",
       "read_count": 6,
       "write_or_action_count": 13,
       "tool_count": 19,
       "capabilities": [
         {
           "catalog_id": "billing-changes-001",
-          "advertised_tool_name": "ZohoBilling_Add_a_Contact_Person_to_a_Subscription",
-          "operation_label": "Add a Contact Person to a Subscription",
+          "catalog_operation_key": "Add_a_Contact_Person_to_a_Subscription",
+          "annotated_tool_name": "Add a Contact Person to a Subscription",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-changes-002",
-          "advertised_tool_name": "ZohoBilling_Add_Subscription_Notes",
-          "operation_label": "Add Subscription Notes",
+          "catalog_operation_key": "Add_Subscription_Notes",
+          "annotated_tool_name": "Add Subscription Notes",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-changes-003",
-          "advertised_tool_name": "ZohoBilling_Cancel_a_Subscription",
-          "operation_label": "Cancel a Subscription",
+          "catalog_operation_key": "Cancel_a_Subscription",
+          "annotated_tool_name": "Cancel a Subscription",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-changes-004",
-          "advertised_tool_name": "ZohoBilling_Create_a_Customer",
-          "operation_label": "Create a Customer",
+          "catalog_operation_key": "Create_a_Customer",
+          "annotated_tool_name": "Create a Customer",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-changes-005",
-          "advertised_tool_name": "ZohoBilling_Create_a_Subscription",
-          "operation_label": "Create a Subscription",
+          "catalog_operation_key": "Create_a_Subscription",
+          "annotated_tool_name": "Create a Subscription",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-changes-006",
-          "advertised_tool_name": "ZohoBilling_Get_a_Customer",
-          "operation_label": "Get a Customer",
+          "catalog_operation_key": "Get_a_Customer",
+          "annotated_tool_name": "Get a Customer",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-changes-007",
-          "advertised_tool_name": "ZohoBilling_Get_a_Plan",
-          "operation_label": "Get a Plan",
+          "catalog_operation_key": "Get_a_Plan",
+          "annotated_tool_name": "Get a Plan",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-changes-008",
-          "advertised_tool_name": "ZohoBilling_Get_a_Subscription",
-          "operation_label": "Get a Subscription",
+          "catalog_operation_key": "Get_a_Subscription",
+          "annotated_tool_name": "Get a Subscription",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-changes-009",
-          "advertised_tool_name": "ZohoBilling_Get_an_Addon",
-          "operation_label": "Get an Addon",
+          "catalog_operation_key": "Get_an_Addon",
+          "annotated_tool_name": "Get an Addon",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-changes-010",
-          "advertised_tool_name": "ZohoBilling_Get_an_Organization",
-          "operation_label": "Get an Organization",
+          "catalog_operation_key": "Get_an_Organization",
+          "annotated_tool_name": "Get an Organization",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-changes-011",
-          "advertised_tool_name": "ZohoBilling_Pause_a_Subscription",
-          "operation_label": "Pause a Subscription",
+          "catalog_operation_key": "Pause_a_Subscription",
+          "annotated_tool_name": "Pause a Subscription",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-changes-012",
-          "advertised_tool_name": "ZohoBilling_Reactivate_a_Subscription",
-          "operation_label": "Reactivate a Subscription",
+          "catalog_operation_key": "Reactivate_a_Subscription",
+          "annotated_tool_name": "Reactivate a Subscription",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-changes-013",
-          "advertised_tool_name": "ZohoBilling_Resume_a_Subscription",
-          "operation_label": "Resume a Subscription",
+          "catalog_operation_key": "Resume_a_Subscription",
+          "annotated_tool_name": "Resume a Subscription",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-changes-014",
-          "advertised_tool_name": "ZohoBilling_Update_a_Contact_Person",
-          "operation_label": "Update a Contact Person",
+          "catalog_operation_key": "Update_a_Contact_Person",
+          "annotated_tool_name": "Update a Contact Person",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-changes-015",
-          "advertised_tool_name": "ZohoBilling_Update_a_Customer",
-          "operation_label": "Update a Customer",
+          "catalog_operation_key": "Update_a_Customer",
+          "annotated_tool_name": "Update a Customer",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-changes-016",
-          "advertised_tool_name": "ZohoBilling_Update_a_Subscription",
-          "operation_label": "Update a Subscription",
+          "catalog_operation_key": "Update_a_Subscription",
+          "annotated_tool_name": "Update a Subscription",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-changes-017",
-          "advertised_tool_name": "ZohoBilling_Update_Custom_Fields_in_a_Subscription",
-          "operation_label": "Update Custom Fields in a Subscription",
+          "catalog_operation_key": "Update_Custom_Fields_in_a_Subscription",
+          "annotated_tool_name": "Update Custom Fields in a Subscription",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-changes-018",
-          "advertised_tool_name": "ZohoBilling_Update_the_Reference_of_a_Subscription",
-          "operation_label": "Update the Reference of a Subscription",
+          "catalog_operation_key": "Update_the_Reference_of_a_Subscription",
+          "annotated_tool_name": "Update the Reference of a Subscription",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "billing-changes-019",
-          "advertised_tool_name": "ZohoBilling_View_Scheduled_Changes_of_a_Subscription",
-          "operation_label": "View Scheduled Changes of a Subscription",
+          "catalog_operation_key": "View_Scheduled_Changes_of_a_Subscription",
+          "annotated_tool_name": "View Scheduled Changes of a Subscription",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         }
       ]
     },
@@ -418,290 +452,290 @@
       "role": "books-audit",
       "product": "Zoho Books",
       "access_class": "read-only",
-      "observed_status": "advertised-not-call-verified",
+      "observed_status": "configured-selection-not-call-verified",
       "read_count": 40,
       "write_or_action_count": 0,
       "tool_count": 40,
       "capabilities": [
         {
           "catalog_id": "books-audit-001",
-          "advertised_tool_name": "ZohoBooks_get_activity_logs_report",
-          "operation_label": "get activity logs report",
+          "catalog_operation_key": "get_activity_logs_report",
+          "annotated_tool_name": "get activity logs report",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-audit-002",
-          "advertised_tool_name": "ZohoBooks_get_ar_aging_summary_report",
-          "operation_label": "get ar aging summary report",
+          "catalog_operation_key": "get_ar_aging_summary_report",
+          "annotated_tool_name": "get ar aging summary report",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-audit-003",
-          "advertised_tool_name": "ZohoBooks_get_balance_sheet_report",
-          "operation_label": "get balance sheet report",
+          "catalog_operation_key": "get_balance_sheet_report",
+          "annotated_tool_name": "get balance sheet report",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-audit-004",
-          "advertised_tool_name": "ZohoBooks_get_bank_account",
-          "operation_label": "get bank account",
+          "catalog_operation_key": "get_bank_account",
+          "annotated_tool_name": "get bank account",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-audit-005",
-          "advertised_tool_name": "ZohoBooks_get_bank_transaction",
-          "operation_label": "get bank transaction",
+          "catalog_operation_key": "get_bank_transaction",
+          "annotated_tool_name": "get bank transaction",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-audit-006",
-          "advertised_tool_name": "ZohoBooks_get_bill",
-          "operation_label": "get bill",
+          "catalog_operation_key": "get_bill",
+          "annotated_tool_name": "get bill",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-audit-007",
-          "advertised_tool_name": "ZohoBooks_get_cash_flow_report",
-          "operation_label": "get cash flow report",
+          "catalog_operation_key": "get_cash_flow_report",
+          "annotated_tool_name": "get cash flow report",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-audit-008",
-          "advertised_tool_name": "ZohoBooks_get_chart_of_account",
-          "operation_label": "get chart of account",
+          "catalog_operation_key": "get_chart_of_account",
+          "annotated_tool_name": "get chart of account",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-audit-009",
-          "advertised_tool_name": "ZohoBooks_get_contact",
-          "operation_label": "get contact",
+          "catalog_operation_key": "get_contact",
+          "annotated_tool_name": "get contact",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-audit-010",
-          "advertised_tool_name": "ZohoBooks_get_credit_note",
-          "operation_label": "get credit note",
+          "catalog_operation_key": "get_credit_note",
+          "annotated_tool_name": "get credit note",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-audit-011",
-          "advertised_tool_name": "ZohoBooks_get_current_user",
-          "operation_label": "get current user",
+          "catalog_operation_key": "get_current_user",
+          "annotated_tool_name": "get current user",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-audit-012",
-          "advertised_tool_name": "ZohoBooks_get_customer_balance_summary_report",
-          "operation_label": "get customer balance summary report",
+          "catalog_operation_key": "get_customer_balance_summary_report",
+          "annotated_tool_name": "get customer balance summary report",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-audit-013",
-          "advertised_tool_name": "ZohoBooks_get_customer_payment",
-          "operation_label": "get customer payment",
+          "catalog_operation_key": "get_customer_payment",
+          "annotated_tool_name": "get customer payment",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-audit-014",
-          "advertised_tool_name": "ZohoBooks_get_estimate",
-          "operation_label": "get estimate",
+          "catalog_operation_key": "get_estimate",
+          "annotated_tool_name": "get estimate",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-audit-015",
-          "advertised_tool_name": "ZohoBooks_get_expense",
-          "operation_label": "get expense",
+          "catalog_operation_key": "get_expense",
+          "annotated_tool_name": "get expense",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-audit-016",
-          "advertised_tool_name": "ZohoBooks_get_fields_meta",
-          "operation_label": "get fields meta",
+          "catalog_operation_key": "get_fields_meta",
+          "annotated_tool_name": "get fields meta",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-audit-017",
-          "advertised_tool_name": "ZohoBooks_get_invoice",
-          "operation_label": "get invoice",
+          "catalog_operation_key": "get_invoice",
+          "annotated_tool_name": "get invoice",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-audit-018",
-          "advertised_tool_name": "ZohoBooks_get_item",
-          "operation_label": "get item",
+          "catalog_operation_key": "get_item",
+          "annotated_tool_name": "get item",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-audit-019",
-          "advertised_tool_name": "ZohoBooks_get_organization",
-          "operation_label": "get organization",
+          "catalog_operation_key": "get_organization",
+          "annotated_tool_name": "get organization",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-audit-020",
-          "advertised_tool_name": "ZohoBooks_get_profit_and_loss_report",
-          "operation_label": "get profit and loss report",
+          "catalog_operation_key": "get_profit_and_loss_report",
+          "annotated_tool_name": "get profit and loss report",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-audit-021",
-          "advertised_tool_name": "ZohoBooks_get_recurring_invoice",
-          "operation_label": "get recurring invoice",
+          "catalog_operation_key": "get_recurring_invoice",
+          "annotated_tool_name": "get recurring invoice",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-audit-022",
-          "advertised_tool_name": "ZohoBooks_get_reports_metadata",
-          "operation_label": "get reports metadata",
+          "catalog_operation_key": "get_reports_metadata",
+          "annotated_tool_name": "get reports metadata",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-audit-023",
-          "advertised_tool_name": "ZohoBooks_get_sales_summary_report",
-          "operation_label": "get sales summary report",
+          "catalog_operation_key": "get_sales_summary_report",
+          "annotated_tool_name": "get sales summary report",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-audit-024",
-          "advertised_tool_name": "ZohoBooks_get_transaction_lock",
-          "operation_label": "get transaction lock",
+          "catalog_operation_key": "get_transaction_lock",
+          "annotated_tool_name": "get transaction lock",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-audit-025",
-          "advertised_tool_name": "ZohoBooks_list_bank_accounts",
-          "operation_label": "list bank accounts",
+          "catalog_operation_key": "list_bank_accounts",
+          "annotated_tool_name": "list bank accounts",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-audit-026",
-          "advertised_tool_name": "ZohoBooks_list_bank_transactions",
-          "operation_label": "list bank transactions",
+          "catalog_operation_key": "list_bank_transactions",
+          "annotated_tool_name": "list bank transactions",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-audit-027",
-          "advertised_tool_name": "ZohoBooks_list_bills",
-          "operation_label": "list bills",
+          "catalog_operation_key": "list_bills",
+          "annotated_tool_name": "list bills",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-audit-028",
-          "advertised_tool_name": "ZohoBooks_list_chart_of_account_transactions",
-          "operation_label": "list chart of account transactions",
+          "catalog_operation_key": "list_chart_of_account_transactions",
+          "annotated_tool_name": "list chart of account transactions",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-audit-029",
-          "advertised_tool_name": "ZohoBooks_list_chart_of_accounts",
-          "operation_label": "list chart of accounts",
+          "catalog_operation_key": "list_chart_of_accounts",
+          "annotated_tool_name": "list chart of accounts",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-audit-030",
-          "advertised_tool_name": "ZohoBooks_list_contacts",
-          "operation_label": "list contacts",
+          "catalog_operation_key": "list_contacts",
+          "annotated_tool_name": "list contacts",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-audit-031",
-          "advertised_tool_name": "ZohoBooks_list_credit_notes",
-          "operation_label": "list credit notes",
+          "catalog_operation_key": "list_credit_notes",
+          "annotated_tool_name": "list credit notes",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-audit-032",
-          "advertised_tool_name": "ZohoBooks_list_customer_payments",
-          "operation_label": "list customer payments",
+          "catalog_operation_key": "list_customer_payments",
+          "annotated_tool_name": "list customer payments",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-audit-033",
-          "advertised_tool_name": "ZohoBooks_list_estimates",
-          "operation_label": "list estimates",
+          "catalog_operation_key": "list_estimates",
+          "annotated_tool_name": "list estimates",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-audit-034",
-          "advertised_tool_name": "ZohoBooks_list_expenses",
-          "operation_label": "list expenses",
+          "catalog_operation_key": "list_expenses",
+          "annotated_tool_name": "list expenses",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-audit-035",
-          "advertised_tool_name": "ZohoBooks_list_invoice_credits_applied",
-          "operation_label": "list invoice credits applied",
+          "catalog_operation_key": "list_invoice_credits_applied",
+          "annotated_tool_name": "list invoice credits applied",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-audit-036",
-          "advertised_tool_name": "ZohoBooks_list_invoice_payments",
-          "operation_label": "list invoice payments",
+          "catalog_operation_key": "list_invoice_payments",
+          "annotated_tool_name": "list invoice payments",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-audit-037",
-          "advertised_tool_name": "ZohoBooks_list_invoices",
-          "operation_label": "list invoices",
+          "catalog_operation_key": "list_invoices",
+          "annotated_tool_name": "list invoices",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-audit-038",
-          "advertised_tool_name": "ZohoBooks_list_items",
-          "operation_label": "list items",
+          "catalog_operation_key": "list_items",
+          "annotated_tool_name": "list items",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-audit-039",
-          "advertised_tool_name": "ZohoBooks_list_organizations",
-          "operation_label": "list organizations",
+          "catalog_operation_key": "list_organizations",
+          "annotated_tool_name": "list organizations",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-audit-040",
-          "advertised_tool_name": "ZohoBooks_list_recurring_invoices",
-          "operation_label": "list recurring invoices",
+          "catalog_operation_key": "list_recurring_invoices",
+          "annotated_tool_name": "list recurring invoices",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         }
       ]
     },
@@ -709,115 +743,115 @@
       "role": "books-changes",
       "product": "Zoho Books",
       "access_class": "mixed-read-write",
-      "observed_status": "advertised-not-call-verified",
+      "observed_status": "configured-selection-not-call-verified",
       "read_count": 9,
       "write_or_action_count": 6,
       "tool_count": 15,
       "capabilities": [
         {
           "catalog_id": "books-changes-001",
-          "advertised_tool_name": "ZohoBooks_create_contact",
-          "operation_label": "create contact",
+          "catalog_operation_key": "create_contact",
+          "annotated_tool_name": "create contact",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-changes-002",
-          "advertised_tool_name": "ZohoBooks_create_estimate",
-          "operation_label": "create estimate",
+          "catalog_operation_key": "create_estimate",
+          "annotated_tool_name": "create estimate",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-changes-003",
-          "advertised_tool_name": "ZohoBooks_create_invoice",
-          "operation_label": "create invoice",
+          "catalog_operation_key": "create_invoice",
+          "annotated_tool_name": "create invoice",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-changes-004",
-          "advertised_tool_name": "ZohoBooks_get_current_user",
-          "operation_label": "get current user",
+          "catalog_operation_key": "get_current_user",
+          "annotated_tool_name": "get current user",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-changes-005",
-          "advertised_tool_name": "ZohoBooks_get_estimate",
-          "operation_label": "get estimate",
+          "catalog_operation_key": "get_estimate",
+          "annotated_tool_name": "get estimate",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-changes-006",
-          "advertised_tool_name": "ZohoBooks_get_invoice",
-          "operation_label": "get invoice",
+          "catalog_operation_key": "get_invoice",
+          "annotated_tool_name": "get invoice",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-changes-007",
-          "advertised_tool_name": "ZohoBooks_get_item",
-          "operation_label": "get item",
+          "catalog_operation_key": "get_item",
+          "annotated_tool_name": "get item",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-changes-008",
-          "advertised_tool_name": "ZohoBooks_get_organization",
-          "operation_label": "get organization",
+          "catalog_operation_key": "get_organization",
+          "annotated_tool_name": "get organization",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-changes-009",
-          "advertised_tool_name": "ZohoBooks_list_contacts",
-          "operation_label": "list contacts",
+          "catalog_operation_key": "list_contacts",
+          "annotated_tool_name": "list contacts",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-changes-010",
-          "advertised_tool_name": "ZohoBooks_list_estimates",
-          "operation_label": "list estimates",
+          "catalog_operation_key": "list_estimates",
+          "annotated_tool_name": "list estimates",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-changes-011",
-          "advertised_tool_name": "ZohoBooks_list_invoices",
-          "operation_label": "list invoices",
+          "catalog_operation_key": "list_invoices",
+          "annotated_tool_name": "list invoices",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-changes-012",
-          "advertised_tool_name": "ZohoBooks_list_items",
-          "operation_label": "list items",
+          "catalog_operation_key": "list_items",
+          "annotated_tool_name": "list items",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-changes-013",
-          "advertised_tool_name": "ZohoBooks_update_contact",
-          "operation_label": "update contact",
+          "catalog_operation_key": "update_contact",
+          "annotated_tool_name": "update contact",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-changes-014",
-          "advertised_tool_name": "ZohoBooks_update_estimate",
-          "operation_label": "update estimate",
+          "catalog_operation_key": "update_estimate",
+          "annotated_tool_name": "update estimate",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-changes-015",
-          "advertised_tool_name": "ZohoBooks_update_invoice",
-          "operation_label": "update invoice",
+          "catalog_operation_key": "update_invoice",
+          "annotated_tool_name": "update invoice",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         }
       ]
     },
@@ -825,234 +859,234 @@
       "role": "books-controller",
       "product": "Zoho Books",
       "access_class": "controller",
-      "observed_status": "advertised-not-call-verified",
+      "observed_status": "configured-selection-not-call-verified",
       "read_count": 10,
       "write_or_action_count": 22,
       "tool_count": 32,
       "capabilities": [
         {
           "catalog_id": "books-controller-001",
-          "advertised_tool_name": "ZohoBooks_apply_credit_note_to_invoice",
-          "operation_label": "apply credit note to invoice",
+          "catalog_operation_key": "apply_credit_note_to_invoice",
+          "annotated_tool_name": "apply credit note to invoice",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-controller-002",
-          "advertised_tool_name": "ZohoBooks_cancel_write_off_invoice",
-          "operation_label": "cancel write off invoice",
+          "catalog_operation_key": "cancel_write_off_invoice",
+          "annotated_tool_name": "cancel write off invoice",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-controller-003",
-          "advertised_tool_name": "ZohoBooks_create_bank_reconciliation",
-          "operation_label": "create bank reconciliation",
+          "catalog_operation_key": "create_bank_reconciliation",
+          "annotated_tool_name": "create bank reconciliation",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-controller-004",
-          "advertised_tool_name": "ZohoBooks_create_credit_note",
-          "operation_label": "create credit note",
+          "catalog_operation_key": "create_credit_note",
+          "annotated_tool_name": "create credit note",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-controller-005",
-          "advertised_tool_name": "ZohoBooks_create_credit_note_refund",
-          "operation_label": "create credit note refund",
+          "catalog_operation_key": "create_credit_note_refund",
+          "annotated_tool_name": "create credit note refund",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-controller-006",
-          "advertised_tool_name": "ZohoBooks_create_customer_payment",
-          "operation_label": "create customer payment",
+          "catalog_operation_key": "create_customer_payment",
+          "annotated_tool_name": "create customer payment",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-controller-007",
-          "advertised_tool_name": "ZohoBooks_create_customer_payment_refund",
-          "operation_label": "create customer payment refund",
+          "catalog_operation_key": "create_customer_payment_refund",
+          "annotated_tool_name": "create customer payment refund",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-controller-008",
-          "advertised_tool_name": "ZohoBooks_create_journal",
-          "operation_label": "create journal",
+          "catalog_operation_key": "create_journal",
+          "annotated_tool_name": "create journal",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-controller-009",
-          "advertised_tool_name": "ZohoBooks_exclude_bank_transaction",
-          "operation_label": "exclude bank transaction",
+          "catalog_operation_key": "exclude_bank_transaction",
+          "annotated_tool_name": "exclude bank transaction",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-controller-010",
-          "advertised_tool_name": "ZohoBooks_get_bank_reconciliation",
-          "operation_label": "get bank reconciliation",
+          "catalog_operation_key": "get_bank_reconciliation",
+          "annotated_tool_name": "get bank reconciliation",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-controller-011",
-          "advertised_tool_name": "ZohoBooks_get_bank_transaction",
-          "operation_label": "get bank transaction",
+          "catalog_operation_key": "get_bank_transaction",
+          "annotated_tool_name": "get bank transaction",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-controller-012",
-          "advertised_tool_name": "ZohoBooks_get_bill",
-          "operation_label": "get bill",
+          "catalog_operation_key": "get_bill",
+          "annotated_tool_name": "get bill",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-controller-013",
-          "advertised_tool_name": "ZohoBooks_get_credit_note",
-          "operation_label": "get credit note",
+          "catalog_operation_key": "get_credit_note",
+          "annotated_tool_name": "get credit note",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-controller-014",
-          "advertised_tool_name": "ZohoBooks_get_current_user",
-          "operation_label": "get current user",
+          "catalog_operation_key": "get_current_user",
+          "annotated_tool_name": "get current user",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-controller-015",
-          "advertised_tool_name": "ZohoBooks_get_customer_payment",
-          "operation_label": "get customer payment",
+          "catalog_operation_key": "get_customer_payment",
+          "annotated_tool_name": "get customer payment",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-controller-016",
-          "advertised_tool_name": "ZohoBooks_get_invoice",
-          "operation_label": "get invoice",
+          "catalog_operation_key": "get_invoice",
+          "annotated_tool_name": "get invoice",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-controller-017",
-          "advertised_tool_name": "ZohoBooks_get_journal",
-          "operation_label": "get journal",
+          "catalog_operation_key": "get_journal",
+          "annotated_tool_name": "get journal",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-controller-018",
-          "advertised_tool_name": "ZohoBooks_get_organization",
-          "operation_label": "get organization",
+          "catalog_operation_key": "get_organization",
+          "annotated_tool_name": "get organization",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-controller-019",
-          "advertised_tool_name": "ZohoBooks_get_transaction_lock",
-          "operation_label": "get transaction lock",
+          "catalog_operation_key": "get_transaction_lock",
+          "annotated_tool_name": "get transaction lock",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-controller-020",
-          "advertised_tool_name": "ZohoBooks_mark_bill_void",
-          "operation_label": "mark bill void",
+          "catalog_operation_key": "mark_bill_void",
+          "annotated_tool_name": "mark bill void",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-controller-021",
-          "advertised_tool_name": "ZohoBooks_mark_credit_note_void",
-          "operation_label": "mark credit note void",
+          "catalog_operation_key": "mark_credit_note_void",
+          "annotated_tool_name": "mark credit note void",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-controller-022",
-          "advertised_tool_name": "ZohoBooks_mark_invoice_void",
-          "operation_label": "mark invoice void",
+          "catalog_operation_key": "mark_invoice_void",
+          "annotated_tool_name": "mark invoice void",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-controller-023",
-          "advertised_tool_name": "ZohoBooks_restore_bank_transaction",
-          "operation_label": "restore bank transaction",
+          "catalog_operation_key": "restore_bank_transaction",
+          "annotated_tool_name": "restore bank transaction",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-controller-024",
-          "advertised_tool_name": "ZohoBooks_reverse_journal",
-          "operation_label": "reverse journal",
+          "catalog_operation_key": "reverse_journal",
+          "annotated_tool_name": "reverse journal",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-controller-025",
-          "advertised_tool_name": "ZohoBooks_submit_journal_for_approval",
-          "operation_label": "submit journal for approval",
+          "catalog_operation_key": "submit_journal_for_approval",
+          "annotated_tool_name": "submit journal for approval",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-controller-026",
-          "advertised_tool_name": "ZohoBooks_uncategorize_bank_transaction",
-          "operation_label": "uncategorize bank transaction",
+          "catalog_operation_key": "uncategorize_bank_transaction",
+          "annotated_tool_name": "uncategorize bank transaction",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-controller-027",
-          "advertised_tool_name": "ZohoBooks_unmatch_bank_transaction",
-          "operation_label": "unmatch bank transaction",
+          "catalog_operation_key": "unmatch_bank_transaction",
+          "annotated_tool_name": "unmatch bank transaction",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-controller-028",
-          "advertised_tool_name": "ZohoBooks_update_bank_reconciliation",
-          "operation_label": "update bank reconciliation",
+          "catalog_operation_key": "update_bank_reconciliation",
+          "annotated_tool_name": "update bank reconciliation",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-controller-029",
-          "advertised_tool_name": "ZohoBooks_update_credit_note",
-          "operation_label": "update credit note",
+          "catalog_operation_key": "update_credit_note",
+          "annotated_tool_name": "update credit note",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-controller-030",
-          "advertised_tool_name": "ZohoBooks_update_customer_payment",
-          "operation_label": "update customer payment",
+          "catalog_operation_key": "update_customer_payment",
+          "annotated_tool_name": "update customer payment",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-controller-031",
-          "advertised_tool_name": "ZohoBooks_update_journal",
-          "operation_label": "update journal",
+          "catalog_operation_key": "update_journal",
+          "annotated_tool_name": "update journal",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "books-controller-032",
-          "advertised_tool_name": "ZohoBooks_write_off_invoice",
-          "operation_label": "write off invoice",
+          "catalog_operation_key": "write_off_invoice",
+          "annotated_tool_name": "write off invoice",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         }
       ]
     },
@@ -1060,101 +1094,101 @@
       "role": "catalyst-audit",
       "product": "Zoho Catalyst",
       "access_class": "read-only",
-      "observed_status": "advertised-not-call-verified",
+      "observed_status": "configured-selection-not-call-verified",
       "read_count": 13,
       "write_or_action_count": 0,
       "tool_count": 13,
       "capabilities": [
         {
           "catalog_id": "catalyst-audit-001",
-          "advertised_tool_name": "CatalystbyZoho_Get_API_route",
-          "operation_label": "Get API route",
+          "catalog_operation_key": "Get_API_route",
+          "annotated_tool_name": "Get API route",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "catalyst-audit-002",
-          "advertised_tool_name": "CatalystbyZoho_Get_Deployment",
-          "operation_label": "Get Deployment",
+          "catalog_operation_key": "Get_Deployment",
+          "annotated_tool_name": "Get Deployment",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "catalyst-audit-003",
-          "advertised_tool_name": "CatalystbyZoho_Get_Function",
-          "operation_label": "Get Function",
+          "catalog_operation_key": "Get_Function",
+          "annotated_tool_name": "Get Function",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "catalyst-audit-004",
-          "advertised_tool_name": "CatalystbyZoho_Get_Logs",
-          "operation_label": "Get Logs",
+          "catalog_operation_key": "Get_Logs",
+          "annotated_tool_name": "Get Logs",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "catalyst-audit-005",
-          "advertised_tool_name": "CatalystbyZoho_Get_Pipeline_By_Id",
-          "operation_label": "Get Pipeline By Id",
+          "catalog_operation_key": "Get_Pipeline_By_Id",
+          "annotated_tool_name": "Get Pipeline By Id",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "catalyst-audit-006",
-          "advertised_tool_name": "CatalystbyZoho_Get_Project_By_Id",
-          "operation_label": "Get Project By Id",
+          "catalog_operation_key": "Get_Project_By_Id",
+          "annotated_tool_name": "Get Project By Id",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "catalyst-audit-007",
-          "advertised_tool_name": "CatalystbyZoho_List_All_API_route",
-          "operation_label": "List All API route",
+          "catalog_operation_key": "List_All_API_route",
+          "annotated_tool_name": "List All API route",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "catalyst-audit-008",
-          "advertised_tool_name": "CatalystbyZoho_List_All_Deployments",
-          "operation_label": "List All Deployments",
+          "catalog_operation_key": "List_All_Deployments",
+          "annotated_tool_name": "List All Deployments",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "catalyst-audit-009",
-          "advertised_tool_name": "CatalystbyZoho_List_All_Env_Variables",
-          "operation_label": "List All Env Variables",
+          "catalog_operation_key": "List_All_Env_Variables",
+          "annotated_tool_name": "List All Env Variables",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "catalyst-audit-010",
-          "advertised_tool_name": "CatalystbyZoho_List_All_Functions",
-          "operation_label": "List All Functions",
+          "catalog_operation_key": "List_All_Functions",
+          "annotated_tool_name": "List All Functions",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "catalyst-audit-011",
-          "advertised_tool_name": "CatalystbyZoho_List_All_Organizations",
-          "operation_label": "List All Organizations",
+          "catalog_operation_key": "List_All_Organizations",
+          "annotated_tool_name": "List All Organizations",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "catalyst-audit-012",
-          "advertised_tool_name": "CatalystbyZoho_List_All_Pipelines",
-          "operation_label": "List All Pipelines",
+          "catalog_operation_key": "List_All_Pipelines",
+          "annotated_tool_name": "List All Pipelines",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "catalyst-audit-013",
-          "advertised_tool_name": "CatalystbyZoho_List_All_Projects",
-          "operation_label": "List All Projects",
+          "catalog_operation_key": "List_All_Projects",
+          "annotated_tool_name": "List All Projects",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         }
       ]
     },
@@ -1162,45 +1196,45 @@
       "role": "catalyst-break-glass",
       "product": "Zoho Catalyst",
       "access_class": "break-glass",
-      "observed_status": "advertised-not-call-verified",
+      "observed_status": "configured-selection-not-call-verified",
       "read_count": 0,
       "write_or_action_count": 5,
       "tool_count": 5,
       "capabilities": [
         {
           "catalog_id": "catalyst-break-glass-001",
-          "advertised_tool_name": "CatalystbyZoho_Configure_API_Gateway_Route",
-          "operation_label": "Configure API Gateway Route",
+          "catalog_operation_key": "Configure_API_Gateway_Route",
+          "annotated_tool_name": "Configure API Gateway Route",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "catalyst-break-glass-002",
-          "advertised_tool_name": "CatalystbyZoho_Create_Env_Variables",
-          "operation_label": "Create Env Variables",
+          "catalog_operation_key": "Create_Env_Variables",
+          "annotated_tool_name": "Create Env Variables",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "catalyst-break-glass-003",
-          "advertised_tool_name": "CatalystbyZoho_Create_Pipeline",
-          "operation_label": "Create Pipeline",
+          "catalog_operation_key": "Create_Pipeline",
+          "annotated_tool_name": "Create Pipeline",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "catalyst-break-glass-004",
-          "advertised_tool_name": "CatalystbyZoho_Update_Environment_Variable",
-          "operation_label": "Update Environment Variable",
+          "catalog_operation_key": "Update_Environment_Variable",
+          "annotated_tool_name": "Update Environment Variable",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "catalyst-break-glass-005",
-          "advertised_tool_name": "CatalystbyZoho_Update_Pipeline",
-          "operation_label": "Update Pipeline",
+          "catalog_operation_key": "Update_Pipeline",
+          "annotated_tool_name": "Update Pipeline",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         }
       ]
     },
@@ -1208,59 +1242,59 @@
       "role": "catalyst-release",
       "product": "Zoho Catalyst",
       "access_class": "release",
-      "observed_status": "advertised-not-call-verified",
+      "observed_status": "configured-selection-not-call-verified",
       "read_count": 0,
       "write_or_action_count": 7,
       "tool_count": 7,
       "capabilities": [
         {
           "catalog_id": "catalyst-release-001",
-          "advertised_tool_name": "CatalystbyZoho_Cancel_Build",
-          "operation_label": "Cancel Build",
+          "catalog_operation_key": "Cancel_Build",
+          "annotated_tool_name": "Cancel Build",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "catalyst-release-002",
-          "advertised_tool_name": "CatalystbyZoho_Execute_Automation_Test",
-          "operation_label": "Execute Automation Test",
+          "catalog_operation_key": "Execute_Automation_Test",
+          "annotated_tool_name": "Execute Automation Test",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "catalyst-release-003",
-          "advertised_tool_name": "CatalystbyZoho_Execute_Function_Via_POST",
-          "operation_label": "Execute Function Via POST",
+          "catalog_operation_key": "Execute_Function_Via_POST",
+          "annotated_tool_name": "Execute Function Via POST",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "catalyst-release-004",
-          "advertised_tool_name": "CatalystbyZoho_Execute_Pipeline_Manually",
-          "operation_label": "Execute Pipeline Manually",
+          "catalog_operation_key": "Execute_Pipeline_Manually",
+          "annotated_tool_name": "Execute Pipeline Manually",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "catalyst-release-005",
-          "advertised_tool_name": "CatalystbyZoho_Redeploy_a_deployment",
-          "operation_label": "Redeploy a deployment",
+          "catalog_operation_key": "Redeploy_a_deployment",
+          "annotated_tool_name": "Redeploy a deployment",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "catalyst-release-006",
-          "advertised_tool_name": "CatalystbyZoho_Rollback_Build",
-          "operation_label": "Rollback Build",
+          "catalog_operation_key": "Rollback_Build",
+          "annotated_tool_name": "Rollback Build",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "catalyst-release-007",
-          "advertised_tool_name": "CatalystbyZoho_Update_Function",
-          "operation_label": "Update Function",
+          "catalog_operation_key": "Update_Function",
+          "annotated_tool_name": "Update Function",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         }
       ]
     },
@@ -1268,129 +1302,129 @@
       "role": "creator-audit",
       "product": "Zoho Creator",
       "access_class": "read-only",
-      "observed_status": "advertised-not-call-verified",
+      "observed_status": "configured-selection-not-call-verified",
       "read_count": 17,
       "write_or_action_count": 0,
       "tool_count": 17,
       "capabilities": [
         {
           "catalog_id": "creator-audit-001",
-          "advertised_tool_name": "ZohoCreator_getApplications",
-          "operation_label": "get Applications",
+          "catalog_operation_key": "getApplications",
+          "annotated_tool_name": "get Applications",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "creator-audit-002",
-          "advertised_tool_name": "ZohoCreator_getApplicationsByWorkspace",
-          "operation_label": "get Applications By Workspace",
+          "catalog_operation_key": "getApplicationsByWorkspace",
+          "annotated_tool_name": "get Applications By Workspace",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "creator-audit-003",
-          "advertised_tool_name": "ZohoCreator_getApplicationSummary",
-          "operation_label": "get Application Summary",
+          "catalog_operation_key": "getApplicationSummary",
+          "annotated_tool_name": "get Application Summary",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "creator-audit-004",
-          "advertised_tool_name": "ZohoCreator_getApprovals",
-          "operation_label": "get Approvals",
+          "catalog_operation_key": "getApprovals",
+          "annotated_tool_name": "get Approvals",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "creator-audit-005",
-          "advertised_tool_name": "ZohoCreator_getBlueprintTransitions",
-          "operation_label": "get Blueprint Transitions",
+          "catalog_operation_key": "getBlueprintTransitions",
+          "annotated_tool_name": "get Blueprint Transitions",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "creator-audit-006",
-          "advertised_tool_name": "ZohoCreator_getComments",
-          "operation_label": "get Comments",
+          "catalog_operation_key": "getComments",
+          "annotated_tool_name": "get Comments",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "creator-audit-007",
-          "advertised_tool_name": "ZohoCreator_getCreatorRecords",
-          "operation_label": "get Creator Records",
+          "catalog_operation_key": "getCreatorRecords",
+          "annotated_tool_name": "get Creator Records",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "creator-audit-008",
-          "advertised_tool_name": "ZohoCreator_getFormMetadata",
-          "operation_label": "get Form Metadata",
+          "catalog_operation_key": "getFormMetadata",
+          "annotated_tool_name": "get Form Metadata",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "creator-audit-009",
-          "advertised_tool_name": "ZohoCreator_getForms",
-          "operation_label": "get Forms",
+          "catalog_operation_key": "getForms",
+          "annotated_tool_name": "get Forms",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "creator-audit-010",
-          "advertised_tool_name": "ZohoCreator_getPages",
-          "operation_label": "get Pages",
+          "catalog_operation_key": "getPages",
+          "annotated_tool_name": "get Pages",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "creator-audit-011",
-          "advertised_tool_name": "ZohoCreator_getRecordByID",
-          "operation_label": "get Record By ID",
+          "catalog_operation_key": "getRecordByID",
+          "annotated_tool_name": "get Record By ID",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "creator-audit-012",
-          "advertised_tool_name": "ZohoCreator_getReportMetadata",
-          "operation_label": "get Report Metadata",
+          "catalog_operation_key": "getReportMetadata",
+          "annotated_tool_name": "get Report Metadata",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "creator-audit-013",
-          "advertised_tool_name": "ZohoCreator_getReports",
-          "operation_label": "get Reports",
+          "catalog_operation_key": "getReports",
+          "annotated_tool_name": "get Reports",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "creator-audit-014",
-          "advertised_tool_name": "ZohoCreator_getSections",
-          "operation_label": "get Sections",
+          "catalog_operation_key": "getSections",
+          "annotated_tool_name": "get Sections",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "creator-audit-015",
-          "advertised_tool_name": "ZohoCreator_getUsageSummary",
-          "operation_label": "get Usage Summary",
+          "catalog_operation_key": "getUsageSummary",
+          "annotated_tool_name": "get Usage Summary",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "creator-audit-016",
-          "advertised_tool_name": "ZohoCreator_getUsageTrend",
-          "operation_label": "get Usage Trend",
+          "catalog_operation_key": "getUsageTrend",
+          "annotated_tool_name": "get Usage Trend",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "creator-audit-017",
-          "advertised_tool_name": "ZohoCreator_getWorkspaces",
-          "operation_label": "get Workspaces",
+          "catalog_operation_key": "getWorkspaces",
+          "annotated_tool_name": "get Workspaces",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         }
       ]
     },
@@ -1398,87 +1432,87 @@
       "role": "creator-changes",
       "product": "Zoho Creator",
       "access_class": "mixed-read-write",
-      "observed_status": "advertised-not-call-verified",
+      "observed_status": "configured-selection-not-call-verified",
       "read_count": 5,
       "write_or_action_count": 6,
       "tool_count": 11,
       "capabilities": [
         {
           "catalog_id": "creator-changes-001",
-          "advertised_tool_name": "ZohoCreator_addComment",
-          "operation_label": "add Comment",
+          "catalog_operation_key": "addComment",
+          "annotated_tool_name": "add Comment",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "creator-changes-002",
-          "advertised_tool_name": "ZohoCreator_addRecords",
-          "operation_label": "add Records",
+          "catalog_operation_key": "addRecords",
+          "annotated_tool_name": "add Records",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "creator-changes-003",
-          "advertised_tool_name": "ZohoCreator_addReplyToComment",
-          "operation_label": "add Reply To Comment",
+          "catalog_operation_key": "addReplyToComment",
+          "annotated_tool_name": "add Reply To Comment",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "creator-changes-004",
-          "advertised_tool_name": "ZohoCreator_executeApprovalAction",
-          "operation_label": "execute Approval Action",
+          "catalog_operation_key": "executeApprovalAction",
+          "annotated_tool_name": "execute Approval Action",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "creator-changes-005",
-          "advertised_tool_name": "ZohoCreator_executeBlueprintTransition",
-          "operation_label": "execute Blueprint Transition",
+          "catalog_operation_key": "executeBlueprintTransition",
+          "annotated_tool_name": "execute Blueprint Transition",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "creator-changes-006",
-          "advertised_tool_name": "ZohoCreator_getApplications",
-          "operation_label": "get Applications",
+          "catalog_operation_key": "getApplications",
+          "annotated_tool_name": "get Applications",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "creator-changes-007",
-          "advertised_tool_name": "ZohoCreator_getApplicationSummary",
-          "operation_label": "get Application Summary",
+          "catalog_operation_key": "getApplicationSummary",
+          "annotated_tool_name": "get Application Summary",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "creator-changes-008",
-          "advertised_tool_name": "ZohoCreator_getFormMetadata",
-          "operation_label": "get Form Metadata",
+          "catalog_operation_key": "getFormMetadata",
+          "annotated_tool_name": "get Form Metadata",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "creator-changes-009",
-          "advertised_tool_name": "ZohoCreator_getRecordByID",
-          "operation_label": "get Record By ID",
+          "catalog_operation_key": "getRecordByID",
+          "annotated_tool_name": "get Record By ID",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "creator-changes-010",
-          "advertised_tool_name": "ZohoCreator_getReportMetadata",
-          "operation_label": "get Report Metadata",
+          "catalog_operation_key": "getReportMetadata",
+          "annotated_tool_name": "get Report Metadata",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "creator-changes-011",
-          "advertised_tool_name": "ZohoCreator_updateRecordByID",
-          "operation_label": "update Record By ID",
+          "catalog_operation_key": "updateRecordByID",
+          "annotated_tool_name": "update Record By ID",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         }
       ]
     },
@@ -1486,255 +1520,255 @@
       "role": "crm-audit",
       "product": "Zoho CRM",
       "access_class": "read-only",
-      "observed_status": "advertised-not-call-verified",
+      "observed_status": "configured-selection-not-call-verified",
       "read_count": 35,
       "write_or_action_count": 0,
       "tool_count": 35,
       "capabilities": [
         {
           "catalog_id": "crm-audit-001",
-          "advertised_tool_name": "ZohoCRM_executeCOQLQuery",
-          "operation_label": "execute COQLQuery",
+          "catalog_operation_key": "executeCOQLQuery",
+          "annotated_tool_name": "execute COQLQuery",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-audit-002",
-          "advertised_tool_name": "ZohoCRM_getBulkGlobalPicklists",
-          "operation_label": "get Bulk Global Picklists",
+          "catalog_operation_key": "getBulkGlobalPicklists",
+          "annotated_tool_name": "get Bulk Global Picklists",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-audit-003",
-          "advertised_tool_name": "ZohoCRM_getCustomViews",
-          "operation_label": "get Custom Views",
+          "catalog_operation_key": "getCustomViews",
+          "annotated_tool_name": "get Custom Views",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-audit-004",
-          "advertised_tool_name": "ZohoCRM_getFields",
-          "operation_label": "get Fields",
+          "catalog_operation_key": "getFields",
+          "annotated_tool_name": "get Fields",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-audit-005",
-          "advertised_tool_name": "ZohoCRM_getFieldsWithID",
-          "operation_label": "get Fields With ID",
+          "catalog_operation_key": "getFieldsWithID",
+          "annotated_tool_name": "get Fields With ID",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-audit-006",
-          "advertised_tool_name": "ZohoCRM_getFieldUpdateById",
-          "operation_label": "get Field Update By Id",
+          "catalog_operation_key": "getFieldUpdateById",
+          "annotated_tool_name": "get Field Update By Id",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-audit-007",
-          "advertised_tool_name": "ZohoCRM_getFieldUpdates",
-          "operation_label": "get Field Updates",
+          "catalog_operation_key": "getFieldUpdates",
+          "annotated_tool_name": "get Field Updates",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-audit-008",
-          "advertised_tool_name": "ZohoCRM_getGlobalPickListFieldAssociations",
-          "operation_label": "get Global Pick List Field Associations",
+          "catalog_operation_key": "getGlobalPickListFieldAssociations",
+          "annotated_tool_name": "get Global Pick List Field Associations",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-audit-009",
-          "advertised_tool_name": "ZohoCRM_getLayoutById",
-          "operation_label": "get Layout By Id",
+          "catalog_operation_key": "getLayoutById",
+          "annotated_tool_name": "get Layout By Id",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-audit-010",
-          "advertised_tool_name": "ZohoCRM_getLayoutRules",
-          "operation_label": "get Layout Rules",
+          "catalog_operation_key": "getLayoutRules",
+          "annotated_tool_name": "get Layout Rules",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-audit-011",
-          "advertised_tool_name": "ZohoCRM_getLayoutRulesById",
-          "operation_label": "get Layout Rules By Id",
+          "catalog_operation_key": "getLayoutRulesById",
+          "annotated_tool_name": "get Layout Rules By Id",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-audit-012",
-          "advertised_tool_name": "ZohoCRM_getLayouts",
-          "operation_label": "get Layouts",
+          "catalog_operation_key": "getLayouts",
+          "annotated_tool_name": "get Layouts",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-audit-013",
-          "advertised_tool_name": "ZohoCRM_getModuleByApiName",
-          "operation_label": "get Module By Api Name",
+          "catalog_operation_key": "getModuleByApiName",
+          "annotated_tool_name": "get Module By Api Name",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-audit-014",
-          "advertised_tool_name": "ZohoCRM_getModules",
-          "operation_label": "get Modules",
+          "catalog_operation_key": "getModules",
+          "annotated_tool_name": "get Modules",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-audit-015",
-          "advertised_tool_name": "ZohoCRM_getNoteById",
-          "operation_label": "get Note By Id",
+          "catalog_operation_key": "getNoteById",
+          "annotated_tool_name": "get Note By Id",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-audit-016",
-          "advertised_tool_name": "ZohoCRM_getOrganization",
-          "operation_label": "get Organization",
+          "catalog_operation_key": "getOrganization",
+          "annotated_tool_name": "get Organization",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-audit-017",
-          "advertised_tool_name": "ZohoCRM_getPipeline",
-          "operation_label": "get Pipeline",
+          "catalog_operation_key": "getPipeline",
+          "annotated_tool_name": "get Pipeline",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-audit-018",
-          "advertised_tool_name": "ZohoCRM_getPipelines",
-          "operation_label": "get Pipelines",
+          "catalog_operation_key": "getPipelines",
+          "annotated_tool_name": "get Pipelines",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-audit-019",
-          "advertised_tool_name": "ZohoCRM_getRecord",
-          "operation_label": "get Record",
+          "catalog_operation_key": "getRecord",
+          "annotated_tool_name": "get Record",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-audit-020",
-          "advertised_tool_name": "ZohoCRM_getRecordCount",
-          "operation_label": "get Record Count",
+          "catalog_operation_key": "getRecordCount",
+          "annotated_tool_name": "get Record Count",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-audit-021",
-          "advertised_tool_name": "ZohoCRM_getRecords",
-          "operation_label": "get Records",
+          "catalog_operation_key": "getRecords",
+          "annotated_tool_name": "get Records",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-audit-022",
-          "advertised_tool_name": "ZohoCRM_getRelatedLists",
-          "operation_label": "get Related Lists",
+          "catalog_operation_key": "getRelatedLists",
+          "annotated_tool_name": "get Related Lists",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-audit-023",
-          "advertised_tool_name": "ZohoCRM_getRelatedRecord",
-          "operation_label": "get Related Record",
+          "catalog_operation_key": "getRelatedRecord",
+          "annotated_tool_name": "get Related Record",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-audit-024",
-          "advertised_tool_name": "ZohoCRM_getRelatedRecords",
-          "operation_label": "get Related Records",
+          "catalog_operation_key": "getRelatedRecords",
+          "annotated_tool_name": "get Related Records",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-audit-025",
-          "advertised_tool_name": "ZohoCRM_getRelatedRecordsCount",
-          "operation_label": "get Related Records Count",
+          "catalog_operation_key": "getRelatedRecordsCount",
+          "annotated_tool_name": "get Related Records Count",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-audit-026",
-          "advertised_tool_name": "ZohoCRM_getSingleGlobalPicklists",
-          "operation_label": "get Single Global Picklists",
+          "catalog_operation_key": "getSingleGlobalPicklists",
+          "annotated_tool_name": "get Single Global Picklists",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-audit-027",
-          "advertised_tool_name": "ZohoCRM_getTags",
-          "operation_label": "get Tags",
+          "catalog_operation_key": "getTags",
+          "annotated_tool_name": "get Tags",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-audit-028",
-          "advertised_tool_name": "ZohoCRM_getTaskById",
-          "operation_label": "get Task By Id",
+          "catalog_operation_key": "getTaskById",
+          "annotated_tool_name": "get Task By Id",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-audit-029",
-          "advertised_tool_name": "ZohoCRM_getTimelines",
-          "operation_label": "get Timelines",
+          "catalog_operation_key": "getTimelines",
+          "annotated_tool_name": "get Timelines",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-audit-030",
-          "advertised_tool_name": "ZohoCRM_getUsers",
-          "operation_label": "get Users",
+          "catalog_operation_key": "getUsers",
+          "annotated_tool_name": "get Users",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-audit-031",
-          "advertised_tool_name": "ZohoCRM_getWorkflowConfigurations",
-          "operation_label": "get Workflow Configurations",
+          "catalog_operation_key": "getWorkflowConfigurations",
+          "annotated_tool_name": "get Workflow Configurations",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-audit-032",
-          "advertised_tool_name": "ZohoCRM_getWorkflowRuleById",
-          "operation_label": "get Workflow Rule By Id",
+          "catalog_operation_key": "getWorkflowRuleById",
+          "annotated_tool_name": "get Workflow Rule By Id",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-audit-033",
-          "advertised_tool_name": "ZohoCRM_getWorkflowRules",
-          "operation_label": "get Workflow Rules",
+          "catalog_operation_key": "getWorkflowRules",
+          "annotated_tool_name": "get Workflow Rules",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-audit-034",
-          "advertised_tool_name": "ZohoCRM_getWorkflowTasks",
-          "operation_label": "get Workflow Tasks",
+          "catalog_operation_key": "getWorkflowTasks",
+          "annotated_tool_name": "get Workflow Tasks",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-audit-035",
-          "advertised_tool_name": "ZohoCRM_searchRecords",
-          "operation_label": "search Records",
+          "catalog_operation_key": "searchRecords",
+          "annotated_tool_name": "search Records",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         }
       ]
     },
@@ -1742,73 +1776,73 @@
       "role": "crm-changes",
       "product": "Zoho CRM",
       "access_class": "mixed-read-write",
-      "observed_status": "advertised-not-call-verified",
+      "observed_status": "configured-selection-not-call-verified",
       "read_count": 5,
       "write_or_action_count": 4,
       "tool_count": 9,
       "capabilities": [
         {
           "catalog_id": "crm-changes-001",
-          "advertised_tool_name": "ZohoCRM_createNotesModule",
-          "operation_label": "create Notes Module",
+          "catalog_operation_key": "createNotesModule",
+          "annotated_tool_name": "create Notes Module",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-changes-002",
-          "advertised_tool_name": "ZohoCRM_createRecords",
-          "operation_label": "create Records",
+          "catalog_operation_key": "createRecords",
+          "annotated_tool_name": "create Records",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-changes-003",
-          "advertised_tool_name": "ZohoCRM_getNotesById",
-          "operation_label": "get Notes By Id",
+          "catalog_operation_key": "getNotesById",
+          "annotated_tool_name": "get Notes By Id",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-changes-004",
-          "advertised_tool_name": "ZohoCRM_getOrganization",
-          "operation_label": "get Organization",
+          "catalog_operation_key": "getOrganization",
+          "annotated_tool_name": "get Organization",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-changes-005",
-          "advertised_tool_name": "ZohoCRM_getRecord",
-          "operation_label": "get Record",
+          "catalog_operation_key": "getRecord",
+          "annotated_tool_name": "get Record",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-changes-006",
-          "advertised_tool_name": "ZohoCRM_getRelatedRecords",
-          "operation_label": "get Related Records",
+          "catalog_operation_key": "getRelatedRecords",
+          "annotated_tool_name": "get Related Records",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-changes-007",
-          "advertised_tool_name": "ZohoCRM_searchRecords",
-          "operation_label": "search Records",
+          "catalog_operation_key": "searchRecords",
+          "annotated_tool_name": "search Records",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-changes-008",
-          "advertised_tool_name": "ZohoCRM_updateNoteById",
-          "operation_label": "update Note By Id",
+          "catalog_operation_key": "updateNoteById",
+          "annotated_tool_name": "update Note By Id",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "crm-changes-009",
-          "advertised_tool_name": "ZohoCRM_updateRecord",
-          "operation_label": "update Record",
+          "catalog_operation_key": "updateRecord",
+          "annotated_tool_name": "update Record",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         }
       ]
     },
@@ -1816,94 +1850,94 @@
       "role": "mail-audit",
       "product": "Zoho Mail",
       "access_class": "read-only",
-      "observed_status": "advertised-not-call-verified",
+      "observed_status": "configured-selection-not-call-verified",
       "read_count": 12,
       "write_or_action_count": 0,
       "tool_count": 12,
       "capabilities": [
         {
           "catalog_id": "mail-audit-001",
-          "advertised_tool_name": "ZohoMail_getAccountDetails",
-          "operation_label": "get Account Details",
+          "catalog_operation_key": "getAccountDetails",
+          "annotated_tool_name": "get Account Details",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "mail-audit-002",
-          "advertised_tool_name": "ZohoMail_getAllFolders",
-          "operation_label": "get All Folders",
+          "catalog_operation_key": "getAllFolders",
+          "annotated_tool_name": "get All Folders",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "mail-audit-003",
-          "advertised_tool_name": "ZohoMail_getFolder",
-          "operation_label": "get Folder",
+          "catalog_operation_key": "getFolder",
+          "annotated_tool_name": "get Folder",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "mail-audit-004",
-          "advertised_tool_name": "ZohoMail_getMailAccounts",
-          "operation_label": "get Mail Accounts",
+          "catalog_operation_key": "getMailAccounts",
+          "annotated_tool_name": "get Mail Accounts",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "mail-audit-005",
-          "advertised_tool_name": "ZohoMail_getMessageAttachmentInfo",
-          "operation_label": "get Message Attachment Info",
+          "catalog_operation_key": "getMessageAttachmentInfo",
+          "annotated_tool_name": "get Message Attachment Info",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "mail-audit-006",
-          "advertised_tool_name": "ZohoMail_getMessageContent",
-          "operation_label": "get Message Content",
+          "catalog_operation_key": "getMessageContent",
+          "annotated_tool_name": "get Message Content",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "mail-audit-007",
-          "advertised_tool_name": "ZohoMail_getMessageDetails",
-          "operation_label": "get Message Details",
+          "catalog_operation_key": "getMessageDetails",
+          "annotated_tool_name": "get Message Details",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "mail-audit-008",
-          "advertised_tool_name": "ZohoMail_getMessageHeader",
-          "operation_label": "get Message Header",
+          "catalog_operation_key": "getMessageHeader",
+          "annotated_tool_name": "get Message Header",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "mail-audit-009",
-          "advertised_tool_name": "ZohoMail_getOrgDetails",
-          "operation_label": "get Org Details",
+          "catalog_operation_key": "getOrgDetails",
+          "annotated_tool_name": "get Org Details",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "mail-audit-010",
-          "advertised_tool_name": "ZohoMail_getOriginalMessage",
-          "operation_label": "get Original Message",
+          "catalog_operation_key": "getOriginalMessage",
+          "annotated_tool_name": "get Original Message",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "mail-audit-011",
-          "advertised_tool_name": "ZohoMail_listEmails",
-          "operation_label": "list Emails",
+          "catalog_operation_key": "listEmails",
+          "annotated_tool_name": "list Emails",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "mail-audit-012",
-          "advertised_tool_name": "ZohoMail_SearchEmails",
-          "operation_label": "Search Emails",
+          "catalog_operation_key": "SearchEmails",
+          "annotated_tool_name": "Search Emails",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         }
       ]
     },
@@ -1911,38 +1945,38 @@
       "role": "mail-changes",
       "product": "Zoho Mail",
       "access_class": "mixed-read-write",
-      "observed_status": "advertised-not-call-verified",
+      "observed_status": "configured-selection-not-call-verified",
       "read_count": 2,
       "write_or_action_count": 2,
       "tool_count": 4,
       "capabilities": [
         {
           "catalog_id": "mail-changes-001",
-          "advertised_tool_name": "ZohoMail_getAllFolders",
-          "operation_label": "get All Folders",
+          "catalog_operation_key": "getAllFolders",
+          "annotated_tool_name": "get All Folders",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "mail-changes-002",
-          "advertised_tool_name": "ZohoMail_getMailAccounts",
-          "operation_label": "get Mail Accounts",
+          "catalog_operation_key": "getMailAccounts",
+          "annotated_tool_name": "get Mail Accounts",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "mail-changes-003",
-          "advertised_tool_name": "ZohoMail_sendEmail",
-          "operation_label": "send Email",
+          "catalog_operation_key": "sendEmail",
+          "annotated_tool_name": "send Email",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "mail-changes-004",
-          "advertised_tool_name": "ZohoMail_sendReplyEmail",
-          "operation_label": "send Reply Email",
+          "catalog_operation_key": "sendReplyEmail",
+          "annotated_tool_name": "send Reply Email",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         }
       ]
     },
@@ -1950,80 +1984,80 @@
       "role": "payments-audit",
       "product": "Zoho Payments",
       "access_class": "read-only",
-      "observed_status": "advertised-not-call-verified",
+      "observed_status": "configured-selection-not-call-verified",
       "read_count": 10,
       "write_or_action_count": 0,
       "tool_count": 10,
       "capabilities": [
         {
           "catalog_id": "payments-audit-001",
-          "advertised_tool_name": "ZohoPayments_getCustomer",
-          "operation_label": "get Customer",
+          "catalog_operation_key": "getCustomer",
+          "annotated_tool_name": "get Customer",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "payments-audit-002",
-          "advertised_tool_name": "ZohoPayments_getPayment",
-          "operation_label": "get Payment",
+          "catalog_operation_key": "getPayment",
+          "annotated_tool_name": "get Payment",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "payments-audit-003",
-          "advertised_tool_name": "ZohoPayments_getPaymentLink",
-          "operation_label": "get Payment Link",
+          "catalog_operation_key": "getPaymentLink",
+          "annotated_tool_name": "get Payment Link",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "payments-audit-004",
-          "advertised_tool_name": "ZohoPayments_getPaymentSession",
-          "operation_label": "get Payment Session",
+          "catalog_operation_key": "getPaymentSession",
+          "annotated_tool_name": "get Payment Session",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "payments-audit-005",
-          "advertised_tool_name": "ZohoPayments_getPayout",
-          "operation_label": "get Payout",
+          "catalog_operation_key": "getPayout",
+          "annotated_tool_name": "get Payout",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "payments-audit-006",
-          "advertised_tool_name": "ZohoPayments_getPayoutTransactions",
-          "operation_label": "get Payout Transactions",
+          "catalog_operation_key": "getPayoutTransactions",
+          "annotated_tool_name": "get Payout Transactions",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "payments-audit-007",
-          "advertised_tool_name": "ZohoPayments_getRefund",
-          "operation_label": "get Refund",
+          "catalog_operation_key": "getRefund",
+          "annotated_tool_name": "get Refund",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "payments-audit-008",
-          "advertised_tool_name": "ZohoPayments_listMerchantAccounts",
-          "operation_label": "list Merchant Accounts",
+          "catalog_operation_key": "listMerchantAccounts",
+          "annotated_tool_name": "list Merchant Accounts",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "payments-audit-009",
-          "advertised_tool_name": "ZohoPayments_listPayments",
-          "operation_label": "list Payments",
+          "catalog_operation_key": "listPayments",
+          "annotated_tool_name": "list Payments",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "payments-audit-010",
-          "advertised_tool_name": "ZohoPayments_listPayouts",
-          "operation_label": "list Payouts",
+          "catalog_operation_key": "listPayouts",
+          "annotated_tool_name": "list Payouts",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         }
       ]
     },
@@ -2031,59 +2065,59 @@
       "role": "payments-changes",
       "product": "Zoho Payments",
       "access_class": "mixed-read-write",
-      "observed_status": "advertised-not-call-verified",
+      "observed_status": "configured-selection-not-call-verified",
       "read_count": 3,
       "write_or_action_count": 4,
       "tool_count": 7,
       "capabilities": [
         {
           "catalog_id": "payments-changes-001",
-          "advertised_tool_name": "ZohoPayments_createCustomer",
-          "operation_label": "create Customer",
+          "catalog_operation_key": "createCustomer",
+          "annotated_tool_name": "create Customer",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "payments-changes-002",
-          "advertised_tool_name": "ZohoPayments_createPaymentLink",
-          "operation_label": "create Payment Link",
+          "catalog_operation_key": "createPaymentLink",
+          "annotated_tool_name": "create Payment Link",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "payments-changes-003",
-          "advertised_tool_name": "ZohoPayments_createPaymentSession",
-          "operation_label": "create Payment Session",
+          "catalog_operation_key": "createPaymentSession",
+          "annotated_tool_name": "create Payment Session",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "payments-changes-004",
-          "advertised_tool_name": "ZohoPayments_getCustomer",
-          "operation_label": "get Customer",
+          "catalog_operation_key": "getCustomer",
+          "annotated_tool_name": "get Customer",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "payments-changes-005",
-          "advertised_tool_name": "ZohoPayments_getPaymentLink",
-          "operation_label": "get Payment Link",
+          "catalog_operation_key": "getPaymentLink",
+          "annotated_tool_name": "get Payment Link",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "payments-changes-006",
-          "advertised_tool_name": "ZohoPayments_getPaymentSession",
-          "operation_label": "get Payment Session",
+          "catalog_operation_key": "getPaymentSession",
+          "annotated_tool_name": "get Payment Session",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "payments-changes-007",
-          "advertised_tool_name": "ZohoPayments_updatePaymentLink",
-          "operation_label": "update Payment Link",
+          "catalog_operation_key": "updatePaymentLink",
+          "annotated_tool_name": "update Payment Link",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         }
       ]
     },
@@ -2091,157 +2125,157 @@
       "role": "workdrive-audit",
       "product": "Zoho WorkDrive",
       "access_class": "read-only",
-      "observed_status": "advertised-not-call-verified",
+      "observed_status": "configured-selection-not-call-verified",
       "read_count": 21,
       "write_or_action_count": 0,
       "tool_count": 21,
       "capabilities": [
         {
           "catalog_id": "workdrive-audit-001",
-          "advertised_tool_name": "ZohoWorkdrive_Breadcrumbs_Of_File",
-          "operation_label": "Breadcrumbs Of File",
+          "catalog_operation_key": "Breadcrumbs_Of_File",
+          "annotated_tool_name": "Breadcrumbs Of File",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "workdrive-audit-002",
-          "advertised_tool_name": "ZohoWorkdrive_Download_Server_File",
-          "operation_label": "Download Server File",
+          "catalog_operation_key": "Download_Server_File",
+          "annotated_tool_name": "Download Server File",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "workdrive-audit-003",
-          "advertised_tool_name": "ZohoWorkdrive_Download_Server_File_Version",
-          "operation_label": "Download Server File Version",
+          "catalog_operation_key": "Download_Server_File_Version",
+          "annotated_tool_name": "Download Server File Version",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "workdrive-audit-004",
-          "advertised_tool_name": "ZohoWorkdrive_downloadWorkDriveFile",
-          "operation_label": "download Work Drive File",
+          "catalog_operation_key": "downloadWorkDriveFile",
+          "annotated_tool_name": "download Work Drive File",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "workdrive-audit-005",
-          "advertised_tool_name": "ZohoWorkdrive_Fetch_Files_Folders",
-          "operation_label": "Fetch Files Folders",
+          "catalog_operation_key": "Fetch_Files_Folders",
+          "annotated_tool_name": "Fetch Files Folders",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "workdrive-audit-006",
-          "advertised_tool_name": "ZohoWorkdrive_File_Property",
-          "operation_label": "File Property",
+          "catalog_operation_key": "File_Property",
+          "annotated_tool_name": "File Property",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "workdrive-audit-007",
-          "advertised_tool_name": "ZohoWorkdrive_Get_All_Team_Folders",
-          "operation_label": "Get All Team Folders",
+          "catalog_operation_key": "Get_All_Team_Folders",
+          "annotated_tool_name": "Get All Team Folders",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "workdrive-audit-008",
-          "advertised_tool_name": "ZohoWorkdrive_Get_All_Teams_Of_User",
-          "operation_label": "Get All Teams Of User",
+          "catalog_operation_key": "Get_All_Teams_Of_User",
+          "annotated_tool_name": "Get All Teams Of User",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "workdrive-audit-009",
-          "advertised_tool_name": "ZohoWorkdrive_Get_Current_Team_User",
-          "operation_label": "Get Current Team User",
+          "catalog_operation_key": "Get_Current_Team_User",
+          "annotated_tool_name": "Get Current Team User",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "workdrive-audit-010",
-          "advertised_tool_name": "ZohoWorkdrive_Get_File_List",
-          "operation_label": "Get File List",
+          "catalog_operation_key": "Get_File_List",
+          "annotated_tool_name": "Get File List",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "workdrive-audit-011",
-          "advertised_tool_name": "ZohoWorkdrive_Get_File_Preview",
-          "operation_label": "Get File Preview",
+          "catalog_operation_key": "Get_File_Preview",
+          "annotated_tool_name": "Get File Preview",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "workdrive-audit-012",
-          "advertised_tool_name": "ZohoWorkdrive_Get_List_Of_Recent_Changes",
-          "operation_label": "Get List Of Recent Changes",
+          "catalog_operation_key": "Get_List_Of_Recent_Changes",
+          "annotated_tool_name": "Get List Of Recent Changes",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "workdrive-audit-013",
-          "advertised_tool_name": "ZohoWorkdrive_Get_Shared_Links",
-          "operation_label": "Get Shared Links",
+          "catalog_operation_key": "Get_Shared_Links",
+          "annotated_tool_name": "Get Shared Links",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "workdrive-audit-014",
-          "advertised_tool_name": "ZohoWorkdrive_Get_Shared_Users",
-          "operation_label": "Get Shared Users",
+          "catalog_operation_key": "Get_Shared_Users",
+          "annotated_tool_name": "Get Shared Users",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "workdrive-audit-015",
-          "advertised_tool_name": "ZohoWorkdrive_Get_Start_Token",
-          "operation_label": "Get Start Token",
+          "catalog_operation_key": "Get_Start_Token",
+          "annotated_tool_name": "Get Start Token",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "workdrive-audit-016",
-          "advertised_tool_name": "ZohoWorkdrive_Get_Team_Folder_Setting",
-          "operation_label": "Get Team Folder Setting",
+          "catalog_operation_key": "Get_Team_Folder_Setting",
+          "annotated_tool_name": "Get Team Folder Setting",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "workdrive-audit-017",
-          "advertised_tool_name": "ZohoWorkdrive_Get_Team_Folder_Shared_Users",
-          "operation_label": "Get Team Folder Shared Users",
+          "catalog_operation_key": "Get_Team_Folder_Shared_Users",
+          "annotated_tool_name": "Get Team Folder Shared Users",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "workdrive-audit-018",
-          "advertised_tool_name": "ZohoWorkdrive_Get_Team_Folders_Info",
-          "operation_label": "Get Team Folders Info",
+          "catalog_operation_key": "Get_Team_Folders_Info",
+          "annotated_tool_name": "Get Team Folders Info",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "workdrive-audit-019",
-          "advertised_tool_name": "ZohoWorkdrive_Get_User_Info",
-          "operation_label": "Get User Info",
+          "catalog_operation_key": "Get_User_Info",
+          "annotated_tool_name": "Get User Info",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "workdrive-audit-020",
-          "advertised_tool_name": "ZohoWorkdrive_Get_Version",
-          "operation_label": "Get Version",
+          "catalog_operation_key": "Get_Version",
+          "annotated_tool_name": "Get Version",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "workdrive-audit-021",
-          "advertised_tool_name": "ZohoWorkdrive_Search_Records",
-          "operation_label": "Search Records",
+          "catalog_operation_key": "Search_Records",
+          "annotated_tool_name": "Search Records",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         }
       ]
     },
@@ -2249,45 +2283,45 @@
       "role": "workdrive-changes",
       "product": "Zoho WorkDrive",
       "access_class": "mixed-read-write",
-      "observed_status": "advertised-not-call-verified",
+      "observed_status": "configured-selection-not-call-verified",
       "read_count": 1,
       "write_or_action_count": 4,
       "tool_count": 5,
       "capabilities": [
         {
           "catalog_id": "workdrive-changes-001",
-          "advertised_tool_name": "ZohoWorkdrive_Create_Folder",
-          "operation_label": "Create Folder",
+          "catalog_operation_key": "Create_Folder",
+          "annotated_tool_name": "Create Folder",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "workdrive-changes-002",
-          "advertised_tool_name": "ZohoWorkdrive_moveFileOrFolder",
-          "operation_label": "move File Or Folder",
+          "catalog_operation_key": "moveFileOrFolder",
+          "annotated_tool_name": "move File Or Folder",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "workdrive-changes-003",
-          "advertised_tool_name": "ZohoWorkdrive_renameFileOrFolder",
-          "operation_label": "rename File Or Folder",
+          "catalog_operation_key": "renameFileOrFolder",
+          "annotated_tool_name": "rename File Or Folder",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "workdrive-changes-004",
-          "advertised_tool_name": "ZohoWorkdrive_Upload_File",
-          "operation_label": "Upload File",
+          "catalog_operation_key": "Upload_File",
+          "annotated_tool_name": "Upload File",
           "effect": "write/action",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         },
         {
           "catalog_id": "workdrive-changes-005",
-          "advertised_tool_name": "ZohoWorkdrive_Upload_Status",
-          "operation_label": "Upload Status",
+          "catalog_operation_key": "Upload_Status",
+          "annotated_tool_name": "Upload Status",
           "effect": "read",
-          "contract_status": "advertised-not-call-verified"
+          "contract_status": "configured-selection-not-call-verified"
         }
       ]
     }

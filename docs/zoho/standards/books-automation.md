@@ -4,7 +4,8 @@
 
 - Repository standard: **Proposed**
 - Official capability evidence: current Zoho Books API documentation, subject to operation-specific verification
-- Advertised MCP evidence: dated 2026-08-04 historical snapshot plus a 2026-08-05 Books refresh exposing 91 Audit, 24 Changes, and 67 Controller operations
+- Configured-selection evidence: dated 2026-08-04 historical service-plus-operation-key snapshot
+- Later scoped role evidence: a 2026-08-05 Books refresh exposed 91 Audit, 24 Changes, and 67 Controller operations
 - Sylvara Books organization and read access: **Verified 2026-08-05** for the active live organization, Admin identity, and complete active/inactive chart
 - Chart mutation access: **Verified for the bounded 2026-08-05 chart deployment**; create, update, mark-active, and mark-inactive succeeded with independent Audit readback, but every future use still requires fresh scoped authorization and controls
 

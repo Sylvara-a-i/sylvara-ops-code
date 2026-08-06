@@ -109,7 +109,8 @@ CAPABILITY_LAYERS = (
     "official-product-capability",
     "tool-manual-catalog",
     "preconfigured-template-membership",
-    "advertised-mcp-tool-name",
+    "configured-mcp-selection",
+    "advertised-mcp-contract",
     "effective-tenant-capability",
 )
 PRODUCT_REFERENCE_FILES = {
@@ -237,7 +238,7 @@ class ZohoStandardsTests(unittest.TestCase):
 
     def test_machine_readable_suite_registry_is_complete_and_resolvable(self) -> None:
         registry = json.loads(SUITE_REGISTRY.read_text(encoding="utf-8"))
-        self.assertEqual(2, registry["schema_version"])
+        self.assertEqual(3, registry["schema_version"])
         self.assertEqual("2026-08-05", registry["as_of"])
         self.assertEqual("docs/zoho", registry["path_base"])
         self.assertEqual("partially-verified", registry["live_state"])
@@ -263,7 +264,7 @@ class ZohoStandardsTests(unittest.TestCase):
                 else:
                     self.assertEqual("unknown", row["effective_tenant_capability"])
                     expected_observation = (
-                        "advertised-tool-names-observed-2026-08-04"
+                        "configured-selections-observed-2026-08-04"
                         if row["id"] in OBSERVED_PRODUCT_IDS
                         else "not-observed-2026-08-04"
                     )
@@ -282,7 +283,7 @@ class ZohoStandardsTests(unittest.TestCase):
                 self.assertTrue((ZOHO_DOCS / row["reference"]).is_file())
                 if row["id"] == "payments":
                     self.assertEqual(
-                        "advertised-tool-names-observed-2026-08-04",
+                        "configured-selections-observed-2026-08-04",
                         row["mcp_observation"],
                     )
 
@@ -300,9 +301,19 @@ class ZohoStandardsTests(unittest.TestCase):
 
     def test_source_manifest_lists_every_reference_and_resolves(self) -> None:
         manifest = json.loads(SOURCE_MANIFEST.read_text(encoding="utf-8"))
-        self.assertEqual(1, manifest["schema_version"])
+        self.assertEqual(2, manifest["schema_version"])
         self.assertEqual("2026-08-05", manifest["last_reviewed_on"])
         self.assertEqual("2026-08-05", manifest["research_cutoffs"]["field_type_refresh"])
+        self.assertIn("configured_session_tool_selections", manifest["source_classes"])
+        self.assertNotIn("configured_session_advertised_names", manifest["source_classes"])
+        self.assertEqual(
+            "2026-08-04",
+            manifest["research_cutoffs"]["configured_session_tool_selections"],
+        )
+        self.assertNotIn(
+            "configured_session_advertised_names",
+            manifest["research_cutoffs"],
+        )
         self.assertEqual(24, len(manifest["product_references"]))
         self.assertEqual(24, len(set(manifest["product_references"])))
         for target in manifest["product_references"]:
