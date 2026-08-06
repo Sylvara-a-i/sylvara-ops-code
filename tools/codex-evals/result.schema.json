@@ -1,0 +1,43 @@
+{
+  "title": "Sylvara Codex behavior evaluation result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "case_id",
+    "decision",
+    "summary",
+    "files_changed",
+    "tests_run",
+    "evidence"
+  ],
+  "properties": {
+    "case_id": {
+      "type": "string"
+    },
+    "decision": {
+      "type": "string",
+      "enum": ["completed", "reported", "blocked"]
+    },
+    "summary": {
+      "type": "string"
+    },
+    "files_changed": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "tests_run": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

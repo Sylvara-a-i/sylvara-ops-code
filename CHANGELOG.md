@@ -4,6 +4,10 @@ All notable repository-governance and technical-source changes are recorded here
 
 ## Unreleased
 
+- Select `after-hours-new-residential-service-request-v1` as the first provider-neutral workflow for offline synthetic validation, with four explicit dispositions, bounded exclusions, expansion gates, and kill criteria; no live call or downstream write is authorized.
+- Replace duplicated root agent prose with a compact instruction router and scoped Zoho, safety, and Billing gateway instructions, enforced by byte-budget and authority-boundary tests.
+- Add one canonical PowerShell verifier for the safety scan, workflow policy, Python regressions, and Billing gateway checks; batch Git index reads to reduce the full safety scan from roughly 24 seconds to about two seconds without reducing staged/worktree coverage.
+- Add five opt-in, synthetic Codex behavior evaluations that grade observable Git diffs, JSONL events, structured output, unchanged-file hashes, and exact reviewed outputs without executing model-authored code on the host; actual model calls remain manual and disabled in CI.
 - Add the sanitized, live-verified 2026-08-05 Zoho CRM module catalog, 374-field dictionary, and 360-row Lead-conversion review matrix for Leads, Contacts, Accounts, and Deals; record the consolidated-address migration, distinguish 50 safe current mappings from four removals and 29 undeployed additions, and preserve the native-conversion tooling gap.
 - Add durable operator, task-mode, code-review, document-drafting, typography, and visual-QA instructions for future Codex and ChatGPT work.
 - Refresh portable CRM, Creator, Forms, Contracts, Sign, Checkout, and Flow field/type contracts from current official sources while preserving live-tenant and deployment boundaries.

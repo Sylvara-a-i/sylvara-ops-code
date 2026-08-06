@@ -7,6 +7,7 @@
 - Delivery phase: **Validation; no live capability is established by this document**
 - Customer-facing publication: **Not authorized by repository approval**
 - Canonical decision record: [ADR 0002](../adr/0002-managed-home-service-receptionist-product-boundary.md)
+- Initial workflow decision: [`after-hours-new-residential-service-request-v1`](../adr/0003-initial-after-hours-service-request-workflow.md), accepted for offline synthetic validation only
 - Telephone and legal gate: [AI Receptionist Legal And Compliance Control Archive](../legal-compliance/README.md)
 
 ## Purpose
@@ -125,9 +126,9 @@ If primary reception proves too risky or weakly valued, narrow first to after-ho
 
 ## Open Decisions
 
-The strategy does not yet establish:
+The initial workflow is now fixed by [ADR 0003](../adr/0003-initial-after-hours-service-request-workflow.md). The strategy still does not establish:
 
-- the exact first residential-plumbing workflow template and which plumbing call types belong in the initial validated package;
+- the implemented structured rules, state machine, synthetic scenario suite, or deterministic evaluator for that workflow;
 - the initial voice and telephony providers for a live deployment;
 - the first field-service integration justified by qualified paid demand;
 - the human escalation destination, coverage window, and commercial model;

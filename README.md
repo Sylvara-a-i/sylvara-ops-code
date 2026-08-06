@@ -8,7 +8,7 @@ This repository is publicly viewable but is not open source. See [`NOTICE.md`](N
 
 Sylvara is validating a managed inbound receptionist and front-office service for independent residential plumbing companies, beginning in Kansas City with after-hours and overflow calls that staff cannot answer reliably. The product must complete and attribute bounded business workflows; it is not a generic voice-agent subscription or a broad custom-automation agency. Dispatch activity remains limited to separately approved intake, routing, and integration behavior.
 
-The canonical public boundary is [`docs/product/README.md`](docs/product/README.md), supported by [ADR 0002](docs/adr/0002-managed-home-service-receptionist-product-boundary.md). Those documents govern product scope, progressive rollout, explicit non-goals, evidence gates, and deferred verticals. They do not establish a live service, current pricing, a customer deployment, or approval for customer-facing publication.
+The canonical public boundary is [`docs/product/README.md`](docs/product/README.md), supported by [ADR 0002](docs/adr/0002-managed-home-service-receptionist-product-boundary.md). [ADR 0003](docs/adr/0003-initial-after-hours-service-request-workflow.md) selects `after-hours-new-residential-service-request-v1` for offline synthetic validation. Those documents govern product scope, progressive rollout, explicit non-goals, evidence gates, and deferred verticals. They do not establish a live service, current pricing, a customer deployment, or approval for customer-facing publication.
 
 ## Repository Boundary
 
@@ -51,6 +51,7 @@ Current governed artifacts:
 
 - [`docs/standards/README.md`](docs/standards/README.md) contains durable operator-facing drafting and code-review standards. Portable documents use Inter by default; San Francisco is preferred only when supplied natively or separately licensed.
 - [`docs/product/README.md`](docs/product/README.md) is the public implementation filter for the managed plumbing-first receptionist product. It records the initial audience and use case, progressive deployment model, proposed capability gates, validation dimensions, non-goals, and the private research boundary without publishing the source report or commercial model.
+- [`docs/adr/0003-initial-after-hours-service-request-workflow.md`](docs/adr/0003-initial-after-hours-service-request-workflow.md) fixes the first provider-neutral workflow, four offline dispositions, exclusions, expansion gates, and kill criteria without authorizing calls or downstream writes.
 - [`docs/legal-compliance/`](docs/legal-compliance/) is the dated telephony, recording, consent, privacy, security, state-jurisdiction, regulated-use, vendor, and launch-control archive for the proposed AI receptionist. Its only proposed telephone profile is internal, non-sales QA by authorized staff/contractors using a carrier media gate, keypad assent, synthetic conversation data, and no retained content, outbound channel, real-world side effect, or production integration. Prospect-facing telephone demonstrations remain blocked. The archive is not legal advice or launch approval.
 - [`docs/accounting/`](docs/accounting/) is the product-neutral front door for Sylvara accounting authority, federal tax research, U.S. GAAP topic navigation, policy controls, and dated source provenance. It contains original operational summaries and official links, not copied standards text, tax advice, financial records, or another business's accounting conclusions.
 - [`docs/copywriting/`](docs/copywriting/) is the public front door for original copywriting principles, channel playbooks, structure cards, briefing, and claim review. It contains no raw swipe files, source passages, customer facts, or third-party publication claims.
@@ -62,6 +63,7 @@ Current governed artifacts:
 - [`src/zoho-catalyst/billing-webhook-gateway`](src/zoho-catalyst/billing-webhook-gateway) contains a proposed sanitized replacement for the historical Billing gateway, repository-level unit tests, a variable-name registry attested against the supplied export and replacement source, and a proposed Data Store schema. It is not platform-validated, live-tested, deployed, or deployment-approved.
 - [`archive/zoho-catalyst/billing-webhook-gateway`](archive/zoho-catalyst/billing-webhook-gateway) preserves the original export's non-executable review record and source hashes. The supplied handler, private manifest metadata, installed dependencies, and deployment configuration remain excluded.
 - [`archive/README.md`](archive/README.md) explains why historical review records remain separate from active source and reusable documentation.
+- [`tools/codex-evals/`](tools/codex-evals/) contains opt-in synthetic behavior evaluations for Codex; deterministic harness checks may run in CI, but model calls remain local and manual.
 
 ## Operating Rules
 
@@ -76,17 +78,18 @@ Current governed artifacts:
 
 ## Local Validation
 
+Run the offline local verification path after dependencies have been bootstrapped:
+
 ```powershell
-python -m venv .codex-tmp\safety-venv
-.\.codex-tmp\safety-venv\Scripts\python.exe -m pip install --disable-pip-version-check --only-binary=:all: --require-hashes -r tools/safety/requirements.txt
-.\.codex-tmp\safety-venv\Scripts\python.exe tools/safety/pre-commit-safety-check.py
-.\.codex-tmp\safety-venv\Scripts\python.exe tools/safety/validate_workflows.py
-.\.codex-tmp\safety-venv\Scripts\python.exe -m unittest discover -s tools/safety/tests -p "test_*.py" -v
-npm ci --ignore-scripts --prefix src\zoho-catalyst\billing-webhook-gateway
-npm run ci --prefix src\zoho-catalyst\billing-webhook-gateway
+.\tools\verify.cmd
 ```
 
-Use 64-bit CPython 3.12 and Node.js 24 on Windows for the documented local path; CI runs the equivalent checks on Linux. Python dependency installation is hash-pinned, and the gateway uses an exact npm dependency version plus a committed integrity lockfile.
+For a new checkout, run `.\tools\verify.cmd -Bootstrap`. Before publication,
+use `.\tools\verify.cmd -Mode All` to reproduce dependency installation and the
+production dependency audit. Both commands may contact the Python and npm
+registries; default Quick mode remains offline. The verifier requires 64-bit
+CPython 3.12 and Node.js 24. See [`tools/README.md`](tools/README.md) for modes,
+runtime selection, and direct CI-script ownership.
 
 ## Commercial Constraint
 
