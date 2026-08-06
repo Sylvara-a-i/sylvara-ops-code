@@ -248,7 +248,13 @@ class ZohoStandardsTests(unittest.TestCase):
         self.assertEqual(REQUIRED_REGISTRY_IDS, {row["id"] for row in products})
         for row in products:
             with self.subTest(product=row["id"]):
-                if row["id"] == "books":
+                if row["id"] == "crm":
+                    self.assertEqual(
+                        "organization-identity-and-scoped-metadata-record-field-layout-picklist-read-write-verified-2026-08-05-conversion-mapping-and-direct-native-convert-write-unavailable",
+                        row["effective_tenant_capability"],
+                    )
+                    expected_observation = "crm-roles-refreshed-2026-08-05"
+                elif row["id"] == "books":
                     self.assertEqual(
                         "organization-identity-chart-read-and-scoped-chart-create-update-activate-inactivate-verified-2026-08-05",
                         row["effective_tenant_capability"],

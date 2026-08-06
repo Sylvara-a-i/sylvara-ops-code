@@ -4,7 +4,7 @@
   "last_reconciled_on": "2026-08-05",
   "reconciliation": {
     "result": "historical-export-no-advertised-name-delta",
-    "scope": "The supplied 2026-08-05 Sylvara-only export matched this dated 294-name inventory. A later callable-registry Books refresh is recorded separately in the capability catalog and is not merged into this historical inventory.",
+    "scope": "The supplied 2026-08-05 Sylvara-only export matched this dated 294-name inventory. Later callable-registry Books and CRM refreshes are recorded separately in the capability catalog, suite registry, and product-owned artifacts and are not merged into this historical inventory.",
     "historical_export_books_chart_account_gap": {
       "audit_reads_advertised_in_export": [
         "ZohoBooks_get_chart_of_account",

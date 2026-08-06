@@ -63,3 +63,6 @@ exports/
 !src/zoho-books/reference/final-chart-of-accounts-tax-preparer-2026-08-05.csv
 !src/zoho-books/reference/proposed-chart-of-accounts.csv
 !src/zoho-books/reference/schedule-c-tax-rollup-2026-08-05.csv
+!src/zoho-crm/reference/modules.csv
+!src/zoho-crm/reference/crm-field-dictionary.csv
+!src/zoho-crm/reference/lead-conversion-mapping.csv

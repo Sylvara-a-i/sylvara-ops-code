@@ -5,10 +5,12 @@
 - Repository standard: **Proposed**
 - Official capability evidence: Zoho CRM API V8 documentation, subject to current-product verification
 - Field-type documentation rechecked: **2026-08-05**
-- Advertised MCP evidence: dated 2026-08-04 Sylvara tool-name snapshot, reconciled unchanged on 2026-08-05
-- Sylvara CRM organization, edition, schema, permissions, workflows, and effective MCP access: **Unknown**
+- Advertised MCP evidence: dated 2026-08-04 Sylvara tool-name snapshot, superseded for CRM by a callable-role refresh on 2026-08-05
+- Effective access verified on 2026-08-05: organization identity plus scoped module, field, layout, picklist, record, and Lead-conversion-map reads; bounded field, layout, picklist, help-text, and record mutations with independent readback
+- Effective write access unavailable on 2026-08-05: direct typed native Convert Lead, Lead Conversion Mapping mutation, and workflow-rule mutation; a readable workflow action named Convert does not establish any of those write contracts
+- Edition, comprehensive permissions, validation rules, formula dependencies, pipeline metadata, and unexercised contracts: **Unknown**
 
-This standard is reviewed design guidance. It is not proof of a live field, layout, tool capability, deployment, or approved CRM change.
+This standard is reviewed design guidance. Dated effective-access evidence proves only the scoped contracts exercised for the exact verified target; it is not continuing approval or proof of an unlisted capability.
 
 ## Scope
 
@@ -175,14 +177,15 @@ Subforms have separate edition and row limits, and their module/field API names 
 
 ## Current MCP Capability Limit
 
-The 2026-08-04 Sylvara snapshot advertises CRM metadata and record reads plus bounded record and note changes. It does not advertise field, layout, module, workflow, or other schema-mutation operations, and the published inventory intentionally does not reproduce private runtime request schemas. Therefore:
+The 2026-08-05 CRM role refresh supersedes the CRM portion of the older advertised-name snapshot. The verified surface supported scoped organization, module, field, layout, picklist, record, workflow, and Lead-conversion-map reads plus the bounded field, layout, picklist, help-text, and record mutations exercised during the approved CRM change. A workflow read exposed a Convert action, but the change surface did not expose a direct typed native Convert Lead write, Lead Conversion Mapping mutation, or workflow-rule mutation. Therefore:
 
-- do not infer that official schema APIs are exposed through the active MCP roles;
-- do not guess a field, layout, workflow, module, or subform payload;
-- do not substitute a generic record-write tool for a configuration endpoint; and
-- do not write until a typed, target-verified contract and rollback path exist.
+- treat only an exercised typed operation as verified and recheck the target before reuse;
+- do not guess a field, layout, workflow, conversion, module, or subform payload;
+- do not substitute generic record creation for native Lead conversion or a configuration endpoint;
+- do not infer absent conversion or workflow writes from official REST API support; and
+- require private prestate, scoped approval, rollback, and independent readback for every live change.
 
-Official API capability does not expand the active MCP tool contract.
+The sanitized [CRM schema and Lead-conversion package](../../../src/zoho-crm/README.md) records the dated field and mapping contract without publishing private identifiers. Official API capability does not expand the active MCP tool contract.
 
 ## Field Proposal Contract
 
@@ -208,7 +211,7 @@ A write-capable tool's presence is not approval. Bulk updates, layout redesign, 
 
 ## Repository Boundary
 
-GitHub may contain sanitized schema proposals, generic metadata catalogs, field-purpose descriptions, dependency maps, synthetic fixtures, migration plans, and reviewed API-name conventions. It must not contain live organization, module, layout, field, record, workflow, user, profile, pipeline, connection, or deployment identifiers; customer records; raw submissions; documents; financial data; credentials; or unredacted metadata exports.
+GitHub may contain approved sanitized schema proposals, field labels and API names, generic metadata catalogs, field-purpose descriptions, dependency maps, synthetic fixtures, migration plans, and reviewed API-name conventions. It must not contain live numeric or opaque organization, module, layout, field, record, workflow, user, profile, pipeline, connection, or deployment identifiers; customer records; field values; raw submissions; documents; financial data; credentials; or unredacted metadata exports.
 
 Repository schema is desired-state evidence only. Live metadata and returned `api_name` values remain authoritative for the exact Sylvara organization and environment.
 
@@ -239,7 +242,7 @@ A local test or official API example does not prove that a live MCP write contra
 
 ## Manual Setup
 
-All live setup is currently **Unknown**. Before relying on this standard for a Sylvara change, verify or configure:
+The dated CRM package verifies only the scoped 2026-08-05 schema, mapping-read, and completed-change evidence it names. Native Lead conversion mapping, pilot/subscription conversion automation, comprehensive dependency discovery, and any future live setup remain undeployed or **Unknown**. Before relying on this standard for another Sylvara change, verify or configure:
 
 - the exact CRM organization, data center, edition, environment, administrators, and least-privilege audit/change identities;
 - module, layout, section, field, profile, workflow, picklist, lookup, and dependency metadata required by the change;

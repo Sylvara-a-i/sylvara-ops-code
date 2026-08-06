@@ -53,6 +53,7 @@ The [product reference collection](reference/README.md) covers the currently gov
 
 ## Code-Adjacent Zoho Artifacts
 
+- [Sanitized CRM schema and Lead-conversion reference](../../src/zoho-crm/README.md)
 - [Zoho Books implementation area](../../src/zoho-books/README.md)
 - [Sanitized chart-of-accounts reference](../../src/zoho-books/reference/README.md)
 - [Proposed Billing webhook gateway](../../src/zoho-catalyst/billing-webhook-gateway/README.md)
@@ -108,11 +109,13 @@ Official documentation establishes general product capability. A Tool Manual nam
 
 ## Current MCP Snapshot
 
-The dated 2026-08-04 configured-session snapshot contains 294 Sylvara-only Zoho tool names across 18 neutral roles and eight products: 221 reads and 73 write-capable actions. An earlier 2026-08-05 export matched that snapshot. A later same-day callable-registry refresh superseded the Books portion: the current session exposes 91 Books Audit, 24 Books Changes, and 67 Books Controller operations. Runtime namespaces, generated transport IDs, endpoints, authentication details, connection aliases, and production target identifiers are excluded.
+The dated 2026-08-04 configured-session snapshot contains 294 Sylvara-only Zoho tool names across 18 neutral roles and eight products: 221 reads and 73 write-capable actions. An earlier 2026-08-05 export matched that snapshot. Later same-day callable-registry refreshes superseded the Books and CRM portions. Runtime namespaces, generated transport IDs, endpoints, authentication details, connection aliases, and production target identifiers are excluded.
 
 The refreshed Books Controller advertises chart-account create, update, mark-active, and mark-inactive operations. The Audit and Controller connections, same-organization identity, and those four operations were verified in an approved bounded chart deployment on 2026-08-05; every mutation received independent Audit readback. This proves only the scoped chart contracts exercised in that deployment, not other Books writes or continuing approval. The older 2026-08-04 inventory remains a historical snapshot, not the current Books allowlist.
 
-Billing, Books, Catalyst, Creator, CRM, Mail, Payments, and WorkDrive were observed at the advertised-name layer. Forms, Contracts, Sign, Sites, and Analytics were not observed; their MCP availability is **Unknown**, not unsupported. Observation does not establish product adoption, tenant binding, effective authorization, or permission for live use.
+The refreshed CRM roles verified the organization identity plus scoped module, field, layout, picklist, record, workflow, and Lead-conversion-map reads. Approved bounded field, layout, picklist, help-text, and record mutations received independent readback. A workflow read exposed a Convert action, but the change surface did not provide a direct typed native Convert Lead write, Lead Conversion Mapping mutation, or workflow-rule mutation, so those write operations remain unavailable rather than inferred.
+
+Billing, Books, Catalyst, Creator, CRM, Mail, Payments, and WorkDrive were observed at the advertised-name layer. Forms, Contracts, Sign, Sites, and Analytics were not observed; their MCP availability is **Unknown**, not unsupported. Observation or a past successful call does not grant continuing approval for live use.
 
 ## Live Change Boundary
 

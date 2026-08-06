@@ -2,7 +2,9 @@
 
 ## Scope And Evidence
 
-This catalog is a sanitized historical snapshot of the Zoho tool names advertised to Codex for Sylvara on 2026-08-04. An earlier 2026-08-05 export matched its 294 role-qualified names. A later same-day callable-registry refresh superseded the Books portion with 91 Books Audit, 24 Books Changes, and 67 Books Controller operations, including chart create, update, mark-active, and mark-inactive. The rows below intentionally preserve the dated snapshot and are not a current Books allowlist. No Zoho chart-of-accounts write was invoked during the initial capability reconciliation; a later separately approved deployment exercised the four bounded chart operations with independent Audit readback.
+This catalog is a sanitized historical snapshot of the Zoho tool names advertised to Codex for Sylvara on 2026-08-04. An earlier 2026-08-05 export matched its 294 role-qualified names. Later same-day callable-registry refreshes superseded the Books and CRM portions. The Books refresh exposed 91 Books Audit, 24 Books Changes, and 67 Books Controller operations, including chart create, update, mark-active, and mark-inactive. The separately recorded CRM refresh verified scoped metadata and record operations but no direct typed native conversion write. The rows below intentionally preserve the dated snapshot and are not a current Books or CRM allowlist. No Zoho chart-of-accounts write was invoked during the initial capability reconciliation; a later separately approved deployment exercised the four bounded chart operations with independent Audit readback.
+
+Current scoped CRM evidence is indexed in the [suite registry](../../../../governance/suite-registry.json) and the [product-owned CRM package](../../../../../../src/zoho-crm/README.md); it is not merged into the historical rows below.
 
 The complete role-qualified name inventory is in [`sylvara-observed-tool-inventory.json`](sylvara-observed-tool-inventory.json). Runtime server names, generated transport IDs, endpoints, authentication details, connection aliases, organization or account identifiers, record identifiers, sample values, and returned data are excluded.
 
