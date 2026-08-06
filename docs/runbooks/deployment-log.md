@@ -15,10 +15,10 @@ The production configuration events recorded here are the 2026-08-05 Sylvara Zoh
 ```text
 Date (UTC): 2026-08-05
 Environment class: production
-Change reference: draft pull request #18 on codex/document-crm-schema-conversion
+Change reference: pull request #18; source commit 7c6d1eacaafabfbc6c785a454e03a559999779d6
 Immutable artifact reference: modules 5b21ffef4d7a0434e612d039400a446b8fdbc9eff2ccdd6925c58332b6fcbb3d; fields 228e92a52009ab1556a70f51c218829807d73eed35ab89452125f808ab94176a; mappings 05b2f1c8d143105f76bfda2aa19f4cf6f0126a8e799f8e951ff118890ea22c09
-Approval reference: explicit owner approval retained in the private Codex task
-Evidence limitation: private prestate and readback remain task-local and require archival under an approved durable private-audit locator
+Approval reference: not durably archived; task-local owner-approval evidence is insufficient for later audit
+Evidence limitation: private prestate and readback are not durably archived; treat provenance as incomplete and do not use this entry to authorize a repeat or rollback
 Operator role: scoped CRM change role with separate audit readback
 Pre-deployment state: verified for the affected Leads, Contacts, Accounts, Deals, layouts, fields, picklists, mappings, and populated legacy address values
 Action: configuration change; polish Leads, update Industry and Rating choices, organize layouts, add supported help text, and migrate populated legacy address values into the consolidated Address field
