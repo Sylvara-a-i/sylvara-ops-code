@@ -1,0 +1,5 @@
+{
+  "fixture": "synthetic",
+  "enabled": false,
+  "outbound_messages": false
+}

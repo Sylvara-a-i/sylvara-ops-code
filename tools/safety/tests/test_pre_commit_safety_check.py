@@ -306,6 +306,110 @@ class SafetyCheckTests(unittest.TestCase):
         self.assertIsNone(content)
         self.assertTrue(any("fails closed" in item for item in problems))
 
+    def test_index_blobs_are_read_with_two_git_batch_calls(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            self._git(root, "init", "--quiet")
+            expected: dict[str, bytes] = {}
+            for number in range(3):
+                rel = f"file-{number}.txt"
+                content = f"synthetic-{number}\n".encode("utf-8")
+                root.joinpath(rel).write_bytes(content)
+                expected[rel] = content
+            self._git(root, "add", ".")
+            entries, entry_problems = safety_check.load_tracked_entries(root)
+            self.assertEqual([], entry_problems)
+
+            original_run = subprocess.run
+            with mock.patch.object(
+                safety_check.subprocess, "run", wraps=original_run
+            ) as run:
+                contents, problems = safety_check.load_index_blobs(root, entries)
+
+        self.assertEqual([], problems)
+        self.assertEqual(expected, contents)
+        cat_file_calls = [
+            call
+            for call in run.call_args_list
+            if call.args and call.args[0][:2] == ["git", "cat-file"]
+        ]
+        self.assertEqual(2, len(cat_file_calls))
+
+    def test_index_blob_limits_split_content_without_omitting_files(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            self._git(root, "init", "--quiet")
+            expected: dict[str, bytes] = {}
+            for number in range(3):
+                rel = f"batch-{number}.txt"
+                content = f"synthetic-batch-{number}\n".encode("utf-8")
+                root.joinpath(rel).write_bytes(content)
+                expected[rel] = content
+            self._git(root, "add", ".")
+            entries, entry_problems = safety_check.load_tracked_entries(root)
+            self.assertEqual([], entry_problems)
+
+            original_run = subprocess.run
+            with mock.patch.object(
+                safety_check, "BATCH_OBJECT_LIMIT", 1
+            ), mock.patch.object(
+                safety_check, "BATCH_CONTENT_LIMIT", 1
+            ), mock.patch.object(
+                safety_check.subprocess, "run", wraps=original_run
+            ) as run:
+                contents, problems = safety_check.load_index_blobs(root, entries)
+
+        self.assertEqual([], problems)
+        self.assertEqual(expected, contents)
+        self.assertTrue(
+            all(
+                not safety_check.scan_decoded_text(path, content.decode("utf-8"))
+                for path, content in contents.items()
+            )
+        )
+        cat_file_calls = [
+            call
+            for call in run.call_args_list
+            if call.args and call.args[0][:2] == ["git", "cat-file"]
+        ]
+        self.assertEqual(6, len(cat_file_calls))
+
+    def test_truncated_batch_blob_output_fails_closed(self) -> None:
+        object_id = "a" * 40
+        entry = safety_check.TrackedEntry("100644", object_id)
+        metadata = SimpleNamespace(
+            returncode=0, stdout=f"{object_id} blob 5\n".encode("ascii")
+        )
+        truncated_content = SimpleNamespace(
+            returncode=0, stdout=f"{object_id} blob 5\nsafe".encode("ascii")
+        )
+        with mock.patch.object(
+            safety_check.subprocess,
+            "run",
+            side_effect=[metadata, truncated_content],
+        ):
+            contents, problems = safety_check.load_index_blobs(
+                Path("."), {"safe.txt": entry}
+            )
+        self.assertEqual({}, contents)
+        self.assertTrue(any("fails closed" in item for item in problems))
+
+    def test_oversized_index_blob_is_not_loaded(self) -> None:
+        object_id = "a" * 40
+        entry = safety_check.TrackedEntry("100644", object_id)
+        metadata = SimpleNamespace(
+            returncode=0, stdout=f"{object_id} blob 3\n".encode("ascii")
+        )
+        with mock.patch.object(safety_check, "MAX_TEXT_BYTES", 2), mock.patch.object(
+            safety_check.subprocess, "run", return_value=metadata
+        ) as run:
+            contents, problems = safety_check.load_index_blobs(
+                Path("."), {"large.txt": entry}
+            )
+        self.assertEqual({}, contents)
+        self.assertEqual(1, run.call_count)
+        self.assertTrue(any("exceeds" in item for item in problems))
+
 
 if __name__ == "__main__":
     unittest.main()

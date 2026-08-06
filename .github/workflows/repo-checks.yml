@@ -118,3 +118,9 @@ jobs:
 
       - name: Run Billing gateway checks and tests
         run: npm run ci --prefix src/zoho-catalyst/billing-webhook-gateway
+
+      - name: Run the canonical verifier on Linux
+        shell: pwsh
+        env:
+          PYTHONPATH: .ci-deps
+        run: ./tools/verify.ps1 -Mode Quick -PythonPath (Get-Command python3).Source

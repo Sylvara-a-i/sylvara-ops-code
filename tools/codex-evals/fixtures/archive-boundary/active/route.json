@@ -1,0 +1,5 @@
+{
+  "fixture": "synthetic",
+  "route_mode": "disabled",
+  "outbound_messages": false
+}

@@ -1,0 +1,5 @@
+{
+  "fixture": "synthetic-deprecated",
+  "route_mode": "legacy-live",
+  "outbound_messages": true
+}

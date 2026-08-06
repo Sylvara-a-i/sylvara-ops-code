@@ -369,50 +369,188 @@ def load_tracked_entries(root: Path) -> tuple[dict[str, TrackedEntry], list[str]
 def load_index_blob(
     root: Path, rel: str, entry: TrackedEntry
 ) -> tuple[bytes | None, list[str]]:
-    """Read the exact blob named by the Git index, with bounded allocation."""
+    """Read one index blob through the bounded batch implementation."""
 
-    if GIT_OBJECT_ID_RE.fullmatch(entry.object_id) is None:
-        return None, [f"Invalid Git object ID for staged path {rel}; safety scan fails closed"]
+    contents, problems = load_index_blobs(root, {rel: entry})
+    return contents.get(rel), problems
 
+
+BATCH_CONTENT_LIMIT = 16 * 1024 * 1024
+BATCH_OBJECT_LIMIT = 1024
+
+
+def _run_cat_file_batch(
+    root: Path, arguments: list[str], object_ids: list[str]
+) -> tuple[bytes | None, list[str]]:
+    """Run one bounded Git batch request without exposing repository content."""
+
+    request = "".join(f"{object_id}\n" for object_id in object_ids).encode("ascii")
     try:
-        size_result = subprocess.run(
-            ["git", "cat-file", "-s", entry.object_id],
+        result = subprocess.run(
+            ["git", "cat-file", *arguments],
             cwd=root,
             check=False,
+            input=request,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
-            timeout=15,
+            timeout=30,
         )
     except (OSError, subprocess.SubprocessError):
-        return None, [f"Could not inspect staged blob for {rel}; safety scan fails closed"]
-    if size_result.returncode != 0:
-        return None, [f"Could not inspect staged blob for {rel}; safety scan fails closed"]
-    try:
-        size_text = size_result.stdout.decode("ascii").strip()
-        size = int(size_text)
-    except (UnicodeDecodeError, ValueError):
-        return None, [f"Git returned an invalid staged blob size for {rel}; safety scan fails closed"]
-    if size < 0 or str(size) != size_text:
-        return None, [f"Git returned an invalid staged blob size for {rel}; safety scan fails closed"]
+        return None, ["Could not inspect staged Git blobs; safety scan fails closed"]
+    if result.returncode != 0:
+        return None, ["Could not inspect staged Git blobs; safety scan fails closed"]
+    return result.stdout, []
 
-    size_problems = scan_size_policy(rel, size)
-    if size_problems:
-        return None, size_problems
 
-    try:
-        blob_result = subprocess.run(
-            ["git", "cat-file", "blob", entry.object_id],
-            cwd=root,
-            check=False,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            timeout=15,
+def _parse_batch_metadata(
+    output: bytes, object_ids: list[str]
+) -> tuple[dict[str, int], list[str]]:
+    lines = output.splitlines()
+    if len(lines) != len(object_ids):
+        return {}, ["Git returned incomplete staged-blob metadata; safety scan fails closed"]
+
+    sizes: dict[str, int] = {}
+    for expected_id, line in zip(object_ids, lines, strict=True):
+        try:
+            fields = line.decode("ascii").split()
+        except UnicodeDecodeError:
+            return {}, ["Git returned invalid staged-blob metadata; safety scan fails closed"]
+        if len(fields) != 3 or fields[0].lower() != expected_id or fields[1] != "blob":
+            return {}, ["Git returned invalid staged-blob metadata; safety scan fails closed"]
+        try:
+            size = int(fields[2])
+        except ValueError:
+            return {}, ["Git returned an invalid staged-blob size; safety scan fails closed"]
+        if size < 0 or str(size) != fields[2]:
+            return {}, ["Git returned an invalid staged-blob size; safety scan fails closed"]
+        sizes[expected_id] = size
+    return sizes, []
+
+
+def _parse_batch_contents(
+    output: bytes, object_ids: list[str], expected_sizes: dict[str, int]
+) -> tuple[dict[str, bytes], list[str]]:
+    contents: dict[str, bytes] = {}
+    offset = 0
+    for expected_id in object_ids:
+        header_end = output.find(b"\n", offset)
+        if header_end < 0 or header_end - offset > 200:
+            return {}, ["Git returned incomplete staged-blob content; safety scan fails closed"]
+        try:
+            fields = output[offset:header_end].decode("ascii").split()
+        except UnicodeDecodeError:
+            return {}, ["Git returned invalid staged-blob content; safety scan fails closed"]
+        expected_size = expected_sizes[expected_id]
+        if (
+            len(fields) != 3
+            or fields[0].lower() != expected_id
+            or fields[1] != "blob"
+            or fields[2] != str(expected_size)
+        ):
+            return {}, ["Git returned invalid staged-blob content; safety scan fails closed"]
+
+        content_start = header_end + 1
+        content_end = content_start + expected_size
+        if content_end >= len(output) or output[content_end : content_end + 1] != b"\n":
+            return {}, ["Git returned incomplete staged-blob content; safety scan fails closed"]
+        contents[expected_id] = output[content_start:content_end]
+        offset = content_end + 1
+
+    if offset != len(output):
+        return {}, ["Git returned excess staged-blob content; safety scan fails closed"]
+    return contents, []
+
+
+def load_index_blobs(
+    root: Path, entries: dict[str, TrackedEntry]
+) -> tuple[dict[str, bytes], list[str]]:
+    """Read staged blobs in bounded batches instead of spawning Git per file."""
+
+    invalid_paths = [
+        rel
+        for rel, entry in entries.items()
+        if GIT_OBJECT_ID_RE.fullmatch(entry.object_id) is None
+    ]
+    if invalid_paths:
+        return {}, [
+            f"Invalid Git object ID for staged path {rel}; safety scan fails closed"
+            for rel in sorted(invalid_paths)
+        ]
+    if not entries:
+        return {}, []
+
+    entries = {
+        rel: TrackedEntry(entry.mode, entry.object_id.lower())
+        for rel, entry in entries.items()
+    }
+    object_ids = sorted({entry.object_id for entry in entries.values()})
+    problems: list[str] = []
+    sizes: dict[str, int] = {}
+    for start in range(0, len(object_ids), BATCH_OBJECT_LIMIT):
+        metadata_ids = object_ids[start : start + BATCH_OBJECT_LIMIT]
+        metadata_output, metadata_run_problems = _run_cat_file_batch(
+            root,
+            ["--batch-check=%(objectname) %(objecttype) %(objectsize)"],
+            metadata_ids,
         )
-    except (OSError, subprocess.SubprocessError):
-        return None, [f"Could not read staged blob for {rel}; safety scan fails closed"]
-    if blob_result.returncode != 0 or len(blob_result.stdout) != size:
-        return None, [f"Could not read staged blob for {rel}; safety scan fails closed"]
-    return blob_result.stdout, []
+        if metadata_output is None:
+            problems.extend(metadata_run_problems)
+            return {}, problems
+        metadata_sizes, metadata_parse_problems = _parse_batch_metadata(
+            metadata_output, metadata_ids
+        )
+        if metadata_parse_problems:
+            problems.extend(metadata_parse_problems)
+            return {}, problems
+        sizes.update(metadata_sizes)
+
+    allowed_ids: set[str] = set()
+    allowed_paths: set[str] = set()
+    for rel, entry in sorted(entries.items()):
+        size_problems = scan_size_policy(rel, sizes[entry.object_id])
+        problems.extend(size_problems)
+        if not size_problems:
+            allowed_ids.add(entry.object_id)
+            allowed_paths.add(rel)
+
+    content_by_id: dict[str, bytes] = {}
+    batch: list[str] = []
+    batch_size = 0
+    batches: list[list[str]] = []
+    for object_id in sorted(allowed_ids):
+        size = sizes[object_id]
+        if batch and (
+            batch_size + size > BATCH_CONTENT_LIMIT
+            or len(batch) >= BATCH_OBJECT_LIMIT
+        ):
+            batches.append(batch)
+            batch = []
+            batch_size = 0
+        batch.append(object_id)
+        batch_size += size
+    if batch:
+        batches.append(batch)
+
+    for object_id_batch in batches:
+        batch_output, batch_problems = _run_cat_file_batch(
+            root, ["--batch"], object_id_batch
+        )
+        if batch_output is None:
+            problems.extend(batch_problems)
+            return {}, problems
+        parsed_contents, parse_problems = _parse_batch_contents(
+            batch_output, object_id_batch, sizes
+        )
+        if parse_problems:
+            problems.extend(parse_problems)
+            return {}, problems
+        content_by_id.update(parsed_contents)
+
+    return {
+        rel: content_by_id[entry.object_id]
+        for rel, entry in entries.items()
+        if rel in allowed_paths and entry.object_id in content_by_id
+    }, problems
 
 
 def load_candidate_paths(root: Path) -> tuple[set[str], list[str]]:
@@ -627,6 +765,14 @@ def scan_repository(root: Path = ROOT) -> list[str]:
             f"Tracked path was omitted from repository candidate enumeration: {rel}"
         )
 
+    scannable_entries = {
+        rel: entry
+        for rel, entry in entries.items()
+        if entry.mode in ALLOWED_GIT_MODES
+    }
+    index_contents, index_load_problems = load_index_blobs(root, scannable_entries)
+    problems.extend(_label_problems(index_load_problems, "staged index"))
+
     for rel in sorted(candidate_paths):
         entry = entries.get(rel)
         mode = entry.mode if entry is not None else "100644"
@@ -646,19 +792,16 @@ def scan_repository(root: Path = ROOT) -> list[str]:
 
         problems.extend(scan_filename(rel))
 
-        index_content: bytes | None = None
-        if entry is not None:
-            index_content, index_problems = load_index_blob(root, rel, entry)
-            problems.extend(_label_problems(index_problems, "staged index"))
-            if index_content is not None:
-                index_policy_problems, index_text = scan_content_policy(rel, index_content)
-                problems.extend(_label_problems(index_policy_problems, "staged index"))
-                if index_text is not None:
-                    problems.extend(
-                        _label_problems(
-                            scan_decoded_text(rel, index_text), "staged index"
-                        )
+        index_content = index_contents.get(rel)
+        if index_content is not None:
+            index_policy_problems, index_text = scan_content_policy(rel, index_content)
+            problems.extend(_label_problems(index_policy_problems, "staged index"))
+            if index_text is not None:
+                problems.extend(
+                    _label_problems(
+                        scan_decoded_text(rel, index_text), "staged index"
                     )
+                )
 
         path = root.joinpath(*PurePosixPath(rel).parts)
         if path.is_symlink():
