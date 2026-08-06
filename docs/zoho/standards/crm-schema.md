@@ -5,7 +5,7 @@
 - Repository standard: **Proposed**
 - Official capability evidence: Zoho CRM API V8 documentation, subject to current-product verification
 - Field-type documentation rechecked: **2026-08-05**
-- Advertised MCP evidence: dated 2026-08-04 Sylvara tool-name snapshot, superseded for CRM by a callable-role refresh on 2026-08-05
+- Configured-selection evidence: dated 2026-08-04 Sylvara service-plus-operation-key snapshot, superseded for CRM by a callable-role refresh on 2026-08-05
 - Effective access verified on 2026-08-05: organization identity plus scoped module, field, layout, picklist, record, and Lead-conversion-map reads; bounded field, layout, picklist, help-text, and record mutations with independent readback
 - Effective write access unavailable on 2026-08-05: direct typed native Convert Lead, Lead Conversion Mapping mutation, and workflow-rule mutation; a readable workflow action named Convert does not establish any of those write contracts
 - Edition, comprehensive permissions, validation rules, formula dependencies, pipeline metadata, and unexercised contracts: **Unknown**
@@ -177,7 +177,7 @@ Subforms have separate edition and row limits, and their module/field API names 
 
 ## Current MCP Capability Limit
 
-The 2026-08-05 CRM role refresh supersedes the CRM portion of the older advertised-name snapshot. The verified surface supported scoped organization, module, field, layout, picklist, record, workflow, and Lead-conversion-map reads plus the bounded field, layout, picklist, help-text, and record mutations exercised during the approved CRM change. A workflow read exposed a Convert action, but the change surface did not expose a direct typed native Convert Lead write, Lead Conversion Mapping mutation, or workflow-rule mutation. Therefore:
+The 2026-08-05 CRM role refresh supersedes the CRM portion of the older configured-selection snapshot. The verified surface supported scoped organization, module, field, layout, picklist, record, workflow, and Lead-conversion-map reads plus the bounded field, layout, picklist, help-text, and record mutations exercised during the approved CRM change. A workflow read exposed a Convert action, but the change surface did not expose a direct typed native Convert Lead write, Lead Conversion Mapping mutation, or workflow-rule mutation. Therefore:
 
 - treat only an exercised typed operation as verified and recheck the target before reuse;
 - do not guess a field, layout, workflow, conversion, module, or subform payload;

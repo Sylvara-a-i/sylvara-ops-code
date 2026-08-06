@@ -66,13 +66,13 @@ tool_timeout_sec = 60
 
 The example name is a role convention, not proof of a production connection. Actual endpoints, headers, scopes, and connection names stay private.
 
-`codex mcp login` works only when the streamable HTTP server supports Codex-managed OAuth. An advertised tool-name snapshot does not establish how a server authenticates. Use the approved private provisioning method for the exact server and verify access afterward; do not repeatedly retry an unsupported login path or substitute Browser automation.
+`codex mcp login` works only when the streamable HTTP server supports Codex-managed OAuth. A configured-selection snapshot or advertised input contract does not establish how a server authenticates. Use the approved private provisioning method for the exact server and verify access afterward; do not repeatedly retry an unsupported login path or substitute Browser automation.
 
 ## Acceptance Sequence
 
 Run acceptance separately for every role and environment:
 
-1. Confirm the exact server name and advertised tool allowlist.
+1. Confirm the exact private server identity. Reconcile each portal or configured selection by service plus its prefix-free catalog operation key. Configure and verify the Codex `enabled_tools` allowlist using the exact currently advertised runtime tool name, then inspect that tool's description and input schema.
 2. Call the least-sensitive identity endpoint first.
 3. Verify organization, environment, data center, current user, and intended role.
 4. Confirm the server rejects another organization, project, or environment.

@@ -194,6 +194,7 @@ class AgentInstructionsTests(unittest.TestCase):
         )
         for marker in (
             "official zoho documentation",
+            "configured mcp selection",
             "advertised tool contract",
             "effective tenant access",
             "approved sylvara requirement",

@@ -4,6 +4,7 @@ All notable repository-governance and technical-source changes are recorded here
 
 ## Unreleased
 
+- Reconcile the remaining documentation branches by preserving append-only dated MCP snapshots and separating configured tool selections, advertised input contracts, and effective tenant capability; intentionally exclude redundant folder indexes and a copied 1.73 MB provider catalog.
 - Select `after-hours-new-residential-service-request-v1` as the first provider-neutral workflow for offline synthetic validation, with four explicit dispositions, bounded exclusions, expansion gates, and kill criteria; no live call or downstream write is authorized.
 - Replace duplicated root agent prose with a compact instruction router and scoped Zoho, safety, and Billing gateway instructions, enforced by byte-budget and authority-boundary tests.
 - Add one canonical PowerShell verifier for the safety scan, workflow policy, Python regressions, and Billing gateway checks; batch Git index reads to reduce the full safety scan from roughly 24 seconds to about two seconds without reducing staged/worktree coverage.
@@ -37,4 +38,4 @@ All notable repository-governance and technical-source changes are recorded here
 - Preserve a non-executable review record for the historical Zoho Catalyst billing gateway while excluding the supplied handler and deployment files from the public repository.
 - Add a proposed sanitized Zoho Billing webhook gateway replacement with repository-level tests, a variable-name registry attested against the supplied export and replacement source, a proposed durable Data Store schema, a Node.js 24 baseline, an exact-version dependency lock, and explicit Development/Production gates.
 - Add product-owned standards for Billing, Catalyst, Creator/Forms/Sites, WorkDrive/Contracts/Sign, Mail, Analytics, and portable accounting practices.
-- Add a machine-readable Zoho suite ownership registry and distinguish official product support, advertised MCP tool names, and effective tenant capability.
+- Add a machine-readable Zoho suite ownership registry and distinguish official product support, configured MCP selections, advertised MCP contracts, and effective tenant capability.

@@ -2,13 +2,13 @@
 
 ## Scope And Evidence
 
-This catalog is a sanitized historical snapshot of the Zoho tool names advertised to Codex for Sylvara on 2026-08-04. An earlier 2026-08-05 export matched its 294 role-qualified names. Later same-day callable-registry refreshes superseded the Books and CRM portions. The Books refresh exposed 91 Books Audit, 24 Books Changes, and 67 Books Controller operations, including chart create, update, mark-active, and mark-inactive. The separately recorded CRM refresh verified scoped metadata and record operations but no direct typed native conversion write. The rows below intentionally preserve the dated snapshot and are not a current Books or CRM allowlist. No Zoho chart-of-accounts write was invoked during the initial capability reconciliation; a later separately approved deployment exercised the four bounded chart operations with independent Audit readback.
+This catalog is a sanitized historical snapshot of the Zoho tool selections configured for Sylvara on 2026-08-04. An earlier 2026-08-05 export matched its 294 role-qualified selections. Later same-day callable-registry refreshes superseded the Books and CRM portions. The Books refresh exposed 91 Books Audit, 24 Books Changes, and 67 Books Controller operations, including chart create, update, mark-active, and mark-inactive. The separately recorded CRM refresh verified scoped metadata and record operations but no direct typed native conversion write. The rows below intentionally preserve the dated snapshot and are not a current Books or CRM allowlist. No Zoho chart-of-accounts write was invoked during the initial capability reconciliation; a later separately approved deployment exercised the four bounded chart operations with independent Audit readback.
 
 Current scoped CRM evidence is indexed in the [suite registry](../../../../governance/suite-registry.json) and the [product-owned CRM package](../../../../../../src/zoho-crm/README.md); it is not merged into the historical rows below.
 
-The complete role-qualified name inventory is in [`sylvara-observed-tool-inventory.json`](sylvara-observed-tool-inventory.json). Runtime server names, generated transport IDs, endpoints, authentication details, connection aliases, organization or account identifiers, record identifiers, sample values, and returned data are excluded.
+The complete role-qualified selection inventory is in [`sylvara-observed-tool-inventory.json`](sylvara-observed-tool-inventory.json). Each row separates the exact prefix-free catalog operation key from its prefix-free annotated tool name. Runtime server names, generated transport IDs, service-prefixed adapter labels, endpoints, authentication details, connection aliases, organization or account identifiers, record identifiers, sample values, and returned data are excluded.
 
-This is **advertised tool-name evidence**, not proof of effective tenant access. The source export establishes role and operation names; it does not establish successful authorization, target binding, plan availability, response completeness, or safe write semantics.
+This is **configured-selection evidence**, not proof of an advertised MCP contract or effective tenant access. The source export establishes dated role membership and operation keys; it does not establish a current description or input schema, successful authorization, target binding, plan availability, response completeness, or safe write semantics.
 
 ## Capability Evidence Layers
 
@@ -16,7 +16,9 @@ This is **advertised tool-name evidence**, not proof of effective tenant access.
 |---|---|---|
 | Official Zoho documentation | A generally documented product capability, API family, scope, limit, or behavior | That the capability is selectable in the current Tool Manual, enabled for Sylvara, or authorized for one identity |
 | Dated Tool Manual catalog | A provider catalog row existed for a service at the recorded cutoff | That the row is still present, selected on a Sylvara server, or callable |
-| Advertised Sylvara tool name | One neutral role exposed that operation name in the inspected Codex surface | Complete request or response semantics, successful execution, tenant binding, or approval to use it |
+| Preconfigured template membership | A dated provider template contained the operation | That Sylvara selected the template or that its membership remains current |
+| Configured Sylvara selection | One neutral role contained that operation in the inspected Codex surface | A current description or input schema, successful execution, tenant binding, or approval to use it |
+| Advertised MCP contract | A currently inspected server exposes a description and input schema for the selected operation | Effective authorization, correct tenant binding, successful execution, or safe write semantics |
 | Effective Sylvara capability | A specific identity, target, environment, role, grant, plan, and feature passed an authorized acceptance check | Permission for an adjacent tool, target, or future call |
 
 Never promote evidence to a higher layer by assumption.
@@ -57,15 +59,15 @@ The official [Zoho Books Chart of Accounts API](https://www.zoho.com/books/api/v
 | `payments-changes` | 3 | 4 | 7 | Customer, payment-link, and payment-session mutation |
 | `workdrive-audit` | 21 | 0 | 21 | Document metadata, content search, preview, sharing, and download |
 | `workdrive-changes` | 1 | 4 | 5 | Folder creation, upload, move, and rename |
-| **Total** | **221** | **73** | **294** | Advertised names; no operation was called |
+| **Total** | **221** | **73** | **294** | Configured selections; no operation was called |
 
-The 294 entries contain 257 unique product operation names. Thirty-four operation names appear in more than one role, creating 37 additional role-qualified entries. Those overlaps are intentional readback or discovery helpers; never deduplicate them across privilege boundaries.
+The 294 entries contain 257 unique service-qualified operation keys and 257 unique case-sensitive annotations. Thirty-four operations appear in more than one role, creating 37 additional role-qualified entries. Those overlaps are intentional readback or discovery helpers; never deduplicate them across privilege boundaries.
 
 ## Product Coverage And Broader Possible Surface
 
-The official Tool Manual is the provider's complete, changing tool-definition source. The dated 2026-07-24 catalog recorded 3,222 rows for the eight products observed here. Those rows are **possible provider catalog entries**, not enabled Sylvara tools, and they are not one-to-one comparable with this inventory because the same operation can be exposed in multiple roles.
+The official Tool Manual is the provider's complete, changing tool-definition source. The dated 2026-07-24 catalog recorded 3,222 rows for the eight products observed here. Those rows are **possible provider catalog entries**, not configured Sylvara selections, and they are not one-to-one comparable with this inventory because the same operation can be selected in multiple roles.
 
-| Product | Observed roles | Read | Write / action | Advertised total | Unique operation names | Dated Tool Manual rows | Product handbook |
+| Product | Observed roles | Read | Write / action | Configured total | Unique operation keys | Dated Tool Manual rows | Product handbook |
 |---|---:|---:|---:|---:|---:|---:|---|
 | Zoho Billing | 2 | 38 | 13 | 51 | 45 | 453 | [Billing reference](../../../../reference/products/zoho-billing.md) |
 | Zoho Books | 3 | 59 | 28 | 87 | 70 | 1,090 | [Books reference](../../../../reference/products/zoho-books.md) |
@@ -79,7 +81,7 @@ The official Tool Manual is the provider's complete, changing tool-definition so
 
 The product handbooks summarize the broader official API families, scopes, failure modes, and current official links. Copying Zoho's full manuals into this repository would become stale, blur the evidence boundary, and duplicate provider-owned documentation. Refresh the [Zoho MCP knowledge-base index](https://help.zoho.com/portal/en/kb/mcp), [implementation guide](https://help.zoho.com/portal/en/kb/mcp/implementation-guide/articles/zoho-mcp-implementation-guide), and [supported-services list](https://www.zoho.com/mcp/services/zoho-services.html) before selecting a new tool.
 
-## Advertised Capability Families
+## Configured Capability Families
 
 ### Zoho Billing
 
@@ -99,7 +101,7 @@ Observed reads cover workspaces, applications, forms, reports, pages, sections, 
 
 ### Zoho CRM
 
-Observed reads cover organization, modules, fields, layouts, layout rules, picklists, pipelines, users, workflows, tasks, notes, tags, records, related records, timelines, search, counts, and COQL queries. Changes are limited to note creation/update and record creation/update. No schema-mutation or delete operation is advertised in this snapshot.
+Observed reads cover organization, modules, fields, layouts, layout rules, picklists, pipelines, users, workflows, tasks, notes, tags, records, related records, timelines, search, counts, and COQL queries. Changes are limited to note creation/update and record creation/update. No schema-mutation or delete operation is configured in this snapshot.
 
 ### Zoho Mail
 
@@ -107,7 +109,7 @@ Observed reads cover organization and account details, folders, message lists, s
 
 ### Zoho Payments
 
-Observed reads cover merchant accounts, customers, payments, payment links, payment sessions, payouts, payout transactions, and refunds. Changes cover customer creation, payment-link creation/update, and payment-session creation. No refund, capture, or payout mutation is advertised.
+Observed reads cover merchant accounts, customers, payments, payment links, payment sessions, payouts, payout transactions, and refunds. Changes cover customer creation, payment-link creation/update, and payment-session creation. No refund, capture, or payout mutation is configured.
 
 ### Zoho WorkDrive
 
@@ -115,9 +117,9 @@ Observed reads cover teams, team folders, users, hierarchy, file and folder list
 
 ## Contract Limitations
 
-- Runtime callable names contain generated or truncated transport identifiers. The inventory preserves the provider operation spelling and neutral role because those are the stable review keys.
+- Runtime callable names contain generated or truncated transport identifiers. The inventory preserves the exact prefix-free catalog operation key, its prefix-free annotation, and the neutral role because those are the stable review keys.
 - Every current runtime declaration returns a generic data/status envelope rather than a typed product response. A transport success value is not proof of the intended downstream outcome.
-- Some discovery tools accept open argument objects, and several request schemas contain partially unknown fields. An advertised write with an open or incomplete payload remains blocked until its exact contract is verified.
+- Some discovery tools accept open argument objects, and several request schemas contain partially unknown fields. A configured write with an open or incomplete advertised contract remains blocked until its exact contract is verified.
 - Download tools can return binary or content-bearing data; WorkDrive uploads use multipart behavior. These require separate redaction, size, malware, and content-handling controls.
 - Read-only does not mean low sensitivity. Reports, messages, records, logs, previews, downloads, payments, and accounting data can all expose restricted information.
 
@@ -129,7 +131,7 @@ Create, add, update, send, execute, cancel, pause, resume, reactivate, apply, ma
 
 ## Unobserved Sylvara Surfaces
 
-No Sylvara Forms, Contracts, Sign, Sites, or Analytics tool name was present in the inspected surface. Their current MCP availability is **Unknown**, not unsupported. Product API documentation or a Tool Manual row does not prove that a Sylvara server advertises or can execute the capability.
+No Sylvara Forms, Contracts, Sign, Sites, or Analytics selection was present in the inspected surface. Their current MCP availability is **Unknown**, not unsupported. Product API documentation or a Tool Manual row does not prove that a Sylvara server is configured for or can execute the capability.
 
 ## Live Use Gate
 
@@ -145,8 +147,8 @@ Repository documentation is not live-system approval. Before calling any Zoho op
 
 1. Export the current configured tool list in a trusted local session without publishing raw namespaces, endpoints, or authorization data.
 2. Filter to the intended business and Zoho products before any comparison.
-3. Cross-check role counts and advertised names against the current callable registry without invoking Zoho.
-4. Preserve exact operation spelling, neutralize server roles, classify side effects, and retain role-qualified duplicates.
+3. Cross-check role counts and configured operation keys against the callable registry available at observation time without invoking Zoho.
+4. Preserve exact prefix-free operation keys and annotations, neutralize server roles, classify side effects, and retain role-qualified duplicates.
 5. Refresh the official Tool Manual and product documentation separately.
-6. Replace this dated snapshot, update navigation and governance status, and run all safety checks.
+6. Create a new dated snapshot for a later observation, update navigation and governance status, preserve older historical snapshots, and run all safety checks.
 7. Perform effective-access acceptance only through a separately approved, least-sensitive workflow.

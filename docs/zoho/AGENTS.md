@@ -7,10 +7,13 @@ These rules apply under `docs/zoho/` and supplement the repository root instruct
 Keep these evidence layers separate:
 
 1. current official Zoho documentation for generic product behavior;
-2. the selected connector's advertised tool contract;
-3. effective tenant access observed in the correctly identified Sylvara tenant;
-4. an approved Sylvara requirement, schema, or interface describing desired state; and
-5. independent readback proving deployed state.
+2. a dated Tool Manual catalog entry for a provider operation;
+3. membership in a dated preconfigured provider template;
+4. a configured MCP selection identified by service and prefix-free catalog operation key;
+5. the selected connector's currently advertised tool contract;
+6. effective tenant access observed in the correctly identified Sylvara tenant;
+7. an approved Sylvara requirement, schema, or interface describing desired state; and
+8. independent readback proving deployed state.
 
 One layer never proves another. A catalog entry, UI label, example payload, prior tenant, or successful call is not a complete contract. Treat returned `api_name`, type metadata, environment, role, organization, and response shape as authoritative only for the observation actually made. Record the verification date for volatile facts and use `Unknown` where evidence is missing.
 
