@@ -12,6 +12,7 @@ This folder separates MCP design policy from dated evidence. A large catalog doe
 | Official Tool Manual snapshot | [`reference/tool-manual-service-catalog-2026-07-24.md`](reference/tool-manual-service-catalog-2026-07-24.md) | Dated service coverage and row counts documented by the provider |
 | Preconfigured portal templates | [`reference/preconfigured-template-catalog-2026-07-25.md`](reference/preconfigured-template-catalog-2026-07-25.md) | Dated template names and captured memberships, not a recommendation |
 | Configured-session selections | [`snapshots/configured/2026-08-04/`](snapshots/configured/2026-08-04/) | Sanitized Sylvara-only role membership, prefix-free catalog operation keys, and annotations observed in one inspected session |
+| Effective CRM access | [`snapshots/effective/2026-08-12/`](snapshots/effective/2026-08-12/) | Current 48-operation Audit and 14-operation Changes registries plus only the bounded calls actually acceptance-tested |
 | Advertised MCP contract | Not stored as a blanket claim | Requires current inspection of the selected operation's description and input schema |
 | Effective Sylvara access | Not stored as a blanket claim | Requires a current identity check and authorized acceptance call |
 
@@ -25,8 +26,11 @@ The refreshed Books Controller advertises chart-account create, update, mark-act
 
 The separate CRM refresh verified scoped metadata, record, workflow, and conversion-map reads plus the exact bounded schema, picklist, layout, help-text, and record writes recorded in the [sanitized CRM package](../../../src/zoho-crm/README.md). It did not expose direct typed native conversion, conversion-map mutation, or workflow-rule mutation. The dated machine inventory is not a current CRM allowlist.
 
+The [2026-08-12 effective CRM snapshot](snapshots/effective/2026-08-12/) supersedes the older configured-selection snapshot for current CRM role membership. It records 48 Audit and 14 Changes operations, distinguishes advertised membership from exercised behavior, and documents the system-picklist and missing-pipeline-mutation limits.
+
 - [Capability analysis and broader official-family crosswalk](snapshots/configured/2026-08-04/capability-catalog.md)
 - [Complete machine-readable configured-selection inventory](snapshots/configured/2026-08-04/sylvara-observed-tool-inventory.json)
+- [Current CRM effective-access inventory](snapshots/effective/2026-08-12/crm-tool-inventory.json)
 
 ## Tool Manual Snapshot
 

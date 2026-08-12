@@ -6,12 +6,13 @@ This area contains Sylvara-owned, sanitized CRM schema and Lead-conversion docum
 
 ## Evidence Status
 
-- Snapshot date: **2026-08-05**
+- Current field/layout snapshot date: **2026-08-12**
+- Historical Lead-conversion decision snapshot: **2026-08-05**
 - Target: the verified Sylvara CRM organization, with private organization and object identifiers excluded
 - Modules in scope: Leads, Contacts, Accounts, and Deals
-- Metadata status: module, field, layout-requirement, help-text-presence, and current Lead-conversion mapping metadata verified
-- Live changes: the scoped field, layout, picklist, supported help-text, and consolidated-address work was read back after mutation
-- Help-text exception: 12 used compound Address, Coordinates, or Distance entries still report no help text and require a separately verified mutation path
+- Metadata status: all 467 current fields and the complete 84-field Free-Test layout contract were independently verified; the older conversion matrix is not a current mapping audit
+- Live changes: 34 missing Free-Test fields were created, 50 existing Free-Test fields received verified help text, and all 84 were read back in their intended sections and order
+- Help-text exception: all 84 Free-Test fields have help text; 12 other used compound Address, Coordinates, or Distance entries still report no text and remain outside this write scope
 - Conversion automation: **not deployed**
 
 The snapshot proves only what the authorized CRM audit surface returned on the observation date. It does not grant continuing permission to change CRM and does not establish unsupported workflow, formula-dependency, profile, or validation-rule behavior.
@@ -23,9 +24,12 @@ The snapshot proves only what the authorized CRM audit surface returned on the o
 | [Reference contract](reference/README.md) | Scope, provenance, conversion findings, deployment boundary, and rollback |
 | [Module catalog](reference/modules.csv) | Module labels, API names, field counts, and conversion roles |
 | [Field dictionary](reference/crm-field-dictionary.csv) | One sanitized row for every verified field in the four governed modules |
+| [Free-Test deployment status](reference/free-test-schema-2026-08-12.md) | Deployed scope, normalized values, layout contract, cleanup boundary, and pipeline decision |
+| [Free-Test field manifest](reference/free-test-field-manifest.csv) | The complete 84-field API/type/help/section/order contract |
+| [Free-Test picklist values](reference/free-test-picklist-values.csv) | Verified choice order, colors, and normalized live values |
 | [Lead-conversion matrix](reference/lead-conversion-mapping.csv) | One row for every Lead field and target module, including explicit intentional non-mappings |
 
-The CSV files are deterministic review artifacts, not import files and not live configuration payloads.
+The CSV files are deterministic review artifacts, not import files and not live configuration payloads. The Lead-conversion matrix is a dated 2026-08-05 decision snapshot; use the 2026-08-12 field dictionary for current API-name existence.
 
 ## Commercial Conversion Rule
 

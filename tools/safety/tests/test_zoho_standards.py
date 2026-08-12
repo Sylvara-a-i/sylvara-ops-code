@@ -239,7 +239,7 @@ class ZohoStandardsTests(unittest.TestCase):
     def test_machine_readable_suite_registry_is_complete_and_resolvable(self) -> None:
         registry = json.loads(SUITE_REGISTRY.read_text(encoding="utf-8"))
         self.assertEqual(3, registry["schema_version"])
-        self.assertEqual("2026-08-05", registry["as_of"])
+        self.assertEqual("2026-08-12", registry["as_of"])
         self.assertEqual("docs/zoho", registry["path_base"])
         self.assertEqual("partially-verified", registry["live_state"])
         self.assertEqual(list(CAPABILITY_LAYERS), registry["capability_layers"])
@@ -251,10 +251,10 @@ class ZohoStandardsTests(unittest.TestCase):
             with self.subTest(product=row["id"]):
                 if row["id"] == "crm":
                     self.assertEqual(
-                        "organization-identity-and-scoped-metadata-record-field-layout-picklist-read-write-verified-2026-08-05-conversion-mapping-and-direct-native-convert-write-unavailable",
+                        "same-target-identity-and-bounded-field-help-layout-read-write-independently-verified-2026-08-12-system-picklist-and-pipeline-conversion-workflow-mutations-unavailable-or-unverified",
                         row["effective_tenant_capability"],
                     )
-                    expected_observation = "crm-roles-refreshed-2026-08-05"
+                    expected_observation = "crm-roles-effective-2026-08-12"
                 elif row["id"] == "books":
                     self.assertEqual(
                         "organization-identity-chart-read-and-scoped-chart-create-update-activate-inactivate-verified-2026-08-05",

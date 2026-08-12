@@ -1,6 +1,6 @@
 {
   "schema_version": 3,
-  "as_of": "2026-08-05",
+  "as_of": "2026-08-12",
   "path_base": "docs/zoho",
   "repository_status": "proposed-governance",
   "live_state": "partially-verified",
@@ -27,10 +27,15 @@
         "../../src/zoho-crm/reference/README.md",
         "../../src/zoho-crm/reference/modules.csv",
         "../../src/zoho-crm/reference/crm-field-dictionary.csv",
-        "../../src/zoho-crm/reference/lead-conversion-mapping.csv"
+        "../../src/zoho-crm/reference/lead-conversion-mapping.csv",
+        "../../src/zoho-crm/reference/free-test-schema-2026-08-12.md",
+        "../../src/zoho-crm/reference/free-test-field-manifest.csv",
+        "../../src/zoho-crm/reference/free-test-picklist-values.csv",
+        "mcp/snapshots/effective/2026-08-12/README.md",
+        "mcp/snapshots/effective/2026-08-12/crm-tool-inventory.json"
       ],
-      "mcp_observation": "crm-roles-refreshed-2026-08-05",
-      "effective_tenant_capability": "organization-identity-and-scoped-metadata-record-field-layout-picklist-read-write-verified-2026-08-05-conversion-mapping-and-direct-native-convert-write-unavailable"
+      "mcp_observation": "crm-roles-effective-2026-08-12",
+      "effective_tenant_capability": "same-target-identity-and-bounded-field-help-layout-read-write-independently-verified-2026-08-12-system-picklist-and-pipeline-conversion-workflow-mutations-unavailable-or-unverified"
     },
     {
       "id": "books",

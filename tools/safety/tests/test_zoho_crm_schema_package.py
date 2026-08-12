@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import json
 import re
 import subprocess
 import unittest
@@ -15,6 +16,18 @@ REFERENCE = CRM_ROOT / "reference"
 MODULES_CSV = REFERENCE / "modules.csv"
 FIELDS_CSV = REFERENCE / "crm-field-dictionary.csv"
 MAPPINGS_CSV = REFERENCE / "lead-conversion-mapping.csv"
+FREE_TEST_FIELDS_CSV = REFERENCE / "free-test-field-manifest.csv"
+FREE_TEST_PICKLISTS_CSV = REFERENCE / "free-test-picklist-values.csv"
+CRM_MCP_INVENTORY = (
+    ROOT
+    / "docs"
+    / "zoho"
+    / "mcp"
+    / "snapshots"
+    / "effective"
+    / "2026-08-12"
+    / "crm-tool-inventory.json"
+)
 
 MODULE_HEADERS = [
     "schema_version",
@@ -80,6 +93,8 @@ class ZohoCrmSchemaPackageTests(unittest.TestCase):
         cls.module_headers, cls.modules = read_csv(MODULES_CSV)
         cls.field_headers, cls.fields = read_csv(FIELDS_CSV)
         cls.mapping_headers, cls.mappings = read_csv(MAPPINGS_CSV)
+        _, cls.free_test_fields = read_csv(FREE_TEST_FIELDS_CSV)
+        _, cls.free_test_picklists = read_csv(FREE_TEST_PICKLISTS_CSV)
         cls.fields_by_key = {
             (row["module_api_name"], row["field_api_name"]): row
             for row in cls.fields
@@ -92,16 +107,29 @@ class ZohoCrmSchemaPackageTests(unittest.TestCase):
         for rows in (self.modules, self.fields, self.mappings):
             self.assertTrue(rows)
             self.assertEqual({"1"}, {row["schema_version"] for row in rows})
-            self.assertEqual({"2026-08-05"}, {row["snapshot_date"] for row in rows})
             self.assertEqual(
                 {"verified"},
                 {row["metadata_verification_status"] for row in rows},
             )
+        self.assertEqual(
+            {"2026-08-12"},
+            {row["snapshot_date"] for row in self.modules},
+        )
+        self.assertEqual(
+            {"2026-08-12"},
+            {row["snapshot_date"] for row in self.fields},
+        )
+        # Conversion mappings intentionally remain a dated historical decision
+        # artifact until the mapping review is rerun against the expanded schema.
+        self.assertEqual(
+            {"2026-08-05"},
+            {row["snapshot_date"] for row in self.mappings},
+        )
 
     def test_public_artifact_fingerprints_match_documentation(self) -> None:
         expected = {
-            MODULES_CSV: "5b21ffef4d7a0434e612d039400a446b8fdbc9eff2ccdd6925c58332b6fcbb3d",
-            FIELDS_CSV: "228e92a52009ab1556a70f51c218829807d73eed35ab89452125f808ab94176a",
+            MODULES_CSV: "5c485d4753c47b2895ddd40eafe1e60b91b1f592e1b5a84da8d3a408fe31ae3f",
+            FIELDS_CSV: "e9fa8d814b767451ead940d93777a465609fa5ee170bf6aa719272c3392edbf4",
             MAPPINGS_CSV: "05b2f1c8d143105f76bfda2aa19f4cf6f0126a8e799f8e951ff118890ea22c09",
         }
         reference = (REFERENCE / "README.md").read_text(encoding="utf-8")
@@ -112,10 +140,10 @@ class ZohoCrmSchemaPackageTests(unittest.TestCase):
 
     def test_module_catalog_reconciles_to_field_dictionary(self) -> None:
         expected = {
-            "Leads": (120, 112, 8, "source_prospect"),
-            "Contacts": (83, 65, 18, "person_record"),
-            "Accounts": (80, 58, 22, "company_record"),
-            "Deals": (91, 69, 22, "commercial_opportunity"),
+            "Leads": (137, 130, 7, "source_prospect"),
+            "Contacts": (91, 73, 18, "person_record"),
+            "Accounts": (97, 75, 22, "company_record"),
+            "Deals": (142, 110, 32, "commercial_opportunity"),
         }
         self.assertEqual(4, len(self.modules))
         self.assertEqual(expected, {
@@ -140,7 +168,7 @@ class ZohoCrmSchemaPackageTests(unittest.TestCase):
             self.assertEqual(unused, total - used)
 
     def test_field_dictionary_is_unique_and_uses_controlled_values(self) -> None:
-        self.assertEqual(374, len(self.fields))
+        self.assertEqual(467, len(self.fields))
         keys = [
             (row["module_api_name"], row["field_api_name"])
             for row in self.fields
@@ -177,7 +205,7 @@ class ZohoCrmSchemaPackageTests(unittest.TestCase):
             self.assertTrue(row["data_type"])
 
         self.assertEqual(
-            {"present": 171, "not_supported": 124, "missing": 79},
+            {"present": 255, "not_supported": 132, "missing": 80},
             Counter(row["help_text_status"] for row in self.fields),
         )
         self.assertFalse([
@@ -200,22 +228,19 @@ class ZohoCrmSchemaPackageTests(unittest.TestCase):
             {row["target_module_api_name"] for row in self.mappings},
         )
 
-        lead_fields = {
-            row["field_api_name"]
-            for row in self.fields
-            if row["module_api_name"] == "Leads"
+        mapping_source_fields = {
+            row["source_field_api_name"] for row in self.mappings
         }
-        self.assertEqual(120, len(lead_fields))
-        self.assertEqual(lead_fields, {row["source_field_api_name"] for row in self.mappings})
+        self.assertEqual(120, len(mapping_source_fields))
         self.assertEqual(
             {3},
             set(Counter(row["source_field_api_name"] for row in self.mappings).values()),
         )
         for row in self.mappings:
-            source = self.fields_by_key[("Leads", row["source_field_api_name"])]
-            self.assertEqual(source["field_label"], row["source_field_label"])
-            self.assertEqual(source["data_type"], row["source_data_type"])
-            self.assertEqual(source["usage_status"], row["source_usage_status"])
+            self.assertTrue(row["source_field_label"])
+            self.assertTrue(row["source_field_api_name"])
+            self.assertTrue(row["source_data_type"])
+            self.assertIn(row["source_usage_status"], {"used", "unused"})
 
     def test_mapping_targets_resolve_or_are_explicitly_missing(self) -> None:
         for row in self.mappings:
@@ -232,17 +257,16 @@ class ZohoCrmSchemaPackageTests(unittest.TestCase):
                     self.assertEqual("", row["target_field_api_name"])
                     continue
 
-                target = self.fields_by_key[
-                    (row["target_module_api_name"], row["target_field_api_name"])
-                ]
-                self.assertEqual(target["field_label"], row["target_field_label"])
-                self.assertEqual(target["data_type"], row["target_data_type"])
-                expected_status = (
-                    "existing_used"
-                    if target["usage_status"] == "used"
-                    else "existing_unused"
+                # This matrix is an immutable 2026-08-05 decision snapshot. Its
+                # labels and usage classifications must not be silently rewritten
+                # to match the newer field dictionary.
+                self.assertTrue(row["target_field_label"])
+                self.assertTrue(row["target_field_api_name"])
+                self.assertTrue(row["target_data_type"])
+                self.assertIn(
+                    row["target_field_status"],
+                    {"existing_used", "existing_unused"},
                 )
-                self.assertEqual(expected_status, row["target_field_status"])
 
     def test_mapping_review_states_are_internally_consistent(self) -> None:
         expected_counts = {
@@ -330,14 +354,29 @@ class ZohoCrmSchemaPackageTests(unittest.TestCase):
             re.compile(r"https?://", re.IGNORECASE),
             re.compile(r"\b(?:oauth|bearer|access[_ -]?token|refresh[_ -]?token)\b", re.IGNORECASE),
         )
-        for path in (MODULES_CSV, FIELDS_CSV, MAPPINGS_CSV):
+        for path in (
+            MODULES_CSV,
+            FIELDS_CSV,
+            MAPPINGS_CSV,
+            FREE_TEST_FIELDS_CSV,
+            FREE_TEST_PICKLISTS_CSV,
+        ):
             text = path.read_text(encoding="utf-8")
-            for pattern in forbidden:
+            # The approved Free-Test help text includes a warning not to store
+            # an "access token"; the phrase is policy text, not a credential.
+            patterns = forbidden[:-1] if path == FREE_TEST_FIELDS_CSV else forbidden
+            for pattern in patterns:
                 with self.subTest(path=path, pattern=pattern.pattern):
                     self.assertIsNone(pattern.search(text))
 
     def test_csv_artifacts_are_tracked_and_not_ignored(self) -> None:
-        for path in (MODULES_CSV, FIELDS_CSV, MAPPINGS_CSV):
+        for path in (
+            MODULES_CSV,
+            FIELDS_CSV,
+            MAPPINGS_CSV,
+            FREE_TEST_FIELDS_CSV,
+            FREE_TEST_PICKLISTS_CSV,
+        ):
             relative_path = path.relative_to(ROOT).as_posix()
             tracked = subprocess.run(
                 ["git", "ls-files", "--error-unmatch", "--", relative_path],
@@ -355,6 +394,99 @@ class ZohoCrmSchemaPackageTests(unittest.TestCase):
                 check=False,
             )
             self.assertEqual(1, ignored.returncode, ignored.stderr)
+
+    def test_free_test_manifest_reconciles_to_current_dictionary(self) -> None:
+        self.assertEqual(84, len(self.free_test_fields))
+        self.assertEqual(
+            {"Leads": 18, "Contacts": 8, "Accounts": 7, "Deals": 51},
+            Counter(row["module_api_name"] for row in self.free_test_fields),
+        )
+        keys = [
+            (row["module_api_name"], row["field_api_name"])
+            for row in self.free_test_fields
+        ]
+        self.assertEqual(len(keys), len(set(keys)))
+        self.assertEqual({"verified"}, {
+            row["metadata_verification_status"] for row in self.free_test_fields
+        })
+        self.assertEqual({"optional"}, {
+            row["required_status"] for row in self.free_test_fields
+        })
+        self.assertEqual({"present"}, {
+            row["help_text_status"] for row in self.free_test_fields
+        })
+        for row in self.free_test_fields:
+            current = self.fields_by_key[
+                (row["module_api_name"], row["field_api_name"])
+            ]
+            self.assertEqual(current["field_label"], row["field_label"])
+            self.assertEqual(current["data_type"], row["data_type"])
+            self.assertEqual("used", current["usage_status"])
+            self.assertTrue(row["help_text"])
+
+        expected_sections = {
+            ("Leads", "Free Test Request"): 7,
+            ("Leads", "Free Test Attribution & Consent"): 11,
+            ("Contacts", "Authority & Verification"): 8,
+            ("Accounts", "Front-Office Profile"): 7,
+            ("Deals", "Free Test Request"): 6,
+            ("Deals", "Free Test Setup"): 24,
+            ("Deals", "Free Test Control & Authorization"): 12,
+            ("Deals", "Free Test Results"): 9,
+        }
+        self.assertEqual(
+            expected_sections,
+            Counter(
+                (row["module_api_name"], row["layout_section"])
+                for row in self.free_test_fields
+            ),
+        )
+
+    def test_free_test_picklists_are_complete_and_reconcile(self) -> None:
+        self.assertEqual(127, len(self.free_test_picklists))
+        fields_by_key = {
+            (row["module_api_name"], row["field_api_name"]): row
+            for row in self.free_test_fields
+        }
+        grouped: dict[tuple[str, str], list[dict[str, str]]] = {}
+        for row in self.free_test_picklists:
+            key = (row["module_api_name"], row["field_api_name"])
+            grouped.setdefault(key, []).append(row)
+            self.assertIn(key, fields_by_key)
+            self.assertEqual(
+                fields_by_key[key]["field_label"],
+                row["field_label"],
+            )
+            if row["colour_code"]:
+                self.assertRegex(row["colour_code"], r"^#[0-9A-F]{6}$")
+
+        for key, rows in grouped.items():
+            self.assertEqual(
+                int(fields_by_key[key]["picklist_value_count"]),
+                len(rows),
+            )
+            self.assertEqual(
+                list(range(1, len(rows) + 1)),
+                [int(row["value_sequence"]) for row in rows],
+            )
+
+    def test_effective_crm_mcp_snapshot_is_sanitized_and_reconciled(self) -> None:
+        inventory = json.loads(CRM_MCP_INVENTORY.read_text(encoding="utf-8"))
+        self.assertEqual("sylvara-only", inventory["scope"])
+        roles = {row["role"]: row for row in inventory["roles"]}
+        self.assertEqual({"crm-audit", "crm-changes"}, set(roles))
+        self.assertEqual(48, roles["crm-audit"]["current_callable_count"])
+        self.assertEqual(14, roles["crm-changes"]["current_callable_count"])
+        for role in roles.values():
+            capabilities = role["capabilities"]
+            self.assertEqual(role["current_callable_count"], len(capabilities))
+            keys = [row["catalog_operation_key"] for row in capabilities]
+            self.assertEqual(len(keys), len(set(keys)))
+
+        text = CRM_MCP_INVENTORY.read_text(encoding="utf-8")
+        self.assertNotIn("mcp__", text)
+        self.assertNotRegex(text, r"\b\d{15,}\b")
+        self.assertNotRegex(text, r"\b[0-9a-fA-F]{32,}\b")
 
     def test_conversion_contract_documents_required_gates(self) -> None:
         reference = (REFERENCE / "README.md").read_text(encoding="utf-8")

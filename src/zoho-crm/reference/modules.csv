@@ -1,5 +1,5 @@
 schema_version,snapshot_date,module_label,module_api_name,total_fields,used_fields,unused_fields,conversion_role,metadata_verification_status
-1,2026-08-05,Leads,Leads,120,112,8,source_prospect,verified
-1,2026-08-05,Contacts,Contacts,83,65,18,person_record,verified
-1,2026-08-05,Accounts,Accounts,80,58,22,company_record,verified
-1,2026-08-05,Deals,Deals,91,69,22,commercial_opportunity,verified
+1,2026-08-12,Leads,Leads,137,130,7,source_prospect,verified
+1,2026-08-12,Contacts,Contacts,91,73,18,person_record,verified
+1,2026-08-12,Accounts,Accounts,97,75,22,company_record,verified
+1,2026-08-12,Deals,Deals,142,110,32,commercial_opportunity,verified

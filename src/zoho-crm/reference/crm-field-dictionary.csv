@@ -1,375 +1,468 @@
 schema_version,snapshot_date,module_label,module_api_name,field_label,field_api_name,data_type,origin_status,usage_status,write_status,system_required_status,standard_layout_required_status,virtual_status,help_text_status,metadata_verification_status
-1,2026-08-05,Leads,Leads,Address,Address,textarea,custom,used,read_only,optional,optional,virtual,missing,verified
-1,2026-08-05,Leads,Leads,Address - City,Address_City,text,custom,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Leads,Leads,Address - Coordinates,Address_Coordinates,textarea,custom,used,read_only,optional,optional,virtual,missing,verified
-1,2026-08-05,Leads,Leads,Address - Latitude,Address_Coordinates_Latitude,double,custom,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Leads,Leads,Address - Longitude,Address_Coordinates_Longitude,double,custom,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Leads,Leads,Address - Country / Region,Address_Country_Region,picklist,custom,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Leads,Leads,Address - Flat / House No./ Building / Apartment Name,Address_Flat_House_No_Building_Apartment_Name,text,custom,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Leads,Leads,Address - State / Province,Address_State_Province,picklist,custom,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Leads,Leads,Address - Street Address,Address_Street_Address,text,custom,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Leads,Leads,Address - Zip / Postal Code,Address_Zip_Postal_Code,text,custom,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Leads,Leads,After-Hours Audit At,After_Hours_Audit_At,datetime,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,After-Hours Audit Notes,After_Hours_Audit_Notes,textarea,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,After-Hours Audit Outcome,After_Hours_Audit_Outcome,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,After-Hours Call Band,After_Hours_Call_Band,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Annual Revenue,Annual_Revenue,currency,system,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Average Job Value Band,Average_Job_Value_Band,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Average Time Spent (Minutes),Average_Time_Spent_Minutes,double,system,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Leads,Leads,Commercial Fit,Budget_Fit,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Change Log Time,Change_Log_Time__s,datetime,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Leads,Leads,City,City,text,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Leads,Leads,Company,Company,text,system,used,writable,optional,required,concrete,present,verified
-1,2026-08-05,Leads,Leads,Company Email,Company_Email,email,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Company Phone,Company_Phone,phone,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Contact Location Link,Contact_Location_Relationship,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Contact Source URL,Contact_Source_URL,website,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Contact Verification,Contact_Verification_Status,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Contact Verified At,Contact_Verified_At,datetime,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Is Converted,Converted__s,boolean,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Leads,Leads,Converted Account,Converted_Account,lookup,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Leads,Leads,Converted Contact,Converted_Contact,lookup,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Leads,Leads,Converted Date Time,Converted_Date_Time,datetime,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Leads,Leads,Converted Deal,Converted_Deal,lookup,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Leads,Leads,Country,Country,text,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Leads,Leads,Coverage Needs,Coverage_Needs,multiselectpicklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Created By,Created_By,ownerlookup,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Leads,Leads,Created Time,Created_Time,datetime,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Leads,Leads,Current Call Handling,Current_Call_Handling,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Days Visited,Days_Visited,integer,system,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Leads,Leads,Decision Authority,Decision_Authority,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Decision-Maker Role,Decision_Maker_Role,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Description,Description,textarea,system,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Designation,Designation,text,system,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Disqualification Reason,Disqualification_Reason,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Distance to Anchor ZIP,Distance_to_Anchor_ZIP,double,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Email,Email,email,system,used,writable,optional,required,concrete,present,verified
-1,2026-08-05,Leads,Leads,Email Opt Out,Email_Opt_Out,boolean,system,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Enrich Status,Enrich_Status__s,picklist,system,used,read_only,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Fax,Fax,text,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Leads,Leads,Field Team Size Band,Field_Team_Size_Band,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,First Name,First_Name,text,system,used,writable,optional,required,concrete,not_supported,verified
-1,2026-08-05,Leads,Leads,First Visit,First_Visited_Time,datetime,system,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Leads,Leads,First Page Visited,First_Visited_URL,website,system,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Leads,Leads,Full Name,Full_Name,text,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Leads,Leads,ICP Fit,ICP_Fit,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Record Id,id,bigint,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Leads,Leads,Industry,Industry,picklist,system,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Integration Readiness,Integration_Readiness,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Last Activity Time,Last_Activity_Time,datetime,system,used,read_only,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Last Enriched Time,Last_Enriched_Time__s,datetime,system,used,read_only,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Last Name,Last_Name,text,system,used,writable,required,required,concrete,not_supported,verified
-1,2026-08-05,Leads,Leads,Last Outreach At,Last_Outreach_At,datetime,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Last Outreach Channel,Last_Outreach_Channel,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Last Research Verified At,Last_Research_Verified_At,datetime,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Most Recent Visit,Last_Visited_Time,datetime,system,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Leads,Leads,Lead Conversion Time,Lead_Conversion_Time,integer,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Leads,Leads,Lead Source,Lead_Source,picklist,system,used,writable,optional,required,concrete,present,verified
-1,2026-08-05,Leads,Leads,Lead Status,Lead_Status,picklist,system,used,writable,optional,required,concrete,present,verified
-1,2026-08-05,Leads,Leads,Social Lead ID,leadchain0__Social_Lead_ID,text,custom,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Leads,Leads,Lifecycle Status,Lifecycle_Status,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,LinkedIn,LinkedIn,website,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Location Source URL,Location_Source_URL,website,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Location Type,Location_Type,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Locked,Locked__s,boolean,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Leads,Leads,Mobile,Mobile,phone,system,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Modified By,Modified_By,ownerlookup,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Leads,Leads,Modified Time,Modified_Time,datetime,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Leads,Leads,Monthly Inbound Call Band,Monthly_Inbound_Call_Band,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Distance,nearby_distance__s,double,system,used,read_only,optional,optional,virtual,missing,verified
-1,2026-08-05,Leads,Leads,Next Action,Next_Action,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Next Outreach At,Next_Outreach_At,datetime,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,No of Employees,No_of_Employees,integer,system,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Number Of Chats,Number_Of_Chats,integer,system,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Leads,Leads,Number of Locations,Number_of_Locations,integer,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Nurture Reason,Nurture_Reason,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Outreach Attempt Count,Outreach_Attempt_Count,integer,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Lead Owner,Owner,ownerlookup,system,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Leads,Leads,Pain Summary,Pain_Point_Summary,textarea,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Pain Signals,Pain_Signals,multiselectpicklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Phone,Phone,phone,system,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Communication Preference,Preferred_Communication_Method,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Primary Operating System,Primary_Operating_System,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Prospect Import Key,Prospect_Import_Key,text,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Rating,Rating,picklist,system,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Lead Image,Record_Image,profileimage,system,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Leads,Leads,Record Status,Record_Status__s,picklist,system,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Leads,Leads,Referral Source Contact,Referral_Source_Name,lookup,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Referrer,Referrer,website,system,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Leads,Leads,Research Notes,Research_Notes,textarea,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Salutation,Salutation,picklist,system,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Leads,Leads,Scheduling Process,Scheduling_Process,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Secondary Email,Secondary_Email,email,system,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Service Interest,Service_Interest,multiselectpicklist,custom,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Leads,Leads,Skype ID,Skype_ID,text,system,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,State,State,text,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Leads,Leads,Street,Street,text,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Leads,Leads,Tag,Tag,text,system,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Target Anchor ZIP,Target_Anchor_ZIP,text,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Target Selection Basis,Target_Location_Selection_Basis,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Target Market Fit,Target_Market_Fit,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Text Opt Out,Text_Opt_Out,boolean,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Time Zone,Time_Zone,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Time Zone (IANA ID),Time_Zone_IANA_ID,text,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Time Zone Normalized At,Time_Zone_Normalized_At,datetime,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Timeline Fit,Timeline_Fit,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Twitter,Twitter,text,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Leads,Leads,Unsubscribed Mode,Unsubscribed_Mode,picklist,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Leads,Leads,Unsubscribed Time,Unsubscribed_Time,datetime,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Leads,Leads,Visitor Score,Visitor_Score,bigint,system,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Leads,Leads,Website,Website,website,system,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Leads,Leads,Zip Code,Zip_Code,text,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Contacts,Contacts,Account Name,Account_Name,lookup,system,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Contacts,Contacts,Address,Address,textarea,custom,used,read_only,optional,optional,virtual,missing,verified
-1,2026-08-05,Contacts,Contacts,Address - City,Address_City,text,custom,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Contacts,Contacts,Address - Coordinates,Address_Coordinates,textarea,custom,used,read_only,optional,optional,virtual,missing,verified
-1,2026-08-05,Contacts,Contacts,Address - Latitude,Address_Coordinates_Latitude,double,custom,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Contacts,Contacts,Address - Longitude,Address_Coordinates_Longitude,double,custom,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Contacts,Contacts,Address - Country / Region,Address_Country_Region,picklist,custom,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Contacts,Contacts,Address - Flat / House No./ Building / Apartment Name,Address_Flat_House_No_Building_Apartment_Name,text,custom,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Contacts,Contacts,Address - State / Province,Address_State_Province,picklist,custom,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Contacts,Contacts,Address - Street Address,Address_Street_Address,text,custom,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Contacts,Contacts,Address - Zip / Postal Code,Address_Zip_Postal_Code,text,custom,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Contacts,Contacts,Assistant,Assistant,text,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Contacts,Contacts,Asst Phone,Asst_Phone,phone,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Contacts,Contacts,Average Time Spent (Minutes),Average_Time_Spent_Minutes,double,system,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Contacts,Contacts,Change Log Time,Change_Log_Time__s,datetime,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Contacts,Contacts,Contact Type,Contact_Type,picklist,custom,used,writable,optional,required,concrete,present,verified
-1,2026-08-05,Contacts,Contacts,Created By,Created_By,ownerlookup,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Contacts,Contacts,Created Time,Created_Time,datetime,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Contacts,Contacts,Date of Birth,Date_of_Birth,date,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Contacts,Contacts,Days Visited,Days_Visited,integer,system,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Contacts,Contacts,Department,Department,text,system,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Contacts,Contacts,Description,Description,textarea,system,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Contacts,Contacts,Email,Email,email,system,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Contacts,Contacts,Email Opt Out,Email_Opt_Out,boolean,system,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Contacts,Contacts,Enrich Status,Enrich_Status__s,picklist,system,used,read_only,optional,optional,concrete,present,verified
-1,2026-08-05,Contacts,Contacts,Fax,Fax,text,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Contacts,Contacts,First Name,First_Name,text,system,used,writable,optional,required,concrete,not_supported,verified
-1,2026-08-05,Contacts,Contacts,First Visit,First_Visited_Time,datetime,system,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Contacts,Contacts,First Page Visited,First_Visited_URL,website,system,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Contacts,Contacts,Full Name,Full_Name,text,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Contacts,Contacts,Home Phone,Home_Phone,phone,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Contacts,Contacts,Record Id,id,bigint,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Contacts,Contacts,Is Billing Contact?,Is_Billing_Contact,boolean,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Contacts,Contacts,Is Portal User?,Is_Portal_User,boolean,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Contacts,Contacts,Is Primary Contact?,Is_Primary_Contact,boolean,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Contacts,Contacts,Last Activity Time,Last_Activity_Time,datetime,system,used,read_only,optional,optional,concrete,present,verified
-1,2026-08-05,Contacts,Contacts,Last Enriched Time,Last_Enriched_Time__s,datetime,system,used,read_only,optional,optional,concrete,present,verified
-1,2026-08-05,Contacts,Contacts,Last Name,Last_Name,text,system,used,writable,required,required,concrete,not_supported,verified
-1,2026-08-05,Contacts,Contacts,Most Recent Visit,Last_Visited_Time,datetime,system,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Contacts,Contacts,Lead Source,Lead_Source,picklist,system,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Contacts,Contacts,Social Lead ID,leadchain0__Social_Lead_ID,text,custom,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Contacts,Contacts,LinkedIn,LinkedIn,website,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Contacts,Contacts,Locked,Locked__s,boolean,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Contacts,Contacts,Mailing City,Mailing_City,text,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Contacts,Contacts,Mailing Country,Mailing_Country,text,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Contacts,Contacts,Mailing State,Mailing_State,text,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Contacts,Contacts,Mailing Street,Mailing_Street,text,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Contacts,Contacts,Mailing Zip,Mailing_Zip,text,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Contacts,Contacts,Middle Name,Middle_Name,text,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Contacts,Contacts,Mobile,Mobile,phone,system,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Contacts,Contacts,Modified By,Modified_By,ownerlookup,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Contacts,Contacts,Modified Time,Modified_Time,datetime,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Contacts,Contacts,Name,Name1,formula,custom,unused,read_only,optional,not_present,concrete,missing,verified
-1,2026-08-05,Contacts,Contacts,Distance,nearby_distance__s,double,system,used,read_only,optional,optional,virtual,missing,verified
-1,2026-08-05,Contacts,Contacts,Number Of Chats,Number_Of_Chats,integer,system,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Contacts,Contacts,Other City,Other_City,text,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Contacts,Contacts,Other Country,Other_Country,text,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Contacts,Contacts,Other Phone,Other_Phone,phone,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Contacts,Contacts,Other State,Other_State,text,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Contacts,Contacts,Other Street,Other_Street,text,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Contacts,Contacts,Other Zip,Other_Zip,text,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Contacts,Contacts,Contact Owner,Owner,ownerlookup,system,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Contacts,Contacts,Phone,Phone,phone,system,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Contacts,Contacts,Portal Role,Portal_Role,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Contacts,Contacts,Preferred Communication Methods,Preferred_Communication_Methods,multiselectpicklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Contacts,Contacts,Priority,Priority,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Contacts,Contacts,Contact Image,Record_Image,profileimage,system,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Contacts,Contacts,Record Status,Record_Status__s,picklist,system,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Contacts,Contacts,Referrer,Referrer,website,system,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Contacts,Contacts,Reporting To,Reporting_To,lookup,system,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Contacts,Contacts,Salutation,Salutation,picklist,system,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Contacts,Contacts,Secondary Email,Secondary_Email,email,system,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Contacts,Contacts,Skype ID,Skype_ID,text,system,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Contacts,Contacts,Tag,Tag,text,system,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Contacts,Contacts,Time Zone,Time_Zone,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Contacts,Contacts,Time Zone (IANA ID),Time_Zone_IANA_ID,text,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Contacts,Contacts,Time Zone Normalized At,Time_Zone_Normalized_At,datetime,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Contacts,Contacts,Title,Title,text,system,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Contacts,Contacts,Twitter,Twitter,text,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Contacts,Contacts,Unsubscribed Mode,Unsubscribed_Mode,picklist,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Contacts,Contacts,Unsubscribed Time,Unsubscribed_Time,datetime,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Contacts,Contacts,Vendor Name,Vendor_Name,lookup,system,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Contacts,Contacts,Visitor Score,Visitor_Score,bigint,system,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Accounts,Accounts,Account Name,Account_Name,text,system,used,writable,required,required,concrete,not_supported,verified
-1,2026-08-05,Accounts,Accounts,Account Number,Account_Number,bigint,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Accounts,Accounts,Account Site,Account_Site,text,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Accounts,Accounts,Account Type,Account_Type,picklist,system,used,writable,optional,required,concrete,present,verified
-1,2026-08-05,Accounts,Accounts,Active Services,Active_Services,multiselectpicklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Accounts,Accounts,Address,Address,textarea,custom,used,read_only,optional,optional,virtual,missing,verified
-1,2026-08-05,Accounts,Accounts,Address - City,Address_City,text,custom,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Accounts,Accounts,Address - Coordinates,Address_Coordinates,textarea,custom,used,read_only,optional,optional,virtual,missing,verified
-1,2026-08-05,Accounts,Accounts,Address - Latitude,Address_Coordinates_Latitude,double,custom,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Accounts,Accounts,Address - Longitude,Address_Coordinates_Longitude,double,custom,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Accounts,Accounts,Address - Country / Region,Address_Country_Region,picklist,custom,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Accounts,Accounts,Address - Flat / House No./ Building / Apartment Name,Address_Flat_House_No_Building_Apartment_Name,text,custom,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Accounts,Accounts,Address - State / Province,Address_State_Province,picklist,custom,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Accounts,Accounts,Address - Street Address,Address_Street_Address,text,custom,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Accounts,Accounts,Address - Zip / Postal Code,Address_Zip_Postal_Code,text,custom,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Accounts,Accounts,Annual Revenue,Annual_Revenue,currency,system,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Accounts,Accounts,Billing Attention,Billing_Attention,text,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Accounts,Accounts,Billing City,Billing_City,text,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Accounts,Accounts,Billing Code,Billing_Code,text,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Accounts,Accounts,Billing Contact,Billing_Contact,lookup,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Accounts,Accounts,Billing Country,Billing_Country,text,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Accounts,Accounts,Billing Fax,Billing_Fax,phone,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Accounts,Accounts,Billing Phone,Billing_Phone,phone,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Accounts,Accounts,Billing State,Billing_State,text,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Accounts,Accounts,Billing Street,Billing_Street,text,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Accounts,Accounts,Billing Street Line 2,Billing_Street_Line_2,text,custom,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Accounts,Accounts,Change Log Time,Change_Log_Time__s,datetime,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Accounts,Accounts,Created By,Created_By,ownerlookup,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Accounts,Accounts,Created Time,Created_Time,datetime,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Accounts,Accounts,Billing Customer ID,Customer_ID,text,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Accounts,Accounts,Department,Department,text,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Accounts,Accounts,Description,Description,textarea,system,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Accounts,Accounts,Email,Email,email,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Accounts,Accounts,Employees,Employees,integer,system,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Accounts,Accounts,Enrich Status,Enrich_Status__s,picklist,system,used,read_only,optional,optional,concrete,present,verified
-1,2026-08-05,Accounts,Accounts,Facebook,Facebook,website,custom,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Accounts,Accounts,Fax,Fax,text,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Accounts,Accounts,Record Id,id,bigint,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Accounts,Accounts,Implementation Owner,Implementation_Owner,userlookup,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Accounts,Accounts,Industry,Industry,picklist,system,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Accounts,Accounts,Last Activity Time,Last_Activity_Time,datetime,system,used,read_only,optional,optional,concrete,present,verified
-1,2026-08-05,Accounts,Accounts,Last Enriched Time,Last_Enriched_Time__s,datetime,system,used,read_only,optional,optional,concrete,present,verified
-1,2026-08-05,Accounts,Accounts,Locked,Locked__s,boolean,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Accounts,Accounts,Mobile,Mobile,phone,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Accounts,Accounts,Modified By,Modified_By,ownerlookup,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Accounts,Accounts,Modified Time,Modified_Time,datetime,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Accounts,Accounts,Monthly Recurring Revenue,Monthly_Recurring_Revenue,currency,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Accounts,Accounts,Distance,nearby_distance__s,double,system,used,read_only,optional,optional,virtual,missing,verified
-1,2026-08-05,Accounts,Accounts,Onboarding Status,Onboarding_Status,picklist,custom,used,writable,optional,required,concrete,present,verified
-1,2026-08-05,Accounts,Accounts,Onboarding Submitted At,Onboarding_Submitted_At,datetime,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Accounts,Accounts,Account Owner,Owner,ownerlookup,system,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Accounts,Accounts,Ownership,Ownership,picklist,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Accounts,Accounts,Pain Point Summary,Pain_Point_Summary,textarea,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Accounts,Accounts,Parent Account,Parent_Account,lookup,system,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Accounts,Accounts,Phone,Phone,phone,system,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Accounts,Accounts,Primary Contact,Primary_Contact,lookup,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Accounts,Accounts,Rating,Rating,picklist,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Accounts,Accounts,Account Image,Record_Image,profileimage,system,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Accounts,Accounts,Record Status,Record_Status__s,picklist,system,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Accounts,Accounts,Shipping Attention,Shipping_Attention,text,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Accounts,Accounts,Shipping City,Shipping_City,text,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Accounts,Accounts,Shipping Code,Shipping_Code,text,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Accounts,Accounts,Shipping Contact,Shipping_Contact,lookup,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Accounts,Accounts,Shipping Country,Shipping_Country,text,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Accounts,Accounts,Shipping Fax,Shipping_Fax,phone,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Accounts,Accounts,Shipping Phone,Shipping_Phone,phone,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Accounts,Accounts,Shipping State,Shipping_State,text,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Accounts,Accounts,Shipping Street,Shipping_Street,text,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Accounts,Accounts,Shipping Street Line 2,Shipping_Street_Line_2,text,custom,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Accounts,Accounts,SIC Code,SIC_Code,integer,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Accounts,Accounts,Lead Source,Source_Channel,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Accounts,Accounts,Subscription Status,Subscription_Status,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Accounts,Accounts,Tag,Tag,text,system,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Accounts,Accounts,Ticker Symbol,Ticker_Symbol,text,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Accounts,Accounts,Title,Title,text,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Accounts,Accounts,Vertical,Vertical,picklist,custom,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Accounts,Accounts,Website,Website,website,system,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Accounts,Accounts,Work Phone,Work_Phone,phone,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Accounts,Accounts,X (Twitter),X_Twitter,website,custom,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Accounts,Accounts,Contracts Counterparty ID,zohocontracts__Contracts_Counterparty_ID,text,custom,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Deals,Deals,Account Name,Account_Name,lookup,system,used,writable,optional,required,concrete,not_supported,verified
-1,2026-08-05,Deals,Deals,Address,Address,textarea,custom,used,read_only,optional,optional,virtual,missing,verified
-1,2026-08-05,Deals,Deals,Address - City,Address_City,text,custom,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Deals,Deals,Address - Coordinates,Address_Coordinates,textarea,custom,used,read_only,optional,optional,virtual,missing,verified
-1,2026-08-05,Deals,Deals,Address - Latitude,Address_Coordinates_Latitude,double,custom,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Deals,Deals,Address - Longitude,Address_Coordinates_Longitude,double,custom,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Deals,Deals,Address - Country / Region,Address_Country_Region,picklist,custom,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Deals,Deals,Address - Flat / House No./ Building / Apartment Name,Address_Flat_House_No_Building_Apartment_Name,text,custom,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Deals,Deals,Address - State / Province,Address_State_Province,picklist,custom,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Deals,Deals,Address - Street Address,Address_Street_Address,text,custom,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Deals,Deals,Address - Zip / Postal Code,Address_Zip_Postal_Code,text,custom,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Deals,Deals,After-Hours Call Band,After_Hours_Call_Band,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Deals,Deals,After Hours Call Share,After_Hours_Call_Share,percent,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Deals,Deals,Amount,Amount,currency,system,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Deals,Deals,Attachment,Attachment,picklist,custom,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Deals,Deals,Average Job Value,Average_Job_Value,currency,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Deals,Deals,Average Job Value Band,Average_Job_Value_Band,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Deals,Deals,Backup Fee,Backup_Fee,currency,custom,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Deals,Deals,Billing Customer ID,Billing_Customer_ID,text,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Deals,Deals,Billing Subscription ID,Billing_Subscription_ID,text,custom,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Deals,Deals,Breach Continuation Days,Breach_Continuation_Days,integer,custom,unused,writable,optional,not_present,concrete,present,verified
-1,2026-08-05,Deals,Deals,Commercial Fit,Budget_Fit,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Deals,Deals,Change Log Time,Change_Log_Time__s,datetime,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Deals,Deals,Closing Date,Closing_Date,date,system,used,writable,optional,required,concrete,present,verified
-1,2026-08-05,Deals,Deals,Contact Name,Contact_Name,lookup,system,used,writable,optional,required,concrete,not_supported,verified
-1,2026-08-05,Deals,Deals,Coverage Needs,Coverage_Needs,multiselectpicklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Deals,Deals,Created By,Created_By,ownerlookup,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Deals,Deals,Created Time,Created_Time,datetime,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Deals,Deals,Current Call Handling,Current_Call_Handling,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Deals,Deals,Monthly Answering Cost,Current_Monthly_Answering_Cost,currency,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Deals,Deals,Date,Date,date,custom,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Deals,Deals,Deal Name,Deal_Name,text,system,used,writable,required,required,concrete,not_supported,verified
-1,2026-08-05,Deals,Deals,Deliverables,Deliverables,picklist,custom,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Deals,Deals,Department,Department,text,custom,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Deals,Deals,Description,Description,textarea,system,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Deals,Deals,Description Of SaaS Service,Description_Of_SaaS_Service,text,custom,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Deals,Deals,Email,Email,email,custom,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Deals,Deals,Est Missed Opportunity,Estimated_Monthly_Missed_Opportunity,currency,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Deals,Deals,Est Unanswered Call Rate,Estimated_Unanswered_Call_Rate,percent,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Deals,Deals,Expected Revenue,Expected_Revenue,currency,system,used,read_only,optional,optional,concrete,present,verified
-1,2026-08-05,Deals,Deals,Governing Law State,Governing_Law_State,picklist,custom,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Deals,Deals,Record Id,id,bigint,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Deals,Deals,Integration Readiness,Integration_Readiness,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Deals,Deals,Last Activity Time,Last_Activity_Time,datetime,system,used,read_only,optional,optional,concrete,present,verified
-1,2026-08-05,Deals,Deals,Lead Conversion Time,Lead_Conversion_Time,integer,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Deals,Deals,Lead Source,Lead_Source,picklist,system,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Deals,Deals,Social Lead ID,leadchain0__Social_Lead_ID,text,custom,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Deals,Deals,Locked,Locked__s,boolean,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Deals,Deals,Mobile,Mobile,phone,custom,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Deals,Deals,Modified By,Modified_By,ownerlookup,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Deals,Deals,Modified Time,Modified_Time,datetime,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Deals,Deals,Monthly Inbound Call Band,Monthly_Inbound_Call_Band,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Deals,Deals,Monthly Inbound Calls,Monthly_Inbound_Calls,integer,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Deals,Deals,Monthly Recurring Revenue,Monthly_Recurring_Revenue,currency,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Deals,Deals,Distance,nearby_distance__s,double,system,used,read_only,optional,optional,virtual,missing,verified
-1,2026-08-05,Deals,Deals,Next Renewal Date,Next_Renewal_Date,date,custom,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Deals,Deals,Next Step,Next_Step,text,system,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Deals,Deals,Next Action,Next_Steps,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Deals,Deals,Nth,Nth,text,custom,unused,writable,optional,not_present,concrete,present,verified
-1,2026-08-05,Deals,Deals,Overall Sales Duration,Overall_Sales_Duration,integer,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Deals,Deals,Deal Owner,Owner,ownerlookup,system,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Deals,Deals,Pain Summary,Pain_Point_Summary,textarea,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Deals,Deals,Party A,Party_A,picklist,custom,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Deals,Deals,Party B,Party_B,lookup,custom,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Deals,Deals,Phone,Phone,phone,custom,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Deals,Deals,Pilot Outcome,Pilot_Outcome,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Deals,Deals,Pilot Outcome Notes,Pilot_Outcome_Notes,textarea,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Deals,Deals,Pilot Scope,Pilot_Scope,textarea,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Deals,Deals,Pilot Success Criteria,Pilot_Success_Criteria,textarea,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Deals,Deals,Pipeline,Pipeline,picklist,system,used,writable,required,required,concrete,not_supported,verified
-1,2026-08-05,Deals,Deals,Plan,Plan,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Deals,Deals,Primary Operating System,Primary_Operating_System,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Deals,Deals,Probability,Probability,integer,system,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Deals,Deals,Reason For Loss,Reason_For_Loss__s,picklist,system,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Deals,Deals,Deal Image,Record_Image,profileimage,system,unused,writable,optional,not_present,concrete,not_supported,verified
-1,2026-08-05,Deals,Deals,Record Status,Record_Status__s,picklist,system,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Deals,Deals,Sales Cycle Duration,Sales_Cycle_Duration,integer,system,used,read_only,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Deals,Deals,Scheduling Process,Scheduling_Process,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Deals,Deals,Service Line,Service,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Deals,Deals,Setup Fee,Setup_Fee,currency,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Deals,Deals,Stage,Stage,picklist,system,used,writable,required,required,concrete,not_supported,verified
-1,2026-08-05,Deals,Deals,Stage Modified Time,Stage_Modified_Time,datetime,system,used,writable,optional,optional,concrete,not_supported,verified
-1,2026-08-05,Deals,Deals,Subscription Start Date,Subscription_Start_Date,date,custom,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Deals,Deals,Subscription Status,Subscription_Status,picklist,custom,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Deals,Deals,Tag,Tag,text,system,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Deals,Deals,Target Start Date,Target_Start_Date,date,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Deals,Deals,Timeline Fit,Timeline_Fit,picklist,custom,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Deals,Deals,Title,Title,text,custom,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Deals,Deals,Type,Type,picklist,system,used,writable,optional,optional,concrete,present,verified
-1,2026-08-05,Deals,Deals,URL,URL,text,custom,unused,writable,optional,not_present,concrete,missing,verified
-1,2026-08-05,Deals,Deals,Workflow Integration,Workflow_And_Integration_Notes,textarea,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Address,Address,textarea,custom,used,read_only,optional,optional,virtual,missing,verified
+1,2026-08-12,Leads,Leads,Address - City,Address_City,text,custom,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Leads,Leads,Address - Coordinates,Address_Coordinates,textarea,custom,used,read_only,optional,optional,virtual,missing,verified
+1,2026-08-12,Leads,Leads,Address - Country / Region,Address_Country_Region,picklist,custom,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Leads,Leads,Address - Flat / House No./ Building / Apartment Name,Address_Flat_House_No_Building_Apartment_Name,text,custom,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Leads,Leads,Address - Latitude,Address_Coordinates_Latitude,double,custom,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Leads,Leads,Address - Longitude,Address_Coordinates_Longitude,double,custom,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Leads,Leads,Address - State / Province,Address_State_Province,picklist,custom,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Leads,Leads,Address - Street Address,Address_Street_Address,text,custom,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Leads,Leads,Address - Zip / Postal Code,Address_Zip_Postal_Code,text,custom,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Leads,Leads,After-Hours Audit At,After_Hours_Audit_At,datetime,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,After-Hours Audit Notes,After_Hours_Audit_Notes,textarea,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,After-Hours Audit Outcome,After_Hours_Audit_Outcome,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,After-Hours Call Band,After_Hours_Call_Band,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Annual Revenue,Annual_Revenue,currency,system,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Average Job Value Band,Average_Job_Value_Band,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Average Time Spent (Minutes),Average_Time_Spent_Minutes,double,system,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Leads,Leads,Change Log Time,Change_Log_Time__s,datetime,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Leads,Leads,City,City,text,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Leads,Leads,Commercial Fit,Budget_Fit,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Communication Preference,Preferred_Communication_Method,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Company,Company,text,system,used,writable,optional,required,concrete,present,verified
+1,2026-08-12,Leads,Leads,Company Email,Company_Email,email,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Company Phone,Company_Phone,phone,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Contact Location Link,Contact_Location_Relationship,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Contact Source URL,Contact_Source_URL,website,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Contact Verification,Contact_Verification_Status,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Contact Verified At,Contact_Verified_At,datetime,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Converted Account,Converted_Account,lookup,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Leads,Leads,Converted Contact,Converted_Contact,lookup,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Leads,Leads,Converted Date Time,Converted_Date_Time,datetime,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Leads,Leads,Converted Deal,Converted_Deal,lookup,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Leads,Leads,Country,Country,text,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Leads,Leads,Coverage Needs,Coverage_Needs,multiselectpicklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Created By,Created_By,ownerlookup,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Leads,Leads,Created Time,Created_Time,datetime,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Leads,Leads,Current Call Handling,Current_Call_Handling,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Days Visited,Days_Visited,integer,system,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Leads,Leads,Decision Authority,Decision_Authority,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Decision-Maker Role,Decision_Maker_Role,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Description,Description,textarea,system,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Designation,Designation,text,system,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Disqualification Reason,Disqualification_Reason,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Distance,nearby_distance__s,double,system,used,read_only,optional,optional,virtual,missing,verified
+1,2026-08-12,Leads,Leads,Distance to Anchor ZIP,Distance_to_Anchor_ZIP,double,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Email,Email,email,system,used,writable,optional,required,concrete,present,verified
+1,2026-08-12,Leads,Leads,Email Opt Out,Email_Opt_Out,boolean,system,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Enrich Status,Enrich_Status__s,picklist,system,used,read_only,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Entry Offer,Entry_Offer,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Fax,Fax,text,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Leads,Leads,Field Team Size Band,Field_Team_Size_Band,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,First Name,First_Name,text,system,used,writable,optional,required,concrete,not_supported,verified
+1,2026-08-12,Leads,Leads,First Page Visited,First_Visited_URL,website,system,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Leads,Leads,First Visit,First_Visited_Time,datetime,system,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Leads,Leads,Free Test Contact Consent,Free_Test_Contact_Consent,boolean,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Free Test Contact Consent At,Free_Test_Contact_Consent_At,datetime,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Free Test Contact Consent Version,Free_Test_Contact_Consent_Version,text,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Free Test Request Notes,Free_Test_Request_Notes,textarea,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Free Test Request Submitted At,Free_Test_Request_Submitted_At,datetime,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Full Name,Full_Name,text,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Leads,Leads,ICP Fit,ICP_Fit,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Industry,Industry,picklist,system,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Intake Form Version,Intake_Form_Version,text,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Intake Submission ID,Intake_Submission_ID,text,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Integration Readiness,Integration_Readiness,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Is Converted,Converted__s,boolean,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Leads,Leads,Last Activity Time,Last_Activity_Time,datetime,system,used,read_only,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Last Enriched Time,Last_Enriched_Time__s,datetime,system,used,read_only,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Last Name,Last_Name,text,system,used,writable,required,required,concrete,not_supported,verified
+1,2026-08-12,Leads,Leads,Last Outreach At,Last_Outreach_At,datetime,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Last Outreach Channel,Last_Outreach_Channel,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Last Research Verified At,Last_Research_Verified_At,datetime,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Lead Conversion Time,Lead_Conversion_Time,integer,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Leads,Leads,Lead Image,Record_Image,profileimage,system,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Leads,Leads,Lead Owner,Owner,ownerlookup,system,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Leads,Leads,Lead Source,Lead_Source,picklist,system,used,writable,optional,required,concrete,present,verified
+1,2026-08-12,Leads,Leads,Lead Status,Lead_Status,picklist,system,used,writable,optional,required,concrete,present,verified
+1,2026-08-12,Leads,Leads,Lifecycle Status,Lifecycle_Status,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,LinkedIn,LinkedIn,website,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Location Source URL,Location_Source_URL,website,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Location Type,Location_Type,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Locked,Locked__s,boolean,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Leads,Leads,Mobile,Mobile,phone,system,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Modified By,Modified_By,ownerlookup,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Leads,Leads,Modified Time,Modified_Time,datetime,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Leads,Leads,Monthly Inbound Call Band,Monthly_Inbound_Call_Band,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Most Recent Visit,Last_Visited_Time,datetime,system,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Leads,Leads,Next Action,Next_Action,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Next Outreach At,Next_Outreach_At,datetime,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,No of Employees,No_of_Employees,integer,system,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Number Of Chats,Number_Of_Chats,integer,system,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Leads,Leads,Number of Locations,Number_of_Locations,integer,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Nurture Reason,Nurture_Reason,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Outreach Attempt Count,Outreach_Attempt_Count,integer,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Pain Signals,Pain_Signals,multiselectpicklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Pain Summary,Pain_Point_Summary,textarea,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Phone,Phone,phone,system,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Phone System Provider,Phone_System_Provider,text,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Primary Operating System,Primary_Operating_System,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Primary Service Area,Primary_Service_Area,textarea,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Prospect Import Key,Prospect_Import_Key,text,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Rating,Rating,picklist,system,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Record Id,id,bigint,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Leads,Leads,Record Status,Record_Status__s,picklist,system,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Leads,Leads,Referral Source Contact,Referral_Source_Name,lookup,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Referrer,Referrer,website,system,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Leads,Leads,Requested Test Route,Requested_Test_Route,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Research Notes,Research_Notes,textarea,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Salutation,Salutation,picklist,system,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Leads,Leads,Scheduling Process,Scheduling_Process,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Secondary Email,Secondary_Email,email,system,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Skype ID,Skype_ID,text,system,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Social Lead ID,leadchain0__Social_Lead_ID,text,custom,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Leads,Leads,Source Page,Source_Page,text,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,State,State,text,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Leads,Leads,Street,Street,text,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Leads,Leads,Submission Channel,Submission_Channel,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Tag,Tag,text,system,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Target Anchor ZIP,Target_Anchor_ZIP,text,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Target Market Fit,Target_Market_Fit,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Target Selection Basis,Target_Location_Selection_Basis,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Text Opt Out,Text_Opt_Out,boolean,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Time Zone,Time_Zone,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Time Zone (IANA ID),Time_Zone_IANA_ID,text,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Time Zone Normalized At,Time_Zone_Normalized_At,datetime,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Timeline Fit,Timeline_Fit,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Twitter,Twitter,text,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Leads,Leads,Unsubscribed Mode,Unsubscribed_Mode,picklist,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Leads,Leads,Unsubscribed Time,Unsubscribed_Time,datetime,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Leads,Leads,UTM Campaign,UTM_Campaign,text,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,UTM Content,UTM_Content,text,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,UTM Medium,UTM_Medium,text,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,UTM Source,UTM_Source,text,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,UTM Term,UTM_Term,text,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Visitor Score,Visitor_Score,bigint,system,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Leads,Leads,Website,Website,website,system,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Leads,Leads,Zip Code,Zip_Code,text,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Contacts,Contacts,Account Name,Account_Name,lookup,system,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Contacts,Contacts,Address,Address,textarea,custom,used,read_only,optional,optional,virtual,missing,verified
+1,2026-08-12,Contacts,Contacts,Address - City,Address_City,text,custom,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Contacts,Contacts,Address - Coordinates,Address_Coordinates,textarea,custom,used,read_only,optional,optional,virtual,missing,verified
+1,2026-08-12,Contacts,Contacts,Address - Country / Region,Address_Country_Region,picklist,custom,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Contacts,Contacts,Address - Flat / House No./ Building / Apartment Name,Address_Flat_House_No_Building_Apartment_Name,text,custom,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Contacts,Contacts,Address - Latitude,Address_Coordinates_Latitude,double,custom,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Contacts,Contacts,Address - Longitude,Address_Coordinates_Longitude,double,custom,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Contacts,Contacts,Address - State / Province,Address_State_Province,picklist,custom,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Contacts,Contacts,Address - Street Address,Address_Street_Address,text,custom,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Contacts,Contacts,Address - Zip / Postal Code,Address_Zip_Postal_Code,text,custom,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Contacts,Contacts,Assistant,Assistant,text,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Contacts,Contacts,Asst Phone,Asst_Phone,phone,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Contacts,Contacts,Average Time Spent (Minutes),Average_Time_Spent_Minutes,double,system,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Contacts,Contacts,Change Log Time,Change_Log_Time__s,datetime,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Contacts,Contacts,Contact Image,Record_Image,profileimage,system,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Contacts,Contacts,Contact Owner,Owner,ownerlookup,system,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Contacts,Contacts,Contact Type,Contact_Type,picklist,custom,used,writable,optional,required,concrete,present,verified
+1,2026-08-12,Contacts,Contacts,Contact Verification,Contact_Verification_Status,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Contacts,Contacts,Contact Verified At,Contact_Verified_At,datetime,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Contacts,Contacts,Created By,Created_By,ownerlookup,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Contacts,Contacts,Created Time,Created_Time,datetime,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Contacts,Contacts,Date of Birth,Date_of_Birth,date,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Contacts,Contacts,Days Visited,Days_Visited,integer,system,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Contacts,Contacts,Decision Authority,Decision_Authority,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Contacts,Contacts,Decision-Maker Role,Decision_Maker_Role,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Contacts,Contacts,Department,Department,text,system,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Contacts,Contacts,Description,Description,textarea,system,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Contacts,Contacts,Distance,nearby_distance__s,double,system,used,read_only,optional,optional,virtual,missing,verified
+1,2026-08-12,Contacts,Contacts,Email,Email,email,system,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Contacts,Contacts,Email Opt Out,Email_Opt_Out,boolean,system,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Contacts,Contacts,Enrich Status,Enrich_Status__s,picklist,system,used,read_only,optional,optional,concrete,present,verified
+1,2026-08-12,Contacts,Contacts,Fax,Fax,text,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Contacts,Contacts,First Name,First_Name,text,system,used,writable,optional,required,concrete,not_supported,verified
+1,2026-08-12,Contacts,Contacts,First Page Visited,First_Visited_URL,website,system,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Contacts,Contacts,First Visit,First_Visited_Time,datetime,system,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Contacts,Contacts,Free Test Contact Consent,Free_Test_Contact_Consent,boolean,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Contacts,Contacts,Free Test Contact Consent At,Free_Test_Contact_Consent_At,datetime,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Contacts,Contacts,Free Test Contact Consent Version,Free_Test_Contact_Consent_Version,text,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Contacts,Contacts,Full Name,Full_Name,text,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Contacts,Contacts,Home Phone,Home_Phone,phone,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Contacts,Contacts,Is Billing Contact?,Is_Billing_Contact,boolean,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Contacts,Contacts,Is Portal User?,Is_Portal_User,boolean,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Contacts,Contacts,Is Primary Contact?,Is_Primary_Contact,boolean,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Contacts,Contacts,Last Activity Time,Last_Activity_Time,datetime,system,used,read_only,optional,optional,concrete,present,verified
+1,2026-08-12,Contacts,Contacts,Last Enriched Time,Last_Enriched_Time__s,datetime,system,used,read_only,optional,optional,concrete,present,verified
+1,2026-08-12,Contacts,Contacts,Last Name,Last_Name,text,system,used,writable,required,required,concrete,not_supported,verified
+1,2026-08-12,Contacts,Contacts,Lead Source,Lead_Source,picklist,system,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Contacts,Contacts,LinkedIn,LinkedIn,website,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Contacts,Contacts,Locked,Locked__s,boolean,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Contacts,Contacts,Mailing City,Mailing_City,text,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Contacts,Contacts,Mailing Country,Mailing_Country,text,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Contacts,Contacts,Mailing State,Mailing_State,text,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Contacts,Contacts,Mailing Street,Mailing_Street,text,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Contacts,Contacts,Mailing Zip,Mailing_Zip,text,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Contacts,Contacts,Middle Name,Middle_Name,text,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Contacts,Contacts,Mobile,Mobile,phone,system,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Contacts,Contacts,Modified By,Modified_By,ownerlookup,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Contacts,Contacts,Modified Time,Modified_Time,datetime,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Contacts,Contacts,Most Recent Visit,Last_Visited_Time,datetime,system,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Contacts,Contacts,Name,Name1,formula,custom,unused,read_only,optional,not_present,concrete,missing,verified
+1,2026-08-12,Contacts,Contacts,Number Of Chats,Number_Of_Chats,integer,system,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Contacts,Contacts,Other City,Other_City,text,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Contacts,Contacts,Other Country,Other_Country,text,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Contacts,Contacts,Other Phone,Other_Phone,phone,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Contacts,Contacts,Other State,Other_State,text,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Contacts,Contacts,Other Street,Other_Street,text,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Contacts,Contacts,Other Zip,Other_Zip,text,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Contacts,Contacts,Phone,Phone,phone,system,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Contacts,Contacts,Portal Role,Portal_Role,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Contacts,Contacts,Preferred Communication Methods,Preferred_Communication_Methods,multiselectpicklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Contacts,Contacts,Priority,Priority,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Contacts,Contacts,Record Id,id,bigint,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Contacts,Contacts,Record Status,Record_Status__s,picklist,system,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Contacts,Contacts,Referrer,Referrer,website,system,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Contacts,Contacts,Reporting To,Reporting_To,lookup,system,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Contacts,Contacts,Salutation,Salutation,picklist,system,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Contacts,Contacts,Secondary Email,Secondary_Email,email,system,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Contacts,Contacts,Skype ID,Skype_ID,text,system,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Contacts,Contacts,Social Lead ID,leadchain0__Social_Lead_ID,text,custom,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Contacts,Contacts,Tag,Tag,text,system,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Contacts,Contacts,Text Opt Out,Text_Opt_Out,boolean,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Contacts,Contacts,Time Zone,Time_Zone,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Contacts,Contacts,Time Zone (IANA ID),Time_Zone_IANA_ID,text,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Contacts,Contacts,Time Zone Normalized At,Time_Zone_Normalized_At,datetime,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Contacts,Contacts,Title,Title,text,system,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Contacts,Contacts,Twitter,Twitter,text,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Contacts,Contacts,Unsubscribed Mode,Unsubscribed_Mode,picklist,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Contacts,Contacts,Unsubscribed Time,Unsubscribed_Time,datetime,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Contacts,Contacts,Vendor Name,Vendor_Name,lookup,system,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Contacts,Contacts,Visitor Score,Visitor_Score,bigint,system,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Accounts,Accounts,Account Image,Record_Image,profileimage,system,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Accounts,Accounts,Account Name,Account_Name,text,system,used,writable,required,required,concrete,not_supported,verified
+1,2026-08-12,Accounts,Accounts,Account Number,Account_Number,bigint,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Accounts,Accounts,Account Owner,Owner,ownerlookup,system,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Accounts,Accounts,Account Site,Account_Site,text,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Accounts,Accounts,Account Type,Account_Type,picklist,system,used,writable,optional,required,concrete,present,verified
+1,2026-08-12,Accounts,Accounts,Active Services,Active_Services,multiselectpicklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Accounts,Accounts,Annual Revenue,Annual_Revenue,currency,system,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Accounts,Accounts,Billing Address,Address,textarea,custom,used,read_only,optional,optional,virtual,missing,verified
+1,2026-08-12,Accounts,Accounts,Billing Address - City,Address_City,text,custom,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Accounts,Accounts,Billing Address - Coordinates,Address_Coordinates,textarea,custom,used,read_only,optional,optional,virtual,missing,verified
+1,2026-08-12,Accounts,Accounts,Billing Address - Country / Region,Address_Country_Region,picklist,custom,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Accounts,Accounts,Billing Address - Flat / House No./ Building / Apartment Name,Address_Flat_House_No_Building_Apartment_Name,text,custom,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Accounts,Accounts,Billing Address - Latitude,Address_Coordinates_Latitude,double,custom,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Accounts,Accounts,Billing Address - Longitude,Address_Coordinates_Longitude,double,custom,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Accounts,Accounts,Billing Address - State / Province,Address_State_Province,picklist,custom,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Accounts,Accounts,Billing Address - Street Address,Address_Street_Address,text,custom,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Accounts,Accounts,Billing Address - Zip / Postal Code,Address_Zip_Postal_Code,text,custom,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Accounts,Accounts,Billing Attention,Billing_Attention,text,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Accounts,Accounts,Billing City,Billing_City,text,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Accounts,Accounts,Billing Code,Billing_Code,text,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Accounts,Accounts,Billing Contact,Billing_Contact,lookup,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Accounts,Accounts,Billing Country,Billing_Country,text,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Accounts,Accounts,Billing Customer ID,Customer_ID,text,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Accounts,Accounts,Billing Fax,Billing_Fax,phone,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Accounts,Accounts,Billing Phone,Billing_Phone,phone,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Accounts,Accounts,Billing State,Billing_State,text,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Accounts,Accounts,Billing Street,Billing_Street,text,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Accounts,Accounts,Billing Street Line 2,Billing_Street_Line_2,text,custom,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Accounts,Accounts,Change Log Time,Change_Log_Time__s,datetime,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Accounts,Accounts,Contracts Counterparty ID,zohocontracts__Contracts_Counterparty_ID,text,custom,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Accounts,Accounts,Created By,Created_By,ownerlookup,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Accounts,Accounts,Created Time,Created_Time,datetime,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Accounts,Accounts,Department,Department,text,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Accounts,Accounts,Description,Description,textarea,system,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Accounts,Accounts,Distance,nearby_distance__s,double,system,used,read_only,optional,optional,virtual,missing,verified
+1,2026-08-12,Accounts,Accounts,Email,Email,email,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Accounts,Accounts,Employees,Employees,integer,system,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Accounts,Accounts,Enrich Status,Enrich_Status__s,picklist,system,used,read_only,optional,optional,concrete,present,verified
+1,2026-08-12,Accounts,Accounts,Facebook,Facebook,website,custom,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Accounts,Accounts,Fax,Fax,text,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Accounts,Accounts,Field Team Size Band,Field_Team_Size_Band,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Accounts,Accounts,Implementation Owner,Implementation_Owner,userlookup,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Accounts,Accounts,Industry,Industry,picklist,system,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Accounts,Accounts,Last Activity Time,Last_Activity_Time,datetime,system,used,read_only,optional,optional,concrete,present,verified
+1,2026-08-12,Accounts,Accounts,Last Enriched Time,Last_Enriched_Time__s,datetime,system,used,read_only,optional,optional,concrete,present,verified
+1,2026-08-12,Accounts,Accounts,Lead Source,Source_Channel,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Accounts,Accounts,Legal Business Name,Legal_Business_Name,text,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Accounts,Accounts,Locked,Locked__s,boolean,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Accounts,Accounts,Mobile,Mobile,phone,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Accounts,Accounts,Modified By,Modified_By,ownerlookup,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Accounts,Accounts,Modified Time,Modified_Time,datetime,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Accounts,Accounts,Monthly Recurring Revenue,Monthly_Recurring_Revenue,currency,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Accounts,Accounts,Normal Business Hours,Normal_Business_Hours,textarea,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Accounts,Accounts,Onboarding Status,Onboarding_Status,picklist,custom,used,writable,optional,required,concrete,present,verified
+1,2026-08-12,Accounts,Accounts,Onboarding Submitted At,Onboarding_Submitted_At,datetime,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Accounts,Accounts,Other Service Details,Other_Service_Details,textarea,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Accounts,Accounts,Ownership,Ownership,picklist,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Accounts,Accounts,Pain Point Summary,Pain_Point_Summary,textarea,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Accounts,Accounts,Parent Account,Parent_Account,lookup,system,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Accounts,Accounts,Phone,Phone,phone,system,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Accounts,Accounts,Phone System Provider,Phone_System_Provider,text,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Accounts,Accounts,Primary Contact,Primary_Contact,lookup,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Accounts,Accounts,Primary Service Area,Primary_Service_Area,textarea,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Accounts,Accounts,Rating,Rating,picklist,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Accounts,Accounts,Record Id,id,bigint,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Accounts,Accounts,Record Status,Record_Status__s,picklist,system,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Accounts,Accounts,Services Handled,Services_Handled,multiselectpicklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Accounts,Accounts,Shipping Address,Shipping_Address,textarea,custom,used,read_only,optional,optional,virtual,missing,verified
+1,2026-08-12,Accounts,Accounts,Shipping Address - City,Shipping_Address_City,text,custom,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Accounts,Accounts,Shipping Address - Coordinates,Shipping_Address_Coordinates,textarea,custom,used,read_only,optional,optional,virtual,missing,verified
+1,2026-08-12,Accounts,Accounts,Shipping Address - Country / Region,Shipping_Address_Country_Region,picklist,custom,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Accounts,Accounts,Shipping Address - Flat / House No./ Building / Apartment Name,Shipping_Address_Flat_House_No_Building_Apartment,text,custom,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Accounts,Accounts,Shipping Address - Latitude,Shipping_Address_Coordinates_Latitude,double,custom,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Accounts,Accounts,Shipping Address - Longitude,Shipping_Address_Coordinates_Longitude,double,custom,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Accounts,Accounts,Shipping Address - State / Province,Shipping_Address_State_Province,picklist,custom,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Accounts,Accounts,Shipping Address - Street Address,Shipping_Address_Street_Address,text,custom,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Accounts,Accounts,Shipping Address - Zip / Postal Code,Shipping_Address_Zip_Postal_Code,text,custom,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Accounts,Accounts,Shipping Attention,Shipping_Attention,text,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Accounts,Accounts,Shipping City,Shipping_City,text,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Accounts,Accounts,Shipping Code,Shipping_Code,text,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Accounts,Accounts,Shipping Contact,Shipping_Contact,lookup,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Accounts,Accounts,Shipping Country,Shipping_Country,text,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Accounts,Accounts,Shipping Fax,Shipping_Fax,phone,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Accounts,Accounts,Shipping Phone,Shipping_Phone,phone,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Accounts,Accounts,Shipping State,Shipping_State,text,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Accounts,Accounts,Shipping Street,Shipping_Street,text,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Accounts,Accounts,Shipping Street Line 2,Shipping_Street_Line_2,text,custom,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Accounts,Accounts,SIC Code,SIC_Code,integer,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Accounts,Accounts,Subscription Status,Subscription_Status,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Accounts,Accounts,Tag,Tag,text,system,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Accounts,Accounts,Ticker Symbol,Ticker_Symbol,text,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Accounts,Accounts,Title,Title,text,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Accounts,Accounts,Vertical,Vertical,picklist,custom,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Accounts,Accounts,Website,Website,website,system,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Accounts,Accounts,Work Phone,Work_Phone,phone,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Accounts,Accounts,X (Twitter),X_Twitter,website,custom,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Deals,Deals,Account Name,Account_Name,lookup,system,used,writable,optional,required,concrete,not_supported,verified
+1,2026-08-12,Deals,Deals,Address,Address,textarea,custom,unused,read_only,optional,not_present,virtual,missing,verified
+1,2026-08-12,Deals,Deals,Address - City,Address_City,text,custom,unused,writable,optional,not_present,concrete,not_supported,verified
+1,2026-08-12,Deals,Deals,Address - Coordinates,Address_Coordinates,textarea,custom,unused,read_only,optional,not_present,virtual,missing,verified
+1,2026-08-12,Deals,Deals,Address - Country / Region,Address_Country_Region,picklist,custom,unused,writable,optional,not_present,concrete,not_supported,verified
+1,2026-08-12,Deals,Deals,Address - Flat / House No./ Building / Apartment Name,Address_Flat_House_No_Building_Apartment_Name,text,custom,unused,writable,optional,not_present,concrete,not_supported,verified
+1,2026-08-12,Deals,Deals,Address - Latitude,Address_Coordinates_Latitude,double,custom,unused,writable,optional,not_present,concrete,not_supported,verified
+1,2026-08-12,Deals,Deals,Address - Longitude,Address_Coordinates_Longitude,double,custom,unused,writable,optional,not_present,concrete,not_supported,verified
+1,2026-08-12,Deals,Deals,Address - State / Province,Address_State_Province,picklist,custom,unused,writable,optional,not_present,concrete,not_supported,verified
+1,2026-08-12,Deals,Deals,Address - Street Address,Address_Street_Address,text,custom,unused,writable,optional,not_present,concrete,not_supported,verified
+1,2026-08-12,Deals,Deals,Address - Zip / Postal Code,Address_Zip_Postal_Code,text,custom,unused,writable,optional,not_present,concrete,not_supported,verified
+1,2026-08-12,Deals,Deals,After Hours Call Share,After_Hours_Call_Share,percent,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,After-Hours Call Band,After_Hours_Call_Band,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Alert Recipient Email,Alert_Recipient_Email,email,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Alert Recipient Mobile,Alert_Recipient_Mobile,phone,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Alert Recipient Name,Alert_Recipient_Name,text,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Amount,Amount,currency,system,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Approved Fallback Destination,Approved_Fallback_Destination,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Approved Fallback Number,Approved_Fallback_Number,phone,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Approved Test Route,Approved_Test_Route,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Attachment,Attachment,picklist,custom,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Deals,Deals,Authority Confirmed At,Authority_Confirmed_At,datetime,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Authorization Signed At,Authorization_Signed_At,datetime,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Authorized Representative Confirmed,Authorized_Representative_Confirmed,boolean,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Average Job Value,Average_Job_Value,currency,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Average Job Value Band,Average_Job_Value_Band,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Backup Fee,Backup_Fee,currency,custom,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Deals,Deals,Billing Customer ID,Billing_Customer_ID,text,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Billing Subscription ID,Billing_Subscription_ID,text,custom,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Deals,Deals,Breach Continuation Days,Breach_Continuation_Days,integer,custom,unused,writable,optional,not_present,concrete,present,verified
+1,2026-08-12,Deals,Deals,Change Log Time,Change_Log_Time__s,datetime,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Deals,Deals,Closing Date,Closing_Date,date,system,used,writable,optional,required,concrete,present,verified
+1,2026-08-12,Deals,Deals,Commercial Fit,Budget_Fit,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Contact Name,Contact_Name,lookup,system,used,writable,optional,required,concrete,not_supported,verified
+1,2026-08-12,Deals,Deals,Coverage Needs,Coverage_Needs,multiselectpicklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Created By,Created_By,ownerlookup,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Deals,Deals,Created Time,Created_Time,datetime,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Deals,Deals,Current Call Handling,Current_Call_Handling,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Date,Date,date,custom,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Deals,Deals,Deal Image,Record_Image,profileimage,system,unused,writable,optional,not_present,concrete,not_supported,verified
+1,2026-08-12,Deals,Deals,Deal Name,Deal_Name,text,system,used,writable,required,required,concrete,not_supported,verified
+1,2026-08-12,Deals,Deals,Deal Owner,Owner,ownerlookup,system,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Deals,Deals,Deliverables,Deliverables,picklist,custom,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Deals,Deals,Department,Department,text,custom,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Deals,Deals,Description,Description,textarea,system,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Description Of SaaS Service,Description_Of_SaaS_Service,text,custom,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Deals,Deals,Distance,nearby_distance__s,double,system,used,read_only,optional,optional,virtual,missing,verified
+1,2026-08-12,Deals,Deals,Email,Email,email,custom,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Deals,Deals,Entry Offer,Entry_Offer,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Est Missed Opportunity,Estimated_Monthly_Missed_Opportunity,currency,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Est Unanswered Call Rate,Estimated_Unanswered_Call_Rate,percent,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Existing-Customer Call Handling,Existing_Customer_Call_Handling,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Expected Revenue,Expected_Revenue,currency,system,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Forwarding Administrator Mobile,Forwarding_Administrator_Mobile,phone,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Forwarding Administrator Name,Forwarding_Administrator_Name,text,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Free Test Authorization Status,Free_Test_Authorization_Status,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Free Test Request Notes,Free_Test_Request_Notes,textarea,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Free Test Request Submitted At,Free_Test_Request_Submitted_At,datetime,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Go-Live Approval Status,Go_Live_Approval_Status,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Go-Live Approved At,Go_Live_Approved_At,datetime,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Governing Law State,Governing_Law_State,picklist,custom,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Deals,Deals,Intake Submission ID,Intake_Submission_ID,text,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Integration Readiness,Integration_Readiness,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Last Activity Time,Last_Activity_Time,datetime,system,used,read_only,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Lead Conversion Time,Lead_Conversion_Time,integer,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Deals,Deals,Lead Source,Lead_Source,picklist,system,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Locked,Locked__s,boolean,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Deals,Deals,Mobile,Mobile,phone,custom,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Deals,Deals,Modified By,Modified_By,ownerlookup,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Deals,Deals,Modified Time,Modified_Time,datetime,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Deals,Deals,Monthly Answering Cost,Current_Monthly_Answering_Cost,currency,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Monthly Inbound Call Band,Monthly_Inbound_Call_Band,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Monthly Inbound Calls,Monthly_Inbound_Calls,integer,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Monthly Recurring Revenue,Monthly_Recurring_Revenue,currency,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Next Action,Next_Steps,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Next Renewal Date,Next_Renewal_Date,date,custom,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Deals,Deals,Next Step,Next_Step,text,system,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Deals,Deals,No-Answer Delay,No_Answer_Delay,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Nth,Nth,text,custom,unused,writable,optional,not_present,concrete,present,verified
+1,2026-08-12,Deals,Deals,Overall Sales Duration,Overall_Sales_Duration,integer,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Deals,Deals,Pain Summary,Pain_Point_Summary,textarea,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Party A,Party_A,picklist,custom,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Deals,Deals,Party B,Party_B,lookup,custom,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Deals,Deals,Phone,Phone,phone,custom,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Deals,Deals,Pilot Outcome,Pilot_Outcome,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Pilot Outcome Notes,Pilot_Outcome_Notes,textarea,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Pilot Scope,Pilot_Scope,textarea,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Pilot Success Criteria,Pilot_Success_Criteria,textarea,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Pipeline,Pipeline,picklist,system,used,writable,required,required,concrete,not_supported,verified
+1,2026-08-12,Deals,Deals,Plan,Plan,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Primary Operating System,Primary_Operating_System,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Probability,Probability,integer,system,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Reason For Loss,Reason_For_Loss__s,picklist,system,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Record Id,id,bigint,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Deals,Deals,Record Status,Record_Status__s,picklist,system,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Deals,Deals,Requested Test Route,Requested_Test_Route,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Results Review At,Results_Review_At,datetime,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Rollback Completed At,Rollback_Completed_At,datetime,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Rollback Contact Mobile,Rollback_Contact_Mobile,phone,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Rollback Contact Name,Rollback_Contact_Name,text,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Sales Cycle Duration,Sales_Cycle_Duration,integer,system,used,read_only,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Deals,Deals,Scheduling Process,Scheduling_Process,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Service Line,Service,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Setup Access Issued At,Setup_Access_Issued_At,datetime,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Setup Access Status,Setup_Access_Status,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Setup Access Verified At,Setup_Access_Verified_At,datetime,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Setup Fee,Setup_Fee,currency,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Setup Form Submission ID,Setup_Form_Submission_ID,text,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Setup Form Submitted At,Setup_Form_Submitted_At,datetime,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Setup Form Version,Setup_Form_Version,text,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Social Lead ID,leadchain0__Social_Lead_ID,text,custom,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Deals,Deals,Stage,Stage,picklist,system,used,writable,required,required,concrete,not_supported,verified
+1,2026-08-12,Deals,Deals,Stage Modified Time,Stage_Modified_Time,datetime,system,used,writable,optional,optional,concrete,not_supported,verified
+1,2026-08-12,Deals,Deals,Submission Channel,Submission_Channel,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Subscription Start Date,Subscription_Start_Date,date,custom,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Deals,Deals,Subscription Status,Subscription_Status,picklist,custom,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Deals,Deals,Tag,Tag,text,system,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Target Start Date,Target_Start_Date,date,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Test Call Limit,Test_Call_Limit,integer,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Test Callback Requests,Test_Callback_Requests,integer,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Test Calls Reaching Route,Test_Calls_Reaching_Route,integer,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Test Company-Confirmed Outcomes,Test_Company_Confirmed_Outcomes,integer,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Test Company-Confirmed Value,Test_Company_Confirmed_Value,currency,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Test Duration Days,Test_Duration_Days,integer,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Test End At,Test_End_At,datetime,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Test End Reason,Test_End_Reason,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Test Existing-Customer Calls,Test_Existing_Customer_Calls,integer,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Test New-Service Inquiries,Test_New_Service_Inquiries,integer,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Test Phone Number,Test_Phone_Number,phone,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Test Qualified Opportunities,Test_Qualified_Opportunities,integer,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Test Scope Accepted,Test_Scope_Accepted,boolean,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Test Scope Accepted At,Test_Scope_Accepted_At,datetime,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Test Scope Version,Test_Scope_Version,text,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Test Start At,Test_Start_At,datetime,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Test Status,Test_Status,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Test Urgent or Person-Requested Calls,Test_Urgent_or_Person_Requested_Calls,integer,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Timeline Fit,Timeline_Fit,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Title,Title,text,custom,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Deals,Deals,Type,Type,picklist,system,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,Urgent Call Handling,Urgent_Call_Handling,picklist,custom,used,writable,optional,optional,concrete,present,verified
+1,2026-08-12,Deals,Deals,URL,URL,text,custom,unused,writable,optional,not_present,concrete,missing,verified
+1,2026-08-12,Deals,Deals,Workflow Integration,Workflow_And_Integration_Notes,textarea,custom,used,writable,optional,optional,concrete,present,verified

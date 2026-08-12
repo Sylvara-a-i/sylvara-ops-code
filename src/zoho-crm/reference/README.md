@@ -2,41 +2,43 @@
 
 ## Status And Provenance
 
-This is a sanitized metadata snapshot observed and reconciled on **2026-08-05** through the authorized Sylvara CRM audit and change roles. Live metadata supplied every recorded module and field API name. Private IDs, raw responses, record values, and picklist internals were removed before publication.
+This package has two dated evidence layers. The four-module catalog and Free-Test deployment artifacts were independently observed and reconciled on **2026-08-12** through the authorized Sylvara CRM Audit and Changes roles. The Lead-conversion mapping matrix remains an immutable **2026-08-05** decision snapshot and must not be treated as a current mapping or field-existence audit. Private IDs, raw responses, record values, and connection details were removed before publication.
 
 Immutable public artifact fingerprints:
 
 | Artifact | SHA-256 |
 |---|---|
-| `modules.csv` | `5b21ffef4d7a0434e612d039400a446b8fdbc9eff2ccdd6925c58332b6fcbb3d` |
-| `crm-field-dictionary.csv` | `228e92a52009ab1556a70f51c218829807d73eed35ab89452125f808ab94176a` |
+| `modules.csv` | `5c485d4753c47b2895ddd40eafe1e60b91b1f592e1b5a84da8d3a408fe31ae3f` |
+| `crm-field-dictionary.csv` | `e9fa8d814b767451ead940d93777a465609fa5ee170bf6aa719272c3392edbf4` |
 | `lead-conversion-mapping.csv` | `05b2f1c8d143105f76bfda2aa19f4cf6f0126a8e799f8e951ff118890ea22c09` |
+| `free-test-field-manifest.csv` | `6cafb58a551cf3fd37fc0b0dd0f50e51bdc3599530cdafa718f5ea5bbcf071b0` |
+| `free-test-picklist-values.csv` | `3dff5386c0602a584636029b5d24b45fd7f5e31b218942d952dfa17c364c8641` |
 
-The current state and the recommended state are deliberately separate:
+The historical mapping state and its recommended state are deliberately separate:
 
 - `current_mapping_status=mapped` means the mapping was verified live on the snapshot date.
 - `mapping_review_status=safe_keep` means a current mapping is semantically and technically safe to retain.
 - `mapping_review_status=remove` means a current mapping should be removed before the next native Lead conversion.
 - `mapping_review_status=safe_add` means an existing target field can safely receive the source field after an approved mapping change.
-- `mapping_review_status=target_creation_required` means no suitable target exists and a complete field proposal is required. These are reviewed candidates, not deployment-ready field specifications. Target API names remain blank until an approved creation and Zoho readback.
+- `mapping_review_status=target_creation_required` records that no suitable target existed on 2026-08-05. It does not override the newer field dictionary.
 - `mapping_review_status=intentional_unmapped` means the source value should remain on the retained converted Lead or be handled by a separately approved workflow.
 
-Recommendations in this package are **not deployed**.
+The 84-field Free-Test schema is deployed and verified. Lead-conversion recommendations and the consolidated Deal-pipeline recommendation are **not deployed**.
 
 ## Module Inventory
 
 | Module label | Module API name | Fields | Used | Unused | Conversion role |
 |---|---|---:|---:|---:|---|
-| Leads | `Leads` | 120 | 112 | 8 | Source prospect |
-| Contacts | `Contacts` | 83 | 65 | 18 | Person record |
-| Accounts | `Accounts` | 80 | 58 | 22 | Company record |
-| Deals | `Deals` | 91 | 69 | 22 | Commercial opportunity |
+| Leads | `Leads` | 137 | 130 | 7 | Source prospect |
+| Contacts | `Contacts` | 91 | 73 | 18 | Person record |
+| Accounts | `Accounts` | 97 | 75 | 22 | Company record |
+| Deals | `Deals` | 142 | 110 | 32 | Commercial opportunity |
 
 The authoritative machine-readable catalog is [modules.csv](modules.csv).
 
 ## Field Dictionary Contract
 
-[crm-field-dictionary.csv](crm-field-dictionary.csv) contains 374 unique `module_api_name + field_api_name` rows. It records:
+[crm-field-dictionary.csv](crm-field-dictionary.csv) contains 467 unique `module_api_name + field_api_name` rows. It records:
 
 - module and field labels plus API names;
 - Zoho metadata data type;
@@ -48,13 +50,13 @@ The authoritative machine-readable catalog is [modules.csv](modules.csv).
 - whether help text is present; and
 - the metadata verification state.
 
-Help-text content, field values, picklist choices, internal choice values, colors, profile access, and numeric IDs are intentionally excluded. The live system remains authoritative for those details.
+The general dictionary excludes help-text content, field values, picklist choices, internal choice values, colors, profile access, and numeric IDs. The bounded [Free-Test field manifest](free-test-field-manifest.csv) and [picklist-value manifest](free-test-picklist-values.csv) preserve the approved public help text and choices for those 84 fields only.
 
-Help-text coverage reconciles across all 374 fields: 171 have help text, 124 do not support it through the verified field contract, and 79 show no text. Of the 79, 67 are unused fields and the remaining 12 are compound Address, Coordinates, or Distance entries marked read-only by the verified metadata. All used fields marked writable have help text, but the 12 used exceptions remain an unresolved capability gap; this is not full help-text completion.
+Help-text coverage reconciles across all 467 fields: 255 have help text, 132 do not expose support through the verified field contract, and 80 show no text. Of the 80, 68 are unused fields and the remaining 12 are compound Address, Coordinates, or Distance entries marked read-only by verified metadata. Every used writable field has help text, including all 84 Free-Test fields.
 
 ## Lead Conversion Matrix
 
-[lead-conversion-mapping.csv](lead-conversion-mapping.csv) contains 360 unique rows: every one of the 120 Lead fields reviewed against Contacts, Accounts, and Deals. Explicit non-mapping rows prevent silence from being mistaken for an incomplete review.
+[lead-conversion-mapping.csv](lead-conversion-mapping.csv) contains 360 unique historical rows: each of the 120 Lead fields observed on 2026-08-05 reviewed against Contacts, Accounts, and Deals. Explicit non-mapping rows prevent silence from being mistaken for an incomplete review. It is not reconciled to the 137-field 2026-08-12 Lead catalog.
 
 ### Review Summary
 
@@ -102,7 +104,9 @@ The Account phone replacement is Lead `Company_Phone` to Account `Phone`.
 | Deals | `After_Hours_Call_Band` | `After_Hours_Call_Band` |
 | Deals | `Average_Job_Value_Band` | `Average_Job_Value_Band` |
 
-### Candidate Targets Requiring Complete Field Proposals
+### Historical Candidate Targets Recorded On 2026-08-05
+
+This table preserves the dated conversion review only. Some listed fields now exist in the 2026-08-12 dictionary. Refresh native conversion mappings and choice compatibility before using any row as an implementation decision.
 
 | Target module | Lead source label | Source API name | Target status |
 |---|---|---|---|

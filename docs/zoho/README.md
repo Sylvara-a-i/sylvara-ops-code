@@ -48,6 +48,7 @@ The [product reference collection](reference/README.md) covers the currently gov
 - [MCP Server Standard](mcp/server-standard.md)
 - [Sylvara configured-session capability catalog, 2026-08-04](mcp/snapshots/configured/2026-08-04/capability-catalog.md)
 - [Sylvara configured-session machine-readable inventory, 2026-08-04](mcp/snapshots/configured/2026-08-04/sylvara-observed-tool-inventory.json)
+- [Sylvara CRM effective-access snapshot, 2026-08-12](mcp/snapshots/effective/2026-08-12/README.md)
 - [Tool Manual service catalog, 2026-07-24](mcp/reference/tool-manual-service-catalog-2026-07-24.md)
 - [Preconfigured template catalog, 2026-07-25](mcp/reference/preconfigured-template-catalog-2026-07-25.md)
 
@@ -113,7 +114,7 @@ The dated 2026-08-04 configured-session snapshot contains 294 Sylvara-only Zoho 
 
 The refreshed Books Controller advertises chart-account create, update, mark-active, and mark-inactive operations. The Audit and Controller connections, same-organization identity, and those four operations were verified in an approved bounded chart deployment on 2026-08-05; every mutation received independent Audit readback. This proves only the scoped chart contracts exercised in that deployment, not other Books writes or continuing approval. The older 2026-08-04 inventory remains a historical snapshot, not the current Books allowlist.
 
-The refreshed CRM roles verified the organization identity plus scoped module, field, layout, picklist, record, workflow, and Lead-conversion-map reads. Approved bounded field, layout, picklist, help-text, and record mutations received independent readback. A workflow read exposed a Convert action, but the change surface did not provide a direct typed native Convert Lead write, Lead Conversion Mapping mutation, or workflow-rule mutation, so those write operations remain unavailable rather than inferred.
+The refreshed CRM roles independently verified the same authorized target plus scoped module, field, layout, picklist, record, workflow, and pipeline reads. The 2026-08-12 bounded deployment independently reconciled the complete 84-field Free-Test schema, including help text and layout order. The current role membership and exercised-operation boundary are recorded in the [effective CRM snapshot](mcp/snapshots/effective/2026-08-12/README.md). Native Convert Lead, Lead Conversion Mapping mutation, workflow-rule mutation, and pipeline mutation remain unavailable rather than inferred.
 
 Billing, Books, Catalyst, Creator, CRM, Mail, Payments, and WorkDrive were observed at the configured-selection layer. Forms, Contracts, Sign, Sites, and Analytics were not observed; their MCP availability is **Unknown**, not unsupported. A selection, advertised contract, or past successful call does not grant continuing approval for live use.
 

@@ -1,0 +1,350 @@
+{
+  "schema_version": 1,
+  "observed_on": "2026-08-12",
+  "scope": "sylvara-only",
+  "evidence_class": "effective-access-and-current-callable-registry",
+  "publication_boundary": "Sanitized catalog operation keys and bounded outcomes only. Runtime namespaces, generated transport identifiers, connection names, organization/user/profile/resource IDs, raw payloads, and record data are excluded.",
+  "roles": [
+    {
+      "role": "crm-audit",
+      "access_class": "read-only",
+      "current_callable_count": 48,
+      "independent_identity_status": "same_target_verified_private_identity_omitted",
+      "capabilities": [
+        {
+          "catalog_operation_key": "bulkSearchRecords",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "executeCOQLQuery",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getBulkGlobalPicklists",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getCustomViews",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getFeatureSpecificDetails",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getFeatureDetails",
+          "effect": "read",
+          "effective_status": "verified_call_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getFields",
+          "effect": "read",
+          "effective_status": "verified_call_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getFieldsWithID",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getFieldUpdateById",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getFieldUpdates",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getGlobalPickListFieldAssociations",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getLayoutById",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getLayoutRules",
+          "effect": "read",
+          "effective_status": "verified_call_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getLayoutRulesById",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getLayouts",
+          "effect": "read",
+          "effective_status": "verified_call_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getMapDependencyById",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getMapDependency",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getModuleByApiName",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getModules",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getNoteById",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getOrganization",
+          "effect": "read",
+          "effective_status": "verified_call_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getPickListValueUsage",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getPickListValueById",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getPickListValues",
+          "effect": "read",
+          "effective_status": "verified_call_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getPipeline",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getPipelines",
+          "effect": "read",
+          "effective_status": "verified_call_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getProfile",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getProfiles",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getRecord",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getRecordCount",
+          "effect": "read",
+          "effective_status": "verified_call_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getRecords",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getRelatedRecordsCount",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getRelatedLists",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getRelatedRecord",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getRelatedRecords",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getReplacedValues",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getRole",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getRoles",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getSingleGlobalPicklists",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getTags",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getTaskById",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getTimelines",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getUsers",
+          "effect": "read",
+          "effective_status": "verified_call_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getWorkflowConfigurations",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getWorkflowRuleById",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getWorkflowRules",
+          "effect": "read",
+          "effective_status": "verified_call_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getWorkflowTasks",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "searchRecords",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        }
+      ]
+    },
+    {
+      "role": "crm-changes",
+      "access_class": "bounded-schema-change",
+      "current_callable_count": 14,
+      "independent_identity_status": "same_target_verified_private_identity_omitted",
+      "capabilities": [
+        {
+          "catalog_operation_key": "createFields",
+          "effect": "write",
+          "effective_status": "verified_mutation_and_independent_readback",
+          "advertised_contract_note": "Current MCP projection exposes field items as untyped; bounded calls were independently reconciled, but this does not authorize arbitrary payloads."
+        },
+        {
+          "catalog_operation_key": "deleteCustomField",
+          "effect": "write",
+          "effective_status": "advertised_not_exercised_in_this_deployment",
+          "safety_note": "Available but not invoked. No field deletion was authorized without value and dependency proof."
+        },
+        {
+          "catalog_operation_key": "getFields",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getFieldsWithID",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getLayoutById",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getLayouts",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getModuleByApiName",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getModules",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getOrganization",
+          "effect": "read",
+          "effective_status": "verified_identity_call"
+        },
+        {
+          "catalog_operation_key": "getPickListValues",
+          "effect": "read",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "getUsers",
+          "effect": "read",
+          "effective_status": "verified_identity_call"
+        },
+        {
+          "catalog_operation_key": "putFieldsWithId",
+          "effect": "write",
+          "effective_status": "verified_custom_field_update_and_independent_readback",
+          "advertised_contract_note": "Current MCP projection exposes field items as untyped; bounded calls were independently reconciled, but this does not authorize arbitrary payloads.",
+          "effective_limit_note": "Verified for custom-field label/help updates. A system Lead Source option update returned connector success but authoritative Audit readback showed no change; it was not retried."
+        },
+        {
+          "catalog_operation_key": "updateField",
+          "effect": "write",
+          "effective_status": "advertised_not_exercised_in_this_deployment"
+        },
+        {
+          "catalog_operation_key": "updateLayout",
+          "effect": "write",
+          "effective_status": "verified_mutation_and_independent_readback",
+          "effective_limit_note": "Verified for section placement/order in batches of no more than five fields."
+        }
+      ]
+    }
+  ],
+  "unavailable_required_capabilities": [
+    {
+      "catalog_operation_key": "createPipeline",
+      "required_for": "Deploy the recommended consolidated Deal pipeline."
+    },
+    {
+      "catalog_operation_key": "updatePipelineById",
+      "required_for": "Replace or migrate the current Deal pipeline safely."
+    }
+  ]
+}

@@ -66,3 +66,5 @@ exports/
 !src/zoho-crm/reference/modules.csv
 !src/zoho-crm/reference/crm-field-dictionary.csv
 !src/zoho-crm/reference/lead-conversion-mapping.csv
+!src/zoho-crm/reference/free-test-field-manifest.csv
+!src/zoho-crm/reference/free-test-picklist-values.csv
