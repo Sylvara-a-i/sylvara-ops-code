@@ -565,11 +565,11 @@ class ZohoCrmSchemaSnapshot20260814Tests(unittest.TestCase):
             "Stage and operational status can drift",
             "Verified Configuration Remediations",
             "case-insensitive unique",
-            "post-create normalization",
+            "normalizes the field after creation",
             "cannot satisfy the active pre-save validation rule",
             "`Rollback_Completed_At`",
             "Authorization criterion hardening remains unapplied",
-            "Zoho rejected the transition update",
+            "rejected by Zoho transition validation",
             "Closed Won is under-controlled",
             "Forms/controller path is unverified",
         ):

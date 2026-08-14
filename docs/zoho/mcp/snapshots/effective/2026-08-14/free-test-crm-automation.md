@@ -113,7 +113,7 @@ One unrelated legacy workflow, `Big Deal Rule`, remains active and can send a ge
 
 ## Acceptance Gate
 
-Before calling this workflow operational, a separately approved change must ensure `Type = Initial Sale` is supplied during Deal creation, reconcile the three Form 2/Blueprint requirement conflicts, define Stage-to-`Test_Status` after-actions, resolve the authorization-control limitation, and tighten Closed Won evidence. Then use one synthetic disposable path to verify Form 1 intake, human-approved native conversion, both initialization workflows, unique-key replay behavior, secure Form 2 update, task creation, every success and loss transition, `Close Live Test` evidence requirements, and authoritative readback.
+Before calling this workflow operational, a separately approved change must ensure `Type = Initial Sale` is supplied during Deal creation, reconcile the three Form 2/Blueprint requirement conflicts, define Stage-to-`Test_Status` after-actions, resolve the authorization-control limitation, and tighten Closed Won evidence. Then use one synthetic disposable path to verify Form 1 intake, human-approved native conversion, both initialization workflows, unique-key replay behavior, secure Form 2 update, task creation, every success and loss transition, `Close Live Test` evidence requirements, and authoritative readback. Contain the unrelated Big Deal rule before exercising a Closed Won canary.
 
 ## Capability And Authority Boundary
 
