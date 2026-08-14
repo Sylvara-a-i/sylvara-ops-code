@@ -35,7 +35,9 @@ Blueprint required fields, reviewer notes, checklists, and transition validation
 
 These are prerequisites for identity, metadata resolution, fresh prestate, duplicate review, and independent readback:
 
-`getOrganization`, `getUsers`, `getModules`, `getFields`, `getLayouts`, `getLayoutById`, `getPickListValues`, `getPipelines`, `getPipeline`, `getRecords`, `getRecord`, `searchRecords`, `getRelatedRecords`, and `getTimelines`.
+`getOrganization`, `getUsers`, `getProfiles`, `getRoles`, `getUserGroups`, `getGroup`, `getModules`, `getFields`, `getLayouts`, `getLayoutById`, `getPickListValues`, `getPipelines`, `getPipeline`, `getRecords`, `getRecord`, `searchRecords`, `getRelatedRecords`, and `getTimelines`.
+
+Profiles, roles, groups, and users are needed to resolve Blueprint ownership and transition visibility from returned identifiers rather than guessing access targets.
 
 ### Add Workflow And Reusable-Action Reads
 
