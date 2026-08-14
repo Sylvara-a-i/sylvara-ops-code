@@ -49,6 +49,8 @@ The [product reference collection](reference/README.md) covers the currently gov
 - [Sylvara configured-session capability catalog, 2026-08-04](mcp/snapshots/configured/2026-08-04/capability-catalog.md)
 - [Sylvara configured-session machine-readable inventory, 2026-08-04](mcp/snapshots/configured/2026-08-04/sylvara-observed-tool-inventory.json)
 - [Tool Manual service catalog, 2026-07-24](mcp/reference/tool-manual-service-catalog-2026-07-24.md)
+- [Zoho CRM Tool Manual catalog, 2026-08-14](mcp/reference/zoho-crm-tool-manual-catalog-2026-08-14.md)
+- [Proposed Form 1/Form 2 CRM MCP allowlist, 2026-08-14](mcp/proposals/2026-08-14/sylvara-free-test-crm-mcp-allowlist.md)
 - [Preconfigured template catalog, 2026-07-25](mcp/reference/preconfigured-template-catalog-2026-07-25.md)
 
 ## Code-Adjacent Zoho Artifacts
