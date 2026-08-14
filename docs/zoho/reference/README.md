@@ -5,6 +5,7 @@
 - Classification: **Reference**
 - Product research cutoff: **2026-07-20**
 - Targeted field-type refresh: **2026-08-05**
+- Zoho Forms builder and official-reference refresh: **2026-08-14**
 - Sylvara adoption and effective tenant access: **Unknown unless separately verified**
 - Source: sanitized derivatives of authorized product research, with current official links retained where available
 

@@ -141,7 +141,11 @@ PRODUCT_REFERENCE_FILES = {
 FIELD_CONTRACT_MARKERS = {
     "standards/crm-schema.md": ("CRM Field-Type Crosswalk", "`multiselectpicklist`", "`multiuserlookup`"),
     "reference/products/zoho-creator.md": ("Field Metadata And Write Contract", "| 39 | Prediction |"),
-    "reference/products/zoho-forms.md": ("Field Families And Dictionary", "1-Column", "Legal and Consent"),
+    "reference/products/zoho-forms.md": (
+        "Live Builder Element Catalog",
+        "1-Column",
+        "Legal & Consent",
+    ),
     "reference/products/zoho-contracts.md": ("Contract-Type Field Metadata", "`dataType` | 11 | Email"),
     "reference/products/zoho-sign.md": ("Document Fields And Text Tags", "Split Text", "fewer than 75 pages"),
     "reference/products/zoho-checkout.md": ("Invoice Custom Fields", "API Field Name"),
@@ -251,10 +255,23 @@ class ZohoStandardsTests(unittest.TestCase):
             with self.subTest(product=row["id"]):
                 if row["id"] == "crm":
                     self.assertEqual(
-                        "organization-metadata-field-layout-picklist-pipeline-workflow-blueprint-readback-and-bounded-workflow-blueprint-configuration-verified-2026-08-14-forms-and-module-conversion-map-write-unknown-native-conversion-manual",
+                        "organization-metadata-field-layout-picklist-pipeline-validation-workflow-blueprint-configuration-readback-verified-2026-08-14-runtime-forms-and-module-conversion-map-write-unknown-native-conversion-manual",
                         row["effective_tenant_capability"],
                     )
                     expected_observation = "crm-roles-and-free-test-automation-refreshed-2026-08-14"
+                    self.assertEqual(
+                        {
+                            "../../src/zoho-crm/reference/modules.csv",
+                            "../../src/zoho-crm/reference/crm-field-dictionary.csv",
+                            "../../src/zoho-crm/reference/lead-conversion-mapping.csv",
+                        },
+                        set(row["historical_repository_artifacts"]),
+                    )
+                    self.assertTrue(
+                        set(row["repository_artifacts"]).isdisjoint(
+                            row["historical_repository_artifacts"]
+                        )
+                    )
                 elif row["id"] == "books":
                     self.assertEqual(
                         "organization-identity-chart-read-and-scoped-chart-create-update-activate-inactivate-verified-2026-08-05",
@@ -272,7 +289,11 @@ class ZohoStandardsTests(unittest.TestCase):
                     expected_observation,
                     row["mcp_observation"],
                 )
-                for target in (*row["standards"], *row["repository_artifacts"]):
+                for target in (
+                    *row["standards"],
+                    *row["repository_artifacts"],
+                    *row.get("historical_repository_artifacts", []),
+                ):
                     self.assertTrue((ZOHO_DOCS / target).resolve().is_file())
 
         references = registry["reference_only_products"]
@@ -294,7 +315,8 @@ class ZohoStandardsTests(unittest.TestCase):
         for path in references:
             with self.subTest(path=path):
                 text = path.read_text(encoding="utf-8").lower()
-                self.assertIn("2026-07-20", text)
+                expected_date = "2026-08-14" if path.name == "zoho-forms.md" else "2026-07-20"
+                self.assertIn(expected_date, text)
                 self.assertIn("reference", text)
                 self.assertIn("unknown", text)
                 self.assertIn("official", text)
@@ -302,9 +324,11 @@ class ZohoStandardsTests(unittest.TestCase):
     def test_source_manifest_lists_every_reference_and_resolves(self) -> None:
         manifest = json.loads(SOURCE_MANIFEST.read_text(encoding="utf-8"))
         self.assertEqual(2, manifest["schema_version"])
-        self.assertEqual("2026-08-05", manifest["last_reviewed_on"])
+        self.assertEqual("2026-08-14", manifest["last_reviewed_on"])
         self.assertEqual("2026-08-05", manifest["research_cutoffs"]["field_type_refresh"])
+        self.assertEqual("2026-08-14", manifest["research_cutoffs"]["forms_builder_inventory"])
         self.assertIn("configured_session_tool_selections", manifest["source_classes"])
+        self.assertIn("live_forms_builder_inventory", manifest["source_classes"])
         self.assertNotIn("configured_session_advertised_names", manifest["source_classes"])
         self.assertEqual(
             "2026-08-04",
@@ -324,7 +348,8 @@ class ZohoStandardsTests(unittest.TestCase):
         for relative_path, markers in FIELD_CONTRACT_MARKERS.items():
             text = (ZOHO_DOCS / relative_path).read_text(encoding="utf-8")
             with self.subTest(relative_path=relative_path):
-                self.assertIn("2026-08-05", text)
+                expected_date = "2026-08-14" if relative_path.endswith("zoho-forms.md") else "2026-08-05"
+                self.assertIn(expected_date, text)
                 for marker in markers:
                     self.assertIn(marker, text)
 

@@ -38,6 +38,7 @@ The live schema has 113 choice fields. The public option artifact covers 90; 23 
 ## Form 1 Findings
 
 - All destinations in the latest approved 14-field visible Form 1 and its 13 hidden/server rows are enabled and type-compatible. The approved combined Full Name input maps explicitly to Lead First Name and Last Name components.
+- Lead Source is workflow-owned and intentionally is not a visible or hidden Form 1 field. The receiving controller/workflow must set and verify it from the trusted intake route.
 - Middle Name, Company Logo, Plan Interest, Assisted By, and a separate Contact Phone are not part of the latest approved Form 1 contract. Their absence is not treated as a schema defect.
 - `Lead_Status` and `Lifecycle_Status` are separate. Current active Lead Status display values include **Attempted Contact**, **Free Test Requested**, **Free Test Setup Scheduled**, **Contacted**, **Qualified for Free Test**, **New**, **Not Qualified**, and **Converted**. Nurture and Disqualified are Lifecycle Status values.
 - Display and stored values differ for several system choices. Automations must use the actual value contract where the publishable option artifact supplies it; restricted choices require fresh private metadata readback.
@@ -50,8 +51,11 @@ The live schema has 113 choice fields. The public option artifact covers 90; 23 
 - `Setup_Form_Submission_ID` and Deal `Intake_Submission_ID` are not unique, so Deal-side idempotency must be enforced by deterministic lookup/readback rather than assumed from CRM metadata.
 - The authoritative Revenue Desk Sales order is Setup and Authorization, Test Authorized, Setup and QA, Test Live, Results Review, Subscription Proposed, Closed Won, and Closed Lost. Stored Stage values differ from the displayed labels and are recorded separately.
 - Free Test sections are 10–13 in Deals; `Target_Start_Date` remains in Pilot Scope and Outcome. Account Front-Office Profile is section 10. These are schema-complete but not optimal operator placement.
-- The active delivery Blueprint has eight states and twelve transitions, but transition `actions` are absent. Stage can therefore advance while `Test_Status` remains unchanged. Treat status synchronization as an unresolved automation defect.
-- Blueprint transition requirements do not cover every provenance/setup field. Authority/scope timestamps and versions, rollback contacts, several call-handling fields, and Target Start Date require an explicit validation decision.
+- An active Deal validation rule rejects records whose `Type` is empty. No Lead field maps to `Deals.Type`, so the conversion/controller contract must set `Type = Initial Sale` when it creates the Deal and independently read it back.
+- The active delivery Blueprint has eight states and twelve transitions, but transition `actions` are absent. It is controlled by `Stage`, so Stage can advance while `Test_Status` remains unchanged. Treat status synchronization as an unresolved automation defect.
+- `Begin Setup and QA` unconditionally requires `No_Answer_Delay`, `Approved_Fallback_Number`, and `Alert_Recipient_Email`. The Form 2 contract makes the first two conditional and permits alert mobile or email, so a valid Form 2 submission can be blocked until those Blueprint requirements are reconciled.
+- Blueprint transitions do not enforce every provenance/setup, safe-stop, rollback, or Closed Won evidence field. The exact current workflow and transition contract is recorded in the [effective automation snapshot](../../../../../docs/zoho/mcp/snapshots/effective/2026-08-14/free-test-crm-automation.md).
+- All four new workflows report no prior execution, and the Blueprint has zero enrolled records. Schema and configuration readback passed; end-to-end runtime acceptance did not.
 
 ## Other Deferred Schema Drift
 

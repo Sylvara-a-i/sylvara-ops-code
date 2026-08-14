@@ -21,11 +21,11 @@ Approval reference: owner authorization retained in the private task record
 Operator role: separately scoped CRM automation roles with independent CRM Audit readback
 Pre-deployment state: exact organization identity and current workflow, Blueprint, module, field, layout, picklist, and pipeline metadata verified privately
 Action: configuration change; update and activate the Form 1 intake-review workflow; create and activate the Deal Form 2 submission, Deal control-initialization, and Deal limit-initialization workflows; and create and activate the Revenue Desk Free Test Delivery Blueprint
-Smoke-test result: blocked for a production-record runtime path; configuration readback succeeded, but no test Lead conversion or customer-record transition was executed
-Readback result: four active workflows and one active eight-state, twelve-transition Deal Blueprint observed; approved CRM destination fields are present, while the external Zoho Forms implementation remains unverified
+Smoke-test result: blocked for a runtime path; all four new workflows report no prior execution and the Blueprint has zero enrolled records, so no task, initialization, Lead conversion, Form submission, or transition was proven end to end
+Readback result: four active workflows and one active eight-state, twelve-transition Deal Blueprint observed; all approved CRM destination fields and Lead-conversion mappings are present, while the Zoho Forms/controller implementation remains unverified
 Rollback target: captured private prestate only; inactive drafts are explicitly excluded as rollback targets, and any deactivation or replacement requires fresh record-count, state-impact, and replacement readback approval
-Outcome: configuration present; acceptance remains partial because every Blueprint transition has no after-action and Stage can drift from Test Status
-Follow-up: decide and implement Stage/Test Status synchronization, complete transition validation coverage, verify Zoho Forms field links/order/settings, and keep native Lead conversion human-approved
+Outcome: configuration present; runtime acceptance blocked because Deal creation requires an unmapped `Type`, three unconditional Blueprint inputs conflict with valid Form 2 conditions, every transition has no after-action, Stage can drift from Test Status, safe-stop and Closed Won evidence are under-controlled, and Deal submission IDs are not metadata-unique
+Follow-up: set and read back `Type = Initial Sale` during Deal creation; reconcile the three Form 2/Blueprint requirements; define Stage/Test Status, stop/rollback, and Closed Won controls; verify Forms/controller security and replay behavior; then run a separately approved synthetic canary while keeping native Lead conversion human-approved
 ```
 
 ## 2026-08-05 — Zoho CRM Lead Schema, Layout, And Address Migration
@@ -44,7 +44,7 @@ Smoke-test result: passed for supported mutations; Zoho-managed compound, coordi
 Readback result: matched for completed metadata changes and every migrated populated address; legacy schema fields were retained, and their migrated values were cleared after readback
 Rollback target: captured private prestate; restore prior labels, choices, help text, and layout placement, and reverse-copy consolidated components into retained legacy fields if reconciliation requires it
 Outcome: succeeded for the scoped schema, layout, and address work
-Follow-up: four unsafe current Lead mappings must be removed, 18 existing-target mappings added, 11 target fields created and mapped, and native pilot/subscription conversion automation verified and deployed through typed contracts; none of that follow-up was deployed
+Follow-up: historical recommendation at the time of this event. The 2026-08-14 readback shows the four unsafe mappings absent and the current fields/mappings in the dated 2026-08-14 package; use that package rather than this superseded follow-up. Native conversion remains human-approved and runtime automation acceptance remains incomplete.
 ```
 
 ## 2026-08-05 — Zoho Books Chart Initial Attempt And Containment
@@ -103,7 +103,7 @@ Follow-up: reverify the final Schedule C for the filing year; configure any sepa
 
 Account activity and historical report-presentation effects were not reconciled in the chart-only amendment. No claim of zero historical financial activity is made.
 
-## 2026-08-05 â€” Zoho Books Tax-Preparer Description Correction
+## 2026-08-05 — Zoho Books Tax-Preparer Description Correction
 
 ```text
 Date (UTC): 2026-08-05T20:35:31Z

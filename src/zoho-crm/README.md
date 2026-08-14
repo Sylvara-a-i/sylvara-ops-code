@@ -12,11 +12,11 @@ This area contains Sylvara-owned, sanitized CRM schema and Lead-conversion docum
 - Modules in scope: Leads, Contacts, Accounts, and Deals
 - Current metadata status: 466 fields, every enabled field's Standard-layout placement, the selected Quick Create and Business Card fields/order, publishable choice-field values with restricted sets represented by count/status only, the Revenue Desk pipeline, and 414 Lead-to-target mapping rows verified read-only
 - Current module counts: Leads 138, Contacts 91, Accounts 95, and Deals 142
-- Automation status: Form 1 intake and Deal initialization workflows plus the Deal delivery Blueprint are active; native Lead conversion remains human-approved and manual
-- Current known defects: Blueprint transitions have no after-actions, so Deal Stage and `Test_Status` can drift; transition enforcement is incomplete; exact Zoho Forms configuration remains unverified
+- Automation status: four Form 1/Deal workflows plus the Deal delivery Blueprint are active and read back; all four workflows have no recorded execution and the Blueprint has zero enrolled records, so runtime acceptance is blocked; native Lead conversion remains human-approved and manual
+- Current known defects: Deal creation can fail unless the controller sets `Type = Initial Sale`; three unconditional Blueprint inputs conflict with valid Form 2 conditions; transitions have no after-actions, so Deal Stage and `Test_Status` can drift; safe-stop and Closed Won evidence are under-controlled; exact Zoho Forms/controller behavior remains unverified
 - Live changes in the 2026-08-14 audit: **none**
 
-The snapshot proves only what the authorized CRM audit surface returned on the observation date. It does not grant continuing permission to change CRM and does not establish unsupported workflow, formula-dependency, profile, or validation-rule behavior.
+The snapshot proves only what the authorized CRM audit surface returned on the observation date. It does not grant continuing permission to change CRM and does not establish uninspected formula, profile, Forms, controller, or runtime behavior.
 
 ## Artifacts
 
@@ -27,7 +27,7 @@ The snapshot proves only what the authorized CRM audit surface returned on the o
 | [Historical 2026-08-05 module catalog](reference/modules.csv) | Immutable pre-Free-Test module counts and roles |
 | [Historical 2026-08-05 field dictionary](reference/crm-field-dictionary.csv) | Immutable 374-field baseline |
 | [Historical 2026-08-05 Lead-conversion review](reference/lead-conversion-mapping.csv) | Immutable desired-state review that is no longer current-state evidence |
-| [Form 1/Form 2 MCP allowlist](../../docs/zoho/mcp/proposals/2026-08-14/sylvara-free-test-crm-mcp-allowlist.md) | Least-privilege design record with current implementation status linked separately |
+| [Historical Form 1/Form 2 MCP allowlist](../../docs/zoho/mcp/proposals/2026-08-14/sylvara-free-test-crm-mcp-allowlist.md) | Superseded least-privilege design record; use the linked effective snapshot for current state |
 
 The CSV files are deterministic review artifacts, not import files and not live configuration payloads.
 

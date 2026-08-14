@@ -4,4 +4,4 @@ This directory contains dated, sanitized results from exact Sylvara identity, co
 
 ## Snapshots
 
-- [2026-08-14 Free-Test CRM automation and metadata](2026-08-14/free-test-crm-automation.md)
+- [2026-08-14 Free-Test CRM automation and metadata](2026-08-14/free-test-crm-automation.md) — configuration readback passed; runtime acceptance remains blocked by the documented validation, transition, and Forms/controller gaps

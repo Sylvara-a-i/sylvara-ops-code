@@ -24,6 +24,16 @@ PICKLISTS = SNAPSHOT / "crm-picklist-options.csv"
 LAYOUTS = SNAPSHOT / "crm-layout-field-order.csv"
 MAPPINGS = SNAPSHOT / "lead-conversion-mapping.csv"
 FORM_MAP = SNAPSHOT / "free-test-form-field-map.csv"
+AUTOMATION = (
+    ROOT
+    / "docs"
+    / "zoho"
+    / "mcp"
+    / "snapshots"
+    / "effective"
+    / "2026-08-14"
+    / "free-test-crm-automation.md"
+)
 
 ARTIFACTS = [MODULES, FIELDS, PICKLISTS, LAYOUTS, MAPPINGS, FORM_MAP]
 
@@ -451,7 +461,14 @@ class ZohoCrmSchemaSnapshot20260814Tests(unittest.TestCase):
             form1_visible,
         )
         self.assertTrue(
-            {"Middle Name", "Company Logo", "Plan Interest", "Assisted By", "Contact Phone"}.isdisjoint(
+            {
+                "Middle Name",
+                "Company Logo",
+                "Plan Interest",
+                "Assisted By",
+                "Contact Phone",
+                "Lead Source",
+            }.isdisjoint(
                 {row["form_label"] for row in self.form_map if row["form_or_process"] == "Form 1"}
             )
         )
@@ -508,6 +525,55 @@ class ZohoCrmSchemaSnapshot20260814Tests(unittest.TestCase):
                 )
             ]
             self.assertEqual(target["data_type"], row["destination_field_type"])
+
+    def test_effective_automation_contract_is_complete_and_fail_closed(self) -> None:
+        text = AUTOMATION.read_text(encoding="utf-8")
+        for marker in (
+            "End-to-end runtime acceptance: **Blocked**",
+            "All 98 expanded CRM destinations",
+            "Lead Source is workflow-owned",
+            "Leads Free Test Intake Review",
+            "Deals Free Test Form 2 Submitted",
+            "Deals Free Test Initialize Controls",
+            "Deals Free Test Initialize Limits",
+            "Control field: `Stage`",
+            "All four workflows report no prior execution",
+            "Blueprint reports zero enrolled records",
+            "`Type = Initial Sale`",
+            "`No_Answer_Delay`",
+            "`Approved_Fallback_Number`",
+            "`Alert_Recipient_Email`",
+            "Stage and operational status can drift",
+            "Stopping a live test is under-controlled",
+            "Closed Won is under-controlled",
+            "Forms/controller path is unverified",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, text)
+
+        transition_names = {
+            "Confirm Authorization",
+            "Begin Setup and QA",
+            "Approve Go Live",
+            "Complete Free Test",
+            "Propose Subscription",
+            "Activate Subscription",
+            "Close During Authorization",
+            "Close After Authorization",
+            "Close During QA",
+            "Close Live Test",
+            "Close After Results Review",
+            "Decline Subscription",
+        }
+        transition_rows = {
+            cells[0]
+            for line in text.splitlines()
+            if line.startswith("|")
+            and len(cells := [cell.strip() for cell in line.strip("|").split("|")]) == 5
+            and cells[0] in transition_names
+            and cells[-1] == "None"
+        }
+        self.assertEqual(transition_names, transition_rows)
 
     def test_public_files_contain_no_private_identifiers_or_payloads(self) -> None:
         forbidden = (

@@ -2,13 +2,13 @@
 
 ## Status And Scope
 
-- Classification: **Proposed server design**
+- Classification: **Historical proposed server design; superseded as a current runbook**
 - Owning product: **Zoho CRM**
 - Workflow: public free-test intake, qualification, controlled Lead conversion, secure setup, authorization, QA, go-live approval, limited-test operation, and results review
 - Catalog evidence: [Zoho CRM Tool Manual Catalog — 2026-08-14](../../reference/zoho-crm-tool-manual-catalog-2026-08-14.md)
-- Live deployment: **Not established by this document**
+- Live deployment: **Not established by this document; use the effective snapshot for observed current state**
 
-Implementation note: a separate [effective snapshot](../../snapshots/effective/2026-08-14/free-test-crm-automation.md) records the current active workflows and Deal Blueprint. This proposal remains the design record; it is not retroactively relabeled as deployment evidence.
+Implementation note: a separate [effective snapshot](../../snapshots/effective/2026-08-14/free-test-crm-automation.md) records the current active workflows, validation dependency, and Stage-controlled Deal Blueprint. This proposal remains a historical design record, not a current build order or deployment artifact. Its proposed Lead Blueprint, function-backed initializer/after-actions, connection work, and sandbox-release role were not observed in the current configuration and remain deferred unless separately re-approved.
 
 This allowlist corrects an earlier inference from the configured Sylvara runtime subset. The current Tool Manual catalog contains CRM Blueprint, transition, function, custom-button, workflow, validation, conversion, record, and sandbox actions. Their absence from a connected server is an enablement gap, not proof that the catalog lacks them.
 
@@ -16,16 +16,18 @@ Catalog membership still does not prove a complete current input contract, OAuth
 
 Every operation name in backticks is the exact MCP Tool Manual key from the dated capture. Do not silently substitute a similar OpenAPI `operationId`; some official OAS names differ from the Tool Manual keys.
 
-## Intended Process Coverage
+## Historical Intended Process Coverage
+
+The table below records the desired architecture considered before configuration. It does not describe current tenant state. In particular, the active Deal Blueprint is controlled by `Stage`, every transition currently has no after-action, no Lead qualification Blueprint was observed, and the initializer is implemented as two create-only workflows rather than the proposed function.
 
 | Process component | CRM mechanism | Intended MCP coverage |
 |---|---|---|
 | Form 1 registration | Create/edit Lead workflow | Workflow rule, task, field-update, and readback operations |
-| Qualification control | Non-continuous Lead Blueprint | Blueprint, state, transition, checklist/field-input, activation, and readback operations |
+| Qualification control | Proposed non-continuous Lead Blueprint | Blueprint, state, transition, checklist/field-input, activation, and readback operations; not observed in the current configuration |
 | Duplicate review and conversion | Native Lead conversion | Conversion-options read; conversion remains human-approved and irreversible |
-| Post-conversion initialization | Deal create workflow plus Deluge function | Workflow, automation function, record read/write, task, and failure-read operations |
+| Post-conversion initialization | Proposed Deal create workflow plus Deluge function | Current implementation uses two create-only field-update workflows; no initializer function was observed |
 | Form 2 setup and authorization | Existing Contact, Account, and Deal fields | Record reads, Blueprint transition requirements, function-backed side effects, and timeline readback |
-| QA and go-live control | Non-continuous Deal Blueprint on test status | Blueprint states/transitions and function-backed after-actions |
+| QA and go-live control | Historically proposed non-continuous Deal Blueprint on `Test_Status` | Active Blueprint is controlled by `Stage` and has no after-actions; treat this row as desired-state history, not current architecture |
 | Setup access, signature, activation, stop, and rollback | Restricted transitions/functions with external authoritative systems | Function and connection discovery/configuration; external systems remain authoritative for tokens, signatures, and routing state |
 | Validation and promotion | CRM Sandbox when available | Read-only sandbox discovery; narrowly scoped validation and deployment on a separate Release role |
 
@@ -148,7 +150,9 @@ Do not enable bulk deployment, sandbox deletion, or production deployment until 
 - speculative conversion-mapping payloads through field or layout APIs; and
 - every `x...` record-operation alias when its canonical non-`x` key is available.
 
-## Safe Build Order
+## Historical Proposed Build Order — Superseded For Current State
+
+This sequence is retained to explain the original design and least-privilege decomposition. Do not execute it as a current runbook. The current fields, workflows, validation dependency, Blueprint transitions, and runtime blockers must instead be taken from the [2026-08-14 effective snapshot](../../snapshots/effective/2026-08-14/free-test-crm-automation.md). Any Lead Blueprint, Deluge function, after-action, connection, or sandbox-release work below requires a new exact design, current prestate, scoped approval, rollback/containment, and independent readback.
 
 1. Refresh Audit metadata and record the exact advertised contracts for every selected operation.
 2. Resolve the four unsafe Lead Conversion Mapping entries identified by the 2026-08-05 review manually in CRM because no catalog action was captured for that configuration surface; read field metadata back afterward. Current metadata shows those four mappings absent; do not invent a fifth.
