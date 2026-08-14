@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import unittest
@@ -22,6 +23,15 @@ ZOHO_DOCS = ROOT / "docs" / "zoho"
 CAPABILITY_CATALOG = INVENTORY.parent / "capability-catalog.md"
 MCP_README = ZOHO_DOCS / "mcp" / "README.md"
 SERVER_STANDARD = ZOHO_DOCS / "mcp" / "server-standard.md"
+CATALYST_TOOL_MANUAL = (
+    ZOHO_DOCS
+    / "mcp"
+    / "reference"
+    / "zoho-catalyst-tool-manual-catalog-2026-08-14.md"
+)
+CATALYST_TOOL_MANUAL_ACTION_ROWS_SHA256 = (
+    "e6cda2e3dfa399194a63d438bad974fa78ac6e0374e405bae5a65bc06f249957"
+)
 
 EXPECTED_COUNTS = {
     "billing-audit": (32, 32, 0),
@@ -381,6 +391,101 @@ class ZohoInventoryTests(unittest.TestCase):
                 host = (urlparse(url).hostname or "").lower()
                 with self.subTest(path=path, url=url):
                     self.assertIn(host, OFFICIAL_DOCUMENTATION_HOSTS)
+
+    def test_catalyst_tool_manual_catalog_is_complete_and_integral(self) -> None:
+        catalog = CATALYST_TOOL_MANUAL.read_text(encoding="utf-8")
+        action_row_re = re.compile(
+            r"^\| `([^`]+)` \| (.+?) \| (.+?) \| `([A-Z][A-Z-]+)` \|$"
+        )
+        rows = [
+            action_row_re.match(line).groups()
+            for line in catalog.splitlines()
+            if action_row_re.match(line)
+        ]
+        names = {name for name, _, _, _ in rows}
+
+        self.assertEqual(189, len(rows))
+        self.assertEqual(189, len(names))
+        self.assertTrue(all(description.strip() for _, description, _, _ in rows))
+        self.assertTrue(all("Use when" in use_case for _, _, use_case, _ in rows))
+
+        expected_source_counts = {
+            "PROJECTS": 4,
+            "AUTH": 10,
+            "API-GATEWAY": 8,
+            "DATASTORE": 25,
+            "CACHE": 9,
+            "FILESTORE": 8,
+            "STRATUS": 18,
+            "MAIL": 5,
+            "FUNCTIONS": 9,
+            "ENVIRONMENT": 3,
+            "CIRCUITS": 3,
+            "JOBS": 15,
+            "PIPELINES": 6,
+            "SLATE": 7,
+            "APPSAIL": 3,
+            "BROWSER-GRID": 6,
+            "AUTOMATION-TESTING": 1,
+            "LOGS": 1,
+            "QUICKML": 45,
+            "DATAVERSE": 3,
+        }
+        observed_source_counts = {
+            source_key: sum(row[3] == source_key for row in rows)
+            for source_key in expected_source_counts
+        }
+        self.assertEqual(expected_source_counts, observed_source_counts)
+        self.assertEqual(
+            set(expected_source_counts),
+            {source_key for _, _, _, source_key in rows},
+        )
+
+        normalized_rows = "\n".join(
+            line for line in catalog.splitlines() if action_row_re.match(line)
+        ) + "\n"
+        self.assertEqual(
+            CATALYST_TOOL_MANUAL_ACTION_ROWS_SHA256,
+            hashlib.sha256(normalized_rows.encode("utf-8")).hexdigest(),
+        )
+
+        required_actions = {
+            "List All Projects",
+            "Add User",
+            "Configure API Gateway Route",
+            "Create Table",
+            "Create Cache Item",
+            "Create Folder",
+            "Create Bucket",
+            "Create Domain",
+            "Execute Function Via PATCH",
+            "Create Env Variables",
+            "Execute Circuit",
+            "Create Job Pool",
+            "Create Pipeline",
+            "Redeploy a deployment",
+            "Get AppSail",
+            "Delete Browser Grid",
+            "Execute Automation Test",
+            "Get Logs",
+            "Create AutoML Pipeline",
+            "Lead Enrichment",
+        }
+        self.assertTrue(required_actions.issubset(names))
+
+        for marker in (
+            "Displayed action count | **189**",
+            "Prior aggregate snapshot | **176**",
+            "Configured selection, connected-user permission, and effective tenant access | **Unknown**",
+            "## Public Action-Page Gaps",
+            "No Search, Event Listener, or generic Zia action appeared",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, catalog)
+
+        readme = MCP_README.read_text(encoding="utf-8")
+        self.assertIn(CATALYST_TOOL_MANUAL.name, readme)
+        self.assertIn("proves only dated provider-picker membership", readme)
 
 
 if __name__ == "__main__":

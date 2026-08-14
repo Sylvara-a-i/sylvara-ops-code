@@ -10,6 +10,7 @@ This folder separates MCP design policy from dated evidence. A large catalog doe
 |---|---|---|
 | Official product capability | [`../reference/README.md`](../reference/README.md) | What current official product documentation says the underlying product can do |
 | Official Tool Manual snapshot | [`reference/tool-manual-service-catalog-2026-07-24.md`](reference/tool-manual-service-catalog-2026-07-24.md) | Dated service coverage and row counts documented by the provider |
+| Dated Catalyst provider-picker catalog | [`reference/zoho-catalyst-tool-manual-catalog-2026-08-14.md`](reference/zoho-catalyst-tool-manual-catalog-2026-08-14.md) | 189 captured display labels, connector-description derivatives, practical use cases, and official-family source routes; not a configured selection or runtime contract |
 | Preconfigured portal templates | [`reference/preconfigured-template-catalog-2026-07-25.md`](reference/preconfigured-template-catalog-2026-07-25.md) | Dated template names and captured memberships, not a recommendation |
 | Configured-session selections | [`snapshots/configured/2026-08-04/`](snapshots/configured/2026-08-04/) | Sanitized Sylvara-only role membership, prefix-free catalog operation keys, and annotations observed in one inspected session |
 | Advertised MCP contract | Not stored as a blanket claim | Requires current inspection of the selected operation's description and input schema |
@@ -31,6 +32,8 @@ The separate CRM refresh verified scoped metadata, record, workflow, and convers
 ## Tool Manual Snapshot
 
 The dated Tool Manual catalog records 10,533 service-qualified rows across 59 documented services. Eight products in the current Sylvara snapshot account for 3,222 of those dated rows. The repository preserves the compact service/count index and links the relevant product handbooks instead of copying provider-owned manuals. Exact current names, parameters, scopes, and side effects must be refreshed from the official interactive Tool Manual before server design. The configured-session snapshot separately preserves all 294 role-qualified selections that passed the public sanitization review.
+
+The supplied authenticated Catalyst `All Tools` interface displayed 189 actions on 2026-08-14, 13 more than the 176 Catalyst rows in the 2026-07-24 aggregate snapshot. The [dated Catalyst catalog](reference/zoho-catalyst-tool-manual-catalog-2026-08-14.md) preserves all 189 display labels, concise connector-description derivatives, an official Zoho documentation-family crosswalk, practical use cases, and exact public action-page gaps. It proves only dated provider-picker membership. It does not establish prefix-free operation keys, selection in a configured server, an advertised input schema, connection permission, effective access, or authorization to invoke an action.
 
 ## Server Design Sequence
 
