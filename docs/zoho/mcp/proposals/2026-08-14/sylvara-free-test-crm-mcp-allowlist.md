@@ -24,7 +24,7 @@ Every operation name in backticks is the exact MCP Tool Manual key from the date
 | Post-conversion initialization | Deal create workflow plus Deluge function | Workflow, automation function, record read/write, task, and failure-read operations |
 | Form 2 setup and authorization | Existing Contact, Account, and Deal fields | Record reads, Blueprint transition requirements, function-backed side effects, and timeline readback |
 | QA and go-live control | Non-continuous Deal Blueprint on test status | Blueprint states/transitions and function-backed after-actions |
-| Setup access, signature, activation, stop, and rollback | Restricted transitions/functions with external authoritative systems | Function configuration; external systems remain authoritative for tokens, signatures, and routing state |
+| Setup access, signature, activation, stop, and rollback | Restricted transitions/functions with external authoritative systems | Function and connection discovery/configuration; external systems remain authoritative for tokens, signatures, and routing state |
 | Validation and promotion | CRM Sandbox when available | Read-only sandbox discovery; narrowly scoped validation and deployment on a separate Release role |
 
 Blueprint required fields, reviewer notes, checklists, and transition validations are configured inside transition `during_inputs`, criteria, validation filters, and validation messages. They are not separate checklist tools.
@@ -50,6 +50,12 @@ Enable `getRecordBlueprintTransition` only for controlled testing or troubleshoo
 ### Add Function Reads
 
 `getFunctions`, `getFunction`, `getFunctionCode`, `getAllAutomationFunctions`, `getAutomationFunctions`, and `getAutomationFunctionFailures`.
+
+### Add Connection Reads
+
+`getConnections`, `getConnection`, `getConnectionServices`, and `getConnectionService`.
+
+These expose configured connection metadata and authorization state, not secret values. Use them before authoring a function that calls Zoho Sign, Catalyst, or a phone provider. Never place access tokens, client secrets, provider credentials, or secret-bearing URLs in function source, CRM fields, repository files, prompts, or logs.
 
 Custom-button reads are optional because the initial design uses Blueprint transitions and Zoho's standard Lead Convert action. Add `listCustomButtons`, `getCustomButtonById`, `getCustomButtonCount`, and `getCustomButtonAssociations` only if a later approved design introduces custom buttons.
 
@@ -87,6 +93,12 @@ Before first activation, read the created Blueprint, states, transitions, usage 
 
 The intended initializer and restricted operational actions use Deluge, which the catalog describes as auto-published on create/update. Enable `publishFunction` only if the selected current contract or a non-Deluge runtime requires an explicit publish step. Use `getAutomationFunctionFailures` on Audit for acceptance and production exception review.
 
+### Connection Configuration — Enable Only When A Required Connection Is Missing
+
+`postConnections` and `putConnections`.
+
+Connection authorization or reauthorization can require a protected user authentication handoff and must not accept credentials through chat. Prefer an existing, correctly scoped system service. Keep `postConnectionServices` disabled unless a separately reviewed custom service definition is genuinely required; it expands the authentication surface and may require confidential provider configuration.
+
 ### Duplicate Control And Global Validation — Enable Only If The Approved Design Uses Them
 
 `createDuplicateCheckPreference`, `updateDuplicateCheckPreference`, `createValidationRule`, and `updateValidationRule`.
@@ -123,6 +135,7 @@ Do not enable bulk deployment, sandbox deletion, or production deployment until 
 ## Operations Intentionally Excluded
 
 - all Blueprint, workflow, task, field-update, function, button, validation, webhook, record, and sandbox delete operations;
+- `deleteConnections` and custom connection-service authoring by default;
 - `putBlueprint`, `updateBlueprintStates`, and `updateBlueprintTransitions` bulk variants until a demonstrated need exists;
 - `reorderBlueprints` and `reorderWorkflowRules` unless current precedence conflicts are proven;
 - `executeCustomButton`, bulk record actions, mass updates, merges, owner changes, and record deletes;
@@ -138,7 +151,7 @@ Do not enable bulk deployment, sandbox deletion, or production deployment until 
 3. Create reusable tasks and field updates, then create the Form 1 intake workflow inactive and acceptance-test it.
 4. Build the Lead qualification Blueprint in draft, including mandatory fields, reviewer note, checklist, transition criteria, and post-actions; read every created object back before activation.
 5. Keep Lead conversion a named human approval gate. Test `convertLead` only on a disposable canary after duplicate-option review.
-6. Create and test the post-conversion initializer function and Deal workflow. Verify linked Contact, Account, and Deal postconditions and function-failure reporting.
+6. Audit required CRM Connections, complete any protected authorization manually, then create and test the post-conversion initializer function and Deal workflow. Verify linked Contact, Account, and Deal postconditions and function-failure reporting.
 7. Build the Deal limited-test Blueprint and restricted transition functions. Add custom buttons only if an approved action cannot be represented safely as a Blueprint transition. External setup access, signature, and phone-routing systems remain authoritative.
 8. Test duplicate submissions, existing-record matches, missing consent, disqualification, function failure, repeated button clicks, stale state, callback replay, activation ambiguity, caps, stop, rollback, and reconciliation.
 9. Promote through the Release role only when Sandbox support and an exact validated change set are proven; otherwise keep production rules inactive until a separately approved canary.
