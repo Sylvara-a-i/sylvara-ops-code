@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import unittest
@@ -22,6 +23,22 @@ ZOHO_DOCS = ROOT / "docs" / "zoho"
 CAPABILITY_CATALOG = INVENTORY.parent / "capability-catalog.md"
 MCP_README = ZOHO_DOCS / "mcp" / "README.md"
 SERVER_STANDARD = ZOHO_DOCS / "mcp" / "server-standard.md"
+CRM_TOOL_MANUAL = (
+    ZOHO_DOCS
+    / "mcp"
+    / "reference"
+    / "zoho-crm-tool-manual-catalog-2026-08-14.md"
+)
+FREE_TEST_CRM_ALLOWLIST = (
+    ZOHO_DOCS
+    / "mcp"
+    / "proposals"
+    / "2026-08-14"
+    / "sylvara-free-test-crm-mcp-allowlist.md"
+)
+CRM_TOOL_MANUAL_ACTION_ROWS_SHA256 = (
+    "ad327f3e1ab8fee076ad9e2f5481427fa222673ee0a4e4890476251d00c498d1"
+)
 
 EXPECTED_COUNTS = {
     "billing-audit": (32, 32, 0),
@@ -381,6 +398,58 @@ class ZohoInventoryTests(unittest.TestCase):
                 host = (urlparse(url).hostname or "").lower()
                 with self.subTest(path=path, url=url):
                     self.assertIn(host, OFFICIAL_DOCUMENTATION_HOSTS)
+
+    def test_crm_tool_manual_and_free_test_allowlist_are_complete(self) -> None:
+        catalog = CRM_TOOL_MANUAL.read_text(encoding="utf-8")
+        rows = re.findall(
+            r"^\*\*([A-Za-z0-9_-]+)\*\*\s+(.+)$",
+            catalog,
+            flags=re.MULTILINE,
+        )
+        names = {name for name, _ in rows}
+
+        self.assertEqual(1291, len(rows))
+        self.assertEqual(1291, len(names))
+        self.assertTrue(all(description.strip() for _, description in rows))
+        normalized_rows = "\n".join(
+            line
+            for line in catalog.splitlines()
+            if re.match(r"^\*\*[A-Za-z0-9_-]+\*\*\s+.", line)
+        ) + "\n"
+        self.assertEqual(
+            CRM_TOOL_MANUAL_ACTION_ROWS_SHA256,
+            hashlib.sha256(normalized_rows.encode("utf-8")).hexdigest(),
+        )
+
+        x_aliases = {name for name in names if name.startswith("x")}
+        self.assertEqual(80, len(x_aliases))
+        self.assertTrue(all(name[1:] in names for name in x_aliases))
+        self.assertIn("getUnassignedUsers", names)
+        self.assertIn("getUnAssignedUsers", names)
+        self.assertIn("Associated Users' Count", catalog)
+
+        required_catalog_actions = {
+            "postBlueprint",
+            "createBlueprintStates",
+            "createBlueprintTransitions",
+            "activateBlueprint",
+            "postWorkflowRule",
+            "createWorkflowTasks",
+            "createFieldUpdates",
+            "createFunctions",
+            "postAutomationFunctions",
+            "createCustomButton",
+            "getLeadConversionOptions",
+            "convertLead",
+            "createRecords",
+            "updateRecord",
+        }
+        self.assertTrue(required_catalog_actions.issubset(names))
+
+        allowlist = FREE_TEST_CRM_ALLOWLIST.read_text(encoding="utf-8")
+        for action in required_catalog_actions:
+            with self.subTest(action=action):
+                self.assertIn(f"`{action}`", allowlist)
 
 
 if __name__ == "__main__":
