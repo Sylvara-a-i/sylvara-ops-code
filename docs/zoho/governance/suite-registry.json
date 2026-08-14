@@ -1,6 +1,6 @@
 {
   "schema_version": 3,
-  "as_of": "2026-08-05",
+  "as_of": "2026-08-14",
   "path_base": "docs/zoho",
   "repository_status": "proposed-governance",
   "live_state": "partially-verified",
@@ -27,10 +27,18 @@
         "../../src/zoho-crm/reference/README.md",
         "../../src/zoho-crm/reference/modules.csv",
         "../../src/zoho-crm/reference/crm-field-dictionary.csv",
-        "../../src/zoho-crm/reference/lead-conversion-mapping.csv"
+        "../../src/zoho-crm/reference/lead-conversion-mapping.csv",
+        "../../src/zoho-crm/reference/snapshots/2026-08-14/README.md",
+        "../../src/zoho-crm/reference/snapshots/2026-08-14/modules.csv",
+        "../../src/zoho-crm/reference/snapshots/2026-08-14/crm-field-dictionary.csv",
+        "../../src/zoho-crm/reference/snapshots/2026-08-14/crm-picklist-options.csv",
+        "../../src/zoho-crm/reference/snapshots/2026-08-14/crm-layout-field-order.csv",
+        "../../src/zoho-crm/reference/snapshots/2026-08-14/lead-conversion-mapping.csv",
+        "../../src/zoho-crm/reference/snapshots/2026-08-14/free-test-form-field-map.csv",
+        "mcp/snapshots/effective/2026-08-14/free-test-crm-automation.md"
       ],
-      "mcp_observation": "crm-roles-refreshed-2026-08-05",
-      "effective_tenant_capability": "organization-identity-and-scoped-metadata-record-field-layout-picklist-read-write-verified-2026-08-05-conversion-mapping-and-direct-native-convert-write-unavailable"
+      "mcp_observation": "crm-roles-and-free-test-automation-refreshed-2026-08-14",
+      "effective_tenant_capability": "organization-metadata-field-layout-picklist-pipeline-workflow-blueprint-readback-and-bounded-workflow-blueprint-configuration-verified-2026-08-14-forms-and-module-conversion-map-write-unknown-native-conversion-manual"
     },
     {
       "id": "books",

@@ -29,8 +29,11 @@ The separate CRM refresh verified scoped metadata, record, workflow, and convers
 
 The proposed [Free-Test CRM MCP Allowlist](proposals/2026-08-14/sylvara-free-test-crm-mcp-allowlist.md) maps the smallest relevant subset to the Form 1 and Form 2 workflow. It remains design evidence until each current contract and effective permission is independently verified.
 
+The later [2026-08-14 effective snapshot](snapshots/effective/2026-08-14/free-test-crm-automation.md) records the active Form 1/Deal workflows and Deal delivery Blueprint observed after authorized configuration work. It also records the absence of Blueprint after-actions, incomplete transition requirements, manual Lead-conversion boundary, and Forms-readback gap. Effective evidence does not turn the broader Tool Manual catalog into an allowlist.
+
 - [Capability analysis and broader official-family crosswalk](snapshots/configured/2026-08-04/capability-catalog.md)
 - [Complete machine-readable configured-selection inventory](snapshots/configured/2026-08-04/sylvara-observed-tool-inventory.json)
+- [Free-Test CRM effective snapshot, 2026-08-14](snapshots/effective/2026-08-14/free-test-crm-automation.md)
 
 ## Tool Manual Snapshot
 

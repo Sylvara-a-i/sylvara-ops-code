@@ -8,7 +8,25 @@ A merged pull request is not a deployment. Record an entry only after an authori
 
 ## Current State
 
-The production configuration events recorded here are the 2026-08-05 Sylvara Zoho CRM schema/layout/address work and the same-day Zoho Books chart deployment, Schedule C hierarchy amendment, and final tax-preparer description correction. The CRM event changed scoped relationship-system metadata and migrated populated legacy address values; it did not deploy native Lead conversion or conversion automation. The Books events wrote chart metadata and active status only; no transaction record, journal, bank, clearing, tax-engine, or integration was written. Chart metadata can change historical report presentation even when transaction records remain unchanged.
+The production configuration events recorded here are the 2026-08-14 Free-Test CRM workflow and Blueprint work; the 2026-08-05 Sylvara Zoho CRM schema/layout/address work; and the same-day Zoho Books chart deployment, Schedule C hierarchy amendment, and final tax-preparer description correction. The Free-Test CRM event configured intake and Deal automation but did not automate native Lead conversion or prove Zoho Forms settings. The Books events wrote chart metadata and active status only; no transaction record, journal, bank, clearing, tax-engine, or integration was written. Chart metadata can change historical report presentation even when transaction records remain unchanged.
+
+## 2026-08-14 — Zoho CRM Free-Test Workflows And Deal Blueprint
+
+```text
+Date (UTC): 2026-08-14
+Environment class: production
+Change reference: draft pull request #22
+Immutable artifact reference: current sanitized schema fingerprints in src/zoho-crm/reference/snapshots/2026-08-14/README.md
+Approval reference: owner authorization retained in the private task record
+Operator role: separately scoped CRM automation roles with independent CRM Audit readback
+Pre-deployment state: exact organization identity and current workflow, Blueprint, module, field, layout, picklist, and pipeline metadata verified privately
+Action: configuration change; update and activate the Form 1 intake-review workflow; create and activate the Deal Form 2 submission, Deal control-initialization, and Deal limit-initialization workflows; and create and activate the Revenue Desk Free Test Delivery Blueprint
+Smoke-test result: blocked for a production-record runtime path; configuration readback succeeded, but no test Lead conversion or customer-record transition was executed
+Readback result: four active workflows and one active eight-state, twelve-transition Deal Blueprint observed; approved CRM destination fields are present, while the external Zoho Forms implementation remains unverified
+Rollback target: captured private prestate only; inactive drafts are explicitly excluded as rollback targets, and any deactivation or replacement requires fresh record-count, state-impact, and replacement readback approval
+Outcome: configuration present; acceptance remains partial because every Blueprint transition has no after-action and Stage can drift from Test Status
+Follow-up: decide and implement Stage/Test Status synchronization, complete transition validation coverage, verify Zoho Forms field links/order/settings, and keep native Lead conversion human-approved
+```
 
 ## 2026-08-05 — Zoho CRM Lead Schema, Layout, And Address Migration
 

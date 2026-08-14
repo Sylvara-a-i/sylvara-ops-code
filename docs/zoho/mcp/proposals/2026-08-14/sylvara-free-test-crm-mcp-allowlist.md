@@ -8,6 +8,8 @@
 - Catalog evidence: [Zoho CRM Tool Manual Catalog — 2026-08-14](../../reference/zoho-crm-tool-manual-catalog-2026-08-14.md)
 - Live deployment: **Not established by this document**
 
+Implementation note: a separate [effective snapshot](../../snapshots/effective/2026-08-14/free-test-crm-automation.md) records the current active workflows and Deal Blueprint. This proposal remains the design record; it is not retroactively relabeled as deployment evidence.
+
 This allowlist corrects an earlier inference from the configured Sylvara runtime subset. The current Tool Manual catalog contains CRM Blueprint, transition, function, custom-button, workflow, validation, conversion, record, and sandbox actions. Their absence from a connected server is an enablement gap, not proof that the catalog lacks them.
 
 Catalog membership still does not prove a complete current input contract, OAuth permission, effective tenant access, or authorization for a live write. Every selected operation remains subject to the [MCP Server Standard](../../server-standard.md).
@@ -149,7 +151,7 @@ Do not enable bulk deployment, sandbox deletion, or production deployment until 
 ## Safe Build Order
 
 1. Refresh Audit metadata and record the exact advertised contracts for every selected operation.
-2. Resolve the five unsafe Lead Conversion Mapping entries manually in CRM because no catalog action was captured for that configuration surface; read field metadata back afterward.
+2. Resolve the four unsafe Lead Conversion Mapping entries identified by the 2026-08-05 review manually in CRM because no catalog action was captured for that configuration surface; read field metadata back afterward. Current metadata shows those four mappings absent; do not invent a fifth.
 3. Create reusable tasks and field updates, then create the Form 1 intake workflow inactive and acceptance-test it.
 4. Build the Lead qualification Blueprint in draft, including mandatory fields, reviewer note, checklist, transition criteria, and post-actions; read every created object back before activation.
 5. Keep Lead conversion a named human approval gate. Test `convertLead` only on a disposable canary after duplicate-option review.

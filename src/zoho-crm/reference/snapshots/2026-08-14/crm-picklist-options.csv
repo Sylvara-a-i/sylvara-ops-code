@@ -1,0 +1,720 @@
+schema_version,snapshot_date,module_api_name,field_label,field_api_name,field_data_type,option_scope,display_value,actual_value,reference_value,option_sequence,sequence_variants,sequence_status,usage_status,default_status,colour_code,option_source,metadata_verification_status
+2,2026-08-14,Leads,After-Hours Audit Outcome,After_Hours_Audit_Outcome,picklist,module,-None-,-None-,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,After-Hours Audit Outcome,After_Hours_Audit_Outcome,picklist,module,Not Audited,Not Audited,,2,2,verified_field_metadata,used,unknown_not_exposed,#acacac,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,After-Hours Audit Outcome,After_Hours_Audit_Outcome,picklist,module,Voicemail / No Answer,Voicemail / No Answer,,3,3,verified_field_metadata,used,unknown_not_exposed,#eb4d4d,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,After-Hours Audit Outcome,After_Hours_Audit_Outcome,picklist,module,IVR,IVR,,4,4,verified_field_metadata,used,unknown_not_exposed,#f5c72f,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,After-Hours Audit Outcome,After_Hours_Audit_Outcome,picklist,module,Live Staff,Live Staff,,5,5,verified_field_metadata,used,unknown_not_exposed,#67c480,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,After-Hours Audit Outcome,After_Hours_Audit_Outcome,picklist,module,Answering Service,Answering Service,,6,6,verified_field_metadata,used,unknown_not_exposed,#5cb3fd,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,After-Hours Audit Outcome,After_Hours_Audit_Outcome,picklist,module,AI Receptionist,AI Receptionist,,7,7,verified_field_metadata,used,unknown_not_exposed,#5d4ffb,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,After-Hours Audit Outcome,After_Hours_Audit_Outcome,picklist,module,Mixed,Mixed,,8,8,verified_field_metadata,used,unknown_not_exposed,#f5c72f,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Commercial Fit,Budget_Fit,picklist,module,-None-,-None-,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Commercial Fit,Budget_Fit,picklist,module,Fit,Fit,,2,2,verified_field_metadata,used,unknown_not_exposed,#67c480,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Commercial Fit,Budget_Fit,picklist,module,Maybe,Maybe,,3,3,verified_field_metadata,used,unknown_not_exposed,#f5c72f,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Commercial Fit,Budget_Fit,picklist,module,Not Fit,Not Fit,,4,4,verified_field_metadata,used,unknown_not_exposed,#eb4d4d,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Commercial Fit,Budget_Fit,picklist,module,Unknown,Unknown,,5,5,verified_field_metadata,used,unknown_not_exposed,#acacac,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Contact Location Link,Contact_Location_Relationship,picklist,module,-None-,-None-,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Contact Location Link,Contact_Location_Relationship,picklist,module,At Target Location,At Target Location,,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Contact Location Link,Contact_Location_Relationship,picklist,module,Different Company Site,Different Company Site,,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Contact Location Link,Contact_Location_Relationship,picklist,module,Remote / No Fixed Office,Remote / No Fixed Office,,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Contact Location Link,Contact_Location_Relationship,picklist,module,Unknown,Unknown,,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Contact Verification,Contact_Verification_Status,picklist,module,-None-,-None-,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Contact Verification,Contact_Verification_Status,picklist,module,Verified Current,Verified Current,,2,2,verified_field_metadata,used,unknown_not_exposed,#67c480,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Contact Verification,Contact_Verification_Status,picklist,module,Likely Current,Likely Current,,3,3,verified_field_metadata,used,unknown_not_exposed,#f5c72f,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Contact Verification,Contact_Verification_Status,picklist,module,Unverified,Unverified,,4,4,verified_field_metadata,used,unknown_not_exposed,#acacac,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Contact Verification,Contact_Verification_Status,picklist,module,Conflicting,Conflicting,,5,5,verified_field_metadata,used,unknown_not_exposed,#eb4d4d,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Contact Verification,Contact_Verification_Status,picklist,module,Not Found,Not Found,,6,6,verified_field_metadata,used,unknown_not_exposed,#666666,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Coverage Needs,Coverage_Needs,multiselectpicklist,module,After-Hours,After-Hours,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Coverage Needs,Coverage_Needs,multiselectpicklist,module,Overflow,Overflow,,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Coverage Needs,Coverage_Needs,multiselectpicklist,module,Weekends,Weekends,,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Coverage Needs,Coverage_Needs,multiselectpicklist,module,Lunch / Breaks,Lunch / Breaks,,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Coverage Needs,Coverage_Needs,multiselectpicklist,module,Seasonal Peak,Seasonal Peak,,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Coverage Needs,Coverage_Needs,multiselectpicklist,module,Missed-Call Recovery,Missed-Call Recovery,,6,6,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Coverage Needs,Coverage_Needs,multiselectpicklist,module,Selected Call Types,Selected Call Types,,7,7,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Coverage Needs,Coverage_Needs,multiselectpicklist,module,Primary Reception Request,Primary Reception Request,,8,8,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Current Call Handling,Current_Call_Handling,picklist,module,-None-,-None-,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Current Call Handling,Current_Call_Handling,picklist,module,Office Staff / Dispatcher,Office Staff / Dispatcher,,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Current Call Handling,Current_Call_Handling,picklist,module,Owner / Technician Cell,Owner / Technician Cell,,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Current Call Handling,Current_Call_Handling,picklist,module,Voicemail,Voicemail,,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Current Call Handling,Current_Call_Handling,picklist,module,Phone Menu / IVR,Phone Menu / IVR,,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Current Call Handling,Current_Call_Handling,picklist,module,Human Answering Service,Human Answering Service,,6,6,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Current Call Handling,Current_Call_Handling,picklist,module,Existing AI Receptionist,Existing AI Receptionist,,7,7,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Current Call Handling,Current_Call_Handling,picklist,module,Mixed,Mixed,,8,8,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Current Call Handling,Current_Call_Handling,picklist,module,Unknown,Unknown,,9,9,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Decision Authority,Decision_Authority,picklist,module,-None-,-None-,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Decision Authority,Decision_Authority,picklist,module,Unknown,Unknown,,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Decision Authority,Decision_Authority,picklist,module,Influencer,Influencer,,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Decision Authority,Decision_Authority,picklist,module,Recommender,Recommender,,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Decision Authority,Decision_Authority,picklist,module,Joint Decision-Maker,Joint Decision-Maker,,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Decision Authority,Decision_Authority,picklist,module,Final Decision-Maker,Final Decision-Maker,,6,6,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Decision Authority,Decision_Authority,picklist,module,Authorized Signer,Authorized Signer,,7,7,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Decision Authority,Decision_Authority,picklist,module,Evaluator,Evaluator,,8,8,verified_field_metadata,unused,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Decision Authority,Decision_Authority,picklist,module,Final Decision Maker,Final Decision Maker,,9,9,verified_field_metadata,unused,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Decision Authority,Decision_Authority,picklist,module,Gatekeeper,Gatekeeper,,10,10,verified_field_metadata,unused,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Decision Authority,Decision_Authority,picklist,module,Strong Influencer,Strong Influencer,,11,11,verified_field_metadata,unused,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Decision-Maker Role,Decision_Maker_Role,picklist,module,-None-,-None-,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Decision-Maker Role,Decision_Maker_Role,picklist,module,Owner / Founder,Owner / Founder,,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Decision-Maker Role,Decision_Maker_Role,picklist,module,General Manager,General Manager,,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Decision-Maker Role,Decision_Maker_Role,picklist,module,Operations Manager,Operations Manager,,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Decision-Maker Role,Decision_Maker_Role,picklist,module,Office Manager,Office Manager,,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Decision-Maker Role,Decision_Maker_Role,picklist,module,Dispatch Manager,Dispatch Manager,,6,6,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Decision-Maker Role,Decision_Maker_Role,picklist,module,Other,Other,,7,7,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Decision-Maker Role,Decision_Maker_Role,picklist,module,CEO,CEO,,8,8,verified_field_metadata,unused,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Decision-Maker Role,Decision_Maker_Role,picklist,module,Founder,Founder,,9,9,verified_field_metadata,unused,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Decision-Maker Role,Decision_Maker_Role,picklist,module,Owner,Owner,,10,10,verified_field_metadata,unused,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Decision-Maker Role,Decision_Maker_Role,picklist,module,President,President,,11,11,verified_field_metadata,unused,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Decision-Maker Role,Decision_Maker_Role,picklist,module,Unknown,Unknown,,12,12,verified_field_metadata,unused,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Disqualification Reason,Disqualification_Reason,picklist,module,-None-,-None-,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Disqualification Reason,Disqualification_Reason,picklist,module,Commercial-Only Plumbing,Commercial-Only Plumbing,,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Disqualification Reason,Disqualification_Reason,picklist,module,Outside Target Market,Outside Target Market,,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Disqualification Reason,Disqualification_Reason,picklist,module,Poor Operational Fit,Poor Operational Fit,,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Disqualification Reason,Disqualification_Reason,picklist,module,No Scheduling Process,No Scheduling Process,,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Disqualification Reason,Disqualification_Reason,picklist,module,Integration Not Feasible,Integration Not Feasible,,6,6,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Disqualification Reason,Disqualification_Reason,picklist,module,Compliance or Risk,Compliance or Risk,,7,7,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Disqualification Reason,Disqualification_Reason,picklist,module,Invalid Business,Invalid Business,,8,8,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Disqualification Reason,Disqualification_Reason,picklist,module,Duplicate,Duplicate,,9,9,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Disqualification Reason,Disqualification_Reason,picklist,module,Other,Other,,10,10,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Enrich Status,Enrich_Status__s,picklist,module,Available,Available,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Enrich Status,Enrich_Status__s,picklist,module,Enriched,Enriched,,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Enrich Status,Enrich_Status__s,picklist,module,Data not found,Data not found,,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Entry Offer,Entry_Offer,picklist,module,-None-,-None-,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Entry Offer,Entry_Offer,picklist,module,Free 7-Day Missed-Call,Free 7-Day Missed-Call,,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Entry Offer,Entry_Offer,picklist,module,Paid Pilot,Paid Pilot,,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Entry Offer,Entry_Offer,picklist,module,Direct Subscription,Direct Subscription,,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,ICP Fit,ICP_Fit,picklist,module,-None-,-None-,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,ICP Fit,ICP_Fit,picklist,module,A - Strong Fit,A - Strong Fit,,2,2,verified_field_metadata,used,unknown_not_exposed,#67c480,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,ICP Fit,ICP_Fit,picklist,module,B - Good Fit,B - Good Fit,,3,3,verified_field_metadata,used,unknown_not_exposed,#67c480,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,ICP Fit,ICP_Fit,picklist,module,C - Possible Fit,C - Possible Fit,,4,4,verified_field_metadata,used,unknown_not_exposed,#f5c72f,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,ICP Fit,ICP_Fit,picklist,module,Not Current Fit,Not Current Fit,,5,5,verified_field_metadata,used,unknown_not_exposed,#eb4d4d,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,ICP Fit,ICP_Fit,picklist,module,Unverified,Unverified,,6,6,verified_field_metadata,used,unknown_not_exposed,#acacac,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Industry,Industry,picklist,module,-None-,-None-,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Industry,Industry,picklist,module,Agriculture,Agriculture,,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Industry,Industry,picklist,module,Automotive,Automotive,,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Industry,Industry,picklist,module,Commercial-Only Plumbing,Commercial-Only Plumbing,,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Industry,Industry,picklist,module,Construction,Construction,,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Industry,Industry,picklist,module,Consumer Goods,Consumer Goods,,6,6,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Industry,Industry,picklist,module,Education,Education,,7,7,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Industry,Industry,picklist,module,Energy,Energy,,8,8,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Industry,Industry,picklist,module,Entertainment,Entertainment,,9,9,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Industry,Industry,picklist,module,Financial Services,Financial Services,,10,10,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Industry,Industry,picklist,module,Government,Government,,11,11,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Industry,Industry,picklist,module,Healthcare,Healthcare,,12,12,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Industry,Industry,picklist,module,Hospitality,Hospitality,,13,13,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Industry,Industry,picklist,module,Insurance,Insurance,,14,14,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Industry,Industry,picklist,module,IT and Software,IT and Software,,15,15,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Industry,Industry,picklist,module,Legal Services,Legal Services,,16,16,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Industry,Industry,picklist,module,Manufacturing,Manufacturing,,17,17,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Industry,Industry,picklist,module,Mixed Plumbing,Mixed Plumbing,,18,18,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Industry,Industry,picklist,module,Non-Profit,Non-Profit,,19,19,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Industry,Industry,picklist,module,Other Trade,Other Trade,,20,20,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Industry,Industry,picklist,module,Professional Services,Professional Services,,21,21,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Industry,Industry,picklist,module,Real Estate,Real Estate,,22,22,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Industry,Industry,picklist,module,Residential Plumbing,Residential Plumbing,,23,23,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Industry,Industry,picklist,module,Retail,Retail,,24,24,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Industry,Industry,picklist,module,Technology,Technology,,25,25,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Industry,Industry,picklist,module,Telecommunications,Telecommunications,,26,26,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Industry,Industry,picklist,module,Transportation And Logistics,Transportation And Logistics,,27,27,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Industry,Industry,picklist,module,Travel And Tourism,Travel and Tourism,,28,28,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Industry,Industry,picklist,module,Unknown,Unknown,,29,29,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Integration Readiness,Integration_Readiness,picklist,module,-None-,-None-,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Integration Readiness,Integration_Readiness,picklist,module,Ready to Connect,Ready to Connect,,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Integration Readiness,Integration_Readiness,picklist,module,Willing - Needs Review,Willing - Needs Review,,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Integration Readiness,Integration_Readiness,picklist,module,Unknown,Unknown,,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Integration Readiness,Integration_Readiness,picklist,module,Unwilling,Unwilling,,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Integration Readiness,Integration_Readiness,picklist,module,No Structured System,No Structured System,,6,6,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Last Outreach Channel,Last_Outreach_Channel,picklist,module,-None-,-None-,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Last Outreach Channel,Last_Outreach_Channel,picklist,module,Advertising,Advertising,,2,2,verified_field_metadata,unused,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Last Outreach Channel,Last_Outreach_Channel,picklist,module,Cold Call,Cold Call,,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Last Outreach Channel,Last_Outreach_Channel,picklist,module,Email Campaign,Email Campaign,,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Last Outreach Channel,Last_Outreach_Channel,picklist,module,Event,Event,,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Last Outreach Channel,Last_Outreach_Channel,picklist,module,Facebook,Facebook,,6,6,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Last Outreach Channel,Last_Outreach_Channel,picklist,module,Google Ads,Google Ads,,7,7,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Last Outreach Channel,Last_Outreach_Channel,picklist,module,In-Person Walk In,Inbound,,8,8,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Last Outreach Channel,Last_Outreach_Channel,picklist,module,Instagram,Instagram,,9,9,verified_field_metadata,unused,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Last Outreach Channel,Last_Outreach_Channel,picklist,module,LinkedIn Ads,LinkedIn Ads,,10,10,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Last Outreach Channel,Last_Outreach_Channel,picklist,module,LinkedIn Outreach,LinkedIn,,11,11,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Last Outreach Channel,Last_Outreach_Channel,picklist,module,Organic,Organic,,12,12,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Last Outreach Channel,Last_Outreach_Channel,picklist,module,Referral,Referral,,13,13,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Last Outreach Channel,Last_Outreach_Channel,picklist,module,Twitter,Twitter,,14,14,verified_field_metadata,unused,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Last Outreach Channel,Last_Outreach_Channel,picklist,module,Website,Website,,15,15,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Last Outreach Channel,Last_Outreach_Channel,picklist,module,Word Of Mouth,Word Of Mouth,,16,16,verified_field_metadata,unused,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Last Outreach Channel,Last_Outreach_Channel,picklist,module,YouTube,YouTube,,17,17,verified_field_metadata,unused,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Lead Source,Lead_Source,picklist,module,-None-,-None-,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Lead Source,Lead_Source,picklist,module,Advertising,Advertising,,2,2,verified_field_metadata,unused,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Lead Source,Lead_Source,picklist,module,Cold Call,Cold Call,,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Lead Source,Lead_Source,picklist,module,Email Campaign,Email Campaign,,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Lead Source,Lead_Source,picklist,module,Event,Event,,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Lead Source,Lead_Source,picklist,module,Facebook,Facebook,,6,6,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Lead Source,Lead_Source,picklist,module,Google Ads,Google Ads,,7,7,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Lead Source,Lead_Source,picklist,module,In-Person Walk In,Inbound,,8,8,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Lead Source,Lead_Source,picklist,module,Instagram,Instagram,,9,9,verified_field_metadata,unused,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Lead Source,Lead_Source,picklist,module,LinkedIn Ads,LinkedIn Ads,,10,10,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Lead Source,Lead_Source,picklist,module,LinkedIn Outreach,LinkedIn,,11,11,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Lead Source,Lead_Source,picklist,module,Organic,Organic,,12,12,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Lead Source,Lead_Source,picklist,module,Referral,Referral,,13,13,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Lead Source,Lead_Source,picklist,module,Twitter,Twitter,,14,14,verified_field_metadata,unused,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Lead Source,Lead_Source,picklist,module,Website,Website,,15,15,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Lead Source,Lead_Source,picklist,module,Word Of Mouth,Word Of Mouth,,16,16,verified_field_metadata,unused,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Lead Source,Lead_Source,picklist,module,YouTube,YouTube,,17,17,verified_field_metadata,unused,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Lead Status,Lead_Status,picklist,module,-None-,-None-,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Lead Status,Lead_Status,picklist,module,Attempted Contact,Attempted to Contact,,2,2,verified_field_metadata,used,unknown_not_exposed,#ced9ff,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Lead Status,Lead_Status,picklist,module,Free Test Requested,Free Test Requested,,3,3,verified_field_metadata,used,unknown_not_exposed,#14B8A6,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Lead Status,Lead_Status,picklist,module,Free Test Setup Scheduled,Free Test Setup Scheduled,,4,4,verified_field_metadata,used,unknown_not_exposed,#3B82F6,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Lead Status,Lead_Status,picklist,module,Contacted,Contacted,,5,5,verified_field_metadata,used,unknown_not_exposed,#c4f0b3,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Lead Status,Lead_Status,picklist,module,Qualified for Free Test,Qualified for Free Test,,6,6,verified_field_metadata,used,unknown_not_exposed,#22C55E,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Lead Status,Lead_Status,picklist,module,New,Not Contacted,,7,7,verified_field_metadata,used,unknown_not_exposed,#eb4d4d,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Lead Status,Lead_Status,picklist,module,Not Qualified,Not Qualified,,8,8,verified_field_metadata,used,unknown_not_exposed,#4137be,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Lead Status,Lead_Status,picklist,module,Converted,Converted,,9,9,verified_field_metadata,used,unknown_not_exposed,#fea36a,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Lead Status,Lead_Status,picklist,module,Contact In Future,Contact in Future,,10,10,verified_field_metadata,unused,unknown_not_exposed,#5d4ffb,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Lead Status,Lead_Status,picklist,module,Lost Lead,Lost Lead,,11,11,verified_field_metadata,unused,unknown_not_exposed,#fd8989,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Lead Status,Lead_Status,picklist,module,Pre-Qualified,Pre-Qualified,,12,12,verified_field_metadata,unused,unknown_not_exposed,#5d4ffb,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Lead Status,Lead_Status,picklist,module,Unqualified,Junk Lead,,13,13,verified_field_metadata,unused,unknown_not_exposed,#f27e22,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Lifecycle Status,Lifecycle_Status,picklist,module,-None-,-None-,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Lifecycle Status,Lifecycle_Status,picklist,module,New / Unresearched,New / Unresearched,,2,2,verified_field_metadata,used,unknown_not_exposed,#acacac,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Lifecycle Status,Lifecycle_Status,picklist,module,Researching,Researching,,3,3,verified_field_metadata,used,unknown_not_exposed,#5d4ffb,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Lifecycle Status,Lifecycle_Status,picklist,module,ICP Review,ICP Review,,4,4,verified_field_metadata,used,unknown_not_exposed,#f5c72f,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Lifecycle Status,Lifecycle_Status,picklist,module,Ready for Outreach,Ready for Outreach,,5,5,verified_field_metadata,used,unknown_not_exposed,#67c480,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Lifecycle Status,Lifecycle_Status,picklist,module,Outreach In Progress,Outreach In Progress,,6,6,verified_field_metadata,used,unknown_not_exposed,#5d4ffb,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Lifecycle Status,Lifecycle_Status,picklist,module,Discovery Scheduled,Discovery Scheduled,,7,7,verified_field_metadata,used,unknown_not_exposed,#67c480,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Lifecycle Status,Lifecycle_Status,picklist,module,Nurture,Nurture,,8,8,verified_field_metadata,used,unknown_not_exposed,#f5c72f,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Lifecycle Status,Lifecycle_Status,picklist,module,Disqualified,Disqualified,,9,9,verified_field_metadata,used,unknown_not_exposed,#eb4d4d,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Lifecycle Status,Lifecycle_Status,picklist,module,Converted,Converted,,10,10,verified_field_metadata,used,unknown_not_exposed,#67c480,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Location Type,Location_Type,picklist,module,-None-,-None-,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Location Type,Location_Type,picklist,module,Headquarters,Headquarters,,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Location Type,Location_Type,picklist,module,Branch,Branch,,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Location Type,Location_Type,picklist,module,Office,Office,,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Location Type,Location_Type,picklist,module,Service Area Only,Service Area Only,,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Location Type,Location_Type,picklist,module,Sole Location,Sole Location,,6,6,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Location Type,Location_Type,picklist,module,Unknown,Unknown,,7,7,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Next Action,Next_Action,picklist,module,-None-,-None-,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Next Action,Next_Action,picklist,module,Research Company,Research Company,,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Next Action,Next_Action,picklist,module,Find Decision Maker,Find Decision Maker,,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Next Action,Next_Action,picklist,module,Verify Contact Data,Verify Contact Data,,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Next Action,Next_Action,picklist,module,Verify Target Location,Verify Target Location,,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Next Action,Next_Action,picklist,module,Run After-Hours Audit,Run After-Hours Audit,,6,6,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Next Action,Next_Action,picklist,module,Call Decision Maker,Call Decision Maker,,7,7,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Next Action,Next_Action,picklist,module,Send Follow-Up,Send Follow-Up,,8,8,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Next Action,Next_Action,picklist,module,Schedule Discovery,Schedule Discovery,,9,9,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Next Action,Next_Action,picklist,module,Convert to Deal,Convert to Deal,,10,10,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Next Action,Next_Action,picklist,module,Nurture,Nurture,,11,11,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Next Action,Next_Action,picklist,module,Close Out,Close Out,,12,12,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Nurture Reason,Nurture_Reason,picklist,module,-None-,-None-,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Nurture Reason,Nurture_Reason,picklist,module,Timing,Timing,,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Nurture Reason,Nurture_Reason,picklist,module,Budget,Budget,,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Nurture Reason,Nurture_Reason,picklist,module,Low Call Volume,Low Call Volume,,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Nurture Reason,Nurture_Reason,picklist,module,No Coverage Gap,No Coverage Gap,,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Nurture Reason,Nurture_Reason,picklist,module,No Decision-Maker Access,No Decision-Maker Access,,6,6,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Nurture Reason,Nurture_Reason,picklist,module,Existing Contract,Existing Contract,,7,7,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Nurture Reason,Nurture_Reason,picklist,module,Not Ready to Change,Not Ready to Change,,8,8,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Nurture Reason,Nurture_Reason,picklist,module,Other,Other,,9,9,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Pain Signals,Pain_Signals,multiselectpicklist,module,Calls to Voicemail,Calls to Voicemail,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Pain Signals,Pain_Signals,multiselectpicklist,module,Long Ring / No Answer,Long Ring / No Answer,,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Pain Signals,Pain_Signals,multiselectpicklist,module,Owner / Tech Interrupted,Owner / Tech Interrupted,,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Pain Signals,Pain_Signals,multiselectpicklist,module,Office / Dispatch Strain,Office / Dispatch Strain,,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Pain Signals,Pain_Signals,multiselectpicklist,module,After-Hours Leads Lost,After-Hours Leads Lost,,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Pain Signals,Pain_Signals,multiselectpicklist,module,Seasonal Overflow,Seasonal Overflow,,6,6,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Pain Signals,Pain_Signals,multiselectpicklist,module,Costly Answering Service,Costly Answering Service,,7,7,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Pain Signals,Pain_Signals,multiselectpicklist,module,Poor IVR,Poor IVR,,8,8,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Pain Signals,Pain_Signals,multiselectpicklist,module,Marketing Spend Wasted,Marketing Spend Wasted,,9,9,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Pain Signals,Pain_Signals,multiselectpicklist,module,No Evident Gap,No Evident Gap,,10,10,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Communication Preference,Preferred_Communication_Method,picklist,module,-None-,-None-,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Communication Preference,Preferred_Communication_Method,picklist,module,Call,Call,,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Communication Preference,Preferred_Communication_Method,picklist,module,Email,Email,,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Communication Preference,Preferred_Communication_Method,picklist,module,Text,Text,,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Primary Operating System,Primary_Operating_System,picklist,module,-None-,-None-,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Primary Operating System,Primary_Operating_System,picklist,module,ServiceTitan,ServiceTitan,,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Primary Operating System,Primary_Operating_System,picklist,module,Housecall Pro,Housecall Pro,,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Primary Operating System,Primary_Operating_System,picklist,module,Jobber,Jobber,,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Primary Operating System,Primary_Operating_System,picklist,module,FieldEdge,FieldEdge,,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Primary Operating System,Primary_Operating_System,picklist,module,Other Structured System,Other Structured System,,6,6,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Primary Operating System,Primary_Operating_System,picklist,module,Spreadsheet or Paper,Spreadsheet or Paper,,7,7,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Primary Operating System,Primary_Operating_System,picklist,module,None,None,,8,8,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Primary Operating System,Primary_Operating_System,picklist,module,Unknown,Unknown,,9,9,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Rating,Rating,picklist,module,-None-,-None-,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Rating,Rating,picklist,module,Acquired,Acquired,,2,2,verified_field_metadata,unused,unknown_not_exposed,#c9651a,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Rating,Rating,picklist,module,Active,Active,,3,3,verified_field_metadata,unused,unknown_not_exposed,#f27e22,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Rating,Rating,picklist,module,High Priority,Hot,,4,4,verified_field_metadata,used,unknown_not_exposed,#EA580C,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Rating,Rating,picklist,module,Low Priority,Cold,,5,5,verified_field_metadata,used,unknown_not_exposed,#6B7280,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Rating,Rating,picklist,module,Market Failed,Market Failed,,6,6,verified_field_metadata,unused,unknown_not_exposed,#666666,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Rating,Rating,picklist,module,Project Cancelled,Project Cancelled,,7,7,verified_field_metadata,unused,unknown_not_exposed,#e972fd,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Rating,Rating,picklist,module,Shut Down,ShutDown,,8,8,verified_field_metadata,unused,unknown_not_exposed,#177ba0,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Rating,Rating,picklist,module,Standard Priority,Warm,,9,9,verified_field_metadata,used,unknown_not_exposed,#2563EB,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Record Status,Record_Status__s,picklist,module,Trash,Trash,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Record Status,Record_Status__s,picklist,module,Available,Available,,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Record Status,Record_Status__s,picklist,module,Draft,Draft,,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Requested Test Route,Requested_Test_Route,picklist,module,-None-,-None-,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Requested Test Route,Requested_Test_Route,picklist,module,After Hours Only,After Hours Only,,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Requested Test Route,Requested_Test_Route,picklist,module,No Answer / Overflow Only,No Answer / Overflow Only,,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Requested Test Route,Requested_Test_Route,picklist,module,After Hours + Overflow,After Hours + Overflow,,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Salutation,Salutation,picklist,module,-None-,-None-,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Salutation,Salutation,picklist,module,Mr.,Mr.,,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Salutation,Salutation,picklist,module,Mrs.,Mrs.,,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Salutation,Salutation,picklist,module,Ms.,Ms.,,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Salutation,Salutation,picklist,module,Dr.,Dr.,,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Salutation,Salutation,picklist,module,Prof.,Prof.,,6,6,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Scheduling Process,Scheduling_Process,picklist,module,-None-,-None-,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Scheduling Process,Scheduling_Process,picklist,module,Field-Service Platform,Field-Service Platform,,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Scheduling Process,Scheduling_Process,picklist,module,Shared Calendar,Shared Calendar,,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Scheduling Process,Scheduling_Process,picklist,module,Manual but Defined,Manual but Defined,,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Scheduling Process,Scheduling_Process,picklist,module,Ad Hoc,Ad Hoc,,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Scheduling Process,Scheduling_Process,picklist,module,None,None,,6,6,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Scheduling Process,Scheduling_Process,picklist,module,Unknown,Unknown,,7,7,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Submission Channel,Submission_Channel,picklist,module,-None-,-None-,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Submission Channel,Submission_Channel,picklist,module,Website,Website,,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Submission Channel,Submission_Channel,picklist,module,In Person,In Person,,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Target Selection Basis,Target_Location_Selection_Basis,picklist,module,-None-,-None-,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Target Selection Basis,Target_Location_Selection_Basis,picklist,module,Decision-Maker Office,Decision-Maker Office,,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Target Selection Basis,Target_Location_Selection_Basis,picklist,module,Nearest to Target ZIP,Nearest to Target ZIP,,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Target Selection Basis,Target_Location_Selection_Basis,picklist,module,Headquarters / Sole,Headquarters / Sole,,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Target Selection Basis,Target_Location_Selection_Basis,picklist,module,Manual Exception,Manual Exception,,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Target Selection Basis,Target_Location_Selection_Basis,picklist,module,Unknown,Unknown,,6,6,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Target Market Fit,Target_Market_Fit,picklist,module,-None-,-None-,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Target Market Fit,Target_Market_Fit,picklist,module,Strong Fit,Strong Fit,,2,2,verified_field_metadata,used,unknown_not_exposed,#67c480,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Target Market Fit,Target_Market_Fit,picklist,module,Possible Fit,Possible Fit,,3,3,verified_field_metadata,used,unknown_not_exposed,#f5c72f,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Target Market Fit,Target_Market_Fit,picklist,module,Not Current Fit,Not Current Fit,,4,4,verified_field_metadata,used,unknown_not_exposed,#eb4d4d,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Target Market Fit,Target_Market_Fit,picklist,module,Unverified,Unverified,,5,5,verified_field_metadata,used,unknown_not_exposed,#acacac,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Unsubscribed Mode,Unsubscribed_Mode,picklist,module,Consent form,Consent form,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Unsubscribed Mode,Unsubscribed_Mode,picklist,module,Manual,Manual,,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Unsubscribed Mode,Unsubscribed_Mode,picklist,module,Unsubscribe link,Unsubscribe link,,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Leads,Unsubscribed Mode,Unsubscribed_Mode,picklist,module,Zoho campaigns,Zoho campaigns,,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Contact Type,Contact_Type,picklist,module,-None-,-None-,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Contact Type,Contact_Type,picklist,module,Customer – Decision Maker,Customer – Decision Maker,,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Contact Type,Contact_Type,picklist,module,Customer – User,Customer – User,,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Contact Type,Contact_Type,picklist,module,Internal (Sylvara),Internal (Sylvara),,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Contact Type,Contact_Type,picklist,module,Vendor Contact,Vendor Contact,,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Contact Verification,Contact_Verification_Status,picklist,module,-None-,-None-,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Contact Verification,Contact_Verification_Status,picklist,module,Unverified,Unverified,,2,2,verified_field_metadata,used,unknown_not_exposed,#64748B,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Contact Verification,Contact_Verification_Status,picklist,module,Email Verified,Email Verified,,3,3,verified_field_metadata,used,unknown_not_exposed,#3B82F6,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Contact Verification,Contact_Verification_Status,picklist,module,Email and Mobile Verified,Email and Mobile Verified,,4,4,verified_field_metadata,used,unknown_not_exposed,#16A34A,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Contact Verification,Contact_Verification_Status,picklist,module,Verification Failed,Verification Failed,,5,5,verified_field_metadata,used,unknown_not_exposed,#EF4444,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Contact Verification,Contact_Verification_Status,picklist,module,Expired,Expired,,6,6,verified_field_metadata,used,unknown_not_exposed,#F59E0B,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Contact Verification,Contact_Verification_Status,picklist,module,Revoked,Revoked,,7,7,verified_field_metadata,used,unknown_not_exposed,#DC2626,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Decision Authority,Decision_Authority,picklist,module,-None-,-None-,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Decision Authority,Decision_Authority,picklist,module,Unknown,Unknown,,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Decision Authority,Decision_Authority,picklist,module,Influencer,Influencer,,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Decision Authority,Decision_Authority,picklist,module,Recommender,Recommender,,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Decision Authority,Decision_Authority,picklist,module,Joint Decision-Maker,Joint Decision-Maker,,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Decision Authority,Decision_Authority,picklist,module,Final Decision-Maker,Final Decision-Maker,,6,6,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Decision Authority,Decision_Authority,picklist,module,Authorized Signer,Authorized Signer,,7,7,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Decision-Maker Role,Decision_Maker_Role,picklist,module,-None-,-None-,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Decision-Maker Role,Decision_Maker_Role,picklist,module,Owner / Founder,Owner / Founder,,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Decision-Maker Role,Decision_Maker_Role,picklist,module,General Manager,General Manager,,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Decision-Maker Role,Decision_Maker_Role,picklist,module,Operations Manager,Operations Manager,,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Decision-Maker Role,Decision_Maker_Role,picklist,module,Office Manager,Office Manager,,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Decision-Maker Role,Decision_Maker_Role,picklist,module,Dispatch Manager,Dispatch Manager,,6,6,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Decision-Maker Role,Decision_Maker_Role,picklist,module,Other,Other,,7,7,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Enrich Status,Enrich_Status__s,picklist,module,Available,Available,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Enrich Status,Enrich_Status__s,picklist,module,Enriched,Enriched,,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Enrich Status,Enrich_Status__s,picklist,module,Data not found,Data not found,,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Lead Source,Lead_Source,picklist,module,-None-,-None-,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Lead Source,Lead_Source,picklist,module,Advertising,Advertising,,2,2,verified_field_metadata,unused,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Lead Source,Lead_Source,picklist,module,Cold Call,Cold Call,,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Lead Source,Lead_Source,picklist,module,Email Campaign,Email Campaign,,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Lead Source,Lead_Source,picklist,module,Event,Event,,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Lead Source,Lead_Source,picklist,module,Facebook,Facebook,,6,6,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Lead Source,Lead_Source,picklist,module,Google Ads,Google Ads,,7,7,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Lead Source,Lead_Source,picklist,module,In-Person Walk In,Inbound,,8,8,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Lead Source,Lead_Source,picklist,module,Instagram,Instagram,,9,9,verified_field_metadata,unused,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Lead Source,Lead_Source,picklist,module,LinkedIn Ads,LinkedIn Ads,,10,10,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Lead Source,Lead_Source,picklist,module,LinkedIn Outreach,LinkedIn,,11,11,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Lead Source,Lead_Source,picklist,module,Organic,Organic,,12,12,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Lead Source,Lead_Source,picklist,module,Referral,Referral,,13,13,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Lead Source,Lead_Source,picklist,module,Twitter,Twitter,,14,14,verified_field_metadata,unused,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Lead Source,Lead_Source,picklist,module,Website,Website,,15,15,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Lead Source,Lead_Source,picklist,module,Word Of Mouth,Word Of Mouth,,16,16,verified_field_metadata,unused,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Lead Source,Lead_Source,picklist,module,YouTube,YouTube,,17,17,verified_field_metadata,unused,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Portal Role,Portal_Role,picklist,module,-None-,-None-,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Portal Role,Portal_Role,picklist,module,Admin,Admin,,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Portal Role,Portal_Role,picklist,module,Billing,Billing,,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Portal Role,Portal_Role,picklist,module,Operations,Operations,,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Portal Role,Portal_Role,picklist,module,Read-Only,Read-Only,,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Portal Role,Portal_Role,picklist,module,Standard,Standard,,6,6,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Preferred Communication Methods,Preferred_Communication_Methods,multiselectpicklist,module,Email,Email,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Preferred Communication Methods,Preferred_Communication_Methods,multiselectpicklist,module,Phone,Phone,,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Preferred Communication Methods,Preferred_Communication_Methods,multiselectpicklist,module,Text,Text,,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Preferred Communication Methods,Preferred_Communication_Methods,multiselectpicklist,module,Video Call,Video Call,,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Priority,Priority,picklist,module,-None-,-None-,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Priority,Priority,picklist,module,Low,Low,,2,2,verified_field_metadata,used,unknown_not_exposed,#67c480,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Priority,Priority,picklist,module,Medium,Medium,,3,3,verified_field_metadata,used,unknown_not_exposed,#f27e22,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Priority,Priority,picklist,module,High,High,,4,4,verified_field_metadata,used,unknown_not_exposed,#eb4d4d,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Record Status,Record_Status__s,picklist,module,Trash,Trash,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Record Status,Record_Status__s,picklist,module,Available,Available,,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Record Status,Record_Status__s,picklist,module,Draft,Draft,,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Salutation,Salutation,picklist,module,-None-,-None-,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Salutation,Salutation,picklist,module,Capt.,Capt.,,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Salutation,Salutation,picklist,module,Dr.,Dr.,,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Salutation,Salutation,picklist,module,Hon.,Hon.,,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Salutation,Salutation,picklist,module,Mr.,Mr.,,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Salutation,Salutation,picklist,module,Mrs.,Mrs.,,6,6,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Salutation,Salutation,picklist,module,Ms.,Ms.,,7,7,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Salutation,Salutation,picklist,module,Prof.,Prof.,,8,8,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Salutation,Salutation,picklist,module,Rev.,Rev.,,9,9,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Salutation,Salutation,picklist,module,Sir,Sir,,10,10,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Unsubscribed Mode,Unsubscribed_Mode,picklist,module,Consent form,Consent form,,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Unsubscribed Mode,Unsubscribed_Mode,picklist,module,Manual,Manual,,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Unsubscribed Mode,Unsubscribed_Mode,picklist,module,Unsubscribe link,Unsubscribe link,,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Contacts,Unsubscribed Mode,Unsubscribed_Mode,picklist,module,Zoho campaigns,Zoho campaigns,,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Account Type,Account_Type,picklist,module,-None-,-None-,-None-,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Account Type,Account_Type,picklist,module,Customer,Customer,Customer,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Account Type,Account_Type,picklist,module,Lead,Lead,Lead,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Account Type,Account_Type,picklist,module,Partner,Partner,Partner,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Account Type,Account_Type,picklist,module,Vendor,Vendor,Vendor,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Active Services,Active_Services,multiselectpicklist,module,AI Job Applier,AI Job Applier,AI Job Applier,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Active Services,Active_Services,multiselectpicklist,module,AI Receptionist,AI Receptionist,AI Receptionist,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Active Services,Active_Services,multiselectpicklist,module,Custom App Development,Custom App Development,Custom App Development,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Active Services,Active_Services,multiselectpicklist,module,Customer Support AI,Customer Support AI,Customer Support AI,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Active Services,Active_Services,multiselectpicklist,module,Lead Generation,Lead Generation,Lead Generation,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Enrich Status,Enrich_Status__s,picklist,module,Available,Available,Available,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Enrich Status,Enrich_Status__s,picklist,module,Enriched,Enriched,Enriched,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Enrich Status,Enrich_Status__s,picklist,module,Data not found,Data not found,Data not found,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Industry,Industry,picklist,module,-None-,-None-,-None-,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Industry,Industry,picklist,module,Agriculture,Agriculture,Agriculture,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Industry,Industry,picklist,module,Automotive,Automotive,Automotive,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Industry,Industry,picklist,module,Commercial-Only Plumbing,Commercial-Only Plumbing,Commercial-Only Plumbing,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Industry,Industry,picklist,module,Construction,Construction,Construction,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Industry,Industry,picklist,module,Consumer Goods,Consumer Goods,Consumer Goods,6,6,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Industry,Industry,picklist,module,Education,Education,Education,7,7,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Industry,Industry,picklist,module,Energy,Energy,Energy,8,8,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Industry,Industry,picklist,module,Entertainment,Entertainment,Entertainment,9,9,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Industry,Industry,picklist,module,Financial Services,Financial Services,Financial Services,10,10,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Industry,Industry,picklist,module,Government,Government,Government,11,11,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Industry,Industry,picklist,module,Healthcare,Healthcare,Healthcare,12,12,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Industry,Industry,picklist,module,Hospitality,Hospitality,Hospitality,13,13,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Industry,Industry,picklist,module,Insurance,Insurance,Insurance,14,14,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Industry,Industry,picklist,module,IT and Software,IT and Software,IT and Software,15,15,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Industry,Industry,picklist,module,Legal Services,Legal Services,Legal Services,16,16,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Industry,Industry,picklist,module,Manufacturing,Manufacturing,Manufacturing,17,17,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Industry,Industry,picklist,module,Mixed Plumbing,Mixed Plumbing,Mixed Plumbing,18,18,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Industry,Industry,picklist,module,Non-Profit,Non-Profit,Non-Profit,19,19,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Industry,Industry,picklist,module,Other Trade,Other Trade,Other Trade,20,20,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Industry,Industry,picklist,module,Professional Services,Professional Services,Professional Services,21,21,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Industry,Industry,picklist,module,Real Estate,Real Estate,Real Estate,22,22,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Industry,Industry,picklist,module,Residential Plumbing,Residential Plumbing,Residential Plumbing,23,23,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Industry,Industry,picklist,module,Retail,Retail,Retail,24,24,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Industry,Industry,picklist,module,Technology,Technology,Technology,25,25,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Industry,Industry,picklist,module,Telecommunications,Telecommunications,Telecommunications,26,26,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Industry,Industry,picklist,module,Transportation And Logistics,Transportation And Logistics,Transportation And Logistics,27,27,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Industry,Industry,picklist,module,Travel And Tourism,Travel and Tourism,Travel And Tourism,28,28,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Industry,Industry,picklist,module,Unknown,Unknown,Unknown,29,29,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Onboarding Status,Onboarding_Status,picklist,module,-None-,-None-,-None-,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Onboarding Status,Onboarding_Status,picklist,module,Not Started,Not Started,Not Started,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Onboarding Status,Onboarding_Status,picklist,module,Submitted,Submitted,Submitted,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Ownership,Ownership,picklist,module,-None-,-None-,-None-,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Ownership,Ownership,picklist,module,Other,Other,Other,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Ownership,Ownership,picklist,module,Private,Private,Private,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Ownership,Ownership,picklist,module,Public,Public,Public,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Ownership,Ownership,picklist,module,Subsidiary,Subsidiary,Subsidiary,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Rating,Rating,picklist,module,-None-,-None-,-None-,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Rating,Rating,picklist,module,Acquired,Acquired,Acquired,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Rating,Rating,picklist,module,Active,Active,Active,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Rating,Rating,picklist,module,Market Failed,Market Failed,Market Failed,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Rating,Rating,picklist,module,Project Cancelled,Project Cancelled,Project Cancelled,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Rating,Rating,picklist,module,Shut Down,ShutDown,Shut Down,6,6,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Record Status,Record_Status__s,picklist,module,Trash,Trash,Trash,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Record Status,Record_Status__s,picklist,module,Available,Available,Available,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Record Status,Record_Status__s,picklist,module,Draft,Draft,Draft,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Services Handled,Services_Handled,multiselectpicklist,layout_standard,Drain Cleaning,Drain Cleaning,Drain Cleaning,1,1,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Accounts,Services Handled,Services_Handled,multiselectpicklist,layout_standard,Sewer Service,Sewer Service,Sewer Service,2,2,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Accounts,Services Handled,Services_Handled,multiselectpicklist,layout_standard,Leak or Pipe Repair,Leak or Pipe Repair,Leak or Pipe Repair,3,3,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Accounts,Services Handled,Services_Handled,multiselectpicklist,layout_standard,Water Heaters,Water Heaters,Water Heaters,4,4,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Accounts,Services Handled,Services_Handled,multiselectpicklist,layout_standard,Fixtures & Faucets,Fixtures & Faucets,Fixtures & Faucets,5,5,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Accounts,Services Handled,Services_Handled,multiselectpicklist,layout_standard,Sump Pumps,Sump Pumps,Sump Pumps,6,6,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Accounts,Services Handled,Services_Handled,multiselectpicklist,layout_standard,Gas Line Service,Gas Line Service,Gas Line Service,7,7,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Accounts,Services Handled,Services_Handled,multiselectpicklist,layout_standard,Commercial Plumbing,Commercial Plumbing,Commercial Plumbing,8,8,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Accounts,Services Handled,Services_Handled,multiselectpicklist,layout_standard,Other,Other,Other,9,9,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Accounts,Lead Source,Source_Channel,picklist,module,-None-,-None-,-None-,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Lead Source,Source_Channel,picklist,module,Advertising,Advertising,Advertising,2,2,verified_field_metadata,unused,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Lead Source,Source_Channel,picklist,module,Cold Call,Cold Call,Cold Call,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Lead Source,Source_Channel,picklist,module,Email Campaign,Email Campaign,Email Campaign,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Lead Source,Source_Channel,picklist,module,Event,Event,Event,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Lead Source,Source_Channel,picklist,module,Facebook,Facebook,Facebook,6,6,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Lead Source,Source_Channel,picklist,module,Google Ads,Google Ads,Google Ads,7,7,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Lead Source,Source_Channel,picklist,module,In-Person Walk In,Inbound,In-Person Walk In,8,8,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Lead Source,Source_Channel,picklist,module,Instagram,Instagram,Instagram,9,9,verified_field_metadata,unused,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Lead Source,Source_Channel,picklist,module,LinkedIn Ads,LinkedIn Ads,LinkedIn Ads,10,10,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Lead Source,Source_Channel,picklist,module,LinkedIn Outreach,LinkedIn,LinkedIn Outreach,11,11,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Lead Source,Source_Channel,picklist,module,Organic,Organic,Organic,12,12,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Lead Source,Source_Channel,picklist,module,Referral,Referral,Referral,13,13,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Lead Source,Source_Channel,picklist,module,Twitter,Twitter,Twitter,14,14,verified_field_metadata,unused,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Lead Source,Source_Channel,picklist,module,Website,Website,Website,15,15,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Lead Source,Source_Channel,picklist,module,Word Of Mouth,Word Of Mouth,Word Of Mouth,16,16,verified_field_metadata,unused,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Lead Source,Source_Channel,picklist,module,YouTube,YouTube,YouTube,17,17,verified_field_metadata,unused,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Subscription Status,Subscription_Status,picklist,module,-None-,-None-,-None-,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Subscription Status,Subscription_Status,picklist,module,Active,Active,Active,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Subscription Status,Subscription_Status,picklist,module,Canceled,Canceled,Canceled,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Subscription Status,Subscription_Status,picklist,module,Expired,Expired,Expired,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Subscription Status,Subscription_Status,picklist,module,Past Due,Past Due,Past Due,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Subscription Status,Subscription_Status,picklist,module,Trial,Trial,Trial,6,6,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Vertical,Vertical,picklist,module,-None-,-None-,-None-,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Vertical,Vertical,picklist,module,Option 1,Option 1,Option 1,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Accounts,Vertical,Vertical,picklist,module,Option 2,Option 2,Option 2,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Approved Fallback Destination,Approved_Fallback_Destination,picklist,layout_standard,-None-,-None-,-None-,1,1,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Approved Fallback Destination,Approved_Fallback_Destination,picklist,layout_standard,Existing Office Line,Existing Office Line,Existing Office Line,2,2,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Approved Fallback Destination,Approved_Fallback_Destination,picklist,layout_standard,On-Call Mobile,On-Call Mobile,On-Call Mobile,3,3,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Approved Fallback Destination,Approved_Fallback_Destination,picklist,layout_standard,Voicemail,Voicemail,Voicemail,4,4,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Approved Fallback Destination,Approved_Fallback_Destination,picklist,layout_standard,Other,Other,Other,5,5,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Approved Test Route,Approved_Test_Route,picklist,layout_standard,-None-,-None-,-None-,1,1,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Approved Test Route,Approved_Test_Route,picklist,layout_standard,After Hours Only,After Hours Only,After Hours Only,2,2,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Approved Test Route,Approved_Test_Route,picklist,layout_standard,No Answer / Overflow Only,No Answer / Overflow Only,No Answer / Overflow Only,3,3,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Approved Test Route,Approved_Test_Route,picklist,layout_standard,After Hours + Overflow,After Hours + Overflow,After Hours + Overflow,4,4,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Attachment,Attachment,picklist,module,-None-,-None-,-None-,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Attachment,Attachment,picklist,module,Addendum,Addendum,Addendum,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Attachment,Attachment,picklist,module,Appendix,Appendix,Appendix,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Attachment,Attachment,picklist,module,Exhibit,Exhibit,Exhibit,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Attachment,Attachment,picklist,module,Schedule,Schedule,Schedule,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Commercial Fit,Budget_Fit,picklist,module,-None-,-None-,-None-,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Commercial Fit,Budget_Fit,picklist,module,Fit,Fit,Fit,2,2,verified_field_metadata,used,unknown_not_exposed,#67c480,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Commercial Fit,Budget_Fit,picklist,module,Maybe,Maybe,Maybe,3,3,verified_field_metadata,used,unknown_not_exposed,#f5c72f,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Commercial Fit,Budget_Fit,picklist,module,Not Fit,Not Fit,Not Fit,4,4,verified_field_metadata,used,unknown_not_exposed,#eb4d4d,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Commercial Fit,Budget_Fit,picklist,module,Unknown,Unknown,Unknown,5,5,verified_field_metadata,used,unknown_not_exposed,#acacac,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Coverage Needs,Coverage_Needs,multiselectpicklist,module,After-Hours,After-Hours,After-Hours,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Coverage Needs,Coverage_Needs,multiselectpicklist,module,Overflow,Overflow,Overflow,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Coverage Needs,Coverage_Needs,multiselectpicklist,module,Weekends,Weekends,Weekends,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Coverage Needs,Coverage_Needs,multiselectpicklist,module,Lunch / Breaks,Lunch / Breaks,Lunch / Breaks,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Coverage Needs,Coverage_Needs,multiselectpicklist,module,Seasonal Peak,Seasonal Peak,Seasonal Peak,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Coverage Needs,Coverage_Needs,multiselectpicklist,module,Missed-Call Recovery,Missed-Call Recovery,Missed-Call Recovery,6,6,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Coverage Needs,Coverage_Needs,multiselectpicklist,module,Selected Call Types,Selected Call Types,Selected Call Types,7,7,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Coverage Needs,Coverage_Needs,multiselectpicklist,module,Primary Reception Request,Primary Reception Request,Primary Reception Request,8,8,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Current Call Handling,Current_Call_Handling,picklist,module,-None-,-None-,-None-,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Current Call Handling,Current_Call_Handling,picklist,module,Office Staff / Dispatcher,Office Staff / Dispatcher,Office Staff / Dispatcher,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Current Call Handling,Current_Call_Handling,picklist,module,Owner / Technician Cell,Owner / Technician Cell,Owner / Technician Cell,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Current Call Handling,Current_Call_Handling,picklist,module,Voicemail,Voicemail,Voicemail,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Current Call Handling,Current_Call_Handling,picklist,module,Phone Menu / IVR,Phone Menu / IVR,Phone Menu / IVR,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Current Call Handling,Current_Call_Handling,picklist,module,Human Answering Service,Human Answering Service,Human Answering Service,6,6,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Current Call Handling,Current_Call_Handling,picklist,module,Existing AI Receptionist,Existing AI Receptionist,Existing AI Receptionist,7,7,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Current Call Handling,Current_Call_Handling,picklist,module,Mixed,Mixed,Mixed,8,8,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Current Call Handling,Current_Call_Handling,picklist,module,Unknown,Unknown,Unknown,9,9,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Deliverables,Deliverables,picklist,module,-None-,-None-,-None-,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Deliverables,Deliverables,picklist,module,Automation Workflow,Automation Workflow,Automation Workflow,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Deliverables,Deliverables,picklist,module,Chatbots/Conversational AI,Chatbots/Conversational AI,Chatbots/Conversational AI,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Deliverables,Deliverables,picklist,module,Content Creation/Generation,Content Creation/Generation,Content Creation/Generation,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Deliverables,Deliverables,picklist,module,Customer Engagement,Customer Engagement,Customer Engagement,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Deliverables,Deliverables,picklist,module,Lead Generation,Lead Generation,Lead Generation,6,6,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Deliverables,Deliverables,picklist,module,Scheduling/Client Management,Scheduling/Client Management,Scheduling/Client Management,7,7,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Entry Offer,Entry_Offer,picklist,layout_standard,-None-,-None-,-None-,1,1,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Entry Offer,Entry_Offer,picklist,layout_standard,Free 7-Day Missed-Call,Free 7-Day Missed-Call,Free 7-Day Missed-Call,2,2,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Entry Offer,Entry_Offer,picklist,layout_standard,Paid Pilot,Paid Pilot,Paid Pilot,3,3,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Entry Offer,Entry_Offer,picklist,layout_standard,Direct Subscription,Direct Subscription,Direct Subscription,4,4,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Existing-Customer Call Handling,Existing_Customer_Call_Handling,picklist,layout_standard,-None-,-None-,-None-,1,1,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Existing-Customer Call Handling,Existing_Customer_Call_Handling,picklist,layout_standard,Attempt Transfer,Attempt Transfer,Attempt Transfer,2,2,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Existing-Customer Call Handling,Existing_Customer_Call_Handling,picklist,layout_standard,Alert + Capture Callback,Alert + Capture Callback,Alert + Capture Callback,3,3,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Existing-Customer Call Handling,Existing_Customer_Call_Handling,picklist,layout_standard,Capture Callback Only,Capture Callback Only,Capture Callback Only,4,4,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Existing-Customer Call Handling,Existing_Customer_Call_Handling,picklist,layout_standard,Use Approved Fallback,Use Approved Fallback,Use Approved Fallback,5,5,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Free Test Authorization Status,Free_Test_Authorization_Status,picklist,layout_standard,-None-,-None-,-None-,1,1,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Free Test Authorization Status,Free_Test_Authorization_Status,picklist,layout_standard,Not Sent,Not Sent,Not Sent,2,2,verified_layout_sequence,used,unknown_not_exposed,#64748B,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Free Test Authorization Status,Free_Test_Authorization_Status,picklist,layout_standard,Sent,Sent,Sent,3,3,verified_layout_sequence,used,unknown_not_exposed,#3B82F6,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Free Test Authorization Status,Free_Test_Authorization_Status,picklist,layout_standard,Viewed,Viewed,Viewed,4,4,verified_layout_sequence,used,unknown_not_exposed,#4F46E5,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Free Test Authorization Status,Free_Test_Authorization_Status,picklist,layout_standard,Signed,Signed,Signed,5,5,verified_layout_sequence,used,unknown_not_exposed,#16A34A,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Free Test Authorization Status,Free_Test_Authorization_Status,picklist,layout_standard,Declined,Declined,Declined,6,6,verified_layout_sequence,used,unknown_not_exposed,#DC2626,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Free Test Authorization Status,Free_Test_Authorization_Status,picklist,layout_standard,Expired,Expired,Expired,7,7,verified_layout_sequence,used,unknown_not_exposed,#F59E0B,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Free Test Authorization Status,Free_Test_Authorization_Status,picklist,layout_standard,Voided,Voided,Voided,8,8,verified_layout_sequence,used,unknown_not_exposed,#475569,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Free Test Authorization Status,Free_Test_Authorization_Status,picklist,layout_standard,Failed,Failed,Failed,9,9,verified_layout_sequence,used,unknown_not_exposed,#EF4444,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Go-Live Approval Status,Go_Live_Approval_Status,picklist,layout_standard,-None-,-None-,-None-,1,1,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Go-Live Approval Status,Go_Live_Approval_Status,picklist,layout_standard,Not Ready,Not Ready,Not Ready,2,2,verified_layout_sequence,used,unknown_not_exposed,#64748B,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Go-Live Approval Status,Go_Live_Approval_Status,picklist,layout_standard,Pending Internal Approval,Pending Internal Approval,Pending Internal Approval,3,3,verified_layout_sequence,used,unknown_not_exposed,#F59E0B,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Go-Live Approval Status,Go_Live_Approval_Status,picklist,layout_standard,Approved,Approved,Approved,4,4,verified_layout_sequence,used,unknown_not_exposed,#16A34A,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Go-Live Approval Status,Go_Live_Approval_Status,picklist,layout_standard,Blocked,Blocked,Blocked,5,5,verified_layout_sequence,used,unknown_not_exposed,#EF4444,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Go-Live Approval Status,Go_Live_Approval_Status,picklist,layout_standard,Revoked,Revoked,Revoked,6,6,verified_layout_sequence,used,unknown_not_exposed,#DC2626,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,-None-,-None-,-None-,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,Alabama,Alabama,Alabama,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,Alaska,Alaska,Alaska,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,Arizona,Arizona,Arizona,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,Arkansas,Arkansas,Arkansas,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,California,California,California,6,6,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,Colorado,Colorado,Colorado,7,7,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,Connecticut,Connecticut,Connecticut,8,8,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,Delaware,Delaware,Delaware,9,9,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,Florida,Florida,Florida,10,10,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,Georgia,Georgia,Georgia,11,11,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,Hawaii,Hawaii,Hawaii,12,12,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,Idaho,Idaho,Idaho,13,13,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,Illinois,Illinois,Illinois,14,14,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,Indiana,Indiana,Indiana,15,15,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,Iowa,Iowa,Iowa,16,16,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,Kansas,Kansas,Kansas,17,17,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,Kentucky,Kentucky,Kentucky,18,18,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,Louisiana,Louisiana,Louisiana,19,19,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,Maine,Maine,Maine,20,20,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,Maryland,Maryland,Maryland,21,21,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,Massachusetts,Massachusetts,Massachusetts,22,22,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,Michigan,Michigan,Michigan,23,23,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,Minnesota,Minnesota,Minnesota,24,24,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,Mississippi,Mississippi,Mississippi,25,25,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,Missouri,Missouri,Missouri,26,26,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,Montana,Montana,Montana,27,27,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,Nebraska,Nebraska,Nebraska,28,28,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,Nevada,Nevada,Nevada,29,29,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,New Hampshire,New Hampshire,New Hampshire,30,30,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,New Jersey,New Jersey,New Jersey,31,31,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,New Mexico,New Mexico,New Mexico,32,32,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,New York,New York,New York,33,33,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,North Carolina,North Carolina,North Carolina,34,34,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,North Dakota,North Dakota,North Dakota,35,35,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,Ohio,Ohio,Ohio,36,36,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,Oklahoma,Oklahoma,Oklahoma,37,37,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,Oregon,Oregon,Oregon,38,38,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,Pennsylvania,Pennsylvania,Pennsylvania,39,39,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,Rhode Island,Rhode Island,Rhode Island,40,40,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,South Carolina,South Carolina,South Carolina,41,41,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,South Dakota,South Dakota,South Dakota,42,42,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,Tennessee,Tennessee,Tennessee,43,43,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,Texas,Texas,Texas,44,44,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,Utah,Utah,Utah,45,45,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,Vermont,Vermont,Vermont,46,46,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,Virginia,Virginia,Virginia,47,47,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,Washington,Washington,Washington,48,48,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,West Virginia,West Virginia,West Virginia,49,49,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,Wisconsin,Wisconsin,Wisconsin,50,50,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Governing Law State,Governing_Law_State,picklist,module,Wyoming,Wyoming,Wyoming,51,51,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Integration Readiness,Integration_Readiness,picklist,module,-None-,-None-,-None-,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Integration Readiness,Integration_Readiness,picklist,module,Ready to Connect,Ready to Connect,Ready to Connect,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Integration Readiness,Integration_Readiness,picklist,module,Willing - Needs Review,Willing - Needs Review,Willing - Needs Review,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Integration Readiness,Integration_Readiness,picklist,module,Unknown,Unknown,Unknown,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Integration Readiness,Integration_Readiness,picklist,module,Unwilling,Unwilling,Unwilling,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Integration Readiness,Integration_Readiness,picklist,module,No Structured System,No Structured System,No Structured System,6,6,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Lead Source,Lead_Source,picklist,module,-None-,-None-,-None-,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Lead Source,Lead_Source,picklist,module,Advertising,Advertising,Advertising,2,2,verified_field_metadata,unused,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Lead Source,Lead_Source,picklist,module,Cold Call,Cold Call,Cold Call,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Lead Source,Lead_Source,picklist,module,Email Campaign,Email Campaign,Email Campaign,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Lead Source,Lead_Source,picklist,module,Event,Event,Event,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Lead Source,Lead_Source,picklist,module,Facebook,Facebook,Facebook,6,6,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Lead Source,Lead_Source,picklist,module,Google Ads,Google Ads,Google Ads,7,7,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Lead Source,Lead_Source,picklist,module,In-Person Walk In,Inbound,In-Person Walk In,8,8,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Lead Source,Lead_Source,picklist,module,Instagram,Instagram,Instagram,9,9,verified_field_metadata,unused,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Lead Source,Lead_Source,picklist,module,LinkedIn Ads,LinkedIn Ads,LinkedIn Ads,10,10,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Lead Source,Lead_Source,picklist,module,LinkedIn Outreach,LinkedIn,LinkedIn Outreach,11,11,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Lead Source,Lead_Source,picklist,module,Organic,Organic,Organic,12,12,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Lead Source,Lead_Source,picklist,module,Referral,Referral,Referral,13,13,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Lead Source,Lead_Source,picklist,module,Twitter,Twitter,Twitter,14,14,verified_field_metadata,unused,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Lead Source,Lead_Source,picklist,module,Website,Website,Website,15,15,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Lead Source,Lead_Source,picklist,module,Word Of Mouth,Word Of Mouth,Word Of Mouth,16,16,verified_field_metadata,unused,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Lead Source,Lead_Source,picklist,module,YouTube,YouTube,YouTube,17,17,verified_field_metadata,unused,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Next Action,Next_Steps,picklist,module,-None-,-None-,-None-,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Next Action,Next_Steps,picklist,module,Book Demo,Book Demo,Book Demo,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Next Action,Next_Steps,picklist,module,Follow Up,Follow Up,Follow Up,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Next Action,Next_Steps,picklist,module,Send Checkout,Send Checkout,Send Checkout,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Next Action,Next_Steps,picklist,module,Send Proposal,Send Proposal,Send Proposal,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Next Action,Next_Steps,picklist,module,Waiting On Customer,Waiting On Customer,Waiting On Customer,6,6,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,No-Answer Delay,No_Answer_Delay,picklist,layout_standard,-None-,-None-,-None-,1,1,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,No-Answer Delay,No_Answer_Delay,picklist,layout_standard,4 Rings,4 Rings,4 Rings,2,2,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,No-Answer Delay,No_Answer_Delay,picklist,layout_standard,5 Rings,5 Rings,5 Rings,3,3,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,No-Answer Delay,No_Answer_Delay,picklist,layout_standard,6 Rings,6 Rings,6 Rings,4,4,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,No-Answer Delay,No_Answer_Delay,picklist,layout_standard,Provider Default,Provider Default,Provider Default,5,5,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,No-Answer Delay,No_Answer_Delay,picklist,layout_standard,Not Sure,Not Sure,Not Sure,6,6,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Pilot Outcome,Pilot_Outcome,picklist,module,-None-,-None-,-None-,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Pilot Outcome,Pilot_Outcome,picklist,module,Success Criteria Met,Success Criteria Met,Success Criteria Met,2,2,verified_field_metadata,used,unknown_not_exposed,#67c480,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Pilot Outcome,Pilot_Outcome,picklist,module,Partially Met,Partially Met,Partially Met,3,3,verified_field_metadata,used,unknown_not_exposed,#f5c72f,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Pilot Outcome,Pilot_Outcome,picklist,module,Not Met,Not Met,Not Met,4,4,verified_field_metadata,used,unknown_not_exposed,#eb4d4d,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Pilot Outcome,Pilot_Outcome,picklist,module,Inconclusive,Inconclusive,Inconclusive,5,5,verified_field_metadata,used,unknown_not_exposed,#acacac,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Pipeline,Pipeline,picklist,layout_standard,Revenue Desk Sales,Standard (Standard),Revenue Desk Sales,2,2,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Pipeline,Pipeline,picklist,layout_standard,-None-,-None-,-None-,1000,1000,verified_layout_sequence,unused,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Plan,Plan,picklist,module,-None-,-None-,-None-,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Plan,Plan,picklist,module,Basic,Option 1,Basic,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Plan,Plan,picklist,module,Enterprise,Enterprise,Enterprise,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Plan,Plan,picklist,module,Growth,Option 2,Growth,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Plan,Plan,picklist,module,Pro,Pro,Pro,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Primary Operating System,Primary_Operating_System,picklist,module,-None-,-None-,-None-,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Primary Operating System,Primary_Operating_System,picklist,module,ServiceTitan,ServiceTitan,ServiceTitan,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Primary Operating System,Primary_Operating_System,picklist,module,Housecall Pro,Housecall Pro,Housecall Pro,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Primary Operating System,Primary_Operating_System,picklist,module,Jobber,Jobber,Jobber,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Primary Operating System,Primary_Operating_System,picklist,module,FieldEdge,FieldEdge,FieldEdge,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Primary Operating System,Primary_Operating_System,picklist,module,Other Structured System,Other Structured System,Other Structured System,6,6,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Primary Operating System,Primary_Operating_System,picklist,module,Spreadsheet or Paper,Spreadsheet or Paper,Spreadsheet or Paper,7,7,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Primary Operating System,Primary_Operating_System,picklist,module,None,None,None,8,8,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Primary Operating System,Primary_Operating_System,picklist,module,Unknown,Unknown,Unknown,9,9,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Reason For Loss,Reason_For_Loss__s,picklist,layout_standard,-None-,-None-,-None-,1,1,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Reason For Loss,Reason_For_Loss__s,picklist,layout_standard,Expectation Mismatch,Expectation Mismatch,Expectation Mismatch,2,2,verified_layout_sequence,unused,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Reason For Loss,Reason_For_Loss__s,picklist,layout_standard,Price,Price,Price,3,3,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Reason For Loss,Reason_For_Loss__s,picklist,layout_standard,Unqualified Customer,Unqualified Customer,Unqualified Customer,4,4,verified_layout_sequence,unused,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Reason For Loss,Reason_For_Loss__s,picklist,layout_standard,No Decision,Lack of response,No Decision,5,5,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Reason For Loss,Reason_For_Loss__s,picklist,layout_standard,No Follow-Through,Missed Follow Ups,No Follow-Through,6,6,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Reason For Loss,Reason_For_Loss__s,picklist,layout_standard,Bad Fit,Wrong Target,Bad Fit,7,7,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Reason For Loss,Reason_For_Loss__s,picklist,layout_standard,Competitor,Competition,Competitor,8,8,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Reason For Loss,Reason_For_Loss__s,picklist,layout_standard,Not Now,Future Interest,Not Now,9,9,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Reason For Loss,Reason_For_Loss__s,picklist,layout_standard,Other,Other,Other,10,10,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Record Status,Record_Status__s,picklist,module,Trash,Trash,Trash,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Record Status,Record_Status__s,picklist,module,Available,Available,Available,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Record Status,Record_Status__s,picklist,module,Draft,Draft,Draft,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Requested Test Route,Requested_Test_Route,picklist,layout_standard,-None-,-None-,-None-,1,1,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Requested Test Route,Requested_Test_Route,picklist,layout_standard,After Hours Only,After Hours Only,After Hours Only,2,2,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Requested Test Route,Requested_Test_Route,picklist,layout_standard,No Answer / Overflow Only,No Answer / Overflow Only,No Answer / Overflow Only,3,3,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Requested Test Route,Requested_Test_Route,picklist,layout_standard,After Hours + Overflow,After Hours + Overflow,After Hours + Overflow,4,4,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Scheduling Process,Scheduling_Process,picklist,module,-None-,-None-,-None-,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Scheduling Process,Scheduling_Process,picklist,module,Field-Service Platform,Field-Service Platform,Field-Service Platform,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Scheduling Process,Scheduling_Process,picklist,module,Shared Calendar,Shared Calendar,Shared Calendar,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Scheduling Process,Scheduling_Process,picklist,module,Manual but Defined,Manual but Defined,Manual but Defined,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Scheduling Process,Scheduling_Process,picklist,module,Ad Hoc,Ad Hoc,Ad Hoc,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Scheduling Process,Scheduling_Process,picklist,module,None,None,None,6,6,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Scheduling Process,Scheduling_Process,picklist,module,Unknown,Unknown,Unknown,7,7,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Service Line,Service,picklist,module,-None-,-None-,-None-,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Service Line,Service,picklist,module,AI Job Applier,AI Job Applier,AI Job Applier,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Service Line,Service,picklist,module,AI Lead Generation,AI Lead Generation,AI Lead Generation,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Service Line,Service,picklist,module,AI Receptionist,AI Receptionist,AI Receptionist,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Service Line,Service,picklist,module,Custom App Development,Custom App Development,Custom App Development,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Service Line,Service,picklist,module,Social Media AI,Social Media AI,Social Media AI,6,6,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Setup Access Status,Setup_Access_Status,picklist,layout_standard,-None-,-None-,-None-,1,1,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Setup Access Status,Setup_Access_Status,picklist,layout_standard,Not Issued,Not Issued,Not Issued,2,2,verified_layout_sequence,used,unknown_not_exposed,#64748B,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Setup Access Status,Setup_Access_Status,picklist,layout_standard,Issued,Issued,Issued,3,3,verified_layout_sequence,used,unknown_not_exposed,#3B82F6,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Setup Access Status,Setup_Access_Status,picklist,layout_standard,Verified,Verified,Verified,4,4,verified_layout_sequence,used,unknown_not_exposed,#0D9488,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Setup Access Status,Setup_Access_Status,picklist,layout_standard,Submitted,Submitted,Submitted,5,5,verified_layout_sequence,used,unknown_not_exposed,#16A34A,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Setup Access Status,Setup_Access_Status,picklist,layout_standard,Expired,Expired,Expired,6,6,verified_layout_sequence,used,unknown_not_exposed,#F59E0B,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Setup Access Status,Setup_Access_Status,picklist,layout_standard,Revoked,Revoked,Revoked,7,7,verified_layout_sequence,used,unknown_not_exposed,#DC2626,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Setup Access Status,Setup_Access_Status,picklist,layout_standard,Failed,Failed,Failed,8,8,verified_layout_sequence,used,unknown_not_exposed,#EF4444,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Stage,Stage,picklist,module_global_metadata,Setup and Authorization,New Lead,Setup and Authorization,2,2,not_pipeline_order,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Stage,Stage,picklist,module_global_metadata,Test Authorized,Demo Scheduled,Test Authorized,3,3,not_pipeline_order,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Stage,Stage,picklist,module_global_metadata,Test Live,Value Proposition,Test Live,4,4,not_pipeline_order,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Stage,Stage,picklist,module_global_metadata,Onboarding In Progress,Onboarding In Progress,Onboarding In Progress,5,5,not_pipeline_order,unused,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Stage,Stage,picklist,module_global_metadata,Setup and QA,Demo Completed,Setup and QA,5,5,not_pipeline_order,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Stage,Stage,picklist,module_global_metadata,Results Review,Checkout Sent,Results Review,6,6,not_pipeline_order,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Stage,Stage,picklist,module_global_metadata,Subscription Proposed,Trial Started,Subscription Proposed,7,7,not_pipeline_order,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Stage,Stage,picklist,module_global_metadata,Closed Lost,Closed Lost,Closed Lost,8,8,not_pipeline_order,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Stage,Stage,picklist,module_global_metadata,Live,Live,Live,8,8,not_pipeline_order,unused,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Stage,Stage,picklist,module_global_metadata,Closed Won,Paid Subscription Active,Closed Won,9,9,not_pipeline_order,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Stage,Stage,picklist,pipeline_revenue_desk_sales,Setup and Authorization,New Lead,Setup and Authorization,1,1,authoritative_pipeline_order,used,unknown_not_exposed,,pipeline_metadata,verified_live_read_only
+2,2026-08-14,Deals,Stage,Stage,picklist,pipeline_revenue_desk_sales,Test Authorized,Demo Scheduled,Test Authorized,2,2,authoritative_pipeline_order,used,unknown_not_exposed,,pipeline_metadata,verified_live_read_only
+2,2026-08-14,Deals,Stage,Stage,picklist,pipeline_revenue_desk_sales,Setup and QA,Demo Completed,Setup and QA,3,3,authoritative_pipeline_order,used,unknown_not_exposed,,pipeline_metadata,verified_live_read_only
+2,2026-08-14,Deals,Stage,Stage,picklist,pipeline_revenue_desk_sales,Test Live,Value Proposition,Test Live,4,4,authoritative_pipeline_order,used,unknown_not_exposed,,pipeline_metadata,verified_live_read_only
+2,2026-08-14,Deals,Stage,Stage,picklist,pipeline_revenue_desk_sales,Results Review,Checkout Sent,Results Review,5,5,authoritative_pipeline_order,used,unknown_not_exposed,,pipeline_metadata,verified_live_read_only
+2,2026-08-14,Deals,Stage,Stage,picklist,pipeline_revenue_desk_sales,Subscription Proposed,Trial Started,Subscription Proposed,6,6,authoritative_pipeline_order,used,unknown_not_exposed,,pipeline_metadata,verified_live_read_only
+2,2026-08-14,Deals,Stage,Stage,picklist,pipeline_revenue_desk_sales,Closed Won,Paid Subscription Active,Closed Won,7,7,authoritative_pipeline_order,used,unknown_not_exposed,,pipeline_metadata,verified_live_read_only
+2,2026-08-14,Deals,Stage,Stage,picklist,pipeline_revenue_desk_sales,Closed Lost,Closed Lost,Closed Lost,8,8,authoritative_pipeline_order,used,unknown_not_exposed,,pipeline_metadata,verified_live_read_only
+2,2026-08-14,Deals,Submission Channel,Submission_Channel,picklist,layout_standard,-None-,-None-,-None-,1,1,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Submission Channel,Submission_Channel,picklist,layout_standard,Website,Website,Website,2,2,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Submission Channel,Submission_Channel,picklist,layout_standard,In Person,In Person,In Person,3,3,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Subscription Status,Subscription_Status,picklist,module,-None-,-None-,-None-,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Subscription Status,Subscription_Status,picklist,module,Active,Active,Active,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Subscription Status,Subscription_Status,picklist,module,Canceled,Canceled,Canceled,3,3,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Subscription Status,Subscription_Status,picklist,module,Expired,Expired,Expired,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Subscription Status,Subscription_Status,picklist,module,Past Due,Past Due,Past Due,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Subscription Status,Subscription_Status,picklist,module,Trial,Trial,Trial,6,6,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Test End Reason,Test_End_Reason,picklist,layout_standard,-None-,-None-,-None-,1,1,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Test End Reason,Test_End_Reason,picklist,layout_standard,Seven-Day Limit Reached,Seven-Day Limit Reached,Seven-Day Limit Reached,2,2,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Test End Reason,Test_End_Reason,picklist,layout_standard,Call Limit Reached,Call Limit Reached,Call Limit Reached,3,3,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Test End Reason,Test_End_Reason,picklist,layout_standard,Client Requested Stop,Client Requested Stop,Client Requested Stop,4,4,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Test End Reason,Test_End_Reason,picklist,layout_standard,Sylvara Stopped,Sylvara Stopped,Sylvara Stopped,5,5,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Test End Reason,Test_End_Reason,picklist,layout_standard,Technical Failure,Technical Failure,Technical Failure,6,6,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Test End Reason,Test_End_Reason,picklist,layout_standard,Converted Early,Converted Early,Converted Early,7,7,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Test End Reason,Test_End_Reason,picklist,layout_standard,Other,Other,Other,8,8,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Test Status,Test_Status,picklist,layout_standard,-None-,-None-,-None-,1,1,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Test Status,Test_Status,picklist,layout_standard,Not Started,Not Started,Not Started,2,2,verified_layout_sequence,used,unknown_not_exposed,#64748B,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Test Status,Test_Status,picklist,layout_standard,Setup Pending,Setup Pending,Setup Pending,3,3,verified_layout_sequence,used,unknown_not_exposed,#3B82F6,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Test Status,Test_Status,picklist,layout_standard,QA In Progress,QA In Progress,QA In Progress,4,4,verified_layout_sequence,used,unknown_not_exposed,#F59E0B,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Test Status,Test_Status,picklist,layout_standard,Ready for Approval,Ready for Approval,Ready for Approval,5,5,verified_layout_sequence,used,unknown_not_exposed,#8B5CF6,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Test Status,Test_Status,picklist,layout_standard,Scheduled,Scheduled,Scheduled,6,6,verified_layout_sequence,used,unknown_not_exposed,#06B6D4,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Test Status,Test_Status,picklist,layout_standard,Live,Live,Live,7,7,verified_layout_sequence,used,unknown_not_exposed,#16A34A,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Test Status,Test_Status,picklist,layout_standard,Paused,Paused,Paused,8,8,verified_layout_sequence,used,unknown_not_exposed,#D97706,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Test Status,Test_Status,picklist,layout_standard,Completed,Completed,Completed,9,9,verified_layout_sequence,used,unknown_not_exposed,#15803D,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Test Status,Test_Status,picklist,layout_standard,Stopped,Stopped,Stopped,10,10,verified_layout_sequence,used,unknown_not_exposed,#475569,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Test Status,Test_Status,picklist,layout_standard,Rolled Back,Rolled Back,Rolled Back,11,11,verified_layout_sequence,used,unknown_not_exposed,#EA580C,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Test Status,Test_Status,picklist,layout_standard,Failed,Failed,Failed,12,12,verified_layout_sequence,used,unknown_not_exposed,#DC2626,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Type,Type,picklist,module,-None-,-None-,-None-,1,1,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Type,Type,picklist,module,Cross-Sell,Cross-Sell,Cross-Sell,2,2,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Type,Type,picklist,module,Existing Business,Existing Business,Existing Business,3,3,verified_field_metadata,unused,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Type,Type,picklist,module,Expansion,Expansion,Expansion,4,4,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Type,Type,picklist,module,Initial Sale,Initial Sale,Initial Sale,5,5,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Type,Type,picklist,module,New Business,New Business,New Business,6,6,verified_field_metadata,unused,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Type,Type,picklist,module,Renewal,Renewal,Renewal,7,7,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Type,Type,picklist,module,Upgrade,Upgrade,Upgrade,8,8,verified_field_metadata,used,unknown_not_exposed,,field_metadata,verified_live_read_only
+2,2026-08-14,Deals,Urgent Call Handling,Urgent_Call_Handling,picklist,layout_standard,-None-,-None-,-None-,1,1,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Urgent Call Handling,Urgent_Call_Handling,picklist,layout_standard,Attempt Approved Transfer,Attempt Approved Transfer,Attempt Approved Transfer,2,2,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Urgent Call Handling,Urgent_Call_Handling,picklist,layout_standard,Alert + Capture Callback,Alert + Capture Callback,Alert + Capture Callback,3,3,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only
+2,2026-08-14,Deals,Urgent Call Handling,Urgent_Call_Handling,picklist,layout_standard,Capture Callback Only,Capture Callback Only,Capture Callback Only,4,4,verified_layout_sequence,used,unknown_not_exposed,,dedicated_picklist_endpoint,verified_live_read_only

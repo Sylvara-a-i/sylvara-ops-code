@@ -1,6 +1,13 @@
 # Sylvara CRM Schema And Lead Conversion Reference
 
-## Status And Provenance
+## Snapshot Index
+
+- [Current live metadata snapshot — 2026-08-14](snapshots/2026-08-14/README.md): 466 fields across Leads, Contacts, Accounts, and Deals; exact Standard-layout placement; display and actual picklist values; current conversion mappings; and the Form 1/Form 2 CRM destination contract.
+- Historical baseline below — 2026-08-05: immutable field and desired-conversion review preserved with its original fingerprints.
+
+The dated packages answer different questions. The 2026-08-14 package is current-state evidence. The 2026-08-05 package preserves the pre-Free-Test schema review and its recommendations; do not treat its counts, missing targets, or mapping recommendations as current live state.
+
+## Historical 2026-08-05 Status And Provenance
 
 This is a sanitized metadata snapshot observed and reconciled on **2026-08-05** through the authorized Sylvara CRM audit and change roles. Live metadata supplied every recorded module and field API name. Private IDs, raw responses, record values, and picklist internals were removed before publication.
 

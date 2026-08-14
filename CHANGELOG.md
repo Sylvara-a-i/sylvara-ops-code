@@ -4,6 +4,7 @@ All notable repository-governance and technical-source changes are recorded here
 
 ## Unreleased
 
+- Add a sanitized 2026-08-14 Zoho CRM live-state package covering all 466 Leads, Contacts, Accounts, and Deals fields; 438 exact Standard/Quick Create/Business Card placement rows; 719 publishable picklist rows with restricted and vendor-managed high-cardinality sets represented by count/status only; 414 current Lead-conversion rows; and a 113-row approved Form 1/Form 2/Blueprint coverage contract. Record the active Free-Test workflows and Deal Blueprint, manual native-conversion boundary, Blueprint Stage/Test Status drift, incomplete transition requirements, and remaining Zoho Forms readback gate.
 - Reconcile the remaining documentation branches by preserving append-only dated MCP snapshots and separating configured tool selections, advertised input contracts, and effective tenant capability; intentionally exclude redundant folder indexes and a copied 1.73 MB provider catalog.
 - Select `after-hours-new-residential-service-request-v1` as the first provider-neutral workflow for offline synthetic validation, with four explicit dispositions, bounded exclusions, expansion gates, and kill criteria; no live call or downstream write is authorized.
 - Replace duplicated root agent prose with a compact instruction router and scoped Zoho, safety, and Billing gateway instructions, enforced by byte-budget and authority-boundary tests.

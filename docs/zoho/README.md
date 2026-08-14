@@ -51,6 +51,8 @@ The [product reference collection](reference/README.md) covers the currently gov
 - [Tool Manual service catalog, 2026-07-24](mcp/reference/tool-manual-service-catalog-2026-07-24.md)
 - [Zoho CRM Tool Manual catalog, 2026-08-14](mcp/reference/zoho-crm-tool-manual-catalog-2026-08-14.md)
 - [Proposed Form 1/Form 2 CRM MCP allowlist, 2026-08-14](mcp/proposals/2026-08-14/sylvara-free-test-crm-mcp-allowlist.md)
+- [Effective Form 1/Form 2 CRM automation snapshot, 2026-08-14](mcp/snapshots/effective/2026-08-14/free-test-crm-automation.md)
+- [Current CRM field, picklist, layout, conversion, and form map snapshot, 2026-08-14](../../src/zoho-crm/reference/snapshots/2026-08-14/README.md)
 - [Preconfigured template catalog, 2026-07-25](mcp/reference/preconfigured-template-catalog-2026-07-25.md)
 
 ## Code-Adjacent Zoho Artifacts
