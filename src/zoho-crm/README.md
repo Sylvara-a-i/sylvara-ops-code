@@ -24,6 +24,7 @@ The snapshot proves only what the authorized CRM audit surface returned on the o
 | [Module catalog](reference/modules.csv) | Module labels, API names, field counts, and conversion roles |
 | [Field dictionary](reference/crm-field-dictionary.csv) | One sanitized row for every verified field in the four governed modules |
 | [Lead-conversion matrix](reference/lead-conversion-mapping.csv) | One row for every Lead field and target module, including explicit intentional non-mappings |
+| [Proposed Form 1/Form 2 MCP allowlist](../../docs/zoho/mcp/proposals/2026-08-14/sylvara-free-test-crm-mcp-allowlist.md) | Proposed Blueprint, workflow, function, and verification tool split; not configured or deployed by this reference |
 
 The CSV files are deterministic review artifacts, not import files and not live configuration payloads.
 
