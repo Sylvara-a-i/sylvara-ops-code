@@ -49,6 +49,11 @@ The [product reference collection](reference/README.md) covers the currently gov
 - [Sylvara configured-session capability catalog, 2026-08-04](mcp/snapshots/configured/2026-08-04/capability-catalog.md)
 - [Sylvara configured-session machine-readable inventory, 2026-08-04](mcp/snapshots/configured/2026-08-04/sylvara-observed-tool-inventory.json)
 - [Tool Manual service catalog, 2026-07-24](mcp/reference/tool-manual-service-catalog-2026-07-24.md)
+- [Zoho CRM Tool Manual catalog, 2026-08-14](mcp/reference/zoho-crm-tool-manual-catalog-2026-08-14.md)
+- [Historical Form 1/Form 2 CRM MCP allowlist, 2026-08-14](mcp/proposals/2026-08-14/sylvara-free-test-crm-mcp-allowlist.md)
+- [Effective Form 1/Form 2 CRM automation snapshot, 2026-08-14](mcp/snapshots/effective/2026-08-14/free-test-crm-automation.md)
+- [Current CRM field, picklist, layout, conversion, and form map snapshot, 2026-08-14](../../src/zoho-crm/reference/snapshots/2026-08-14/README.md)
+- [Zoho Catalyst 189-action Tool Manual catalog, 2026-08-14](mcp/reference/zoho-catalyst-tool-manual-catalog-2026-08-14.md)
 - [Preconfigured template catalog, 2026-07-25](mcp/reference/preconfigured-template-catalog-2026-07-25.md)
 
 ## Code-Adjacent Zoho Artifacts
@@ -113,7 +118,7 @@ The dated 2026-08-04 configured-session snapshot contains 294 Sylvara-only Zoho 
 
 The refreshed Books Controller advertises chart-account create, update, mark-active, and mark-inactive operations. The Audit and Controller connections, same-organization identity, and those four operations were verified in an approved bounded chart deployment on 2026-08-05; every mutation received independent Audit readback. This proves only the scoped chart contracts exercised in that deployment, not other Books writes or continuing approval. The older 2026-08-04 inventory remains a historical snapshot, not the current Books allowlist.
 
-The refreshed CRM roles verified the organization identity plus scoped module, field, layout, picklist, record, workflow, and Lead-conversion-map reads. Approved bounded field, layout, picklist, help-text, and record mutations received independent readback. A workflow read exposed a Convert action, but the change surface did not provide a direct typed native Convert Lead write, Lead Conversion Mapping mutation, or workflow-rule mutation, so those write operations remain unavailable rather than inferred.
+The 2026-08-05 CRM role refresh verified organization identity plus scoped module, field, layout, picklist, record, workflow, and Lead-conversion-map reads. That change surface did not provide a direct typed native Convert Lead write, Lead Conversion Mapping mutation, or workflow-rule mutation. A later, separately scoped 2026-08-14 automation surface was used for authorized bounded workflow and Blueprint configuration, followed by independent readback. The current schema and automation contract are documented in the [CRM metadata snapshot](../../src/zoho-crm/reference/snapshots/2026-08-14/README.md) and [effective automation snapshot](mcp/snapshots/effective/2026-08-14/free-test-crm-automation.md). Configuration readback is not runtime acceptance: the four new workflows have not executed, the Blueprint has no enrolled records, native conversion remains human-approved, and the Forms/controller path remains unverified.
 
 Billing, Books, Catalyst, Creator, CRM, Mail, Payments, and WorkDrive were observed at the configured-selection layer. Forms, Contracts, Sign, Sites, and Analytics were not observed; their MCP availability is **Unknown**, not unsupported. A selection, advertised contract, or past successful call does not grant continuing approval for live use.
 

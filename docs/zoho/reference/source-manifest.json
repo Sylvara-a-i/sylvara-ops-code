@@ -1,17 +1,19 @@
 {
   "schema_version": 2,
   "created_on": "2026-08-04",
-  "last_reviewed_on": "2026-08-05",
+  "last_reviewed_on": "2026-08-14",
   "classification": "sanitized-derivative-manifest",
   "source_classes": {
     "portable_product_references": "authorized operating documentation from a separate business repository",
-    "configured_session_tool_selections": "Sylvara-only Codex surface export cross-checked against the callable-tool registry available on the observation date"
+    "configured_session_tool_selections": "Sylvara-only Codex surface export cross-checked against the callable-tool registry available on the observation date",
+    "live_forms_builder_inventory": "sanitized element names and section membership observed read-only in the current Sylvara Zoho Forms builder"
   },
   "source_revision_policy": "Verify the authorized source revision privately during each refresh; do not publish its path, remote, or fingerprint.",
   "publication_boundary": "No source tenant configuration, identifiers, records, code, routes, aliases, screenshots, payloads, logs, or private artifacts are included.",
   "research_cutoffs": {
     "product_handbooks": "2026-07-20",
     "field_type_refresh": "2026-08-05",
+    "forms_builder_inventory": "2026-08-14",
     "tool_manual_service_catalog": "2026-07-24",
     "preconfigured_template_catalog": "2026-07-25",
     "configured_session_tool_selections": "2026-08-04",
@@ -23,8 +25,8 @@
     "Removed all source-business fields, modules, workflows, business rules, examples, identifiers, routes, aliases, and decisions.",
     "Retained portable product behavior, generic reliability controls, and official-source links.",
     "Separated each configured operation key from its prefix-free human annotation; product or server prefixes are not part of annotated tool names.",
-    "Refreshed portable CRM, Creator, Forms, Contracts, Sign, Checkout, and Flow field-type contracts against current official sources.",
-    "Marked Sylvara adoption and effective tenant access unknown except for the separately recorded bounded Books chart and CRM schema capabilities verified on 2026-08-05.",
+    "Refreshed portable CRM, Creator, Contracts, Sign, Checkout, and Flow field-type contracts against current official sources on 2026-08-05; refreshed the Forms builder catalog and official references separately on 2026-08-14.",
+    "Marked Sylvara adoption and effective tenant access unknown except for the separately recorded bounded Books chart evidence and the 2026-08-14 CRM schema/workflow/Blueprint configuration evidence; CRM runtime acceptance remains blocked.",
     "Separated reusable references from Sylvara operating standards and live configuration."
   ],
   "product_references": [

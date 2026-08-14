@@ -8,7 +8,8 @@
 - Configured-selection evidence: dated 2026-08-04 Sylvara service-plus-operation-key snapshot, superseded for CRM by a callable-role refresh on 2026-08-05
 - Effective access verified on 2026-08-05: organization identity plus scoped module, field, layout, picklist, record, and Lead-conversion-map reads; bounded field, layout, picklist, help-text, and record mutations with independent readback
 - Effective write access unavailable on 2026-08-05: direct typed native Convert Lead, Lead Conversion Mapping mutation, and workflow-rule mutation; a readable workflow action named Convert does not establish any of those write contracts
-- Edition, comprehensive permissions, validation rules, formula dependencies, pipeline metadata, and unexercised contracts: **Unknown**
+- Effective CRM refresh on 2026-08-14: workflow and Blueprint configuration contracts were exercised for the authorized Free-Test deployment and independently read back; current module, field, layout, picklist, pipeline, workflow, and Blueprint state was then audited read-only
+- Current limitations: native Lead conversion remains human-approved; no typed Lead Conversion Mapping editor was captured; Zoho Forms/controller configuration and comprehensive profile/formula dependencies remain **Unknown**; the four new workflows have not executed and the active Blueprint has no enrolled records
 
 This standard is reviewed design guidance. Dated effective-access evidence proves only the scoped contracts exercised for the exact verified target; it is not continuing approval or proof of an unlisted capability.
 
@@ -177,15 +178,17 @@ Subforms have separate edition and row limits, and their module/field API names 
 
 ## Current MCP Capability Limit
 
-The 2026-08-05 CRM role refresh supersedes the CRM portion of the older configured-selection snapshot. The verified surface supported scoped organization, module, field, layout, picklist, record, workflow, and Lead-conversion-map reads plus the bounded field, layout, picklist, help-text, and record mutations exercised during the approved CRM change. A workflow read exposed a Convert action, but the change surface did not expose a direct typed native Convert Lead write, Lead Conversion Mapping mutation, or workflow-rule mutation. Therefore:
+The 2026-08-14 CRM refresh supersedes the CRM portion of the older configured-selection snapshot only for the contracts it exercised. Direct readback established organization identity, module/field/layout/picklist/pipeline metadata, workflow and Blueprint configuration, task and field-update action metadata, and bounded record counts. Separately scoped automation roles exercised typed workflow and Blueprint configuration actions for the authorized Free-Test deployment with independent Audit readback. No unexercised function, connection, validation, webhook, or Lead-conversion-option capability is inferred. The current [effective snapshot](../mcp/snapshots/effective/2026-08-14/free-test-crm-automation.md) records that bounded result.
+
+No typed module-level Lead Conversion Mapping editor was captured, and native Lead conversion remains a human-approved runtime action. Zoho Forms configuration was not available through the CRM roles. Therefore:
 
 - treat only an exercised typed operation as verified and recheck the target before reuse;
 - do not guess a field, layout, workflow, conversion, module, or subform payload;
 - do not substitute generic record creation for native Lead conversion or a configuration endpoint;
-- do not infer absent conversion or workflow writes from official REST API support; and
+- do not infer Forms, conversion-map, native-conversion, or unexercised writes from official REST API support; and
 - require private prestate, scoped approval, rollback, and independent readback for every live change.
 
-The sanitized [CRM schema and Lead-conversion package](../../../src/zoho-crm/README.md) records the dated field and mapping contract without publishing private identifiers. Official API capability does not expand the active MCP tool contract.
+The sanitized [CRM schema and Lead-conversion package](../../../src/zoho-crm/README.md) and [2026-08-14 snapshot](../../../src/zoho-crm/reference/snapshots/2026-08-14/README.md) record the dated field, picklist, layout, mapping, and Form-destination contract without publishing private identifiers. Official API capability does not expand the active MCP tool contract.
 
 ## Field Proposal Contract
 
@@ -242,7 +245,7 @@ A local test or official API example does not prove that a live MCP write contra
 
 ## Manual Setup
 
-The dated CRM package verifies only the scoped 2026-08-05 schema, mapping-read, and completed-change evidence it names. Native Lead conversion mapping, pilot/subscription conversion automation, comprehensive dependency discovery, and any future live setup remain undeployed or **Unknown**. Before relying on this standard for another Sylvara change, verify or configure:
+The immutable 2026-08-05 package records the earlier schema and completed-change evidence. The [2026-08-14 metadata package](../../../src/zoho-crm/reference/snapshots/2026-08-14/README.md) now owns the current four-module field, layout, picklist, conversion-map, and Form 1/Form 2 contract. The paired [effective automation snapshot](../mcp/snapshots/effective/2026-08-14/free-test-crm-automation.md) records four active workflows and the active Deal Blueprint, plus the unresolved Deal `Type` requirement, Form 2/Blueprint requirement conflicts, missing transition actions, weak stop/Closed Won gates, and absent runtime evidence. Native Lead conversion and Forms/controller implementation remain manual or **Unknown**. Before relying on this standard for another Sylvara change, verify or configure:
 
 - the exact CRM organization, data center, edition, environment, administrators, and least-privilege audit/change identities;
 - module, layout, section, field, profile, workflow, picklist, lookup, and dependency metadata required by the change;
