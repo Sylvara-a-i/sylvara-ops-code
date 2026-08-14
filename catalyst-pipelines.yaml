@@ -1,0 +1,26 @@
+version: 1
+
+jobs:
+  approve:
+    type:
+      type-name: approval
+      type-variables:
+        reviewers:
+          - << env.DEPLOY_APPROVER_EMAIL >>
+        message: Approve the reviewed Form 2 controller revision for Catalyst Development.
+  deploy_form2_development:
+    steps:
+      - >-
+        PROJECT_ID='<< env.PROJECT_ID >>'
+        CATALYST_ORG='<< env.CATALYST_ORG >>'
+        CATALYST_TOKEN='<< env.CATALYST_TOKEN >>'
+        APPROVED_SOURCE_REVISION='<< env.APPROVED_SOURCE_REVISION >>'
+        bash src/zoho-catalyst/form2-controller/scripts/deploy-development.sh
+
+stages:
+  - name: approval
+    jobs:
+      - approve
+  - name: development
+    jobs:
+      - deploy_form2_development

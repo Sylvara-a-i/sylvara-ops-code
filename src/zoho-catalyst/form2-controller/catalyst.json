@@ -1,0 +1,12 @@
+{
+  "functions": {
+    "source": "functions",
+    "targets": [
+      "form2_controller"
+    ],
+    "ignore": [
+      "test/**",
+      ".env*"
+    ]
+  }
+}
