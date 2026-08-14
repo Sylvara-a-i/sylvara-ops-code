@@ -4,9 +4,9 @@
 
 - Classification: **Sanitized effective-tenant metadata evidence**
 - Observation date: **2026-08-14**
-- Method: authorized read-only CRM metadata, layout, picklist, pipeline, workflow, and Blueprint inspection
+- Method: authorized CRM metadata, layout, picklist, pipeline, workflow, and Blueprint inspection plus independent post-change readback
 - Modules: Leads, Contacts, Accounts, and Deals
-- Live CRM mutation in this audit: **none**
+- Live CRM mutation during this documentation readback: **none**; separately authorized configuration changes are recorded in the deployment log
 - Zoho Forms readback: **not available in this audit**
 
 This package records the current CRM field contract without production identifiers, record values, private payloads, credentials, or customer data. It supplements rather than overwrites the immutable [2026-08-05 reference](../../README.md).
@@ -48,13 +48,15 @@ The live schema has 113 choice fields. The public option artifact covers 90; 23 
 ## Form 2 And Deal Findings
 
 - Every CRM destination in the 51-row approved Form 2 coverage contract exists, including secure-prefill Contact/Account identity fields, Requested Start Date to Deal `Target_Start_Date`, setup controls, authority/scope timestamps, secure record context, and original-request preservation.
-- `Setup_Form_Submission_ID` and Deal `Intake_Submission_ID` are not unique, so Deal-side idempotency must be enforced by deterministic lookup/readback rather than assumed from CRM metadata.
+- Deal `Intake_Submission_ID` and `Setup_Form_Submission_ID` are case-insensitive unique. This supplies CRM-level duplicate rejection, but the controller must still perform deterministic lookup, replay handling, and post-write readback because field uniqueness does not make multi-step processing atomic.
 - The authoritative Revenue Desk Sales order is Setup and Authorization, Test Authorized, Setup and QA, Test Live, Results Review, Subscription Proposed, Closed Won, and Closed Lost. Stored Stage values differ from the displayed labels and are recorded separately.
 - Free Test sections are 10–13 in Deals; `Target_Start_Date` remains in Pilot Scope and Outcome. Account Front-Office Profile is section 10. These are schema-complete but not optimal operator placement.
-- An active Deal validation rule rejects records whose `Type` is empty. No Lead field maps to `Deals.Type`, so the conversion/controller contract must set `Type = Initial Sale` when it creates the Deal and independently read it back.
+- An active Deal validation rule rejects records whose `Type` is empty. The existing create-only `Deals Free Test Initialize Limits` workflow now also applies `Type = Initial Sale`, but create-only field updates occur after record creation and cannot satisfy pre-save validation. The controller or native conversion operation must therefore supply `Type = Initial Sale` during Deal creation and independently read it back.
 - The active delivery Blueprint has eight states and twelve transitions, but transition `actions` are absent. It is controlled by `Stage`, so Stage can advance while `Test_Status` remains unchanged. Treat status synchronization as an unresolved automation defect.
 - `Begin Setup and QA` unconditionally requires `No_Answer_Delay`, `Approved_Fallback_Number`, and `Alert_Recipient_Email`. The Form 2 contract makes the first two conditional and permits alert mobile or email, so a valid Form 2 submission can be blocked until those Blueprint requirements are reconciled.
-- Blueprint transitions do not enforce every provenance/setup, safe-stop, rollback, or Closed Won evidence field. The exact current workflow and transition contract is recorded in the [effective automation snapshot](../../../../../docs/zoho/mcp/snapshots/effective/2026-08-14/free-test-crm-automation.md).
+- `Close Live Test` now requires `Reason_For_Loss__s`, `Test_End_At`, `Test_End_Reason`, and `Rollback_Completed_At`. It still has no after-action, so it does not synchronize `Test_Status`. Other transitions still do not enforce every provenance, setup, status, or Closed Won evidence requirement.
+- An authorized attempt to harden `Confirm Authorization` to require signed status plus both authority and scope booleans in its criterion was rejected by Zoho transition validation. Immediate readback was unchanged: the criterion remains signed-status only, the same five during-transition inputs remain required, and after-actions remain absent.
+- Two unassociated `Test_Status = Setup Pending` field-update definitions remain from a rejected Blueprint-action attachment diagnostic. They are not referenced by a workflow or transition and do not execute. The exact current workflow and transition contract is recorded in the [effective automation snapshot](../../../../../docs/zoho/mcp/snapshots/effective/2026-08-14/free-test-crm-automation.md).
 - All four new workflows report no prior execution, and the Blueprint has zero enrolled records. Schema and configuration readback passed; end-to-end runtime acceptance did not.
 
 ## Other Deferred Schema Drift
@@ -73,11 +75,11 @@ The CRM audit proves destination fields and current automation metadata. The for
 | Artifact | SHA-256 |
 |---|---|
 | `modules.csv` | `6c92c4b2458ffcb33347d5fe4b2ffe460889c1d5c0a31ee790eab2bdbf19934d` |
-| `crm-field-dictionary.csv` | `3595efe10e1093f09cb4c6bfeef5f7a95a6647242f57b9f02f7c7373f72372e7` |
+| `crm-field-dictionary.csv` | `5c4c7d09e32f88847b7ec47c99b1b878af67b740100869c468faa17128dd37bc` |
 | `crm-picklist-options.csv` | `c96a790203728ba06a07b663c732c8013a2b10c6d365d2154eed47647575b71e` |
 | `crm-layout-field-order.csv` | `272ab7fc6975bb7dd40d4c2dda7b06c2b312d9c2592d028d83243a1dfb9a63ea` |
 | `lead-conversion-mapping.csv` | `1f7cdb07c1f8209f0b4e41125d0ec43ee70c75ebcbf7786e57a39133b2c2a89c` |
-| `free-test-form-field-map.csv` | `c30017105feee1b76f24dc1869ed852fee6234e5f755e45904b487f2ef524247` |
+| `free-test-form-field-map.csv` | `69398d17b219b8c6af8ce42de965abe1c4b437a1c64036af41c6d2e56d21b2b7` |
 
 ## Publication Boundary
 

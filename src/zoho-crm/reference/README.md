@@ -186,7 +186,7 @@ The complete required-field contract is:
 
 Do not rely silently on the current default Pipeline, Stage, or type/status values. The approved conversion contract must supply or prove each value. `Pilot_Outcome` and billing/subscription lifecycle fields remain blank at initial conversion.
 
-The verified 2026-08-05 connector surface did not expose a typed Lead Conversion Mapping write, native Convert Lead write, or workflow-rule mutation. The later automation surface and current mapping readback are documented in the 2026-08-14 packages, but native conversion remains a named human gate. Generic record creation is not a safe substitute because it can bypass native conversion semantics, duplicate records, and leave the Lead unconverted. Native conversion is irreversible; runtime acceptance remains blocked until its exact duplicate behavior, required Deal `Type`, trigger behavior, and containment are verified.
+The verified 2026-08-05 connector surface did not expose a typed Lead Conversion Mapping write, native Convert Lead write, or workflow-rule mutation. The later automation surface and current mapping readback are documented in the 2026-08-14 packages, but native conversion remains a named human gate. Generic record creation is not a safe substitute because it can bypass native conversion semantics, duplicate records, and leave the Lead unconverted. Native conversion is irreversible; runtime acceptance remains blocked until its exact duplicate behavior, pre-save `Type = Initial Sale` input, create-only normalization behavior, trigger behavior, and containment are verified.
 
 ## Source And Verification
 
