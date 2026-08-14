@@ -53,6 +53,7 @@ function submissionClaim(prefillId = UUIDS[0], overrides = {}) {
     submissionId: "FORM-ENTRY-0001",
     prefillId,
     sessionRowId: "9000000000001",
+    submissionFingerprint: "b".repeat(64),
     ...overrides,
   };
 }
@@ -398,6 +399,7 @@ test("claims a submission by unique insert before any read and stores only deriv
   );
   assert.match(stored.SUBMISSION_KEY, /^[a-f0-9]{64}$/);
   assert.match(stored.PREFILL_KEY, /^[a-f0-9]{64}$/);
+  assert.equal(stored.SUBMISSION_FINGERPRINT, "b".repeat(64));
   assert.doesNotMatch(JSON.stringify(stored), /FORM-ENTRY-0001/);
   assert.doesNotMatch(JSON.stringify(stored), new RegExp(UUIDS[4], "i"));
   assert.doesNotMatch(JSON.stringify(stored), /email|phone|name|raw.payload/i);
@@ -439,6 +441,12 @@ test("returns unresolved for exact in-flight or failed duplicates and conflicts 
   await assert.rejects(
     failed.store.claimSubmission(submissionClaim(UUIDS[0], {
       sessionRowId: "9000000000002",
+    })),
+    (error) => error.publicCode === "submission_conflict",
+  );
+  await assert.rejects(
+    failed.store.claimSubmission(submissionClaim(UUIDS[0], {
+      submissionFingerprint: "c".repeat(64),
     })),
     (error) => error.publicCode === "submission_conflict",
   );
@@ -610,7 +618,7 @@ test("fails closed on multiple key rows, unknown states, and lease mismatches", 
   await unknown.store.claimSubmission(submissionClaim());
   unknown.tables[SUBMISSION_TABLE][0].STATUS = "mystery";
   await assert.rejects(
-    unknown.store.readSubmission({ submissionId: "FORM-ENTRY-0001" }),
+    unknown.store.readSubmission(submissionClaim()),
     WorkflowStoreError,
   );
 

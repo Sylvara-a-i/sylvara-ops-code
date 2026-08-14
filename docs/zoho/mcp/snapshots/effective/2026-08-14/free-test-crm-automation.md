@@ -5,9 +5,9 @@
 - Classification: **Sanitized effective-tenant configuration evidence**
 - Product: Zoho CRM
 - Environment class: production
-- Verification method: authorized identity check plus current module, field, layout, picklist, pipeline, validation-rule, workflow, action, Blueprint, and record-count reads
+- Verification method: authorized identity check; current module, field, layout, picklist, pipeline, validation-rule, workflow, action, Blueprint, and record-count reads; bounded same-day configuration changes; and independent post-change readback
 - Record or customer data published: none
-- Live write in this acceptance pass: none
+- Live writes during this reconciliation: bounded same-day CRM configuration events recorded in the deployment log
 - Configuration acceptance: **Passed**
 - End-to-end runtime acceptance: **Blocked**
 
@@ -32,7 +32,7 @@ The current field, layout, picklist, conversion, and form map is the [2026-08-14
 | Leads Free Test Intake Review | Leads | Active | Create or edit | False | All: `Entry_Offer = Free 7-Day Missed-Call`; `Intake_Submission_ID` is not empty; `Lead_Status = Free Test Requested`; `Free_Test_Contact_Consent = true` | Create high-priority, not-started task `Review Free-Test Request — ${Leads.Company}` for the configured CRM operator; due current day; notification enabled | After one business day, create high-priority, not-started task `Follow Up — Free-Test Setup Not Scheduled — ${Leads.Company}`; due on execution day; notification enabled |
 | Deals Free Test Form 2 Submitted | Deals | Active | Create or edit | False | All: `Entry_Offer = Free 7-Day Missed-Call`; `Setup_Form_Submission_ID` is not empty; `Setup_Form_Submitted_At` is not empty; `Authorized_Representative_Confirmed = true`; `Test_Scope_Accepted = true` | Create high-priority, not-started task `Review Free-Test Setup and Send Authorization — ${Deals.Deal Name}` for the configured CRM operator; due current day; notification enabled | None |
 | Deals Free Test Initialize Controls | Deals | Active | Create only | Not applicable | `Entry_Offer = Free 7-Day Missed-Call` | Apply the five field updates below | None |
-| Deals Free Test Initialize Limits | Deals | Active | Create only | Not applicable | `Entry_Offer = Free 7-Day Missed-Call` | Apply the two field updates below | None |
+| Deals Free Test Initialize Limits | Deals | Active | Create only | Not applicable | `Entry_Offer = Free 7-Day Missed-Call` | Apply the three field updates below | None |
 
 The two task workflows have no email, webhook, function, or field-update action beyond the actions shown. The Form 2 workflow does not send a signature request or authorize go-live. The two initialization workflows run only when `Entry_Offer` is present during Deal creation; adding it later does not invoke their create-only triggers.
 
@@ -47,6 +47,7 @@ The two task workflows have no email, webhook, function, or field-update action 
 | Deals Free Test Initialize Controls | `Test_Duration_Days` | `7` |
 | Deals Free Test Initialize Limits | `Test_Call_Limit` | Private configured limit; value intentionally withheld |
 | Deals Free Test Initialize Limits | `Test_Scope_Version` | `free-test-scope-v1.0` |
+| Deals Free Test Initialize Limits | `Type` | `Initial Sale` |
 
 ## Active Blueprint Contract
 
@@ -86,26 +87,33 @@ The two task workflows have no email, webhook, function, or field-update action 
 | Close During Authorization | Setup and Authorization → Closed Lost | None | `Reason_For_Loss__s` | None |
 | Close After Authorization | Test Authorized → Closed Lost | None | `Reason_For_Loss__s` | None |
 | Close During QA | Setup and QA → Closed Lost | None | `Reason_For_Loss__s` | None |
-| Close Live Test | Test Live → Closed Lost | None | `Reason_For_Loss__s` | None |
+| Close Live Test | Test Live → Closed Lost | None | `Reason_For_Loss__s`; `Test_End_At`; `Test_End_Reason`; `Rollback_Completed_At` | None |
 | Close After Results Review | Results Review → Closed Lost | None | `Reason_For_Loss__s` | None |
 | Decline Subscription | Subscription Proposed → Closed Lost | None | `Reason_For_Loss__s` | None |
 
+## Verified Configuration Remediations
+
+- Deal `Intake_Submission_ID` and `Setup_Form_Submission_ID` are now case-insensitive unique. Controller-side deterministic lookup, replay handling, and post-write readback remain required.
+- The existing create-only `Deals Free Test Initialize Limits` workflow now also applies `Type = Initial Sale`. This normalizes the field after creation but cannot satisfy the active pre-save validation rule; the controller or native conversion operation must still supply `Type = Initial Sale` during creation.
+- `Close Live Test` now requires the loss reason, test-end timestamp, test-end reason, and rollback-completion timestamp. It still has no after-action and does not synchronize `Test_Status`.
+- An attempted `Confirm Authorization` criterion hardening was rejected by Zoho transition validation. Readback confirmed no partial change: the criterion remains signed-status only, the same five inputs remain required, and after-actions remain absent.
+- Two unassociated `Test_Status = Setup Pending` field-update definitions remain from the rejected Blueprint-action attachment diagnostic. They are not referenced by a workflow or transition and do not execute.
+
 ## Blocking Gaps
 
-1. **Deal creation can fail on `Type`.** An active Deal validation rule rejects a save when `Deals.Type` is empty. `Type` is not a Form 1 or Form 2 input, no Lead field maps to it, and neither initializer sets it. The conversion/controller contract must set the active value `Initial Sale` during Deal creation and read it back.
-2. **Three Blueprint inputs conflict with valid Form 2 conditions.** Form 2 requires `No_Answer_Delay` only for a route that uses no-answer behavior and `Approved_Fallback_Number` only for a fallback destination that needs a number. It permits either alert mobile or alert email. `Begin Setup and QA` instead requires both conditional fields and specifically requires `Alert_Recipient_Email` on every record. A contract-valid Form 2 submission can therefore be blocked.
-3. **Stage and operational status can drift.** The Blueprint is controlled by `Stage`, not `Test_Status`, and every transition has no after-action. Advancing Stage does not update `Test_Status` or its related operational timestamps/statuses.
-4. **Stopping a live test is under-controlled.** `Close Live Test` requires only a loss reason. It does not require `Test_End_At`, `Test_End_Reason`, or `Rollback_Completed_At`, and it does not synchronize Test Status. A Deal can reach Closed Lost while routing or rollback remains unresolved.
-5. **Closed Won is under-controlled.** `Activate Subscription` has no criterion, required evidence, or action. It can mark a Deal Closed Won without authoritative payment or subscription evidence.
-6. **Deal-side idempotency is not metadata-enforced.** `Intake_Submission_ID` and `Setup_Form_Submission_ID` are not unique on Deals. The controller must perform deterministic lookup, replay detection, and post-write readback.
-7. **Runtime evidence is absent.** The four workflows have not executed and the Blueprint has zero enrolled records. Configuration readback does not prove task creation, field initialization, criteria behavior, or transitions.
-8. **The Forms/controller path is unverified.** Current Form 1/Form 2 link names, page order, conditions, hidden/default expressions, secure context, personal/encryption settings, confirmation behavior, retry/replay handling, and live CRM mappings were not available through the CRM audit role.
+1. **Deal creation still requires `Type` before save.** The create-only initializer runs after record creation and cannot satisfy the active pre-save validation rule. The controller or native conversion operation must provide `Type = Initial Sale` during creation and read it back.
+2. **Three Blueprint inputs conflict with valid Form 2 conditions.** Form 2 requires `No_Answer_Delay` only for a route that uses no-answer behavior and `Approved_Fallback_Number` only for a fallback destination that needs a number. It permits either alert mobile or alert email. `Begin Setup and QA` instead requires both conditional fields and specifically requires `Alert_Recipient_Email` on every record.
+3. **Stage and operational status can drift.** The Blueprint is controlled by `Stage`, not `Test_Status`, and every transition still has no after-action. The API rejected Blueprint action association in the active module context, and the web editor did not render safely; a workflow substitute is not valid because Blueprint transition field changes do not trigger workflow rules.
+4. **Authorization criterion hardening remains unapplied.** `Confirm Authorization` retains its signed-status-only criterion after Zoho rejected the bounded hardening attempt. Its authority and scope booleans remain during-transition inputs, but criteria-level enforcement and runtime behavior remain unproven.
+5. **Closed Won is under-controlled.** `Activate Subscription` has no criterion, required evidence, or action.
+6. **Runtime evidence is absent.** The four workflows have no recorded execution and the Blueprint has zero enrolled records.
+7. **The Forms/controller path is unverified.** Current form configuration, secure context, retry/replay handling, live mappings, and controller behavior remain outside the CRM metadata proof.
 
 One unrelated legacy workflow, `Big Deal Rule`, remains active and can send a generic alert when its private configured criteria are met. Its interaction with a future Closed Won acceptance record must be contained during testing.
 
 ## Acceptance Gate
 
-Before calling this workflow operational, a separately approved change must resolve the `Deals.Type` write and the three Form 2/Blueprint requirement conflicts, define Stage-to-`Test_Status` and stop/rollback controls, and tighten Closed Won evidence. Then use one synthetic disposable path to verify Form 1 intake and task creation, named human conversion with `Type = Initial Sale`, both initialization workflows, secure Form 2 update, task creation, every success transition, each loss transition, duplicate/replay handling, and authoritative readback. Contain the unrelated Big Deal rule before exercising a Closed Won canary.
+Before calling this workflow operational, a separately approved change must ensure `Type = Initial Sale` is supplied during Deal creation, reconcile the three Form 2/Blueprint requirement conflicts, define Stage-to-`Test_Status` after-actions, resolve the authorization-control limitation, and tighten Closed Won evidence. Then use one synthetic disposable path to verify Form 1 intake, human-approved native conversion, both initialization workflows, unique-key replay behavior, secure Form 2 update, task creation, every success and loss transition, `Close Live Test` evidence requirements, and authoritative readback. Contain the unrelated Big Deal rule before exercising a Closed Won canary.
 
 ## Capability And Authority Boundary
 

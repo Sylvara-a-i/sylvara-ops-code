@@ -149,6 +149,43 @@ function compositeAcknowledgment() {
   };
 }
 
+function duplicateRollbackAcknowledgment() {
+  return {
+    __composite_requests: [
+      {
+        code: "ROLLBACK_PERFORMED",
+        details: { rollbacked_by_sub_request_index: 2 },
+        message: "synthetic rollback",
+        status: "error",
+      },
+      {
+        code: "ROLLBACK_PERFORMED",
+        details: { rollbacked_by_sub_request_index: 2 },
+        message: "synthetic rollback",
+        status: "error",
+      },
+      {
+        code: "SUCCESS",
+        details: {
+          response: {
+            status_code: 400,
+            body: {
+              data: [{
+                code: "DUPLICATE_DATA",
+                details: { api_name: "Setup_Form_Submission_ID" },
+                message: "synthetic duplicate",
+                status: "error",
+              }],
+            },
+          },
+        },
+        message: "synthetic sub request executed",
+        status: "success",
+      },
+    ],
+  };
+}
+
 function afterRecords() {
   const existing = existingRecords();
   const selectedUpdates = updates();
@@ -201,6 +238,7 @@ test("uses one ordered rollback composite and verifies all three records by inde
 
   const result = await client.updateForm2Composite(existingRecords(), updates());
   assert.equal(result.deal.Setup_Form_Version, "form2-v1");
+  assert.equal(result.replayed, false);
   assert.equal(calls.length, 4);
   const composite = calls[0];
   const body = JSON.parse(composite.options.body);
@@ -227,6 +265,95 @@ test("uses one ordered rollback composite and verifies all three records by inde
     [["workflow"], ["workflow"], ["workflow"]],
   );
   assert.equal(JSON.stringify(body).includes("casey@example.invalid"), false);
+});
+
+test("an exact Deal duplicate rollback is a replay only after all-three-record readback", async () => {
+  const calls = [];
+  const readbacks = afterRecords();
+  const client = clientWithFetch(async (url) => {
+    const path = new URL(url).pathname;
+    calls.push(path);
+    if (path.endsWith("/__composite_requests")) {
+      return jsonResponse(duplicateRollbackAcknowledgment(), 400);
+    }
+    if (path.includes("/Contacts/")) return jsonResponse({ data: [readbacks.contact] });
+    if (path.includes("/Accounts/")) return jsonResponse({ data: [readbacks.account] });
+    if (path.includes("/Deals/")) return jsonResponse({ data: [readbacks.deal] });
+    throw new Error("unexpected synthetic route");
+  });
+
+  const result = await client.updateForm2Composite(existingRecords(), updates());
+  assert.equal(result.replayed, true);
+  assert.equal(result.deal.Setup_Form_Submission_ID, "synthetic-submission-0001");
+  assert.equal(calls.length, 4);
+});
+
+test("a Deal duplicate rollback with a mismatched readback requires reconciliation", async () => {
+  const readbacks = afterRecords();
+  readbacks.deal.Setup_Form_Submission_ID = "synthetic-other-submission";
+  const client = clientWithFetch(async (url) => {
+    const path = new URL(url).pathname;
+    if (path.endsWith("/__composite_requests")) {
+      return jsonResponse(duplicateRollbackAcknowledgment(), 400);
+    }
+    if (path.includes("/Contacts/")) return jsonResponse({ data: [readbacks.contact] });
+    if (path.includes("/Accounts/")) return jsonResponse({ data: [readbacks.account] });
+    return jsonResponse({ data: [readbacks.deal] });
+  });
+
+  await assert.rejects(
+    client.updateForm2Composite(existingRecords(), updates()),
+    (error) =>
+      error instanceof CrmClientError &&
+      error.ambiguous === true &&
+      error.publicCode === "reconciliation_required",
+  );
+});
+
+test("a Deal duplicate rollback with an unavailable readback requires reconciliation", async () => {
+  const client = clientWithFetch(async (url) => {
+    const path = new URL(url).pathname;
+    return path.endsWith("/__composite_requests")
+      ? jsonResponse(duplicateRollbackAcknowledgment(), 400)
+      : jsonResponse({ code: "DEPENDENCY_UNAVAILABLE" }, 503);
+  });
+
+  await assert.rejects(
+    client.updateForm2Composite(existingRecords(), updates()),
+    (error) =>
+      error instanceof CrmClientError &&
+      error.ambiguous === true &&
+      error.publicCode === "reconciliation_required",
+  );
+});
+
+test("an unproven HTTP 400 is not mistaken for the documented Deal rollback", async () => {
+  const client = clientWithFetch(async () => jsonResponse({
+    code: "DUPLICATE_DATA",
+    status: "error",
+  }, 400));
+
+  await assert.rejects(
+    client.updateForm2Composite(existingRecords(), updates()),
+    (error) =>
+      error instanceof CrmClientError &&
+      error.ambiguous === true &&
+      error.publicCode === "reconciliation_required",
+  );
+});
+
+test("a duplicate rollback with the wrong failure index is not accepted", async () => {
+  const rollback = duplicateRollbackAcknowledgment();
+  rollback.__composite_requests[0].details.rollbacked_by_sub_request_index = "2";
+  const client = clientWithFetch(async () => jsonResponse(rollback, 400));
+
+  await assert.rejects(
+    client.updateForm2Composite(existingRecords(), updates()),
+    (error) =>
+      error instanceof CrmClientError &&
+      error.ambiguous === true &&
+      error.publicCode === "reconciliation_required",
+  );
 });
 
 test("malformed composite success and readback mismatch are ambiguous", async () => {

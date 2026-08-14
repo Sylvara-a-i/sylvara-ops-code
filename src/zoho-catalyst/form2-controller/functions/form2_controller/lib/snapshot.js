@@ -37,7 +37,7 @@ function canonicalize(value, seen = new WeakSet()) {
   return result;
 }
 
-function fingerprintSnapshot(snapshot, pepper) {
+function fingerprintValue(value, pepper, domain) {
   if (
     typeof pepper !== "string" ||
     Buffer.byteLength(pepper, "utf8") < 32 ||
@@ -45,16 +45,24 @@ function fingerprintSnapshot(snapshot, pepper) {
   ) {
     throw new SnapshotError("Snapshot pepper is invalid");
   }
-  const canonical = JSON.stringify(canonicalize(snapshot));
+  const canonical = JSON.stringify(canonicalize(value));
   if (Buffer.byteLength(canonical, "utf8") > 32768) {
     throw new SnapshotError("Snapshot exceeds its approved bound");
   }
   return crypto
     .createHmac("sha256", pepper)
-    .update("sylvara.form2.prefill-snapshot.v1", "utf8")
+    .update(domain, "utf8")
     .update(Buffer.from([0]))
     .update(canonical, "utf8")
     .digest("hex");
 }
 
-module.exports = { SnapshotError, fingerprintSnapshot };
+function fingerprintSnapshot(snapshot, pepper) {
+  return fingerprintValue(snapshot, pepper, "sylvara.form2.prefill-snapshot.v1");
+}
+
+function fingerprintSubmission(submission, pepper) {
+  return fingerprintValue(submission, pepper, "sylvara.form2.submission.v1");
+}
+
+module.exports = { SnapshotError, fingerprintSnapshot, fingerprintSubmission };

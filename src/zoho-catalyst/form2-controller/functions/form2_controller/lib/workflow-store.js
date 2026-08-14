@@ -42,6 +42,7 @@ const SUBMISSION_STORED_FIELDS = Object.freeze([
   "SUBMISSION_KEY",
   "PREFILL_KEY",
   "SESSION_ROW_ID",
+  "SUBMISSION_FINGERPRINT",
   "STATUS",
   "LEASE_OWNER",
   "LEASE_EXPIRES_AT",
@@ -81,7 +82,12 @@ const PREFILL_BINDING_KEYS = new Set([
 ]);
 const PREFILL_CONSUME_KEYS = new Set([...PREFILL_BINDING_KEYS, "prefillId"]);
 const PREFILL_READ_KEYS = new Set(["prefillId", "sessionRowId"]);
-const SUBMISSION_CLAIM_KEYS = new Set(["submissionId", "prefillId", "sessionRowId"]);
+const SUBMISSION_CLAIM_KEYS = new Set([
+  "submissionId",
+  "prefillId",
+  "sessionRowId",
+  "submissionFingerprint",
+]);
 const CLAIM_REFERENCE_KEYS = new Set(["rowId", "leaseOwner"]);
 const PREFILL_REFERENCE_KEYS = new Set(["rowId", "consumptionOwner"]);
 
@@ -326,6 +332,7 @@ function normalizeSubmissionRow(rawRow, tableName) {
     submissionKey: String(row.SUBMISSION_KEY ?? ""),
     prefillKey: String(row.PREFILL_KEY ?? ""),
     sessionRowId: validateRowId(row.SESSION_ROW_ID, "workflow_store_unavailable"),
+    submissionFingerprint: String(row.SUBMISSION_FINGERPRINT ?? ""),
     status: String(row.STATUS ?? ""),
     leaseOwner: String(row.LEASE_OWNER ?? ""),
     leaseExpiresAt: String(row.LEASE_EXPIRES_AT ?? ""),
@@ -343,6 +350,7 @@ function normalizeSubmissionRow(rawRow, tableName) {
   if (
     !HASH_PATTERN.test(normalized.submissionKey) ||
     !HASH_PATTERN.test(normalized.prefillKey) ||
+    !HASH_PATTERN.test(normalized.submissionFingerprint) ||
     !SUBMISSION_STATUS_SET.has(normalized.status) ||
     !REVISION_PATTERN.test(normalized.sourceRevision) ||
     normalized.sourceEnvironment !== "development" ||
@@ -530,6 +538,35 @@ function createWorkflowStore(
     false,
     "the durable submission receipt",
   );
+
+  function validateSubmissionBinding(input) {
+    assertExactKeys(input, SUBMISSION_CLAIM_KEYS, "Submission binding is invalid");
+    const submissionId = validateSubmissionId(input.submissionId);
+    const prefillId = validateUuid(input.prefillId, "prefillId");
+    const sessionRowId = validateRowId(input.sessionRowId);
+    const submissionFingerprint = validateFingerprint(input.submissionFingerprint);
+    return {
+      submissionId,
+      submissionKey: deriveKey("submission", submissionId),
+      prefillKey: deriveKey("prefill", prefillId),
+      sessionRowId,
+      submissionFingerprint,
+    };
+  }
+
+  function requireSubmissionBinding(receipt, binding) {
+    if (
+      receipt.prefillKey !== binding.prefillKey ||
+      receipt.sessionRowId !== binding.sessionRowId ||
+      receipt.submissionFingerprint !== binding.submissionFingerprint
+    ) {
+      throw new WorkflowStoreError(
+        "Submission identity is bound to a different workflow or payload",
+        "submission_conflict",
+      );
+    }
+    return receipt;
+  }
 
   async function mintPrefill(input) {
     const binding = validatePrefillBinding(input);
@@ -729,18 +766,19 @@ function createWorkflowStore(
   }
 
   async function readSubmission(input) {
-    assertExactKeys(input, new Set(["submissionId"]), "Submission lookup is invalid");
-    const submissionId = validateSubmissionId(input.submissionId);
-    return readSubmissionByKey(deriveKey("submission", submissionId));
+    const binding = validateSubmissionBinding(input);
+    const receipt = await readSubmissionByKey(binding.submissionKey);
+    return receipt ? requireSubmissionBinding(receipt, binding) : null;
   }
 
   async function claimSubmission(input) {
-    assertExactKeys(input, SUBMISSION_CLAIM_KEYS, "Submission claim is invalid");
-    const submissionId = validateSubmissionId(input.submissionId);
-    const prefillId = validateUuid(input.prefillId, "prefillId");
-    const sessionRowId = validateRowId(input.sessionRowId);
-    const submissionKey = deriveKey("submission", submissionId);
-    const prefillKey = deriveKey("prefill", prefillId);
+    const binding = validateSubmissionBinding(input);
+    const {
+      submissionKey,
+      prefillKey,
+      sessionRowId,
+      submissionFingerprint,
+    } = binding;
     const leaseOwner = mintUuid("submission lease owner");
     const nowMs = validateNow(now);
     const timestamp = new Date(nowMs).toISOString();
@@ -748,6 +786,7 @@ function createWorkflowStore(
       SUBMISSION_KEY: submissionKey,
       PREFILL_KEY: prefillKey,
       SESSION_ROW_ID: sessionRowId,
+      SUBMISSION_FINGERPRINT: submissionFingerprint,
       STATUS: "processing",
       LEASE_OWNER: leaseOwner,
       LEASE_EXPIRES_AT: new Date(nowMs + leaseDurationMs).toISOString(),
@@ -776,15 +815,7 @@ function createWorkflowStore(
         "reconciliation_required",
       );
     }
-    if (
-      readback.prefillKey !== prefillKey ||
-      readback.sessionRowId !== sessionRowId
-    ) {
-      throw new WorkflowStoreError(
-        "Submission identity is bound to a different workflow",
-        "submission_conflict",
-      );
-    }
+    requireSubmissionBinding(readback, binding);
     if (readback.status === "succeeded") {
       return Object.freeze({ outcome: "succeeded", receipt: readback });
     }
@@ -828,15 +859,7 @@ function createWorkflowStore(
         // the fresh lease owner and the exact durable readback below.
       }
       const reclaimed = await readSubmissionByKey(submissionKey);
-      if (
-        reclaimed.prefillKey !== prefillKey ||
-        reclaimed.sessionRowId !== sessionRowId
-      ) {
-        throw new WorkflowStoreError(
-          "Submission identity is bound to a different workflow",
-          "submission_conflict",
-        );
-      }
+      requireSubmissionBinding(reclaimed, binding);
       if (reclaimed.status === "succeeded") {
         return Object.freeze({ outcome: "succeeded", receipt: reclaimed });
       }

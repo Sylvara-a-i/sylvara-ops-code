@@ -74,6 +74,7 @@
         { "api_name": "SUBMISSION_KEY", "type": "varchar", "max_length": 64, "mandatory": true, "unique": true, "pii_ephi": true },
         { "api_name": "PREFILL_KEY", "type": "varchar", "max_length": 64, "mandatory": true, "unique": false, "pii_ephi": true },
         { "api_name": "SESSION_ROW_ID", "type": "varchar", "max_length": 30, "mandatory": true, "unique": false, "pii_ephi": true },
+        { "api_name": "SUBMISSION_FINGERPRINT", "type": "varchar", "max_length": 64, "mandatory": true, "unique": false, "pii_ephi": true },
         { "api_name": "STATUS", "type": "varchar", "max_length": 32, "mandatory": true, "unique": false },
         { "api_name": "LEASE_OWNER", "type": "varchar", "max_length": 36, "mandatory": true, "unique": false },
         { "api_name": "LEASE_EXPIRES_AT", "type": "varchar", "max_length": 32, "mandatory": true, "unique": false },

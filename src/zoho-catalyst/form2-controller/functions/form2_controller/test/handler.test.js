@@ -195,6 +195,7 @@ function fixture() {
   let crmReadError = null;
   let mintError = null;
   let verifyError = null;
+  let compositeReplay = false;
 
   function nextModifiedTime() {
     modifiedSequence += 1;
@@ -226,7 +227,7 @@ function fixture() {
       Object.assign(records.contact, clone(updates.contactUpdate), { Modified_Time: nextModifiedTime() });
       Object.assign(records.account, clone(updates.accountUpdate), { Modified_Time: nextModifiedTime() });
       Object.assign(records.deal, clone(updates.dealUpdate), { Modified_Time: nextModifiedTime() });
-      return clone(records);
+      return { ...clone(records), replayed: compositeReplay };
     },
   };
 
@@ -323,6 +324,20 @@ function fixture() {
       assert.equal(String(input.sessionRowId), String(prefill.sessionRowId));
       return Object.freeze({ ...prefill });
     },
+    async readSubmission(input) {
+      events.push("workflow.submission.read");
+      if (!receipt || input.submissionId !== receipt.submissionId) return null;
+      if (
+        input.prefillId !== receipt.prefillId ||
+        String(input.sessionRowId) !== String(receipt.sessionRowId) ||
+        input.submissionFingerprint !== receipt.submissionFingerprint
+      ) {
+        const error = new Error("synthetic submission binding conflict");
+        error.publicCode = "submission_conflict";
+        throw error;
+      }
+      return Object.freeze({ ...receipt });
+    },
     async claimSubmission(input) {
       events.push("workflow.submission.claim");
       if (forceClaimOutcome === "unresolved") {
@@ -330,6 +345,9 @@ function fixture() {
       }
       if (receipt) {
         assert.equal(input.submissionId, receipt.submissionId);
+        assert.equal(input.prefillId, receipt.prefillId);
+        assert.equal(String(input.sessionRowId), String(receipt.sessionRowId));
+        assert.equal(input.submissionFingerprint, receipt.submissionFingerprint);
         return {
           outcome: receipt.status === "succeeded" ? "succeeded" : "unresolved",
           receipt: Object.freeze({ ...receipt }),
@@ -339,6 +357,9 @@ function fixture() {
         rowId: "7200000000001",
         leaseOwner: LEASE_OWNER,
         submissionId: input.submissionId,
+        prefillId: input.prefillId,
+        sessionRowId: input.sessionRowId,
+        submissionFingerprint: input.submissionFingerprint,
         status: "processing",
       };
       return { outcome: "claimed", receipt: Object.freeze({ ...receipt }) };
@@ -394,6 +415,7 @@ function fixture() {
     get session() { return session; },
     setForceClaimOutcome(value) { forceClaimOutcome = value; },
     setCompositeError(value) { compositeError = value; },
+    setCompositeReplay(value) { compositeReplay = value; },
     setCrmReadError(value) { crmReadError = value; },
     setMintError(value) { mintError = value; },
     setVerifyError(value) { verifyError = value; },
@@ -768,6 +790,22 @@ test("runs claim, one-time consume, atomic CRM composite, receipt, then session 
   assert.equal(selected.records.deal.Setup_Access_Status, "Synthetic Submitted");
 });
 
+test("reports an independently verified CRM uniqueness replay as a duplicate success", async () => {
+  const selected = fixture();
+  await issue(selected);
+  const prefillResult = await prefill(selected);
+  selected.setCompositeReplay(true);
+  selected.events.length = 0;
+
+  const result = await submit(selected, validSubmission(prefillResult.body));
+
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.body, { ok: true, accepted: true, duplicate: true });
+  assert.equal(result.outcome, "duplicate_succeeded");
+  assert.equal(selected.events.includes("workflow.submission.succeeded"), true);
+  assert.equal(selected.events.includes("session.submitted"), true);
+});
+
 test("email and mobile changes fail through the contract before consume or CRM mutation", async () => {
   for (const [submissionId, change] of [
     ["10002", { businessEmail: "different@example.invalid" }],
@@ -816,6 +854,50 @@ test("an exact succeeded duplicate requires matching CRM readback and does not r
   assert.deepEqual(duplicate.body, { ok: true, accepted: true, duplicate: true });
   assert.equal(selected.events.includes("crm.get.Deals"), true);
   assert.equal(selected.events.includes("crm.composite"), false);
+  assert.equal(selected.events.includes("workflow.submission.read"), true);
+  assert.equal(selected.events.includes("workflow.submission.claim"), false);
+});
+
+test("a completed submission ID with changed respondent data is rejected before CRM", async () => {
+  const selected = fixture();
+  await issue(selected);
+  const prefillResult = await prefill(selected);
+  const body = validSubmission(prefillResult.body);
+  assert.equal((await submit(selected, body)).status, 200);
+  selected.events.length = 0;
+
+  const conflicting = await submit(selected, {
+    ...body,
+    requestedStartDate: "2026-08-21",
+  });
+
+  assert.equal(conflicting.status, 409);
+  assert.deepEqual(conflicting.body, { ok: false, code: "setup_conflict" });
+  assert.equal(selected.events.includes("workflow.submission.read"), true);
+  assert.equal(selected.events.includes("workflow.submission.claim"), false);
+  assert.equal(selected.events.some((event) => event.startsWith("crm.")), false);
+});
+
+test("a new submission ID after session completion creates no receipt claim", async () => {
+  const selected = fixture();
+  await issue(selected);
+  const prefillResult = await prefill(selected);
+  const body = validSubmission(prefillResult.body);
+  assert.equal((await submit(selected, body)).status, 200);
+  const completedReceipt = clone(selected.receipt);
+  selected.events.length = 0;
+
+  const conflicting = await submit(selected, {
+    ...body,
+    submissionId: "10002",
+  });
+
+  assert.equal(conflicting.status, 409);
+  assert.deepEqual(conflicting.body, { ok: false, code: "setup_conflict" });
+  assert.deepEqual(selected.receipt, completedReceipt);
+  assert.equal(selected.events.includes("workflow.submission.read"), true);
+  assert.equal(selected.events.includes("workflow.submission.claim"), false);
+  assert.equal(selected.events.some((event) => event.startsWith("crm.")), false);
 });
 
 test("an unresolved duplicate is non-successful and never reaches CRM", async () => {

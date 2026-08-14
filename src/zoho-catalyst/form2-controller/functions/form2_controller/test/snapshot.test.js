@@ -2,7 +2,11 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { SnapshotError, fingerprintSnapshot } = require("../lib/snapshot");
+const {
+  SnapshotError,
+  fingerprintSnapshot,
+  fingerprintSubmission,
+} = require("../lib/snapshot");
 
 const PEPPER = "P".repeat(43);
 
@@ -12,7 +16,9 @@ test("fingerprints equivalent key ordering identically and changed values differ
   const changed = { ...left, firstName: "Changed" };
   assert.equal(fingerprintSnapshot(left, PEPPER), fingerprintSnapshot(reordered, PEPPER));
   assert.notEqual(fingerprintSnapshot(left, PEPPER), fingerprintSnapshot(changed, PEPPER));
+  assert.notEqual(fingerprintSnapshot(left, PEPPER), fingerprintSubmission(left, PEPPER));
   assert.match(fingerprintSnapshot(left, PEPPER), /^[a-f0-9]{64}$/);
+  assert.match(fingerprintSubmission(left, PEPPER), /^[a-f0-9]{64}$/);
 });
 
 test("rejects unsafe values, cycles, oversized snapshots, and weak peppers", () => {

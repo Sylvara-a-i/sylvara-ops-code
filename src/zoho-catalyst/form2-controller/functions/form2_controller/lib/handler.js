@@ -22,7 +22,7 @@ const {
   isValidAccessToken,
   verifyCustomHeader,
 } = require("./security");
-const { fingerprintSnapshot } = require("./snapshot");
+const { fingerprintSnapshot, fingerprintSubmission } = require("./snapshot");
 
 const ISSUE_KEYS = new Set(["dealId", "issueRequestId"]);
 const PREFILL_KEYS = new Set(["setupToken"]);
@@ -854,14 +854,36 @@ async function handleSubmission(body, dependencies, nowMs) {
     });
   }
   assertBindingMatchesSession(revision, session);
+  const submissionBinding = {
+    submissionId: namespacedSubmissionId,
+    prefillId: body.prefillId,
+    sessionRowId: session.rowId,
+    submissionFingerprint: fingerprintSubmission({
+      submissionId: namespacedSubmissionId,
+      prefillId: body.prefillId,
+      values: submissionFormPayload(body),
+    }, dependencies.config.tokenPepper),
+  };
+
+  if (session.status === "submitted") {
+    let receipt;
+    try {
+      receipt = await dependencies.workflowStore.readSubmission(submissionBinding);
+    } catch (error) {
+      throw publicError(error);
+    }
+    if (!receipt || receipt.status !== "succeeded") {
+      throw new ControllerError("Submitted session does not match a completed receipt", {
+        status: 409,
+        publicCode: "setup_conflict",
+      });
+    }
+    return verifySucceededDuplicate(session, namespacedSubmissionId, dependencies);
+  }
 
   let claim;
   try {
-    claim = await dependencies.workflowStore.claimSubmission({
-      submissionId: namespacedSubmissionId,
-      prefillId: body.prefillId,
-      sessionRowId: session.rowId,
-    });
+    claim = await dependencies.workflowStore.claimSubmission(submissionBinding);
   } catch (error) {
     throw publicError(error);
   }
@@ -918,15 +940,16 @@ async function handleSubmission(body, dependencies, nowMs) {
       prefillId: body.prefillId,
       ...prefillBinding(session, existing, currentFingerprint),
     });
-    await dependencies.crmClient.updateForm2Composite(existing, updates);
+    const crmOutcome = await dependencies.crmClient.updateForm2Composite(existing, updates);
     crmCommitted = true;
     await dependencies.workflowStore.markSubmissionSucceeded(receiptReference);
     await dependencies.sessionStore.markSubmitted(session.rowId);
+    const duplicate = crmOutcome?.replayed === true;
     return response(
       200,
-      { ok: true, accepted: true, duplicate: false },
+      { ok: true, accepted: true, duplicate },
       "submission",
-      "accepted",
+      duplicate ? "duplicate_succeeded" : "accepted",
     );
   } catch (error) {
     const normalized = publicError(error);

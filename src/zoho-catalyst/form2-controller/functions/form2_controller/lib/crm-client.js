@@ -388,6 +388,46 @@ function validateCompositeAcknowledgments(json, targets) {
   });
 }
 
+function isRollbackEntry(entry, failedIndex) {
+  return (
+    entry?.status === "error" &&
+    entry?.code === "ROLLBACK_PERFORMED" &&
+    entry?.details?.rollbacked_by_sub_request_index === failedIndex
+  );
+}
+
+function isDuplicateUpdateBody(body) {
+  if (!isPlainObject(body)) return false;
+  const candidate = Array.isArray(body.data)
+    ? body.data.length === 1
+      ? body.data[0]
+      : null
+    : body;
+  return (
+    isPlainObject(candidate) &&
+    candidate.status === "error" &&
+    candidate.code === "DUPLICATE_DATA"
+  );
+}
+
+function isDealDuplicateRollback(json, targetCount) {
+  const responses = json?.__composite_requests;
+  const dealIndex = 2;
+  if (!Array.isArray(responses) || targetCount !== 3 || responses.length !== targetCount) {
+    return false;
+  }
+  if (!responses.slice(0, dealIndex).every((entry) => isRollbackEntry(entry, dealIndex))) {
+    return false;
+  }
+  const dealResponse = responses[dealIndex];
+  return (
+    dealResponse?.status === "success" &&
+    dealResponse?.code === "SUCCESS" &&
+    dealResponse?.details?.response?.status_code === 400 &&
+    isDuplicateUpdateBody(dealResponse.details.response.body)
+  );
+}
+
 function createCrmClient(
   config,
   {
@@ -516,6 +556,33 @@ function createCrmClient(
     ];
     for (const target of targets) validateModifiedTime(target.modifiedTime);
 
+    async function readbackAndVerifyForm2() {
+      try {
+        const [contact, account, deal] = await Promise.all([
+          getRecord("Contacts", existing.contact.id),
+          getRecord("Accounts", existing.account.id),
+          getRecord("Deals", existing.deal.id),
+        ]);
+        verifyRecordRelationships({ contact, account, deal });
+        verifyFields(contact, updates.contactUpdate, {
+          preservedFrom: existing.contact,
+          preservedFields: PRESERVED_CONTACT_FIELDS,
+        });
+        verifyFields(account, updates.accountUpdate);
+        verifyFields(deal, updates.dealUpdate, {
+          preservedFrom: existing.deal,
+          preservedFields: PRESERVED_DEAL_FIELDS,
+        });
+        return { contact, account, deal };
+      } catch {
+        fail("CRM composite readback could not prove the transaction outcome", {
+          ambiguous: true,
+          publicCode: "reconciliation_required",
+          status: 503,
+        });
+      }
+    }
+
     const response = await authorizedRequest(
       `${boundary.apiBaseUrl}/__composite_requests`,
       {
@@ -539,29 +606,25 @@ function createCrmClient(
       { sideEffecting: true, write: true },
     );
     if (response.status !== 200) {
+      if (response.status === 400 && isDealDuplicateRollback(response.json, targets.length)) {
+        const readback = await readbackAndVerifyForm2();
+        return Object.freeze({ ...readback, replayed: true });
+      }
+      if (response.status === 400) {
+        fail("CRM composite rollback could not be proven safe", {
+          ambiguous: true,
+          publicCode: "reconciliation_required",
+          status: 503,
+        });
+      }
       fail("CRM rejected or rolled back the composite update", classifyRejectedStatus(
         response.status,
         { sideEffecting: true },
       ));
     }
     validateCompositeAcknowledgments(response.json, targets);
-
-    const [contact, account, deal] = await Promise.all([
-      getRecord("Contacts", existing.contact.id),
-      getRecord("Accounts", existing.account.id),
-      getRecord("Deals", existing.deal.id),
-    ]);
-    verifyRecordRelationships({ contact, account, deal });
-    verifyFields(contact, updates.contactUpdate, {
-      preservedFrom: existing.contact,
-      preservedFields: PRESERVED_CONTACT_FIELDS,
-    });
-    verifyFields(account, updates.accountUpdate);
-    verifyFields(deal, updates.dealUpdate, {
-      preservedFrom: existing.deal,
-      preservedFields: PRESERVED_DEAL_FIELDS,
-    });
-    return Object.freeze({ contact, account, deal });
+    const readback = await readbackAndVerifyForm2();
+    return Object.freeze({ ...readback, replayed: false });
   }
 
   return Object.freeze({ getRecord, updateForm2Composite, updateRecord });

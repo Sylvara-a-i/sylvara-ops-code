@@ -43,7 +43,7 @@ The Deal subrequest is last so the active Form 2 workflow evaluates only after t
 
 - The session table uses unique `ISSUE_KEY` and `TOKEN_HASH` columns and stores the minimum CRM relationship context, expiry, attempts, and coarse state. Every distinct prefill preparation is bounded; concurrent exact requests converge on the same durable attempt and revision, while a later repeat consumes another attempt. An elapsed session is durably moved to `expired` before the public route returns its generic 404. The configured ceiling is at least two so one post-verification prefill-store failure can still receive one bounded retry.
 - The prefill table uses a unique `PREFILL_KEY` and stores the durable session-attempt number, the exact three CRM revision timestamps, and an HMAC of the allowlisted prefill snapshot. Its opaque prefill UUID and key are deterministic only from the server pepper, session row, and bounded attempt, so concurrent requests that share one successful attempt converge on one revision instead of multiplying rows. It does not store the prefill values.
-- The submission table uses a unique `SUBMISSION_KEY`, a bounded lease, and a terminal receipt. It does not store the raw Zoho Forms Unique ID or body. Only an explicitly recorded, unambiguous pre-commit dependency failure can be reclaimed, through a conditional lease rotation and up to the configured attempt ceiling; an expired in-flight lease is never replayed automatically.
+- The submission table uses a unique `SUBMISSION_KEY`, a domain-separated HMAC `SUBMISSION_FINGERPRINT` over the canonical submission binding and values, a bounded lease, and a terminal receipt. It does not store the raw Zoho Forms Unique ID or body. A completed replay must match that fingerprint before CRM readback; changed data under the same ID is a conflict, and a new ID cannot create a receipt after the session is terminal. Only an explicitly recorded, unambiguous pre-commit dependency failure can be reclaimed, through a conditional lease rotation and up to the configured attempt ceiling; an expired in-flight lease is never replayed automatically.
 
 Unique insert is the concurrency boundary. A timeout or duplicate is resolved only by an exact unique-key readback. State transitions use one conditional ZCQL `UPDATE` whose `WHERE` clause includes the current state and lease or attempt value, followed by exact row readback. Cache and process memory are never authoritative.
 
@@ -74,6 +74,8 @@ The controller updates Contact and Account respondent fields, then these Deal fi
 - the exact privately configured submitted setup-access status.
 
 It deliberately does not update `Test_Duration_Days`, `Test_Call_Limit`, or `Test_Scope_Version`; current CRM initialization workflows own those values. The active Form 2 submitted workflow is expected to create the internal review task after the successful Deal update. It must not be duplicated in Catalyst.
+
+`Setup_Form_Submission_ID` is a case-insensitive unique Deal field in the current CRM contract. If CRM returns the documented rollback response with the Deal update failing as `DUPLICATE_DATA`, the controller treats it as a replay only after independent Contact, Account, and Deal reads match every intended update, relationship, and protected field. Any different response shape or readback enters normal rejection or reconciliation handling.
 
 ## Manual Development Setup
 
@@ -126,6 +128,7 @@ Activation requires current synthetic evidence for every item below:
 - Forms sends the exact flat JSON types, especially the multi-select array and literal booleans;
 - valid prefill returns no CRM IDs, stale prefill fails with no write, and an old browser tab cannot overwrite a newer snapshot;
 - an exact duplicate submission produces one CRM outcome and a successful duplicate acknowledgment;
+- changed data under a completed submission ID and a new ID after session completion both fail before a receipt claim or CRM call;
 - invalid, expired, revoked, conflicting, oversized, malformed, unknown-field, wrong-header, and wrong-route requests fail closed;
 - a failed middle CRM subrequest rolls back all three writes and does not trigger the Form 2 workflow;
 - a successful Composite triggers the existing internal review task exactly once, and independent readback matches every updated and preserved field;

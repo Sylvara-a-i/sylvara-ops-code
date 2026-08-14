@@ -15,8 +15,8 @@ The production configuration events recorded here are the 2026-08-14 Free-Test C
 ```text
 Date (UTC): 2026-08-14
 Environment class: production
-Change reference: draft pull request #22
-Immutable artifact reference: current sanitized schema fingerprints in src/zoho-crm/reference/snapshots/2026-08-14/README.md
+Change reference: pull request #22; merged commit cf96445f04bc516b0e75be4c9ab40fd8fa996102
+Immutable artifact reference: commit cf96445f04bc516b0e75be4c9ab40fd8fa996102 and the fingerprints recorded in that revision’s 2026-08-14 CRM snapshot
 Approval reference: owner authorization retained in the private task record
 Operator role: separately scoped CRM automation roles with independent CRM Audit readback
 Pre-deployment state: exact organization identity and current workflow, Blueprint, module, field, layout, picklist, and pipeline metadata verified privately
@@ -26,6 +26,42 @@ Readback result: four active workflows and one active eight-state, twelve-transi
 Rollback target: captured private prestate only; inactive drafts are explicitly excluded as rollback targets, and any deactivation or replacement requires fresh record-count, state-impact, and replacement readback approval
 Outcome: configuration present; runtime acceptance blocked because Deal creation requires an unmapped `Type`, three unconditional Blueprint inputs conflict with valid Form 2 conditions, every transition has no after-action, Stage can drift from Test Status, safe-stop and Closed Won evidence are under-controlled, and Deal submission IDs are not metadata-unique
 Follow-up: set and read back `Type = Initial Sale` during Deal creation; reconcile the three Form 2/Blueprint requirements; define Stage/Test Status, stop/rollback, and Closed Won controls; verify Forms/controller security and replay behavior; then run a separately approved synthetic canary while keeping native Lead conversion human-approved
+```
+
+## 2026-08-14 — Zoho CRM Free-Test Idempotency, Type Normalization, And Safe-Stop Remediation
+
+```text
+Date (UTC): 2026-08-14
+Environment class: production
+Change reference: owner-authorized same-day remediation; repository publication pending
+Immutable artifact reference: updated 2026-08-14 CRM metadata and effective-automation snapshots
+Approval reference: owner authorization retained in the private task record
+Operator role: separately scoped CRM automation roles with independent CRM Audit readback
+Pre-deployment state: both Deal submission-ID fields were not unique; the create-only limits workflow had two field updates; Close Live Test required only a loss reason; every Blueprint transition had no after-action
+Action: configuration change; make Deal Intake Submission ID and Setup Form Submission ID case-insensitive unique; add Type = Initial Sale to the existing create-only limits workflow; require Test End At, Test End Reason, and Rollback Completed At during Close Live Test; and test a bounded Blueprint status-action association
+Smoke-test result: blocked for an end-to-end runtime path; no record submission, workflow execution, native conversion, or Blueprint transition was exercised
+Readback result: the two uniqueness changes, three-action limits workflow, and four-field Close Live gate matched; Blueprint action association was rejected, all twelve transitions still had no after-action, and two unassociated inert Setup Pending field-update definitions remained
+Rollback target: captured private prestate for the two field uniqueness settings, workflow action set, transition inputs, and unassociated diagnostic definitions
+Outcome: succeeded for the bounded uniqueness, normalization, and safe-stop changes; the Blueprint action attempt failed closed without association. The Type update is post-create normalization and cannot satisfy pre-save validation.
+Follow-up: supply Type during Deal creation; reconcile Form 2 and Blueprint requirements; use a supported native Blueprint after-action path; separately approve cleanup of the two inert definitions; tighten Closed Won; verify controller replay behavior; then run a separately approved synthetic canary
+```
+
+## 2026-08-14 — Zoho CRM Confirm Authorization Criteria Hardening Attempt
+
+```text
+Date (UTC): 2026-08-14
+Environment class: production
+Change reference: owner-authorized bounded remediation attempt; repository publication pending
+Immutable artifact reference: immediate post-attempt Blueprint readback retained in the private audit record
+Approval reference: owner authorization retained in the private task record
+Operator role: separately scoped CRM automation role with independent CRM Audit readback
+Pre-deployment state: Confirm Authorization used the signed-status criterion, required five during-transition inputs, and had no after-actions
+Action: attempt to require signed status plus confirmed authority and accepted scope in the transition criterion
+Smoke-test result: failed; Zoho rejected the transition update during validation
+Readback result: unchanged; the signed-status-only criterion, five required inputs, and absent after-actions remained intact
+Rollback target: not applicable because Zoho accepted no configuration change
+Outcome: contained with no partial mutation
+Follow-up: do not retry until a supported transition-criteria contract and rollback-safe test path are verified
 ```
 
 ## 2026-08-05 — Zoho CRM Lead Schema, Layout, And Address Migration

@@ -128,6 +128,8 @@ class ZohoCrmSchemaSnapshot20260814Tests(unittest.TestCase):
                 ("Leads", "Intake_Submission_ID"),
                 ("Contacts", "Email"),
                 ("Accounts", "Customer_ID"),
+                ("Deals", "Intake_Submission_ID"),
+                ("Deals", "Setup_Form_Submission_ID"),
             },
             unique_enabled,
         )
@@ -505,6 +507,23 @@ class ZohoCrmSchemaSnapshot20260814Tests(unittest.TestCase):
         )
         self.assertEqual("configured_private_limit", call_limit["write_or_derive_behavior"])
 
+        setup_submission = next(
+            row for row in self.form_map
+            if row["form_or_process"] == "Form 2"
+            and row["destination_field_api_name"] == "Setup_Form_Submission_ID"
+        )
+        self.assertEqual(
+            "case_insensitive_crm_unique_idempotency_key",
+            setup_submission["write_or_derive_behavior"],
+        )
+        self.assertEqual(
+            "case_insensitive",
+            self.fields_by_key[("Deals", "Intake_Submission_ID")]["unique_status"],
+        )
+        self.assertEqual(
+            "case_insensitive",
+            self.fields_by_key[("Deals", "Setup_Form_Submission_ID")]["unique_status"],
+        )
         for row in self.form_map:
             if row["form_or_process"] == "Free Test Delivery":
                 self.assertEqual("not_applicable_crm_control", row["form_order_status"])
@@ -544,7 +563,13 @@ class ZohoCrmSchemaSnapshot20260814Tests(unittest.TestCase):
             "`Approved_Fallback_Number`",
             "`Alert_Recipient_Email`",
             "Stage and operational status can drift",
-            "Stopping a live test is under-controlled",
+            "Verified Configuration Remediations",
+            "case-insensitive unique",
+            "normalizes the field after creation",
+            "cannot satisfy the active pre-save validation rule",
+            "`Rollback_Completed_At`",
+            "Authorization criterion hardening remains unapplied",
+            "rejected by Zoho transition validation",
             "Closed Won is under-controlled",
             "Forms/controller path is unverified",
         ):
