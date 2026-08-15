@@ -280,6 +280,30 @@ test("private field-team choices fail closed unless unchanged or privately allow
   assert.equal(updates.accountUpdate.Field_Team_Size_Band, "Different Private Band");
 });
 
+test("preserves the exact en-dash field-team size bands used by Forms and CRM", () => {
+  const allowedFieldTeamSizeBands = ["1–2", "3–4"];
+  for (const fieldTeamSizeBand of allowedFieldTeamSizeBands) {
+    const records = existingRecords();
+    records.account.Field_Team_Size_Band = fieldTeamSizeBand;
+    const updates = validateForm2Payload(
+      { ...validPayload(), fieldTeamSizeBand },
+      { existing: records, ...SERVER_OPTIONS, allowedFieldTeamSizeBands },
+    );
+    assert.equal(updates.accountUpdate.Field_Team_Size_Band, fieldTeamSizeBand);
+    assert.equal(buildPrefillPayload(records).fieldTeamSizeBand, fieldTeamSizeBand);
+  }
+
+  for (const fieldTeamSizeBand of ["1-2", "3-4"]) {
+    assert.throws(
+      () => validateForm2Payload(
+        { ...validPayload(), fieldTeamSizeBand },
+        { existing: existingRecords(), ...SERVER_OPTIONS, allowedFieldTeamSizeBands },
+      ),
+      (error) => error instanceof FormContractError && error.field === "fieldTeamSizeBand",
+    );
+  }
+});
+
 test("requires Contact, Account, and Deal to resolve to one relationship context", () => {
   const records = existingRecords();
   records.deal.Contact_Name.id = `${"9".repeat(16)}99`;
