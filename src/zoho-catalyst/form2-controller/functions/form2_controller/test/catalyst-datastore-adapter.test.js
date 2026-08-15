@@ -105,6 +105,7 @@ test("executes exact hash and ROWID SELECT statements for every store lookup", a
   const { adapter, calls } = fixture();
   await adapter.findRowsByTokenHash(SESSION_TABLE, "a".repeat(64));
   await adapter.findRowsByIssueKey(SESSION_TABLE, "b".repeat(64));
+  await adapter.findRowsByDealIssuanceKey(SESSION_TABLE, "e".repeat(64));
   await adapter.findRowsByPrefillKey(PREFILL_TABLE, "c".repeat(64));
   await adapter.findRowsBySubmissionKey(SUBMISSION_TABLE, "d".repeat(64));
   await adapter.findRowsByRowId(PREFILL_TABLE, "1000000000002");
@@ -112,6 +113,7 @@ test("executes exact hash and ROWID SELECT statements for every store lookup", a
   assert.deepEqual(calls.queries, [
     `SELECT * FROM ${SESSION_TABLE} WHERE TOKEN_HASH = '${"a".repeat(64)}'`,
     `SELECT * FROM ${SESSION_TABLE} WHERE ISSUE_KEY = '${"b".repeat(64)}'`,
+    `SELECT * FROM ${SESSION_TABLE} WHERE DEAL_ISSUANCE_KEY = '${"e".repeat(64)}'`,
     `SELECT * FROM ${PREFILL_TABLE} WHERE PREFILL_KEY = '${"c".repeat(64)}'`,
     `SELECT * FROM ${SUBMISSION_TABLE} WHERE SUBMISSION_KEY = '${"d".repeat(64)}'`,
     `SELECT * FROM ${PREFILL_TABLE} WHERE ROWID = 1000000000002`,
@@ -219,6 +221,10 @@ test("requires lowercase 64-character hashes and digit-only bounded ROWIDs", asy
   for (const hash of ["a".repeat(63), "A".repeat(64), `${"a".repeat(63)}'`]) {
     await assert.rejects(
       adapter.findRowsByIssueKey(SESSION_TABLE, hash),
+      CatalystDataStoreAdapterError,
+    );
+    await assert.rejects(
+      adapter.findRowsByDealIssuanceKey(SESSION_TABLE, hash),
       CatalystDataStoreAdapterError,
     );
   }

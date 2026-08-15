@@ -254,8 +254,15 @@ function createCatalystDataStoreAdapter(app, config) {
     return executeQuery(statement, "Data Store ROWID query");
   }
 
+  const findRowsByDealIssuanceKey = (tableName, issuanceKey) => findRowsByHash(
+    tableName,
+    "DEAL_ISSUANCE_KEY",
+    issuanceKey,
+  );
+
   return Object.freeze({
     findRowsByIssueKey,
+    findRowsByDealIssuanceKey,
     findRowsByPrefillKey,
     findRowsByRowId,
     findRowsBySubmissionKey,

@@ -4,8 +4,6 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const { ConfigurationError, NUMERIC_LIMITS, loadConfig } = require("../lib/config");
 
-const REVISION = "a".repeat(40);
-
 function baseEnvironment(overrides = {}) {
   return {
     DEPLOYMENT_ENVIRONMENT: "development",
@@ -34,7 +32,7 @@ function baseEnvironment(overrides = {}) {
     CRM_API_BASE_URL: "https://www.zohoapis.com/crm/v8",
     CRM_READ_CONNECTION_LINK_NAME: "SyntheticCrmRead",
     CRM_WRITE_CONNECTION_LINK_NAME: "SyntheticCrmWrite",
-    SOURCE_REVISION: REVISION,
+    SOURCE_REVISION: "a".repeat(40),
     ...overrides,
   };
 }
@@ -181,9 +179,12 @@ test("rejects malformed aliases, versions, revisions, and Connection link names"
   }
 });
 
-test("binds the runtime revision to the stamped deployed artifact", () => {
+test("binds the runtime source revision to the stamped deployed artifact", () => {
   const environment = baseEnvironment();
   assert.throws(() => loadConfig(environment), ConfigurationError);
-  assert.throws(() => loadConfig(environment, "b".repeat(40)), ConfigurationError);
-  assert.equal(loadConfig(environment, REVISION).sourceRevision, REVISION);
+  assert.throws(
+    () => loadConfig(environment, "b".repeat(40)),
+    ConfigurationError,
+  );
+  assert.equal(loadConfig(environment, environment.SOURCE_REVISION).sourceRevision, "a".repeat(40));
 });

@@ -2,7 +2,7 @@
   "schema_version": 1,
   "status": "proposed-development-only",
   "rules": {
-    "values": "Real secret, endpoint, route, table, alias, Connection, picklist, and deployment values exist only in Catalyst Development configuration.",
+    "values": "Any real secret, endpoint, route, table, alias, Connection, picklist, and deployment values must exist only in Catalyst Development configuration.",
     "logging": "No configuration value may be logged except SOURCE_REVISION.",
     "production": "This source revision rejects every Production configuration."
   },

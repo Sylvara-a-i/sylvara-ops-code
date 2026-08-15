@@ -1,6 +1,7 @@
 "use strict";
 
 const crypto = require("node:crypto");
+const { SOURCE_REVISION_PATTERN } = require("./config");
 
 const PREFILL_STATUSES = Object.freeze([
   "ready",
@@ -62,7 +63,6 @@ const SUBMISSION_STATUS_SET = new Set(SUBMISSION_STATUSES);
 const HASH_PATTERN = /^[a-f0-9]{64}$/;
 const RECORD_ID_PATTERN = /^[0-9]{10,30}$/;
 const ROW_ID_PATTERN = /^[0-9]{1,30}$/;
-const REVISION_PATTERN = /^[a-f0-9]{40}$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MODIFIED_TIME_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/;
 const ISO_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
@@ -134,7 +134,7 @@ function validateConfig(config) {
     !safeTable.test(config?.submissionTableName ?? "") ||
     config.prefillTableName === config.submissionTableName ||
     config?.deploymentEnvironment !== "development" ||
-    !REVISION_PATTERN.test(config?.sourceRevision ?? "") ||
+    !SOURCE_REVISION_PATTERN.test(config?.sourceRevision ?? "") ||
     typeof pepper !== "string" ||
     Buffer.byteLength(pepper, "utf8") < 32 ||
     Buffer.byteLength(pepper, "utf8") > 256 ||
@@ -291,7 +291,7 @@ function normalizePrefillRow(rawRow, tableName) {
     !HASH_PATTERN.test(normalized.prefillKey) ||
     !PREFILL_STATUS_SET.has(normalized.status) ||
     !HASH_PATTERN.test(normalized.snapshotFingerprint) ||
-    !REVISION_PATTERN.test(normalized.sourceRevision) ||
+    !SOURCE_REVISION_PATTERN.test(normalized.sourceRevision) ||
     normalized.sourceEnvironment !== "development" ||
     !OUTCOME_PATTERN.test(normalized.lastOutcome)
   ) {
@@ -352,7 +352,7 @@ function normalizeSubmissionRow(rawRow, tableName) {
     !HASH_PATTERN.test(normalized.prefillKey) ||
     !HASH_PATTERN.test(normalized.submissionFingerprint) ||
     !SUBMISSION_STATUS_SET.has(normalized.status) ||
-    !REVISION_PATTERN.test(normalized.sourceRevision) ||
+    !SOURCE_REVISION_PATTERN.test(normalized.sourceRevision) ||
     normalized.sourceEnvironment !== "development" ||
     !OUTCOME_PATTERN.test(normalized.lastOutcome)
   ) {

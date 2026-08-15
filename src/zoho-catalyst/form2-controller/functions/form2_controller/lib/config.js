@@ -6,17 +6,18 @@ const {
 } = require("./destinations");
 const { ARTIFACT_SOURCE_REVISION } = require("./source-revision");
 
-const SOURCE_REVISION_PATTERN = /^[a-f0-9]{40}$/;
-
 const SESSION_STATUSES = Object.freeze([
+  "issuing",
   "issued",
   "verified",
+  "submitting",
   "submitted",
   "expired",
   "revoked",
   "failed",
   "reconciliation_required",
 ]);
+const SOURCE_REVISION_PATTERN = /^[a-f0-9]{40}$/;
 
 const NUMERIC_LIMITS = Object.freeze({
   SESSION_TTL_SECONDS: Object.freeze({ fallback: 3600, minimum: 300, maximum: 86400 }),
@@ -163,7 +164,9 @@ function validateCrmApiBaseUrl(value) {
 
 function validateRevision(value, name) {
   if (!SOURCE_REVISION_PATTERN.test(value)) {
-    throw new ConfigurationError(`${name} must be a lowercase 40-character Git commit`);
+    throw new ConfigurationError(
+      `${name} must be a lowercase 40-character Git commit`,
+    );
   }
   return value;
 }

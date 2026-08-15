@@ -83,12 +83,23 @@ test("the Data Store schema defines every durable key as mandatory and unique", 
     ["SUBMISSION_TABLE_NAME", SUBMISSION_STORED_FIELDS],
   ]);
   const expectedUniqueColumns = new Map([
-    ["SESSION_TABLE_NAME", ["ISSUE_KEY", "TOKEN_HASH"]],
+    ["SESSION_TABLE_NAME", ["ISSUE_KEY", "TOKEN_HASH", "DEAL_ISSUANCE_KEY"]],
     ["PREFILL_TABLE_NAME", ["PREFILL_KEY"]],
     ["SUBMISSION_TABLE_NAME", ["SUBMISSION_KEY"]],
   ]);
 
+  assert.equal(schema.status, "proposed-development-only");
+  assert.equal(
+    schema.live_state,
+    "existing-54-column-development-baseline-and-access-readback-verified-deal-issuance-key-and-last-outcome-privacy-change-not-provisioned",
+  );
+  assert.equal(schema.observed_at, "2026-08-14");
+
   assert.equal(schema.tables.length, 3);
+  assert.equal(
+    schema.tables.reduce((total, table) => total + table.columns.length, 0),
+    55,
+  );
   assert.deepEqual(
     sorted(schema.tables.map((table) => table.runtime_variable)),
     sorted(runtimeFields.keys()),
@@ -120,14 +131,44 @@ test("the Data Store schema defines every durable key as mandatory and unique", 
       assert.equal(columns.get(key)?.unique, true);
     }
   }
+  const sessionTable = schema.tables.find(
+    (table) => table.runtime_variable === "SESSION_TABLE_NAME",
+  );
+  const sessionColumns = new Map(
+    sessionTable.columns.map((column) => [column.api_name, column]),
+  );
+  assert.deepEqual(sessionColumns.get("DEAL_ISSUANCE_KEY"), {
+    api_name: "DEAL_ISSUANCE_KEY",
+    type: "varchar",
+    max_length: 64,
+    mandatory: true,
+    unique: true,
+    pii_ephi: true,
+  });
+  assert.equal(sessionColumns.get("LAST_OUTCOME").pii_ephi, true);
+  assert.match(sessionTable.retention, /Do not delete or alter any session row/);
+  assert.equal(
+    schema.deployment_gates.some((gate) =>
+      gate.includes("zero rows") && gate.includes("reviewed migration")),
+    true,
+  );
+  assert.equal(
+    schema.deployment_gates.some((gate) =>
+      gate.includes("LAST_OUTCOME") && gate.includes("read back")),
+    true,
+  );
   assert.equal(JSON.stringify(schema).includes("RAW_PAYLOAD"), false);
 });
 
 test("the Catalyst and npm manifests describe one consistent Advanced IO target", () => {
   const catalyst = readJson(path.join(controllerRoot, "catalyst.json"));
-  assert.equal(catalyst.functions.source, "functions");
-  assert.deepEqual(catalyst.functions.targets, ["form2_controller"]);
-  assert.deepEqual(catalyst.functions.ignore, ["test/**", ".env*"]);
+  assert.deepEqual(catalyst, {
+    functions: {
+      source: "functions",
+      targets: ["form2_controller"],
+      ignore: ["test/**", ".env*"],
+    },
+  });
 
   const sourceRoot = path.join(controllerRoot, catalyst.functions.source);
   const targetRoot = path.join(sourceRoot, catalyst.functions.targets[0]);
@@ -142,27 +183,87 @@ test("the Catalyst and npm manifests describe one consistent Advanced IO target"
   const packageJson = readJson(packagePath);
   const packageLock = readJson(packageLockPath);
 
-  assert.deepEqual(catalystConfig.deployment, {
-    name: "form2_controller",
-    stack: "node24",
-    type: "advancedio",
+  assert.deepEqual(catalystConfig, {
+    deployment: {
+      name: "form2_controller",
+      stack: "node24",
+      type: "advancedio",
+    },
+    execution: { main: "index.js" },
   });
-  assert.deepEqual(catalystConfig.execution, { main: "index.js" });
   assert.equal(catalystConfig.deployment.name, catalyst.functions.targets[0]);
+  const expectedRuntimeSources = [
+    "index.js",
+    "lib/catalyst-adapter.js",
+    "lib/catalyst-datastore-adapter.js",
+    "lib/config.js",
+    "lib/connection-boundary.js",
+    "lib/crm-client.js",
+    "lib/destinations.js",
+    "lib/form-contract.js",
+    "lib/handler.js",
+    "lib/http.js",
+    "lib/operation-timeout.js",
+    "lib/safe-log.js",
+    "lib/security.js",
+    "lib/session-store.js",
+    "lib/snapshot.js",
+    "lib/source-revision.js",
+    "lib/workflow-store.js",
+  ];
+  const expectedCheckScript = expectedRuntimeSources
+    .map((sourceFile) => `node --check ${sourceFile}`)
+    .join(" && ");
+  assert.deepEqual(packageJson, {
+    name: "sylvara-form2-controller",
+    version: "0.1.0",
+    private: true,
+    description: "Development-blocked Zoho Forms Form 2 prefill and submission controller for Zoho Catalyst.",
+    main: "index.js",
+    type: "commonjs",
+    engines: { node: "24.x" },
+    scripts: {
+      check: expectedCheckScript,
+      test: "node --test test/*.test.js",
+      ci: "npm run check && npm test",
+    },
+    dependencies: { "zcatalyst-sdk-node": "3.4.0" },
+  });
   assert.equal(packageJson.main, catalystConfig.execution.main);
-  assert.equal(packageJson.engines.node, "24.x");
-  assert.equal(packageJson.dependencies["zcatalyst-sdk-node"], "3.4.0");
 
+  assert.deepEqual(sorted(Object.keys(packageLock)), sorted([
+    "name",
+    "version",
+    "lockfileVersion",
+    "requires",
+    "packages",
+  ]));
   assert.equal(packageLock.lockfileVersion, 3);
+  assert.equal(packageLock.requires, true);
   assert.equal(packageLock.name, packageJson.name);
   assert.equal(packageLock.version, packageJson.version);
-  assert.equal(packageLock.packages[""].name, packageJson.name);
-  assert.equal(packageLock.packages[""].version, packageJson.version);
-  assert.equal(packageLock.packages[""].engines.node, packageJson.engines.node);
-  assert.equal(
-    packageLock.packages[""].dependencies["zcatalyst-sdk-node"],
-    packageJson.dependencies["zcatalyst-sdk-node"],
-  );
+  assert.deepEqual(packageLock.packages[""], {
+    name: packageJson.name,
+    version: packageJson.version,
+    dependencies: packageJson.dependencies,
+    engines: packageJson.engines,
+  });
+  assert.deepEqual(sorted(Object.keys(packageLock.packages)), sorted([
+    "",
+    "node_modules/agent-base",
+    "node_modules/debug",
+    "node_modules/https-proxy-agent",
+    "node_modules/ms",
+    "node_modules/zcatalyst-sdk-node",
+  ]));
+  for (const [packagePath, metadata] of Object.entries(packageLock.packages)) {
+    assert.notEqual(metadata.hasInstallScript, true, `${packagePath} has an install script`);
+    assert.equal(metadata.link, undefined, `${packagePath} is a linked dependency`);
+    if (packagePath !== "") {
+      assert.match(metadata.resolved, /^https:\/\/registry\.npmjs\.org\//);
+      assert.match(metadata.integrity, /^sha512-[A-Za-z0-9+/]+=*$/);
+    }
+  }
   assert.equal(packageLock.packages["node_modules/zcatalyst-sdk-node"].version, "3.4.0");
   assert.match(
     packageLock.packages["node_modules/zcatalyst-sdk-node"].resolved,
@@ -186,12 +287,10 @@ test("the Catalyst and npm manifests describe one consistent Advanced IO target"
     );
   }
 
-  const checkedSources = [...packageJson.scripts.check.matchAll(/\bnode --check ([\w./-]+\.js)/g)]
-    .map((match) => match[1]);
   const runtimeSources = walkFiles(targetRoot)
     .filter((relativePath) => relativePath === "index.js" || /^lib\/.*\.js$/.test(relativePath));
-  assert.deepEqual(sorted(checkedSources), sorted(runtimeSources));
-  for (const sourceFile of checkedSources) {
+  assert.deepEqual(sorted(runtimeSources), sorted(expectedRuntimeSources));
+  for (const sourceFile of expectedRuntimeSources) {
     assert.equal(fs.statSync(path.join(targetRoot, sourceFile)).isFile(), true);
   }
 });
@@ -234,13 +333,19 @@ test("the intended function archive excludes tests and environment files", () =>
 test("the repository pipeline gates and reproduces one immutable Development deploy", () => {
   const pipelinePath = path.join(repositoryRoot, "catalyst-pipelines.yaml");
   const scriptPath = path.join(controllerRoot, "scripts/deploy-development.sh");
+  const revisionModulePath = path.join(functionRoot, "lib/source-revision.js");
   const pipeline = fs.readFileSync(pipelinePath, "utf8");
   const script = fs.readFileSync(scriptPath, "utf8");
+  const revisionModule = fs.readFileSync(revisionModulePath, "utf8");
 
   assert.match(pipeline, /^version: 1$/m);
   assert.match(pipeline, /^  approve:\n    type:\n      type-name: approval$/m);
+  const approvalStageIndex = pipeline.indexOf("- name: approval");
+  const developmentStageIndex = pipeline.indexOf("- name: development");
+  assert.notEqual(approvalStageIndex, -1, "the approval stage is missing");
+  assert.notEqual(developmentStageIndex, -1, "the Development stage is missing");
   assert.ok(
-    pipeline.indexOf("- name: approval") < pipeline.indexOf("- name: development"),
+    approvalStageIndex < developmentStageIndex,
     "the approval stage must precede the deployment stage",
   );
   for (const variableName of [
@@ -254,26 +359,94 @@ test("the repository pipeline gates and reproduces one immutable Development dep
   }
   assert.match(
     pipeline,
-    /bash src\/zoho-catalyst\/form2-controller\/scripts\/deploy-development\.sh/,
+    /bash --noprofile --norc src\/zoho-catalyst\/form2-controller\/scripts\/deploy-development\.sh/,
   );
+  assert.match(pipeline, /^      - \|\n        set \+x\n        \/usr\/bin\/env -i \\/m);
+  assert.match(pipeline, /^          PATH="\$PATH" \\/m);
+  assert.doesNotMatch(pipeline, /BASH_ENV=|ENV=|SHELLOPTS=|PS4=/);
 
   assert.notEqual(fs.statSync(scriptPath).mode & 0o111, 0, "deployment script is not executable");
-  assert.match(script, /^#!\/usr\/bin\/env bash\nset -euo pipefail$/m);
-  assert.match(script, /readonly NODE_VERSION="24\.18\.0"/);
+  assert.match(script, /^#!\/usr\/bin\/env bash\nset \+x\nset -euo pipefail$/m);
+  assert.match(script, /readonly NODE_VERSION="24\.19\.0"/);
   assert.match(script, /readonly CATALYST_CLI_VERSION="1\.26\.1"/);
-  assert.match(script, /readonly NODE_SHA256="[a-f0-9]{64}"/);
-  assert.match(script, /actual_revision.*git .* rev-parse --verify HEAD/);
+  assert.match(
+    script,
+    /readonly NODE_SHA256="14b342e71204f811bde6153be8e04b62aef63c236fef92b55f9c83154b409647"/,
+  );
+  assert.match(script, /actual_revision.*run_isolated_git .* rev-parse --verify HEAD/);
   assert.match(script, /actual_revision" == "\$APPROVED_SOURCE_REVISION/);
   assert.match(script, /status --porcelain=v1 --untracked-files=all/);
-  assert.match(script, /archive --format=tar "\$actual_revision"/);
-  assert.match(script, /functions\/form2_controller\/lib\/source-revision\.js/);
-  assert.match(script, /ARTIFACT_SOURCE_REVISION/);
-  assert.match(script, /artifact_project_root/);
+  assert.equal(revisionModule, `"use strict";
+
+// The Development deploy script replaces this sentinel only after proving that
+// Git HEAD equals APPROVED_SOURCE_REVISION. An unstamped or manually packaged
+// function therefore fails configuration before it can access CRM or Data Store.
+const ARTIFACT_SOURCE_REVISION = "__SYLVARA_UNSTAMPED_SOURCE_REVISION__";
+
+module.exports = { ARTIFACT_SOURCE_REVISION };
+`);
+  assert.match(script, /run_isolated_git .* archive --format=tar "\$actual_revision"/);
+  assert.match(script, /catalyst-pipelines\.yaml \|/);
+  assert.match(script, /approved pipeline export is unavailable/);
+  assert.match(script, /"ls-tree", "-r", "-z", revision/);
+  assert.match(script, /mode not in \{"100644", "100755"\}/);
+  assert.match(script, /approved Git export contains an unsupported mode or object type/);
+  assert.match(script, /approved Git export content differs from its Git blob/);
+  assert.match(script, /approved Git export paths differ from the reviewed Git tree/);
+  assert.match(script, /test-export/);
+  assert.match(script, /deploy-export/);
+  assert.match(script, /reference-export/);
+  assert.match(script, /source revision module is not the exact reviewed sentinel template/);
+  assert.match(script, /replacement = f'const ARTIFACT_SOURCE_REVISION = "\{revision\}";'/);
+  assert.match(script, /artifact_revision" == "\$actual_revision/);
+  assert.doesNotMatch(script, /require\(process\.argv\[1\]\)\.ARTIFACT_SOURCE_REVISION/);
+  assert.doesNotMatch(script, /--exclude=node_modules/);
+  assert.match(script, /function_dependency_subtree="functions\/form2_controller\/node_modules"/);
+  assert.match(script, /reference_source_manifest/);
+  assert.match(script, /deploy_source_manifest/);
+  assert.match(script, /deployable controller differs from the approved Git export/);
+  assert.doesNotMatch(script, /source-revision\.js\.original|revision_backup_path/);
   assert.match(script, /tools\/safety\/pre-commit-safety-check\.py/);
-  assert.match(script, /npm ci --ignore-scripts --no-audit --no-fund/);
-  assert.match(script, /npm run ci --prefix/);
+  assert.match(script, /run_isolated_npm/);
+  assert.match(script, /env -i/);
+  assert.match(script, /npm_config_globalconfig/);
+  assert.equal(
+    (script.match(/ci --omit=dev --ignore-scripts --no-audit --no-fund/g) ?? []).length,
+    2,
+  );
+  assert.match(script, /--ignore-scripts run ci/);
+  assert.match(script, /manifest_tree/);
+  assert.match(script, /tested and deployable dependency trees differ/);
+  assert.match(script, /artifact symlink escapes its tree/);
+  assert.match(script, /artifact path has special permission bits/);
+  assert.match(script, /artifact directory has special permission bits/);
+  assert.match(script, /artifact regular file is group- or world-writable/);
+  assert.match(script, /artifact contains an unsupported file type/);
+  assert.match(script, /rm -rf -- "\$deploy_function_root\/test"/);
+  assert.doesNotMatch(script, /find "\$deploy_function_root" -maxdepth 1 -name '\.env\*'/);
+  assert.match(script, /unreviewed Catalyst project-state file entered the export/);
+  assert.match(script, /deployment cleanup failed; deployment may have completed/);
+  assert.match(
+    script,
+    /export -n PROJECT_ID CATALYST_ORG CATALYST_TOKEN APPROVED_SOURCE_REVISION/,
+  );
+  assert.match(script, /GIT_\*\|npm_config_\*\|NPM_CONFIG_\*/);
+  const unexportIndex = script.indexOf(
+    "export -n PROJECT_ID CATALYST_ORG CATALYST_TOKEN APPROVED_SOURCE_REVISION",
+  );
+  assert.notEqual(unexportIndex, -1);
+  assert.ok(unexportIndex < script.indexOf('git_directory="$(dirname'));
+  assert.ok(unexportIndex < script.indexOf('runner_architecture="$(uname'));
+  assert.match(script, /GIT_NO_REPLACE_OBJECTS=1/);
+  assert.match(script, /"GIT_NO_REPLACE_OBJECTS": "1"/);
   assert.doesNotMatch(script, /npm install[^\n]*zcatalyst-cli|zcatalyst-cli@/);
-  assert.equal((script.match(/\bcatalyst deploy\b/g) ?? []).length, 1);
+  assert.equal((script.match(/"\$catalyst_path" deploy/g) ?? []).length, 1);
+  assert.match(
+    script,
+    /deployment may have completed; independently read back the Development function and deployment before any retry/,
+  );
+  assert.match(script, /trap deployment_interrupted HUP INT TERM/);
+  assert.match(script, /cd -- "\$deploy_project_root"/);
   assert.match(script, /--only functions:form2_controller/);
   assert.match(script, /--ignore-scripts/);
   assert.match(script, /--project "\$PROJECT_ID"/);

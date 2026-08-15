@@ -1,10 +1,12 @@
 "use strict";
 
+const crypto = require("node:crypto");
 const { SESSION_STATUSES, SOURCE_REVISION_PATTERN } = require("./config");
 
 const STATUS_SET = new Set(SESSION_STATUSES);
 const TOKEN_HASH_PATTERN = /^[a-f0-9]{64}$/;
 const ISSUE_KEY_PATTERN = /^[a-f0-9]{64}$/;
+const SUBMISSION_FINGERPRINT_PATTERN = /^[a-f0-9]{64}$/;
 const RECORD_ID_PATTERN = /^[0-9]{10,30}$/;
 const ROW_ID_PATTERN = /^[0-9]{1,30}$/;
 const OUTCOME_PATTERN = /^[a-z0-9_]{1,80}$/;
@@ -25,6 +27,7 @@ const STORED_FIELDS = Object.freeze([
   "CRM_CONTACT_ID",
   "CRM_ACCOUNT_ID",
   "CRM_DEAL_ID",
+  "DEAL_ISSUANCE_KEY",
   "STATUS",
   "ISSUED_AT",
   "EXPIRES_AT",
@@ -54,6 +57,7 @@ function validateAdapter(adapter) {
     "insertRow",
     "updateRow",
     "findRowsByIssueKey",
+    "findRowsByDealIssuanceKey",
     "findRowsByTokenHash",
     "findRowsByRowId",
   ]) {
@@ -138,6 +142,7 @@ function normalizeRow(rawRow, tableName) {
     crmContactId: optionalRecordId(row.CRM_CONTACT_ID, "CRM_CONTACT_ID"),
     crmAccountId: optionalRecordId(row.CRM_ACCOUNT_ID, "CRM_ACCOUNT_ID"),
     crmDealId: optionalRecordId(row.CRM_DEAL_ID, "CRM_DEAL_ID"),
+    dealIssuanceKey: String(row.DEAL_ISSUANCE_KEY ?? ""),
     status: String(row.STATUS ?? ""),
     issuedAt: String(row.ISSUED_AT ?? ""),
     expiresAt: String(row.EXPIRES_AT ?? ""),
@@ -157,6 +162,7 @@ function normalizeRow(rawRow, tableName) {
   if (
     !ISSUE_KEY_PATTERN.test(normalized.issueKey) ||
     !TOKEN_HASH_PATTERN.test(normalized.tokenHash) ||
+    !TOKEN_HASH_PATTERN.test(normalized.dealIssuanceKey) ||
     !STATUS_SET.has(normalized.status) ||
     !OUTCOME_PATTERN.test(normalized.lastOutcome) ||
     normalized.sourceEnvironment !== "development" ||
@@ -170,6 +176,16 @@ function normalizeRow(rawRow, tableName) {
     throw new SessionStoreError("Session row is not bound to Contact, Account, and Deal records");
   }
   return Object.freeze(normalized);
+}
+
+function sameSessionIdentity(left, right) {
+  return Boolean(left && right) &&
+    String(left.rowId) === String(right.rowId) &&
+    left.issueKey === right.issueKey &&
+    left.tokenHash === right.tokenHash &&
+    left.crmContactId === right.crmContactId &&
+    left.crmAccountId === right.crmAccountId &&
+    left.crmDealId === right.crmDealId;
 }
 
 function validateIssueInput(input) {
@@ -218,6 +234,39 @@ function createCatalystSessionStore(adapter, config, { now = Date.now } = {}) {
   if (typeof now !== "function") throw new SessionStoreError("Session clock is invalid");
   const tableName = config.sessionTableName;
 
+  function deriveDealIssuanceKey(kind, crmDealId, issueKey = "") {
+    if (!new Set(["active", "generation"]).has(kind)) {
+      throw new SessionStoreError("Deal issuance key domain is invalid");
+    }
+    const validatedDealId = optionalRecordId(crmDealId, "crmDealId");
+    if (!validatedDealId || (kind === "generation" && !ISSUE_KEY_PATTERN.test(issueKey))) {
+      throw new SessionStoreError("Deal issuance key input is invalid", "session_input_invalid");
+    }
+    try {
+      return crypto
+        .createHash("sha256")
+        .update(`sylvara-form2:${config.deploymentEnvironment}:deal-${kind}\0`, "utf8")
+        .update(validatedDealId, "utf8")
+        .update(kind === "generation" ? `\0${issueKey}` : "", "utf8")
+        .digest("hex");
+    } catch {
+      throw new SessionStoreError("Deal issuance key derivation failed");
+    }
+  }
+
+  function assertDealIssuanceKey(row) {
+    const released = row.status === "expired" && row.lastOutcome === "crm_expiry_synced";
+    const expected = deriveDealIssuanceKey(
+      released ? "generation" : "active",
+      row.crmDealId,
+      row.issueKey,
+    );
+    if (row.dealIssuanceKey !== expected) {
+      throw new SessionStoreError("Session row has an invalid Deal issuance lock");
+    }
+    return row;
+  }
+
   async function queryExactlyOne(query, notFoundAllowed = false) {
     let rows;
     try {
@@ -228,7 +277,9 @@ function createCatalystSessionStore(adapter, config, { now = Date.now } = {}) {
     if (!Array.isArray(rows) || rows.length > 1 || (!notFoundAllowed && rows.length !== 1)) {
       throw new SessionStoreError("Durable session readback was not unique");
     }
-    return rows.length === 0 ? null : normalizeRow(rows[0], tableName);
+    return rows.length === 0
+      ? null
+      : assertDealIssuanceKey(normalizeRow(rows[0], tableName));
   }
 
   async function readByTokenHash(tokenHash) {
@@ -256,6 +307,20 @@ function createCatalystSessionStore(adapter, config, { now = Date.now } = {}) {
     return queryExactlyOne(() => adapter.findRowsByRowId(tableName, validated));
   }
 
+  async function readByDealIssuanceKey(dealIssuanceKey) {
+    if (!TOKEN_HASH_PATTERN.test(dealIssuanceKey ?? "")) {
+      throw new SessionStoreError("Deal issuance key is invalid", "session_input_invalid");
+    }
+    return queryExactlyOne(
+      () => adapter.findRowsByDealIssuanceKey(tableName, dealIssuanceKey),
+      true,
+    );
+  }
+
+  async function readActiveByCrmDealId(crmDealId) {
+    return readByDealIssuanceKey(deriveDealIssuanceKey("active", crmDealId));
+  }
+
   function exactIssueMatch(session, expected, nowMs) {
     return (
       session.issueKey === expected.ISSUE_KEY &&
@@ -265,7 +330,8 @@ function createCatalystSessionStore(adapter, config, { now = Date.now } = {}) {
       session.crmDealId === expected.CRM_DEAL_ID &&
       session.sourceRevision === expected.SOURCE_REVISION &&
       session.sourceEnvironment === expected.SOURCE_ENVIRONMENT &&
-      new Set(["issued", "verified"]).has(session.status) &&
+      session.dealIssuanceKey === expected.DEAL_ISSUANCE_KEY &&
+      new Set(["issuing", "issued", "verified"]).has(session.status) &&
       parseIso(session.expiresAt, "EXPIRES_AT") > nowMs
     );
   }
@@ -279,14 +345,15 @@ function createCatalystSessionStore(adapter, config, { now = Date.now } = {}) {
       CRM_CONTACT_ID: ids.crmContactId,
       CRM_ACCOUNT_ID: ids.crmAccountId,
       CRM_DEAL_ID: ids.crmDealId,
-      STATUS: "issued",
+      DEAL_ISSUANCE_KEY: deriveDealIssuanceKey("active", ids.crmDealId),
+      STATUS: "issuing",
       ISSUED_AT: new Date(nowMs).toISOString(),
       EXPIRES_AT: new Date(nowMs + config.sessionTtlSeconds * 1000).toISOString(),
       ATTEMPT_COUNT: 0,
       MAX_ATTEMPTS: config.maxVerificationAttempts,
       SOURCE_REVISION: config.sourceRevision,
       SOURCE_ENVIRONMENT: "development",
-      LAST_OUTCOME: "issued",
+      LAST_OUTCOME: "issuing",
       VERIFIED_AT: "",
       SUBMITTED_AT: "",
       EXPIRED_AT: "",
@@ -301,7 +368,7 @@ function createCatalystSessionStore(adapter, config, { now = Date.now } = {}) {
       // Insert failures can be ambiguous, so the issue-key readback below is
       // authoritative. Never retry a potentially successful insert blindly.
     }
-    const readback = await readByIssueKey(input.issueKey);
+    const readback = await readByDealIssuanceKey(row.DEAL_ISSUANCE_KEY);
     if (!readback || !exactIssueMatch(readback, row, nowMs)) {
       throw new SessionStoreError(
         "Session issuance requires operator reconciliation",
@@ -363,6 +430,268 @@ function createCatalystSessionStore(adapter, config, { now = Date.now } = {}) {
     return writeAndReadBack(current, patch);
   }
 
+  async function markExpirySynced(rowId) {
+    const current = await readByRowId(rowId);
+    if (current.status === "expired" && current.lastOutcome === "crm_expiry_synced") {
+      return current;
+    }
+    if (
+      current.status !== "expired" ||
+      !new Set(["crm_expiry_pending", "issuing_expiry_pending"]).has(current.lastOutcome)
+    ) {
+      throw new SessionStoreError(
+        "Session expiry synchronization is not allowed",
+        "session_state_invalid",
+      );
+    }
+    const timestamp = new Date(validateNow(now)).toISOString();
+    const releasedDealIssuanceKey = deriveDealIssuanceKey(
+      "generation",
+      current.crmDealId,
+      current.issueKey,
+    );
+    try {
+      await adapter.updateRow(tableName, {
+        ROWID: current.rowId,
+        DEAL_ISSUANCE_KEY: releasedDealIssuanceKey,
+        LAST_OUTCOME: "crm_expiry_synced",
+        UPDATED_AT: timestamp,
+      }, {
+        DEAL_ISSUANCE_KEY: current.dealIssuanceKey,
+        STATUS: "expired",
+        LAST_OUTCOME: current.lastOutcome,
+        ATTEMPT_COUNT: current.attemptCount,
+      });
+    } catch {
+      // Resolve a lost conditional response only through the durable row.
+    }
+    const readback = await readByRowId(current.rowId);
+    if (
+      !sameSessionIdentity(current, readback) ||
+      readback.dealIssuanceKey !== releasedDealIssuanceKey ||
+      readback.status !== "expired" ||
+      readback.lastOutcome !== "crm_expiry_synced" ||
+      readback.updatedAt !== timestamp
+    ) {
+      throw new SessionStoreError(
+        "Session expiry synchronization requires operator reconciliation",
+        "reconciliation_required",
+      );
+    }
+    return readback;
+  }
+
+  async function markIssuingExpiryPending(rowId) {
+    const current = await readByRowId(rowId);
+    if (
+      current.status === "expired" &&
+      new Set(["issuing_expiry_pending", "crm_expiry_synced"]).has(current.lastOutcome)
+    ) {
+      return current;
+    }
+    if (current.status !== "issuing" || current.lastOutcome !== "issuing") {
+      throw new SessionStoreError(
+        "Stale issuing expiry is not allowed",
+        "session_state_invalid",
+      );
+    }
+    const nowMs = validateNow(now);
+    if (parseIso(current.expiresAt, "EXPIRES_AT") > nowMs) {
+      throw new SessionStoreError(
+        "Issuing session has not elapsed",
+        "session_state_invalid",
+      );
+    }
+    const timestamp = new Date(nowMs).toISOString();
+    try {
+      await adapter.updateRow(tableName, {
+        ROWID: current.rowId,
+        STATUS: "expired",
+        LAST_OUTCOME: "issuing_expiry_pending",
+        EXPIRED_AT: timestamp,
+        UPDATED_AT: timestamp,
+      }, {
+        DEAL_ISSUANCE_KEY: current.dealIssuanceKey,
+        STATUS: "issuing",
+        LAST_OUTCOME: "issuing",
+        ATTEMPT_COUNT: current.attemptCount,
+      });
+    } catch {
+      // Exact readback below resolves a concurrent finalizer or lost response.
+    }
+    const readback = await readByRowId(current.rowId);
+    if (
+      sameSessionIdentity(current, readback) &&
+      readback.status === "expired" &&
+      readback.lastOutcome === "crm_expiry_synced"
+    ) {
+      return readback;
+    }
+    if (
+      !sameSessionIdentity(current, readback) ||
+      readback.status !== "expired" ||
+      readback.lastOutcome !== "issuing_expiry_pending" ||
+      readback.expiredAt !== timestamp ||
+      readback.updatedAt !== timestamp ||
+      readback.dealIssuanceKey !== current.dealIssuanceKey
+    ) {
+      throw new SessionStoreError(
+        "Stale issuing expiry requires operator reconciliation",
+        "reconciliation_required",
+      );
+    }
+    return readback;
+  }
+
+  async function markExpiryReconciliationRequired(
+    rowId,
+    outcome = "crm_expiry_outcome_unknown",
+  ) {
+    if (!OUTCOME_PATTERN.test(outcome)) {
+      throw new SessionStoreError("Session transition input is invalid", "session_input_invalid");
+    }
+    const current = await readByRowId(rowId);
+    if (current.status === "reconciliation_required") return current;
+    if (
+      current.status !== "expired" ||
+      !new Set(["crm_expiry_pending", "issuing_expiry_pending"]).has(current.lastOutcome)
+    ) {
+      throw new SessionStoreError(
+        "Session expiry reconciliation is not allowed",
+        "session_state_invalid",
+      );
+    }
+    const timestamp = new Date(validateNow(now)).toISOString();
+    try {
+      await adapter.updateRow(tableName, {
+        ROWID: current.rowId,
+        STATUS: "reconciliation_required",
+        LAST_OUTCOME: outcome,
+        FAILED_AT: timestamp,
+        UPDATED_AT: timestamp,
+      }, {
+        STATUS: "expired",
+        LAST_OUTCOME: current.lastOutcome,
+        ATTEMPT_COUNT: current.attemptCount,
+      });
+    } catch {
+      // Resolve a lost conditional response only through the durable row.
+    }
+    const readback = await readByRowId(current.rowId);
+    if (
+      !sameSessionIdentity(current, readback) ||
+      readback.status !== "reconciliation_required" ||
+      readback.lastOutcome !== outcome ||
+      readback.failedAt !== timestamp ||
+      readback.updatedAt !== timestamp
+    ) {
+      throw new SessionStoreError(
+        "Session expiry reconciliation requires operator review",
+        "reconciliation_required",
+      );
+    }
+    return readback;
+  }
+
+  async function beginSubmission(rowId, submissionFingerprint) {
+    if (!SUBMISSION_FINGERPRINT_PATTERN.test(submissionFingerprint ?? "")) {
+      throw new SessionStoreError(
+        "Submission fingerprint is invalid",
+        "session_input_invalid",
+      );
+    }
+    const current = await readByRowId(rowId);
+    const outcome = `submitting_${submissionFingerprint}`;
+    if (current.status === "submitting") {
+      if (current.lastOutcome === outcome) return current;
+      throw new SessionStoreError(
+        "A different submission already owns this session",
+        "submission_conflict",
+      );
+    }
+    if (current.status !== "verified") {
+      throw new SessionStoreError("Session submission is not allowed", "session_state_invalid");
+    }
+    const timestamp = new Date(validateNow(now)).toISOString();
+    try {
+      await adapter.updateRow(tableName, {
+        ROWID: current.rowId,
+        STATUS: "submitting",
+        LAST_OUTCOME: outcome,
+        UPDATED_AT: timestamp,
+      }, {
+        STATUS: "verified",
+        ATTEMPT_COUNT: current.attemptCount,
+      });
+    } catch {
+      // Exact readback below identifies the winning fingerprint.
+    }
+    const readback = await readByRowId(current.rowId);
+    if (
+      sameSessionIdentity(current, readback) &&
+      readback.status === "submitting" &&
+      readback.lastOutcome === outcome &&
+      readback.updatedAt === timestamp
+    ) {
+      return readback;
+    }
+    if (readback.status === "submitting" && readback.lastOutcome !== outcome) {
+      throw new SessionStoreError(
+        "A different submission already owns this session",
+        "submission_conflict",
+      );
+    }
+    throw new SessionStoreError(
+      "Session submission ownership requires reconciliation",
+      "reconciliation_required",
+    );
+  }
+
+  async function releaseSubmission(rowId, submissionFingerprint) {
+    if (!SUBMISSION_FINGERPRINT_PATTERN.test(submissionFingerprint ?? "")) {
+      throw new SessionStoreError(
+        "Submission fingerprint is invalid",
+        "session_input_invalid",
+      );
+    }
+    const current = await readByRowId(rowId);
+    const expectedOutcome = `submitting_${submissionFingerprint}`;
+    if (current.status === "verified" && current.lastOutcome === "submission_released") {
+      return current;
+    }
+    if (current.status !== "submitting" || current.lastOutcome !== expectedOutcome) {
+      throw new SessionStoreError("Session submission release is not allowed", "session_state_invalid");
+    }
+    const timestamp = new Date(validateNow(now)).toISOString();
+    try {
+      await adapter.updateRow(tableName, {
+        ROWID: current.rowId,
+        STATUS: "verified",
+        LAST_OUTCOME: "submission_released",
+        UPDATED_AT: timestamp,
+      }, {
+        STATUS: "submitting",
+        LAST_OUTCOME: expectedOutcome,
+        ATTEMPT_COUNT: current.attemptCount,
+      });
+    } catch {
+      // Exact readback below resolves an ambiguous release.
+    }
+    const readback = await readByRowId(current.rowId);
+    if (
+      !sameSessionIdentity(current, readback) ||
+      readback.status !== "verified" ||
+      readback.lastOutcome !== "submission_released" ||
+      readback.updatedAt !== timestamp
+    ) {
+      throw new SessionStoreError(
+        "Session submission release requires reconciliation",
+        "reconciliation_required",
+      );
+    }
+    return readback;
+  }
+
   async function verify(tokenHash) {
     const current = await readByTokenHash(tokenHash);
     if (!current) return Object.freeze({ outcome: "not_found", session: null });
@@ -375,7 +704,7 @@ function createCatalystSessionStore(adapter, config, { now = Date.now } = {}) {
       const expired = await transition(
         current.rowId,
         "expired",
-        "ttl_elapsed",
+        "crm_expiry_pending",
         new Set(["issued", "verified"]),
         "EXPIRED_AT",
       );
@@ -403,12 +732,84 @@ function createCatalystSessionStore(adapter, config, { now = Date.now } = {}) {
     return Object.freeze({ outcome: "verified", session: verified });
   }
 
-  const markSubmitted = (rowId) => transition(
+  async function markSubmitted(rowId, submissionFingerprint) {
+    if (!SUBMISSION_FINGERPRINT_PATTERN.test(submissionFingerprint ?? "")) {
+      throw new SessionStoreError(
+        "Submission fingerprint is invalid",
+        "session_input_invalid",
+      );
+    }
+    const current = await readByRowId(rowId);
+    if (current.status === "submitted") return current;
+    const expectedOutcome = `submitting_${submissionFingerprint}`;
+    if (
+      current.status !== "verified" &&
+      !(current.status === "submitting" && current.lastOutcome === expectedOutcome)
+    ) {
+      throw new SessionStoreError("Session submission is not allowed", "session_state_invalid");
+    }
+    const timestamp = new Date(validateNow(now)).toISOString();
+    try {
+      await adapter.updateRow(tableName, {
+        ROWID: current.rowId,
+        STATUS: "submitted",
+        LAST_OUTCOME: "submitted",
+        SUBMITTED_AT: timestamp,
+        UPDATED_AT: timestamp,
+      }, {
+        STATUS: current.status,
+        LAST_OUTCOME: current.lastOutcome,
+        ATTEMPT_COUNT: current.attemptCount,
+      });
+    } catch {
+      // Only an exact durable submitted row can recover a lost response.
+    }
+    const readback = await readByRowId(current.rowId);
+    if (
+      !sameSessionIdentity(current, readback) ||
+      readback.status !== "submitted" ||
+      readback.lastOutcome !== "submitted" ||
+      readback.submittedAt !== timestamp ||
+      readback.updatedAt !== timestamp
+    ) {
+      throw new SessionStoreError(
+        "Session submission completion requires reconciliation",
+        "reconciliation_required",
+      );
+    }
+    return readback;
+  }
+
+  async function markSubmittedReconciliationRequired(
     rowId,
-    "submitted",
-    "submitted",
-    new Set(["verified"]),
-    "SUBMITTED_AT",
+    outcome = "succeeded_receipt_crm_mismatch",
+  ) {
+    if (!OUTCOME_PATTERN.test(outcome)) {
+      throw new SessionStoreError("Session transition input is invalid", "session_input_invalid");
+    }
+    const current = await readByRowId(rowId);
+    if (current.status === "reconciliation_required" && current.lastOutcome === outcome) {
+      return current;
+    }
+    if (current.status !== "submitted") {
+      throw new SessionStoreError(
+        "Submitted session reconciliation is not allowed",
+        "session_state_invalid",
+      );
+    }
+    const timestamp = new Date(validateNow(now)).toISOString();
+    return writeAndReadBack(current, {
+      STATUS: "reconciliation_required",
+      LAST_OUTCOME: outcome,
+      FAILED_AT: timestamp,
+      UPDATED_AT: timestamp,
+    });
+  }
+  const markIssued = (rowId) => transition(
+    rowId,
+    "issued",
+    "issued",
+    new Set(["issuing"]),
   );
   const revoke = (rowId) => transition(
     rowId,
@@ -421,25 +822,34 @@ function createCatalystSessionStore(adapter, config, { now = Date.now } = {}) {
     rowId,
     "failed",
     outcome,
-    new Set(["issued", "verified"]),
+    new Set(["issued", "verified", "submitting"]),
     "FAILED_AT",
   );
   const markReconciliationRequired = (rowId, outcome = "outcome_unknown") => transition(
     rowId,
     "reconciliation_required",
     outcome,
-    new Set(["issued", "verified", "submitted", "expired", "failed"]),
+    new Set(["issuing", "issued", "verified", "submitting", "failed"]),
     "FAILED_AT",
   );
 
   return Object.freeze({
+    beginSubmission,
     issue,
+    markExpiryReconciliationRequired,
+    markExpirySynced,
     markFailed,
+    markIssued,
+    markIssuingExpiryPending,
     markReconciliationRequired,
     markSubmitted,
+    markSubmittedReconciliationRequired,
+    readActiveByCrmDealId,
+    readByDealIssuanceKey,
     readByIssueKey,
     readByRowId,
     readByTokenHash,
+    releaseSubmission,
     revoke,
     verify,
   });

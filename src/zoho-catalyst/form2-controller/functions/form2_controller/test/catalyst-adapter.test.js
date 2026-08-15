@@ -130,7 +130,7 @@ test("listener logs stage and outcome for controller successes and handled error
     const listener = createRequestListener({
       catalystSdk: catalystSdkStub(),
       environment: listenerEnvironment(),
-      artifactRevision: "a".repeat(40),
+      artifactSourceRevision: listenerEnvironment().SOURCE_REVISION,
       logger: {
         info(line) { lines.push(["info", line]); },
         error(line) { lines.push(["error", line]); },
@@ -156,4 +156,33 @@ test("listener logs stage and outcome for controller successes and handled error
     assert.equal(publicBody.stage, undefined);
     assert.equal(publicBody.outcome, undefined);
   }
+});
+
+test("listener fails before SDK initialization when runtime and artifact revisions differ", async () => {
+  let initialized = false;
+  const sdk = catalystSdkStub();
+  const originalInitialize = sdk.initialize.bind(sdk);
+  sdk.initialize = (...argumentsList) => {
+    initialized = true;
+    return originalInitialize(...argumentsList);
+  };
+  const listener = createRequestListener({
+    catalystSdk: sdk,
+    environment: listenerEnvironment(),
+    artifactSourceRevision: "b".repeat(40),
+    logger: { info() {}, error() {} },
+    randomUUID: () => "10000000-0000-4000-8000-000000000001",
+    now: () => 100,
+  });
+  const output = responseStub();
+
+  await listener({ headers: { "x-zc-environment": "Development" } }, output);
+
+  assert.equal(initialized, false);
+  assert.equal(output.statusCode, 503);
+  assert.deepEqual(JSON.parse(output.payload), {
+    ok: false,
+    code: "configuration_invalid",
+    requestId: "10000000-0000-4000-8000-000000000001",
+  });
 });

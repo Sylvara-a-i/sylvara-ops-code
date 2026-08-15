@@ -120,7 +120,7 @@ function assertCatalystEnvironment(request, app, configuredEnvironment) {
 function createRequestListener({
   catalystSdk,
   environment = process.env,
-  artifactRevision,
+  artifactSourceRevision,
   logger = console,
   randomUUID = crypto.randomUUID,
   now = Date.now,
@@ -136,7 +136,7 @@ function createRequestListener({
     const requestId = randomUUID();
     let sourceRevision = "unavailable";
     try {
-      const config = loadConfig(environment, artifactRevision);
+      const config = loadConfig(environment, artifactSourceRevision);
       sourceRevision = config.sourceRevision;
       readCatalystEnvironmentHeader(request);
       const app = runtimeSdk.initialize(request);

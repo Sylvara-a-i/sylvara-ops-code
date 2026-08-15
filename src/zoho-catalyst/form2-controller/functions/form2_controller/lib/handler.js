@@ -363,6 +363,87 @@ function sessionAttemptAdvanced(candidate, readback) {
     readback.attemptCount <= readback.maxAttempts;
 }
 
+function pendingExpiryMatches(candidate, readback) {
+  return sameSessionIdentity(candidate, readback) &&
+    readback.status === "expired" &&
+    new Set(["crm_expiry_pending", "issuing_expiry_pending"]).has(
+      readback.lastOutcome,
+    ) &&
+    hasValue(readback.expiredAt);
+}
+
+function synchronizedExpiryMatches(candidate, readback) {
+  return sameSessionIdentity(candidate, readback) &&
+    readback.status === "expired" &&
+    readback.lastOutcome === "crm_expiry_synced" &&
+    hasValue(readback.expiredAt);
+}
+
+async function completeExpiredSession(
+  expiredSession,
+  dependencies,
+  synchronizationOptions,
+) {
+  if (synchronizedExpiryMatches(expiredSession, expiredSession)) return expiredSession;
+  await synchronizeExpiredSession(
+    dependencies,
+    expiredSession,
+    synchronizationOptions,
+  );
+  let synchronized;
+  try {
+    synchronized = await dependencies.sessionStore.markExpirySynced(expiredSession.rowId);
+  } catch {
+    synchronized = await bestEffort(
+      () => dependencies.sessionStore.readByRowId(expiredSession.rowId),
+    );
+  }
+  if (!synchronizedExpiryMatches(expiredSession, synchronized)) {
+    throw new ControllerError("Expired setup state did not finalize", {
+      status: 503,
+      publicCode: "service_unavailable",
+      ambiguous: true,
+    });
+  }
+  return synchronized;
+}
+
+async function expireSession(candidate, tokenHash, dependencies) {
+  if (synchronizedExpiryMatches(candidate, candidate)) return candidate;
+  let expiredSession;
+  if (pendingExpiryMatches(candidate, candidate)) {
+    expiredSession = candidate;
+  } else {
+    try {
+      const result = await dependencies.sessionStore.verify(tokenHash);
+      if (synchronizedExpiryMatches(candidate, result?.session)) return result.session;
+      if (result?.outcome !== "expired" || !pendingExpiryMatches(candidate, result.session)) {
+        throw genericSetupNotFound();
+      }
+      expiredSession = result.session;
+    } catch (error) {
+      // A simultaneous request may have completed either expiry phase.
+      // Accept only an exact durable readback; the write error is not proof.
+      let readback = null;
+      try {
+        readback = await dependencies.sessionStore.readByTokenHash(tokenHash);
+      } catch {
+        // Preserve the original dependency failure below.
+      }
+      if (synchronizedExpiryMatches(candidate, readback)) return readback;
+      if (!pendingExpiryMatches(candidate, readback)) throw publicError(error);
+      expiredSession = readback;
+    }
+  }
+  return completeExpiredSession(
+    expiredSession,
+    dependencies,
+    expiredSession.lastOutcome === "issuing_expiry_pending"
+      ? { allowInitialIssuingState: true }
+      : undefined,
+  );
+}
+
 async function readPrefillSession(setupToken, dependencies, nowMs) {
   let tokenHash;
   try {
@@ -382,7 +463,11 @@ async function readPrefillSession(setupToken, dependencies, nowMs) {
     Number.isFinite(expiresAt) &&
     hasValue(session.expiredAt)
   ) {
-    await synchronizeExpiredSession(dependencies, session);
+    if (new Set(["crm_expiry_pending", "issuing_expiry_pending"]).has(
+      session.lastOutcome,
+    )) {
+      await expireSession(session, tokenHash, dependencies);
+    }
     throw genericSetupNotFound();
   }
   if (
@@ -458,20 +543,26 @@ async function resolveSubmissionSession(setupToken, dependencies, nowMs) {
     Number.isFinite(expiresAt) &&
     hasValue(session.expiredAt)
   ) {
-    await synchronizeExpiredSession(dependencies, session);
+    if (new Set(["crm_expiry_pending", "issuing_expiry_pending"]).has(
+      session.lastOutcome,
+    )) {
+      await expireSession(session, tokenHash, dependencies);
+    }
     throw genericSetupNotFound();
   }
   if (
     !session ||
-    !new Set(["verified", "submitted"]).has(session.status) ||
+    !new Set(["verified", "submitting", "submitted"]).has(session.status) ||
     !Number.isFinite(expiresAt) ||
     !hasValue(session.verifiedAt) ||
+    (session.status === "submitting" &&
+      !/^submitting_[a-f0-9]{64}$/.test(session.lastOutcome)) ||
     (session.status === "submitted" && !hasValue(session.submittedAt))
   ) {
     throw genericSetupNotFound();
   }
   return Object.freeze({
-    expired: expiresAt <= nowMs,
+    expired: session.status === "verified" && expiresAt <= nowMs,
     session,
     tokenHash,
   });
@@ -504,6 +595,14 @@ function dealRemainsSetupEligible(deal, config) {
     !hasValue(deal.Setup_Form_Submitted_At);
 }
 
+function dealMatchesInitialSession(deal, session, config) {
+  return dealMatchesSessionBinding(deal, session) &&
+    dealRemainsSetupEligible(deal, config) &&
+    deal.Setup_Access_Status === config.form2AccessStatuses.initial &&
+    !hasValue(deal.Setup_Access_Issued_At) &&
+    !hasValue(deal.Setup_Access_Verified_At);
+}
+
 function dealMatchesIssuedSession(deal, session, config) {
   return dealMatchesSessionBinding(deal, session) &&
     dealRemainsSetupEligible(deal, config) &&
@@ -521,44 +620,28 @@ function dealMatchesVerifiedSession(deal, session, config) {
 }
 
 function dealMatchesExpiredSession(deal, session, config) {
+  const wasVerified = hasValue(session.verifiedAt);
   return dealMatchesSessionBinding(deal, session) &&
     dealRemainsSetupEligible(deal, config) &&
+    hasValue(session.expiredAt) &&
     deal.Setup_Access_Status === config.form2AccessStatuses.expired &&
     sameInstant(deal.Setup_Access_Issued_At, session.issuedAt) &&
-    (hasValue(session.verifiedAt)
+    (wasVerified
       ? sameInstant(deal.Setup_Access_Verified_At, session.verifiedAt)
       : !hasValue(deal.Setup_Access_Verified_At));
 }
 
-async function synchronizeExpiredSession(dependencies, session) {
+async function readActiveDealSession(dependencies, dealId) {
   try {
-    const deal = await dependencies.crmClient.getRecord("Deals", session.crmDealId);
-    if (dealMatchesExpiredSession(deal, session, dependencies.config)) return deal;
-    const expectedCurrentState = hasValue(session.verifiedAt)
-      ? dealMatchesVerifiedSession(deal, session, dependencies.config)
-      : dealMatchesIssuedSession(deal, session, dependencies.config);
-    if (!expectedCurrentState) throw new Error("CRM expiry state did not match");
-    const readback = await dependencies.crmClient.updateRecord(
-      "Deals",
-      session.crmDealId,
-      { Setup_Access_Status: dependencies.config.form2AccessStatuses.expired },
-      { ifUnmodifiedSince: deal.Modified_Time },
-    );
-    if (!dealMatchesExpiredSession(readback, session, dependencies.config)) {
-      throw new Error("CRM expiry readback did not match");
-    }
-    return readback;
-  } catch {
-    const observed = await bestEffort(
-      () => dependencies.crmClient.getRecord("Deals", session.crmDealId),
-    );
-    if (dealMatchesExpiredSession(observed, session, dependencies.config)) return observed;
-    await markSessionReconciliation(
-      dependencies.sessionStore,
-      session,
-      "crm_expiry_outcome_unknown",
-    );
-    throw new ControllerError("Expired setup state requires reconciliation", {
+    return await dependencies.sessionStore.readActiveByCrmDealId(dealId);
+  } catch (error) {
+    throw publicError(error);
+  }
+}
+
+function assertActiveDealSession(active, session) {
+  if (!sameSessionIdentity(active, session)) {
+    throw new ControllerError("Deal issuance ownership is not unique", {
       status: 503,
       publicCode: "service_unavailable",
       ambiguous: true,
@@ -566,50 +649,112 @@ async function synchronizeExpiredSession(dependencies, session) {
   }
 }
 
-async function expireSession(candidate, tokenHash, dependencies) {
-  let expiredSession = null;
-  try {
-    const result = await dependencies.sessionStore.verify(tokenHash);
-    if (
-      result?.outcome === "expired" &&
-      sameSessionIdentity(candidate, result.session) &&
-      result.session.status === "expired" &&
-      hasValue(result.session.expiredAt)
-    ) {
-      expiredSession = result.session;
-    }
-  } catch {
-    expiredSession = await bestEffort(
-      () => dependencies.sessionStore.readByTokenHash(tokenHash),
-    );
-  }
-  if (
-    !sameSessionIdentity(candidate, expiredSession) ||
-    expiredSession.status !== "expired" ||
-    !hasValue(expiredSession.expiredAt)
-  ) {
-    await markSessionReconciliation(
-      dependencies.sessionStore,
-      candidate,
-      "session_expiry_outcome_unknown",
-    );
-    throw new ControllerError("Setup expiry requires reconciliation", {
-      status: 503,
-      publicCode: "service_unavailable",
-      ambiguous: true,
+function requireNewIssueLock(existing, active, config) {
+  const statuses = config.form2AccessStatuses;
+  if (active) {
+    throw new ControllerError("A Deal issuance lock already exists", {
+      status: 409,
+      publicCode: "setup_conflict",
     });
   }
-  await synchronizeExpiredSession(dependencies, expiredSession);
-  return expiredSession;
+  const initialWithoutPriorIssuance =
+    existing.deal.Setup_Access_Status === statuses.initial &&
+    !hasValue(existing.deal.Setup_Access_Issued_At) &&
+    !hasValue(existing.deal.Setup_Access_Verified_At);
+  if (initialWithoutPriorIssuance) {
+    return;
+  }
+
+  const issuedAt = Date.parse(existing.deal.Setup_Access_Issued_At);
+  const verifiedAt = hasValue(existing.deal.Setup_Access_Verified_At)
+    ? Date.parse(existing.deal.Setup_Access_Verified_At)
+    : null;
+  if (
+    existing.deal.Setup_Access_Status !== statuses.expired ||
+    !Number.isFinite(issuedAt) ||
+    (verifiedAt !== null && !Number.isFinite(verifiedAt))
+  ) {
+    throw new ControllerError("Expired setup history is not eligible for reissue", {
+      status: 409,
+      publicCode: "setup_conflict",
+    });
+  }
+}
+
+async function synchronizeExpiredSession(
+  dependencies,
+  session,
+  { allowInitialIssuingState = false } = {},
+) {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    let deal;
+    try {
+      deal = await dependencies.crmClient.getRecord("Deals", session.crmDealId);
+    } catch {
+      break;
+    }
+    if (dealMatchesExpiredSession(deal, session, dependencies.config)) return deal;
+
+    const initialIssuingState = allowInitialIssuingState &&
+      dealMatchesInitialSession(deal, session, dependencies.config);
+    const expectedCurrentState = initialIssuingState || (hasValue(session.verifiedAt)
+      ? dealMatchesVerifiedSession(deal, session, dependencies.config)
+      : dealMatchesIssuedSession(deal, session, dependencies.config));
+    if (!expectedCurrentState) break;
+
+    const update = {
+      Setup_Access_Status: dependencies.config.form2AccessStatuses.expired,
+    };
+    if (initialIssuingState) {
+      // This write fences a delayed Issue writer through Modified_Time while
+      // recording which never-returned generation was abandoned.
+      update.Setup_Access_Issued_At = session.issuedAt;
+      update.Setup_Access_Verified_At = null;
+    }
+    try {
+      const readback = await dependencies.crmClient.updateRecord(
+        "Deals",
+        session.crmDealId,
+        update,
+        { ifUnmodifiedSince: deal.Modified_Time },
+      );
+      if (dealMatchesExpiredSession(readback, session, dependencies.config)) {
+        return readback;
+      }
+    } catch {
+      // Reread once. A delayed Issue writer may have won the first CRM race;
+      // exact Issued state can still be expired while the active lock remains.
+    }
+  }
+
+  try {
+    const observed = await dependencies.crmClient.getRecord("Deals", session.crmDealId);
+    if (dealMatchesExpiredSession(observed, session, dependencies.config)) {
+      return observed;
+    }
+  } catch {
+    // Only an exact independent readback can recover an ambiguous expiry.
+  }
+  await bestEffort(() => dependencies.sessionStore.markExpiryReconciliationRequired(
+    session.rowId,
+    "crm_expiry_outcome_unknown",
+  ));
+  throw new ControllerError("Expired setup state requires reconciliation", {
+    status: 503,
+    publicCode: "service_unavailable",
+    ambiguous: true,
+  });
 }
 
 async function readIssueSessionState(dependencies, session) {
   try {
-    const [readback, deal] = await Promise.all([
+    const [readback, deal, active] = await Promise.all([
       dependencies.sessionStore.readByRowId(session.rowId),
       dependencies.crmClient.getRecord("Deals", session.crmDealId),
+      dependencies.sessionStore.readActiveByCrmDealId(session.crmDealId),
     ]);
     if (!sameSessionIdentity(session, readback)) return null;
+    assertActiveDealSession(active, readback);
     if (
       (readback.status === "issued" &&
         dealMatchesIssuedSession(deal, readback, dependencies.config)) ||
@@ -627,8 +772,144 @@ async function readIssueSessionState(dependencies, session) {
     ) {
       return Object.freeze({ outcome: "verification_in_flight", session: readback });
     }
+    if (
+      readback.status === "issuing" &&
+      dealMatchesIssuedSession(deal, readback, dependencies.config)
+    ) {
+      return Object.freeze({ outcome: "finalization_pending", session: readback });
+    }
   } catch {
     // A failed or non-exact readback never proves convergence.
+  }
+  return null;
+}
+
+function issuedSessionMatches(candidate, readback) {
+  return sameSessionIdentity(candidate, readback) &&
+    readback.status === "issued" &&
+    readback.attemptCount === candidate.attemptCount &&
+    readback.maxAttempts === candidate.maxAttempts &&
+    sameInstant(readback.issuedAt, candidate.issuedAt) &&
+    sameInstant(readback.expiresAt, candidate.expiresAt);
+}
+
+async function finalizeIssuedSession(session, dependencies) {
+  const active = await readActiveDealSession(dependencies, session.crmDealId);
+  assertActiveDealSession(active, session);
+  let readback = null;
+  try {
+    readback = await dependencies.sessionStore.markIssued(session.rowId);
+  } catch {
+    readback = await bestEffort(
+      () => dependencies.sessionStore.readByRowId(session.rowId),
+    );
+  }
+  if (issuedSessionMatches(session, readback)) return readback;
+  if (
+    sameSessionIdentity(session, readback) &&
+    readback.status === "verified" &&
+    hasValue(readback.verifiedAt)
+  ) {
+    throw new ControllerError("Setup verification is still in progress", {
+      status: 503,
+      publicCode: "service_unavailable",
+    });
+  }
+  await markSessionReconciliation(
+    dependencies.sessionStore,
+    session,
+    "setup_access_issue_finalize_unknown",
+  );
+  throw new ControllerError("Setup issuance requires reconciliation", {
+    status: 503,
+    publicCode: "service_unavailable",
+    ambiguous: true,
+  });
+}
+
+async function expireStaleIssuingSession(session, existing, dependencies) {
+  if (dealMatchesIssuedSession(existing.deal, session, dependencies.config)) {
+    try {
+      const issued = await finalizeIssuedSession(session, dependencies);
+      return await expireSession(issued, issued.tokenHash, dependencies);
+    } catch (error) {
+      const readback = await bestEffort(
+        () => dependencies.sessionStore.readByRowId(session.rowId),
+      );
+      if (synchronizedExpiryMatches(session, readback)) return readback;
+      if (pendingExpiryMatches(session, readback)) {
+        return completeExpiredSession(readback, dependencies, {
+          allowInitialIssuingState: true,
+        });
+      }
+      throw error;
+    }
+  }
+
+  if (!dealMatchesInitialSession(existing.deal, session, dependencies.config)) {
+    await markSessionReconciliation(
+      dependencies.sessionStore,
+      session,
+      "stale_issuing_crm_mismatch",
+    );
+    throw new ControllerError("Stale issuing state requires reconciliation", {
+      status: 503,
+      publicCode: "service_unavailable",
+      ambiguous: true,
+    });
+  }
+
+  let expiring;
+  try {
+    expiring = await dependencies.sessionStore.markIssuingExpiryPending(session.rowId);
+  } catch (error) {
+    const readback = await bestEffort(
+      () => dependencies.sessionStore.readByRowId(session.rowId),
+    );
+    if (synchronizedExpiryMatches(session, readback)) return readback;
+    if (pendingExpiryMatches(session, readback)) {
+      expiring = readback;
+    } else if (
+      sameSessionIdentity(session, readback) &&
+      readback.status === "issued"
+    ) {
+      return expireSession(readback, readback.tokenHash, dependencies);
+    } else {
+      await markSessionReconciliation(
+        dependencies.sessionStore,
+        session,
+        "stale_issuing_expiry_phase_unknown",
+      );
+      throw publicError(error);
+    }
+  }
+  if (synchronizedExpiryMatches(session, expiring)) return expiring;
+  if (!pendingExpiryMatches(session, expiring)) {
+    throw new ControllerError("Stale issuing expiry phase did not converge", {
+      status: 503,
+      publicCode: "service_unavailable",
+      ambiguous: true,
+    });
+  }
+  return completeExpiredSession(expiring, dependencies, {
+    allowInitialIssuingState: true,
+  });
+}
+
+async function recoverElapsedActiveSession(active, existing, dependencies, nowMs) {
+  if (!active) return null;
+  if (
+    active.status === "expired" &&
+    new Set(["crm_expiry_pending", "issuing_expiry_pending"]).has(active.lastOutcome)
+  ) {
+    return expireSession(active, active.tokenHash, dependencies);
+  }
+  if (Date.parse(active.expiresAt) > nowMs) return null;
+  if (new Set(["issued", "verified"]).has(active.status)) {
+    return expireSession(active, active.tokenHash, dependencies);
+  }
+  if (active.status === "issuing") {
+    return expireStaleIssuingSession(active, existing, dependencies);
   }
   return null;
 }
@@ -642,7 +923,7 @@ async function verifiedDealConverged(dependencies, session) {
   }
 }
 
-async function handleIssue(body, dependencies) {
+async function handleIssue(body, dependencies, nowMs) {
   assertExactKeys(body, ISSUE_KEYS, "Issue request is invalid");
   const dealId = normalizeRecordId(body.dealId, "Deal identifier");
   let setupToken;
@@ -670,24 +951,47 @@ async function handleIssue(body, dependencies) {
     crmDealId: dealId,
   };
   let existing = await fetchSessionContext(dependencies.crmClient, binding);
+  let activeSession = await readActiveDealSession(dependencies, dealId);
   const statuses = dependencies.config.form2AccessStatuses;
-  if (!priorSession) {
-    requireEligibleContext(existing, dependencies.config, new Set([statuses.initial]));
-    if (
-      hasValue(existing.deal.Setup_Access_Issued_At) ||
-      hasValue(existing.deal.Setup_Access_Verified_At)
-    ) {
-      throw new ControllerError("Setup context is not eligible", {
+  const expiredGeneration = await recoverElapsedActiveSession(
+    activeSession,
+    existing,
+    dependencies,
+    nowMs,
+  );
+  if (expiredGeneration) {
+    if (!synchronizedExpiryMatches(activeSession, expiredGeneration)) {
+      throw new ControllerError("Expired Deal issuance lock did not converge", {
+        status: 503,
+        publicCode: "service_unavailable",
+        ambiguous: true,
+      });
+    }
+    // The immutable UUID belongs to the tombstoned generation. Recovery may
+    // release the Deal lock, but that UUID can never mint the old token again.
+    if (priorSession) {
+      throw new ControllerError("A fresh issuance identity is required", {
         status: 409,
         publicCode: "setup_conflict",
       });
     }
+    existing = await fetchSessionContext(dependencies.crmClient, binding);
+    activeSession = await readActiveDealSession(dependencies, dealId);
+  }
+  if (!priorSession) {
+    requireEligibleContext(
+      existing,
+      dependencies.config,
+      new Set([statuses.initial, statuses.expired]),
+    );
+    requireNewIssueLock(existing, activeSession, dependencies.config);
   } else {
     requireEligibleContext(
       existing,
       dependencies.config,
-      new Set([statuses.initial, statuses.issued, statuses.verified]),
+      new Set([statuses.initial, statuses.issued, statuses.verified, statuses.expired]),
     );
+    assertActiveDealSession(activeSession, priorSession);
   }
   // Validate every prefilled value that cannot be repaired by the respondent,
   // especially the locked Email and Mobile identity, before creating durable
@@ -704,9 +1008,12 @@ async function handleIssue(body, dependencies) {
   } catch (error) {
     throw publicError(error);
   }
+  const issuedActiveSession = await readActiveDealSession(dependencies, dealId);
+  assertActiveDealSession(issuedActiveSession, session);
   const issuedUpdate = {
     Setup_Access_Status: statuses.issued,
     Setup_Access_Issued_At: session.issuedAt,
+    Setup_Access_Verified_At: null,
   };
   const issuedStateMatches =
     existing.deal.Setup_Access_Status === statuses.issued &&
@@ -716,21 +1023,25 @@ async function handleIssue(body, dependencies) {
     existing.deal.Setup_Access_Status === statuses.initial &&
     !hasValue(existing.deal.Setup_Access_Issued_At) &&
     !hasValue(existing.deal.Setup_Access_Verified_At);
+  const expiredStateMatches = existing.deal.Setup_Access_Status === statuses.expired;
   const verifiedStateMatches =
     session.status === "verified" &&
     existing.deal.Setup_Access_Status === statuses.verified &&
     sameInstant(existing.deal.Setup_Access_Issued_At, session.issuedAt) &&
     sameInstant(existing.deal.Setup_Access_Verified_At, session.verifiedAt);
 
-  if (session.status === "issued" && initialStateMatches) {
+  if (session.status === "issuing" && (initialStateMatches || expiredStateMatches)) {
     try {
       await dependencies.crmClient.updateRecord("Deals", dealId, issuedUpdate, {
         ifUnmodifiedSince: existing.deal.Modified_Time,
       });
+      session = await finalizeIssuedSession(session, dependencies);
     } catch {
       const observed = await readIssueSessionState(dependencies, session);
       if (observed?.outcome === "converged") {
         session = observed.session;
+      } else if (observed?.outcome === "finalization_pending") {
+        session = await finalizeIssuedSession(observed.session, dependencies);
       } else if (observed?.outcome === "verification_in_flight") {
         throw new ControllerError("Setup verification is still in progress", {
           status: 503,
@@ -750,12 +1061,15 @@ async function handleIssue(body, dependencies) {
       }
     }
   } else if (
+    (session.status === "issuing") ||
     (session.status === "issued" && !issuedStateMatches) ||
     (session.status === "verified" && !verifiedStateMatches)
   ) {
     const observed = await readIssueSessionState(dependencies, session);
     if (observed?.outcome === "converged") {
       session = observed.session;
+    } else if (observed?.outcome === "finalization_pending") {
+      session = await finalizeIssuedSession(observed.session, dependencies);
     } else if (observed?.outcome === "verification_in_flight") {
       throw new ControllerError("Setup verification is still in progress", {
         status: 503,
@@ -858,27 +1172,96 @@ async function handlePrefill(body, dependencies, nowMs) {
   return response(200, { ...prefill, prefillId: minted.prefillId }, "prefill", "prepared");
 }
 
-async function verifySucceededDuplicate(session, namespacedSubmissionId, dependencies) {
-  const deal = await dependencies.crmClient.getRecord("Deals", session.crmDealId);
+function sessionOwnsSubmission(session, submissionFingerprint) {
+  return session.status !== "submitting" ||
+    session.lastOutcome === `submitting_${submissionFingerprint}`;
+}
+
+async function terminalizeSubmissionState(session, outcome, dependencies) {
+  let readback = null;
+  try {
+    readback = session.status === "submitted"
+      ? await dependencies.sessionStore.markSubmittedReconciliationRequired(
+        session.rowId,
+        outcome,
+      )
+      : await dependencies.sessionStore.markReconciliationRequired(session.rowId, outcome);
+  } catch {
+    readback = await bestEffort(() => dependencies.sessionStore.readByRowId(session.rowId));
+  }
+  if (
+    !sameSessionIdentity(session, readback) ||
+    readback.status !== "reconciliation_required" ||
+    readback.lastOutcome !== outcome
+  ) {
+    throw new ControllerError("Completed submission mismatch was not durably terminalized", {
+      status: 503,
+      publicCode: "service_unavailable",
+      ambiguous: true,
+    });
+  }
+}
+
+async function terminalizeSucceededReceiptMismatch(session, dependencies) {
+  return terminalizeSubmissionState(
+    session,
+    "succeeded_receipt_crm_mismatch",
+    dependencies,
+  );
+}
+
+async function verifySucceededDuplicate(
+  session,
+  namespacedSubmissionId,
+  submissionFingerprint,
+  dependencies,
+) {
+  if (!sessionOwnsSubmission(session, submissionFingerprint)) {
+    throw new ControllerError("Submission ownership does not match", {
+      status: 409,
+      publicCode: "setup_conflict",
+    });
+  }
+  if (session.status === "submitted" && !submittedSessionMatches(session, session)) {
+    await terminalizeSubmissionState(
+      session,
+      "submitted_session_state_invalid",
+      dependencies,
+    );
+    throw new ControllerError("Completed submission session state is invalid", {
+      status: 503,
+      publicCode: "service_unavailable",
+      ambiguous: true,
+    });
+  }
+  let deal;
+  try {
+    deal = await dependencies.crmClient.getRecord("Deals", session.crmDealId);
+  } catch {
+    // A read outage is not affirmative evidence of CRM drift. Preserve the
+    // exact session owner so a later retry can perform the required readback.
+    throw new ControllerError("Completed submission readback is unavailable", {
+      status: 503,
+      publicCode: "service_unavailable",
+      ambiguous: true,
+    });
+  }
   if (
     !dealMatchesSessionBinding(deal, session) ||
     deal.Setup_Form_Submission_ID !== namespacedSubmissionId ||
     deal.Setup_Access_Status !== dependencies.config.form2AccessStatuses.submitted ||
-    !hasValue(deal.Setup_Form_Submitted_At)
+    !hasValue(deal.Setup_Form_Submitted_At) ||
+    !Number.isFinite(Date.parse(deal.Setup_Form_Submitted_At))
   ) {
-    await markSessionReconciliation(
-      dependencies.sessionStore,
-      session,
-      "succeeded_receipt_crm_mismatch",
-    );
+    await terminalizeSucceededReceiptMismatch(session, dependencies);
     throw new ControllerError("Completed submission readback does not match", {
       status: 503,
       publicCode: "service_unavailable",
       ambiguous: true,
     });
   }
-  if (session.status !== "submitted") {
-    await repairSubmittedSession(session, dependencies);
+  if (new Set(["verified", "submitting"]).has(session.status)) {
+    await repairSubmittedSession(session, submissionFingerprint, dependencies);
   }
   return response(
     200,
@@ -891,6 +1274,7 @@ async function verifySucceededDuplicate(session, namespacedSubmissionId, depende
 function submittedSessionMatches(candidate, readback) {
   return sameSessionIdentity(candidate, readback) &&
     readback.status === "submitted" &&
+    readback.lastOutcome === "submitted" &&
     hasValue(readback.submittedAt) &&
     readback.attemptCount === candidate.attemptCount &&
     readback.maxAttempts === candidate.maxAttempts &&
@@ -899,22 +1283,42 @@ function submittedSessionMatches(candidate, readback) {
     sameInstant(readback.verifiedAt, candidate.verifiedAt);
 }
 
-async function repairSubmittedSession(session, dependencies) {
+async function repairSubmittedSession(session, submissionFingerprint, dependencies) {
   let readback = null;
   try {
-    readback = await dependencies.sessionStore.markSubmitted(session.rowId);
-  } catch {
-    readback = await bestEffort(
-      () => dependencies.sessionStore.readByRowId(session.rowId),
+    readback = await dependencies.sessionStore.markSubmitted(
+      session.rowId,
+      submissionFingerprint,
     );
+  } catch {
+    try {
+      readback = await dependencies.sessionStore.readByRowId(session.rowId);
+    } catch {
+      // The succeeded receipt and CRM readback remain authoritative, but a
+      // missing session repair must be reconciled before acknowledging.
+    }
   }
   if (submittedSessionMatches(session, readback)) return readback;
+
+  if (
+    !readback ||
+    (sameSessionIdentity(session, readback) &&
+      (readback.status === "verified" ||
+        (readback.status === "submitting" &&
+          readback.lastOutcome === `submitting_${submissionFingerprint}`)))
+  ) {
+    throw new ControllerError("Completed submission session repair is pending", {
+      status: 503,
+      publicCode: "service_unavailable",
+    });
+  }
+
   await markSessionReconciliation(
     dependencies.sessionStore,
     session,
     "submission_session_repair_unknown",
   );
-  throw new ControllerError("Completed submission session repair requires reconciliation", {
+  throw new ControllerError("Completed submission session repair did not converge", {
     status: 503,
     publicCode: "service_unavailable",
     ambiguous: true,
@@ -923,6 +1327,55 @@ async function repairSubmittedSession(session, dependencies) {
 
 function submissionFormPayload(body) {
   return Object.fromEntries(CLIENT_KEYS.map((key) => [key, body[key]]));
+}
+
+function failedSubmissionReceiptMatches(candidate, readback, expectedOutcome) {
+  return Boolean(candidate && readback) &&
+    String(readback.rowId) === String(candidate.rowId) &&
+    readback.submissionKey === candidate.submissionKey &&
+    readback.prefillKey === candidate.prefillKey &&
+    readback.leaseOwner === candidate.leaseOwner &&
+    readback.leaseExpiresAt === candidate.leaseExpiresAt &&
+    readback.claimedAt === candidate.claimedAt &&
+    readback.sessionRowId === candidate.sessionRowId &&
+    readback.submissionFingerprint === candidate.submissionFingerprint &&
+    readback.attemptCount === candidate.attemptCount &&
+    readback.status === "failed" &&
+    readback.lastOutcome === expectedOutcome &&
+    hasValue(readback.failedAt) &&
+    Number.isFinite(Date.parse(readback.failedAt)) &&
+    readback.updatedAt === readback.failedAt &&
+    !hasValue(readback.succeededAt) &&
+    !hasValue(readback.reconciliationRequiredAt);
+}
+
+async function finalizeFailedSubmissionReceipt(
+  dependencies,
+  { claimReceipt, receiptReference, submissionBinding, failedOutcome },
+) {
+  let readback = null;
+  try {
+    readback = await dependencies.workflowStore.markSubmissionFailed(
+      receiptReference,
+      failedOutcome,
+    );
+  } catch {
+    // A lost transition response is recovered only by an exact binding read.
+  }
+  if (failedSubmissionReceiptMatches(claimReceipt, readback, failedOutcome)) {
+    return Object.freeze({ outcome: "failed", receipt: readback });
+  }
+  try {
+    readback = await dependencies.workflowStore.readSubmission(submissionBinding);
+  } catch {
+    return Object.freeze({ outcome: "unresolved", receipt: null });
+  }
+  if (readback?.status === "succeeded") {
+    return Object.freeze({ outcome: "succeeded", receipt: readback });
+  }
+  return failedSubmissionReceiptMatches(claimReceipt, readback, failedOutcome)
+    ? Object.freeze({ outcome: "failed", receipt: readback })
+    : Object.freeze({ outcome: "unresolved", receipt: readback });
 }
 
 async function reconcileSubmission(
@@ -949,6 +1402,54 @@ async function reconcileSubmission(
   );
 }
 
+async function beginSubmissionOwnership(session, submissionFingerprint, dependencies) {
+  let readback;
+  try {
+    readback = await dependencies.sessionStore.beginSubmission(
+      session.rowId,
+      submissionFingerprint,
+    );
+  } catch (error) {
+    throw publicError(error);
+  }
+  if (
+    !sameSessionIdentity(session, readback) ||
+    readback.status !== "submitting" ||
+    readback.lastOutcome !== `submitting_${submissionFingerprint}`
+  ) {
+    throw new ControllerError("Submission ownership did not converge", {
+      status: 503,
+      publicCode: "service_unavailable",
+      ambiguous: true,
+    });
+  }
+  return readback;
+}
+
+async function releaseSubmissionOwnership(session, submissionFingerprint, dependencies) {
+  let readback;
+  try {
+    readback = await dependencies.sessionStore.releaseSubmission(
+      session.rowId,
+      submissionFingerprint,
+    );
+  } catch (error) {
+    throw publicError(error);
+  }
+  if (
+    !sameSessionIdentity(session, readback) ||
+    readback.status !== "verified" ||
+    readback.lastOutcome !== "submission_released"
+  ) {
+    throw new ControllerError("Submission ownership release did not converge", {
+      status: 503,
+      publicCode: "service_unavailable",
+      ambiguous: true,
+    });
+  }
+  return readback;
+}
+
 async function handleSubmission(body, dependencies, nowMs) {
   assertExactKeys(body, SUBMISSION_KEYS, "Submission request is invalid");
   const namespacedSubmissionId = namespaceSubmissionId(
@@ -961,23 +1462,34 @@ async function handleSubmission(body, dependencies, nowMs) {
     nowMs,
   );
   const { expired, tokenHash } = resolvedSession;
-  const session = resolvedSession.session;
+  let session = resolvedSession.session;
+  const submissionFingerprint = fingerprintSubmission({
+    submissionId: namespacedSubmissionId,
+    prefillId: body.prefillId,
+    values: submissionFormPayload(body),
+  }, dependencies.config.tokenPepper);
   const submissionBinding = {
     submissionId: namespacedSubmissionId,
     prefillId: body.prefillId,
     sessionRowId: session.rowId,
-    submissionFingerprint: fingerprintSubmission({
-      submissionId: namespacedSubmissionId,
-      prefillId: body.prefillId,
-      values: submissionFormPayload(body),
-    }, dependencies.config.tokenPepper),
+    submissionFingerprint,
   };
+
   let existingReceipt;
   try {
     existingReceipt = await dependencies.workflowStore.readSubmission(submissionBinding);
   } catch (error) {
+    if (
+      expired &&
+      session.status === "verified" &&
+      error?.publicCode === "submission_conflict"
+    ) {
+      await expireSession(session, tokenHash, dependencies);
+      throw genericSetupNotFound();
+    }
     throw publicError(error);
   }
+
   if (session.status === "submitted") {
     if (!existingReceipt || existingReceipt.status !== "succeeded") {
       throw new ControllerError("Submitted session does not match a completed receipt", {
@@ -985,15 +1497,50 @@ async function handleSubmission(body, dependencies, nowMs) {
         publicCode: "setup_conflict",
       });
     }
-    return verifySucceededDuplicate(session, namespacedSubmissionId, dependencies);
+    return verifySucceededDuplicate(
+      session,
+      namespacedSubmissionId,
+      submissionFingerprint,
+      dependencies,
+    );
   }
+
   if (existingReceipt?.status === "succeeded") {
-    return verifySucceededDuplicate(session, namespacedSubmissionId, dependencies);
+    if (session.status === "verified") {
+      session = await beginSubmissionOwnership(session, submissionFingerprint, dependencies);
+    }
+    return verifySucceededDuplicate(
+      session,
+      namespacedSubmissionId,
+      submissionFingerprint,
+      dependencies,
+    );
   }
+
+  if (!sessionOwnsSubmission(session, submissionFingerprint)) {
+    throw new ControllerError("A different submission owns this setup session", {
+      status: 409,
+      publicCode: "setup_conflict",
+    });
+  }
+
   if (expired) {
+    if (existingReceipt && existingReceipt.status !== "failed") {
+      await markSessionReconciliation(
+        dependencies.sessionStore,
+        session,
+        "expired_submission_outcome_unknown",
+      );
+      throw new ControllerError("Expired submission outcome requires reconciliation", {
+        status: 503,
+        publicCode: "service_unavailable",
+        ambiguous: true,
+      });
+    }
     await expireSession(session, tokenHash, dependencies);
     throw genericSetupNotFound();
   }
+
   let revision;
   try {
     revision = await dependencies.workflowStore.readPrefill({
@@ -1011,14 +1558,32 @@ async function handleSubmission(body, dependencies, nowMs) {
   }
   assertBindingMatchesSession(revision, session);
 
+  if (session.status === "verified") {
+    session = await beginSubmissionOwnership(session, submissionFingerprint, dependencies);
+  }
+
   let claim;
   try {
     claim = await dependencies.workflowStore.claimSubmission(submissionBinding);
   } catch (error) {
-    throw publicError(error);
+    await markSessionReconciliation(
+      dependencies.sessionStore,
+      session,
+      "submission_claim_outcome_unknown",
+    );
+    throw new ControllerError("Submission claim requires reconciliation", {
+      status: 503,
+      publicCode: "service_unavailable",
+      ambiguous: true,
+    });
   }
   if (claim.outcome === "succeeded") {
-    return verifySucceededDuplicate(session, namespacedSubmissionId, dependencies);
+    return verifySucceededDuplicate(
+      session,
+      namespacedSubmissionId,
+      submissionFingerprint,
+      dependencies,
+    );
   }
   if (claim.outcome !== "claimed") {
     throw new ControllerError("Submission result is unresolved", {
@@ -1032,9 +1597,11 @@ async function handleSubmission(body, dependencies, nowMs) {
     leaseOwner: claim.receipt.leaseOwner,
   };
   let consumedPrefill = null;
+  let consumeStarted = false;
   let crmCommitted = false;
+  let receiptSucceeded = false;
   try {
-    if (session.status !== "verified") {
+    if (!sessionOwnsSubmission(session, submissionFingerprint) || session.status !== "submitting") {
       throw new ControllerError("Setup session is not available for a new submission", {
         status: 409,
         publicCode: "setup_conflict",
@@ -1066,6 +1633,7 @@ async function handleSubmission(body, dependencies, nowMs) {
       setupAccessSubmittedStatus: dependencies.config.form2AccessStatuses.submitted,
       allowedFieldTeamSizeBands: dependencies.config.form2FieldTeamSizeBands,
     });
+    consumeStarted = true;
     consumedPrefill = await dependencies.workflowStore.consumePrefill({
       prefillId: body.prefillId,
       ...prefillBinding(session, existing, currentFingerprint),
@@ -1073,7 +1641,8 @@ async function handleSubmission(body, dependencies, nowMs) {
     const crmOutcome = await dependencies.crmClient.updateForm2Composite(existing, updates);
     crmCommitted = true;
     await dependencies.workflowStore.markSubmissionSucceeded(receiptReference);
-    await repairSubmittedSession(session, dependencies);
+    receiptSucceeded = true;
+    await repairSubmittedSession(session, submissionFingerprint, dependencies);
     const duplicate = crmOutcome?.replayed === true;
     return response(
       200,
@@ -1083,6 +1652,12 @@ async function handleSubmission(body, dependencies, nowMs) {
     );
   } catch (error) {
     const normalized = publicError(error);
+    if (receiptSucceeded) {
+      throw new ControllerError("Completed submission session repair is pending", {
+        status: 503,
+        publicCode: "service_unavailable",
+      });
+    }
     const ambiguous = normalized.ambiguous || crmCommitted || error?.publicCode === "reconciliation_required";
     if (ambiguous) {
       await reconcileSubmission(dependencies, {
@@ -1101,10 +1676,55 @@ async function handleSubmission(body, dependencies, nowMs) {
       : normalized.status >= 500 && consumedPrefill === null
         ? "retryable_precommit"
         : "processing_failed";
-    await bestEffort(() => dependencies.workflowStore.markSubmissionFailed(
-      receiptReference,
-      failedOutcome,
-    ));
+    const failedFinalization = await finalizeFailedSubmissionReceipt(
+      dependencies,
+      {
+        claimReceipt: claim.receipt,
+        receiptReference,
+        submissionBinding,
+        failedOutcome,
+      },
+    );
+    if (failedFinalization.outcome === "succeeded") {
+      return verifySucceededDuplicate(
+        session,
+        namespacedSubmissionId,
+        submissionFingerprint,
+        dependencies,
+      );
+    }
+    if (failedFinalization.outcome !== "failed") {
+      await reconcileSubmission(dependencies, {
+        receiptReference,
+        consumedPrefill,
+        session,
+      });
+      throw new ControllerError("Submission failure finalization requires reconciliation", {
+        status: 503,
+        publicCode: "service_unavailable",
+        ambiguous: true,
+      });
+    }
+    if (!consumeStarted && consumedPrefill === null) {
+      try {
+        session = await releaseSubmissionOwnership(
+          session,
+          submissionFingerprint,
+          dependencies,
+        );
+      } catch {
+        await markSessionReconciliation(
+          dependencies.sessionStore,
+          session,
+          "submission_release_outcome_unknown",
+        );
+        throw new ControllerError("Submission ownership release requires reconciliation", {
+          status: 503,
+          publicCode: "service_unavailable",
+          ambiguous: true,
+        });
+      }
+    }
     throw normalized;
   }
 }
@@ -1159,7 +1779,7 @@ async function handleForm2Request(request, dependencies) {
     const body = parseJsonObject(rawBody);
     const now = typeof dependencies.now === "function" ? dependencies.now : Date.now;
     const nowMs = normalizeNow(now);
-    if (path === config.issuePath) return await handleIssue(body, dependencies);
+    if (path === config.issuePath) return await handleIssue(body, dependencies, nowMs);
     if (path === config.prefillPath) return await handlePrefill(body, dependencies, nowMs);
     return await handleSubmission(body, dependencies, nowMs);
   } catch (error) {

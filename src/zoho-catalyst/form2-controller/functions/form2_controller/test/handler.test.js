@@ -1,6 +1,7 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const crypto = require("node:crypto");
 const test = require("node:test");
 const { CLIENT_KEYS } = require("../lib/form-contract");
 const { ControllerError, buildFormUrl, handleForm2Request } = require("../lib/handler");
@@ -137,6 +138,15 @@ function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function dealIssuanceKey(kind, dealId, issueKey = "") {
+  return crypto
+    .createHash("sha256")
+    .update(`sylvara-form2:development:deal-${kind}\0`, "utf8")
+    .update(dealId, "utf8")
+    .update(kind === "generation" ? `\0${issueKey}` : "", "utf8")
+    .digest("hex");
+}
+
 function createRequest(path, body, secret, overrides = {}) {
   const rawBody = Buffer.from(JSON.stringify(body));
   return {
@@ -176,7 +186,7 @@ function validSubmission(prefillBody, overrides = {}) {
     existingCustomerCallHandling: "Capture Callback Only",
     alertRecipientName: "Synthetic Alert Recipient",
     alertRecipientMobile: "555-010-2600",
-    alertRecipientEmail: "alerts@example.invalid",
+    alertRecipientEmail: null,
     authorizedRepresentativeConfirmed: true,
     testScopeAccepted: true,
     ...overrides,
@@ -189,6 +199,8 @@ function fixture() {
   const events = [];
   let modifiedSequence = 0;
   let session = null;
+  const sessions = [];
+  let nextSessionRowId = 7000000000001n;
   let prefill = null;
   let receipt = null;
   let forceClaimOutcome = null;
@@ -196,7 +208,6 @@ function fixture() {
   let crmReadError = null;
   let mintError = null;
   let verifyError = null;
-  let markSubmittedError = null;
   let compositeReplay = false;
 
   function nextModifiedTime() {
@@ -236,19 +247,37 @@ function fixture() {
   const sessionStore = {
     async readByIssueKey(issueKey) {
       events.push("session.issue.read");
-      return session && issueKey === session.issueKey ? Object.freeze({ ...session }) : null;
+      const match = sessions.find((candidate) => issueKey === candidate.issueKey);
+      return match ? Object.freeze({ ...match }) : null;
+    },
+    async readActiveByCrmDealId(dealId) {
+      events.push("session.deal.active.read");
+      const activeKey = dealIssuanceKey("active", dealId);
+      const matches = sessions.filter(
+        (candidate) => candidate.dealIssuanceKey === activeKey,
+      );
+      assert.ok(matches.length <= 1, "the Deal issuance key must be unique");
+      return matches[0] ? Object.freeze({ ...matches[0] }) : null;
     },
     async issue(input) {
       events.push("session.issue");
-      if (!session) {
-        session = {
-          rowId: "7000000000001",
+      let match = sessions.find((candidate) => input.issueKey === candidate.issueKey);
+      if (!match) {
+        const activeKey = dealIssuanceKey("active", input.crmDealId);
+        if (sessions.some((candidate) => candidate.dealIssuanceKey === activeKey)) {
+          const error = new Error("synthetic Deal issuance uniqueness conflict");
+          error.publicCode = "reconciliation_required";
+          throw error;
+        }
+        match = {
+          rowId: String(nextSessionRowId++),
           issueKey: input.issueKey,
           tokenHash: input.tokenHash,
           crmContactId: input.crmContactId,
           crmAccountId: input.crmAccountId,
           crmDealId: input.crmDealId,
-          status: "issued",
+          dealIssuanceKey: activeKey,
+          status: "issuing",
           issuedAt: "2026-08-14T18:00:00.000Z",
           expiresAt: "2026-08-14T19:00:00.000Z",
           attemptCount: 0,
@@ -256,57 +285,212 @@ function fixture() {
           verifiedAt: "",
           submittedAt: "",
           expiredAt: "",
+          lastOutcome: "issuing",
         };
+        sessions.push(match);
       } else {
-        assert.equal(input.issueKey, session.issueKey);
-        assert.equal(input.tokenHash, session.tokenHash);
+        assert.equal(input.issueKey, match.issueKey);
+        assert.equal(input.tokenHash, match.tokenHash);
       }
-      return Object.freeze({ ...session });
+      session = match;
+      return Object.freeze({ ...match });
     },
     async verify(tokenHash) {
       events.push("session.verify");
-      if (!session || tokenHash !== session.tokenHash) return { outcome: "not_found", session: null };
+      const match = sessions.find((candidate) => tokenHash === candidate.tokenHash);
+      if (!match) return { outcome: "not_found", session: null };
+      session = match;
       if (verifyError) throw verifyError;
-      if (!new Set(["issued", "verified"]).has(session.status)) {
-        return { outcome: session.status, session: Object.freeze({ ...session }) };
+      if (!new Set(["issued", "verified"]).has(match.status)) {
+        return { outcome: match.status, session: Object.freeze({ ...match }) };
       }
-      if (Date.parse(session.expiresAt) <= NOW_MS) {
-        session.status = "expired";
-        session.expiredAt = new Date(NOW_MS).toISOString();
-        return { outcome: "expired", session: Object.freeze({ ...session }) };
+      if (Date.parse(match.expiresAt) <= NOW_MS) {
+        match.status = "expired";
+        match.expiredAt = new Date(NOW_MS).toISOString();
+        match.lastOutcome = "crm_expiry_pending";
+        return { outcome: "expired", session: Object.freeze({ ...match }) };
       }
-      if (session.attemptCount >= session.maxAttempts) {
-        session.status = "failed";
-        return { outcome: "failed", session: Object.freeze({ ...session }) };
+      if (match.attemptCount >= match.maxAttempts) {
+        match.status = "failed";
+        return { outcome: "failed", session: Object.freeze({ ...match }) };
       }
-      session.status = "verified";
-      session.attemptCount += 1;
-      session.verifiedAt ||= "2026-08-14T18:00:00.000Z";
-      return { outcome: "verified", session: Object.freeze({ ...session }) };
+      match.status = "verified";
+      match.lastOutcome = "verified";
+      match.attemptCount += 1;
+      match.verifiedAt ||= "2026-08-14T18:00:00.000Z";
+      return { outcome: "verified", session: Object.freeze({ ...match }) };
     },
     async readByTokenHash(tokenHash) {
       events.push("session.read");
-      return session && tokenHash === session.tokenHash ? Object.freeze({ ...session }) : null;
+      const match = sessions.find((candidate) => tokenHash === candidate.tokenHash);
+      return match ? Object.freeze({ ...match }) : null;
     },
     async readByRowId(rowId) {
       events.push("session.row.read");
-      return session && String(rowId) === String(session.rowId)
-        ? Object.freeze({ ...session })
+      const match = sessions.find((candidate) => String(rowId) === String(candidate.rowId));
+      return match
+        ? Object.freeze({ ...match })
         : null;
     },
-    async markSubmitted(rowId) {
-      events.push("session.submitted");
-      assert.equal(rowId, session.rowId);
-      if (markSubmittedError) throw markSubmittedError;
-      session.status = "submitted";
-      session.submittedAt = "2026-08-14T18:00:00.000Z";
-      return Object.freeze({ ...session });
+    async beginSubmission(rowId, submissionFingerprint) {
+      events.push("session.submitting");
+      const match = sessions.find((candidate) => String(rowId) === String(candidate.rowId));
+      assert.ok(match);
+      const outcome = `submitting_${submissionFingerprint}`;
+      if (match.status === "submitting" && match.lastOutcome === outcome) {
+        return Object.freeze({ ...match });
+      }
+      if (match.status !== "verified") {
+        const error = new Error("synthetic session submission conflict");
+        error.publicCode = match.status === "submitting"
+          ? "submission_conflict"
+          : "session_state_invalid";
+        throw error;
+      }
+      session = match;
+      match.status = "submitting";
+      match.lastOutcome = outcome;
+      return Object.freeze({ ...match });
     },
-    async markReconciliationRequired(rowId) {
+    async releaseSubmission(rowId, submissionFingerprint) {
+      events.push("session.submission.released");
+      const match = sessions.find((candidate) => String(rowId) === String(candidate.rowId));
+      assert.ok(match);
+      const expected = `submitting_${submissionFingerprint}`;
+      if (match.status === "verified" && match.lastOutcome === "submission_released") {
+        return Object.freeze({ ...match });
+      }
+      if (match.status !== "submitting" || match.lastOutcome !== expected) {
+        const error = new Error("synthetic session release conflict");
+        error.publicCode = "session_state_invalid";
+        throw error;
+      }
+      session = match;
+      match.status = "verified";
+      match.lastOutcome = "submission_released";
+      return Object.freeze({ ...match });
+    },
+    async markSubmitted(rowId, submissionFingerprint) {
+      events.push("session.submitted");
+      const match = sessions.find((candidate) => String(rowId) === String(candidate.rowId));
+      assert.ok(match);
+      if (match.status === "submitted") return Object.freeze({ ...match });
+      if (
+        match.status !== "verified" &&
+        !(
+          match.status === "submitting" &&
+          match.lastOutcome === `submitting_${submissionFingerprint}`
+        )
+      ) {
+        const error = new Error("synthetic session submission conflict");
+        error.publicCode = "session_state_invalid";
+        throw error;
+      }
+      session = match;
+      match.status = "submitted";
+      match.lastOutcome = "submitted";
+      match.submittedAt = new Date(NOW_MS).toISOString();
+      return Object.freeze({ ...match });
+    },
+    async markIssued(rowId) {
+      events.push("session.issued");
+      const match = sessions.find((candidate) => String(rowId) === String(candidate.rowId));
+      assert.ok(match);
+      session = match;
+      if (match.status === "issuing") {
+        match.status = "issued";
+        match.lastOutcome = "issued";
+      }
+      return Object.freeze({ ...match });
+    },
+    async markExpirySynced(rowId) {
+      events.push("session.expiry.synced");
+      const match = sessions.find((candidate) => String(rowId) === String(candidate.rowId));
+      assert.ok(match);
+      session = match;
+      if (match.status === "expired" && match.lastOutcome === "crm_expiry_synced") {
+        return Object.freeze({ ...match });
+      }
+      if (
+        match.status !== "expired" ||
+        !new Set(["crm_expiry_pending", "issuing_expiry_pending"]).has(match.lastOutcome)
+      ) {
+        throw new Error("synthetic expiry synchronization conflict");
+      }
+      match.lastOutcome = "crm_expiry_synced";
+      match.dealIssuanceKey = dealIssuanceKey(
+        "generation",
+        match.crmDealId,
+        match.issueKey,
+      );
+      return Object.freeze({ ...match });
+    },
+    async markIssuingExpiryPending(rowId) {
+      events.push("session.issuing.expiry.pending");
+      const match = sessions.find((candidate) => String(rowId) === String(candidate.rowId));
+      assert.ok(match);
+      session = match;
+      if (
+        match.status === "expired" &&
+        new Set(["issuing_expiry_pending", "crm_expiry_synced"]).has(match.lastOutcome)
+      ) {
+        return Object.freeze({ ...match });
+      }
+      if (match.status !== "issuing" || match.lastOutcome !== "issuing") {
+        const error = new Error("synthetic stale issuing expiry conflict");
+        error.publicCode = "session_state_invalid";
+        throw error;
+      }
+      match.status = "expired";
+      match.lastOutcome = "issuing_expiry_pending";
+      match.expiredAt = new Date(NOW_MS).toISOString();
+      return Object.freeze({ ...match });
+    },
+    async markExpiryReconciliationRequired(rowId) {
       events.push("session.reconciliation");
-      assert.equal(rowId, session.rowId);
-      session.status = "reconciliation_required";
-      return Object.freeze({ ...session });
+      const match = sessions.find((candidate) => String(rowId) === String(candidate.rowId));
+      assert.ok(match);
+      session = match;
+      if (
+        match.status !== "expired" ||
+        !new Set(["crm_expiry_pending", "issuing_expiry_pending"]).has(match.lastOutcome)
+      ) {
+        throw new Error("synthetic expiry reconciliation conflict");
+      }
+      match.status = "reconciliation_required";
+      match.lastOutcome = "crm_expiry_outcome_unknown";
+      return Object.freeze({ ...match });
+    },
+    async markReconciliationRequired(rowId, outcome = "outcome_unknown") {
+      events.push("session.reconciliation");
+      const match = sessions.find((candidate) => String(rowId) === String(candidate.rowId));
+      assert.ok(match);
+      if (match.status === "submitted") {
+        const error = new Error("synthetic submitted reconciliation conflict");
+        error.publicCode = "session_state_invalid";
+        throw error;
+      }
+      session = match;
+      match.status = "reconciliation_required";
+      match.lastOutcome = outcome;
+      return Object.freeze({ ...match });
+    },
+    async markSubmittedReconciliationRequired(
+      rowId,
+      outcome = "succeeded_receipt_crm_mismatch",
+    ) {
+      events.push("session.submitted.reconciliation");
+      const match = sessions.find((candidate) => String(rowId) === String(candidate.rowId));
+      assert.ok(match);
+      if (match.status !== "submitted") {
+        const error = new Error("synthetic submitted reconciliation conflict");
+        error.publicCode = "session_state_invalid";
+        throw error;
+      }
+      session = match;
+      match.status = "reconciliation_required";
+      match.lastOutcome = outcome;
+      return Object.freeze({ ...match });
     },
   };
 
@@ -353,6 +537,14 @@ function fixture() {
         assert.equal(input.prefillId, receipt.prefillId);
         assert.equal(String(input.sessionRowId), String(receipt.sessionRowId));
         assert.equal(input.submissionFingerprint, receipt.submissionFingerprint);
+        if (receipt.status === "failed" && receipt.lastOutcome === "retryable_precommit") {
+          receipt.status = "processing";
+          receipt.leaseOwner = LEASE_OWNER;
+          receipt.attemptCount += 1;
+          receipt.failedAt = "";
+          receipt.lastOutcome = "processing";
+          return { outcome: "claimed", receipt: Object.freeze({ ...receipt }) };
+        }
         return {
           outcome: receipt.status === "succeeded" ? "succeeded" : "unresolved",
           receipt: Object.freeze({ ...receipt }),
@@ -361,11 +553,21 @@ function fixture() {
       receipt = {
         rowId: "7200000000001",
         leaseOwner: LEASE_OWNER,
+        leaseExpiresAt: "2026-08-14T19:00:00.000Z",
+        claimedAt: "2026-08-14T18:00:00.000Z",
         submissionId: input.submissionId,
+        submissionKey: input.submissionId,
         prefillId: input.prefillId,
+        prefillKey: input.prefillId,
         sessionRowId: input.sessionRowId,
         submissionFingerprint: input.submissionFingerprint,
         status: "processing",
+        attemptCount: 1,
+        succeededAt: "",
+        failedAt: "",
+        reconciliationRequiredAt: "",
+        updatedAt: "2026-08-14T18:00:00.000Z",
+        lastOutcome: "processing",
       };
       return { outcome: "claimed", receipt: Object.freeze({ ...receipt }) };
     },
@@ -381,12 +583,17 @@ function fixture() {
       events.push("workflow.submission.succeeded");
       assert.equal(reference.rowId, receipt.rowId);
       receipt.status = "succeeded";
+      receipt.succeededAt = new Date(NOW_MS).toISOString();
+      receipt.updatedAt = receipt.succeededAt;
+      receipt.lastOutcome = "succeeded";
       return Object.freeze({ ...receipt });
     },
     async markSubmissionFailed(reference, outcome) {
       events.push("workflow.submission.failed");
       assert.equal(reference.rowId, receipt.rowId);
       receipt.status = "failed";
+      receipt.failedAt = new Date(NOW_MS).toISOString();
+      receipt.updatedAt = receipt.failedAt;
       receipt.lastOutcome = outcome;
       return Object.freeze({ ...receipt });
     },
@@ -394,6 +601,9 @@ function fixture() {
       events.push("workflow.submission.reconciliation");
       assert.equal(reference.rowId, receipt.rowId);
       receipt.status = "reconciliation_required";
+      receipt.reconciliationRequiredAt = new Date(NOW_MS).toISOString();
+      receipt.updatedAt = receipt.reconciliationRequiredAt;
+      receipt.lastOutcome = "crm_outcome_unknown";
       return Object.freeze({ ...receipt });
     },
     async markPrefillReconciliationRequired(reference) {
@@ -418,25 +628,46 @@ function fixture() {
     get prefill() { return prefill; },
     get receipt() { return receipt; },
     get session() { return session; },
+    get sessions() { return sessions; },
+    clearPrefill() { prefill = null; },
     setForceClaimOutcome(value) { forceClaimOutcome = value; },
     setCompositeError(value) { compositeError = value; },
     setCompositeReplay(value) { compositeReplay = value; },
     setCrmReadError(value) { crmReadError = value; },
     setMintError(value) { mintError = value; },
     setVerifyError(value) { verifyError = value; },
-    setMarkSubmittedError(value) { markSubmittedError = value; },
   };
 }
 
-async function issue(fixtureValue) {
+async function issue(fixtureValue, body = issueBody()) {
   return handleForm2Request(
     createRequest(
       fixtureValue.dependencies.config.issuePath,
-      issueBody(),
+      body,
       fixtureValue.dependencies.config.issueHeaderSecret,
     ),
     fixtureValue.dependencies,
   );
+}
+
+async function seedIssuingSession(fixtureValue, issueRequestId = ISSUE_REQUEST_ID) {
+  const setupToken = deriveAccessToken(
+    issueRequestId,
+    fixtureValue.dependencies.config.tokenPepper,
+  );
+  return fixtureValue.dependencies.sessionStore.issue({
+    issueKey: hashIssueRequestId(
+      issueRequestId,
+      fixtureValue.dependencies.config.tokenPepper,
+    ),
+    tokenHash: hashAccessToken(
+      setupToken,
+      fixtureValue.dependencies.config.tokenPepper,
+    ),
+    crmContactId: IDS.contact,
+    crmAccountId: IDS.account,
+    crmDealId: IDS.deal,
+  });
 }
 
 async function prefill(fixtureValue) {
@@ -554,6 +785,60 @@ test("two simultaneous exact issue retries converge without invalidating their s
   assert.equal(selected.records.deal.Setup_Access_Status, "Synthetic Issued");
 });
 
+test("an exact issuing row plus CRM Issued readback finalizes after a crash", async () => {
+  const selected = fixture();
+  const setupToken = deriveAccessToken(ISSUE_REQUEST_ID, config().tokenPepper);
+  const pending = await selected.dependencies.sessionStore.issue({
+    issueKey: hashIssueRequestId(ISSUE_REQUEST_ID, config().tokenPepper),
+    tokenHash: hashAccessToken(setupToken, config().tokenPepper),
+    crmContactId: IDS.contact,
+    crmAccountId: IDS.account,
+    crmDealId: IDS.deal,
+  });
+  Object.assign(selected.records.deal, {
+    Setup_Access_Status: "Synthetic Issued",
+    Setup_Access_Issued_At: pending.issuedAt,
+    Setup_Access_Verified_At: null,
+  });
+  selected.events.length = 0;
+
+  const recovered = await issue(selected);
+
+  assert.equal(recovered.status, 200);
+  assert.equal(selected.session.status, "issued");
+  assert.equal(selected.sessions.length, 1);
+  assert.equal(selected.events.includes("session.issued"), true);
+  assert.equal(selected.events.includes("session.reconciliation"), false);
+});
+
+test("two concurrent distinct issuance identities leave exactly one usable token", async () => {
+  for (const startingStatus of ["Synthetic Initial", "Synthetic Expired"]) {
+    const selected = fixture();
+    selected.records.deal.Setup_Access_Status = startingStatus;
+    if (startingStatus === "Synthetic Expired") {
+      selected.records.deal.Setup_Access_Issued_At = "2026-08-14T17:00:00.000Z";
+    }
+    const results = await Promise.all([
+      issue(selected, {
+        ...issueBody(),
+        issueRequestId: "10000000-0000-4000-8000-000000000011",
+      }),
+      issue(selected, {
+        ...issueBody(),
+        issueRequestId: "10000000-0000-4000-8000-000000000012",
+      }),
+    ]);
+
+    assert.equal(results.filter((result) => result.status === 200).length, 1);
+    assert.equal(
+      results.filter((result) => new Set([409, 503]).has(result.status)).length,
+      1,
+    );
+    assert.equal(results.filter((result) => Object.hasOwn(result.body, "formUrl")).length, 1);
+    assert.deepEqual(selected.sessions.map((candidate) => candidate.status), ["issued"]);
+  }
+});
+
 test("rejects a different issuance identity after access is issued", async () => {
   const selected = fixture();
   assert.equal((await issue(selected)).status, 200);
@@ -568,6 +853,44 @@ test("rejects a different issuance identity after access is issued", async () =>
   );
   assert.equal(result.status, 409);
   assert.deepEqual(result.body, { ok: false, code: "setup_conflict" });
+  assert.equal(selected.events.includes("session.issue"), false);
+});
+
+test("a forged CRM Expired label cannot bypass a live Deal issuance lock", async () => {
+  const selected = fixture();
+  assert.equal((await issue(selected)).status, 200);
+  selected.records.deal.Setup_Access_Status = "Synthetic Expired";
+  selected.events.length = 0;
+
+  const blocked = await issue(selected, {
+    ...issueBody(),
+    issueRequestId: "10000000-0000-4000-8000-000000000099",
+  });
+
+  assert.equal(blocked.status, 409);
+  assert.deepEqual(blocked.body, { ok: false, code: "setup_conflict" });
+  assert.equal(selected.sessions.length, 1);
+  assert.equal(selected.session.status, "issued");
+  assert.equal(selected.events.includes("session.issue"), false);
+
+  selected.records.deal.Setup_Access_Status = "Synthetic Issued";
+  assert.equal((await prefill(selected)).status, 200);
+});
+
+test("token-pepper rotation cannot bypass the stable active Deal lock", async () => {
+  const selected = fixture();
+  assert.equal((await issue(selected)).status, 200);
+  selected.dependencies.config = Object.freeze({
+    ...selected.dependencies.config,
+    tokenPepper: "Q".repeat(43),
+  });
+  selected.events.length = 0;
+
+  const blocked = await issue(selected);
+
+  assert.equal(blocked.status, 409);
+  assert.deepEqual(blocked.body, { ok: false, code: "setup_conflict" });
+  assert.equal(selected.sessions.length, 1);
   assert.equal(selected.events.includes("session.issue"), false);
 });
 
@@ -702,19 +1025,76 @@ test("durably expires an elapsed prefill session before returning the generic 40
   assert.equal(selected.session.status, "expired");
   assert.equal(selected.session.expiredAt, "2026-08-14T18:00:00.000Z");
   assert.equal(selected.records.deal.Setup_Access_Status, "Synthetic Expired");
+  assert.equal(selected.session.lastOutcome, "crm_expiry_synced");
   assert.deepEqual(selected.events, [
     "session.read",
     "session.verify",
     "crm.get.Deals",
     "crm.update.Deals",
+    "session.expiry.synced",
   ]);
 });
 
-test("moves an unknown CRM expiry outcome into durable reconciliation", async () => {
+test("a persisted expiry-pending session repairs CRM after a process restart", async () => {
+  const selected = fixture();
+  assert.equal((await issue(selected)).status, 200);
+  assert.equal((await prefill(selected)).status, 200);
+  selected.session.status = "expired";
+  selected.session.expiredAt = "2026-08-14T18:00:00.000Z";
+  selected.session.expiresAt = "2026-08-14T17:59:59.000Z";
+  selected.session.lastOutcome = "crm_expiry_pending";
+  selected.events.length = 0;
+
+  const result = await prefill(selected);
+
+  assert.equal(result.status, 404);
+  assert.equal(selected.records.deal.Setup_Access_Status, "Synthetic Expired");
+  assert.equal(selected.session.status, "expired");
+  assert.equal(selected.session.lastOutcome, "crm_expiry_synced");
+  assert.equal(selected.events.includes("session.verify"), false);
+  assert.ok(
+    selected.events.indexOf("crm.update.Deals") <
+      selected.events.indexOf("session.expiry.synced"),
+  );
+});
+
+test("expiry never acknowledges 404 after the durable row becomes reconciliation-required", async () => {
+  const selected = fixture();
+  assert.equal((await issue(selected)).status, 200);
+  assert.equal((await prefill(selected)).status, 200);
+  selected.session.expiresAt = "2026-08-14T17:59:59.000Z";
+  const originalUpdate = selected.dependencies.crmClient.updateRecord.bind(
+    selected.dependencies.crmClient,
+  );
+  selected.dependencies.crmClient.updateRecord = async (...argumentsList) => {
+    const result = await originalUpdate(...argumentsList);
+    selected.session.status = "reconciliation_required";
+    selected.session.lastOutcome = "synthetic_concurrent_reconciliation";
+    return result;
+  };
+
+  const result = await prefill(selected);
+
+  assert.equal(result.status, 503);
+  assert.deepEqual(result.body, { ok: false, code: "service_unavailable" });
+  assert.equal(selected.session.status, "reconciliation_required");
+});
+
+test("moves an expired session to reconciliation when the CRM terminal state cannot converge", async () => {
   const selected = fixture();
   await issue(selected);
   selected.session.expiresAt = "2026-08-14T17:59:59.000Z";
-  selected.setCrmReadError(new Error("synthetic CRM expiry read failure"));
+  const originalUpdate = selected.dependencies.crmClient.updateRecord.bind(
+    selected.dependencies.crmClient,
+  );
+  selected.dependencies.crmClient.updateRecord = async (...argumentsList) => {
+    if (argumentsList[2].Setup_Access_Status === "Synthetic Expired") {
+      const error = new Error("synthetic CRM expiry update unavailable");
+      error.ambiguous = true;
+      throw error;
+    }
+    return originalUpdate(...argumentsList);
+  };
   selected.events.length = 0;
 
   const result = await prefill(selected);
@@ -725,20 +1105,272 @@ test("moves an unknown CRM expiry outcome into durable reconciliation", async ()
   assert.equal(selected.events.includes("session.reconciliation"), true);
 });
 
-test("moves an unknown durable session expiry outcome into reconciliation", async () => {
+test("an ambiguous expiry write returns 404 only after exact independent CRM convergence", async () => {
   const selected = fixture();
   await issue(selected);
   selected.session.expiresAt = "2026-08-14T17:59:59.000Z";
-  selected.setVerifyError(new Error("synthetic session expiry write failure"));
+  const originalUpdate = selected.dependencies.crmClient.updateRecord.bind(
+    selected.dependencies.crmClient,
+  );
+  selected.dependencies.crmClient.updateRecord = async (...argumentsList) => {
+    const readback = await originalUpdate(...argumentsList);
+    if (argumentsList[2].Setup_Access_Status === "Synthetic Expired") {
+      throw new Error("synthetic expiry acknowledgment lost after commit");
+    }
+    return readback;
+  };
   selected.events.length = 0;
 
   const result = await prefill(selected);
 
-  assert.equal(result.status, 503);
-  assert.deepEqual(result.body, { ok: false, code: "service_unavailable" });
-  assert.equal(selected.session.status, "reconciliation_required");
-  assert.equal(selected.events.includes("session.reconciliation"), true);
-  assert.equal(selected.events.includes("crm.get.Deals"), false);
+  assert.equal(result.status, 404);
+  assert.deepEqual(result.body, { ok: false, code: "setup_not_found" });
+  assert.equal(selected.session.status, "expired");
+  assert.equal(selected.records.deal.Setup_Access_Status, "Synthetic Expired");
+  assert.equal(selected.events.filter((event) => event === "crm.get.Deals").length, 2);
+  assert.equal(selected.events.includes("session.reconciliation"), false);
+});
+
+test("a fresh issuance identity reissues an exact expired Deal without reviving the old token", async () => {
+  const selected = fixture();
+  const first = await issue(selected);
+  const firstToken = new URL(first.body.formUrl).searchParams.get(
+    selected.dependencies.config.form2TokenFieldAlias,
+  );
+  selected.session.issuedAt = "2026-08-14T17:00:00.000Z";
+  selected.session.expiresAt = "2026-08-14T17:59:59.000Z";
+  selected.records.deal.Setup_Access_Issued_At = selected.session.issuedAt;
+  assert.equal((await prefill(selected)).status, 404);
+  const expiredSession = selected.session;
+
+  const reissued = await issue(selected, {
+    ...issueBody(),
+    issueRequestId: "10000000-0000-4000-8000-000000000002",
+  });
+
+  assert.equal(reissued.status, 200);
+  const secondToken = new URL(reissued.body.formUrl).searchParams.get(
+    selected.dependencies.config.form2TokenFieldAlias,
+  );
+  assert.notEqual(secondToken, firstToken);
+  assert.notEqual(selected.session.rowId, expiredSession.rowId);
+  assert.equal(expiredSession.status, "expired");
+  assert.equal(selected.records.deal.Setup_Access_Status, "Synthetic Issued");
+  assert.equal(selected.records.deal.Setup_Access_Issued_At, "2026-08-14T18:00:00.000Z");
+  assert.equal(selected.records.deal.Setup_Access_Verified_At, null);
+
+  const oldTokenResult = await prefill(selected);
+  assert.equal(oldTokenResult.status, 404);
+  assert.deepEqual(oldTokenResult.body, { ok: false, code: "setup_not_found" });
+});
+
+test("the issue route expires an unused issued generation and requires a fresh UUID", async () => {
+  const selected = fixture();
+  assert.equal((await issue(selected)).status, 200);
+  const oldSession = selected.session;
+  oldSession.expiresAt = "2026-08-14T17:59:59.000Z";
+  selected.events.length = 0;
+
+  const oldUuidRetry = await issue(selected);
+
+  assert.equal(oldUuidRetry.status, 409);
+  assert.deepEqual(oldUuidRetry.body, { ok: false, code: "setup_conflict" });
+  assert.equal(oldSession.status, "expired");
+  assert.equal(oldSession.lastOutcome, "crm_expiry_synced");
+  assert.equal(selected.records.deal.Setup_Access_Status, "Synthetic Expired");
+  assert.equal(selected.sessions.length, 1);
+
+  const fresh = await issue(selected, {
+    ...issueBody(),
+    issueRequestId: "10000000-0000-4000-8000-000000000021",
+  });
+  assert.equal(fresh.status, 200);
+  assert.equal(selected.sessions.length, 2);
+  assert.equal(selected.session.status, "issued");
+  assert.equal((await prefill(selected)).status, 404);
+});
+
+test("the issue route expires an unused verified generation before reissue", async () => {
+  const selected = fixture();
+  assert.equal((await issue(selected)).status, 200);
+  assert.equal((await prefill(selected)).status, 200);
+  const oldSession = selected.session;
+  oldSession.expiresAt = "2026-08-14T17:59:59.000Z";
+  selected.events.length = 0;
+
+  const fresh = await issue(selected, {
+    ...issueBody(),
+    issueRequestId: "10000000-0000-4000-8000-000000000022",
+  });
+
+  assert.equal(fresh.status, 200);
+  assert.equal(oldSession.status, "expired");
+  assert.equal(oldSession.lastOutcome, "crm_expiry_synced");
+  assert.equal(selected.sessions.length, 2);
+  assert.equal(selected.records.deal.Setup_Access_Status, "Synthetic Issued");
+  assert.equal(selected.records.deal.Setup_Access_Verified_At, null);
+});
+
+test("the issue route resumes a persisted pending expiry before reissue", async () => {
+  const selected = fixture();
+  assert.equal((await issue(selected)).status, 200);
+  const oldSession = selected.session;
+  oldSession.status = "expired";
+  oldSession.lastOutcome = "crm_expiry_pending";
+  oldSession.expiredAt = "2026-08-14T18:00:00.000Z";
+  oldSession.expiresAt = "2026-08-14T17:59:59.000Z";
+  selected.events.length = 0;
+
+  const fresh = await issue(selected, {
+    ...issueBody(),
+    issueRequestId: "10000000-0000-4000-8000-000000000023",
+  });
+
+  assert.equal(fresh.status, 200);
+  assert.equal(oldSession.status, "expired");
+  assert.equal(oldSession.lastOutcome, "crm_expiry_synced");
+  assert.equal(selected.sessions.length, 2);
+  assert.equal(selected.events.includes("session.expiry.synced"), true);
+});
+
+test("a stale issuing generation fences CRM Initial before releasing its lock", async () => {
+  const selected = fixture();
+  await seedIssuingSession(selected);
+  const stale = selected.session;
+  stale.expiresAt = "2026-08-14T17:59:59.000Z";
+  selected.events.length = 0;
+
+  const fresh = await issue(selected, {
+    ...issueBody(),
+    issueRequestId: "10000000-0000-4000-8000-000000000024",
+  });
+
+  assert.equal(fresh.status, 200);
+  assert.equal(stale.status, "expired");
+  assert.equal(stale.lastOutcome, "crm_expiry_synced");
+  assert.equal(selected.sessions.length, 2);
+  assert.equal(selected.events.includes("session.issuing.expiry.pending"), true);
+  assert.ok(
+    selected.events.indexOf("session.issuing.expiry.pending") <
+      selected.events.indexOf("session.expiry.synced"),
+  );
+  assert.equal(selected.records.deal.Setup_Access_Status, "Synthetic Issued");
+});
+
+test("the issue route resumes stale-issuing expiry pending with CRM Initial", async () => {
+  const selected = fixture();
+  await seedIssuingSession(selected);
+  const stale = selected.session;
+  stale.expiresAt = "2026-08-14T17:59:59.000Z";
+  await selected.dependencies.sessionStore.markIssuingExpiryPending(stale.rowId);
+  assert.equal(stale.lastOutcome, "issuing_expiry_pending");
+  assert.equal(selected.records.deal.Setup_Access_Status, "Synthetic Initial");
+  selected.events.length = 0;
+
+  const fresh = await issue(selected, {
+    ...issueBody(),
+    issueRequestId: "10000000-0000-4000-8000-000000000028",
+  });
+
+  assert.equal(fresh.status, 200);
+  assert.equal(stale.status, "expired");
+  assert.equal(stale.lastOutcome, "crm_expiry_synced");
+  assert.equal(selected.sessions.length, 2);
+  assert.equal(selected.events.includes("session.reconciliation"), false);
+});
+
+test("a stale issuing generation finalizes exact CRM Issued before expiry", async () => {
+  const selected = fixture();
+  await seedIssuingSession(selected);
+  const stale = selected.session;
+  stale.expiresAt = "2026-08-14T17:59:59.000Z";
+  Object.assign(selected.records.deal, {
+    Setup_Access_Status: "Synthetic Issued",
+    Setup_Access_Issued_At: stale.issuedAt,
+    Setup_Access_Verified_At: null,
+  });
+  selected.events.length = 0;
+
+  const fresh = await issue(selected, {
+    ...issueBody(),
+    issueRequestId: "10000000-0000-4000-8000-000000000025",
+  });
+
+  assert.equal(fresh.status, 200);
+  assert.equal(stale.status, "expired");
+  assert.equal(stale.lastOutcome, "crm_expiry_synced");
+  assert.ok(
+    selected.events.indexOf("session.issued") < selected.events.indexOf("session.verify"),
+  );
+  assert.equal(selected.events.includes("session.reconciliation"), false);
+});
+
+test("a stale issuing CRM mismatch retains the active lock in reconciliation", async () => {
+  const selected = fixture();
+  await seedIssuingSession(selected);
+  const stale = selected.session;
+  stale.expiresAt = "2026-08-14T17:59:59.000Z";
+  Object.assign(selected.records.deal, {
+    Setup_Access_Status: "Synthetic Issued",
+    Setup_Access_Issued_At: "2026-08-14T17:00:00.000Z",
+    Setup_Access_Verified_At: null,
+  });
+  selected.events.length = 0;
+
+  const blocked = await issue(selected, {
+    ...issueBody(),
+    issueRequestId: "10000000-0000-4000-8000-000000000026",
+  });
+
+  assert.equal(blocked.status, 503);
+  assert.equal(stale.status, "reconciliation_required");
+  assert.equal(stale.lastOutcome, "stale_issuing_crm_mismatch");
+  assert.equal(selected.sessions.length, 1);
+  assert.equal(
+    (await selected.dependencies.sessionStore.readActiveByCrmDealId(IDS.deal)).rowId,
+    stale.rowId,
+  );
+});
+
+test("a delayed Issue writer is fenced before stale issuing lock release", async () => {
+  const selected = fixture();
+  await seedIssuingSession(selected);
+  const stale = selected.session;
+  stale.expiresAt = "2026-08-14T17:59:59.000Z";
+  const originalUpdate = selected.dependencies.crmClient.updateRecord.bind(
+    selected.dependencies.crmClient,
+  );
+  let raced = false;
+  selected.dependencies.crmClient.updateRecord = async (...argumentsList) => {
+    const update = argumentsList[2];
+    if (update.Setup_Access_Status === "Synthetic Expired" && !raced) {
+      raced = true;
+      await originalUpdate(
+        "Deals",
+        IDS.deal,
+        {
+          Setup_Access_Status: "Synthetic Issued",
+          Setup_Access_Issued_At: stale.issuedAt,
+          Setup_Access_Verified_At: null,
+        },
+        { ifUnmodifiedSince: selected.records.deal.Modified_Time },
+      );
+    }
+    return originalUpdate(...argumentsList);
+  };
+  selected.events.length = 0;
+
+  const fresh = await issue(selected, {
+    ...issueBody(),
+    issueRequestId: "10000000-0000-4000-8000-000000000027",
+  });
+
+  assert.equal(fresh.status, 200);
+  assert.equal(raced, true);
+  assert.equal(stale.status, "expired");
+  assert.equal(stale.lastOutcome, "crm_expiry_synced");
+  assert.equal(selected.events.includes("session.reconciliation"), false);
+  assert.equal(selected.sessions.length, 2);
 });
 
 test("bounds repeated verified prefill requests with the durable attempt ceiling", async () => {
@@ -818,6 +1450,7 @@ test("runs claim, one-time consume, atomic CRM composite, receipt, then session 
   assert.equal(result.stage, "submission");
   assert.equal(result.outcome, "accepted");
   const order = [
+    "session.submitting",
     "workflow.submission.claim",
     "workflow.prefill.consume",
     "crm.composite",
@@ -831,6 +1464,49 @@ test("runs claim, one-time consume, atomic CRM composite, receipt, then session 
     "form2-v1:10001",
   );
   assert.equal(selected.records.deal.Setup_Access_Status, "Synthetic Submitted");
+});
+
+test("a crash after succeeded receipt preserves submitting ownership and repairs on exact retry", async () => {
+  const selected = fixture();
+  await issue(selected);
+  const prefillResult = await prefill(selected);
+  const body = validSubmission(prefillResult.body);
+  const originalMarkSubmitted = selected.dependencies.sessionStore.markSubmitted.bind(
+    selected.dependencies.sessionStore,
+  );
+  selected.dependencies.sessionStore.markSubmitted = async () => {
+    selected.events.push("session.submitted");
+    throw new Error("synthetic crash before session finalization");
+  };
+  selected.events.length = 0;
+
+  const interrupted = await submit(selected, body);
+
+  assert.equal(interrupted.status, 503);
+  assert.equal(selected.receipt.status, "succeeded");
+  assert.equal(selected.session.status, "submitting");
+  assert.match(selected.session.lastOutcome, /^submitting_[a-f0-9]{64}$/);
+  assert.equal(selected.events.filter((event) => event === "crm.composite").length, 1);
+  assert.equal(selected.events.includes("workflow.submission.reconciliation"), false);
+  assert.equal(selected.events.includes("workflow.prefill.reconciliation"), false);
+  assert.equal(selected.events.includes("session.reconciliation"), false);
+
+  selected.session.expiresAt = "2026-08-14T17:59:59.000Z";
+  selected.events.length = 0;
+  const stalePrefill = await prefill(selected);
+  assert.equal(stalePrefill.status, 404);
+  assert.equal(selected.session.status, "submitting");
+  assert.equal(selected.records.deal.Setup_Access_Status, "Synthetic Submitted");
+  assert.equal(selected.events.includes("session.verify"), false);
+  assert.equal(selected.events.includes("session.expiry.synced"), false);
+
+  selected.dependencies.sessionStore.markSubmitted = originalMarkSubmitted;
+  selected.events.length = 0;
+  const repaired = await submit(selected, body);
+  assert.equal(repaired.status, 200);
+  assert.deepEqual(repaired.body, { ok: true, accepted: true, duplicate: true });
+  assert.equal(selected.session.status, "submitted");
+  assert.equal(selected.events.includes("crm.composite"), false);
 });
 
 test("reports an independently verified CRM uniqueness replay as a duplicate success", async () => {
@@ -870,6 +1546,109 @@ test("email and mobile changes fail through the contract before consume or CRM m
   }
 });
 
+test("a failed-receipt write that is not durably proven returns ambiguous 503", async () => {
+  const selected = fixture();
+  await issue(selected);
+  const prefillResult = await prefill(selected);
+  selected.dependencies.workflowStore.markSubmissionFailed = async () => {
+    selected.events.push("workflow.submission.failed");
+    throw new Error("synthetic failure result write did not commit");
+  };
+  selected.events.length = 0;
+
+  const result = await submit(
+    selected,
+    validSubmission(prefillResult.body, {
+      submissionId: "10007",
+      authorizedRepresentativeConfirmed: false,
+    }),
+  );
+
+  assert.equal(result.status, 503);
+  assert.deepEqual(result.body, { ok: false, code: "service_unavailable" });
+  assert.equal(selected.receipt.status, "reconciliation_required");
+  assert.equal(selected.session.status, "reconciliation_required");
+  assert.equal(selected.session.lastOutcome, "submission_outcome_unknown");
+  assert.equal(selected.events.includes("workflow.submission.reconciliation"), true);
+  assert.equal(selected.events.includes("session.reconciliation"), true);
+  assert.equal(selected.events.includes("session.submission.released"), false);
+  assert.equal(selected.events.includes("workflow.prefill.consume"), false);
+  assert.equal(selected.events.includes("crm.composite"), false);
+});
+
+test("a committed failed receipt with unavailable readback is still ambiguous", async () => {
+  const selected = fixture();
+  await issue(selected);
+  const prefillResult = await prefill(selected);
+  const originalMarkFailed = selected.dependencies.workflowStore.markSubmissionFailed.bind(
+    selected.dependencies.workflowStore,
+  );
+  selected.dependencies.workflowStore.markSubmissionFailed = async (...args) => {
+    await originalMarkFailed(...args);
+    throw new Error("synthetic timeout after failed receipt commit");
+  };
+  const originalReadSubmission = selected.dependencies.workflowStore.readSubmission.bind(
+    selected.dependencies.workflowStore,
+  );
+  let readCount = 0;
+  selected.dependencies.workflowStore.readSubmission = async (...args) => {
+    readCount += 1;
+    if (readCount > 1) {
+      throw new Error("synthetic failed receipt readback outage");
+    }
+    return originalReadSubmission(...args);
+  };
+  selected.events.length = 0;
+
+  const result = await submit(
+    selected,
+    validSubmission(prefillResult.body, {
+      submissionId: "10008",
+      authorizedRepresentativeConfirmed: false,
+    }),
+  );
+
+  assert.equal(result.status, 503);
+  assert.deepEqual(result.body, { ok: false, code: "service_unavailable" });
+  assert.equal(selected.receipt.status, "reconciliation_required");
+  assert.equal(selected.session.status, "reconciliation_required");
+  assert.equal(selected.events.includes("workflow.submission.reconciliation"), true);
+  assert.equal(selected.events.includes("session.submission.released"), false);
+  assert.equal(selected.events.includes("workflow.prefill.consume"), false);
+  assert.equal(selected.events.includes("crm.composite"), false);
+});
+
+test("an exact failed-receipt readback permits the ordinary error and safe release", async () => {
+  const selected = fixture();
+  await issue(selected);
+  const prefillResult = await prefill(selected);
+  const originalMarkFailed = selected.dependencies.workflowStore.markSubmissionFailed.bind(
+    selected.dependencies.workflowStore,
+  );
+  selected.dependencies.workflowStore.markSubmissionFailed = async (...args) => {
+    await originalMarkFailed(...args);
+    throw new Error("synthetic timeout after failed receipt commit");
+  };
+  selected.events.length = 0;
+
+  const result = await submit(
+    selected,
+    validSubmission(prefillResult.body, {
+      submissionId: "10009",
+      authorizedRepresentativeConfirmed: false,
+    }),
+  );
+
+  assert.equal(result.status, 422);
+  assert.deepEqual(result.body, { ok: false, code: "form_invalid" });
+  assert.equal(selected.receipt.status, "failed");
+  assert.equal(selected.receipt.lastOutcome, "form_invalid");
+  assert.equal(selected.session.status, "verified");
+  assert.equal(selected.session.lastOutcome, "submission_released");
+  assert.equal(selected.events.includes("workflow.submission.reconciliation"), false);
+  assert.equal(selected.events.includes("session.submission.released"), true);
+});
+
 test("stale Modified_Time fails after claim without consuming prefill or writing CRM", async () => {
   const selected = fixture();
   await issue(selected);
@@ -901,24 +1680,47 @@ test("an exact succeeded duplicate requires matching CRM readback and does not r
   assert.equal(selected.events.includes("workflow.submission.claim"), false);
 });
 
-test("terminalizes a succeeded receipt whose CRM readback no longer matches", async () => {
+test("a positive CRM mismatch durably terminalizes an already-submitted session", async () => {
   const selected = fixture();
   await issue(selected);
   const prefillResult = await prefill(selected);
   const body = validSubmission(prefillResult.body);
   assert.equal((await submit(selected, body)).status, 200);
-  selected.records.deal.Setup_Form_Submission_ID = "form2-v1:different";
+  selected.records.deal.Setup_Form_Submission_ID = "different:succeeded:id";
   selected.events.length = 0;
 
-  const duplicate = await submit(selected, body);
+  const mismatch = await submit(selected, body);
 
-  assert.equal(duplicate.status, 503);
-  assert.deepEqual(duplicate.body, { ok: false, code: "service_unavailable" });
+  assert.equal(mismatch.status, 503);
+  assert.deepEqual(mismatch.body, { ok: false, code: "service_unavailable" });
+  assert.equal(selected.receipt.status, "succeeded");
   assert.equal(selected.session.status, "reconciliation_required");
-  assert.equal(selected.events.includes("session.reconciliation"), true);
+  assert.equal(selected.session.lastOutcome, "succeeded_receipt_crm_mismatch");
+  assert.equal(selected.events.includes("session.submitted.reconciliation"), true);
+  assert.equal(selected.events.includes("workflow.submission.reconciliation"), false);
+  assert.equal(selected.events.includes("crm.composite"), false);
 });
 
-test("accepts an exact completed webhook retry after the setup token expires", async () => {
+test("a malformed submitted outcome is never acknowledged as a duplicate", async () => {
+  const selected = fixture();
+  await issue(selected);
+  const prefillResult = await prefill(selected);
+  const body = validSubmission(prefillResult.body);
+  assert.equal((await submit(selected, body)).status, 200);
+  selected.session.lastOutcome = "outcome_unknown";
+  selected.events.length = 0;
+
+  const malformed = await submit(selected, body);
+
+  assert.equal(malformed.status, 503);
+  assert.equal(selected.session.status, "reconciliation_required");
+  assert.equal(selected.session.lastOutcome, "submitted_session_state_invalid");
+  assert.equal(selected.events.includes("session.submitted.reconciliation"), true);
+  assert.equal(selected.events.includes("crm.get.Deals"), false);
+  assert.equal(selected.events.includes("crm.composite"), false);
+});
+
+test("an exact succeeded duplicate remains recoverable after the setup-token TTL", async () => {
   const selected = fixture();
   await issue(selected);
   const prefillResult = await prefill(selected);
@@ -931,12 +1733,51 @@ test("accepts an exact completed webhook retry after the setup token expires", a
 
   assert.equal(duplicate.status, 200);
   assert.deepEqual(duplicate.body, { ok: true, accepted: true, duplicate: true });
-  assert.equal(selected.records.deal.Setup_Access_Status, "Synthetic Submitted");
+  assert.equal(selected.events.includes("workflow.submission.read"), true);
+  assert.equal(selected.events.includes("crm.get.Deals"), true);
+  assert.equal(selected.events.includes("crm.composite"), false);
   assert.equal(selected.events.includes("session.verify"), false);
-  assert.equal(selected.events.includes("crm.update.Deals"), false);
 });
 
-test("repairs a verified session before acknowledging a recovered succeeded receipt", async () => {
+test("a completed duplicate does not depend on the prefill row remaining available", async () => {
+  const selected = fixture();
+  await issue(selected);
+  const prefillResult = await prefill(selected);
+  const body = validSubmission(prefillResult.body);
+  assert.equal((await submit(selected, body)).status, 200);
+  selected.clearPrefill();
+  selected.events.length = 0;
+
+  const duplicate = await submit(selected, body);
+
+  assert.equal(duplicate.status, 200);
+  assert.equal(selected.events.includes("workflow.submission.read"), true);
+  assert.equal(selected.events.includes("workflow.prefill.read"), false);
+  assert.equal(selected.events.includes("crm.composite"), false);
+});
+
+test("a verified crash-gap session repairs from its receipt after prefill cleanup", async () => {
+  const selected = fixture();
+  await issue(selected);
+  const prefillResult = await prefill(selected);
+  const body = validSubmission(prefillResult.body);
+  assert.equal((await submit(selected, body)).status, 200);
+  selected.session.status = "verified";
+  selected.session.submittedAt = "";
+  selected.session.expiresAt = "2026-08-14T17:59:59.000Z";
+  selected.clearPrefill();
+  selected.events.length = 0;
+
+  const recovered = await submit(selected, body);
+
+  assert.equal(recovered.status, 200);
+  assert.equal(selected.session.status, "submitted");
+  assert.equal(selected.events.includes("workflow.prefill.read"), false);
+  assert.equal(selected.events.includes("workflow.submission.claim"), false);
+  assert.equal(selected.events.includes("crm.composite"), false);
+});
+
+test("a succeeded receipt repairs its verified session before duplicate acknowledgment", async () => {
   const selected = fixture();
   await issue(selected);
   const prefillResult = await prefill(selected);
@@ -952,11 +1793,17 @@ test("repairs a verified session before acknowledging a recovered succeeded rece
   assert.equal(recovered.status, 200);
   assert.deepEqual(recovered.body, { ok: true, accepted: true, duplicate: true });
   assert.equal(selected.session.status, "submitted");
-  assert.equal(selected.events.includes("session.submitted"), true);
-  assert.ok(selected.events.indexOf("crm.get.Deals") < selected.events.indexOf("session.submitted"));
+  assert.equal(selected.session.submittedAt, "2026-08-14T18:00:00.000Z");
+  assert.equal(selected.events.includes("workflow.submission.read"), true);
+  assert.equal(selected.events.includes("workflow.submission.claim"), false);
+  assert.equal(selected.events.includes("crm.composite"), false);
+  assert.equal(selected.events.includes("session.verify"), false);
+  assert.ok(
+    selected.events.indexOf("crm.get.Deals") < selected.events.indexOf("session.submitted"),
+  );
 });
 
-test("terminalizes an ambiguous recovered-success session repair", async () => {
+test("a recovered session repair accepts an exact submitted readback after a write timeout", async () => {
   const selected = fixture();
   await issue(selected);
   const prefillResult = await prefill(selected);
@@ -964,16 +1811,121 @@ test("terminalizes an ambiguous recovered-success session repair", async () => {
   assert.equal((await submit(selected, body)).status, 200);
   selected.session.status = "verified";
   selected.session.submittedAt = "";
-  selected.setMarkSubmittedError(new Error("synthetic repair write failure"));
+  const originalMarkSubmitted = selected.dependencies.sessionStore.markSubmitted.bind(
+    selected.dependencies.sessionStore,
+  );
+  selected.dependencies.sessionStore.markSubmitted = async (rowId, submissionFingerprint) => {
+    await originalMarkSubmitted(rowId, submissionFingerprint);
+    throw new Error("synthetic response lost after session repair");
+  };
+  selected.events.length = 0;
+
+  const recovered = await submit(selected, body);
+
+  assert.equal(recovered.status, 200);
+  assert.equal(selected.session.status, "submitted");
+  assert.equal(selected.events.includes("session.row.read"), true);
+  assert.equal(selected.events.includes("session.reconciliation"), false);
+});
+
+test("an unavailable recovered-session repair preserves the exact retry owner", async () => {
+  const selected = fixture();
+  await issue(selected);
+  const prefillResult = await prefill(selected);
+  const body = validSubmission(prefillResult.body);
+  assert.equal((await submit(selected, body)).status, 200);
+  selected.session.status = "verified";
+  selected.session.submittedAt = "";
+  const originalMarkSubmitted = selected.dependencies.sessionStore.markSubmitted.bind(
+    selected.dependencies.sessionStore,
+  );
+  selected.dependencies.sessionStore.markSubmitted = async () => {
+    selected.events.push("session.submitted");
+    throw new Error("synthetic session repair unavailable");
+  };
   selected.events.length = 0;
 
   const recovered = await submit(selected, body);
 
   assert.equal(recovered.status, 503);
   assert.deepEqual(recovered.body, { ok: false, code: "service_unavailable" });
-  assert.equal(selected.session.status, "reconciliation_required");
-  assert.equal(selected.events.includes("session.row.read"), true);
-  assert.equal(selected.events.includes("session.reconciliation"), true);
+  assert.equal(selected.session.status, "submitting");
+  assert.match(selected.session.lastOutcome, /^submitting_[a-f0-9]{64}$/);
+  assert.equal(selected.events.includes("session.reconciliation"), false);
+  assert.equal(selected.events.includes("crm.composite"), false);
+
+  selected.dependencies.sessionStore.markSubmitted = originalMarkSubmitted;
+  selected.events.length = 0;
+  const retry = await submit(selected, body);
+  assert.equal(retry.status, 200);
+  assert.equal(selected.session.status, "submitted");
+  assert.equal(selected.events.includes("crm.composite"), false);
+});
+
+test("a succeeded receipt preserves transient CRM retries but terminalizes a positive mismatch", async () => {
+  for (const failureMode of ["read_error", "mismatch"]) {
+    const selected = fixture();
+    await issue(selected);
+    const prefillResult = await prefill(selected);
+    const body = validSubmission(prefillResult.body);
+    assert.equal((await submit(selected, body)).status, 200);
+    selected.session.status = "verified";
+    selected.session.submittedAt = "";
+    if (failureMode === "read_error") {
+      selected.setCrmReadError(new Error("synthetic CRM read unavailable"));
+    } else {
+      selected.records.deal.Setup_Form_Submission_ID = "different:succeeded:id";
+    }
+    selected.events.length = 0;
+
+    const unresolved = await submit(selected, body);
+
+    assert.equal(unresolved.status, 503);
+    assert.equal(
+      selected.session.status,
+      failureMode === "read_error" ? "submitting" : "reconciliation_required",
+    );
+    assert.equal(
+      selected.events.includes("session.reconciliation"),
+      failureMode === "mismatch",
+    );
+    if (failureMode === "mismatch") {
+      assert.equal(selected.session.lastOutcome, "succeeded_receipt_crm_mismatch");
+    }
+    selected.setCrmReadError(null);
+    selected.events.length = 0;
+
+    if (failureMode === "read_error") {
+      const repaired = await submit(selected, body);
+      assert.equal(repaired.status, 200);
+      assert.equal(selected.session.status, "submitted");
+      assert.equal(selected.events.includes("crm.composite"), false);
+      continue;
+    }
+
+    const differentId = await submit(selected, { ...body, submissionId: "19999" });
+    assert.equal(differentId.status, 404);
+    assert.equal(selected.events.includes("workflow.submission.claim"), false);
+  }
+});
+
+test("an elapsed verified session without a succeeded receipt expires both stores before 404", async () => {
+  const selected = fixture();
+  await issue(selected);
+  const prefillResult = await prefill(selected);
+  selected.session.expiresAt = "2026-08-14T17:59:59.000Z";
+  selected.events.length = 0;
+
+  const result = await submit(selected, validSubmission(prefillResult.body));
+
+  assert.equal(result.status, 404);
+  assert.deepEqual(result.body, { ok: false, code: "setup_not_found" });
+  assert.equal(selected.session.status, "expired");
+  assert.equal(selected.records.deal.Setup_Access_Status, "Synthetic Expired");
+  assert.equal(selected.events.includes("workflow.submission.read"), true);
+  assert.equal(selected.events.includes("workflow.submission.claim"), false);
+  assert.equal(selected.events.includes("crm.composite"), false);
+  assert.ok(selected.events.indexOf("session.verify") < selected.events.indexOf("crm.update.Deals"));
 });
 
 test("a completed submission ID with changed respondent data is rejected before CRM", async () => {
@@ -982,6 +1934,7 @@ test("a completed submission ID with changed respondent data is rejected before 
   const prefillResult = await prefill(selected);
   const body = validSubmission(prefillResult.body);
   assert.equal((await submit(selected, body)).status, 200);
+  selected.session.expiresAt = "2026-08-14T17:59:59.000Z";
   selected.events.length = 0;
 
   const conflicting = await submit(selected, {
@@ -1002,6 +1955,7 @@ test("a new submission ID after session completion creates no receipt claim", as
   const prefillResult = await prefill(selected);
   const body = validSubmission(prefillResult.body);
   assert.equal((await submit(selected, body)).status, 200);
+  selected.session.expiresAt = "2026-08-14T17:59:59.000Z";
   const completedReceipt = clone(selected.receipt);
   selected.events.length = 0;
 
@@ -1062,7 +2016,21 @@ test("labels an unambiguous pre-consumption dependency failure as safely retryab
   assert.equal(result.status, 503);
   assert.deepEqual(result.body, { ok: false, code: "service_unavailable" });
   assert.equal(selected.receipt.lastOutcome, "retryable_precommit");
+  assert.equal(selected.session.status, "verified");
+  assert.equal(selected.session.lastOutcome, "submission_released");
+  assert.equal(selected.events.includes("session.submission.released"), true);
   assert.equal(selected.events.includes("workflow.prefill.consume"), false);
+
+  selected.setCrmReadError(null);
+  selected.events.length = 0;
+  const retry = await submit(
+    selected,
+    validSubmission(prefillResult.body, { submissionId: "10006" }),
+  );
+  assert.equal(retry.status, 200);
+  assert.equal(selected.session.status, "submitted");
+  assert.equal(selected.events.includes("session.submitting"), true);
+  assert.equal(selected.events.includes("workflow.submission.claim"), true);
 });
 
 test("ambiguous CRM errors reconcile durable state and return only a redacted error", async () => {

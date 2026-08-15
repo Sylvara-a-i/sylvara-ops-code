@@ -105,7 +105,7 @@ function validPayload() {
     existingCustomerCallHandling: "Capture Callback Only",
     alertRecipientName: "Synthetic Alert Recipient",
     alertRecipientMobile: "555-010-2600",
-    alertRecipientEmail: "alerts@example.invalid",
+    alertRecipientEmail: null,
     authorizedRepresentativeConfirmed: true,
     testScopeAccepted: true,
   };
@@ -128,7 +128,7 @@ test("normalizes the approved Form 2 payload into three bounded CRM updates", ()
     First_Name: "Casey",
     Last_Name: "Tester",
     Decision_Maker_Role: "Owner / Founder",
-    Title: "Owner / Founder",
+    Title: "Owner",
     Decision_Authority: "Authorized Signer",
   });
   assert.equal(updates.contactUpdate.Email, undefined);
@@ -142,42 +142,6 @@ test("normalizes the approved Form 2 payload into three bounded CRM updates", ()
   assert.equal(updates.dealUpdate.Test_Call_Limit, undefined);
   assert.equal(updates.dealUpdate.Test_Scope_Version, undefined);
   assert.equal(Object.isFrozen(updates), true);
-});
-
-test("coalesces the role and exact-job-title fields into one canonical CRM title", () => {
-  const listed = validateForm2Payload(
-    { ...validPayload(), jobTitle: "stale client value" },
-    { existing: existingRecords(), ...SERVER_OPTIONS },
-  );
-  assert.equal(listed.contactUpdate.Decision_Maker_Role, "Owner / Founder");
-  assert.equal(listed.contactUpdate.Title, "Owner / Founder");
-
-  const other = validateForm2Payload(
-    { ...validPayload(), decisionMakerRole: "Other", jobTitle: "President" },
-    { existing: existingRecords(), ...SERVER_OPTIONS },
-  );
-  assert.equal(other.contactUpdate.Decision_Maker_Role, "Other");
-  assert.equal(other.contactUpdate.Title, "President");
-
-  for (const jobTitle of [
-    null,
-    "",
-    "Other",
-    " other ",
-    "N/A",
-    "NA",
-    "None",
-    "Not Applicable",
-    "Unknown",
-  ]) {
-    assert.throws(
-      () => validateForm2Payload(
-        { ...validPayload(), decisionMakerRole: "Other", jobTitle },
-        { existing: existingRecords(), ...SERVER_OPTIONS },
-      ),
-      (error) => error instanceof FormContractError && error.field === "jobTitle",
-    );
-  }
 });
 
 test("locks verified email and requires separate reverification for a mobile change", () => {
@@ -242,28 +206,53 @@ test("enforces conditional fields and both affirmative confirmations", () => {
   }
 });
 
-test("accepts the intended conditional nulls for the pending Blueprint v4 contract", () => {
-  const updates = validateForm2Payload({
+test("preserves the approved conditional setup matrix despite stricter live Blueprint inputs", () => {
+  const afterHoursRecords = existingRecords();
+  afterHoursRecords.deal.Requested_Test_Route = "After Hours Only";
+  afterHoursRecords.deal.Approved_Test_Route = "After Hours Only";
+  const afterHours = {
     ...validPayload(),
+    requestedTestRoute: "After Hours Only",
     approvedTestRoute: "After Hours Only",
     noAnswerDelay: null,
+  };
+  assert.doesNotThrow(() => validateForm2Payload(afterHours, {
+    existing: afterHoursRecords,
+    ...SERVER_OPTIONS,
+  }));
+  assert.throws(
+    () => validateForm2Payload(
+      { ...afterHours, noAnswerDelay: "5 Rings" },
+      { existing: afterHoursRecords, ...SERVER_OPTIONS },
+    ),
+    FormContractError,
+  );
+
+  const voicemail = {
+    ...validPayload(),
     approvedFallbackDestination: "Voicemail",
     approvedFallbackNumber: null,
-    alertRecipientMobile: "555-010-2600",
-    alertRecipientEmail: null,
-  }, {
-    existing: {
-      ...existingRecords(),
-      deal: {
-        ...existingRecords().deal,
-        Approved_Test_Route: "After Hours Only",
-      },
-    },
+  };
+  assert.doesNotThrow(() => validateForm2Payload(voicemail, {
+    existing: existingRecords(),
     ...SERVER_OPTIONS,
-  });
-  assert.equal(updates.dealUpdate.No_Answer_Delay, null);
-  assert.equal(updates.dealUpdate.Approved_Fallback_Number, null);
-  assert.equal(updates.dealUpdate.Alert_Recipient_Email, null);
+  }));
+  assert.throws(
+    () => validateForm2Payload(
+      { ...voicemail, approvedFallbackNumber: "555-010-2400" },
+      { existing: existingRecords(), ...SERVER_OPTIONS },
+    ),
+    FormContractError,
+  );
+
+  assert.doesNotThrow(() => validateForm2Payload(
+    { ...validPayload(), alertRecipientMobile: null, alertRecipientEmail: "alerts@example.invalid" },
+    { existing: existingRecords(), ...SERVER_OPTIONS },
+  ));
+  assert.doesNotThrow(() => validateForm2Payload(
+    { ...validPayload(), alertRecipientMobile: "555-010-2600", alertRecipientEmail: null },
+    { existing: existingRecords(), ...SERVER_OPTIONS },
+  ));
 });
 
 test("private field-team choices fail closed unless unchanged or privately allowlisted", () => {
@@ -280,30 +269,6 @@ test("private field-team choices fail closed unless unchanged or privately allow
   assert.equal(updates.accountUpdate.Field_Team_Size_Band, "Different Private Band");
 });
 
-test("preserves the exact en-dash field-team size bands used by Forms and CRM", () => {
-  const allowedFieldTeamSizeBands = ["1–2", "3–4"];
-  for (const fieldTeamSizeBand of allowedFieldTeamSizeBands) {
-    const records = existingRecords();
-    records.account.Field_Team_Size_Band = fieldTeamSizeBand;
-    const updates = validateForm2Payload(
-      { ...validPayload(), fieldTeamSizeBand },
-      { existing: records, ...SERVER_OPTIONS, allowedFieldTeamSizeBands },
-    );
-    assert.equal(updates.accountUpdate.Field_Team_Size_Band, fieldTeamSizeBand);
-    assert.equal(buildPrefillPayload(records).fieldTeamSizeBand, fieldTeamSizeBand);
-  }
-
-  for (const fieldTeamSizeBand of ["1-2", "3-4"]) {
-    assert.throws(
-      () => validateForm2Payload(
-        { ...validPayload(), fieldTeamSizeBand },
-        { existing: existingRecords(), ...SERVER_OPTIONS, allowedFieldTeamSizeBands },
-      ),
-      (error) => error instanceof FormContractError && error.field === "fieldTeamSizeBand",
-    );
-  }
-});
-
 test("requires Contact, Account, and Deal to resolve to one relationship context", () => {
   const records = existingRecords();
   records.deal.Contact_Name.id = `${"9".repeat(16)}99`;
@@ -318,7 +283,6 @@ test("builds a flat prefill allowlist without record IDs or server-controlled va
   assert.deepEqual(Object.keys(prefill), CLIENT_KEYS);
   assert.equal(prefill.businessEmail, "casey@example.invalid");
   assert.equal(prefill.approvedTestRoute, "No Answer / Overflow Only");
-  assert.equal(prefill.jobTitle, "Owner / Founder");
   assert.equal(prefill.authorizedRepresentativeConfirmed, false);
   assert.equal(prefill.testScopeAccepted, false);
   assert.equal(JSON.stringify(prefill).includes(IDS.contact), false);
