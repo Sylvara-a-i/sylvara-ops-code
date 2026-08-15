@@ -1,6 +1,6 @@
 "use strict";
 
-const { SESSION_STATUSES } = require("./config");
+const { SESSION_STATUSES, SOURCE_REVISION_PATTERN } = require("./config");
 
 const STATUS_SET = new Set(SESSION_STATUSES);
 const TOKEN_HASH_PATTERN = /^[a-f0-9]{64}$/;
@@ -75,7 +75,7 @@ function validateConfig(config) {
     !Number.isSafeInteger(config?.maxVerificationAttempts) ||
     config.maxVerificationAttempts < 2 ||
     config.maxVerificationAttempts > 10 ||
-    !/^[A-Za-z0-9][A-Za-z0-9._-]{6,79}$/.test(config?.sourceRevision ?? "")
+    !SOURCE_REVISION_PATTERN.test(config?.sourceRevision ?? "")
   ) {
     throw new SessionStoreError("Session lifecycle configuration is invalid");
   }
@@ -160,7 +160,7 @@ function normalizeRow(rawRow, tableName) {
     !STATUS_SET.has(normalized.status) ||
     !OUTCOME_PATTERN.test(normalized.lastOutcome) ||
     normalized.sourceEnvironment !== "development" ||
-    !/^[A-Za-z0-9][A-Za-z0-9._-]{6,79}$/.test(normalized.sourceRevision)
+    !SOURCE_REVISION_PATTERN.test(normalized.sourceRevision)
   ) {
     throw new SessionStoreError("Session row contains invalid operational metadata");
   }
@@ -428,7 +428,7 @@ function createCatalystSessionStore(adapter, config, { now = Date.now } = {}) {
     rowId,
     "reconciliation_required",
     outcome,
-    new Set(["issued", "verified", "failed"]),
+    new Set(["issued", "verified", "submitted", "expired", "failed"]),
     "FAILED_AT",
   );
 

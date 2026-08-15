@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
   "status": "proposed-development-only",
-  "live_state": "not_provisioned",
+  "live_state": "development_tables_provisioned_and_independently_read_back_2026-08-14_runtime_not_deployed",
   "data_policy": {
     "direct_form_payloads_stored": false,
     "raw_tokens_or_submission_ids_stored": false,

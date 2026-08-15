@@ -20,7 +20,7 @@ function config(overrides = {}) {
     deploymentEnvironment: "development",
     sessionTtlSeconds: 3600,
     maxVerificationAttempts: 3,
-    sourceRevision: "synthetic-revision-001",
+    sourceRevision: "a".repeat(40),
     ...overrides,
   };
 }
@@ -183,7 +183,7 @@ test("fails reconciliation when an issue key is reused with a conflicting hash o
   }
   const changedRevisionStore = createCatalystSessionStore(
     adapter,
-    config({ sourceRevision: "synthetic-revision-002" }),
+    config({ sourceRevision: "b".repeat(40) }),
     { now: () => clock.nowMs },
   );
   await assert.rejects(
@@ -248,6 +248,28 @@ test("supports explicit revoke, failure, and reconciliation-required terminal st
   assert.equal((await failedFixture.store.markReconciliationRequired(
     failedIssue.rowId,
     "crm_outcome_unknown",
+  )).status, "reconciliation_required");
+
+  const expiredFixture = fixture();
+  const expiredIssue = await expiredFixture.store.issue(issueInput({
+    tokenHash: "c".repeat(64),
+  }));
+  expiredFixture.clock.nowMs = NOW_MS + 3600 * 1000;
+  await expiredFixture.store.verify("c".repeat(64));
+  assert.equal((await expiredFixture.store.markReconciliationRequired(
+    expiredIssue.rowId,
+    "crm_expiry_outcome_unknown",
+  )).status, "reconciliation_required");
+
+  const submittedFixture = fixture();
+  const submittedIssue = await submittedFixture.store.issue(issueInput({
+    tokenHash: "d".repeat(64),
+  }));
+  await submittedFixture.store.verify("d".repeat(64));
+  await submittedFixture.store.markSubmitted(submittedIssue.rowId);
+  assert.equal((await submittedFixture.store.markReconciliationRequired(
+    submittedIssue.rowId,
+    "succeeded_receipt_crm_mismatch",
   )).status, "reconciliation_required");
 
   assert.deepEqual(SESSION_STATUSES, [

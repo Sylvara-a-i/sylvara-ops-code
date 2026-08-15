@@ -4,6 +4,8 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const { ConfigurationError, NUMERIC_LIMITS, loadConfig } = require("../lib/config");
 
+const REVISION = "a".repeat(40);
+
 function baseEnvironment(overrides = {}) {
   return {
     DEPLOYMENT_ENVIRONMENT: "development",
@@ -28,16 +30,21 @@ function baseEnvironment(overrides = {}) {
     FORM2_ACCESS_STATUS_ISSUED_VALUE: "Synthetic Issued",
     FORM2_ACCESS_STATUS_VERIFIED_VALUE: "Synthetic Verified",
     FORM2_ACCESS_STATUS_SUBMITTED_VALUE: "Synthetic Submitted",
+    FORM2_ACCESS_STATUS_EXPIRED_VALUE: "Synthetic Expired",
     CRM_API_BASE_URL: "https://www.zohoapis.com/crm/v8",
     CRM_READ_CONNECTION_LINK_NAME: "SyntheticCrmRead",
     CRM_WRITE_CONNECTION_LINK_NAME: "SyntheticCrmWrite",
-    SOURCE_REVISION: "synthetic-revision-001",
+    SOURCE_REVISION: REVISION,
     ...overrides,
   };
 }
 
+function load(environment = baseEnvironment()) {
+  return loadConfig(environment, environment.SOURCE_REVISION);
+}
+
 test("loads an immutable Development-only configuration with bounded defaults", () => {
-  const config = loadConfig(baseEnvironment());
+  const config = load();
   assert.equal(config.deploymentEnvironment, "development");
   assert.equal(config.prefillTableName, "Form2_Prefills");
   assert.equal(config.sessionTtlSeconds, 3600);
@@ -55,6 +62,7 @@ test("loads an immutable Development-only configuration with bounded defaults", 
     issued: "Synthetic Issued",
     verified: "Synthetic Verified",
     submitted: "Synthetic Submitted",
+    expired: "Synthetic Expired",
   });
   assert.ok(Object.isFrozen(config.form2AccessStatuses));
   assert.ok(Object.isFrozen(config));
@@ -63,7 +71,7 @@ test("loads an immutable Development-only configuration with bounded defaults", 
 test("hard-blocks every environment other than exact Development", () => {
   for (const value of ["production", "Production", "development ", "test", ""]) {
     assert.throws(
-      () => loadConfig(baseEnvironment({ DEPLOYMENT_ENVIRONMENT: value })),
+      () => load(baseEnvironment({ DEPLOYMENT_ENVIRONMENT: value })),
       ConfigurationError,
     );
   }
@@ -76,7 +84,7 @@ test("requires separate safe Data Store table identifiers", () => {
     { SUBMISSION_TABLE_NAME: "Form2_Prefills" },
     { PREFILL_TABLE_NAME: "" },
   ]) {
-    assert.throws(() => loadConfig(baseEnvironment(overrides)), ConfigurationError);
+    assert.throws(() => load(baseEnvironment(overrides)), ConfigurationError);
   }
 });
 
@@ -89,7 +97,7 @@ test("requires three unique exact routes and isolated custom-header names", () =
     { ISSUE_HEADER_NAME: "x-sylvara-forms-key" },
     { FORMS_HEADER_NAME: "authorization" },
   ]) {
-    assert.throws(() => loadConfig(baseEnvironment(overrides)), ConfigurationError);
+    assert.throws(() => load(baseEnvironment(overrides)), ConfigurationError);
   }
 });
 
@@ -101,7 +109,7 @@ test("requires independently generated printable route secrets and token pepper"
     { SUBMISSION_HEADER_SECRET: "P".repeat(43) },
     { PREFILL_HEADER_SECRET: "S".repeat(43) },
   ]) {
-    assert.throws(() => loadConfig(baseEnvironment(overrides)), ConfigurationError);
+    assert.throws(() => load(baseEnvironment(overrides)), ConfigurationError);
   }
 });
 
@@ -119,7 +127,7 @@ test("accepts only exact HTTPS form and regional Zoho CRM API URLs", () => {
     { CRM_API_BASE_URL: "https://www.zohoapis.com/crm/v8/Leads" },
     { CRM_API_BASE_URL: "https://www.zohoapis.com:444/crm/v8" },
   ]) {
-    assert.throws(() => loadConfig(baseEnvironment(overrides)), ConfigurationError);
+    assert.throws(() => load(baseEnvironment(overrides)), ConfigurationError);
   }
 });
 
@@ -136,18 +144,18 @@ test("parses all numeric controls as strict bounded base-10 integers", () => {
       PLATFORM_OPERATION_TIMEOUT_MS: "platformOperationTimeoutMs",
     };
     assert.equal(
-      loadConfig(baseEnvironment({ [name]: String(limits.minimum) }))[propertyByName[name]],
+      load(baseEnvironment({ [name]: String(limits.minimum) }))[propertyByName[name]],
       limits.minimum,
     );
     for (const value of ["0", "01", "1.5", "-1", "NaN", String(limits.maximum + 1)]) {
       assert.throws(
-        () => loadConfig(baseEnvironment({ [name]: value })),
+        () => load(baseEnvironment({ [name]: value })),
         ConfigurationError,
       );
     }
   }
   assert.throws(
-    () => loadConfig(baseEnvironment({ MAX_VERIFICATION_ATTEMPTS: "1" })),
+    () => load(baseEnvironment({ MAX_VERIFICATION_ATTEMPTS: "1" })),
     ConfigurationError,
   );
 });
@@ -157,6 +165,9 @@ test("rejects malformed aliases, versions, revisions, and Connection link names"
     { FORM2_TOKEN_FIELD_ALIAS: "access-token" },
     { FORM2_FORM_VERSION: "version with spaces" },
     { SOURCE_REVISION: "short" },
+    { SOURCE_REVISION: "A".repeat(40) },
+    { SOURCE_REVISION: "a".repeat(39) },
+    { SOURCE_REVISION: "a".repeat(41) },
     { CRM_READ_CONNECTION_LINK_NAME: "unsafe-link" },
     { CRM_WRITE_CONNECTION_LINK_NAME: "SyntheticCrmRead" },
     { FORM2_ENTRY_OFFER_VALUE: "Unsafe\nValue" },
@@ -164,7 +175,15 @@ test("rejects malformed aliases, versions, revisions, and Connection link names"
     { FORM2_FIELD_TEAM_SIZE_BANDS: "[]" },
     { FORM2_FIELD_TEAM_SIZE_BANDS: '["Duplicate","Duplicate"]' },
     { FORM2_ACCESS_STATUS_INITIAL_VALUE: "Synthetic Issued" },
+    { FORM2_ACCESS_STATUS_EXPIRED_VALUE: "Synthetic Submitted" },
   ]) {
-    assert.throws(() => loadConfig(baseEnvironment(overrides)), ConfigurationError);
+    assert.throws(() => load(baseEnvironment(overrides)), ConfigurationError);
   }
+});
+
+test("binds the runtime revision to the stamped deployed artifact", () => {
+  const environment = baseEnvironment();
+  assert.throws(() => loadConfig(environment), ConfigurationError);
+  assert.throws(() => loadConfig(environment, "b".repeat(40)), ConfigurationError);
+  assert.equal(loadConfig(environment, REVISION).sourceRevision, REVISION);
 });

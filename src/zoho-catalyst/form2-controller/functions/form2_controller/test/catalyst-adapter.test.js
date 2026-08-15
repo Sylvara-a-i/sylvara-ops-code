@@ -36,10 +36,11 @@ function listenerEnvironment() {
     FORM2_ACCESS_STATUS_ISSUED_VALUE: "Synthetic Issued",
     FORM2_ACCESS_STATUS_VERIFIED_VALUE: "Synthetic Verified",
     FORM2_ACCESS_STATUS_SUBMITTED_VALUE: "Synthetic Submitted",
+    FORM2_ACCESS_STATUS_EXPIRED_VALUE: "Synthetic Expired",
     CRM_API_BASE_URL: "https://www.zohoapis.com/crm/v8",
     CRM_READ_CONNECTION_LINK_NAME: "SyntheticCrmRead",
     CRM_WRITE_CONNECTION_LINK_NAME: "SyntheticCrmWrite",
-    SOURCE_REVISION: "synthetic-revision-001",
+    SOURCE_REVISION: "a".repeat(40),
   };
 }
 
@@ -129,6 +130,7 @@ test("listener logs stage and outcome for controller successes and handled error
     const listener = createRequestListener({
       catalystSdk: catalystSdkStub(),
       environment: listenerEnvironment(),
+      artifactRevision: "a".repeat(40),
       logger: {
         info(line) { lines.push(["info", line]); },
         error(line) { lines.push(["error", line]); },

@@ -265,6 +265,10 @@ test("the repository pipeline gates and reproduces one immutable Development dep
   assert.match(script, /actual_revision.*git .* rev-parse --verify HEAD/);
   assert.match(script, /actual_revision" == "\$APPROVED_SOURCE_REVISION/);
   assert.match(script, /status --porcelain=v1 --untracked-files=all/);
+  assert.match(script, /archive --format=tar "\$actual_revision"/);
+  assert.match(script, /functions\/form2_controller\/lib\/source-revision\.js/);
+  assert.match(script, /ARTIFACT_SOURCE_REVISION/);
+  assert.match(script, /artifact_project_root/);
   assert.match(script, /tools\/safety\/pre-commit-safety-check\.py/);
   assert.match(script, /npm ci --ignore-scripts --no-audit --no-fund/);
   assert.match(script, /npm run ci --prefix/);

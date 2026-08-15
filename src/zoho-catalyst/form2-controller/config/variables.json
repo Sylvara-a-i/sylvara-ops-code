@@ -27,6 +27,7 @@
     { "name": "FORM2_ACCESS_STATUS_ISSUED_VALUE", "classification": "private-crm-contract", "required": true, "example_allowed": false },
     { "name": "FORM2_ACCESS_STATUS_VERIFIED_VALUE", "classification": "private-crm-contract", "required": true, "example_allowed": false },
     { "name": "FORM2_ACCESS_STATUS_SUBMITTED_VALUE", "classification": "private-crm-contract", "required": true, "example_allowed": false },
+    { "name": "FORM2_ACCESS_STATUS_EXPIRED_VALUE", "classification": "private-crm-contract", "required": true, "example_allowed": false },
     { "name": "CRM_API_BASE_URL", "classification": "private-regional-endpoint", "required": true, "example_allowed": false },
     { "name": "CRM_READ_CONNECTION_LINK_NAME", "classification": "private-connection-identity", "required": true, "example_allowed": false },
     { "name": "CRM_WRITE_CONNECTION_LINK_NAME", "classification": "private-connection-identity", "required": true, "example_allowed": false },

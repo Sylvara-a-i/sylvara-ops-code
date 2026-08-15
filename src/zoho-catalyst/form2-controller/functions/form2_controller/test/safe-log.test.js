@@ -8,7 +8,7 @@ test("emits only the fixed operational allowlist", () => {
   const lines = [];
   safeLog({ info: (line) => lines.push(line) }, "info", {
     requestId: "synthetic-request",
-    sourceRevision: "revision-001",
+    sourceRevision: "a".repeat(40),
     stage: "prefill",
     outcome: "completed",
     elapsedMs: 12,
@@ -18,7 +18,7 @@ test("emits only the fixed operational allowlist", () => {
   assert.equal(lines.length, 1);
   assert.deepEqual(JSON.parse(lines[0]), {
     requestId: "synthetic-request",
-    sourceRevision: "revision-001",
+    sourceRevision: "a".repeat(40),
     stage: "prefill",
     outcome: "completed",
     elapsedMs: 12,

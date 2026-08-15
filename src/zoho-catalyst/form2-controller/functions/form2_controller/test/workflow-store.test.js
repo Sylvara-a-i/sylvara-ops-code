@@ -24,7 +24,7 @@ function config(overrides = {}) {
   return {
     prefillTableName: PREFILL_TABLE,
     submissionTableName: SUBMISSION_TABLE,
-    sourceRevision: "synthetic-revision-001",
+    sourceRevision: "a".repeat(40),
     deploymentEnvironment: "development",
     platformOperationTimeoutMs: 5000,
     maxSubmissionAttempts: 3,

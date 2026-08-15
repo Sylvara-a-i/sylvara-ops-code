@@ -55,6 +55,33 @@ cleanup() {
 }
 trap cleanup EXIT
 
+readonly artifact_root="$tool_root/artifact"
+mkdir -p -- "$artifact_root"
+git -C "$repository_root" archive --format=tar "$actual_revision" | \
+  tar --extract --file=- --directory="$artifact_root"
+readonly artifact_project_root="$artifact_root/src/zoho-catalyst/form2-controller"
+readonly artifact_revision_path="${artifact_project_root}/functions/form2_controller/lib/source-revision.js"
+[[ -f "$artifact_revision_path" ]] || fail "the source-revision module is unavailable"
+
+python3 -I -S - "$artifact_revision_path" "$actual_revision" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+path = Path(sys.argv[1])
+revision = sys.argv[2]
+sentinel = 'const ARTIFACT_SOURCE_REVISION = "__SYLVARA_UNSTAMPED_SOURCE_REVISION__";'
+if re.fullmatch(r"[a-f0-9]{40}", revision) is None:
+    raise SystemExit("approved source revision is invalid")
+text = path.read_text(encoding="utf-8")
+if text.count(sentinel) != 1:
+    raise SystemExit("source revision module is not the reviewed unstamped template")
+path.write_text(
+    text.replace(sentinel, f'const ARTIFACT_SOURCE_REVISION = "{revision}";'),
+    encoding="utf-8",
+)
+PY
+
 readonly node_archive_path="$tool_root/$NODE_ARCHIVE"
 curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
   --output "$node_archive_path" \
@@ -76,10 +103,10 @@ readonly catalyst_version
 
 python3 "$repository_root/tools/safety/pre-commit-safety-check.py"
 npm ci --ignore-scripts --no-audit --no-fund \
-  --prefix "$project_root/functions/form2_controller"
-npm run ci --prefix "$project_root/functions/form2_controller"
+  --prefix "$artifact_project_root/functions/form2_controller"
+npm run ci --prefix "$artifact_project_root/functions/form2_controller"
 
-cd -- "$project_root"
+cd -- "$artifact_project_root"
 catalyst deploy \
   --only functions:form2_controller \
   --ignore-scripts \

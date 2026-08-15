@@ -37,6 +37,7 @@ function config() {
       issued: "Synthetic Issued",
       verified: "Synthetic Verified",
       submitted: "Synthetic Submitted",
+      expired: "Synthetic Expired",
     }),
     form2FieldTeamSizeBands: Object.freeze([
       "Synthetic Approved Band",
@@ -175,7 +176,7 @@ function validSubmission(prefillBody, overrides = {}) {
     existingCustomerCallHandling: "Capture Callback Only",
     alertRecipientName: "Synthetic Alert Recipient",
     alertRecipientMobile: "555-010-2600",
-    alertRecipientEmail: null,
+    alertRecipientEmail: "alerts@example.invalid",
     authorizedRepresentativeConfirmed: true,
     testScopeAccepted: true,
     ...overrides,
@@ -195,6 +196,7 @@ function fixture() {
   let crmReadError = null;
   let mintError = null;
   let verifyError = null;
+  let markSubmittedError = null;
   let compositeReplay = false;
 
   function nextModifiedTime() {
@@ -252,6 +254,7 @@ function fixture() {
           attemptCount: 0,
           maxAttempts: selectedConfig.maxVerificationAttempts,
           verifiedAt: "",
+          submittedAt: "",
           expiredAt: "",
         };
       } else {
@@ -294,7 +297,9 @@ function fixture() {
     async markSubmitted(rowId) {
       events.push("session.submitted");
       assert.equal(rowId, session.rowId);
+      if (markSubmittedError) throw markSubmittedError;
       session.status = "submitted";
+      session.submittedAt = "2026-08-14T18:00:00.000Z";
       return Object.freeze({ ...session });
     },
     async markReconciliationRequired(rowId) {
@@ -419,6 +424,7 @@ function fixture() {
     setCrmReadError(value) { crmReadError = value; },
     setMintError(value) { mintError = value; },
     setVerifyError(value) { verifyError = value; },
+    setMarkSubmittedError(value) { markSubmittedError = value; },
   };
 }
 
@@ -695,7 +701,44 @@ test("durably expires an elapsed prefill session before returning the generic 40
   assert.deepEqual(result.body, { ok: false, code: "setup_not_found" });
   assert.equal(selected.session.status, "expired");
   assert.equal(selected.session.expiredAt, "2026-08-14T18:00:00.000Z");
-  assert.deepEqual(selected.events, ["session.read", "session.verify"]);
+  assert.equal(selected.records.deal.Setup_Access_Status, "Synthetic Expired");
+  assert.deepEqual(selected.events, [
+    "session.read",
+    "session.verify",
+    "crm.get.Deals",
+    "crm.update.Deals",
+  ]);
+});
+
+test("moves an unknown CRM expiry outcome into durable reconciliation", async () => {
+  const selected = fixture();
+  await issue(selected);
+  selected.session.expiresAt = "2026-08-14T17:59:59.000Z";
+  selected.setCrmReadError(new Error("synthetic CRM expiry read failure"));
+  selected.events.length = 0;
+
+  const result = await prefill(selected);
+
+  assert.equal(result.status, 503);
+  assert.deepEqual(result.body, { ok: false, code: "service_unavailable" });
+  assert.equal(selected.session.status, "reconciliation_required");
+  assert.equal(selected.events.includes("session.reconciliation"), true);
+});
+
+test("moves an unknown durable session expiry outcome into reconciliation", async () => {
+  const selected = fixture();
+  await issue(selected);
+  selected.session.expiresAt = "2026-08-14T17:59:59.000Z";
+  selected.setVerifyError(new Error("synthetic session expiry write failure"));
+  selected.events.length = 0;
+
+  const result = await prefill(selected);
+
+  assert.equal(result.status, 503);
+  assert.deepEqual(result.body, { ok: false, code: "service_unavailable" });
+  assert.equal(selected.session.status, "reconciliation_required");
+  assert.equal(selected.events.includes("session.reconciliation"), true);
+  assert.equal(selected.events.includes("crm.get.Deals"), false);
 });
 
 test("bounds repeated verified prefill requests with the durable attempt ceiling", async () => {
@@ -856,6 +899,81 @@ test("an exact succeeded duplicate requires matching CRM readback and does not r
   assert.equal(selected.events.includes("crm.composite"), false);
   assert.equal(selected.events.includes("workflow.submission.read"), true);
   assert.equal(selected.events.includes("workflow.submission.claim"), false);
+});
+
+test("terminalizes a succeeded receipt whose CRM readback no longer matches", async () => {
+  const selected = fixture();
+  await issue(selected);
+  const prefillResult = await prefill(selected);
+  const body = validSubmission(prefillResult.body);
+  assert.equal((await submit(selected, body)).status, 200);
+  selected.records.deal.Setup_Form_Submission_ID = "form2-v1:different";
+  selected.events.length = 0;
+
+  const duplicate = await submit(selected, body);
+
+  assert.equal(duplicate.status, 503);
+  assert.deepEqual(duplicate.body, { ok: false, code: "service_unavailable" });
+  assert.equal(selected.session.status, "reconciliation_required");
+  assert.equal(selected.events.includes("session.reconciliation"), true);
+});
+
+test("accepts an exact completed webhook retry after the setup token expires", async () => {
+  const selected = fixture();
+  await issue(selected);
+  const prefillResult = await prefill(selected);
+  const body = validSubmission(prefillResult.body);
+  assert.equal((await submit(selected, body)).status, 200);
+  selected.session.expiresAt = "2026-08-14T17:59:59.000Z";
+  selected.events.length = 0;
+
+  const duplicate = await submit(selected, body);
+
+  assert.equal(duplicate.status, 200);
+  assert.deepEqual(duplicate.body, { ok: true, accepted: true, duplicate: true });
+  assert.equal(selected.records.deal.Setup_Access_Status, "Synthetic Submitted");
+  assert.equal(selected.events.includes("session.verify"), false);
+  assert.equal(selected.events.includes("crm.update.Deals"), false);
+});
+
+test("repairs a verified session before acknowledging a recovered succeeded receipt", async () => {
+  const selected = fixture();
+  await issue(selected);
+  const prefillResult = await prefill(selected);
+  const body = validSubmission(prefillResult.body);
+  assert.equal((await submit(selected, body)).status, 200);
+  selected.session.status = "verified";
+  selected.session.submittedAt = "";
+  selected.session.expiresAt = "2026-08-14T17:59:59.000Z";
+  selected.events.length = 0;
+
+  const recovered = await submit(selected, body);
+
+  assert.equal(recovered.status, 200);
+  assert.deepEqual(recovered.body, { ok: true, accepted: true, duplicate: true });
+  assert.equal(selected.session.status, "submitted");
+  assert.equal(selected.events.includes("session.submitted"), true);
+  assert.ok(selected.events.indexOf("crm.get.Deals") < selected.events.indexOf("session.submitted"));
+});
+
+test("terminalizes an ambiguous recovered-success session repair", async () => {
+  const selected = fixture();
+  await issue(selected);
+  const prefillResult = await prefill(selected);
+  const body = validSubmission(prefillResult.body);
+  assert.equal((await submit(selected, body)).status, 200);
+  selected.session.status = "verified";
+  selected.session.submittedAt = "";
+  selected.setMarkSubmittedError(new Error("synthetic repair write failure"));
+  selected.events.length = 0;
+
+  const recovered = await submit(selected, body);
+
+  assert.equal(recovered.status, 503);
+  assert.deepEqual(recovered.body, { ok: false, code: "service_unavailable" });
+  assert.equal(selected.session.status, "reconciliation_required");
+  assert.equal(selected.events.includes("session.row.read"), true);
+  assert.equal(selected.events.includes("session.reconciliation"), true);
 });
 
 test("a completed submission ID with changed respondent data is rejected before CRM", async () => {

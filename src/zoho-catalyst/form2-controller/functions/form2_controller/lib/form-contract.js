@@ -119,6 +119,14 @@ const NUMBERED_FALLBACKS = new Set([
   "On-Call Mobile",
   "Other",
 ]);
+const GENERIC_JOB_TITLES = new Set([
+  "n/a",
+  "na",
+  "none",
+  "not applicable",
+  "other",
+  "unknown",
+]);
 
 class FormContractError extends Error {
   constructor(message, { field = null, publicCode = "form_invalid", status = 400 } = {}) {
@@ -448,7 +456,17 @@ function validateForm2Payload(payload, options = {}) {
     CHOICES.decisionMakerRole,
     { required: true },
   );
-  const jobTitle = normalizeText(payload, "jobTitle", { maximum: 100 });
+  const submittedJobTitle = normalizeText(payload, "jobTitle", { maximum: 100 });
+  let contactTitle = decisionMakerRole;
+  if (decisionMakerRole === "Other") {
+    if (
+      submittedJobTitle === null ||
+      GENERIC_JOB_TITLES.has(submittedJobTitle.toLowerCase())
+    ) {
+      fail("jobTitle", "Exact job title is required when the selected role is Other");
+    }
+    contactTitle = submittedJobTitle;
+  }
   const decisionAuthority = normalizeChoice(
     payload,
     "decisionAuthority",
@@ -603,7 +621,7 @@ function validateForm2Payload(payload, options = {}) {
       First_Name: firstName,
       Last_Name: lastName,
       Decision_Maker_Role: decisionMakerRole,
-      Title: jobTitle,
+      Title: contactTitle,
       Decision_Authority: decisionAuthority,
     },
     accountUpdate: {
@@ -693,12 +711,21 @@ function buildPrefillPayloadUnchecked({ contact, account, deal }) {
       status: 409,
     });
   }
+  const decisionMakerRole = prefillChoice(
+    contact,
+    "Decision_Maker_Role",
+    CHOICES.decisionMakerRole,
+  );
+  const storedContactTitle = prefillText(contact, "Title", 100);
+  const canonicalJobTitle = decisionMakerRole === null || decisionMakerRole === "Other"
+    ? storedContactTitle
+    : decisionMakerRole;
 
   const result = {
     firstName: prefillText(contact, "First_Name", 40),
     lastName: prefillText(contact, "Last_Name", 80),
-    decisionMakerRole: prefillChoice(contact, "Decision_Maker_Role", CHOICES.decisionMakerRole),
-    jobTitle: prefillText(contact, "Title", 100),
+    decisionMakerRole,
+    jobTitle: canonicalJobTitle,
     decisionAuthority: prefillChoice(contact, "Decision_Authority", CHOICES.decisionAuthority),
     businessEmail: prefillEmail(contact, "Email", { required: true }),
     directMobileNumber: prefillPhone(contact, "Mobile", { required: true }),

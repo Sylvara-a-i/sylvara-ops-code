@@ -4,6 +4,9 @@ const {
   isApprovedCrmApiHostname,
   isApprovedFormsPublicHostname,
 } = require("./destinations");
+const { ARTIFACT_SOURCE_REVISION } = require("./source-revision");
+
+const SOURCE_REVISION_PATTERN = /^[a-f0-9]{40}$/;
 
 const SESSION_STATUSES = Object.freeze([
   "issued",
@@ -158,9 +161,9 @@ function validateCrmApiBaseUrl(value) {
   return value;
 }
 
-function validateRevision(value) {
-  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{6,79}$/.test(value)) {
-    throw new ConfigurationError("SOURCE_REVISION has an invalid format");
+function validateRevision(value, name) {
+  if (!SOURCE_REVISION_PATTERN.test(value)) {
+    throw new ConfigurationError(`${name} must be a lowercase 40-character Git commit`);
   }
   return value;
 }
@@ -209,7 +212,7 @@ function assertUnique(values, message) {
   }
 }
 
-function loadConfig(environment = process.env) {
+function loadConfig(environment = process.env, artifactRevision = ARTIFACT_SOURCE_REVISION) {
   const deploymentEnvironment = readRequired(environment, "DEPLOYMENT_ENVIRONMENT");
   // Production remains impossible in code until Development acceptance evidence,
   // connection scopes, rollback, and an explicit source change are reviewed.
@@ -311,11 +314,29 @@ function loadConfig(environment = process.env) {
       readRequired(environment, "FORM2_ACCESS_STATUS_SUBMITTED_VALUE"),
       "FORM2_ACCESS_STATUS_SUBMITTED_VALUE",
     ),
+    expired: validateBoundedBusinessValue(
+      readRequired(environment, "FORM2_ACCESS_STATUS_EXPIRED_VALUE"),
+      "FORM2_ACCESS_STATUS_EXPIRED_VALUE",
+    ),
   });
   assertUnique(
     Object.values(form2AccessStatuses),
     "Form 2 setup-access status values must be different",
   );
+
+  const sourceRevision = validateRevision(
+    readRequired(environment, "SOURCE_REVISION"),
+    "SOURCE_REVISION",
+  );
+  const builtRevision = validateRevision(
+    artifactRevision,
+    "Artifact source revision",
+  );
+  if (sourceRevision !== builtRevision) {
+    throw new ConfigurationError(
+      "SOURCE_REVISION does not match the deployed artifact source revision",
+    );
+  }
 
   const config = {
     deploymentEnvironment,
@@ -365,7 +386,7 @@ function loadConfig(environment = process.env) {
       environment,
       "PLATFORM_OPERATION_TIMEOUT_MS",
     ),
-    sourceRevision: validateRevision(readRequired(environment, "SOURCE_REVISION")),
+    sourceRevision,
   };
 
   return Object.freeze(config);
@@ -375,5 +396,6 @@ module.exports = {
   ConfigurationError,
   NUMERIC_LIMITS,
   SESSION_STATUSES,
+  SOURCE_REVISION_PATTERN,
   loadConfig,
 };

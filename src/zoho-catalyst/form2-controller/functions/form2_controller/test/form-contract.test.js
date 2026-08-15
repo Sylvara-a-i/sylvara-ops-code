@@ -105,7 +105,7 @@ function validPayload() {
     existingCustomerCallHandling: "Capture Callback Only",
     alertRecipientName: "Synthetic Alert Recipient",
     alertRecipientMobile: "555-010-2600",
-    alertRecipientEmail: null,
+    alertRecipientEmail: "alerts@example.invalid",
     authorizedRepresentativeConfirmed: true,
     testScopeAccepted: true,
   };
@@ -128,7 +128,7 @@ test("normalizes the approved Form 2 payload into three bounded CRM updates", ()
     First_Name: "Casey",
     Last_Name: "Tester",
     Decision_Maker_Role: "Owner / Founder",
-    Title: "Owner",
+    Title: "Owner / Founder",
     Decision_Authority: "Authorized Signer",
   });
   assert.equal(updates.contactUpdate.Email, undefined);
@@ -142,6 +142,42 @@ test("normalizes the approved Form 2 payload into three bounded CRM updates", ()
   assert.equal(updates.dealUpdate.Test_Call_Limit, undefined);
   assert.equal(updates.dealUpdate.Test_Scope_Version, undefined);
   assert.equal(Object.isFrozen(updates), true);
+});
+
+test("coalesces the role and exact-job-title fields into one canonical CRM title", () => {
+  const listed = validateForm2Payload(
+    { ...validPayload(), jobTitle: "stale client value" },
+    { existing: existingRecords(), ...SERVER_OPTIONS },
+  );
+  assert.equal(listed.contactUpdate.Decision_Maker_Role, "Owner / Founder");
+  assert.equal(listed.contactUpdate.Title, "Owner / Founder");
+
+  const other = validateForm2Payload(
+    { ...validPayload(), decisionMakerRole: "Other", jobTitle: "President" },
+    { existing: existingRecords(), ...SERVER_OPTIONS },
+  );
+  assert.equal(other.contactUpdate.Decision_Maker_Role, "Other");
+  assert.equal(other.contactUpdate.Title, "President");
+
+  for (const jobTitle of [
+    null,
+    "",
+    "Other",
+    " other ",
+    "N/A",
+    "NA",
+    "None",
+    "Not Applicable",
+    "Unknown",
+  ]) {
+    assert.throws(
+      () => validateForm2Payload(
+        { ...validPayload(), decisionMakerRole: "Other", jobTitle },
+        { existing: existingRecords(), ...SERVER_OPTIONS },
+      ),
+      (error) => error instanceof FormContractError && error.field === "jobTitle",
+    );
+  }
 });
 
 test("locks verified email and requires separate reverification for a mobile change", () => {
@@ -206,6 +242,30 @@ test("enforces conditional fields and both affirmative confirmations", () => {
   }
 });
 
+test("accepts the intended conditional nulls for the pending Blueprint v4 contract", () => {
+  const updates = validateForm2Payload({
+    ...validPayload(),
+    approvedTestRoute: "After Hours Only",
+    noAnswerDelay: null,
+    approvedFallbackDestination: "Voicemail",
+    approvedFallbackNumber: null,
+    alertRecipientMobile: "555-010-2600",
+    alertRecipientEmail: null,
+  }, {
+    existing: {
+      ...existingRecords(),
+      deal: {
+        ...existingRecords().deal,
+        Approved_Test_Route: "After Hours Only",
+      },
+    },
+    ...SERVER_OPTIONS,
+  });
+  assert.equal(updates.dealUpdate.No_Answer_Delay, null);
+  assert.equal(updates.dealUpdate.Approved_Fallback_Number, null);
+  assert.equal(updates.dealUpdate.Alert_Recipient_Email, null);
+});
+
 test("private field-team choices fail closed unless unchanged or privately allowlisted", () => {
   const changed = { ...validPayload(), fieldTeamSizeBand: "Different Private Band" };
   assert.throws(
@@ -234,6 +294,7 @@ test("builds a flat prefill allowlist without record IDs or server-controlled va
   assert.deepEqual(Object.keys(prefill), CLIENT_KEYS);
   assert.equal(prefill.businessEmail, "casey@example.invalid");
   assert.equal(prefill.approvedTestRoute, "No Answer / Overflow Only");
+  assert.equal(prefill.jobTitle, "Owner / Founder");
   assert.equal(prefill.authorizedRepresentativeConfirmed, false);
   assert.equal(prefill.testScopeAccepted, false);
   assert.equal(JSON.stringify(prefill).includes(IDS.contact), false);

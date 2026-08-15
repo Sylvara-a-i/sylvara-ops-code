@@ -378,6 +378,14 @@ async function readPrefillSession(setupToken, dependencies, nowMs) {
   }
   const expiresAt = Date.parse(session?.expiresAt);
   if (
+    session?.status === "expired" &&
+    Number.isFinite(expiresAt) &&
+    hasValue(session.expiredAt)
+  ) {
+    await synchronizeExpiredSession(dependencies, session);
+    throw genericSetupNotFound();
+  }
+  if (
     !session ||
     !new Set(["issued", "verified"]).has(session.status) ||
     !Number.isFinite(expiresAt)
@@ -385,36 +393,7 @@ async function readPrefillSession(setupToken, dependencies, nowMs) {
     throw genericSetupNotFound();
   }
   if (expiresAt <= nowMs) {
-    let result;
-    try {
-      result = await dependencies.sessionStore.verify(tokenHash);
-    } catch (error) {
-      // A simultaneous request may have completed the same terminal expiry
-      // transition. Accept only an exact durable readback before returning the
-      // generic token response.
-      let readback = null;
-      try {
-        readback = await dependencies.sessionStore.readByTokenHash(tokenHash);
-      } catch {
-        // Preserve the original dependency failure below.
-      }
-      if (
-        !sameSessionIdentity(session, readback) ||
-        readback.status !== "expired" ||
-        !hasValue(readback.expiredAt)
-      ) {
-        throw publicError(error);
-      }
-      throw genericSetupNotFound();
-    }
-    if (
-      result?.outcome !== "expired" ||
-      !sameSessionIdentity(session, result.session) ||
-      result.session.status !== "expired" ||
-      !hasValue(result.session.expiredAt)
-    ) {
-      throw genericSetupNotFound();
-    }
+    await expireSession(session, tokenHash, dependencies);
     throw genericSetupNotFound();
   }
   if (session.status === "verified" && !hasValue(session.verifiedAt)) {
@@ -473,16 +452,29 @@ async function resolveSubmissionSession(setupToken, dependencies, nowMs) {
   } catch (error) {
     throw publicError(error);
   }
+  const expiresAt = Date.parse(session?.expiresAt);
+  if (
+    session?.status === "expired" &&
+    Number.isFinite(expiresAt) &&
+    hasValue(session.expiredAt)
+  ) {
+    await synchronizeExpiredSession(dependencies, session);
+    throw genericSetupNotFound();
+  }
   if (
     !session ||
     !new Set(["verified", "submitted"]).has(session.status) ||
-    !Number.isFinite(Date.parse(session.expiresAt)) ||
-    Date.parse(session.expiresAt) <= nowMs ||
-    !hasValue(session.verifiedAt)
+    !Number.isFinite(expiresAt) ||
+    !hasValue(session.verifiedAt) ||
+    (session.status === "submitted" && !hasValue(session.submittedAt))
   ) {
     throw genericSetupNotFound();
   }
-  return session;
+  return Object.freeze({
+    expired: expiresAt <= nowMs,
+    session,
+    tokenHash,
+  });
 }
 
 async function bestEffort(operation) {
@@ -526,6 +518,89 @@ function dealMatchesVerifiedSession(deal, session, config) {
     deal.Setup_Access_Status === config.form2AccessStatuses.verified &&
     sameInstant(deal.Setup_Access_Issued_At, session.issuedAt) &&
     sameInstant(deal.Setup_Access_Verified_At, session.verifiedAt);
+}
+
+function dealMatchesExpiredSession(deal, session, config) {
+  return dealMatchesSessionBinding(deal, session) &&
+    dealRemainsSetupEligible(deal, config) &&
+    deal.Setup_Access_Status === config.form2AccessStatuses.expired &&
+    sameInstant(deal.Setup_Access_Issued_At, session.issuedAt) &&
+    (hasValue(session.verifiedAt)
+      ? sameInstant(deal.Setup_Access_Verified_At, session.verifiedAt)
+      : !hasValue(deal.Setup_Access_Verified_At));
+}
+
+async function synchronizeExpiredSession(dependencies, session) {
+  try {
+    const deal = await dependencies.crmClient.getRecord("Deals", session.crmDealId);
+    if (dealMatchesExpiredSession(deal, session, dependencies.config)) return deal;
+    const expectedCurrentState = hasValue(session.verifiedAt)
+      ? dealMatchesVerifiedSession(deal, session, dependencies.config)
+      : dealMatchesIssuedSession(deal, session, dependencies.config);
+    if (!expectedCurrentState) throw new Error("CRM expiry state did not match");
+    const readback = await dependencies.crmClient.updateRecord(
+      "Deals",
+      session.crmDealId,
+      { Setup_Access_Status: dependencies.config.form2AccessStatuses.expired },
+      { ifUnmodifiedSince: deal.Modified_Time },
+    );
+    if (!dealMatchesExpiredSession(readback, session, dependencies.config)) {
+      throw new Error("CRM expiry readback did not match");
+    }
+    return readback;
+  } catch {
+    const observed = await bestEffort(
+      () => dependencies.crmClient.getRecord("Deals", session.crmDealId),
+    );
+    if (dealMatchesExpiredSession(observed, session, dependencies.config)) return observed;
+    await markSessionReconciliation(
+      dependencies.sessionStore,
+      session,
+      "crm_expiry_outcome_unknown",
+    );
+    throw new ControllerError("Expired setup state requires reconciliation", {
+      status: 503,
+      publicCode: "service_unavailable",
+      ambiguous: true,
+    });
+  }
+}
+
+async function expireSession(candidate, tokenHash, dependencies) {
+  let expiredSession = null;
+  try {
+    const result = await dependencies.sessionStore.verify(tokenHash);
+    if (
+      result?.outcome === "expired" &&
+      sameSessionIdentity(candidate, result.session) &&
+      result.session.status === "expired" &&
+      hasValue(result.session.expiredAt)
+    ) {
+      expiredSession = result.session;
+    }
+  } catch {
+    expiredSession = await bestEffort(
+      () => dependencies.sessionStore.readByTokenHash(tokenHash),
+    );
+  }
+  if (
+    !sameSessionIdentity(candidate, expiredSession) ||
+    expiredSession.status !== "expired" ||
+    !hasValue(expiredSession.expiredAt)
+  ) {
+    await markSessionReconciliation(
+      dependencies.sessionStore,
+      candidate,
+      "session_expiry_outcome_unknown",
+    );
+    throw new ControllerError("Setup expiry requires reconciliation", {
+      status: 503,
+      publicCode: "service_unavailable",
+      ambiguous: true,
+    });
+  }
+  await synchronizeExpiredSession(dependencies, expiredSession);
+  return expiredSession;
 }
 
 async function readIssueSessionState(dependencies, session) {
@@ -786,14 +861,24 @@ async function handlePrefill(body, dependencies, nowMs) {
 async function verifySucceededDuplicate(session, namespacedSubmissionId, dependencies) {
   const deal = await dependencies.crmClient.getRecord("Deals", session.crmDealId);
   if (
+    !dealMatchesSessionBinding(deal, session) ||
     deal.Setup_Form_Submission_ID !== namespacedSubmissionId ||
-    deal.Setup_Access_Status !== dependencies.config.form2AccessStatuses.submitted
+    deal.Setup_Access_Status !== dependencies.config.form2AccessStatuses.submitted ||
+    !hasValue(deal.Setup_Form_Submitted_At)
   ) {
+    await markSessionReconciliation(
+      dependencies.sessionStore,
+      session,
+      "succeeded_receipt_crm_mismatch",
+    );
     throw new ControllerError("Completed submission readback does not match", {
       status: 503,
       publicCode: "service_unavailable",
       ambiguous: true,
     });
+  }
+  if (session.status !== "submitted") {
+    await repairSubmittedSession(session, dependencies);
   }
   return response(
     200,
@@ -801,6 +886,39 @@ async function verifySucceededDuplicate(session, namespacedSubmissionId, depende
     "submission",
     "duplicate_succeeded",
   );
+}
+
+function submittedSessionMatches(candidate, readback) {
+  return sameSessionIdentity(candidate, readback) &&
+    readback.status === "submitted" &&
+    hasValue(readback.submittedAt) &&
+    readback.attemptCount === candidate.attemptCount &&
+    readback.maxAttempts === candidate.maxAttempts &&
+    sameInstant(readback.issuedAt, candidate.issuedAt) &&
+    sameInstant(readback.expiresAt, candidate.expiresAt) &&
+    sameInstant(readback.verifiedAt, candidate.verifiedAt);
+}
+
+async function repairSubmittedSession(session, dependencies) {
+  let readback = null;
+  try {
+    readback = await dependencies.sessionStore.markSubmitted(session.rowId);
+  } catch {
+    readback = await bestEffort(
+      () => dependencies.sessionStore.readByRowId(session.rowId),
+    );
+  }
+  if (submittedSessionMatches(session, readback)) return readback;
+  await markSessionReconciliation(
+    dependencies.sessionStore,
+    session,
+    "submission_session_repair_unknown",
+  );
+  throw new ControllerError("Completed submission session repair requires reconciliation", {
+    status: 503,
+    publicCode: "service_unavailable",
+    ambiguous: true,
+  });
 }
 
 function submissionFormPayload(body) {
@@ -837,7 +955,45 @@ async function handleSubmission(body, dependencies, nowMs) {
     dependencies.config,
     body.submissionId,
   );
-  const session = await resolveSubmissionSession(body.setupToken, dependencies, nowMs);
+  const resolvedSession = await resolveSubmissionSession(
+    body.setupToken,
+    dependencies,
+    nowMs,
+  );
+  const { expired, tokenHash } = resolvedSession;
+  const session = resolvedSession.session;
+  const submissionBinding = {
+    submissionId: namespacedSubmissionId,
+    prefillId: body.prefillId,
+    sessionRowId: session.rowId,
+    submissionFingerprint: fingerprintSubmission({
+      submissionId: namespacedSubmissionId,
+      prefillId: body.prefillId,
+      values: submissionFormPayload(body),
+    }, dependencies.config.tokenPepper),
+  };
+  let existingReceipt;
+  try {
+    existingReceipt = await dependencies.workflowStore.readSubmission(submissionBinding);
+  } catch (error) {
+    throw publicError(error);
+  }
+  if (session.status === "submitted") {
+    if (!existingReceipt || existingReceipt.status !== "succeeded") {
+      throw new ControllerError("Submitted session does not match a completed receipt", {
+        status: 409,
+        publicCode: "setup_conflict",
+      });
+    }
+    return verifySucceededDuplicate(session, namespacedSubmissionId, dependencies);
+  }
+  if (existingReceipt?.status === "succeeded") {
+    return verifySucceededDuplicate(session, namespacedSubmissionId, dependencies);
+  }
+  if (expired) {
+    await expireSession(session, tokenHash, dependencies);
+    throw genericSetupNotFound();
+  }
   let revision;
   try {
     revision = await dependencies.workflowStore.readPrefill({
@@ -854,32 +1010,6 @@ async function handleSubmission(body, dependencies, nowMs) {
     });
   }
   assertBindingMatchesSession(revision, session);
-  const submissionBinding = {
-    submissionId: namespacedSubmissionId,
-    prefillId: body.prefillId,
-    sessionRowId: session.rowId,
-    submissionFingerprint: fingerprintSubmission({
-      submissionId: namespacedSubmissionId,
-      prefillId: body.prefillId,
-      values: submissionFormPayload(body),
-    }, dependencies.config.tokenPepper),
-  };
-
-  if (session.status === "submitted") {
-    let receipt;
-    try {
-      receipt = await dependencies.workflowStore.readSubmission(submissionBinding);
-    } catch (error) {
-      throw publicError(error);
-    }
-    if (!receipt || receipt.status !== "succeeded") {
-      throw new ControllerError("Submitted session does not match a completed receipt", {
-        status: 409,
-        publicCode: "setup_conflict",
-      });
-    }
-    return verifySucceededDuplicate(session, namespacedSubmissionId, dependencies);
-  }
 
   let claim;
   try {
@@ -943,7 +1073,7 @@ async function handleSubmission(body, dependencies, nowMs) {
     const crmOutcome = await dependencies.crmClient.updateForm2Composite(existing, updates);
     crmCommitted = true;
     await dependencies.workflowStore.markSubmissionSucceeded(receiptReference);
-    await dependencies.sessionStore.markSubmitted(session.rowId);
+    await repairSubmittedSession(session, dependencies);
     const duplicate = crmOutcome?.replayed === true;
     return response(
       200,
