@@ -1,0 +1,14 @@
+{
+  "name": "sylvara-retell-crm-event-gateway-reference",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Reference implementation and tests for the Sylvara Retell-to-Zoho CRM Catalyst gateway.",
+  "scripts": {
+    "lint": "node tools/check.js",
+    "test": "node --test test/*.test.js",
+    "ci": "npm run lint && npm test"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
