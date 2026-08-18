@@ -20,7 +20,7 @@ The current public architecture already requires one dedicated Retell client age
 
 ### Official Retell Capability
 
-Retell supports a shared-agent design only when a pre-call resolver is deliberately implemented. Its inbound-call webhook is configured per phone number and can override the agent or version and inject dynamic variables and metadata before the call connects. The endpoint has a ten-second response window and Retell may retry a failed request. If the webhook ultimately fails and the number has an inbound agent configured, Retell can fall back to that assigned agent.
+Retell provides a supported pre-call mechanism for shared-agent designs through its inbound-call webhook. The webhook is configured per phone number and can override the agent or version and inject dynamic variables and metadata before the call connects. In the current Sylvara design, using one live agent for multiple companies would require a deliberately implemented and validated resolver of that kind. The endpoint has a ten-second response window and Retell may retry a failed request. If the webhook ultimately fails and the number has an inbound agent configured, Retell can fall back to that assigned agent.
 
 Retell also provides immutable published agent versions and per-agent environment tags. The default tags are `prod` and `staging`; tags point phone numbers and other integrations to a selected version and can inject environment-specific dynamic variables. They are deployment controls inside one agent, not a durable customer-tenancy boundary.
 
