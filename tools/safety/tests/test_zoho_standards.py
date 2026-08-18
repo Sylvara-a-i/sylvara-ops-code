@@ -243,7 +243,7 @@ class ZohoStandardsTests(unittest.TestCase):
     def test_machine_readable_suite_registry_is_complete_and_resolvable(self) -> None:
         registry = json.loads(SUITE_REGISTRY.read_text(encoding="utf-8"))
         self.assertEqual(3, registry["schema_version"])
-        self.assertEqual("2026-08-14", registry["as_of"])
+        self.assertEqual("2026-08-18", registry["as_of"])
         self.assertEqual("docs/zoho", registry["path_base"])
         self.assertEqual("partially-verified", registry["live_state"])
         self.assertEqual(list(CAPABILITY_LAYERS), registry["capability_layers"])
@@ -278,6 +278,12 @@ class ZohoStandardsTests(unittest.TestCase):
                         row["effective_tenant_capability"],
                     )
                     expected_observation = "books-roles-refreshed-2026-08-05"
+                elif row["id"] == "analytics":
+                    self.assertEqual("unknown", row["effective_tenant_capability"])
+                    expected_observation = (
+                        "official-managed-mcp-tool-catalog-reviewed-2026-08-18-"
+                        "configured-selection-and-effective-access-unknown"
+                    )
                 else:
                     self.assertEqual("unknown", row["effective_tenant_capability"])
                     expected_observation = (
