@@ -39,9 +39,9 @@ This table defines durable ownership boundaries. Current Zoho capability evidenc
 | Zoho Sign | Signer routing, execution status, and signature evidence | Contract drafting or CRM relationship truth | Use, templates, signer rules, and integration state are unverified |
 | Zoho Sites | Public presentation and approved doorway behavior | Operational, relationship, subscription, or accounting truth | Use and administration capability are unverified |
 | Zoho Mail | Mailbox messages, approved send transport, and delivery state | CRM relationship truth, consent truth, or financial state | Use, sender identities, scopes, webhooks, and integration state are unverified |
-| Zoho Analytics | Derived reporting models, refresh state, dashboards, and controlled exports | Transactional truth or reverse-write authority | Use, source lineage, refresh timing, access controls, and integration state are unverified |
-| Zoho Catalyst | Approved middleware, API gateway functions, webhook verification, retry-safe processing, and durable integration state when adopted | Business-system records owned by CRM, Books, or Billing; secret documentation; or proof that a Git commit is deployed | A sanitized Billing gateway replacement and proposed Data Store schema exist in GitHub; current Catalyst project, route, variables, deployment, and runtime state remain unverified |
-| Approved voice platform; Retell is a candidate | Voice runtime behavior, call execution, and approved runtime configuration for the selected deployment | Structured customer business-rule ownership, downstream job truth, CRM, accounting, subscription, legal approval, consent truth, source-control, or secret ownership | No platform is approved by this repository; vendor/legal review and exact live agents, prompts, numbers, recording, retention, and training settings are private and unverified |
+| Zoho Analytics | Derived reporting models, refresh state, dashboards, and controlled exports | Transactional truth or reverse-write authority | The official managed Analytics MCP tool page was reviewed on 2026-08-18 and the proposed reporting roles and metric contract are documented. Sylvara organization, plan, workspace, configured selection, effective access, model, schedules, and client isolation remain unverified. |
+| Zoho Catalyst | Approved middleware, API gateway functions, webhook verification, retry-safe processing, and durable integration state when adopted | Business-system records owned by CRM, Books, or Billing; secret documentation; or proof that a Git commit is deployed | The Billing gateway replacement and the proposed Retell call, reconciliation, and reporting boundary are documented. The current Catalyst project, functions, routes, tables, Connections, variables, deployment, and runtime state remain unverified. |
+| Approved voice platform; Retell is the current implementation candidate | Voice runtime behavior, call execution, and approved runtime configuration for the selected deployment | Structured customer business-rule ownership, downstream job truth, CRM, accounting, subscription, legal approval, consent truth, source-control, or secret ownership | The official webhook, signature, post-call analysis, and storage contracts were reviewed on 2026-08-18 and the proposed client-agent lifecycle is documented. Vendor/legal approval and exact live agents, versions, prompts, numbers, events, recording, retention, training, and routing remain private and unverified. |
 | Make.com or approved orchestration platform | Approved non-critical post-call orchestration and system handoffs | Critical conversational availability, accounting truth, legal approval, consent truth, source code, or secret ownership | Disabled in the proposed controlled demo; any future workflow and exact live scenario remain unverified and separately gated |
 | Approved human escalation destination | Human handling and disposition of explicitly transferred exceptions during the approved coverage window | Default handling of every call, Sylvara workflow truth, or downstream system-of-record state | Disabled in the proposed controlled demo; destination, coverage, privacy terms, transfer behavior, and capacity for a future pilot are unverified |
 | Approved secret stores | Credential values, signing secrets, tokens, and environment-specific sensitive configuration | Business records, source code, deployment evidence, or public documentation | Secret values must remain in platform-native encrypted stores; the approved store inventory is unverified |
@@ -75,6 +75,41 @@ Call disposition and estimated value are Sylvara operational evidence. A booking
 ### Middleware
 
 Use Catalyst only when a concrete integration requires controls that a managed connector cannot safely provide, such as signature verification, payload allowlisting, idempotency, durable retry state, or audited readback. Do not add middleware merely to mirror platform features.
+
+## Proposed Call And Reporting Flow
+
+[ADR 0004](../adr/0004-retell-catalyst-crm-analytics-integration-boundary.md) governs the proposed connection path. [The reporting runbook](../runbooks/retell-catalyst-analytics-reporting.md) sequences Development verification, acceptance, containment, and later Production approval. Neither document proves deployment.
+
+```text
+Approved carrier route
+        |
+        v
+One dedicated Retell agent per client and environment
+        |
+        | signed account-level post-call events
+        v
+Catalyst verification, client binding, minimized event ledger,
+normalized call state, artifacts metadata, reconciliation, and outbox
+        |
+        +----> customer scheduling or field-service truth
+        |
+        +----> bounded CRM relationship and commercial summaries
+        |
+        +----> direct Analytics API bulk updateadd
+                         |
+                         v
+              one-client reviewed report
+```
+
+The master Retell template is an authoring baseline and never receives client traffic. Within one environment, a client-specific agent is promoted from bounded evaluation to paid-service configuration rather than duplicated into separate evaluation and paid agents by default. A separate agent is justified only by an approved environment, rollback, provider, or contractual requirement.
+
+Catalyst is the durable integration-state layer. CRM does not become a per-call event store. Analytics does not receive recordings, transcripts, raw webhook payloads, phone numbers, addresses, or unrestricted CRM data. The customer's approved operating system remains authoritative for bookings, jobs, work orders, completion, invoices, and payments.
+
+Use one voice-integration Catalyst project per environment rather than one project or function stack per client. The logical ingress, post-call processor, and Analytics sync responsibilities may share or split deployable functions only after the current function inventory proves compatible trust, secret, scaling, failure, and rollback boundaries. The Billing gateway remains separate.
+
+Managed Analytics MCP roles support bounded operator discovery and report-model maintenance. Production facts use the direct Analytics API with a separate least-privilege connection, batched asynchronous imports, job polling, rejected-row handling, and exact reconciliation. The [dated managed MCP catalog](../zoho/mcp/reference/zoho-analytics-managed-mcp-catalog-2026-08-18.md) preserves the reviewed tool names and proposed role allowlists.
+
+The first external evaluation report remains manually reviewed. Scheduled monthly delivery requires one-client isolation, reconciled counts, a current watermark, resolved imports, approved recipients, restricted exports, and clear separation between estimated opportunity value and verified booked, completed, invoiced, or paid value. A client portal remains deferred.
 
 ## Change And Data Flow
 

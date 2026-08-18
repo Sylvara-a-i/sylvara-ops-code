@@ -37,6 +37,7 @@ Implementation-specific READMEs remain beside the code or artifact they govern s
 - [WorkDrive, Contracts, And Sign Document Lifecycle](standards/document-lifecycle.md)
 - [Mail](standards/mail.md)
 - [Analytics](standards/analytics.md)
+- [Call Reporting Metric Contract](standards/call-reporting-metric-contract.md)
 
 ## Product Reference Index
 
@@ -54,6 +55,7 @@ The [product reference collection](reference/README.md) covers the currently gov
 - [Effective Form 1/Form 2 CRM automation snapshot, 2026-08-14](mcp/snapshots/effective/2026-08-14/free-test-crm-automation.md)
 - [Current CRM field, picklist, layout, conversion, and form map snapshot, 2026-08-14](../../src/zoho-crm/reference/snapshots/2026-08-14/README.md)
 - [Zoho Catalyst 189-action Tool Manual catalog, 2026-08-14](mcp/reference/zoho-catalyst-tool-manual-catalog-2026-08-14.md)
+- [Zoho Analytics managed MCP tool catalog, 2026-08-18](mcp/reference/zoho-analytics-managed-mcp-catalog-2026-08-18.md)
 - [Preconfigured template catalog, 2026-07-25](mcp/reference/preconfigured-template-catalog-2026-07-25.md)
 
 ## Code-Adjacent Zoho Artifacts
@@ -63,6 +65,8 @@ The [product reference collection](reference/README.md) covers the currently gov
 - [Sanitized chart-of-accounts reference](../../src/zoho-books/reference/README.md)
 - [Proposed Billing webhook gateway](../../src/zoho-catalyst/billing-webhook-gateway/README.md)
 - [Historical, non-executable Billing gateway review record](../../archive/zoho-catalyst/billing-webhook-gateway/README.md)
+- [Retell, Catalyst, CRM, and Analytics integration boundary](../adr/0004-retell-catalyst-crm-analytics-integration-boundary.md)
+- [Retell-to-reporting deployment and containment runbook](../runbooks/retell-catalyst-analytics-reporting.md)
 
 These files stay beside their artifacts because they describe exact source, validation, deployment, provenance, or rollback behavior. Reusable policy belongs here under `docs/zoho/`.
 
@@ -120,7 +124,7 @@ The refreshed Books Controller advertises chart-account create, update, mark-act
 
 The 2026-08-05 CRM role refresh verified organization identity plus scoped module, field, layout, picklist, record, workflow, and Lead-conversion-map reads. That change surface did not provide a direct typed native Convert Lead write, Lead Conversion Mapping mutation, or workflow-rule mutation. A later, separately scoped 2026-08-14 automation surface was used for authorized bounded workflow and Blueprint configuration, followed by independent readback. The current schema and automation contract are documented in the [CRM metadata snapshot](../../src/zoho-crm/reference/snapshots/2026-08-14/README.md) and [effective automation snapshot](mcp/snapshots/effective/2026-08-14/free-test-crm-automation.md). Configuration readback is not runtime acceptance: the four new workflows have not executed, the Blueprint has no enrolled records, native conversion remains human-approved, and the Forms/controller path remains unverified.
 
-Billing, Books, Catalyst, Creator, CRM, Mail, Payments, and WorkDrive were observed at the configured-selection layer. Forms, Contracts, Sign, Sites, and Analytics were not observed; their MCP availability is **Unknown**, not unsupported. A selection, advertised contract, or past successful call does not grant continuing approval for live use.
+Billing, Books, Catalyst, Creator, CRM, Mail, Payments, and WorkDrive were observed at the configured-selection layer. Forms, Contracts, Sign, and Sites were not observed. Analytics was not observed in the 2026-08-04 configured selection, but the official managed Analytics MCP page was reviewed on 2026-08-18 and its 24 published tool names are preserved in the dated catalog. The earlier Tool Manual service catalog counted 25 Analytics rows; those separate evidence layers remain unreconciled. Analytics configured selection, identity, authorization, plan, workspace, and effective access are **Unknown**, not unsupported. A selection, advertised contract, or past successful call does not grant continuing approval for live use.
 
 ## Live Change Boundary
 
