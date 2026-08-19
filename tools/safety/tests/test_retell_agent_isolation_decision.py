@@ -88,7 +88,7 @@ class RetellAgentIsolationDecisionTests(unittest.TestCase):
             "use one catalyst endpoint for all approved client numbers",
             "post /retell/inbound",
             "resolve `to_number` to exactly one active deployment",
-            "return only the allowlisted metadata and string dynamic variables",
+            "inject only the allowlisted metadata and string dynamic variables required for that call",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, self.current_lower)
@@ -109,7 +109,7 @@ class RetellAgentIsolationDecisionTests(unittest.TestCase):
 
     def test_neutral_fallback_and_client_reporting_are_explicit(self) -> None:
         self.assertIn("neutral fallback", self.current_lower)
-        self.assertIn("resolver_status = degraded", self.current_lower)
+        self.assertIn("records degraded status", self.current_lower)
         self.assertIn("client_id + deployment_id + call_id", self.current_lower)
         self.assertIn("one client per report", self.current_lower)
         self.assertIn("no cross-client metadata", self.current_lower)
