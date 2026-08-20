@@ -6,6 +6,13 @@ const {
 } = require("./destinations");
 const { ARTIFACT_SOURCE_REVISION } = require("./source-revision");
 
+const PRIVATE_CHOICE_LIMITS = Object.freeze({
+  // Covers the reviewed 207-choice provider catalog plus bounded growth. Any
+  // increase beyond 256 requires a source change and contract review.
+  phoneSystemProviders: 256,
+  fieldTeamSizeBands: 20,
+});
+
 const SESSION_STATUSES = Object.freeze([
   "issuing",
   "issued",
@@ -188,7 +195,10 @@ function validateBoundedBusinessValue(value, name) {
   return value;
 }
 
-function parsePrivateChoiceList(environment, name) {
+function parsePrivateChoiceList(environment, name, maximumChoices) {
+  if (!Number.isSafeInteger(maximumChoices) || maximumChoices < 1) {
+    throw new ConfigurationError(`${name} choice limit is invalid`);
+  }
   const raw = readRequired(environment, name);
   let parsed;
   try {
@@ -196,8 +206,8 @@ function parsePrivateChoiceList(environment, name) {
   } catch {
     throw new ConfigurationError(`${name} must be a JSON array`);
   }
-  if (!Array.isArray(parsed) || parsed.length < 1 || parsed.length > 20) {
-    throw new ConfigurationError(`${name} must contain 1-20 choices`);
+  if (!Array.isArray(parsed) || parsed.length < 1 || parsed.length > maximumChoices) {
+    throw new ConfigurationError(`${name} must contain 1-${maximumChoices} choices`);
   }
   const choices = parsed.map((entry) => {
     if (typeof entry !== "string" || !entry || entry !== entry.trim()) {
@@ -367,9 +377,15 @@ function loadConfig(environment = process.env, artifactRevision = ARTIFACT_SOURC
       readRequired(environment, "FORM2_ENTRY_OFFER_VALUE"),
       "FORM2_ENTRY_OFFER_VALUE",
     ),
+    form2PhoneSystemProviders: parsePrivateChoiceList(
+      environment,
+      "FORM2_PHONE_SYSTEM_PROVIDERS",
+      PRIVATE_CHOICE_LIMITS.phoneSystemProviders,
+    ),
     form2FieldTeamSizeBands: parsePrivateChoiceList(
       environment,
       "FORM2_FIELD_TEAM_SIZE_BANDS",
+      PRIVATE_CHOICE_LIMITS.fieldTeamSizeBands,
     ),
     form2AccessStatuses,
     crmApiBaseUrl: validateCrmApiBaseUrl(readRequired(environment, "CRM_API_BASE_URL")),
@@ -398,6 +414,7 @@ function loadConfig(environment = process.env, artifactRevision = ARTIFACT_SOURC
 module.exports = {
   ConfigurationError,
   NUMERIC_LIMITS,
+  PRIVATE_CHOICE_LIMITS,
   SESSION_STATUSES,
   SOURCE_REVISION_PATTERN,
   loadConfig,

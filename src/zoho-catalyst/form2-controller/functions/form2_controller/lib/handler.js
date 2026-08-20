@@ -993,7 +993,9 @@ async function handleIssue(body, dependencies, nowMs) {
   // Validate every prefilled value that cannot be repaired by the respondent,
   // especially the locked Email and Mobile identity, before creating durable
   // session state or changing the Deal.
-  buildPrefillPayload(existing);
+  buildPrefillPayload(existing, {
+    allowedPhoneSystemProviders: dependencies.config.form2PhoneSystemProviders,
+  });
 
   let session;
   try {
@@ -1109,7 +1111,9 @@ async function handlePrefill(body, dependencies, nowMs) {
   // Fail deterministic CRM/Form contract defects before consuming a bounded
   // prefill attempt or changing Deal state. Verified retries still consume an
   // attempt so repeated prefill-row creation cannot continue until TTL.
-  buildPrefillPayload(existing);
+  buildPrefillPayload(existing, {
+    allowedPhoneSystemProviders: dependencies.config.form2PhoneSystemProviders,
+  });
   const session = await verifyPrefillSession(
     candidate.session,
     candidate.tokenHash,
@@ -1160,7 +1164,9 @@ async function handlePrefill(body, dependencies, nowMs) {
 
   existing = await fetchSessionContext(dependencies.crmClient, session);
   requireEligibleContext(existing, dependencies.config, new Set([statuses.verified]));
-  const prefill = buildPrefillPayload(existing);
+  const prefill = buildPrefillPayload(existing, {
+    allowedPhoneSystemProviders: dependencies.config.form2PhoneSystemProviders,
+  });
   const snapshotFingerprint = fingerprintSnapshot(prefill, dependencies.config.tokenPepper);
   const minted = await dependencies.workflowStore.mintPrefill(
     prefillBinding(session, existing, snapshotFingerprint),
@@ -1613,7 +1619,9 @@ async function handleSubmission(body, dependencies, nowMs) {
     );
     assertFreshPrefill(existing, revision);
     const currentFingerprint = fingerprintSnapshot(
-      buildPrefillPayload(existing),
+      buildPrefillPayload(existing, {
+        allowedPhoneSystemProviders: dependencies.config.form2PhoneSystemProviders,
+      }),
       dependencies.config.tokenPepper,
     );
     if (currentFingerprint !== revision.snapshotFingerprint) {
@@ -1629,6 +1637,7 @@ async function handleSubmission(body, dependencies, nowMs) {
       setupFormVersion: dependencies.config.form2FormVersion,
       submissionId: namespacedSubmissionId,
       setupAccessSubmittedStatus: dependencies.config.form2AccessStatuses.submitted,
+      allowedPhoneSystemProviders: dependencies.config.form2PhoneSystemProviders,
       allowedFieldTeamSizeBands: dependencies.config.form2FieldTeamSizeBands,
     });
     consumeStarted = true;
