@@ -11,7 +11,6 @@ const {
 } = require("../lib/session-store");
 
 const TABLE = "Form2_Sessions";
-const ISSUE_KEY = "e".repeat(64);
 const TOKEN_HASH = "a".repeat(64);
 const NOW_MS = Date.parse("2026-08-14T18:00:00.000Z");
 const SUBMISSION_FINGERPRINT = "f".repeat(64);
@@ -21,7 +20,7 @@ function dealIssuanceKey(kind, input = issueInput()) {
     .createHash("sha256")
     .update(`sylvara-form2:development:deal-${kind}\0`, "utf8")
     .update(input.crmDealId, "utf8")
-    .update(kind === "generation" ? `\0${input.issueKey}` : "", "utf8")
+    .update(kind === "generation" ? `\0${input.tokenHash}` : "", "utf8")
     .digest("hex");
 }
 
@@ -44,7 +43,6 @@ function fixture({
   const calls = {
     insert: [],
     update: [],
-    issueKeyQueries: [],
     dealKeyQueries: [],
     tokenQueries: [],
     rowQueries: [],
@@ -56,7 +54,6 @@ function fixture({
     async insertRow(tableName, row) {
       calls.insert.push({ tableName, row: { ...row } });
       if (rows.some((candidate) =>
-        candidate.ISSUE_KEY === row.ISSUE_KEY ||
         candidate.TOKEN_HASH === row.TOKEN_HASH ||
         candidate.DEAL_ISSUANCE_KEY === row.DEAL_ISSUANCE_KEY)) {
         throw new Error("synthetic unique session-key conflict");
@@ -78,12 +75,6 @@ function fixture({
       Object.assign(row, update);
       if (updateFailure === "after") throw new Error("synthetic update timeout");
       return row;
-    },
-    async findRowsByIssueKey(tableName, issueKey) {
-      calls.issueKeyQueries.push({ tableName, issueKey });
-      return rows
-        .filter((row) => row.ISSUE_KEY === issueKey)
-        .map((row) => ({ [TABLE]: { ...row } }));
     },
     async findRowsByDealIssuanceKey(tableName, dealKey) {
       calls.dealKeyQueries.push({ tableName, dealKey });
@@ -113,7 +104,6 @@ function fixture({
 
 function issueInput(overrides = {}) {
   return {
-    issueKey: ISSUE_KEY,
     tokenHash: TOKEN_HASH,
     crmContactId: `${"1".repeat(18)}1`,
     crmAccountId: `${"1".repeat(18)}2`,
@@ -126,7 +116,6 @@ test("issues and reads back a Development session containing no raw token or for
   const { calls, store } = fixture();
   const issuing = await store.issue(issueInput());
   assert.equal(issuing.status, "issuing");
-  assert.equal(issuing.issueKey, ISSUE_KEY);
   assert.equal(issuing.tokenHash, TOKEN_HASH);
   assert.equal(issuing.expiresAt, "2026-08-14T19:00:00.000Z");
   assert.equal(
@@ -145,6 +134,7 @@ test("issues and reads back a Development session containing no raw token or for
   assert.equal(stored.MAX_ATTEMPTS, 3);
   assert.equal(stored.SOURCE_ENVIRONMENT, "development");
   assert.equal(stored.DEAL_ISSUANCE_KEY, dealIssuanceKey("active"));
+  assert.equal(Object.hasOwn(stored, "ISSUE_KEY"), false);
   assert.doesNotMatch(JSON.stringify(stored), /email|phone|name|address|raw.token/i);
 });
 
@@ -162,7 +152,7 @@ test("rejects PII-shaped or unstructured issue input before the adapter is calle
     SessionStoreError,
   );
   await assert.rejects(
-    store.issue({ ...issueInput(), issueKey: "E".repeat(64) }),
+    store.issue({ ...issueInput(), issueKey: "e".repeat(64) }),
     SessionStoreError,
   );
   await assert.rejects(
@@ -178,7 +168,7 @@ test("rejects PII-shaped or unstructured issue input before the adapter is calle
   assert.equal(calls.insert.length, 0);
 });
 
-test("returns an identical live session for an exact issue-key retry", async () => {
+test("returns an identical live session for an exact deterministic-token retry", async () => {
   const { calls, clock, rows, store } = fixture();
   const first = await store.issue(issueInput());
   await store.markIssued(first.rowId);
@@ -195,7 +185,7 @@ test("returns an identical live session for an exact issue-key retry", async () 
   assert.equal(verifiedRetry.status, "verified");
 });
 
-test("fails reconciliation when an issue key is reused with a conflicting hash or CRM context", async () => {
+test("fails reconciliation when the token or CRM context conflicts with the active generation", async () => {
   const { adapter, clock, store } = fixture();
   await store.issue(issueInput());
   for (const conflicting of [
@@ -347,7 +337,6 @@ test("the unique active Deal key blocks competitors and is freed only by synchro
   await selected.store.markIssued(first.rowId);
 
   const competing = issueInput({
-    issueKey: "c".repeat(64),
     tokenHash: "d".repeat(64),
   });
   await assert.rejects(

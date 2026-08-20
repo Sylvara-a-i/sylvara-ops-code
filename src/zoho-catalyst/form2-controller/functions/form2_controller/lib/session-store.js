@@ -5,7 +5,6 @@ const { SESSION_STATUSES, SOURCE_REVISION_PATTERN } = require("./config");
 
 const STATUS_SET = new Set(SESSION_STATUSES);
 const TOKEN_HASH_PATTERN = /^[a-f0-9]{64}$/;
-const ISSUE_KEY_PATTERN = /^[a-f0-9]{64}$/;
 const SUBMISSION_FINGERPRINT_PATTERN = /^[a-f0-9]{64}$/;
 const RECORD_ID_PATTERN = /^[0-9]{10,30}$/;
 const ROW_ID_PATTERN = /^[0-9]{1,30}$/;
@@ -13,7 +12,6 @@ const OUTCOME_PATTERN = /^[a-z0-9_]{1,80}$/;
 const ISO_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
 const ISSUE_INPUT_KEYS = new Set([
-  "issueKey",
   "tokenHash",
   "crmContactId",
   "crmAccountId",
@@ -22,7 +20,6 @@ const ISSUE_INPUT_KEYS = new Set([
 
 const STORED_FIELDS = Object.freeze([
   "ROWID",
-  "ISSUE_KEY",
   "TOKEN_HASH",
   "CRM_CONTACT_ID",
   "CRM_ACCOUNT_ID",
@@ -56,7 +53,6 @@ function validateAdapter(adapter) {
   for (const method of [
     "insertRow",
     "updateRow",
-    "findRowsByIssueKey",
     "findRowsByDealIssuanceKey",
     "findRowsByTokenHash",
     "findRowsByRowId",
@@ -137,7 +133,6 @@ function normalizeRow(rawRow, tableName) {
 
   const normalized = {
     rowId: validateRowId(row.ROWID),
-    issueKey: String(row.ISSUE_KEY ?? ""),
     tokenHash: String(row.TOKEN_HASH ?? ""),
     crmContactId: optionalRecordId(row.CRM_CONTACT_ID, "CRM_CONTACT_ID"),
     crmAccountId: optionalRecordId(row.CRM_ACCOUNT_ID, "CRM_ACCOUNT_ID"),
@@ -160,7 +155,6 @@ function normalizeRow(rawRow, tableName) {
   };
 
   if (
-    !ISSUE_KEY_PATTERN.test(normalized.issueKey) ||
     !TOKEN_HASH_PATTERN.test(normalized.tokenHash) ||
     !TOKEN_HASH_PATTERN.test(normalized.dealIssuanceKey) ||
     !STATUS_SET.has(normalized.status) ||
@@ -181,7 +175,6 @@ function normalizeRow(rawRow, tableName) {
 function sameSessionIdentity(left, right) {
   return Boolean(left && right) &&
     String(left.rowId) === String(right.rowId) &&
-    left.issueKey === right.issueKey &&
     left.tokenHash === right.tokenHash &&
     left.crmContactId === right.crmContactId &&
     left.crmAccountId === right.crmAccountId &&
@@ -199,9 +192,6 @@ function validateIssueInput(input) {
         "session_input_invalid",
       );
     }
-  }
-  if (!ISSUE_KEY_PATTERN.test(input.issueKey ?? "")) {
-    throw new SessionStoreError("Issue key is invalid", "session_input_invalid");
   }
   if (!TOKEN_HASH_PATTERN.test(input.tokenHash ?? "")) {
     throw new SessionStoreError("Token hash is invalid", "session_input_invalid");
@@ -234,12 +224,15 @@ function createCatalystSessionStore(adapter, config, { now = Date.now } = {}) {
   if (typeof now !== "function") throw new SessionStoreError("Session clock is invalid");
   const tableName = config.sessionTableName;
 
-  function deriveDealIssuanceKey(kind, crmDealId, issueKey = "") {
+  function deriveDealIssuanceKey(kind, crmDealId, generationTokenHash = "") {
     if (!new Set(["active", "generation"]).has(kind)) {
       throw new SessionStoreError("Deal issuance key domain is invalid");
     }
     const validatedDealId = optionalRecordId(crmDealId, "crmDealId");
-    if (!validatedDealId || (kind === "generation" && !ISSUE_KEY_PATTERN.test(issueKey))) {
+    if (
+      !validatedDealId ||
+      (kind === "generation" && !TOKEN_HASH_PATTERN.test(generationTokenHash))
+    ) {
       throw new SessionStoreError("Deal issuance key input is invalid", "session_input_invalid");
     }
     try {
@@ -247,7 +240,7 @@ function createCatalystSessionStore(adapter, config, { now = Date.now } = {}) {
         .createHash("sha256")
         .update(`sylvara-form2:${config.deploymentEnvironment}:deal-${kind}\0`, "utf8")
         .update(validatedDealId, "utf8")
-        .update(kind === "generation" ? `\0${issueKey}` : "", "utf8")
+        .update(kind === "generation" ? `\0${generationTokenHash}` : "", "utf8")
         .digest("hex");
     } catch {
       throw new SessionStoreError("Deal issuance key derivation failed");
@@ -259,7 +252,7 @@ function createCatalystSessionStore(adapter, config, { now = Date.now } = {}) {
     const expected = deriveDealIssuanceKey(
       released ? "generation" : "active",
       row.crmDealId,
-      row.issueKey,
+      row.tokenHash,
     );
     if (row.dealIssuanceKey !== expected) {
       throw new SessionStoreError("Session row has an invalid Deal issuance lock");
@@ -292,16 +285,6 @@ function createCatalystSessionStore(adapter, config, { now = Date.now } = {}) {
     );
   }
 
-  async function readByIssueKey(issueKey) {
-    if (!ISSUE_KEY_PATTERN.test(issueKey ?? "")) {
-      throw new SessionStoreError("Issue key is invalid", "session_input_invalid");
-    }
-    return queryExactlyOne(
-      () => adapter.findRowsByIssueKey(tableName, issueKey),
-      true,
-    );
-  }
-
   async function readByRowId(rowId) {
     const validated = validateRowId(rowId);
     return queryExactlyOne(() => adapter.findRowsByRowId(tableName, validated));
@@ -323,7 +306,6 @@ function createCatalystSessionStore(adapter, config, { now = Date.now } = {}) {
 
   function exactIssueMatch(session, expected, nowMs) {
     return (
-      session.issueKey === expected.ISSUE_KEY &&
       session.tokenHash === expected.TOKEN_HASH &&
       session.crmContactId === expected.CRM_CONTACT_ID &&
       session.crmAccountId === expected.CRM_ACCOUNT_ID &&
@@ -340,7 +322,6 @@ function createCatalystSessionStore(adapter, config, { now = Date.now } = {}) {
     const ids = validateIssueInput(input);
     const nowMs = validateNow(now);
     const row = {
-      ISSUE_KEY: input.issueKey,
       TOKEN_HASH: input.tokenHash,
       CRM_CONTACT_ID: ids.crmContactId,
       CRM_ACCOUNT_ID: ids.crmAccountId,
@@ -365,7 +346,7 @@ function createCatalystSessionStore(adapter, config, { now = Date.now } = {}) {
     try {
       await adapter.insertRow(tableName, row);
     } catch {
-      // Insert failures can be ambiguous, so the issue-key readback below is
+      // Insert failures can be ambiguous, so the active-Deal readback below is
       // authoritative. Never retry a potentially successful insert blindly.
     }
     const readback = await readByDealIssuanceKey(row.DEAL_ISSUANCE_KEY);
@@ -448,7 +429,7 @@ function createCatalystSessionStore(adapter, config, { now = Date.now } = {}) {
     const releasedDealIssuanceKey = deriveDealIssuanceKey(
       "generation",
       current.crmDealId,
-      current.issueKey,
+      current.tokenHash,
     );
     try {
       await adapter.updateRow(tableName, {
@@ -846,7 +827,6 @@ function createCatalystSessionStore(adapter, config, { now = Date.now } = {}) {
     markSubmittedReconciliationRequired,
     readActiveByCrmDealId,
     readByDealIssuanceKey,
-    readByIssueKey,
     readByRowId,
     readByTokenHash,
     releaseSubmission,

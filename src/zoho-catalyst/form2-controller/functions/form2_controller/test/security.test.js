@@ -12,7 +12,6 @@ const {
   deriveAccessToken,
   generateAccessToken,
   hashAccessToken,
-  hashIssueRequestId,
   isValidAccessToken,
   verifyAccessTokenHash,
   verifyCustomHeader,
@@ -78,18 +77,21 @@ test("hashes access tokens with HMAC-SHA256 and the configured pepper", () => {
   );
 });
 
-test("derives retry-stable tokens and issue keys with separate HMAC domains", () => {
+test("derives one retry-stable token identity from each immutable issue request", () => {
   const token = deriveAccessToken(ISSUE_REQUEST_ID, PEPPER);
-  const issueKey = hashIssueRequestId(ISSUE_REQUEST_ID, PEPPER);
+  const tokenHash = hashAccessToken(token, PEPPER);
   assert.equal(token, deriveAccessToken(ISSUE_REQUEST_ID, PEPPER));
+  assert.equal(tokenHash, hashAccessToken(deriveAccessToken(ISSUE_REQUEST_ID, PEPPER), PEPPER));
   assert.equal(token.length, 43);
   assert.equal(Buffer.from(token, "base64url").length, 32);
-  assert.match(issueKey, /^[a-f0-9]{64}$/);
-  assert.notEqual(hashAccessToken(token, PEPPER), issueKey);
+  assert.match(tokenHash, /^[a-f0-9]{64}$/);
 
   const otherRequest = "8bad1e54-498b-4684-897a-1e063760191c";
   assert.notEqual(deriveAccessToken(otherRequest, PEPPER), token);
-  assert.notEqual(hashIssueRequestId(otherRequest, PEPPER), issueKey);
+  assert.notEqual(
+    hashAccessToken(deriveAccessToken(otherRequest, PEPPER), PEPPER),
+    tokenHash,
+  );
 });
 
 test("accepts only canonical lowercase UUID v4 issue request IDs", () => {
@@ -102,7 +104,6 @@ test("accepts only canonical lowercase UUID v4 issue request IDs", () => {
     null,
   ]) {
     assert.throws(() => deriveAccessToken(issueRequestId, PEPPER), SecurityError);
-    assert.throws(() => hashIssueRequestId(issueRequestId, PEPPER), SecurityError);
   }
 });
 

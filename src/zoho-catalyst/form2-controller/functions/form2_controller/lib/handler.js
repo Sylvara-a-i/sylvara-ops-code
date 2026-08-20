@@ -18,13 +18,12 @@ const {
   SecurityError,
   deriveAccessToken,
   hashAccessToken,
-  hashIssueRequestId,
   isValidAccessToken,
   verifyCustomHeader,
 } = require("./security");
 const { fingerprintSnapshot, fingerprintSubmission } = require("./snapshot");
 
-const ISSUE_KEYS = new Set(["dealId", "issueRequestId"]);
+const ISSUE_REQUEST_KEYS = new Set(["dealId", "issueRequestId"]);
 const PREFILL_KEYS = new Set(["setupToken"]);
 const SUBMISSION_KEYS = new Set(["setupToken", "prefillId", "submissionId", ...CLIENT_KEYS]);
 const RECORD_ID_PATTERN = /^[1-9][0-9]{9,29}$/;
@@ -346,7 +345,6 @@ function genericSetupNotFound() {
 function sameSessionIdentity(left, right) {
   return Boolean(left && right) &&
     String(left.rowId) === String(right.rowId) &&
-    left.issueKey === right.issueKey &&
     left.tokenHash === right.tokenHash &&
     left.crmContactId === right.crmContactId &&
     left.crmAccountId === right.crmAccountId &&
@@ -924,14 +922,12 @@ async function verifiedDealConverged(dependencies, session) {
 }
 
 async function handleIssue(body, dependencies, nowMs) {
-  assertExactKeys(body, ISSUE_KEYS, "Issue request is invalid");
+  assertExactKeys(body, ISSUE_REQUEST_KEYS, "Issue request is invalid");
   const dealId = normalizeRecordId(body.dealId, "Deal identifier");
   let setupToken;
-  let issueKey;
   let tokenHash;
   try {
     setupToken = deriveAccessToken(body.issueRequestId, dependencies.config.tokenPepper);
-    issueKey = hashIssueRequestId(body.issueRequestId, dependencies.config.tokenPepper);
     tokenHash = hashAccessToken(setupToken, dependencies.config.tokenPepper);
   } catch (error) {
     throw publicError(error);
@@ -939,7 +935,7 @@ async function handleIssue(body, dependencies, nowMs) {
 
   let priorSession;
   try {
-    priorSession = await dependencies.sessionStore.readByIssueKey(issueKey);
+    priorSession = await dependencies.sessionStore.readByTokenHash(tokenHash);
   } catch (error) {
     throw publicError(error);
   }
@@ -1001,7 +997,6 @@ async function handleIssue(body, dependencies, nowMs) {
   let session;
   try {
     session = await dependencies.sessionStore.issue({
-      issueKey,
       tokenHash,
       ...binding,
     });

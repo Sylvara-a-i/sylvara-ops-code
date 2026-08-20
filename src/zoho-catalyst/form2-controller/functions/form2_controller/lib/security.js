@@ -9,7 +9,6 @@ const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}
 const HMAC_DOMAINS = Object.freeze({
   linkDerivation: "sylvara.form2.access-token.v1",
   linkDigest: "sylvara.form2.access-token-hash.v1",
-  issueDigest: "sylvara.form2.issue-key.v1",
 });
 
 class SecurityError extends Error {
@@ -83,11 +82,6 @@ function deriveAccessToken(issueRequestId, pepper) {
   return token;
 }
 
-function hashIssueRequestId(issueRequestId, pepper) {
-  assertIssueRequestId(issueRequestId);
-  return domainSeparatedHmac(issueRequestId, pepper, HMAC_DOMAINS.issueDigest).toString("hex");
-}
-
 function hashAccessToken(token, pepper) {
   if (!isValidAccessToken(token)) {
     throw new SecurityError("Access token is invalid", "access_token_invalid");
@@ -152,7 +146,6 @@ module.exports = {
   deriveAccessToken,
   generateAccessToken,
   hashAccessToken,
-  hashIssueRequestId,
   isValidAccessToken,
   verifyAccessTokenHash,
   verifyCustomHeader,

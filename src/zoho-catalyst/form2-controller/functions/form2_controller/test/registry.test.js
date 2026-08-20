@@ -69,7 +69,7 @@ test("the public variable registry and placeholder environment file stay in lock
     .every((entry) => entry.example_allowed === false), true);
 });
 
-test("the Data Store schema defines every durable key as mandatory and unique", () => {
+test("the Data Store schema matches the runtime and Catalyst uniqueness boundary", () => {
   const schemaPath = path.join(controllerRoot, "config/datastore-schema.json");
   const schema = readJson(schemaPath);
   const { STORED_FIELDS } = require("../lib/session-store");
@@ -83,7 +83,7 @@ test("the Data Store schema defines every durable key as mandatory and unique", 
     ["SUBMISSION_TABLE_NAME", SUBMISSION_STORED_FIELDS],
   ]);
   const expectedUniqueColumns = new Map([
-    ["SESSION_TABLE_NAME", ["ISSUE_KEY", "TOKEN_HASH", "DEAL_ISSUANCE_KEY"]],
+    ["SESSION_TABLE_NAME", ["TOKEN_HASH", "DEAL_ISSUANCE_KEY"]],
     ["PREFILL_TABLE_NAME", ["PREFILL_KEY"]],
     ["SUBMISSION_TABLE_NAME", ["SUBMISSION_KEY"]],
   ]);
@@ -91,14 +91,14 @@ test("the Data Store schema defines every durable key as mandatory and unique", 
   assert.equal(schema.status, "proposed-development-only");
   assert.equal(
     schema.live_state,
-    "existing-54-column-development-baseline-and-access-readback-verified-deal-issuance-key-and-last-outcome-privacy-change-not-provisioned",
+    "development-54-column-schema-rename-privacy-access-scope-and-empty-state-readback-verified-function-not-deployed",
   );
-  assert.equal(schema.observed_at, "2026-08-14");
+  assert.equal(schema.observed_at, "2026-08-20");
 
   assert.equal(schema.tables.length, 3);
   assert.equal(
     schema.tables.reduce((total, table) => total + table.columns.length, 0),
-    55,
+    54,
   );
   assert.deepEqual(
     sorted(schema.tables.map((table) => table.runtime_variable)),
@@ -130,6 +130,10 @@ test("the Data Store schema defines every durable key as mandatory and unique", 
       assert.equal(columns.get(key)?.mandatory, true);
       assert.equal(columns.get(key)?.unique, true);
     }
+    assert.ok(
+      table.columns.filter((column) => column.type === "varchar" && column.unique).length <= 2,
+      `${table.runtime_variable} exceeds Catalyst's verified unique varchar limit`,
+    );
   }
   const sessionTable = schema.tables.find(
     (table) => table.runtime_variable === "SESSION_TABLE_NAME",
@@ -145,11 +149,20 @@ test("the Data Store schema defines every durable key as mandatory and unique", 
     unique: true,
     pii_ephi: true,
   });
+  assert.equal(sessionColumns.has("ISSUE_KEY"), false);
+  assert.deepEqual(sessionColumns.get("TOKEN_HASH"), {
+    api_name: "TOKEN_HASH",
+    type: "varchar",
+    max_length: 64,
+    mandatory: true,
+    unique: true,
+    pii_ephi: true,
+  });
   assert.equal(sessionColumns.get("LAST_OUTCOME").pii_ephi, true);
   assert.match(sessionTable.retention, /Do not delete or alter any session row/);
   assert.equal(
     schema.deployment_gates.some((gate) =>
-      gate.includes("zero rows") && gate.includes("reviewed migration")),
+      gate.includes("zero rows") && gate.includes("renaming ISSUE_KEY")),
     true,
   );
   assert.equal(

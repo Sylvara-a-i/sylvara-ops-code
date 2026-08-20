@@ -5,7 +5,7 @@ const crypto = require("node:crypto");
 const test = require("node:test");
 const { CLIENT_KEYS } = require("../lib/form-contract");
 const { ControllerError, buildFormUrl, handleForm2Request } = require("../lib/handler");
-const { deriveAccessToken, hashAccessToken, hashIssueRequestId } = require("../lib/security");
+const { deriveAccessToken, hashAccessToken } = require("../lib/security");
 
 const NOW_MS = Date.parse("2026-08-14T18:00:00.000Z");
 const ISSUE_REQUEST_ID = "10000000-0000-4000-8000-000000000001";
@@ -138,12 +138,12 @@ function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
-function dealIssuanceKey(kind, dealId, issueKey = "") {
+function dealIssuanceKey(kind, dealId, generationTokenHash = "") {
   return crypto
     .createHash("sha256")
     .update(`sylvara-form2:development:deal-${kind}\0`, "utf8")
     .update(dealId, "utf8")
-    .update(kind === "generation" ? `\0${issueKey}` : "", "utf8")
+    .update(kind === "generation" ? `\0${generationTokenHash}` : "", "utf8")
     .digest("hex");
 }
 
@@ -245,11 +245,6 @@ function fixture() {
   };
 
   const sessionStore = {
-    async readByIssueKey(issueKey) {
-      events.push("session.issue.read");
-      const match = sessions.find((candidate) => issueKey === candidate.issueKey);
-      return match ? Object.freeze({ ...match }) : null;
-    },
     async readActiveByCrmDealId(dealId) {
       events.push("session.deal.active.read");
       const activeKey = dealIssuanceKey("active", dealId);
@@ -261,7 +256,7 @@ function fixture() {
     },
     async issue(input) {
       events.push("session.issue");
-      let match = sessions.find((candidate) => input.issueKey === candidate.issueKey);
+      let match = sessions.find((candidate) => input.tokenHash === candidate.tokenHash);
       if (!match) {
         const activeKey = dealIssuanceKey("active", input.crmDealId);
         if (sessions.some((candidate) => candidate.dealIssuanceKey === activeKey)) {
@@ -271,7 +266,6 @@ function fixture() {
         }
         match = {
           rowId: String(nextSessionRowId++),
-          issueKey: input.issueKey,
           tokenHash: input.tokenHash,
           crmContactId: input.crmContactId,
           crmAccountId: input.crmAccountId,
@@ -289,7 +283,6 @@ function fixture() {
         };
         sessions.push(match);
       } else {
-        assert.equal(input.issueKey, match.issueKey);
         assert.equal(input.tokenHash, match.tokenHash);
       }
       session = match;
@@ -421,7 +414,7 @@ function fixture() {
       match.dealIssuanceKey = dealIssuanceKey(
         "generation",
         match.crmDealId,
-        match.issueKey,
+        match.tokenHash,
       );
       return Object.freeze({ ...match });
     },
@@ -656,10 +649,6 @@ async function seedIssuingSession(fixtureValue, issueRequestId = ISSUE_REQUEST_I
     fixtureValue.dependencies.config.tokenPepper,
   );
   return fixtureValue.dependencies.sessionStore.issue({
-    issueKey: hashIssueRequestId(
-      issueRequestId,
-      fixtureValue.dependencies.config.tokenPepper,
-    ),
     tokenHash: hashAccessToken(
       setupToken,
       fixtureValue.dependencies.config.tokenPepper,
@@ -733,10 +722,6 @@ test("issues one retry-stable URL containing only the opaque token and no CRM ID
   assert.equal(selected.events.filter((event) => event === "session.issue").length, 2);
   assert.equal(selected.events.filter((event) => event === "crm.update.Deals").length, 1);
   assert.equal(
-    selected.session.issueKey,
-    hashIssueRequestId(ISSUE_REQUEST_ID, config().tokenPepper),
-  );
-  assert.equal(
     selected.session.tokenHash,
     hashAccessToken(deriveAccessToken(ISSUE_REQUEST_ID, config().tokenPepper), config().tokenPepper),
   );
@@ -789,7 +774,6 @@ test("an exact issuing row plus CRM Issued readback finalizes after a crash", as
   const selected = fixture();
   const setupToken = deriveAccessToken(ISSUE_REQUEST_ID, config().tokenPepper);
   const pending = await selected.dependencies.sessionStore.issue({
-    issueKey: hashIssueRequestId(ISSUE_REQUEST_ID, config().tokenPepper),
     tokenHash: hashAccessToken(setupToken, config().tokenPepper),
     crmContactId: IDS.contact,
     crmAccountId: IDS.account,
