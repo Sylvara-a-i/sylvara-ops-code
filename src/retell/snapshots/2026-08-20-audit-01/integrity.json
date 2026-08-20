@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "snapshot_id": "2026-08-20-audit-01",
+  "algorithm": "sha256",
+  "scope": "sanitized-artifacts-only",
+  "canonicalization": "sha256-over-repository-file-bytes",
+  "files": [
+    {
+      "path": "agents/7-day-free-test/snapshots/2026-08-20-audit-01/comparison.json",
+      "sha256": "0c84e3302bb41fedad0ee879f6b06fcc220c7a227d69188f8f5e1561dc8b99ca"
+    },
+    {
+      "path": "agents/7-day-free-test/snapshots/2026-08-20-audit-01/draft/agent-configuration-summary.json",
+      "sha256": "a4bf34f4795818e1eb428e557db9965b001e1ff0107b6fa0bc81086236f7be93"
+    },
+    {
+      "path": "agents/7-day-free-test/snapshots/2026-08-20-audit-01/draft/dynamic-variable-contract.json",
+      "sha256": "29260114524c4ca47319cc84fb5efe7c0f1bc485e1cc217646e4639619aca535"
+    },
+    {
+      "path": "agents/7-day-free-test/snapshots/2026-08-20-audit-01/draft/flow-configuration-summary.json",
+      "sha256": "12f8937a1c80b28667c052848cc1b8d38d22d30037f7a07e3fdddbeb01d895c6"
+    },
+    {
+      "path": "agents/7-day-free-test/snapshots/2026-08-20-audit-01/draft/function-definitions.json",
+      "sha256": "5ed3cc3a102cb8e0b734201fd9dbe8c86801c47d6c58872126d36512c785410c"
+    },
+    {
+      "path": "agents/7-day-free-test/snapshots/2026-08-20-audit-01/draft/test-definitions.json",
+      "sha256": "684097c172999cf2fb3b086368eb9ad83a12dc5dacf07530e6e1468aafec7e44"
+    },
+    {
+      "path": "agents/7-day-free-test/snapshots/2026-08-20-audit-01/published/resolution.json",
+      "sha256": "9eb2097613e7059f5077d6ff9c4568346b626c89915ad92c6d15219c3b4686f7"
+    },
+    {
+      "path": "agents/revenue-desk-master-template/snapshots/2026-08-20-audit-01/comparison.json",
+      "sha256": "79cfbcf4e4bc4bb3de8a6e38177954d8615f289d15d826ed269f3ad2eb3749b7"
+    },
+    {
+      "path": "agents/revenue-desk-master-template/snapshots/2026-08-20-audit-01/draft/agent-configuration-summary.json",
+      "sha256": "d0d9b33b23500d6fa3d28fabd7589321865d860b3a10d6bacbc90fe98ca9a5bd"
+    },
+    {
+      "path": "agents/revenue-desk-master-template/snapshots/2026-08-20-audit-01/draft/dynamic-variable-contract.json",
+      "sha256": "0ad4e207c9d73594b39097893805fbe78f3f30602b85d08085161b3dfe430d34"
+    },
+    {
+      "path": "agents/revenue-desk-master-template/snapshots/2026-08-20-audit-01/draft/flow-configuration-summary.json",
+      "sha256": "c3eefdfd65609e784e570783fc67a0f906766afaf0b74a43bf7f996335d14fbc"
+    },
+    {
+      "path": "agents/revenue-desk-master-template/snapshots/2026-08-20-audit-01/draft/function-definitions.json",
+      "sha256": "0b3c21f39458e5d74fe14f095c4829130142df5b7593fcb0942838edf5d649d0"
+    },
+    {
+      "path": "agents/revenue-desk-master-template/snapshots/2026-08-20-audit-01/draft/test-definitions.json",
+      "sha256": "1fd39c3458f40643b66f54e0892c21eb4e772f7d7f26c341557046d9bb3b6f15"
+    },
+    {
+      "path": "agents/revenue-desk-master-template/snapshots/2026-08-20-audit-01/published/resolution.json",
+      "sha256": "c96c9c66e8a258f5f9511da910502ba352bb5f76ffcc4ec1f5bb724d9b16050c"
+    },
+    {
+      "path": "snapshots/2026-08-20-audit-01/audit-manifest.json",
+      "sha256": "e11ceaa1fbf8b07365cc280e75d122cee4e5ae7e7f45bebf82e742175fe5cab4"
+    }
+  ]
+}
