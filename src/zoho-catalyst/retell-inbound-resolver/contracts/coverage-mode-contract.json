@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "contract_id": "sylvara-retell-coverage-mode-v1",
+  "decision_status": "approved",
+  "deployment_authorized": false,
+  "canonical_coverage_modes": [
+    "AfterHoursOnly",
+    "NoAnswerOverflowOnly",
+    "AfterHoursAndOverflow"
+  ],
+  "display_label_mappings": [
+    {
+      "display_label": "After Hours Only",
+      "coverage_mode": "AfterHoursOnly"
+    },
+    {
+      "display_label": "No Answer/Overflow Only",
+      "coverage_mode": "NoAnswerOverflowOnly"
+    },
+    {
+      "display_label": "No Answer / Overflow Only",
+      "coverage_mode": "NoAnswerOverflowOnly"
+    },
+    {
+      "display_label": "After Hours + Overflow",
+      "coverage_mode": "AfterHoursAndOverflow"
+    }
+  ],
+  "coverage_triggers": [
+    "AfterHours",
+    "NoAnswerOverflow"
+  ],
+  "compatible_triggers_by_coverage_mode": {
+    "AfterHoursOnly": [
+      "AfterHours"
+    ],
+    "NoAnswerOverflowOnly": [
+      "NoAnswerOverflow"
+    ],
+    "AfterHoursAndOverflow": [
+      "AfterHours",
+      "NoAnswerOverflow"
+    ]
+  },
+  "validation": {
+    "case_sensitive": true,
+    "trim_inputs": false,
+    "unknown_values_fail_closed": true,
+    "coverage_trigger_is_separate_from_coverage_mode": true
+  }
+}

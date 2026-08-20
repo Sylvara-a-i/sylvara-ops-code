@@ -27,6 +27,7 @@ function Join-PathSegments {
 
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $GatewayRoot = Join-PathSegments $RepoRoot @("src", "zoho-catalyst", "billing-webhook-gateway")
+$RetellResolverRoot = Join-PathSegments $RepoRoot @("src", "zoho-catalyst", "retell-inbound-resolver")
 $RequirementsPath = Join-PathSegments $RepoRoot @("tools", "safety", "requirements.txt")
 $VenvParent = Join-PathSegments $RepoRoot @(".codex-tmp")
 $VenvRoot = Join-PathSegments $VenvParent @("safety-venv")
@@ -422,6 +423,8 @@ try {
         }
         Invoke-Native -Label "Billing gateway checks and tests" -Executable $npm `
             -Arguments @("run", "ci", "--prefix", $GatewayRoot)
+        Invoke-Native -Label "Retell resolver contract checks" -Executable $npm `
+            -Arguments @("run", "ci", "--prefix", $RetellResolverRoot)
 
         Write-Host "Verification passed ($Mode mode)."
     } finally {
