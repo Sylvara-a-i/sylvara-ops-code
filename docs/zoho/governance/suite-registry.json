@@ -1,6 +1,6 @@
 {
   "schema_version": 3,
-  "as_of": "2026-08-14",
+  "as_of": "2026-08-18",
   "path_base": "docs/zoho",
   "repository_status": "proposed-governance",
   "live_state": "partially-verified",
@@ -84,6 +84,8 @@
       ],
       "repository_artifacts": [
         "../../src/zoho-catalyst/billing-webhook-gateway/README.md",
+        "../adr/0004-retell-catalyst-crm-analytics-integration-boundary.md",
+        "../runbooks/retell-catalyst-analytics-reporting.md",
         "reference/products/zoho-catalyst.md"
       ],
       "mcp_observation": "configured-selections-observed-2026-08-04",
@@ -186,26 +188,75 @@
       "authoritative_for": "derived reporting models and dashboards",
       "must_not_own": "transactional state or reverse-write decisions",
       "standards": [
-        "standards/analytics.md"
+        "standards/analytics.md",
+        "standards/call-reporting-metric-contract.md"
       ],
       "repository_artifacts": [
-        "reference/products/zoho-analytics.md"
+        "reference/products/zoho-analytics.md",
+        "mcp/reference/zoho-analytics-managed-mcp-catalog-2026-08-18.md",
+        "../adr/0004-retell-catalyst-crm-analytics-integration-boundary.md",
+        "../runbooks/retell-catalyst-analytics-reporting.md"
       ],
-      "mcp_observation": "not-observed-2026-08-04",
+      "mcp_observation": "official-managed-mcp-tool-catalog-reviewed-2026-08-18-configured-selection-and-effective-access-unknown",
       "effective_tenant_capability": "unknown"
     }
   ],
   "reference_only_products": [
-    {"id": "api-console", "reference": "reference/products/zoho-api-console.md", "adoption_status": "unknown"},
-    {"id": "one", "reference": "reference/products/zoho-one.md", "adoption_status": "unknown"},
-    {"id": "bookings", "reference": "reference/products/zoho-bookings.md", "adoption_status": "unknown"},
-    {"id": "calendar", "reference": "reference/products/zoho-calendar.md", "adoption_status": "unknown"},
-    {"id": "checkout", "reference": "reference/products/zoho-checkout.md", "adoption_status": "unknown"},
-    {"id": "flow", "reference": "reference/products/zoho-flow.md", "adoption_status": "unknown"},
-    {"id": "meeting", "reference": "reference/products/zoho-meeting.md", "adoption_status": "unknown"},
-    {"id": "payments", "reference": "reference/products/zoho-payments.md", "adoption_status": "unknown", "mcp_observation": "configured-selections-observed-2026-08-04"},
-    {"id": "people", "reference": "reference/products/zoho-people.md", "adoption_status": "unknown"},
-    {"id": "todo", "reference": "reference/products/zoho-todo.md", "adoption_status": "unknown"},
-    {"id": "voice", "reference": "reference/products/zoho-voice.md", "adoption_status": "unknown"}
+    {
+      "id": "api-console",
+      "reference": "reference/products/zoho-api-console.md",
+      "adoption_status": "unknown"
+    },
+    {
+      "id": "one",
+      "reference": "reference/products/zoho-one.md",
+      "adoption_status": "unknown"
+    },
+    {
+      "id": "bookings",
+      "reference": "reference/products/zoho-bookings.md",
+      "adoption_status": "unknown"
+    },
+    {
+      "id": "calendar",
+      "reference": "reference/products/zoho-calendar.md",
+      "adoption_status": "unknown"
+    },
+    {
+      "id": "checkout",
+      "reference": "reference/products/zoho-checkout.md",
+      "adoption_status": "unknown"
+    },
+    {
+      "id": "flow",
+      "reference": "reference/products/zoho-flow.md",
+      "adoption_status": "unknown"
+    },
+    {
+      "id": "meeting",
+      "reference": "reference/products/zoho-meeting.md",
+      "adoption_status": "unknown"
+    },
+    {
+      "id": "payments",
+      "reference": "reference/products/zoho-payments.md",
+      "adoption_status": "unknown",
+      "mcp_observation": "configured-selections-observed-2026-08-04"
+    },
+    {
+      "id": "people",
+      "reference": "reference/products/zoho-people.md",
+      "adoption_status": "unknown"
+    },
+    {
+      "id": "todo",
+      "reference": "reference/products/zoho-todo.md",
+      "adoption_status": "unknown"
+    },
+    {
+      "id": "voice",
+      "reference": "reference/products/zoho-voice.md",
+      "adoption_status": "unknown"
+    }
   ]
 }

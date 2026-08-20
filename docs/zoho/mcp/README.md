@@ -12,6 +12,7 @@ This folder separates MCP design policy from dated evidence. A large catalog doe
 | Official Tool Manual snapshot | [`reference/tool-manual-service-catalog-2026-07-24.md`](reference/tool-manual-service-catalog-2026-07-24.md) | Dated service coverage and row counts documented by the provider |
 | Zoho CRM Tool Manual snapshot | [`reference/zoho-crm-tool-manual-catalog-2026-08-14.md`](reference/zoho-crm-tool-manual-catalog-2026-08-14.md) | Dated capture of 1,291 unique Zoho CRM catalog actions and their provider annotations |
 | Dated Catalyst provider-picker catalog | [`reference/zoho-catalyst-tool-manual-catalog-2026-08-14.md`](reference/zoho-catalyst-tool-manual-catalog-2026-08-14.md) | 189 captured display labels, connector-description derivatives, practical use cases, and official-family source routes; not a configured selection or runtime contract |
+| Dated Analytics managed MCP catalog | [`reference/zoho-analytics-managed-mcp-catalog-2026-08-18.md`](reference/zoho-analytics-managed-mcp-catalog-2026-08-18.md) | 24 names published on the official managed Analytics MCP page plus proposed role allowlists; not a configured selection or runtime contract |
 | Preconfigured portal templates | [`reference/preconfigured-template-catalog-2026-07-25.md`](reference/preconfigured-template-catalog-2026-07-25.md) | Dated template names and captured memberships, not a recommendation |
 | Configured-session selections | [`snapshots/configured/2026-08-04/`](snapshots/configured/2026-08-04/) | Sanitized Sylvara-only role membership, prefix-free catalog operation keys, and annotations observed in one inspected session |
 | Proposed server designs | [`proposals/`](proposals/) | Dated least-privilege allowlists that are not selected, authorized, or deployed merely because they are documented |
@@ -32,6 +33,8 @@ The historical [Free-Test CRM MCP Allowlist](proposals/2026-08-14/sylvara-free-t
 
 The later [2026-08-14 effective snapshot](snapshots/effective/2026-08-14/free-test-crm-automation.md) records the active Form 1/Deal workflows and Deal delivery Blueprint observed after authorized configuration work. It also records the absence of Blueprint after-actions, incomplete transition requirements, manual Lead-conversion boundary, and Forms-readback gap. Effective evidence does not turn the broader Tool Manual catalog into an allowlist.
 
+Analytics was not present in the 2026-08-04 configured-selection snapshot. The official managed Analytics MCP page was separately reviewed on 2026-08-18 and listed 24 managed tool names. That review establishes only a dated advertised product surface. Sylvara server configuration, organization identity, workspace access, plan availability, scopes, input schemas, and effective access remain Unknown.
+
 - [Capability analysis and broader official-family crosswalk](snapshots/configured/2026-08-04/capability-catalog.md)
 - [Complete machine-readable configured-selection inventory](snapshots/configured/2026-08-04/sylvara-observed-tool-inventory.json)
 - [Free-Test CRM effective snapshot, 2026-08-14](snapshots/effective/2026-08-14/free-test-crm-automation.md)
@@ -41,6 +44,8 @@ The later [2026-08-14 effective snapshot](snapshots/effective/2026-08-14/free-te
 The dated Tool Manual catalog records 10,533 service-qualified rows across 59 documented services. Eight products in the current Sylvara snapshot account for 3,222 of those dated rows. The repository preserves the compact service/count index and links the relevant product handbooks instead of copying provider-owned manuals. Exact current names, parameters, scopes, and side effects must be refreshed from the official interactive Tool Manual before server design. The configured-session snapshot separately preserves all 294 role-qualified selections that passed the public sanitization review.
 
 The supplied authenticated Catalyst `All Tools` interface displayed 189 actions on 2026-08-14, 13 more than the 176 Catalyst rows in the 2026-07-24 aggregate snapshot. The [dated Catalyst catalog](reference/zoho-catalyst-tool-manual-catalog-2026-08-14.md) preserves all 189 display labels, concise connector-description derivatives, an official Zoho documentation-family crosswalk, practical use cases, and exact public action-page gaps. It proves only dated provider-picker membership. It does not establish prefix-free operation keys, selection in a configured server, an advertised input schema, connection permission, effective access, or authorization to invoke an action.
+
+The 2026-07-24 Tool Manual service catalog counted 25 Zoho Analytics rows. The [official managed Analytics catalog reviewed on 2026-08-18](reference/zoho-analytics-managed-mcp-catalog-2026-08-18.md) listed 24 callable names. These are separate evidence layers with different dates and potentially different product surfaces. The repository preserves the discrepancy and requires a current live comparison before server configuration.
 
 ## Server Design Sequence
 
