@@ -2,6 +2,7 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
+const { PRIVATE_CHOICE_LIMITS } = require("../lib/config");
 const {
   CLIENT_KEYS,
   FormContractError,
@@ -9,6 +10,13 @@ const {
   validateForm2Payload,
   verifyRecordRelationships,
 } = require("../lib/form-contract");
+
+function providerChoices(count) {
+  return Array.from(
+    { length: count },
+    (_, index) => `Synthetic Provider ${String(index + 1).padStart(3, "0")}`,
+  );
+}
 
 const IDS = Object.freeze({
   contact: `${"9".repeat(17)}1`,
@@ -116,6 +124,10 @@ const SERVER_OPTIONS = Object.freeze({
   setupFormVersion: "form2-v1",
   submissionId: "synthetic-submission-0001",
   setupAccessSubmittedStatus: "Synthetic Submitted",
+  allowedPhoneSystemProviders: Object.freeze([
+    "Synthetic PBX",
+    "Different Synthetic PBX",
+  ]),
 });
 
 test("normalizes the approved Form 2 payload into three bounded CRM updates", () => {
@@ -269,6 +281,67 @@ test("private field-team choices fail closed unless unchanged or privately allow
   assert.equal(updates.accountUpdate.Field_Team_Size_Band, "Different Private Band");
 });
 
+test("phone-system providers require the private allowlist and 120-character ceiling", () => {
+  for (const phoneSystemProvider of ["Unapproved Synthetic PBX", "P".repeat(121)]) {
+    assert.throws(
+      () => validateForm2Payload(
+        { ...validPayload(), phoneSystemProvider },
+        { existing: existingRecords(), ...SERVER_OPTIONS },
+      ),
+      (error) => error instanceof FormContractError && error.publicCode === "form_invalid",
+    );
+  }
+
+  const updates = validateForm2Payload(
+    { ...validPayload(), phoneSystemProvider: "Different Synthetic PBX" },
+    { existing: existingRecords(), ...SERVER_OPTIONS },
+  );
+  assert.equal(updates.accountUpdate.Phone_System_Provider, "Different Synthetic PBX");
+});
+
+test("phone-system contract accepts 207 providers and rejects a list above its bound", () => {
+  const providers = providerChoices(207);
+  const selectedProvider = providers.at(-1);
+  const records = existingRecords();
+  records.account.Phone_System_Provider = selectedProvider;
+  const payload = { ...validPayload(), phoneSystemProvider: selectedProvider };
+  const updates = validateForm2Payload(payload, {
+    existing: records,
+    ...SERVER_OPTIONS,
+    allowedPhoneSystemProviders: providers,
+  });
+  assert.equal(updates.accountUpdate.Phone_System_Provider, selectedProvider);
+  const prefill = buildPrefillPayload(records, {
+    allowedPhoneSystemProviders: providers,
+  });
+  assert.equal(prefill.phoneSystemProvider, selectedProvider);
+
+  assert.throws(
+    () => validateForm2Payload(validPayload(), {
+      existing: existingRecords(),
+      ...SERVER_OPTIONS,
+      allowedPhoneSystemProviders: providerChoices(
+        PRIVATE_CHOICE_LIMITS.phoneSystemProviders + 1,
+      ),
+    }),
+    (error) =>
+      error instanceof FormContractError && error.publicCode === "configuration_invalid",
+  );
+});
+
+test("prefill rejects CRM phone-system providers outside the private runtime contract", () => {
+  for (const provider of ["Unapproved Synthetic PBX", "P".repeat(121)]) {
+    const records = existingRecords();
+    records.account.Phone_System_Provider = provider;
+    assert.throws(
+      () => buildPrefillPayload(records, {
+        allowedPhoneSystemProviders: SERVER_OPTIONS.allowedPhoneSystemProviders,
+      }),
+      (error) => error instanceof FormContractError && error.publicCode === "context_invalid",
+    );
+  }
+});
+
 test("requires Contact, Account, and Deal to resolve to one relationship context", () => {
   const records = existingRecords();
   records.deal.Contact_Name.id = `${"9".repeat(16)}99`;
@@ -279,7 +352,9 @@ test("requires Contact, Account, and Deal to resolve to one relationship context
 });
 
 test("builds a flat prefill allowlist without record IDs or server-controlled values", () => {
-  const prefill = buildPrefillPayload(existingRecords());
+  const prefill = buildPrefillPayload(existingRecords(), {
+    allowedPhoneSystemProviders: SERVER_OPTIONS.allowedPhoneSystemProviders,
+  });
   assert.deepEqual(Object.keys(prefill), CLIENT_KEYS);
   assert.equal(prefill.businessEmail, "casey@example.invalid");
   assert.equal(prefill.approvedTestRoute, "No Answer / Overflow Only");

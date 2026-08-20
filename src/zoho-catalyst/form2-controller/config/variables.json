@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "status": "proposed-development-only",
   "rules": {
     "values": "Any real secret, endpoint, route, table, alias, Connection, picklist, and deployment values must exist only in Catalyst Development configuration.",
@@ -22,6 +22,7 @@
     { "name": "FORM2_TOKEN_FIELD_ALIAS", "classification": "private-form-contract", "required": true, "example_allowed": false },
     { "name": "FORM2_FORM_VERSION", "classification": "business-contract", "required": true, "example_allowed": true },
     { "name": "FORM2_ENTRY_OFFER_VALUE", "classification": "private-crm-contract", "required": true, "example_allowed": false },
+    { "name": "FORM2_PHONE_SYSTEM_PROVIDERS", "classification": "private-crm-contract", "required": true, "example_allowed": false },
     { "name": "FORM2_FIELD_TEAM_SIZE_BANDS", "classification": "private-crm-contract", "required": true, "example_allowed": false },
     { "name": "FORM2_ACCESS_STATUS_INITIAL_VALUE", "classification": "private-crm-contract", "required": true, "example_allowed": false },
     { "name": "FORM2_ACCESS_STATUS_ISSUED_VALUE", "classification": "private-crm-contract", "required": true, "example_allowed": false },

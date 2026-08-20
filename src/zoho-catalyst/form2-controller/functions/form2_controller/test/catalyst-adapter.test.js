@@ -31,6 +31,7 @@ function listenerEnvironment() {
     FORM2_TOKEN_FIELD_ALIAS: "access_token",
     FORM2_FORM_VERSION: "form2-v1",
     FORM2_ENTRY_OFFER_VALUE: "Synthetic Free Test",
+    FORM2_PHONE_SYSTEM_PROVIDERS: '["Synthetic PBX"]',
     FORM2_FIELD_TEAM_SIZE_BANDS: '["Synthetic Approved Band"]',
     FORM2_ACCESS_STATUS_INITIAL_VALUE: "Synthetic Initial",
     FORM2_ACCESS_STATUS_ISSUED_VALUE: "Synthetic Issued",

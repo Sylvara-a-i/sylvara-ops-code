@@ -2,7 +2,19 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { ConfigurationError, NUMERIC_LIMITS, loadConfig } = require("../lib/config");
+const {
+  ConfigurationError,
+  NUMERIC_LIMITS,
+  PRIVATE_CHOICE_LIMITS,
+  loadConfig,
+} = require("../lib/config");
+
+function providerChoices(count) {
+  return Array.from(
+    { length: count },
+    (_, index) => `Synthetic Provider ${String(index + 1).padStart(3, "0")}`,
+  );
+}
 
 function baseEnvironment(overrides = {}) {
   return {
@@ -23,6 +35,7 @@ function baseEnvironment(overrides = {}) {
     FORM2_TOKEN_FIELD_ALIAS: "access_token",
     FORM2_FORM_VERSION: "form2-v1",
     FORM2_ENTRY_OFFER_VALUE: "Synthetic Free Test",
+    FORM2_PHONE_SYSTEM_PROVIDERS: '["Synthetic PBX","Different Synthetic PBX"]',
     FORM2_FIELD_TEAM_SIZE_BANDS: '["Synthetic Approved Band","Different Private Band"]',
     FORM2_ACCESS_STATUS_INITIAL_VALUE: "Synthetic Initial",
     FORM2_ACCESS_STATUS_ISSUED_VALUE: "Synthetic Issued",
@@ -50,6 +63,11 @@ test("loads an immutable Development-only configuration with bounded defaults", 
   assert.equal(config.maxSubmissionAttempts, 3);
   assert.equal(config.maxBodyBytes, 32768);
   assert.equal(config.outboundMaxBytes, 131072);
+  assert.deepEqual(config.form2PhoneSystemProviders, [
+    "Synthetic PBX",
+    "Different Synthetic PBX",
+  ]);
+  assert.ok(Object.isFrozen(config.form2PhoneSystemProviders));
   assert.deepEqual(config.form2FieldTeamSizeBands, [
     "Synthetic Approved Band",
     "Different Private Band",
@@ -64,6 +82,32 @@ test("loads an immutable Development-only configuration with bounded defaults", 
   });
   assert.ok(Object.isFrozen(config.form2AccessStatuses));
   assert.ok(Object.isFrozen(config));
+});
+
+test("accepts the 207-provider catalog and rejects growth above the reviewed bound", () => {
+  const providers = providerChoices(207);
+  const config = load(baseEnvironment({
+    FORM2_PHONE_SYSTEM_PROVIDERS: JSON.stringify(providers),
+  }));
+  assert.deepEqual(config.form2PhoneSystemProviders, providers);
+  assert.equal(PRIVATE_CHOICE_LIMITS.phoneSystemProviders, 256);
+  assert.throws(
+    () => load(baseEnvironment({
+      FORM2_PHONE_SYSTEM_PROVIDERS: JSON.stringify(
+        providerChoices(PRIVATE_CHOICE_LIMITS.phoneSystemProviders + 1),
+      ),
+    })),
+    ConfigurationError,
+  );
+  assert.equal(PRIVATE_CHOICE_LIMITS.fieldTeamSizeBands, 20);
+  assert.throws(
+    () => load(baseEnvironment({
+      FORM2_FIELD_TEAM_SIZE_BANDS: JSON.stringify(
+        Array.from({ length: 21 }, (_, index) => `Synthetic Band ${index + 1}`),
+      ),
+    })),
+    ConfigurationError,
+  );
 });
 
 test("hard-blocks every environment other than exact Development", () => {
@@ -169,6 +213,10 @@ test("rejects malformed aliases, versions, revisions, and Connection link names"
     { CRM_READ_CONNECTION_LINK_NAME: "unsafe-link" },
     { CRM_WRITE_CONNECTION_LINK_NAME: "SyntheticCrmRead" },
     { FORM2_ENTRY_OFFER_VALUE: "Unsafe\nValue" },
+    { FORM2_PHONE_SYSTEM_PROVIDERS: "not-json" },
+    { FORM2_PHONE_SYSTEM_PROVIDERS: "[]" },
+    { FORM2_PHONE_SYSTEM_PROVIDERS: '["Duplicate","Duplicate"]' },
+    { FORM2_PHONE_SYSTEM_PROVIDERS: JSON.stringify(["P".repeat(121)]) },
     { FORM2_FIELD_TEAM_SIZE_BANDS: "not-json" },
     { FORM2_FIELD_TEAM_SIZE_BANDS: "[]" },
     { FORM2_FIELD_TEAM_SIZE_BANDS: '["Duplicate","Duplicate"]' },

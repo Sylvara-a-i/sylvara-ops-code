@@ -1,5 +1,7 @@
 "use strict";
 
+const { PRIVATE_CHOICE_LIMITS } = require("./config");
+
 const POLLUTION_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 
 const CHOICES = Object.freeze({
@@ -447,6 +449,36 @@ function validatePrivateBand(value, existingValue, allowedValues) {
   return value;
 }
 
+function validatePrivateChoice(value, field, allowedValues, maximumChoices) {
+  if (
+    !Number.isSafeInteger(maximumChoices) ||
+    maximumChoices < 1 ||
+    !Array.isArray(allowedValues) ||
+    allowedValues.length < 1 ||
+    allowedValues.length > maximumChoices ||
+    allowedValues.some(
+      (entry) =>
+        typeof entry !== "string" ||
+        !entry ||
+        entry !== entry.trim() ||
+        [...entry].length > 120 ||
+        /[\u0000-\u001f\u007f]/.test(entry),
+    ) ||
+    new Set(allowedValues).size !== allowedValues.length
+  ) {
+    throw new FormContractError("Private choice configuration is invalid", {
+      field,
+      publicCode: "configuration_invalid",
+      status: 503,
+    });
+  }
+  if (value === null) return null;
+  if (!allowedValues.includes(value)) {
+    fail(field, "Choice is not in the private approved set");
+  }
+  return value;
+}
+
 function freezeUpdates(updates) {
   for (const update of Object.values(updates)) {
     for (const value of Object.values(update)) {
@@ -488,10 +520,15 @@ function validateForm2Payload(payload, options = {}) {
     maximum: 255,
   });
   const mainBusinessNumber = normalizePhone(payload, "mainBusinessNumber", { required: true });
-  const phoneSystemProvider = normalizeText(payload, "phoneSystemProvider", {
-    required: true,
-    maximum: 150,
-  });
+  const phoneSystemProvider = validatePrivateChoice(
+    normalizeText(payload, "phoneSystemProvider", {
+      required: true,
+      maximum: 120,
+    }),
+    "phoneSystemProvider",
+    options.allowedPhoneSystemProviders,
+    PRIVATE_CHOICE_LIMITS.phoneSystemProviders,
+  );
   const primaryServiceArea = normalizeText(payload, "primaryServiceArea", {
     required: true,
     maximum: 2000,
@@ -694,7 +731,7 @@ function prefillDate(record, key) {
   return normalizeIsoDate({ value }, "value");
 }
 
-function buildPrefillPayloadUnchecked({ contact, account, deal }) {
+function buildPrefillPayloadUnchecked({ contact, account, deal }, options = {}) {
   verifyRecordRelationships({ contact, account, deal });
   const servicesHandled = account.Services_Handled ?? [];
   if (!Array.isArray(servicesHandled)) {
@@ -727,7 +764,12 @@ function buildPrefillPayloadUnchecked({ contact, account, deal }) {
     companyName: prefillText(account, "Account_Name", 200),
     legalBusinessName: prefillText(account, "Legal_Business_Name", 255),
     mainBusinessNumber: prefillPhone(account, "Phone"),
-    phoneSystemProvider: prefillText(account, "Phone_System_Provider", 150),
+    phoneSystemProvider: validatePrivateChoice(
+      prefillText(account, "Phone_System_Provider", 120),
+      "phoneSystemProvider",
+      options.allowedPhoneSystemProviders,
+      PRIVATE_CHOICE_LIMITS.phoneSystemProviders,
+    ),
     primaryServiceArea: prefillText(account, "Primary_Service_Area", 2000),
     normalBusinessHours: prefillText(account, "Normal_Business_Hours", 2000),
     fieldTeamSizeBand: prefillText(account, "Field_Team_Size_Band", 120),
@@ -765,9 +807,9 @@ function buildPrefillPayloadUnchecked({ contact, account, deal }) {
   return Object.freeze(result);
 }
 
-function buildPrefillPayload(existing) {
+function buildPrefillPayload(existing, options = {}) {
   try {
-    return buildPrefillPayloadUnchecked(existing);
+    return buildPrefillPayloadUnchecked(existing, options);
   } catch (error) {
     if (
       error instanceof FormContractError &&

@@ -33,6 +33,10 @@ function config() {
     form2TokenFieldAlias: "access_token",
     form2FormVersion: "form2-v1",
     form2EntryOfferValue: "Synthetic Free Test",
+    form2PhoneSystemProviders: Object.freeze([
+      "Synthetic PBX",
+      "Different Synthetic PBX",
+    ]),
     form2AccessStatuses: Object.freeze({
       initial: "Synthetic Initial",
       issued: "Synthetic Issued",
@@ -1528,6 +1532,29 @@ test("email and mobile changes fail through the contract before consume or CRM m
     assert.equal(selected.events.includes("workflow.prefill.consume"), false);
     assert.equal(selected.events.includes("crm.composite"), false);
   }
+});
+
+test("an unapproved phone-system provider fails before prefill consumption or CRM mutation", async () => {
+  const selected = fixture();
+  await issue(selected);
+  const prefillResult = await prefill(selected);
+  selected.events.length = 0;
+
+  const result = await submit(
+    selected,
+    validSubmission(prefillResult.body, {
+      submissionId: "10010",
+      phoneSystemProvider: "Unapproved Synthetic PBX",
+    }),
+  );
+
+  assert.equal(result.status, 422);
+  assert.deepEqual(result.body, { ok: false, code: "form_invalid" });
+  assert.equal(selected.receipt.status, "failed");
+  assert.equal(selected.receipt.lastOutcome, "form_invalid");
+  assert.equal(selected.events.includes("workflow.submission.failed"), true);
+  assert.equal(selected.events.includes("workflow.prefill.consume"), false);
+  assert.equal(selected.events.includes("crm.composite"), false);
 });
 
 test("a failed-receipt write that is not durably proven returns ambiguous 503", async () => {
