@@ -310,7 +310,8 @@ function createCatalystSessionStore(adapter, config, { now = Date.now } = {}) {
       session.crmContactId === expected.CRM_CONTACT_ID &&
       session.crmAccountId === expected.CRM_ACCOUNT_ID &&
       session.crmDealId === expected.CRM_DEAL_ID &&
-      session.sourceRevision === expected.SOURCE_REVISION &&
+      // The stored revision is creation provenance, not issuance identity. An
+      // active deterministic-token retry must survive a controller deployment.
       session.sourceEnvironment === expected.SOURCE_ENVIRONMENT &&
       session.dealIssuanceKey === expected.DEAL_ISSUANCE_KEY &&
       new Set(["issuing", "issued", "verified"]).has(session.status) &&

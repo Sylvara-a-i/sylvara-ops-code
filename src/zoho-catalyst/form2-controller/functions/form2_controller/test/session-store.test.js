@@ -186,7 +186,7 @@ test("returns an identical live session for an exact deterministic-token retry",
 });
 
 test("fails reconciliation when the token or CRM context conflicts with the active generation", async () => {
-  const { adapter, clock, store } = fixture();
+  const { store } = fixture();
   await store.issue(issueInput());
   for (const conflicting of [
     issueInput({ tokenHash: "b".repeat(64) }),
@@ -199,15 +199,24 @@ test("fails reconciliation when the token or CRM context conflicts with the acti
       (error) => error.publicCode === "reconciliation_required",
     );
   }
+});
+
+test("recovers an exact active issuance retry across source revisions", async () => {
+  const { adapter, clock, rows, store } = fixture();
+  const first = await store.issue(issueInput());
+  await store.markIssued(first.rowId);
+
   const changedRevisionStore = createCatalystSessionStore(
     adapter,
     config({ sourceRevision: "b".repeat(40) }),
     { now: () => clock.nowMs },
   );
-  await assert.rejects(
-    changedRevisionStore.issue(issueInput()),
-    (error) => error.publicCode === "reconciliation_required",
-  );
+  const retry = await changedRevisionStore.issue(issueInput());
+
+  assert.equal(retry.rowId, first.rowId);
+  assert.equal(retry.status, "issued");
+  assert.equal(retry.sourceRevision, "a".repeat(40));
+  assert.equal(rows.length, 1);
 });
 
 test("verifies a live session, increments its bounded attempt counter, and supports submission", async () => {

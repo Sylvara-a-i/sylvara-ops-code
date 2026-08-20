@@ -1985,6 +1985,24 @@ test("rejects a decorated Forms Unique ID before a durable submission claim", as
   assert.equal(selected.events.includes("workflow.submission.claim"), false);
 });
 
+test("rejects an unsupported decimal form value before fingerprinting or state access", async () => {
+  const selected = fixture();
+  await issue(selected);
+  const prefillResult = await prefill(selected);
+  selected.events.length = 0;
+
+  const result = await submit(
+    selected,
+    validSubmission(prefillResult.body, { noAnswerDelay: 5.5 }),
+  );
+
+  assert.equal(result.status, 422);
+  assert.deepEqual(result.body, { ok: false, code: "form_invalid" });
+  assert.equal(selected.receipt, null);
+  assert.equal(selected.session.status, "verified");
+  assert.deepEqual(selected.events, []);
+});
+
 test("labels an unambiguous pre-consumption dependency failure as safely retryable", async () => {
   const selected = fixture();
   await issue(selected);

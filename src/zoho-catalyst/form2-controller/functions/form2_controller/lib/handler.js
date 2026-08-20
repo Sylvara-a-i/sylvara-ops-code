@@ -6,6 +6,7 @@ const {
   FormContractError,
   buildPrefillPayload,
   validateForm2Payload,
+  validateForm2PayloadTypes,
   verifyRecordRelationships,
 } = require("./form-contract");
 const {
@@ -1447,6 +1448,8 @@ async function releaseSubmissionOwnership(session, submissionFingerprint, depend
 
 async function handleSubmission(body, dependencies, nowMs) {
   assertExactKeys(body, SUBMISSION_KEYS, "Submission request is invalid");
+  const formPayload = submissionFormPayload(body);
+  validateForm2PayloadTypes(formPayload);
   const namespacedSubmissionId = namespaceSubmissionId(
     dependencies.config,
     body.submissionId,
@@ -1461,7 +1464,7 @@ async function handleSubmission(body, dependencies, nowMs) {
   const submissionFingerprint = fingerprintSubmission({
     submissionId: namespacedSubmissionId,
     prefillId: body.prefillId,
-    values: submissionFormPayload(body),
+    values: formPayload,
   }, dependencies.config.tokenPepper);
   const submissionBinding = {
     submissionId: namespacedSubmissionId,
@@ -1620,7 +1623,7 @@ async function handleSubmission(body, dependencies, nowMs) {
       });
     }
 
-    const updates = validateForm2Payload(submissionFormPayload(body), {
+    const updates = validateForm2Payload(formPayload, {
       existing,
       trustedNow: new Date(nowMs).toISOString(),
       setupFormVersion: dependencies.config.form2FormVersion,

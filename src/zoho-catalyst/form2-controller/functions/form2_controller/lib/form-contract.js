@@ -110,6 +110,10 @@ const CLIENT_KEYS = Object.freeze([
 ]);
 
 const CLIENT_KEY_SET = new Set(CLIENT_KEYS);
+const BOOLEAN_CLIENT_KEYS = new Set([
+  "authorizedRepresentativeConfirmed",
+  "testScopeAccepted",
+]);
 const NO_ANSWER_ROUTES = new Set([
   "No Answer / Overflow Only",
   "After Hours + Overflow",
@@ -163,6 +167,24 @@ function assertPayloadShape(payload) {
         publicCode: "unknown_field",
       });
     }
+  }
+}
+
+function validateForm2PayloadTypes(payload) {
+  assertPayloadShape(payload);
+  for (const [key, value] of Object.entries(payload)) {
+    if (value === null) continue;
+    if (key === "servicesHandled") {
+      if (!Array.isArray(value) || value.some((entry) => typeof entry !== "string")) {
+        fail(key, "Field must be a list of text values");
+      }
+      continue;
+    }
+    if (BOOLEAN_CLIENT_KEYS.has(key)) {
+      if (typeof value !== "boolean") fail(key, "Field must be a confirmation");
+      continue;
+    }
+    if (typeof value !== "string") fail(key, "Field must be text");
   }
 }
 
@@ -771,5 +793,6 @@ module.exports = {
   FormContractError,
   buildPrefillPayload,
   validateForm2Payload,
+  validateForm2PayloadTypes,
   verifyRecordRelationships,
 };
