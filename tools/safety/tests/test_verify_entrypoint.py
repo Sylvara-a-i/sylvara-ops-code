@@ -55,6 +55,7 @@ class VerifyEntrypointTests(unittest.TestCase):
             "tools/safety/validate_workflows.py",
             '"-m", "unittest", "discover"',
             '"run", "ci", "--prefix", $GatewayRoot',
+            '"run", "ci", "--prefix", $RetellResolverRoot',
         ):
             with self.subTest(fragment=required_fragment):
                 self.assertIn(required_fragment, self.script)
