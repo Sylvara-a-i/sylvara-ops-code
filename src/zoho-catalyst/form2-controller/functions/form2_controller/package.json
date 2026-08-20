@@ -1,0 +1,19 @@
+{
+  "name": "sylvara-form2-controller",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Development-blocked Zoho Forms Form 2 prefill and submission controller for Zoho Catalyst.",
+  "main": "index.js",
+  "type": "commonjs",
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "check": "node --check index.js && node --check lib/catalyst-adapter.js && node --check lib/catalyst-datastore-adapter.js && node --check lib/config.js && node --check lib/connection-boundary.js && node --check lib/crm-client.js && node --check lib/destinations.js && node --check lib/form-contract.js && node --check lib/handler.js && node --check lib/http.js && node --check lib/operation-timeout.js && node --check lib/safe-log.js && node --check lib/security.js && node --check lib/session-store.js && node --check lib/snapshot.js && node --check lib/source-revision.js && node --check lib/workflow-store.js",
+    "test": "node --test test/*.test.js",
+    "ci": "npm run check && npm test"
+  },
+  "dependencies": {
+    "zcatalyst-sdk-node": "3.4.0"
+  }
+}
