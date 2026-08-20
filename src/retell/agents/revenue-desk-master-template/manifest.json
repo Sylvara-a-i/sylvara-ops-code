@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "local_key": "agent_revenue_desk_master_template",
+  "display_name": "Revenue Desk — Master Template",
+  "separate_configuration_boundary": true,
+  "runtime_authority": false,
+  "snapshots": [
+    "2026-08-20-audit-01"
+  ]
+}
