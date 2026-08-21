@@ -1,5 +1,7 @@
 "use strict";
 
+const { brotliDecompressSync } = require("node:zlib");
+
 const {
   isApprovedCrmApiHostname,
   isApprovedFormsPublicHostname,
@@ -25,6 +27,9 @@ const SESSION_STATUSES = Object.freeze([
   "reconciliation_required",
 ]);
 const SOURCE_REVISION_PATTERN = /^[a-f0-9]{40}$/;
+const COMPRESSED_CHOICE_PREFIX = "br:";
+const MAX_COMPRESSED_CHOICE_CHARS = 4096;
+const MAX_DECOMPRESSED_CHOICE_BYTES = 32768;
 
 const NUMERIC_LIMITS = Object.freeze({
   SESSION_TTL_SECONDS: Object.freeze({ fallback: 3600, minimum: 300, maximum: 86400 }),
@@ -195,11 +200,56 @@ function validateBoundedBusinessValue(value, name) {
   return value;
 }
 
-function parsePrivateChoiceList(environment, name, maximumChoices) {
+function readPrivateChoicePayload(environment, name, { allowCompressed = false } = {}) {
+  const raw = readRequired(environment, name);
+  if (!raw.startsWith(COMPRESSED_CHOICE_PREFIX)) return raw;
+  if (!allowCompressed) {
+    throw new ConfigurationError(`${name} may not use compressed encoding`);
+  }
+
+  const encoded = raw.slice(COMPRESSED_CHOICE_PREFIX.length);
+  if (
+    encoded.length < 1 ||
+    encoded.length > MAX_COMPRESSED_CHOICE_CHARS ||
+    !/^[A-Za-z0-9_-]+$/.test(encoded)
+  ) {
+    throw new ConfigurationError(`${name} has invalid compressed encoding`);
+  }
+
+  const compressed = Buffer.from(encoded, "base64url");
+  if (
+    compressed.length < 1 ||
+    compressed.toString("base64url") !== encoded
+  ) {
+    throw new ConfigurationError(`${name} has non-canonical compressed encoding`);
+  }
+
+  let decoded;
+  try {
+    decoded = brotliDecompressSync(compressed, {
+      maxOutputLength: MAX_DECOMPRESSED_CHOICE_BYTES,
+    });
+  } catch {
+    throw new ConfigurationError(`${name} compressed payload is invalid or too large`);
+  }
+
+  const text = decoded.toString("utf8");
+  if (!Buffer.from(text, "utf8").equals(decoded)) {
+    throw new ConfigurationError(`${name} compressed payload must be UTF-8 text`);
+  }
+  return text;
+}
+
+function parsePrivateChoiceList(
+  environment,
+  name,
+  maximumChoices,
+  { allowCompressed = false } = {},
+) {
   if (!Number.isSafeInteger(maximumChoices) || maximumChoices < 1) {
     throw new ConfigurationError(`${name} choice limit is invalid`);
   }
-  const raw = readRequired(environment, name);
+  const raw = readPrivateChoicePayload(environment, name, { allowCompressed });
   let parsed;
   try {
     parsed = JSON.parse(raw);
@@ -381,6 +431,7 @@ function loadConfig(environment = process.env, artifactRevision = ARTIFACT_SOURC
       environment,
       "FORM2_PHONE_SYSTEM_PROVIDERS",
       PRIVATE_CHOICE_LIMITS.phoneSystemProviders,
+      { allowCompressed: true },
     ),
     form2FieldTeamSizeBands: parsePrivateChoiceList(
       environment,
