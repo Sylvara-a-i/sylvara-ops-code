@@ -1,0 +1,190 @@
+{
+  "schema_version": 1,
+  "classification": "public-provider-neutral-acceptance-contract",
+  "runtime_authority": false,
+  "deployment_authorized": false,
+  "source_system": "provider-neutral-contract",
+  "agent": {
+    "local_key": "agent_7_day_free_test",
+    "display_name": "7-Day Free Test"
+  },
+  "scope": "bounded-intake-classification",
+  "state_sets": {
+    "urgency": [
+      "approved_urgent",
+      "nonurgent",
+      "unknown"
+    ],
+    "urgent_callback": [
+      "confirmed_usable",
+      "explicitly_unavailable",
+      "unknown"
+    ],
+    "nonurgent_callback": [
+      "confirmed_usable",
+      "explicitly_unavailable",
+      "unknown"
+    ],
+    "area": [
+      "in_area",
+      "out_of_area",
+      "unknown"
+    ],
+    "service_property": [
+      "supported",
+      "unsupported",
+      "unknown"
+    ],
+    "routine": [
+      "verified_complete",
+      "incomplete_or_ambiguous"
+    ]
+  },
+  "preserved_boundaries": {
+    "configuration_failure": "configuration_unavailable",
+    "safety_precedes_classification": true,
+    "approved_urgency": "urgent_callback_policy",
+    "nonurgent_urgency": "nonurgent_policy",
+    "unresolved_urgency": "needs_review",
+    "exception_behavior": "preserved"
+  },
+  "urgent_callback_policy": {
+    "initial": {
+      "confirmed_usable": {
+        "outcome": "urgent_callback",
+        "needs_review": false
+      },
+      "explicitly_unavailable": {
+        "outcome": "urgent_no_callback",
+        "needs_review": true
+      },
+      "unknown": {
+        "outcome": "one_confirmation",
+        "needs_review": false
+      }
+    },
+    "final": {
+      "confirmed_usable": {
+        "outcome": "urgent_callback",
+        "needs_review": false
+      },
+      "explicitly_unavailable": {
+        "outcome": "urgent_no_callback",
+        "needs_review": true
+      },
+      "unknown": {
+        "outcome": "urgent_no_callback",
+        "needs_review": true
+      }
+    }
+  },
+  "nonurgent_callback_policy": {
+    "initial": {
+      "confirmed_usable": {
+        "outcome": "area_classification",
+        "needs_review": false
+      },
+      "explicitly_unavailable": {
+        "outcome": "no_callback",
+        "needs_review": false
+      },
+      "unknown": {
+        "outcome": "one_confirmation",
+        "needs_review": false
+      }
+    },
+    "final": {
+      "confirmed_usable": {
+        "outcome": "area_classification",
+        "needs_review": false
+      },
+      "explicitly_unavailable": {
+        "outcome": "no_callback",
+        "needs_review": false
+      },
+      "unknown": {
+        "outcome": "no_callback",
+        "needs_review": true
+      }
+    }
+  },
+  "nonurgent_precedence_phase": "after-bounded-confirmation",
+  "nonurgent_precedence": [
+    {
+      "rank": 1,
+      "match": {
+        "callback": [
+          "explicitly_unavailable",
+          "unknown"
+        ]
+      },
+      "outcome": "no_callback"
+    },
+    {
+      "rank": 2,
+      "match": {
+        "callback": [
+          "confirmed_usable"
+        ],
+        "area": [
+          "out_of_area"
+        ]
+      },
+      "outcome": "out_of_area"
+    },
+    {
+      "rank": 3,
+      "match": {
+        "callback": [
+          "confirmed_usable"
+        ],
+        "area": [
+          "in_area"
+        ],
+        "service_property": [
+          "unsupported"
+        ]
+      },
+      "outcome": "unsupported_service_or_property"
+    },
+    {
+      "rank": 4,
+      "match": {
+        "callback": [
+          "confirmed_usable"
+        ],
+        "area": [
+          "in_area"
+        ],
+        "service_property": [
+          "supported"
+        ],
+        "routine": [
+          "verified_complete"
+        ]
+      },
+      "outcome": "standard"
+    },
+    {
+      "rank": 5,
+      "match": {},
+      "outcome": "needs_review"
+    }
+  ],
+  "bounded_confirmation_attempts": 1,
+  "capability_boundary": {
+    "function_calls": false,
+    "transfers": false,
+    "booking": false,
+    "dispatch": false,
+    "messages": false,
+    "external_writes": false
+  },
+  "publication_boundary": {
+    "runtime_mapping_in_git": false,
+    "manual_chat_evidence_in_git": false,
+    "runtime_prompts_in_git": false,
+    "runtime_topology_in_git": false
+  },
+  "interpretation": "Provider-neutral acceptance semantics only; not deployable Retell configuration or proof of runtime behavior."
+}

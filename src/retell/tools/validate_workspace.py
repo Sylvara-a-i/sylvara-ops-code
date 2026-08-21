@@ -36,6 +36,151 @@ DRAFT_ARTIFACTS = (
 UNRESOLVED_PUBLISHED_FILES = {"resolution.json"}
 RESOLVED_PUBLISHED_FILES = set(DRAFT_ARTIFACTS)
 
+NONURGENT_CONTRACT_RELATIVE_PATH = (
+    "agents/7-day-free-test/contracts/nonurgent-classification-contract.json"
+)
+NONURGENT_CLASSIFICATION_CONTRACT = {
+    "schema_version": 1,
+    "classification": "public-provider-neutral-acceptance-contract",
+    "runtime_authority": False,
+    "deployment_authorized": False,
+    "source_system": "provider-neutral-contract",
+    "agent": {
+        "local_key": "agent_7_day_free_test",
+        "display_name": "7-Day Free Test",
+    },
+    "scope": "bounded-intake-classification",
+    "state_sets": {
+        "urgency": ["approved_urgent", "nonurgent", "unknown"],
+        "urgent_callback": [
+            "confirmed_usable",
+            "explicitly_unavailable",
+            "unknown",
+        ],
+        "nonurgent_callback": [
+            "confirmed_usable",
+            "explicitly_unavailable",
+            "unknown",
+        ],
+        "area": ["in_area", "out_of_area", "unknown"],
+        "service_property": ["supported", "unsupported", "unknown"],
+        "routine": ["verified_complete", "incomplete_or_ambiguous"],
+    },
+    "preserved_boundaries": {
+        "configuration_failure": "configuration_unavailable",
+        "safety_precedes_classification": True,
+        "approved_urgency": "urgent_callback_policy",
+        "nonurgent_urgency": "nonurgent_policy",
+        "unresolved_urgency": "needs_review",
+        "exception_behavior": "preserved",
+    },
+    "urgent_callback_policy": {
+        "initial": {
+            "confirmed_usable": {
+                "outcome": "urgent_callback",
+                "needs_review": False,
+            },
+            "explicitly_unavailable": {
+                "outcome": "urgent_no_callback",
+                "needs_review": True,
+            },
+            "unknown": {"outcome": "one_confirmation", "needs_review": False},
+        },
+        "final": {
+            "confirmed_usable": {
+                "outcome": "urgent_callback",
+                "needs_review": False,
+            },
+            "explicitly_unavailable": {
+                "outcome": "urgent_no_callback",
+                "needs_review": True,
+            },
+            "unknown": {"outcome": "urgent_no_callback", "needs_review": True},
+        },
+    },
+    "nonurgent_callback_policy": {
+        "initial": {
+            "confirmed_usable": {
+                "outcome": "area_classification",
+                "needs_review": False,
+            },
+            "explicitly_unavailable": {
+                "outcome": "no_callback",
+                "needs_review": False,
+            },
+            "unknown": {"outcome": "one_confirmation", "needs_review": False},
+        },
+        "final": {
+            "confirmed_usable": {
+                "outcome": "area_classification",
+                "needs_review": False,
+            },
+            "explicitly_unavailable": {
+                "outcome": "no_callback",
+                "needs_review": False,
+            },
+            "unknown": {"outcome": "no_callback", "needs_review": True},
+        },
+    },
+    "nonurgent_precedence_phase": "after-bounded-confirmation",
+    "nonurgent_precedence": [
+        {
+            "rank": 1,
+            "match": {
+                "callback": ["explicitly_unavailable", "unknown"]
+            },
+            "outcome": "no_callback",
+        },
+        {
+            "rank": 2,
+            "match": {
+                "callback": ["confirmed_usable"],
+                "area": ["out_of_area"],
+            },
+            "outcome": "out_of_area",
+        },
+        {
+            "rank": 3,
+            "match": {
+                "callback": ["confirmed_usable"],
+                "area": ["in_area"],
+                "service_property": ["unsupported"],
+            },
+            "outcome": "unsupported_service_or_property",
+        },
+        {
+            "rank": 4,
+            "match": {
+                "callback": ["confirmed_usable"],
+                "area": ["in_area"],
+                "service_property": ["supported"],
+                "routine": ["verified_complete"],
+            },
+            "outcome": "standard",
+        },
+        {"rank": 5, "match": {}, "outcome": "needs_review"},
+    ],
+    "bounded_confirmation_attempts": 1,
+    "capability_boundary": {
+        "function_calls": False,
+        "transfers": False,
+        "booking": False,
+        "dispatch": False,
+        "messages": False,
+        "external_writes": False,
+    },
+    "publication_boundary": {
+        "runtime_mapping_in_git": False,
+        "manual_chat_evidence_in_git": False,
+        "runtime_prompts_in_git": False,
+        "runtime_topology_in_git": False,
+    },
+    "interpretation": (
+        "Provider-neutral acceptance semantics only; not deployable Retell "
+        "configuration or proof of runtime behavior."
+    ),
+}
+
 SNAPSHOT_ID_RE = re.compile(r"^\d{4}-\d{2}-\d{2}-audit-\d{2}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 URL_RE = re.compile(r"https?://", re.IGNORECASE)
@@ -510,6 +655,17 @@ def validate_configuration_document(
     return problems
 
 
+def validate_nonurgent_contract_document(
+    document: Mapping[str, Any],
+) -> list[str]:
+    """Validate the provider-neutral classification contract in isolation."""
+
+    problems = find_public_data_problems(document, "$/nonurgent-contract")
+    if document != NONURGENT_CLASSIFICATION_CONTRACT:
+        problems.append("nonurgent-contract: exact public schema mismatch")
+    return problems
+
+
 def published_layout_problems(file_names: set[str]) -> list[str]:
     """Validate the mutually exclusive published lifecycle file union."""
 
@@ -545,7 +701,11 @@ def _read_published_layout(
 def _expected_file_inventory(
     snapshot_ids: list[str], layouts: Mapping[tuple[str, str], str]
 ) -> set[str]:
-    expected = {"README.md", "tools/validate_workspace.py"}
+    expected = {
+        "README.md",
+        "tools/validate_workspace.py",
+        NONURGENT_CONTRACT_RELATIVE_PATH,
+    }
     expected.update(f"agents/{slug}/manifest.json" for slug in EXPECTED_AGENTS)
     for snapshot_id in snapshot_ids:
         expected.update(
@@ -772,6 +932,13 @@ def validate_workspace(root: Path = RETELL_ROOT) -> list[str]:
         problems.append(f"Unexpected public files: {', '.join(extra_files)}")
 
     problems.extend(_validate_readme(root))
+    problems.extend(
+        _validate_exact_document(
+            root,
+            root.joinpath(*PurePosixPath(NONURGENT_CONTRACT_RELATIVE_PATH).parts),
+            NONURGENT_CLASSIFICATION_CONTRACT,
+        )
+    )
     for slug, (local_key, display_name) in EXPECTED_AGENTS.items():
         manifest_path = root / "agents" / slug / "manifest.json"
         problems.extend(
