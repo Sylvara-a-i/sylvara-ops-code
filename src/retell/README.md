@@ -20,7 +20,7 @@ For every future Retell update:
 5. Report the exact private before-and-after proposal and obtain explicit approval before invoking a Retell write.
 6. Modify a draft only. Publishing, deploying, binding a phone number, placing a call, changing routing, running a Retell simulation, or deleting a resource requires separate explicit approval.
 
-Complete raw responses, connector labels, runtime-derived variable names, prompts, routing conditions and destinations, security-control structure, runtime defaults, production identifiers, private endpoints, precise platform timestamps, calls, transcripts, and secrets never enter Git.
+Complete raw responses, connector labels, runtime-derived variable names, prompts, routing conditions and destinations, security-control structure, runtime defaults, production identifiers, private endpoints, precise platform timestamps, calls, transcripts, and secrets never enter Git. Public acceptance artifacts use independent provider-neutral aliases and never publish their private runtime mapping.
 
 The approved provider-neutral coverage-mode enum, exact CRM-label mapping, and per-call trigger compatibility rules live in the Catalyst-owned [`coverage-mode-contract.json`](../zoho-catalyst/retell-inbound-resolver/contracts/coverage-mode-contract.json). This public contract does not expose a live deployment mapping, runtime value, or private resolver configuration.
 
@@ -33,6 +33,22 @@ This is historical observation only. Assignment references are not treated as pu
 ## Provider-Neutral Acceptance Contract
 
 The `7-Day Free Test` subtree includes a public acceptance contract for urgency, callback, and bounded nonurgent classification. It records synthetic state semantics and deterministic precedence only. It is not runtime mapping, a Retell prompt or flow export, Manual Chat evidence, deployable configuration, or proof that the runtime passed those checks.
+
+The zero-network shadow-QA harness extends that contract with fail-closed identifier validation, structural checks, deterministic state oracles, fixed synthetic adversarial fixtures, metamorphic checks, mutation testing, and sanitized differential selection. It distinguishes the required `call_ended` and `call_analyzed` provider telemetry class from prohibited customer-facing actions; the private Catalyst destination and delivery health are not asserted by this public contract. It never interprets caller language or emulates Retell. Generated reports belong only in an ignored local output directory.
+
+```powershell
+python src\retell\tools\run_shadow_qa.py run `
+  --private-agent "<ignored-private-agent-snapshot>" `
+  --private-agent-baseline "<ignored-private-prechange-agent-snapshot>" `
+  --private-flow "<ignored-private-flow-snapshot>" `
+  --private-flow-baseline "<ignored-private-prechange-flow-snapshot>" `
+  --private-identifier-contract "<ignored-private-identifier-contract>" `
+  --baseline "<ignored-sanitized-prechange-shadow-contract>" `
+  --candidate src\retell\agents\7-day-free-test\contracts\shadow-qa-contract.json `
+  --output .codex-tmp\retell-shadow-qa\latest
+```
+
+The private snapshot arguments must be under the approved ignored audit directory and are never written to reports. Output is restricted to the worktree's ignored `.codex-tmp` directory. The candidate—not merely the baseline—is executed by every public deterministic layer, and the prechange agent snapshot supplies a complete private post-call-structure comparison. Caller-text coverage is heuristic; actual extraction, prompt selection, speech behavior, interruption handling, and post-call generation still require separately approved Retell-native validation.
 
 ## Local Validation
 

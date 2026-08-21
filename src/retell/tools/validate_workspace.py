@@ -39,6 +39,11 @@ RESOLVED_PUBLISHED_FILES = set(DRAFT_ARTIFACTS)
 NONURGENT_CONTRACT_RELATIVE_PATH = (
     "agents/7-day-free-test/contracts/nonurgent-classification-contract.json"
 )
+SHADOW_QA_PUBLIC_FILES = {
+    "agents/7-day-free-test/contracts/shadow-qa-contract.json",
+    "agents/7-day-free-test/tests/fixtures/shadow-qa-corpus.json",
+    "tools/run_shadow_qa.py",
+}
 NONURGENT_CLASSIFICATION_CONTRACT = {
     "schema_version": 1,
     "classification": "public-provider-neutral-acceptance-contract",
@@ -705,6 +710,7 @@ def _expected_file_inventory(
         "README.md",
         "tools/validate_workspace.py",
         NONURGENT_CONTRACT_RELATIVE_PATH,
+        *SHADOW_QA_PUBLIC_FILES,
     }
     expected.update(f"agents/{slug}/manifest.json" for slug in EXPECTED_AGENTS)
     for snapshot_id in snapshot_ids:
@@ -939,6 +945,13 @@ def validate_workspace(root: Path = RETELL_ROOT) -> list[str]:
             NONURGENT_CLASSIFICATION_CONTRACT,
         )
     )
+    for relative in sorted(SHADOW_QA_PUBLIC_FILES - {"tools/run_shadow_qa.py"}):
+        document, document_problems = _load_json(
+            root, root.joinpath(*PurePosixPath(relative).parts)
+        )
+        problems.extend(document_problems)
+        if document is not None:
+            problems.extend(find_public_data_problems(document, f"$/{relative}"))
     for slug, (local_key, display_name) in EXPECTED_AGENTS.items():
         manifest_path = root / "agents" / slug / "manifest.json"
         problems.extend(
