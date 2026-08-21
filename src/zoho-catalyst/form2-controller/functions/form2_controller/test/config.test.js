@@ -2,6 +2,7 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
+const { brotliCompressSync } = require("node:zlib");
 const {
   ConfigurationError,
   NUMERIC_LIMITS,
@@ -14,6 +15,11 @@ function providerChoices(count) {
     { length: count },
     (_, index) => `Synthetic Provider ${String(index + 1).padStart(3, "0")}`,
   );
+}
+
+function compressedChoices(choices) {
+  return `br:${brotliCompressSync(Buffer.from(JSON.stringify(choices), "utf8"))
+    .toString("base64url")}`;
 }
 
 function baseEnvironment(overrides = {}) {
@@ -87,7 +93,7 @@ test("loads an immutable Development-only configuration with bounded defaults", 
 test("accepts the 207-provider catalog and rejects growth above the reviewed bound", () => {
   const providers = providerChoices(207);
   const config = load(baseEnvironment({
-    FORM2_PHONE_SYSTEM_PROVIDERS: JSON.stringify(providers),
+    FORM2_PHONE_SYSTEM_PROVIDERS: compressedChoices(providers),
   }));
   assert.deepEqual(config.form2PhoneSystemProviders, providers);
   assert.equal(PRIVATE_CHOICE_LIMITS.phoneSystemProviders, 256);
@@ -105,6 +111,33 @@ test("accepts the 207-provider catalog and rejects growth above the reviewed bou
       FORM2_FIELD_TEAM_SIZE_BANDS: JSON.stringify(
         Array.from({ length: 21 }, (_, index) => `Synthetic Band ${index + 1}`),
       ),
+    })),
+    ConfigurationError,
+  );
+});
+
+test("bounds and validates compressed private-choice configuration", () => {
+  for (const value of [
+    "br:",
+    "br:not+base64url",
+    `br:${"A".repeat(4097)}`,
+    `br:${Buffer.from("not-brotli", "utf8").toString("base64url")}`,
+    `${compressedChoices(["Synthetic PBX"])}=`,
+    compressedChoices("not-an-array"),
+    `br:${brotliCompressSync(Buffer.alloc(32769, 0x41)).toString("base64url")}`,
+    `br:${brotliCompressSync(Buffer.from([0xff])).toString("base64url")}`,
+    compressedChoices(["Duplicate", "Duplicate"]),
+    compressedChoices(providerChoices(PRIVATE_CHOICE_LIMITS.phoneSystemProviders + 1)),
+    compressedChoices(["P".repeat(121)]),
+  ]) {
+    assert.throws(
+      () => load(baseEnvironment({ FORM2_PHONE_SYSTEM_PROVIDERS: value })),
+      ConfigurationError,
+    );
+  }
+  assert.throws(
+    () => load(baseEnvironment({
+      FORM2_FIELD_TEAM_SIZE_BANDS: compressedChoices(["Synthetic Approved Band"]),
     })),
     ConfigurationError,
   );

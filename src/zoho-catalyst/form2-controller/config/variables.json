@@ -3,6 +3,7 @@
   "status": "proposed-development-only",
   "rules": {
     "values": "Any real secret, endpoint, route, table, alias, Connection, picklist, and deployment values must exist only in Catalyst Development configuration.",
+    "compressed_private_choices": "FORM2_PHONE_SYSTEM_PROVIDERS may use br:<canonical-unpadded-base64url> containing bounded Brotli-compressed UTF-8 JSON when the literal JSON would exceed Catalyst's environment-map limit. This reversible private encoding is not encryption.",
     "logging": "No configuration value may be logged except SOURCE_REVISION.",
     "production": "This source revision rejects every Production configuration."
   },
