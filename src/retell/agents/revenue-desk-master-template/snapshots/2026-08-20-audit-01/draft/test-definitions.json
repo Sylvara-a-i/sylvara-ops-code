@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "classification": "public-synthetic-test-contract",
+  "runtime_authority": false,
+  "source_system": "retell",
+  "snapshot_id": "2026-08-20-audit-01",
+  "observed_on": "2026-08-20",
+  "agent": {
+    "local_key": "agent_revenue_desk_master_template",
+    "display_name": "Revenue Desk — Master Template"
+  },
+  "lifecycle_slot": "draft",
+  "runtime_test_inventory_in_git": false,
+  "retell_test_runs_performed": 0,
+  "public_definition_count": 1,
+  "definitions": [
+    {
+      "local_key": "repository_boundary_validation",
+      "kind": "offline-repository-contract",
+      "fixture_class": "synthetic",
+      "expected_outcome": "public-boundary-valid",
+      "external_call": false
+    }
+  ],
+  "interpretation": "This is an offline repository-boundary test only; Retell test inventory and results remain private."
+}

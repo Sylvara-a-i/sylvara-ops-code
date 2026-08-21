@@ -155,6 +155,21 @@ resolver_status
 
 Proposed dynamic variables are limited to the client context actually required by the monitor, such as an approved company label, time zone, test mode, and disclosure text. Secrets, credentials, internal URLs, raw phone-system configuration, and unnecessary client data never belong in metadata or dynamic variables.
 
+### Canonical Coverage-Mode Contract
+
+The machine-readable authority is [`coverage-mode-contract.json`](../../src/zoho-catalyst/retell-inbound-resolver/contracts/coverage-mode-contract.json). Resolver and deployment-configuration code must derive its accepted values and mappings from that file rather than maintaining another string table.
+
+| Approved display label | Canonical `coverage_mode` |
+| --- | --- |
+| `After Hours Only` | `AfterHoursOnly` |
+| `No Answer/Overflow Only` | `NoAnswerOverflowOnly` |
+| `No Answer / Overflow Only` | `NoAnswerOverflowOnly` |
+| `After Hours + Overflow` | `AfterHoursAndOverflow` |
+
+`CoverageTrigger` is a separate per-call fact. Its only accepted values are `AfterHours` and `NoAnswerOverflow`. `AfterHoursOnly` permits only `AfterHours`; `NoAnswerOverflowOnly` permits only `NoAnswerOverflow`; and `AfterHoursAndOverflow` permits either trigger. A missing or unknown trigger fails closed whenever trigger validation is required. Trigger values must never be used as `coverage_mode` values or injected into the voice agent unless a separately approved pre-call contract requires that field.
+
+Unknown, blank, whitespace-only, wrong-case, partial, malformed, or unsupported values fail closed. CRM picklist labels remain unchanged; the resolver normalizes only the exact approved labels above to the canonical machine value.
+
 ## Resolver Failure And Fallback
 
 Each client number may keep the shared monitor as its default inbound agent so Retell can fall back when the inbound resolver times out or fails.

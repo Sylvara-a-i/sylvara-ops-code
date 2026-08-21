@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "classification": "public-sanitized-flow-summary",
+  "runtime_authority": false,
+  "source_system": "retell",
+  "snapshot_id": "2026-08-20-audit-01",
+  "observed_on": "2026-08-20",
+  "agent": {
+    "local_key": "agent_revenue_desk_master_template",
+    "display_name": "Revenue Desk — Master Template"
+  },
+  "lifecycle_slot": "draft",
+  "flow_summary": {
+    "response_engine_class": "conversation-flow",
+    "resource_boundary": "agent-specific",
+    "public_detail_level": "resource-class-only",
+    "topology_in_git": false,
+    "runtime_text_in_git": false,
+    "runtime_decisions_in_git": false
+  },
+  "private_evidence_scope": [
+    "complete flow version",
+    "runtime text",
+    "decision topology",
+    "referenced runtime resources"
+  ],
+  "interpretation": "The agent has a separate private flow resource; this summary contains no deployable flow content."
+}

@@ -1,0 +1,216 @@
+{
+  "schema_version": 1,
+  "classification": "public-provider-neutral-shadow-qa-contract",
+  "runtime_authority": false,
+  "deployment_authorized": false,
+  "one_to_one_runtime_mapping": false,
+  "agent": {
+    "local_key": "agent_7_day_free_test",
+    "display_name": "7-Day Free Test"
+  },
+  "gate_contract": {
+    "canonical_modes_owned_by_coverage_contract": true,
+    "noncanonical_modes_fail_closed": true,
+    "required_nonblank_references": [
+      "client_reference",
+      "deployment_reference",
+      "configuration_reference"
+    ],
+    "identifier_value_contract": {
+      "required_type": "string",
+      "trimmed_required": true,
+      "trimmed_nonempty_required": true,
+      "safe_default": "",
+      "never_spoken": true,
+      "configured_client_matching": "approved_private_exact_tuple"
+    },
+    "required_exact_values": {
+      "resolver_state": "Resolved",
+      "engagement_type": "free_test",
+      "capability_profile": "call_gap_monitor_v1"
+    },
+    "failure_terminal": "terminal.configuration_unavailable",
+    "failure_reaches_disclosure": false,
+    "failure_reaches_caller_data_collection": false,
+    "failure_uses_client_configuration": false,
+    "failure_primary_outcome": "configuration_not_ready",
+    "failure_review_required": true
+  },
+  "state_sets": {
+    "urgency": [
+      "approved_urgent",
+      "nonurgent",
+      "unknown"
+    ],
+    "urgent_callback": [
+      "confirmed_usable",
+      "explicitly_unavailable",
+      "unknown"
+    ],
+    "nonurgent_callback": [
+      "confirmed_usable",
+      "explicitly_unavailable",
+      "unknown"
+    ],
+    "area": [
+      "in_area",
+      "out_of_area",
+      "unknown"
+    ],
+    "service_property": [
+      "supported",
+      "unsupported",
+      "unknown"
+    ],
+    "routine": [
+      "verified_complete",
+      "incomplete_or_ambiguous"
+    ]
+  },
+  "rules": {
+    "generic_no_callback_before_urgency": false,
+    "urgent_callback": {
+      "confirmed_usable": "terminal.urgent_callback",
+      "explicitly_unavailable": "terminal.urgent_no_callback",
+      "unknown": "terminal.urgent_no_callback"
+    },
+    "nonurgent_callback": {
+      "confirmed_usable": "continue.area",
+      "explicitly_unavailable": "terminal.no_callback",
+      "unknown": "terminal.no_callback"
+    },
+    "area": {
+      "in_area": "continue.service_property",
+      "out_of_area": "terminal.out_of_area",
+      "unknown": "terminal.needs_review"
+    },
+    "service_property": {
+      "supported": "continue.routine",
+      "unsupported": "terminal.unsupported_service_or_property",
+      "unknown": "terminal.needs_review"
+    },
+    "routine": {
+      "verified_complete": "terminal.standard",
+      "incomplete_or_ambiguous": "terminal.needs_review"
+    },
+    "goodbye_preserves_terminal": true
+  },
+  "precedence": [
+    "configuration",
+    "safety",
+    "consent_or_sensitive_termination",
+    "existing_customer_exception",
+    "urgency",
+    "urgent_callback",
+    "nonurgent_callback",
+    "area",
+    "service_property",
+    "routine",
+    "needs_review"
+  ],
+  "abstract_graph": {
+    "nodes": [
+      {"key": "gate_configuration", "kind": "split"},
+      {"key": "check_safety", "kind": "split"},
+      {"key": "check_consent", "kind": "split"},
+      {"key": "check_exception", "kind": "split"},
+      {"key": "classify_urgency", "kind": "split"},
+      {"key": "classify_urgent_callback", "kind": "split"},
+      {"key": "classify_nonurgent_callback", "kind": "split"},
+      {"key": "classify_area", "kind": "split"},
+      {"key": "classify_service_property", "kind": "split"},
+      {"key": "classify_routine", "kind": "split"},
+      {"key": "terminal.configuration_unavailable", "kind": "end"},
+      {"key": "terminal.safety", "kind": "end"},
+      {"key": "terminal.consent_withdrawal", "kind": "end"},
+      {"key": "terminal.sensitive_data", "kind": "end"},
+      {"key": "terminal.existing_customer_message", "kind": "end"},
+      {"key": "terminal.urgent_callback", "kind": "end"},
+      {"key": "terminal.urgent_no_callback", "kind": "end"},
+      {"key": "terminal.no_callback", "kind": "end"},
+      {"key": "terminal.out_of_area", "kind": "end"},
+      {"key": "terminal.unsupported_service_or_property", "kind": "end"},
+      {"key": "terminal.standard", "kind": "end"},
+      {"key": "terminal.needs_review", "kind": "end"}
+    ],
+    "edges": [
+      {"key": "configuration_valid", "from_state": "gate_configuration", "to_state": "check_safety", "when": "valid"},
+      {"key": "configuration_else", "from_state": "gate_configuration", "to_state": "terminal.configuration_unavailable", "when": "else"},
+      {"key": "safety_immediate", "from_state": "check_safety", "to_state": "terminal.safety", "when": "immediate_hazard"},
+      {"key": "safety_else", "from_state": "check_safety", "to_state": "check_consent", "when": "else"},
+      {"key": "consent_withdrawn", "from_state": "check_consent", "to_state": "terminal.consent_withdrawal", "when": "withdrawn"},
+      {"key": "sensitive_termination", "from_state": "check_consent", "to_state": "terminal.sensitive_data", "when": "sensitive_termination_required"},
+      {"key": "consent_else", "from_state": "check_consent", "to_state": "check_exception", "when": "else"},
+      {"key": "exception_existing", "from_state": "check_exception", "to_state": "terminal.existing_customer_message", "when": "existing_customer"},
+      {"key": "exception_else", "from_state": "check_exception", "to_state": "classify_urgency", "when": "else"},
+      {"key": "urgency_approved", "from_state": "classify_urgency", "to_state": "classify_urgent_callback", "when": "approved_urgent"},
+      {"key": "urgency_nonurgent", "from_state": "classify_urgency", "to_state": "classify_nonurgent_callback", "when": "nonurgent"},
+      {"key": "urgency_else", "from_state": "classify_urgency", "to_state": "terminal.needs_review", "when": "else"},
+      {"key": "urgent_callback_confirmed", "from_state": "classify_urgent_callback", "to_state": "terminal.urgent_callback", "when": "confirmed_usable"},
+      {"key": "urgent_callback_else", "from_state": "classify_urgent_callback", "to_state": "terminal.urgent_no_callback", "when": "else"},
+      {"key": "nonurgent_callback_confirmed", "from_state": "classify_nonurgent_callback", "to_state": "classify_area", "when": "confirmed_usable"},
+      {"key": "nonurgent_callback_else", "from_state": "classify_nonurgent_callback", "to_state": "terminal.no_callback", "when": "else"},
+      {"key": "area_out", "from_state": "classify_area", "to_state": "terminal.out_of_area", "when": "out_of_area"},
+      {"key": "area_in", "from_state": "classify_area", "to_state": "classify_service_property", "when": "in_area"},
+      {"key": "area_else", "from_state": "classify_area", "to_state": "terminal.needs_review", "when": "else"},
+      {"key": "service_unsupported", "from_state": "classify_service_property", "to_state": "terminal.unsupported_service_or_property", "when": "unsupported"},
+      {"key": "service_supported", "from_state": "classify_service_property", "to_state": "classify_routine", "when": "supported"},
+      {"key": "service_else", "from_state": "classify_service_property", "to_state": "terminal.needs_review", "when": "else"},
+      {"key": "routine_complete", "from_state": "classify_routine", "to_state": "terminal.standard", "when": "verified_complete"},
+      {"key": "routine_else", "from_state": "classify_routine", "to_state": "terminal.needs_review", "when": "else"}
+    ]
+  },
+  "variable_references": {
+    "configuration": ["coverage_mode", "resolver_state", "client_reference", "deployment_reference", "configuration_reference", "engagement_type", "capability_profile"],
+    "urgency": ["urgency"],
+    "urgent_callback": ["urgent_callback"],
+    "nonurgent_callback": ["nonurgent_callback"],
+    "area": ["area"],
+    "service_property": ["service_property"],
+    "routine": ["routine"]
+  },
+  "post_call_definitions": [
+    {"key": "transfer_attempted", "type": "boolean", "required_value": false},
+    {"key": "transfer_result", "type": "enum", "required_value": "not_enabled"},
+    {"key": "appointment_booked", "type": "boolean", "required_value": false},
+    {"key": "human_escalation", "type": "boolean", "required_value": false}
+  ],
+  "post_call_definition_count_policy": "preserve_private_baseline",
+  "capability_boundary": {
+    "transfer": false,
+    "tools": false,
+    "functions": false,
+    "mcp": false,
+    "booking": false,
+    "booking_modification": false,
+    "dispatch": false,
+    "pricing": false,
+    "sms": false,
+    "email": false,
+    "outbound_callback": false,
+    "customer_notification": false,
+    "crm_write": false,
+    "calendar_write": false,
+    "field_service_write": false,
+    "catalyst_write": false,
+    "analytics_write": false,
+    "other_external_write": false
+  },
+  "telemetry_boundary": {
+    "required_provider_events": [
+      "call_ended",
+      "call_analyzed"
+    ],
+    "approved_ingestion_class": "approved_catalyst_ingestion_only",
+    "signed_call_access_authorized": false,
+    "customer_facing_delivery_authorized": false,
+    "customer_or_operational_action_authorized": false,
+    "forbidden_primary_outcomes": [
+      "qualified_urgent_transfer_completed",
+      "qualified_urgent_transfer_failed",
+      "existing_customer_transfer_completed",
+      "existing_customer_transfer_failed"
+    ]
+  },
+  "interpretation": "Provider-neutral acceptance semantics for zero-cost local QA; not runtime topology, extraction proof, spoken-behavior proof, or deployment authorization."
+}
