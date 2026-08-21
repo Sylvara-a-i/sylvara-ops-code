@@ -30,6 +30,10 @@ The 2026-08-20 read-only audit resolved one current draft for each managed agent
 
 This is historical observation only. Assignment references are not treated as publication, deployment, phone binding, or production-routing proof. Runtime-derived names, counts, topology, voice details, connector labels, and control settings remain in the ignored private audit store only.
 
+## Provider-Neutral Acceptance Contract
+
+The `7-Day Free Test` subtree includes a public acceptance contract for urgency, callback, and bounded nonurgent classification. It records synthetic state semantics and deterministic precedence only. It is not runtime mapping, a Retell prompt or flow export, Manual Chat evidence, deployable configuration, or proof that the runtime passed those checks.
+
 ## Local Validation
 
 ```powershell
