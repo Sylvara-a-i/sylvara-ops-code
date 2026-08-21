@@ -119,6 +119,21 @@ jobs:
       - name: Run Billing gateway checks and tests
         run: npm run ci --prefix src/zoho-catalyst/billing-webhook-gateway
 
+      - name: Install exact Form 2 controller dependencies without lifecycle scripts
+        run: >-
+          npm ci --ignore-scripts --no-audit --no-fund
+          --prefix src/zoho-catalyst/form2-controller/functions/form2_controller
+
+      - name: Audit production Form 2 controller dependencies
+        run: >-
+          npm audit --omit=dev --audit-level=high
+          --prefix src/zoho-catalyst/form2-controller/functions/form2_controller
+
+      - name: Run Form 2 controller checks and tests
+        run: >-
+          npm run ci
+          --prefix src/zoho-catalyst/form2-controller/functions/form2_controller
+
       - name: Run the canonical verifier on Linux
         shell: pwsh
         env:
