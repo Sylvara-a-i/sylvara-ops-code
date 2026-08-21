@@ -27,6 +27,9 @@ function Join-PathSegments {
 
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $GatewayRoot = Join-PathSegments $RepoRoot @("src", "zoho-catalyst", "billing-webhook-gateway")
+$Form2ControllerRoot = Join-PathSegments $RepoRoot @(
+    "src", "zoho-catalyst", "form2-controller", "functions", "form2_controller"
+)
 $RequirementsPath = Join-PathSegments $RepoRoot @("tools", "safety", "requirements.txt")
 $VenvParent = Join-PathSegments $RepoRoot @(".codex-tmp")
 $VenvRoot = Join-PathSegments $VenvParent @("safety-venv")
@@ -389,6 +392,11 @@ try {
                     "ci", "--ignore-scripts", "--no-audit", "--no-fund",
                     "--prefix", $GatewayRoot
                 )
+            Invoke-Native -Label "Install exact Form 2 controller dependencies" `
+                -Executable $npm -Arguments @(
+                    "ci", "--ignore-scripts", "--no-audit", "--no-fund",
+                    "--prefix", $Form2ControllerRoot
+                )
         } else {
             $env:npm_config_offline = "true"
             $env:npm_config_update_notifier = "false"
@@ -401,6 +409,12 @@ try {
         )
         if (-not (Test-Path -LiteralPath $gatewayDependency -PathType Leaf)) {
             throw "Gateway dependencies are missing. Run .\tools\verify.cmd -Bootstrap once before offline Quick verification."
+        }
+        $form2ControllerDependency = Join-PathSegments $Form2ControllerRoot @(
+            "node_modules", "zcatalyst-sdk-node", "package.json"
+        )
+        if (-not (Test-Path -LiteralPath $form2ControllerDependency -PathType Leaf)) {
+            throw "Form 2 controller dependencies are missing. Run .\tools\verify.cmd -Bootstrap once before offline Quick verification."
         }
 
         Invoke-Native -Label "Public repository safety scan" -Executable $python `
@@ -419,9 +433,16 @@ try {
                     "audit", "--omit=dev", "--audit-level=high",
                     "--prefix", $GatewayRoot
                 )
+            Invoke-Native -Label "Form 2 production dependency audit" -Executable $npm `
+                -Arguments @(
+                    "audit", "--omit=dev", "--audit-level=high",
+                    "--prefix", $Form2ControllerRoot
+                )
         }
         Invoke-Native -Label "Billing gateway checks and tests" -Executable $npm `
             -Arguments @("run", "ci", "--prefix", $GatewayRoot)
+        Invoke-Native -Label "Form 2 controller checks and tests" -Executable $npm `
+            -Arguments @("run", "ci", "--prefix", $Form2ControllerRoot)
 
         Write-Host "Verification passed ($Mode mode)."
     } finally {
