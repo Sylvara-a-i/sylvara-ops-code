@@ -121,6 +121,18 @@ const UPDATE_FIELDS = Object.freeze({
   ]),
 });
 
+const CRM_DATETIME_FIELDS = Object.freeze({
+  Contacts: new Set(),
+  Accounts: new Set(),
+  Deals: new Set([
+    "Authority_Confirmed_At",
+    "Test_Scope_Accepted_At",
+    "Setup_Form_Submitted_At",
+    "Setup_Access_Issued_At",
+    "Setup_Access_Verified_At",
+  ]),
+});
+
 const PRESERVED_DEAL_FIELDS = Object.freeze([
   "Current_Call_Handling",
   "Requested_Test_Route",
@@ -268,6 +280,27 @@ function validateUpdate(module, update) {
     }
   }
   return update;
+}
+
+function serializeUpdate(module, update) {
+  validateUpdate(module, update);
+  return Object.fromEntries(Object.entries(update).map(([field, value]) => {
+    if (!CRM_DATETIME_FIELDS[module].has(field) || value === null) {
+      return [field, value];
+    }
+    if (
+      typeof value !== "string" ||
+      !/(?:Z|[+-]\d{2}:\d{2})$/.test(value) ||
+      !Number.isFinite(Date.parse(value))
+    ) {
+      fail("CRM DateTime update is invalid", { publicCode: "configuration_invalid" });
+    }
+    // Zoho CRM documents DateTime writes as second precision with a numeric
+    // UTC offset (yyyy-MM-ddTHH:mm:ss+00:00), not JavaScript's millisecond-Z
+    // representation. Keep millisecond precision in controller state, but
+    // normalize only the outbound CRM payload.
+    return [field, new Date(value).toISOString().replace(/\.\d{3}Z$/, "+00:00")];
+  }));
 }
 
 function recordUrl(boundary, module, recordId) {
@@ -490,7 +523,7 @@ function createCrmClient(
   }
 
   async function updateRecord(module, recordId, update, { ifUnmodifiedSince } = {}) {
-    validateUpdate(module, update);
+    const serializedUpdate = serializeUpdate(module, update);
     validateModifiedTime(ifUnmodifiedSince);
     const response = await authorizedRequest(
       updateUrl(boundary, module, recordId),
@@ -502,7 +535,7 @@ function createCrmClient(
           "If-Unmodified-Since": ifUnmodifiedSince,
         },
         body: JSON.stringify({
-          data: [{ id: recordId, ...update }],
+          data: [{ id: recordId, ...serializedUpdate }],
           trigger: ["workflow"],
         }),
       },
@@ -515,7 +548,7 @@ function createCrmClient(
     }
     parseUpdateAcknowledgment(response.json, recordId);
     const readback = await getRecord(module, recordId);
-    verifyFields(readback, update);
+    verifyFields(readback, serializedUpdate);
     return readback;
   }
 
@@ -537,21 +570,21 @@ function createCrmClient(
         module: "Contacts",
         recordId: existing.contact.id,
         modifiedTime: existing.contact.Modified_Time,
-        update: validateUpdate("Contacts", updates.contactUpdate),
+        update: serializeUpdate("Contacts", updates.contactUpdate),
       },
       {
         requestId: "account_update",
         module: "Accounts",
         recordId: existing.account.id,
         modifiedTime: existing.account.Modified_Time,
-        update: validateUpdate("Accounts", updates.accountUpdate),
+        update: serializeUpdate("Accounts", updates.accountUpdate),
       },
       {
         requestId: "deal_update",
         module: "Deals",
         recordId: existing.deal.id,
         modifiedTime: existing.deal.Modified_Time,
-        update: validateUpdate("Deals", updates.dealUpdate),
+        update: serializeUpdate("Deals", updates.dealUpdate),
       },
     ];
     for (const target of targets) validateModifiedTime(target.modifiedTime);

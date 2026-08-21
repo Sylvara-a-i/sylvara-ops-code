@@ -264,6 +264,16 @@ test("uses one ordered rollback composite and verifies all three records by inde
     body.__composite_requests.map((entry) => entry.body.trigger),
     [["workflow"], ["workflow"], ["workflow"]],
   );
+  assert.deepEqual(
+    body.__composite_requests[2].body.data[0],
+    {
+      id: IDS.deal,
+      ...updates().dealUpdate,
+      Authority_Confirmed_At: "2026-08-14T18:00:00+00:00",
+      Test_Scope_Accepted_At: "2026-08-14T18:00:00+00:00",
+      Setup_Form_Submitted_At: "2026-08-14T18:00:00+00:00",
+    },
+  );
   assert.equal(JSON.stringify(body).includes("casey@example.invalid"), false);
 });
 
@@ -454,6 +464,44 @@ test("single-record update requires a precondition and authoritative readback", 
     { ifUnmodifiedSince: OLD_TIME },
   );
   assert.equal(result.First_Name, "Changed");
+});
+
+test("single-record update serializes CRM DateTime fields to the documented wire format", async () => {
+  let call = 0;
+  let updateBody;
+  const readback = {
+    ...existingRecords().deal,
+    Setup_Access_Status: "Issued",
+    Setup_Access_Issued_At: "2026-08-14T13:00:00-05:00",
+    Setup_Access_Verified_At: null,
+    Modified_Time: NEW_TIME,
+  };
+  const client = clientWithFetch(async (_url, options) => {
+    call += 1;
+    if (call === 1) {
+      updateBody = JSON.parse(options.body);
+      return jsonResponse(acknowledgment(IDS.deal));
+    }
+    return jsonResponse({ data: [readback] });
+  });
+
+  await client.updateRecord(
+    "Deals",
+    IDS.deal,
+    {
+      Setup_Access_Status: "Issued",
+      Setup_Access_Issued_At: "2026-08-14T18:00:00.987Z",
+      Setup_Access_Verified_At: null,
+    },
+    { ifUnmodifiedSince: OLD_TIME },
+  );
+
+  assert.deepEqual(updateBody.data[0], {
+    id: IDS.deal,
+    Setup_Access_Status: "Issued",
+    Setup_Access_Issued_At: "2026-08-14T18:00:00+00:00",
+    Setup_Access_Verified_At: null,
+  });
 });
 
 test("stale writes are rejected without being classified as ambiguous", async () => {
