@@ -4,6 +4,7 @@ import copy
 import importlib.util
 import itertools
 import json
+import sys
 import unittest
 from pathlib import Path
 
@@ -18,6 +19,10 @@ CONTRACT_PATH = (
     / "contracts"
     / "nonurgent-classification-contract.json"
 )
+SHADOW_HARNESS_PATH = RETELL_ROOT / "tools" / "run_shadow_qa.py"
+SHADOW_CONTRACT_PATH = CONTRACT_PATH.with_name("shadow-qa-contract.json")
+SHADOW_CORPUS_PATH = RETELL_ROOT / "agents" / "7-day-free-test" / "tests" / "fixtures" / "shadow-qa-corpus.json"
+COVERAGE_PATH = REPOSITORY_ROOT / "src" / "zoho-catalyst" / "retell-inbound-resolver" / "contracts" / "coverage-mode-contract.json"
 
 
 def _load_validator():
@@ -31,6 +36,18 @@ def _load_validator():
     return module
 
 
+def _load_shadow_harness():
+    sys.path.insert(0, str(SHADOW_HARNESS_PATH.parent))
+    try:
+        spec = importlib.util.spec_from_file_location("retell_shadow_qa", SHADOW_HARNESS_PATH)
+        if spec is None or spec.loader is None: raise RuntimeError("Could not load the Retell shadow-QA harness")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    finally:
+        sys.path.pop(0)
+
+
 def _resolve(contract: dict[str, object], facts: dict[str, str]) -> str:
     for rule in contract["nonurgent_precedence"]:
         if all(facts[key] in allowed for key, allowed in rule["match"].items()):
@@ -42,6 +59,7 @@ class RetellNonurgentClassificationContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.validator = _load_validator()
+        cls.shadow = _load_shadow_harness()
         cls.contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
 
     def test_contract_matches_exact_public_schema(self) -> None:
@@ -171,6 +189,83 @@ class RetellNonurgentClassificationContractTests(unittest.TestCase):
     def test_public_contract_does_not_reference_the_other_managed_agent(self) -> None:
         serialized = json.dumps(self.contract, sort_keys=True)
         self.assertNotIn("Revenue Desk — Master Template", serialized)
+
+    def test_shadow_qa_public_layers_pass_without_private_runtime_data(self) -> None:
+        shadow_contract = json.loads(SHADOW_CONTRACT_PATH.read_text(encoding="utf-8"))
+        coverage = json.loads(COVERAGE_PATH.read_text(encoding="utf-8"))
+        corpus = json.loads(SHADOW_CORPUS_PATH.read_text(encoding="utf-8"))
+        self.assertEqual(set(), self.shadow.contract_failures(shadow_contract, coverage, self.contract))
+        gate = self.shadow.gate_cases(shadow_contract, coverage)
+        self.assertEqual(70, len(gate))
+        self.assertTrue(all(row["pass"] for row in gate))
+        self.assertTrue(all(row["primary_outcome"] == "configuration_not_ready" and row["review_required"] and not row["identifiers_spoken"] for row in gate if not row["expected_valid"]))
+        business = self.shadow.business_state_report(shadow_contract, coverage)
+        self.assertEqual((3060, 3060, 0), (business["cases"], business["passed"], business["failed"]))
+        self.assertEqual(36, len(business["configuration_dispositions"]))
+        self.assertTrue(all(row["pass"] for row in business["configuration_dispositions"]))
+        self.assertEqual(104, self.shadow.metamorphic_report(shadow_contract, coverage)["passed"])
+        corpus_result = self.shadow.validate_corpus(corpus, shadow_contract)
+        self.assertEqual((220, 36, 256), (corpus_result["fixtures"], corpus_result["configuration_cases"], corpus_result["passed"]))
+        mutation = self.shadow.mutation_report(shadow_contract, coverage, self.contract, corpus)
+        self.assertEqual("15/15", mutation["variant_score"])
+        self.assertEqual("12/12", mutation["family_score"])
+        self.assertEqual(15, mutation["detected_variants"])
+        self.assertEqual(self.shadow.EXPECTED_TELEMETRY, shadow_contract["telemetry_boundary"])
+        self.assertEqual([], self.shadow.differential(shadow_contract, shadow_contract)["tests_affected"])
+
+    def test_shadow_oracle_fails_closed_and_is_independent(self) -> None:
+        shadow_contract = json.loads(SHADOW_CONTRACT_PATH.read_text(encoding="utf-8"))
+        for facts in (
+            {**self.shadow.base_facts(), "safety": "unknown"},
+            {**self.shadow.base_facts(), "consent": "unknown"},
+        ):
+            self.assertEqual("terminal.needs_review", self.shadow.resolve(facts, shadow_contract)[0])
+            self.assertEqual("terminal.needs_review", self.shadow.expected_terminal(facts))
+
+        mutant = copy.deepcopy(shadow_contract)
+        self.shadow.mutate_route(
+            mutant, "area", "out_of_area", "terminal.unsupported_service_or_property", "area_out"
+        )
+        coverage = json.loads(COVERAGE_PATH.read_text(encoding="utf-8"))
+        self.assertGreater(self.shadow.business_state_report(mutant, coverage)["failed"], 0)
+        self.assertEqual(set(), self.shadow.abstract_graph_failures(mutant))
+
+    def test_shadow_graph_and_differential_reject_unsafe_shapes(self) -> None:
+        baseline = json.loads(SHADOW_CONTRACT_PATH.read_text(encoding="utf-8"))
+        graph_only = copy.deepcopy(baseline)
+        next(edge for edge in graph_only["abstract_graph"]["edges"] if edge["key"] == "area_out")["to_state"] = "terminal.unsupported_service_or_property"
+        self.assertIn("graph.rules_match", self.shadow.abstract_graph_failures(graph_only))
+
+        changed = copy.deepcopy(baseline)
+        changed["state_sets"]["area"] = list(reversed(changed["state_sets"]["area"]))
+        report = self.shadow.differential(baseline, changed)
+        self.assertTrue(report["changed_enum_contracts"]["area"]["order_changed"])
+        self.assertEqual(self.shadow.FULL_TESTS - {"static_post_call", "static_capabilities"}, set(report["tests_affected"]))
+
+        unauthorized = copy.deepcopy(baseline)
+        unauthorized["runtime_authority"] = True
+        with self.assertRaises(ValueError):
+            self.shadow.differential(baseline, unauthorized)
+        malformed = copy.deepcopy(baseline)
+        malformed["gate_contract"] = None
+        self.assertFalse(self.shadow.contract_schema_valid(malformed))
+        with self.assertRaises(ValueError):
+            self.shadow.differential(baseline, malformed)
+        with self.assertRaises(ValueError):
+            self.shadow.unique_object([("authority", False), ("authority", True)])
+        for field, value in (
+            ("gate_contract", {**baseline["gate_contract"], "required_nonblank_references": []}),
+            ("variable_references", {**baseline["variable_references"], "area": []}),
+            ("post_call_definitions", []),
+        ):
+            unsafe = copy.deepcopy(baseline)
+            unsafe[field] = value
+            self.assertTrue(self.shadow.contract_failures(unsafe, json.loads(COVERAGE_PATH.read_text(encoding="utf-8")), self.contract))
+        typed = copy.deepcopy(baseline)
+        typed["abstract_graph"]["nodes"][0]["key"] = 7
+        self.assertFalse(self.shadow.contract_schema_valid(typed))
+        with self.assertRaises(ValueError):
+            self.shadow.require_within(REPOSITORY_ROOT / "tracked-output.json", self.shadow.OUTPUT_ROOT, "test output")
 
 
 if __name__ == "__main__":
