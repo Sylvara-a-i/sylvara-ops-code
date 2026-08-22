@@ -124,7 +124,7 @@ function paidPlanMap(environment, enabled) {
     throw new ConfigurationError("PAID_PLAN_CODE_MAP must be an object");
   }
   const entries = Object.entries(parsed);
-  if (entries.length > 20 || (enabled && entries.length < 1)) {
+  if (entries.length > 20 || (enabled && entries.length < 1) || (!enabled && entries.length !== 0)) {
     throw new ConfigurationError("PAID_PLAN_CODE_MAP has an invalid size");
   }
   const result = Object.create(null);
