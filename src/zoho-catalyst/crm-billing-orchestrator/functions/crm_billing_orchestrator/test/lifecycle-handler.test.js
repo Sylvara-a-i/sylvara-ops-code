@@ -164,6 +164,38 @@ test("paid subscription is impossible without explicit acceptance", async () => 
     dealId: "100000000000001",
   }), /Plan and Billing Frequency are outside/);
   assert.equal(wrongFrequency.calls.some(([kind]) => kind === "paid"), false);
+
+  for (const invalidDate of ["2026-02-31", "2026-08-20", "2027-08-23"]) {
+    const invalidStart = harness(config, context(config, {
+      Stage: config.subscriptionProposedStageValue,
+      Test_Status: config.testCompletedStatusValue,
+      Subscription_Acceptance_Status: config.paidAcceptanceValue,
+      Subscription_Start_Date: invalidDate,
+    }));
+    await assert.rejects(invalidStart.lifecycle.handle({
+      action: "prepare_paid_subscription",
+      dealId: "100000000000001",
+    }), /Subscription_Start_Date/);
+    assert.equal(invalidStart.calls.some(([kind]) => kind === "paid"), false);
+  }
+});
+
+test("paid subscription preparation is impossible while the Development gate is disabled", async () => {
+  const config = loadConfig(baseEnvironment({
+    ENABLE_PAID_SUBSCRIPTION_PREPARATION: "false",
+    PAID_PLAN_CODE_MAP: "{}",
+  }), { artifactRevision: REVISION });
+  const disabled = harness(config, context(config, {
+    Stage: config.subscriptionProposedStageValue,
+    Test_Status: config.testCompletedStatusValue,
+    Subscription_Acceptance_Status: config.paidAcceptanceValue,
+  }));
+  await assert.rejects(disabled.lifecycle.handle({
+    action: "prepare_paid_subscription",
+    dealId: "100000000000001",
+  }), /preparation is disabled/);
+  assert.equal(disabled.calls.some(([kind]) => kind === "paid"), false);
+  assert.equal(disabled.calls.some(([kind]) => kind === "crm_update"), false);
 });
 
 test("end_evaluation requires terminal CRM evidence before cancellation", async () => {
