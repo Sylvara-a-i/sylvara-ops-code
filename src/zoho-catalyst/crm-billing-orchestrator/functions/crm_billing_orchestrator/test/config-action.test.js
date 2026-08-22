@@ -11,6 +11,7 @@ test("configuration is immutable Development-only and rejects Production", () =>
   const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
   assert.equal(config.deploymentEnvironment, "development");
   assert.equal(config.freeTestDurationDays, 7);
+  assert.equal(config.setupQaStageValue, "Setup and QA");
   assert.equal(config.paidPlanCodeMap["Launch::Monthly"], "launch_plan");
   assert.throws(
     () => loadConfig(baseEnvironment({ DEPLOYMENT_ENVIRONMENT: "production" }), {

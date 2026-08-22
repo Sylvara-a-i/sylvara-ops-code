@@ -145,7 +145,7 @@ function createLifecycleHandler(config, { crmClient, billingClient, operationSto
     }
     if (action === "start_evaluation") {
       if (
-        state.deal.Stage !== config.testLiveStageValue ||
+        !new Set([config.setupQaStageValue, config.testLiveStageValue]).has(state.deal.Stage) ||
         state.deal.Go_Live_Approval_Status !== config.goLiveApprovedValue ||
         Number(state.deal.Test_Duration_Days) !== config.freeTestDurationDays ||
         Number(state.deal.Test_Call_Limit) !== config.freeTestCallLimit ||
@@ -176,7 +176,11 @@ function createLifecycleHandler(config, { crmClient, billingClient, operationSto
       return "evaluation_readback_confirmed";
     }
     if (action === "end_evaluation") {
-      if (!new Set([config.resultsReviewStageValue, config.closedLostStageValue]).has(state.deal.Stage)) {
+      if (!new Set([
+        config.testLiveStageValue,
+        config.resultsReviewStageValue,
+        config.closedLostStageValue,
+      ]).has(state.deal.Stage)) {
         fail("Deal is not approved to end an evaluation");
       }
       timestamp(state.deal.Test_End_At, "Test_End_At");

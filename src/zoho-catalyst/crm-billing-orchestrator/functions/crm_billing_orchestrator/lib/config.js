@@ -171,6 +171,7 @@ function loadConfig(environment = process.env, { artifactRevision = ARTIFACT_SOU
     paidAcceptanceValue: boundedText(environment, "PAID_ACCEPTANCE_VALUE"),
     freeTestEntryOfferValue: boundedText(environment, "FREE_TEST_ENTRY_OFFER_VALUE"),
     initialSaleTypeValue: boundedText(environment, "INITIAL_SALE_TYPE_VALUE"),
+    setupQaStageValue: boundedText(environment, "SETUP_QA_STAGE_VALUE"),
     testLiveStageValue: boundedText(environment, "TEST_LIVE_STAGE_VALUE"),
     resultsReviewStageValue: boundedText(environment, "RESULTS_REVIEW_STAGE_VALUE"),
     subscriptionProposedStageValue: boundedText(environment, "SUBSCRIPTION_PROPOSED_STAGE_VALUE"),

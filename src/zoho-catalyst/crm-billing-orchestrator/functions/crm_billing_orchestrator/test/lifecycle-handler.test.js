@@ -102,7 +102,9 @@ function harness(config, initialContext) {
 
 test("start_evaluation creates only after CRM gates and persists readback IDs", async () => {
   const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
-  const { lifecycle, calls } = harness(config, context(config));
+  const { lifecycle, calls } = harness(config, context(config, {
+    Stage: config.setupQaStageValue,
+  }));
   const result = await lifecycle.handle({
     action: "start_evaluation",
     dealId: "100000000000001",
@@ -166,7 +168,7 @@ test("paid subscription is impossible without explicit acceptance", async () => 
 test("end_evaluation requires terminal CRM evidence before cancellation", async () => {
   const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
   const approved = harness(config, context(config, {
-    Stage: config.resultsReviewStageValue,
+    Stage: config.testLiveStageValue,
     Test_End_At: "2026-08-28T10:00:00-05:00",
     Test_End_Reason: "Configured limit reached",
     Billing_Customer_ID: "200000000000001",
@@ -185,6 +187,31 @@ test("end_evaluation requires terminal CRM evidence before cancellation", async 
   assert.equal(terminalUpdate.Billing_Evaluation_Status, "Ended");
   assert.equal(terminalUpdate.Billing_Automation_Status, "Evaluation Verified");
   assert.equal(Object.hasOwn(terminalUpdate, "Subscription_Status"), false);
+});
+
+test("evaluation mutations fail closed outside their pre-transition stages", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const prematureStart = harness(config, context(config, {
+    Stage: "Test Authorized",
+  }));
+  await assert.rejects(prematureStart.lifecycle.handle({
+    action: "start_evaluation",
+    dealId: "100000000000001",
+  }), /not approved to start/);
+  assert.equal(prematureStart.calls.some(([kind]) => kind === "evaluation"), false);
+
+  const prematureEnd = harness(config, context(config, {
+    Stage: config.setupQaStageValue,
+    Test_End_At: "2026-08-28T10:00:00-05:00",
+    Test_End_Reason: "Configured limit reached",
+    Billing_Customer_ID: "200000000000001",
+    Billing_Evaluation_Subscription_ID: "300000000000001",
+  }));
+  await assert.rejects(prematureEnd.lifecycle.handle({
+    action: "end_evaluation",
+    dealId: "100000000000001",
+  }), /not approved to end/);
+  assert.equal(prematureEnd.calls.some(([kind]) => kind === "cancel"), false);
 });
 
 test("customer verification never occupies paid subscription fields", async () => {

@@ -9,8 +9,8 @@ This package mediates the approved CRM Deal lifecycle into bounded Zoho Billing 
 | Action | Required authoritative CRM state | Bounded outcome |
 | --- | --- | --- |
 | `ensure_customer` | Free-test Deal, Initial Sale, valid Account | Reconcile or import one CRM-linked Billing customer and read the ID back into the Deal |
-| `start_evaluation` | Test Live, go-live approved, configured duration/call limit, start timestamp | Reconcile or create one zero-exposure evaluation subscription in the dedicated evaluation fields |
-| `end_evaluation` | Results Review or Closed Lost, end timestamp/reason, evaluation subscription ID | Cancel the evaluation immediately and verify its terminal evaluation status |
+| `start_evaluation` | Setup and QA (or an idempotent replay after Test Live), go-live approved, configured duration/call limit, start timestamp | Reconcile or create one zero-exposure evaluation subscription in the dedicated evaluation fields before the Deal can move to Test Live |
+| `end_evaluation` | Test Live (or an idempotent replay after Results Review/Closed Lost), end timestamp/reason, evaluation subscription ID | Cancel the evaluation immediately, verify `Ended`, and only then permit Results Review |
 | `prepare_paid_subscription` | Subscription Proposed, completed evaluation, explicit paid acceptance, allowlisted Plan and Billing Frequency | Reconcile or create a paid subscription in the paid-only fields with collection disabled; do not close the Deal |
 | `reconcile` | Valid free-test Deal | Read Billing customer/subscription state without mutation |
 
@@ -33,6 +33,7 @@ The handler rejects unknown fields, re-reads CRM, derives its own deterministic 
 - Billing plan readback uses `GET /plans/{plan_code}`. Subscription reconciliation uses paginated `reference_contains` queries followed by an exact `reference_id` filter; missing pagination metadata, an incomplete traversal, or more than one exact match fails closed.
 - Paid plan and Billing Frequency combinations map to Billing plan codes through a private allowlist. This repository contains no prices, live identifiers, secrets, endpoints, or customer data.
 - CRM stage is never mutated here. `prepare_paid_subscription` runs while the Deal remains Subscription Proposed; the later Blueprint transition may require the verified Billing ID and status before Closed Won.
+- The Blueprint is sequenced around authoritative readback: `start_evaluation` runs while the Deal is still Setup and QA, and `Approve Go Live` requires `Billing_Automation_Status = Evaluation Verified`; `end_evaluation` runs while the Deal is still Test Live, and `Complete Free Test` requires `Billing_Evaluation_Status = Ended`. Replays after the transition are permitted only so the same deterministic operation can be reconciled safely.
 - `Billing_Evaluation_Subscription_ID` and `Billing_Evaluation_Status` are evaluation-only. `Billing_Subscription_ID` and `Subscription_Status` are paid-only. Successful readback also clears the sanitized automation error and records the last sync timestamp.
 
 ## Durable Processing

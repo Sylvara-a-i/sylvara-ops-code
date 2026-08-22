@@ -24,6 +24,7 @@ function baseEnvironment(overrides = {}) {
     PAID_ACCEPTANCE_VALUE: "Accepted",
     FREE_TEST_ENTRY_OFFER_VALUE: "Free Test",
     INITIAL_SALE_TYPE_VALUE: "Initial Sale",
+    SETUP_QA_STAGE_VALUE: "Setup and QA",
     TEST_LIVE_STAGE_VALUE: "Test Live",
     RESULTS_REVIEW_STAGE_VALUE: "Results Review",
     SUBSCRIPTION_PROPOSED_STAGE_VALUE: "Subscription Proposed",
