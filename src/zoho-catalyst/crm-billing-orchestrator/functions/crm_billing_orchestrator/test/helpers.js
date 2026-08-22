@@ -20,6 +20,7 @@ function baseEnvironment(overrides = {}) {
     DATASTORE_DUPLICATE_ERROR_CODES: "DUPLICATE",
     IDEMPOTENCY_PEPPER: "p".repeat(32),
     EVALUATION_PLAN_CODE: "evaluation_plan",
+    ENABLE_PAID_SUBSCRIPTION_PREPARATION: "true",
     PAID_PLAN_CODE_MAP: JSON.stringify({ "Launch::Monthly": "launch_plan" }),
     PAID_ACCEPTANCE_VALUE: "Accepted",
     FREE_TEST_ENTRY_OFFER_VALUE: "Free Test",
