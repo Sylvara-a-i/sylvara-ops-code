@@ -11,16 +11,16 @@ const token = `Zoho-oauthtoken ${"t".repeat(24)}`;
 test("CRM client re-reads Deal and Account and independently verifies integration fields", async () => {
   const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
   const deal = {
-    id: "10000000000000001",
+    id: "100000000000001",
     Modified_Time: "2026-08-21T10:00:00-05:00",
-    Account_Name: { id: "10000000000000002", name: "Synthetic Account" },
+    Account_Name: { id: "100000000000002", name: "Synthetic Account" },
     Billing_Customer_ID: null,
     Billing_Automation_Status: null,
     Billing_Last_Sync_At: null,
     Billing_Automation_Error: "Synthetic prior error",
   };
   const account = {
-    id: "10000000000000002",
+    id: "100000000000002",
     Modified_Time: "2026-08-21T10:00:00-05:00",
     Account_Name: "Synthetic Account",
   };
@@ -36,7 +36,7 @@ test("CRM client re-reads Deal and Account and independently verifies integratio
     jsonResponse(200, { data: [{
       ...deal,
       Modified_Time: "2026-08-21T10:01:00-05:00",
-      Billing_Customer_ID: "20000000000000001",
+      Billing_Customer_ID: "200000000000001",
       Billing_Automation_Status: "Customer Verified",
       Billing_Last_Sync_At: "2026-08-21T15:01:00.000Z",
       Billing_Automation_Error: null,
@@ -52,7 +52,7 @@ test("CRM client re-reads Deal and Account and independently verifies integratio
   });
   const context = await client.getContext(deal.id);
   await client.updateDealIntegration(context.deal, {
-    Billing_Customer_ID: "20000000000000001",
+    Billing_Customer_ID: "200000000000001",
     Billing_Automation_Status: "Customer Verified",
     Billing_Last_Sync_At: "2026-08-21T15:01:00.000Z",
     Billing_Automation_Error: null,
@@ -61,7 +61,7 @@ test("CRM client re-reads Deal and Account and independently verifies integratio
   const write = calls[2];
   assert.equal(write.options.headers["If-Unmodified-Since"], deal.Modified_Time);
   assert.deepEqual(JSON.parse(write.options.body).trigger, []);
-  assert.match(calls[3].url, /\/Deals\/10000000000000001\?/);
+  assert.match(calls[3].url, /\/Deals\/100000000000001\?/);
   assert.match(calls[0].url, /Billing_Evaluation_Subscription_ID/);
   assert.match(calls[0].url, /Subscription_Acceptance_Status/);
 });

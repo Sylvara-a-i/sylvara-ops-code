@@ -28,16 +28,16 @@ test("action payload is exactly schemaVersion, action, and dealId", () => {
   assert.deepEqual(validatePayload({
     schemaVersion: "crm-billing-lifecycle-v1",
     action: "ensure_customer",
-    dealId: "10000000000000001",
+    dealId: "100000000000001",
   }), {
     schemaVersion: "crm-billing-lifecycle-v1",
     action: "ensure_customer",
-    dealId: "10000000000000001",
+    dealId: "100000000000001",
   });
   assert.throws(() => validatePayload({
     schemaVersion: "crm-billing-lifecycle-v1",
     action: "ensure_customer",
-    dealId: "10000000000000001",
+    dealId: "100000000000001",
     stage: "forged",
   }), /fields do not match/);
 });
@@ -47,7 +47,7 @@ test("request boundary authenticates before accepting the exact JSON body", asyn
   const body = JSON.stringify({
     schemaVersion: "crm-billing-lifecycle-v1",
     action: "reconcile",
-    dealId: "10000000000000001",
+    dealId: "100000000000001",
   });
   const request = {
     method: "POST",

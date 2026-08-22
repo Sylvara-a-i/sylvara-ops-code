@@ -7,9 +7,9 @@ const { loadConfig } = require("../lib/config");
 const { REVISION, baseEnvironment, jsonResponse } = require("./helpers");
 
 const token = `Zoho-oauthtoken ${"b".repeat(24)}`;
-const crmAccountId = "10000000000000002";
-const customerId = "20000000000000001";
-const subscriptionId = "30000000000000001";
+const crmAccountId = "100000000000002";
+const customerId = "200000000000001";
+const subscriptionId = "300000000000001";
 const reference = `syl-evaluation-${"c".repeat(32)}`;
 
 function evaluationPlan(price = "0") {
@@ -125,7 +125,7 @@ test("subscription lookup paginates and exact-filters reference_contains results
   const client = clientFor(config, [
     jsonResponse(200, subscriptionPage([
       evaluationSubscription({
-        subscription_id: "30000000000000002",
+        subscription_id: "300000000000002",
         reference_id: `${reference}-partial`,
       }),
     ], 1, true)),
@@ -144,7 +144,7 @@ test("incomplete pagination and duplicate exact references fail closed", async (
 
   const duplicate = clientFor(config, [jsonResponse(200, subscriptionPage([
     evaluationSubscription(),
-    evaluationSubscription({ subscription_id: "30000000000000002" }),
+    evaluationSubscription({ subscription_id: "300000000000002" }),
   ]))]);
   await assert.rejects(duplicate.findSubscriptionByReference(reference), /not unique/);
 });

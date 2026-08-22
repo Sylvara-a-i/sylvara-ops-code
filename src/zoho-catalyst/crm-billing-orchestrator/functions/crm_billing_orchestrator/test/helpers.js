@@ -11,7 +11,7 @@ function baseEnvironment(overrides = {}) {
     SHARED_HEADER_VALUE: "s".repeat(32),
     CRM_API_BASE_URL: "https://www.zohoapis.com/crm/v8",
     BILLING_API_BASE_URL: "https://www.zohoapis.com/billing/v1",
-    BILLING_ORGANIZATION_ID: "10000000000000001",
+    BILLING_ORGANIZATION_ID: "100000000000001",
     CRM_READ_CONNECTION_LINK_NAME: "CrmRead",
     CRM_WRITE_CONNECTION_LINK_NAME: "CrmWrite",
     BILLING_READ_CONNECTION_LINK_NAME: "BillingRead",

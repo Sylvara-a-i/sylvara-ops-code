@@ -44,8 +44,8 @@ test("durable operation claim returns completed replay and rejects conflicts", a
   const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
   const app = memoryApp(config.operationTable);
   const store = createOperationStore(app, config);
-  const identity = deriveOperationIdentity(config, "start_evaluation", "10000000000000001", {
-    accountId: "10000000000000002",
+  const identity = deriveOperationIdentity(config, "start_evaluation", "100000000000001", {
+    accountId: "100000000000002",
     testScopeVersion: "scope-v1",
     testStartAt: "2026-08-21T10:00:00-05:00",
   });
@@ -54,7 +54,7 @@ test("durable operation claim returns completed replay and rejects conflicts", a
     operationKey: identity.operationKey,
     operationFingerprint: identity.operationFingerprint,
     action: "start_evaluation",
-    dealId: "10000000000000001",
+    dealId: "100000000000001",
   });
   assert.equal(first.outcome, "claimed");
   await store.mark(first.rowId, "completed", "evaluation_readback_confirmed");
@@ -62,14 +62,14 @@ test("durable operation claim returns completed replay and rejects conflicts", a
     operationKey: identity.operationKey,
     operationFingerprint: identity.operationFingerprint,
     action: "start_evaluation",
-    dealId: "10000000000000001",
+    dealId: "100000000000001",
   });
   assert.equal(replay.outcome, "duplicate-completed");
   const conflict = await store.claim({
     operationKey: identity.operationKey,
     operationFingerprint: "d".repeat(64),
     action: "start_evaluation",
-    dealId: "10000000000000001",
+    dealId: "100000000000001",
   });
   assert.equal(conflict.outcome, "duplicate-conflict");
 });

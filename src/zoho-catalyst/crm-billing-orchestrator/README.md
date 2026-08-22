@@ -17,7 +17,7 @@ This package mediates the approved CRM Deal lifecycle into bounded Zoho Billing 
 The request body contains only:
 
 ```json
-{"schemaVersion":"crm-billing-lifecycle-v1","action":"ensure_customer","dealId":"10000000000000001"}
+{"schemaVersion":"crm-billing-lifecycle-v1","action":"ensure_customer","dealId":"100000000000001"}
 ```
 
 The handler rejects unknown fields, re-reads CRM, derives its own deterministic operation identity, and never trusts caller-supplied stage, plan, price, status, customer, or subscription facts.
