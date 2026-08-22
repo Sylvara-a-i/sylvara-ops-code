@@ -133,10 +133,7 @@ function createBillingClient(config, {
       publicCode: "billing_state_invalid",
     });
     id(customer.customer_id, "Billing customer identifier");
-    if (
-      customer.zcrm_account_id !== undefined &&
-      String(customer.zcrm_account_id) !== selectedAccountId
-    ) {
+    if (String(customer.zcrm_account_id ?? "") !== selectedAccountId) {
       fail("Billing customer reference readback does not match", { publicCode: "billing_state_invalid" });
     }
     return customer;
@@ -268,6 +265,7 @@ function createBillingClient(config, {
     selectedPlanCode,
     evaluation,
     startsAt,
+    allowedStatuses,
   }) {
     if (!plainObject(subscription)) fail("Billing subscription is unavailable", {
       publicCode: "billing_state_invalid",
@@ -287,9 +285,16 @@ function createBillingClient(config, {
     const hasNestedBankAccount = plainObject(subscription.bank_account) &&
       Object.keys(subscription.bank_account).length > 0;
     if (
+      !Array.isArray(allowedStatuses) || allowedStatuses.length < 1 ||
+      allowedStatuses.some((status) => typeof status !== "string" || !status)
+    ) fail("Billing subscription status boundary is invalid", {
+      publicCode: "configuration_invalid",
+    });
+    if (
       returnedCustomerIds.length === 0 || returnedCustomerIds.some((value) => value !== customerId) ||
       subscription.reference_id !== deterministicReference ||
       (subscription.plan?.plan_code ?? subscription.plan_code) !== selectedPlanCode ||
+      !allowedStatuses.includes(subscription.status) ||
       subscription.auto_collect !== false ||
       !Array.isArray(subscription.addons) || subscription.addons.length !== 0 ||
       subscription.card_id || subscription.payment_method_id || subscription.payment_source_id ||
@@ -303,9 +308,18 @@ function createBillingClient(config, {
     });
     if (evaluation) {
       const amountEvidence = subscription.amount ?? subscription.recurring_price;
+      const setupFeeEvidence = subscription.plan?.setup_fee;
+      const trialDaysEvidence = subscription.plan?.trial_days;
+      const billingCyclesEvidence = subscription.plan?.billing_cycles;
       if (
         amountEvidence === undefined || amountEvidence === null || amountEvidence === "" ||
-        decimal(amountEvidence, "Evaluation subscription amount") !== 0
+        setupFeeEvidence === undefined || setupFeeEvidence === null || setupFeeEvidence === "" ||
+        !Number.isInteger(Number(trialDaysEvidence)) ||
+        Number(trialDaysEvidence) !== config.freeTestDurationDays ||
+        !Number.isInteger(Number(billingCyclesEvidence)) ||
+        Number(billingCyclesEvidence) !== 1 ||
+        decimal(amountEvidence, "Evaluation subscription amount") !== 0 ||
+        decimal(setupFeeEvidence, "Evaluation subscription setup fee") !== 0
       ) fail("Evaluation subscription has financial exposure", {
         ambiguous: true,
         publicCode: "reconciliation_required",
@@ -375,6 +389,7 @@ function createBillingClient(config, {
       selectedPlanCode,
       evaluation,
       startsAt: evaluation ? undefined : subscriptionStartDate,
+      allowedStatuses: evaluation ? ["trial"] : ["future", "live"],
     });
   }
 
@@ -385,10 +400,20 @@ function createBillingClient(config, {
   });
   const ensurePaidSubscription = (input) => ensureSubscription({ ...input, evaluation: false });
 
-  async function cancelEvaluation(subscriptionId) {
+  async function cancelEvaluation({ subscriptionId, customerId, deterministicReference }) {
     const selectedId = id(subscriptionId, "Billing subscription identifier");
+    const selectedCustomerId = id(customerId, "Billing customer identifier");
+    const selectedReference = reference(deterministicReference);
+    const terminalStatuses = ["cancelled", "expired", "trial_expired"];
     const before = await getSubscription(selectedId);
-    if (new Set(["cancelled", "expired", "trial_expired"]).has(before.status)) return before;
+    verifySubscription(before, {
+      customerId: selectedCustomerId,
+      deterministicReference: selectedReference,
+      selectedPlanCode: config.evaluationPlanCode,
+      evaluation: true,
+      allowedStatuses: ["trial", "live", ...terminalStatuses],
+    });
+    if (terminalStatuses.includes(before.status)) return before;
     try {
       const response = await authorizedRequest(`/subscriptions/${selectedId}/cancel`, {
         method: "POST",
@@ -405,13 +430,13 @@ function createBillingClient(config, {
       if (!(error instanceof BillingClientError) || !error.ambiguous) throw error;
     }
     const readback = await getSubscription(selectedId);
-    if (!new Set(["cancelled", "expired", "trial_expired"]).has(readback.status)) {
-      fail("Billing evaluation cancellation outcome is unresolved", {
-        ambiguous: true,
-        publicCode: "reconciliation_required",
-      });
-    }
-    return readback;
+    return verifySubscription(readback, {
+      customerId: selectedCustomerId,
+      deterministicReference: selectedReference,
+      selectedPlanCode: config.evaluationPlanCode,
+      evaluation: true,
+      allowedStatuses: terminalStatuses,
+    });
   }
 
   return Object.freeze({

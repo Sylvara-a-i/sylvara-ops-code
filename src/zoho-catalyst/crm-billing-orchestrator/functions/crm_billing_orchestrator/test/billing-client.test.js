@@ -28,7 +28,12 @@ function evaluationSubscription(overrides = {}) {
     subscription_id: subscriptionId,
     customer_id: customerId,
     reference_id: reference,
-    plan: { plan_code: "evaluation_plan" },
+    plan: {
+      plan_code: "evaluation_plan",
+      setup_fee: "0",
+      trial_days: 7,
+      billing_cycles: 1,
+    },
     auto_collect: false,
     addons: [],
     amount: "0",
@@ -41,14 +46,14 @@ function paidPlan() {
   return {
     plan_code: "launch_plan",
     status: "active",
-    recurring_price: "349",
+    recurring_price: "37",
   };
 }
 
 function paidSubscription(overrides = {}) {
   return evaluationSubscription({
     plan: { plan_code: "launch_plan" },
-    amount: "349",
+    amount: "37",
     status: "future",
     start_date: "2026-09-01",
     ...overrides,
@@ -94,6 +99,17 @@ test("customer creation uses only the native CRM Account import and exact refere
   assert.equal(calls.some(({ url, options }) => (
     url.endsWith("/customers") && options.method === "POST"
   )), false);
+});
+
+test("customer lookup rejects a response without the exact CRM Account reference", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const client = clientFor(config, [
+    jsonResponse(200, { customer: { customer_id: customerId } }),
+  ]);
+  await assert.rejects(
+    client.findCustomerByCrmReference(crmAccountId),
+    /reference readback does not match/,
+  );
 });
 
 test("evaluation creation proves zero exposure and uses the documented creation overrides", async () => {
@@ -210,6 +226,33 @@ test("subscription readback fails closed when evaluation amount evidence is miss
   }), /financial exposure/);
 });
 
+test("evaluation readback requires trial status and explicit zero setup fee", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  for (const unsafe of [
+    evaluationSubscription({ status: "live" }),
+    evaluationSubscription({ plan: { plan_code: "evaluation_plan" } }),
+    evaluationSubscription({ plan: {
+      plan_code: "evaluation_plan", setup_fee: "1.00", trial_days: 7, billing_cycles: 1,
+    } }),
+    evaluationSubscription({ plan: {
+      plan_code: "evaluation_plan", setup_fee: "0", trial_days: 14, billing_cycles: 1,
+    } }),
+    evaluationSubscription({ plan: {
+      plan_code: "evaluation_plan", setup_fee: "0", trial_days: 7, billing_cycles: -1,
+    } }),
+  ]) {
+    const client = clientFor(config, [
+      jsonResponse(200, { plan: evaluationPlan() }),
+      jsonResponse(200, subscriptionPage([unsafe])),
+      jsonResponse(200, { subscription: unsafe }),
+    ]);
+    await assert.rejects(client.ensureEvaluationSubscription({
+      customerId,
+      deterministicReference: reference,
+    }), /approved boundary|financial exposure/);
+  }
+});
+
 test("subscription readback accepts the documented nested customer identity", async () => {
   const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
   const nestedCustomer = evaluationSubscription({ customer_id: undefined, customer: { customer_id: customerId } });
@@ -231,9 +274,63 @@ test("natural trial expiry is a terminal evaluation outcome", async () => {
   const client = clientFor(config, [
     jsonResponse(200, { subscription: evaluationSubscription({ status: "trial_expired" }) }),
   ], calls);
-  const result = await client.cancelEvaluation(subscriptionId);
+  const result = await client.cancelEvaluation({
+    subscriptionId,
+    customerId,
+    deterministicReference: reference,
+  });
   assert.equal(result.status, "trial_expired");
   assert.equal(calls.some((call) => call.options.method === "POST"), false);
+});
+
+test("evaluation cancellation verifies identity and zero exposure before and after POST", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const calls = [];
+  const client = clientFor(config, [
+    jsonResponse(200, { subscription: evaluationSubscription() }),
+    jsonResponse(200, { code: 0 }),
+    jsonResponse(200, { subscription: evaluationSubscription({ status: "cancelled" }) }),
+  ], calls);
+  const result = await client.cancelEvaluation({
+    subscriptionId,
+    customerId,
+    deterministicReference: reference,
+  });
+  assert.equal(result.status, "cancelled");
+  assert.equal(calls.filter((call) => call.options.method === "POST").length, 1);
+
+  for (const poisoned of [
+    evaluationSubscription({ reference_id: `syl-evaluation-${"d".repeat(32)}` }),
+    evaluationSubscription({ plan: {
+      plan_code: "launch_plan", setup_fee: "0", trial_days: 7, billing_cycles: 1,
+    } }),
+    evaluationSubscription({ customer_id: "200000000000002" }),
+  ]) {
+    const poisonedCalls = [];
+    const poisonedClient = clientFor(config, [
+      jsonResponse(200, { subscription: poisoned }),
+    ], poisonedCalls);
+    await assert.rejects(poisonedClient.cancelEvaluation({
+      subscriptionId,
+      customerId,
+      deterministicReference: reference,
+    }), /approved boundary/);
+    assert.equal(poisonedCalls.some((call) => call.options.method === "POST"), false);
+  }
+
+  const activatedCalls = [];
+  const activatedClient = clientFor(config, [
+    jsonResponse(200, { subscription: evaluationSubscription({ status: "live" }) }),
+    jsonResponse(200, { code: 0 }),
+    jsonResponse(200, { subscription: evaluationSubscription({ status: "cancelled" }) }),
+  ], activatedCalls);
+  const contained = await activatedClient.cancelEvaluation({
+    subscriptionId,
+    customerId,
+    deterministicReference: reference,
+  });
+  assert.equal(contained.status, "cancelled");
+  assert.equal(activatedCalls.filter((call) => call.options.method === "POST").length, 1);
 });
 
 test("incomplete pagination and duplicate exact references fail closed", async () => {

@@ -6,11 +6,21 @@ const { loadConfig } = require("../lib/config");
 const { createLifecycleHandler } = require("../lib/lifecycle-handler");
 const { REVISION, baseEnvironment } = require("./helpers");
 
+function paidEnabledConfig() {
+  const base = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  return Object.freeze({
+    ...base,
+    enablePaidSubscriptionPreparation: true,
+    paidPlanCodeMap: Object.freeze({ "Launch::Monthly": "launch_plan" }),
+  });
+}
+
 function context(config, overrides = {}) {
   return {
     deal: {
       id: "100000000000001",
       Modified_Time: "2026-08-21T10:00:00-05:00",
+      Pipeline: config.revenueDeskPipelineValue,
       Entry_Offer: config.freeTestEntryOfferValue,
       Type: config.initialSaleTypeValue,
       Stage: config.testLiveStageValue,
@@ -44,11 +54,18 @@ function context(config, overrides = {}) {
   };
 }
 
-function harness(config, initialContext) {
+function harness(config, initialContext, options = {}) {
   let current = structuredClone(initialContext);
+  let contextReads = 0;
   const calls = [];
   const crmClient = {
-    getContext: async () => structuredClone(current),
+    getContext: async () => {
+      contextReads += 1;
+      if (typeof options.onGetContext === "function") {
+        current = options.onGetContext(structuredClone(current), contextReads) ?? current;
+      }
+      return structuredClone(current);
+    },
     updateDealIntegration: async (deal, patch) => {
       calls.push(["crm_update", patch]);
       current.deal = {
@@ -60,10 +77,13 @@ function harness(config, initialContext) {
     },
   };
   const billingClient = {
-    ensureCustomer: async () => ({ customer: {
-      customer_id: "200000000000001",
-      zcrm_account_id: current.account.id,
-    } }),
+    ensureCustomer: async () => {
+      calls.push(["customer"]);
+      return { customer: {
+        customer_id: "200000000000001",
+        zcrm_account_id: current.account.id,
+      } };
+    },
     ensureEvaluationSubscription: async (input) => {
       calls.push(["evaluation", input]);
       return { subscription_id: "300000000000001" };
@@ -72,9 +92,9 @@ function harness(config, initialContext) {
       calls.push(["paid", input]);
       return { subscription_id: "400000000000001" };
     },
-    cancelEvaluation: async (id) => {
-      calls.push(["cancel", id]);
-      return { subscription_id: id, status: "cancelled" };
+    cancelEvaluation: async (input) => {
+      calls.push(["cancel", input]);
+      return { subscription_id: input.subscriptionId, status: "cancelled" };
     },
     findCustomerByCrmReference: async () => ({ customer_id: "200000000000001" }),
     getSubscription: async (id) => {
@@ -86,8 +106,15 @@ function harness(config, initialContext) {
     },
   };
   const operationStore = {
-    claim: async () => ({ outcome: "claimed", rowId: "1" }),
-    mark: async (...args) => calls.push(["mark", ...args]),
+    claim: async () => {
+      calls.push(["claim"]);
+      return { outcome: "claimed", rowId: "1" };
+    },
+    mark: async (...args) => {
+      calls.push(["mark", ...args]);
+      if (typeof options.mark === "function") return options.mark(...args);
+      return undefined;
+    },
   };
   return {
     calls,
@@ -122,7 +149,7 @@ test("start_evaluation creates only after CRM gates and persists readback IDs", 
 });
 
 test("paid subscription is impossible without explicit acceptance", async () => {
-  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const config = paidEnabledConfig();
   const rejected = harness(config, context(config, {
     Stage: config.subscriptionProposedStageValue,
     Test_Status: config.testCompletedStatusValue,
@@ -131,6 +158,7 @@ test("paid subscription is impossible without explicit acceptance", async () => 
     action: "prepare_paid_subscription",
     dealId: "100000000000001",
   }), /explicit paid acceptance/);
+  assert.equal(rejected.calls.some(([kind]) => kind === "claim"), false);
   assert.equal(rejected.calls.some(([kind]) => kind === "paid"), false);
 
   const accepted = harness(config, context(config, {
@@ -194,6 +222,7 @@ test("paid subscription preparation is impossible while the Development gate is 
     action: "prepare_paid_subscription",
     dealId: "100000000000001",
   }), /preparation is disabled/);
+  assert.equal(disabled.calls.some(([kind]) => kind === "claim"), false);
   assert.equal(disabled.calls.some(([kind]) => kind === "paid"), false);
   assert.equal(disabled.calls.some(([kind]) => kind === "crm_update"), false);
 });
@@ -212,10 +241,10 @@ test("end_evaluation requires terminal CRM evidence before cancellation", async 
     dealId: "100000000000001",
   });
   assert.equal(result.outcome, "evaluation_end_readback_confirmed");
-  assert.deepEqual(approved.calls.find(([kind]) => kind === "cancel"), [
-    "cancel",
-    "300000000000001",
-  ]);
+  const cancellation = approved.calls.find(([kind]) => kind === "cancel")[1];
+  assert.equal(cancellation.subscriptionId, "300000000000001");
+  assert.equal(cancellation.customerId, "200000000000001");
+  assert.match(cancellation.deterministicReference, /^syl-evaluation-[a-f0-9]{32}$/);
   const terminalUpdate = approved.calls.filter(([kind]) => kind === "crm_update").at(-1)[1];
   assert.equal(terminalUpdate.Billing_Evaluation_Status, "Ended");
   assert.equal(terminalUpdate.Billing_Automation_Status, "Evaluation Verified");
@@ -231,6 +260,7 @@ test("evaluation mutations fail closed outside their pre-transition stages", asy
     action: "start_evaluation",
     dealId: "100000000000001",
   }), /not approved to start/);
+  assert.equal(prematureStart.calls.some(([kind]) => kind === "claim"), false);
   assert.equal(prematureStart.calls.some(([kind]) => kind === "evaluation"), false);
 
   const prematureEnd = harness(config, context(config, {
@@ -244,7 +274,118 @@ test("evaluation mutations fail closed outside their pre-transition stages", asy
     action: "end_evaluation",
     dealId: "100000000000001",
   }), /not approved to end/);
+  assert.equal(prematureEnd.calls.some(([kind]) => kind === "claim"), false);
   assert.equal(prematureEnd.calls.some(([kind]) => kind === "cancel"), false);
+
+  const wrongPipeline = harness(config, context(config, {
+    Pipeline: "Another Pipeline",
+    Stage: config.setupQaStageValue,
+  }));
+  await assert.rejects(wrongPipeline.lifecycle.handle({
+    action: "start_evaluation",
+    dealId: "100000000000001",
+  }), /outside the approved free-test lifecycle/);
+  assert.equal(wrongPipeline.calls.some(([kind]) => kind === "claim"), false);
+});
+
+test("pre-existing CRM subscription IDs cannot trigger a second Billing create", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const existingEvaluation = harness(config, context(config, {
+    Stage: config.setupQaStageValue,
+    Billing_Evaluation_Subscription_ID: "300000000000001",
+  }));
+  await assert.rejects(existingEvaluation.lifecycle.handle({
+    action: "start_evaluation",
+    dealId: "100000000000001",
+  }), /requires reconciliation/);
+  assert.equal(existingEvaluation.calls.some(([kind]) => kind === "customer"), false);
+  assert.equal(existingEvaluation.calls.some(([kind]) => kind === "evaluation"), false);
+
+  const paidConfig = paidEnabledConfig();
+  const existingPaid = harness(paidConfig, context(paidConfig, {
+    Stage: paidConfig.subscriptionProposedStageValue,
+    Test_Status: paidConfig.testCompletedStatusValue,
+    Subscription_Acceptance_Status: paidConfig.paidAcceptanceValue,
+    Billing_Subscription_ID: "400000000000001",
+  }));
+  await assert.rejects(existingPaid.lifecycle.handle({
+    action: "prepare_paid_subscription",
+    dealId: "100000000000001",
+  }), /requires reconciliation/);
+  assert.equal(existingPaid.calls.some(([kind]) => kind === "customer"), false);
+  assert.equal(existingPaid.calls.some(([kind]) => kind === "paid"), false);
+});
+
+test("subscription creation revalidates authoritative CRM state after customer synchronization", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const changedStage = harness(config, context(config, {
+    Stage: config.setupQaStageValue,
+  }), {
+    onGetContext: (current, readNumber) => readNumber === 2 ? {
+      ...current,
+      deal: { ...current.deal, Stage: "Test Authorized" },
+    } : current,
+  });
+  await assert.rejects(changedStage.lifecycle.handle({
+    action: "start_evaluation",
+    dealId: "100000000000001",
+  }), /not approved to start/);
+  assert.equal(changedStage.calls.some(([kind]) => kind === "evaluation"), false);
+
+  const concurrentSubscription = harness(config, context(config, {
+    Stage: config.setupQaStageValue,
+  }), {
+    onGetContext: (current, readNumber) => readNumber === 2 ? {
+      ...current,
+      deal: {
+        ...current.deal,
+        Billing_Evaluation_Subscription_ID: "300000000000001",
+      },
+    } : current,
+  });
+  await assert.rejects(concurrentSubscription.lifecycle.handle({
+    action: "start_evaluation",
+    dealId: "100000000000001",
+  }), /requires reconciliation/);
+  assert.equal(concurrentSubscription.calls.some(([kind]) => kind === "evaluation"), false);
+
+  const changedAccount = harness(config, context(config, {
+    Stage: config.setupQaStageValue,
+  }), {
+    onGetContext: (current, readNumber) => readNumber === 2 ? {
+      deal: {
+        ...current.deal,
+        Account_Name: { id: "100000000000003", name: "Other Synthetic Account" },
+      },
+      account: {
+        ...current.account,
+        id: "100000000000003",
+        Account_Name: "Other Synthetic Account",
+      },
+    } : current,
+  });
+  await assert.rejects(changedAccount.lifecycle.handle({
+    action: "start_evaluation",
+    dealId: "100000000000001",
+  }), /Account relationship changed/);
+  assert.equal(changedAccount.calls.some(([kind]) => kind === "evaluation"), false);
+});
+
+test("an uncertain completed mark is never followed by a second terminal write", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const uncertain = harness(config, context(config), {
+    mark: async (_rowId, status) => {
+      if (status === "completed") throw new Error("synthetic uncertain completion");
+    },
+  });
+  await assert.rejects(uncertain.lifecycle.handle({
+    action: "ensure_customer",
+    dealId: "100000000000001",
+  }), /completion requires reconciliation/);
+  assert.deepEqual(
+    uncertain.calls.filter(([kind]) => kind === "mark").map(([, , status]) => status),
+    ["completed"],
+  );
 });
 
 test("customer verification never occupies paid subscription fields", async () => {

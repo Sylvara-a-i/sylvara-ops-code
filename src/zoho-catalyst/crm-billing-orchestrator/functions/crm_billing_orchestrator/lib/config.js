@@ -162,6 +162,11 @@ function loadConfig(environment = process.env, { artifactRevision = ARTIFACT_SOU
     environment,
     "ENABLE_PAID_SUBSCRIPTION_PREPARATION",
   );
+  if (enablePaidSubscriptionPreparation) {
+    throw new ConfigurationError(
+      "Paid subscription preparation is blocked until exact commercial terms are enforced",
+    );
+  }
   return Object.freeze({
     deploymentEnvironment,
     sourceRevision,
@@ -180,8 +185,9 @@ function loadConfig(environment = process.env, { artifactRevision = ARTIFACT_SOU
     idempotencyPepper: secret(environment, "IDEMPOTENCY_PEPPER"),
     evaluationPlanCode: planCode(environment, "EVALUATION_PLAN_CODE"),
     enablePaidSubscriptionPreparation,
-    paidPlanCodeMap: paidPlanMap(environment, enablePaidSubscriptionPreparation),
+    paidPlanCodeMap: paidPlanMap(environment, false),
     paidAcceptanceValue: boundedText(environment, "PAID_ACCEPTANCE_VALUE"),
+    revenueDeskPipelineValue: boundedText(environment, "REVENUE_DESK_PIPELINE_VALUE"),
     freeTestEntryOfferValue: boundedText(environment, "FREE_TEST_ENTRY_OFFER_VALUE"),
     initialSaleTypeValue: boundedText(environment, "INITIAL_SALE_TYPE_VALUE"),
     setupQaStageValue: boundedText(environment, "SETUP_QA_STAGE_VALUE"),
