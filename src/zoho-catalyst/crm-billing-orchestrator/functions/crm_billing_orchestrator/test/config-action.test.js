@@ -28,6 +28,13 @@ test("configuration is immutable Development-only and rejects Production", () =>
     /exact commercial terms/,
   );
   assert.throws(
+    () => loadConfig(baseEnvironment({
+      ENABLE_PAID_SUBSCRIPTION_PREPARATION: "false",
+      PAID_PLAN_CODE_MAP: JSON.stringify({ "Launch::Monthly": "launch_plan" }),
+    }), { artifactRevision: REVISION }),
+    /invalid size/,
+  );
+  assert.throws(
     () => loadConfig(baseEnvironment(), { artifactRevision: "b".repeat(40) }),
     /immutable artifact/,
   );

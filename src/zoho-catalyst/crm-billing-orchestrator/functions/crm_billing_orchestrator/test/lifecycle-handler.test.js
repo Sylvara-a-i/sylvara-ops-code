@@ -3,6 +3,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const { loadConfig } = require("../lib/config");
+const { deriveOperationIdentity } = require("../lib/idempotency");
 const { createLifecycleHandler } = require("../lib/lifecycle-handler");
 const { REVISION, baseEnvironment } = require("./helpers");
 
@@ -97,6 +98,25 @@ function harness(config, initialContext, options = {}) {
       return { subscription_id: input.subscriptionId, status: "cancelled" };
     },
     findCustomerByCrmReference: async () => ({ customer_id: "200000000000001" }),
+    findSubscriptionByReference: async (reference) => {
+      calls.push(["find_subscription", reference]);
+      if (typeof options.findSubscriptionByReference === "function") {
+        return options.findSubscriptionByReference(reference);
+      }
+      return null;
+    },
+    findVerifiedEvaluationSubscription: async (input) => {
+      calls.push(["find_verified_evaluation", input]);
+      if (typeof options.findVerifiedEvaluationSubscription === "function") {
+        return options.findVerifiedEvaluationSubscription(input);
+      }
+      const id = current.deal.Billing_Evaluation_Subscription_ID;
+      return id ? {
+        subscription_id: id,
+        customer_id: "200000000000001",
+        status: current.deal.Billing_Evaluation_Status === "Ended" ? "cancelled" : "trial",
+      } : null;
+    },
     getSubscription: async (id) => {
       calls.push(["get_subscription", id]);
       return {
@@ -108,7 +128,24 @@ function harness(config, initialContext, options = {}) {
   const operationStore = {
     claim: async () => {
       calls.push(["claim"]);
+      if (typeof options.claim === "function") return options.claim();
       return { outcome: "claimed", rowId: "1" };
+    },
+    readByKey: async (operationKey) => {
+      calls.push(["read_operation", operationKey]);
+      if (typeof options.readOperation === "function") {
+        return options.readOperation(operationKey);
+      }
+      const startKey = deriveOperationIdentity(
+        config,
+        "start_evaluation",
+        current.deal.id,
+        { accountId: current.account.id },
+      ).operationKey;
+      if (operationKey === startKey && current.deal.Billing_Evaluation_Subscription_ID) {
+        return { STATUS: "completed" };
+      }
+      return null;
     },
     mark: async (...args) => {
       calls.push(["mark", ...args]);
@@ -235,6 +272,7 @@ test("end_evaluation requires terminal CRM evidence before cancellation", async 
     Test_End_Reason: "Configured limit reached",
     Billing_Customer_ID: "200000000000001",
     Billing_Evaluation_Subscription_ID: "300000000000001",
+    Billing_Evaluation_Status: "Trial",
   }));
   const result = await approved.lifecycle.handle({
     action: "end_evaluation",
@@ -269,6 +307,7 @@ test("evaluation mutations fail closed outside their pre-transition stages", asy
     Test_End_Reason: "Configured limit reached",
     Billing_Customer_ID: "200000000000001",
     Billing_Evaluation_Subscription_ID: "300000000000001",
+    Billing_Evaluation_Status: "Trial",
   }));
   await assert.rejects(prematureEnd.lifecycle.handle({
     action: "end_evaluation",
@@ -369,6 +408,20 @@ test("subscription creation revalidates authoritative CRM state after customer s
     dealId: "100000000000001",
   }), /Account relationship changed/);
   assert.equal(changedAccount.calls.some(([kind]) => kind === "evaluation"), false);
+
+  const changedMaterial = harness(config, context(config, {
+    Stage: config.setupQaStageValue,
+  }), {
+    onGetContext: (current, readNumber) => readNumber === 2 ? {
+      ...current,
+      deal: { ...current.deal, Test_Scope_Version: "scope-v2" },
+    } : current,
+  });
+  await assert.rejects(changedMaterial.lifecycle.handle({
+    action: "start_evaluation",
+    dealId: "100000000000001",
+  }), /inputs changed after the operation claim/);
+  assert.equal(changedMaterial.calls.some(([kind]) => kind === "evaluation"), false);
 });
 
 test("an uncertain completed mark is never followed by a second terminal write", async () => {
@@ -403,23 +456,68 @@ test("customer verification never occupies paid subscription fields", async () =
   assert.equal(Object.hasOwn(patch, "Subscription_Status"), false);
 });
 
-test("reconcile reads evaluation and paid subscription IDs independently", async () => {
+test("reconcile searches deterministic references and verifies operation state", async () => {
   const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
   const reconciled = harness(config, context(config, {
     Billing_Customer_ID: "200000000000001",
     Billing_Evaluation_Subscription_ID: "300000000000001",
-    Billing_Subscription_ID: "400000000000001",
+    Billing_Evaluation_Status: "Trial",
   }));
   const result = await reconciled.lifecycle.handle({
     action: "reconcile",
     dealId: "100000000000001",
   });
   assert.equal(result.outcome, "authoritative_readback_confirmed");
-  assert.deepEqual(
-    reconciled.calls.filter(([kind]) => kind === "get_subscription"),
-    [
-      ["get_subscription", "300000000000001"],
-      ["get_subscription", "400000000000001"],
-    ],
-  );
+  assert.equal(reconciled.calls.filter(([kind]) => kind === "find_verified_evaluation").length, 1);
+  assert.equal(reconciled.calls.filter(([kind]) => kind === "find_subscription").length, 1);
+
+  const orphan = harness(config, context(config, {
+    Billing_Customer_ID: "200000000000001",
+  }), {
+    findVerifiedEvaluationSubscription: async () => ({
+      subscription_id: "300000000000001",
+      customer_id: "200000000000001",
+      status: "trial",
+    }),
+  });
+  await assert.rejects(orphan.lifecycle.handle({
+    action: "reconcile",
+    dealId: "100000000000001",
+  }), /reconciliation does not match/);
+
+  const unresolvedStartKey = deriveOperationIdentity(
+    config,
+    "start_evaluation",
+    "100000000000001",
+    { accountId: "100000000000002" },
+  ).operationKey;
+  const unresolved = harness(config, context(config, {
+    Billing_Customer_ID: "200000000000001",
+  }), {
+    readOperation: async (operationKey) => (
+      operationKey === unresolvedStartKey ? { STATUS: "processing" } : null
+    ),
+  });
+  await assert.rejects(unresolved.lifecycle.handle({
+    action: "reconcile",
+    dealId: "100000000000001",
+  }), /operation is unresolved/);
+});
+
+test("completed duplicates perform authoritative reconciliation before success", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const replay = harness(config, context(config, {
+    Stage: config.testLiveStageValue,
+    Billing_Customer_ID: "200000000000001",
+    Billing_Evaluation_Subscription_ID: "300000000000001",
+    Billing_Evaluation_Status: "Trial",
+  }), {
+    claim: async () => ({ outcome: "duplicate-completed", rowId: "1" }),
+  });
+  const result = await replay.lifecycle.handle({
+    action: "start_evaluation",
+    dealId: "100000000000001",
+  });
+  assert.deepEqual(result, { outcome: "duplicate_completed", duplicate: true });
+  assert.equal(replay.calls.filter(([kind]) => kind === "find_verified_evaluation").length, 1);
 });
