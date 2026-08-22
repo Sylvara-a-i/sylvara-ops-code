@@ -49,6 +49,14 @@ function requiredInteger(environment, name, minimum, maximum) {
   return integer(environment, name, null, minimum, maximum);
 }
 
+function requiredBoolean(environment, name) {
+  const result = required(environment, name);
+  if (!new Set(["true", "false"]).has(result)) {
+    throw new ConfigurationError(`${name} must be true or false`);
+  }
+  return result === "true";
+}
+
 function identifier(environment, name) {
   const result = required(environment, name);
   if (!IDENTIFIER.test(result)) throw new ConfigurationError(`${name} is invalid`);
@@ -105,7 +113,7 @@ function duplicateCodes(environment) {
   return Object.freeze(entries);
 }
 
-function paidPlanMap(environment) {
+function paidPlanMap(environment, enabled) {
   let parsed;
   try {
     parsed = JSON.parse(required(environment, "PAID_PLAN_CODE_MAP"));
@@ -116,7 +124,7 @@ function paidPlanMap(environment) {
     throw new ConfigurationError("PAID_PLAN_CODE_MAP must be an object");
   }
   const entries = Object.entries(parsed);
-  if (entries.length < 1 || entries.length > 20) {
+  if (entries.length > 20 || (enabled && entries.length < 1)) {
     throw new ConfigurationError("PAID_PLAN_CODE_MAP has an invalid size");
   }
   const result = Object.create(null);
@@ -150,6 +158,10 @@ function loadConfig(environment = process.env, { artifactRevision = ARTIFACT_SOU
   if (!/^[1-9][0-9]{7,29}$/.test(organizationId)) {
     throw new ConfigurationError("BILLING_ORGANIZATION_ID is invalid");
   }
+  const enablePaidSubscriptionPreparation = requiredBoolean(
+    environment,
+    "ENABLE_PAID_SUBSCRIPTION_PREPARATION",
+  );
   return Object.freeze({
     deploymentEnvironment,
     sourceRevision,
@@ -167,7 +179,8 @@ function loadConfig(environment = process.env, { artifactRevision = ARTIFACT_SOU
     duplicateErrorCodes: duplicateCodes(environment),
     idempotencyPepper: secret(environment, "IDEMPOTENCY_PEPPER"),
     evaluationPlanCode: planCode(environment, "EVALUATION_PLAN_CODE"),
-    paidPlanCodeMap: paidPlanMap(environment),
+    enablePaidSubscriptionPreparation,
+    paidPlanCodeMap: paidPlanMap(environment, enablePaidSubscriptionPreparation),
     paidAcceptanceValue: boundedText(environment, "PAID_ACCEPTANCE_VALUE"),
     freeTestEntryOfferValue: boundedText(environment, "FREE_TEST_ENTRY_OFFER_VALUE"),
     initialSaleTypeValue: boundedText(environment, "INITIAL_SALE_TYPE_VALUE"),
