@@ -321,7 +321,7 @@ function createBillingClient(config, {
             plan: evaluation ? {
               plan_code: selectedPlanCode,
               quantity: 1,
-              exlude_setup_fee: true,
+              exclude_setup_fee: true,
               billing_cycles: 1,
               trial_days: config.freeTestDurationDays,
             } : { plan_code: selectedPlanCode, quantity: 1 },
