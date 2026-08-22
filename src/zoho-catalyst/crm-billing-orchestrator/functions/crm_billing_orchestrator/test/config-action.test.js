@@ -11,6 +11,7 @@ test("configuration is immutable Development-only and rejects Production", () =>
   const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
   assert.equal(config.deploymentEnvironment, "development");
   assert.equal(config.freeTestDurationDays, 7);
+  assert.equal(config.enablePaidSubscriptionPreparation, true);
   assert.equal(config.setupQaStageValue, "Setup and QA");
   assert.equal(config.paidPlanCodeMap["Launch::Monthly"], "launch_plan");
   assert.throws(
@@ -19,6 +20,12 @@ test("configuration is immutable Development-only and rejects Production", () =>
     }),
     /Production activation is blocked/,
   );
+  const evaluationOnly = loadConfig(baseEnvironment({
+    ENABLE_PAID_SUBSCRIPTION_PREPARATION: "false",
+    PAID_PLAN_CODE_MAP: "{}",
+  }), { artifactRevision: REVISION });
+  assert.equal(evaluationOnly.enablePaidSubscriptionPreparation, false);
+  assert.deepEqual(Object.keys(evaluationOnly.paidPlanCodeMap), []);
   assert.throws(
     () => loadConfig(baseEnvironment(), { artifactRevision: "b".repeat(40) }),
     /immutable artifact/,
