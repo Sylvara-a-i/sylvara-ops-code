@@ -1,0 +1,551 @@
+"use strict";
+
+const { deriveOperationIdentity } = require("./idempotency");
+
+const AUTOMATION_STATUS = Object.freeze({
+  customer: "Customer Verified",
+  evaluation: "Evaluation Verified",
+  paid: "Paid Verified",
+});
+const EVALUATION_STATUS = Object.freeze({
+  trial: "Trial",
+  cancelled: "Ended",
+  expired: "Ended",
+  trial_expired: "Ended",
+});
+
+class LifecycleError extends Error {
+  constructor(message, { ambiguous = false, publicCode = "lifecycle_state_invalid", status = 409 } = {}) {
+    super(message);
+    this.name = "LifecycleError";
+    this.ambiguous = ambiguous;
+    this.publicCode = publicCode;
+    this.status = status;
+  }
+}
+
+function fail(message, options) {
+  throw new LifecycleError(message, options);
+}
+
+function timestamp(value, name) {
+  if (
+    typeof value !== "string" ||
+    !/(?:Z|[+-]\d{2}:\d{2})$/.test(value) ||
+    !Number.isFinite(Date.parse(value))
+  ) fail(`${name} is invalid`);
+  return value;
+}
+
+function calendarDate(value, name) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    fail(`${name} is invalid`);
+  }
+  const parsed = Date.parse(`${value}T00:00:00Z`);
+  if (!Number.isFinite(parsed) || new Date(parsed).toISOString().slice(0, 10) !== value) {
+    fail(`${name} is invalid`);
+  }
+  return parsed;
+}
+
+function lookupId(lookup, name) {
+  const value = lookup?.id;
+  if (typeof value !== "string" || !/^[1-9][0-9]{7,29}$/.test(value)) fail(`${name} is invalid`);
+  return value;
+}
+
+function billingId(value, name) {
+  if (typeof value !== "string" || !/^[1-9][0-9]{7,29}$/.test(value)) fail(`${name} is invalid`);
+  return value;
+}
+
+function validateCommon(context, config) {
+  const { deal, account } = context;
+  if (
+    deal.Pipeline !== config.revenueDeskPipelineValue ||
+    deal.Entry_Offer !== config.freeTestEntryOfferValue ||
+    deal.Type !== config.initialSaleTypeValue
+  ) fail("Deal is outside the approved free-test lifecycle");
+  const accountId = lookupId(deal.Account_Name, "Deal Account relationship");
+  if (account.id !== accountId || typeof account.Account_Name !== "string" || !account.Account_Name.trim()) {
+    fail("Authoritative CRM Account state is incomplete");
+  }
+  return Object.freeze({ deal, account, accountId });
+}
+
+function operationMaterial(action, state, config) {
+  const { deal, accountId } = state;
+  switch (action) {
+    case "ensure_customer":
+      return { accountId };
+    case "start_evaluation":
+      return {
+        accountId,
+        testStartAt: timestamp(deal.Test_Start_At, "Test_Start_At"),
+        testScopeVersion: String(deal.Test_Scope_Version ?? ""),
+      };
+    case "end_evaluation":
+      return {
+        subscriptionId: billingId(
+          deal.Billing_Evaluation_Subscription_ID,
+          "Evaluation subscription ID",
+        ),
+        testEndAt: timestamp(deal.Test_End_At, "Test_End_At"),
+        testEndReason: String(deal.Test_End_Reason ?? ""),
+      };
+    case "prepare_paid_subscription":
+      return {
+        accountId,
+        plan: String(deal.Plan ?? ""),
+        billingFrequency: String(deal.Billing_Frequency ?? ""),
+        subscriptionStartDate: String(deal.Subscription_Start_Date ?? ""),
+        accepted: deal.Subscription_Acceptance_Status === config.paidAcceptanceValue,
+      };
+    default:
+      fail("Action does not create a durable mutation", { publicCode: "operation_invalid" });
+  }
+}
+
+function createLifecycleHandler(config, { crmClient, billingClient, operationStore, now = Date.now }) {
+  for (const dependency of [crmClient, billingClient, operationStore]) {
+    if (!dependency || typeof dependency !== "object") {
+      fail("Lifecycle dependency is unavailable", { publicCode: "configuration_invalid", status: 503 });
+    }
+  }
+
+  if (typeof now !== "function") {
+    fail("Lifecycle clock is unavailable", { publicCode: "configuration_invalid", status: 503 });
+  }
+
+  function lastSyncAt() {
+    const value = new Date(now());
+    if (!Number.isFinite(value.getTime())) {
+      fail("Lifecycle clock is invalid", { publicCode: "configuration_invalid", status: 503 });
+    }
+    return value.toISOString();
+  }
+
+  function successPatch(status) {
+    return {
+      Billing_Automation_Status: status,
+      Billing_Last_Sync_At: lastSyncAt(),
+      Billing_Automation_Error: null,
+    };
+  }
+
+  function validateAction(action, state) {
+    if (action === "ensure_customer") return Object.freeze({});
+    if (action === "start_evaluation") {
+      if (
+        !new Set([config.setupQaStageValue, config.testLiveStageValue]).has(state.deal.Stage) ||
+        state.deal.Go_Live_Approval_Status !== config.goLiveApprovedValue ||
+        Number(state.deal.Test_Duration_Days) !== config.freeTestDurationDays ||
+        Number(state.deal.Test_Call_Limit) !== config.freeTestCallLimit ||
+        !String(state.deal.Test_Scope_Version ?? "")
+      ) fail("Deal is not approved to start an evaluation");
+      timestamp(state.deal.Go_Live_Approved_At, "Go_Live_Approved_At");
+      timestamp(state.deal.Test_Start_At, "Test_Start_At");
+      return Object.freeze({});
+    }
+    if (action === "end_evaluation") {
+      if (!new Set([
+        config.testLiveStageValue,
+        config.resultsReviewStageValue,
+        config.closedLostStageValue,
+      ]).has(state.deal.Stage)) {
+        fail("Deal is not approved to end an evaluation");
+      }
+      timestamp(state.deal.Test_End_At, "Test_End_At");
+      if (typeof state.deal.Test_End_Reason !== "string" || !state.deal.Test_End_Reason.trim()) {
+        fail("Test_End_Reason is required");
+      }
+      return Object.freeze({
+        subscriptionId: billingId(
+          state.deal.Billing_Evaluation_Subscription_ID,
+          "Evaluation subscription ID",
+        ),
+      });
+    }
+    if (action === "prepare_paid_subscription") {
+      if (!config.enablePaidSubscriptionPreparation) {
+        fail("Paid subscription preparation is disabled", {
+          publicCode: "operation_invalid",
+          status: 409,
+        });
+      }
+      if (
+        state.deal.Stage !== config.subscriptionProposedStageValue ||
+        state.deal.Test_Status !== config.testCompletedStatusValue ||
+        state.deal.Subscription_Acceptance_Status !== config.paidAcceptanceValue
+      ) fail("Deal does not contain explicit paid acceptance");
+      const plan = String(state.deal.Plan ?? "");
+      const billingFrequency = String(state.deal.Billing_Frequency ?? "");
+      if (
+        !plan || !billingFrequency || plan.length > 120 || billingFrequency.length > 120 ||
+        /[\u0000-\u001f\u007f]/.test(`${plan}${billingFrequency}`)
+      ) fail("Deal Plan and Billing Frequency are invalid");
+      const selectedPlanCode = config.paidPlanCodeMap[`${plan}::${billingFrequency}`];
+      if (!selectedPlanCode) fail("Deal Plan and Billing Frequency are outside the approved map");
+      const subscriptionStartDate = state.deal.Subscription_Start_Date;
+      const subscriptionStartAt = calendarDate(subscriptionStartDate, "Subscription_Start_Date");
+      const currentTime = new Date(now());
+      if (!Number.isFinite(currentTime.getTime())) {
+        fail("Lifecycle clock is invalid", { publicCode: "configuration_invalid", status: 503 });
+      }
+      const currentDate = Date.parse(`${currentTime.toISOString().slice(0, 10)}T00:00:00Z`);
+      const maximumStartDate = currentDate + (366 * 24 * 60 * 60 * 1000);
+      if (subscriptionStartAt < currentDate || subscriptionStartAt > maximumStartDate) {
+        fail("Subscription_Start_Date is outside the approved range");
+      }
+      return Object.freeze({ selectedPlanCode, subscriptionStartDate });
+    }
+    fail("Lifecycle action is unsupported", { publicCode: "operation_invalid" });
+  }
+
+  async function ensureCustomer(state) {
+    const existingId = state.deal.Billing_Customer_ID;
+    const result = await billingClient.ensureCustomer({
+      crmAccountId: state.accountId,
+    });
+    const customerId = billingId(result.customer.customer_id, "Billing customer ID");
+    if (existingId && existingId !== customerId) fail("CRM and Billing customer IDs conflict", {
+      ambiguous: true,
+      publicCode: "reconciliation_required",
+      status: 503,
+    });
+    let deal = state.deal;
+    const patch = successPatch(AUTOMATION_STATUS.customer);
+    if (deal.Billing_Customer_ID !== customerId) patch.Billing_Customer_ID = customerId;
+    deal = await crmClient.updateDealIntegration(deal, patch);
+    return Object.freeze({ ...state, deal, customerId });
+  }
+
+  function rejectPreexistingSubscription(value, name) {
+    if (value) fail(`${name} already exists and requires reconciliation`, {
+      ambiguous: true,
+      publicCode: "reconciliation_required",
+      status: 503,
+    });
+  }
+
+  async function refreshActionState(action, originalState) {
+    const refreshed = validateCommon(await crmClient.getContext(originalState.deal.id), config);
+    if (refreshed.accountId !== originalState.accountId) fail(
+      "Deal Account relationship changed during the operation",
+      { publicCode: "record_stale", status: 409 },
+    );
+    const validation = validateAction(action, refreshed);
+    return Object.freeze({ state: refreshed, validation });
+  }
+
+  function assertClaimStillMatches(action, state, identity) {
+    const refreshedIdentity = deriveOperationIdentity(
+      config,
+      action,
+      state.deal.id,
+      operationMaterial(action, state, config),
+    );
+    if (
+      refreshedIdentity.operationKey !== identity.operationKey ||
+      refreshedIdentity.operationFingerprint !== identity.operationFingerprint
+    ) fail("Authoritative CRM inputs changed after the operation claim", {
+      publicCode: "record_stale",
+      status: 409,
+    });
+  }
+
+  async function execute(action, state, identity, validation) {
+    if (action === "ensure_customer") {
+      await ensureCustomer(state);
+      return "customer_readback_confirmed";
+    }
+    if (action === "start_evaluation") {
+      rejectPreexistingSubscription(
+        state.deal.Billing_Evaluation_Subscription_ID,
+        "CRM evaluation subscription",
+      );
+      const customerState = await ensureCustomer(state);
+      const refreshed = await refreshActionState(action, state);
+      rejectPreexistingSubscription(
+        refreshed.state.deal.Billing_Evaluation_Subscription_ID,
+        "CRM evaluation subscription",
+      );
+      if (refreshed.state.deal.Billing_Customer_ID !== customerState.customerId) {
+        fail("CRM and Billing customer IDs conflict", {
+          ambiguous: true,
+          publicCode: "reconciliation_required",
+          status: 503,
+        });
+      }
+      assertClaimStillMatches(action, refreshed.state, identity);
+      const subscription = await billingClient.ensureEvaluationSubscription({
+        customerId: customerState.customerId,
+        deterministicReference: identity.billingReference,
+      });
+      const subscriptionId = billingId(subscription.subscription_id, "Evaluation subscription ID");
+      if (
+        refreshed.state.deal.Billing_Evaluation_Subscription_ID &&
+        refreshed.state.deal.Billing_Evaluation_Subscription_ID !== subscriptionId
+      ) fail("CRM already references a different Billing subscription", {
+        ambiguous: true,
+        publicCode: "reconciliation_required",
+        status: 503,
+      });
+      await crmClient.updateDealIntegration(refreshed.state.deal, {
+        Billing_Customer_ID: customerState.customerId,
+        Billing_Evaluation_Subscription_ID: subscriptionId,
+        Billing_Evaluation_Status: EVALUATION_STATUS.trial,
+        ...successPatch(AUTOMATION_STATUS.evaluation),
+      });
+      return "evaluation_readback_confirmed";
+    }
+    if (action === "end_evaluation") {
+      const customer = await billingClient.findCustomerByCrmReference(state.accountId);
+      if (!customer) fail("Billing customer is missing", {
+        ambiguous: true,
+        publicCode: "reconciliation_required",
+        status: 503,
+      });
+      const customerId = billingId(customer.customer_id, "Billing customer ID");
+      if (state.deal.Billing_Customer_ID && state.deal.Billing_Customer_ID !== customerId) {
+        fail("CRM and Billing customer IDs conflict", {
+          ambiguous: true,
+          publicCode: "reconciliation_required",
+          status: 503,
+        });
+      }
+      const refreshed = await refreshActionState(action, state);
+      assertClaimStillMatches(action, refreshed.state, identity);
+      if (
+        refreshed.state.deal.Billing_Customer_ID &&
+        refreshed.state.deal.Billing_Customer_ID !== customerId
+      ) {
+        fail("CRM and Billing customer IDs conflict", {
+          ambiguous: true,
+          publicCode: "reconciliation_required",
+          status: 503,
+        });
+      }
+      const evaluationIdentity = deriveOperationIdentity(
+        config,
+        "start_evaluation",
+        refreshed.state.deal.id,
+        { accountId: refreshed.state.accountId },
+      );
+      const subscriptionId = refreshed.validation.subscriptionId;
+      const readback = await billingClient.cancelEvaluation({
+        subscriptionId,
+        customerId,
+        deterministicReference: evaluationIdentity.billingReference,
+      });
+      const terminalStatus = EVALUATION_STATUS[readback.status];
+      if (!terminalStatus) fail("Billing evaluation terminal status is invalid", {
+        ambiguous: true,
+        publicCode: "reconciliation_required",
+        status: 503,
+      });
+      await crmClient.updateDealIntegration(refreshed.state.deal, {
+        Billing_Evaluation_Subscription_ID: subscriptionId,
+        Billing_Evaluation_Status: terminalStatus,
+        ...successPatch(AUTOMATION_STATUS.evaluation),
+      });
+      return "evaluation_end_readback_confirmed";
+    }
+    if (action === "prepare_paid_subscription") {
+      rejectPreexistingSubscription(
+        state.deal.Billing_Subscription_ID,
+        "CRM paid subscription",
+      );
+      const customerState = await ensureCustomer(state);
+      const refreshed = await refreshActionState(action, state);
+      rejectPreexistingSubscription(
+        refreshed.state.deal.Billing_Subscription_ID,
+        "CRM paid subscription",
+      );
+      if (refreshed.state.deal.Billing_Customer_ID !== customerState.customerId) {
+        fail("CRM and Billing customer IDs conflict", {
+          ambiguous: true,
+          publicCode: "reconciliation_required",
+          status: 503,
+        });
+      }
+      assertClaimStillMatches(action, refreshed.state, identity);
+      const subscription = await billingClient.ensurePaidSubscription({
+        customerId: customerState.customerId,
+        deterministicReference: identity.billingReference,
+        selectedPlanCode: refreshed.validation.selectedPlanCode,
+        subscriptionStartDate: refreshed.validation.subscriptionStartDate,
+      });
+      const subscriptionId = billingId(subscription.subscription_id, "Paid subscription ID");
+      if (
+        refreshed.state.deal.Billing_Subscription_ID &&
+        refreshed.state.deal.Billing_Subscription_ID !== subscriptionId
+      ) fail("CRM already references a different paid Billing subscription", {
+        ambiguous: true,
+        publicCode: "reconciliation_required",
+        status: 503,
+      });
+      await crmClient.updateDealIntegration(refreshed.state.deal, {
+        Billing_Customer_ID: customerState.customerId,
+        Billing_Subscription_ID: subscriptionId,
+        Subscription_Status: config.paidReadyStatusValue,
+        ...successPatch(AUTOMATION_STATUS.paid),
+      });
+      return "paid_subscription_readback_confirmed";
+    }
+    fail("Lifecycle action is unsupported", { publicCode: "operation_invalid" });
+  }
+
+  async function reconcile(state) {
+    const actions = [
+      "ensure_customer",
+      "start_evaluation",
+      "end_evaluation",
+      "prepare_paid_subscription",
+    ];
+    const identities = Object.create(null);
+    const operations = Object.create(null);
+    let hasUnresolvedOperation = false;
+    for (const action of actions) {
+      identities[action] = deriveOperationIdentity(
+        config,
+        action,
+        state.deal.id,
+        { accountId: state.accountId },
+      );
+      const operation = await operationStore.readByKey(identities[action].operationKey);
+      if (operation && operation.STATUS !== "completed") hasUnresolvedOperation = true;
+      operations[action] = operation;
+    }
+
+    const customer = await billingClient.findCustomerByCrmReference(state.accountId);
+    if (!customer) fail("Billing customer is missing", {
+      ambiguous: true,
+      publicCode: "reconciliation_required",
+      status: 503,
+    });
+    const customerId = billingId(customer.customer_id, "Billing customer ID");
+    if (state.deal.Billing_Customer_ID !== customerId) {
+      fail("CRM and Billing customer IDs conflict", {
+        ambiguous: true,
+        publicCode: "reconciliation_required",
+        status: 503,
+      });
+    }
+    if (
+      state.deal.Billing_Evaluation_Subscription_ID &&
+      state.deal.Billing_Subscription_ID &&
+      state.deal.Billing_Evaluation_Subscription_ID === state.deal.Billing_Subscription_ID
+    ) fail("Evaluation and paid Billing subscription IDs are not separated", {
+      ambiguous: true,
+      publicCode: "reconciliation_required",
+      status: 503,
+    });
+
+    const evaluation = await billingClient.findVerifiedEvaluationSubscription({
+      customerId,
+      deterministicReference: identities.start_evaluation.billingReference,
+    });
+    const crmEvaluationId = state.deal.Billing_Evaluation_Subscription_ID;
+    const startCompleted = operations.start_evaluation?.STATUS === "completed";
+    if (
+      Boolean(evaluation) !== Boolean(crmEvaluationId) ||
+      (evaluation && evaluation.subscription_id !== crmEvaluationId) ||
+      Boolean(evaluation) !== startCompleted ||
+      Boolean(evaluation) !== Boolean(state.deal.Billing_Evaluation_Status) ||
+      (evaluation && EVALUATION_STATUS[evaluation.status] !== state.deal.Billing_Evaluation_Status)
+    ) fail("Evaluation subscription reconciliation does not match", {
+      ambiguous: true,
+      publicCode: "reconciliation_required",
+      status: 503,
+    });
+    if (
+      operations.end_evaluation?.STATUS === "completed" &&
+      !new Set(["cancelled", "expired", "trial_expired"]).has(evaluation?.status)
+    ) fail("Evaluation end operation does not match Billing", {
+      ambiguous: true,
+      publicCode: "reconciliation_required",
+      status: 503,
+    });
+
+    const paid = await billingClient.findSubscriptionByReference(
+      identities.prepare_paid_subscription.billingReference,
+    );
+    if (paid || state.deal.Billing_Subscription_ID || operations.prepare_paid_subscription) {
+      fail("Paid subscription state requires a commercial-contract reconciliation revision", {
+        ambiguous: true,
+        publicCode: "reconciliation_required",
+        status: 503,
+      });
+    }
+    if (hasUnresolvedOperation) fail("Lifecycle operation is unresolved", {
+      ambiguous: true,
+      publicCode: "reconciliation_required",
+      status: 503,
+    });
+    return Object.freeze({ outcome: "authoritative_readback_confirmed", duplicate: false });
+  }
+
+  async function handle(payload) {
+    const context = await crmClient.getContext(payload.dealId);
+    const state = validateCommon(context, config);
+    if (payload.action === "reconcile") return reconcile(state);
+    const validation = validateAction(payload.action, state);
+    const identity = deriveOperationIdentity(
+      config,
+      payload.action,
+      payload.dealId,
+      operationMaterial(payload.action, state, config),
+    );
+    const claim = await operationStore.claim({
+      operationKey: identity.operationKey,
+      operationFingerprint: identity.operationFingerprint,
+      action: payload.action,
+      dealId: payload.dealId,
+    });
+    if (claim.outcome === "duplicate-completed") {
+      await reconcile(state);
+      return Object.freeze({ outcome: "duplicate_completed", duplicate: true });
+    }
+    if (claim.outcome !== "claimed") fail("Lifecycle operation requires reconciliation", {
+      ambiguous: true,
+      publicCode: "reconciliation_required",
+      status: 503,
+    });
+    let outcome;
+    try {
+      outcome = await execute(payload.action, state, identity, validation);
+    } catch (error) {
+      const status = error?.ambiguous ? "reconciliation_required" : "failed";
+      const outcome = String(error?.publicCode ?? "lifecycle_failed");
+      try {
+        await operationStore.mark(
+          claim.rowId,
+          status,
+          /^[a-z0-9_]{1,80}$/.test(outcome) ? outcome : "lifecycle_failed",
+        );
+      } catch {
+        throw new LifecycleError("Lifecycle result requires reconciliation", {
+          ambiguous: true,
+          publicCode: "reconciliation_required",
+          status: 503,
+        });
+      }
+      throw error;
+    }
+    try {
+      await operationStore.mark(claim.rowId, "completed", outcome);
+    } catch {
+      throw new LifecycleError("Lifecycle completion requires reconciliation", {
+        ambiguous: true,
+        publicCode: "reconciliation_required",
+        status: 503,
+      });
+    }
+    return Object.freeze({ outcome, duplicate: false });
+  }
+
+  return Object.freeze({ handle });
+}
+
+module.exports = { LifecycleError, createLifecycleHandler };
