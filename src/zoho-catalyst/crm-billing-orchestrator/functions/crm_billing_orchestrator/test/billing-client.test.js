@@ -37,6 +37,24 @@ function evaluationSubscription(overrides = {}) {
   };
 }
 
+function paidPlan() {
+  return {
+    plan_code: "launch_plan",
+    status: "active",
+    recurring_price: "349",
+  };
+}
+
+function paidSubscription(overrides = {}) {
+  return evaluationSubscription({
+    plan: { plan_code: "launch_plan" },
+    amount: "349",
+    status: "future",
+    starts_at: "2026-09-01",
+    ...overrides,
+  });
+}
+
 function subscriptionPage(subscriptions, page = 1, hasMorePage = false) {
   return {
     subscriptions,
@@ -135,6 +153,57 @@ test("subscription lookup paginates and exact-filters reference_contains results
   assert.equal(result.subscription_id, subscriptionId);
   assert.equal(new URL(calls[0].url).searchParams.get("page"), "1");
   assert.equal(new URL(calls[1].url).searchParams.get("page"), "2");
+});
+
+test("paid subscription creation transmits and verifies the accepted start date", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const calls = [];
+  const subscription = paidSubscription();
+  const client = clientFor(config, [
+    jsonResponse(200, { plan: paidPlan() }),
+    jsonResponse(200, subscriptionPage([])),
+    jsonResponse(201, { subscription }),
+    jsonResponse(200, subscriptionPage([subscription])),
+    jsonResponse(200, { subscription }),
+  ], calls);
+  const result = await client.ensurePaidSubscription({
+    customerId,
+    deterministicReference: reference,
+    selectedPlanCode: "launch_plan",
+    subscriptionStartDate: "2026-09-01",
+  });
+  assert.equal(result.subscription_id, subscriptionId);
+  const body = JSON.parse(calls.find((call) => call.options.method === "POST").options.body);
+  assert.equal(body.starts_at, "2026-09-01");
+});
+
+test("subscription readback rejects every documented payment-method shape", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  for (const paymentEvidence of [
+    { card: { card_id: "synthetic-card" } },
+    { bank_account_id: "synthetic-bank" },
+  ]) {
+    const client = clientFor(config, [
+      jsonResponse(200, { plan: evaluationPlan() }),
+      jsonResponse(200, subscriptionPage([evaluationSubscription()])),
+      jsonResponse(200, { subscription: evaluationSubscription(paymentEvidence) }),
+    ]);
+    await assert.rejects(client.ensureEvaluationSubscription({
+      customerId,
+      deterministicReference: reference,
+    }), /violates the approved boundary/);
+  }
+});
+
+test("natural trial expiry is a terminal evaluation outcome", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const calls = [];
+  const client = clientFor(config, [
+    jsonResponse(200, { subscription: evaluationSubscription({ status: "trial_expired" }) }),
+  ], calls);
+  const result = await client.cancelEvaluation(subscriptionId);
+  assert.equal(result.status, "trial_expired");
+  assert.equal(calls.some((call) => call.options.method === "POST"), false);
 });
 
 test("incomplete pagination and duplicate exact references fail closed", async () => {
