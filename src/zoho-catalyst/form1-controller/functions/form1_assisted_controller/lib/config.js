@@ -211,7 +211,6 @@ function loadConfig(environment = process.env, artifactRevision) {
       assistedBy: readBoundedText(environment, "FORM1_ASSISTED_BY_VALUE", 100),
       entryOffer: readBoundedText(environment, "FORM1_ENTRY_OFFER_VALUE", 100),
       intakeFormVersion: readBoundedText(environment, "FORM1_INTAKE_FORM_VERSION", 30),
-      leadSource: readBoundedText(environment, "FORM1_LEAD_SOURCE_VALUE", 100),
       leadStatus: readBoundedText(environment, "FORM1_LEAD_STATUS_VALUE", 100),
       sourcePage: readBoundedText(environment, "FORM1_SOURCE_PAGE_VALUE", 100),
       submissionChannel: readBoundedText(

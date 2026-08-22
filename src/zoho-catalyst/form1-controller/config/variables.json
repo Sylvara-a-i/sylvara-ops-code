@@ -21,7 +21,6 @@
     { "name": "FORM1_ASSISTED_BY_VALUE", "classification": "private-form-contract", "required": true },
     { "name": "FORM1_ENTRY_OFFER_VALUE", "classification": "private-form-contract", "required": true },
     { "name": "FORM1_INTAKE_FORM_VERSION", "classification": "private-form-contract", "required": true },
-    { "name": "FORM1_LEAD_SOURCE_VALUE", "classification": "private-crm-contract", "required": true },
     { "name": "FORM1_LEAD_STATUS_VALUE", "classification": "private-crm-contract", "required": true },
     { "name": "FORM1_SOURCE_PAGE_VALUE", "classification": "private-form-contract", "required": true },
     { "name": "FORM1_SUBMISSION_CHANNEL_VALUE", "classification": "private-form-contract", "required": true },

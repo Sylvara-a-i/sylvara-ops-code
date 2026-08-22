@@ -10,6 +10,9 @@ const FIELD_CONTRACT = Object.freeze([
   Object.freeze({ crm: "Designation", output: "exact_job_title", maximum: 100 }),
   Object.freeze({ crm: "Email", output: "email", maximum: 100 }),
   Object.freeze({ crm: "Mobile", output: "mobile_phone", maximum: 30 }),
+  // Preserve the prospect's acquisition attribution. Assisted intake is
+  // recorded separately through Submission Channel and Source Page.
+  Object.freeze({ crm: "Lead_Source", output: "lead_source", maximum: 100 }),
   Object.freeze({ crm: "Main_Business_Phone", output: "company_phone", maximum: 30 }),
   Object.freeze({ crm: "Current_Call_Handling", output: "current_call_handling", maximum: 120 }),
   Object.freeze({ crm: "Requested_Test_Route", output: "preferred_test_route", maximum: 120 }),
@@ -22,7 +25,6 @@ const PREFILL_OUTPUT_KEYS = Object.freeze([
   ...FIELD_CONTRACT.map((field) => field.output),
   "entry_offer",
   "submission_channel",
-  "lead_source",
   "lead_status",
   "intake_submission_id",
   "source_page",
@@ -63,7 +65,6 @@ function buildPrefillPayload(lead, session, constants) {
     "assistedBy",
     "entryOffer",
     "intakeFormVersion",
-    "leadSource",
     "leadStatus",
     "sourcePage",
     "submissionChannel",
@@ -88,7 +89,6 @@ function buildPrefillPayload(lead, session, constants) {
     entry_offer: constants.entryOffer,
     intake_form_version: constants.intakeFormVersion,
     intake_submission_id: intakeSubmissionId,
-    lead_source: constants.leadSource,
     lead_status: constants.leadStatus,
     source_page: constants.sourcePage,
     submission_channel: constants.submissionChannel,

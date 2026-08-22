@@ -13,7 +13,6 @@ const ASSISTED_CONSTANTS = Object.freeze({
   assistedBy: "Synthetic assisted flow",
   entryOffer: "Synthetic test offer",
   intakeFormVersion: "test-version",
-  leadSource: "Synthetic assisted source",
   leadStatus: "Synthetic requested status",
   sourcePage: "synthetic-assisted",
   submissionChannel: "Synthetic In Person",
@@ -155,6 +154,7 @@ test("prefill reserves disclosure before CRM read and excludes consent and inter
   assert.equal(result.body.first_name, "Synthetic");
   assert.equal(result.body.intake_submission_id, INTAKE_ID);
   assert.equal(result.body.submission_channel, "Synthetic In Person");
+  assert.equal(result.body.lead_source, "Synthetic original source");
   assert.equal(Object.hasOwn(result.body, "additional_notes"), false);
   assert.equal(Object.keys(result.body).some((key) => /consent/i.test(key)), false);
   assert.equal(JSON.stringify(result.body).includes("internal-only-note"), false);

@@ -20,7 +20,7 @@ Form 1's existing native CRM integration remains the only submission writer. Its
 
 ## Prefill allowlist
 
-The current allowlist is: first and last name, company, decision-maker role, exact job title, contact email, mobile phone, company phone, current call handling, requested test route, phone-system provider, primary service area, field-team-size band, the fresh intake identity, and the assisted-mode provenance values held only in Catalyst Development configuration.
+The current allowlist is: first and last name, company, decision-maker role, exact job title, contact email, mobile phone, company phone, the existing CRM Lead Source, current call handling, requested test route, phone-system provider, primary service area, field-team-size band, the fresh intake identity, and the assisted-mode provenance values held only in Catalyst Development configuration. The original Lead Source is preserved; assisted intake is attributed separately through Submission Channel and Source Page.
 
 ## Development setup
 

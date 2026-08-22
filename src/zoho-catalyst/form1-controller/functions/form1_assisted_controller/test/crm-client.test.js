@@ -49,4 +49,5 @@ test("CRM prefill read allowlist excludes notes and consent fields", () => {
   assert.equal(READ_FIELDS.includes("Free_Test_Request_Notes"), false);
   assert.equal(READ_FIELDS.some((field) => /consent/i.test(field)), false);
   assert.equal(READ_FIELDS.includes("Intake_Submission_ID"), true);
+  assert.equal(READ_FIELDS.includes("Lead_Source"), true);
 });
