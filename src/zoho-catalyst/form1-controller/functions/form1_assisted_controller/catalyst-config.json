@@ -1,0 +1,10 @@
+{
+  "deployment": {
+    "name": "form1_assisted_controller",
+    "stack": "node24",
+    "type": "advancedio"
+  },
+  "execution": {
+    "main": "index.js"
+  }
+}
