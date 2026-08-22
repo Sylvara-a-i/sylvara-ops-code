@@ -268,6 +268,29 @@ test("subscription readback accepts the documented nested customer identity", as
   assert.equal(result.subscription_id, subscriptionId);
 });
 
+test("verified evaluation lookup exact-filters then performs authoritative readback", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const calls = [];
+  const client = clientFor(config, [
+    jsonResponse(200, subscriptionPage([
+      evaluationSubscription({
+        subscription_id: "300000000000002",
+        reference_id: `${reference}-partial`,
+      }),
+      evaluationSubscription(),
+    ])),
+    jsonResponse(200, { subscription: evaluationSubscription() }),
+  ], calls);
+  const result = await client.findVerifiedEvaluationSubscription({
+    customerId,
+    deterministicReference: reference,
+  });
+  assert.equal(result.subscription_id, subscriptionId);
+  assert.equal(calls.length, 2);
+  assert.equal(new URL(calls[0].url).searchParams.get("reference_contains"), reference);
+  assert.match(calls[1].url, new RegExp(`/subscriptions/${subscriptionId}$`));
+});
+
 test("natural trial expiry is a terminal evaluation outcome", async () => {
   const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
   const calls = [];
