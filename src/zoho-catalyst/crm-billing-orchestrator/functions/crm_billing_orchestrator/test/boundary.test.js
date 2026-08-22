@@ -16,6 +16,21 @@ test("runtime contains no Zoho Books client or endpoint", () => {
   }
 });
 
+test("Catalyst and Node package names match the deployment target", () => {
+  const packageConfig = JSON.parse(fs.readFileSync(
+    path.join(functionRoot, "package.json"),
+    "utf8",
+  ));
+  const catalystConfig = JSON.parse(fs.readFileSync(
+    path.join(functionRoot, "catalyst-config.json"),
+    "utf8",
+  ));
+  assert.equal(packageConfig.name, "crm_billing_orchestrator");
+  assert.equal(catalystConfig.deployment.name, packageConfig.name);
+  assert.equal(catalystConfig.deployment.stack, "node24");
+  assert.equal(catalystConfig.deployment.type, "advancedio");
+});
+
 test("blank environment and reviewed variable registry have the same names", () => {
   const envNames = fs.readFileSync(path.join(functionRoot, ".env.example"), "utf8")
     .split(/\r?\n/)
