@@ -11,6 +11,7 @@ const EVALUATION_STATUS = Object.freeze({
   trial: "Trial",
   cancelled: "Ended",
   expired: "Ended",
+  trial_expired: "Ended",
 });
 
 class LifecycleError extends Error {
@@ -229,6 +230,7 @@ function createLifecycleHandler(config, { crmClient, billingClient, operationSto
         customerId: customerState.customerId,
         deterministicReference: identity.billingReference,
         selectedPlanCode,
+        subscriptionStartDate: state.deal.Subscription_Start_Date,
       });
       const subscriptionId = billingId(subscription.subscription_id, "Paid subscription ID");
       if (
