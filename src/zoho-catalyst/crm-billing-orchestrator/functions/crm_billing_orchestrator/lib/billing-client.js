@@ -400,6 +400,21 @@ function createBillingClient(config, {
   });
   const ensurePaidSubscription = (input) => ensureSubscription({ ...input, evaluation: false });
 
+  async function findVerifiedEvaluationSubscription({ customerId, deterministicReference }) {
+    const selectedCustomerId = id(customerId, "Billing customer identifier");
+    const selectedReference = reference(deterministicReference);
+    const candidate = await findSubscriptionByReference(selectedReference);
+    if (!candidate) return null;
+    const readback = await getSubscription(candidate.subscription_id);
+    return verifySubscription(readback, {
+      customerId: selectedCustomerId,
+      deterministicReference: selectedReference,
+      selectedPlanCode: config.evaluationPlanCode,
+      evaluation: true,
+      allowedStatuses: ["trial", "live", "cancelled", "expired", "trial_expired"],
+    });
+  }
+
   async function cancelEvaluation({ subscriptionId, customerId, deterministicReference }) {
     const selectedId = id(subscriptionId, "Billing subscription identifier");
     const selectedCustomerId = id(customerId, "Billing customer identifier");
@@ -446,6 +461,7 @@ function createBillingClient(config, {
     ensurePaidSubscription,
     findCustomerByCrmReference,
     findSubscriptionByReference,
+    findVerifiedEvaluationSubscription,
     getPlan,
     getSubscription,
   });
