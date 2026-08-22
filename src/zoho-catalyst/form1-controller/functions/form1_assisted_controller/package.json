@@ -1,5 +1,5 @@
 {
-  "name": "sylvara-form1-assisted-controller",
+  "name": "form1_assisted_controller",
   "version": "1.0.0",
   "private": true,
   "description": "Isolated Zoho Catalyst Advanced I/O controller for CRM-assisted Form 1 issue and prefill.",
