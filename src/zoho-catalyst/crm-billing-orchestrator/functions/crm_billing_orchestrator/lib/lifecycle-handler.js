@@ -37,6 +37,17 @@ function timestamp(value, name) {
   return value;
 }
 
+function calendarDate(value, name) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    fail(`${name} is invalid`);
+  }
+  const parsed = Date.parse(`${value}T00:00:00Z`);
+  if (!Number.isFinite(parsed) || new Date(parsed).toISOString().slice(0, 10) !== value) {
+    fail(`${name} is invalid`);
+  }
+  return parsed;
+}
+
 function lookupId(lookup, name) {
   const value = lookup?.id;
   if (typeof value !== "string" || !/^[1-9][0-9]{7,29}$/.test(value)) fail(`${name} is invalid`);
@@ -207,6 +218,12 @@ function createLifecycleHandler(config, { crmClient, billingClient, operationSto
       return "evaluation_end_readback_confirmed";
     }
     if (action === "prepare_paid_subscription") {
+      if (!config.enablePaidSubscriptionPreparation) {
+        fail("Paid subscription preparation is disabled", {
+          publicCode: "operation_invalid",
+          status: 409,
+        });
+      }
       if (
         state.deal.Stage !== config.subscriptionProposedStageValue ||
         state.deal.Test_Status !== config.testCompletedStatusValue ||
@@ -220,11 +237,19 @@ function createLifecycleHandler(config, { crmClient, billingClient, operationSto
       ) fail("Deal Plan and Billing Frequency are invalid");
       const selectedPlanCode = config.paidPlanCodeMap[`${plan}::${billingFrequency}`];
       if (!selectedPlanCode) fail("Deal Plan and Billing Frequency are outside the approved map");
-      if (
-        typeof state.deal.Subscription_Start_Date !== "string" ||
-        !/^\d{4}-\d{2}-\d{2}$/.test(state.deal.Subscription_Start_Date) ||
-        !Number.isFinite(Date.parse(`${state.deal.Subscription_Start_Date}T00:00:00Z`))
-      ) fail("Subscription_Start_Date is invalid");
+      const subscriptionStartAt = calendarDate(
+        state.deal.Subscription_Start_Date,
+        "Subscription_Start_Date",
+      );
+      const currentTime = new Date(now());
+      if (!Number.isFinite(currentTime.getTime())) {
+        fail("Lifecycle clock is invalid", { publicCode: "configuration_invalid", status: 503 });
+      }
+      const currentDate = Date.parse(`${currentTime.toISOString().slice(0, 10)}T00:00:00Z`);
+      const maximumStartDate = currentDate + (366 * 24 * 60 * 60 * 1000);
+      if (subscriptionStartAt < currentDate || subscriptionStartAt > maximumStartDate) {
+        fail("Subscription_Start_Date is outside the approved range");
+      }
       const customerState = await ensureCustomer(state);
       const subscription = await billingClient.ensurePaidSubscription({
         customerId: customerState.customerId,
