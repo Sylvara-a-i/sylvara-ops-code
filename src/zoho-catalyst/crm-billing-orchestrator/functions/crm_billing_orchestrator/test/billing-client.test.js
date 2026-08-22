@@ -1,0 +1,179 @@
+"use strict";
+
+const assert = require("node:assert/strict");
+const test = require("node:test");
+const { createBillingClient } = require("../lib/billing-client");
+const { loadConfig } = require("../lib/config");
+const { REVISION, baseEnvironment, jsonResponse } = require("./helpers");
+
+const token = `Zoho-oauthtoken ${"b".repeat(24)}`;
+const crmAccountId = "10000000000000002";
+const customerId = "20000000000000001";
+const subscriptionId = "30000000000000001";
+const reference = `syl-evaluation-${"c".repeat(32)}`;
+
+function evaluationPlan(price = "0") {
+  return {
+    plan_code: "evaluation_plan",
+    status: "active",
+    recurring_price: price,
+    setup_fee: "0",
+    billing_cycles: 1,
+    trial_period: 7,
+  };
+}
+
+function evaluationSubscription(overrides = {}) {
+  return {
+    subscription_id: subscriptionId,
+    customer_id: customerId,
+    reference_id: reference,
+    plan: { plan_code: "evaluation_plan" },
+    auto_collect: false,
+    addons: [],
+    amount: "0",
+    status: "trial",
+    ...overrides,
+  };
+}
+
+function subscriptionPage(subscriptions, page = 1, hasMorePage = false) {
+  return {
+    subscriptions,
+    page_context: { page, per_page: 200, has_more_page: hasMorePage },
+  };
+}
+
+function clientFor(config, responses, calls = []) {
+  return createBillingClient(config, {
+    readAuthorizationProvider: async () => token,
+    writeAuthorizationProvider: async () => token,
+    fetchImpl: async (url, options) => {
+      calls.push({ url, options });
+      const response = responses.shift();
+      if (response instanceof Error) throw response;
+      return response;
+    },
+  });
+}
+
+test("customer creation uses only the native CRM Account import and exact reference readback", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const calls = [];
+  const customer = { customer_id: customerId, zcrm_account_id: crmAccountId };
+  const client = clientFor(config, [
+    jsonResponse(404, { code: 1008 }),
+    jsonResponse(201, { code: 0 }),
+    jsonResponse(200, { customer }),
+  ], calls);
+  const result = await client.ensureCustomer({ crmAccountId });
+  assert.equal(result.imported, true);
+  assert.equal(result.customer.customer_id, customerId);
+  assert.equal(calls[0].url, `${config.billingApiBaseUrl}/customers/reference/${crmAccountId}?reference_id_type=zcrm_account_id`);
+  assert.equal(calls[1].url, `${config.billingApiBaseUrl}/crm/account/${crmAccountId}/import`);
+  assert.equal(calls[1].options.method, "POST");
+  assert.equal(Object.hasOwn(calls[1].options, "body"), false);
+  assert.equal(calls.some(({ url, options }) => (
+    url.endsWith("/customers") && options.method === "POST"
+  )), false);
+});
+
+test("evaluation creation proves zero exposure and uses the documented creation overrides", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const calls = [];
+  const responses = [
+    jsonResponse(200, { plan: evaluationPlan() }),
+    jsonResponse(200, subscriptionPage([])),
+    jsonResponse(201, { subscription: evaluationSubscription() }),
+    jsonResponse(200, subscriptionPage([evaluationSubscription()])),
+    jsonResponse(200, { subscription: evaluationSubscription() }),
+  ];
+  const client = clientFor(config, responses, calls);
+  const result = await client.ensureEvaluationSubscription({
+    customerId,
+    deterministicReference: reference,
+  });
+  assert.equal(result.subscription_id, subscriptionId);
+  assert.equal(calls[0].url, `${config.billingApiBaseUrl}/plans/evaluation_plan`);
+  const create = calls.find((call) => call.options.method === "POST");
+  const body = JSON.parse(create.options.body);
+  assert.equal(body.auto_collect, false);
+  assert.deepEqual(body.plan, {
+    plan_code: "evaluation_plan",
+    quantity: 1,
+    exlude_setup_fee: true,
+    billing_cycles: 1,
+    trial_days: config.freeTestDurationDays,
+  });
+  assert.equal(Object.hasOwn(body, "addons"), false);
+  assert.equal(Object.hasOwn(body, "card_id"), false);
+  const referenceLookups = calls.filter(({ url }) => url.includes("reference_contains="));
+  assert.equal(referenceLookups.length, 2);
+  assert.ok(referenceLookups.every(({ url }) => (
+    new URL(url).searchParams.get("reference_contains") === reference &&
+    new URL(url).searchParams.has("reference_id") === false
+  )));
+  assert.ok(calls.every((call) => (
+    call.options.headers["X-com-zoho-subscriptions-organizationid"] ===
+    config.billingOrganizationId
+  )));
+});
+
+test("subscription lookup paginates and exact-filters reference_contains results", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const calls = [];
+  const client = clientFor(config, [
+    jsonResponse(200, subscriptionPage([
+      evaluationSubscription({
+        subscription_id: "30000000000000002",
+        reference_id: `${reference}-partial`,
+      }),
+    ], 1, true)),
+    jsonResponse(200, subscriptionPage([evaluationSubscription()], 2, false)),
+  ], calls);
+  const result = await client.findSubscriptionByReference(reference);
+  assert.equal(result.subscription_id, subscriptionId);
+  assert.equal(new URL(calls[0].url).searchParams.get("page"), "1");
+  assert.equal(new URL(calls[1].url).searchParams.get("page"), "2");
+});
+
+test("incomplete pagination and duplicate exact references fail closed", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const incomplete = clientFor(config, [jsonResponse(200, { subscriptions: [] })]);
+  await assert.rejects(incomplete.findSubscriptionByReference(reference), /pagination is incomplete/);
+
+  const duplicate = clientFor(config, [jsonResponse(200, subscriptionPage([
+    evaluationSubscription(),
+    evaluationSubscription({ subscription_id: "30000000000000002" }),
+  ]))]);
+  await assert.rejects(duplicate.findSubscriptionByReference(reference), /not unique/);
+});
+
+test("non-zero evaluation plan fails before subscription creation", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const calls = [];
+  const client = clientFor(config, [
+    jsonResponse(200, { plan: evaluationPlan("1.00") }),
+  ], calls);
+  await assert.rejects(client.ensureEvaluationSubscription({
+    customerId,
+    deterministicReference: reference,
+  }), /zero bounded exposure/);
+  assert.equal(calls.some((call) => call.options.method === "POST"), false);
+});
+
+test("an ambiguous create is resolved only by paginated deterministic reference readback", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const client = clientFor(config, [
+    jsonResponse(200, { plan: evaluationPlan() }),
+    jsonResponse(200, subscriptionPage([])),
+    new Error("synthetic post-commit timeout"),
+    jsonResponse(200, subscriptionPage([evaluationSubscription()])),
+    jsonResponse(200, { subscription: evaluationSubscription() }),
+  ]);
+  const result = await client.ensureEvaluationSubscription({
+    customerId,
+    deterministicReference: reference,
+  });
+  assert.equal(result.subscription_id, subscriptionId);
+});

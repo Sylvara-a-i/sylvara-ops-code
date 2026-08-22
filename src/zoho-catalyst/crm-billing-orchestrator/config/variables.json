@@ -1,0 +1,43 @@
+{
+  "status": "proposed-development-only",
+  "rules": {
+    "repository_values": "names and constraints only",
+    "runtime_values": "Catalyst private configuration or Connections",
+    "logging": "prohibited for every configured value"
+  },
+  "variables": [
+    { "name": "DEPLOYMENT_ENVIRONMENT", "class": "environment-binding", "required": true },
+    { "name": "SOURCE_REVISION", "class": "artifact-binding", "required": true },
+    { "name": "ALLOWED_PATH", "class": "private-route", "required": true },
+    { "name": "SHARED_HEADER_NAME", "class": "private-route-auth", "required": true },
+    { "name": "SHARED_HEADER_VALUE", "class": "secret", "required": true },
+    { "name": "CRM_API_BASE_URL", "class": "public-api-base", "required": true },
+    { "name": "BILLING_API_BASE_URL", "class": "public-api-base", "required": true },
+    { "name": "BILLING_ORGANIZATION_ID", "class": "private-identifier", "required": true },
+    { "name": "CRM_READ_CONNECTION_LINK_NAME", "class": "private-connection", "required": true },
+    { "name": "CRM_WRITE_CONNECTION_LINK_NAME", "class": "private-connection", "required": true },
+    { "name": "BILLING_READ_CONNECTION_LINK_NAME", "class": "private-connection", "required": true },
+    { "name": "BILLING_WRITE_CONNECTION_LINK_NAME", "class": "private-connection", "required": true },
+    { "name": "OPERATION_TABLE", "class": "private-platform-name", "required": true },
+    { "name": "DATASTORE_DUPLICATE_ERROR_CODES", "class": "verified-platform-contract", "required": true },
+    { "name": "IDEMPOTENCY_PEPPER", "class": "secret", "required": true },
+    { "name": "EVALUATION_PLAN_CODE", "class": "private-plan", "required": true },
+    { "name": "PAID_PLAN_CODE_MAP", "class": "private-plan-map", "required": true },
+    { "name": "PAID_ACCEPTANCE_VALUE", "class": "private-crm-value", "required": true },
+    { "name": "FREE_TEST_ENTRY_OFFER_VALUE", "class": "private-crm-value", "required": true },
+    { "name": "INITIAL_SALE_TYPE_VALUE", "class": "private-crm-value", "required": true },
+    { "name": "TEST_LIVE_STAGE_VALUE", "class": "private-crm-value", "required": true },
+    { "name": "RESULTS_REVIEW_STAGE_VALUE", "class": "private-crm-value", "required": true },
+    { "name": "SUBSCRIPTION_PROPOSED_STAGE_VALUE", "class": "private-crm-value", "required": true },
+    { "name": "CLOSED_LOST_STAGE_VALUE", "class": "private-crm-value", "required": true },
+    { "name": "GO_LIVE_APPROVED_VALUE", "class": "private-crm-value", "required": true },
+    { "name": "TEST_COMPLETED_STATUS_VALUE", "class": "private-crm-value", "required": true },
+    { "name": "PAID_READY_STATUS_VALUE", "class": "private-crm-value", "required": true },
+    { "name": "FREE_TEST_DURATION_DAYS", "class": "private-operating-rule", "required": true },
+    { "name": "FREE_TEST_CALL_LIMIT", "class": "private-operating-rule", "required": true },
+    { "name": "MAX_BODY_BYTES", "class": "bounded-runtime", "required": false },
+    { "name": "OUTBOUND_TIMEOUT_MS", "class": "bounded-runtime", "required": false },
+    { "name": "OUTBOUND_MAX_BYTES", "class": "bounded-runtime", "required": false },
+    { "name": "PLATFORM_OPERATION_TIMEOUT_MS", "class": "bounded-runtime", "required": false }
+  ]
+}

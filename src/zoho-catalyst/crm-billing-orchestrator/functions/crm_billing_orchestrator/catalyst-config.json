@@ -1,0 +1,11 @@
+{
+  "deployment": {
+    "name": "crm_billing_orchestrator",
+    "stack": "node24",
+    "type": "advancedio"
+  },
+  "execution": {
+    "main": "index.js"
+  }
+}
+

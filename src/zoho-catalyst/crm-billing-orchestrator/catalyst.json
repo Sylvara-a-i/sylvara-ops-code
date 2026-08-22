@@ -1,0 +1,13 @@
+{
+  "functions": {
+    "source": "functions",
+    "targets": [
+      "crm_billing_orchestrator"
+    ],
+    "ignore": [
+      "test/**",
+      ".env*"
+    ]
+  }
+}
+
