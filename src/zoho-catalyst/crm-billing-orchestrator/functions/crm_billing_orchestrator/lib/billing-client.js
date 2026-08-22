@@ -267,18 +267,24 @@ function createBillingClient(config, {
     deterministicReference,
     selectedPlanCode,
     evaluation,
+    startsAt,
   }) {
     if (!plainObject(subscription)) fail("Billing subscription is unavailable", {
       publicCode: "billing_state_invalid",
     });
     id(subscription.subscription_id, "Billing subscription identifier");
+    const hasNestedCard = plainObject(subscription.card) && Object.keys(subscription.card).length > 0;
+    const hasNestedBankAccount = plainObject(subscription.bank_account) &&
+      Object.keys(subscription.bank_account).length > 0;
     if (
       String(subscription.customer_id ?? "") !== customerId ||
       subscription.reference_id !== deterministicReference ||
       (subscription.plan?.plan_code ?? subscription.plan_code) !== selectedPlanCode ||
       subscription.auto_collect !== false ||
       !Array.isArray(subscription.addons) || subscription.addons.length !== 0 ||
-      subscription.card_id || subscription.payment_method_id || subscription.payment_source_id
+      subscription.card_id || subscription.payment_method_id || subscription.payment_source_id ||
+      subscription.bank_account_id || hasNestedCard || hasNestedBankAccount ||
+      (startsAt && subscription.starts_at !== startsAt)
     ) fail("Billing subscription violates the approved boundary", {
       ambiguous: true,
       publicCode: "reconciliation_required",
@@ -293,7 +299,13 @@ function createBillingClient(config, {
     return subscription;
   }
 
-  async function ensureSubscription({ customerId, deterministicReference, selectedPlanCode, evaluation }) {
+  async function ensureSubscription({
+    customerId,
+    deterministicReference,
+    selectedPlanCode,
+    evaluation,
+    subscriptionStartDate,
+  }) {
     id(customerId, "Billing customer identifier");
     reference(deterministicReference);
     planCode(selectedPlanCode);
@@ -318,6 +330,7 @@ function createBillingClient(config, {
             customer_id: customerId,
             reference_id: deterministicReference,
             auto_collect: false,
+            ...(evaluation ? {} : { starts_at: subscriptionStartDate }),
             plan: evaluation ? {
               plan_code: selectedPlanCode,
               quantity: 1,
@@ -346,6 +359,7 @@ function createBillingClient(config, {
       deterministicReference,
       selectedPlanCode,
       evaluation,
+      startsAt: evaluation ? undefined : subscriptionStartDate,
     });
   }
 
@@ -359,7 +373,7 @@ function createBillingClient(config, {
   async function cancelEvaluation(subscriptionId) {
     const selectedId = id(subscriptionId, "Billing subscription identifier");
     const before = await getSubscription(selectedId);
-    if (new Set(["cancelled", "expired"]).has(before.status)) return before;
+    if (new Set(["cancelled", "expired", "trial_expired"]).has(before.status)) return before;
     try {
       const response = await authorizedRequest(`/subscriptions/${selectedId}/cancel`, {
         method: "POST",
@@ -376,7 +390,7 @@ function createBillingClient(config, {
       if (!(error instanceof BillingClientError) || !error.ambiguous) throw error;
     }
     const readback = await getSubscription(selectedId);
-    if (!new Set(["cancelled", "expired"]).has(readback.status)) {
+    if (!new Set(["cancelled", "expired", "trial_expired"]).has(readback.status)) {
       fail("Billing evaluation cancellation outcome is unresolved", {
         ambiguous: true,
         publicCode: "reconciliation_required",
