@@ -44,3 +44,5 @@ node --test test/*.test.js
 ```
 
 The tests cover Development/source binding, credential separation, destination allowlists, opaque-token handling, fresh intake rotation, prefill-before-read reservation, stale binding rejection, exact request contracts, live table columns, bounded concurrent reservations, and separate CRM read/write credentials.
+
+When Catalyst's console rejects a valid multi-file ZIP, `tools/build-single-file.js` can produce a deterministic editor-safe `index.js` from the same reviewed modules. It stamps the exact reviewed commit, keeps Node built-ins and the Catalyst SDK as native imports, and fails if the source-revision sentinel is missing or remains unstamped.
