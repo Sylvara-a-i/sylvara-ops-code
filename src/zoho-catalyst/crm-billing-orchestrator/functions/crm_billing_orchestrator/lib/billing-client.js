@@ -273,29 +273,44 @@ function createBillingClient(config, {
       publicCode: "billing_state_invalid",
     });
     id(subscription.subscription_id, "Billing subscription identifier");
+    const returnedCustomerIds = [
+      subscription.customer_id,
+      subscription.customer?.customer_id,
+    ].filter((value) => value !== undefined && value !== null && String(value) !== "")
+      .map(String);
+    const returnedStartDates = [
+      subscription.start_date,
+      subscription.starts_at,
+      subscription.current_term_starts_at,
+    ].filter((value) => typeof value === "string" && value.length > 0);
     const hasNestedCard = plainObject(subscription.card) && Object.keys(subscription.card).length > 0;
     const hasNestedBankAccount = plainObject(subscription.bank_account) &&
       Object.keys(subscription.bank_account).length > 0;
     if (
-      String(subscription.customer_id ?? "") !== customerId ||
+      returnedCustomerIds.length === 0 || returnedCustomerIds.some((value) => value !== customerId) ||
       subscription.reference_id !== deterministicReference ||
       (subscription.plan?.plan_code ?? subscription.plan_code) !== selectedPlanCode ||
       subscription.auto_collect !== false ||
       !Array.isArray(subscription.addons) || subscription.addons.length !== 0 ||
       subscription.card_id || subscription.payment_method_id || subscription.payment_source_id ||
       subscription.bank_account_id || hasNestedCard || hasNestedBankAccount ||
-      (startsAt && subscription.starts_at !== startsAt)
+      (startsAt && (
+        returnedStartDates.length === 0 || returnedStartDates.some((value) => value !== startsAt)
+      ))
     ) fail("Billing subscription violates the approved boundary", {
       ambiguous: true,
       publicCode: "reconciliation_required",
     });
-    if (evaluation && decimal(
-      subscription.amount ?? subscription.recurring_price ?? 0,
-      "Evaluation subscription amount",
-    ) !== 0) fail("Evaluation subscription has financial exposure", {
-      ambiguous: true,
-      publicCode: "reconciliation_required",
-    });
+    if (evaluation) {
+      const amountEvidence = subscription.amount ?? subscription.recurring_price;
+      if (
+        amountEvidence === undefined || amountEvidence === null || amountEvidence === "" ||
+        decimal(amountEvidence, "Evaluation subscription amount") !== 0
+      ) fail("Evaluation subscription has financial exposure", {
+        ambiguous: true,
+        publicCode: "reconciliation_required",
+      });
+    }
     return subscription;
   }
 
