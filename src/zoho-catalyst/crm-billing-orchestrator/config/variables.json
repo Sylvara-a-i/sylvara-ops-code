@@ -22,6 +22,7 @@
     { "name": "DATASTORE_DUPLICATE_ERROR_CODES", "class": "verified-platform-contract", "required": true },
     { "name": "IDEMPOTENCY_PEPPER", "class": "secret", "required": true },
     { "name": "EVALUATION_PLAN_CODE", "class": "private-plan", "required": true },
+    { "name": "ENABLE_PAID_SUBSCRIPTION_PREPARATION", "class": "feature-gate", "required": true },
     { "name": "PAID_PLAN_CODE_MAP", "class": "private-plan-map", "required": true },
     { "name": "PAID_ACCEPTANCE_VALUE", "class": "private-crm-value", "required": true },
     { "name": "FREE_TEST_ENTRY_OFFER_VALUE", "class": "private-crm-value", "required": true },
