@@ -68,11 +68,12 @@ function deriveOperationIdentity(config, action, dealId, material) {
     throw new IdempotencyError("Operation identity input is invalid", "operation_invalid");
   }
   const canonical = canonicalMaterial(material);
+  const stableIdentity = `${config.deploymentEnvironment}\0${dealId}\0${action}`;
   const key = crypto.createHmac("sha256", config.idempotencyPepper)
-    .update(`${config.deploymentEnvironment}\0${dealId}\0${action}\0${canonical}`)
+    .update(`operation\0${stableIdentity}`)
     .digest("hex");
   const fingerprint = crypto.createHmac("sha256", config.idempotencyPepper)
-    .update(`fingerprint\0${canonical}`)
+    .update(`fingerprint\0${stableIdentity}\0${canonical}`)
     .digest("hex");
   const referencePrefix = action === "start_evaluation"
     ? "syl-evaluation-"
@@ -188,4 +189,3 @@ function createOperationStore(app, config) {
 }
 
 module.exports = { IdempotencyError, createOperationStore, deriveOperationIdentity };
-

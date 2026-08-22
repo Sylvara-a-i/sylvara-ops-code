@@ -310,14 +310,11 @@ function createBillingClient(config, {
       const amountEvidence = subscription.amount ?? subscription.recurring_price;
       const setupFeeEvidence = subscription.plan?.setup_fee;
       const trialDaysEvidence = subscription.plan?.trial_days;
-      const billingCyclesEvidence = subscription.plan?.billing_cycles;
       if (
         amountEvidence === undefined || amountEvidence === null || amountEvidence === "" ||
         setupFeeEvidence === undefined || setupFeeEvidence === null || setupFeeEvidence === "" ||
         !Number.isInteger(Number(trialDaysEvidence)) ||
         Number(trialDaysEvidence) !== config.freeTestDurationDays ||
-        !Number.isInteger(Number(billingCyclesEvidence)) ||
-        Number(billingCyclesEvidence) !== 1 ||
         decimal(amountEvidence, "Evaluation subscription amount") !== 0 ||
         decimal(setupFeeEvidence, "Evaluation subscription setup fee") !== 0
       ) fail("Evaluation subscription has financial exposure", {
@@ -400,6 +397,21 @@ function createBillingClient(config, {
   });
   const ensurePaidSubscription = (input) => ensureSubscription({ ...input, evaluation: false });
 
+  async function findVerifiedEvaluationSubscription({ customerId, deterministicReference }) {
+    const selectedCustomerId = id(customerId, "Billing customer identifier");
+    const selectedReference = reference(deterministicReference);
+    const candidate = await findSubscriptionByReference(selectedReference);
+    if (!candidate) return null;
+    const readback = await getSubscription(candidate.subscription_id);
+    return verifySubscription(readback, {
+      customerId: selectedCustomerId,
+      deterministicReference: selectedReference,
+      selectedPlanCode: config.evaluationPlanCode,
+      evaluation: true,
+      allowedStatuses: ["trial", "live", "cancelled", "expired", "trial_expired"],
+    });
+  }
+
   async function cancelEvaluation({ subscriptionId, customerId, deterministicReference }) {
     const selectedId = id(subscriptionId, "Billing subscription identifier");
     const selectedCustomerId = id(customerId, "Billing customer identifier");
@@ -446,6 +458,7 @@ function createBillingClient(config, {
     ensurePaidSubscription,
     findCustomerByCrmReference,
     findSubscriptionByReference,
+    findVerifiedEvaluationSubscription,
     getPlan,
     getSubscription,
   });

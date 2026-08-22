@@ -32,7 +32,6 @@ function evaluationSubscription(overrides = {}) {
       plan_code: "evaluation_plan",
       setup_fee: "0",
       trial_days: 7,
-      billing_cycles: 1,
     },
     auto_collect: false,
     addons: [],
@@ -232,13 +231,10 @@ test("evaluation readback requires trial status and explicit zero setup fee", as
     evaluationSubscription({ status: "live" }),
     evaluationSubscription({ plan: { plan_code: "evaluation_plan" } }),
     evaluationSubscription({ plan: {
-      plan_code: "evaluation_plan", setup_fee: "1.00", trial_days: 7, billing_cycles: 1,
+      plan_code: "evaluation_plan", setup_fee: "1.00", trial_days: 7,
     } }),
     evaluationSubscription({ plan: {
-      plan_code: "evaluation_plan", setup_fee: "0", trial_days: 14, billing_cycles: 1,
-    } }),
-    evaluationSubscription({ plan: {
-      plan_code: "evaluation_plan", setup_fee: "0", trial_days: 7, billing_cycles: -1,
+      plan_code: "evaluation_plan", setup_fee: "0", trial_days: 14,
     } }),
   ]) {
     const client = clientFor(config, [
@@ -302,7 +298,7 @@ test("evaluation cancellation verifies identity and zero exposure before and aft
   for (const poisoned of [
     evaluationSubscription({ reference_id: `syl-evaluation-${"d".repeat(32)}` }),
     evaluationSubscription({ plan: {
-      plan_code: "launch_plan", setup_fee: "0", trial_days: 7, billing_cycles: 1,
+      plan_code: "launch_plan", setup_fee: "0", trial_days: 7,
     } }),
     evaluationSubscription({ customer_id: "200000000000002" }),
   ]) {

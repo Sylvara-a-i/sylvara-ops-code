@@ -97,6 +97,7 @@ function createCrmClient(config, {
   }
   const dealFields = Object.freeze([
     "Modified_Time",
+    "Pipeline",
     "Stage",
     "Entry_Offer",
     "Type",
@@ -206,7 +207,11 @@ function createCrmClient(config, {
         "Content-Type": "application/json",
         "If-Unmodified-Since": deal.Modified_Time,
       },
-      body: JSON.stringify({ data: [{ id: deal.id, ...patch }], trigger: [] }),
+      body: JSON.stringify({
+        data: [{ id: deal.id, ...patch }],
+        trigger: [],
+        skip_feature_execution: [{ name: "cadences" }],
+      }),
     }, { write: true, sideEffecting: true });
     if (response.status !== 200) fail("CRM rejected the Deal update", classifyStatus(response.status, true));
     parseUpdate(response.json, deal.id);

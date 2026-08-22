@@ -74,3 +74,74 @@ test("durable operation claim returns completed replay and rejects conflicts", a
   assert.equal(conflict.outcome, "duplicate-conflict");
 });
 
+test("evaluation and paid references stay stable when mutable Deal material changes", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const cases = [
+    {
+      action: "start_evaluation",
+      prefix: "syl-evaluation-",
+      first: {
+        accountId: "100000000000002",
+        testScopeVersion: "scope-v1",
+        testStartAt: "2026-08-21T10:00:00-05:00",
+      },
+      changed: {
+        accountId: "100000000000002",
+        testScopeVersion: "scope-v2",
+        testStartAt: "2026-08-22T10:00:00-05:00",
+      },
+    },
+    {
+      action: "prepare_paid_subscription",
+      prefix: "syl-paid-",
+      first: {
+        accountId: "100000000000002",
+        accepted: true,
+        billingFrequency: "Monthly",
+        plan: "Launch",
+        subscriptionStartDate: "2026-09-01",
+      },
+      changed: {
+        accountId: "100000000000002",
+        accepted: true,
+        billingFrequency: "Annual",
+        plan: "Growth",
+        subscriptionStartDate: "2026-10-01",
+      },
+    },
+  ];
+  for (const candidate of cases) {
+    const first = deriveOperationIdentity(
+      config,
+      candidate.action,
+      "100000000000001",
+      candidate.first,
+    );
+    const changed = deriveOperationIdentity(
+      config,
+      candidate.action,
+      "100000000000001",
+      candidate.changed,
+    );
+    assert.equal(changed.operationKey, first.operationKey);
+    assert.equal(changed.billingReference, first.billingReference);
+    assert.notEqual(changed.operationFingerprint, first.operationFingerprint);
+    assert.match(first.billingReference, new RegExp(`^${candidate.prefix}[a-f0-9]{32}$`));
+
+    const app = memoryApp(config.operationTable);
+    const store = createOperationStore(app, config);
+    await store.claim({
+      operationKey: first.operationKey,
+      operationFingerprint: first.operationFingerprint,
+      action: candidate.action,
+      dealId: "100000000000001",
+    });
+    const conflict = await store.claim({
+      operationKey: changed.operationKey,
+      operationFingerprint: changed.operationFingerprint,
+      action: candidate.action,
+      dealId: "100000000000001",
+    });
+    assert.equal(conflict.outcome, "duplicate-conflict");
+  }
+});

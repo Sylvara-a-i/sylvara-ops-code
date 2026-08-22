@@ -60,7 +60,9 @@ test("CRM client re-reads Deal and Account and independently verifies integratio
   assert.equal(calls.length, 4);
   const write = calls[2];
   assert.equal(write.options.headers["If-Unmodified-Since"], deal.Modified_Time);
-  assert.deepEqual(JSON.parse(write.options.body).trigger, []);
+  const writeBody = JSON.parse(write.options.body);
+  assert.deepEqual(writeBody.trigger, []);
+  assert.deepEqual(writeBody.skip_feature_execution, [{ name: "cadences" }]);
   assert.match(calls[3].url, /\/Deals\/100000000000001\?/);
   assert.match(calls[0].url, /Billing_Evaluation_Subscription_ID/);
   assert.match(calls[0].url, /Subscription_Acceptance_Status/);
