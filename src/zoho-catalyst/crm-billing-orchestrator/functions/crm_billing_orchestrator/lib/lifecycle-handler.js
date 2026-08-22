@@ -238,6 +238,22 @@ function createLifecycleHandler(config, { crmClient, billingClient, operationSto
     return Object.freeze({ state: refreshed, validation });
   }
 
+  function assertClaimStillMatches(action, state, identity) {
+    const refreshedIdentity = deriveOperationIdentity(
+      config,
+      action,
+      state.deal.id,
+      operationMaterial(action, state, config),
+    );
+    if (
+      refreshedIdentity.operationKey !== identity.operationKey ||
+      refreshedIdentity.operationFingerprint !== identity.operationFingerprint
+    ) fail("Authoritative CRM inputs changed after the operation claim", {
+      publicCode: "record_stale",
+      status: 409,
+    });
+  }
+
   async function execute(action, state, identity, validation) {
     if (action === "ensure_customer") {
       await ensureCustomer(state);
@@ -261,6 +277,7 @@ function createLifecycleHandler(config, { crmClient, billingClient, operationSto
           status: 503,
         });
       }
+      assertClaimStillMatches(action, refreshed.state, identity);
       const subscription = await billingClient.ensureEvaluationSubscription({
         customerId: customerState.customerId,
         deterministicReference: identity.billingReference,
@@ -298,6 +315,7 @@ function createLifecycleHandler(config, { crmClient, billingClient, operationSto
         });
       }
       const refreshed = await refreshActionState(action, state);
+      assertClaimStillMatches(action, refreshed.state, identity);
       if (
         refreshed.state.deal.Billing_Customer_ID &&
         refreshed.state.deal.Billing_Customer_ID !== customerId
@@ -351,6 +369,7 @@ function createLifecycleHandler(config, { crmClient, billingClient, operationSto
           status: 503,
         });
       }
+      assertClaimStillMatches(action, refreshed.state, identity);
       const subscription = await billingClient.ensurePaidSubscription({
         customerId: customerState.customerId,
         deterministicReference: identity.billingReference,
@@ -378,6 +397,27 @@ function createLifecycleHandler(config, { crmClient, billingClient, operationSto
   }
 
   async function reconcile(state) {
+    const actions = [
+      "ensure_customer",
+      "start_evaluation",
+      "end_evaluation",
+      "prepare_paid_subscription",
+    ];
+    const identities = Object.create(null);
+    const operations = Object.create(null);
+    let hasUnresolvedOperation = false;
+    for (const action of actions) {
+      identities[action] = deriveOperationIdentity(
+        config,
+        action,
+        state.deal.id,
+        { accountId: state.accountId },
+      );
+      const operation = await operationStore.readByKey(identities[action].operationKey);
+      if (operation && operation.STATUS !== "completed") hasUnresolvedOperation = true;
+      operations[action] = operation;
+    }
+
     const customer = await billingClient.findCustomerByCrmReference(state.accountId);
     if (!customer) fail("Billing customer is missing", {
       ambiguous: true,
@@ -385,7 +425,7 @@ function createLifecycleHandler(config, { crmClient, billingClient, operationSto
       status: 503,
     });
     const customerId = billingId(customer.customer_id, "Billing customer ID");
-    if (state.deal.Billing_Customer_ID && state.deal.Billing_Customer_ID !== customerId) {
+    if (state.deal.Billing_Customer_ID !== customerId) {
       fail("CRM and Billing customer IDs conflict", {
         ambiguous: true,
         publicCode: "reconciliation_required",
@@ -401,21 +441,48 @@ function createLifecycleHandler(config, { crmClient, billingClient, operationSto
       publicCode: "reconciliation_required",
       status: 503,
     });
-    for (const subscriptionId of [
-      state.deal.Billing_Evaluation_Subscription_ID,
-      state.deal.Billing_Subscription_ID,
-    ].filter(Boolean)) {
-      const subscription = await billingClient.getSubscription(subscriptionId);
-      const returnedCustomerIds = [
-        subscription.customer_id,
-        subscription.customer?.customer_id,
-      ].filter((value) => value !== undefined && value !== null && String(value) !== "")
-        .map(String);
-      if (returnedCustomerIds.length === 0 || returnedCustomerIds.some((value) => value !== customerId)) fail(
-        "Billing subscription belongs to a different customer",
-        { ambiguous: true, publicCode: "reconciliation_required", status: 503 },
-      );
+
+    const evaluation = await billingClient.findVerifiedEvaluationSubscription({
+      customerId,
+      deterministicReference: identities.start_evaluation.billingReference,
+    });
+    const crmEvaluationId = state.deal.Billing_Evaluation_Subscription_ID;
+    const startCompleted = operations.start_evaluation?.STATUS === "completed";
+    if (
+      Boolean(evaluation) !== Boolean(crmEvaluationId) ||
+      (evaluation && evaluation.subscription_id !== crmEvaluationId) ||
+      Boolean(evaluation) !== startCompleted ||
+      Boolean(evaluation) !== Boolean(state.deal.Billing_Evaluation_Status) ||
+      (evaluation && EVALUATION_STATUS[evaluation.status] !== state.deal.Billing_Evaluation_Status)
+    ) fail("Evaluation subscription reconciliation does not match", {
+      ambiguous: true,
+      publicCode: "reconciliation_required",
+      status: 503,
+    });
+    if (
+      operations.end_evaluation?.STATUS === "completed" &&
+      !new Set(["cancelled", "expired", "trial_expired"]).has(evaluation?.status)
+    ) fail("Evaluation end operation does not match Billing", {
+      ambiguous: true,
+      publicCode: "reconciliation_required",
+      status: 503,
+    });
+
+    const paid = await billingClient.findSubscriptionByReference(
+      identities.prepare_paid_subscription.billingReference,
+    );
+    if (paid || state.deal.Billing_Subscription_ID || operations.prepare_paid_subscription) {
+      fail("Paid subscription state requires a commercial-contract reconciliation revision", {
+        ambiguous: true,
+        publicCode: "reconciliation_required",
+        status: 503,
+      });
     }
+    if (hasUnresolvedOperation) fail("Lifecycle operation is unresolved", {
+      ambiguous: true,
+      publicCode: "reconciliation_required",
+      status: 503,
+    });
     return Object.freeze({ outcome: "authoritative_readback_confirmed", duplicate: false });
   }
 
@@ -437,6 +504,7 @@ function createLifecycleHandler(config, { crmClient, billingClient, operationSto
       dealId: payload.dealId,
     });
     if (claim.outcome === "duplicate-completed") {
+      await reconcile(state);
       return Object.freeze({ outcome: "duplicate_completed", duplicate: true });
     }
     if (claim.outcome !== "claimed") fail("Lifecycle operation requires reconciliation", {
