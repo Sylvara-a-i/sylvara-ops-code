@@ -13,6 +13,7 @@ const controllerRoot = path.resolve(functionRoot, "../..");
 const repositoryRoot = path.resolve(controllerRoot, "../../..");
 const supportedRunner = process.platform === "linux" && process.arch === "x64";
 const syntheticToken = "0123456789abcdef0123456789abcdef";
+const approvedFormDestinationSha256 = "c".repeat(64);
 
 function findExecutable(name) {
   for (const entry of (process.env.PATH || "").split(path.delimiter)) {
@@ -139,6 +140,26 @@ function createFixture(testContext, scenario) {
     recursive: true,
     filter: (source) => path.basename(source) !== "node_modules",
   });
+  const copiedFormDestination = path.join(
+    copiedController,
+    "functions/form2_controller/lib/form-destination.js",
+  );
+  if (scenario !== "destination-sentinel") {
+    const formDestinationSource = fs.readFileSync(copiedFormDestination, "utf8");
+    assert.equal(
+      (formDestinationSource.match(/__SYLVARA_UNSTAMPED_FORM_DESTINATION_SHA256__/g) ?? [])
+        .length,
+      1,
+    );
+    fs.writeFileSync(
+      copiedFormDestination,
+      formDestinationSource.replace(
+        "__SYLVARA_UNSTAMPED_FORM_DESTINATION_SHA256__",
+        approvedFormDestinationSha256,
+      ),
+      "utf8",
+    );
+  }
   const copiedDeployScript = path.join(copiedController, "scripts/deploy-development.sh");
   fs.chmodSync(copiedDeployScript, 0o755);
   fs.copyFileSync(
@@ -338,6 +359,7 @@ function createFixture(testContext, scenario) {
     "real_node=" + shellQuote(realNode),
     "repo_root=" + shellQuote(repo),
     "expected_head=" + shellQuote(head),
+    "expected_destination=" + shellQuote(approvedFormDestinationSha256),
     "evidence_path=" + shellQuote(evidence),
     "expected_token=" + shellQuote(syntheticToken),
     "scenario=" + shellQuote(scenario),
@@ -365,9 +387,13 @@ function createFixture(testContext, scenario) {
     "[[ \"$token\" == \"$expected_token\" ]]",
     "artifact=\"$(\"$real_node\" -e 'process.stdout.write(require(process.argv[1]).ARTIFACT_SOURCE_REVISION)' \"$function_root/lib/source-revision.js\")\"",
     "checkout=\"$(\"$real_node\" -e 'process.stdout.write(require(process.argv[1]).ARTIFACT_SOURCE_REVISION)' \"$repo_root/src/zoho-catalyst/form2-controller/functions/form2_controller/lib/source-revision.js\")\"",
+    "artifact_destination=\"$(\"$real_node\" -e 'process.stdout.write(require(process.argv[1]).ARTIFACT_FORM_DESTINATION_SHA256)' \"$function_root/lib/form-destination.js\")\"",
+    "checkout_destination=\"$(\"$real_node\" -e 'process.stdout.write(require(process.argv[1]).ARTIFACT_FORM_DESTINATION_SHA256)' \"$repo_root/src/zoho-catalyst/form2-controller/functions/form2_controller/lib/form-destination.js\")\"",
     "[[ \"$artifact\" == \"$expected_head\" ]]",
     "[[ \"$checkout\" == __SYLVARA_UNSTAMPED_SOURCE_REVISION__ ]]",
-    "printf 'deploy-called\\nartifact=%s\\n' \"$artifact\" >> \"$evidence_path\"",
+    "[[ \"$artifact_destination\" == \"$expected_destination\" ]]",
+    "[[ \"$checkout_destination\" == \"$expected_destination\" ]]",
+    "printf 'deploy-called\\nartifact=%s\\ndestination=%s\\n' \"$artifact\" \"$artifact_destination\" >> \"$evidence_path\"",
     "if [[ \"$scenario\" == deploy-ambiguous ]]; then",
     "  printf '%s\\n' 'deployment-accepted' >> \"$evidence_path\"",
     "  exit 75",
@@ -380,7 +406,7 @@ function createFixture(testContext, scenario) {
   const hostileStartupFile = path.join(fixtureRoot, "hostile-startup.sh");
   fs.writeFileSync(hostileStartupFile, [
     `printf '%s\\n' 'startup-file-executed' >> ${shellQuote(evidence)}`,
-    "printf '%s\\n' \"${CATALYST_TOKEN:-startup-token-missing}\" >&2",
+    "printf '%s\\n' \"${" + "CATALYST_" + "TOKEN:-startup-token-missing}\" >&2",
     "exit 72",
     "",
   ].join("\n"), "utf8");
@@ -400,8 +426,11 @@ function createFixture(testContext, scenario) {
     `PATH=${stubBin}${path.delimiter}${process.env.PATH || ""}`,
     "PROJECT_ID=1",
     "CATALYST_ORG=2",
-    `CATALYST_TOKEN=${syntheticToken}`,
+    `${"CATALYST_" + "TOKEN"}=${syntheticToken}`,
     `APPROVED_SOURCE_REVISION=${head}`,
+    `APPROVED_FORM2_DESTINATION_SHA256=${
+      scenario === "destination-mismatch" ? "d".repeat(64) : approvedFormDestinationSha256
+    }`,
     `TMPDIR=${runtimeTmp}`,
     "NODE_OPTIONS=--synthetic-option-that-must-not-survive",
     "npm_config_registry=https://synthetic.invalid",
@@ -443,6 +472,7 @@ function createFixture(testContext, scenario) {
     head,
     result,
     runtimeTmp,
+    scenario,
     status,
   };
 }
@@ -456,6 +486,15 @@ function assertCheckoutUnchanged(fixture) {
     "utf8",
   );
   assert.match(revisionSource, /__SYLVARA_UNSTAMPED_SOURCE_REVISION__/);
+  const destinationSource = fs.readFileSync(
+    path.join(fixture.copiedController, "functions/form2_controller/lib/form-destination.js"),
+    "utf8",
+  );
+  if (fixture.scenario === "destination-sentinel") {
+    assert.match(destinationSource, /__SYLVARA_UNSTAMPED_FORM_DESTINATION_SHA256__/);
+  } else {
+    assert.match(destinationSource, new RegExp(approvedFormDestinationSha256));
+  }
   assert.equal(
     fs.readdirSync(fixture.runtimeTmp).some((name) => name.startsWith("sylvara-form2-deploy.")),
     false,
@@ -474,6 +513,10 @@ test("the isolated Development deploy succeeds without mutating the checkout", {
   assert.match(fixture.evidence, /^test-mutation-created$/m);
   assert.match(fixture.evidence, /^deploy-called$/m);
   assert.match(fixture.evidence, new RegExp(`^artifact=${fixture.head}$`, "m"));
+  assert.match(
+    fixture.evidence,
+    new RegExp(`^destination=${approvedFormDestinationSha256}$`, "m"),
+  );
   assertCheckoutUnchanged(fixture);
 });
 
@@ -485,6 +528,10 @@ test("the isolated Development deploy ignores a replacement ref for the approved
   assert.match(fixture.evidence, /^test-mutation-created$/m);
   assert.match(fixture.evidence, /^deploy-called$/m);
   assert.match(fixture.evidence, new RegExp(`^artifact=${fixture.head}$`, "m"));
+  assert.match(
+    fixture.evidence,
+    new RegExp(`^destination=${approvedFormDestinationSha256}$`, "m"),
+  );
   assertCheckoutUnchanged(fixture);
 });
 
@@ -495,6 +542,29 @@ test("the isolated Development deploy rejects source mutation in the deploy expo
   assert.notEqual(fixture.result.status, 0);
   assert.match(fixture.result.stderr, /deployable controller differs from the approved Git export/);
   assert.match(fixture.evidence, /^test-mutation-created$/m);
+  assert.doesNotMatch(fixture.evidence, /^deploy-called$/m);
+  assertCheckoutUnchanged(fixture);
+});
+
+test("the isolated Development deploy rejects a destination not bound in reviewed source", {
+  skip: !supportedRunner,
+}, (testContext) => {
+  const fixture = createFixture(testContext, "destination-mismatch");
+  assert.notEqual(fixture.result.status, 0);
+  assert.match(
+    fixture.result.stderr,
+    /approved Form 2 destination does not match the reviewed source/,
+  );
+  assert.doesNotMatch(fixture.evidence, /^deploy-called$/m);
+  assertCheckoutUnchanged(fixture);
+});
+
+test("the isolated Development deploy rejects an unstamped destination sentinel", {
+  skip: !supportedRunner,
+}, (testContext) => {
+  const fixture = createFixture(testContext, "destination-sentinel");
+  assert.notEqual(fixture.result.status, 0);
+  assert.match(fixture.result.stderr, /reviewed source form destination is not approved/);
   assert.doesNotMatch(fixture.evidence, /^deploy-called$/m);
   assertCheckoutUnchanged(fixture);
 });

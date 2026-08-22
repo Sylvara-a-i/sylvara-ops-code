@@ -39,7 +39,7 @@
       "required_when": "always",
       "repository_value_policy": "reviewed-commit-or-artifact-id-allowed",
       "runtime_log_policy": "value",
-      "description": "Immutable reviewed source revision used for audit correlation."
+      "description": "Exact lowercase 40-character Git revision; it must match the revision stamped into the immutable artifact."
     },
     {
       "name": "ALLOWED_PATH",
@@ -232,12 +232,12 @@
     },
     {
       "name": "CREATOR_ALLOWED_HOSTS",
-      "status": "active",
+      "status": "retired",
       "classification": "private-outbound-allowlist",
-      "required_when": "creator-delivery",
+      "required_when": "never",
       "repository_value_policy": "name-only",
       "runtime_log_policy": "never",
-      "description": "Exact Creator hostnames; suffix matching is prohibited."
+      "description": "Runtime host authorization is prohibited; the exact US Creator origin and destination digest are source-owned. Any value causes startup failure."
     },
     {
       "name": "CREATOR_ENDPOINT_KIND",
@@ -458,7 +458,7 @@
       "required_when": "never",
       "repository_value_policy": "name-only",
       "runtime_log_policy": "never",
-      "description": "Replaced by exact CREATOR_ALLOWED_HOSTS; any value causes startup failure."
+      "description": "Runtime host suffix authorization is prohibited; any value causes startup failure."
     },
     {
       "name": "ENABLE_PING",

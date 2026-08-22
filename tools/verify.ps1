@@ -27,10 +27,14 @@ function Join-PathSegments {
 
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $GatewayRoot = Join-PathSegments $RepoRoot @("src", "zoho-catalyst", "billing-webhook-gateway")
+$Form2ControllerRoot = Join-PathSegments $RepoRoot @(
+    "src", "zoho-catalyst", "form2-controller", "functions", "form2_controller"
+)
 $RequirementsPath = Join-PathSegments $RepoRoot @("tools", "safety", "requirements.txt")
 $VenvParent = Join-PathSegments $RepoRoot @(".codex-tmp")
 $VenvRoot = Join-PathSegments $VenvParent @("safety-venv")
 $ManagedVenvMarker = ".sylvara-verify-venv"
+$ExpectedNodeVersion = "24.19.0"
 $OnWindows = [System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT
 $VenvPython = if ($OnWindows) {
     Join-PathSegments $VenvRoot @("Scripts", "python.exe")
@@ -327,7 +331,7 @@ function Assert-PythonDependencies {
 function Assert-NodeBaseline {
     $node = Resolve-Application -Name "node"
     if ($null -eq $node) {
-        throw "Node.js 24 was not found on PATH. Install Node.js 24 and retry."
+        throw "Node.js $ExpectedNodeVersion was not found on PATH. Install the exact verified runtime and retry."
     }
     try {
         $version = & $node -p "process.versions.node" 2>$null
@@ -339,9 +343,9 @@ function Assert-NodeBaseline {
     if ($probeExitCode -ne 0 -or -not $version) {
         throw "Could not query the Node.js runtime."
     }
-    $major = [int](($version | Select-Object -Last 1).Split(".")[0])
-    if ($major -ne 24) {
-        throw "Expected Node.js 24, but $node reported $version."
+    $reportedVersion = ($version | Select-Object -Last 1).Trim()
+    if ($reportedVersion -ne $ExpectedNodeVersion) {
+        throw "Expected Node.js $ExpectedNodeVersion, but $node reported $reportedVersion."
     }
     return $node
 }
@@ -350,7 +354,7 @@ function Resolve-Npm {
     $name = if ($OnWindows) { "npm.cmd" } else { "npm" }
     $npm = Resolve-Application -Name $name
     if ($null -eq $npm) {
-        throw "$name was not found on PATH. Install npm for Node.js 24 and retry."
+        throw "$name was not found on PATH. Install npm for Node.js $ExpectedNodeVersion and retry."
     }
     return $npm
 }
@@ -389,6 +393,11 @@ try {
                     "ci", "--ignore-scripts", "--no-audit", "--no-fund",
                     "--prefix", $GatewayRoot
                 )
+            Invoke-Native -Label "Install exact Form 2 controller dependencies" `
+                -Executable $npm -Arguments @(
+                    "ci", "--ignore-scripts", "--no-audit", "--no-fund",
+                    "--prefix", $Form2ControllerRoot
+                )
         } else {
             $env:npm_config_offline = "true"
             $env:npm_config_update_notifier = "false"
@@ -401,6 +410,12 @@ try {
         )
         if (-not (Test-Path -LiteralPath $gatewayDependency -PathType Leaf)) {
             throw "Gateway dependencies are missing. Run .\tools\verify.cmd -Bootstrap once before offline Quick verification."
+        }
+        $form2ControllerDependency = Join-PathSegments $Form2ControllerRoot @(
+            "node_modules", "zcatalyst-sdk-node", "package.json"
+        )
+        if (-not (Test-Path -LiteralPath $form2ControllerDependency -PathType Leaf)) {
+            throw "Form 2 controller dependencies are missing. Run .\tools\verify.cmd -Bootstrap once before offline Quick verification."
         }
 
         Invoke-Native -Label "Public repository safety scan" -Executable $python `
@@ -416,12 +431,19 @@ try {
         if ($Mode -eq "All") {
             Invoke-Native -Label "Production dependency audit" -Executable $npm `
                 -Arguments @(
-                    "audit", "--omit=dev", "--audit-level=high",
+                    "audit", "--omit=dev", "--audit-level=moderate",
                     "--prefix", $GatewayRoot
+                )
+            Invoke-Native -Label "Form 2 production dependency audit" -Executable $npm `
+                -Arguments @(
+                    "audit", "--omit=dev", "--audit-level=moderate",
+                    "--prefix", $Form2ControllerRoot
                 )
         }
         Invoke-Native -Label "Billing gateway checks and tests" -Executable $npm `
             -Arguments @("run", "ci", "--prefix", $GatewayRoot)
+        Invoke-Native -Label "Form 2 controller checks and tests" -Executable $npm `
+            -Arguments @("run", "ci", "--prefix", $Form2ControllerRoot)
 
         Write-Host "Verification passed ($Mode mode)."
     } finally {

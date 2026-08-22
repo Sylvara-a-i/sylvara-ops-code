@@ -11,6 +11,7 @@ const {
 } = require("../lib/session-store");
 
 const TABLE = "Form2_Sessions";
+const ISSUE_REQUEST_KEY = "b".repeat(64);
 const TOKEN_HASH = "a".repeat(64);
 const NOW_MS = Date.parse("2026-08-14T18:00:00.000Z");
 const SUBMISSION_FINGERPRINT = "f".repeat(64);
@@ -20,7 +21,7 @@ function dealIssuanceKey(kind, input = issueInput()) {
     .createHash("sha256")
     .update(`sylvara-form2:development:deal-${kind}\0`, "utf8")
     .update(input.crmDealId, "utf8")
-    .update(kind === "generation" ? `\0${input.tokenHash}` : "", "utf8")
+    .update(kind === "generation" ? `\0${input.issueRequestKey}` : "", "utf8")
     .digest("hex");
 }
 
@@ -44,6 +45,7 @@ function fixture({
     insert: [],
     update: [],
     dealKeyQueries: [],
+    issueRequestKeyQueries: [],
     tokenQueries: [],
     rowQueries: [],
   };
@@ -54,7 +56,7 @@ function fixture({
     async insertRow(tableName, row) {
       calls.insert.push({ tableName, row: { ...row } });
       if (rows.some((candidate) =>
-        candidate.TOKEN_HASH === row.TOKEN_HASH ||
+        candidate.ISSUE_REQUEST_KEY === row.ISSUE_REQUEST_KEY ||
         candidate.DEAL_ISSUANCE_KEY === row.DEAL_ISSUANCE_KEY)) {
         throw new Error("synthetic unique session-key conflict");
       }
@@ -85,7 +87,13 @@ function fixture({
     async findRowsByTokenHash(tableName, tokenHash) {
       calls.tokenQueries.push({ tableName, tokenHash });
       return rows
-        .filter((row) => row.TOKEN_HASH === tokenHash)
+        .filter((row) => row.ACCESS_TOKEN_HASH === tokenHash)
+        .map((row) => ({ [TABLE]: { ...row } }));
+    },
+    async findRowsByIssueRequestKey(tableName, issueRequestKey) {
+      calls.issueRequestKeyQueries.push({ tableName, issueRequestKey });
+      return rows
+        .filter((row) => row.ISSUE_REQUEST_KEY === issueRequestKey)
         .map((row) => ({ [TABLE]: { ...row } }));
     },
     async findRowsByRowId(tableName, rowId) {
@@ -104,6 +112,7 @@ function fixture({
 
 function issueInput(overrides = {}) {
   return {
+    issueRequestKey: ISSUE_REQUEST_KEY,
     tokenHash: TOKEN_HASH,
     crmContactId: `${"1".repeat(18)}1`,
     crmAccountId: `${"1".repeat(18)}2`,
@@ -116,6 +125,7 @@ test("issues and reads back a Development session containing no raw token or for
   const { calls, store } = fixture();
   const issuing = await store.issue(issueInput());
   assert.equal(issuing.status, "issuing");
+  assert.equal(issuing.issueRequestKey, ISSUE_REQUEST_KEY);
   assert.equal(issuing.tokenHash, TOKEN_HASH);
   assert.equal(issuing.expiresAt, "2026-08-14T19:00:00.000Z");
   assert.equal(
@@ -346,6 +356,7 @@ test("the unique active Deal key blocks competitors and is freed only by synchro
   await selected.store.markIssued(first.rowId);
 
   const competing = issueInput({
+    issueRequestKey: "e".repeat(64),
     tokenHash: "d".repeat(64),
   });
   await assert.rejects(
