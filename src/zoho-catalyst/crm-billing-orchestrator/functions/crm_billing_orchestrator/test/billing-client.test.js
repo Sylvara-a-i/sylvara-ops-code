@@ -50,7 +50,7 @@ function paidSubscription(overrides = {}) {
     plan: { plan_code: "launch_plan" },
     amount: "349",
     status: "future",
-    starts_at: "2026-09-01",
+    start_date: "2026-09-01",
     ...overrides,
   });
 }
@@ -193,6 +193,36 @@ test("subscription readback rejects every documented payment-method shape", asyn
       deterministicReference: reference,
     }), /violates the approved boundary/);
   }
+});
+
+test("subscription readback fails closed when evaluation amount evidence is missing", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const missingAmount = evaluationSubscription();
+  delete missingAmount.amount;
+  const client = clientFor(config, [
+    jsonResponse(200, { plan: evaluationPlan() }),
+    jsonResponse(200, subscriptionPage([missingAmount])),
+    jsonResponse(200, { subscription: missingAmount }),
+  ]);
+  await assert.rejects(client.ensureEvaluationSubscription({
+    customerId,
+    deterministicReference: reference,
+  }), /financial exposure/);
+});
+
+test("subscription readback accepts the documented nested customer identity", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const nestedCustomer = evaluationSubscription({ customer_id: undefined, customer: { customer_id: customerId } });
+  const client = clientFor(config, [
+    jsonResponse(200, { plan: evaluationPlan() }),
+    jsonResponse(200, subscriptionPage([nestedCustomer])),
+    jsonResponse(200, { subscription: nestedCustomer }),
+  ]);
+  const result = await client.ensureEvaluationSubscription({
+    customerId,
+    deterministicReference: reference,
+  });
+  assert.equal(result.subscription_id, subscriptionId);
 });
 
 test("natural trial expiry is a terminal evaluation outcome", async () => {
