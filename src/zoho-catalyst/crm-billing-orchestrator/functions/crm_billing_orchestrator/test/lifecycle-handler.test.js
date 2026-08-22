@@ -146,6 +146,7 @@ test("paid subscription is impossible without explicit acceptance", async () => 
   assert.equal(accepted.calls.filter(([kind]) => kind === "paid").length, 1);
   const paidInput = accepted.calls.find(([kind]) => kind === "paid")[1];
   assert.equal(paidInput.selectedPlanCode, "launch_plan");
+  assert.equal(paidInput.subscriptionStartDate, "2026-09-01");
   const paidUpdate = accepted.calls.filter(([kind]) => kind === "crm_update").at(-1)[1];
   assert.equal(paidUpdate.Billing_Subscription_ID, "400000000000001");
   assert.equal(paidUpdate.Subscription_Status, config.paidReadyStatusValue);
