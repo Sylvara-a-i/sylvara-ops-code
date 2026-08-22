@@ -30,7 +30,8 @@ class VerifyEntrypointTests(unittest.TestCase):
         self.assertIn('$Info.implementation -eq "CPython"', self.script)
         self.assertIn("$Info.minor -eq 12", self.script)
         self.assertIn("$Info.bits -eq 64", self.script)
-        self.assertIn("$major -ne 24", self.script)
+        self.assertIn('$ExpectedNodeVersion = "24.19.0"', self.script)
+        self.assertIn('$reportedVersion -ne $ExpectedNodeVersion', self.script)
         self.assertIn(
             ".cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
             self.script,
@@ -43,7 +44,7 @@ class VerifyEntrypointTests(unittest.TestCase):
         self.assertIn('"--require-hashes"', self.script)
         self.assertIn('"ci", "--ignore-scripts", "--no-audit", "--no-fund"', self.script)
         self.assertIn('if ($Mode -eq "All") {', self.script)
-        self.assertIn('"audit", "--omit=dev", "--audit-level=high"', self.script)
+        self.assertIn('"audit", "--omit=dev", "--audit-level=moderate"', self.script)
         self.assertIn('$env:npm_config_offline = "true"', self.script)
         self.assertIn('$env:npm_config_update_notifier = "false"', self.script)
         for unsafe_downloader in ("Invoke-WebRequest", "curl.exe", "Start-BitsTransfer"):

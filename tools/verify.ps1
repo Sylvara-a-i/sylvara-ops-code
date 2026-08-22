@@ -34,6 +34,7 @@ $RequirementsPath = Join-PathSegments $RepoRoot @("tools", "safety", "requiremen
 $VenvParent = Join-PathSegments $RepoRoot @(".codex-tmp")
 $VenvRoot = Join-PathSegments $VenvParent @("safety-venv")
 $ManagedVenvMarker = ".sylvara-verify-venv"
+$ExpectedNodeVersion = "24.19.0"
 $OnWindows = [System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT
 $VenvPython = if ($OnWindows) {
     Join-PathSegments $VenvRoot @("Scripts", "python.exe")
@@ -330,7 +331,7 @@ function Assert-PythonDependencies {
 function Assert-NodeBaseline {
     $node = Resolve-Application -Name "node"
     if ($null -eq $node) {
-        throw "Node.js 24 was not found on PATH. Install Node.js 24 and retry."
+        throw "Node.js $ExpectedNodeVersion was not found on PATH. Install the exact verified runtime and retry."
     }
     try {
         $version = & $node -p "process.versions.node" 2>$null
@@ -342,9 +343,9 @@ function Assert-NodeBaseline {
     if ($probeExitCode -ne 0 -or -not $version) {
         throw "Could not query the Node.js runtime."
     }
-    $major = [int](($version | Select-Object -Last 1).Split(".")[0])
-    if ($major -ne 24) {
-        throw "Expected Node.js 24, but $node reported $version."
+    $reportedVersion = ($version | Select-Object -Last 1).Trim()
+    if ($reportedVersion -ne $ExpectedNodeVersion) {
+        throw "Expected Node.js $ExpectedNodeVersion, but $node reported $reportedVersion."
     }
     return $node
 }
@@ -353,7 +354,7 @@ function Resolve-Npm {
     $name = if ($OnWindows) { "npm.cmd" } else { "npm" }
     $npm = Resolve-Application -Name $name
     if ($null -eq $npm) {
-        throw "$name was not found on PATH. Install npm for Node.js 24 and retry."
+        throw "$name was not found on PATH. Install npm for Node.js $ExpectedNodeVersion and retry."
     }
     return $npm
 }
@@ -430,12 +431,12 @@ try {
         if ($Mode -eq "All") {
             Invoke-Native -Label "Production dependency audit" -Executable $npm `
                 -Arguments @(
-                    "audit", "--omit=dev", "--audit-level=high",
+                    "audit", "--omit=dev", "--audit-level=moderate",
                     "--prefix", $GatewayRoot
                 )
             Invoke-Native -Label "Form 2 production dependency audit" -Executable $npm `
                 -Arguments @(
-                    "audit", "--omit=dev", "--audit-level=high",
+                    "audit", "--omit=dev", "--audit-level=moderate",
                     "--prefix", $Form2ControllerRoot
                 )
         }

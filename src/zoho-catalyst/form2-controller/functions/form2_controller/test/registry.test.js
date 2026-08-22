@@ -83,7 +83,7 @@ test("the Data Store schema matches the runtime and Catalyst uniqueness boundary
     ["SUBMISSION_TABLE_NAME", SUBMISSION_STORED_FIELDS],
   ]);
   const expectedUniqueColumns = new Map([
-    ["SESSION_TABLE_NAME", ["TOKEN_HASH", "DEAL_ISSUANCE_KEY"]],
+    ["SESSION_TABLE_NAME", ["ISSUE_REQUEST_KEY", "DEAL_ISSUANCE_KEY"]],
     ["PREFILL_TABLE_NAME", ["PREFILL_KEY"]],
     ["SUBMISSION_TABLE_NAME", ["SUBMISSION_KEY"]],
   ]);
@@ -91,14 +91,14 @@ test("the Data Store schema matches the runtime and Catalyst uniqueness boundary
   assert.equal(schema.status, "proposed-development-only");
   assert.equal(
     schema.live_state,
-    "development-54-column-schema-rename-privacy-access-scope-and-empty-state-readback-verified-function-not-deployed",
+    "development-54-column-version-2-schema-readback-verified-function-not-deployed-version-3-migration-not-applied",
   );
   assert.equal(schema.observed_at, "2026-08-20");
 
   assert.equal(schema.tables.length, 3);
   assert.equal(
     schema.tables.reduce((total, table) => total + table.columns.length, 0),
-    54,
+    55,
   );
   assert.deepEqual(
     sorted(schema.tables.map((table) => table.runtime_variable)),
@@ -149,20 +149,29 @@ test("the Data Store schema matches the runtime and Catalyst uniqueness boundary
     unique: true,
     pii_ephi: true,
   });
-  assert.equal(sessionColumns.has("ISSUE_KEY"), false);
-  assert.deepEqual(sessionColumns.get("TOKEN_HASH"), {
-    api_name: "TOKEN_HASH",
+  assert.deepEqual(sessionColumns.get("ISSUE_REQUEST_KEY"), {
+    api_name: "ISSUE_REQUEST_KEY",
     type: "varchar",
     max_length: 64,
     mandatory: true,
     unique: true,
     pii_ephi: true,
   });
+  assert.deepEqual(sessionColumns.get("ACCESS_TOKEN_HASH"), {
+    api_name: "ACCESS_TOKEN_HASH",
+    type: "varchar",
+    max_length: 64,
+    mandatory: true,
+    unique: false,
+    pii_ephi: true,
+  });
+  assert.equal(sessionColumns.has("TOKEN_HASH"), false);
+  assert.equal(sessionColumns.has("ISSUE_KEY"), false);
   assert.equal(sessionColumns.get("LAST_OUTCOME").pii_ephi, true);
   assert.match(sessionTable.retention, /Do not delete or alter any session row/);
   assert.equal(
     schema.deployment_gates.some((gate) =>
-      gate.includes("zero rows") && gate.includes("renaming ISSUE_KEY")),
+      gate.includes("zero rows") && gate.includes("schema version 3")),
     true,
   );
   assert.equal(
@@ -213,6 +222,7 @@ test("the Catalyst and npm manifests describe one consistent Advanced IO target"
     "lib/connection-boundary.js",
     "lib/crm-client.js",
     "lib/destinations.js",
+    "lib/form-destination.js",
     "lib/form-contract.js",
     "lib/handler.js",
     "lib/http.js",
@@ -343,13 +353,15 @@ test("the intended function archive excludes tests and environment files", () =>
   }
 });
 
-test("the repository pipeline gates and reproduces one immutable Development deploy", () => {
+test("the repository pipeline keeps approval but blocks Development deployment", () => {
   const pipelinePath = path.join(repositoryRoot, "catalyst-pipelines.yaml");
   const scriptPath = path.join(controllerRoot, "scripts/deploy-development.sh");
   const revisionModulePath = path.join(functionRoot, "lib/source-revision.js");
+  const formDestinationModulePath = path.join(functionRoot, "lib/form-destination.js");
   const pipeline = fs.readFileSync(pipelinePath, "utf8");
   const script = fs.readFileSync(scriptPath, "utf8");
   const revisionModule = fs.readFileSync(revisionModulePath, "utf8");
+  const formDestinationModule = fs.readFileSync(formDestinationModulePath, "utf8");
 
   assert.match(pipeline, /^version: 1$/m);
   assert.match(pipeline, /^  approve:\n    type:\n      type-name: approval$/m);
@@ -361,21 +373,36 @@ test("the repository pipeline gates and reproduces one immutable Development dep
     approvalStageIndex < developmentStageIndex,
     "the approval stage must precede the deployment stage",
   );
-  for (const variableName of [
-    "DEPLOY_APPROVER_EMAIL",
+  assert.match(pipeline, /<< env\.DEPLOY_APPROVER_EMAIL >>/);
+  const deploymentJob = pipeline
+    .split(/^  deploy_form2_development:\n/m)[1]
+    ?.split(/^stages:\n/m)[0];
+  assert.ok(deploymentJob, "the Development deployment job is missing");
+  assert.equal(
+    deploymentJob.trimEnd(),
+    `    steps:
+      - |
+        set +x
+        printf '%s\\n' 'BLOCKED: Form 2 Development deployment requires a verified native secret binding.' >&2
+        exit 1`,
+  );
+  assert.doesNotMatch(deploymentJob, /<<\s*env\./);
+  for (const forbiddenVariableName of [
     "PROJECT_ID",
     "CATALYST_ORG",
     "CATALYST_TOKEN",
     "APPROVED_SOURCE_REVISION",
+    "APPROVED_FORM2_DESTINATION_SHA256",
   ]) {
-    assert.match(pipeline, new RegExp(`<< env\\.${variableName} >>`));
+    assert.doesNotMatch(pipeline, new RegExp(`<< env\\.${forbiddenVariableName} >>`));
   }
   assert.match(
-    pipeline,
-    /bash --noprofile --norc src\/zoho-catalyst\/form2-controller\/scripts\/deploy-development\.sh/,
+    deploymentJob,
+    /printf '%s\\n' 'BLOCKED: Form 2 Development deployment requires a verified native secret binding\.' >&2/,
   );
-  assert.match(pipeline, /^      - \|\n        set \+x\n        \/usr\/bin\/env -i \\/m);
-  assert.match(pipeline, /^          PATH="\$PATH" \\/m);
+  assert.match(deploymentJob, /^      - \|\n        set \+x\n/m);
+  assert.match(deploymentJob, /^        exit 1$/m);
+  assert.doesNotMatch(deploymentJob, /deploy-development\.sh|\bcatalyst\s+deploy\b/);
   assert.doesNotMatch(pipeline, /BASH_ENV=|ENV=|SHELLOPTS=|PS4=/);
 
   assert.notEqual(fs.statSync(scriptPath).mode & 0o111, 0, "deployment script is not executable");
@@ -398,6 +425,16 @@ const ARTIFACT_SOURCE_REVISION = "__SYLVARA_UNSTAMPED_SOURCE_REVISION__";
 
 module.exports = { ARTIFACT_SOURCE_REVISION };
 `);
+  assert.equal(formDestinationModule, `"use strict";
+
+// A CODEOWNERS-reviewed source change must replace this sentinel with the
+// SHA-256 of the one approved normalized Zoho Forms URL. The deploy script may
+// verify this value but must never derive or stamp it from runtime input.
+const ARTIFACT_FORM_DESTINATION_SHA256 =
+  "__SYLVARA_UNSTAMPED_FORM_DESTINATION_SHA256__";
+
+module.exports = { ARTIFACT_FORM_DESTINATION_SHA256 };
+`);
   assert.match(script, /run_isolated_git .* archive --format=tar "\$actual_revision"/);
   assert.match(script, /catalyst-pipelines\.yaml \|/);
   assert.match(script, /approved pipeline export is unavailable/);
@@ -412,6 +449,14 @@ module.exports = { ARTIFACT_SOURCE_REVISION };
   assert.match(script, /source revision module is not the exact reviewed sentinel template/);
   assert.match(script, /replacement = f'const ARTIFACT_SOURCE_REVISION = "\{revision\}";'/);
   assert.match(script, /artifact_revision" == "\$actual_revision/);
+  assert.match(script, /APPROVED_FORM2_DESTINATION_SHA256.*\^\[a-f0-9\]\{64\}\$/);
+  assert.match(script, /reviewed source form destination is not approved/);
+  assert.match(script, /read_approved_form_destination "\$form_destination_path"/);
+  assert.doesNotMatch(script, /stamp_form_destination/);
+  assert.match(
+    script,
+    /artifact_form_destination" == "\$APPROVED_FORM2_DESTINATION_SHA256/,
+  );
   assert.doesNotMatch(script, /require\(process\.argv\[1\]\)\.ARTIFACT_SOURCE_REVISION/);
   assert.doesNotMatch(script, /--exclude=node_modules/);
   assert.match(script, /function_dependency_subtree="functions\/form2_controller\/node_modules"/);

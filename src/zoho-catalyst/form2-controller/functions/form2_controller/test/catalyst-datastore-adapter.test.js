@@ -61,7 +61,8 @@ function fixture({ insertImpl, queryImpl } = {}) {
 test("inserts a validated row through the allowlisted Catalyst table with a timeout boundary", async () => {
   const { adapter, calls } = fixture();
   const row = {
-    TOKEN_HASH: "a".repeat(64),
+    ISSUE_REQUEST_KEY: "b".repeat(64),
+    ACCESS_TOKEN_HASH: "a".repeat(64),
     STATUS: "issued",
     ATTEMPT_COUNT: 0,
     ACTIVE: true,
@@ -104,13 +105,15 @@ test("builds one atomic conditional UPDATE with every expected field and escaped
 test("executes exact hash and ROWID SELECT statements for every store lookup", async () => {
   const { adapter, calls } = fixture();
   await adapter.findRowsByTokenHash(SESSION_TABLE, "a".repeat(64));
+  await adapter.findRowsByIssueRequestKey(SESSION_TABLE, "b".repeat(64));
   await adapter.findRowsByDealIssuanceKey(SESSION_TABLE, "e".repeat(64));
   await adapter.findRowsByPrefillKey(PREFILL_TABLE, "c".repeat(64));
   await adapter.findRowsBySubmissionKey(SUBMISSION_TABLE, "d".repeat(64));
   await adapter.findRowsByRowId(PREFILL_TABLE, "1000000000002");
 
   assert.deepEqual(calls.queries, [
-    `SELECT * FROM ${SESSION_TABLE} WHERE TOKEN_HASH = '${"a".repeat(64)}'`,
+    `SELECT * FROM ${SESSION_TABLE} WHERE ACCESS_TOKEN_HASH = '${"a".repeat(64)}'`,
+    `SELECT * FROM ${SESSION_TABLE} WHERE ISSUE_REQUEST_KEY = '${"b".repeat(64)}'`,
     `SELECT * FROM ${SESSION_TABLE} WHERE DEAL_ISSUANCE_KEY = '${"e".repeat(64)}'`,
     `SELECT * FROM ${PREFILL_TABLE} WHERE PREFILL_KEY = '${"c".repeat(64)}'`,
     `SELECT * FROM ${SUBMISSION_TABLE} WHERE SUBMISSION_KEY = '${"d".repeat(64)}'`,

@@ -1,5 +1,10 @@
 "use strict";
 
+const { ARTIFACT_CREATOR_DESTINATION_SHA256 } = require("./creator-destination");
+const {
+  DestinationValidationError,
+  assertCreatorDestination,
+} = require("./destinations");
 const { HttpBoundaryError, requestJson } = require("./http");
 
 class CreatorDeliveryError extends Error {
@@ -13,7 +18,11 @@ class CreatorDeliveryError extends Error {
 
 function createCreatorClient(
   config,
-  { authorizationProvider, fetchImpl = globalThis.fetch } = {},
+  {
+    authorizationProvider,
+    fetchImpl = globalThis.fetch,
+    artifactCreatorDestinationSha256 = ARTIFACT_CREATOR_DESTINATION_SHA256,
+  } = {},
 ) {
   if (typeof authorizationProvider !== "function") {
     throw new CreatorDeliveryError("Creator authorization provider is unavailable", {
@@ -22,6 +31,21 @@ function createCreatorClient(
   }
 
   async function deliver(envelope) {
+    let creatorUrl;
+    try {
+      creatorUrl = assertCreatorDestination(
+        config.creatorUrl,
+        artifactCreatorDestinationSha256,
+      );
+    } catch (error) {
+      if (error instanceof DestinationValidationError) {
+        throw new CreatorDeliveryError("Creator destination binding failed", {
+          ambiguous: false,
+        });
+      }
+      throw error;
+    }
+
     let authorization;
     try {
       authorization = await authorizationProvider();
@@ -34,7 +58,7 @@ function createCreatorClient(
     let response;
     try {
       response = await requestJson(
-        config.creatorUrl,
+        creatorUrl,
         {
           method: "POST",
           headers: {

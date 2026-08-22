@@ -7,7 +7,11 @@ const { PassThrough } = require("node:stream");
 const test = require("node:test");
 const { createRequestListener } = require("../lib/catalyst-adapter");
 const { HttpBoundaryError, readRawBody, requestJson } = require("../lib/http");
-const { baseEnvironment } = require("./helpers");
+const {
+  CREATOR_DESTINATION_SHA256,
+  TEST_SOURCE_REVISION,
+  baseEnvironment,
+} = require("./helpers");
 
 test("bounds direct and streamed request bodies", async () => {
   await assert.rejects(
@@ -53,7 +57,7 @@ test("classifies transport failure by side-effect boundary", async () => {
   );
 });
 
-test("returns JSON 413 for an oversized chunked native HTTP request", async () => {
+test("returns JSON 413 for an oversized chunked native request stream", async () => {
   const environment = baseEnvironment({ MAX_BODY_BYTES: "1024" });
   const catalystSdk = {
     initialize() {
@@ -75,11 +79,76 @@ test("returns JSON 413 for an oversized chunked native HTTP request", async () =
     logger,
     randomUUID: () => "request_sample_oversized",
     now: () => 100,
+    artifactCreatorDestinationSha256: CREATOR_DESTINATION_SHA256,
+    artifactSourceRevision: TEST_SOURCE_REVISION,
+  });
+  const request = new PassThrough();
+  Object.assign(request, {
+    method: "POST",
+    url: environment.ALLOWED_PATH,
+    headers: {
+      "content-type": environment.BILLING_CONTENT_TYPE,
+      "x-zoho-webhook-signature": "0".repeat(64),
+      "x-zc-environment": "Development",
+    },
+  });
+  const response = {
+    headers: {},
+    setHeader(name, value) { this.headers[name] = value; },
+    end(body) { this.body = body; },
+  };
+  const completion = listener(request, response);
+  request.write(Buffer.alloc(600, "a"));
+  request.write(Buffer.alloc(600, "b"));
+  request.end();
+  await completion;
+
+  assert.equal(response.statusCode, 413);
+  assert.match(response.headers["content-type"], /^application\/json\b/);
+  assert.deepEqual(JSON.parse(response.body), {
+    ok: false,
+    code: "body_too_large",
+    request_id: "request_sample_oversized",
+  });
+});
+
+test("returns JSON 413 for an oversized chunked native HTTP request", async (t) => {
+  const environment = baseEnvironment({ MAX_BODY_BYTES: "1024" });
+  const catalystSdk = {
+    initialize() {
+      return {
+        config: { environment: "Development" },
+        datastore() {
+          return { table() { return {}; } };
+        },
+        zcql() {
+          return {};
+        },
+      };
+    },
+  };
+  const logger = { info() {}, error() {} };
+  const listener = createRequestListener({
+    catalystSdk,
+    environment,
+    logger,
+    randomUUID: () => "request_sample_oversized_native",
+    now: () => 100,
+    artifactCreatorDestinationSha256: CREATOR_DESTINATION_SHA256,
+    artifactSourceRevision: TEST_SOURCE_REVISION,
   });
   const server = http.createServer(listener);
 
   server.listen(0, "127.0.0.1");
-  await once(server, "listening");
+  try {
+    await once(server, "listening");
+  } catch (error) {
+    if (error?.code === "EPERM" || error?.code === "EACCES") {
+      t.skip(`loopback bind is unavailable in this sandbox (${error.code})`);
+      return;
+    }
+    throw error;
+  }
 
   try {
     const result = await new Promise((resolve, reject) => {
@@ -116,7 +185,7 @@ test("returns JSON 413 for an oversized chunked native HTTP request", async () =
     assert.deepEqual(JSON.parse(result.body), {
       ok: false,
       code: "body_too_large",
-      request_id: "request_sample_oversized",
+      request_id: "request_sample_oversized_native",
     });
   } finally {
     await new Promise((resolve, reject) => {
