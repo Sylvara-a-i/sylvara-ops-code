@@ -182,7 +182,7 @@ test("end_evaluation requires terminal CRM evidence before cancellation", async 
     "300000000000001",
   ]);
   const terminalUpdate = approved.calls.filter(([kind]) => kind === "crm_update").at(-1)[1];
-  assert.equal(terminalUpdate.Billing_Evaluation_Status, "Canceled");
+  assert.equal(terminalUpdate.Billing_Evaluation_Status, "Ended");
   assert.equal(terminalUpdate.Billing_Automation_Status, "Evaluation Verified");
   assert.equal(Object.hasOwn(terminalUpdate, "Subscription_Status"), false);
 });

@@ -9,7 +9,7 @@ const AUTOMATION_STATUS = Object.freeze({
 });
 const EVALUATION_STATUS = Object.freeze({
   trial: "Trial",
-  cancelled: "Canceled",
+  cancelled: "Ended",
   expired: "Ended",
 });
 
