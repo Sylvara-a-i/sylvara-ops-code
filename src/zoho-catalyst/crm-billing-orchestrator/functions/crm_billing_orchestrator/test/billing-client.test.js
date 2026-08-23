@@ -2,7 +2,7 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { createBillingClient } = require("../lib/billing-client");
+const { createBillingClient, directTestCustomerIdentity } = require("../lib/billing-client");
 const { loadConfig } = require("../lib/config");
 const { REVISION, baseEnvironment, jsonResponse } = require("./helpers");
 
@@ -67,6 +67,42 @@ function subscriptionPage(subscriptions, page = 1, hasMorePage = false) {
   };
 }
 
+function testOrganization(config, overrides = {}) {
+  return {
+    organization_id: config.billingOrganizationId,
+    name: "Synthetic Billing TEST Organization",
+    mode: "test",
+    org_joined_app_list: ["subscriptions"],
+    ...overrides,
+  };
+}
+
+function customerPage(customers, page = 1, hasMorePage = false) {
+  return {
+    customers,
+    page_context: { page, per_page: 200, has_more_page: hasMorePage },
+  };
+}
+
+function directTestCustomer(config, overrides = {}) {
+  const identity = directTestCustomerIdentity(config, crmAccountId);
+  return {
+    customer_id: customerId,
+    email: identity.email,
+    display_name: identity.displayName,
+    company_name: identity.displayName,
+    notes: identity.marker,
+    status: "active",
+    is_portal_enabled: false,
+    ach_supported: false,
+    payment_terms: 0,
+    is_linked_with_zohocrm: false,
+    outstanding: "0",
+    unused_credits: "0",
+    ...overrides,
+  };
+}
+
 function clientFor(config, responses, calls = []) {
   return createBillingClient(config, {
     readAuthorizationProvider: async () => token,
@@ -99,6 +135,141 @@ test("customer creation uses only the native CRM Account import and exact refere
   assert.equal(calls.some(({ url, options }) => (
     url.endsWith("/customers") && options.method === "POST"
   )), false);
+});
+
+test("direct customer provisioning is confined to an attested Billing TEST organization", async () => {
+  const config = loadConfig(baseEnvironment({
+    CUSTOMER_PROVISIONING_MODE: "test_direct_customer",
+    ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING: "true",
+  }), { artifactRevision: REVISION });
+  const calls = [];
+  const customer = directTestCustomer(config);
+  const client = clientFor(config, [
+    jsonResponse(200, { organization: testOrganization(config) }),
+    jsonResponse(200, customerPage([])),
+    jsonResponse(200, { organization: testOrganization(config) }),
+    jsonResponse(201, { customer }),
+    jsonResponse(200, { organization: testOrganization(config) }),
+    jsonResponse(200, customerPage([{ customer_id: customerId, email: customer.email }])),
+    jsonResponse(200, { customer }),
+  ], calls);
+  const result = await client.ensureCustomer({ crmAccountId });
+  assert.equal(result.customer.customer_id, customerId);
+  assert.equal(result.testDirect, true);
+  const create = calls.find(({ url, options }) => (
+    url.endsWith("/customers") && options.method === "POST"
+  ));
+  const body = JSON.parse(create.options.body);
+  assert.deepEqual(Object.keys(body).sort(), [
+    "ach_supported",
+    "company_name",
+    "display_name",
+    "email",
+    "is_portal_enabled",
+    "notes",
+    "payment_terms",
+  ]);
+  assert.equal(body.is_portal_enabled, false);
+  assert.equal(body.ach_supported, false);
+  assert.equal(body.payment_terms, 0);
+  assert.match(body.email, /^billing-sandbox\+[a-f0-9]{32}@example\.com$/);
+  assert.match(body.notes, /^syl-test-customer-[a-f0-9]{32}$/);
+  assert.doesNotMatch(create.options.body, new RegExp(crmAccountId));
+  assert.equal(calls.some(({ url }) => url.includes("/crm/account/")), false);
+  assert.equal(calls.filter(({ url }) => url.includes("/organizations/")).length, 3);
+});
+
+test("direct customer provisioning rejects live or joined organizations before mutation", async () => {
+  const config = loadConfig(baseEnvironment({
+    CUSTOMER_PROVISIONING_MODE: "test_direct_customer",
+    ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING: "true",
+  }), { artifactRevision: REVISION });
+  for (const unsafe of [
+    testOrganization(config, { mode: "live" }),
+    testOrganization(config, { org_joined_app_list: ["subscriptions", "books"] }),
+  ]) {
+    const calls = [];
+    const client = clientFor(config, [jsonResponse(200, { organization: unsafe })], calls);
+    await assert.rejects(
+      client.ensureCustomer({ crmAccountId }),
+      /not the isolated Billing TEST tenant/,
+    );
+    assert.equal(calls.some(({ options }) => options.method === "POST"), false);
+  }
+});
+
+test("direct customer reconciliation requires unique pagination and exact synthetic readback", async () => {
+  const config = loadConfig(baseEnvironment({
+    CUSTOMER_PROVISIONING_MODE: "test_direct_customer",
+    ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING: "true",
+  }), { artifactRevision: REVISION });
+  const customer = directTestCustomer(config);
+  const poisoned = clientFor(config, [
+    jsonResponse(200, { organization: testOrganization(config) }),
+    jsonResponse(200, customerPage([{ customer_id: customerId, email: customer.email }])),
+    jsonResponse(200, { customer: { ...customer, notes: "wrong" } }),
+  ]);
+  await assert.rejects(
+    poisoned.findCustomerByCrmReference(crmAccountId),
+    /violates the isolated boundary/,
+  );
+
+  for (const unsafe of [
+    { ach_supported: true },
+    { payment_terms: 15 },
+  ]) {
+    const unsafeCustomer = { ...customer, ...unsafe };
+    const unsafeClient = clientFor(config, [
+      jsonResponse(200, { organization: testOrganization(config) }),
+      jsonResponse(200, customerPage([{ customer_id: customerId, email: customer.email }])),
+      jsonResponse(200, { customer: unsafeCustomer }),
+    ]);
+    await assert.rejects(
+      unsafeClient.findCustomerByCrmReference(crmAccountId),
+      /violates the isolated boundary/,
+    );
+  }
+
+  const incomplete = clientFor(config, [
+    jsonResponse(200, { organization: testOrganization(config) }),
+    jsonResponse(200, { customers: [] }),
+  ]);
+  await assert.rejects(
+    incomplete.findCustomerByCrmReference(crmAccountId),
+    /pagination is incomplete/,
+  );
+
+  const duplicate = clientFor(config, [
+    jsonResponse(200, { organization: testOrganization(config) }),
+    jsonResponse(200, customerPage([
+      { customer_id: customerId, email: customer.email },
+      { customer_id: `${customerId.slice(0, -1)}2`, email: customer.email },
+    ])),
+  ]);
+  await assert.rejects(
+    duplicate.findCustomerByCrmReference(crmAccountId),
+    /identity is not unique/,
+  );
+});
+
+test("an ambiguous direct customer create is accepted only after exact TEST readback", async () => {
+  const config = loadConfig(baseEnvironment({
+    CUSTOMER_PROVISIONING_MODE: "test_direct_customer",
+    ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING: "true",
+  }), { artifactRevision: REVISION });
+  const customer = directTestCustomer(config);
+  const client = clientFor(config, [
+    jsonResponse(200, { organization: testOrganization(config) }),
+    jsonResponse(200, customerPage([])),
+    jsonResponse(200, { organization: testOrganization(config) }),
+    new Error("synthetic post-commit timeout"),
+    jsonResponse(200, { organization: testOrganization(config) }),
+    jsonResponse(200, customerPage([{ customer_id: customerId, email: customer.email }])),
+    jsonResponse(200, { customer }),
+  ]);
+  const result = await client.ensureCustomer({ crmAccountId });
+  assert.equal(result.customer.customer_id, customerId);
+  assert.equal(result.testDirect, true);
 });
 
 test("customer lookup rejects a response without the exact CRM Account reference", async () => {

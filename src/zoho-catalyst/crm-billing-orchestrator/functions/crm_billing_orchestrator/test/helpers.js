@@ -12,6 +12,8 @@ function baseEnvironment(overrides = {}) {
     CRM_API_BASE_URL: "https://www.zohoapis.com/crm/v8",
     BILLING_API_BASE_URL: "https://www.zohoapis.com/billing/v1",
     BILLING_ORGANIZATION_ID: "100000000000001",
+    CUSTOMER_PROVISIONING_MODE: "native_crm_import",
+    ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING: "false",
     CRM_READ_CONNECTION_LINK_NAME: "CrmRead",
     CRM_WRITE_CONNECTION_LINK_NAME: "CrmWrite",
     BILLING_READ_CONNECTION_LINK_NAME: "BillingRead",
