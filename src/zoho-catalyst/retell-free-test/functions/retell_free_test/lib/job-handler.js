@@ -1,6 +1,5 @@
 'use strict';
 
-const catalyst = require('zcatalyst-sdk-node');
 const { loadJobConfig } = require('./config');
 const { invariant } = require('./errors');
 const { createCatalystStore } = require('./catalyst-store');
@@ -41,7 +40,7 @@ function assertDevelopmentJob(jobRequest, environment, config) {
  */
 function createRetryJobHandler(options = {}) {
   const {
-    catalystSdk = catalyst,
+    catalystSdk = null,
     environment = process.env,
     now = Date.now,
     logger = { info() {}, warn() {}, error() {} },
@@ -56,7 +55,12 @@ function createRetryJobHandler(options = {}) {
     // Job functions have no request Host boundary. Validate Catalyst-provided project
     // identity before SDK initialization, Data Store access, or Catalyst Mail access.
     assertDevelopmentJob(jobRequest, environment, config);
-    const app = catalystSdk.initialize(context);
+    // Defer the deployment dependency until after Development identity passes.
+    // Tests can inject the SDK, while Catalyst resolves its packaged dependency.
+    const runtimeCatalystSdk = catalystSdk || require('zcatalyst-sdk-node');
+    invariant(typeof runtimeCatalystSdk.initialize === 'function',
+      'INVALID_RUNTIME_CONFIGURATION', 'Catalyst SDK is unavailable.', { httpStatus: 503 });
+    const app = runtimeCatalystSdk.initialize(context);
     const store = storeFactory(app, config);
     const service = serviceFactory({ store, mailAdapter: mailFactory(app, config), config, now, logger });
     const result = await service.runRetryJob(25);
