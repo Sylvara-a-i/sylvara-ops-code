@@ -349,7 +349,7 @@ test("the intended function archive excludes tests and environment files", () =>
   }
 });
 
-test("the repository pipeline gates and reproduces one immutable Development deploy", () => {
+test("the repository pipeline keeps approval but blocks Development deployment", () => {
   const pipelinePath = path.join(repositoryRoot, "catalyst-pipelines.yaml");
   const scriptPath = path.join(controllerRoot, "scripts/deploy-development.sh");
   const revisionModulePath = path.join(functionRoot, "lib/source-revision.js");
@@ -367,21 +367,30 @@ test("the repository pipeline gates and reproduces one immutable Development dep
     approvalStageIndex < developmentStageIndex,
     "the approval stage must precede the deployment stage",
   );
+  assert.match(pipeline, /<< env\.DEPLOY_APPROVER_EMAIL >>/);
+  const deploymentJob = pipeline
+    .split(/^  deploy_form2_development:\n/m)[1]
+    ?.split(/^stages:\n/m)[0];
+  assert.ok(deploymentJob, "the Development deployment job is missing");
+  assert.equal(
+    deploymentJob.trimEnd(),
+    `    steps:
+      - |
+        set +x
+        printf '%s\\n' 'BLOCKED: Form 2 Development deployment requires a verified native secret binding.' >&2
+        exit 1`,
+  );
+  assert.doesNotMatch(deploymentJob, /<<\s*env\./);
   for (const variableName of [
-    "DEPLOY_APPROVER_EMAIL",
     "PROJECT_ID",
     "CATALYST_ORG",
     "CATALYST_TOKEN",
     "APPROVED_SOURCE_REVISION",
   ]) {
-    assert.match(pipeline, new RegExp(`<< env\\.${variableName} >>`));
+    assert.doesNotMatch(pipeline, new RegExp(`<< env\\.${variableName} >>`));
   }
-  assert.match(
-    pipeline,
-    /bash --noprofile --norc src\/zoho-catalyst\/form2-controller\/scripts\/deploy-development\.sh/,
-  );
-  assert.match(pipeline, /^      - \|\n        set \+x\n        \/usr\/bin\/env -i \\/m);
-  assert.match(pipeline, /^          PATH="\$PATH" \\/m);
+  assert.match(deploymentJob, /^        exit 1$/m);
+  assert.doesNotMatch(deploymentJob, /deploy-development\.sh|\bcatalyst\s+deploy\b/);
   assert.doesNotMatch(pipeline, /BASH_ENV=|ENV=|SHELLOPTS=|PS4=/);
 
   assert.notEqual(fs.statSync(scriptPath).mode & 0o111, 0, "deployment script is not executable");

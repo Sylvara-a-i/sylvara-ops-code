@@ -12,13 +12,8 @@ jobs:
     steps:
       - |
         set +x
-        /usr/bin/env -i \
-          PATH="$PATH" \
-          PROJECT_ID='<< env.PROJECT_ID >>' \
-          CATALYST_ORG='<< env.CATALYST_ORG >>' \
-          CATALYST_TOKEN='<< env.CATALYST_TOKEN >>' \
-          APPROVED_SOURCE_REVISION='<< env.APPROVED_SOURCE_REVISION >>' \
-          bash --noprofile --norc src/zoho-catalyst/form2-controller/scripts/deploy-development.sh
+        printf '%s\n' 'BLOCKED: Form 2 Development deployment requires a verified native secret binding.' >&2
+        exit 1
 
 stages:
   - name: approval
