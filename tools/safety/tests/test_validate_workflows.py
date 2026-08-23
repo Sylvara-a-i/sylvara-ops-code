@@ -229,6 +229,13 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertTrue(any("pull_request_target" in item for item in problems))
         self.assertTrue(any("runner must be exactly" in item for item in problems))
 
+    def test_workflow_dispatch_is_blocked(self) -> None:
+        problems = validate_workflows.validate_workflow(
+            self.path,
+            workflow(hardened_job(), "workflow_dispatch"),
+        )
+        self.assertTrue(any("workflow_dispatch is prohibited" in item for item in problems))
+
     def test_setup_node_requires_the_approved_major_version(self) -> None:
         steps = f"""      - uses: {SETUP_NODE}
         with:

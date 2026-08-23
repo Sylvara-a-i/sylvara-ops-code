@@ -13,6 +13,6 @@ These rules apply to this proposed Zoho Forms Form 2 controller.
 - Claim the immutable Forms submission identity with a unique Data Store key before CRM mutation. Unknown duplicate or timeout outcomes require reconciliation.
 - Apply Contact, Account, and Deal changes as one ordered CRM Composite request with rollback on failure. Put Deal last so its workflow observes complete related state.
 - Lock Business Email. Reject Mobile changes until an independently approved reverification flow exists. Preserve original request, approved route, duration, call-limit, and scope-version fields.
-- Treat `Authorized_Representative_Confirmed` and `Authority_Confirmed_At` only as respondent attestation. They are never a signature, signed-authorization evidence, or go-live approval; only the trusted Zoho Sign callback may establish signed state.
+- Do not send Form 2 to Zoho Sign. Treat `Authorized_Representative_Confirmed` and `Authority_Confirmed_At` only as the approved checkbox attestation for Form 2. They do not authorize phone routing or go-live; that requires the separate explicit CRM go-live approval.
 - Require independent CRM readback before acknowledging success. Never retry an ambiguous mutation without resolving current CRM and receipt state first.
 - Use synthetic fixtures only. Run `npm run ci`, then the repository verifier before handoff.
