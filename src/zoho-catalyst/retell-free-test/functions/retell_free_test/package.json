@@ -1,0 +1,19 @@
+{
+  "name": "sylvara-retell-free-test",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Development-only shared Retell free-test contracts and deterministic lifecycle core; Catalyst runtime activation is blocked pending datastore proof.",
+  "main": "index.js",
+  "type": "commonjs",
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "check": "node --check index.js && node --check lib/adapters.js && node --check lib/config.js && node --check lib/contracts.js && node --check lib/errors.js && node --check lib/memory-store.js && node --check lib/security.js && node --check lib/service.js && node --check lib/validation.js",
+    "test:unit": "node --test test/unit.test.js",
+    "test:integration": "node --test test/integration.test.js",
+    "test:acceptance": "node --test test/acceptance.test.js",
+    "test": "npm run test:unit && npm run test:integration && npm run test:acceptance",
+    "ci": "npm run check && npm test"
+  }
+}

@@ -24,10 +24,31 @@ This checklist has two scopes. The controlled synthetic AI-receptionist demo use
 - [ ] A synthetic inbound test reaches only the approved voice runtime and route.
 - [ ] The static AI/demo notice and keypad assent occur before speech recognition; absent, ambiguous, or withdrawn assent ends the call.
 - [ ] Missing, malformed, ambiguous, spam-like, and after-hours inputs fail safely.
-- [ ] A provider or dependency failure produces the approved fallback rather than fabricated success.
+- [ ] A provider or dependency failure produces the controlled profile's approved carrier-level safe termination rather than fabricated success. This is not permission for free-test degraded intake.
 - [ ] Recording, retained transcription, content logging, model training, and human review are disabled from the first packet through every provider and subprocessor.
 - [ ] Outbound channels, human transfers, post-call events, downstream integrations, and real-world side effects remain disabled.
 - [ ] Only synthetic scenario content is accepted; sensitive or real data triggers the approved refusal and termination path.
+
+## Synthetic Development Free-Test Processing — No Phone Or External Delivery
+
+This scope exercises source locally or in an separately authorized Development deployment with synthetic HTTP fixtures. It must not bind a number, receive audio, contact a recipient, write CRM, import Analytics, or expose a route publicly.
+
+- [ ] The source revision, `development` environment, component-owned variable registry, synthetic notification mode, synthetic Analytics mode, and disabled CRM mode are verified.
+- [ ] Two synthetic clients use different client/deployment/version/company/service-area/recipient/number values and the same shared agent.
+- [ ] Each synthetic number resolves only its own immutable deployment/configuration.
+- [ ] All seven exact gate values and every ownership/approval/status/expiry/count invariant pass before normal intake.
+- [ ] Every invalid, missing, ambiguous, stale, expired, or exhausted configuration reaches Configuration Unavailable without caller-data collection.
+- [ ] The 25th unique admission can enter; a concurrent 26th cannot; reservation state and finalized eligible handled count remain distinct.
+- [ ] Duplicate, delayed, reordered, malformed, and retried events preserve one immutable call binding and one canonical outcome.
+- [ ] Replay produces no duplicate admission, call, notification, Analytics fact, or CRM summary.
+- [ ] Notification state is durable through pending, bounded retry, delivered synthetic result, or terminal failure and never crosses recipients.
+- [ ] Analytics facts and metrics partition by Client ID and Deployment ID; each report contains one client only.
+- [ ] Number reassignment preserves prior assignment intervals and old call ownership; ambiguous delayed events quarantine.
+- [ ] One immutable correlation chain follows admission, event, call/outcome, notification, reporting outbox, and any approved summary.
+- [ ] All required caller, configuration, isolation, replay, retry, and provider-failure scenarios pass with zero P0/P1 defects.
+- [ ] Rollback leaves the deployment inactive, outboxes preserved, and subsequent configuration attempts safely unavailable.
+
+Passing this section, with complete reproducible source and zero open P0/P1 source defects, supports only **READY FOR DEVELOPMENT END-TO-END TEST**. The Development deployment, runtime/source parity, route readback, and full correlation trace are evidence that test must produce before any later readiness classification. This is not a phone-test or prospect-test gate.
 
 ## Future Pilot Or Production Integration Checks — Not For Controlled Demo
 

@@ -3,11 +3,11 @@
 ## Status
 
 - Runbook status: **Proposed**
-- Implementation status: **Not implemented**
+- Implementation status: **Development source is present; deployment, routes, runtime/source parity, and end-to-end behavior are unproven**
 - Live Retell, Catalyst, CRM, or Analytics change authorized by this file: **No**
 - Production call path: **Blocked pending the product, legal, vendor, environment, and deployment gates**
 
-This runbook implements the boundary in [ADR 0004](../adr/0004-retell-catalyst-crm-analytics-integration-boundary.md). It describes the order of work and acceptance evidence. It does not contain live names, URLs, identifiers, credentials, customer data, call content, or deployment values.
+This runbook implements the system-ownership and generic reporting boundary in [ADR 0004](../adr/0004-retell-catalyst-crm-analytics-integration-boundary.md). For the 7-Day Free Test, [ADR 0006](../adr/0006-shared-seven-day-monitor-with-client-number-isolation.md) and the [shared-agent runbook](shared-seven-day-monitor-number-routing.md) supersede this file's former client-agent mapping, agent-first ownership, admission, notification, and evaluation-agent lifecycle instructions. It does not contain live names, URLs, identifiers, credentials, customer data, call content, or deployment values.
 
 ## Objective
 
@@ -16,11 +16,11 @@ Build the smallest secure reporting path that can:
 1. accept approved Retell post-call events;
 2. preserve replay-safe and auditable call state in Catalyst;
 3. keep CRM limited to relationship and commercial summaries;
-4. reconcile downstream outcomes to the customer's authoritative system;
+4. preserve later outcome-attribution fields and, only for a separately approved paid workflow, reconcile them to the customer's authoritative system;
 5. batch minimized facts into Zoho Analytics; and
 6. produce one reviewed client-isolated report.
 
-Do not build a client portal, general event platform, shared live agent, or CRM call warehouse.
+Do not build a client portal, general event platform, or CRM call warehouse. The free test deliberately uses one shared bounded-intake agent; it is not a generic shared-agent platform and never uses the shared `agent_id` as a tenant key.
 
 ## Prerequisites
 
@@ -105,12 +105,13 @@ Record a private dated evidence package. GitHub receives only the sanitized stat
 
 Default to one voice-integration Catalyst project per environment, not one project per client or evaluation. Before creating or modifying a function, inventory every current function, trigger, route, runtime, secret grant, deployment unit, and rollback target in the intended project.
 
-Implement three logical responsibilities:
+For the free test, implement four logical responsibilities:
 
 ```text
-Retell ingress
-Post-call processing and reconciliation
-Analytics outbox synchronization
+Pre-call number resolution and admission
+Retell event ingress
+Post-call call/outcome and notification processing
+Reporting outbox synchronization
 ```
 
 Choose physical packaging from the observed contract:
@@ -125,52 +126,34 @@ Document the decision and read the final function inventory back before deployme
 
 ## Phase 2: Establish Private Configuration
 
-Create separate Development and Production configuration. The following public names are proposed keys, not proof that a live variable exists:
+The free-test component owns its exact public variable registry at [`src/zoho-catalyst/retell-free-test/config/variables.json`](../../src/zoho-catalyst/retell-free-test/config/variables.json) and sanitized placeholders at [`functions/retell_free_test/.env.example`](../../src/zoho-catalyst/retell-free-test/functions/retell_free_test/.env.example). Those files define each consumer, secret classification, required format, Development behavior, and Production prohibition. Do not use old root Retell/Make variable lists or infer a live value from either file.
 
-```text
-DEPLOYMENT_ENVIRONMENT
-RETELL_WEBHOOK_API_KEY
-RETELL_ALLOWED_EVENT_TYPES
-RETELL_ALLOWED_AGENT_IDS
-CATALYST_CALL_EVENT_TABLE
-CATALYST_CALL_TABLE
-CATALYST_CALL_ARTIFACT_TABLE
-CATALYST_OUTCOME_TABLE
-CATALYST_REPORTING_OUTBOX_TABLE
-CATALYST_REPORT_RUN_TABLE
-ZOHO_ANALYTICS_API_BASE_URL
-ZOHO_ANALYTICS_ORG_ID
-ZOHO_ANALYTICS_WORKSPACE_ID
-ZOHO_ANALYTICS_CALL_FACTS_VIEW_ID
-ZOHO_ANALYTICS_DAILY_FACTS_VIEW_ID
-ZOHO_ANALYTICS_CONNECTION_NAME
-REPORTING_SYNC_INTERVAL_MINUTES
-REPORTING_BATCH_SIZE
-```
+Secrets and OAuth material stay only in platform-native secret/Connection storage. Private identifiers remain in environment configuration. Missing or invalid required values fail closed. Do not commit a populated `.env`, endpoint, platform identifier, or configuration export.
 
-Classification:
+## Phase 3: Model Free-Test Deployment And Number State
 
-| Key class | Storage rule |
-|---|---|
-| Secret | `RETELL_WEBHOOK_API_KEY` and any OAuth credential material stay only in platform-native secret or Connection storage |
-| Private identifier | Organization, workspace, view, table, agent, route, connection, and project identifiers stay in private environment configuration |
-| Non-secret behavior | Event allowlists, interval, batch size, and environment labels remain environment-specific and are reviewed before deployment |
-
-Do not commit a populated `.env` file or configuration export.
-
-## Phase 3: Model Client And Agent State
-
-Create one stable client record outside the voice platform and one effective mapping for each client agent and environment.
+For the free test, create one immutable versioned deployment/configuration snapshot and one effective number assignment for each client test. The shared agent is product identity, not ownership.
 
 Required mapping facts:
 
 ```text
 client_id
+deployment_id
+configuration_version
 crm_relationship_reference
+retell_to_number_private_reference
+number_assignment_version
 retell_agent_id
 agent_version
 environment
 coverage_mode
+engagement_type
+capability_profile
+route_approval_state
+actual_start_at
+expires_at
+eligible_handled_count
+admission_limit
 effective_from
 effective_to
 status
@@ -178,12 +161,13 @@ status
 
 Acceptance:
 
-- one active mapping per client and environment;
-- one client per active agent;
+- one active deployment per client test and one client per deployment;
+- one non-overlapping assignment per Retell number at a point in time;
+- the same accepted free-test agent may appear on multiple deployments;
 - no mapping by mutable name or prompt text;
-- conflicting or missing mapping fails closed;
-- promotion preserves the prior accepted agent version; and
-- the master template has no client binding and no live number route.
+- conflicting, stale, or missing ownership fails through Configuration Unavailable before intake;
+- prior assignments, configurations, and call bindings remain immutable; and
+- conversion creates a separately accepted Revenue Desk agent rather than promoting or cloning the free-test flow.
 
 ## Phase 4: Build The Catalyst Ingress
 
@@ -196,12 +180,14 @@ Required processing order:
 3. verify the Retell signature and signed timestamp;
 4. parse JSON only after signature success;
 5. validate the event type, call identifier, agent identifier, and schema;
-6. resolve exactly one active client-agent mapping;
+6. resolve call ownership using validated deployment metadata, an existing immutable call binding, a unique effective `to_number` assignment, then `agent_id` only when it uniquely maps to one deployment;
 7. derive a stable idempotency key;
 8. durably claim a minimized event row;
 9. enqueue or persist the normalized call update;
 10. return an empty 2xx response inside the provider timeout; and
 11. process downstream work asynchronously.
+
+This is the required runtime contract, not current evidence. The Development core presently calls synthetic notification and Analytics adapters within `processEvent`; it has no accepted HTTP ingress or durable queue/worker handoff. Do not deploy or describe webhook acknowledgement as durable/asynchronous until that boundary, failure recovery, and readback are implemented and tested.
 
 Logging is limited to:
 
@@ -225,13 +211,15 @@ Do not log signatures, headers, raw bodies, event keys, call IDs, agent IDs, cli
 
 ## Phase 5: Normalize Call State
 
-Create one normalized call row per `client_id + call_id`.
+Create one normalized call row per opaque keyed-HMAC-derived `call_lookup_key`. Bind it once to the immutable client, deployment, configuration, and assignment/admission fields below. Do not retain the raw provider call identifier; reject any later ownership conflict.
 
 Minimum proposed fields:
 
 ```text
 client_id
-call_id
+deployment_id
+configuration_version
+call_lookup_key
 retell_agent_id
 agent_version
 environment
@@ -277,7 +265,7 @@ When separately authorized, store only a private artifact record:
 
 ```text
 client_id
-call_id
+call_lookup_key
 artifact_type
 storage_provider
 private_object_reference
@@ -299,7 +287,15 @@ Controls:
 - deletion readback; and
 - incident and legal-hold behavior defined privately.
 
+## Free-Test Notification Boundary
+
+After one eligible call is durably processed, Catalyst creates one idempotent notification record for the destination already approved in that deployment snapshot. It stores retry and terminal-failure state, correlation to the call/deployment, and a sanitized provider result. Webhook replay cannot enqueue or send a duplicate, and a provider ambiguity is reconciled before retry. Callers cannot choose the destination and Retell never sends the message.
+
+The current Development implementation uses a deterministic synthetic adapter and contacts nobody. Real provider credentials, destinations, sending, and Production modes remain prohibited until separately approved. See the [shared-agent runbook](shared-seven-day-monitor-number-routing.md) for the exact lifecycle and isolation test.
+
 ## Phase 7: Reconcile Customer Outcomes
+
+The 7-Day Free Test does not write a customer scheduling or field-service system. Apply this phase only to a separately approved paid Revenue Desk integration. For the free test, preserve the canonical outcome and later attribution fields in Catalyst without inventing booking, completion, or revenue.
 
 For each approved customer-system integration:
 
@@ -316,6 +312,8 @@ Do not write a derived Analytics value back into the customer system.
 ## Phase 8: Update CRM
 
 CRM receives only bounded relationship or commercial summaries.
+
+The current free-test Development package keeps CRM summary mode disabled. A future summary write requires its own approved field contract, idempotency, workflow-impact review, and readback; Retell never initiates it.
 
 Candidate summary categories:
 
@@ -392,6 +390,7 @@ Proposed model:
 
 ```text
 Dim_Client
+Dim_Deployment
 Dim_Date
 Fact_Calls
 Fact_Outcomes
@@ -402,7 +401,8 @@ Fact_QA
 Required controls:
 
 - immutable `Client ID`;
-- stable `Call ID`;
+- immutable `Deployment ID` and configuration version;
+- stable opaque `Call Key`;
 - explicit environment;
 - UTC source times and approved local reporting date;
 - outcome and metric versions;
@@ -434,7 +434,7 @@ Proposed batch behavior:
 2. lock or claim one bounded batch;
 3. export a minimized synthetic or Production-approved payload;
 4. submit asynchronous `updateadd`;
-5. match on `Client ID` and `Call ID`;
+5. match free-test facts on opaque `Call Key`, with `Client ID` and `Deployment ID` as mandatory partitions;
 6. persist the provider job identifier;
 7. poll with bounded backoff;
 8. parse rejected rows and job totals;
@@ -444,6 +444,8 @@ Proposed batch behavior:
 
 The initial operational hypothesis is hourly incremental sync plus periodic full reconciliation. The interval and batch size remain private configuration and must be adjusted from observed volume, API units, source capacity, and staleness requirements.
 
+The current free-test Development adapter persists only a synthetic partitioned fact and must not call the Analytics API. This direct-API sequence remains a separately approved future path.
+
 ## Phase 12: Build Reports
 
 ### Evaluation Report
@@ -452,7 +454,7 @@ Build one fixed-client report set and generate it manually.
 
 Acceptance:
 
-- one client only;
+- one client and only its approved deployment(s);
 - correct environment and period;
 - exact source/Analytics count reconciliation;
 - current watermark;
@@ -481,28 +483,27 @@ A visually plausible dashboard is not acceptance evidence.
 
 ## Phase 13: End-To-End Synthetic Acceptance
 
-Run synthetic scenarios for:
+For the 7-Day Free Test, run all 30 cases and the two-client isolation/replay/reassignment lifecycle in the [shared-agent runbook](shared-seven-day-monitor-number-routing.md) and its linked machine-readable fixture. Reporting acceptance must additionally cover:
 
 - valid analyzed call;
 - call ended before analysis;
 - identical duplicate;
 - conflicting duplicate;
-- unknown agent;
-- inactive mapping;
+- unknown and ambiguous number;
+- inactive/expired/exhausted deployment;
+- conflicting deployment metadata and number assignment;
 - invalid signature;
 - stale signature timestamp;
 - malformed JSON;
 - oversized body;
-- multiple transfer attempts;
-- missing customer outcome;
-- ambiguous customer-system write;
-- CRM duplicate or workflow conflict;
+- notification retry and terminal failure;
+- notification recipient crossover attempt;
+- CRM summary remains disabled in the current Development mode;
 - Analytics import rejection;
 - Analytics job timeout;
 - cross-client report attempt;
-- wrong recipient;
 - stale watermark; and
-- artifact deletion.
+- number reassignment with a delayed event.
 
 For each scenario, record expected HTTP result, durable state, downstream side effects, logs, report visibility, and containment action.
 
@@ -539,11 +540,13 @@ When a path is unsafe or uncertain:
 9. run one synthetic end-to-end test; and
 10. re-enable in the smallest approved order.
 
+For a free-test identity, configuration, or isolation failure, do not switch to degraded intake or a client-specific free-test clone. Stop the affected deployment(s), preserve immutable assignments/bindings/outboxes, and verify Configuration Unavailable or the approved inactive carrier behavior. The [rollback checklist](rollback-checklist.md) contains the authoritative free-test sequence.
+
 A historical artifact, screenshot, or prior Git commit is not automatically a safe rollback target.
 
 ## Ongoing Operations
 
-- Sample calls under the approved QA policy.
+- Sample calls only under a separately approved QA policy and legal profile.
 - Review unresolved and human-escalation reason codes.
 - Monitor provider, Catalyst, CRM, customer-system, and Analytics failures separately.
 - Reconcile report totals to source systems.

@@ -21,9 +21,9 @@
   },
   "configuration_adversarial_matrix": {
     "identifiers": [
-      "client_reference",
-      "deployment_reference",
-      "configuration_reference"
+      "client_id",
+      "deployment_id",
+      "configuration_version"
     ],
     "invalid_value_classes": [
       "missing",

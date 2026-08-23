@@ -56,6 +56,7 @@ class VerifyEntrypointTests(unittest.TestCase):
             '"-m", "unittest", "discover"',
             '"run", "ci", "--prefix", $GatewayRoot',
             '"run", "ci", "--prefix", $RetellResolverRoot',
+            '"run", "ci", "--prefix", $RetellFreeTestRoot',
         ):
             with self.subTest(fragment=required_fragment):
                 self.assertIn(required_fragment, self.script)

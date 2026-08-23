@@ -14,10 +14,6 @@
       "coverage_mode": "AfterHoursOnly"
     },
     {
-      "display_label": "No Answer/Overflow Only",
-      "coverage_mode": "NoAnswerOverflowOnly"
-    },
-    {
       "display_label": "No Answer / Overflow Only",
       "coverage_mode": "NoAnswerOverflowOnly"
     },

@@ -12,9 +12,9 @@
     "canonical_modes_owned_by_coverage_contract": true,
     "noncanonical_modes_fail_closed": true,
     "required_nonblank_references": [
-      "client_reference",
-      "deployment_reference",
-      "configuration_reference"
+      "client_id",
+      "deployment_id",
+      "configuration_version"
     ],
     "identifier_value_contract": {
       "required_type": "string",
@@ -25,7 +25,7 @@
       "configured_client_matching": "approved_private_exact_tuple"
     },
     "required_exact_values": {
-      "resolver_state": "Resolved",
+      "resolver_status": "Resolved",
       "engagement_type": "free_test",
       "capability_profile": "call_gap_monitor_v1"
     },
@@ -161,7 +161,7 @@
     ]
   },
   "variable_references": {
-    "configuration": ["coverage_mode", "resolver_state", "client_reference", "deployment_reference", "configuration_reference", "engagement_type", "capability_profile"],
+    "configuration": ["coverage_mode", "resolver_status", "client_id", "deployment_id", "configuration_version", "engagement_type", "capability_profile"],
     "urgency": ["urgency"],
     "urgent_callback": ["urgent_callback"],
     "nonurgent_callback": ["nonurgent_callback"],

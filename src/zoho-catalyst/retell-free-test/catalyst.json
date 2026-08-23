@@ -1,0 +1,12 @@
+{
+  "functions": {
+    "source": "functions",
+    "targets": [
+      "retell_free_test"
+    ],
+    "ignore": [
+      "test/**",
+      ".env*"
+    ]
+  }
+}

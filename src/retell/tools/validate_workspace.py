@@ -40,7 +40,9 @@ NONURGENT_CONTRACT_RELATIVE_PATH = (
     "agents/7-day-free-test/contracts/nonurgent-classification-contract.json"
 )
 SHADOW_QA_PUBLIC_FILES = {
+    "agents/7-day-free-test/contracts/conversation-contract.json",
     "agents/7-day-free-test/contracts/shadow-qa-contract.json",
+    "agents/7-day-free-test/tests/fixtures/acceptance-cases.json",
     "agents/7-day-free-test/tests/fixtures/shadow-qa-corpus.json",
     "tools/run_shadow_qa.py",
 }
@@ -765,6 +767,9 @@ def _validate_readme(root: Path) -> list[str]:
         "published configuration did not resolve",
         "No Retell API call is required",
         "runtime-derived variable names",
+        "conversation-contract.json",
+        "exactly 30 machine-readable scenarios",
+        "220 fixed synthetic adversarial fixtures",
     )
     if any(marker not in text for marker in required):
         problems.append("README.md: required public-boundary statement is missing")

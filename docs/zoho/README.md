@@ -66,9 +66,18 @@ The [product reference collection](reference/README.md) covers the currently gov
 - [Proposed Billing webhook gateway](../../src/zoho-catalyst/billing-webhook-gateway/README.md)
 - [Historical, non-executable Billing gateway review record](../../archive/zoho-catalyst/billing-webhook-gateway/README.md)
 - [Retell, Catalyst, CRM, and Analytics integration boundary](../adr/0004-retell-catalyst-crm-analytics-integration-boundary.md)
+- [Authoritative shared 7-Day Free Test architecture](../adr/0006-shared-seven-day-monitor-with-client-number-isolation.md)
+- [Shared free-test Development, acceptance, and rollback runbook](../runbooks/shared-seven-day-monitor-number-routing.md)
+- [Sanitized 2026-08-22 Development runtime/source reconciliation](../runbooks/free-test-development-reconciliation-2026-08-22.md)
+- [Free-test runtime security controls](../security/free-test-runtime-controls.md)
 - [Retell-to-reporting deployment and containment runbook](../runbooks/retell-catalyst-analytics-reporting.md)
+- [Free-test Catalyst runtime contract](../../src/zoho-catalyst/retell-free-test/functions/retell_free_test/contracts/free-test-contract.json)
+- [Free-test environment-variable registry](../../src/zoho-catalyst/retell-free-test/config/variables.json)
+- [Free-test Catalyst Data Store schema](../../src/zoho-catalyst/retell-free-test/config/datastore-schema.json)
 
 These files stay beside their artifacts because they describe exact source, validation, deployment, provenance, or rollback behavior. Reusable policy belongs here under `docs/zoho/`.
+
+The free-test source is Development-only. Its notification and Analytics adapters are synthetic, its CRM summary path is disabled, and its Production mode is rejected. The 2026-08-22 reconciliation found runtime/source parity and deployed route evidence unproven; repository presence is not deployment evidence.
 
 ## Portability Boundary
 

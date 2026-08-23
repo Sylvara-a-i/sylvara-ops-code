@@ -28,6 +28,9 @@ function Join-PathSegments {
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $GatewayRoot = Join-PathSegments $RepoRoot @("src", "zoho-catalyst", "billing-webhook-gateway")
 $RetellResolverRoot = Join-PathSegments $RepoRoot @("src", "zoho-catalyst", "retell-inbound-resolver")
+$RetellFreeTestRoot = Join-PathSegments $RepoRoot @(
+    "src", "zoho-catalyst", "retell-free-test", "functions", "retell_free_test"
+)
 $RequirementsPath = Join-PathSegments $RepoRoot @("tools", "safety", "requirements.txt")
 $VenvParent = Join-PathSegments $RepoRoot @(".codex-tmp")
 $VenvRoot = Join-PathSegments $VenvParent @("safety-venv")
@@ -390,6 +393,11 @@ try {
                     "ci", "--ignore-scripts", "--no-audit", "--no-fund",
                     "--prefix", $GatewayRoot
                 )
+            Invoke-Native -Label "Validate exact free-test package lock" `
+                -Executable $npm -Arguments @(
+                    "ci", "--ignore-scripts", "--no-audit", "--no-fund",
+                    "--prefix", $RetellFreeTestRoot
+                )
         } else {
             $env:npm_config_offline = "true"
             $env:npm_config_update_notifier = "false"
@@ -403,7 +411,6 @@ try {
         if (-not (Test-Path -LiteralPath $gatewayDependency -PathType Leaf)) {
             throw "Gateway dependencies are missing. Run .\tools\verify.cmd -Bootstrap once before offline Quick verification."
         }
-
         Invoke-Native -Label "Public repository safety scan" -Executable $python `
             -Arguments @("tools/safety/pre-commit-safety-check.py")
         Invoke-Native -Label "Workflow security policy" -Executable $python `
@@ -420,11 +427,18 @@ try {
                     "audit", "--omit=dev", "--audit-level=high",
                     "--prefix", $GatewayRoot
                 )
+            Invoke-Native -Label "Free-test production dependency audit" -Executable $npm `
+                -Arguments @(
+                    "audit", "--omit=dev", "--audit-level=high",
+                    "--prefix", $RetellFreeTestRoot
+                )
         }
         Invoke-Native -Label "Billing gateway checks and tests" -Executable $npm `
             -Arguments @("run", "ci", "--prefix", $GatewayRoot)
         Invoke-Native -Label "Retell resolver contract checks" -Executable $npm `
             -Arguments @("run", "ci", "--prefix", $RetellResolverRoot)
+        Invoke-Native -Label "Retell free-test checks and tests" -Executable $npm `
+            -Arguments @("run", "ci", "--prefix", $RetellFreeTestRoot)
 
         Write-Host "Verification passed ($Mode mode)."
     } finally {

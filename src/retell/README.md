@@ -34,7 +34,11 @@ This is historical observation only. Assignment references are not treated as pu
 
 The `7-Day Free Test` subtree includes a public acceptance contract for urgency, callback, and bounded nonurgent classification. It records synthetic state semantics and deterministic precedence only. It is not runtime mapping, a Retell prompt or flow export, Manual Chat evidence, deployable configuration, or proof that the runtime passed those checks.
 
-The zero-network shadow-QA harness extends that contract with fail-closed identifier validation, structural checks, deterministic state oracles, fixed synthetic adversarial fixtures, metamorphic checks, mutation testing, and sanitized differential selection. It distinguishes the required `call_ended` and `call_analyzed` provider telemetry class from prohibited customer-facing actions; the private Catalyst destination and delivery health are not asserted by this public contract. It never interprets caller language or emulates Retell. Generated reports belong only in an ignored local output directory.
+[`conversation-contract.json`](agents/7-day-free-test/contracts/conversation-contract.json) defines the shared free-test caller-experience boundary: the exact seven-field configuration gate, direct Configuration Unavailable termination before intake, client-specific greeting structure, bounded intake, sensitive-data redirects, canonical outcomes, truthful closing, and prohibited Retell-side actions. Its normalized naturalness ranges are acceptance constraints only; every value still requires Retell-native mapping, simulation, and readback before a controlled phone test.
+
+[`acceptance-cases.json`](agents/7-day-free-test/tests/fixtures/acceptance-cases.json) contains exactly 30 machine-readable scenarios. Each records inputs, routing, extraction, terminal state, persistence, notification, Analytics, and explicit pass/fail expectations. Catalyst-owned webhook, persistence, retry, notification, and reporting cases describe the required downstream behavior; they do not pretend that Retell executes or proves those backend operations.
+
+The zero-network shadow-QA harness extends that contract with fail-closed identifier validation, structural checks, deterministic state oracles, 220 fixed synthetic adversarial fixtures, metamorphic checks, mutation testing, and sanitized differential selection. It distinguishes the required `call_ended` and `call_analyzed` provider telemetry class from prohibited customer-facing actions; the private Catalyst destination and delivery health are not asserted by this public contract. It never interprets caller language or emulates Retell. Generated reports belong only in an ignored local output directory.
 
 ```powershell
 python src\retell\tools\run_shadow_qa.py run `
@@ -53,6 +57,8 @@ The private snapshot arguments must be under the approved ignored audit director
 ## Local Validation
 
 ```powershell
+python src\retell\tools\validate_workspace.py
+python -m unittest tools.safety.tests.test_retell_free_test_acceptance_contract -v
 python -m unittest discover -s tools\safety\tests -p "test_retell_workspace.py" -v
 .\tools\verify.cmd
 ```

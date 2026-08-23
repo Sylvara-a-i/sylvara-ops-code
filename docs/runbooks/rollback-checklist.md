@@ -25,6 +25,8 @@ Initiate containment and evaluate rollback when:
 - the deployed artifact differs from the reviewed artifact;
 - the target identity or environment cannot be confirmed.
 
+For the 7-Day Free Test, also contain immediately on unknown/ambiguous number resolution, configuration-gate bypass, count/expiry bypass, stale number ownership, cross-client configuration/call/notification/reporting state, duplicate notification, or loss of immutable correlation evidence.
+
 ## Execution
 
 1. Stop further automated writes or traffic expansion when safe.
@@ -35,6 +37,20 @@ Initiate containment and evaluate rollback when:
 6. Read back runtime configuration and each authoritative downstream system.
 7. Run the focused smoke tests with synthetic data.
 8. Record a sanitized outcome in [Deployment Log](deployment-log.md).
+
+## 7-Day Free-Test Containment
+
+1. Disable the affected number assignment/forwarding route where authorized and set route approval to revoked or blocked and deployment to stopped.
+2. If the shared agent or resolver is suspect, stop every affected deployment. Never switch to a client-specific free-test clone or degraded intake.
+3. Pause affected notification and reporting workers without deleting calls, bindings, assignment history, admissions, or outboxes.
+4. Determine scope from immutable deployment and call bindings, not display names, the shared Agent ID, or the number's current owner.
+5. Preserve the old number-assignment interval before any reassignment. A delayed bound event remains with its original deployment; an ambiguous unbound event quarantines.
+6. Verify no notification/report crossed clients and treat any contamination as a P0 incident.
+7. Restore only a previously approved inactive/provider route or carrier destination, then independently read it back.
+8. Confirm the shared flow returns Configuration Unavailable or receives no traffic; it must not collect degraded intake.
+9. Re-enable only after the full two-client, limit, replay, reassignment, notification, correlation, and rollback suites pass with zero P0/P1 and new route approval.
+
+Stopping a test never activates paid service or a Revenue Desk.
 
 ## Data And Financial Safety
 

@@ -29,7 +29,6 @@ test("the machine-readable contract exposes exactly three canonical modes", () =
 test("approved CRM labels map to one canonical value", () => {
   const cases = new Map([
     ["After Hours Only", "AfterHoursOnly"],
-    ["No Answer/Overflow Only", "NoAnswerOverflowOnly"],
     ["No Answer / Overflow Only", "NoAnswerOverflowOnly"],
     ["After Hours + Overflow", "AfterHoursAndOverflow"],
   ]);
@@ -63,6 +62,7 @@ test("unknown, blank, malformed, partial, and trigger-as-mode inputs fail closed
     "NoAnswerOverflow",
     "AfterHoursAnd",
     "After Hours+Overflow",
+    "No Answer/Overflow Only",
     "No Answer  / Overflow Only",
     "Unknown",
   ];

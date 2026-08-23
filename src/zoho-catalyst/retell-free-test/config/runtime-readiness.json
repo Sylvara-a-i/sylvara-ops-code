@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "decision": "no_go",
+  "decision_date": "2026-08-22",
+  "environment": "development",
+  "entrypoint_policy": "fixed_503",
+  "documented_platform_capabilities": [
+    {
+      "id": "advanced_io_native_http",
+      "status": "documented_not_runtime_verified",
+      "source": "https://docs.catalyst.zoho.com/en/serverless/help/functions/advanced-io/",
+      "scope": "Native Node.js request/response objects and a createServer-based blank Advanced I/O function are documented."
+    },
+    {
+      "id": "datastore_single_row_insert_update",
+      "status": "documented_not_runtime_verified",
+      "source": "https://docs.catalyst.zoho.com/en/sdk/nodejs/v2/cloud-scale/data-store/insert-rows/",
+      "secondary_source": "https://docs.catalyst.zoho.com/en/sdk/nodejs/v2/cloud-scale/data-store/update-rows/",
+      "scope": "Single-row insert and ROWID-based update SDK calls are documented."
+    },
+    {
+      "id": "datastore_unique_column",
+      "status": "documented_not_runtime_verified",
+      "source": "https://docs.catalyst.zoho.com/en/cloud-scale/help/data-store/columns/",
+      "scope": "The IsUnique column constraint is documented without the nullable or duplicate-error behavior required below."
+    },
+    {
+      "id": "job_submission",
+      "status": "documented_not_runtime_verified",
+      "source": "https://docs.catalyst.zoho.com/en/sdk/nodejs/v2/job-scheduling/jobs/create-job/",
+      "scope": "Function-job submission and bounded platform retry configuration are documented."
+    }
+  ],
+  "blocking_evidence_gaps": [
+    {
+      "id": "atomic_admission_and_handled_count",
+      "severity": "P0",
+      "status": "unverified",
+      "missing_contract": "No authoritative multi-row transaction or compare-and-set contract proves one atomic transition across admission identity, one of 25 slots, admitted count, handled count, canonical call binding, and stop state.",
+      "required_closure": "Prove a concrete Catalyst Development algorithm under concurrent 25th/26th admission and duplicate post-call finalization, including crash recovery and exact readback."
+    },
+    {
+      "id": "nullable_unique_and_duplicate_error",
+      "severity": "P0",
+      "status": "unverified",
+      "missing_contract": "Published IsUnique documentation does not establish nullable uniqueness semantics for pre-provisioned slots or the exact SDK duplicate-conflict code and shape.",
+      "required_closure": "Provision the proposed Development schema, run concurrent insert/claim probes, and independently read back uniqueness and duplicate-error behavior without publishing private identifiers."
+    },
+    {
+      "id": "conditional_zcql_result_and_timeout",
+      "severity": "P0",
+      "status": "unverified",
+      "missing_contract": "The exact affected-row response for conditional ZCQL UPDATE and the result of a timeout after possible commit are not established for the pinned runtime.",
+      "required_closure": "Verify zero-row/one-row response shapes, atomic predicate evaluation, timeout ambiguity, and authoritative readback in Catalyst Development."
+    },
+    {
+      "id": "lease_fenced_side_effect_claims",
+      "severity": "P0",
+      "status": "unverified",
+      "missing_contract": "No deployed store contract proves that a stale event worker cannot mutate a call, claim notification delivery, or publish Analytics after lease takeover.",
+      "required_closure": "Implement and concurrency-test conditional lease-token checks on every durable mutation and side-effect claim against the real Data Store adapter."
+    },
+    {
+      "id": "queue_worker_runtime",
+      "severity": "P0",
+      "status": "unverified",
+      "missing_contract": "The exact pinned SDK surface, job payload/response shape, target invocation shape, delivery/retry semantics, Development binding, and receipt-to-job crash window are not verified.",
+      "required_closure": "Pin the supported SDK, configure a private Development Function Job Pool and worker, test duplicate/delayed/lost job behavior, and add a durable scanner so receipt persistence and job submission cannot silently split."
+    },
+    {
+      "id": "runtime_environment_and_raw_body_readback",
+      "severity": "P0",
+      "status": "unverified",
+      "missing_contract": "Repository conventions for the platform environment header, SDK environment value, unchanged raw request bytes, and Advanced I/O response behavior have not been served or deployed for this function.",
+      "required_closure": "Run Catalyst CLI serve and a Development deployment using synthetic signed bytes; prove Development identity from platform-derived state and reject Production before Data Store or provider access."
+    },
+    {
+      "id": "notification_provider_contract",
+      "severity": "P0",
+      "status": "unverified",
+      "missing_contract": "No notification provider or approved Development destination contract defines idempotency-key enforcement, outcome readback, timeout ambiguity, rate limits, or terminal response mapping.",
+      "required_closure": "Select one approved provider and Development-only destination, document its official contract, implement one bounded adapter, and verify send/readback without real prospect or customer delivery."
+    },
+    {
+      "id": "analytics_handoff_contract",
+      "severity": "P1",
+      "status": "unverified",
+      "missing_contract": "No approved Development Analytics import/upsert boundary defines the target schema, idempotency key, response validation, or authoritative readback.",
+      "required_closure": "Approve one minimized Development-only Analytics handoff and verify idempotent upsert/readback using synthetic call facts."
+    },
+    {
+      "id": "orphan_admission_reconciliation",
+      "severity": "P1",
+      "status": "unverified",
+      "missing_contract": "Retell pre-call requests have no call_id and retry stability of event_timestamp is unproven, so an elapsed-time release cannot distinguish an abandoned request from a delayed handled call.",
+      "required_closure": "Obtain provider-authoritative Development evidence that deterministically releases or finalizes an orphan while preserving the 25 eligible-handled-call ceiling."
+    }
+  ],
+  "release_gate": {
+    "all_blocking_gaps_must_be_verified": true,
+    "fixed_503_removal_requires_separate_review": true,
+    "production_remains_prohibited": true
+  }
+}

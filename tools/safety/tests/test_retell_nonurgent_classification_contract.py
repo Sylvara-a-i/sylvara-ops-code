@@ -196,7 +196,7 @@ class RetellNonurgentClassificationContractTests(unittest.TestCase):
         corpus = json.loads(SHADOW_CORPUS_PATH.read_text(encoding="utf-8"))
         self.assertEqual(set(), self.shadow.contract_failures(shadow_contract, coverage, self.contract))
         gate = self.shadow.gate_cases(shadow_contract, coverage)
-        self.assertEqual(70, len(gate))
+        self.assertEqual(69, len(gate))
         self.assertTrue(all(row["pass"] for row in gate))
         self.assertTrue(all(row["primary_outcome"] == "configuration_not_ready" and row["review_required"] and not row["identifiers_spoken"] for row in gate if not row["expected_valid"]))
         business = self.shadow.business_state_report(shadow_contract, coverage)

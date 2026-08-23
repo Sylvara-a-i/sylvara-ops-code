@@ -45,84 +45,91 @@ class RetellAgentIsolationDecisionTests(unittest.TestCase):
 
     def test_current_topology_is_unambiguous(self) -> None:
         required = (
-            "one shared monitor agent",
-            "one dedicated retell number and deployment per active test client",
-            "one dedicated revenue desk agent per converted client",
-            "the client keeps the same forwarding destination",
-            "all approved client numbers may use the same inbound-webhook endpoint",
-            "no active retell number shared by two clients",
+            "use one shared free-test agent",
+            "one dedicated retell number per active test client",
+            "one versioned catalyst deployment/configuration record per active test",
+            "one shared inbound resolver",
+            "the shared free-test agent is never promoted into a revenue desk",
+            "not a generalized multi-tenant voice platform",
         )
         for marker in required:
             with self.subTest(marker=marker):
                 self.assertIn(marker, self.current_lower)
 
     def test_monitor_and_revenue_desk_are_separate_agent_products(self) -> None:
-        self.assertIn("seven-day call-gap monitor", self.current_lower)
-        self.assertIn("revenue desk master and client clones", self.current_lower)
+        self.assertIn("shared **7-day free test** agent", self.current_lower)
+        self.assertIn("**revenue desk**", self.current_lower)
         self.assertIn(
-            "the monitor and revenue desk remain separate agents",
+            "the shared free-test agent is never promoted into a revenue desk",
             self.current_lower,
         )
         self.assertIn(
-            "the monitor agent is not promoted into the revenue desk",
+            "never auto-extend, auto-convert, or start a revenue desk",
             self.runbook_lower,
         )
 
     def test_number_not_agent_is_the_shared_monitor_client_boundary(self) -> None:
         self.assertIn(
-            "the additional number is intentional. it is the stable client-routing boundary",
+            "called `to_number` identifies the dedicated forwarding destination",
             self.current_lower,
         )
         self.assertIn(
-            "the shared monitor `agent_id` identifies the monitor product, not the client",
+            "catalyst binds that number to exactly one client deployment",
+            self.current_lower,
+        )
+        self.assertIn(
+            "the shared retell `agent_id` identifies the free-test product; it is not sufficient evidence of client ownership",
+            self.current_lower,
+        )
+        self.assertIn(
+            "the shared `agent_id` identifies the product, never the tenant",
             self.runbook_lower,
-        )
-        self.assertIn("unique retell `to_number` mapping", self.current_lower)
-        self.assertIn(
-            "the shared monitor `agent_id` intentionally maps to multiple deployments",
-            self.current_lower,
         )
 
     def test_one_shared_inbound_resolver_is_required(self) -> None:
         for marker in (
-            "use one catalyst endpoint for all approved client numbers",
-            "post /retell/inbound",
-            "resolve `to_number` to exactly one active deployment",
-            "inject only the allowlisted metadata and string dynamic variables required for that call",
+            "one shared inbound resolver",
+            "the called `to_number` maps to exactly one eligible number assignment",
+            "return only allowlisted metadata, shared agent/version, and approved dynamic variables",
         ):
             with self.subTest(marker=marker):
-                self.assertIn(marker, self.current_lower)
+                self.assertIn(marker, self.current_lower + self.runbook_lower)
 
     def test_post_call_resolution_does_not_use_shared_agent_as_tenancy_key(self) -> None:
         ordered_markers = (
-            "validated explicit `deployment_id`",
-            "existing immutable call-to-deployment binding",
-            "unique retell `to_number` mapping",
-            "retell `agent_id` only when that agent maps to exactly one active deployment",
+            "validated `deployment_id` from call metadata",
+            "existing durable call-to-deployment binding",
+            "unique validated `to_number` assignment effective for the call",
+            "`agent_id` only if it maps to exactly one deployment",
         )
         positions = [self.current_lower.index(marker) for marker in ordered_markers]
         self.assertEqual(positions, sorted(positions))
         self.assertIn(
-            "the processor must not quarantine a call merely because the shared monitor agent has multiple deployments",
+            "the shared free-test `agent_id` maps to multiple deployments and therefore is not sufficient ownership evidence",
             self.current_lower,
         )
 
-    def test_neutral_fallback_and_client_reporting_are_explicit(self) -> None:
-        self.assertIn("neutral fallback", self.current_lower)
-        self.assertIn("records degraded status", self.current_lower)
-        self.assertIn("client_id + deployment_id + call_id", self.current_lower)
-        self.assertIn("one client per report", self.current_lower)
-        self.assertIn("no cross-client metadata", self.current_lower)
+    def test_configuration_failure_terminates_before_intake(self) -> None:
+        self.assertIn("neutral **configuration unavailable** termination", self.current_lower)
+        self.assertIn("collects no caller details", self.current_lower)
+        self.assertIn("continues with a degraded generic intake", self.current_lower)
+        self.assertIn("configuration unavailable is a direct neutral termination", self.runbook_lower)
+        self.assertIn("call_lookup_key = hmac", self.current_lower)
+        self.assertIn("the raw provider identifier is not stored", self.current_lower)
+        self.assertIn("reporting remains partitioned by `client_id`, `deployment_id`", self.current_lower)
 
-    def test_two_client_acceptance_and_clone_fallback_are_required(self) -> None:
-        self.assertIn("at least two synthetic clients and two dedicated retell numbers", self.current_lower)
-        self.assertIn("both numbers reach the same pinned monitor version", self.current_lower)
-        self.assertIn("use one monitor clone per client until the defect is corrected", self.current_lower)
-        self.assertIn("rebind number a to revenue desk clone", self.runbook_lower)
+    def test_two_client_acceptance_is_required_and_clone_fallback_is_rejected(self) -> None:
+        self.assertIn(
+            "two synthetic clients, two distinct synthetic numbers, and the same shared agent",
+            self.current_lower,
+        )
+        self.assertIn("number reassignment cannot resolve stale ownership", self.current_lower)
+        self.assertIn("the two-client suite must additionally prove", self.runbook_lower)
+        self.assertIn("do not switch to a client clone or degraded intake", self.runbook_lower)
 
     def test_scope_remains_narrow_and_live_authority_is_not_claimed(self) -> None:
         self.assertIn("not a generalized multi-tenant voice platform", self.current_lower)
-        self.assertIn("does not authorize a live seven-day test", self.current_lower)
+        self.assertIn("production authorization: not granted", self.current_lower)
         self.assertIn("production authorization: **not granted**", self.runbook_lower)
         self.assertNotIn("is deployed and working", self.current_lower)
 
