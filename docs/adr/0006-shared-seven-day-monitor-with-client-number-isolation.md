@@ -1,275 +1,268 @@
-# ADR 0006: Shared Seven-Day Monitor With Client Number Isolation
+# ADR 0006: Shared Seven-Day Free-Test Agent With Client Number Isolation
 
-- Status: Accepted as the current architecture decision
+- Status: Accepted as the current free-test architecture
 - Date: 2026-08-18
+- Reconciled: 2026-08-22 for the Development MVP
+- Current deployment status: **READY FOR DEVELOPMENT DEPLOYMENT**; controlled phone testing still requires deployed readback and the remaining evidence below
 - Supersedes: [ADR 0005](0005-client-specific-retell-test-agent-isolation.md)
-- Clarifies and supersedes: the agent-lifecycle and evaluation-to-paid-agent sections of [ADR 0004](0004-retell-catalyst-crm-analytics-integration-boundary.md)
-- Deployment status: Documentation only; no Retell, Catalyst, CRM, Analytics, phone number, forwarding route, or customer configuration changed
+- Supersedes within [ADR 0004](0004-retell-catalyst-crm-analytics-integration-boundary.md): the client-specific evaluation-agent lifecycle, agent-first tenancy model, and Analytics-first free-test reporting path
+- Production authorization: Not granted
 
 ## Context
 
-Sylvara has two different agent products with different purposes:
+Sylvara has two different agent products:
 
-1. the **Seven-Day Call-Gap Monitor**, which receives only the approved after-hours or no-answer/overflow calls needed to measure the call gap and produce evidence; and
-2. the **Revenue Desk**, which is the separately approved paid operational agent that handles the bounded receptionist and front-office workflow.
+1. the shared **7-Day Free Test** agent, which performs bounded intake and classifies calls reaching an approved call gap; and
+2. the **Revenue Desk**, a separately approved paid operational agent with client-specific behavior and integrations.
 
-The monitor and Revenue Desk do not need to be the same Retell agent. The key design question is whether every test client needs a cloned monitor agent or whether one shared monitor can remain cleanly partitioned.
+The free test is not a small Revenue Desk. Its purpose is to show which opportunities, existing-customer calls, urgent requests, spam, and out-of-scope calls reach a contractor's after-hours or approved no-answer/overflow gap. Routine client variation belongs in configuration, not cloned Retell agents or duplicated conversation nodes.
 
-Retell provides two capabilities that make the smaller shared-monitor design viable:
+Retell's called `to_number` identifies the dedicated forwarding destination. Catalyst binds that number to exactly one client deployment and supplies approved call-specific context. The shared Retell `agent_id` identifies the free-test product; it is not sufficient evidence of client ownership.
 
-- every purchased or imported Retell number can have its own inbound-agent and inbound-webhook configuration; and
-- the inbound-call webhook always provides `to_number` and can override the agent or version and inject call-specific metadata and dynamic variables before the call connects.
-
-A unique Retell number therefore provides a stable client route even when multiple numbers use the same monitor agent. One shared Retell number would not provide that isolation because `to_number` would be identical for every client and `from_number` identifies the caller rather than the contractor.
-
-This is a narrow routing service for the validated acquisition workflow, not a generalized multi-tenant voice platform. If the required isolation cannot be proven with two synthetic clients, Sylvara will use client-specific monitor clones rather than expand an unsafe abstraction.
+This is one narrow acquisition workflow, not a generalized multi-tenant voice platform.
 
 ## Decision Summary
 
-Use one shared monitor agent, one dedicated Retell number and deployment per active test client, and one dedicated Revenue Desk agent per converted client.
+Use one shared free-test agent, one dedicated Retell number per active test client, one versioned Catalyst deployment/configuration record per active test, and one shared inbound resolver.
 
 ```text
-Client A Public Number                      Client B Public Number
-        | after-hours / no-answer                    | after-hours / no-answer
-        v                                             v
-Client A Dedicated Retell Number           Client B Dedicated Retell Number
-        |                                             |
-        +--------------- same inbound resolver ------+
-                              |
-                              v
-                 Shared Seven-Day Monitor Agent
-                              |
-                              v
-               Catalyst Post-Call And Reporting Path
-```
-
-After conversion:
-
-```text
-Client A Public Number
+Contractor main number
+        |
+        | approved after-hours or no-answer/overflow forwarding
+        v
+Client-specific Retell number
         |
         v
-Client A Existing Dedicated Retell Number
+Shared Sylvara 7-Day Free Test agent
+        |
+        | pre-call resolution and exact configuration gate
+        v
+Client-specific Catalyst deployment configuration
         |
         v
-Client A Dedicated Revenue Desk Agent
+Bounded intake conversation
+        |
+        | authenticated post-call event
+        v
+Catalyst durable processing
+        |
+        +--> Catalyst Mail email record for the approved recipient
+        +--> canonical call and outcome record
+        +--> client-partitioned query and CSV reporting
 ```
 
-The client keeps the same forwarding destination. Sylvara changes the agent bound behind the client-specific Retell number after the Revenue Desk clone passes its separate approval and acceptance gates.
+CRM mutation is disabled for the MVP. Zoho Analytics is deferred; it is not required for offline testing or a controlled internal Development phone test. After a separately approved paid conversion, the client's number may be bound to a dedicated Revenue Desk only after that product passes its own acceptance and route gates. The shared free-test agent is never promoted into a Revenue Desk.
 
-## Agent Roles
+## Shared And Client-Specific State
 
-### Shared Seven-Day Call-Gap Monitor
+The following remain shared and version controlled:
 
-Maintain one versioned shared monitor agent for the approved environment.
+- the Retell free-test agent and conversation flow;
+- greeting, disclosure, bounded intake, and natural closing structure;
+- caller-intent, new/existing, urgency, spam, sensitive-data, safety, unsupported-service, and out-of-area rules;
+- capability denials;
+- configuration-failure behavior;
+- post-call extraction schema;
+- call-outcome and reporting taxonomies; and
+- QA and acceptance cases.
 
-A suitable public label is:
+Each Catalyst deployment stores a versioned snapshot of the client context required for one test:
+
+- `client_id`, `deployment_id`, and `configuration_version`;
+- approved company identity and optional description;
+- business hours, coverage mode, services, service area, urgency definitions, and callback expectation;
+- approved email notification recipient;
+- approved start, actual start, expiration, handled-call count, limit, and stop reason;
+- assigned Retell number;
+- route approval state;
+- deployment status; and
+- source revision and audit timestamps.
+
+Configuration values are private runtime data. GitHub contains schemas, validation, and synthetic examples only.
+
+## Canonical Coverage Modes
+
+The machine-readable authority is [`coverage-mode-contract.json`](../../src/zoho-catalyst/retell-inbound-resolver/contracts/coverage-mode-contract.json).
+
+| Approved display label | Canonical `coverage_mode` |
+| --- | --- |
+| After Hours Only | `AfterHoursOnly` |
+| No Answer / Overflow Only | `NoAnswerOverflowOnly` |
+| After Hours + Overflow | `AfterHoursAndOverflow` |
+
+There are no alternate internal spellings. Unknown, blank, padded, wrong-case, partial, or unsupported values fail closed.
+
+## Exact Configuration Gate
+
+Before normal intake, the resolver must return all seven fields exactly:
 
 ```text
-Sylvara Plumbing — Seven-Day Call-Gap Monitor
+resolver_status = Resolved
+client_id = nonempty
+deployment_id = nonempty
+configuration_version = nonempty
+engagement_type = free_test
+capability_profile = call_gap_monitor_v1
+coverage_mode = AfterHoursOnly | NoAnswerOverflowOnly | AfterHoursAndOverflow
 ```
 
-The monitor:
+The same consistent configuration read must also prove:
 
-- may receive calls from multiple dedicated client Retell numbers;
-- handles only the approved temporary call-gap measurement workflow;
-- uses one generic, fail-safe baseline rather than persistent client-specific defaults;
-- receives approved client context per call through the inbound resolver;
-- performs only the approved minimal disclosure, capture, classification, and post-call analysis needed for the test;
-- does not book, dispatch, quote, collect payment, send outbound messages, or use client operating-system tools;
-- does not act as the Revenue Desk;
-- does not use Retell `agent_id` as the client-tenancy key; and
-- remains versioned so one accepted release can be pinned and rolled back.
+- the called `to_number` maps to exactly one eligible number assignment;
+- the deployment belongs to the resolved client;
+- the Retell number belongs to that deployment;
+- the route is explicitly approved;
+- the deployment is active;
+- `now < expires_at`;
+- durable `handled_call_count < 25`; and
+- the configuration version is complete and internally consistent.
 
-No client receives direct access to the shared Retell agent history. Client reporting is produced from the partitioned Catalyst and Analytics records.
+For a known authenticated invalid, unknown, ambiguous, mismatched, unapproved, inactive, expired, or exhausted resolution, Catalyst returns HTTP 200 with `{ "call_inbound": { "reject": true } }`, Retell starts no agent, and the resolver creates no call or failure row. Transport or authentication failure, timeout, 503/unavailable endpoint, malformed response, invalid agent override, or missing runtime configuration may instead cause Retell to use the number-bound shared agent. The neutral **Configuration Unavailable** termination collects no caller details and ends immediately without client identity. Neither path guesses, selects another client, reuses stale variables, or continues with a degraded generic intake.
 
-### Revenue Desk Master And Client Clones
+## Seven-Day And Practical 25-Call Enforcement
 
-Maintain one reusable Revenue Desk master that never receives client traffic directly.
+The MVP uses simple durable handled-call counting rather than pre-call admission reservations.
 
-A suitable public label is:
+- An explicitly approved activation sets `actual_start_at`; setup, publishing, and QA do not start the clock.
+- `expires_at` is derived once as seven days after actual start. Every pre-call resolution requires `now < expires_at`.
+- Every pre-call resolution requires the current durable handled count to be below 25.
+- Post-call processing increments the handled count once for each unique eligible handled call.
+- Processing the 25th handled call marks the deployment completed with `call_limit_reached`. Later resolver requests fail closed.
+- Calls that already passed the resolver while the count was below 25 may still finish after another call reaches 25. The final handled total may therefore exceed 25 by the number of already-in-flight calls. Reports show that overshoot honestly.
+
+The offer is still “seven days or 25 handled calls, whichever occurs first,” but the MVP does not claim an exact concurrency cap. Failure to reject new calls after the durable threshold or expiration is observed remains a P0 defect. Exact reservation/orphan reconciliation is deferred because it adds platform complexity without improving the first controlled test enough to justify it.
+
+The test never auto-extends, auto-converts, or starts a Revenue Desk.
+
+## Number Ownership, Freeze, And Cooldown
+
+Each active deployment owns one dedicated number. Normal request processing never selects between overlapping assignments and never changes number ownership.
+
+The two initial validation numbers are not reused or moved between deployments during initial validation. When a test completes or stops, preserve the binding and ownership evidence, disable the route, and place the number into a documented cooldown before any separately reviewed future reuse. Historical call rows retain their embedded client, deployment, and configuration ownership.
+
+Automatic reassignment and live rebinding are deferred. A future post-cooldown reuse process requires its own stopped-route administration, readback, and re-QA, including proof that number reassignment cannot resolve stale ownership, but that future feature is not an internal MVP blocker.
+
+## Post-Call Ownership And Canonical Call Key
+
+Resolve post-call ownership in this order:
+
+1. validated `deployment_id` from call metadata;
+2. existing durable call-to-deployment binding;
+3. unique validated `to_number` assignment effective for the call;
+4. `agent_id` only if it maps to exactly one deployment.
+
+The shared free-test `agent_id` maps to multiple deployments and therefore is not sufficient ownership evidence. Conflicts, zero matches, and multiple matches fail closed or enter an operator-visible unresolved state; the processor never selects the first match.
+
+The canonical lookup key is an opaque keyed HMAC:
 
 ```text
-Sylvara Plumbing — Revenue Desk — Master
+call_lookup_key = HMAC(environment event key, provider call identifier)
 ```
 
-When a client converts:
+The raw provider identifier is not stored in reports or ordinary logs. The canonical row binds the opaque key to immutable `client_id`, `deployment_id`, and `configuration_version`. Later conflicting ownership is rejected. Reporting remains partitioned by `client_id`, `deployment_id`, and the opaque call key, never by the shared agent alone.
 
-1. clone the Revenue Desk master into one client-specific Revenue Desk agent;
-2. apply the approved client configuration, tools, destinations, and operating rules;
-3. publish and pin the accepted version;
-4. run the separate synthetic and controlled acceptance suite;
-5. rebind the client's existing Retell number to the client-specific Revenue Desk agent; and
-6. preserve the monitor test deployment and report as historical evidence under the approved retention policy.
+## Catalyst State And Idempotent Processing
 
-The monitor and Revenue Desk remain separate agents because they have different purposes, permissions, integrations, risk, and rollback behavior.
+Catalyst is the canonical operational store for minimized Retell event references, immutable call bindings, normalized calls, processing status, configuration versions, call outcomes, handled count, notification state, deduplication claims, reporting fields, and correlation/audit fields.
 
-## Client Number Boundary
+Webhook delivery may be duplicated, delayed, retried, reordered, or malformed. The runtime target verifies authenticity against the raw body, validates the schema, claims the event durably, and makes post-call processing idempotent. Replay must not create a duplicate canonical call, handled-count increment, email record, or report row.
 
-Every active test client receives one dedicated Retell number or an equivalent imported number controlled by the same routing contract.
+The current source/runtime evidence must be documented separately. A passing in-memory core does not prove Catalyst HTTP, Data Store, or deployed route behavior.
 
-The client's existing public number forwards only the approved after-hours or no-answer/overflow calls to that client-specific Retell number.
+## Email Notification MVP
 
-Required rules:
+The MVP notification channel is email only through Catalyst Mail. The approved destination comes only from the deployment configuration; a caller cannot supply or change it.
 
-- one active client deployment per Retell `to_number`;
-- no active Retell number shared by two clients;
-- the Retell number is private forwarding infrastructure, not the client's advertised public number;
-- all approved client numbers may use the same shared monitor agent;
-- all approved client numbers may use the same inbound-webhook endpoint;
-- the number remains with the client deployment through the test-to-paid conversion when practical; and
-- number release, reassignment, or deletion requires the applicable retention, rollback, and authorization controls.
+The committed/default Development mode is `dry_run`:
 
-The additional number is intentional. It is the stable client-routing boundary that allows the monitor agent and Catalyst infrastructure to be shared safely.
+- create one durable notification row correlated to the call and deployment;
+- terminate it as `DryRunRecorded`;
+- record `attempts = 0` and provider code `CATALYST_MAIL_DRY_RUN`;
+- never invoke `app.email().sendMail` while in `dry_run`; and
+- never claim delivery, retry, or provider acceptance.
 
-## Inbound Resolver
+The adapter consumes `FREE_TEST_NOTIFICATION_MODE` with the reviewed values `dry_run` or `send_development` and `FREE_TEST_MAIL_FROM` with a privately configured verified Development sender. Both are required and validated; do not substitute `CATALYST_MAIL_MODE` or an undocumented default. The committed mode is `dry_run`, and this package rejects Production mode.
 
-Use one Catalyst endpoint for all approved client numbers. Do not build one webhook implementation per client.
+Before the internal-phone readiness classification, use `send_development` once with only the verified Development sender and approved synthetic recipient, independently read back the provider result and inbox delivery, prove replay does not send again, then restore `dry_run`. Retell never sends the email directly. Prospect delivery remains a separate unresolved decision.
 
-```text
-POST /retell/inbound
-```
+The future email body remains limited to approved useful fields: caller name, callback number, new/existing classification, city or ZIP signal, issue summary, routine/urgent, requested person, timestamp, and outcome.
 
-For each inbound request, Catalyst must:
+## Reporting MVP And System Ownership
 
-1. authenticate the Retell request under the approved verification contract;
-2. validate `to_number` and reject malformed input;
-3. resolve `to_number` to exactly one active deployment;
-4. verify the deployment is inside its approved test window and call limit;
-5. return the approved shared monitor agent and pinned version or environment tag;
-6. inject only the allowlisted metadata and string dynamic variables required for that call;
-7. record a bounded resolver result without caller or client PII in ordinary logs; and
-8. fail closed on zero matches, multiple matches, conflicting status, stale configuration, or an unauthorized test window.
+Internal Development reporting uses client-partitioned Catalyst queries and a sanitized CSV export. It must show total handled calls, outcome counts, durable notification state, calls by date/time, known coverage trigger, test-period progress, handled-call progress, and any documented overshoot. The export excludes raw event bodies, recordings, transcripts, recipient addresses, and secrets.
 
-Proposed metadata:
+Zoho Analytics is deferred and is not an internal-test launch blocker. If it is added later, it remains derived reporting and must reconcile to Catalyst. CRM remains relationship/configuration oriented, but the MVP performs no CRM read or write in the call lifecycle. Catalyst remains the operational source of truth.
 
-```text
-client_id
-deployment_id
-configuration_version
-engagement_type
-capability_profile
-coverage_mode
-resolver_status
-```
+Revenue/value reporting distinguishes `confirmed_revenue`, `booked_revenue`, `customer_supplied_estimate`, `internal_estimate_with_method`, and `unknown`. The MVP defaults to `unknown` unless evidence supports another value. It never multiplies calls by an arbitrary amount and labels the result revenue.
 
-Proposed dynamic variables are limited to the client context actually required by the monitor, such as an approved company label, time zone, test mode, and disclosure text. Secrets, credentials, internal URLs, raw phone-system configuration, and unnecessary client data never belong in metadata or dynamic variables.
+## Caller And Capability Boundary
 
-## Resolver Failure And Fallback
+The shared agent performs concise bounded intake only. It may capture caller name, callback number, new/existing status, intent, issue summary, city/ZIP signal, urgency, a requested person, and disposition when appropriate.
 
-Each client number may keep the shared monitor as its default inbound agent so Retell can fall back when the inbound resolver times out or fails.
+It does not book, dispatch, assign technicians, quote, estimate, collect payment, transfer arbitrarily, initiate outbound calls, send SMS or email, or mutate CRM, Analytics, or a field-service system. It refuses or redirects prohibited sensitive data and minimizes any volunteered sensitive content.
 
-The fallback monitor configuration must be neutral:
+Every normal intake summarizes material facts, confirms uncertainty, states the next step truthfully, states that no appointment or dispatch is confirmed, asks whether the caller has anything else to add, and closes politely. Conversation settings remain conservative and require Retell-native validation; a repository contract is not proof of spoken behavior.
 
-- no client-specific company claim;
-- no client-specific transfer or fallback destination;
-- no booking, dispatch, quote, payment, outbound message, or external-system tool;
-- no client-specific service-area or schedule claim; and
-- no assumption that resolver metadata is present.
+## Validation Lanes
 
-Because the Retell number remains unique, the post-call processor can still resolve the client by `to_number`. The call must be marked with a degraded or missing-resolver status and routed to review. A resolver failure must never cause one client's variables or destinations to be reused for another client.
+Keep three decisions separate:
 
-A stricter disconnect-on-resolver-failure policy may be selected later if legal, privacy, or workflow requirements make a neutral fallback unacceptable. That is an environment-specific deployment decision, not a prompt default.
+1. **Offline/synthetic Development testing** uses synthetic clients, events, email dry-run records, and query/CSV reports. It makes no phone call and contacts nobody.
+2. **Controlled internal Development phone testing** uses only designated internal testers, Development resources, synthetic client facts, a non-customer route, and the single controlled Development email delivery/readback required by this gate. Record the exact number, route, data handling, vendor settings, test script, and rollback before the call.
+3. **Controlled prospect testing** remains unresolved. It requires a separate decision covering the real prospect, route, caller population, notices, data handling, retention, approved recipient, actual email delivery, and operational rollback.
 
-## Post-Call Routing Order
+The [legal and compliance archive](../legal-compliance/README.md) contains a conservative historical internal-QA proposal and source research. It is not legal advice and does not itself grant or deny approval for a particular test. Record the actual business, privacy, security, vendor, and any professional review required for the chosen workflow privately. Production and real prospect/customer traffic remain outside this ADR.
 
-For the shared monitor, Catalyst resolves call ownership in this order:
+## Development Acceptance Gate
 
-1. validated explicit `deployment_id` from Retell call metadata;
-2. the existing immutable call-to-deployment binding for later lifecycle events;
-3. the unique Retell `to_number` mapping;
-4. Retell `agent_id` only when that agent maps to exactly one active deployment.
+Before an internal phone test, prove with two synthetic clients, two distinct synthetic numbers, and the same shared agent and reviewed version that:
 
-The shared monitor `agent_id` intentionally maps to multiple deployments and is therefore not a valid client-routing key. The processor must not quarantine a call merely because the shared monitor agent has multiple deployments when a validated deployment ID, existing call binding, or unique `to_number` resolves exactly one client.
+1. each number resolves only its client, deployment, version, company, service area, urgency rules, and approved email reference;
+2. understood invalid configuration is explicitly rejected with zero writes, while transport/response failure reaches only the shared agent's no-data Configuration Unavailable branch;
+3. the seven-day boundary and practical handled-count stop work, including documented in-flight overshoot;
+4. calls, outcomes, email states, the single controlled delivery, queries, and CSV exports never cross clients;
+5. webhook replay creates no duplicate call, count, email record, or report row;
+6. delayed and reordered events preserve immutable ownership;
+7. malformed events and processing failures remain visible and retry-safe;
+8. the caller experience has a deliberate natural close; and
+9. containment disables new intake while preserving evidence.
 
-Zero matches, multiple matches, conflicting identifiers, stale mappings, and unauthorized test windows are quarantined. The processor never silently selects the first match.
-
-## Reporting Contract
-
-The reporting key is:
-
-```text
-client_id + deployment_id + call_id
-```
-
-Every normalized call and analytical fact must carry the resolved client and test deployment. Reports are filtered by the approved client, deployment, and test window—not by the shared monitor agent alone.
-
-Acceptance requires:
-
-- one client per report;
-- exact source-to-Analytics call-count reconciliation;
-- one active deployment per Retell number;
-- no cross-client metadata, dynamic variables, transcript, artifact, or report row;
-- a visible resolver and data-watermark status; and
-- manual review before the first client report is delivered.
-
-The shared Retell agent's dashboard history is an operator surface, not the client reporting boundary.
-
-## Conversion Flow
-
-1. Close the seven-day test window and freeze the reconciled report.
-2. Disable new test handling for the deployment while preserving evidence.
-3. Clone the client-specific Revenue Desk agent from the approved Revenue Desk master.
-4. Configure and test the paid workflow separately.
-5. Verify the prior phone route and shared-monitor binding remain available for rollback.
-6. Rebind the client's existing Retell number to the accepted Revenue Desk agent and version.
-7. Retain the same inbound resolver when it is needed for explicit deployment identity and per-call context.
-8. Run controlled calls and independently read back the number, agent, version, Catalyst deployment, and downstream state.
-9. Activate only after the exact live route receives separate approval.
-
-The client should not need to change its forwarding destination again merely because the agent behind the Retell number changed.
-
-## Validation Gate
-
-Before the shared monitor is used for a client test, prove the topology with at least two synthetic clients and two dedicated Retell numbers.
-
-The test must prove:
-
-1. both numbers reach the same pinned monitor version;
-2. each `to_number` resolves to exactly one deployment;
-3. each call receives the correct metadata and dynamic variables;
-4. a resolver timeout or failure uses only the neutral fallback and records degraded status;
-5. post-call events resolve correctly without treating shared `agent_id` as the client key;
-6. duplicate, stale, conflicting, and out-of-window events fail closed;
-7. Catalyst and Analytics contain no cross-client rows or artifacts;
-8. each report contains one client only;
-9. one synthetic client's number can be rebound to a dedicated Revenue Desk clone without changing the client's forwarding destination; and
-10. the prior monitor binding or prior route can be restored.
-
-If any isolation, fallback, reconciliation, or rollback test fails, stop the shared-monitor deployment and use one monitor clone per client until the defect is corrected and the complete test passes.
+Any cross-client state, safety failure, configuration-gate bypass, failure to stop after an observed limit/expiration, prohibited sensitive retention, Production action, or uncontrolled route is P0. No P0/P1 may remain for the scoped lane being approved.
 
 ## Rejected Alternatives
 
 ### One Shared Retell Number
 
-Rejected because the called `to_number` would be identical for every client and the caller's `from_number` does not identify the contractor. Optional forwarding headers are not a sufficient tenancy contract.
+Rejected because `to_number` would not identify the contractor deployment.
 
-### One Monitor Clone Per Client As The Default
+### One Free-Test Agent Clone Per Client
 
-Rejected as the default because unique client numbers and a bounded inbound resolver provide deterministic identity without duplicating a low-capability monitor agent. Per-client clones remain the containment fallback if the shared topology fails acceptance.
+Rejected because client variation belongs in versioned configuration and clones create drift. If shared isolation fails, disable the route and fix the defect.
 
-### Convert The Monitor Into The Revenue Desk
+### Continue Intake When Resolution Fails
 
-Rejected because the acquisition monitor and paid Revenue Desk have different permissions, tools, operating rules, integrations, risk, and rollback requirements.
+Rejected because even neutral intake could collect caller data without trustworthy ownership or approved client behavior. A known authenticated failure is rejected before an agent starts. If Retell falls back after transport/authentication/response failure, the shared agent's exact Configuration Unavailable gate terminates before collection.
 
-### Build A General Multi-Tenant Voice Platform
+### Exact Reservation Platform For The First MVP
 
-Rejected. The only approved abstraction is one number-to-deployment resolver and one reporting partition directly required by the current offer. A generalized tenant administration platform, customer portal, arbitrary agent provisioning framework, or broad configuration service remains deferred until repeated paid demand proves it necessary.
+Deferred. Durable pre-call reservations, orphan reconciliation, and a guaranteed no-overshoot cap add platform-specific concurrency work. The practical handled-count gate is adequate for a small controlled test when overshoot is visible and no new call is admitted after the durable threshold is observed.
+
+### Make Analytics Or CRM Part Of Internal Acceptance
+
+Rejected for the MVP. Catalyst query/CSV proves the reporting value with less integration risk; CRM remains disabled and Analytics can be added after real evidence justifies it.
 
 ## Consequences
 
-This decision reduces Retell agent duplication while preserving client isolation through the number and deployment records. It adds one critical pre-call resolver, but the resolver is narrow, deterministic, reusable, and directly tied to the free-test acquisition workflow.
+The architecture keeps one shared flow, strict tenant resolution, durable canonical calls, email-only notification records, and simple client reporting while removing concurrency and integration work that does not help the first controlled test. It does not add a portal, generalized provisioning, automatic number reassignment, CRM mutation, Analytics ETL, SMS, or paid-service behavior.
 
-Each client still incurs one Retell number and one deployment record. Converted clients receive one dedicated Revenue Desk agent. The architecture must be proven through synthetic two-client isolation, resolver-failure, report-reconciliation, conversion, and rollback tests before any live client route.
+Once the scoped Development acceptance path works, stop expanding the technical system and request the next explicit operating approval.
 
-This decision does not authorize a live seven-day test, recording, transcription, forwarding change, number purchase, customer report, or Revenue Desk activation.
+## Official Retell References
 
-## Official References
-
-- [Retell inbound-call webhook](https://docs.retellai.com/features/inbound-call-webhook)
-- [Retell dynamic variables](https://docs.retellai.com/build/dynamic-variables)
-- [Retell receive inbound calls](https://docs.retellai.com/deploy/inbound-call)
-- [Retell purchase phone number](https://docs.retellai.com/deploy/purchase-number)
-- [Retell update phone number](https://docs.retellai.com/api-references/update-phone-number)
-- [Retell agent versioning and environment tags](https://docs.retellai.com/agent/version)
-- [Retell call-event webhook overview](https://docs.retellai.com/features/webhook-overview)
+- [Inbound-call webhook](https://docs.retellai.com/features/inbound-call-webhook)
+- [Dynamic variables](https://docs.retellai.com/build/dynamic-variables)
+- [Receive inbound calls](https://docs.retellai.com/deploy/inbound-call)
+- [Purchase phone number](https://docs.retellai.com/deploy/purchase-number)
+- [Update phone number](https://docs.retellai.com/api-references/update-phone-number)
+- [Agent versioning and environment tags](https://docs.retellai.com/agent/version)
+- [Call-event webhook overview](https://docs.retellai.com/features/webhook-overview)

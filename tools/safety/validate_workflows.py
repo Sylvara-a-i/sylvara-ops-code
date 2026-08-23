@@ -286,8 +286,14 @@ def validate_workflow(path: Path, text: str) -> list[str]:
     if top_permissions:
         problems.append("top-level permissions must be empty")
 
-    if "pull_request_target" in _trigger_names(document.get("on")):
+    trigger_names = _trigger_names(document.get("on"))
+    if "pull_request_target" in trigger_names:
         problems.append("pull_request_target is prohibited")
+    if "workflow_dispatch" in trigger_names:
+        problems.append(
+            "workflow_dispatch is prohibited because manually selected refs execute "
+            "with access to the default-branch cache scope"
+        )
 
     jobs = document.get("jobs")
     if not isinstance(jobs, Mapping) or not jobs:

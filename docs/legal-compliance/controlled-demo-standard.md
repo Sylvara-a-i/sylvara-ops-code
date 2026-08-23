@@ -1,6 +1,6 @@
 # Controlled Inbound Demonstration Standard
 
-**Status:** Proposed; not launch-approved
+**Status:** Historical conservative proposal; not a current launch approval or prohibition
 
 **Profile:** `controlled-inbound-ai-receptionist-internal-qa`
 
@@ -8,7 +8,7 @@
 
 ## Demonstration Boundary
 
-This standard is the only currently proposed telephone test. It is limited to internal, non-sales quality assurance by pre-authorized adult Sylvara personnel or contractors under a written tester authorization. It must not be offered to a prospect, lead, customer, reseller, or other person as part of sales outreach and must not be conducted to induce a purchase. Prospect-facing demonstrations use an offline or prerecorded synthetic simulation until counsel approves a separate commercial-demo profile, purpose, identity, disclosures, records, and state treatment. This test does not operate a real receptionist workflow. An unrestricted or publicly advertised number is outside this profile.
+This standard preserves a conservative internal telephone-test profile for reference. It is not the current approval record for the 7-Day Free Test and does not decide what the law requires for a different set of facts. If an owner explicitly adopts this profile, it is limited to internal, non-sales quality assurance by pre-authorized adult Sylvara personnel or contractors under a written tester authorization. It must not be offered to a prospect, lead, customer, reseller, or other person as part of sales outreach and must not be conducted to induce a purchase. A prospect-facing test needs its own reviewed workflow, purpose, identity, disclosures, records, state treatment, and explicit approval. This historical profile does not operate a real receptionist workflow. An unrestricted or publicly advertised number is outside it.
 
 | Dimension | Required state |
 |---|---|
@@ -126,4 +126,4 @@ An authorized reviewer must privately sign and date:
 - incident kill switch, deletion procedure, and named on-call owner; and
 - qualified counsel's approval of the actual configuration and intentionally served jurisdictions.
 
-Repository review alone cannot satisfy any item.
+Repository review alone cannot satisfy any item in this profile. An actual internal Development phone test may instead use another explicitly approved control record appropriate to its facts; this historical proposal neither authorizes nor prohibits that decision.

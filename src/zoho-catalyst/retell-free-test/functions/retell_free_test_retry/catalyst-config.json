@@ -1,0 +1,10 @@
+{
+  "deployment": {
+    "name": "retell_free_test_retry",
+    "stack": "node18",
+    "type": "job"
+  },
+  "execution": {
+    "main": "index.js"
+  }
+}

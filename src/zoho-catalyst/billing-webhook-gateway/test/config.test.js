@@ -4,13 +4,20 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const { ConfigurationError, loadConfig } = require("../lib/config");
 const {
+  CREATOR_DESTINATION_SHA256,
+  CREATOR_FORWARD_URL,
   TEST_NOW_MS,
+  TEST_SOURCE_REVISION,
   baseEnvironment,
   creatorEnvironment,
 } = require("./helpers");
 
 function load(environment) {
-  return loadConfig(environment, { nowMs: TEST_NOW_MS });
+  return loadConfig(environment, {
+    nowMs: TEST_NOW_MS,
+    artifactCreatorDestinationSha256: CREATOR_DESTINATION_SHA256,
+    artifactSourceRevision: TEST_SOURCE_REVISION,
+  });
 }
 
 test("loads an immutable fail-closed registration configuration", () => {
@@ -21,6 +28,24 @@ test("loads an immutable fail-closed registration configuration", () => {
   assert.deepEqual(config.allowedEventTypes, ["subscription_created", "payment_declined"]);
   assert.equal(config.creatorUrl, undefined);
   assert.throws(() => config.allowedEventTypes.push("payment_voided"), TypeError);
+});
+
+test("requires the runtime source revision to match the stamped artifact", () => {
+  assert.throws(
+    () => loadConfig(baseEnvironment(), { nowMs: TEST_NOW_MS }),
+    ConfigurationError,
+  );
+  assert.throws(
+    () => loadConfig(baseEnvironment({ SOURCE_REVISION: "b".repeat(40) }), {
+      nowMs: TEST_NOW_MS,
+      artifactSourceRevision: TEST_SOURCE_REVISION,
+    }),
+    ConfigurationError,
+  );
+  assert.throws(
+    () => load(baseEnvironment({ SOURCE_REVISION: "not-a-git-sha" })),
+    ConfigurationError,
+  );
 });
 
 test("enforces Zoho Billing's 12-50 alphanumeric signing-secret contract", () => {
@@ -82,8 +107,7 @@ test("requires verified encodings and a composite budget below the runtime limit
     {
       DELIVERY_MODE: "creator",
       CREATOR_FIELD_ALLOWLIST: "",
-      CREATOR_FORWARD_URL: "https://creator.example.invalid/creator/custom/sylvara/billing_gateway",
-      CREATOR_ALLOWED_HOSTS: "creator.example.invalid",
+      CREATOR_FORWARD_URL,
       CREATOR_ENDPOINT_KIND: "custom-api",
       CREATOR_TARGET_ENVIRONMENT: "development",
       CREATOR_CONNECTION_LINK_NAME: "SyntheticCreatorConnection",
@@ -104,6 +128,7 @@ test("retired and weakening variables fail startup", () => {
     { REQUIRE_SIGNATURE: "false" },
     { ENABLE_REPLAY_DEFENSE: "false" },
     { CREATOR_ALLOWED_HOST_SUFFIXES: "example.invalid" },
+    { CREATOR_ALLOWED_HOSTS: "www.zohoapis.com" },
     { ["ZOHO_REFRESH" + "_TOKEN"]: "legacy-value" },
   ]) {
     assert.throws(() => load(baseEnvironment(overrides)), ConfigurationError);
@@ -114,15 +139,29 @@ test("Creator mode requires an exact Custom API target and approved environment 
   const config = load(creatorEnvironment());
   assert.equal(
     config.creatorUrl,
-    "https://creator.example.invalid/creator/custom/sylvara/billing_gateway",
+    CREATOR_FORWARD_URL,
   );
   assert.equal(config.creatorConnectionLinkName, "SyntheticCreatorConnection");
 
   for (const overrides of [
     { CREATOR_FORWARD_URL: "https://other.example.invalid/creator/custom/sylvara/billing_gateway" },
-    { CREATOR_FORWARD_URL: "https://creator.example.invalid:444/creator/custom/sylvara/billing_gateway" },
-    { CREATOR_FORWARD_URL: "https://creator.example.invalid/arbitrary/path" },
-    { CREATOR_FORWARD_URL: "https://creator.example.invalid/creator/custom/sylvara/billing_gateway?mode=test" },
+    { CREATOR_FORWARD_URL: "https://www.zohoapis.com.evil.invalid/creator/custom/sylvara/billing_gateway" },
+    {
+      CREATOR_FORWARD_URL: [
+        "https://synthetic-user",
+        "www.zohoapis.com/creator/custom/sylvara/billing_gateway",
+      ].join("@"),
+    },
+    { CREATOR_FORWARD_URL: "https://www.zohoapis.com:444/creator/custom/sylvara/billing_gateway" },
+    { CREATOR_FORWARD_URL: "https://www.zohoapis.com:443/creator/custom/sylvara/billing_gateway" },
+    { CREATOR_FORWARD_URL: "https://WWW.ZOHOAPIS.COM/creator/custom/sylvara/billing_gateway" },
+    { CREATOR_FORWARD_URL: "https://www.zohoapis.com/arbitrary/path" },
+    { CREATOR_FORWARD_URL: `${CREATOR_FORWARD_URL}?mode=test` },
+    { CREATOR_FORWARD_URL: `${CREATOR_FORWARD_URL}?` },
+    { CREATOR_FORWARD_URL: `${CREATOR_FORWARD_URL}#` },
+    { CREATOR_FORWARD_URL: "https://www.zohoapis.com/creator/custom/sylvara/other/../billing_gateway" },
+    { CREATOR_FORWARD_URL: "https://www.zohoapis.com/creator/custom/sylvara/%62illing_gateway" },
+    { CREATOR_FORWARD_URL: "https://www.zohoapis.com/creator/custom/other/billing_gateway" },
     { CREATOR_ENDPOINT_KIND: "data-api" },
     { CREATOR_FIELD_ALLOWLIST: "event_id" },
   ]) {
@@ -135,6 +174,21 @@ test("Creator mode requires an exact Custom API target and approved environment 
   );
   assert.throws(
     () => load(creatorEnvironment({ CREATOR_TARGET_ENVIRONMENT: "production" })),
+    ConfigurationError,
+  );
+  assert.throws(
+    () => loadConfig(creatorEnvironment(), {
+      nowMs: TEST_NOW_MS,
+      artifactSourceRevision: TEST_SOURCE_REVISION,
+    }),
+    ConfigurationError,
+  );
+  assert.throws(
+    () => loadConfig(creatorEnvironment(), {
+      nowMs: TEST_NOW_MS,
+      artifactCreatorDestinationSha256: "0".repeat(64),
+      artifactSourceRevision: TEST_SOURCE_REVISION,
+    }),
     ConfigurationError,
   );
 });

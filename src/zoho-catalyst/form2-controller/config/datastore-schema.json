@@ -1,8 +1,8 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "status": "proposed-development-only",
-  "live_state": "development-54-column-schema-rename-privacy-access-scope-and-empty-state-readback-verified-function-not-deployed",
-  "observed_at": "2026-08-20",
+  "live_state": "retell-development-54-column-version-2-copy-verified-legacy-live-function-routes-variables-callers-not-cut-over-version-3-not-applied",
+  "observed_at": "2026-08-22",
   "data_policy": {
     "direct_form_payloads_stored": false,
     "raw_tokens_or_submission_ids_stored": false,
@@ -14,11 +14,12 @@
   "tables": [
     {
       "runtime_variable": "SESSION_TABLE_NAME",
-      "purpose": "One expiring, CRM-bound Form 2 bearer-token generation per unique deterministic token hash, with one atomic active-generation lock per Deal.",
-      "required_unique_columns": ["TOKEN_HASH", "DEAL_ISSUANCE_KEY"],
+      "purpose": "One expiring, CRM-bound Form 2 bearer-token generation per stable immutable-request digest, with a pepper-bound bearer lookup digest and one atomic active-generation lock per Deal.",
+      "required_unique_columns": ["ISSUE_REQUEST_KEY", "DEAL_ISSUANCE_KEY"],
       "retention": "Retain as an issuance tombstone. Do not delete or alter any session row under this controller; removal requires a separately reviewed migration or upstream immutable-UUID deduplication design.",
       "columns": [
-        { "api_name": "TOKEN_HASH", "type": "varchar", "max_length": 64, "mandatory": true, "unique": true, "pii_ephi": true },
+        { "api_name": "ISSUE_REQUEST_KEY", "type": "varchar", "max_length": 64, "mandatory": true, "unique": true, "pii_ephi": true },
+        { "api_name": "ACCESS_TOKEN_HASH", "type": "varchar", "max_length": 64, "mandatory": true, "unique": false, "pii_ephi": true },
         { "api_name": "CRM_CONTACT_ID", "type": "varchar", "max_length": 30, "mandatory": true, "unique": false, "pii_ephi": true },
         { "api_name": "CRM_ACCOUNT_ID", "type": "varchar", "max_length": 30, "mandatory": true, "unique": false, "pii_ephi": true },
         { "api_name": "CRM_DEAL_ID", "type": "varchar", "max_length": 30, "mandatory": true, "unique": false, "pii_ephi": true },
@@ -92,14 +93,16 @@
     }
   ],
   "deployment_gates": [
-    "Provision in Catalyst Development only and read back every column constraint.",
-    "Before renaming ISSUE_KEY, independently prove the undeployed Development session table contains zero rows; if it is not empty, stop for a reviewed migration instead of repurposing stored data.",
-    "Rename the existing ISSUE_KEY column to DEAL_ISSUANCE_KEY while preserving mandatory, unique, private varchar(64) constraints; do not add a third unique varchar column.",
-    "Enable the private-data flag on the session LAST_OUTCOME column and independently read back the rename, both unique constraints, and the privacy change before deployment.",
-    "Treat every session row as an issuance tombstone: only expired rows with crm_expiry_synced have a rotated terminal key, but no session status is cleanup-eligible without a separately reviewed migration.",
+    "Use only the existing Retell Catalyst project in Development and independently re-read the three copied version-2 tables, every column constraint, and row state before any version-3 work or function deployment.",
+    "The initial 54-column Retell Development copy was verified on 2026-08-22, but schema version 3 is only a source proposal and has not been applied. Keep the copied version-2 tables and the legacy Form 2 project live and unchanged until the target function, pipeline, variables, Connections, routes, callers, synthetic canary, containment, and rollback have independent readback; deletion is a separate destructive action.",
+    "Before applying schema version 3, independently prove the session table contains zero rows. If any row exists, do not rename, overwrite, or backfill it; provision a distinct version-3 table and preserve the version-2 table for recovery and audit.",
+    "For an independently verified empty table, rename TOKEN_HASH to ISSUE_REQUEST_KEY while preserving mandatory, unique, private varchar(64) constraints, then add mandatory, non-unique, private ACCESS_TOKEN_HASH varchar(64); do not add a third unique varchar column.",
+    "Independently read back all 55 version-3 application columns, both unique constraints, mandatory and privacy flags including LAST_OUTCOME, row state, table access, scopes, permissions, client-access denial, and function-not-deployed state before source upload or route activation.",
+    "Bind form2_controller only to its three distinct reviewed version-3 tables and preserve every legacy Form 2, Retell, and Form 1 function, route, table, Connection, variable, and deployment.",
+    "Treat every version-3 session row as an issuance tombstone: ISSUE_REQUEST_KEY remains stable across TOKEN_PEPPER rotation; only expired rows with crm_expiry_synced have a rotated terminal Deal key, and no session status is cleanup-eligible without a separately reviewed migration.",
     "The key columns named in required_unique_columns must be mandatory and unique; runtime safety depends on the unique insert being atomic.",
     "Block all client-side table access and restrict reconciliation access to the minimum operator role.",
-    "Verify conditional ZCQL UPDATE behavior, unique-conflict behavior, and SDK response shapes with concurrent synthetic requests before route activation.",
+    "Verify conditional ZCQL UPDATE behavior, unique-conflict behavior, and SDK response shapes with concurrent synthetic requests before route activation or caller cutover.",
     "Do not add names, email addresses, phone numbers, raw Forms bodies, raw tokens, raw submission identifiers, OAuth material, or logs to these tables."
   ]
 }

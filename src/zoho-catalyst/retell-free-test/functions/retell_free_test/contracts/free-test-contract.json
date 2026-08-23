@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "contract_id": "sylvara-retell-seven-day-free-test-v1",
+  "environment": "development",
+  "engagement_type": "free_test",
+  "capability_profile": "call_gap_monitor_v1",
+  "resolved_status": "Resolved",
+  "configuration_unavailable_status": "ConfigurationUnavailable",
+  "test_duration_days": 7,
+  "handled_call_limit": 25,
+  "canonical_coverage_modes": [
+    "AfterHoursOnly",
+    "NoAnswerOverflowOnly",
+    "AfterHoursAndOverflow"
+  ],
+  "display_label_mappings": [
+    {
+      "display_label": "After Hours Only",
+      "coverage_mode": "AfterHoursOnly"
+    },
+    {
+      "display_label": "No Answer / Overflow Only",
+      "coverage_mode": "NoAnswerOverflowOnly"
+    },
+    {
+      "display_label": "After Hours + Overflow",
+      "coverage_mode": "AfterHoursAndOverflow"
+    }
+  ],
+  "crm_test_statuses": [
+    "Not Started",
+    "Setup Pending",
+    "QA In Progress",
+    "Ready for Approval",
+    "Scheduled",
+    "Live",
+    "Paused",
+    "Completed",
+    "Stopped",
+    "Rolled Back",
+    "Failed"
+  ],
+  "crm_go_live_approval_statuses": [
+    "Not Ready",
+    "Pending Internal Approval",
+    "Approved",
+    "Blocked",
+    "Revoked"
+  ],
+  "active_test_status": "Live",
+  "approved_go_live_status": "Approved",
+  "stop_reason_mappings": [
+    { "internal": "seven_day_limit_reached", "crm_test_end_reason": "Seven-Day Limit Reached" },
+    { "internal": "call_limit_reached", "crm_test_end_reason": "Call Limit Reached" },
+    { "internal": "client_requested_stop", "crm_test_end_reason": "Client Requested Stop" },
+    { "internal": "sylvara_stopped", "crm_test_end_reason": "Sylvara Stopped" },
+    { "internal": "technical_failure", "crm_test_end_reason": "Technical Failure" },
+    { "internal": "converted_early", "crm_test_end_reason": "Converted Early" },
+    { "internal": "other", "crm_test_end_reason": "Other" }
+  ],
+  "outcomes": [
+    { "value": "potential_job", "label": "Potential Job" },
+    { "value": "existing_customer", "label": "Existing Customer" },
+    { "value": "urgent_potential_job", "label": "Urgent Potential Job" },
+    { "value": "spam", "label": "Spam" },
+    { "value": "unsupported_service", "label": "Unsupported Service" },
+    { "value": "out_of_area", "label": "Out Of Area" },
+    { "value": "other_general_inquiry", "label": "Other / General Inquiry" },
+    { "value": "sensitive_data_ended", "label": "Sensitive Data Ended" },
+    { "value": "configuration_failure", "label": "Configuration Failure" },
+    { "value": "caller_abandoned", "label": "Caller Abandoned" },
+    { "value": "unresolved", "label": "Unresolved" }
+  ],
+  "coverage_triggers": [
+    "AfterHours",
+    "NoAnswerOverflow",
+    "Unknown"
+  ],
+  "value_evidence_classes": [
+    "confirmed_revenue",
+    "booked_revenue",
+    "customer_supplied_estimate",
+    "internal_estimate_with_method",
+    "unknown"
+  ],
+  "retell_events": [
+    "call_ended",
+    "call_analyzed"
+  ],
+  "notification_states": [
+    "Pending",
+    "Sending",
+    "Sent",
+    "RetryRequired",
+    "Ambiguous",
+    "ReconciliationRequired",
+    "Succeeded",
+    "TerminalFailure",
+    "DryRunRecorded"
+  ]
+}

@@ -12,14 +12,100 @@ from __future__ import annotations
 import csv
 import hashlib
 import io
+import json
 import re
 import subprocess
 import sys
 from pathlib import Path, PurePosixPath
-from typing import NamedTuple
+from typing import Mapping, NamedTuple
 
 
 ROOT = Path(__file__).resolve().parents[2]
+
+SECRET_REGISTRY_PATHS = (
+    PurePosixPath("src/zoho-catalyst/billing-webhook-gateway/config/variables.json"),
+    PurePosixPath("src/zoho-catalyst/crm-billing-orchestrator/config/variables.json"),
+    PurePosixPath("src/zoho-catalyst/form1-controller/config/variables.json"),
+    PurePosixPath("src/zoho-catalyst/form2-controller/config/variables.json"),
+    PurePosixPath("src/zoho-catalyst/retell-free-test/config/variables.json"),
+)
+SECRET_REGISTRY_CLASSIFICATIONS = frozenset({"secret", "stable-secret"})
+LEGACY_REGISTRY_CLASSIFICATIONS = {
+    "artifact-binding": "public-build-identity",
+    "bounded-runtime": "bounded-runtime-policy",
+    "environment-binding": "safe-enum",
+    "feature-gate": "safe-boolean",
+    "immutable-identity-secret": "stable-secret",
+    "private-connection": "private-connection-identity",
+    "private-crm-value": "private-crm-contract",
+    "private-identifier": "private-platform-identifier",
+    "private-operating-rule": "business-policy",
+    "private-plan": "private-platform-identifier",
+    "private-plan-map": "private-platform-identifier",
+    "private-platform-name": "private-platform-identifier",
+    "private-route": "private-deployment-routing",
+    "private-route-auth": "private-auth-metadata",
+    "public-api-base": "public-protocol-setting",
+    "secret": "secret",
+    "verified-platform-contract": "verified-platform-contract",
+}
+ALLOWED_REGISTRY_CLASSIFICATIONS = frozenset(
+    {
+        "bounded-runtime-policy",
+        "bounded-security-policy",
+        "business-contract",
+        "business-policy",
+        "fixed-security-policy",
+        "private-auth-metadata",
+        "private-connection-identity",
+        "private-crm-contract",
+        "private-data-contract",
+        "private-deployment-identifier",
+        "private-deployment-routing",
+        "private-endpoint",
+        "private-form-contract",
+        "private-oauth-identity",
+        "private-outbound-allowlist",
+        "private-platform-identifier",
+        "private-regional-endpoint",
+        "private-route",
+        "private-security-configuration",
+        "private-source-identity",
+        "public-build-identity",
+        "public-protocol-setting",
+        "runtime-metadata",
+        "safe-boolean",
+        "safe-bounded-scalar",
+        "safe-enum",
+        "secret",
+        "security-and-reliability-policy",
+        "security-policy",
+        "security-protocol-setting",
+        "stable-secret",
+        "verified-platform-contract",
+    }
+)
+ADDITIONAL_SECRET_ASSIGNMENT_NAMES = frozenset(
+    {
+        "CATALYST_TOKEN",
+        "OPERATOR_HMAC_SECRET",
+        "RETELL_API_KEY",
+        "RETELL_WEBHOOK_API_KEY",
+        "RETELL_WEBHOOK_SIGNING_SECRET",
+        "SYLVARA_PII_HASH_KEY",
+        "SYLVARA_ROUTE_HASH_KEY",
+    }
+)
+CONFIG_VARIABLE_NAME_RE = re.compile(r"^[A-Z][A-Z0-9_]{1,127}$")
+GENERIC_UPPERCASE_SECRET_NAME_RE = re.compile(
+    r"^[A-Z][A-Z0-9_]*(?:_SECRET|_TOKEN|_PEPPER|_PASSWORD|_PASSWD|"
+    r"_CREDENTIAL|_API_KEY|_PRIVATE_KEY|_SIGNING_KEY|_ACCESS_KEY|_HEADER_VALUE)$"
+    r"|^[A-Z][A-Z0-9_]*(?:_HASH_KEY|_HMAC_KEY|_WEBHOOK_KEY)$"
+)
+GENERIC_CODE_KEY_MATERIAL_NAME_RE = re.compile(
+    r"^[A-Za-z_$][A-Za-z0-9_$]*(?:HashKey|HmacKey|HMACKey|HmacSecret|"
+    r"HMACSecret|WebhookKey|WebhookSecret|SigningSecret)$"
+)
 
 MAX_TEXT_BYTES = 2 * 1024 * 1024
 MAX_APPROVED_BINARY_BYTES = 5 * 1024 * 1024
@@ -124,16 +210,31 @@ CREDENTIAL_FILENAME_RE = re.compile(
 PRIVATE_KEY_RE = re.compile(
     r"-----BEGIN (?:RSA |DSA |EC |OPENSSH )?PRIVATE KEY-----", re.IGNORECASE
 )
-SECRET_ASSIGNMENT_RE = re.compile(
+SECRET_ASSIGNMENT_NAME_RE = re.compile(
     r"\b(?P<name>access[_-]?token|api[_-]?key|auth[_-]?token|bearer[_-]?token|"
     r"client[_-]?secret|consumer[_-]?secret|password|passwd|private[_-]?key|"
     r"refresh[_-]?token|secret[_-]?(?:access[_-]?)?key|signing[_-]?secret|"
     r"webhook[_-]?(?:secret|signing[_-]?key)|aws[_-]?secret[_-]?access[_-]?key|"
     r"github[_-]?token|openai[_-]?api[_-]?key|zoho[_-]?(?:access[_-]?token|"
     r"client[_-]?secret|refresh[_-]?token)|retell[_-]?(?:api[_-]?)?key|"
-    r"make[_-]?(?:api[_-]?)?token)\b\s*[:=]\s*(?P<quote>['\"]?)"
-    r"(?P<value>[^'\"`\s,;})\]]+)",
+    r"make[_-]?(?:api[_-]?)?token)\b",
     re.IGNORECASE,
+)
+CONFIG_ASSIGNMENT_NAME_RE = re.compile(
+    r"(?<![A-Za-z0-9_])(?<!\$\{)(?P<name_quote>['\"]?)"
+    r"(?P<name>[A-Za-z][A-Za-z0-9_]{1,127})"
+    r"(?P=name_quote)",
+)
+BRACKET_CONFIG_ASSIGNMENT_NAME_RE = re.compile(
+    r"(?<![A-Za-z0-9_$])"
+    r"[A-Za-z_$][A-Za-z0-9_$.]*\s*\[\s*"
+    r"(?P<name_quote>['\"`])(?P<name>[A-Za-z][A-Za-z0-9_]{1,127})"
+    r"(?P=name_quote)\s*\]",
+)
+COMPUTED_PROPERTY_ASSIGNMENT_NAME_RE = re.compile(
+    r"(?<![A-Za-z0-9_$])\[\s*"
+    r"(?P<name_quote>['\"`])(?P<name>[A-Za-z][A-Za-z0-9_]{1,127})"
+    r"(?P=name_quote)\s*\]",
 )
 
 TOKEN_PATTERNS = (
@@ -171,29 +272,8 @@ TOKEN_PATTERNS = (
     ),
 )
 
-SAFE_SECRET_VALUE_PREFIXES = (
-    "<",
-    "${",
-    "$",
-    "{{",
-    "[",
-    "config.",
-    "env.",
-    "env(",
-    "get_secret(",
-    "getsecret(",
-    "load_secret(",
-    "os.environ",
-    "process.env",
-    "runtime",
-    "secrets.",
-    "settings.",
-    "string(process.env",
-    "await",
-    "parsed.",
-    "response.",
-)
 SAFE_SECRET_VALUE_WORDS = {
+    "",
     "change_me",
     "changeme",
     "example",
@@ -206,6 +286,16 @@ SAFE_SECRET_VALUE_WORDS = {
     "sample",
     "undefined",
 }
+SAFE_PUBLIC_TEST_SECRET_WORDS = frozenset(
+    {
+        "abcdef123456",
+        "short",
+        "synthetic-secret-value",
+        "syntheticbillingsecret1234",
+        "syntheticfingerprintsecretvalue123456",
+        "syntheticfixturevalue123456789",
+    }
+)
 
 EMAIL_RE = re.compile(
     r"\b[A-Z0-9._%+-]+@(?P<domain>[A-Z0-9.-]+\.[A-Z]{2,})\b", re.IGNORECASE
@@ -259,6 +349,175 @@ class TrackedEntry(NamedTuple):
     object_id: str
 
 
+class SecretAssignment(NamedTuple):
+    """One conservatively parsed assignment to a secret-bearing name."""
+
+    value: str
+    quoted: bool
+    start_offset: int
+    end_offset: int
+    quote_offset: int
+
+
+class SecretRegistryError(RuntimeError):
+    """Raised when the reviewed secret-name registry cannot be trusted."""
+
+
+def load_registry_secret_names_from_contents(
+    registry_contents: Mapping[str, bytes],
+    *,
+    require_all: bool = True,
+) -> frozenset[str]:
+    """Parse exact registry bytes from one repository view, failing closed."""
+
+    names = set(ADDITIONAL_SECRET_ASSIGNMENT_NAMES)
+    loaded_registry_count = 0
+    for relative_path in SECRET_REGISTRY_PATHS:
+        registry_key = relative_path.as_posix()
+        raw = registry_contents.get(registry_key)
+        if raw is None:
+            if not require_all:
+                continue
+            raise SecretRegistryError(
+                f"Could not read secret variable registry {relative_path}"
+            )
+        loaded_registry_count += 1
+        if len(raw) > MAX_TEXT_BYTES:
+            raise SecretRegistryError(
+                f"Secret variable registry exceeds the text limit: {relative_path}"
+            )
+        try:
+            document = json.loads(raw.decode("utf-8"))
+        except (UnicodeError, json.JSONDecodeError) as exc:
+            raise SecretRegistryError(
+                f"Secret variable registry is not valid UTF-8 JSON: {relative_path}"
+            ) from exc
+        variables = document.get("variables") if isinstance(document, dict) else None
+        if not isinstance(variables, list) or not variables:
+            raise SecretRegistryError(
+                f"Secret variable registry has no variable list: {relative_path}"
+            )
+
+        seen: set[str] = set()
+        for index, entry in enumerate(variables, start=1):
+            if not isinstance(entry, dict):
+                raise SecretRegistryError(
+                    f"Secret variable registry entry {index} is invalid: {relative_path}"
+                )
+            name = entry.get("name")
+            classification = entry.get("classification")
+            if classification is None:
+                legacy_class = entry.get("class")
+                classification = LEGACY_REGISTRY_CLASSIFICATIONS.get(legacy_class)
+            if classification is None and isinstance(entry.get("secret"), bool):
+                classification = "secret" if entry["secret"] else "runtime-metadata"
+            if (
+                not isinstance(name, str)
+                or CONFIG_VARIABLE_NAME_RE.fullmatch(name) is None
+                or not isinstance(classification, str)
+                or classification not in ALLOWED_REGISTRY_CLASSIFICATIONS
+                or name in seen
+            ):
+                raise SecretRegistryError(
+                    f"Secret variable registry entry {index} is invalid: {relative_path}"
+                )
+            seen.add(name)
+            if classification in SECRET_REGISTRY_CLASSIFICATIONS:
+                names.add(name)
+
+    if loaded_registry_count and names == set(ADDITIONAL_SECRET_ASSIGNMENT_NAMES):
+        raise SecretRegistryError("Secret variable registries contain no secret names")
+    return frozenset(names)
+
+
+def load_registry_secret_names(root: Path = ROOT) -> frozenset[str]:
+    """Load every secret-classified working-tree variable name, failing closed."""
+
+    registry_contents: dict[str, bytes] = {}
+    for relative_path in SECRET_REGISTRY_PATHS:
+        path = root.joinpath(*relative_path.parts)
+        try:
+            registry_contents[relative_path.as_posix()] = path.read_bytes()
+        except OSError as exc:
+            raise SecretRegistryError(
+                f"Could not read secret variable registry {relative_path}"
+            ) from exc
+    return load_registry_secret_names_from_contents(registry_contents)
+
+
+def load_head_registry_secret_names(root: Path = ROOT) -> frozenset[str]:
+    """Load the committed registry baseline so a candidate cannot downgrade it."""
+
+    try:
+        result = subprocess.run(
+            [
+                "git",
+                "ls-tree",
+                "-z",
+                "HEAD",
+                "--",
+                *(path.as_posix() for path in SECRET_REGISTRY_PATHS),
+            ],
+            cwd=root,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=15,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise SecretRegistryError(
+            "Could not read the committed secret variable registry baseline"
+        ) from exc
+    if result.returncode != 0:
+        raise SecretRegistryError(
+            "Could not read the committed secret variable registry baseline"
+        )
+
+    expected_paths = {path.as_posix() for path in SECRET_REGISTRY_PATHS}
+    entries: dict[str, TrackedEntry] = {}
+    for record in result.stdout.split(b"\0"):
+        if not record:
+            continue
+        metadata, separator, raw_path = record.partition(b"\t")
+        fields = metadata.split()
+        if not separator or len(fields) != 3:
+            raise SecretRegistryError(
+                "Git returned an invalid committed secret registry entry"
+            )
+        try:
+            mode = fields[0].decode("ascii")
+            object_type = fields[1].decode("ascii")
+            object_id = fields[2].decode("ascii")
+        except UnicodeDecodeError as exc:
+            raise SecretRegistryError(
+                "Git returned invalid committed secret registry metadata"
+            ) from exc
+        rel, path_problems = _validate_repository_path(raw_path)
+        if (
+            path_problems
+            or rel is None
+            or rel not in expected_paths
+            or mode not in ALLOWED_GIT_MODES
+            or object_type != "blob"
+            or GIT_OBJECT_ID_RE.fullmatch(object_id) is None
+            or rel in entries
+        ):
+            raise SecretRegistryError(
+                "Git returned an unsafe committed secret registry entry"
+            )
+        entries[rel] = TrackedEntry(mode, object_id.lower())
+
+    contents, problems = load_index_blobs(root, entries)
+    if problems:
+        raise SecretRegistryError(
+            "Could not inspect the committed secret variable registry baseline"
+        )
+    return load_registry_secret_names_from_contents(contents, require_all=False)
+
+
+SECRET_ASSIGNMENT_NAMES = load_registry_secret_names()
+
+
 def _is_example_filename(name: str) -> bool:
     lowered = name.lower()
     return lowered == ".env.example" or any(
@@ -267,18 +526,327 @@ def _is_example_filename(name: str) -> bool:
 
 
 def _is_safe_secret_reference(value: str, rel: str, quoted: bool) -> bool:
-    lowered = value.strip().strip("'\"").lower()
-    if lowered in SAFE_SECRET_VALUE_WORDS or any(
-        lowered.startswith(prefix) for prefix in SAFE_SECRET_VALUE_PREFIXES
+    stripped = value.strip()
+    lowered = stripped.strip("'\"`").lower()
+    if lowered in SAFE_SECRET_VALUE_WORDS:
+        return True
+    if re.fullmatch(r"<[^<>\r\n]{1,200}>", stripped):
+        return True
+    if re.fullmatch(r"<<[^<>\r\n]{1,200}>>", stripped):
+        return True
+    if re.fullmatch(r"\{\{[^{}\r\n]{1,200}\}\}", stripped):
+        return True
+    if re.fullmatch(r"\[[^\[\]\r\n]{1,200}\]", stripped):
+        return True
+    if re.fullmatch(r"\$[A-Za-z_][A-Za-z0-9_]*", stripped):
+        return True
+    if re.fullmatch(r"\$\{[A-Za-z_][A-Za-z0-9_]*\}", stripped):
+        return True
+    if quoted:
+        return False
+
+    safe_runtime_references = (
+        r"(?:config|env|runtime|secrets|settings|parsed|response)"
+        r"\.[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*",
+        r"process\.env\.[A-Za-z_$][A-Za-z0-9_$]*",
+        r"String\(process\.env\.[A-Za-z_$][A-Za-z0-9_$]*\)",
+        r"os\.environ\[['\"][A-Za-z_][A-Za-z0-9_]*['\"]\]",
+        r"(?:await\s+)?(?:get_secret|getsecret|load_secret|env)"
+        r"\(\s*['\"][A-Za-z_][A-Za-z0-9_]*['\"]\s*\)",
+    )
+    if any(
+        re.fullmatch(pattern, stripped, re.IGNORECASE)
+        for pattern in safe_runtime_references
     ):
         return True
     code_suffixes = {".cjs", ".deluge", ".js", ".mjs", ".py", ".ts"}
     return (
-        not quoted
-        and PurePosixPath(rel).suffix.lower() in code_suffixes
-        and re.fullmatch(r"[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*", value)
+        PurePosixPath(rel).suffix.lower() in code_suffixes
+        and re.fullmatch(
+            r"[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*",
+            stripped,
+        )
         is not None
     )
+
+
+def _assignment_suffix_is_safe(source: str, end_offset: int) -> bool:
+    """Require the parsed value to be the complete assignment expression."""
+
+    cursor = end_offset
+    crossed_line = False
+    while cursor < len(source):
+        while cursor < len(source) and source[cursor] in " \t":
+            cursor += 1
+        if cursor >= len(source):
+            return True
+        if not crossed_line and source[cursor] in ",;})]":
+            return True
+        if source.startswith("//", cursor) or source[cursor] == "#":
+            newline = source.find("\n", cursor)
+            if newline < 0:
+                return True
+            cursor = newline + 1
+            crossed_line = True
+            continue
+        if source[cursor] == "\r":
+            cursor += 1
+            if cursor < len(source) and source[cursor] == "\n":
+                cursor += 1
+            crossed_line = True
+            continue
+        if source[cursor] == "\n":
+            cursor += 1
+            crossed_line = True
+            continue
+        break
+
+    if not crossed_line:
+        return False
+    return not source.startswith(
+        (
+            "||",
+            "??",
+            "&&",
+            "+",
+            "-",
+            "*",
+            "/",
+            "%",
+            "^",
+            "!",
+            "<",
+            ">",
+            "?",
+            ":",
+            ".",
+            "`",
+            "(",
+            "[",
+        ),
+        cursor,
+    )
+
+
+def _is_test_fixture_path(rel: str) -> bool:
+    path = PurePosixPath(rel)
+    lowered_parts = {part.lower() for part in path.parts}
+    lowered_name = path.name.lower()
+    return (
+        bool(lowered_parts.intersection({"test", "tests"}))
+        or lowered_name.startswith("test_")
+        or ".test." in lowered_name
+    )
+
+
+def _is_safe_public_test_secret_fixture(
+    value: str,
+    rel: str,
+    source: str,
+    assignment: SecretAssignment,
+) -> bool:
+    """Allow only deterministic, visibly synthetic literals in test source."""
+
+    if not _is_test_fixture_path(rel):
+        return False
+    lowered = value.strip().strip("'\"").lower()
+    if lowered in SAFE_PUBLIC_TEST_SECRET_WORDS:
+        return _assignment_suffix_is_safe(source, assignment.end_offset)
+
+    quote_start = assignment.quote_offset
+    if quote_start < 0:
+        return False
+    repeat = re.match(
+        r"(?P<quote>['\"`])[A-Za-z0-9](?P=quote)\.repeat\([1-9][0-9]{0,2}\)",
+        source[quote_start:],
+    )
+    return repeat is not None and _assignment_suffix_is_safe(
+        source, quote_start + repeat.end()
+    )
+
+
+def _iter_secret_assignments(
+    source: str, secret_names: frozenset[str]
+):
+    def skip_trivia(cursor: int) -> int | None:
+        """Skip arbitrary whitespace and complete JS-style comments."""
+
+        while cursor < len(source):
+            if source[cursor].isspace():
+                cursor += 1
+                continue
+            if source.startswith("/*", cursor):
+                comment_end = source.find("*/", cursor + 2)
+                if comment_end < 0:
+                    return None
+                cursor = comment_end + 2
+                continue
+            if source.startswith("//", cursor):
+                newline = source.find("\n", cursor + 2)
+                if newline < 0:
+                    return len(source)
+                cursor = newline + 1
+                continue
+            return cursor
+        return cursor
+
+    def skip_horizontal(cursor: int) -> int:
+        while cursor < len(source) and source[cursor] in " \t":
+            cursor += 1
+        return cursor
+
+    def locate_value_offset(name_match: re.Match[str], delimiter: str) -> int | None:
+        cursor = skip_trivia(name_match.end())
+        if cursor is None or cursor >= len(source):
+            return None
+
+        if delimiter == "equals":
+            return skip_horizontal(cursor + 1) if source[cursor] == "=" else None
+        if delimiter == "colon":
+            return skip_horizontal(cursor + 1) if source[cursor] == ":" else None
+
+        if source[cursor] == "=":
+            return skip_horizontal(cursor + 1)
+        if source[cursor] != ":":
+            return None
+
+        # Distinguish JSON/YAML's value colon from a common TypeScript/Python
+        # annotation followed by '='. The type token is bounded and the
+        # subsequent trivia parser handles any number of interposed comments.
+        value_offset = skip_horizontal(cursor + 1)
+        type_match = re.match(
+            r"[A-Za-z_$][A-Za-z0-9_$<>,.?|\[\] &]{0,255}",
+            source[value_offset:],
+        )
+        if type_match is not None:
+            typed_end = value_offset + len(type_match.group(0).rstrip())
+            equals_cursor = skip_trivia(typed_end)
+            if (
+                equals_cursor is not None
+                and equals_cursor < len(source)
+                and source[equals_cursor] == "="
+            ):
+                return skip_horizontal(equals_cursor + 1)
+        return value_offset
+
+    def parse_value(start_offset: int, value_offset: int) -> SecretAssignment:
+        if value_offset < len(source) and source[value_offset] in "\r\n":
+            newline_end = value_offset + 1
+            if (
+                source[value_offset] == "\r"
+                and newline_end < len(source)
+                and source[newline_end] == "\n"
+            ):
+                newline_end += 1
+            next_line_end = source.find("\n", newline_end)
+            if next_line_end < 0:
+                next_line_end = len(source)
+            next_line = source[newline_end:next_line_end]
+            candidate = next_line.lstrip(" \t")
+            indented = len(candidate) < len(next_line)
+            obvious_literal = candidate.startswith(
+                ("'", '"', "`", "<", "${", "{{", "[")
+            ) or re.match(r"(?i:[fbru]{1,3})['\"]", candidate) is not None
+            obvious_new_assignment = re.match(
+                r"[A-Za-z_][A-Za-z0-9_]{1,127}\s*[:=]", candidate
+            ) is not None
+            if (
+                candidate
+                and not candidate.startswith(("#", "//"))
+                and not obvious_new_assignment
+                and (indented or obvious_literal)
+            ):
+                value_offset = newline_end + (len(next_line) - len(candidate))
+        if source.startswith('"""', value_offset) or source.startswith("'''", value_offset):
+            delimiter = source[value_offset : value_offset + 3]
+            content_start = value_offset + 3
+            content_end = source.find(delimiter, content_start)
+            value = source[content_start:] if content_end < 0 else source[content_start:content_end]
+            end_offset = len(source) if content_end < 0 else content_end + 3
+            return SecretAssignment(
+                value, True, start_offset, end_offset, value_offset
+            )
+
+        if value_offset < len(source) and source[value_offset] in "'\"`":
+            delimiter = source[value_offset]
+            cursor = value_offset + 1
+            while cursor < len(source):
+                if source[cursor] == "\\":
+                    cursor += 2
+                    continue
+                if source[cursor] == delimiter:
+                    break
+                cursor += 1
+            return SecretAssignment(
+                source[value_offset + 1 : cursor],
+                True,
+                start_offset,
+                len(source) if cursor >= len(source) else cursor + 1,
+                value_offset,
+            )
+
+        structured_reference = re.match(
+            r"(?:"
+            r"\$\{[^}\r\n]*\}|"
+            r"\{\{[^{}\r\n]{1,200}\}\}|"
+            r"\[[^\[\]\r\n]{1,200}\]|"
+            r"String\(process\.env\.[A-Za-z_$][A-Za-z0-9_$]*\)|"
+            r"os\.environ\[['\"][A-Za-z_][A-Za-z0-9_]*['\"]\]|"
+            r"(?:await\s+)?(?:get_secret|getsecret|load_secret|env)"
+            r"\(\s*['\"][A-Za-z_][A-Za-z0-9_]*['\"]\s*\)"
+            r")",
+            source[value_offset:],
+            re.IGNORECASE,
+        )
+        if structured_reference is not None:
+            value = structured_reference.group(0)
+            return SecretAssignment(
+                value,
+                False,
+                start_offset,
+                value_offset + len(value),
+                -1,
+            )
+
+        unquoted = re.match(r"[^'\"`\\\s,;})\]]+", source[value_offset:])
+        value = "" if unquoted is None else unquoted.group(0)
+        return SecretAssignment(
+            value,
+            False,
+            start_offset,
+            value_offset + len(value),
+            -1,
+        )
+
+    def is_secret_name(name: str) -> bool:
+        normalized = name.upper()
+        return normalized in secret_names or (
+            name == normalized
+            and GENERIC_UPPERCASE_SECRET_NAME_RE.fullmatch(name) is not None
+        ) or GENERIC_CODE_KEY_MATERIAL_NAME_RE.fullmatch(name) is not None
+
+    seen_value_offsets: set[int] = set()
+    for name_match in SECRET_ASSIGNMENT_NAME_RE.finditer(source):
+        value_offset = locate_value_offset(name_match, "standard")
+        if value_offset is None or value_offset in seen_value_offsets:
+            continue
+        seen_value_offsets.add(value_offset)
+        yield parse_value(name_match.start(), value_offset)
+
+    for name_pattern, delimiter in (
+        (CONFIG_ASSIGNMENT_NAME_RE, "standard"),
+        (BRACKET_CONFIG_ASSIGNMENT_NAME_RE, "equals"),
+        (COMPUTED_PROPERTY_ASSIGNMENT_NAME_RE, "colon"),
+    ):
+        for name_match in name_pattern.finditer(source):
+            name = name_match.group("name")
+            if not is_secret_name(name):
+                continue
+            value_offset = locate_value_offset(name_match, delimiter)
+            if value_offset is None or value_offset in seen_value_offsets:
+                continue
+            seen_value_offsets.add(value_offset)
+            yield parse_value(name_match.start(), value_offset)
 
 
 def _looks_like_real_phone(value: str) -> bool:
@@ -596,8 +1164,33 @@ def scan_filename(rel: str) -> list[str]:
     return []
 
 
-def scan_text(rel: str, text: str) -> list[str]:
+def scan_text(
+    rel: str,
+    text: str,
+    secret_names: frozenset[str] | None = None,
+) -> list[str]:
+    selected_secret_names = SECRET_ASSIGNMENT_NAMES if secret_names is None else secret_names
     problems: list[str] = []
+
+    # Scan assignments over the complete document so pretty-printed JSON,
+    # multiline JavaScript, and indented YAML cannot split a registry name from
+    # its literal value. Other content checks stay line-oriented for precise
+    # diagnostics and to avoid matching unrelated prose across line breaks.
+    for assignment in _iter_secret_assignments(text, selected_secret_names):
+        if not (
+            (
+                _is_safe_secret_reference(
+                    assignment.value, rel, assignment.quoted
+                )
+                and _assignment_suffix_is_safe(text, assignment.end_offset)
+            )
+            or _is_safe_public_test_secret_fixture(
+                assignment.value, rel, text, assignment
+            )
+        ):
+            line_number = text.count("\n", 0, assignment.start_offset) + 1
+            problems.append(f"secret assignment in {rel}:{line_number}")
+
     for line_number, line in enumerate(text.splitlines(), start=1):
         if PRIVATE_KEY_RE.search(line):
             problems.append(f"private key block in {rel}:{line_number}")
@@ -605,12 +1198,6 @@ def scan_text(rel: str, text: str) -> list[str]:
         for label, pattern in TOKEN_PATTERNS:
             if pattern.search(line):
                 problems.append(f"{label} in {rel}:{line_number}")
-
-        for match in SECRET_ASSIGNMENT_RE.finditer(line):
-            if not _is_safe_secret_reference(
-                match.group("value"), rel, bool(match.group("quote"))
-            ):
-                problems.append(f"secret assignment in {rel}:{line_number}")
 
         for match in EMAIL_RE.finditer(line):
             domain = match.group("domain").lower()
@@ -744,8 +1331,12 @@ def scan_file_policy(rel: str, path: Path) -> tuple[list[str], str | None]:
     return scan_content_policy(rel, content)
 
 
-def scan_decoded_text(rel: str, text: str) -> list[str]:
-    problems = scan_text(rel, text)
+def scan_decoded_text(
+    rel: str,
+    text: str,
+    secret_names: frozenset[str] | None = None,
+) -> list[str]:
+    problems = scan_text(rel, text, secret_names)
     if rel == CHART_OF_ACCOUNTS_PATH:
         problems.extend(scan_chart_of_accounts_csv(text))
     return problems
@@ -773,6 +1364,40 @@ def scan_repository(root: Path = ROOT) -> list[str]:
     index_contents, index_load_problems = load_index_blobs(root, scannable_entries)
     problems.extend(_label_problems(index_load_problems, "staged index"))
 
+    try:
+        index_secret_names = load_registry_secret_names_from_contents(index_contents)
+    except SecretRegistryError as exc:
+        problems.append(f"{exc} [staged index]")
+        index_secret_names = SECRET_ASSIGNMENT_NAMES
+    try:
+        working_secret_names = load_registry_secret_names(root)
+    except SecretRegistryError as exc:
+        problems.append(f"{exc} [working tree]")
+        working_secret_names = SECRET_ASSIGNMENT_NAMES
+    try:
+        baseline_secret_names = load_head_registry_secret_names(root)
+    except SecretRegistryError as exc:
+        problems.append(f"{exc} [committed baseline]")
+        baseline_secret_names = SECRET_ASSIGNMENT_NAMES
+
+    protected_baseline_names = baseline_secret_names.difference(
+        ADDITIONAL_SECRET_ASSIGNMENT_NAMES
+    )
+    for source, current_names in (
+        ("staged index", index_secret_names),
+        ("working tree", working_secret_names),
+    ):
+        retired_names = sorted(protected_baseline_names.difference(current_names))
+        if retired_names:
+            problems.append(
+                "Secret registry names may not be removed or downgraded without "
+                f"a reviewed scanner migration: {', '.join(retired_names)} [{source}]"
+            )
+
+    protected_secret_names = frozenset(
+        baseline_secret_names | index_secret_names | working_secret_names
+    )
+
     for rel in sorted(candidate_paths):
         entry = entries.get(rel)
         mode = entry.mode if entry is not None else "100644"
@@ -799,7 +1424,8 @@ def scan_repository(root: Path = ROOT) -> list[str]:
             if index_text is not None:
                 problems.extend(
                     _label_problems(
-                        scan_decoded_text(rel, index_text), "staged index"
+                        scan_decoded_text(rel, index_text, protected_secret_names),
+                        "staged index",
                     )
                 )
 
@@ -840,7 +1466,10 @@ def scan_repository(root: Path = ROOT) -> list[str]:
             problems.extend(_label_problems(working_policy_problems, source))
             if working_text is not None:
                 problems.extend(
-                    _label_problems(scan_decoded_text(rel, working_text), source)
+                    _label_problems(
+                        scan_decoded_text(rel, working_text, protected_secret_names),
+                        source,
+                    )
                 )
     return problems
 

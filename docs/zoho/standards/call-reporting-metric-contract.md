@@ -4,10 +4,11 @@
 
 - Repository status: **Proposed**
 - Live Catalyst datasets: **Unknown**
-- Live Zoho Analytics model, reports, schedules, and access controls: **Unknown**
+- Free-test internal reporting: **Catalyst client/deployment query plus sanitized CSV; runtime readback required**
+- Live Zoho Analytics model, reports, schedules, and access controls: **Deferred and not an internal-test dependency**
 - Customer-facing use: **Not authorized by this document**
 
-This standard defines the minimum reproducible contract for Sylvara call and outcome reporting. It supplements the general [Zoho Analytics standard](analytics.md) and the [Retell, Catalyst, CRM, and Analytics boundary](../../adr/0004-retell-catalyst-crm-analytics-integration-boundary.md).
+This standard defines the minimum reproducible contract for Sylvara call and outcome reporting. For the free-test MVP, Catalyst canonical rows plus client/deployment-scoped query and sanitized CSV are authoritative. The general [Zoho Analytics standard](analytics.md) applies only if a later decision adds Analytics. [ADR 0006](../../adr/0006-shared-seven-day-monitor-with-client-number-isolation.md) is authoritative for the MVP.
 
 A report is evidence about a bounded workflow. It is not transactional truth and it does not prove a booking, completed job, invoice, payment, or recovered revenue unless the metric is reconciled to the authoritative system that owns that outcome.
 
@@ -40,19 +41,45 @@ Every call fact must use these dimensions where applicable:
 | Dimension | Contract |
 |---|---|
 | `Client ID` | Immutable internal client partition; mandatory on every client-reporting fact |
-| `Call ID` | Stable provider call identifier within the bound client |
-| `Agent ID` | Provider agent that handled the call; mapped to the client through Catalyst |
-| `Agent Version` | Reviewed configuration version effective for the call |
+| `Deployment ID` | Immutable free-test deployment partition; mandatory with Client ID on every free-test fact |
+| `Configuration Version` | Immutable approved deployment snapshot effective for the call |
+| `Call Key` | Opaque stable keyed-HMAC lookup key derived from the provider call identifier; the raw provider identifier is excluded |
+| `Agent ID` | Provider agent that handled the call; descriptive only for the shared free-test agent and never a tenant key |
+| `Agent Version` | Reviewed shared Retell flow version effective for the call; distinct from Configuration Version |
 | `Environment` | Development or Production; never combined without an explicit filter |
-| `Coverage Mode` | Approved mode such as after-hours or overflow |
+| `Coverage Mode` | One canonical deployment value: `AfterHoursOnly`, `NoAnswerOverflowOnly`, or `AfterHoursAndOverflow` |
+| `Coverage Trigger` | Per-call `AfterHours` or `NoAnswerOverflow` where known; never substituted for Coverage Mode |
 | `Started At` | Source timestamp normalized to UTC |
 | `Ended At` | Source timestamp normalized to UTC |
 | `Local Reporting Date` | Date derived with the approved client reporting time zone |
 | `Outcome Version` | Version of the classification and metric taxonomy |
-| `Data Watermark` | Latest source event included in the report |
+| `Data Watermark` | Latest canonical Catalyst update included in the query/export |
 | `Reconciliation Status` | Pending, verified, corrected, rejected, or unresolved |
+| `Notification State` | Durable Catalyst email record; Development defaults to `DryRunRecorded`, while the single controlled send may use `Pending`, `Sending`, `Sent`, `RetryRequired`, `Ambiguous`, or `TerminalFailure` |
 
 Display labels and company names are not join keys.
+
+For free-test facts, match on the opaque `Call Key` and require immutable `Client ID` and `Deployment ID` partitions on the same row. Any ownership conflict fails closed. The shared Agent ID is never sufficient ownership evidence.
+
+## Free-Test Outcome Taxonomy
+
+Each processed free-test call receives exactly one high-level outcome:
+
+| Canonical value | Report label |
+| --- | --- |
+| `potential_job` | Potential Job |
+| `existing_customer` | Existing Customer |
+| `urgent_potential_job` | Urgent Potential Job |
+| `spam` | Spam |
+| `unsupported_service` | Unsupported Service |
+| `out_of_area` | Out Of Area |
+| `other_general_inquiry` | Other / General Inquiry |
+| `sensitive_data_ended` | Sensitive Data Ended |
+| `configuration_failure` | Configuration Failure |
+| `caller_abandoned` | Caller Abandoned |
+| `unresolved` | Unresolved |
+
+Do not create overlapping high-level outcomes or count one call in two outcome totals. Urgency may remain a separate detail, but an urgent new opportunity uses `urgent_potential_job`, not both potential-job categories. A configuration failure is operational evidence and never a client opportunity.
 
 ## Canonical Metrics
 
@@ -65,6 +92,15 @@ Display labels and company names are not join keys.
 - Include: calls whose environment, agent binding, coverage window, direction, and workflow intent satisfy the approved contract.
 - Exclude: synthetic tests from Production reports, duplicate events, spam when the report definition excludes it, and calls outside the approved route.
 - Verification: operationally derived; not customer-system revenue truth.
+
+### Total Calls Handled And Limit Progress
+
+- `Total Calls Handled` counts distinct finalized opaque Call Keys within the immutable Client ID and Deployment ID partitions.
+- Pre-call eligibility requires the durable handled count to be below 25; the MVP has no reservation state.
+- The unique call that changes the count from 24 to 25 marks the deployment completed. Calls already in flight may finish and increase the final total above 25.
+- Operational evidence shows handled count, limit (25), remaining count before the threshold, and `in_flight_overshoot = max(handled_count - 25, 0)` after it.
+- Report overshoot honestly and explain that it represents calls already admitted before the threshold became visible. Do not claim an exact concurrency cap.
+- Replay changes none of these values.
 
 ### Calls Completed Or Correctly Escalated
 
@@ -149,7 +185,7 @@ Display labels and company names are not join keys.
 
 - Grain: one call or one integration operation, depending on the report.
 - Source: Catalyst operational state and verified provider/customer-system errors.
-- Examples: signature rejection, schema rejection, provider timeout, duplicate conflict, import rejection, failed customer-system readback, or stale Analytics watermark.
+- Examples: signature rejection, schema rejection, provider timeout, duplicate conflict, failed canonical write, tenant-filter rejection, or CSV reconciliation mismatch.
 - Separate caller/business outcomes from platform failures.
 
 ### Estimated Opportunity Value
@@ -161,6 +197,18 @@ Display labels and company names are not join keys.
 - Required: method version, assumptions, currency, effective date, and confidence label.
 - Never label this metric as revenue, collected revenue, or recovered revenue.
 - Do not add value to spam, excluded, duplicate, unresolved, or unqualified calls.
+
+Every value field must carry exactly one evidence status:
+
+| Canonical value | Meaning |
+| --- | --- |
+| `confirmed_revenue` | Revenue reconciled to the authoritative financial/customer outcome |
+| `booked_revenue` | Booked value reconciled to the authoritative scheduling/customer outcome |
+| `customer_supplied_estimate` | Customer-supplied estimated job value, not verified revenue |
+| `internal_estimate_with_method` | Internally estimated opportunity value with an approved method/version |
+| `unknown` | No defensible value evidence |
+
+Confirmed/booked labels require authoritative reconciliation. Internal estimates require a documented method version; never multiply calls by an arbitrary amount.
 
 ### Verified Booked Value
 
@@ -204,19 +252,21 @@ Each step has its own source, timestamp, and verification state. A later step ma
 
 ## Free-Test Or Evaluation Report
 
-The first external report for a bounded evaluation is manually generated and reviewed. It may include:
+The first internal report for a bounded evaluation is a manually generated and reviewed Catalyst query/CSV export. A free-test report uses simple per-client metrics:
 
-- test period and approved coverage mode;
-- eligible calls;
-- qualified opportunities;
-- callback or booking requests;
-- transfer attempts and bridges;
-- unresolved calls;
-- technical failures;
+- total calls handled;
+- potential jobs and urgent potential jobs;
+- existing customers;
+- spam, unsupported, out-of-area, other/general, and unresolved calls;
+- Catalyst Mail state, including default `DryRunRecorded`, the one controlled delivery result, and any missing, retrying, ambiguous, or terminal-failure record;
+- calls by date/time and after-hours versus no-answer/overflow where known;
+- handled-call limit, any in-flight overshoot, and seven-day period progress;
 - representative redacted outcome summaries; and
-- estimated opportunity value with its method.
+- estimated opportunity value only with its documented method/version.
 
-Do not include raw transcripts, recordings, caller phone numbers, caller addresses, unrestricted call-detail exports, or an unverified revenue claim.
+Do not include raw transcripts, recordings, caller phone numbers, caller addresses, recipient email addresses, unrestricted call-detail exports, or an unverified revenue claim.
+
+Zoho Analytics, CRM mutation, scheduled delivery, dashboards, and a client portal are outside the internal MVP. Their absence is not an internal Development phone-test blocker.
 
 A recommendation may be:
 
@@ -244,18 +294,18 @@ Do not automate client delivery merely because a dashboard looks correct.
 
 ## Report Acceptance Gates
 
-Before one external delivery:
+Before an internal query/CSV is accepted:
 
 1. the report period, client, environment, and time zone are explicit;
-2. `count_distinct(Client ID) = 1` across every included dataset;
-3. source and Analytics row counts reconcile for the approved period;
+2. `count_distinct(Client ID) = 1` and only approved Deployment IDs across every included dataset;
+3. canonical Catalyst call count and exported row count reconcile for the approved period;
 4. duplicate source keys are zero or explicitly quarantined;
-5. all asynchronous imports are complete and rejected rows are resolved;
-6. the watermark meets the approved freshness requirement;
+5. no canonical call or processing item included in the period is unresolved without an explicit label;
+6. the query/export watermark meets the approved freshness requirement;
 7. estimated and verified values are visually and semantically separate;
 8. no recording, transcript, raw payload, phone number, address, credential, or unrestricted identifier appears;
-9. the recipient set exactly matches the approved CRM record;
-10. export, link, and row-level permissions were tested with a non-admin identity;
+9. any external recipient is separately approved; the internal MVP does not deliver the CSV automatically;
+10. query filters, export storage, and access permissions were tested with a non-admin identity;
 11. correction history is preserved; and
 12. an authorized reviewer approves the final output.
 
@@ -263,26 +313,24 @@ Fail closed when any gate is unknown.
 
 ## Client Isolation
 
-The proposed shared Production workspace requires an immutable `Client ID` on every fact and dimension that can reach a client report.
+Every Catalyst query and CSV export requires immutable `Client ID` and `Deployment ID` predicates on every free-test row. This is a model contract, not Production authorization.
 
-- Fixed-client reports use server-side or workspace-controlled criteria.
+- Fixed-client reports use server-side query criteria; display-name filtering is prohibited.
 - A client must never be able to change a filter to another client.
-- Source tables and unrestricted query tables are not shared with clients.
-- Public or no-login links are disabled.
-- Scheduled attachments inherit the source classification and require recipient review.
-- Contractual or technical requirements may justify a separate workspace for one client; that is an exception, not the default.
+- Source tables and unrestricted queries are not shared with clients.
+- Public or no-login links are prohibited.
+- CSV files inherit the source classification, use approved private storage, and require recipient review before any later external delivery.
 
 ## Corrections And Late Data
 
 - Preserve source modified time, load time, metric version, and reconciliation status.
-- A corrected source outcome creates a governed analytical update; do not erase the fact that an earlier report was different.
+- A corrected source outcome changes a later query/export with an explicit correction record; do not erase the fact that an earlier report was different.
 - Late customer-system outcomes may update later periods or a labeled prior-period correction according to the approved reporting policy.
-- Deleted or withdrawn source records require a documented tombstone or correction path so derived totals do not silently drift.
-- An ambiguous import or reverse-write is reconciled before retry.
+- Deleted or withdrawn source records require a documented tombstone or correction path so export totals do not silently drift.
 
 ## Privacy And Export Boundary
 
-Zoho Analytics receives only the columns required to calculate and present approved metrics.
+The Catalyst query and CSV include only the columns required to calculate and present approved metrics. If Analytics is added later, the same minimum-data rule applies.
 
 Excluded by default:
 
@@ -306,12 +354,16 @@ Use synthetic data to test:
 - zero-call periods;
 - duplicate events and calls;
 - multiple transfer attempts;
-- missing and conflicting client-agent mappings;
+- missing and conflicting deployment/number mappings;
+- replay and delayed events that preserve embedded call ownership;
+- duplicate Catalyst Mail dry-run behavior, one controlled send with no second delivery on replay, and attempted cross-client email reference;
+- count-at-25 rejection and already-in-flight overshoot disclosure;
+- initial-validation number freeze, preserved historical ownership, and documented post-completion cooldown;
 - late and corrected customer-system outcomes;
 - unknown or stale metric versions;
 - time-zone and period-boundary behavior;
 - null and malformed values;
-- import rejection and ambiguous job status;
+- query failure and CSV count mismatch;
 - cross-client join attempts;
 - non-admin sharing and export restrictions;
 - estimated-versus-verified labeling; and
@@ -330,4 +382,4 @@ A metric change requires:
 7. Production approval; and
 8. a correction note when previously delivered values change.
 
-A GitHub merge establishes reviewed intent only. It does not change a live Analytics formula, report, schedule, share, or delivered customer report.
+A GitHub merge establishes reviewed intent only. It does not change a live Catalyst query, export, Analytics formula, schedule, share, or delivered customer report.

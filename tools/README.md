@@ -7,8 +7,9 @@ Use the root verifier as the single local validation implementation. On Windows:
 ```
 
 `Quick` is the default. It is offline and runs the repository safety scan,
-workflow policy validator, complete Python regression suite, and Billing gateway
-checks against dependencies already installed in the checkout.
+workflow policy validator, complete Python regression suite, and the Billing
+gateway, Form 1 controller, and Form 2 controller checks against dependencies
+already installed in the checkout.
 
 On a new checkout, bootstrap the hash-pinned Python and exact npm dependencies,
 then run the same checks:
@@ -18,7 +19,7 @@ then run the same checks:
 ```
 
 Use `All` before publication when registry access is available. It refreshes the
-dependency install, runs the production npm audit, and then runs every Quick
+dependency installs, runs each production npm audit, and then runs every Quick
 check:
 
 ```powershell

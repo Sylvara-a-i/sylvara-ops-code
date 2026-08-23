@@ -13,6 +13,13 @@ const OLD_TIME = "2026-08-14T12:00:00-05:00";
 const NEW_TIME = "2026-08-14T12:01:00-05:00";
 const READ_AUTHORIZATION = "Zoho-oauthtoken SyntheticReadToken123456789";
 const WRITE_AUTHORIZATION = "Zoho-oauthtoken SyntheticWriteToken12345678";
+const PROTECTED_DEAL_FIELDS = Object.freeze({
+  Free_Test_Authorization_Status: "Signed",
+  Authorization_Signed_At: "2026-08-14T18:05:00.987Z",
+  Go_Live_Approval_Status: "Approved",
+  Go_Live_Approved_At: "2026-08-14T18:10:00.654Z",
+  Test_Status: "Live",
+});
 
 function config(overrides = {}) {
   return {
@@ -68,6 +75,11 @@ function existingRecords() {
       Approved_Test_Route: "No Answer / Overflow Only",
       Setup_Access_Issued_At: "2026-08-14T17:55:00.000Z",
       Setup_Access_Verified_At: "2026-08-14T17:58:00.000Z",
+      Free_Test_Authorization_Status: "Not Sent",
+      Authorization_Signed_At: null,
+      Go_Live_Approval_Status: "Not Ready",
+      Go_Live_Approved_At: null,
+      Test_Status: "Not Started",
       Test_Duration_Days: 7,
       Test_Call_Limit: 25,
       Test_Scope_Version: "scope-v1",
@@ -186,9 +198,8 @@ function duplicateRollbackAcknowledgment() {
   };
 }
 
-function afterRecords() {
+function afterRecords(selectedUpdates = updates()) {
   const existing = existingRecords();
-  const selectedUpdates = updates();
   return {
     contact: { ...existing.contact, ...selectedUpdates.contactUpdate, Modified_Time: NEW_TIME },
     account: { ...existing.account, ...selectedUpdates.accountUpdate, Modified_Time: NEW_TIME },
@@ -219,6 +230,21 @@ test("GET is restricted to one approved record endpoint and a fixed field projec
   assert.equal(captured.options.method, "GET");
   assert.equal(captured.options.headers.Authorization, READ_AUTHORIZATION);
   assert.equal(captured.options.redirect, "error");
+});
+
+test("Deal reads project signature, go-live, and test-status controls", async () => {
+  let capturedUrl;
+  const record = existingRecords().deal;
+  const client = clientWithFetch(async (url) => {
+    capturedUrl = new URL(url);
+    return jsonResponse({ data: [record] });
+  });
+
+  assert.deepEqual(await client.getRecord("Deals", IDS.deal), record);
+  const fields = new Set(capturedUrl.searchParams.get("fields").split(","));
+  for (const field of Object.keys(PROTECTED_DEAL_FIELDS)) {
+    assert.equal(fields.has(field), true, field);
+  }
 });
 
 test("uses one ordered rollback composite and verifies all three records by independent GET", async () => {
@@ -264,7 +290,58 @@ test("uses one ordered rollback composite and verifies all three records by inde
     body.__composite_requests.map((entry) => entry.body.trigger),
     [["workflow"], ["workflow"], ["workflow"]],
   );
+  assert.deepEqual(
+    body.__composite_requests[2].body.data[0],
+    {
+      id: IDS.deal,
+      ...updates().dealUpdate,
+      Authority_Confirmed_At: "2026-08-14T18:00:00+00:00",
+      Test_Scope_Accepted_At: "2026-08-14T18:00:00+00:00",
+      Setup_Form_Submitted_At: "2026-08-14T18:00:00+00:00",
+    },
+  );
   assert.equal(JSON.stringify(body).includes("casey@example.invalid"), false);
+});
+
+test("composite readback verifies serialized CRM DateTimes when source timestamps include milliseconds", async () => {
+  const selectedUpdates = updates();
+  selectedUpdates.dealUpdate.Authority_Confirmed_At = "2026-08-14T18:00:00.123Z";
+  selectedUpdates.dealUpdate.Test_Scope_Accepted_At = "2026-08-14T18:00:00.456Z";
+  selectedUpdates.dealUpdate.Setup_Form_Submitted_At = "2026-08-14T18:00:00.789Z";
+  const readbacks = afterRecords(selectedUpdates);
+  readbacks.deal.Authority_Confirmed_At = "2026-08-14T18:00:00+00:00";
+  readbacks.deal.Test_Scope_Accepted_At = "2026-08-14T18:00:00+00:00";
+  readbacks.deal.Setup_Form_Submitted_At = "2026-08-14T18:00:00+00:00";
+  let compositeBody;
+  const client = clientWithFetch(async (url, options) => {
+    const path = new URL(url).pathname;
+    if (path.endsWith("/__composite_requests")) {
+      compositeBody = JSON.parse(options.body);
+      return jsonResponse(compositeAcknowledgment());
+    }
+    if (path.includes("/Contacts/")) return jsonResponse({ data: [readbacks.contact] });
+    if (path.includes("/Accounts/")) return jsonResponse({ data: [readbacks.account] });
+    return jsonResponse({ data: [readbacks.deal] });
+  });
+
+  const result = await client.updateForm2Composite(existingRecords(), selectedUpdates);
+
+  assert.equal(result.replayed, false);
+  assert.deepEqual(
+    {
+      Authority_Confirmed_At:
+        compositeBody.__composite_requests[2].body.data[0].Authority_Confirmed_At,
+      Test_Scope_Accepted_At:
+        compositeBody.__composite_requests[2].body.data[0].Test_Scope_Accepted_At,
+      Setup_Form_Submitted_At:
+        compositeBody.__composite_requests[2].body.data[0].Setup_Form_Submitted_At,
+    },
+    {
+      Authority_Confirmed_At: "2026-08-14T18:00:00+00:00",
+      Test_Scope_Accepted_At: "2026-08-14T18:00:00+00:00",
+      Setup_Form_Submitted_At: "2026-08-14T18:00:00+00:00",
+    },
+  );
 });
 
 test("an exact Deal duplicate rollback is a replay only after all-three-record readback", async () => {
@@ -438,6 +515,47 @@ test("post-composite readback rejects workflow changes to setup access timestamp
   }
 });
 
+test("Form 2 cannot write or indirectly mutate signature, go-live, or test-status controls", async () => {
+  let fetchCalls = 0;
+  const rejectingClient = clientWithFetch(async () => {
+    fetchCalls += 1;
+    return jsonResponse({});
+  });
+  for (const [field, value] of Object.entries(PROTECTED_DEAL_FIELDS)) {
+    const selectedUpdates = updates();
+    selectedUpdates.dealUpdate[field] = value;
+    await assert.rejects(
+      rejectingClient.updateForm2Composite(existingRecords(), selectedUpdates),
+      (error) =>
+        error instanceof CrmClientError && error.publicCode === "configuration_invalid",
+      field,
+    );
+  }
+  assert.equal(fetchCalls, 0);
+
+  for (const [field, value] of Object.entries(PROTECTED_DEAL_FIELDS)) {
+    const readbacks = afterRecords();
+    readbacks.deal[field] = value;
+    const client = clientWithFetch(async (url) => {
+      const path = new URL(url).pathname;
+      if (path.endsWith("/__composite_requests")) {
+        return jsonResponse(compositeAcknowledgment());
+      }
+      if (path.includes("/Contacts/")) return jsonResponse({ data: [readbacks.contact] });
+      if (path.includes("/Accounts/")) return jsonResponse({ data: [readbacks.account] });
+      return jsonResponse({ data: [readbacks.deal] });
+    });
+    await assert.rejects(
+      client.updateForm2Composite(existingRecords(), updates()),
+      (error) =>
+        error instanceof CrmClientError &&
+        error.ambiguous === true &&
+        error.publicCode === "reconciliation_required",
+      field,
+    );
+  }
+});
+
 test("single-record update requires a precondition and authoritative readback", async () => {
   let call = 0;
   const readback = { ...existingRecords().contact, First_Name: "Changed", Modified_Time: NEW_TIME };
@@ -454,6 +572,44 @@ test("single-record update requires a precondition and authoritative readback", 
     { ifUnmodifiedSince: OLD_TIME },
   );
   assert.equal(result.First_Name, "Changed");
+});
+
+test("single-record update serializes CRM DateTime fields to the documented wire format", async () => {
+  let call = 0;
+  let updateBody;
+  const readback = {
+    ...existingRecords().deal,
+    Setup_Access_Status: "Issued",
+    Setup_Access_Issued_At: "2026-08-14T13:00:00-05:00",
+    Setup_Access_Verified_At: null,
+    Modified_Time: NEW_TIME,
+  };
+  const client = clientWithFetch(async (_url, options) => {
+    call += 1;
+    if (call === 1) {
+      updateBody = JSON.parse(options.body);
+      return jsonResponse(acknowledgment(IDS.deal));
+    }
+    return jsonResponse({ data: [readback] });
+  });
+
+  await client.updateRecord(
+    "Deals",
+    IDS.deal,
+    {
+      Setup_Access_Status: "Issued",
+      Setup_Access_Issued_At: "2026-08-14T18:00:00.987Z",
+      Setup_Access_Verified_At: null,
+    },
+    { ifUnmodifiedSince: OLD_TIME },
+  );
+
+  assert.deepEqual(updateBody.data[0], {
+    id: IDS.deal,
+    Setup_Access_Status: "Issued",
+    Setup_Access_Issued_At: "2026-08-14T18:00:00+00:00",
+    Setup_Access_Verified_At: null,
+  });
 });
 
 test("stale writes are rejected without being classified as ambiguous", async () => {

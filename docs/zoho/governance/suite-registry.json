@@ -77,7 +77,7 @@
     },
     {
       "id": "catalyst",
-      "authoritative_for": "middleware verification, normalization, durable idempotency, retry state, and API mediation",
+      "authoritative_for": "middleware verification, free-test deployment and current number binding, time and handled-count eligibility, normalization, canonical call/outcome and durable Catalyst Mail state, retry Job recovery, tenant query/CSV reporting, durable idempotency, and API mediation",
       "must_not_own": "CRM, subscription, accounting, legal-document, or mailbox facts",
       "standards": [
         "standards/catalyst.md"
@@ -85,7 +85,14 @@
       "repository_artifacts": [
         "../../src/zoho-catalyst/billing-webhook-gateway/README.md",
         "../adr/0004-retell-catalyst-crm-analytics-integration-boundary.md",
+        "../adr/0006-shared-seven-day-monitor-with-client-number-isolation.md",
+        "../runbooks/shared-seven-day-monitor-number-routing.md",
+        "../runbooks/free-test-development-reconciliation-2026-08-22.md",
+        "../security/free-test-runtime-controls.md",
         "../runbooks/retell-catalyst-analytics-reporting.md",
+        "../../src/zoho-catalyst/retell-free-test/functions/retell_free_test/contracts/free-test-contract.json",
+        "../../src/zoho-catalyst/retell-free-test/config/variables.json",
+        "../../src/zoho-catalyst/retell-free-test/config/datastore-schema.json",
         "reference/products/zoho-catalyst.md"
       ],
       "mcp_observation": "configured-selections-observed-2026-08-04",
@@ -195,6 +202,9 @@
         "reference/products/zoho-analytics.md",
         "mcp/reference/zoho-analytics-managed-mcp-catalog-2026-08-18.md",
         "../adr/0004-retell-catalyst-crm-analytics-integration-boundary.md",
+        "../adr/0006-shared-seven-day-monitor-with-client-number-isolation.md",
+        "../runbooks/shared-seven-day-monitor-number-routing.md",
+        "../runbooks/free-test-development-reconciliation-2026-08-22.md",
         "../runbooks/retell-catalyst-analytics-reporting.md"
       ],
       "mcp_observation": "official-managed-mcp-tool-catalog-reviewed-2026-08-18-configured-selection-and-effective-access-unknown",

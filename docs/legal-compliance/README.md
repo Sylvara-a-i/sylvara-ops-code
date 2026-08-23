@@ -1,14 +1,16 @@
 # AI Receptionist Legal And Compliance Control Archive
 
-**Status:** Proposed engineering controls; qualified counsel review required
+**Status:** Research archive with a preserved conservative internal-QA proposal; not a current launch decision
 
 **Research verified:** 2026-08-04
 
-**Initial operating profile:** Controlled, inbound-only, internal non-sales QA with synthetic conversation data
+**Preserved profile:** Controlled, inbound-only, internal non-sales QA with synthetic conversation data
 
-This archive translates current primary legal sources into fail-closed design and launch controls for Sylvara's proposed AI receptionist. It is not legal advice, a legal opinion, a fifty-state survey, or proof that any vendor configuration or live deployment is compliant. Law, facts, contracts, caller location, client industry, and product behavior can change the result. A repository approval does not approve a public launch, customer pilot, outbound campaign, recording practice, privacy notice, contract, or production configuration.
+This archive records dated source research and a conservative proposed control profile for Sylvara's AI receptionist. It is not legal advice, a legal opinion, a fifty-state survey, or proof that any vendor configuration or live deployment is compliant. Law, facts, contracts, caller location, client industry, and product behavior can change the result. A repository approval does not approve a public launch, customer pilot, outbound campaign, recording practice, privacy notice, contract, or production configuration.
 
-## Current Decision
+The internal-QA profile is preserved as a historical proposed option, not as a blanket legal conclusion or the current approval record for every Development test. Keep three decisions separate: offline/synthetic Development tests need no telephone route; a controlled internal Development phone test needs an explicit owner-approved scope, environment readback, data-handling decision, and rollback; and a prospect/customer launch remains unresolved until its actual workflow and required approvals are recorded. The responsible business owner determines which professional reviews are required for the facts. This public archive neither grants nor denies a particular call authorization.
+
+## Preserved Conservative Profile
 
 No person can promise that a software stack is “perfectly legal.” The lowest-risk demonstrable profile is narrow enough to remove the highest-risk activities instead of trying to paper over them:
 
@@ -20,7 +22,7 @@ No person can promise that a software stack is “perfectly legal.” The lowest
 - there are no real bookings, dispatches, quotes, contracts, payments, credentials, emergencies, health matters, or regulated decisions; and
 - no client system, production calendar, CRM, mailbox, analytics destination, or business phone line is connected.
 
-A prospect-facing telephone demonstration is not within this profile: it can itself be part of a campaign to induce purchase even if no sale occurs during the call. Until counsel approves a separate commercial-demo analysis and script, show prospects only an offline or prerecorded synthetic simulation.
+A prospect-facing telephone demonstration is not within this historical profile. A real prospect test needs its own current business, privacy, security, vendor, route, data, and any legal review appropriate to the actual workflow; do not infer that approval from this archive.
 
 The machine-readable proposed control profile is in [`demo-control-profile.json`](demo-control-profile.json). Repository tests check its declared scope and internal consistency; they do not implement or prove runtime enforcement. Runtime controls require separate implementation, environment-specific verification, and written approval. The human procedure and test cases are in [`controlled-demo-standard.md`](controlled-demo-standard.md).
 
@@ -49,7 +51,7 @@ Every conclusion in this archive uses one of four labels:
 
 ## What This Archive Does Not Approve
 
-Until the matching gate is closed with current written evidence, the following are prohibited:
+The archive itself does not approve the following activities. They require a separate current decision for the actual workflow; the list is an engineering boundary, not a legal conclusion:
 
 - outbound AI-generated or prerecorded voice calls;
 - an openly advertised or unrestricted public call-in demonstration;

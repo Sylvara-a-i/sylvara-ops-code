@@ -3,11 +3,19 @@
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
 const test = require("node:test");
+const { destinationDigest } = require("../lib/destinations");
 const { CLIENT_KEYS } = require("../lib/form-contract");
 const { ControllerError, buildFormUrl, handleForm2Request } = require("../lib/handler");
-const { deriveAccessToken, hashAccessToken } = require("../lib/security");
+const {
+  deriveAccessToken,
+  deriveIssueRequestKey,
+  hashAccessToken,
+} = require("../lib/security");
 
 const NOW_MS = Date.parse("2026-08-14T18:00:00.000Z");
+const FORM2_PUBLIC_URL =
+  "https://forms.zohopublic.com/synthetic/form/perma/synthetic";
+const FORM2_DESTINATION_SHA256 = destinationDigest(FORM2_PUBLIC_URL);
 const ISSUE_REQUEST_ID = "10000000-0000-4000-8000-000000000001";
 const PREFILL_ID = "20000000-0000-4000-8000-000000000002";
 const LEASE_OWNER = "30000000-0000-4000-8000-000000000003";
@@ -29,7 +37,8 @@ function config() {
     prefillHeaderSecret: "F".repeat(43),
     submissionHeaderSecret: "S".repeat(43),
     tokenPepper: "P".repeat(43),
-    form2PublicUrl: "https://forms.zohopublic.com/synthetic/form/perma/synthetic",
+    form2PublicUrl: FORM2_PUBLIC_URL,
+    form2DestinationSha256: FORM2_DESTINATION_SHA256,
     form2TokenFieldAlias: "access_token",
     form2FormVersion: "form2-v1",
     form2EntryOfferValue: "Synthetic Free Test",
@@ -60,6 +69,7 @@ test("form links are fail-closed to the exact approved Zoho Forms host", () => {
     "https://forms.zohopublic.evil.com/synthetic/form",
     "https://forms.example.invalid/synthetic/form",
     "https://example.invalid/synthetic/form",
+    "https://forms.zohopublic.com/other/form/perma/synthetic",
   ]) {
     assert.throws(
       () => buildFormUrl({ ...config(), form2PublicUrl }, setupToken),
@@ -142,12 +152,12 @@ function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
-function dealIssuanceKey(kind, dealId, generationTokenHash = "") {
+function dealIssuanceKey(kind, dealId, generationIssueRequestKey = "") {
   return crypto
     .createHash("sha256")
     .update(`sylvara-form2:development:deal-${kind}\0`, "utf8")
     .update(dealId, "utf8")
-    .update(kind === "generation" ? `\0${generationTokenHash}` : "", "utf8")
+    .update(kind === "generation" ? `\0${generationIssueRequestKey}` : "", "utf8")
     .digest("hex");
 }
 
@@ -260,7 +270,9 @@ function fixture() {
     },
     async issue(input) {
       events.push("session.issue");
-      let match = sessions.find((candidate) => input.tokenHash === candidate.tokenHash);
+      let match = sessions.find(
+        (candidate) => input.issueRequestKey === candidate.issueRequestKey,
+      );
       if (!match) {
         const activeKey = dealIssuanceKey("active", input.crmDealId);
         if (sessions.some((candidate) => candidate.dealIssuanceKey === activeKey)) {
@@ -270,6 +282,7 @@ function fixture() {
         }
         match = {
           rowId: String(nextSessionRowId++),
+          issueRequestKey: input.issueRequestKey,
           tokenHash: input.tokenHash,
           crmContactId: input.crmContactId,
           crmAccountId: input.crmAccountId,
@@ -287,6 +300,7 @@ function fixture() {
         };
         sessions.push(match);
       } else {
+        assert.equal(input.issueRequestKey, match.issueRequestKey);
         assert.equal(input.tokenHash, match.tokenHash);
       }
       session = match;
@@ -320,6 +334,13 @@ function fixture() {
     async readByTokenHash(tokenHash) {
       events.push("session.read");
       const match = sessions.find((candidate) => tokenHash === candidate.tokenHash);
+      return match ? Object.freeze({ ...match }) : null;
+    },
+    async readByIssueRequestKey(issueRequestKey) {
+      events.push("session.issue-request.read");
+      const match = sessions.find(
+        (candidate) => issueRequestKey === candidate.issueRequestKey,
+      );
       return match ? Object.freeze({ ...match }) : null;
     },
     async readByRowId(rowId) {
@@ -418,7 +439,7 @@ function fixture() {
       match.dealIssuanceKey = dealIssuanceKey(
         "generation",
         match.crmDealId,
-        match.tokenHash,
+        match.issueRequestKey,
       );
       return Object.freeze({ ...match });
     },
@@ -611,10 +632,29 @@ function fixture() {
     },
   };
 
+  const verificationProofStore = {
+    async readAllFactorsVerifiedProof(binding) {
+      events.push("verification.proof.read");
+      return Object.freeze({
+        status: "all_factors_verified",
+        sessionRowId: binding.sessionRowId,
+        tokenHash: binding.tokenHash,
+        crmContactId: binding.crmContactId,
+        crmAccountId: binding.crmAccountId,
+        crmDealId: binding.crmDealId,
+        emailOtpVerifiedAt: "2026-08-14T18:00:00.000Z",
+        captchaVerifiedAt: "2026-08-14T18:00:00.000Z",
+        verifiedAt: "2026-08-14T18:00:00.000Z",
+        expiresAt: "2026-08-14T18:30:00.000Z",
+      });
+    },
+  };
+
   const dependencies = {
     config: selectedConfig,
     crmClient,
     sessionStore,
+    verificationProofStore,
     workflowStore,
     now: () => NOW_MS,
   };
@@ -653,6 +693,7 @@ async function seedIssuingSession(fixtureValue, issueRequestId = ISSUE_REQUEST_I
     fixtureValue.dependencies.config.tokenPepper,
   );
   return fixtureValue.dependencies.sessionStore.issue({
+    issueRequestKey: deriveIssueRequestKey(issueRequestId),
     tokenHash: hashAccessToken(
       setupToken,
       fixtureValue.dependencies.config.tokenPepper,
@@ -778,6 +819,7 @@ test("an exact issuing row plus CRM Issued readback finalizes after a crash", as
   const selected = fixture();
   const setupToken = deriveAccessToken(ISSUE_REQUEST_ID, config().tokenPepper);
   const pending = await selected.dependencies.sessionStore.issue({
+    issueRequestKey: deriveIssueRequestKey(ISSUE_REQUEST_ID),
     tokenHash: hashAccessToken(setupToken, config().tokenPepper),
     crmContactId: IDS.contact,
     crmAccountId: IDS.account,
@@ -962,8 +1004,24 @@ test("verifies CRM, mints a bound prefill revision, and returns no IDs or token"
   const serialized = JSON.stringify(result.body);
   for (const id of Object.values(IDS)) assert.equal(serialized.includes(id), false);
   assert.equal(serialized.includes(deriveAccessToken(ISSUE_REQUEST_ID, config().tokenPepper)), false);
+  assert.ok(selected.events.indexOf("verification.proof.read") < selected.events.indexOf("crm.get.Contacts"));
   assert.ok(selected.events.indexOf("session.verify") < selected.events.indexOf("crm.update.Deals"));
   assert.ok(selected.events.indexOf("crm.update.Deals") < selected.events.indexOf("workflow.prefill.mint"));
+});
+
+test("token possession alone cannot establish verified state", async () => {
+  const selected = fixture();
+  await issue(selected);
+  delete selected.dependencies.verificationProofStore;
+  selected.events.length = 0;
+
+  const result = await prefill(selected);
+
+  assert.equal(result.status, 403);
+  assert.deepEqual(result.body, { ok: false, code: "verification_required" });
+  assert.equal(selected.session.status, "issued");
+  assert.equal(selected.records.deal.Setup_Access_Status, "Synthetic Issued");
+  assert.deepEqual(selected.events, ["session.read"]);
 });
 
 test("prefill contract defects do not consume verification state", async () => {
@@ -998,6 +1056,24 @@ test("a post-verification prefill-store failure is recoverable through one bound
   assert.equal(selected.events.includes("session.verify"), true);
   assert.equal(selected.session.attemptCount, 2);
   assert.equal(selected.events.includes("crm.update.Deals"), false);
+});
+
+test("a verified prefill retry accepts CRM whole-second DateTime precision", async () => {
+  const selected = fixture();
+  await issue(selected);
+  assert.equal((await prefill(selected)).status, 200);
+
+  selected.session.verifiedAt = "2026-08-14T18:00:00.115Z";
+  selected.records.deal.Setup_Access_Verified_At = "2026-08-14T18:00:00Z";
+  selected.events.length = 0;
+
+  const retried = await prefill(selected);
+
+  assert.equal(retried.status, 200);
+  assert.equal(selected.session.status, "verified");
+  assert.equal(selected.session.attemptCount, 2);
+  assert.equal(selected.events.includes("crm.update.Deals"), false);
+  assert.equal(selected.events.includes("session.reconciliation"), false);
 });
 
 test("durably expires an elapsed prefill session before returning the generic 404", async () => {
@@ -1176,6 +1252,28 @@ test("the issue route expires an unused issued generation and requires a fresh U
   assert.equal(selected.sessions.length, 2);
   assert.equal(selected.session.status, "issued");
   assert.equal((await prefill(selected)).status, 404);
+});
+
+test("pepper rotation cannot reuse an issuance UUID after its tombstone is synchronized", async () => {
+  const selected = fixture();
+  assert.equal((await issue(selected)).status, 200);
+  const oldSession = selected.session;
+  oldSession.expiresAt = "2026-08-14T17:59:59.000Z";
+  assert.equal((await prefill(selected)).status, 404);
+  assert.equal(oldSession.lastOutcome, "crm_expiry_synced");
+
+  selected.dependencies.config = Object.freeze({
+    ...selected.dependencies.config,
+    tokenPepper: "Q".repeat(43),
+  });
+  selected.events.length = 0;
+  const blocked = await issue(selected);
+
+  assert.equal(blocked.status, 409);
+  assert.deepEqual(blocked.body, { ok: false, code: "setup_conflict" });
+  assert.equal(selected.sessions.length, 1);
+  assert.equal(selected.sessions[0].rowId, oldSession.rowId);
+  assert.equal(selected.events.includes("session.issue"), false);
 });
 
 test("the issue route expires an unused verified generation before reissue", async () => {
