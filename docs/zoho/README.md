@@ -66,9 +66,18 @@ The [product reference collection](reference/README.md) covers the currently gov
 - [Proposed Billing webhook gateway](../../src/zoho-catalyst/billing-webhook-gateway/README.md)
 - [Historical, non-executable Billing gateway review record](../../archive/zoho-catalyst/billing-webhook-gateway/README.md)
 - [Retell, Catalyst, CRM, and Analytics integration boundary](../adr/0004-retell-catalyst-crm-analytics-integration-boundary.md)
+- [Authoritative shared 7-Day Free Test architecture](../adr/0006-shared-seven-day-monitor-with-client-number-isolation.md)
+- [Shared free-test Development, acceptance, and rollback runbook](../runbooks/shared-seven-day-monitor-number-routing.md)
+- [Sanitized 2026-08-22 Development runtime/source reconciliation](../runbooks/free-test-development-reconciliation-2026-08-22.md)
+- [Free-test runtime security controls](../security/free-test-runtime-controls.md)
 - [Retell-to-reporting deployment and containment runbook](../runbooks/retell-catalyst-analytics-reporting.md)
+- [Free-test Catalyst runtime contract](../../src/zoho-catalyst/retell-free-test/functions/retell_free_test/contracts/free-test-contract.json)
+- [Free-test environment-variable registry](../../src/zoho-catalyst/retell-free-test/config/variables.json)
+- [Free-test Catalyst Data Store schema](../../src/zoho-catalyst/retell-free-test/config/datastore-schema.json)
 
 These files stay beside their artifacts because they describe exact source, validation, deployment, provenance, or rollback behavior. Reusable policy belongs here under `docs/zoho/`.
+
+The free-test source is Development-only and **READY FOR DEVELOPMENT DEPLOYMENT**. The MVP uses Catalyst Mail email-only durable state, defaults to `dry_run`, and permits one controlled `send_development` delivery/readback before internal-phone readiness; replay must send no duplicate and mode must return to `dry_run`. The separate Function Job handles due retryable state without blindly resending ambiguity. CRM remains disabled, Analytics is omitted, and reporting uses tenant-scoped Catalyst queries plus sanitized CSV. Offline/synthetic, Development deployment, controlled internal phone, and prospect launch decisions remain separate. Repository presence is not deployment or route evidence.
 
 ## Portability Boundary
 

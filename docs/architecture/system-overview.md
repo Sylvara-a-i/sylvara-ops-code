@@ -38,10 +38,10 @@ This table defines durable ownership boundaries. Current Zoho capability evidenc
 | Zoho Contracts | Contract drafting, clauses, approvals, and legal lifecycle state | Signature execution evidence, public storage, or CRM relationship truth | Use, templates, contract types, and integration state are unverified |
 | Zoho Sign | Signer routing, execution status, and signature evidence | Contract drafting or CRM relationship truth | Use, templates, signer rules, and integration state are unverified |
 | Zoho Sites | Public presentation and approved doorway behavior | Operational, relationship, subscription, or accounting truth | Use and administration capability are unverified |
-| Zoho Mail | Mailbox messages, approved send transport, and delivery state | CRM relationship truth, consent truth, or financial state | Use, sender identities, scopes, webhooks, and integration state are unverified |
+| Zoho Mail | Zoho Mail mailbox messages and their delivery state | Catalyst Mail function sends, CRM relationship truth, consent truth, or financial state | Use, sender identities, scopes, webhooks, and integration state are unverified |
 | Zoho Analytics | Derived reporting models, refresh state, dashboards, and controlled exports | Transactional truth or reverse-write authority | The official managed Analytics MCP tool page was reviewed on 2026-08-18 and the proposed reporting roles and metric contract are documented. Sylvara organization, plan, workspace, configured selection, effective access, model, schedules, and client isolation remain unverified. |
-| Zoho Catalyst | Approved middleware, API gateway functions, webhook verification, retry-safe processing, and durable integration state when adopted | Business-system records owned by CRM, Books, or Billing; secret documentation; or proof that a Git commit is deployed | The Billing gateway replacement and the proposed Retell call, reconciliation, and reporting boundary are documented. The current Catalyst project, functions, routes, tables, Connections, variables, deployment, and runtime state remain unverified. |
-| Approved voice platform; Retell is the current implementation candidate | Voice runtime behavior, call execution, and approved runtime configuration for the selected deployment | Structured customer business-rule ownership, downstream job truth, CRM, accounting, subscription, legal approval, consent truth, source-control, or secret ownership | The official webhook, signature, post-call analysis, and storage contracts were reviewed on 2026-08-18 and the proposed client-agent lifecycle is documented. Vendor/legal approval and exact live agents, versions, prompts, numbers, events, recording, retention, training, and routing remain private and unverified. |
+| Zoho Catalyst | Approved middleware, API gateway functions, webhook verification, retry-safe processing, durable integration state, free-test deployment/configuration snapshots, current number binding, pre-call eligibility, handled count, canonical calls/outcomes, durable Catalyst Mail state, Function Job recovery, and query/CSV reporting when adopted | Business-system records owned by CRM, Books, or Billing; secret documentation; optional later analytical presentation; or proof that a Git commit is deployed | The Billing gateway replacement and free-test source are documented; the free-test source is **READY FOR DEVELOPMENT DEPLOYMENT**. A sanitized inspection is recorded in the [free-test reconciliation](../runbooks/free-test-development-reconciliation-2026-08-22.md), while deployment/readback and phone behavior remain separate evidence. On 2026-08-22, the Form 1 and Form 2 table copies in Retell Development were provisioned and received initial readback. The legacy form projects remain live; target functions, routes, Connections, variables, callers, deployments, runtime behavior, and Production remain uncut or unverified. |
+| Approved voice platform; Retell is the current implementation candidate | Voice runtime behavior, call execution, and approved runtime configuration for the selected deployment | Client ownership, structured customer business-rule ownership, downstream job truth, CRM, accounting, subscription, legal approval, consent truth, source-control, or secret ownership | ADR 0006 selects one shared draft free-test agent with dedicated client numbers and Catalyst configurations. A sanitized Development inspection is recorded in the [free-test reconciliation](../runbooks/free-test-development-reconciliation-2026-08-22.md); binding, routing, publication, legal approval, and telephone behavior remain unproven. The official webhook, signature, post-call analysis, and storage contracts were reviewed on 2026-08-18. Vendor/legal approval and exact live agents, versions, prompts, numbers, events, recording, retention, training, and routing remain private and unverified. |
 | Make.com or approved orchestration platform | Approved non-critical post-call orchestration and system handoffs | Critical conversational availability, accounting truth, legal approval, consent truth, source code, or secret ownership | Disabled in the proposed controlled demo; any future workflow and exact live scenario remain unverified and separately gated |
 | Approved human escalation destination | Human handling and disposition of explicitly transferred exceptions during the approved coverage window | Default handling of every call, Sylvara workflow truth, or downstream system-of-record state | Disabled in the proposed controlled demo; destination, coverage, privacy terms, transfer behavior, and capacity for a future pilot are unverified |
 | Approved secret stores | Credential values, signing secrets, tokens, and environment-specific sensitive configuration | Business records, source code, deployment evidence, or public documentation | Secret values must remain in platform-native encrypted stores; the approved store inventory is unverified |
@@ -64,11 +64,11 @@ Zoho Books owns accounting facts when adopted. Zoho Billing may own subscription
 
 ### Voice And Workflow Runtime
 
-The [legal and compliance control archive](../legal-compliance/README.md) governs proposed voice, consent, recording, data, vendor, and launch boundaries. No voice runtime is legally approved merely because it is named in this architecture. The only proposed telephone test is internal, non-sales QA: it requires prior written tester authorization, a carrier-level one-way media gate and keypad assent before inbound audio reaches any AI, speech, or model system, no retained call content, no outbound channel or production integration, and no post-call handoff. Prospect-facing telephone demonstrations remain blocked.
+The [legal and compliance control archive](../legal-compliance/README.md) preserves dated research and a conservative historical internal-QA proposal; it is not legal advice or a legal conclusion for a particular test. That historical profile specified no post-call handoff. Keep offline/synthetic Development testing, a controlled internal Development phone test, and a prospect/customer launch as separate approvals. A controlled internal call requires an owner-approved scope, synthetic facts, Development provider/settings readback, data-handling decision, and rollback; its exact data path must be stated rather than inherited silently from the historical profile. Prospect-facing telephone demonstrations remain blocked by repository authority while their operating approval is unresolved.
 
 For a future separately approved pilot, the approved voice platform would handle the real-time interaction and call artifacts while the telephony carrier owns transport state. Sylvara-owned logic must represent critical eligibility, routing, escalation, and outcome rules in structured, testable form; it must not bury the complete operating contract in one provider-specific prompt. Make or another approved automation platform may handle non-critical post-call work. An orchestration outage should not unnecessarily break an active conversation. Handoffs must be idempotent, validate required fields, minimize private data, and route uncertain results to review instead of guessing.
 
-New deployments begin with synthetic and shadow tests, then after-hours or overflow coverage, then selected call types. Primary reception requires separate sustained evidence and production approval. Each expansion preserves a tested fallback and a rollback route.
+New deployments begin with synthetic and shadow tests, then separately approved after-hours or overflow coverage, then selected call types. Primary reception requires separate sustained evidence and production approval. Each expansion preserves a tested containment and rollback route. Configuration uncertainty fails closed; it does not authorize degraded intake.
 
 Call disposition and estimated value are Sylvara operational evidence. A booking, work order, completed job, invoice, payment, or collected revenue becomes authoritative only in the customer system that owns that fact. Attribution must reconcile those layers rather than equate an answered call with revenue.
 
@@ -78,38 +78,44 @@ Use Catalyst only when a concrete integration requires controls that a managed c
 
 ## Proposed Call And Reporting Flow
 
-[ADR 0004](../adr/0004-retell-catalyst-crm-analytics-integration-boundary.md) governs the proposed connection path. [The reporting runbook](../runbooks/retell-catalyst-analytics-reporting.md) sequences Development verification, acceptance, containment, and later Production approval. Neither document proves deployment.
+[ADR 0006](../adr/0006-shared-seven-day-monitor-with-client-number-isolation.md) governs the free-test topology and tenancy model. [The shared-agent runbook](../runbooks/shared-seven-day-monitor-number-routing.md) sequences Development validation, acceptance, containment, and rollback. ADR 0004 and the generic reporting runbook retain the compatible system-ownership and reporting controls. None of these documents proves deployment.
 
 ```text
 Approved carrier route
         |
         v
-One dedicated Retell agent per client and environment
+Client-specific Retell number
+        |
+        v
+One shared 7-Day Free Test agent
+        |
+        | exact pre-call configuration gate
+        v
+Client-specific Catalyst deployment/configuration snapshot
         |
         | signed account-level post-call events
         v
-Catalyst verification, client binding, minimized event ledger,
-normalized call state, artifacts metadata, reconciliation, and outbox
+Catalyst verification, immutable call/deployment binding, minimized event
+ledger, normalized call/outcome, handled count, and durable email state
         |
-        +----> customer scheduling or field-service truth
+        +----> Catalyst Mail email record (`dry_run` by default)
         |
-        +----> bounded CRM relationship and commercial summaries
+        +----> Catalyst Function Job for due retryable state
         |
-        +----> direct Analytics API bulk updateadd
-                         |
-                         v
-              one-client reviewed report
+        +----> client-partitioned query and sanitized CSV report
 ```
 
-The master Retell template is an authoring baseline and never receives client traffic. Within one environment, a client-specific agent is promoted from bounded evaluation to paid-service configuration rather than duplicated into separate evaluation and paid agents by default. A separate agent is justified only by an approved environment, rollback, provider, or contractual requirement.
+All active free tests use the same accepted Retell agent and flow. Each client has a dedicated Retell number and a versioned Catalyst deployment/configuration snapshot. A known authenticated invalid, unknown, ambiguous, inactive, expired, or exhausted resolution returns HTTP 200 explicit rejection, starts no agent, and creates no resolver-side write. Transport/authentication/timeout/503/malformed/invalid-override failure may fall back only to the number-bound shared agent, whose exact Configuration Unavailable gate ends without intake. The seven-field gate, strict seven-day boundary, practical 25-handled-call stop, and ownership priority are defined in ADR 0006. Calls already in flight may create a reported count overshoot; the MVP does not claim a concurrency-perfect cap. The shared `agent_id` is never sufficient tenancy evidence. A separately accepted Revenue Desk agent is appropriate only after paid conversion requires deeper client-specific workflow behavior.
 
-Catalyst is the durable integration-state layer. CRM does not become a per-call event store. Analytics does not receive recordings, transcripts, raw webhook payloads, phone numbers, addresses, or unrestricted CRM data. The customer's approved operating system remains authoritative for bookings, jobs, work orders, completion, invoices, and payments.
+Catalyst is the canonical free-test operational store: deployment ownership, configuration versions, current number binding, event claims, immutable call bindings, canonical outcomes, handled count, email notification record, and reportable fields. Development email defaults to `dry_run`: one `DryRunRecorded` row, zero attempts, no `sendMail` invocation. Before internal-phone readiness, one controlled `send_development` delivery must receive provider/inbox readback, replay must produce no duplicate, and the mode must return to `dry_run`. CRM is disabled in the MVP call path. Internal reporting uses client-partitioned queries and sanitized CSV; Analytics is deferred and is not an internal-test blocker. The free test does not book, dispatch, quote, take payment, or mutate a customer operating system.
 
-Use one voice-integration Catalyst project per environment rather than one project or function stack per client. The logical ingress, post-call processor, and Analytics sync responsibilities may share or split deployable functions only after the current function inventory proves compatible trust, secret, scaling, failure, and rollback boundaries. The Billing gateway remains separate.
+Use one voice-integration Catalyst project per environment rather than one project or function stack per client. Keep ingress, the separate retry Job, post-call processing, Catalyst Mail state, and query/CSV responsibilities small and explicit. The Billing gateway remains separate.
 
-Managed Analytics MCP roles support bounded operator discovery and report-model maintenance. Production facts use the direct Analytics API with a separate least-privilege connection, batched asynchronous imports, job polling, rejected-row handling, and exact reconciliation. The [dated managed MCP catalog](../zoho/mcp/reference/zoho-analytics-managed-mcp-catalog-2026-08-18.md) preserves the reviewed tool names and proposed role allowlists.
+Initial internal validation requires two dedicated synthetic numbers pinned to the same reviewed shared agent version. Do not reuse either number during initial validation. After completion, preserve its binding evidence and place it into a documented cooldown; automatic reassignment remains deferred and is not an internal-test blocker.
 
-The first external evaluation report remains manually reviewed. Scheduled monthly delivery requires one-client isolation, reconciled counts, a current watermark, resolved imports, approved recipients, restricted exports, and clear separation between estimated opportunity value and verified booked, completed, invoiced, or paid value. A client portal remains deferred.
+Managed Analytics MCP roles remain reference material for a later reporting phase. The free-test MVP does not depend on an Analytics workspace, connection, import, job, or dashboard. The [dated managed MCP catalog](../zoho/mcp/reference/zoho-analytics-managed-mcp-catalog-2026-08-18.md) remains separate evidence and does not imply adoption.
+
+The first report is a manually reviewed Catalyst query/CSV export for exactly one client/deployment. Any later external delivery requires approved recipients, restricted export handling, reconciled counts, and clear separation between estimated opportunity value and verified booked, completed, invoiced, or paid value. Scheduled Analytics delivery and a client portal remain deferred.
 
 ## Change And Data Flow
 

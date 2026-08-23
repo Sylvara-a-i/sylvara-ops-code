@@ -4,8 +4,9 @@ const { brotliDecompressSync } = require("node:zlib");
 
 const {
   isApprovedCrmApiHostname,
-  isApprovedFormsPublicHostname,
+  isArtifactBoundFormUrl,
 } = require("./destinations");
+const { ARTIFACT_FORM_DESTINATION_SHA256 } = require("./form-destination");
 const { ARTIFACT_SOURCE_REVISION } = require("./source-revision");
 
 const PRIVATE_CHOICE_LIMITS = Object.freeze({
@@ -32,7 +33,16 @@ const MAX_COMPRESSED_CHOICE_CHARS = 4096;
 const MAX_DECOMPRESSED_CHOICE_BYTES = 32768;
 
 const NUMERIC_LIMITS = Object.freeze({
+  // Invitation lifetime. The first successful verification replaces this
+  // deadline with the fixed post-verification lifetime below.
   SESSION_TTL_SECONDS: Object.freeze({ fallback: 3600, minimum: 300, maximum: 86400 }),
+  // This is intentionally exact rather than merely bounded. Changing the
+  // verified-session lifetime requires a reviewed source change.
+  VERIFIED_SESSION_TTL_SECONDS: Object.freeze({
+    fallback: 1800,
+    minimum: 1800,
+    maximum: 1800,
+  }),
   // Two attempts preserve one bounded retry if prefill persistence fails after
   // the first successful verification transition.
   MAX_VERIFICATION_ATTEMPTS: Object.freeze({ fallback: 3, minimum: 2, maximum: 10 }),
@@ -126,6 +136,9 @@ function validateSecret(value, name) {
 }
 
 function parseHttpsUrl(value, name) {
+  if (typeof value !== "string") {
+    throw new ConfigurationError(`${name} must be an absolute HTTPS URL`);
+  }
   let parsed;
   try {
     parsed = new URL(value);
@@ -137,6 +150,9 @@ function parseHttpsUrl(value, name) {
     parsed.username ||
     parsed.password ||
     parsed.port ||
+    value !== parsed.href ||
+    value.includes("?") ||
+    value.includes("#") ||
     parsed.search ||
     parsed.hash ||
     parsed.hostname !== parsed.hostname.toLowerCase() ||
@@ -147,15 +163,13 @@ function parseHttpsUrl(value, name) {
   return parsed;
 }
 
-function validatePublicFormUrl(value) {
+function validatePublicFormUrl(value, artifactFormDestinationSha256) {
   const parsed = parseHttpsUrl(value, "FORM2_PUBLIC_URL");
   if (
-    !isApprovedFormsPublicHostname(parsed.hostname) ||
-    parsed.pathname === "/" ||
-    parsed.pathname.includes("//")
+    !isArtifactBoundFormUrl(parsed.href, artifactFormDestinationSha256)
   ) {
     throw new ConfigurationError(
-      "FORM2_PUBLIC_URL must use the exact approved US Zoho Forms host and form path",
+      "FORM2_PUBLIC_URL does not match the exact form bound to this artifact",
     );
   }
   return value;
@@ -275,7 +289,11 @@ function assertUnique(values, message) {
   }
 }
 
-function loadConfig(environment = process.env, artifactRevision = ARTIFACT_SOURCE_REVISION) {
+function loadConfig(
+  environment = process.env,
+  artifactRevision = ARTIFACT_SOURCE_REVISION,
+  artifactFormDestinationSha256 = ARTIFACT_FORM_DESTINATION_SHA256,
+) {
   const deploymentEnvironment = readRequired(environment, "DEPLOYMENT_ENVIRONMENT");
   // Production remains impossible in code until Development acceptance evidence,
   // connection scopes, rollback, and an explicit source change are reviewed.
@@ -415,7 +433,11 @@ function loadConfig(environment = process.env, artifactRevision = ARTIFACT_SOURC
     issueHeaderSecret,
     prefillHeaderSecret,
     submissionHeaderSecret,
-    form2PublicUrl: validatePublicFormUrl(readRequired(environment, "FORM2_PUBLIC_URL")),
+    form2PublicUrl: validatePublicFormUrl(
+      readRequired(environment, "FORM2_PUBLIC_URL"),
+      artifactFormDestinationSha256,
+    ),
+    form2DestinationSha256: artifactFormDestinationSha256,
     form2TokenFieldAlias: validateIdentifier(
       readRequired(environment, "FORM2_TOKEN_FIELD_ALIAS"),
       "FORM2_TOKEN_FIELD_ALIAS",
@@ -443,6 +465,10 @@ function loadConfig(environment = process.env, artifactRevision = ARTIFACT_SOURC
     crmReadConnectionLinkName,
     crmWriteConnectionLinkName,
     sessionTtlSeconds: parseBoundedInteger(environment, "SESSION_TTL_SECONDS"),
+    verifiedSessionTtlSeconds: parseBoundedInteger(
+      environment,
+      "VERIFIED_SESSION_TTL_SECONDS",
+    ),
     maxVerificationAttempts: parseBoundedInteger(
       environment,
       "MAX_VERIFICATION_ATTEMPTS",

@@ -6,11 +6,28 @@ const test = require("node:test");
 const { loadConfig } = require("../lib/config");
 const { handleBillingWebhook } = require("../lib/handler");
 const {
+  CREATOR_DESTINATION_SHA256,
   TEST_EVENT_TIME,
   TEST_NOW_MS,
+  TEST_SOURCE_REVISION,
   baseEnvironment,
   creatorEnvironment,
 } = require("./helpers");
+
+function loadCreatorConfig() {
+  return loadConfig(creatorEnvironment(), {
+    nowMs: TEST_NOW_MS,
+    artifactCreatorDestinationSha256: CREATOR_DESTINATION_SHA256,
+    artifactSourceRevision: TEST_SOURCE_REVISION,
+  });
+}
+
+function loadBaseConfig() {
+  return loadConfig(baseEnvironment(), {
+    nowMs: TEST_NOW_MS,
+    artifactSourceRevision: TEST_SOURCE_REVISION,
+  });
+}
 
 function signedRequest(config, payload, overrides = {}) {
   const rawBody = Buffer.from(JSON.stringify(payload), "utf8");
@@ -66,7 +83,7 @@ function dependencies(config, store, creatorClient = null) {
 }
 
 test("Development register-only mode succeeds after durable completion", async () => {
-  const config = loadConfig(baseEnvironment(), { nowMs: TEST_NOW_MS });
+  const config = loadBaseConfig();
   const { calls, store } = storeFixture();
   const result = await handleBillingWebhook(
     signedRequest(config, payload()),
@@ -80,7 +97,7 @@ test("Development register-only mode succeeds after durable completion", async (
 });
 
 test("wrong routes and invalid signatures fail before a durable claim", async () => {
-  const config = loadConfig(baseEnvironment(), { nowMs: TEST_NOW_MS });
+  const config = loadBaseConfig();
   const routeStore = storeFixture();
   await assert.rejects(
     handleBillingWebhook(
@@ -102,7 +119,7 @@ test("wrong routes and invalid signatures fail before a durable claim", async ()
 });
 
 test("only exact completed duplicates are acknowledged", async () => {
-  const config = loadConfig(baseEnvironment(), { nowMs: TEST_NOW_MS });
+  const config = loadBaseConfig();
   const completed = storeFixture("duplicate-completed");
   const completedResult = await handleBillingWebhook(
     signedRequest(config, payload()),
@@ -122,7 +139,7 @@ test("only exact completed duplicates are acknowledged", async () => {
 });
 
 test("Creator receives the minimum source reference plus allowlisted fields", async () => {
-  const config = loadConfig(creatorEnvironment(), { nowMs: TEST_NOW_MS });
+  const config = loadCreatorConfig();
   const captured = [];
   const creatorClient = {
     async deliver(envelope) {
@@ -147,7 +164,7 @@ test("Creator receives the minimum source reference plus allowlisted fields", as
 });
 
 test("an uncertain Creator outcome requires a confirmed reconciliation mark", async () => {
-  const config = loadConfig(creatorEnvironment(), { nowMs: TEST_NOW_MS });
+  const config = loadCreatorConfig();
   const { calls, store } = storeFixture();
   const result = await handleBillingWebhook(
     signedRequest(config, payload()),
@@ -175,7 +192,7 @@ test("an uncertain Creator outcome requires a confirmed reconciliation mark", as
 });
 
 test("a completion readback failure is never acknowledged", async () => {
-  const config = loadConfig(creatorEnvironment(), { nowMs: TEST_NOW_MS });
+  const config = loadCreatorConfig();
   const failedMark = storeFixture("claimed", { markError: new Error("synthetic mismatch") });
   const result = await handleBillingWebhook(
     signedRequest(config, payload()),

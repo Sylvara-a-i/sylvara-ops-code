@@ -1,0 +1,405 @@
+{
+  "schema_version": 1,
+  "classification": "public-provider-neutral-conversation-contract",
+  "runtime_authority": false,
+  "deployment_authorized": false,
+  "agent": {
+    "local_key": "agent_7_day_free_test",
+    "display_name": "7-Day Free Test"
+  },
+  "scope": "shared-seven-day-free-test-bounded-intake",
+  "configuration_gate": {
+    "required_field_count": 7,
+    "client_literals_allowed": false,
+    "ownership_values_source": "validated_catalyst_inbound_resolver",
+    "required_nonblank_strings": [
+      "client_id",
+      "deployment_id",
+      "configuration_version"
+    ],
+    "required_exact_values": {
+      "resolver_status": "Resolved",
+      "engagement_type": "free_test",
+      "capability_profile": "call_gap_monitor_v1"
+    },
+    "canonical_coverage_modes": [
+      "AfterHoursOnly",
+      "NoAnswerOverflowOnly",
+      "AfterHoursAndOverflow"
+    ],
+    "failure_behavior": {
+      "terminal_state": "configuration_unavailable",
+      "normal_intake_allowed": false,
+      "caller_data_collection_allowed": false,
+      "client_configuration_use_allowed": false,
+      "client_identity_claim_allowed": false,
+      "fallback_to_another_client_allowed": false,
+      "neutral_termination_required": true
+    }
+  },
+  "number_binding_policy": {
+    "one_dedicated_number_per_deployment": true,
+    "one_shared_agent_for_all_free_tests": true,
+    "number_reassignment_supported_during_initial_validation": false,
+    "completed_number_requires_documented_cooldown_before_future_reuse": true,
+    "historical_call_ownership_metadata_is_immutable": true
+  },
+  "test_limit_policy": {
+    "pre_call_behavior": "reject_when_stored_unique_handled_count_is_already_at_limit",
+    "post_call_behavior": "stop_after_twenty_fifth_unique_eligible_handled_call_is_recorded",
+    "admission_reservation_used": false,
+    "exact_concurrent_cap_claimed": false,
+    "concurrency_note": "Calls already in progress while the stored count is below the limit can create a small practical overshoot.",
+    "automatic_charge_renew_extend_or_convert": false
+  },
+  "greeting_contract": {
+    "company_name_source": "resolved_client_configuration",
+    "ordered_elements": [
+      "thank_caller_using_company_name",
+      "identify_as_automated_assistant_while_team_is_unavailable",
+      "state_that_call_may_be_recorded",
+      "offer_to_take_a_few_details_for_the_team"
+    ],
+    "prohibited_claims": [
+      "human_identity",
+      "appointment_confirmed",
+      "dispatch_confirmed",
+      "immediate_callback_guaranteed",
+      "notification_delivery_confirmed"
+    ]
+  },
+  "conversation_style": {
+    "first_caller_turn": "open_reason_explanation",
+    "one_question_at_a_time": true,
+    "avoid_reasking_supplied_information": true,
+    "brief_frustration_acknowledgment_allowed": true,
+    "excessive_empathy_language_allowed": false,
+    "yield_when_caller_interrupts": true,
+    "accept_caller_corrections": true,
+    "confirm_uncertain_callback_number": true,
+    "clarify_ambiguous_service_request": true,
+    "prefer_concise_calls": true,
+    "rigid_questionnaire_style_allowed": false
+  },
+  "minimum_intake": [
+    {
+      "key": "caller_name",
+      "post_call_key": "caller_name",
+      "collection": "when_volunteered_or_needed_for_callback"
+    },
+    {
+      "key": "callback_number",
+      "post_call_key": "callback_number",
+      "collection": "request_once_and_confirm_if_uncertain"
+    },
+    {
+      "key": "customer_relationship",
+      "post_call_key": "customer_type",
+      "collection": "new_existing_or_unknown"
+    },
+    {
+      "key": "caller_intent",
+      "post_call_key": "caller_intent",
+      "collection": "bounded_classification"
+    },
+    {
+      "key": "issue_summary",
+      "post_call_key": "issue_summary",
+      "collection": "concise_caller_stated_request"
+    },
+    {
+      "key": "service_area_signal",
+      "post_call_key": "city_or_zip",
+      "collection": "city_or_postal_signal_only"
+    },
+    {
+      "key": "urgency_classification",
+      "post_call_key": "urgency",
+      "collection": "configured_rules_only"
+    },
+    {
+      "key": "specific_person_requested",
+      "post_call_key": "specific_person_requested",
+      "collection": "only_when_caller_requests_a_person"
+    },
+    {
+      "key": "call_outcome",
+      "post_call_key": "outcome",
+      "collection": "exactly_one_canonical_value"
+    }
+  ],
+  "sensitive_data_boundary": {
+    "intentionally_collected": false,
+    "prohibited_categories": [
+      "payment_card_information",
+      "bank_information",
+      "social_security_numbers",
+      "government_identifiers",
+      "passwords",
+      "authentication_codes",
+      "medical_information_outside_approved_scope",
+      "unrelated_sensitive_personal_information"
+    ],
+    "volunteered_data_behavior": [
+      "interrupt_sensitive_value_repetition",
+      "redirect_to_safe_bounded_intake",
+      "end_if_safe_redirect_fails",
+      "minimize_structured_retention"
+    ],
+    "payment_collection_allowed": false
+  },
+  "outcome_taxonomy": [
+    {
+      "canonical_value": "potential_job",
+      "display_label": "Potential Job"
+    },
+    {
+      "canonical_value": "existing_customer",
+      "display_label": "Existing Customer"
+    },
+    {
+      "canonical_value": "urgent_potential_job",
+      "display_label": "Urgent Potential Job"
+    },
+    {
+      "canonical_value": "spam",
+      "display_label": "Spam"
+    },
+    {
+      "canonical_value": "unsupported_service",
+      "display_label": "Unsupported Service"
+    },
+    {
+      "canonical_value": "out_of_area",
+      "display_label": "Out Of Area"
+    },
+    {
+      "canonical_value": "other_general_inquiry",
+      "display_label": "Other / General Inquiry"
+    },
+    {
+      "canonical_value": "sensitive_data_ended",
+      "display_label": "Sensitive Data Ended"
+    },
+    {
+      "canonical_value": "configuration_failure",
+      "display_label": "Configuration Failure"
+    },
+    {
+      "canonical_value": "caller_abandoned",
+      "display_label": "Caller Abandoned"
+    },
+    {
+      "canonical_value": "unresolved",
+      "display_label": "Unresolved"
+    }
+  ],
+  "outcome_rules": {
+    "exactly_one_high_level_outcome_required": true,
+    "callback_quality_is_secondary": true,
+    "review_requirement_is_secondary": true,
+    "revenue_value_is_not_inferred_from_call_outcome": true
+  },
+  "post_call_analysis_schema": {
+    "authority": "catalyst_validated_call_analyzed_processing",
+    "copy_transcript_or_recording_to_crm": false,
+    "fields": [
+      {
+        "key": "outcome",
+        "type": "canonical_outcome",
+        "required": true
+      },
+      {
+        "key": "coverage_trigger",
+        "type": "AfterHours_NoAnswerOverflow_or_Unknown",
+        "required": true
+      },
+      {
+        "key": "caller_name",
+        "type": "bounded_optional_string",
+        "required": false
+      },
+      {
+        "key": "callback_number",
+        "type": "bounded_optional_callback",
+        "required": false
+      },
+      {
+        "key": "customer_type",
+        "type": "new_existing_or_unknown",
+        "required": true
+      },
+      {
+        "key": "caller_intent",
+        "type": "bounded_optional_string",
+        "required": false
+      },
+      {
+        "key": "issue_summary",
+        "type": "bounded_optional_string",
+        "required": false
+      },
+      {
+        "key": "city_or_zip",
+        "type": "bounded_optional_string",
+        "required": false
+      },
+      {
+        "key": "urgency",
+        "type": "routine_urgent_immediate_danger_or_unknown",
+        "required": true
+      },
+      {
+        "key": "specific_person_requested",
+        "type": "bounded_optional_string",
+        "required": false
+      },
+      {
+        "key": "sensitive_data_detected",
+        "type": "boolean",
+        "required": true
+      }
+    ]
+  },
+  "normal_close_contract": {
+    "ordered_elements": [
+      "summarize_material_information",
+      "confirm_uncertain_material_facts",
+      "state_that_details_were_recorded_for_company_review",
+      "state_that_no_appointment_or_dispatch_is_confirmed",
+      "ask_whether_anything_else_should_be_shared",
+      "polite_goodbye"
+    ],
+    "substantive_agent_turns": [
+      {
+        "turn": 1,
+        "purpose": "summarize_material_information_and_confirm_only_uncertain_or_material_facts"
+      },
+      {
+        "turn": 2,
+        "purpose": "state_truthful_next_step_disclaim_booking_and_dispatch_then_ask_for_anything_else"
+      }
+    ],
+    "final_goodbye_after_caller_response": true,
+    "callback_timing_claim_requires_approved_configuration": true,
+    "notification_delivery_claim_allowed": false,
+    "unexplained_hangup_allowed": false
+  },
+  "naturalness_acceptance": {
+    "validation_status": "retell_native_text_simulation_passed_voice_audio_pending",
+    "scale_definition": "normalized_zero_to_one_provider_neutral",
+    "settings": [
+      {
+        "key": "backchannel_frequency",
+        "minimum": 0.15,
+        "maximum": 0.45,
+        "configured_development_value": 0.3,
+        "requirement": "occasional_acknowledgment_without_overlap"
+      },
+      {
+        "key": "interruption_sensitivity",
+        "minimum": 0.35,
+        "maximum": 0.65,
+        "configured_development_value": 0.65,
+        "requirement": "yield_to_clear_caller_speech_without_false_triggers"
+      },
+      {
+        "key": "responsiveness",
+        "minimum": 0.45,
+        "maximum": 0.7,
+        "configured_development_value": 0.65,
+        "requirement": "prompt_but_not_abrupt_turn_start"
+      },
+      {
+        "key": "expressive_mode",
+        "configured_development_value": false,
+        "requirement": "disabled_until_voice_audio_validation_proves_a_clear_benefit"
+      }
+    ],
+    "turn_taking_requirements": [
+      "caller_can_complete_initial_explanation",
+      "caller_interruption_stops_agent_turn",
+      "correction_replaces_prior_uncertain_fact",
+      "silence_recovery_is_bounded",
+      "one_question_is_spoken_per_turn"
+    ],
+    "pacing_requirement": "concise_unhurried_professional",
+    "provider_mapping_must_be_read_back": true,
+    "synthetic_voice_test_required": true
+  },
+  "capability_restrictions": {
+    "appointment_booking": false,
+    "live_dispatch": false,
+    "technician_assignment": false,
+    "pricing_or_estimates": false,
+    "payment_collection": false,
+    "direct_crm_mutation": false,
+    "direct_catalyst_mutation": false,
+    "direct_analytics_mutation": false,
+    "direct_field_service_mutation": false,
+    "custom_client_integrations": false,
+    "autonomous_outbound_calls": false,
+    "direct_sms": false,
+    "direct_email": false,
+    "direct_client_notification": false,
+    "arbitrary_transfers": false,
+    "unbounded_function_calls": false
+  },
+  "allowed_provider_telemetry": [
+    "call_ended",
+    "call_analyzed"
+  ],
+  "analytics_boundary": {
+    "retell_direct_write_allowed": false,
+    "automated_analytics_ingestion_required_for_internal_phone_test": false,
+    "development_evidence_source": "deterministic_catalyst_query_and_json_or_csv_export",
+    "analytics_readback_required_before_first_prospect_report": true
+  },
+  "development_readback": {
+    "observed_on": "2026-08-22",
+    "matching_shared_agent_count": 1,
+    "observed_agent_version": 0,
+    "observed_flow_version": 0,
+    "published_version_resolved": false,
+    "first_node_is_configuration_gate": true,
+    "first_node_gate_matches_this_contract": true,
+    "first_node_gap": null,
+    "missing_configuration_path_collects_caller_data": false,
+    "missing_configuration_path_matches_this_contract": true,
+    "normal_close_matches_this_contract": true,
+    "forbidden_customer_action_capabilities_observed": false,
+    "observed_provider_events": [
+      "call_ended",
+      "call_analyzed"
+    ],
+    "agent_level_webhook_configured": false,
+    "observed_post_call_field_count": 11,
+    "post_call_fields_match_minimal_schema": true,
+    "observed_data_storage_setting": "everything_except_pii",
+    "observed_retention_days": 30,
+    "observed_expressiveness_enabled": false,
+    "observed_backchannel_enabled": true,
+    "observed_backchannel_frequency": 0.3,
+    "observed_responsiveness": 0.65,
+    "observed_interruption_sensitivity": 0.65,
+    "naturalness_matches_text_simulation_acceptance": true,
+    "voice_audio_naturalness_validated": false,
+    "native_simulation_runs_observed": 26,
+    "pre_reconciliation_baseline": {
+      "run_count": 1,
+      "passed": 0,
+      "failed": 1
+    },
+    "post_reconciliation_batch": {
+      "run_count": 25,
+      "passed": 25,
+      "failed": 0,
+      "errors": 0
+    },
+    "development_number_inventory_count": 1,
+    "development_numbers_bound_to_shared_agent": 0,
+    "retell_draft_reconciled": true,
+    "runtime_reconciled": false
+  },
+  "interpretation": "Sanitized provider-neutral behavior and acceptance requirements plus 2026-08-22 Development draft readback. The shared unpublished draft now matches the exact gate, safe missing-configuration path, minimal extraction schema, and deliberate close; 25 supported native text simulations passed after one failed pre-reconciliation baseline. Publication, webhook binding, two-number routing, voice/audio behavior, Catalyst deployment, durable lifecycle evidence, and notification delivery remain unproven."
+}

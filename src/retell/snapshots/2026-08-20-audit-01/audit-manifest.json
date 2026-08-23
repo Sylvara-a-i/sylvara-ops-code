@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "classification": "public-sanitized-historical-observation",
+  "runtime_authority": false,
+  "source_system": "retell",
+  "environment_classification": "unverified",
+  "snapshot_id": "2026-08-20-audit-01",
+  "observed_on": "2026-08-20",
+  "observation_method": "authenticated-read-only-resource-traversal",
+  "retell_write_operations_performed": 0,
+  "prohibited_operations_performed": [],
+  "publication_boundary": "Public resource classes and lifecycle resolution only; all runtime-derived details are private.",
+  "interpretation": "Historical evidence only; not deployable configuration or proof of publication, deployment, phone binding, or routing.",
+  "managed_agents": [
+    {
+      "local_key": "agent_7_day_free_test",
+      "display_name": "7-Day Free Test",
+      "lifecycle_observation": {
+        "draft_resolution": "resolved-at-observation",
+        "published_resolution": "not-resolved-at-observation",
+        "comparison_status": "unavailable"
+      },
+      "local_path": "agents/7-day-free-test"
+    },
+    {
+      "local_key": "agent_revenue_desk_master_template",
+      "display_name": "Revenue Desk — Master Template",
+      "lifecycle_observation": {
+        "draft_resolution": "resolved-at-observation",
+        "published_resolution": "not-resolved-at-observation",
+        "comparison_status": "unavailable"
+      },
+      "local_path": "agents/revenue-desk-master-template"
+    }
+  ],
+  "resource_review": {
+    "inspected_classes": [
+      "agent version inventory",
+      "conversation-flow version",
+      "voice resource",
+      "knowledge-base references",
+      "shared flow-component references",
+      "MCP references",
+      "test-definition inventory"
+    ],
+    "public_detail_level": "resource-class-only",
+    "runtime_details_in_git": false
+  },
+  "integrity": "See integrity.json for hashes of sanitized artifacts only."
+}

@@ -1,6 +1,6 @@
 "use strict";
 
-const { isApprovedFormsPublicHostname } = require("./destinations");
+const { isArtifactBoundFormUrl } = require("./destinations");
 const {
   CLIENT_KEYS,
   FormContractError,
@@ -18,11 +18,13 @@ const {
 const {
   SecurityError,
   deriveAccessToken,
+  deriveIssueRequestKey,
   hashAccessToken,
   isValidAccessToken,
   verifyCustomHeader,
 } = require("./security");
 const { fingerprintSnapshot, fingerprintSubmission } = require("./snapshot");
+const { requireAllFactorsVerified } = require("./verification-proof");
 
 const ISSUE_REQUEST_KEYS = new Set(["dealId", "issueRequestId"]);
 const PREFILL_KEYS = new Set(["setupToken"]);
@@ -147,9 +149,7 @@ function buildFormUrl(config, setupToken) {
     url.port ||
     url.search ||
     url.hash ||
-    !isApprovedFormsPublicHostname(url.hostname) ||
-    url.pathname === "/" ||
-    url.pathname.includes("//") ||
+    !isArtifactBoundFormUrl(url.href, config.form2DestinationSha256) ||
     !/^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(config.form2TokenFieldAlias ?? "")
   ) {
     throw new ControllerError("Form URL configuration is invalid", {
@@ -188,6 +188,18 @@ function sameInstant(left, right) {
   const leftMs = Date.parse(left);
   const rightMs = Date.parse(right);
   return Number.isFinite(leftMs) && Number.isFinite(rightMs) && leftMs === rightMs;
+}
+
+function sameCrmInstant(left, right) {
+  if (!hasValue(left) || !hasValue(right)) return false;
+  const leftMs = Date.parse(left);
+  const rightMs = Date.parse(right);
+  // Zoho CRM DateTime fields round-trip at whole-second precision, while the
+  // Catalyst session keeps ISO milliseconds. Compare only the precision CRM
+  // can preserve; durable session-to-session comparisons remain exact.
+  return Number.isFinite(leftMs) &&
+    Number.isFinite(rightMs) &&
+    Math.trunc(leftMs / 1000) === Math.trunc(rightMs / 1000);
 }
 
 function requireEligibleContext(existing, config, allowedAccessStatuses) {
@@ -291,6 +303,13 @@ function publicError(error) {
     return new ControllerError("Security input is invalid", {
       status: 422,
       publicCode: "form_invalid",
+    });
+  }
+
+  if (error?.publicCode === "verification_required") {
+    return new ControllerError("All verification factors are required", {
+      status: 403,
+      publicCode: "verification_required",
     });
   }
 
@@ -606,7 +625,7 @@ function dealMatchesIssuedSession(deal, session, config) {
   return dealMatchesSessionBinding(deal, session) &&
     dealRemainsSetupEligible(deal, config) &&
     deal.Setup_Access_Status === config.form2AccessStatuses.issued &&
-    sameInstant(deal.Setup_Access_Issued_At, session.issuedAt) &&
+    sameCrmInstant(deal.Setup_Access_Issued_At, session.issuedAt) &&
     !hasValue(deal.Setup_Access_Verified_At);
 }
 
@@ -614,8 +633,8 @@ function dealMatchesVerifiedSession(deal, session, config) {
   return dealMatchesSessionBinding(deal, session) &&
     dealRemainsSetupEligible(deal, config) &&
     deal.Setup_Access_Status === config.form2AccessStatuses.verified &&
-    sameInstant(deal.Setup_Access_Issued_At, session.issuedAt) &&
-    sameInstant(deal.Setup_Access_Verified_At, session.verifiedAt);
+    sameCrmInstant(deal.Setup_Access_Issued_At, session.issuedAt) &&
+    sameCrmInstant(deal.Setup_Access_Verified_At, session.verifiedAt);
 }
 
 function dealMatchesExpiredSession(deal, session, config) {
@@ -624,9 +643,9 @@ function dealMatchesExpiredSession(deal, session, config) {
     dealRemainsSetupEligible(deal, config) &&
     hasValue(session.expiredAt) &&
     deal.Setup_Access_Status === config.form2AccessStatuses.expired &&
-    sameInstant(deal.Setup_Access_Issued_At, session.issuedAt) &&
+    sameCrmInstant(deal.Setup_Access_Issued_At, session.issuedAt) &&
     (wasVerified
-      ? sameInstant(deal.Setup_Access_Verified_At, session.verifiedAt)
+      ? sameCrmInstant(deal.Setup_Access_Verified_At, session.verifiedAt)
       : !hasValue(deal.Setup_Access_Verified_At));
 }
 
@@ -926,8 +945,10 @@ async function handleIssue(body, dependencies, nowMs) {
   assertExactKeys(body, ISSUE_REQUEST_KEYS, "Issue request is invalid");
   const dealId = normalizeRecordId(body.dealId, "Deal identifier");
   let setupToken;
+  let issueRequestKey;
   let tokenHash;
   try {
+    issueRequestKey = deriveIssueRequestKey(body.issueRequestId);
     setupToken = deriveAccessToken(body.issueRequestId, dependencies.config.tokenPepper);
     tokenHash = hashAccessToken(setupToken, dependencies.config.tokenPepper);
   } catch (error) {
@@ -936,9 +957,15 @@ async function handleIssue(body, dependencies, nowMs) {
 
   let priorSession;
   try {
-    priorSession = await dependencies.sessionStore.readByTokenHash(tokenHash);
+    priorSession = await dependencies.sessionStore.readByIssueRequestKey(issueRequestKey);
   } catch (error) {
     throw publicError(error);
+  }
+  if (priorSession && priorSession.tokenHash !== tokenHash) {
+    throw new ControllerError("A fresh issuance identity is required", {
+      status: 409,
+      publicCode: "setup_conflict",
+    });
   }
 
   const initialDeal = await dependencies.crmClient.getRecord("Deals", dealId);
@@ -1000,6 +1027,7 @@ async function handleIssue(body, dependencies, nowMs) {
   let session;
   try {
     session = await dependencies.sessionStore.issue({
+      issueRequestKey,
       tokenHash,
       ...binding,
     });
@@ -1015,7 +1043,7 @@ async function handleIssue(body, dependencies, nowMs) {
   };
   const issuedStateMatches =
     existing.deal.Setup_Access_Status === statuses.issued &&
-    sameInstant(existing.deal.Setup_Access_Issued_At, session.issuedAt) &&
+    sameCrmInstant(existing.deal.Setup_Access_Issued_At, session.issuedAt) &&
     !hasValue(existing.deal.Setup_Access_Verified_At);
   const initialStateMatches =
     existing.deal.Setup_Access_Status === statuses.initial &&
@@ -1025,8 +1053,8 @@ async function handleIssue(body, dependencies, nowMs) {
   const verifiedStateMatches =
     session.status === "verified" &&
     existing.deal.Setup_Access_Status === statuses.verified &&
-    sameInstant(existing.deal.Setup_Access_Issued_At, session.issuedAt) &&
-    sameInstant(existing.deal.Setup_Access_Verified_At, session.verifiedAt);
+    sameCrmInstant(existing.deal.Setup_Access_Issued_At, session.issuedAt) &&
+    sameCrmInstant(existing.deal.Setup_Access_Verified_At, session.verifiedAt);
 
   if (session.status === "issuing" && (initialStateMatches || expiredStateMatches)) {
     try {
@@ -1101,6 +1129,19 @@ async function handleIssue(body, dependencies, nowMs) {
 async function handlePrefill(body, dependencies, nowMs) {
   assertExactKeys(body, PREFILL_KEYS, "Prefill request is invalid");
   const candidate = await readPrefillSession(body.setupToken, dependencies, nowMs);
+  await requireAllFactorsVerified(
+    dependencies.verificationProofStore,
+    {
+      sessionRowId: candidate.session.rowId,
+      tokenHash: candidate.tokenHash,
+      crmContactId: candidate.session.crmContactId,
+      crmAccountId: candidate.session.crmAccountId,
+      crmDealId: candidate.session.crmDealId,
+      issuedAt: candidate.session.issuedAt,
+      expiresAt: candidate.session.expiresAt,
+    },
+    nowMs,
+  );
   let existing = await fetchSessionContext(dependencies.crmClient, candidate.session);
   const statuses = dependencies.config.form2AccessStatuses;
   requireEligibleContext(
@@ -1127,7 +1168,7 @@ async function handlePrefill(body, dependencies, nowMs) {
   };
   const verifiedStateMatches =
     existing.deal.Setup_Access_Status === statuses.verified &&
-    sameInstant(existing.deal.Setup_Access_Verified_At, session.verifiedAt);
+    sameCrmInstant(existing.deal.Setup_Access_Verified_At, session.verifiedAt);
   if (existing.deal.Setup_Access_Status === statuses.issued) {
     try {
       await dependencies.crmClient.updateRecord("Deals", session.crmDealId, verifiedUpdate, {

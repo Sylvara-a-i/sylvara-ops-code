@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "classification": "public-sanitized-lifecycle-resolution",
+  "runtime_authority": false,
+  "source_system": "retell",
+  "snapshot_id": "2026-08-20-audit-01",
+  "observed_on": "2026-08-20",
+  "agent": {
+    "local_key": "agent_7_day_free_test",
+    "display_name": "7-Day Free Test"
+  },
+  "lifecycle_slot": "published",
+  "resolution": "not-resolved-at-observation",
+  "evidence_location": "private-audit-only",
+  "interpretation": "A published configuration did not resolve through the audited read path; this is not categorical proof of nonexistence."
+}

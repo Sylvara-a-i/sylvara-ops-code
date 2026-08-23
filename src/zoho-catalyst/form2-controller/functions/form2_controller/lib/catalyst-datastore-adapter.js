@@ -228,7 +228,12 @@ function createCatalystDataStoreAdapter(app, config) {
 
   const findRowsByTokenHash = (tableName, hash) => findRowsByHash(
     tableName,
-    "TOKEN_HASH",
+    "ACCESS_TOKEN_HASH",
+    hash,
+  );
+  const findRowsByIssueRequestKey = (tableName, hash) => findRowsByHash(
+    tableName,
+    "ISSUE_REQUEST_KEY",
     hash,
   );
   const findRowsByPrefillKey = (tableName, hash) => findRowsByHash(
@@ -257,6 +262,7 @@ function createCatalystDataStoreAdapter(app, config) {
 
   return Object.freeze({
     findRowsByDealIssuanceKey,
+    findRowsByIssueRequestKey,
     findRowsByPrefillKey,
     findRowsByRowId,
     findRowsBySubmissionKey,
