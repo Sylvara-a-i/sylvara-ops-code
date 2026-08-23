@@ -5,6 +5,7 @@ const { ARTIFACT_SOURCE_REVISION } = require("./source-revision");
 const REVISION = /^[a-f0-9]{40}$/;
 const IDENTIFIER = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
 const PLAN_CODE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
+const CUSTOMER_PROVISIONING_MODES = new Set(["native_crm_import", "test_direct_customer"]);
 
 class ConfigurationError extends Error {
   constructor(message) {
@@ -55,6 +56,14 @@ function requiredBoolean(environment, name) {
     throw new ConfigurationError(`${name} must be true or false`);
   }
   return result === "true";
+}
+
+function customerProvisioningMode(environment) {
+  const result = required(environment, "CUSTOMER_PROVISIONING_MODE");
+  if (!CUSTOMER_PROVISIONING_MODES.has(result)) {
+    throw new ConfigurationError("CUSTOMER_PROVISIONING_MODE is invalid");
+  }
+  return result;
 }
 
 function identifier(environment, name) {
@@ -167,6 +176,19 @@ function loadConfig(environment = process.env, { artifactRevision = ARTIFACT_SOU
       "Paid subscription preparation is blocked until exact commercial terms are enforced",
     );
   }
+  const selectedCustomerProvisioningMode = customerProvisioningMode(environment);
+  const enableTestDirectCustomerProvisioning = requiredBoolean(
+    environment,
+    "ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING",
+  );
+  if (
+    (selectedCustomerProvisioningMode === "test_direct_customer") !==
+    enableTestDirectCustomerProvisioning
+  ) {
+    throw new ConfigurationError(
+      "Direct customer provisioning requires its exact Development test gate",
+    );
+  }
   return Object.freeze({
     deploymentEnvironment,
     sourceRevision,
@@ -176,6 +198,8 @@ function loadConfig(environment = process.env, { artifactRevision = ARTIFACT_SOU
     crmApiBaseUrl: apiBase(environment, "CRM_API_BASE_URL", "/crm/v8"),
     billingApiBaseUrl: apiBase(environment, "BILLING_API_BASE_URL", "/billing/v1"),
     billingOrganizationId: organizationId,
+    customerProvisioningMode: selectedCustomerProvisioningMode,
+    enableTestDirectCustomerProvisioning,
     crmReadConnectionLinkName: identifier(environment, "CRM_READ_CONNECTION_LINK_NAME"),
     crmWriteConnectionLinkName: identifier(environment, "CRM_WRITE_CONNECTION_LINK_NAME"),
     billingReadConnectionLinkName: identifier(environment, "BILLING_READ_CONNECTION_LINK_NAME"),
