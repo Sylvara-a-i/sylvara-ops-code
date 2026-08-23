@@ -252,12 +252,18 @@ class RetellFreeTestAcceptanceContractTests(unittest.TestCase):
         self.assertIs(close["notification_delivery_claim_allowed"], False)
         self.assertIs(close["unexplained_hangup_allowed"], False)
         naturalness = self.conversation["naturalness_acceptance"]
-        self.assertEqual("requires_retell_native_validation", naturalness["validation_status"])
+        self.assertEqual(
+            "retell_native_text_simulation_passed_voice_audio_pending",
+            naturalness["validation_status"],
+        )
         self.assertEqual(4, len(naturalness["settings"]))
-        for setting in naturalness["settings"]:
+        for setting in naturalness["settings"][:3]:
             self.assertGreaterEqual(setting["minimum"], 0)
             self.assertLessEqual(setting["maximum"], 1)
             self.assertLess(setting["minimum"], setting["maximum"])
+        expressive = naturalness["settings"][3]
+        self.assertEqual("expressive_mode", expressive["key"])
+        self.assertIs(expressive["configured_development_value"], False)
         self.assertIs(naturalness["provider_mapping_must_be_read_back"], True)
         self.assertIs(naturalness["synthetic_voice_test_required"], True)
 
@@ -295,12 +301,19 @@ class RetellFreeTestAcceptanceContractTests(unittest.TestCase):
             self.assertIn("retell", self.cases[f"ft_{index:03d}"]["execution_layer"])
 
     def test_failure_replay_retry_and_notification_contracts_are_idempotent(self) -> None:
-        for index in range(17, 26):
+        for index in range(17, 23):
             row = self.cases[f"ft_{index:03d}"]
             with self.subTest(case_id=row["case_id"]):
                 self.assertEqual({}, row["expected_extracted_fields"])
                 self.assertEqual("configuration_unavailable", row["expected_terminal_state"])
                 self.assertEqual("none", row["expected_notification_behavior"]["action"])
+        for index in range(23, 26):
+            row = self.cases[f"ft_{index:03d}"]
+            with self.subTest(case_id=row["case_id"]):
+                self.assertEqual({}, row["expected_extracted_fields"])
+                self.assertEqual("inbound_rejected", row["expected_terminal_state"])
+                expected_action = "none_for_pre_call_rejection" if index == 24 else "none"
+                self.assertEqual(expected_action, row["expected_notification_behavior"]["action"])
         replay = self.cases["ft_026"]
         self.assertEqual("create_once", replay["expected_persistence"]["canonical_call"])
         self.assertEqual("enqueue_once_total", replay["expected_notification_behavior"]["action"])

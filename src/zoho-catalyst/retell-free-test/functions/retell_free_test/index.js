@@ -1,20 +1,12 @@
 'use strict';
 
 const http = require('node:http');
+const catalyst = require('zcatalyst-sdk-node');
+const { createRequestListener } = require('./lib/runtime-boundary');
+const { createSafeConsoleLogger } = require('./lib/logging');
 
-/**
- * Deliberate deployment barrier. The pure lifecycle is tested, but Catalyst's
- * conditional-write and nullable-unique behavior has not been read back in
- * Development. Returning a fixed 503 prevents repository source from being
- * mistaken for an approved live ingress boundary.
- */
-module.exports = http.createServer((_request, response) => {
-  response.statusCode = 503;
-  response.setHeader('content-type', 'application/json; charset=utf-8');
-  response.setHeader('cache-control', 'no-store');
-  response.setHeader('x-content-type-options', 'nosniff');
-  response.end(JSON.stringify({
-    ok: false,
-    code: 'development_runtime_not_enabled',
-  }));
-});
+// Catalyst Advanced I/O loads an exported native Node HTTP server.
+module.exports = http.createServer(createRequestListener({
+  catalystSdk: catalyst,
+  logger: createSafeConsoleLogger(console),
+}));

@@ -3,11 +3,15 @@
 ## Status
 
 - Runbook status: **Proposed**
-- Implementation status: **Development source is present; deployment, routes, runtime/source parity, and end-to-end behavior are unproven**
+- Implementation status: **READY FOR DEVELOPMENT DEPLOYMENT; routes, runtime/source parity, controlled email delivery, and phone behavior remain unproven**
 - Live Retell, Catalyst, CRM, or Analytics change authorized by this file: **No**
-- Production call path: **Blocked pending the product, legal, vendor, environment, and deployment gates**
+- Production call path: **Not authorized; required operating evidence and approvals are absent**
 
-This runbook implements the system-ownership and generic reporting boundary in [ADR 0004](../adr/0004-retell-catalyst-crm-analytics-integration-boundary.md). For the 7-Day Free Test, [ADR 0006](../adr/0006-shared-seven-day-monitor-with-client-number-isolation.md) and the [shared-agent runbook](shared-seven-day-monitor-number-routing.md) supersede this file's former client-agent mapping, agent-first ownership, admission, notification, and evaluation-agent lifecycle instructions. It does not contain live names, URLs, identifiers, credentials, customer data, call content, or deployment values.
+This runbook preserves the general future reporting boundary in [ADR 0004](../adr/0004-retell-catalyst-crm-analytics-integration-boundary.md). For the 7-Day Free Test, [ADR 0006](../adr/0006-shared-seven-day-monitor-with-client-number-isolation.md) and the [shared-agent runbook](shared-seven-day-monitor-number-routing.md) supersede this file's client-agent mapping, admission, notification, CRM, Analytics, number-change, and evaluation-agent lifecycle instructions. It does not contain live names, URLs, identifiers, credentials, customer data, call content, or deployment values.
+
+### Free-Test MVP Override
+
+The free-test MVP uses the exact configuration gate plus a durable handled-count check; it has no pre-call reservation/orphan state and may report calls already in flight after the 25th handled call. Its only notification channel is Catalyst Mail email. Committed/default Development mode records `DryRunRecorded`, zero attempts, and `CATALYST_MAIL_DRY_RUN` without invoking `sendMail`; one controlled `send_development` proof, provider/inbox readback, replay without a duplicate, and restoration to `dry_run` are required before internal-phone readiness. Internal reporting is a client/deployment-scoped Catalyst query and sanitized CSV export. CRM is disabled and Analytics is deferred; neither is an internal-test blocker. Initial validation numbers are frozen and enter documented cooldown after completion; reassignment is deferred.
 
 ## Objective
 
@@ -17,8 +21,8 @@ Build the smallest secure reporting path that can:
 2. preserve replay-safe and auditable call state in Catalyst;
 3. keep CRM limited to relationship and commercial summaries;
 4. preserve later outcome-attribution fields and, only for a separately approved paid workflow, reconcile them to the customer's authoritative system;
-5. batch minimized facts into Zoho Analytics; and
-6. produce one reviewed client-isolated report.
+5. produce one reviewed client-isolated report; and
+6. add Analytics only later if validated demand justifies it.
 
 Do not build a client portal, general event platform, or CRM call warehouse. The free test deliberately uses one shared bounded-intake agent; it is not a generic shared-agent platform and never uses the shared `agent_id` as a tenant key.
 
@@ -27,10 +31,9 @@ Do not build a client portal, general event platform, or CRM call warehouse. The
 Before implementation work:
 
 - the exact Development Retell account and intended agent are identified privately;
-- the approved internal-QA or later client-call legal profile is known;
+- the owner-approved scope, data handling, provider settings, rollback, and any professional review required for the selected validation lane are recorded;
 - the exact Catalyst Development project and environment are identified;
-- CRM organization identity and approved summary fields are read back;
-- the Analytics organization, region, plan, and Development workspace strategy are verified;
+- any separately approved CRM/Analytics target is read back; neither target is required for the free-test MVP;
 - separate Audit and Changes identities or non-overlapping grants are available;
 - an approved secret store exists for every credential;
 - a synthetic scenario set and expected outcomes exist; and
@@ -105,34 +108,35 @@ Record a private dated evidence package. GitHub receives only the sanitized stat
 
 Default to one voice-integration Catalyst project per environment, not one project per client or evaluation. Before creating or modifying a function, inventory every current function, trigger, route, runtime, secret grant, deployment unit, and rollback target in the intended project.
 
-For the free test, implement four logical responsibilities:
+For the free test, implement four small logical responsibilities:
 
 ```text
-Pre-call number resolution and admission
+Pre-call number resolution and time/handled-count eligibility
 Retell event ingress
-Post-call call/outcome and notification processing
-Reporting outbox synchronization
+Post-call call/outcome/count and Catalyst Mail state processing
+Separate retry Function Job for due event and notification state
+Client-partitioned query and CSV export
 ```
 
 Choose physical packaging from the observed contract:
 
 - combine responsibilities only when their trust boundary, runtime, secret access, scaling, failure isolation, and rollback lifecycle match;
-- separate the synchronous ingress from slow or retrying work;
+- deploy and independently read back the separate `retell_free_test_retry` Function Job for slow or retrying work;
 - do not create a function per client;
 - do not place Retell processing inside the Billing webhook gateway; and
-- preserve independent disablement of webhook ingress, customer-system writes, CRM writes, and Analytics sync.
+- preserve independent disablement of webhook ingress and every external write; CRM and Analytics stay disabled.
 
 Document the decision and read the final function inventory back before deployment.
 
 ## Phase 2: Establish Private Configuration
 
-The free-test component owns its exact public variable registry at [`src/zoho-catalyst/retell-free-test/config/variables.json`](../../src/zoho-catalyst/retell-free-test/config/variables.json) and sanitized placeholders at [`functions/retell_free_test/.env.example`](../../src/zoho-catalyst/retell-free-test/functions/retell_free_test/.env.example). Those files define each consumer, secret classification, required format, Development behavior, and Production prohibition. Do not use old root Retell/Make variable lists or infer a live value from either file.
+The free-test component owns its exact public variable registry at [`src/zoho-catalyst/retell-free-test/config/variables.json`](../../src/zoho-catalyst/retell-free-test/config/variables.json). It defines each consumer, secret classification, required format, Development behavior, and Production prohibition. Do not use old root Retell/Make variable lists or infer a live value from the registry.
 
 Secrets and OAuth material stay only in platform-native secret/Connection storage. Private identifiers remain in environment configuration. Missing or invalid required values fail closed. Do not commit a populated `.env`, endpoint, platform identifier, or configuration export.
 
 ## Phase 3: Model Free-Test Deployment And Number State
 
-For the free test, create one immutable versioned deployment/configuration snapshot and one effective number assignment for each client test. The shared agent is product identity, not ownership.
+For the free test, create one versioned deployment/configuration snapshot and one current number binding for each client test. The shared agent is product identity, not ownership.
 
 Required mapping facts:
 
@@ -153,20 +157,18 @@ route_approval_state
 actual_start_at
 expires_at
 eligible_handled_count
-admission_limit
-effective_from
-effective_to
+handled_call_limit
 status
 ```
 
 Acceptance:
 
 - one active deployment per client test and one client per deployment;
-- one non-overlapping assignment per Retell number at a point in time;
+- one current number binding per active deployment and no ambiguous/overlapping active mapping;
 - the same accepted free-test agent may appear on multiple deployments;
 - no mapping by mutable name or prompt text;
-- conflicting, stale, or missing ownership fails through Configuration Unavailable before intake;
-- prior assignments, configurations, and call bindings remain immutable; and
+- a known authenticated invalid/unknown/ambiguous/inactive/expired/exhausted resolution returns HTTP 200 explicit rejection with no agent or resolver write; transport/authentication/timeout/503/malformed/invalid-override failure may reach only the shared agent's Configuration Unavailable no-intake gate;
+- historical calls retain their embedded configuration/call ownership; initial validation numbers are not reused, completed numbers enter documented cooldown, and later reuse is separately reviewed; and
 - conversion creates a separately accepted Revenue Desk agent rather than promoting or cloning the free-test flow.
 
 ## Phase 4: Build The Catalyst Ingress
@@ -185,9 +187,9 @@ Required processing order:
 8. durably claim a minimized event row;
 9. enqueue or persist the normalized call update;
 10. return an empty 2xx response inside the provider timeout; and
-11. process downstream work asynchronously.
+11. process slow or retrying downstream work asynchronously.
 
-This is the required runtime contract, not current evidence. The Development core presently calls synthetic notification and Analytics adapters within `processEvent`; it has no accepted HTTP ingress or durable queue/worker handoff. Do not deploy or describe webhook acknowledgement as durable/asynchronous until that boundary, failure recovery, and readback are implemented and tested.
+The current source includes the separate `retell_free_test_retry` Catalyst Function Job target, but repository presence is not deployment evidence. Before an internal phone test, prove the packaged Job identity, trigger/request shape, bounded backoff, event/notification recovery, and ambiguous-state readback in Development. Do not describe webhook acknowledgement, Catalyst persistence, or Job execution as durable until the exact boundary, failure recovery, and readback are observed.
 
 Logging is limited to:
 
@@ -211,7 +213,7 @@ Do not log signatures, headers, raw bodies, event keys, call IDs, agent IDs, cli
 
 ## Phase 5: Normalize Call State
 
-Create one normalized call row per opaque keyed-HMAC-derived `call_lookup_key`. Bind it once to the immutable client, deployment, configuration, and assignment/admission fields below. Do not retain the raw provider call identifier; reject any later ownership conflict.
+Create one normalized call row per opaque keyed-HMAC-derived `call_lookup_key`. Bind it once to the immutable client, deployment, and configuration fields below. Do not retain the raw provider call identifier; reject any later ownership conflict.
 
 Minimum proposed fields:
 
@@ -289,9 +291,9 @@ Controls:
 
 ## Free-Test Notification Boundary
 
-After one eligible call is durably processed, Catalyst creates one idempotent notification record for the destination already approved in that deployment snapshot. It stores retry and terminal-failure state, correlation to the call/deployment, and a sanitized provider result. Webhook replay cannot enqueue or send a duplicate, and a provider ambiguity is reconciled before retry. Callers cannot choose the destination and Retell never sends the message.
+After one eligible call is durably processed, Catalyst creates one idempotent email notification record for the destination already approved in that deployment snapshot. Callers cannot choose the destination and Retell never sends the message.
 
-The current Development implementation uses a deterministic synthetic adapter and contacts nobody. Real provider credentials, destinations, sending, and Production modes remain prohibited until separately approved. See the [shared-agent runbook](shared-seven-day-monitor-number-routing.md) for the exact lifecycle and isolation test.
+Development defaults to `dry_run`: the row terminates at `DryRunRecorded`, `attempts = 0`, provider code `CATALYST_MAIL_DRY_RUN`, and `app.email().sendMail` is not invoked. This proves correlation, minimization, recipient isolation, and replay idempotency but not delivery. Before internal-phone readiness, enable `send_development` only for one verified Development sender and approved synthetic recipient, read back provider acceptance and inbox delivery, prove replay creates no second delivery, handle ambiguity without blind resend, and restore `dry_run`. Prospect/customer delivery remains separately unresolved. See the [shared-agent runbook](shared-seven-day-monitor-number-routing.md).
 
 ## Phase 7: Reconcile Customer Outcomes
 
@@ -313,7 +315,7 @@ Do not write a derived Analytics value back into the customer system.
 
 CRM receives only bounded relationship or commercial summaries.
 
-The current free-test Development package keeps CRM summary mode disabled. A future summary write requires its own approved field contract, idempotency, workflow-impact review, and readback; Retell never initiates it.
+The free-test MVP keeps CRM disabled. A future summary write requires its own approved field contract, idempotency, workflow-impact review, and readback; Retell never initiates it. CRM is not an internal-test dependency.
 
 Candidate summary categories:
 
@@ -336,7 +338,9 @@ Every CRM write requires:
 
 Do not create one CRM record per call merely to support reporting.
 
-## Phase 9: Create Managed Analytics MCP Roles
+## Deferred Phase 9: Create Managed Analytics MCP Roles
+
+This phase is not part of the free-test MVP and does not block offline or controlled internal Development testing.
 
 Use private server names. Public role labels are only conventions.
 
@@ -424,7 +428,9 @@ Test:
 - query-table drift; and
 - non-admin sharing and export restrictions.
 
-## Phase 11: Build Direct Catalyst-To-Analytics Sync
+## Deferred Phase 11: Build Direct Catalyst-To-Analytics Sync
+
+This phase is not part of the free-test MVP. Internal reporting uses Catalyst query/CSV.
 
 Use the direct Analytics API with a dedicated least-privilege Connection.
 
@@ -434,7 +440,7 @@ Proposed batch behavior:
 2. lock or claim one bounded batch;
 3. export a minimized synthetic or Production-approved payload;
 4. submit asynchronous `updateadd`;
-5. match free-test facts on opaque `Call Key`, with `Client ID` and `Deployment ID` as mandatory partitions;
+5. match later approved call facts on opaque `Call Key`, with `Client ID` and `Deployment ID` as mandatory partitions;
 6. persist the provider job identifier;
 7. poll with bounded backoff;
 8. parse rejected rows and job totals;
@@ -444,7 +450,7 @@ Proposed batch behavior:
 
 The initial operational hypothesis is hourly incremental sync plus periodic full reconciliation. The interval and batch size remain private configuration and must be adjusted from observed volume, API units, source capacity, and staleness requirements.
 
-The current free-test Development adapter persists only a synthetic partitioned fact and must not call the Analytics API. This direct-API sequence remains a separately approved future path.
+The free-test MVP has no Analytics adapter or reporting outbox. This direct-API sequence remains a separately approved future path.
 
 ## Phase 12: Build Reports
 
@@ -483,7 +489,7 @@ A visually plausible dashboard is not acceptance evidence.
 
 ## Phase 13: End-To-End Synthetic Acceptance
 
-For the 7-Day Free Test, run all 30 cases and the two-client isolation/replay/reassignment lifecycle in the [shared-agent runbook](shared-seven-day-monitor-number-routing.md) and its linked machine-readable fixture. Reporting acceptance must additionally cover:
+For the 7-Day Free Test, run all 30 cases and the two-client isolation/replay lifecycle in the [shared-agent runbook](shared-seven-day-monitor-number-routing.md) and its linked machine-readable fixture. Reporting acceptance must additionally cover:
 
 - valid analyzed call;
 - call ended before analysis;
@@ -496,14 +502,14 @@ For the 7-Day Free Test, run all 30 cases and the two-client isolation/replay/re
 - stale signature timestamp;
 - malformed JSON;
 - oversized body;
-- notification retry and terminal failure;
+- Catalyst Mail `DryRunRecorded` with zero attempts and no provider invocation;
 - notification recipient crossover attempt;
-- CRM summary remains disabled in the current Development mode;
-- Analytics import rejection;
-- Analytics job timeout;
+- CRM remains disabled;
+- client/deployment query and CSV reconciliation;
+- transparent in-flight count overshoot;
 - cross-client report attempt;
-- stale watermark; and
-- number reassignment with a delayed event.
+- malformed or cross-client export filters; and
+- a delayed event that retains its embedded call ownership.
 
 For each scenario, record expected HTTP result, durable state, downstream side effects, logs, report visibility, and containment action.
 
@@ -514,8 +520,7 @@ Before Production, present privately:
 - immutable source commit and artifact;
 - exact Retell account, agent version, number, events, retention, and webhook target;
 - exact Catalyst project, environment, function, route, tables, Connections, and configuration;
-- exact CRM organization, records, fields, workflows, and recipient controls;
-- exact Analytics organization, workspaces, views, roles, scopes, shares, exports, and schedules;
+- proof that CRM and Analytics are disabled for the free-test MVP;
 - legal and vendor approvals;
 - synthetic and Development acceptance evidence;
 - load and cost observations;
@@ -531,22 +536,22 @@ When a path is unsafe or uncertain:
 
 1. disable the Retell webhook or Catalyst route so new events stop;
 2. restore the last approved carrier route when caller handling is affected;
-3. disable the Analytics sync worker and external report schedule;
-4. preserve event, outbox, import-job, and report-run evidence;
+3. restore `FREE_TEST_NOTIFICATION_MODE=dry_run`, read it back, and stop query/CSV export while scope is uncertain;
+4. preserve event, call, count, notification, and export evidence;
 5. do not delete, reset, or automatically replay unresolved records;
 6. revoke the affected Connection when outbound writes must stop;
-7. reconcile Retell, Catalyst, CRM, customer-system, and Analytics state independently;
+7. reconcile Retell and Catalyst state and confirm CRM/Analytics remain untouched;
 8. restore the prior accepted agent version, function artifact, model definition, or report schedule only when it is an approved rollback target;
 9. run one synthetic end-to-end test; and
 10. re-enable in the smallest approved order.
 
-For a free-test identity, configuration, or isolation failure, do not switch to degraded intake or a client-specific free-test clone. Stop the affected deployment(s), preserve immutable assignments/bindings/outboxes, and verify Configuration Unavailable or the approved inactive carrier behavior. The [rollback checklist](rollback-checklist.md) contains the authoritative free-test sequence.
+For a free-test identity, configuration, or isolation failure, do not switch to degraded intake or a client-specific free-test clone. Stop the affected deployment(s), restore `dry_run`, preserve current bindings, canonical calls, counts, notification rows, and export evidence, then verify explicit resolver rejection, safe shared-agent fallback, or the approved inactive carrier behavior. The [rollback checklist](rollback-checklist.md) contains the authoritative sequence.
 
 A historical artifact, screenshot, or prior Git commit is not automatically a safe rollback target.
 
 ## Ongoing Operations
 
-- Sample calls only under a separately approved QA policy and legal profile.
+- Run phone samples only under a separately approved internal Development test record; this runbook makes no legal conclusion.
 - Review unresolved and human-escalation reason codes.
 - Monitor provider, Catalyst, CRM, customer-system, and Analytics failures separately.
 - Reconcile report totals to source systems.

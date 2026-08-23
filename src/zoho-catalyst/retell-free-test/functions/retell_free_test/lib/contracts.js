@@ -31,18 +31,14 @@ const COVERAGE_TRIGGERS = freezeSet(contract.coverage_triggers);
 const VALUE_EVIDENCE_CLASSES = freezeSet(contract.value_evidence_classes);
 const RETELL_EVENTS = freezeSet(contract.retell_events);
 const NOTIFICATION_STATES = freezeSet(contract.notification_states);
-const OUTBOX_STATES = freezeSet(contract.outbox_states);
-const ADMISSION_STATES = freezeSet(contract.admission_states);
-const ADMISSION_RECONCILIATION_STATES = freezeSet(contract.admission_reconciliation_states);
-const ADMISSION_RECONCILIATION_DECISIONS = freezeSet(contract.admission_reconciliation_decisions);
 
 function assertContract() {
   if (contract.environment !== 'development') throw new Error('Contract must be Development-only.');
   if (contract.engagement_type !== 'free_test') throw new Error('Unexpected engagement type.');
   if (contract.capability_profile !== 'call_gap_monitor_v1') throw new Error('Unexpected capability profile.');
   if (contract.resolved_status !== 'Resolved') throw new Error('Unexpected resolver status.');
-  if (contract.test_duration_days !== 7 || contract.admission_limit !== 25) {
-    throw new Error('Unexpected free-test duration or admission limit.');
+  if (contract.test_duration_days !== 7 || contract.handled_call_limit !== 25) {
+    throw new Error('Unexpected free-test duration or handled-call limit.');
   }
   if (COVERAGE_MODES.size !== 3 || COVERAGE_LABEL_TO_MODE.size !== 3 || COVERAGE_MODE_TO_LABEL.size !== 3) {
     throw new Error('Coverage mapping must be one-to-one across exactly three values.');
@@ -51,16 +47,9 @@ function assertContract() {
     if (!COVERAGE_MODE_TO_LABEL.has(mode)) throw new Error(`Missing display label for ${mode}.`);
   }
   if (OUTCOMES.size !== contract.outcomes.length) throw new Error('Outcome values must be unique.');
-  if (!NOTIFICATION_STATES.has('ReconciliationRequired')) {
-    throw new Error('Notification contract must model ambiguous side effects.');
-  }
-  if (!OUTBOX_STATES.has('ReconciliationRequired')) {
-    throw new Error('Outbox contract must model ambiguous side effects.');
-  }
-  if (!ADMISSION_STATES.has('ReleasedNoCall')
-    || !ADMISSION_RECONCILIATION_STATES.has('ReconciliationRequired')
-    || !ADMISSION_RECONCILIATION_DECISIONS.has('NoCallCreated')) {
-    throw new Error('Admission reconciliation contract must remain fail closed.');
+  if (!NOTIFICATION_STATES.has('ReconciliationRequired')
+    || !NOTIFICATION_STATES.has('DryRunRecorded')) {
+    throw new Error('Notification contract must model ambiguity and Development dry-run containment.');
   }
 }
 
@@ -81,8 +70,4 @@ module.exports = Object.freeze({
   VALUE_EVIDENCE_CLASSES,
   RETELL_EVENTS,
   NOTIFICATION_STATES,
-  OUTBOX_STATES,
-  ADMISSION_STATES,
-  ADMISSION_RECONCILIATION_STATES,
-  ADMISSION_RECONCILIATION_DECISIONS,
 });

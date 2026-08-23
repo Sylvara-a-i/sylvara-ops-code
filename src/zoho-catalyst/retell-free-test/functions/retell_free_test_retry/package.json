@@ -1,0 +1,19 @@
+{
+  "name": "retell_free_test_retry",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Development-only Catalyst Function Job target for bounded free-test event and email retries.",
+  "main": "index.js",
+  "type": "commonjs",
+  "engines": {
+    "node": "18.x"
+  },
+  "scripts": {
+    "check": "node --check index.js",
+    "test": "node --test test/package.test.js",
+    "ci": "npm run check && npm test"
+  },
+  "dependencies": {
+    "retell_free_test": "file:../retell_free_test"
+  }
+}

@@ -1,19 +1,26 @@
 {
-  "name": "sylvara-retell-free-test",
+  "name": "retell_free_test",
   "version": "0.1.0",
   "private": true,
-  "description": "Development-only shared Retell free-test contracts and deterministic lifecycle core; Catalyst runtime activation is blocked pending datastore proof.",
+  "description": "Development-only shared Retell free-test runtime with four-table Catalyst persistence and email-only notification state.",
   "main": "index.js",
   "type": "commonjs",
+  "files": [
+    "lib/**/*.js",
+    "contracts/*.json"
+  ],
   "engines": {
-    "node": "24.x"
+    "node": ">=18 <25"
   },
   "scripts": {
-    "check": "node --check index.js && node --check lib/adapters.js && node --check lib/config.js && node --check lib/contracts.js && node --check lib/errors.js && node --check lib/memory-store.js && node --check lib/security.js && node --check lib/service.js && node --check lib/validation.js",
-    "test:unit": "node --test test/unit.test.js",
-    "test:integration": "node --test test/integration.test.js",
+    "check": "node --check index.js && node --check lib/analysis.js && node --check lib/catalyst-mail.js && node --check lib/catalyst-store.js && node --check lib/config.js && node --check lib/contracts.js && node --check lib/errors.js && node --check lib/http.js && node --check lib/job-handler.js && node --check lib/logging.js && node --check lib/reporting.js && node --check lib/runtime-boundary.js && node --check lib/runtime-service.js && node --check lib/security.js && node --check lib/validation.js",
+    "test:unit": "node --test test/unit.test.js test/job-handler.test.js",
+    "test:integration": "node --test test/runtime.test.js",
     "test:acceptance": "node --test test/acceptance.test.js",
     "test": "npm run test:unit && npm run test:integration && npm run test:acceptance",
     "ci": "npm run check && npm test"
+  },
+  "dependencies": {
+    "zcatalyst-sdk-node": "3.4.0"
   }
 }

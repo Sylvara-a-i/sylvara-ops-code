@@ -77,7 +77,7 @@
     },
     {
       "id": "catalyst",
-      "authoritative_for": "middleware verification, free-test deployment and number ownership, admission, normalization, canonical call and notification state, durable idempotency, retry state, and API mediation",
+      "authoritative_for": "middleware verification, free-test deployment and current number binding, time and handled-count eligibility, normalization, canonical call/outcome and durable Catalyst Mail state, retry Job recovery, tenant query/CSV reporting, durable idempotency, and API mediation",
       "must_not_own": "CRM, subscription, accounting, legal-document, or mailbox facts",
       "standards": [
         "standards/catalyst.md"

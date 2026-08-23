@@ -7,7 +7,7 @@
   "resolved_status": "Resolved",
   "configuration_unavailable_status": "ConfigurationUnavailable",
   "test_duration_days": 7,
-  "admission_limit": 25,
+  "handled_call_limit": 25,
   "canonical_coverage_modes": [
     "AfterHoursOnly",
     "NoAnswerOverflowOnly",
@@ -90,41 +90,12 @@
   "notification_states": [
     "Pending",
     "Sending",
+    "Sent",
     "RetryRequired",
+    "Ambiguous",
     "ReconciliationRequired",
     "Succeeded",
-    "TerminalFailure"
-  ],
-  "notification_retry_delays_ms": [1000, 5000],
-  "analytics_retry_delays_ms": [1000, 5000],
-  "event_processing_lease_ms": 30000,
-  "admission_reconciliation_lease_ms": 30000,
-  "analysis_grace_ms": 900000,
-  "admission_states": [
-    "Reserved",
-    "Handled",
-    "ReleasedNoCall"
-  ],
-  "admission_reconciliation_states": [
-    "NotRequested",
-    "Checking",
-    "RetryRequired",
-    "ReconciliationRequired",
-    "CallObserved",
-    "ReleasedNoCall",
-    "CallBound"
-  ],
-  "admission_reconciliation_decisions": [
-    "NoCallCreated",
-    "CallObserved",
-    "Ambiguous"
-  ],
-  "outbox_states": [
-    "Pending",
-    "Sending",
-    "RetryRequired",
-    "ReconciliationRequired",
-    "Succeeded",
-    "TerminalFailure"
+    "TerminalFailure",
+    "DryRunRecorded"
   ]
 }

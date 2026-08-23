@@ -1,85 +1,108 @@
-# Shared Retell 7-Day Free Test — Catalyst Development Core
+# Shared Retell 7-Day Free Test — Catalyst Development Runtime
 
-Status: **source-complete deterministic core; Catalyst HTTP/Data Store runtime intentionally disabled**.
+Status: **READY FOR DEVELOPMENT DEPLOYMENT; not deployed and not ready for a controlled phone or prospect test**.
 
-This package implements the approved shared-agent policy in pure, dependency-free modules and synthetic adapters. It does not activate a Retell route, send a real notification, mutate CRM, import Analytics, or touch Production. `functions/retell_free_test/index.js` is a deliberate `503` deployment barrier until the Development datastore and request boundary are implemented and independently read back.
+This package is the bounded Catalyst Development runtime for one shared Retell free-test agent. Each active synthetic deployment has one dedicated Retell number and one versioned configuration snapshot. The runtime performs fail-closed resolution, durable post-call convergence, one handled-call count per provider call, and an email notification **dry run** by default. The committed configuration does not send mail, mutate CRM, import Analytics, activate a route, touch Production, or provide paid Revenue Desk behavior.
 
-## Boundary
+## Runtime boundary
 
-The free test performs bounded missed-call intake only. It does not book, dispatch, quote, collect payment, transfer arbitrarily, send Retell SMS, mutate CRM or a field-service system, call outbound, or enable paid Revenue Desk behavior.
+The Advanced I/O entrypoint exposes:
 
-One shared Retell agent is selected by every approved deployment. Each active deployment owns one dedicated effective-dated Retell number. All client differences live in an immutable, versioned configuration record. A number must resolve to exactly one current assignment; the shared agent ID alone is accepted post-call only when exactly one eligible deployment and one historical assignment exist.
+- `POST /retell/inbound` — verifies Retell's raw-body HMAC and timestamp, resolves the called-number HMAC to exactly one eligible deployment, and returns client variables plus integrity-bound ownership metadata.
+- `POST /retell/events` — accepts only `call_ended` and `call_analyzed`, verifies the same raw-body contract, and converges receipts, calls, handled count, and a dry-run notification.
+- `GET /internal/readiness` — private bearer-authenticated Development dependency check.
 
-## Implemented policy
+No other HTTP route exists. [`retell_free_test_retry`](functions/retell_free_test_retry/) is a separate Catalyst Function Job target for due `RetryRequired`/expired-processing event receipts and pending/retryable notification rows. It imports the reviewed core package as a materialized local package, reads a minimized encrypted event record rather than a raw webhook, uses bounded backoff, and does not blindly resend an ambiguous Mail attempt.
 
-- Exact gate: `Resolved`, nonempty ownership/version fields, `free_test`, `call_gap_monitor_v1`, and one of the three approved coverage modes.
-- Exact CRM `Test_Status`, `Go_Live_Approval_Status`, and deterministic internal-to-CRM test-end-reason mappings.
-- Explicit activation timestamps; `Live` cannot start its own clock on first call.
-- Seven days from explicit `actualStartAt`, with expiration checked on every admission.
-- Twenty-five **handled** calls. Atomic reservations prevent a 26th concurrent admission, but do not end the test until 25 admitted calls obtain durable post-call evidence.
-- Orphan reservations remain capacity-blocking unless the reconciliation adapter returns final provider-authoritative `NoCallCreated` evidence bound to the exact immutable admission. Time alone never frees capacity. A released admission leaves a durable tombstone, cannot be revived by resolver replay, and does not increment the handled-call count.
-- Effective-dated number reassignment at a current, non-zero cutover; historical calls keep their old binding and a deployment cannot own two active numbers.
-- Authenticated-event primitives for Retell's raw-body `HMAC-SHA256(raw_body + timestamp)` contract, exact `v=<milliseconds>,d=<hex>` parsing, constant-time comparison, and a 300-second maximum age.
-- Durable receipt, call, notification, and Analytics-outbox state machines in the tested MemoryStore contract.
-- `call_ended` creates `AwaitingAnalysis`; `call_analyzed` enriches in either order. After a 15-minute deterministic grace period, the reconciler emits one `unresolved` notification/fact if analysis never arrives.
-- One immutable correlation ID from admission through event receipt, canonical call, notification, and Analytics projection.
-- Notification and Analytics idempotency, bounded backoff, terminal failure, and `ReconciliationRequired` for ambiguous/Sending outcomes unless provider readback proves success.
-- One current client-partitioned Analytics call fact with outcome, urgency/safety flag, time, coverage trigger, notification state, test/call-limit progress, and explicit value evidence class.
-- CRM summary adapter hard-disabled; notification and Analytics adapters synthetic-only and reject Production.
-- Sensitive-data minimization before persistence/notification and no raw webhook, transcript, recording URL, phone number, recipient, or tenant value in ordinary logs.
+Known resolver failures return Retell's exact rejection object, `{ "call_inbound": { "reject": true } }`. Transport/authentication failure can cause Retell to fall back to the number-bound shared agent. The reviewed Development agent readback and 25-of-25 native simulations now prove the exact first-node gate, direct no-data fallback, deliberate close, and absence of client-specific intake when ownership variables are missing. Keep every number pinned to that reviewed shared version and re-prove fallback after the Catalyst endpoint is deployed.
 
-## Development blockers
+## Four-table model
 
-The following are launch blockers, not hidden implementation claims:
+Only these new Development tables are supported:
 
-1. No authenticated Catalyst HTTP adapter is enabled. The package entrypoint always returns `503`.
-2. No Catalyst SDK Data Store adapter is implemented for this domain. MemoryStore proves policy, not platform durability.
-3. Catalyst Development must prove global uniqueness for nullable `ADMISSION_ID`, unique event/call/notification/outbox keys, conditional slot claims, processing leases with fencing across every side-effect claim, encrypted/private field behavior, and cold-start retry recovery.
-4. The actual Development table/API names are private and intentionally absent from Git.
-5. No Development notification provider credentials exist in this package; only deterministic synthetic delivery is available.
-6. No scheduled Catalyst invocation has been installed for incomplete-call or orphan-admission reconciliation.
-7. Retell pre-call requests contain no call ID. The deterministic admission key uses signed body `event_timestamp + to_number + from_number`; Retell retry timestamp stability has not been proven in Development.
-8. No Retell-authoritative admission-reconciliation adapter has been implemented or read back. The synthetic adapter proves the state machine only and cannot release real capacity.
-9. No Development deployment, phone call, provider send, Analytics import, CRM write, or runtime/source readback occurred in this change.
+1. `FreeTestDeployments` — current number HMAC, immutable configuration snapshot, activation gate, call-key set, handled count, and stop state.
+2. `FreeTestRetellEventReceipts` — minimized event identity/fingerprint, ownership correlation, lease, retry, and terminal state. Development already contains an incompatible legacy `RetellEventReceipts` table; preserve it untouched and do not point this runtime at it.
+3. `FreeTestCalls` — one tenant-bound canonical call and outcome per provider call.
+4. `FreeTestNotifications` — one email-only durable delivery-state record per analyzed call; committed mode is dry-run.
 
-Do not point a Retell number or phone-system forward at this package while any blocker remains.
+[`config/datastore-schema.json`](config/datastore-schema.json) is the exact source schema. It is not evidence that the tables or constraints exist in Catalyst. Table/column provisioning, unique-constraint readback, ZCQL compare-and-set behavior, encrypted-field access, the PII/ePHI validator (`audit_consent=true`) on all four caller- or recipient-bearing JSON columns, and SDK response shapes must be proven in Development before routing.
 
-### Runtime source decision — no-go
+## Eligibility and counting
 
-The 2026-08-22 source/API review concluded **no-go** for adding a deployable HTTP/Data Store/worker/provider boundary now. [`config/runtime-readiness.json`](config/runtime-readiness.json) is the machine-tested decision record.
+Inbound resolution requires all approved gate values plus:
 
-Current official Catalyst documentation establishes several building blocks:
+- `Live` and `Approved` state;
+- explicit `actualStartAt` and an expiration exactly seven days later;
+- current time at or after start and strictly before expiration;
+- handled count below 25;
+- internally consistent client, deployment, configuration, number binding, shared agent, agent version, and source revision.
 
-- [Advanced I/O](https://docs.catalyst.zoho.com/en/serverless/help/functions/advanced-io/) supports native Node.js request/response objects and a blank `createServer` template.
-- The Node SDK documents [single-row inserts](https://docs.catalyst.zoho.com/en/sdk/nodejs/v2/cloud-scale/data-store/insert-rows/) and [ROWID-based updates](https://docs.catalyst.zoho.com/en/sdk/nodejs/v2/cloud-scale/data-store/update-rows/).
-- Data Store documents the [IsUnique column constraint](https://docs.catalyst.zoho.com/en/cloud-scale/help/data-store/columns/).
-- Job Scheduling documents [Function Job submission](https://docs.catalyst.zoho.com/en/sdk/nodejs/v2/job-scheduling/jobs/create-job/).
+A valid terminal `ended` post-call event counts the handled call, whether first observed as `call_ended` or `call_analyzed`. `error` and `not_connected` lifecycle records remain durable but are not counted or notified as handled calls. The call key set makes replay idempotent. Notification waits for analysis.
 
-Those contracts do **not** prove the behaviors this workflow needs: an atomic 25th/26th admission claim across multiple durable facts, nullable-unique slot behavior, the exact duplicate error and conditional-update affected-row shapes, timeout-after-commit recovery, lease fencing across every side effect, or the pinned worker SDK's delivery/input/readback behavior. No notification provider or Analytics import contract has been approved either.
+The reviewed shared Retell draft emits exactly these 11 canonical `custom_analysis_data` names: `outcome`, `coverage_trigger`, `caller_name`, `callback_number`, `customer_type`, `caller_intent`, `issue_summary`, `city_or_zip`, `urgency`, `specific_person_requested`, and `sensitive_data_detected`. Legacy analysis names are not aliases and fail validation or remain unknown. Opportunity value remains `unknown` at this stage; the Catalyst model can accept separately authorized, source-qualified attribution later without inventing revenue.
 
-The repository's [billing raw-body boundary](../billing-webhook-gateway/lib/http.js) and [Form 2 conditional Data Store adapter](../form2-controller/functions/form2_controller/lib/catalyst-datastore-adapter.js) are useful patterns, not runtime proof. Their own deployment controls require Development readback of duplicate conflicts, conditional updates, and SDK response shapes. Copying them here would create a plausible-looking adapter while leaving the free test's P0 concurrency and recovery guarantees unproven.
+There is intentionally no pre-call reservation or admission table. Sequential calls stop at 25. Calls already resolved and in flight when the 25th result converges can create a visible practical overshoot. This is the approved MVP tradeoff; reporting shows the actual handled count and stop state. The runtime never starts paid service.
 
-For that reason, the dependency-free deterministic core and fixed `503` barrier remain the safest source state. No SDK dependency, worker manifest, or provider stub is added until the readiness record's evidence gaps are closed with one concrete Development design.
+## Notification and reporting
+
+Committed configuration uses `FREE_TEST_NOTIFICATION_MODE=dry_run`. The adapter validates the approved email-only recipient and configured sender, creates a durable `Pending` row, then records `DryRunRecorded` with `ATTEMPT_COUNT=0` without calling Mail. Source also contains the tightly bounded `send_development` path using `app.email().sendMail({from_email,to_email:[...],subject,content,html_mode:true})`. That path models `Sending`, `Sent`, `RetryRequired`, `Ambiguous`, and `TerminalFailure`; a timeout or unclassified result after invocation becomes `Ambiguous` and is never automatically resent. No provider send occurred in this change because no verified Development sender and approved synthetic recipient were available. The internal-phone gate requires one controlled delivery/readback, followed by restoration to `dry_run`.
+
+Development reporting uses client-partitioned queries against `FreeTestCalls`, `FreeTestDeployments`, and `FreeTestNotifications`, with a sanitized operator CSV export where required. There is no Analytics outbox/import and no CRM write. Catalyst remains canonical; CRM and Analytics are deferred.
+
+## Deliberate exclusions
+
+The runtime does not book, dispatch, quote, price, transfer, collect payment, send SMS, call outbound, mutate CRM/FSM, ingest transcripts or recordings, or add prospect-specific Retell branches. It stores no raw webhook body, raw provider call ID, Retell number, transcript, recording URL, or notification email outside encrypted configuration.
+
+Number reassignment is not a launch dependency or runtime API. Do not reuse or move either number during initial validation. When a test completes, stop the route, preserve the binding and historical call ownership, and place the number into a documented cooldown. Any later reuse is a separately reviewed stopped-route administrative action with readback and re-QA; automatic reassignment remains deferred.
+
+## Security controls
+
+- Development requires the configured private Advanced I/O host as an early check, then the platform `x-zc-environment`, SDK environment, and exact SDK project identity before Data Store or Mail access. No request header alone is sufficient authority.
+- The retry Job validates Catalyst's platform-injected `X_ZOHO_CATALYST_ENVIRONMENT` as `Development`, then matches the exact private project and Function Job pool identifiers from the Job Request before SDK initialization. Job parameters and undocumented Context headers cannot select a project or pool. Catalyst currently documents both `getJobPoolDetails()` and `getJobpoolDetails()` casing, so the boundary accepts either method but requires the same exact returned ID and `Function` type. The exact live environment and Job Request shapes still require Development readback before enabling the schedule.
+- The Advanced I/O target uses Catalyst's supported Node.js 24 stack with 256 MB function memory. Catalyst's current Job Function contract supports Node.js 18, so the independently packaged retry target is pinned to `node18` with 256 MB function memory and a 512 MB Function Job pool; the shared core declares compatibility with both. Memory is a Catalyst resource setting, so deployment must set and independently read back these values even though the function package manifest does not encode them.
+- Production is rejected by source.
+- Retell verification uses the unmodified UTF-8 request bytes, `HMAC-SHA256(raw_body + timestamp)`, exact millisecond header parsing, constant-time comparison, and a 300-second window.
+- Bodies, strings, tables, columns, routes, timestamps, event types, configuration objects, and extracted fields are bounded and validated.
+- Number, call, event, notification, and public correlation identifiers are keyed digests; ordinary logs contain only public correlation, event/state, route, status, and safe error code.
+- Obvious volunteered card, SSN, bank, government-ID, authentication, or off-scope medical data is minimized before canonical or notification persistence.
+- Retell extraction may assert only unknown or caller-supplied estimated value; confirmed/booked revenue and internal estimates require separate authoritative sources.
 
 ## Configuration
 
-`.env.example` lists every name. `config/variables.json` is the public registry with consumer, secret classification, exact format, and Development/Production handling. Missing, malformed, placeholder, duplicate-table, or Production values fail at configuration load. Real values and table names stay in Catalyst secrets/private configuration.
-
-`config/datastore-schema.json` is a proposed Development schema, not proof of live tables. Its deployment gates are mandatory.
+[`functions/retell_free_test/.env.example`](functions/retell_free_test/.env.example), [`functions/retell_free_test_retry/.env.example`](functions/retell_free_test_retry/.env.example), and [`config/variables.json`](config/variables.json) are the exact public registry. The two target-specific files enforce least privilege: the retry Job does not receive the Retell webhook key, number-lookup key, readiness token, route paths, request limits, or Advanced I/O host. Real secrets, private agent IDs, sender address, client identifiers, phone numbers, and customer data stay outside Git. Missing, malformed, placeholder, mismatched, or Production values fail closed.
 
 ## Tests
 
 From `functions/retell_free_test`:
 
 ```powershell
+npm ci --ignore-scripts
 npm run test:unit
 npm run test:integration
 npm run test:acceptance
 npm run ci
 ```
 
-The acceptance suite uses two synthetic clients with different IDs, versions, companies, service areas, urgency rules, recipients, and numbers on the same shared agent. It covers resolution, conversation variables, persistence, notification, Analytics, replay, concurrency, reassignment/history, malformed and reordered events, seven-day/25-handled-call enforcement, sensitive-data minimization, missing-analysis reconciliation, provider failure states, and provider-authoritative orphan-admission release with ambiguity and stale-lease containment.
+Then prove the independently packaged Function Job target from `functions/retell_free_test_retry`:
 
-## Safe next implementation step
+```powershell
+npm ci --ignore-scripts --install-links
+npm run ci
+```
 
-Close [`config/runtime-readiness.json`](config/runtime-readiness.json) in order: prove the admission/conditional-write contract in Catalyst Development, verify the exact pinned worker SDK and durable scanner design, then approve one notification provider and one Analytics handoff. Only then build a queue-only authenticated Advanced I/O ingress plus an out-of-band worker. The ingress must verify the raw Retell signature, durably insert/claim a minimized receipt, and return within the provider timeout; it must not send notification or Analytics synchronously. Removing the fixed `503` requires separate review. Production remains out of scope.
+The root [`catalyst.json`](catalyst.json) repeats the retry package's `npm ci --install-links` step as a `predeploy` hook. `--install-links` is required: it materializes the reviewed local core package inside the Job archive instead of leaving a sibling-directory link that Catalyst cannot deploy. [`config/retry-job.json`](config/retry-job.json) fixes the Development Function Job pool, no-parameter job, disabled-first one-minute Cron, activation readback, and rollback. The Cron—not the pool alone—submits the recurring retry Job.
+
+The suites cover contract/environment/schema validation, raw signatures, sensitive-data minimization, revenue-source restrictions, Data Store SDK calls, two-client resolution and lifecycle isolation, cross-client rejection, replay, reordered events, 7-day/25-call enforcement, documented in-flight overshoot, dry-run containment, private retry/readiness, and Production pre-access rejection.
+
+## Required Development proof
+
+Before any phone test:
+
+1. Provision the four tables exactly and independently read back every column, uniqueness rule, private/encrypted access control, and required PII/ePHI validator.
+2. Serve and deploy only to Catalyst Development; prove raw bytes, headers, SDK environment, insert conflict, conditional update/readback, timeout, and replay behavior.
+3. Deploy `retell_free_test_retry` to the exact Development Function Job pool in `config/retry-job.json`; run one immediate synthetic Job, then enable/read back its one-minute predefined Cron and exercise event and notification backoff, terminal failure, and ambiguity readback.
+4. Confirm both synthetic numbers still resolve to the reviewed shared Retell version whose exact gate, no-data fallback, and natural close passed native simulation.
+5. Run two synthetic clients through the complete Development phone lifecycle and inspect canonical rows/correlation IDs.
+6. Prove `dry_run`, configure only a verified Development sender and approved synthetic recipient, deliver/read back one controlled email, prove replay creates no second email, then restore `dry_run`.
+
+See [`config/runtime-readiness.json`](config/runtime-readiness.json) for the machine-tested blockers. No repository change is deployment or routing approval.

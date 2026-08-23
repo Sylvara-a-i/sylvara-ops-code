@@ -1,11 +1,7 @@
 'use strict';
 
 const {
-  CONTRACT,
   COVERAGE_MODES,
-  CRM_TEST_STATUSES,
-  CRM_APPROVAL_STATUSES,
-  STOP_REASON_TO_CRM,
   OUTCOMES,
   RETELL_EVENTS,
 } = require('./contracts');
@@ -16,6 +12,7 @@ const E164_PATTERN = /^\+[1-9][0-9]{7,14}$/;
 const SHA_PATTERN = /^[0-9a-f]{40}$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ZIP_PATTERN = /^[0-9]{5}(?:-[0-9]{4})?$/;
+const CALL_STATUSES = new Set(['registered', 'not_connected', 'ongoing', 'ended', 'error']);
 
 function isPlainObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype;
@@ -96,58 +93,6 @@ function enumValue(value, values, name) {
   return result;
 }
 
-function validateDeployment(input) {
-  const value = object(input, 'deployment');
-  exactKeys(value, [
-    'clientId', 'deploymentId', 'configurationVersion', 'environment', 'engagementType',
-    'capabilityProfile', 'coverageMode', 'testStatus', 'goLiveApprovalStatus',
-    'approvedStartAt', 'actualStartAt', 'expiresAt', 'admissionLimit', 'admittedCallCount',
-    'handledCallCount', 'stopReason', 'monitorAgentId', 'monitorAgentVersion',
-  ], 'deployment');
-  const actualStartAt = timestamp(value.actualStartAt, 'deployment.actualStartAt', { nullable: true });
-  const expiresAt = timestamp(value.expiresAt, 'deployment.expiresAt', { nullable: true });
-  invariant(Boolean(actualStartAt) === Boolean(expiresAt), 'INVALID_SCHEMA', 'Start and expiration must both be set or both be absent.');
-  if (actualStartAt && expiresAt) {
-    invariant(Date.parse(expiresAt) - Date.parse(actualStartAt) === CONTRACT.test_duration_days * 86_400_000,
-      'INVALID_CONFIGURATION_VERSION', 'Expiration must be exactly seven days after actual start.');
-  }
-  const admittedCallCount = integer(value.admittedCallCount, 'deployment.admittedCallCount', 0, CONTRACT.admission_limit);
-  const handledCallCount = integer(value.handledCallCount, 'deployment.handledCallCount', 0, CONTRACT.admission_limit);
-  invariant(handledCallCount <= admittedCallCount, 'INVALID_SCHEMA', 'Handled calls cannot exceed admitted calls.');
-  const stopReason = optionalString(value.stopReason, 'deployment.stopReason', { maximum: 50 });
-  invariant(stopReason === null || STOP_REASON_TO_CRM.has(stopReason), 'INVALID_SCHEMA', 'deployment.stopReason is unsupported.');
-  const testStatus = enumValue(value.testStatus, CRM_TEST_STATUSES, 'deployment.testStatus');
-  const goLiveApprovalStatus = enumValue(value.goLiveApprovalStatus, CRM_APPROVAL_STATUSES, 'deployment.goLiveApprovalStatus');
-  const approvedStartAt = timestamp(value.approvedStartAt, 'deployment.approvedStartAt');
-  if (testStatus === CONTRACT.active_test_status) {
-    invariant(actualStartAt && expiresAt
-      && Date.parse(actualStartAt) >= Date.parse(approvedStartAt)
-      && goLiveApprovalStatus === CONTRACT.approved_go_live_status
-      && stopReason === null,
-    'INVALID_SCHEMA', 'Live deployment activation state is inconsistent.');
-  }
-  return Object.freeze({
-    clientId: identifier(value.clientId, 'deployment.clientId'),
-    deploymentId: identifier(value.deploymentId, 'deployment.deploymentId'),
-    configurationVersion: identifier(value.configurationVersion, 'deployment.configurationVersion'),
-    environment: enumValue(value.environment, new Set(['development']), 'deployment.environment'),
-    engagementType: enumValue(value.engagementType, new Set([CONTRACT.engagement_type]), 'deployment.engagementType'),
-    capabilityProfile: enumValue(value.capabilityProfile, new Set([CONTRACT.capability_profile]), 'deployment.capabilityProfile'),
-    coverageMode: enumValue(value.coverageMode, COVERAGE_MODES, 'deployment.coverageMode'),
-    testStatus,
-    goLiveApprovalStatus,
-    approvedStartAt,
-    actualStartAt,
-    expiresAt,
-    admissionLimit: integer(value.admissionLimit, 'deployment.admissionLimit', CONTRACT.admission_limit, CONTRACT.admission_limit),
-    admittedCallCount,
-    handledCallCount,
-    stopReason,
-    monitorAgentId: identifier(value.monitorAgentId, 'deployment.monitorAgentId'),
-    monitorAgentVersion: integer(value.monitorAgentVersion, 'deployment.monitorAgentVersion', 0, 1_000_000),
-  });
-}
-
 function validateConfiguration(input) {
   const value = object(input, 'configuration');
   exactKeys(value, [
@@ -195,32 +140,6 @@ function validateConfiguration(input) {
   });
 }
 
-function validateNumberAssignment(input) {
-  const value = object(input, 'numberAssignment');
-  exactKeys(value, [
-    'assignmentId', 'assignmentVersion', 'toNumber', 'clientId', 'deploymentId',
-    'configurationVersion', 'agentId', 'status', 'effectiveFrom', 'effectiveTo',
-  ], 'numberAssignment');
-  const effectiveFrom = timestamp(value.effectiveFrom, 'numberAssignment.effectiveFrom');
-  const effectiveTo = timestamp(value.effectiveTo, 'numberAssignment.effectiveTo', { nullable: true });
-  invariant(!effectiveTo || Date.parse(effectiveTo) > Date.parse(effectiveFrom), 'INVALID_SCHEMA', 'Number assignment interval is invalid.');
-  invariant((value.status === 'Active' && effectiveTo === null)
-    || (value.status === 'Retired' && effectiveTo !== null),
-  'INVALID_SCHEMA', 'Number assignment status and effective end are inconsistent.');
-  return Object.freeze({
-    assignmentId: identifier(value.assignmentId, 'numberAssignment.assignmentId'),
-    assignmentVersion: integer(value.assignmentVersion, 'numberAssignment.assignmentVersion', 1, 1_000_000),
-    toNumber: e164(value.toNumber, 'numberAssignment.toNumber'),
-    clientId: identifier(value.clientId, 'numberAssignment.clientId'),
-    deploymentId: identifier(value.deploymentId, 'numberAssignment.deploymentId'),
-    configurationVersion: identifier(value.configurationVersion, 'numberAssignment.configurationVersion'),
-    agentId: identifier(value.agentId, 'numberAssignment.agentId'),
-    status: enumValue(value.status, new Set(['Active', 'Retired']), 'numberAssignment.status'),
-    effectiveFrom,
-    effectiveTo,
-  });
-}
-
 function validateInboundPayload(input) {
   const value = object(input, 'inbound webhook');
   exactKeys(value, ['event', 'event_timestamp', 'call_inbound'], 'inbound webhook');
@@ -253,11 +172,17 @@ function validateEventEnvelope(input) {
   const callId = identifier(call.call_id, 'event webhook.call.call_id');
   const agentId = identifier(call.agent_id, 'event webhook.call.agent_id');
   const agentVersion = integer(call.agent_version, 'event webhook.call.agent_version', 0, 1_000_000);
+  const callStatus = enumValue(call.call_status, CALL_STATUSES, 'event webhook.call.call_status');
+  const disconnectionReason = optionalString(call.disconnection_reason,
+    'event webhook.call.disconnection_reason', { maximum: 64, trim: false });
+  invariant(disconnectionReason === null || /^[a-z][a-z0-9_]{0,63}$/.test(disconnectionReason),
+    'INVALID_SCHEMA', 'Event disconnection reason is invalid.');
   const startTimestamp = unixMillis(call.start_timestamp, 'event webhook.call.start_timestamp');
   const endTimestamp = call.end_timestamp === undefined || call.end_timestamp === null
     ? null : unixMillis(call.end_timestamp, 'event webhook.call.end_timestamp');
   invariant(!endTimestamp || endTimestamp >= startTimestamp, 'INVALID_SCHEMA', 'Call timestamps are inconsistent.');
-  return Object.freeze({ event, call, callId, agentId, agentVersion, startTimestamp, endTimestamp });
+  return Object.freeze({ event, call, callId, agentId, agentVersion, callStatus,
+    disconnectionReason, startTimestamp, endTimestamp });
 }
 
 function validateOutcome(value) {
@@ -284,9 +209,7 @@ module.exports = {
   e164,
   stringArray,
   enumValue,
-  validateDeployment,
   validateConfiguration,
-  validateNumberAssignment,
   validateInboundPayload,
   validateEventEnvelope,
   validateOutcome,

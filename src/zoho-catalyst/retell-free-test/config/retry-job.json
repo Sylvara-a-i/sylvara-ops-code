@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "environment": "Development",
+  "live_state": "unverified",
+  "function_target": {
+    "name": "retell_free_test_retry",
+    "stack": "node18",
+    "memory_mb": 256
+  },
+  "job_pool": {
+    "name": "FreeTestRetryDevelopment",
+    "type": "Function",
+    "memory_mb": 512,
+    "id_runtime_variable": "FREE_TEST_RETRY_JOB_POOL_ID"
+  },
+  "job": {
+    "name": "FreeTestRetryScan",
+    "target_type": "Function",
+    "target_name": "retell_free_test_retry",
+    "params": {},
+    "platform_retries_enabled": false,
+    "reason": "The recurring scan and four-table state machine own bounded retry; overlapping provider-level retries are disabled."
+  },
+  "cron": {
+    "name": "FreeTestRetryEveryMinute",
+    "execution_type": "pre-defined",
+    "type": "Periodic",
+    "status_on_initial_provisioning": "disabled",
+    "detail": {
+      "hour": 0,
+      "minute": 1,
+      "second": 0,
+      "repetition_type": "every"
+    }
+  },
+  "activation_gate": [
+    "Deploy and read back both Development function targets from the same SOURCE_REVISION.",
+    "Provision and read back the exact four-table schema, unique constraints, permissions, and PII/ePHI validators.",
+    "Run one immediate synthetic retry Job and verify safe logs and durable state convergence.",
+    "Enable the predefined Cron only after the immediate Job passes; then read back enabled status and target/pool ownership."
+  ],
+  "rollback": "Disable the Cron first, then stop the two synthetic deployment rows and remove the Retell number webhook bindings. Preserve durable rows."
+}

@@ -77,7 +77,7 @@ The [product reference collection](reference/README.md) covers the currently gov
 
 These files stay beside their artifacts because they describe exact source, validation, deployment, provenance, or rollback behavior. Reusable policy belongs here under `docs/zoho/`.
 
-The free-test source is Development-only. Its notification and Analytics adapters are synthetic, its CRM summary path is disabled, and its Production mode is rejected. The 2026-08-22 reconciliation found runtime/source parity and deployed route evidence unproven; repository presence is not deployment evidence.
+The free-test source is Development-only and **READY FOR DEVELOPMENT DEPLOYMENT**. The MVP uses Catalyst Mail email-only durable state, defaults to `dry_run`, and permits one controlled `send_development` delivery/readback before internal-phone readiness; replay must send no duplicate and mode must return to `dry_run`. The separate Function Job handles due retryable state without blindly resending ambiguity. CRM remains disabled, Analytics is omitted, and reporting uses tenant-scoped Catalyst queries plus sanitized CSV. Offline/synthetic, Development deployment, controlled internal phone, and prospect launch decisions remain separate. Repository presence is not deployment or route evidence.
 
 ## Portability Boundary
 

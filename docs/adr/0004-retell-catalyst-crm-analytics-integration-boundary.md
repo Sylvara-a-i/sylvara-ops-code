@@ -2,18 +2,18 @@
 
 - Status: Accepted as a proposed integration boundary; free-test topology and tenancy sections superseded by [ADR 0006](0006-shared-seven-day-monitor-with-client-number-isolation.md)
 - Date: 2026-08-18
-- Deployment status: Development free-test source is present; deployment, runtime/source parity, and live-call approval are unproven
+- Deployment status: **READY FOR DEVELOPMENT DEPLOYMENT**; runtime/source parity, controlled email delivery, provider fallback, and phone behavior still require deployed readback
 - Product scope: `after-hours-new-residential-service-request-v1` and later separately approved extensions
 
 ## Context
 
 [ADR 0003](0003-initial-after-hours-service-request-workflow.md) fixes the first provider-neutral plumbing workflow for offline synthetic validation. The next architectural question is how a future approved call should move through a voice runtime, Sylvara-controlled middleware, relationship systems, customer operating systems, and client reporting without creating duplicate sources of truth or a premature platform.
 
-The current implementation plan uses Retell as the voice-runtime candidate, Zoho Catalyst as the secure middleware and durable integration-state layer, Zoho CRM as Sylvara's relationship and commercial system, and Zoho Analytics as the derived reporting and distribution layer. The customer's approved scheduling or field-service system remains authoritative for appointments, jobs, work orders, completion, and revenue outcomes.
+The general implementation boundary uses Retell as the voice-runtime candidate, Zoho Catalyst as secure middleware and durable integration state, Zoho CRM as Sylvara's relationship/commercial system, and Zoho Analytics as an optional later derived reporting layer. ADR 0006 deliberately narrows the free-test MVP to Catalyst Mail email records plus Catalyst query/CSV reporting, with CRM disabled and Analytics deferred. The customer's approved scheduling or field-service system remains authoritative for appointments, jobs, work orders, completion, and revenue outcomes.
 
 ADR 0006 is now authoritative for the 7-Day Free Test. It replaces this ADR's former client-specific evaluation-agent lifecycle, agent-first tenancy model, and evaluation-to-paid-agent promotion model. The system ownership, webhook, reconciliation, data-minimization, and reporting boundaries below remain current where they do not conflict with ADR 0006.
 
-This decision remains subordinate to the [product boundary](../product/README.md) and [legal and compliance control archive](../legal-compliance/README.md). It does not authorize a prospect-facing telephone demonstration, customer pilot, number forwarding, recording, retained transcription, live transfer, booking, message, CRM write, Analytics delivery, or production deployment.
+This decision remains subordinate to the [product boundary](../product/README.md). The [legal and compliance archive](../legal-compliance/README.md) is dated research with a conservative historical profile, not legal advice or a decision for a particular test. This ADR does not authorize a prospect-facing demonstration, customer pilot, number forwarding, recording, retained transcription, live transfer, booking, message, CRM write, Analytics delivery, or Production deployment.
 
 ## Decision
 
@@ -32,14 +32,9 @@ Shared 7-Day Free Test agent and Catalyst deployment configuration
         v
 Zoho Catalyst ingress and durable call state
         |
-        +----> approved-recipient notification
+        +----> Catalyst Mail email record
         |
-        +----> bounded CRM relationship and commercial summaries
-        |
-        +----> batched Zoho Analytics reporting facts
-                         |
-                         v
-              fixed-client reviewed report
+        +----> Catalyst query / sanitized CSV report
 ```
 
 The boundaries below are architectural intent. Current tenant identities, permissions, agents, numbers, projects, functions, tables, workspaces, views, OAuth grants, schedules, and runtime behavior remain **Unknown** until independently verified.
@@ -50,30 +45,31 @@ The boundaries below are architectural intent. Current tenant identities, permis
 2. Assign one dedicated Retell number and one versioned Catalyst deployment/configuration record to each active test client.
 3. Resolve ownership from the called number and exact approved configuration gate before any client-specific conversation. Never use the shared `agent_id` as the tenant key.
 4. Keep service areas, schedules, eligibility, urgency, route approval, notification destinations, and test limits in the immutable deployment snapshot. Retell presents approved values but is not their authority.
-5. Fail closed through Configuration Unavailable when ownership or configuration cannot be proved. There is no degraded intake or client-clone fallback.
+5. For a known authenticated invalid, unknown, ambiguous, inactive, expired, or exhausted resolution, return HTTP 200 with `{ "call_inbound": { "reject": true } }`, start no agent, and create no resolver-side write. Transport, authentication, timeout, 503/unavailable, malformed-response, or invalid-override failure may instead cause Retell to use the number-bound shared agent; its exact first-node gate must terminate through Configuration Unavailable with no intake. There is no degraded intake or client-clone fallback.
 6. After a separately approved conversion, create and accept a dedicated Revenue Desk agent if deeper client-specific behavior is required. The shared free-test agent is not promoted into paid service.
-7. Preserve prior number assignments, configuration versions, call bindings, and routes so reassignment and rollback remain auditable.
+7. Do not reuse either number during initial validation. When a test completes, preserve its binding evidence and place the number into a documented cooldown. Any later reuse is a separately reviewed stopped-route administrative process; automatic reassignment is deferred and is not an internal-test blocker. Historical calls retain their embedded deployment/configuration ownership.
 
 ## Source-Of-Truth Matrix
 
 | System | Authoritative for | Must not own |
 |---|---|---|
 | Retell | Real-time voice execution, vendor call object, and approved runtime configuration | Customer relationship truth, job completion, revenue, CRM state, or unrestricted business rules |
-| Zoho Catalyst | Pre-call resolution, immutable number/deployment/configuration binding, admission enforcement, webhook verification, event normalization, durable call and notification state, idempotency, retries, reconciliation state, and reporting outbox | CRM relationship state, customer schedule truth, accounting truth, or analytical presentation |
-| Zoho CRM | Prospect, client, contact, opportunity, evaluation authorization, approved report recipients, and bounded commercial summary state | Raw webhook payloads, per-call event ledgers, recordings, or full transcripts |
+| Zoho Catalyst | Pre-call resolution, current number/deployment/configuration binding, time/count eligibility, webhook verification, event normalization, durable calls/outcomes/email records, idempotency, and query/CSV reporting | CRM relationship state, customer schedule truth, accounting truth, or optional later analytical presentation |
+| Zoho CRM | Prospect, client, contact, opportunity, and commercial relationship state outside the MVP call lifecycle | Raw webhook payloads, per-call event ledgers, recordings, transcripts, or free-test runtime mutation |
 | Customer operating system | Services, availability, appointments, jobs, work orders, completion, invoices, or payments within its approved contract | Voice-runtime state or Sylvara relationship state |
 | Zoho Analytics | Derived datasets, formulas, reports, dashboards, refresh state, exports, and scheduled analytical delivery | Transactional decisions, reverse writes, or authoritative booking and revenue truth |
 | GitHub | Sanitized code, schemas, tests, decisions, and runbooks | Secrets, live identifiers, customer or caller data, call content, production configuration, or deployment proof |
 
 ## Catalyst Project And Function Boundary
 
-Use one Sylvara-owned voice-integration project per environment for the approved client set. Do not create a Catalyst project or function stack for every client or every bounded evaluation. Client isolation is enforced through fixed environment binding, stable `client_id` and `deployment_id`, immutable number assignments, configuration versions, typed payloads, and row-level ownership.
+Use one Sylvara-owned voice-integration project per environment for the approved client set. Do not create a Catalyst project or function stack for every client or every bounded evaluation. Client isolation is enforced through fixed environment binding, stable `client_id` and `deployment_id`, one unambiguous current number binding per active deployment, immutable configuration/call ownership, typed payloads, and row-level partitions.
 
 The logical components are:
 
 1. **Retell ingress**: verify and durably claim the provider event inside the webhook timeout.
-2. **Post-call processor**: normalize call state, classify outcomes, create durable notification state, and create reporting outbox rows. Customer-system or CRM mutations exist only in separately approved workflows; they are disabled for the Development free test.
-3. **Analytics sync worker**: batch pending facts, submit and poll Analytics imports, reconcile results, and close report watermarks.
+2. **Catalyst Function Job**: the separate `retell_free_test_retry` target processes due minimized event receipts and retryable notification state with bounded backoff and authoritative readback; ambiguous Mail attempts are not blindly resent.
+3. **Post-call processor**: normalize call state, classify outcomes, update the handled count once, create one Catalyst Mail email record, and expose reportable fields. Customer-system and CRM mutations are disabled.
+4. **Query/CSV reporting**: read a fixed client/deployment partition and create a sanitized, manually reviewed export. Analytics import is a deferred later phase.
 
 Logical separation does not require one function per component. Before implementation, read the exact current Catalyst function inventory and deployment contract. Components may share one deployable package only when they have the same environment, trust boundary, secret access, scaling profile, failure isolation, and rollback lifecycle. Otherwise keep them separate.
 
@@ -102,55 +98,53 @@ A lifecycle event uses a keyed-HMAC receipt key derived from event type and prov
 
 ## Proposed Catalyst Data Contract
 
-The following names are conceptual public labels, not live table names:
+The following names are conceptual future integration labels, not live table names and not the free-test provisioning contract. ADR 0006's MVP uses only the four tables named in the component-owned schema.
 
 | Dataset | Grain and purpose |
 |---|---|
 | `deployment_configurations` | One immutable client-deployment-configuration snapshot |
 | `number_assignments` | One immutable Retell-number assignment and non-overlapping effective interval |
-| `call_admissions` | One atomic seven-day/25-call admission claim per unique call |
 | `call_events` | One immutable, minimized provider event claim |
 | `calls` | One normalized current call row per client, deployment, and call |
 | `call_artifacts` | One private artifact reference, classification, hash, and retention record |
 | `outcome_reconciliation` | One call-to-customer-system outcome reconciliation record |
-| `notifications` | One durable, idempotent notification state machine per eligible call and approved destination |
-| `reporting_outbox` | One versioned analytical change awaiting confirmed delivery |
-| `report_runs` | One client, period, watermark, reconciliation, and delivery result |
+| `notifications` | One durable, idempotent email record per eligible call and approved destination; committed/default Development mode terminates at `DryRunRecorded`, while one controlled `send_development` proof uses the modeled send/retry/ambiguous/terminal states |
 
 The canonical lookup key is a keyed-HMAC of the provider call identifier. The raw provider identifier is not retained or logged. The canonical row binds the opaque key to immutable `client_id`, `deployment_id`, `configuration_version`, and ownership references; conflicts fail closed. Analytical facts use that opaque Call Key plus Client ID and Deployment ID partitions. The event ledger stores only the minimum metadata required for replay safety and reconciliation. Raw provider bodies are not retained by default and never belong in function logs. Recordings and transcripts stay outside Analytics and CRM; Catalyst stores only approved private references and retention metadata when those artifacts are separately authorized.
 
 ## Post-Call Processing
 
-The target synchronous webhook path ends after durable acceptance. Downstream work must run outside the provider timeout:
+The current free-test source includes a separate Catalyst Function Job target for due minimized event receipts and retryable notification rows. Development must still prove the packaged Job identity, trigger/request shape, bounded backoff, lease/conditional-write behavior, and ambiguous-result readback before an internal phone test. Repository source is not deployment evidence.
+
+The current bounded processing sequence is:
 
 1. normalize the current call;
 2. classify the call against the approved outcome taxonomy;
-3. create one idempotent notification record for the pre-approved deployment recipient;
-4. place one versioned row in the reporting outbox;
-5. update only separately approved client-level or commercial summary fields in CRM; and
-6. for a separately approved paid workflow, reconcile customer-system outcomes and later analytical imports.
+3. increment the deployment's handled count once;
+4. create one idempotent Catalyst Mail email record for the pre-approved deployment recipient; and
+5. make the minimized row available to fixed-partition query/CSV reporting.
 
-The free test does not book, dispatch, quote, collect payment, or mutate the customer operating system. Its current Development core directly invokes deterministic synthetic notification and Analytics adapters against an in-memory test store, and CRM writes are disabled. It does not yet implement the HTTP durable-acceptance or queue/worker boundary described above; that gap blocks deployment/readiness.
+The free test does not book, dispatch, quote, collect payment, or mutate the customer operating system. Development Catalyst Mail defaults to `dry_run` (`DryRunRecorded`, zero attempts, no `sendMail` call). Before internal-phone readiness, one controlled `send_development` email must receive provider/inbox readback, replay must create no second delivery, and configuration must return to `dry_run`. CRM is disabled and Analytics is outside the MVP. Current source/runtime gaps are recorded in the Development reconciliation; repository source never proves deployment.
 
 No ambiguous write is blindly retried. The worker first reads the target or job status and determines whether the prior attempt completed, failed, or requires operator reconciliation.
 
 ## Reporting Boundary
 
-Catalyst is the durable integration and operational evidence layer. Zoho Analytics is the client-reporting layer.
+Catalyst is the durable integration and operational evidence layer. For the free-test MVP it is also the internal reporting source through fixed-partition queries and sanitized CSV exports. Zoho Analytics is an optional later presentation layer.
 
 Use separate Development and Production workspaces. The proposed Production model uses one central workspace with immutable `Client ID` and `Deployment ID` partitions unless a contract requires stronger physical separation. Clients receive fixed-client outputs; they do not receive source-table access, a selectable all-client dashboard, or a public link.
 
-The first evaluation report is manually reviewed. Scheduled monthly delivery is enabled only after repeated clean manual cycles and after all report acceptance gates pass:
+The first free-test report is a manually reviewed Catalyst CSV. Any later Analytics or scheduled delivery is enabled only after repeated clean manual cycles and after all applicable report acceptance gates pass:
 
-- source and Analytics call counts reconcile;
+- source and exported call counts reconcile;
 - the report contains exactly one client and only its approved deployment(s);
 - the data watermark is current and visible;
-- no reporting job or reconciliation item is unresolved;
+- no query/export reconciliation item is unresolved;
 - no raw transcript, recording, phone number, address, or webhook payload is present;
-- the recipient set matches the approved CRM record; and
+- any external recipient set is separately approved; and
 - estimated opportunity value is visibly separated from verified booked, completed, invoiced, or paid value.
 
-Catalyst OLAP may later support internal diagnostics or reconciliation. It does not replace Analytics dashboards, controlled exports, or scheduled client delivery.
+Catalyst query/CSV is intentionally sufficient for internal validation. It is not a commitment to build a dashboard or portal.
 
 ## MCP And Production API Boundary
 
@@ -162,7 +156,7 @@ Public role labels are:
 - **Analytics Changes**: workspace initialization, tables, folders, formulas, query tables, and reports.
 - **Analytics Controller**: destructive cleanup only, disconnected unless an exact cleanup is approved.
 
-Actual server names, URLs, identities, OAuth grants, and enabled-tool configuration remain private. A separately approved Production path would move call facts through the direct Zoho Analytics API using a least-privilege connection and batched `updateadd` imports matched on opaque `Call Key` with `Client ID` and `Deployment ID` as mandatory partitions. The current free-test adapter is synthetic only.
+Actual server names, URLs, identities, OAuth grants, and enabled-tool configuration remain private. A separately approved later path could move minimized call facts through the direct Zoho Analytics API, but no Analytics adapter or import is required for the free-test MVP.
 
 The exact proposed tool inventory and role allowlists are recorded in the dated [managed Analytics MCP catalog](../zoho/mcp/reference/zoho-analytics-managed-mcp-catalog-2026-08-18.md).
 
@@ -182,9 +176,9 @@ The exact proposed tool inventory and role allowlists are recorded in the dated 
 
 Rejected because high-volume call events, payloads, transcripts, and recordings would turn the relationship system into an event store, increase API traffic, and blur ownership. CRM receives only bounded relationship and commercial summaries.
 
-### Use Catalyst Alone For Client Reporting
+### Use Catalyst Alone For Long-Term Client Reporting
 
-Rejected because Catalyst is the middleware and operational state layer. Its logs and APM are operational diagnostics, not a durable client dashboard, access-control, export, and scheduled-delivery product.
+Deferred as a long-term reporting decision. Catalyst logs/APM are not reports, but fixed client/deployment queries and sanitized CSV exports are sufficient for the internal MVP. Analytics or another presentation layer should be added only after evidence shows that manual reviewed exports are inadequate.
 
 ### Use Analytics As The Event Store
 
@@ -207,20 +201,20 @@ Rejected because fixed-client reviewed reports are sufficient for validation. A 
 No live path is authorized until all applicable gates pass:
 
 1. current Retell contract, account, agent, number, recording, transcription, retention, training, webhook, and data-region settings are verified;
-2. legal, privacy, vendor, customer, disclosure, consent, and call-path approvals are recorded privately;
-3. Catalyst Development proves signature verification, timeout behavior, duplicate handling, exact configuration gating, number/deployment ownership, seven-day/25-call admission, minimized logging, durable notification state, and durable readback with synthetic events;
-4. the approved CRM summary fields and recipient controls are read back in the correct tenant;
-5. the Analytics organization, region, plan, workspaces, roles, scopes, tools, row-level controls, export restrictions, and schedules are verified;
-6. synthetic imports prove `updateadd`, asynchronous job polling, duplicate behavior, rejected-row handling, and exact reconciliation;
-7. non-admin tests prove one-client isolation and prohibited exports;
+2. the business, privacy, security, vendor, customer, disclosure, consent, and any professional review required for the actual call path are recorded privately;
+3. Catalyst Development proves signature verification, explicit known-failure rejection, safe provider-fallback gating, duplicate handling, exact configuration gating, number/deployment ownership, seven-day eligibility, the practical 25-handled-call stop and visible overshoot, minimized logging, Job retry/readback, email state, tenant-partitioned query/CSV, and durable readback with synthetic events;
+4. two synthetic numbers on the same shared agent version prove client isolation, and prohibited exports remain absent;
+5. CRM mutation and Analytics import are verified disabled;
+6. one controlled `send_development` email is independently read back, replay sends no duplicate, and mode is restored to `dry_run`;
+7. completed validation numbers enter documented cooldown and are not reused during initial validation;
 8. containment and rollback are rehearsed; and
-9. Gabriel separately approves the exact live artifact, target, route, configuration, and readback plan.
+9. Gabriel separately approves the exact external artifact, target, route, configuration, and readback plan.
 
 ## Consequences
 
-This boundary keeps the initial call path small, preserves vendor portability, makes retries and attribution auditable, and gives clients a reporting layer without turning CRM into a call database or Catalyst into a custom dashboard product.
+This boundary keeps the initial call path small, preserves vendor portability, makes replay and attribution auditable, and proves reporting value without turning CRM into a call database or building a custom dashboard.
 
-It also creates deliberate manual work during validation: reports remain reviewed, customer-system outcomes require reconciliation, and live delivery stays blocked until the exact vendor and legal gates close. That is preferable to automating an unverified call and reporting path.
+It also creates deliberate manual work during validation: reports remain reviewed, customer-system outcomes require reconciliation, and live delivery stays blocked until the exact operating evidence and approvals exist. That is preferable to automating an unverified call and reporting path.
 
 ## Official References
 

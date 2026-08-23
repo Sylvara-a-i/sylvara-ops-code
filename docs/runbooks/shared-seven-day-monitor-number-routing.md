@@ -3,19 +3,34 @@
 ## Status And Authority
 
 - Architecture: [ADR 0006](../adr/0006-shared-seven-day-monitor-with-client-number-isolation.md)
-- Runtime contract: [`free-test-contract.json`](../../src/zoho-catalyst/retell-free-test/functions/retell_free_test/contracts/free-test-contract.json)
-- Environment registry: [`variables.json`](../../src/zoho-catalyst/retell-free-test/config/variables.json)
-- Sanitized Development audit: [2026-08-22 reconciliation](free-test-development-reconciliation-2026-08-22.md)
-- Current readiness: **NOT READY**
+- Catalyst component manifest: [`catalyst.json`](../../src/zoho-catalyst/retell-free-test/catalyst.json)
+- Retell contract: [`conversation-contract.json`](../../src/retell/agents/7-day-free-test/contracts/conversation-contract.json)
+- Sanitized audit: [Development reconciliation](free-test-development-reconciliation-2026-08-22.md)
+- Offline/synthetic Development testing: permitted by this repository workflow; verify the current suite before relying on it
+- Controlled internal Development phone test: live Development readback and the scoped internal test record remain required
+- Controlled prospect test: approval unresolved; not authorized by this runbook
 - Production authorization: **Not granted**
 
-This runbook supersedes the client-agent mapping and shared-agent prohibition in the generic [Retell/Catalyst/Analytics runbook](retell-catalyst-analytics-reporting.md). It also supersedes every earlier free-test instruction that permitted neutral/degraded intake after failed resolution. Configuration uncertainty must reach only Configuration Unavailable before caller-data collection.
+This runbook implements [ADR 0006](../adr/0006-shared-seven-day-monitor-with-client-number-isolation.md) for the smallest useful MVP. It supersedes prior free-test instructions for cloned agents, exact reservation/orphan machinery, automatic number reassignment, CRM mutation, and Analytics-first reporting.
 
-The current legal profile does not authorize this telephone workflow. Synthetic Development processing may use synthetic numbers, clients, events, notification results, and Analytics facts. It is not permission to bind a number, expose a route, send a message, place/receive a call, or retain call content.
+Configuration uncertainty must never reach client-specific intake. Known authenticated resolver failures use Retell's explicit successful rejection response with zero resolver writes; transport, authentication, timeout, 503/unavailable, malformed-response, or invalid-override fallback may reach only the shared agent's no-data Configuration Unavailable termination. Do not switch to a client clone or degraded intake.
 
-The repository currently contains the deterministic resolver/processor core and synthetic adapters, but the real Catalyst HTTP request boundary, durable Data Store adapter with atomic conditional semantics, durable queue/worker handoff, deployed routes, and runtime readback remain absent or unproven. The core currently invokes synthetic notification/Analytics work inside `processEvent`; passing in-memory tests does not prove provider-timeout acknowledgement, deployability, or durability.
+## What The MVP Does
 
-## Operational Model
+The MVP uses:
+
+- one shared Retell free-test agent;
+- one dedicated Retell number for each active client deployment;
+- one versioned Catalyst configuration per active test;
+- one shared resolver keyed by the called number;
+- bounded intake and exactly one canonical outcome;
+- one durable Catalyst call record per provider call;
+- one email-only Catalyst Mail notification record per eligible call; and
+- client-partitioned Catalyst queries and sanitized CSV exports.
+
+It does not book, dispatch, quote, collect payment, transfer arbitrarily, call outbound, send SMS, mutate CRM, import Zoho Analytics, or become a paid Revenue Desk.
+
+## Operating Topology
 
 ```text
 Approved contractor forwarding rule
@@ -24,41 +39,64 @@ Client-specific Retell number
         |
 Shared 7-Day Free Test agent
         |
-Exact pre-call Catalyst resolution/admission
+Exact Catalyst resolution and eligibility gate
         |
-Bounded intake
+Bounded intake with deliberate close
         |
 Authenticated Retell post-call event
         |
-Catalyst durable call/outcome processing
-        +--> durable approved-recipient notification
-        +--> client-partitioned Analytics outbox
-        +--> bounded CRM summary only when approved
+Catalyst canonical call and outcome
+        +--> Catalyst Mail email record
+        +--> client query / CSV report
 ```
 
-There is one shared free-test agent and flow. Each active test has one dedicated Retell number, one `client_id`, one `deployment_id`, and one immutable configuration version. The shared `agent_id` identifies the product, never the tenant. Do not create a free-test clone when isolation or resolution fails.
+CRM owns the prospect/client relationship and commercial setup outside the call path. Catalyst owns the operational deployment snapshot, current number binding, call count, event/call deduplication, canonical outcomes, notification rows, and reporting fields. CRM is disabled in the MVP runtime. Zoho Analytics is deferred and is not a blocker for offline or controlled internal Development testing.
 
-CRM owns the prospect/client relationship, setup and route-approval source, approved recipient, and bounded aggregate/commercial summary. Catalyst owns the operational deployment snapshot, number assignment history, admission slots/count, raw-event references, immutable call binding, canonical outcome, notification state, processing state, deduplication, and reporting outbox. Analytics is derived reporting and never reverse-writes. Retell never sends the client notification or mutates CRM/customer systems.
+## Three Validation Lanes
 
-## Canonical Configuration
+Do not collapse these lanes into one readiness claim.
 
-Each deployment snapshot must contain the fields in ADR 0006, including company identity, coverage rules, services/scope, service area, urgency rules, callback expectation, approved recipient, test timestamps/limit/count, assigned number, route approval, and status. Real values stay in Catalyst private configuration. Git contains schemas and synthetic fixtures only.
+| Lane | Allowed scope | Required approval/evidence | Current boundary |
+| --- | --- | --- | --- |
+| Offline/synthetic Development | Local or isolated tests with synthetic clients, numbers, events, email dry-run results, queries, and CSV | Reviewed source revision and passing test evidence | No call, external route, email, or client data |
+| Controlled internal Development phone test | Designated internal testers, synthetic client facts, Development-only numbers/agent/Catalyst route, no customer forwarding, and one controlled Development email/readback | Provider/route/settings readback, data-handling record, rollback, exactly-once email proof, and zero open scoped P0/P1 | Does not authorize a prospect or Production call |
+| Controlled prospect test | Real prospect route and caller workflow | Separate business, privacy, security, vendor, client, data, notification, route, rollback, and any professional review required for the actual facts | Unresolved; this runbook does not approve it |
 
-Coverage labels map exactly:
+The [legal and compliance archive](../legal-compliance/README.md) preserves a conservative historical internal-QA proposal and source research. It is not legal advice and is not, by itself, approval or prohibition for a specific test. The responsible owner records the actual approval basis and any required professional review privately.
 
-| Display label | Canonical value |
-| --- | --- |
-| After Hours Only | `AfterHoursOnly` |
-| No Answer / Overflow Only | `NoAnswerOverflowOnly` |
-| After Hours + Overflow | `AfterHoursAndOverflow` |
+## Client Configuration
 
-Do not accept aliases, alternate spacing/case, or `CoverageTrigger` as coverage mode.
+Keep client variation in one validated configuration record. At minimum it contains:
 
-The component registry documents every required variable, consumer, secret classification, format, Development behavior, and Production prohibition. Do not use obsolete root Retell/Make variables. Missing/invalid required variables fail at startup or request boundary; there are no insecure defaults. This revision permits only `DEPLOYMENT_ENVIRONMENT=development`, synthetic notifications/Analytics, and disabled CRM summary writes.
+- `client_id`, `deployment_id`, and `configuration_version`;
+- company name and approved description;
+- business hours and canonical coverage mode;
+- handled and unsupported services;
+- service area and urgency rules;
+- approved callback wording;
+- one approved email recipient;
+- approved start, actual start, expiration, handled count, and limit;
+- current assigned Retell number;
+- route approval state; and
+- deployment status and stop reason.
 
-## Exact Pre-Call Gate
+Use only these canonical values:
 
-Before client greeting or caller-data collection, all seven values must pass exactly:
+```text
+AfterHoursOnly
+NoAnswerOverflowOnly
+AfterHoursAndOverflow
+```
+
+Display labels may be “After Hours Only,” “No Answer / Overflow Only,” and “After Hours + Overflow.” Do not accept alternate internal spellings.
+
+The component-owned environment registry documents every required variable, consumer, classification, and format. The Advanced I/O and retry Job have separate `.env.example` profiles; do not copy the webhook key, number-lookup key, readiness token, HTTP routes/limits, or Advanced I/O host into the retry Job. For notification, the exact names are `FREE_TEST_NOTIFICATION_MODE` (non-secret; `dry_run` or tightly bounded `send_development`; Production rejected) and `FREE_TEST_MAIL_FROM` (non-secret variable whose verified sender value remains private; required in Development; Production unsupported). The committed/default test mode is `dry_run`; use `send_development` only for the single controlled internal delivery/readback, then restore `dry_run`. Do not use `CATALYST_MAIL_MODE` or obsolete root Retell/Make variables. Missing or malformed required configuration fails closed; real values stay outside GitHub.
+
+The retry path uses the exact Development-only Function Job and disabled-first predefined one-minute Cron in `src/zoho-catalyst/retell-free-test/config/retry-job.json`. Run and read back one immediate synthetic Job before enabling the Cron. The Cron supplies no caller-selectable parameters, uses no platform retry overlap, and must be disabled first during rollback.
+
+## Exact Resolver Gate
+
+The resolver must return:
 
 ```text
 resolver_status = Resolved
@@ -70,76 +108,89 @@ capability_profile = call_gap_monitor_v1
 coverage_mode = AfterHoursOnly | NoAnswerOverflowOnly | AfterHoursAndOverflow
 ```
 
-The same immutable snapshot must also prove a unique current `to_number` assignment; matching client/deployment/version; approved route; `Live` test and `Approved` go-live state; valid actual start and expiration; available reservation capacity under the 25-call limit; and complete typed configuration. Unknown/ambiguous numbers, stale or overlapping assignments, missing approval, inactive/expired/stopped deployment, exhausted capacity, version mismatch, identity conflict, invalid mode/profile/type, missing runtime variables, or resolver failure must return Configuration Unavailable.
+The same consistent read must prove a unique current `to_number` binding, matching client/deployment/version, active deployment, explicit route approval, `now < expires_at`, durable `handled_call_count < 25`, and complete typed configuration.
 
-Configuration Unavailable is a direct neutral termination. Do not greet as a client, collect details, use cached variables, guess ownership, fall back to another deployment, or perform degraded generic intake.
+For a known authenticated invalid, unknown, ambiguous, mismatched, unapproved, inactive, expired, or exhausted resolution, Catalyst returns HTTP 200 with `{ "call_inbound": { "reject": true } }`, creates no resolver-side call or failure row, and Retell does not start the agent. If transport or authentication fails, the request times out, the endpoint returns 503/is unavailable, JSON is malformed, or the agent override is invalid, Retell may fall back to the number-bound shared agent; its first node accepts normal intake only with every exact ownership variable and otherwise enters a direct neutral Configuration Unavailable termination. Neither path may greet as a client, collect details, use cached variables, guess ownership, select another deployment, or perform degraded intake.
 
-## Seven-Day / 25-Call Admission
+Configuration Unavailable is a direct neutral termination; it is not a second intake path.
 
-The explicitly approved activation sets `actual_start_at`; request/setup/QA/publishing does not. Derive `expires_at` once. At request time, atomically reserve one of 25 slots before returning configuration. Reserved capacity prevents concurrent over-admission; the finalized eligible handled-call count is a separate field updated once by post-call processing.
+## Seven-Day And Practical 25-Call Stop
 
-- Admit only while `now < expires_at` and fewer than 25 unique eligible calls have been admitted.
-- The 25th unique admission may enter; a concurrent 26th fails closed. Rejected pre-workflow requests release or never consume a slot under the explicit state machine; an admitted caller-abandoned outcome finalizes once.
-- In the source model, an identical signed-request fingerprint returns its reservation without another slot or count. Because Retell inbound requests do not expose a verified `call_id`, retry signature/timestamp stability and Catalyst atomic conditional updates remain Development evidence gates.
-- Conflicting identity reuse is quarantined.
-- An orphaned reservation remains capacity-blocking until provider evidence deterministically releases or finalizes it; elapsed time alone never frees ambiguous capacity.
-- Rejected configuration attempts do not consume a handled-call slot.
-- Reaching either boundary records the exact stop reason and blocks later intake even if cleanup fails.
-- Never auto-extend, auto-convert, or start a Revenue Desk.
+The MVP intentionally does not use pre-call reservation slots.
 
-Use a deterministic clock and fixed call identities in tests.
+1. Explicit activation sets `actual_start_at` and derives `expires_at` once.
+2. Every resolver request fails closed when `now >= expires_at`.
+3. Every resolver request fails closed when the durable handled count is already 25 or more.
+4. Post-call processing increments the count once for each unique eligible handled call.
+5. The call that changes the count from 24 to 25 marks the deployment completed with `call_limit_reached`.
+6. Any call already admitted while the count was below 25 may finish. Count it, retain it, and report the resulting overshoot.
+
+The possible overshoot equals the calls already in flight or not yet reflected in the durable handled count when the threshold was reached. Do not invent a fixed maximum. The pass condition is that no new call proceeds after the resolver observes expiration or a count of 25+, not that concurrency can never produce a 26th completed call.
+
+Failure to enforce the observed stop is P0. Exact-cap reservations, orphan reservation reconciliation, and time-based slot cleanup are outside the MVP.
+
+Never auto-extend, auto-convert, or start a Revenue Desk.
 
 ## Synthetic Client Setup
 
-Create fixtures only; do not allocate live provider objects.
+Use two fixtures with different values and the same reviewed shared agent version:
 
 | Field | Client A | Client B |
 | --- | --- | --- |
 | `client_id` | `synthetic-client-a` | `synthetic-client-b` |
 | `deployment_id` | `synthetic-deployment-a-v1` | `synthetic-deployment-b-v1` |
 | `configuration_version` | `cfg-a-001` | `cfg-b-009` |
-| company | Northwind Plumbing Test | Contoso Plumbing Test |
-| service area | Synthetic ZIP set A | Synthetic ZIP set B |
-| urgent rule | Synthetic rule A | Different synthetic rule B |
-| recipient | Synthetic recipient A | Different synthetic recipient B |
-| assigned number | reserved synthetic E.164 A | different reserved synthetic E.164 B |
-| Retell agent | same shared synthetic agent | same shared synthetic agent |
+| Company | Northwind Plumbing Test | Contoso Plumbing Test |
+| Service area | Synthetic ZIP set A | Disjoint synthetic ZIP set B |
+| Urgency rule | Synthetic rule A | Different synthetic rule B |
+| Email reference | Synthetic recipient A | Different synthetic recipient B |
+| Assigned number | Reserved synthetic E.164 A | Different reserved synthetic E.164 B |
+| Retell agent/version | Same reviewed shared synthetic version | Same reviewed shared synthetic version |
 
-Store separate immutable configurations and non-overlapping number assignments. Ensure fixtures contain no real company, person, number, address, or recipient.
+Fixtures must not contain a real company, person, number, address, or recipient. Adding another synthetic client means adding a new configuration fixture and isolation assertions; it never means adding Retell nodes or cloning the agent.
 
-To add another synthetic client, copy the fixture shape, generate new opaque synthetic client/deployment/configuration/assignment values, choose a disjoint service area and recipient reference, keep the shared agent/version unchanged, and add explicit isolation assertions against every existing fixture. Do not add Retell nodes or client-specific agent code. Validate the schema and rerun the full suite before using the fixture as evidence.
+For controlled internal validation, bind two dedicated non-customer Development numbers to these two synthetic deployments and pin both to the same reviewed shared agent version. Do not reuse or move either number during initial validation. After completion, preserve its ownership evidence and record the required cooldown before any separately reviewed future reuse.
 
-## Inbound Operator Proof
+## Inbound Resolution Proof
 
-1. Verify the immutable source revision and Development-only variable contract.
-2. Validate the request method/path/media type/body size and Retell authenticity against the unchanged raw body.
-3. Normalize and hash the called number for lookup without routine raw-number logging.
-4. Resolve exactly one assignment effective at call time.
-5. Validate deployment/client/configuration ownership and the exact gate.
-6. Atomically admit the call under the seven-day/25-call rule.
+1. Verify the immutable source revision and Development-only configuration contract.
+2. Validate request method, path, content type, body size, and authenticity against the unchanged raw body.
+3. Normalize/hash the called number without routine raw-number logging.
+4. Resolve exactly one current binding.
+5. validate client/deployment/configuration ownership and the exact gate.
+6. Read the durable handled count and expiration.
 7. Return only allowlisted metadata, shared agent/version, and approved dynamic variables.
-8. Persist a minimized admission/correlation record.
-9. Prove the client-facing greeting and rules match only that configuration.
+8. Prove the client-facing greeting and rules match only that configuration.
 
-Record sanitized pass/fail evidence; do not print signatures, keys, raw requests, phone numbers, recipient details, or call content.
+Record sanitized pass/fail evidence. Never print signatures, keys, raw payloads, phone numbers, email addresses, or call content.
 
 ## Caller Experience Proof
 
-The shared flow must use the approved client identity, disclose automation and possible recording truthfully, invite the caller to explain first, ask one concise question at a time, use supplied information without repetition, accept interruption/correction, confirm uncertain callback details, and avoid excessive empathy. Conservative backchanneling, interruption sensitivity, responsiveness, pacing, turn-taking, and expressiveness require native Retell validation.
+The shared agent must:
 
-The greeting structure is:
+- identify the configured company and disclose automation truthfully;
+- let the caller explain the request first;
+- ask one concise question at a time;
+- reuse facts already provided;
+- accept interruptions and corrections;
+- confirm an uncertain callback number;
+- clarify ambiguous intent without inventing an answer;
+- minimize sensitive data; and
+- close deliberately.
+
+Functional greeting:
 
 > Thanks for calling [Company Name]. I'm an automated assistant helping while the team is unavailable. This call may be recorded. I can take a few details for the team.
 
-Use the recording sentence only when the approved settings and legal/consent profile make it true. Do not impersonate a human or overemphasize AI.
+Use the recording sentence only when it is true for the approved test configuration. Do not impersonate a human or claim unavailable capabilities.
 
-Every normal completion must summarize material facts, confirm uncertainty, state that the information was recorded for team review, state that no appointment or dispatch is confirmed, ask whether anything else should be added, and say goodbye. Never promise an immediate callback or claim downstream delivery. The free test performs no booking, dispatch, assignment, pricing, payment, transfer, outbound call, SMS, direct notification, or system mutation.
-
-The closing structure is:
+Functional closing:
 
 > I have this as [issue] in [city/ZIP], and the best callback number is [number]. Is that correct?
 
 > Thanks. I've recorded this for the [Company Name] team to review. This does not confirm an appointment or dispatch. Before I let you go, is there anything else you'd like the team to know?
+
+Retell-native tests must validate conservative backchanneling, interruption sensitivity, responsiveness, turn-taking, pacing, and expressiveness.
 
 ## Post-Call Lifecycle
 
@@ -147,145 +198,182 @@ Resolve ownership in this strict order:
 
 1. validated `deployment_id` metadata;
 2. existing durable call-to-deployment binding;
-3. unique validated number assignment effective for the call time;
+3. unique validated number binding effective for the call;
 4. `agent_id` only when it maps to exactly one deployment.
 
-The shared free-test `agent_id` normally maps to multiple deployments and is insufficient. Quarantine zero, multiple, conflicting, stale, or unverifiable matches. Derive one opaque `call_lookup_key` as a keyed-HMAC of the provider call identifier; never retain or expose the raw identifier. Bind the opaque key once to immutable client, deployment, configuration, assignment, and admission ownership. A later conflict fails closed.
+The shared `agent_id` identifies the product, never the tenant. Quarantine or fail closed on zero, multiple, or conflicting matches. Derive an opaque HMAC lookup key from the provider call identifier, bind it once to the client/deployment/configuration, and omit the raw provider identifier from reports and ordinary logs.
 
-For an authenticated event, durably claim the minimized event before provider acknowledgement, bind the call once, normalize exactly one canonical outcome, and create notification and reporting outbox records in the same retry-safe lifecycle. Duplicate, delayed, reordered, malformed, and partially processed events must not create duplicate side effects.
+For an authenticated event, claim the minimized event durably, normalize exactly one canonical outcome, create/update the call once, increment the eligible handled count once, and create one notification row. Duplicate, delayed, reordered, malformed, or retried events must not duplicate any of those effects.
 
-### Notification
+## Catalyst Mail Email-Only Notification
 
-Use only the recipient already approved in the deployment snapshot. Store call/deployment correlation, template/version, destination reference, state, attempt count, next-attempt time, sanitized provider result, acceptance reference, and terminal outcome. Use one stable idempotency key per call/destination/template. Reconcile ambiguous results before retry; bound retries and expose terminal failure. In Development, the deterministic synthetic adapter changes durable state but contacts nobody.
+Only the email destination already approved in the deployment configuration may be used. Callers cannot supply a destination, and Retell never sends the notification.
 
-The concise payload may contain only caller name, callback number, new/existing classification, city/ZIP signal, issue summary, routine/urgent, specific-person request, timestamp, and outcome when each field is allowed. Never use a caller-supplied destination or log a message body/provider secret.
+Committed Development behavior is deliberately non-delivering:
 
-### Analytics And CRM
-
-Create one minimized Analytics fact partitioned by `client_id`, `deployment_id`, test window, and configuration version. Track the exact call outcome, notification state, coverage trigger where known, dates, call-limit/test-period progress, and defensible value status. Do not send caller numbers, raw transcripts, recordings, raw events, or unrestricted configuration. A replay updates neither count nor duplicate fact.
-
-CRM receives only an approved idempotent aggregate/commercial summary. It never receives raw events or transcripts and is disabled in the current Development package. A client report must contain exactly one client/deployment and reconcile to Catalyst counts/watermark with no unresolved jobs.
-
-## Run The Test Suite
-
-From the repository root, run the canonical offline verifier:
-
-```powershell
-.\tools\verify.ps1
+```text
+channel = email
+state = DryRunRecorded
+attempts = 0
+provider_code = CATALYST_MAIL_DRY_RUN
+sendMail invoked = false
 ```
 
-For isolated Catalyst evidence, use the component package:
+The durable dry-run row proves recipient isolation, payload minimization, correlation, replay idempotency, and operator visibility without contacting anyone. Do not describe it as sent, delivered, queued with Catalyst Mail, retried, or provider-accepted.
 
-```powershell
-Set-Location src\zoho-catalyst\retell-free-test\functions\retell_free_test
-npm ci
-npm run check
-npm run test:unit
-npm run test:integration
-npm run test:acceptance
-```
+The internal-phone acceptance gate then requires one `send_development` attempt using only the verified Development sender and approved synthetic recipient. Read back provider acceptance, inbox delivery, durable call/notification state, and replay with no second delivery; ambiguous outcomes are never blindly resent. Restore `dry_run` afterward. Prospect delivery remains a later separate decision. SMS and multi-provider abstraction remain out of scope.
 
-The unit/integration/acceptance scripts use only the in-memory store and synthetic adapters. Do not populate Development credentials merely to run them. Record the observed test counts and failures; script names are not evidence that a test passed.
+## Query And CSV Reporting
 
-## Required Acceptance Scenarios
+For the internal MVP, query canonical Catalyst call rows by both `client_id` and `deployment_id`. Export a sanitized CSV only after verifying every row belongs to that partition.
 
-The machine-readable [`acceptance-cases.json`](../../src/retell/agents/7-day-free-test/tests/fixtures/acceptance-cases.json) declares input, expected routing, extracted fields, terminal state, persistence, notification behavior, Analytics behavior, and a machine-verifiable pass condition for each case. The summary below is the operator index. These are minimum cases, not authorization for a phone test.
+Minimum report columns/metrics:
 
-| # | Scenario | Required result |
-| ---: | --- | --- |
-| 1 | Normal potential job | Correct client; useful fields; `potential_job`; one call/notification/fact |
-| 2 | Existing customer | `existing_customer`; no false new lead; one downstream lifecycle |
-| 3 | Urgent callback | Client urgency rule applied; `urgent_potential_job`; no dispatch promise |
-| 4 | Immediate danger | Approved safety instruction; no incorrect operational routing; canonical safe terminal outcome |
-| 5 | Unsupported service | Clarified once; `unsupported_service`; no unsupported promise |
-| 6 | Out of area | Correct client service area; `out_of_area`; no other-client rule |
-| 7 | Spam/solicitation | `spam`; minimal retention; one recipient-scoped notification/fact, never a potential job |
-| 8 | Sensitive-data attempt | Redirect/end; prohibited value absent; `sensitive_data_ended` |
-| 9 | Ambiguous intent | One-at-a-time clarification; resolved category or `unresolved` |
-| 10 | Caller changes answer | Latest confirmed fact wins; no contradictory duplicate field |
-| 11 | Caller interrupts | Interruption accepted; no repeated questionnaire loop |
-| 12 | Noisy/incomplete answer | Clarify/mark unknown without invention |
-| 13 | Invalid callback then correction | Only corrected confirmed callback retained |
-| 14 | Callback refused | Refusal represented; call can close without fabricated number |
-| 15 | Specific person requested | Request captured; no transfer promise |
-| 16 | Service and location in first utterance | Values reused; no redundant questions |
-| 17 | Configuration unavailable | No client greeting/intake; Configuration Unavailable; configuration-failure audit only |
-| 18 | Missing `client_id` | Same fail-closed result as 17 |
-| 19 | Missing `deployment_id` | Same fail-closed result as 17 |
-| 20 | Invalid `coverage_mode` | Same fail-closed result as 17 |
-| 21 | Wrong `engagement_type` | Same fail-closed result as 17 |
-| 22 | Wrong `capability_profile` | Same fail-closed result as 17 |
-| 23 | Expired test | No intake/slot/notification/fact; exact stop reason retained |
-| 24 | 25-call limit reached | 26th blocked; count remains 25; no duplicate downstream work |
-| 25 | Unknown number | No ownership guess; Configuration Unavailable |
-| 26 | Duplicate post-call webhook | One event claim/call/notification/fact; B unchanged |
-| 27 | Delayed webhook | Historical assignment/binding used; never current-owner guess |
-| 28 | Malformed webhook | Safe rejection/quarantine; no call/notification/fact or secret log |
-| 29 | Processing retry | Same immutable binding and idempotency keys; exactly one result |
-| 30 | Notification provider failure | Durable retry then success or terminal failure; never silent/duplicate |
+- Total Calls Handled;
+- Potential Jobs and Urgent Potential Jobs;
+- Existing Customers;
+- Spam;
+- Unsupported Service and Out Of Area;
+- Other / General Inquiry and Unresolved;
+- durable notification state, distinguishing `DryRunRecorded`, `Sent`, retry, ambiguity, and terminal failure;
+- calls by timestamp;
+- after-hours versus overflow when known;
+- test-period progress;
+- handled-call count, limit, and any in-flight overshoot; and
+- value evidence class, defaulting to unknown unless supported.
 
-The two-client suite must additionally prove A/B greeting, service-area, urgency, persistence, transcript-metadata, notification-recipient, report, replay, and number-reassignment isolation. Any cross-client result, safety error, gate bypass, limit bypass, prohibited sensitive retention, Production action, or uncontrolled route is P0. Incorrect urgency/new-existing, missing callback, duplicate call/notification, silently lost notification, incorrect outcome, broken closing, or malformed configuration accepted is P1. No P0/P1 may remain before controlled telephone evaluation.
+Exclude raw events, transcripts, recordings, callback numbers, recipient addresses, and secrets from the ordinary client summary export. A detailed operator view may show approved callback fields only under the same tenant partition and access control.
 
-## Number Reassignment
+Zoho Analytics import, dashboards, outboxes, retry states, and watermarks are deferred. They are not required to approve an internal Development phone test. CRM remains disabled and receives no call summary.
 
-1. Stop the old deployment and close its assignment interval.
-2. Preserve every existing call binding and configuration snapshot.
-3. Create a new deployment/configuration version and assignment record; never overwrite ownership history.
-4. Prove intervals do not overlap and the new client/deployment/version owns the number.
-5. Read back Retell and Catalyst state.
-6. Replay an old-client event and a delayed unbound event. The bound call stays with the old deployment; an ambiguous unbound event is quarantined.
-7. Rerun the complete two-client suite before any activation.
+## Acceptance Scenarios
+
+The machine-readable [`acceptance-cases.json`](../../src/retell/agents/7-day-free-test/tests/fixtures/acceptance-cases.json) remains the detailed input/expected-state authority. At minimum exercise:
+
+1. normal potential job;
+2. existing customer;
+3. urgent callback;
+4. immediate-danger safety boundary;
+5. unsupported service;
+6. out of area;
+7. spam;
+8. sensitive-data attempt;
+9. ambiguous intent;
+10. corrected answer;
+11. interruption;
+12. noisy/incomplete answer;
+13. invalid callback then correction;
+14. callback refused;
+15. specific person requested;
+16. request and location in the first utterance;
+17. configuration unavailable;
+18. missing `client_id`;
+19. missing `deployment_id`;
+20. invalid `coverage_mode`;
+21. wrong `engagement_type`;
+22. wrong `capability_profile`;
+23. expired test;
+24. count already 25, plus a separate transparent in-flight overshoot case;
+25. unknown number;
+26. duplicate post-call webhook;
+27. delayed/reordered webhook with immutable embedded ownership;
+28. malformed webhook;
+29. processing retry; and
+30. Catalyst Mail provider failure, bounded retry or ambiguity handling, and terminal durable state without duplicate delivery.
+
+For every case record inputs, expected routing, extracted fields, terminal state, persistence, notification behavior, query/CSV visibility, and explicit pass/fail criteria.
+
+The two-client suite must additionally prove greeting, service-area, urgency, persistence, call metadata, email-recipient/delivery isolation, query/CSV partition, and replay isolation. Cross-client configuration, call ownership, notification, or reporting is P0.
+
+Treat cross-client exposure, incorrect safety behavior, configuration-gate bypass, failure to stop after expiration or an observed handled count of 25+, prohibited sensitive retention, Production action, and uncontrolled routing as P0. Treat incorrect urgency/new-existing classification, missing callback data, duplicate call/count/email, silently lost notification, incorrect outcome, broken closing, or malformed configuration accepted as P1. A transparently counted call that was already in flight at the threshold is neither P0 nor P1 by itself. Missing Analytics, CRM mutation, automatic number reassignment, or exact-cap reservation machinery is not an MVP defect.
+
+## Initial Number Freeze And Cooldown
+
+The MVP has no automatic number-reassignment workflow.
+
+1. Assign two dedicated synthetic numbers once for initial validation and pin both to the same shared agent version.
+2. Do not reuse, exchange, or move either number between deployments during initial validation.
+3. When a deployment completes or stops, disable its route and preserve canonical calls plus embedded client/deployment/configuration ownership.
+4. Record the completed number's cooldown start, owner, prior deployment/configuration, and earliest separately reviewed reuse point in the private operator record.
+5. Keep the number inactive throughout cooldown. Any later reuse requires a separately controlled stopped-route update, readback, two-client re-QA, and new route approval.
+
+Automatic reassignment, live rebinding, and assignment-history automation are deferred. Their absence is not an internal-test blocker; the initial test does not exercise reassignment.
 
 ## Development Lifecycle Trace
 
-For one synthetic call, the operator must correlate the same immutable identifiers through: resolver request and admission claim; number assignment/deployment/configuration; provider call/event claim; canonical call and outcome; notification record/attempt; reporting outbox/fact; and any approved CRM summary. Capture sanitized state, timestamp, source revision, and pass criterion at each stage. Missing correlation or unreconciled counts fails acceptance.
+For one synthetic call, follow the same immutable correlation through:
 
 | Stage | Operator proof | Pass condition |
 | --- | --- | --- |
-| Synthetic caller fixture | Fixture case ID and immutable source revision | Approved case uses no real identity/data |
-| Dedicated synthetic number | Assignment version and effective interval readback | Exactly one client/deployment/configuration owns the number at call time |
-| Shared agent | Accepted agent/version reference | Same shared version is used for A and B; it is not the tenant key |
-| Pre-call resolver | Signed-request fingerprint, resolution decision, and reservation ID | Exact gate passes from one snapshot; one slot reserved once |
-| Conversation contract | Case assertions and Retell-native result when authorized | Correct client identity/rules, bounded intake, deliberate close, no prohibited capability |
-| Post-call ingress | Provider call reference and durable event claim | Authentic event claimed once; replay is acknowledged without new work |
-| Canonical outcome | Opaque call lookup key, immutable ownership fields, and processing state | One client/deployment/configuration binding and exactly one canonical outcome; no raw provider identifier |
-| Notification | Notification ID/idempotency key, attempts, and synthetic provider result | Correct approved recipient reference; one durable terminal result; no external send |
-| Analytics | Reporting outbox ID and synthetic fact key/watermark | One fact under the same client/deployment/opaque Call Key binding; report counts reconcile |
-| CRM summary | Summary outbox/key and mode | Current Development mode is disabled; no request occurred |
-| Exit/rollback | Stop reason, inactive assignment/deployment, and readback | Route remains inactive and evidence/outboxes remain preserved |
+| Fixture | Case ID and source revision | No real identity or data |
+| Number/config | Number reference, deployment, version | Exactly one tenant configuration |
+| Shared agent | Agent/version readback | Same shared version for A and B |
+| Resolver | Decision and configuration version | Exact gate, time, and count pass |
+| Conversation | Case/native result | Correct identity, bounded intake, natural close |
+| Event | Authenticated deduplication key | One durable claim |
+| Canonical call | Opaque call key and ownership | One call, one outcome, one count increment |
+| Email | Notification and provider/inbox readback | Dry-run first; then one controlled Development delivery with replay producing no second send; restore dry-run |
+| Report | Query parameters and CSV hash | Only the intended client/deployment rows |
+| CRM/Analytics | Disabled/deferred mode | No mutation or import |
+| Rollback | Disabled route and readback | No new intake; evidence preserved |
 
-## Later Real-Client Gates
+Missing correlation, mixed tenant rows, or unexplained counts fails acceptance.
 
-Do not create/bind a real number or change forwarding until all synthetic acceptance, runtime/source parity, security, legal/privacy/vendor, approved client configuration, recipient verification, route/rollback, environment, and explicit route-approval evidence is complete. The contractor phone system must forward directly after hours or after the approved no-answer delay to the dedicated Retell number; never chain an already completed voicemail interaction into Retell.
+## Controlled Internal Development Phone Test
 
-The prospect's request may move into setup without another commercial acceptance gate. It still does not authorize the phone route; an authorized operator must explicitly approve and read back the exact forwarding configuration and rollback target.
+Only after offline acceptance passes and the operator has explicit authority for the external actions:
 
-Document, but do not apply, the exact client phone-system requirement:
+1. deploy/read back the Development Catalyst routes, four tables/validators, target-specific variables, both functions, Function Job pool, immediate synthetic Job, and disabled-first one-minute Cron;
+2. publish/pin/read back the shared Retell Development agent and conversational settings;
+3. bind two non-customer Development numbers to two synthetic deployments using the same reviewed agent version;
+4. prove Catalyst Mail dry-run, execute/read back one controlled Development email to the approved synthetic recipient, prove replay sends no duplicate, and restore dry-run; keep CRM/Analytics disabled;
+5. document the approved tester, synthetic script, data-handling settings, test window, kill switch, and rollback;
+6. place only the approved internal test calls;
+7. trace call, outcome, email state/delivery, count, and query/CSV result; and
+8. disable or return the route to its approved inactive state immediately after the test.
 
-- `AfterHoursOnly`: the business phone system decides the after-hours state and directly forwards to the client-specific Retell number;
-- `NoAnswerOverflowOnly`: the system rings for the explicitly approved delay and, only when nobody answers, directly forwards to the Retell number; and
-- `AfterHoursAndOverflow`: both rules use the same dedicated number under the approved configuration.
+This procedure does not authorize a prospect, customer, business-line forwarding rule, external email, Production resource, or retained content beyond the separately approved Development test configuration.
 
-Sylvara is the approved fallback destination, not an extra step after voicemail has already answered or collected a message. Record the prior carrier destination and exact restoration procedure before any future authorized change.
+## Later Prospect Setup
 
-## Stop, Containment, And Rollback
+Do not create/bind a real prospect number or change a contractor phone system until the prospect workflow, caller/data treatment, Catalyst Mail delivery, approved recipient, route, rollback, and all required business, privacy, security, vendor, client, and professional-review decisions are explicit and privately recorded.
 
-1. Disable the affected client forwarding/number route where authorized, then mark route approval revoked/blocked and deployment stopped.
-2. If the shared agent/resolver is suspect, stop every affected assignment; do not switch to a client clone or degraded intake.
-3. Stop notification/reporting workers for affected records without deleting outboxes.
-4. Preserve events, assignments, bindings, configurations, counts, failures, and correlation evidence.
-5. Determine impact by immutable deployment/call binding, never display name or current number owner.
-6. Verify no cross-client delivery/report occurred; treat any contamination as P0.
-7. Restore only a previously approved carrier route or inactive Retell state and independently read it back.
-8. Confirm subsequent calls reach Configuration Unavailable or the carrier's approved inactive behavior.
-9. Re-enable only after root cause is fixed and the full acceptance suite, reassignment test, and rollback rehearsal pass with new approval.
+The phone-system requirement remains simple:
 
-The test never continues because cleanup failed and never converts to paid service automatically.
+- `AfterHoursOnly`: the business phone system directly forwards after hours;
+- `NoAnswerOverflowOnly`: it forwards after the approved no-answer delay; and
+- `AfterHoursAndOverflow`: both approved rules point directly to the dedicated number.
+
+Do not route through a completed voicemail interaction before Retell. Record the prior carrier destination and exact restoration procedure before any later authorized change.
+
+## Stop And Rollback
+
+1. Disable the retry Cron, then disable the affected forwarding/Retell route and mark the deployment stopped.
+2. If the shared agent or resolver is suspect, stop every affected deployment.
+3. Preserve events, calls, counts, all notification states, and correlation evidence.
+4. Verify no cross-client email record or query/CSV row exists.
+5. Restore only a previously approved inactive or carrier route and read it back.
+6. Confirm new requests fail closed or never reach the agent.
+7. Re-enable only after the defect is fixed, the scoped suite passes, and a new route approval is recorded.
+
+Do not delete evidence, switch to a client-specific free-test clone, leave `send_development` enabled, reuse a cooling number, silently enable prospect/customer email, or activate paid service.
 
 ## Manual Actions Requiring Separate Authority
 
-Only an authorized operator with the relevant UI/credential access may, after the applicable approvals: configure Catalyst secrets and private table names; deploy/read back Development functions and routes; publish/pin a Retell Development agent version; bind a Development number; configure a carrier forwarding rule; authorize a real notification provider/destination; or approve a telephone test. Source implementation and synthetic validation require none of these external actions.
+An operator with the relevant credentials must perform and read back the Development deployment, Catalyst secret/table/validator configuration, retry Job/Cron configuration, Retell version publication, synthetic number binding, Catalyst Mail sender/recipient enablement, and phone-test activation. Contractor forwarding and any prospect/customer action remain outside this task.
 
-## Launch Prohibition
+## Readiness Rule
 
-Do not advance beyond **READY FOR DEVELOPMENT END-TO-END TEST** while runtime/source parity, exact route/deployment readback, native conversation tests, immutable lifecycle tracing, or any P0/P1 evidence is missing. Do not advance even to that Development classification while reproducible source, offline two-client acceptance, or rollback instructions are incomplete. Never describe this architecture as Production-ready. Once the approved Development acceptance path works, stop building and request the separate controlled-test approvals.
+Current deployment status is **READY FOR DEVELOPMENT DEPLOYMENT**. Report readiness separately for offline/synthetic, Development deployment/readback, controlled internal phone, and controlled prospect lanes. Never use an offline pass to imply a deployed phone path, and never use an internal phone pass to imply prospect or Production approval. The next acceptance target is **READY FOR CONTROLLED INTERNAL PHONE TEST**, which requires successful Development deployment/readback, live Retell parity, the scoped two-client trace, one exactly-once Development email, and rollback proof.
+
+Stop building when the controlled internal MVP path proves shared-agent isolation, exact configuration failure, practical time/count stop, idempotent calls, durable email state plus one exactly-once controlled delivery, query/CSV reporting, natural closing, correlation, and rollback. Analytics, CRM, exact-cap reservations, automatic number reassignment, SMS, and provider abstraction are not required.
+
+## Official Retell References
+
+- [Inbound-call webhook](https://docs.retellai.com/features/inbound-call-webhook)
+- [Dynamic variables](https://docs.retellai.com/build/dynamic-variables)
+- [Receive inbound calls](https://docs.retellai.com/deploy/inbound-call)
+- [Purchase phone number](https://docs.retellai.com/deploy/purchase-number)
+- [Update phone number](https://docs.retellai.com/api-references/update-phone-number)
+- [Agent versioning and environment tags](https://docs.retellai.com/agent/version)
+- [Call-event webhook overview](https://docs.retellai.com/features/webhook-overview)

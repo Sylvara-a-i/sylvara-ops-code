@@ -2,355 +2,220 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-
 const {
-  NOW,
-  deployment,
-  configuration,
-  assignment,
-  createFixture,
-  inbound,
-  admit,
-  analyzedEvent,
-  raw,
-} = require('./helpers');
+  NOW, payloadInbound, eventPayload, invoke, runtimeFixture,
+} = require('./runtime-fixture');
 
-test('acceptance: two clients share one agent with isolated conversation, persistence, notification, and Analytics', async () => {
-  const fixture = createFixture();
-  const admittedA = await admit(fixture, 'A');
-  const admittedB = await admit(fixture, 'B');
-  assert.equal(admittedA.result.response.call_inbound.override_agent_id, admittedB.result.response.call_inbound.override_agent_id);
-  const varsA = admittedA.result.response.call_inbound.dynamic_variables;
-  const varsB = admittedB.result.response.call_inbound.dynamic_variables;
-  assert.equal(varsA.client_id, 'client_A');
-  assert.equal(varsB.client_id, 'client_B');
-  assert.match(varsA.company_name, /Alpha/);
-  assert.match(varsB.company_name, /Beta/);
-  assert.match(varsA.service_area_json, /Lenexa/);
-  assert.doesNotMatch(varsA.service_area_json, /Liberty/);
-  assert.match(varsB.urgent_conditions_json, /sewage backup/);
-  assert.doesNotMatch(varsB.urgent_conditions_json, /uncontrolled leak/);
-
-  const eventA = analyzedEvent({ callId: 'call_isolation_A', metadata: admittedA.metadata, letter: 'A' });
-  const eventB = analyzedEvent({ callId: 'call_isolation_B', metadata: admittedB.metadata, letter: 'B' });
-  await fixture.service.processEvent(eventA, { rawBody: raw(eventA) });
-  await fixture.service.processEvent(eventB, { rawBody: raw(eventB) });
-  const snapshot = await fixture.store.snapshot();
-  assert.deepEqual(snapshot.calls.map(({ clientId }) => clientId).sort(), ['client_A', 'client_B']);
-  assert.deepEqual(snapshot.notifications.map(({ recipientId }) => recipientId).sort(), ['recipient_A', 'recipient_B']);
-  assert.equal(snapshot.notifications.find(({ clientId }) => clientId === 'client_A').recipientId, 'recipient_A');
-  assert.equal(snapshot.notifications.find(({ clientId }) => clientId === 'client_B').recipientId, 'recipient_B');
-  assert.deepEqual([...fixture.analyticsAdapter.projections.values()].map(({ clientId }) => clientId).sort(), ['client_A', 'client_B']);
-});
-
-test('acceptance: replaying Client A changes neither Client B nor any durable count', async () => {
-  const fixture = createFixture();
-  const admittedA = await admit(fixture, 'A');
-  const admittedB = await admit(fixture, 'B');
-  const eventA = analyzedEvent({ callId: 'call_replay_A', metadata: admittedA.metadata, letter: 'A' });
-  const eventB = analyzedEvent({ callId: 'call_replay_B', metadata: admittedB.metadata, letter: 'B' });
-  await fixture.service.processEvent(eventA, { rawBody: raw(eventA) });
-  await fixture.service.processEvent(eventB, { rawBody: raw(eventB) });
-  const before = await fixture.store.snapshot();
-  await fixture.service.processEvent(eventA, { rawBody: raw(eventA) });
-  const after = await fixture.store.snapshot();
-  assert.equal(after.calls.length, before.calls.length);
-  assert.equal(after.notifications.length, before.notifications.length);
-  assert.equal(after.outbox.length, before.outbox.length);
-  assert.deepEqual(after.deployments.find(({ clientId }) => clientId === 'client_B'),
-    before.deployments.find(({ clientId }) => clientId === 'client_B'));
-});
-
-test('acceptance: concurrent webhook replay has one call, one attempt/delivery, and one Analytics projection', async () => {
-  const fixture = createFixture();
-  const admitted = await admit(fixture, 'A');
-  const event = analyzedEvent({ callId: 'call_concurrent_replay', metadata: admitted.metadata });
-  const [one, two] = await Promise.all([
-    fixture.service.processEvent(event, { rawBody: raw(event) }),
-    fixture.service.processEvent(event, { rawBody: raw(event) }),
-  ]);
-  assert.ok([one.status, two.status].includes('InProgress'));
-  const snapshot = await fixture.store.snapshot();
-  assert.equal(snapshot.calls.length, 1);
-  assert.equal(snapshot.notifications.length, 1);
-  assert.equal(snapshot.notifications[0].attempts, 1);
-  assert.equal(fixture.notificationAdapter.deliveries.size, 1);
-  assert.equal(fixture.analyticsAdapter.projections.size, 1);
-});
-
-test('acceptance: atomic number reassignment resolves new calls to B while delayed admitted A call remains A', async () => {
-  const fixture = createFixture({ assignments: [assignment('A')] });
-  const admittedA = await admit(fixture, 'A', { timestamp: NOW - 60_000 });
-  const reassignedAt = new Date(NOW).toISOString();
-  await fixture.store.retireAndAssignNumber({
-    retiredAssignmentId: 'assignment_A_v1',
-    retiredAt: reassignedAt,
-    replacement: assignment('B', {
-      assignmentId: 'assignment_A_number_to_B_v2',
-      assignmentVersion: 2,
-      toNumber: '+15550000001',
-      effectiveFrom: reassignedAt,
-    }),
+async function resolve(fixture, letter, timestamp = NOW) {
+  return invoke(fixture.listener, {
+    url: '/retell/inbound', payload: payloadInbound(letter, timestamp), env: fixture.env,
+    signatureTimestamp: timestamp,
   });
-  const newB = await fixture.service.resolveInbound(inbound('B', {
-    toNumber: '+15550000001',
-    timestamp: NOW + 1,
-    fromNumber: '+15551119999',
-  }), { signatureTimestamp: NOW + 1 });
-  assert.equal(newB.response.call_inbound.metadata.client_id, 'client_B');
-  assert.equal(newB.response.call_inbound.metadata.number_assignment_version, '2');
+}
 
-  const delayedOldA = analyzedEvent({
-    callId: 'call_delayed_old_A',
-    metadata: undefined,
-    letter: 'A',
-    startTimestamp: NOW - 59_000,
-    endTimestamp: NOW - 1000,
-  });
-  await fixture.service.processEvent(delayedOldA, { rawBody: raw(delayedOldA) });
-  const snapshot = await fixture.store.snapshot();
-  const oldCall = snapshot.calls.find(({ correlationId }) => correlationId);
-  assert.equal(oldCall.clientId, 'client_A');
-  assert.equal(oldCall.assignmentId, 'assignment_A_v1');
-  assert.equal(snapshot.notifications[0].recipientId, 'recipient_A');
+test('acceptance: two synthetic clients remain isolated through resolution, call, notification, and correlation', async () => {
+  const fixture = runtimeFixture();
+  const a = await resolve(fixture, 'A');
+  const b = await resolve(fixture, 'B');
+  assert.equal(a.body.call_inbound.dynamic_variables.service_area_json.includes('Lenexa'), true);
+  assert.equal(b.body.call_inbound.dynamic_variables.service_area_json.includes('Liberty'), true);
+  assert.equal(a.body.call_inbound.dynamic_variables.urgent_conditions_json.includes('active uncontrolled leak'), true);
+  assert.equal(b.body.call_inbound.dynamic_variables.urgent_conditions_json.includes('sewage backup'), true);
+  const eventA = eventPayload('call_analyzed', 'acceptance_call_A', a.body.call_inbound.metadata, 'A');
+  const eventB = eventPayload('call_analyzed', 'acceptance_call_B', b.body.call_inbound.metadata, 'B');
+  const resultA = await invoke(fixture.listener, { url: '/retell/events', payload: eventA, env: fixture.env });
+  const resultB = await invoke(fixture.listener, { url: '/retell/events', payload: eventB, env: fixture.env });
+  assert.notEqual(resultA.body.correlation_id, resultB.body.correlation_id);
+  assert.equal(resultA.body.correlation_id, a.body.call_inbound.metadata.correlation_id);
+  assert.equal(resultB.body.correlation_id, b.body.call_inbound.metadata.correlation_id);
+  const calls = fixture.store.rows.get('FreeTestCalls');
+  const notifications = fixture.store.rows.get('FreeTestNotifications');
+  assert.deepEqual(new Set(calls.map((row) => row.CLIENT_ID)), new Set(['client_A', 'client_B']));
+  assert.deepEqual(new Set(notifications.map((row) => row.CLIENT_ID)), new Set(['client_A', 'client_B']));
+  for (const row of notifications) {
+    assert.equal(row.DEPLOYMENT_ID.endsWith(row.CLIENT_ID.slice(-1)), true);
+    assert.equal(JSON.parse(row.PAYLOAD_JSON).issueSummary.includes(row.CLIENT_ID.endsWith('A') ? 'water heater' : 'drain'), true);
+  }
 });
 
-test('acceptance: number reassignment rejects missing target configuration, mismatches, overlap, and stale version', async (t) => {
+test('acceptance: replay produces no duplicate canonical call, count, or notification', async () => {
+  const fixture = runtimeFixture();
+  const inbound = await resolve(fixture, 'A');
+  const event = eventPayload('call_analyzed', 'acceptance_replay_A', inbound.body.call_inbound.metadata, 'A');
+  await invoke(fixture.listener, { url: '/retell/events', payload: event, env: fixture.env });
+  await invoke(fixture.listener, { url: '/retell/events', payload: event, env: fixture.env });
+  assert.equal(fixture.store.rows.get('FreeTestCalls').length, 1);
+  assert.equal(fixture.store.rows.get('FreeTestNotifications').length, 1);
+  assert.equal(fixture.store.rows.get('FreeTestDeployments')[0].HANDLED_COUNT, 1);
+  assert.equal(fixture.store.rows.get('FreeTestDeployments')[1].HANDLED_COUNT, 0);
+});
+
+test('acceptance: cross-client metadata/number contamination fails before call or notification persistence', async () => {
+  const fixture = runtimeFixture();
+  const inboundA = await resolve(fixture, 'A');
+  const contaminated = eventPayload('call_analyzed', 'cross_client_attempt', inboundA.body.call_inbound.metadata, 'B');
+  const response = await invoke(fixture.listener, { url: '/retell/events', payload: contaminated, env: fixture.env });
+  assert.equal(response.status, 400);
+  assert.equal(response.body.code, 'CALL_OWNERSHIP_UNRESOLVED');
+  assert.equal(fixture.store.rows.get('FreeTestCalls').length, 0);
+  assert.equal(fixture.store.rows.get('FreeTestNotifications').length, 0);
+  assert.equal(fixture.store.rows.get('FreeTestDeployments').every((row) => row.HANDLED_COUNT === 0), true);
+  assert.equal(fixture.store.rows.get('FreeTestRetellEventReceipts')[0].STATUS, 'TerminalFailure');
+});
+
+test('acceptance: analyzed-before-ended and ended-before-analyzed each converge to one final call fact', async () => {
+  const fixture = runtimeFixture();
+  const inboundA = await resolve(fixture, 'A');
+  const analyzedFirst = eventPayload('call_analyzed', 'reorder_A', inboundA.body.call_inbound.metadata, 'A');
+  analyzedFirst.call.end_timestamp = null;
+  await invoke(fixture.listener, { url: '/retell/events', payload: analyzedFirst, env: fixture.env });
+  await invoke(fixture.listener, { url: '/retell/events', payload: eventPayload('call_ended', 'reorder_A',
+    inboundA.body.call_inbound.metadata, 'A'), env: fixture.env });
+
+  const inboundB = await resolve(fixture, 'B');
+  await invoke(fixture.listener, { url: '/retell/events', payload: eventPayload('call_ended', 'reorder_B',
+    inboundB.body.call_inbound.metadata, 'B'), env: fixture.env });
+  await invoke(fixture.listener, { url: '/retell/events', payload: eventPayload('call_analyzed', 'reorder_B',
+    inboundB.body.call_inbound.metadata, 'B'), env: fixture.env });
+  assert.equal(fixture.store.rows.get('FreeTestCalls').length, 2);
+  assert.equal(fixture.store.rows.get('FreeTestNotifications').length, 2);
+  assert.equal(fixture.store.rows.get('FreeTestCalls').every((row) => row.ENDED_AT !== null
+    && row.PROCESSING_STATE === 'Completed'), true);
+  assert.deepEqual(fixture.store.rows.get('FreeTestDeployments').map((row) => row.HANDLED_COUNT), [1, 1]);
+});
+
+test('acceptance: exact seven-day boundary and malformed configuration fail closed', async () => {
+  const expiry = Date.parse('2026-08-27T12:00:00.000Z');
+  const expired = runtimeFixture({ now: expiry });
+  const atBoundary = await resolve(expired, 'A', expiry);
+  assert.deepEqual(atBoundary.body, { call_inbound: { reject: true } });
+
+  const receivedAfterExpiry = runtimeFixture({ now: expiry + 1000 });
+  const freshPreExpirySignature = await resolve(receivedAfterExpiry, 'A', expiry - 1000);
+  assert.deepEqual(freshPreExpirySignature.body, { call_inbound: { reject: true } });
+  assert.equal(receivedAfterExpiry.store.rows.get('FreeTestCalls').length, 0);
+  assert.equal(receivedAfterExpiry.store.rows.get('FreeTestRetellEventReceipts').length, 0);
+
+  const malformed = runtimeFixture();
+  malformed.store.rows.get('FreeTestDeployments')[0].COVERAGE_MODE = 'after_hours';
+  const rejected = await resolve(malformed, 'A');
+  assert.deepEqual(rejected.body, { call_inbound: { reject: true } });
+
+  const malformedTimestamp = runtimeFixture();
+  malformedTimestamp.store.rows.get('FreeTestDeployments')[0].EXPIRES_AT = 'not-a-timestamp';
+  const timestampRejected = await resolve(malformedTimestamp, 'A');
+  assert.equal(timestampRejected.status, 200);
+  assert.deepEqual(timestampRejected.body, { call_inbound: { reject: true } });
+});
+
+test('acceptance: every required deployment/configuration gate failure rejects without writes', async () => {
   const cases = [
-    ['missing target config', assignment('B', { deploymentId: 'deployment_missing', assignmentId: 'replacement_1', assignmentVersion: 2 })],
-    ['wrong client', assignment('B', { clientId: 'client_A', assignmentId: 'replacement_2', assignmentVersion: 2 })],
-    ['wrong version', assignment('B', { configurationVersion: 'cfg_wrong', assignmentId: 'replacement_3', assignmentVersion: 2 })],
-    ['wrong agent', assignment('B', { agentId: 'agent_wrong', assignmentId: 'replacement_4', assignmentVersion: 2 })],
-    ['stale version', assignment('B', { assignmentId: 'replacement_5', assignmentVersion: 1 })],
-  ];
-  for (const [name, replacement] of cases) {
-    await t.test(name, async () => {
-      const fixture = createFixture();
-      replacement.toNumber = '+15550000001';
-      replacement.effectiveFrom = new Date(NOW).toISOString();
-      await assert.rejects(fixture.store.retireAndAssignNumber({
-        retiredAssignmentId: 'assignment_A_v1',
-        retiredAt: replacement.effectiveFrom,
-        replacement,
-      }), { code: 'ASSIGNMENT_REPLACEMENT_INVALID' });
-    });
-  }
-  await t.test('overlap', async () => {
-    const overlapping = assignment('B', {
-      assignmentId: 'overlap_existing',
-      assignmentVersion: 2,
-      toNumber: '+15550000001',
-      effectiveFrom: new Date(NOW + 120_000).toISOString(),
-    });
-    const fixture = createFixture({ assignments: [assignment('A'), assignment('B'), overlapping] });
-    await assert.rejects(fixture.store.retireAndAssignNumber({
-      retiredAssignmentId: 'assignment_A_v1',
-      retiredAt: new Date(NOW).toISOString(),
-      replacement: assignment('B', {
-        assignmentId: 'replacement_overlap',
-        assignmentVersion: 3,
-        toNumber: '+15550000001',
-        effectiveFrom: new Date(NOW).toISOString(),
-      }),
-    }), { code: 'ASSIGNMENT_REPLACEMENT_INVALID' });
-  });
-  await t.test('target already has an active dedicated number', async () => {
-    const fixture = createFixture();
-    const cutover = new Date(NOW).toISOString();
-    await assert.rejects(fixture.store.retireAndAssignNumber({
-      retiredAssignmentId: 'assignment_A_v1',
-      retiredAt: cutover,
-      replacement: assignment('B', {
-        assignmentId: 'replacement_second_number',
-        assignmentVersion: 2,
-        toNumber: '+15550000001',
-        effectiveFrom: cutover,
-      }),
-    }), { code: 'ASSIGNMENT_REPLACEMENT_INVALID' });
-  });
-  await t.test('future cutover leaves the current route active', async () => {
-    const fixture = createFixture({ assignments: [assignment('A')] });
-    const future = new Date(NOW + 60_000).toISOString();
-    await assert.rejects(fixture.store.retireAndAssignNumber({
-      retiredAssignmentId: 'assignment_A_v1',
-      retiredAt: future,
-      replacement: assignment('B', {
-        assignmentId: 'replacement_future', assignmentVersion: 2,
-        toNumber: '+15550000001', effectiveFrom: future,
-      }),
-    }), { code: 'ASSIGNMENT_REPLACEMENT_INVALID' });
-    const stillA = await fixture.service.resolveInbound(inbound('A'), { signatureTimestamp: NOW });
-    assert.equal(stillA.response.call_inbound.metadata.client_id, 'client_A');
-  });
-  await t.test('zero-length history is rejected', async () => {
-    const fixture = createFixture({ assignments: [assignment('A', { effectiveFrom: new Date(NOW).toISOString() })] });
-    const cutover = new Date(NOW).toISOString();
-    await assert.rejects(fixture.store.retireAndAssignNumber({
-      retiredAssignmentId: 'assignment_A_v1', retiredAt: cutover,
-      replacement: assignment('B', {
-        assignmentId: 'replacement_zero', assignmentVersion: 2,
-        toNumber: '+15550000001', effectiveFrom: cutover,
-      }),
-    }), { code: 'ASSIGNMENT_REPLACEMENT_INVALID' });
-  });
-  await t.test('replacement assignment ID cannot overwrite an existing record', async () => {
-    const fixture = createFixture({ assignments: [assignment('A')] });
-    const cutover = new Date(NOW).toISOString();
-    await assert.rejects(fixture.store.retireAndAssignNumber({
-      retiredAssignmentId: 'assignment_A_v1', retiredAt: cutover,
-      replacement: assignment('B', {
-        assignmentId: 'assignment_A_v1', assignmentVersion: 2,
-        toNumber: '+15550000001', effectiveFrom: cutover,
-      }),
-    }), { code: 'ASSIGNMENT_REPLACEMENT_INVALID' });
-  });
-  const ineligibleTargets = [
-    ['stopped', (target) => { target.testStatus = 'Stopped'; }],
-    ['approval revoked', (target) => { target.goLiveApprovalStatus = 'Revoked'; }],
-    ['expired', (target) => { target.expiresAt = new Date(NOW).toISOString(); }],
-    ['call capacity exhausted', (target) => {
-      target.admittedCallCount = 25;
-      target.handledCallCount = 25;
+    ['missing client id', (row) => { row.CLIENT_ID = ''; }],
+    ['missing deployment id', (row) => { row.DEPLOYMENT_ID = ''; }],
+    ['missing configuration version', (row) => { row.CONFIGURATION_VERSION = ''; }],
+    ['wrong engagement type', (row) => { row.ENGAGEMENT_TYPE = 'paid_service'; }],
+    ['wrong capability profile', (row) => { row.CAPABILITY_PROFILE = 'revenue_desk'; }],
+    ['invalid coverage mode', (row) => { row.COVERAGE_MODE = 'After Hours Only'; }],
+    ['inactive test', (row) => { row.TEST_STATUS = 'Stopped'; }],
+    ['active row with stopped timestamp', (row) => {
+      row.STOPPED_AT = new Date(NOW - 1000).toISOString();
     }],
+    ['malformed stopped timestamp', (row) => { row.STOPPED_AT = 'not-a-timestamp'; }],
+    ['stop reason without stopped timestamp', (row) => { row.STOP_REASON = 'sylvara_stopped'; }],
+    ['approval missing', (row) => { row.GO_LIVE_APPROVAL_STATUS = 'Pending Internal Approval'; }],
+    ['configuration ownership mismatch', (row) => {
+      const config = JSON.parse(row.CONFIGURATION_JSON);
+      config.configurationVersion = 'cfg_A_conflict';
+      row.CONFIGURATION_JSON = JSON.stringify(config);
+    }],
+    ['shared agent mismatch', (row) => { row.MONITOR_AGENT_ID = 'agent_wrong_binding'; }],
+    ['source revision mismatch', (row) => { row.SOURCE_REVISION = 'b'.repeat(40); }],
+    ['empty handled count', (row) => { row.HANDLED_COUNT = ''; }],
+    ['empty count version', (row) => { row.COUNT_VERSION = ''; }],
+    ['noncanonical binding version', (row) => { row.BINDING_VERSION = '01'; }],
   ];
-  for (const [name, makeIneligible] of ineligibleTargets) {
-    await t.test(`ineligible replacement target: ${name}`, async () => {
-      const fixture = createFixture({ assignments: [assignment('A')] });
-      makeIneligible(fixture.store.deployments.get('deployment_B'));
-      const cutover = new Date(NOW).toISOString();
-      await assert.rejects(fixture.store.retireAndAssignNumber({
-        retiredAssignmentId: 'assignment_A_v1',
-        retiredAt: cutover,
-        replacement: assignment('B', {
-          assignmentId: `replacement_ineligible_${name.replace(/[^a-z]+/g, '_')}`,
-          assignmentVersion: 2,
-          toNumber: '+15550000001',
-          effectiveFrom: cutover,
-        }),
-      }), { code: 'ASSIGNMENT_REPLACEMENT_INVALID' });
-      const snapshot = await fixture.store.snapshot();
-      assert.equal(snapshot.assignments.length, 1);
-      assert.equal(snapshot.assignments[0].assignmentId, 'assignment_A_v1');
-      assert.equal(snapshot.assignments[0].status, 'Active');
-      assert.equal(snapshot.assignments[0].effectiveTo, null);
-    });
+  for (const [name, mutate] of cases) {
+    const fixture = runtimeFixture();
+    const before = JSON.stringify([...fixture.store.rows.entries()]);
+    mutate(fixture.store.rows.get('FreeTestDeployments')[0]);
+    const afterMutation = JSON.stringify([...fixture.store.rows.entries()]);
+    const rejected = await resolve(fixture, 'A');
+    assert.equal(rejected.status, 200, name);
+    assert.deepEqual(rejected.body, { call_inbound: { reject: true } }, name);
+    assert.equal(JSON.stringify([...fixture.store.rows.entries()]), afterMutation,
+      `${name} must not mutate resolver state`);
+    assert.notEqual(before, afterMutation, `${name} fixture mutation must take effect`);
+    assert.equal(fixture.store.rows.get('FreeTestCalls').length, 0, name);
+    assert.equal(fixture.store.rows.get('FreeTestRetellEventReceipts').length, 0, name);
+    assert.equal(fixture.store.rows.get('FreeTestNotifications').length, 0, name);
   }
+
+  const exhausted = runtimeFixture();
+  const deployment = exhausted.store.rows.get('FreeTestDeployments')[0];
+  deployment.HANDLED_COUNT = 25;
+  deployment.COUNTED_CALL_KEYS_JSON = JSON.stringify(Array.from(
+    { length: 25 }, (_, index) => `call_${String(index).padStart(64, '0')}`,
+  ));
+  const exhaustedBefore = JSON.stringify([...exhausted.store.rows.entries()]);
+  const exhaustedResult = await resolve(exhausted, 'A');
+  assert.deepEqual(exhaustedResult.body, { call_inbound: { reject: true } });
+  assert.equal(JSON.stringify([...exhausted.store.rows.entries()]), exhaustedBefore);
 });
 
-test('acceptance: Client A number with otherwise-valid Client B metadata fails with zero downstream side effects', async () => {
-  const fixture = createFixture();
-  const admittedB = await admit(fixture, 'B');
-  const contaminated = analyzedEvent({ callId: 'call_cross_number_metadata', metadata: admittedB.metadata, letter: 'A' });
-  await assert.rejects(fixture.service.processEvent(contaminated, { rawBody: raw(contaminated) }), { code: 'CALL_OWNERSHIP_UNRESOLVED' });
-  const snapshot = await fixture.store.snapshot();
-  assert.equal(snapshot.calls.length, 0);
-  assert.equal(snapshot.notifications.length, 0);
-  assert.equal(snapshot.outbox.length, 0);
-  assert.equal(snapshot.receipts[0].status, 'TerminalFailure');
-});
-
-test('acceptance: shared agent alone is ambiguous across two eligible clients and fails closed', async () => {
-  const fixture = createFixture();
-  const event = analyzedEvent({ callId: 'call_agent_only_ambiguous', metadata: undefined });
-  delete event.call.to_number;
-  await assert.rejects(fixture.service.processEvent(event, { rawBody: raw(event) }), { code: 'CALL_OWNERSHIP_UNRESOLVED' });
-  const snapshot = await fixture.store.snapshot();
-  assert.equal(snapshot.calls.length, 0);
-  assert.equal(snapshot.receipts[0].status, 'TerminalFailure');
-});
-
-test('acceptance: malformed event with a usable call ID is durably terminal and sends nothing', async () => {
-  const fixture = createFixture();
-  const malformed = {
-    event: 'call_analyzed',
-    call: { call_id: 'call_malformed', agent_id: 'agent_shared_free_test' },
-  };
-  await assert.rejects(fixture.service.processEvent(malformed, { rawBody: raw(malformed) }), { code: 'INVALID_SCHEMA' });
-  const snapshot = await fixture.store.snapshot();
-  assert.equal(snapshot.receipts.length, 1);
-  assert.equal(snapshot.receipts[0].status, 'TerminalFailure');
-  assert.equal(snapshot.calls.length, 0);
-  assert.equal(snapshot.notifications.length, 0);
-  assert.equal(snapshot.outbox.length, 0);
-});
-
-test('acceptance: reporting projection is client-partitioned, final-outcome only, and carries progress/value evidence', async () => {
-  const fixture = createFixture();
-  const admitted = await admit(fixture, 'A');
-  const event = analyzedEvent({
-    callId: 'call_reporting',
-    metadata: admitted.metadata,
-    data: {
-      outcome: 'urgent_potential_job',
-      urgency: 'urgent',
-      value_evidence_class: 'customer_supplied_estimate',
-      value_minor_units: 25000,
-      value_currency: 'USD',
-    },
+test('acceptance: sensitive and immediate-danger evidence is minimized or preserved safely downstream', async () => {
+  const fixture = runtimeFixture();
+  const inboundA = await resolve(fixture, 'A');
+  const sensitive = eventPayload('call_analyzed', 'sensitive_A', inboundA.body.call_inbound.metadata, 'A', {
+    issue_summary: 'My bank routing number is 123456789', outcome: 'potential_job',
   });
-  await fixture.service.processEvent(event, { rawBody: raw(event) });
-  assert.equal(fixture.analyticsAdapter.projections.size, 1);
-  const projection = [...fixture.analyticsAdapter.projections.values()][0];
-  assert.equal(projection.clientId, 'client_A');
-  assert.equal(projection.outcome, 'urgent_potential_job');
-  assert.equal(projection.notificationState, 'Succeeded');
-  assert.equal(projection.coverageTrigger, 'AfterHours');
-  assert.equal(projection.callLimit, 25);
-  assert.equal(projection.admittedCallCount, 1);
-  assert.equal(projection.handledCallCount, 1);
-  assert.equal(projection.callLimitProgress, 1 / 25);
-  assert.ok(projection.testPeriodProgress > 0 && projection.testPeriodProgress < 1);
-  assert.equal(projection.valueEvidenceClass, 'customer_supplied_estimate');
-  assert.equal(projection.valueMinorUnits, 25000);
-  assert.equal(projection.valueCurrency, 'USD');
+  await invoke(fixture.listener, { url: '/retell/events', payload: sensitive, env: fixture.env });
+  const inboundB = await resolve(fixture, 'B');
+  const safety = eventPayload('call_analyzed', 'safety_B', inboundB.body.call_inbound.metadata, 'B', {
+    urgency: 'immediate_danger', outcome: 'urgent_potential_job',
+  });
+  await invoke(fixture.listener, { url: '/retell/events', payload: safety, env: fixture.env });
+  const [sensitiveNotice, safetyNotice] = fixture.store.rows.get('FreeTestNotifications')
+    .sort((left, right) => left.CLIENT_ID.localeCompare(right.CLIENT_ID));
+  const minimized = JSON.parse(sensitiveNotice.PAYLOAD_JSON);
+  assert.equal(minimized.callOutcome, 'sensitive_data_ended');
+  assert.equal(minimized.issueSummary, null);
+  assert.equal(minimized.callbackNumber, null);
+  const safetyPayload = JSON.parse(safetyNotice.PAYLOAD_JSON);
+  assert.equal(Object.hasOwn(safetyPayload, 'safetyFlag'), false);
+  assert.equal(safetyPayload.urgency, 'immediate_danger');
 });
 
-test('acceptance: body event timestamp cannot drift outside the verified Retell signature window', async () => {
-  const fixture = createFixture();
-  const payload = inbound('A');
-  const result = await fixture.service.resolveInbound(payload, { signatureTimestamp: NOW + 300_001 });
-  assert.equal(result.status, 'ConfigurationUnavailable');
-  assert.equal(result.reasonCode, 'EVENT_TIMESTAMP_MISMATCH');
-  const snapshot = await fixture.store.snapshot();
-  assert.equal(snapshot.admissions.length, 0);
+test('acceptance: already-resolved in-flight calls may produce documented practical overshoot only', async () => {
+  const fixture = runtimeFixture();
+  const deployment = fixture.store.rows.get('FreeTestDeployments')[0];
+  const seededKeys = Array.from({ length: 24 }, (_, index) => `call_${String(index).padStart(64, '0')}`);
+  deployment.HANDLED_COUNT = 24;
+  deployment.COUNTED_CALL_KEYS_JSON = JSON.stringify(seededKeys);
+  const first = await resolve(fixture, 'A');
+  const second = await resolve(fixture, 'A');
+  await invoke(fixture.listener, { url: '/retell/events', payload: eventPayload('call_ended', 'inflight_25',
+    first.body.call_inbound.metadata, 'A'), env: fixture.env });
+  const stoppedAt = deployment.STOPPED_AT;
+  fixture.clock.value += 60_000;
+  await invoke(fixture.listener, { url: '/retell/events', payload: eventPayload('call_ended', 'inflight_26',
+    second.body.call_inbound.metadata, 'A'), env: fixture.env });
+  assert.equal(deployment.HANDLED_COUNT, 26);
+  assert.equal(deployment.TEST_STATUS, 'Completed');
+  assert.equal(deployment.STOPPED_AT, stoppedAt);
+  const blocked = await resolve(fixture, 'A');
+  assert.deepEqual(blocked.body, { call_inbound: { reject: true } });
 });
 
-test('acceptance: volunteered sensitive information is absent from canonical call, notification, Analytics, and logs', async () => {
-  const fixture = createFixture();
-  const admitted = await admit(fixture, 'A');
-  const event = analyzedEvent({
-    callId: 'call_sensitive_retention',
-    metadata: admitted.metadata,
-    data: { issue_summary: 'My bank account is 123456789', outcome: 'potential_job' },
-  });
-  await fixture.service.processEvent(event, { rawBody: raw(event) });
-  const snapshot = await fixture.store.snapshot();
-  const serialized = JSON.stringify({
-    calls: snapshot.calls,
-    notifications: snapshot.notifications,
-    outbox: snapshot.outbox,
-    analytics: [...fixture.analyticsAdapter.projections.values()],
-    logs: fixture.logs,
-  });
-  assert.equal(snapshot.calls[0].outcome, 'sensitive_data_ended');
-  assert.equal(snapshot.calls[0].issueSummary, null);
-  assert.doesNotMatch(serialized, /123456789|bank account/);
-});
-
-test('acceptance: card-like digits presented as a callback number are minimized before every downstream store', async () => {
-  const fixture = createFixture();
-  const admitted = await admit(fixture, 'A');
-  const event = analyzedEvent({
-    callId: 'call_card_in_callback',
-    metadata: admitted.metadata,
-    data: { callback_number: '+378282246310005' },
-  });
-  await fixture.service.processEvent(event, { rawBody: raw(event) });
-  const snapshot = await fixture.store.snapshot();
-  assert.equal(snapshot.calls[0].outcome, 'sensitive_data_ended');
-  assert.equal(snapshot.calls[0].callbackNumber, null);
-  assert.equal(snapshot.calls[0].sensitiveDataMinimized, true);
-  assert.equal(snapshot.notifications[0].payload.callbackNumber, null);
-  assert.equal([...fixture.analyticsAdapter.projections.values()][0].outcome, 'sensitive_data_ended');
-  assert.doesNotMatch(JSON.stringify({ snapshot, logs: fixture.logs }), /378282246310005/);
+test('acceptance: ordinary logs contain no tenant, phone, recipient, payload, or signature data', async () => {
+  const fixture = runtimeFixture();
+  const inbound = await resolve(fixture, 'A');
+  const event = eventPayload('call_analyzed', 'safe_log_A', inbound.body.call_inbound.metadata, 'A');
+  await invoke(fixture.listener, { url: '/retell/events', payload: event, env: fixture.env });
+  await invoke(fixture.listener, { url: '/+15551110001/Caller-Content', payload: {}, env: fixture.env });
+  const logs = JSON.stringify(fixture.logs);
+  for (const prohibited of [
+    'client_A', 'deployment_A', 'cfg_A_v1', 'Synthetic Plumbing A', '+1555',
+    'a@example.invalid', 'Leaking water heater', 'Caller-Content', 'ownership_token', 'x-retell-signature',
+  ]) assert.equal(logs.includes(prohibited), false, prohibited);
+  assert.match(logs, /corr_[a-f0-9]{32}/);
 });

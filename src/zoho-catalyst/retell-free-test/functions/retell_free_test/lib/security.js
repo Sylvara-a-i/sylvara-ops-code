@@ -43,14 +43,6 @@ function keyedDigest(secret, domain, parts) {
   return hmac.digest('hex');
 }
 
-function admissionId(secret, inbound) {
-  return `adm_${keyedDigest(secret, 'free-test-admission-v1', [
-    inbound.eventTimestamp,
-    inbound.toNumber,
-    inbound.fromNumber,
-  ]).slice(0, 40)}`;
-}
-
 function numberLookupKey(secret, toNumber) {
   return `num_${keyedDigest(secret, 'free-test-number-v1', [toNumber])}`;
 }
@@ -74,7 +66,6 @@ function publicCorrelationId(secret, parts) {
 module.exports = {
   verifyRetellSignature,
   keyedDigest,
-  admissionId,
   numberLookupKey,
   eventReceiptKey,
   callLookupKey,

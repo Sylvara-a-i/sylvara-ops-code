@@ -20,7 +20,7 @@ Sylvara is validating a managed inbound receptionist and front-office service fo
 
 The product is not generic access to a voice agent. Its value must come from completing a bounded business workflow, recording the outcome, handling exceptions safely, and remaining accountable for implementation quality.
 
-This product direction does not override the [legal and compliance control archive](../legal-compliance/README.md). The only current telephone proposal is controlled, inbound, internal, non-sales QA with synthetic conversation data. Prospect-facing telephone demonstrations, client pilots, and production calls remain blocked until the exact workflow passes separate legal, privacy, security, vendor, environment, and deployment gates. The progressive customer modes below describe a future gated sequence, not current authorization.
+This product direction does not override the [legal and compliance control archive](../legal-compliance/README.md), which preserves dated research and a conservative historical profile for internal, non-sales QA without making a legal conclusion for every test. Offline/synthetic Development work, a controlled internal Development phone test, and a prospect/customer launch are separate decisions. An internal call requires an explicit owner-approved scope, Development readback, synthetic facts, data-handling settings, and rollback. Prospect-facing telephone demonstrations remain blocked by repository authority—not as a legal conclusion, but because no current prospect workflow or operating approval is recorded. The progressive customer modes below describe a future gated sequence, not current authorization.
 
 ## Initial Product Boundary
 

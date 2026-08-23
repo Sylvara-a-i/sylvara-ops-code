@@ -1,6 +1,6 @@
 {
-  "schema_version": 1,
-  "status": "development-only-source-contract",
+  "schema_version": 2,
+  "status": "development-runtime-source",
   "production_supported": false,
   "rules": {
     "real_values_in_git": false,
@@ -9,248 +9,33 @@
     "secret_values_logged": false
   },
   "variables": [
-    {
-      "name": "DEPLOYMENT_ENVIRONMENT",
-      "consumer": "Catalyst request boundary and every store row",
-      "secret": false,
-      "required": true,
-      "format": "exact literal development",
-      "development": "must be development",
-      "production": "rejected by this source revision"
-    },
-    {
-      "name": "SOURCE_REVISION",
-      "consumer": "Catalyst request boundary, durable audit rows, and safe logs",
-      "secret": false,
-      "required": true,
-      "format": "lowercase 40-character Git commit SHA",
-      "development": "reviewed immutable source revision",
-      "production": "not supported"
-    },
-    {
-      "name": "RETELL_WEBHOOK_API_KEY",
-      "consumer": "Retell inbound and call-event HMAC verifier",
-      "secret": true,
-      "required": true,
-      "format": "Retell API key carrying the webhook-verification badge; 24-4096 non-whitespace characters",
-      "development": "Development Retell workspace secret only",
-      "production": "must be separately provisioned; rejected here"
-    },
-    {
-      "name": "RETELL_SHARED_AGENT_ID",
-      "consumer": "inbound resolver response and agent-only ownership fallback",
-      "secret": false,
-      "required": true,
-      "format": "private opaque identifier matching ^[A-Za-z0-9_-]{8,128}$",
-      "development": "exact shared Development free-test agent",
-      "production": "not supported"
-    },
-    {
-      "name": "RETELL_SHARED_AGENT_VERSION",
-      "consumer": "inbound resolver response",
-      "secret": false,
-      "required": true,
-      "format": "base-10 integer from 0 through 100000",
-      "development": "accepted Development version or tag index",
-      "production": "not supported"
-    },
-    {
-      "name": "RETELL_INBOUND_PATH",
-      "consumer": "HTTP route boundary",
-      "secret": false,
-      "required": true,
-      "format": "exact /retell/inbound",
-      "development": "exact route",
-      "production": "not supported"
-    },
-    {
-      "name": "RETELL_EVENTS_PATH",
-      "consumer": "HTTP route boundary",
-      "secret": false,
-      "required": true,
-      "format": "exact /retell/events",
-      "development": "exact route",
-      "production": "not supported"
-    },
-    {
-      "name": "RETELL_SIGNATURE_MAX_AGE_MS",
-      "consumer": "Retell HMAC timestamp verifier",
-      "secret": false,
-      "required": true,
-      "format": "exact integer 300000",
-      "development": "official five-minute window",
-      "production": "not supported"
-    },
-    {
-      "name": "MAX_WEBHOOK_BYTES",
-      "consumer": "HTTP raw-body reader",
-      "secret": false,
-      "required": true,
-      "format": "integer 1024-262144",
-      "development": "bounded request size",
-      "production": "not supported"
-    },
-    {
-      "name": "INBOUND_BODY_TIMEOUT_MS",
-      "consumer": "HTTP raw-body reader",
-      "secret": false,
-      "required": true,
-      "format": "integer 250-5000",
-      "development": "must leave time inside Retell's ten-second inbound timeout",
-      "production": "not supported"
-    },
-    {
-      "name": "ADMISSION_HMAC_SECRET",
-      "consumer": "retry-safe inbound admission key derivation",
-      "secret": true,
-      "required": true,
-      "format": "32-4096 non-whitespace characters, distinct from every other HMAC key",
-      "development": "stable for the admission retention period",
-      "production": "must be separately generated; rejected here"
-    },
-    {
-      "name": "EVENT_HMAC_SECRET",
-      "consumer": "event receipt key and payload fingerprint derivation",
-      "secret": true,
-      "required": true,
-      "format": "32-4096 non-whitespace characters, distinct from every other HMAC key",
-      "development": "stable for the receipt retention period",
-      "production": "must be separately generated; rejected here"
-    },
-    {
-      "name": "NUMBER_LOOKUP_HMAC_SECRET",
-      "consumer": "searchable called-number lookup hash",
-      "secret": true,
-      "required": true,
-      "format": "32-4096 non-whitespace characters, distinct from every other HMAC key",
-      "development": "stable while any assignment history remains",
-      "production": "must be separately generated; rejected here"
-    },
-    {
-      "name": "PLATFORM_OPERATION_TIMEOUT_MS",
-      "consumer": "Catalyst Data Store and ZCQL adapter",
-      "secret": false,
-      "required": true,
-      "format": "integer 250-5000",
-      "development": "per-operation ceiling",
-      "production": "not supported"
-    },
-    {
-      "name": "NOTIFICATION_MODE",
-      "consumer": "notification adapter selection",
-      "secret": false,
-      "required": true,
-      "format": "exact literal synthetic",
-      "development": "records deterministic synthetic delivery only",
-      "production": "all sending rejected"
-    },
-    {
-      "name": "NOTIFICATION_MAX_ATTEMPTS",
-      "consumer": "notification retry state machine",
-      "secret": false,
-      "required": true,
-      "format": "integer 1-5; approved value 3",
-      "development": "bounded synthetic attempts",
-      "production": "not supported"
-    },
-    {
-      "name": "ANALYTICS_MODE",
-      "consumer": "Analytics adapter selection",
-      "secret": false,
-      "required": true,
-      "format": "exact literal synthetic",
-      "development": "records a synthetic partitioned fact",
-      "production": "all imports rejected"
-    },
-    {
-      "name": "CRM_SUMMARY_MODE",
-      "consumer": "CRM summary adapter selection",
-      "secret": false,
-      "required": true,
-      "format": "exact literal disabled",
-      "development": "no CRM request is permitted",
-      "production": "all writes rejected"
-    },
-    {
-      "name": "DEPLOYMENT_TABLE",
-      "consumer": "Catalyst store",
-      "secret": false,
-      "required": true,
-      "format": "Catalyst table API name ^[A-Za-z][A-Za-z0-9_]{0,63}$",
-      "development": "Development table only",
-      "production": "not supported"
-    },
-    {
-      "name": "CONFIGURATION_TABLE",
-      "consumer": "Catalyst store",
-      "secret": false,
-      "required": true,
-      "format": "Catalyst table API name",
-      "development": "Development table only",
-      "production": "not supported"
-    },
-    {
-      "name": "NUMBER_ASSIGNMENT_TABLE",
-      "consumer": "Catalyst store",
-      "secret": false,
-      "required": true,
-      "format": "Catalyst table API name",
-      "development": "Development table only",
-      "production": "not supported"
-    },
-    {
-      "name": "ADMISSION_SLOT_TABLE",
-      "consumer": "Catalyst store",
-      "secret": false,
-      "required": true,
-      "format": "Catalyst table API name",
-      "development": "exactly 25 pre-provisioned slots per deployment",
-      "production": "not supported"
-    },
-    {
-      "name": "ADMISSION_RECORD_TABLE",
-      "consumer": "Catalyst store",
-      "secret": false,
-      "required": true,
-      "format": "Catalyst table API name",
-      "development": "immutable admission ledger and authoritative reconciliation tombstones",
-      "production": "not supported"
-    },
-    {
-      "name": "EVENT_RECEIPT_TABLE",
-      "consumer": "Catalyst store",
-      "secret": false,
-      "required": true,
-      "format": "Catalyst table API name",
-      "development": "Development table only",
-      "production": "not supported"
-    },
-    {
-      "name": "CANONICAL_CALL_TABLE",
-      "consumer": "Catalyst store",
-      "secret": false,
-      "required": true,
-      "format": "Catalyst table API name",
-      "development": "Development table only",
-      "production": "not supported"
-    },
-    {
-      "name": "NOTIFICATION_TABLE",
-      "consumer": "Catalyst store",
-      "secret": false,
-      "required": true,
-      "format": "Catalyst table API name",
-      "development": "Development table only",
-      "production": "not supported"
-    },
-    {
-      "name": "REPORTING_OUTBOX_TABLE",
-      "consumer": "Catalyst store",
-      "secret": false,
-      "required": true,
-      "format": "Catalyst table API name",
-      "development": "Development table only",
-      "production": "not supported"
-    }
+    { "name": "DEPLOYMENT_ENVIRONMENT", "consumer": "Advanced I/O and retry Job environment gates and durable rows", "secret": false, "required": true, "format": "exact literal development", "development": "required in both function targets", "production": "rejected" },
+    { "name": "X_ZOHO_CATALYST_ENVIRONMENT", "consumer": "Catalyst Function Job pre-SDK environment boundary", "secret": false, "required": true, "format": "platform-injected exact literal Development", "development": "injected by Catalyst; independently read back before enabling the schedule", "production": "Production or missing value rejected before SDK initialization" },
+    { "name": "ZOHO_CATALYST_ZCQL_PARSER", "consumer": "Advanced I/O and retry Job Catalyst configuration gates", "secret": false, "required": true, "format": "exact literal V2", "development": "required in both targets for reviewed conditional ZCQL statements", "production": "not supported" },
+    { "name": "SOURCE_REVISION", "consumer": "Advanced I/O and retry Job durable audit rows", "secret": false, "required": true, "format": "lowercase 40-character Git commit SHA", "development": "same reviewed immutable source revision in both targets", "production": "not supported" },
+    { "name": "RETELL_WEBHOOK_API_KEY", "consumer": "raw-body Retell signature verifier", "secret": true, "required": true, "format": "24-4096 non-whitespace characters", "development": "Development Retell workspace only", "production": "separate provisioning required and rejected here" },
+    { "name": "RETELL_SHARED_AGENT_ID", "consumer": "Advanced I/O resolver/event gate and retry Job ownership gate", "secret": false, "required": true, "format": "^[A-Za-z0-9_-]{8,128}$", "development": "exact shared Development agent in both targets", "production": "not supported" },
+    { "name": "RETELL_SHARED_AGENT_VERSION", "consumer": "Advanced I/O resolver/event gate and retry Job ownership gate", "secret": false, "required": true, "format": "integer 0-100000", "development": "same pinned Development version in both targets", "production": "not supported" },
+    { "name": "RETELL_INBOUND_PATH", "consumer": "Advanced I/O router", "secret": false, "required": true, "format": "exact /retell/inbound", "development": "exact route", "production": "not supported" },
+    { "name": "RETELL_EVENTS_PATH", "consumer": "Advanced I/O router", "secret": false, "required": true, "format": "exact /retell/events", "development": "exact route", "production": "not supported" },
+    { "name": "INTERNAL_READINESS_PATH", "consumer": "Advanced I/O private readiness route", "secret": false, "required": true, "format": "exact /internal/readiness", "development": "exact route", "production": "not supported" },
+    { "name": "CATALYST_DEVELOPMENT_HOST", "consumer": "pre-SDK Development environment boundary", "secret": false, "required": true, "format": "exact private Advanced I/O host using the documented .development.catalystserverless.<region> or .development.zohocatalyst.<region> family", "development": "must match request Host exactly; value remains outside Git", "production": "production-shaped hosts rejected" },
+    { "name": "CATALYST_DEVELOPMENT_PROJECT_ID", "consumer": "Advanced I/O SDK identity and retry Job pre-SDK identity boundaries", "secret": false, "required": true, "format": "exact numeric private Catalyst Development project ID", "development": "required in both targets; must match SDK app.config.projectId and jobRequest.getProjectDetails().id; value remains outside Git", "production": "mismatch rejected before Data Store or Mail access" },
+    { "name": "FREE_TEST_RETRY_JOB_POOL_ID", "consumer": "Function Job pre-SDK job-pool identity boundary", "secret": false, "required": true, "format": "exact numeric private Development Function Job pool ID", "development": "must match the platform Job Pool details ID; value remains outside Git", "production": "mismatch rejected before SDK initialization" },
+    { "name": "RETELL_SIGNATURE_MAX_AGE_MS", "consumer": "Retell signature verifier", "secret": false, "required": true, "format": "exact integer 300000", "development": "official five-minute window", "production": "not supported" },
+    { "name": "MAX_WEBHOOK_BYTES", "consumer": "raw-body reader", "secret": false, "required": true, "format": "integer 1024-262144", "development": "bounded request size", "production": "not supported" },
+    { "name": "INBOUND_BODY_TIMEOUT_MS", "consumer": "raw-body reader", "secret": false, "required": true, "format": "integer 250-5000", "development": "per-request body deadline", "production": "not supported" },
+    { "name": "EVENT_HMAC_SECRET", "consumer": "Advanced I/O and retry Job receipt, call, correlation, and notification keyed digests", "secret": true, "required": true, "format": "32-4096 non-whitespace characters", "development": "same stable value in both targets for retained rows", "production": "separate key required and rejected here" },
+    { "name": "NUMBER_LOOKUP_HMAC_SECRET", "consumer": "called-number lookup digest", "secret": true, "required": true, "format": "32-4096 non-whitespace characters", "development": "stable while bindings are active", "production": "separate key required and rejected here" },
+    { "name": "INTERNAL_READINESS_TOKEN", "consumer": "private readiness authentication", "secret": true, "required": true, "format": "32-256 non-whitespace characters", "development": "Development operator secret", "production": "separate key required and rejected here" },
+    { "name": "PLATFORM_OPERATION_TIMEOUT_MS", "consumer": "Advanced I/O and retry Job Data Store/ZCQL adapters", "secret": false, "required": true, "format": "integer 250-5000", "development": "same per-operation ceiling in both targets", "production": "not supported" },
+    { "name": "FREE_TEST_NOTIFICATION_MODE", "consumer": "Advanced I/O and retry Job Catalyst Mail adapters", "secret": false, "required": true, "format": "dry_run or send_development", "development": "same value in both targets; dry_run is the committed default; send_development is limited to the controlled verified-sender and approved-synthetic-recipient test", "production": "rejected" },
+    { "name": "FREE_TEST_MAIL_FROM", "consumer": "Advanced I/O and retry Job Catalyst Mail adapters", "secret": false, "required": true, "format": "verified sender email; value remains private and outside Git", "development": "same verified Catalyst Development sender in both targets", "production": "not supported" },
+    { "name": "FREE_TEST_MAIL_TIMEOUT_MS", "consumer": "Advanced I/O and retry Job Catalyst Mail adapters", "secret": false, "required": true, "format": "integer 250-5000", "development": "same provider invocation ceiling in both targets", "production": "not supported" },
+    { "name": "FREE_TEST_NOTIFICATION_MAX_ATTEMPTS", "consumer": "Advanced I/O and retry Job notification state machine", "secret": false, "required": true, "format": "exact integer 3", "development": "same bounded retry count in both targets", "production": "not supported" },
+    { "name": "DEPLOYMENT_TABLE", "consumer": "Advanced I/O and retry Job Catalyst Data Store adapters", "secret": false, "required": true, "format": "exact FreeTestDeployments", "development": "reviewed new table in both targets", "production": "not supported" },
+    { "name": "EVENT_RECEIPT_TABLE", "consumer": "Advanced I/O and retry Job Catalyst Data Store adapters", "secret": false, "required": true, "format": "exact FreeTestRetellEventReceipts", "development": "reviewed new table in both targets; distinct from the preserved incompatible legacy RetellEventReceipts table", "production": "not supported" },
+    { "name": "CANONICAL_CALL_TABLE", "consumer": "Advanced I/O and retry Job Catalyst Data Store adapters", "secret": false, "required": true, "format": "exact FreeTestCalls", "development": "reviewed new table in both targets", "production": "not supported" },
+    { "name": "NOTIFICATION_TABLE", "consumer": "Advanced I/O and retry Job Catalyst Data Store adapters", "secret": false, "required": true, "format": "exact FreeTestNotifications", "development": "reviewed new table in both targets", "production": "not supported" }
   ]
 }

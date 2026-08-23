@@ -212,5 +212,5 @@
       "existing_customer_transfer_failed"
     ]
   },
-  "interpretation": "Provider-neutral acceptance semantics for zero-cost local QA; not runtime topology, extraction proof, spoken-behavior proof, or deployment authorization."
+  "interpretation": "Provider-neutral acceptance semantics for zero-cost local QA. The exact ownership tuple is supplied per call by the validated resolver and is never a fixed client literal. The four post-call definitions above are negative capability sentinels, not the Catalyst-aligned extraction schema in conversation-contract.json. This is not runtime topology, extraction proof, spoken-behavior proof, or deployment authorization."
 }
