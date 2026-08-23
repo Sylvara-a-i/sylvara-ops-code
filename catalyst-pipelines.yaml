@@ -7,7 +7,7 @@ jobs:
       type-variables:
         reviewers:
           - << env.DEPLOY_APPROVER_EMAIL >>
-        message: Approve the reviewed Form 2 controller revision for Catalyst Development.
+        message: Approve the reviewed Form 2 controller revision for the existing Retell Catalyst Development target.
   deploy_form2_development:
     steps:
       - |

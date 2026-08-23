@@ -37,7 +37,7 @@ Zoho Catalyst ingress and durable call state
               fixed-client reviewed report
 ```
 
-The boundaries below are architectural intent. Current tenant identities, permissions, agents, numbers, projects, functions, tables, workspaces, views, OAuth grants, schedules, and runtime behavior remain **Unknown** until independently verified.
+The boundaries below are architectural intent. Current tenant identities, permissions, agents, numbers, projects, functions, voice/reporting tables, workspaces, views, OAuth grants, schedules, and runtime behavior remain **Unknown** until independently verified. The separately documented 2026-08-22 initial copy readback for Form 1 and Form 2 tables in Retell Development does not verify or activate this voice/reporting path; the legacy form projects remain live and no function, route, Connection, variable, caller, or runtime cutover is established by that copy.
 
 ## Agent Lifecycle
 

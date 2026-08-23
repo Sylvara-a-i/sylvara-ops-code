@@ -65,6 +65,7 @@ test("loads an immutable Development-only configuration with bounded defaults", 
   assert.equal(config.deploymentEnvironment, "development");
   assert.equal(config.prefillTableName, "Form2_Prefills");
   assert.equal(config.sessionTtlSeconds, 3600);
+  assert.equal(config.verifiedSessionTtlSeconds, 1800);
   assert.equal(config.maxVerificationAttempts, 3);
   assert.equal(config.maxSubmissionAttempts, 3);
   assert.equal(config.maxBodyBytes, 32768);
@@ -210,6 +211,7 @@ test("parses all numeric controls as strict bounded base-10 integers", () => {
   for (const [name, limits] of Object.entries(NUMERIC_LIMITS)) {
     const propertyByName = {
       SESSION_TTL_SECONDS: "sessionTtlSeconds",
+      VERIFIED_SESSION_TTL_SECONDS: "verifiedSessionTtlSeconds",
       MAX_VERIFICATION_ATTEMPTS: "maxVerificationAttempts",
       MAX_SUBMISSION_ATTEMPTS: "maxSubmissionAttempts",
       MAX_BODY_BYTES: "maxBodyBytes",
@@ -233,6 +235,12 @@ test("parses all numeric controls as strict bounded base-10 integers", () => {
     () => load(baseEnvironment({ MAX_VERIFICATION_ATTEMPTS: "1" })),
     ConfigurationError,
   );
+  for (const value of ["1799", "1801"]) {
+    assert.throws(
+      () => load(baseEnvironment({ VERIFIED_SESSION_TTL_SECONDS: value })),
+      ConfigurationError,
+    );
+  }
 });
 
 test("rejects malformed aliases, versions, revisions, and Connection link names", () => {

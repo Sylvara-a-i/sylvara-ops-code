@@ -72,6 +72,7 @@ function validateConfig(config) {
     !Number.isSafeInteger(config?.sessionTtlSeconds) ||
     config.sessionTtlSeconds < 300 ||
     config.sessionTtlSeconds > 86400 ||
+    config?.verifiedSessionTtlSeconds !== 1800 ||
     !Number.isSafeInteger(config?.maxVerificationAttempts) ||
     config.maxVerificationAttempts < 2 ||
     config.maxVerificationAttempts > 10 ||
@@ -376,6 +377,7 @@ function createCatalystSessionStore(adapter, config, { now = Date.now } = {}) {
         STATUS: "status",
         ATTEMPT_COUNT: "attemptCount",
         LAST_OUTCOME: "lastOutcome",
+        EXPIRES_AT: "expiresAt",
         VERIFIED_AT: "verifiedAt",
         SUBMITTED_AT: "submittedAt",
         EXPIRED_AT: "expiredAt",
@@ -704,10 +706,14 @@ function createCatalystSessionStore(adapter, config, { now = Date.now } = {}) {
     }
 
     const timestamp = new Date(nowMs).toISOString();
+    const expiresAt = current.status === "issued"
+      ? new Date(nowMs + config.verifiedSessionTtlSeconds * 1000).toISOString()
+      : current.expiresAt;
     const verified = await writeAndReadBack(current, {
       STATUS: "verified",
       ATTEMPT_COUNT: current.attemptCount + 1,
       LAST_OUTCOME: "verified",
+      EXPIRES_AT: expiresAt,
       VERIFIED_AT: current.verifiedAt || timestamp,
       UPDATED_AT: timestamp,
     });

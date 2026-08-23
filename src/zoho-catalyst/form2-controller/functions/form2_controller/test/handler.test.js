@@ -611,10 +611,29 @@ function fixture() {
     },
   };
 
+  const verificationProofStore = {
+    async readAllFactorsVerifiedProof(binding) {
+      events.push("verification.proof.read");
+      return Object.freeze({
+        status: "all_factors_verified",
+        sessionRowId: binding.sessionRowId,
+        tokenHash: binding.tokenHash,
+        crmContactId: binding.crmContactId,
+        crmAccountId: binding.crmAccountId,
+        crmDealId: binding.crmDealId,
+        emailOtpVerifiedAt: "2026-08-14T18:00:00.000Z",
+        captchaVerifiedAt: "2026-08-14T18:00:00.000Z",
+        verifiedAt: "2026-08-14T18:00:00.000Z",
+        expiresAt: "2026-08-14T18:30:00.000Z",
+      });
+    },
+  };
+
   const dependencies = {
     config: selectedConfig,
     crmClient,
     sessionStore,
+    verificationProofStore,
     workflowStore,
     now: () => NOW_MS,
   };
@@ -962,8 +981,24 @@ test("verifies CRM, mints a bound prefill revision, and returns no IDs or token"
   const serialized = JSON.stringify(result.body);
   for (const id of Object.values(IDS)) assert.equal(serialized.includes(id), false);
   assert.equal(serialized.includes(deriveAccessToken(ISSUE_REQUEST_ID, config().tokenPepper)), false);
+  assert.ok(selected.events.indexOf("verification.proof.read") < selected.events.indexOf("crm.get.Contacts"));
   assert.ok(selected.events.indexOf("session.verify") < selected.events.indexOf("crm.update.Deals"));
   assert.ok(selected.events.indexOf("crm.update.Deals") < selected.events.indexOf("workflow.prefill.mint"));
+});
+
+test("token possession alone cannot establish verified state", async () => {
+  const selected = fixture();
+  await issue(selected);
+  delete selected.dependencies.verificationProofStore;
+  selected.events.length = 0;
+
+  const result = await prefill(selected);
+
+  assert.equal(result.status, 403);
+  assert.deepEqual(result.body, { ok: false, code: "verification_required" });
+  assert.equal(selected.session.status, "issued");
+  assert.equal(selected.records.deal.Setup_Access_Status, "Synthetic Issued");
+  assert.deepEqual(selected.events, ["session.read"]);
 });
 
 test("prefill contract defects do not consume verification state", async () => {
@@ -998,6 +1033,24 @@ test("a post-verification prefill-store failure is recoverable through one bound
   assert.equal(selected.events.includes("session.verify"), true);
   assert.equal(selected.session.attemptCount, 2);
   assert.equal(selected.events.includes("crm.update.Deals"), false);
+});
+
+test("a verified prefill retry accepts CRM whole-second DateTime precision", async () => {
+  const selected = fixture();
+  await issue(selected);
+  assert.equal((await prefill(selected)).status, 200);
+
+  selected.session.verifiedAt = "2026-08-14T18:00:00.115Z";
+  selected.records.deal.Setup_Access_Verified_At = "2026-08-14T18:00:00Z";
+  selected.events.length = 0;
+
+  const retried = await prefill(selected);
+
+  assert.equal(retried.status, 200);
+  assert.equal(selected.session.status, "verified");
+  assert.equal(selected.session.attemptCount, 2);
+  assert.equal(selected.events.includes("crm.update.Deals"), false);
+  assert.equal(selected.events.includes("session.reconciliation"), false);
 });
 
 test("durably expires an elapsed prefill session before returning the generic 404", async () => {

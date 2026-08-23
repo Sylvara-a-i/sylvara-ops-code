@@ -91,9 +91,9 @@ test("the Data Store schema matches the runtime and Catalyst uniqueness boundary
   assert.equal(schema.status, "proposed-development-only");
   assert.equal(
     schema.live_state,
-    "development-54-column-schema-rename-privacy-access-scope-and-empty-state-readback-verified-function-not-deployed",
+    "retell-development-tables-provisioned-initial-copy-verified-legacy-live-function-routes-connections-variables-and-callers-not-cut-over",
   );
-  assert.equal(schema.observed_at, "2026-08-20");
+  assert.equal(schema.observed_at, "2026-08-22");
 
   assert.equal(schema.tables.length, 3);
   assert.equal(
@@ -162,12 +162,17 @@ test("the Data Store schema matches the runtime and Catalyst uniqueness boundary
   assert.match(sessionTable.retention, /Do not delete or alter any session row/);
   assert.equal(
     schema.deployment_gates.some((gate) =>
-      gate.includes("zero rows") && gate.includes("renaming ISSUE_KEY")),
+      gate.includes("already uses DEAL_ISSUANCE_KEY") && gate.includes("do not repeat")),
     true,
   );
   assert.equal(
     schema.deployment_gates.some((gate) =>
       gate.includes("LAST_OUTCOME") && gate.includes("read back")),
+    true,
+  );
+  assert.equal(
+    schema.deployment_gates.some((gate) =>
+      gate.includes("legacy Form 2 project live") && gate.includes("separate destructive action")),
     true,
   );
   assert.equal(JSON.stringify(schema).includes("RAW_PAYLOAD"), false);
@@ -222,6 +227,7 @@ test("the Catalyst and npm manifests describe one consistent Advanced IO target"
     "lib/session-store.js",
     "lib/snapshot.js",
     "lib/source-revision.js",
+    "lib/verification-proof.js",
     "lib/workflow-store.js",
   ];
   const expectedCheckScript = expectedRuntimeSources

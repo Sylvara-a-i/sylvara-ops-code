@@ -37,6 +37,7 @@
     { "name": "PREFILL_TABLE_NAME", "classification": "private-platform-identifier", "required": true, "example_allowed": false },
     { "name": "SUBMISSION_TABLE_NAME", "classification": "private-platform-identifier", "required": true, "example_allowed": false },
     { "name": "SESSION_TTL_SECONDS", "classification": "bounded-security-policy", "required": false, "example_allowed": true },
+    { "name": "VERIFIED_SESSION_TTL_SECONDS", "classification": "fixed-security-policy", "required": false, "example_allowed": true },
     { "name": "MAX_VERIFICATION_ATTEMPTS", "classification": "bounded-security-policy", "required": false, "example_allowed": true },
     { "name": "MAX_SUBMISSION_ATTEMPTS", "classification": "bounded-security-policy", "required": false, "example_allowed": true },
     { "name": "MAX_BODY_BYTES", "classification": "bounded-runtime-policy", "required": false, "example_allowed": true },

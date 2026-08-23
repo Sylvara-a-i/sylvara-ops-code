@@ -32,7 +32,16 @@ const MAX_COMPRESSED_CHOICE_CHARS = 4096;
 const MAX_DECOMPRESSED_CHOICE_BYTES = 32768;
 
 const NUMERIC_LIMITS = Object.freeze({
+  // Invitation lifetime. The first successful verification replaces this
+  // deadline with the fixed post-verification lifetime below.
   SESSION_TTL_SECONDS: Object.freeze({ fallback: 3600, minimum: 300, maximum: 86400 }),
+  // This is intentionally exact rather than merely bounded. Changing the
+  // verified-session lifetime requires a reviewed source change.
+  VERIFIED_SESSION_TTL_SECONDS: Object.freeze({
+    fallback: 1800,
+    minimum: 1800,
+    maximum: 1800,
+  }),
   // Two attempts preserve one bounded retry if prefill persistence fails after
   // the first successful verification transition.
   MAX_VERIFICATION_ATTEMPTS: Object.freeze({ fallback: 3, minimum: 2, maximum: 10 }),
@@ -443,6 +452,10 @@ function loadConfig(environment = process.env, artifactRevision = ARTIFACT_SOURC
     crmReadConnectionLinkName,
     crmWriteConnectionLinkName,
     sessionTtlSeconds: parseBoundedInteger(environment, "SESSION_TTL_SECONDS"),
+    verifiedSessionTtlSeconds: parseBoundedInteger(
+      environment,
+      "VERIFIED_SESSION_TTL_SECONDS",
+    ),
     maxVerificationAttempts: parseBoundedInteger(
       environment,
       "MAX_VERIFICATION_ATTEMPTS",

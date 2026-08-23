@@ -42,8 +42,16 @@ class VerifyEntrypointTests(unittest.TestCase):
         self.assertIn('if ($useRegistry) {', self.script)
         self.assertIn('"--require-hashes"', self.script)
         self.assertIn('"ci", "--ignore-scripts", "--no-audit", "--no-fund"', self.script)
+        self.assertEqual(
+            3,
+            self.script.count('"ci", "--ignore-scripts", "--no-audit", "--no-fund"'),
+        )
         self.assertIn('if ($Mode -eq "All") {', self.script)
         self.assertIn('"audit", "--omit=dev", "--audit-level=high"', self.script)
+        self.assertEqual(
+            3,
+            self.script.count('"audit", "--omit=dev", "--audit-level=high"'),
+        )
         self.assertIn('$env:npm_config_offline = "true"', self.script)
         self.assertIn('$env:npm_config_update_notifier = "false"', self.script)
         for unsafe_downloader in ("Invoke-WebRequest", "curl.exe", "Start-BitsTransfer"):
@@ -55,6 +63,8 @@ class VerifyEntrypointTests(unittest.TestCase):
             "tools/safety/validate_workflows.py",
             '"-m", "unittest", "discover"',
             '"run", "ci", "--prefix", $GatewayRoot',
+            '"run", "ci", "--prefix", $Form1ControllerRoot',
+            '"run", "ci", "--prefix", $Form2ControllerRoot',
         ):
             with self.subTest(fragment=required_fragment):
                 self.assertIn(required_fragment, self.script)
@@ -71,6 +81,8 @@ class VerifyEntrypointTests(unittest.TestCase):
             with self.subTest(path=nonportable):
                 self.assertNotIn(nonportable, self.script)
         self.assertIn("function Join-PathSegments", self.script)
+        self.assertIn('$Form1ControllerRoot = Join-PathSegments $RepoRoot @(', self.script)
+        self.assertIn('$Form2ControllerRoot = Join-PathSegments $RepoRoot @(', self.script)
         self.assertIn("function Ensure-LocalPythonEnvironment", self.script)
         self.assertIn("Get-ManagedVenvPythonCandidates", self.script)
         self.assertIn("safety-venv-cpython-3.12-x64-", self.script)

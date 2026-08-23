@@ -5,11 +5,10 @@ const { createCatalystDataStoreAdapter } = require("./catalyst-datastore-adapter
 const { createConnectionAuthorizationProvider } = require("./connection-boundary");
 const { ConfigurationError, loadConfig } = require("./config");
 const { createCrmClient } = require("./crm-client");
-const { handleForm2Request } = require("./handler");
+const { handleRequest } = require("./handler");
 const { safeLog } = require("./safe-log");
-const { createCatalystSessionStore } = require("./session-store");
-const { createWorkflowStore } = require("./workflow-store");
-const { createDenyAllVerificationProofStore } = require("./verification-proof");
+const { createSessionStore } = require("./session-store");
+const { ARTIFACT_SOURCE_REVISION } = require("./source-revision");
 
 const PUBLIC_CODES = new Set([
   "authentication_failed",
@@ -19,52 +18,22 @@ const PUBLIC_CODES = new Set([
   "body_too_large",
   "body_unavailable",
   "configuration_invalid",
-  "connection_unavailable",
+  "content_encoding_not_allowed",
   "content_length_invalid",
   "content_type_not_allowed",
-  "context_invalid",
-  "context_mismatch",
-  "form_invalid",
-  "identity_mismatch",
+  "context_conflict",
   "method_not_allowed",
-  "mobile_reverification_required",
-  "prefill_consumed",
-  "prefill_stale",
-  "record_stale",
-  "reconciliation_required",
-  "relationship_mismatch",
+  "request_invalid",
   "route_not_found",
-  "setup_not_found",
-  "submission_conflict",
-  "submission_unresolved",
-  "unknown_field",
-  "verification_required",
+  "service_unavailable",
+  "session_not_found",
 ]);
 
 function statusForError(error) {
   if (Number.isInteger(error?.status) && error.status >= 400 && error.status <= 599) {
     return error.status;
   }
-  const byCode = {
-    authentication_failed: 401,
-    body_timeout: 408,
-    body_too_large: 413,
-    configuration_invalid: 503,
-    connection_unavailable: 503,
-    context_invalid: 409,
-    context_mismatch: 409,
-    identity_mismatch: 409,
-    mobile_reverification_required: 409,
-    prefill_consumed: 409,
-    prefill_stale: 409,
-    reconciliation_required: 503,
-    relationship_mismatch: 409,
-    setup_not_found: 404,
-    submission_conflict: 409,
-    submission_unresolved: 409,
-    verification_required: 403,
-  };
-  return byCode[error?.publicCode] ?? 500;
+  return error?.publicCode === "configuration_invalid" ? 503 : 500;
 }
 
 function codeForError(error) {
@@ -90,16 +59,17 @@ function sendJson(response, status, body) {
 function readCatalystEnvironmentHeader(request) {
   const headers = request?.headers;
   if (!headers || typeof headers !== "object" || Array.isArray(headers)) {
-    throw new ConfigurationError("Catalyst runtime environment header is unavailable");
+    throw new ConfigurationError("Catalyst environment header is unavailable");
   }
-  const matches = Object.entries(headers)
-    .filter(([name]) => name.toLowerCase() === "x-zc-environment");
+  const matches = Object.entries(headers).filter(
+    ([name]) => typeof name === "string" && name.toLowerCase() === "x-zc-environment",
+  );
   if (matches.length !== 1 || typeof matches[0][1] !== "string") {
-    throw new ConfigurationError("Catalyst runtime environment header is unavailable");
+    throw new ConfigurationError("Catalyst environment header is unavailable");
   }
   const value = matches[0][1].trim().toLowerCase();
-  if (!new Set(["development", "production"]).has(value)) {
-    throw new ConfigurationError("Catalyst runtime environment header is invalid");
+  if (value !== "development") {
+    throw new ConfigurationError("Catalyst environment header is invalid");
   }
   return value;
 }
@@ -110,43 +80,36 @@ function assertCatalystEnvironment(request, app, configuredEnvironment) {
     ? app.config.environment.trim().toLowerCase()
     : "";
   if (
-    headerEnvironment !== "development" ||
     sdkEnvironment !== "development" ||
-    configuredEnvironment !== "development" ||
     headerEnvironment !== sdkEnvironment ||
     sdkEnvironment !== configuredEnvironment
   ) {
-    throw new ConfigurationError("Catalyst runtime environment does not match Development");
+    throw new ConfigurationError("Catalyst runtime environment does not match configuration");
   }
 }
 
 function createRequestListener({
   catalystSdk,
   environment = process.env,
-  artifactSourceRevision,
   logger = console,
-  randomUUID = crypto.randomUUID,
   now = Date.now,
+  randomBytes = crypto.randomBytes,
+  randomUUID = crypto.randomUUID,
   fetchImpl = globalThis.fetch,
-  requestHandler = handleForm2Request,
+  requestHandler = handleRequest,
+  artifactSourceRevision = ARTIFACT_SOURCE_REVISION,
 } = {}) {
-  // Keep the SDK load at the runtime boundary so pure policy tests can run
-  // without installing deployment dependencies. Catalyst installs this exact
-  // pinned package from package-lock.json for the deployed function.
   const runtimeSdk = catalystSdk ?? require("zcatalyst-sdk-node");
   return async function requestListener(request, response) {
     const startedAt = now();
     const requestId = randomUUID();
-    let sourceRevision = "unavailable";
     try {
       const config = loadConfig(environment, artifactSourceRevision);
-      sourceRevision = config.sourceRevision;
       readCatalystEnvironmentHeader(request);
       const app = runtimeSdk.initialize(request);
       assertCatalystEnvironment(request, app, config.deploymentEnvironment);
-      const dataStoreAdapter = createCatalystDataStoreAdapter(app, config);
-      const sessionStore = createCatalystSessionStore(dataStoreAdapter, config, { now });
-      const workflowStore = createWorkflowStore(dataStoreAdapter, config, { now, randomUUID });
+      const adapter = createCatalystDataStoreAdapter(app, config);
+      const sessionStore = createSessionStore(adapter, config, { now });
       const crmClient = createCrmClient(config, {
         readAuthorizationProvider: createConnectionAuthorizationProvider(
           app,
@@ -160,31 +123,26 @@ function createRequestListener({
         ),
         fetchImpl,
       });
-      if (typeof requestHandler !== "function") {
-        throw new ConfigurationError("Controller request handler is unavailable");
-      }
       const result = await requestHandler(request, {
         config,
         crmClient,
         now,
+        randomBytes,
+        randomUUID,
         sessionStore,
-        verificationProofStore: createDenyAllVerificationProofStore(),
-        workflowStore,
       });
       safeLog(logger, result.status >= 500 ? "error" : "info", {
         requestId,
-        sourceRevision,
         stage: result.stage,
         outcome: result.outcome,
         elapsedMs: now() - startedAt,
       });
-      sendJson(response, result.status, { ...result.body, requestId });
+      sendJson(response, result.status, result.body);
     } catch (error) {
       const status = statusForError(error);
       const code = codeForError(error);
       safeLog(logger, status >= 500 ? "error" : "info", {
         requestId,
-        sourceRevision,
         stage: "request",
         outcome: code,
         elapsedMs: now() - startedAt,

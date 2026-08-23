@@ -29,6 +29,7 @@ function config(overrides = {}) {
     sessionTableName: TABLE,
     deploymentEnvironment: "development",
     sessionTtlSeconds: 3600,
+    verifiedSessionTtlSeconds: 1800,
     maxVerificationAttempts: 3,
     sourceRevision: "a".repeat(40),
     ...overrides,
@@ -220,21 +221,29 @@ test("recovers an exact active issuance retry across source revisions", async ()
 });
 
 test("verifies a live session, increments its bounded attempt counter, and supports submission", async () => {
-  const { calls, store } = fixture();
+  const { calls, clock, store } = fixture();
   const issued = await store.issue(issueInput());
   await store.markIssued(issued.rowId);
   const result = await store.verify(TOKEN_HASH);
   assert.equal(result.outcome, "verified");
   assert.equal(result.session.attemptCount, 1);
   assert.equal(result.session.verifiedAt, "2026-08-14T18:00:00.000Z");
+  assert.equal(result.session.expiresAt, "2026-08-14T18:30:00.000Z");
   assert.deepEqual(calls.update[1].expected, { STATUS: "issued", ATTEMPT_COUNT: 0 });
+
+  const firstVerifiedExpiry = result.session.expiresAt;
+  clock.nowMs += 5 * 60 * 1000;
+  const retried = await store.verify(TOKEN_HASH);
+  assert.equal(retried.session.attemptCount, 2);
+  assert.equal(retried.session.verifiedAt, result.session.verifiedAt);
+  assert.equal(retried.session.expiresAt, firstVerifiedExpiry);
 
   const submitting = await store.beginSubmission(issued.rowId, SUBMISSION_FINGERPRINT);
   assert.equal(submitting.status, "submitting");
   assert.equal(submitting.lastOutcome, `submitting_${SUBMISSION_FINGERPRINT}`);
   const submitted = await store.markSubmitted(issued.rowId, SUBMISSION_FINGERPRINT);
   assert.equal(submitted.status, "submitted");
-  assert.equal(submitted.submittedAt, "2026-08-14T18:00:00.000Z");
+  assert.equal(submitted.submittedAt, "2026-08-14T18:05:00.000Z");
   assert.equal((await store.verify(TOKEN_HASH)).outcome, "submitted");
 });
 
@@ -496,4 +505,13 @@ test("fails closed on non-unique token hashes and unsafe adapter or environment 
     () => createCatalystSessionStore(duplicate.adapter, config({ sessionTtlSeconds: 86401 })),
     SessionStoreError,
   );
+  for (const verifiedSessionTtlSeconds of [1799, 1801, undefined]) {
+    assert.throws(
+      () => createCatalystSessionStore(
+        duplicate.adapter,
+        config({ verifiedSessionTtlSeconds }),
+      ),
+      SessionStoreError,
+    );
+  }
 });
