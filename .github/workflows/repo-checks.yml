@@ -110,6 +110,11 @@ jobs:
           npm ci --ignore-scripts --no-audit --no-fund
           --prefix src/zoho-catalyst/billing-webhook-gateway
 
+      - name: Install exact CRM-Billing orchestrator dependencies without lifecycle scripts
+        run: >-
+          npm ci --ignore-scripts --no-audit --no-fund
+          --prefix src/zoho-catalyst/crm-billing-orchestrator/functions/crm_billing_orchestrator
+
       - name: Install exact Form 1 controller dependencies without lifecycle scripts
         run: >-
           npm ci --ignore-scripts --no-audit --no-fund
@@ -122,21 +127,31 @@ jobs:
 
       - name: Audit production gateway dependencies
         run: >-
-          npm audit --omit=dev --audit-level=high
+          npm audit --omit=dev --audit-level=moderate
           --prefix src/zoho-catalyst/billing-webhook-gateway
+
+      - name: Audit production CRM-Billing orchestrator dependencies
+        run: >-
+          npm audit --omit=dev --audit-level=moderate
+          --prefix src/zoho-catalyst/crm-billing-orchestrator/functions/crm_billing_orchestrator
 
       - name: Audit production Form 1 controller dependencies
         run: >-
-          npm audit --omit=dev --audit-level=high
+          npm audit --omit=dev --audit-level=moderate
           --prefix src/zoho-catalyst/form1-controller/functions/form1_assisted_controller
 
       - name: Audit production Form 2 controller dependencies
         run: >-
-          npm audit --omit=dev --audit-level=high
+          npm audit --omit=dev --audit-level=moderate
           --prefix src/zoho-catalyst/form2-controller/functions/form2_controller
 
       - name: Run Billing gateway checks and tests
         run: npm run ci --prefix src/zoho-catalyst/billing-webhook-gateway
+
+      - name: Run CRM-Billing orchestrator checks and tests
+        run: >-
+          npm run ci
+          --prefix src/zoho-catalyst/crm-billing-orchestrator/functions/crm_billing_orchestrator
 
       - name: Run Form 1 controller checks and tests
         run: npm run ci --prefix src/zoho-catalyst/form1-controller/functions/form1_assisted_controller

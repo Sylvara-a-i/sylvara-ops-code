@@ -30,7 +30,8 @@ class VerifyEntrypointTests(unittest.TestCase):
         self.assertIn('$Info.implementation -eq "CPython"', self.script)
         self.assertIn("$Info.minor -eq 12", self.script)
         self.assertIn("$Info.bits -eq 64", self.script)
-        self.assertIn("$major -ne 24", self.script)
+        self.assertIn('$ExpectedNodeVersion = "24.19.0"', self.script)
+        self.assertIn('$reportedVersion -ne $ExpectedNodeVersion', self.script)
         self.assertIn(
             ".cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
             self.script,
@@ -43,14 +44,14 @@ class VerifyEntrypointTests(unittest.TestCase):
         self.assertIn('"--require-hashes"', self.script)
         self.assertIn('"ci", "--ignore-scripts", "--no-audit", "--no-fund"', self.script)
         self.assertEqual(
-            3,
+            4,
             self.script.count('"ci", "--ignore-scripts", "--no-audit", "--no-fund"'),
         )
         self.assertIn('if ($Mode -eq "All") {', self.script)
-        self.assertIn('"audit", "--omit=dev", "--audit-level=high"', self.script)
+        self.assertIn('"audit", "--omit=dev", "--audit-level=moderate"', self.script)
         self.assertEqual(
-            3,
-            self.script.count('"audit", "--omit=dev", "--audit-level=high"'),
+            4,
+            self.script.count('"audit", "--omit=dev", "--audit-level=moderate"'),
         )
         self.assertIn('$env:npm_config_offline = "true"', self.script)
         self.assertIn('$env:npm_config_update_notifier = "false"', self.script)
@@ -63,6 +64,7 @@ class VerifyEntrypointTests(unittest.TestCase):
             "tools/safety/validate_workflows.py",
             '"-m", "unittest", "discover"',
             '"run", "ci", "--prefix", $GatewayRoot',
+            '"run", "ci", "--prefix", $CrmBillingOrchestratorRoot',
             '"run", "ci", "--prefix", $Form1ControllerRoot',
             '"run", "ci", "--prefix", $Form2ControllerRoot',
         ):
@@ -81,6 +83,7 @@ class VerifyEntrypointTests(unittest.TestCase):
             with self.subTest(path=nonportable):
                 self.assertNotIn(nonportable, self.script)
         self.assertIn("function Join-PathSegments", self.script)
+        self.assertIn('$CrmBillingOrchestratorRoot = Join-PathSegments $RepoRoot @(', self.script)
         self.assertIn('$Form1ControllerRoot = Join-PathSegments $RepoRoot @(', self.script)
         self.assertIn('$Form2ControllerRoot = Join-PathSegments $RepoRoot @(', self.script)
         self.assertIn("function Ensure-LocalPythonEnvironment", self.script)

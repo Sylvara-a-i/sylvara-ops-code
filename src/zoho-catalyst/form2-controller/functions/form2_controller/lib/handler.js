@@ -1,6 +1,6 @@
 "use strict";
 
-const { isApprovedFormsPublicHostname } = require("./destinations");
+const { isArtifactBoundFormUrl } = require("./destinations");
 const {
   CLIENT_KEYS,
   FormContractError,
@@ -18,6 +18,7 @@ const {
 const {
   SecurityError,
   deriveAccessToken,
+  deriveIssueRequestKey,
   hashAccessToken,
   isValidAccessToken,
   verifyCustomHeader,
@@ -148,9 +149,7 @@ function buildFormUrl(config, setupToken) {
     url.port ||
     url.search ||
     url.hash ||
-    !isApprovedFormsPublicHostname(url.hostname) ||
-    url.pathname === "/" ||
-    url.pathname.includes("//") ||
+    !isArtifactBoundFormUrl(url.href, config.form2DestinationSha256) ||
     !/^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(config.form2TokenFieldAlias ?? "")
   ) {
     throw new ControllerError("Form URL configuration is invalid", {
@@ -946,8 +945,10 @@ async function handleIssue(body, dependencies, nowMs) {
   assertExactKeys(body, ISSUE_REQUEST_KEYS, "Issue request is invalid");
   const dealId = normalizeRecordId(body.dealId, "Deal identifier");
   let setupToken;
+  let issueRequestKey;
   let tokenHash;
   try {
+    issueRequestKey = deriveIssueRequestKey(body.issueRequestId);
     setupToken = deriveAccessToken(body.issueRequestId, dependencies.config.tokenPepper);
     tokenHash = hashAccessToken(setupToken, dependencies.config.tokenPepper);
   } catch (error) {
@@ -956,9 +957,15 @@ async function handleIssue(body, dependencies, nowMs) {
 
   let priorSession;
   try {
-    priorSession = await dependencies.sessionStore.readByTokenHash(tokenHash);
+    priorSession = await dependencies.sessionStore.readByIssueRequestKey(issueRequestKey);
   } catch (error) {
     throw publicError(error);
+  }
+  if (priorSession && priorSession.tokenHash !== tokenHash) {
+    throw new ControllerError("A fresh issuance identity is required", {
+      status: 409,
+      publicCode: "setup_conflict",
+    });
   }
 
   const initialDeal = await dependencies.crmClient.getRecord("Deals", dealId);
@@ -1020,6 +1027,7 @@ async function handleIssue(body, dependencies, nowMs) {
   let session;
   try {
     session = await dependencies.sessionStore.issue({
+      issueRequestKey,
       tokenHash,
       ...binding,
     });

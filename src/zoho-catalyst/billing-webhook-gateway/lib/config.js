@@ -1,6 +1,12 @@
 "use strict";
 
+const { ARTIFACT_CREATOR_DESTINATION_SHA256 } = require("./creator-destination");
+const {
+  DestinationValidationError,
+  assertCreatorDestination,
+} = require("./destinations");
 const { parseStrictIsoTimestamp } = require("./iso-timestamp");
+const { ARTIFACT_SOURCE_REVISION } = require("./source-revision");
 
 const KNOWN_EVENT_TYPES = Object.freeze([
   "subscription_created",
@@ -19,6 +25,7 @@ const RETIRED_VARIABLES = Object.freeze([
   "ACCOUNTS_ALLOWED_HOSTS",
   "ACCOUNTS_ALLOWED_HOST_SUFFIXES",
   "ALLOWED_PATHS",
+  "CREATOR_ALLOWED_HOSTS",
   "CREATOR_ALLOWED_HOST_SUFFIXES",
   "CREATOR_ENVIRONMENT",
   "ENABLE_PING",
@@ -156,42 +163,10 @@ function validateIdentifier(identifier, name) {
 }
 
 function validateRevision(revision) {
-  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{6,79}$/.test(revision)) {
+  if (!/^[a-f0-9]{40}$/.test(revision)) {
     throw new ConfigurationError("SOURCE_REVISION has an invalid format");
   }
   return revision;
-}
-
-function validateHost(host) {
-  const lowered = host.toLowerCase();
-  if (
-    host !== lowered ||
-    !/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(host)
-  ) {
-    throw new ConfigurationError("Allowed hosts must be exact DNS names");
-  }
-  return lowered;
-}
-
-function validateEndpoint(raw, allowedHosts, name) {
-  let parsed;
-  try {
-    parsed = new URL(raw);
-  } catch {
-    throw new ConfigurationError(`${name} must be an absolute HTTPS URL`);
-  }
-  if (
-    parsed.protocol !== "https:" ||
-    parsed.username ||
-    parsed.password ||
-    parsed.port ||
-    parsed.search ||
-    parsed.hash ||
-    !allowedHosts.includes(parsed.hostname.toLowerCase())
-  ) {
-    throw new ConfigurationError(`${name} is outside the exact outbound allowlist`);
-  }
-  return parsed.href;
 }
 
 function validateFieldPath(path) {
@@ -232,7 +207,14 @@ function rejectRetiredConfiguration(environment) {
   }
 }
 
-function loadConfig(environment = process.env, { nowMs = Date.now() } = {}) {
+function loadConfig(
+  environment = process.env,
+  {
+    nowMs = Date.now(),
+    artifactCreatorDestinationSha256 = ARTIFACT_CREATOR_DESTINATION_SHA256,
+    artifactSourceRevision = ARTIFACT_SOURCE_REVISION,
+  } = {},
+) {
   rejectRetiredConfiguration(environment);
 
   const deploymentEnvironment = required(environment, "DEPLOYMENT_ENVIRONMENT");
@@ -357,10 +339,18 @@ function loadConfig(environment = process.env, { nowMs = Date.now() } = {}) {
     throw new ConfigurationError("Configured operation timeouts exceed the execution budget");
   }
 
+  const sourceRevision = validateRevision(required(environment, "SOURCE_REVISION"));
+  if (!/^[a-f0-9]{40}$/.test(artifactSourceRevision)) {
+    throw new ConfigurationError("Billing artifact source revision is not stamped");
+  }
+  if (sourceRevision !== artifactSourceRevision) {
+    throw new ConfigurationError("SOURCE_REVISION does not match the Billing artifact");
+  }
+
   const config = {
     deploymentEnvironment,
     billingSourceTier,
-    sourceRevision: validateRevision(required(environment, "SOURCE_REVISION")),
+    sourceRevision,
     allowedPath: validatePath(required(environment, "ALLOWED_PATH")),
     contentType,
     signatureEncoding,
@@ -426,23 +416,19 @@ function loadConfig(environment = process.env, { nowMs = Date.now() } = {}) {
     if (required(environment, "CREATOR_ENDPOINT_KIND") !== "custom-api") {
       throw new ConfigurationError("Only a Creator Custom API endpoint is supported");
     }
-    const creatorHosts = parseCsv(environment, "CREATOR_ALLOWED_HOSTS", {
-      requiredValue: true,
-      maximum: 8,
-    }).map(validateHost);
     config.creatorTargetEnvironment = creatorTargetEnvironment;
-    config.creatorUrl = validateEndpoint(
-      required(environment, "CREATOR_FORWARD_URL"),
-      creatorHosts,
-      "CREATOR_FORWARD_URL",
-    );
-    if (
-      !/^\/creator\/custom\/[A-Za-z0-9_.-]{1,100}\/[A-Za-z0-9_-]{1,100}$/.test(
-        new URL(config.creatorUrl).pathname,
-      )
-    ) {
-      throw new ConfigurationError("CREATOR_FORWARD_URL must be an exact Custom API endpoint");
+    try {
+      config.creatorUrl = assertCreatorDestination(
+        required(environment, "CREATOR_FORWARD_URL"),
+        artifactCreatorDestinationSha256,
+      );
+    } catch (error) {
+      if (error instanceof DestinationValidationError) {
+        throw new ConfigurationError(error.message);
+      }
+      throw error;
     }
+    config.creatorDestinationSha256 = artifactCreatorDestinationSha256;
     config.creatorConnectionLinkName = validateIdentifier(
       required(environment, "CREATOR_CONNECTION_LINK_NAME"),
       "CREATOR_CONNECTION_LINK_NAME",

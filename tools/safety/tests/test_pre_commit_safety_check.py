@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import subprocess
 import tempfile
 import unittest
@@ -63,6 +64,279 @@ class SafetyCheckTests(unittest.TestCase):
         )
         problems = safety_check.scan_text(".env.example", text)
         self.assertEqual([], problems)
+
+    def test_every_registry_secret_name_is_scanned_in_env_json_and_yaml(self) -> None:
+        value = "live-material-AlphaBeta987654321"
+        self.assertIn("CATALYST_TOKEN", safety_check.SECRET_ASSIGNMENT_NAMES)
+        for name in sorted(safety_check.SECRET_ASSIGNMENT_NAMES):
+            assignments = {
+                "env": f"{name}={value}\n",
+                "json": json.dumps({name: value}) + "\n",
+                "yaml": f"{name}: '{value}'\n",
+            }
+            for form, assignment in assignments.items():
+                with self.subTest(name=name, form=form):
+                    problems = safety_check.scan_text(
+                        f"secret-assignment.{form}", assignment
+                    )
+                    self.assertTrue(
+                        any("secret assignment" in problem for problem in problems)
+                    )
+
+    def test_registry_secret_assignments_are_scanned_across_line_breaks(self) -> None:
+        name = "OPAQUE_RUNTIME_MATERIAL"
+        value = "live-material-AlphaBeta987654321"
+        names = frozenset({name})
+        assignments = {
+            "json": f'{{\n  "{name}":\n    "{value}"\n}}\n',
+            "javascript": f'const {name} =\n  "{value}";\n',
+            "javascript-template": f"const {name} =\n  `{value}`;\n",
+            "python-triple-double": f'{name} =\n  """{value}"""\n',
+            "python-triple-single": f"{name} =\n  '''{value}'''\n",
+            "yaml": f"{name}:\n  '{value}'\n",
+        }
+        for form, assignment in assignments.items():
+            with self.subTest(form=form):
+                problems = safety_check.scan_text(
+                    f"secret-assignment.{form}", assignment, names
+                )
+                self.assertTrue(
+                    any("secret assignment" in problem for problem in problems)
+                )
+
+        self.assertEqual(
+            [],
+            safety_check.scan_text(
+                "config.example.js",
+                f"const {name} =\n  process.env.{name};\n",
+                names,
+            ),
+        )
+
+    def test_registry_secret_placeholders_and_references_remain_allowed(self) -> None:
+        for name in sorted(safety_check.SECRET_ASSIGNMENT_NAMES):
+            assignments = (
+                f"{name}=replace_me\n",
+                json.dumps({name: "<set-in-platform-secret-store>"}) + "\n",
+                f"{name}: ${{{name}}}\n",
+                f"const {name} = process.env.{name};\n",
+            )
+            for assignment in assignments:
+                with self.subTest(name=name, assignment=assignment):
+                    self.assertEqual(
+                        [], safety_check.scan_text("config.example.js", assignment)
+                    )
+
+        shell_reference = "${" + "CATALYST_" + "TOKEN}"
+        self.assertEqual(
+            [],
+            safety_check.scan_text(
+                "test/startup-probe.js", f'printf "%s" "{shell_reference}"\n'
+            ),
+        )
+
+    def test_secret_reference_fallbacks_and_tagged_templates_are_rejected(self) -> None:
+        names = frozenset({"OPAQUE_RUNTIME_MATERIAL"})
+        name = next(iter(names))
+        cases = (
+            f"{name}=${{{name}:-opaque-live-material}}\n",
+            f'{name} = process.env.{name} || "opaque-live-material";\n',
+            f"{name} = String.raw`opaque-live-material`;\n",
+            f"{name} = process.env.{name}\n  ?? `opaque-live-material`;\n",
+            f"{name} = process.env.{name}\n\n  || `opaque-live-material`;\n",
+            f"{name} = process.env.{name} // fallback\n  || `opaque-live-material`;\n",
+            f"{name} = process.env.{name}\n  // fallback\n  || `opaque-live-material`;\n",
+            f"{name} = String\n  (`opaque-live-material`);\n",
+        )
+        for assignment in cases:
+            with self.subTest(assignment=assignment):
+                problems = safety_check.scan_text(
+                    "config.example.js", assignment, names
+                )
+                self.assertTrue(
+                    any("secret assignment" in item for item in problems)
+                )
+
+    def test_typed_computed_commented_and_prefixed_assignments_are_rejected(self) -> None:
+        names = frozenset({"RETELL_API_KEY"})
+        name = next(iter(names))
+        cases = {
+            "typescript": f'const {name}: string = "opaque-live-material";\n',
+            "python-annotation": f'{name}: str = "opaque-live-material"\n',
+            "python-prefixed": f'{name} = f"opaque-live-material"\n',
+            "computed": f'config["{name}"] = "opaque-live-material";\n',
+            "computed-backtick": f'config[`{name}`] = "opaque-live-material";\n',
+            "computed-property": f'{{ ["{name}"]: "opaque-live-material" }};\n',
+            "commented": f'{name} /* reviewed? */ = "opaque-live-material";\n',
+            "line-commented": f'{name} // reviewed?\n = "opaque-live-material";\n',
+            "multi-line-commented": (
+                f'{name} // first\n // second\n = "opaque-live-material";\n'
+            ),
+            "mixed-commented": (
+                f'{name} /* first */ // second\n = "opaque-live-material";\n'
+            ),
+        }
+        for shape, assignment in cases.items():
+            with self.subTest(shape=shape):
+                problems = safety_check.scan_text(
+                    f"config.example.{shape}", assignment, names
+                )
+                self.assertTrue(
+                    any("secret assignment" in item for item in problems)
+                )
+
+    def test_registry_loader_drives_non_suffix_secret_names_and_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            for index, relative_path in enumerate(
+                safety_check.SECRET_REGISTRY_PATHS, start=1
+            ):
+                path = root.joinpath(*relative_path.parts)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(
+                    json.dumps(
+                        {
+                            "variables": [
+                                {
+                                    "name": f"FUTURE_OPAQUE_MATERIAL_{index}",
+                                    "classification": "secret",
+                                },
+                                {
+                                    "name": f"FUTURE_STABLE_MATERIAL_{index}",
+                                    "classification": "stable-secret",
+                                },
+                                {
+                                    "name": f"PUBLIC_VALUE_{index}",
+                                    "classification": "safe-enum",
+                                },
+                            ]
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+
+            names = safety_check.load_registry_secret_names(root)
+            self.assertIn("CATALYST_TOKEN", names)
+            self.assertIn("FUTURE_OPAQUE_MATERIAL_1", names)
+            self.assertIn("FUTURE_STABLE_MATERIAL_2", names)
+            self.assertNotIn("PUBLIC_VALUE_1", names)
+            problems = safety_check.scan_text(
+                "future.env.example",
+                "FUTURE_OPAQUE_MATERIAL_1=live-material-987654321\n",
+                names,
+            )
+            self.assertTrue(any("secret assignment" in item for item in problems))
+
+            first_registry = root.joinpath(*safety_check.SECRET_REGISTRY_PATHS[0].parts)
+            first_registry.write_text("{}", encoding="utf-8")
+            with self.assertRaises(safety_check.SecretRegistryError):
+                safety_check.load_registry_secret_names(root)
+
+    def test_registry_loader_normalizes_the_reviewed_legacy_class_schema(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            for index, relative_path in enumerate(
+                safety_check.SECRET_REGISTRY_PATHS, start=1
+            ):
+                path = root.joinpath(*relative_path.parts)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                variables = [
+                    {
+                        "name": f"MODERN_SECRET_{index}",
+                        "classification": "secret",
+                    }
+                ]
+                if index == 2:
+                    variables = [
+                        {"name": "LEGACY_HEADER_VALUE", "class": "secret"},
+                        {"name": "LEGACY_IDEMPOTENCY_MATERIAL", "class": "immutable-identity-secret"},
+                        {"name": "LEGACY_ENVIRONMENT", "class": "environment-binding"},
+                    ]
+                path.write_text(
+                    json.dumps({"variables": variables}),
+                    encoding="utf-8",
+                )
+
+            names = safety_check.load_registry_secret_names(root)
+            self.assertIn("LEGACY_HEADER_VALUE", names)
+            self.assertIn("LEGACY_IDEMPOTENCY_MATERIAL", names)
+            self.assertNotIn("LEGACY_ENVIRONMENT", names)
+
+    def test_registry_loader_rejects_unknown_classifications(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            for index, relative_path in enumerate(
+                safety_check.SECRET_REGISTRY_PATHS, start=1
+            ):
+                path = root.joinpath(*relative_path.parts)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(
+                    json.dumps(
+                        {
+                            "variables": [
+                                {
+                                    "name": f"OPAQUE_MATERIAL_{index}",
+                                    "classification": (
+                                        "unreviewed-secret-kind"
+                                        if index == 1
+                                        else "secret"
+                                    ),
+                                }
+                            ]
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+
+            with self.assertRaises(safety_check.SecretRegistryError):
+                safety_check.load_registry_secret_names(root)
+
+    def test_generic_uppercase_secret_suffixes_are_scanned(self) -> None:
+        value = "live-material-AlphaBeta987654321"
+        names = (
+            "FUTURE_SERVICE_SECRET",
+            "FUTURE_SERVICE_TOKEN",
+            "FUTURE_SERVICE_PEPPER",
+            "FUTURE_SERVICE_PASSWORD",
+            "FUTURE_SERVICE_CREDENTIAL",
+            "FUTURE_SERVICE_API_KEY",
+            "FUTURE_SERVICE_PRIVATE_KEY",
+            "FUTURE_SERVICE_SIGNING_KEY",
+            "FUTURE_SERVICE_HEADER_VALUE",
+            "FUTURE_SERVICE_HASH_KEY",
+            "FUTURE_SERVICE_HMAC_KEY",
+            "FUTURE_SERVICE_WEBHOOK_KEY",
+        )
+        for name in names:
+            with self.subTest(name=name):
+                problems = safety_check.scan_text(
+                    "future.env.example", f"{name}={value}\n"
+                )
+                self.assertTrue(any("secret assignment" in item for item in problems))
+
+        self.assertEqual(
+            [],
+            safety_check.scan_text(
+                "notes.txt", f"future_service_secret={value}\n"
+            ),
+        )
+
+    def test_camel_case_hash_and_hmac_material_names_are_scanned(self) -> None:
+        for name in ("routeHashKey", "webhookHmacSecret", "providerWebhookKey"):
+            with self.subTest(name=name):
+                problems = safety_check.scan_text(
+                    "config.example.js", f'const {name} = "opaque-live-material";\n'
+                )
+                self.assertTrue(
+                    any("secret assignment" in item for item in problems)
+                )
+
+    def test_only_public_synthetic_test_secret_literals_are_exempt(self) -> None:
+        assignment = (
+            "TOKEN_" + "PEPPER=" + "SyntheticFixtureValue123456789" + "\n"
+        )
+        self.assertEqual([], safety_check.scan_text("test/helpers.js", assignment))
+        self.assertTrue(safety_check.scan_text("config/.env.example", assignment))
 
     def test_non_example_environment_and_credential_files_are_blocked(self) -> None:
         self.assertTrue(safety_check.scan_filename(".env"))
@@ -274,6 +548,149 @@ class SafetyCheckTests(unittest.TestCase):
                 for item in problems
             )
         )
+
+    def test_repository_scan_uses_secret_names_from_staged_registry(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            self._git(root, "init", "--quiet")
+            staged_name = "FUTURE_STAGED_ONLY_MATERIAL"
+            for index, relative_path in enumerate(
+                safety_check.SECRET_REGISTRY_PATHS, start=1
+            ):
+                path = root.joinpath(*relative_path.parts)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                name = f"BASE_REGISTRY_MATERIAL_{index}"
+                path.write_text(
+                    json.dumps(
+                        {
+                            "variables": [
+                                {"name": name, "classification": "secret"}
+                            ]
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+
+            self._git(root, "add", ".")
+            self._git(
+                root,
+                "-c",
+                "user.name=Synthetic Test",
+                "-c",
+                "user.email=operator@example.invalid",
+                "commit",
+                "--quiet",
+                "-m",
+                "synthetic baseline",
+            )
+
+            staged_registry = root.joinpath(*safety_check.SECRET_REGISTRY_PATHS[0].parts)
+            staged_registry.write_text(
+                json.dumps(
+                    {
+                        "variables": [
+                            {
+                                "name": "BASE_REGISTRY_MATERIAL_1",
+                                "classification": "secret",
+                            },
+                            {"name": staged_name, "classification": "secret"},
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            candidate = root / "config.example.json"
+            candidate.write_text(
+                f'{{\n  "{staged_name}":\n    "live-material-AlphaBeta987654321"\n}}\n',
+                encoding="utf-8",
+            )
+            self._git(root, "add", ".")
+
+            working_registry = staged_registry
+            working_registry.write_text(
+                json.dumps(
+                    {
+                        "variables": [
+                            {
+                                "name": "BASE_REGISTRY_MATERIAL_1",
+                                "classification": "secret",
+                            },
+                            {
+                                "name": "FUTURE_WORKTREE_ONLY_MATERIAL",
+                                "classification": "secret",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            problems = safety_check.scan_repository(root)
+
+        self.assertTrue(
+            any(
+                "secret assignment" in item and "staged index" in item
+                for item in problems
+            )
+        )
+
+    def test_repository_scan_blocks_registry_secret_downgrade_and_literal(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            self._git(root, "init", "--quiet")
+            protected_name = "HISTORICAL_OPAQUE_MATERIAL"
+            for index, relative_path in enumerate(
+                safety_check.SECRET_REGISTRY_PATHS, start=1
+            ):
+                path = root.joinpath(*relative_path.parts)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                name = protected_name if index == 1 else "SECOND_BASE_MATERIAL"
+                path.write_text(
+                    json.dumps(
+                        {
+                            "variables": [
+                                {"name": name, "classification": "secret"}
+                            ]
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+            self._git(root, "add", ".")
+            self._git(
+                root,
+                "-c",
+                "user.name=Synthetic Test",
+                "-c",
+                "user.email=operator@example.invalid",
+                "commit",
+                "--quiet",
+                "-m",
+                "synthetic baseline",
+            )
+
+            first_registry = root.joinpath(*safety_check.SECRET_REGISTRY_PATHS[0].parts)
+            first_registry.write_text(
+                json.dumps(
+                    {
+                        "variables": [
+                            {"name": protected_name, "classification": "safe-enum"}
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            candidate = root / "config.example.js"
+            candidate.write_text(
+                f"const {protected_name} = `live-material-AlphaBeta987654321`;\n",
+                encoding="utf-8",
+            )
+            self._git(root, "add", ".")
+
+            problems = safety_check.scan_repository(root)
+
+        self.assertTrue(any("may not be removed or downgraded" in item for item in problems))
+        self.assertTrue(any("secret assignment" in item for item in problems))
 
     def test_repository_scan_also_reads_differing_worktree(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

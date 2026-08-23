@@ -5,7 +5,13 @@ const crypto = require("node:crypto");
 const http = require("node:http");
 const test = require("node:test");
 const { createRequestListener } = require("../lib/catalyst-adapter");
-const { TEST_EVENT_TIME, TEST_NOW_MS, baseEnvironment } = require("./helpers");
+const {
+  CREATOR_DESTINATION_SHA256,
+  TEST_EVENT_TIME,
+  TEST_NOW_MS,
+  TEST_SOURCE_REVISION,
+  baseEnvironment,
+} = require("./helpers");
 
 test("entrypoint exports the native server required by blank Advanced I/O", () => {
   const server = require("../index");
@@ -90,6 +96,8 @@ test("Catalyst adapter initializes the SDK and completes a signed request", asyn
     logger,
     randomUUID: () => "request_sample_001",
     now: () => TEST_NOW_MS,
+    artifactCreatorDestinationSha256: CREATOR_DESTINATION_SHA256,
+    artifactSourceRevision: TEST_SOURCE_REVISION,
   });
   await listener(request, response);
 
@@ -133,6 +141,8 @@ test("Catalyst adapter rejects absent, invalid, or mismatched platform environme
       logger: { info() {}, error() {} },
       randomUUID: () => "request_environment_check",
       now: () => TEST_NOW_MS,
+      artifactCreatorDestinationSha256: CREATOR_DESTINATION_SHA256,
+      artifactSourceRevision: TEST_SOURCE_REVISION,
     });
 
     const request = { method: "POST", headers: {} };

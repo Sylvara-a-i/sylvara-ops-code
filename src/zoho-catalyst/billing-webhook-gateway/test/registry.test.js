@@ -79,6 +79,42 @@ test("only the public source revision may be logged by value", () => {
   assert.deepEqual(valueLogged.map((entry) => entry.name), ["SOURCE_REVISION"]);
 });
 
+test("the package syntax-checks every runtime source file", () => {
+  const packageJson = JSON.parse(fs.readFileSync(
+    path.join(__dirname, "..", "package.json"),
+    "utf8",
+  ));
+  const expectedRuntimeSources = [
+    "index.js",
+    "lib/catalyst-adapter.js",
+    "lib/config.js",
+    "lib/connection-boundary.js",
+    "lib/creator-client.js",
+    "lib/creator-destination.js",
+    "lib/destinations.js",
+    "lib/handler.js",
+    "lib/http.js",
+    "lib/idempotency.js",
+    "lib/iso-timestamp.js",
+    "lib/normalize-event.js",
+    "lib/operation-timeout.js",
+    "lib/redact.js",
+    "lib/signature.js",
+    "lib/source-revision.js",
+  ];
+  const actualRuntimeSources = [
+    "index.js",
+    ...fs.readdirSync(path.join(__dirname, "..", "lib"), { withFileTypes: true })
+      .filter((entry) => entry.isFile() && entry.name.endsWith(".js"))
+      .map((entry) => `lib/${entry.name}`),
+  ];
+  assert.deepEqual(actualRuntimeSources.sort(), expectedRuntimeSources.sort());
+  assert.equal(
+    packageJson.scripts.check,
+    expectedRuntimeSources.map((source) => `node --check ${source}`).join(" && "),
+  );
+});
+
 test("proposed Data Store schema matches the durable adapter contract", () => {
   const schema = JSON.parse(fs.readFileSync(
     path.join(__dirname, "..", "config", "datastore-schema.json"),

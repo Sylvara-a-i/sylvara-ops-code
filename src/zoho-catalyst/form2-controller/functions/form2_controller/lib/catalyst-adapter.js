@@ -124,6 +124,7 @@ function createRequestListener({
   catalystSdk,
   environment = process.env,
   artifactSourceRevision,
+  artifactFormDestinationSha256,
   logger = console,
   randomUUID = crypto.randomUUID,
   now = Date.now,
@@ -133,15 +134,19 @@ function createRequestListener({
   // Keep the SDK load at the runtime boundary so pure policy tests can run
   // without installing deployment dependencies. Catalyst installs this exact
   // pinned package from package-lock.json for the deployed function.
-  const runtimeSdk = catalystSdk ?? require("zcatalyst-sdk-node");
   return async function requestListener(request, response) {
     const startedAt = now();
     const requestId = randomUUID();
     let sourceRevision = "unavailable";
     try {
-      const config = loadConfig(environment, artifactSourceRevision);
+      const config = loadConfig(
+        environment,
+        artifactSourceRevision,
+        artifactFormDestinationSha256,
+      );
       sourceRevision = config.sourceRevision;
       readCatalystEnvironmentHeader(request);
+      const runtimeSdk = catalystSdk ?? require("zcatalyst-sdk-node");
       const app = runtimeSdk.initialize(request);
       assertCatalystEnvironment(request, app, config.deploymentEnvironment);
       const dataStoreAdapter = createCatalystDataStoreAdapter(app, config);
