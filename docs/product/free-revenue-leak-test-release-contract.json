@@ -1,0 +1,296 @@
+{
+  "schema_version": 1,
+  "contract_id": "sylvara-free-revenue-leak-test-e2e-v1",
+  "status": "development-release-candidate",
+  "environment": "development",
+  "customer_facing_name": "Free Revenue Leak Test",
+  "legacy_internal_values": {
+    "engagement_type": "free_test",
+    "capability_profile": "call_gap_monitor_v1",
+    "note": "Stable internal API values remain for compatibility; customer-facing copy uses Free Revenue Leak Test."
+  },
+  "commercial_boundary": {
+    "duration_calendar_days": 7,
+    "connected_call_limit": 25,
+    "ends_on_first_limit": true,
+    "starts_at": "authoritative route activation recorded as Test_Start_At",
+    "billing_required_to_start": false,
+    "automatic_paid_conversion": false,
+    "paid_acceptance_separate": true,
+    "one_business_number": true,
+    "one_primary_location": true
+  },
+  "canonical_coverage_modes": {
+    "After Hours Only": "AfterHoursOnly",
+    "No Answer / Overflow Only": "NoAnswerOverflowOnly",
+    "After Hours + Overflow": "AfterHoursAndOverflow"
+  },
+  "state_machine": [
+    {
+      "state": "REQUESTED",
+      "required_evidence": ["Form 1 submission", "immutable intake submission ID", "contact consent"],
+      "effects": ["one CRM Lead upsert", "Lead Status=Free Test Requested", "one internal review task"]
+    },
+    {
+      "state": "QUALIFIED_CONVERTED",
+      "required_evidence": ["human qualification", "controlled native Lead conversion"],
+      "effects": ["one Account", "one Contact", "one Deal", "Deal Stage=Setup and Authorization", "Test Status=Not Started", "Setup Access Status=Not Issued", "Go-Live Approval Status=Not Ready"]
+    },
+    {
+      "state": "FORM2_ISSUED",
+      "required_evidence": ["CRM-bound issuance request", "unexpired secure session", "approved representative email"],
+      "effects": ["CRM stores request and provider message IDs only", "CRM stores no URL, OTP, token, or secret"]
+    },
+    {
+      "state": "FORM2_VERIFIED_SUBMITTED",
+      "required_evidence": ["server-verified one-time email proof", "Contact/Account/Deal/request/destination binding", "authority confirmation", "scope acceptance", "idempotent submission"],
+      "effects": ["Setup Access Status=Submitted", "Free Test Authorization Status=Signed", "Test Status=Setup Pending", "Deal Stage may become Test Authorized", "Go-Live Approval remains Not Ready or Pending Internal Approval"]
+    },
+    {
+      "state": "SETUP_QA",
+      "required_evidence": ["coverage configuration", "one test number", "fallback and rollback contacts", "immutable deployment and configuration version", "Retell binding and resolver mapping"],
+      "effects": ["Deal Stage=Setup and QA", "no live call route"]
+    },
+    {
+      "state": "INTERNAL_GO_LIVE_APPROVED",
+      "required_evidence": ["Sylvara administrator approval", "approved deployment snapshot", "approved configuration-version snapshot", "approval timestamp"],
+      "effects": ["Go-Live Approval Status=Approved", "configuration changes invalidate approval"]
+    },
+    {
+      "state": "TEST_LIVE",
+      "required_evidence": ["authoritative route activation", "approved snapshot still matches current deployment"],
+      "effects": ["Test Start At set", "seven-day clock starts", "Deal Stage=Test Live", "accepted calls bind to exact deployment"]
+    },
+    {
+      "state": "TEST_ENDED",
+      "required_evidence": ["first end condition", "route containment", "end timestamp", "end reason"],
+      "effects": ["no new intake", "prior fallback remains restorable", "duplicate events cannot reopen or recount"]
+    },
+    {
+      "state": "RESULTS_REVIEW",
+      "required_evidence": ["reconciled canonical-call report", "CRM report summary"],
+      "effects": ["Deal Stage=Results Review", "recommended coverage and expected connected-minute range recorded"]
+    },
+    {
+      "state": "PAID_SERVICE_PROPOSED",
+      "required_evidence": ["selected paid plan", "recorded commercial terms"],
+      "effects": ["Subscription Acceptance Status=Pending", "Deal Stage=Subscription Proposed", "no Billing subscription"]
+    },
+    {
+      "state": "PAID_ACCEPTED",
+      "required_evidence": ["separate explicit paid acceptance", "accepted terms version", "acceptance timestamp", "completed free test", "Results Review"],
+      "effects": ["create or verify Billing TEST customer", "create or verify one accepted TEST subscription", "CRM updates only after Billing readback", "Closed Won only after authoritative active-subscription readback"]
+    },
+    {
+      "state": "PAID_DECLINED_OR_NO_DECISION",
+      "required_evidence": ["explicit decline or documented no-decision path"],
+      "effects": ["no Billing subscription", "Deal moves to Closed Lost or Nurture", "reason recorded", "free-test evidence retained"]
+    }
+  ],
+  "form1": {
+    "public_path": {
+      "writer": "native Zoho Forms CRM integration",
+      "deduplication_key": "Intake_Submission_ID",
+      "crm_target": "Leads",
+      "task_owner": "one CRM workflow action"
+    },
+    "assisted_path": {
+      "controller": "form1_assisted_controller",
+      "routes": ["FORM1_ISSUE", "FORM1_PREFILL"],
+      "writer": "native Zoho Forms CRM integration",
+      "controller_must_not_submit_crm_lead": true
+    },
+    "crm_field_mapping": {
+      "entry_offer": "Entry_Offer",
+      "intake_submission_id": "Intake_Submission_ID",
+      "consent": "Free_Test_Contact_Consent",
+      "consent_version": "Free_Test_Contact_Consent_Version",
+      "consent_at": "Free_Test_Contact_Consent_At",
+      "submitted_at": "Free_Test_Request_Submitted_At",
+      "form_version": "Intake_Form_Version",
+      "lead_status": "Lead_Status",
+      "requested_route": "Requested_Test_Route",
+      "source": "Lead_Source",
+      "source_page": "Source_Page",
+      "utm_source": "UTM_Source",
+      "utm_medium": "UTM_Medium",
+      "utm_campaign": "UTM_Campaign",
+      "utm_content": "UTM_Content",
+      "utm_term": "UTM_Term"
+    },
+    "prohibited_effects": ["Billing action", "routing action", "SMS", "paid-service acceptance", "go-live approval"]
+  },
+  "form2": {
+    "controller": "form2_controller",
+    "routes": ["FORM2_ISSUE", "FORM2_PREFILL", "FORM2_SUBMISSION"],
+    "proof": {
+      "mechanism": "email_otp",
+      "destination_source": "CRM-bound authorized representative email",
+      "plaintext_stored": false,
+      "digest": "HMAC-SHA-256 with independent FORM2_PROOF_HMAC_SECRET",
+      "comparison": "constant_time",
+      "expiry_seconds": 600,
+      "maximum_attempts": 5,
+      "one_time_consumption": true,
+      "bindings": ["session", "Contact", "Account", "Deal", "issuance request", "destination"],
+      "mail_modes": ["stub", "send_development"],
+      "sms_allowed": false
+    },
+    "required_affirmations": ["Authorized_Representative_Confirmed", "Test_Scope_Accepted"],
+    "crm_field_mapping": {
+      "submission_id": "Setup_Form_Submission_ID",
+      "submitted_at": "Setup_Form_Submitted_At",
+      "form_version": "Setup_Form_Version",
+      "scope_version": "Test_Scope_Version",
+      "proof_accepted": "Form_2_Trusted_Proof_Accepted",
+      "authority_confirmed": "Authorized_Representative_Confirmed",
+      "scope_accepted": "Test_Scope_Accepted",
+      "scope_accepted_at": "Test_Scope_Accepted_At",
+      "setup_access_status": "Setup_Access_Status",
+      "authorization_status": "Free_Test_Authorization_Status",
+      "test_status": "Test_Status",
+      "requested_route": "Requested_Test_Route",
+      "approved_route": "Approved_Test_Route",
+      "approved_recipient_name": "Alert_Recipient_Name",
+      "approved_recipient_email": "Alert_Recipient_Email"
+    },
+    "prohibited_effects": ["go-live approval", "Billing action", "paid-service acceptance", "SMS", "Zoho Sign request"]
+  },
+  "catalyst_data_contracts": {
+    "retell_runtime_schema": "../../src/zoho-catalyst/retell-free-test/config/datastore-schema.json",
+    "form1_schema": "../../src/zoho-catalyst/form1-controller/config/datastore-schema.json",
+    "form2_schema": "../../src/zoho-catalyst/form2-controller/config/datastore-schema.json",
+    "billing_operation_schema": "../../src/zoho-catalyst/crm-billing-orchestrator/config/datastore-schema.json",
+    "form2_v3_policy": "Additive v3 tables only; preserve both existing v2 stores; promote no ambiguous, conflicting, terminal, or unverifiably bound row.",
+    "required_form2_v3_tables": ["Form2SessionsV3", "Form2PrefillsV3", "Form2SubmissionsV3", "Form2VerificationProofsV3"]
+  },
+  "retell_integration": {
+    "shared_agent_count": 1,
+    "dedicated_number_per_active_deployment": true,
+    "current_development_number_limit": 1,
+    "inbound_route": "POST /retell/inbound",
+    "events_route": "POST /retell/events",
+    "event_types": ["call_ended", "call_analyzed"],
+    "ownership_priority": ["validated deployment_id", "durable call binding", "unique validated to_number", "unique agent_id mapping only when not shared"],
+    "required_resolver_gate": {
+      "resolver_status": "Resolved",
+      "client_id": "nonempty",
+      "deployment_id": "nonempty",
+      "configuration_version": "nonempty",
+      "engagement_type": "free_test",
+      "capability_profile": "call_gap_monitor_v1",
+      "coverage_mode": ["AfterHoursOnly", "NoAnswerOverflowOnly", "AfterHoursAndOverflow"]
+    },
+    "agent_id_alone_establishes_tenant": false,
+    "conversation_changes_in_scope": false
+  },
+  "connected_call": {
+    "identity": "one unique keyed Retell call_id",
+    "required": ["approved shared-agent route reached", "validated immutable resolver ownership metadata", "canonical accepted call row", "HANDLED_RECORDED=true"],
+    "excluded": ["unresolved", "rejected", "malformed", "duplicate", "provider-failed before accepted route", "unauthorized"],
+    "count_mutation": "post-call only",
+    "duplicate_effect": "none"
+  },
+  "limit_behavior": {
+    "pre_call": "reject when stored handled count is already 25 or current time is at/after expiration",
+    "post_call": "stop immediately when the 25th unique accepted call is recorded",
+    "concurrency": "rare overlapping in-progress call may create a small overshoot; no exact concurrent-admission claim",
+    "never": ["charge", "renew", "extend", "create paid subscription", "activate paid service"]
+  },
+  "report": {
+    "formats": ["json", "csv"],
+    "authoritative_source": "FreeTestCalls joined to exact FreeTestDeployments ownership",
+    "fields": ["calls_captured", "actual_average_call_duration_seconds", "qualified_opportunities", "existing_customer_calls", "out_of_area_or_wrong_fit_calls", "urgent_requests", "bookable_opportunities", "office_follow_up_calls", "observed_workflow_failures", "recommended_paid_coverage", "expected_monthly_connected_minutes_min", "expected_monthly_connected_minutes_max", "test_start", "test_end", "test_end_reason", "calls_remaining", "limit_reached", "data_confidence_notes"],
+    "reconciliation": "exact canonical call-key set and deployment count must match, not cardinality alone",
+    "value_policy": "No generic revenue guarantee; opportunity value requires customer-supplied average ticket or known job values."
+  },
+  "crm": {
+    "lead_unique_key": "Intake_Submission_ID",
+    "deal_pipeline": "Revenue Desk Sales",
+    "required_deal_fields_existing": ["Entry_Offer", "Setup_Access_Status", "Free_Test_Authorization_Status", "Go_Live_Approval_Status", "Go_Live_Approved_At", "Test_Status", "Test_Start_At", "Test_End_At", "Test_End_Reason", "Deployment_Record_ID", "Configuration_Version", "Call_Totals_Reconciled", "Results_Review_At", "Plan", "Billing_Frequency", "Setup_Fee", "Subscription_Acceptance_Status", "Billing_Automation_Status", "Billing_Customer_ID", "Billing_Subscription_ID", "Subscription_Status"],
+    "required_deal_fields_to_add": ["Approved_Deployment_Record_ID", "Approved_Configuration_Version", "Subscription_Accepted_At", "Subscription_Acceptance_Version", "Test_Actual_Avg_Call_Duration_Seconds", "Test_Out_Of_Area_Or_Wrong_Fit_Calls", "Test_Urgent_Requests", "Test_Bookable_Opportunities", "Test_Office_Follow_Up_Calls", "Test_Observed_Workflow_Failures", "Recommended_Paid_Coverage", "Expected_Monthly_Connected_Minutes_Min", "Expected_Monthly_Connected_Minutes_Max", "Test_Data_Confidence_Notes"],
+    "billing_owned_fields": ["Billing_Automation_Status", "Billing_Automation_Error", "Billing_Last_Sync_At", "Billing_Customer_ID", "Billing_Subscription_ID", "Subscription_Status", "Subscription_Start_Date"],
+    "raw_call_data_allowed": false
+  },
+  "billing_test": {
+    "environment": "TEST",
+    "product": "Revenue Desk",
+    "plans": {
+      "Launch Monthly": {"management_fee_usd": 349, "setup_fee_usd": 750, "connected_minute_usd": 0.4},
+      "Growth Monthly": {"management_fee_usd": 749, "setup_fee_usd": 1500, "connected_minute_usd": 0.4},
+      "Scale Monthly": {"management_fee_usd": 1299, "setup_fee_usd": 2500, "connected_minute_usd": 0.4}
+    },
+    "positive_acceptance_plan": "Growth Monthly",
+    "public_checkout": false,
+    "payment_method": false,
+    "real_charge": false,
+    "customer_idempotency_key": "HMAC(account_id + billing_test_org)",
+    "subscription_idempotency_key": "HMAC(deal_id + acceptance_version + plan + billing_frequency)",
+    "crm_update_gate": "authoritative Billing customer, subscription, plan, price, setup fee, usage rate, status, and metadata readback"
+  },
+  "idempotency_keys": {
+    "form1": "Intake_Submission_ID",
+    "form2_issue": "ISSUE_REQUEST_KEY",
+    "form2_active_deal": "DEAL_ISSUANCE_KEY",
+    "form2_submission": "SUBMISSION_KEY",
+    "form2_proof": "PROOF_KEY",
+    "retell_event": "EVENT_KEY",
+    "retell_call": "CALL_KEY",
+    "notification": "NOTIFICATION_KEY",
+    "report": "deployment_id + report_schema_version + canonical_call_set_digest",
+    "billing_operation": "OPERATION_KEY",
+    "crm_callback": "billing_operation_key + authoritative_readback_fingerprint"
+  },
+  "function_boundaries": [
+    {"name": "retell_free_test", "type": "Advanced I/O", "decision": "retain", "reason": "Single raw-body Retell signature boundary for inbound resolution, events, readiness, durable call processing, notification, and report queries."},
+    {"name": "retell_free_test_retry", "type": "Job", "decision": "retain_separate", "reason": "Scheduled retry execution and least-privilege variables differ from internet-facing HTTP handling."},
+    {"name": "form1_assisted_controller", "type": "Advanced I/O", "decision": "retain_separate", "reason": "CRM Lead-only Connections and assisted-intake authentication must not expand the Retell webhook blast radius."},
+    {"name": "form2_controller", "type": "Advanced I/O", "decision": "retain_separate", "reason": "Trusted proof, CRM Contact/Account/Deal access, and authorization data require an isolated security boundary."},
+    {"name": "crm_billing_orchestrator", "type": "Advanced I/O", "decision": "retain_separate", "reason": "Billing write credentials and paid-acceptance gate must not exist in any free-test intake or call runtime."},
+    {"name": "retell_events", "type": "Advanced I/O", "decision": "rollback_only_disable_route", "replacement": "retell_free_test"},
+    {"name": "retell_inbound_resolver", "type": "Advanced I/O", "decision": "rollback_only_disable_route", "replacement": "retell_free_test"},
+    {"name": "retell_route_approval_control", "type": "Advanced I/O", "decision": "rollback_only_disable_route", "replacement": "retell_free_test plus version-specific CRM approval"},
+    {"name": "process_retell_events", "type": "Job", "decision": "rollback_only_disable_trigger", "replacement": "retell_free_test_retry"},
+    {"name": "analytics_sync", "type": "Job", "decision": "deferred_disable_trigger", "replacement": "deterministic JSON/CSV report"}
+  ],
+  "route_manifest": [
+    {"id": "RETELL_INBOUND", "function": "retell_free_test", "method": "POST", "path_reference": "RETELL_INBOUND_PATH", "authentication": "Retell raw-body signature", "caller": "Retell", "content_type": "application/json", "size_reference": "MAX_WEBHOOK_BYTES"},
+    {"id": "RETELL_EVENTS", "function": "retell_free_test", "method": "POST", "path_reference": "RETELL_EVENTS_PATH", "authentication": "Retell raw-body signature", "caller": "Retell", "content_type": "application/json", "size_reference": "MAX_WEBHOOK_BYTES"},
+    {"id": "RETELL_READINESS", "function": "retell_free_test", "method": "GET", "path_reference": "INTERNAL_READINESS_PATH", "authentication": "INTERNAL_READINESS_TOKEN", "caller": "Sylvara operator", "content_type": "none", "size_reference": "none"},
+    {"id": "FORM1_ISSUE", "function": "form1_assisted_controller", "method": "POST", "path_reference": "ISSUE_PATH", "authentication": "ISSUE_HEADER_SECRET", "caller": "CRM button/function", "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"},
+    {"id": "FORM1_PREFILL", "function": "form1_assisted_controller", "method": "POST", "path_reference": "PREFILL_PATH", "authentication": "PREFILL_HEADER_SECRET", "caller": "Zoho Forms prefill webhook", "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"},
+    {"id": "FORM2_ISSUE", "function": "form2_controller", "method": "POST", "path_reference": "ISSUE_PATH", "authentication": "ISSUE_HEADER_SECRET", "caller": "CRM button/function", "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"},
+    {"id": "FORM2_PREFILL", "function": "form2_controller", "method": "POST", "path_reference": "PREFILL_PATH", "authentication": "PREFILL_HEADER_SECRET", "caller": "Zoho Forms prefill webhook", "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"},
+    {"id": "FORM2_SUBMISSION", "function": "form2_controller", "method": "POST", "path_reference": "SUBMISSION_PATH", "authentication": "SUBMISSION_HEADER_SECRET plus one-time proof", "caller": "Zoho Forms submission webhook", "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"},
+    {"id": "CRM_BILLING_ACCEPTED", "function": "crm_billing_orchestrator", "method": "POST", "path_reference": "ALLOWED_PATH", "authentication": "SHARED_HEADER_VALUE", "caller": "approved CRM paid-acceptance action", "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"}
+  ],
+  "environment_variable_registries": [
+    "../../src/zoho-catalyst/retell-free-test/config/variables.json",
+    "../../src/zoho-catalyst/form1-controller/config/variables.json",
+    "../../src/zoho-catalyst/form2-controller/config/variables.json",
+    "../../src/zoho-catalyst/crm-billing-orchestrator/config/variables.json"
+  ],
+  "required_new_environment_variables": [
+    {"name": "FORM2_PROOF_TABLE_NAME", "consumer": "form2_controller", "secret": false},
+    {"name": "FORM2_PROOF_HMAC_SECRET", "consumer": "form2_controller", "secret": true},
+    {"name": "FORM2_PROOF_MODE", "consumer": "form2_controller", "secret": false},
+    {"name": "FORM2_PROOF_TTL_SECONDS", "consumer": "form2_controller", "secret": false},
+    {"name": "FORM2_PROOF_MAX_ATTEMPTS", "consumer": "form2_controller", "secret": false},
+    {"name": "FORM2_MAIL_FROM", "consumer": "form2_controller", "secret": false},
+    {"name": "FORM2_PROOF_TEMPLATE_VERSION", "consumer": "form2_controller", "secret": false},
+    {"name": "BILLING_LAUNCH_PLAN_CODE", "consumer": "crm_billing_orchestrator", "secret": false},
+    {"name": "BILLING_GROWTH_PLAN_CODE", "consumer": "crm_billing_orchestrator", "secret": false},
+    {"name": "BILLING_SCALE_PLAN_CODE", "consumer": "crm_billing_orchestrator", "secret": false},
+    {"name": "BILLING_CONNECTED_MINUTE_ADDON_CODE", "consumer": "crm_billing_orchestrator", "secret": false}
+  ],
+  "oauth_connection_references": {
+    "form1_assisted_controller": ["CRM_READ_CONNECTION_LINK_NAME", "CRM_WRITE_CONNECTION_LINK_NAME"],
+    "form2_controller": ["CRM_READ_CONNECTION_LINK_NAME", "CRM_WRITE_CONNECTION_LINK_NAME"],
+    "crm_billing_orchestrator": ["CRM_READ_CONNECTION_LINK_NAME", "CRM_WRITE_CONNECTION_LINK_NAME", "BILLING_READ_CONNECTION_LINK_NAME", "BILLING_WRITE_CONNECTION_LINK_NAME"],
+    "retell_free_test": []
+  },
+  "deployment_order": ["repository contract and tests", "additive schemas", "functions with callers unchanged", "direct signed synthetic tests", "route/auth/throttle readback", "CRM fields and inactive automation", "Zoho Forms desired state", "Form 1 cutover", "Form 2 cutover", "synthetic deployment and Retell integration", "reporting", "Billing TEST catalog and accepted-only orchestrator", "full synthetic E2E", "coordinated Development secret rotation", "final main deployment and smoke test"],
+  "rollback_order": ["disable CRM paid-acceptance action", "disable Form 2 new callers and restore legacy route", "disable Form 1 new callers and restore legacy route", "stop synthetic deployment", "remove Retell webhook binding if containment requires it", "disable retry Cron", "restore prior reviewed Development function revisions", "preserve all v2 tables, v3 evidence, operation rows, call rows, and TEST Billing evidence"],
+  "acceptance_scenarios": ["successful free test to accepted Growth TEST subscription", "results review declined with no subscription", "Form 2 invalid/replayed proof with no downstream effects", "seven-day and 25-call limits", "routing failures fail closed", "replay at every boundary", "rollback with evidence preserved"],
+  "out_of_scope": ["Production", "prospect/customer traffic", "real customer data", "contractor forwarding", "real charge", "payment method", "SMS", "second phone number", "Retell call", "Retell native simulation", "conversation-flow tuning", "prompt tuning", "voice/model/interruption/latency tuning", "booking", "dispatch", "pricing quotes", "payment collection", "outbound marketing", "Analytics dashboard", "client portal", "paid-plan service delivery"]
+}
