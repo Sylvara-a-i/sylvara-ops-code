@@ -157,7 +157,8 @@ function retryJobContext(overrides = {}) {
   return { ...overrides };
 }
 
-async function invoke(listener, { method = 'POST', url, payload, env, headers = {}, signatureTimestamp = NOW }) {
+async function invoke(listener, { method = 'POST', url, payload, env, headers = {}, signatureTimestamp = NOW,
+  rawHeaders = null, headersDistinct = null }) {
   const runtimeEnvironment = env || environment();
   const rawBody = Buffer.from(payload === undefined ? '' : JSON.stringify(payload), 'utf8');
   const request = Readable.from(rawBody.length ? [rawBody] : []);
@@ -169,6 +170,11 @@ async function invoke(listener, { method = 'POST', url, payload, env, headers = 
     ...(payload === undefined ? {} : { 'x-retell-signature': signature(rawBody, runtimeEnvironment.RETELL_WEBHOOK_API_KEY, signatureTimestamp) }),
     ...headers,
   };
+  for (const [name, value] of Object.entries(request.headers)) {
+    if (value === null) delete request.headers[name];
+  }
+  if (rawHeaders !== null) request.rawHeaders = rawHeaders;
+  if (headersDistinct !== null) request.headersDistinct = headersDistinct;
   const response = { statusCode: null, headers: {}, body: '',
     setHeader(name, value) { this.headers[name] = value; },
     end(value = '') { this.body = value; } };

@@ -285,6 +285,12 @@ test('integration: documented Development hosts pass while a production-shaped h
 });
 
 test('integration: Catalyst platform environment and project identity fail closed before store or Mail use', async () => {
+  const noHeader = runtimeFixture();
+  const acceptedWithoutOptionalHeader = await invoke(noHeader.listener, { url: '/retell/inbound',
+    payload: payloadInbound('A'), env: noHeader.env, headers: { 'x-zc-environment': null } });
+  assert.equal(acceptedWithoutOptionalHeader.status, 200);
+  assert.equal(acceptedWithoutOptionalHeader.body.call_inbound.dynamic_variables.resolver_status, 'Resolved');
+
   const headerMismatch = runtimeFixture();
   const rejectedHeader = await invoke(headerMismatch.listener, { url: '/retell/inbound',
     payload: payloadInbound('A'), env: headerMismatch.env,
@@ -294,6 +300,17 @@ test('integration: Catalyst platform environment and project identity fail close
   assert.equal(headerMismatch.store.rows.get('FreeTestCalls').length, 0);
   assert.equal(headerMismatch.mailAccesses, 0);
 
+  const duplicateHeader = runtimeFixture();
+  const rejectedDuplicate = await invoke(duplicateHeader.listener, { url: '/retell/inbound',
+    payload: payloadInbound('A'), env: duplicateHeader.env,
+    headersDistinct: { host: [duplicateHeader.env.FREE_TEST_DEVELOPMENT_HOST],
+      'content-type': ['application/json'], 'x-retell-signature': ['synthetic'],
+      'x-zc-environment': ['Development', 'Development'] } });
+  assert.equal(rejectedDuplicate.status, 400);
+  assert.equal(rejectedDuplicate.body.code, 'INVALID_REQUEST_HEADER');
+  assert.equal(duplicateHeader.store.rows.get('FreeTestCalls').length, 0);
+  assert.equal(duplicateHeader.mailAccesses, 0);
+
   const sdkMismatch = runtimeFixture();
   sdkMismatch.app.config.projectId = '999';
   const rejectedProject = await invoke(sdkMismatch.listener, { url: '/retell/inbound',
@@ -302,6 +319,19 @@ test('integration: Catalyst platform environment and project identity fail close
   assert.equal(rejectedProject.body.code, 'PRODUCTION_BLOCKED');
   assert.equal(sdkMismatch.store.rows.get('FreeTestCalls').length, 0);
   assert.equal(sdkMismatch.mailAccesses, 0);
+});
+
+test('integration: duplicate readiness authorization fails closed', async () => {
+  const fixture = runtimeFixture();
+  const token = `Bearer ${fixture.env.INTERNAL_READINESS_TOKEN}`;
+  const rejected = await invoke(fixture.listener, { method: 'GET', url: '/internal/readiness', env: fixture.env,
+    headers: { authorization: token }, rawHeaders: [
+      'host', fixture.env.FREE_TEST_DEVELOPMENT_HOST,
+      'authorization', token,
+      'authorization', token,
+    ] });
+  assert.equal(rejected.status, 400);
+  assert.equal(rejected.body.code, 'INVALID_REQUEST_HEADER');
 });
 
 test('integration: exact Advanced I/O routes reject query variants', async () => {
