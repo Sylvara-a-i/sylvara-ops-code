@@ -43,7 +43,7 @@ Never commit or print credentials, tokens, populated environment files, private 
 
 Sylvara's approved strategy targets one-location residential service plumbing companies with approximately 5–15 field technicians. The acquisition offer is a 7-Day / 25-Call Revenue Leak Test on after-hours and/or no-answer/overflow. Paid Launch is a complete managed AI receptionist with metered usage; Growth is the recommended managed Revenue Desk; Scale and Enterprise add broader revenue operations only when paid scope and delivery evidence justify them. Coverage volume alone is not a plan gate.
 
-The product is bounded workflow completion, revenue recovery, outcome attribution, managed quality, and safe exception handling—not generic voice-agent access, a generalized automation platform, or a custom call center. Other trades and unrelated verticals remain deferred. Commercial approval does not prove implementation: any prospect-facing demo, pilot, live route, booking, transfer, outbound message, payment flow, or production integration must pass the product, technical, legal, and customer-specific gates.
+The product is bounded workflow completion, revenue recovery, outcome attribution, managed quality, and safe exception handling—not generic voice-agent access, a generalized automation platform, or a custom call center. Other trades and unrelated verticals remain deferred. Current prospect-facing telephone behavior is **not launch-approved**. Commercial approval does not prove implementation: any prospect-facing demo, pilot, live route, booking, transfer, outbound message, payment flow, or production integration must pass the product, technical, legal, and customer-specific gates.
 
 ## Engineering And Verification
 
