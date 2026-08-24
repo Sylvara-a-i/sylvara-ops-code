@@ -3,8 +3,24 @@
   "table": "configured privately by OPERATION_TABLE",
   "retention_days_minimum": 180,
   "columns": [
-    { "name": "OPERATION_KEY", "type": "Var Char", "max_length": 64, "mandatory": true, "unique": true, "private": true },
-    { "name": "OPERATION_FINGERPRINT", "type": "Var Char", "max_length": 64, "mandatory": true, "unique": false, "private": true },
+    {
+      "name": "OPERATION_KEY",
+      "type": "Var Char",
+      "max_length": 64,
+      "mandatory": true,
+      "unique": true,
+      "private": true,
+      "semantics": "Stable HMAC of Development environment, scope record, and action. The Billing reference derives from this key and remains stable across acceptance or commercial changes."
+    },
+    {
+      "name": "OPERATION_FINGERPRINT",
+      "type": "Var Char",
+      "max_length": 64,
+      "mandatory": true,
+      "unique": false,
+      "private": true,
+      "semantics": "Immutable HMAC binding acceptance version and timestamps, plan and frequency, prices, start date, meter unit/product/rate, Account, and Billing organization. A changed fingerprint conflicts with the stable key."
+    },
     { "name": "ACTION", "type": "Var Char", "max_length": 40, "mandatory": true, "unique": false, "private": false },
     {
       "name": "CRM_DEAL_ID",
@@ -16,7 +32,15 @@
       "semantics": "Legacy physical column: CRM Deal ID for public lifecycle rows; CRM Account ID for the private provision_test_customer row."
     },
     { "name": "STATUS", "type": "Var Char", "max_length": 32, "mandatory": true, "unique": false, "private": false },
-    { "name": "SOURCE_REVISION", "type": "Var Char", "max_length": 40, "mandatory": true, "unique": false, "private": false },
+    {
+      "name": "SOURCE_REVISION",
+      "type": "Var Char",
+      "max_length": 40,
+      "mandatory": true,
+      "unique": false,
+      "private": false,
+      "semantics": "Immutable creation audit evidence. Reconciliation verifies operation identity and Development environment but does not require equality to the current deployment revision."
+    },
     { "name": "SOURCE_ENVIRONMENT", "type": "Var Char", "max_length": 16, "mandatory": true, "unique": false, "private": false },
     { "name": "LAST_OUTCOME", "type": "Var Char", "max_length": 80, "mandatory": true, "unique": false, "private": false }
   ]

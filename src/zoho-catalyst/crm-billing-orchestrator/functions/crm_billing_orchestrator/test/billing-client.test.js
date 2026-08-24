@@ -4,67 +4,30 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const { createBillingClient, directTestCustomerIdentity } = require("../lib/billing-client");
 const { loadConfig } = require("../lib/config");
-const { REVISION, baseEnvironment, jsonResponse } = require("./helpers");
+const {
+  REVISION,
+  SYNTHETIC_COMMERCIAL_TERMS,
+  baseEnvironment,
+  jsonResponse,
+} = require("./helpers");
 
 const token = `Zoho-oauthtoken ${"b".repeat(24)}`;
 const crmAccountId = "100000000000002";
 const customerId = "200000000000001";
 const subscriptionId = "300000000000001";
-const reference = `syl-evaluation-${"c".repeat(32)}`;
+const reference = `syl-paid-${"c".repeat(32)}`;
 
-function evaluationPlan(price = "0") {
-  return {
-    plan_code: "evaluation_plan",
-    status: "active",
-    recurring_price: price,
-    setup_fee: "0",
-    billing_cycles: 1,
-    trial_period: 7,
-  };
+function approvedTerms(planName, billingFrequency) {
+  const values = SYNTHETIC_COMMERCIAL_TERMS.plans[`${planName}::${billingFrequency}`];
+  return values ? { plan: planName, billingFrequency, ...values } : null;
 }
 
-function evaluationSubscription(overrides = {}) {
-  return {
-    subscription_id: subscriptionId,
-    customer_id: customerId,
-    reference_id: reference,
-    plan: {
-      plan_code: "evaluation_plan",
-      setup_fee: "0",
-      trial_days: 7,
-      billing_cycles: 1,
-    },
-    auto_collect: false,
-    addons: [],
-    amount: "0",
-    status: "trial",
+function testConfig(overrides = {}) {
+  return loadConfig(baseEnvironment({
+    CUSTOMER_PROVISIONING_MODE: "test_direct_customer",
+    ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING: "true",
     ...overrides,
-  };
-}
-
-function paidPlan() {
-  return {
-    plan_code: "launch_plan",
-    status: "active",
-    recurring_price: "37",
-  };
-}
-
-function paidSubscription(overrides = {}) {
-  return evaluationSubscription({
-    plan: { plan_code: "launch_plan" },
-    amount: "37",
-    status: "future",
-    start_date: "2026-09-01",
-    ...overrides,
-  });
-}
-
-function subscriptionPage(subscriptions, page = 1, hasMorePage = false) {
-  return {
-    subscriptions,
-    page_context: { page, per_page: 200, has_more_page: hasMorePage },
-  };
+  }), { artifactRevision: REVISION });
 }
 
 function testOrganization(config, overrides = {}) {
@@ -74,13 +37,6 @@ function testOrganization(config, overrides = {}) {
     mode: "test",
     org_joined_app_list: ["subscriptions"],
     ...overrides,
-  };
-}
-
-function customerPage(customers, page = 1, hasMorePage = false) {
-  return {
-    customers,
-    page_context: { page, per_page: 200, has_more_page: hasMorePage },
   };
 }
 
@@ -103,6 +59,86 @@ function directTestCustomer(config, overrides = {}) {
   };
 }
 
+function selectedTerms(config, selectedPlan = "Growth") {
+  return config.paidCommercialTerms.plans[`${selectedPlan}::Monthly`];
+}
+
+function moneyString(minor) {
+  return `${Math.floor(minor / 100)}.${String(minor % 100).padStart(2, "0")}`;
+}
+
+function plan(config, selectedPlan = "Growth", overrides = {}) {
+  const terms = selectedTerms(config, selectedPlan);
+  return {
+    plan_code: config.paidPlanCodeMap[`${selectedPlan}::Monthly`],
+    product_id: config.paidUsageAddonProductId,
+    status: "active",
+    currency_code: config.paidCommercialTerms.currency,
+    interval: config.paidCommercialTerms.interval,
+    interval_unit: config.paidCommercialTerms.intervalUnit,
+    trial_period: 0,
+    recurring_price: moneyString(terms.recurringMinor),
+    setup_fee: moneyString(terms.setupMinor),
+    ...overrides,
+  };
+}
+
+function usageAddon(config, overrides = {}) {
+  return {
+    addon_code: config.paidUsageAddonCode,
+    status: "active",
+    type: "usage",
+    pricing_scheme: "unit",
+    currency_code: config.paidCommercialTerms.currency,
+    interval: config.paidCommercialTerms.interval,
+    interval_unit: config.paidCommercialTerms.intervalUnit,
+    unit: config.paidUsageAddonUnit,
+    product_id: config.paidUsageAddonProductId,
+    price_brackets: [{
+      start_quantity: 1,
+      end_quantity: null,
+      price: moneyString(config.paidCommercialTerms.commonUsageRateMinor),
+    }],
+    ...overrides,
+  };
+}
+
+function subscription(config, selectedPlan = "Growth", overrides = {}) {
+  const selectedPlanObject = plan(config, selectedPlan);
+  return {
+    subscription_id: subscriptionId,
+    product_id: config.paidUsageAddonProductId,
+    customer_id: customerId,
+    reference_id: reference,
+    plan: {
+      plan_code: selectedPlanObject.plan_code,
+      recurring_price: selectedPlanObject.recurring_price,
+      setup_fee: selectedPlanObject.setup_fee,
+      interval: config.paidCommercialTerms.interval,
+      interval_unit: config.paidCommercialTerms.intervalUnit,
+    },
+    addons: [{
+      addon_code: config.paidUsageAddonCode,
+      quantity: 1,
+      price: moneyString(config.paidCommercialTerms.commonUsageRateMinor),
+    }],
+    currency_code: config.paidCommercialTerms.currency,
+    auto_collect: false,
+    status: "future",
+    start_date: "2026-09-01",
+    current_term_starts_at: "2026-09-01",
+    ...overrides,
+  };
+}
+
+function customerPage(customers, page = 1, hasMorePage = false) {
+  return { customers, page_context: { page, per_page: 200, has_more_page: hasMorePage } };
+}
+
+function subscriptionPage(subscriptions, page = 1, hasMorePage = false) {
+  return { subscriptions, page_context: { page, per_page: 200, has_more_page: hasMorePage } };
+}
+
 function clientFor(config, responses, calls = [], operationStore = {
   claim: async () => ({ outcome: "claimed", rowId: "1" }),
   mark: async () => undefined,
@@ -120,710 +156,370 @@ function clientFor(config, responses, calls = [], operationStore = {
   });
 }
 
-test("customer creation uses only the native CRM Account import and exact reference readback", async () => {
-  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
-  const calls = [];
-  const customer = { customer_id: customerId, zcrm_account_id: crmAccountId };
-  const client = clientFor(config, [
-    jsonResponse(404, { code: 1008 }),
-    jsonResponse(201, { code: 0 }),
-    jsonResponse(200, { customer }),
-  ], calls);
-  const result = await client.ensureCustomer({ crmAccountId });
-  assert.equal(result.imported, true);
-  assert.equal(result.customer.customer_id, customerId);
-  assert.equal(calls[0].url, `${config.billingApiBaseUrl}/customers/reference/${crmAccountId}?reference_id_type=zcrm_account_id`);
-  assert.equal(calls[1].url, `${config.billingApiBaseUrl}/crm/account/${crmAccountId}/import`);
-  assert.equal(calls[1].options.method, "POST");
-  assert.equal(Object.hasOwn(calls[1].options, "body"), false);
-  assert.equal(calls.some(({ url, options }) => (
-    url.endsWith("/customers") && options.method === "POST"
-  )), false);
-});
+function catalogResponses(config, selectedPlan = "Growth", overrides = {}) {
+  return [
+    jsonResponse(200, { organization: testOrganization(config) }),
+    jsonResponse(200, { plan: plan(config, selectedPlan, overrides.plan) }),
+    jsonResponse(200, { addon: usageAddon(config, overrides.addon) }),
+  ];
+}
+
+function paidCreateResponses(config, selectedPlan = "Growth", overrides = {}) {
+  const paid = subscription(config, selectedPlan, overrides.subscription);
+  return [
+    ...catalogResponses(config, selectedPlan, overrides),
+    jsonResponse(200, subscriptionPage([])),
+    overrides.createResponse ?? jsonResponse(201, { subscription: paid }),
+    jsonResponse(200, subscriptionPage([paid])),
+    jsonResponse(200, { subscription: paid }),
+    ...catalogResponses(config, selectedPlan, overrides),
+  ];
+}
 
 test("direct customer provisioning is confined to an attested Billing TEST organization", async () => {
-  const config = loadConfig(baseEnvironment({
-    CUSTOMER_PROVISIONING_MODE: "test_direct_customer",
-    ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING: "true",
-  }), { artifactRevision: REVISION });
+  const config = testConfig();
   const calls = [];
   const customer = directTestCustomer(config);
+  const marks = [];
   const client = clientFor(config, [
     jsonResponse(200, { organization: testOrganization(config) }),
     jsonResponse(200, customerPage([])),
-    jsonResponse(200, { organization: testOrganization(config) }),
     jsonResponse(201, { customer }),
     jsonResponse(200, { organization: testOrganization(config) }),
-    jsonResponse(200, customerPage([{ customer_id: customerId, email: customer.email }])),
+    jsonResponse(200, customerPage([customer])),
     jsonResponse(200, { customer }),
-  ], calls);
+  ], calls, {
+    claim: async () => ({ outcome: "claimed", rowId: "1" }),
+    mark: async (...args) => marks.push(args),
+  });
   const result = await client.ensureCustomer({ crmAccountId });
-  assert.equal(result.customer.customer_id, customerId);
   assert.equal(result.testDirect, true);
-  const create = calls.find(({ url, options }) => (
-    url.endsWith("/customers") && options.method === "POST"
-  ));
+  assert.equal(result.customer.customer_id, customerId);
+  const create = calls.find(({ url, options }) => url.endsWith("/customers") && options.method === "POST");
   const body = JSON.parse(create.options.body);
-  assert.deepEqual(Object.keys(body).sort(), [
-    "ach_supported",
-    "company_name",
-    "display_name",
-    "email",
-    "is_portal_enabled",
-    "notes",
-    "payment_terms",
-  ]);
   assert.equal(body.is_portal_enabled, false);
   assert.equal(body.ach_supported, false);
   assert.equal(body.payment_terms, 0);
-  assert.match(body.email, /^billing-sandbox\+[a-f0-9]{32}@example\.com$/);
-  assert.match(body.notes, /^syl-test-customer-[a-f0-9]{32}$/);
   assert.doesNotMatch(create.options.body, new RegExp(crmAccountId));
-  assert.equal(calls.some(({ url }) => url.includes("/crm/account/")), false);
-  assert.equal(calls.filter(({ url }) => url.includes("/organizations/")).length, 3);
+  assert.deepEqual(marks, [["1", "completed", "customer_readback_confirmed"]]);
 });
 
-test("direct customer provisioning rejects live or joined organizations before mutation", async () => {
-  const config = loadConfig(baseEnvironment({
-    CUSTOMER_PROVISIONING_MODE: "test_direct_customer",
-    ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING: "true",
-  }), { artifactRevision: REVISION });
-  for (const unsafe of [
+test("direct customer provisioning rejects live, joined, or unresolved claims before mutation", async () => {
+  const config = testConfig();
+  for (const organization of [
     testOrganization(config, { mode: "live" }),
     testOrganization(config, { org_joined_app_list: ["subscriptions", "books"] }),
   ]) {
     const calls = [];
-    const client = clientFor(config, [jsonResponse(200, { organization: unsafe })], calls);
-    await assert.rejects(
-      client.ensureCustomer({ crmAccountId }),
-      /not the isolated Billing TEST tenant/,
-    );
+    const client = clientFor(config, [jsonResponse(200, { organization })], calls);
+    await assert.rejects(client.ensureCustomer({ crmAccountId }), /isolated Billing TEST tenant/);
     assert.equal(calls.some(({ options }) => options.method === "POST"), false);
   }
-});
 
-test("direct customer reconciliation requires unique pagination and exact synthetic readback", async () => {
-  const config = loadConfig(baseEnvironment({
-    CUSTOMER_PROVISIONING_MODE: "test_direct_customer",
-    ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING: "true",
-  }), { artifactRevision: REVISION });
-  const customer = directTestCustomer(config);
-  const poisoned = clientFor(config, [
-    jsonResponse(200, { organization: testOrganization(config) }),
-    jsonResponse(200, customerPage([{ customer_id: customerId, email: customer.email }])),
-    jsonResponse(200, { customer: { ...customer, notes: "wrong" } }),
-  ]);
-  await assert.rejects(
-    poisoned.findCustomerByCrmReference(crmAccountId),
-    /violates the isolated boundary/,
-  );
-
-  for (const unsafe of [
-    { ach_supported: true },
-    { payment_terms: 15 },
-  ]) {
-    const unsafeCustomer = { ...customer, ...unsafe };
-    const unsafeClient = clientFor(config, [
-      jsonResponse(200, { organization: testOrganization(config) }),
-      jsonResponse(200, customerPage([{ customer_id: customerId, email: customer.email }])),
-      jsonResponse(200, { customer: unsafeCustomer }),
-    ]);
-    await assert.rejects(
-      unsafeClient.findCustomerByCrmReference(crmAccountId),
-      /violates the isolated boundary/,
-    );
-  }
-
-  const incomplete = clientFor(config, [
-    jsonResponse(200, { organization: testOrganization(config) }),
-    jsonResponse(200, { customers: [] }),
-  ]);
-  await assert.rejects(
-    incomplete.findCustomerByCrmReference(crmAccountId),
-    /pagination is incomplete/,
-  );
-
-  const duplicate = clientFor(config, [
-    jsonResponse(200, { organization: testOrganization(config) }),
-    jsonResponse(200, customerPage([
-      { customer_id: customerId, email: customer.email },
-      { customer_id: `${customerId.slice(0, -1)}2`, email: customer.email },
-    ])),
-  ]);
-  await assert.rejects(
-    duplicate.findCustomerByCrmReference(crmAccountId),
-    /identity is not unique/,
-  );
-});
-
-test("an ambiguous direct customer create is accepted only after exact TEST readback", async () => {
-  const config = loadConfig(baseEnvironment({
-    CUSTOMER_PROVISIONING_MODE: "test_direct_customer",
-    ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING: "true",
-  }), { artifactRevision: REVISION });
-  const customer = directTestCustomer(config);
-  const client = clientFor(config, [
+  const calls = [];
+  const unresolved = clientFor(config, [
     jsonResponse(200, { organization: testOrganization(config) }),
     jsonResponse(200, customerPage([])),
-    jsonResponse(200, { organization: testOrganization(config) }),
-    new Error("synthetic post-commit timeout"),
-    jsonResponse(200, { organization: testOrganization(config) }),
-    jsonResponse(200, customerPage([{ customer_id: customerId, email: customer.email }])),
-    jsonResponse(200, { customer }),
-  ]);
-  const result = await client.ensureCustomer({ crmAccountId });
-  assert.equal(result.customer.customer_id, customerId);
-  assert.equal(result.testDirect, true);
+  ], calls, {
+    claim: async () => ({ outcome: "duplicate-unresolved", rowId: "1" }),
+    mark: async () => undefined,
+  });
+  await assert.rejects(unresolved.ensureCustomer({ crmAccountId }), /claim is unresolved/);
+  assert.equal(calls.length, 2);
 });
 
-test("a new Account claim completes from an exact pre-existing customer without POST", async () => {
-  const config = loadConfig(baseEnvironment({
-    CUSTOMER_PROVISIONING_MODE: "test_direct_customer",
-    ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING: "true",
-  }), { artifactRevision: REVISION });
-  const calls = [];
-  const marks = [];
+test("a completed direct customer claim performs exact readback and never creates again", async () => {
+  const config = testConfig();
   const customer = directTestCustomer(config);
+  const calls = [];
   const client = clientFor(config, [
     jsonResponse(200, { organization: testOrganization(config) }),
-    jsonResponse(200, customerPage([{ customer_id: customerId, email: customer.email }])),
+    jsonResponse(200, customerPage([customer])),
     jsonResponse(200, { customer }),
   ], calls, {
-    claim: async () => {
-      assert.equal(calls.length, 0);
-      return { outcome: "claimed", rowId: "1" };
-    },
-    mark: async (...args) => { marks.push(args); },
+    claim: async () => ({ outcome: "duplicate-completed", rowId: "1" }),
+    mark: async () => undefined,
   });
-
   const result = await client.ensureCustomer({ crmAccountId });
-  assert.equal(result.customer.customer_id, customerId);
-  assert.equal(result.testDirect, true);
-  assert.equal(calls.some(({ options }) => options.method === "POST"), false);
-  assert.deepEqual(marks, [["1", "completed", "customer_readback_confirmed"]]);
-});
-
-test("an uncertain Account claim completion is not followed by a second terminal mark", async () => {
-  const config = loadConfig(baseEnvironment({
-    CUSTOMER_PROVISIONING_MODE: "test_direct_customer",
-    ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING: "true",
-  }), { artifactRevision: REVISION });
-  const customer = directTestCustomer(config);
-  const marks = [];
-  const client = clientFor(config, [
-    jsonResponse(200, { organization: testOrganization(config) }),
-    jsonResponse(200, customerPage([{ customer_id: customerId, email: customer.email }])),
-    jsonResponse(200, { customer }),
-  ], [], {
-    claim: async () => ({ outcome: "claimed", rowId: "1" }),
-    mark: async (...args) => {
-      marks.push(args);
-      throw new Error("synthetic uncertain completion");
-    },
-  });
-
-  await assert.rejects(client.ensureCustomer({ crmAccountId }), (error) => {
-    assert.equal(error.publicCode, "reconciliation_required");
-    return true;
-  });
-  assert.deepEqual(marks, [["1", "completed", "customer_readback_confirmed"]]);
-});
-
-test("a completed direct customer claim requires exact readback and never creates again", async () => {
-  const config = loadConfig(baseEnvironment({
-    CUSTOMER_PROVISIONING_MODE: "test_direct_customer",
-    ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING: "true",
-  }), { artifactRevision: REVISION });
-  const calls = [];
-  const customer = directTestCustomer(config);
-  const client = clientFor(config, [
-    jsonResponse(200, { organization: testOrganization(config) }),
-    jsonResponse(200, customerPage([{ customer_id: customerId, email: customer.email }])),
-    jsonResponse(200, { customer }),
-  ], calls, {
-    claim: async () => {
-      assert.equal(calls.length, 0);
-      return { outcome: "duplicate-completed", rowId: "1" };
-    },
-    mark: async () => assert.fail("completed duplicate must not be marked again"),
-  });
-
-  const result = await client.ensureCustomer({ crmAccountId });
-  assert.equal(result.customer.customer_id, customerId);
   assert.equal(result.duplicateProvisioning, true);
   assert.equal(calls.some(({ options }) => options.method === "POST"), false);
-  assert.equal(calls.at(-1).url, `${config.billingApiBaseUrl}/customers/${customerId}`);
 });
 
-test("an unresolved or conflicting direct customer claim cannot reach customer creation", async () => {
-  const config = loadConfig(baseEnvironment({
-    CUSTOMER_PROVISIONING_MODE: "test_direct_customer",
-    ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING: "true",
-  }), { artifactRevision: REVISION });
-  for (const outcome of ["duplicate-unresolved", "duplicate-conflict"]) {
+test("unresolved customer creation is quarantined after any write response", async () => {
+  const config = testConfig();
+  const marks = [];
+  const client = clientFor(config, [
+    jsonResponse(200, { organization: testOrganization(config) }),
+    jsonResponse(200, customerPage([])),
+    jsonResponse(400, { code: "SYNTHETIC_REJECTION" }),
+    jsonResponse(200, { organization: testOrganization(config) }),
+    jsonResponse(200, customerPage([])),
+  ], [], {
+    claim: async () => ({ outcome: "claimed", rowId: "1" }),
+    mark: async (...args) => marks.push(args),
+  });
+  await assert.rejects(client.ensureCustomer({ crmAccountId }), (error) => (
+    error?.ambiguous === true && error?.publicCode === "reconciliation_required"
+  ));
+  assert.deepEqual(marks, [["1", "reconciliation_required", "reconciliation_required"]]);
+});
+
+test("a transient pre-write customer read leaves no claim and is safely retryable", async () => {
+  const config = testConfig();
+  const customer = directTestCustomer(config);
+  let claims = 0;
+  const client = clientFor(config, [
+    new Error("synthetic transient read failure"),
+    new Error("synthetic repeated read failure"),
+    jsonResponse(200, { organization: testOrganization(config) }),
+    jsonResponse(200, customerPage([])),
+    jsonResponse(201, { customer }),
+    jsonResponse(200, { organization: testOrganization(config) }),
+    jsonResponse(200, customerPage([customer])),
+    jsonResponse(200, { customer }),
+  ], [], {
+    claim: async () => {
+      claims += 1;
+      return { outcome: "claimed", rowId: "1" };
+    },
+    mark: async () => undefined,
+  });
+  await assert.rejects(client.ensureCustomer({ crmAccountId }), /authoritative result/);
+  assert.equal(claims, 0);
+  assert.equal((await client.ensureCustomer({ crmAccountId })).customer.customer_id, customerId);
+  assert.equal(claims, 1);
+});
+
+test("all approved plans and the common meter require exact catalog readback", async () => {
+  const config = testConfig();
+  for (const selectedPlan of ["Launch", "Growth", "Scale"]) {
+    const client = clientFor(config, catalogResponses(config, selectedPlan));
+    const result = await client.readPaidCatalog(
+      config.paidPlanCodeMap[`${selectedPlan}::Monthly`],
+      approvedTerms(selectedPlan, "Monthly"),
+    );
+    assert.equal(result.plan.plan_code, config.paidPlanCodeMap[`${selectedPlan}::Monthly`]);
+    assert.equal(result.addon.addon_code, config.paidUsageAddonCode);
+  }
+});
+
+test("paid plan or metered add-on drift fails before subscription creation", async () => {
+  const config = testConfig();
+  for (const planOverride of [
+    { recurring_price: moneyString(selectedTerms(config).recurringMinor - 1) },
+    { setup_fee: moneyString(selectedTerms(config).setupMinor - 1) },
+    { currency_code: "CAD" },
+    { interval: 12 },
+    { interval_unit: "years" },
+    { trial_period: 7 },
+    { status: "inactive" },
+    { product_id: "400000000000009" },
+  ]) {
     const calls = [];
-    const client = clientFor(config, [], calls, {
-      claim: async () => ({ outcome, rowId: "1" }),
-      mark: async () => assert.fail("unresolved claim must not be changed"),
-    });
-    await assert.rejects(client.ensureCustomer({ crmAccountId }), (error) => {
-      assert.equal(error.publicCode, "reconciliation_required");
-      assert.equal(error.ambiguous, true);
-      return true;
-    });
+    const client = clientFor(config, [
+      jsonResponse(200, { organization: testOrganization(config) }),
+      jsonResponse(200, { plan: plan(config, "Growth", planOverride) }),
+    ], calls);
+    await assert.rejects(client.ensurePaidSubscription({
+      customerId,
+      deterministicReference: reference,
+      selectedPlanCode: config.paidPlanCodeMap["Growth::Monthly"],
+      commercialTerms: approvedTerms("Growth", "Monthly"),
+      subscriptionStartDate: "2026-09-01",
+    }), /catalog|commercial terms/);
+    assert.equal(calls.some(({ options }) => options.method === "POST"), false);
+  }
+
+  for (const addonOverride of [
+    { status: "inactive" },
+    { type: "recurring" },
+    { pricing_scheme: "volume" },
+    { currency_code: "CAD" },
+    { interval: 2 },
+    { interval_unit: "years" },
+    { unit: "" },
+    { unit: "generic minute" },
+    { product_id: "400000000000009" },
+    { price_brackets: [] },
+    { price_brackets: [{
+      start_quantity: 1,
+      price: moneyString(config.paidCommercialTerms.commonUsageRateMinor + 1),
+    }] },
+  ]) {
+    const calls = [];
+    const client = clientFor(config, catalogResponses(config, "Growth", { addon: addonOverride }), calls);
+    await assert.rejects(client.ensurePaidSubscription({
+      customerId,
+      deterministicReference: reference,
+      selectedPlanCode: config.paidPlanCodeMap["Growth::Monthly"],
+      commercialTerms: approvedTerms("Growth", "Monthly"),
+      subscriptionStartDate: "2026-09-01",
+    }), /metered contract|commercial terms/);
     assert.equal(calls.some(({ options }) => options.method === "POST"), false);
   }
 });
 
-test("competing direct customer claims permit at most one POST path", async () => {
-  const config = loadConfig(baseEnvironment({
-    CUSTOMER_PROVISIONING_MODE: "test_direct_customer",
-    ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING: "true",
-  }), { artifactRevision: REVISION });
-  const customer = directTestCustomer(config);
-  let operation = null;
-  let claimCount = 0;
-  let releaseClaims;
-  const bothClaims = new Promise((resolve) => { releaseClaims = resolve; });
-  const operationStore = {
-    claim: async () => {
-      claimCount += 1;
-      if (claimCount === 2) releaseClaims();
-      if (!operation) {
-        operation = { status: "processing" };
-        await bothClaims;
-        return { outcome: "claimed", rowId: "1" };
-      }
-      return {
-        outcome: operation.status === "completed"
-          ? "duplicate-completed"
-          : "duplicate-unresolved",
-        rowId: "1",
-      };
-    },
-    mark: async (_rowId, status) => { operation.status = status; },
-  };
-  let customerCreated = false;
-  let postCount = 0;
-  const client = createBillingClient(config, {
-    readAuthorizationProvider: async () => token,
-    writeAuthorizationProvider: async () => token,
-    operationStore,
-    fetchImpl: async (url, options) => {
-      const parsed = new URL(url);
-      if (parsed.pathname.endsWith(`/organizations/${config.billingOrganizationId}`)) {
-        return jsonResponse(200, { organization: testOrganization(config) });
-      }
-      if (parsed.pathname.endsWith("/customers") && options.method === "GET") {
-        if (!customerCreated) {
-          return jsonResponse(200, customerPage([]));
-        }
-        return jsonResponse(200, customerPage([
-          { customer_id: customerId, email: customer.email },
-        ]));
-      }
-      if (parsed.pathname.endsWith("/customers") && options.method === "POST") {
-        await bothClaims;
-        postCount += 1;
-        customerCreated = true;
-        return jsonResponse(201, { customer });
-      }
-      if (parsed.pathname.endsWith(`/customers/${customerId}`)) {
-        return jsonResponse(200, { customer });
-      }
-      throw new Error("unexpected synthetic Billing request");
-    },
-  });
-
-  const results = await Promise.allSettled([
-    client.ensureCustomer({ crmAccountId }),
-    client.ensureCustomer({ crmAccountId }),
-  ]);
-  assert.equal(results.filter(({ status }) => status === "fulfilled").length, 1);
-  const rejected = results.find(({ status }) => status === "rejected");
-  assert.equal(rejected.reason.publicCode, "reconciliation_required");
-  assert.equal(postCount, 1);
-});
-
-test("post-create lookup timeout, 5xx, and malformed JSON require reconciliation", async () => {
-  const config = loadConfig(baseEnvironment({
-    CUSTOMER_PROVISIONING_MODE: "test_direct_customer",
-    ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING: "true",
-  }), { artifactRevision: REVISION });
-  const failures = [
-    new Error("synthetic lookup timeout"),
-    jsonResponse(503, { code: 1000 }),
-    new Response("{", { status: 200, headers: { "content-type": "application/json" } }),
-  ];
-  for (const readbackFailure of failures) {
-    const marks = [];
-    const client = clientFor(config, [
-      jsonResponse(200, { organization: testOrganization(config) }),
-      jsonResponse(200, customerPage([])),
-      jsonResponse(200, { organization: testOrganization(config) }),
-      jsonResponse(201, { customer: directTestCustomer(config) }),
-      jsonResponse(200, { organization: testOrganization(config) }),
-      readbackFailure,
-    ], [], {
-      claim: async () => ({ outcome: "claimed", rowId: "1" }),
-      mark: async (...args) => { marks.push(args); },
-    });
-    await assert.rejects(client.ensureCustomer({ crmAccountId }), (error) => {
-      assert.equal(error.publicCode, "reconciliation_required");
-      assert.equal(error.ambiguous, true);
-      return true;
-    });
-    assert.deepEqual(marks, [["1", "reconciliation_required", "reconciliation_required"]]);
-  }
-});
-
-test("an authoritative direct customer POST rejection remains non-ambiguous", async () => {
-  const config = loadConfig(baseEnvironment({
-    CUSTOMER_PROVISIONING_MODE: "test_direct_customer",
-    ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING: "true",
-  }), { artifactRevision: REVISION });
+test("paid creation sends only the accepted plan, common meter, and no collection instruction", async () => {
+  const config = testConfig();
   const calls = [];
-  const marks = [];
-  const client = clientFor(config, [
-    jsonResponse(200, { organization: testOrganization(config) }),
-    jsonResponse(200, customerPage([])),
-    jsonResponse(200, { organization: testOrganization(config) }),
-    jsonResponse(422, { code: 1001 }),
-    jsonResponse(200, { organization: testOrganization(config) }),
-    jsonResponse(200, customerPage([])),
-  ], calls, {
-    claim: async () => ({ outcome: "claimed", rowId: "1" }),
-    mark: async (...args) => { marks.push(args); },
-  });
-  await assert.rejects(client.ensureCustomer({ crmAccountId }), (error) => {
-    assert.equal(error.publicCode, "billing_rejected");
-    assert.equal(error.ambiguous, false);
-    return true;
-  });
-  assert.equal(calls.length, 6);
-  assert.deepEqual(marks, [["1", "failed", "billing_rejected"]]);
-});
-
-test("a duplicate POST rejection completes after exact deterministic customer readback", async () => {
-  const config = loadConfig(baseEnvironment({
-    CUSTOMER_PROVISIONING_MODE: "test_direct_customer",
-    ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING: "true",
-  }), { artifactRevision: REVISION });
-  const calls = [];
-  const marks = [];
-  const customer = directTestCustomer(config);
-  const client = clientFor(config, [
-    jsonResponse(200, { organization: testOrganization(config) }),
-    jsonResponse(200, customerPage([])),
-    jsonResponse(200, { organization: testOrganization(config) }),
-    jsonResponse(409, { code: 1001 }),
-    jsonResponse(200, { organization: testOrganization(config) }),
-    jsonResponse(200, customerPage([{ customer_id: customerId, email: customer.email }])),
-    jsonResponse(200, { customer }),
-  ], calls, {
-    claim: async () => ({ outcome: "claimed", rowId: "1" }),
-    mark: async (...args) => { marks.push(args); },
-  });
-
-  const result = await client.ensureCustomer({ crmAccountId });
-  assert.equal(result.customer.customer_id, customerId);
-  assert.equal(result.testDirect, true);
-  assert.equal(calls.filter(({ options }) => options.method === "POST").length, 1);
-  assert.deepEqual(marks, [["1", "completed", "customer_readback_confirmed"]]);
-});
-
-test("customer lookup rejects a response without the exact CRM Account reference", async () => {
-  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
-  const client = clientFor(config, [
-    jsonResponse(200, { customer: { customer_id: customerId } }),
-  ]);
-  await assert.rejects(
-    client.findCustomerByCrmReference(crmAccountId),
-    /reference readback does not match/,
-  );
-});
-
-test("evaluation creation proves zero exposure and uses the documented creation overrides", async () => {
-  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
-  const calls = [];
-  const responses = [
-    jsonResponse(200, { plan: evaluationPlan() }),
-    jsonResponse(200, subscriptionPage([])),
-    jsonResponse(201, { subscription: evaluationSubscription() }),
-    jsonResponse(200, subscriptionPage([evaluationSubscription()])),
-    jsonResponse(200, { subscription: evaluationSubscription() }),
-  ];
-  const client = clientFor(config, responses, calls);
-  const result = await client.ensureEvaluationSubscription({
-    customerId,
-    deterministicReference: reference,
-  });
-  assert.equal(result.subscription_id, subscriptionId);
-  assert.equal(calls[0].url, `${config.billingApiBaseUrl}/plans/evaluation_plan`);
-  const create = calls.find((call) => call.options.method === "POST");
-  const body = JSON.parse(create.options.body);
-  assert.equal(body.auto_collect, false);
-  assert.deepEqual(body.plan, {
-    plan_code: "evaluation_plan",
-    quantity: 1,
-    exclude_setup_fee: true,
-    billing_cycles: 1,
-    trial_days: config.freeTestDurationDays,
-  });
-  assert.equal(Object.hasOwn(body, "addons"), false);
-  assert.equal(Object.hasOwn(body, "card_id"), false);
-  const referenceLookups = calls.filter(({ url }) => url.includes("reference_contains="));
-  assert.equal(referenceLookups.length, 2);
-  assert.ok(referenceLookups.every(({ url }) => (
-    new URL(url).searchParams.get("reference_contains") === reference &&
-    new URL(url).searchParams.has("reference_id") === false
-  )));
-  assert.ok(calls.every((call) => (
-    call.options.headers["X-com-zoho-subscriptions-organizationid"] ===
-    config.billingOrganizationId
-  )));
-});
-
-test("subscription lookup paginates and exact-filters reference_contains results", async () => {
-  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
-  const calls = [];
-  const client = clientFor(config, [
-    jsonResponse(200, subscriptionPage([
-      evaluationSubscription({
-        subscription_id: "300000000000002",
-        reference_id: `${reference}-partial`,
-      }),
-    ], 1, true)),
-    jsonResponse(200, subscriptionPage([evaluationSubscription()], 2, false)),
-  ], calls);
-  const result = await client.findSubscriptionByReference(reference);
-  assert.equal(result.subscription_id, subscriptionId);
-  assert.equal(new URL(calls[0].url).searchParams.get("page"), "1");
-  assert.equal(new URL(calls[1].url).searchParams.get("page"), "2");
-});
-
-test("paid subscription creation transmits and verifies the accepted start date", async () => {
-  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
-  const calls = [];
-  const subscription = paidSubscription();
-  const client = clientFor(config, [
-    jsonResponse(200, { plan: paidPlan() }),
-    jsonResponse(200, subscriptionPage([])),
-    jsonResponse(201, { subscription }),
-    jsonResponse(200, subscriptionPage([subscription])),
-    jsonResponse(200, { subscription }),
-  ], calls);
+  const client = clientFor(config, paidCreateResponses(config), calls);
   const result = await client.ensurePaidSubscription({
     customerId,
     deterministicReference: reference,
-    selectedPlanCode: "launch_plan",
+    selectedPlanCode: config.paidPlanCodeMap["Growth::Monthly"],
+    commercialTerms: approvedTerms("Growth", "Monthly"),
     subscriptionStartDate: "2026-09-01",
   });
   assert.equal(result.subscription_id, subscriptionId);
-  const body = JSON.parse(calls.find((call) => call.options.method === "POST").options.body);
-  assert.equal(body.starts_at, "2026-09-01");
+  assert.equal(result.status, "future");
+  const create = calls.find(({ url, options }) => url.endsWith("/subscriptions") && options.method === "POST");
+  assert.deepEqual(JSON.parse(create.options.body), {
+    customer_id: customerId,
+    reference_id: reference,
+    auto_collect: false,
+    starts_at: "2026-09-01",
+    plan: { plan_code: config.paidPlanCodeMap["Growth::Monthly"], quantity: 1 },
+    addons: [{ addon_code: config.paidUsageAddonCode, quantity: 1 }],
+  });
+  assert.equal(calls.filter(({ url }) => url.endsWith(`/organizations/${config.billingOrganizationId}`)).length, 2);
+  assert.equal(calls.filter(({ url }) => url.endsWith(`/plans/${config.paidPlanCodeMap["Growth::Monthly"]}`)).length, 2);
+  assert.equal(calls.filter(({ url }) => url.endsWith(`/addons/${config.paidUsageAddonCode}`)).length, 2);
 });
 
-test("subscription readback rejects every documented payment-method shape", async () => {
-  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
-  for (const paymentEvidence of [
+test("paid subscription readback rejects unsafe payment, catalog, meter, and status shapes", async () => {
+  const config = testConfig();
+  for (const unsafe of [
+    { auto_collect: true },
     { card: { card_id: "synthetic-card" } },
     { bank_account_id: "synthetic-bank" },
+    { coupon_id: "synthetic-coupon" },
+    { discount: "10" },
+    { status: "trial" },
+    { currency_code: "CAD" },
+    { product_id: "400000000000009" },
+    { start_date: undefined, current_term_starts_at: "2026-09-01" },
+    { current_term_starts_at: "2026-08-01" },
+    { plan: {
+      ...subscription(config).plan,
+      recurring_price: moneyString(selectedTerms(config).recurringMinor - 1),
+    } },
+    { plan: { ...subscription(config).plan, setup_fee: "0" } },
+    { addons: [] },
+    { addons: [
+      {
+        addon_code: config.paidUsageAddonCode,
+        quantity: 1,
+        price: moneyString(config.paidCommercialTerms.commonUsageRateMinor),
+      },
+      { addon_code: "unexpected", quantity: 1, price: "1.00" },
+    ] },
+    { addons: [{
+      addon_code: config.paidUsageAddonCode,
+      quantity: 1,
+      price: moneyString(config.paidCommercialTerms.commonUsageRateMinor + 1),
+    }] },
   ]) {
-    const client = clientFor(config, [
-      jsonResponse(200, { plan: evaluationPlan() }),
-      jsonResponse(200, subscriptionPage([evaluationSubscription()])),
-      jsonResponse(200, { subscription: evaluationSubscription(paymentEvidence) }),
-    ]);
-    await assert.rejects(client.ensureEvaluationSubscription({
+    const calls = [];
+    const client = clientFor(config, paidCreateResponses(config, "Growth", {
+      subscription: unsafe,
+    }), calls);
+    await assert.rejects(client.ensurePaidSubscription({
       customerId,
       deterministicReference: reference,
-    }), /violates the approved boundary/);
+      selectedPlanCode: config.paidPlanCodeMap["Growth::Monthly"],
+      commercialTerms: approvedTerms("Growth", "Monthly"),
+      subscriptionStartDate: "2026-09-01",
+    }), /reconciliation|approved boundary|commercial/);
   }
 });
 
-test("subscription readback fails closed when evaluation amount evidence is missing", async () => {
-  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
-  const missingAmount = evaluationSubscription();
-  delete missingAmount.amount;
-  const client = clientFor(config, [
-    jsonResponse(200, { plan: evaluationPlan() }),
-    jsonResponse(200, subscriptionPage([missingAmount])),
-    jsonResponse(200, { subscription: missingAmount }),
-  ]);
-  await assert.rejects(client.ensureEvaluationSubscription({
-    customerId,
-    deterministicReference: reference,
-  }), /financial exposure/);
-});
-
-test("evaluation readback requires trial status and explicit zero setup fee", async () => {
-  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
-  for (const unsafe of [
-    evaluationSubscription({ status: "live" }),
-    evaluationSubscription({ plan: { plan_code: "evaluation_plan" } }),
-    evaluationSubscription({ plan: {
-      plan_code: "evaluation_plan", setup_fee: "1.00", trial_days: 7, billing_cycles: 1,
-    } }),
-    evaluationSubscription({ plan: {
-      plan_code: "evaluation_plan", setup_fee: "0", trial_days: 14, billing_cycles: 1,
-    } }),
-    evaluationSubscription({ plan: {
-      plan_code: "evaluation_plan", setup_fee: "0", trial_days: 7, billing_cycles: -1,
-    } }),
-  ]) {
-    const client = clientFor(config, [
-      jsonResponse(200, { plan: evaluationPlan() }),
-      jsonResponse(200, subscriptionPage([unsafe])),
-      jsonResponse(200, { subscription: unsafe }),
-    ]);
-    await assert.rejects(client.ensureEvaluationSubscription({
-      customerId,
-      deterministicReference: reference,
-    }), /approved boundary|financial exposure/);
-  }
-});
-
-test("subscription readback accepts the documented nested customer identity", async () => {
-  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
-  const nestedCustomer = evaluationSubscription({ customer_id: undefined, customer: { customer_id: customerId } });
-  const client = clientFor(config, [
-    jsonResponse(200, { plan: evaluationPlan() }),
-    jsonResponse(200, subscriptionPage([nestedCustomer])),
-    jsonResponse(200, { subscription: nestedCustomer }),
-  ]);
-  const result = await client.ensureEvaluationSubscription({
-    customerId,
-    deterministicReference: reference,
-  });
-  assert.equal(result.subscription_id, subscriptionId);
-});
-
-test("verified evaluation lookup exact-filters then performs authoritative readback", async () => {
-  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+test("subscription lookup paginates, exact-filters, and rejects duplicate exact references", async () => {
+  const config = testConfig();
+  const paid = subscription(config);
+  const partial = { ...paid, subscription_id: "300000000000002", reference_id: `${reference}-partial` };
   const calls = [];
   const client = clientFor(config, [
-    jsonResponse(200, subscriptionPage([
-      evaluationSubscription({
-        subscription_id: "300000000000002",
-        reference_id: `${reference}-partial`,
-      }),
-      evaluationSubscription(),
-    ])),
-    jsonResponse(200, { subscription: evaluationSubscription() }),
+    jsonResponse(200, subscriptionPage([partial], 1, true)),
+    jsonResponse(200, subscriptionPage([paid], 2, false)),
   ], calls);
-  const result = await client.findVerifiedEvaluationSubscription({
-    customerId,
-    deterministicReference: reference,
-  });
-  assert.equal(result.subscription_id, subscriptionId);
-  assert.equal(calls.length, 2);
-  assert.equal(new URL(calls[0].url).searchParams.get("reference_contains"), reference);
-  assert.match(calls[1].url, new RegExp(`/subscriptions/${subscriptionId}$`));
-});
-
-test("natural trial expiry is a terminal evaluation outcome", async () => {
-  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
-  const calls = [];
-  const client = clientFor(config, [
-    jsonResponse(200, { subscription: evaluationSubscription({ status: "trial_expired" }) }),
-  ], calls);
-  const result = await client.cancelEvaluation({
-    subscriptionId,
-    customerId,
-    deterministicReference: reference,
-  });
-  assert.equal(result.status, "trial_expired");
-  assert.equal(calls.some((call) => call.options.method === "POST"), false);
-});
-
-test("evaluation cancellation verifies identity and zero exposure before and after POST", async () => {
-  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
-  const calls = [];
-  const client = clientFor(config, [
-    jsonResponse(200, { subscription: evaluationSubscription() }),
-    jsonResponse(200, { code: 0 }),
-    jsonResponse(200, { subscription: evaluationSubscription({ status: "cancelled" }) }),
-  ], calls);
-  const result = await client.cancelEvaluation({
-    subscriptionId,
-    customerId,
-    deterministicReference: reference,
-  });
-  assert.equal(result.status, "cancelled");
-  assert.equal(calls.filter((call) => call.options.method === "POST").length, 1);
-
-  for (const poisoned of [
-    evaluationSubscription({ reference_id: `syl-evaluation-${"d".repeat(32)}` }),
-    evaluationSubscription({ plan: {
-      plan_code: "launch_plan", setup_fee: "0", trial_days: 7, billing_cycles: 1,
-    } }),
-    evaluationSubscription({ customer_id: "200000000000002" }),
-  ]) {
-    const poisonedCalls = [];
-    const poisonedClient = clientFor(config, [
-      jsonResponse(200, { subscription: poisoned }),
-    ], poisonedCalls);
-    await assert.rejects(poisonedClient.cancelEvaluation({
-      subscriptionId,
-      customerId,
-      deterministicReference: reference,
-    }), /approved boundary/);
-    assert.equal(poisonedCalls.some((call) => call.options.method === "POST"), false);
-  }
-
-  const activatedCalls = [];
-  const activatedClient = clientFor(config, [
-    jsonResponse(200, { subscription: evaluationSubscription({ status: "live" }) }),
-    jsonResponse(200, { code: 0 }),
-    jsonResponse(200, { subscription: evaluationSubscription({ status: "cancelled" }) }),
-  ], activatedCalls);
-  const contained = await activatedClient.cancelEvaluation({
-    subscriptionId,
-    customerId,
-    deterministicReference: reference,
-  });
-  assert.equal(contained.status, "cancelled");
-  assert.equal(activatedCalls.filter((call) => call.options.method === "POST").length, 1);
-});
-
-test("incomplete pagination and duplicate exact references fail closed", async () => {
-  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
-  const incomplete = clientFor(config, [jsonResponse(200, { subscriptions: [] })]);
-  await assert.rejects(incomplete.findSubscriptionByReference(reference), /pagination is incomplete/);
+  assert.equal((await client.findSubscriptionByReference(reference)).subscription_id, subscriptionId);
+  assert.equal(new URL(calls[0].url).searchParams.get("page"), "1");
+  assert.equal(new URL(calls[1].url).searchParams.get("page"), "2");
 
   const duplicate = clientFor(config, [jsonResponse(200, subscriptionPage([
-    evaluationSubscription(),
-    evaluationSubscription({ subscription_id: "300000000000002" }),
+    paid,
+    { ...paid, subscription_id: "300000000000003" },
   ]))]);
   await assert.rejects(duplicate.findSubscriptionByReference(reference), /not unique/);
 });
 
-test("non-zero evaluation plan fails before subscription creation", async () => {
-  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
-  const calls = [];
-  const client = clientFor(config, [
-    jsonResponse(200, { plan: evaluationPlan("1.00") }),
-  ], calls);
-  await assert.rejects(client.ensureEvaluationSubscription({
+test("an ambiguous paid create is accepted only after complete deterministic readback", async () => {
+  const config = testConfig();
+  const responses = paidCreateResponses(config);
+  responses[4] = new Error("synthetic post-commit timeout");
+  const client = clientFor(config, responses);
+  const result = await client.ensurePaidSubscription({
     customerId,
     deterministicReference: reference,
-  }), /zero bounded exposure/);
-  assert.equal(calls.some((call) => call.options.method === "POST"), false);
-});
-
-test("an ambiguous create is resolved only by paginated deterministic reference readback", async () => {
-  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
-  const client = clientFor(config, [
-    jsonResponse(200, { plan: evaluationPlan() }),
-    jsonResponse(200, subscriptionPage([])),
-    new Error("synthetic post-commit timeout"),
-    jsonResponse(200, subscriptionPage([evaluationSubscription()])),
-    jsonResponse(200, { subscription: evaluationSubscription() }),
-  ]);
-  const result = await client.ensureEvaluationSubscription({
-    customerId,
-    deterministicReference: reference,
+    selectedPlanCode: config.paidPlanCodeMap["Growth::Monthly"],
+    commercialTerms: approvedTerms("Growth", "Monthly"),
+    subscriptionStartDate: "2026-09-01",
   });
   assert.equal(result.subscription_id, subscriptionId);
+});
+
+test("any unresolved post-create outcome is reconciliation-required even after a 4xx response", async () => {
+  const config = testConfig();
+  const responses = [
+    ...catalogResponses(config),
+    jsonResponse(200, subscriptionPage([])),
+    jsonResponse(400, { code: "SYNTHETIC_REJECTION" }),
+    jsonResponse(200, subscriptionPage([])),
+  ];
+  const client = clientFor(config, responses);
+  await assert.rejects(client.ensurePaidSubscription({
+    customerId,
+    deterministicReference: reference,
+    selectedPlanCode: config.paidPlanCodeMap["Growth::Monthly"],
+    commercialTerms: approvedTerms("Growth", "Monthly"),
+    subscriptionStartDate: "2026-09-01",
+  }), (error) => (
+    error?.ambiguous === true && error?.publicCode === "reconciliation_required"
+  ));
+});
+
+test("renewal term advancement preserves separately verified original subscription start", async () => {
+  const config = testConfig();
+  const client = clientFor(config, paidCreateResponses(config, "Growth", {
+    subscription: { current_term_starts_at: "2027-01-01" },
+  }));
+  const result = await client.ensurePaidSubscription({
+    customerId,
+    deterministicReference: reference,
+    selectedPlanCode: config.paidPlanCodeMap["Growth::Monthly"],
+    commercialTerms: approvedTerms("Growth", "Monthly"),
+    subscriptionStartDate: "2026-09-01",
+  });
+  assert.equal(result.start_date, "2026-09-01");
+  assert.equal(result.current_term_starts_at, "2027-01-01");
+});
+
+test("verified paid lookup performs catalog and full subscription readback without mutation", async () => {
+  const config = testConfig();
+  const paid = subscription(config);
+  const calls = [];
+  const client = clientFor(config, [
+    ...catalogResponses(config),
+    jsonResponse(200, subscriptionPage([paid])),
+    jsonResponse(200, { subscription: paid }),
+  ], calls);
+  const result = await client.findVerifiedPaidSubscription({
+    customerId,
+    deterministicReference: reference,
+    selectedPlanCode: config.paidPlanCodeMap["Growth::Monthly"],
+    commercialTerms: approvedTerms("Growth", "Monthly"),
+    subscriptionStartDate: "2026-09-01",
+  });
+  assert.equal(result.subscription_id, subscriptionId);
+  assert.equal(calls.some(({ options }) => options.method === "POST"), false);
 });

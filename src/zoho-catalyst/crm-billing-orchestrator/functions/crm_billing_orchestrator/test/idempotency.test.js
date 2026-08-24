@@ -49,106 +49,109 @@ test("durable operation claim returns completed replay and rejects conflicts", a
   const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
   const app = memoryApp(config.operationTable);
   const store = createOperationStore(app, config);
-  const identity = deriveOperationIdentity(config, "start_evaluation", "100000000000001", {
+  const identity = deriveOperationIdentity(config, "prepare_paid_subscription", "100000000000001", {
     accountId: "100000000000002",
-    testScopeVersion: "scope-v1",
-    testStartAt: "2026-08-21T10:00:00-05:00",
+    plan: "Growth",
+    subscriptionStartDate: "2026-08-21",
   });
-  assert.match(identity.billingReference, /^syl-evaluation-[a-f0-9]{32}$/);
+  assert.match(identity.billingReference, /^syl-paid-[a-f0-9]{32}$/);
   const first = await store.claim({
     operationKey: identity.operationKey,
     operationFingerprint: identity.operationFingerprint,
-    action: "start_evaluation",
+    action: "prepare_paid_subscription",
     scopeId: "100000000000001",
   });
   assert.equal(first.outcome, "claimed");
-  await store.mark(first.rowId, "completed", "evaluation_readback_confirmed");
+  await store.mark(first.rowId, "completed", "paid_subscription_readback_confirmed");
   const replay = await store.claim({
     operationKey: identity.operationKey,
     operationFingerprint: identity.operationFingerprint,
-    action: "start_evaluation",
+    action: "prepare_paid_subscription",
     scopeId: "100000000000001",
   });
   assert.equal(replay.outcome, "duplicate-completed");
+  assert.equal(replay.status, "completed");
+  assert.equal(replay.lastOutcome, "paid_subscription_readback_confirmed");
+  assert.equal(replay.sourceRevision, config.sourceRevision);
+  assert.equal(replay.sourceEnvironment, config.deploymentEnvironment);
   const conflict = await store.claim({
     operationKey: identity.operationKey,
     operationFingerprint: "d".repeat(64),
-    action: "start_evaluation",
+    action: "prepare_paid_subscription",
     scopeId: "100000000000001",
   });
   assert.equal(conflict.outcome, "duplicate-conflict");
 });
 
-test("evaluation and paid references stay stable when mutable Deal material changes", async () => {
+test("paid references stay stable while accepted commercial changes conflict", async () => {
   const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
-  const cases = [
+  const growth = config.paidCommercialTerms.plans["Growth::Monthly"];
+  const scale = config.paidCommercialTerms.plans["Scale::Monthly"];
+  const first = deriveOperationIdentity(
+    config,
+    "prepare_paid_subscription",
+    "100000000000001",
     {
-      action: "start_evaluation",
-      prefix: "syl-evaluation-",
-      first: {
-        accountId: "100000000000002",
-        testScopeVersion: "scope-v1",
-        testStartAt: "2026-08-21T10:00:00-05:00",
-      },
-      changed: {
-        accountId: "100000000000002",
-        testScopeVersion: "scope-v2",
-        testStartAt: "2026-08-22T10:00:00-05:00",
-      },
+      accountId: "100000000000002",
+      accepted: true,
+      billingFrequency: "Monthly",
+      plan: "Growth",
+      recurringMinor: growth.recurringMinor,
+      subscriptionAcceptanceVersion: "paid-acceptance-v1",
+      subscriptionStartDate: "2026-09-01",
     },
+  );
+  const changed = deriveOperationIdentity(
+    config,
+    "prepare_paid_subscription",
+    "100000000000001",
     {
-      action: "prepare_paid_subscription",
-      prefix: "syl-paid-",
-      first: {
-        accountId: "100000000000002",
-        accepted: true,
-        billingFrequency: "Monthly",
-        plan: "Launch",
-        subscriptionStartDate: "2026-09-01",
-      },
-      changed: {
-        accountId: "100000000000002",
-        accepted: true,
-        billingFrequency: "Annual",
-        plan: "Growth",
-        subscriptionStartDate: "2026-10-01",
-      },
+      accountId: "100000000000002",
+      accepted: true,
+      billingFrequency: "Monthly",
+      plan: "Scale",
+      recurringMinor: scale.recurringMinor,
+      subscriptionAcceptanceVersion: "paid-acceptance-v1",
+      subscriptionStartDate: "2026-10-01",
     },
-  ];
-  for (const candidate of cases) {
-    const first = deriveOperationIdentity(
-      config,
-      candidate.action,
-      "100000000000001",
-      candidate.first,
-    );
-    const changed = deriveOperationIdentity(
-      config,
-      candidate.action,
-      "100000000000001",
-      candidate.changed,
-    );
-    assert.equal(changed.operationKey, first.operationKey);
-    assert.equal(changed.billingReference, first.billingReference);
-    assert.notEqual(changed.operationFingerprint, first.operationFingerprint);
-    assert.match(first.billingReference, new RegExp(`^${candidate.prefix}[a-f0-9]{32}$`));
+  );
+  const changedAcceptance = deriveOperationIdentity(
+    config,
+    "prepare_paid_subscription",
+    "100000000000001",
+    {
+      accountId: "100000000000002",
+      accepted: true,
+      billingFrequency: "Monthly",
+      plan: "Growth",
+      recurringMinor: growth.recurringMinor,
+      subscriptionAcceptanceVersion: "paid-acceptance-v2",
+      subscriptionStartDate: "2026-09-01",
+    },
+  );
+  assert.equal(changed.operationKey, first.operationKey);
+  assert.equal(changed.billingReference, first.billingReference);
+  assert.notEqual(changed.operationFingerprint, first.operationFingerprint);
+  assert.equal(changedAcceptance.operationKey, first.operationKey);
+  assert.equal(changedAcceptance.billingReference, first.billingReference);
+  assert.notEqual(changedAcceptance.operationFingerprint, first.operationFingerprint);
+  assert.match(first.billingReference, /^syl-paid-[a-f0-9]{32}$/);
 
-    const app = memoryApp(config.operationTable);
-    const store = createOperationStore(app, config);
-    await store.claim({
-      operationKey: first.operationKey,
-      operationFingerprint: first.operationFingerprint,
-      action: candidate.action,
-      scopeId: "100000000000001",
-    });
-    const conflict = await store.claim({
-      operationKey: changed.operationKey,
-      operationFingerprint: changed.operationFingerprint,
-      action: candidate.action,
-      scopeId: "100000000000001",
-    });
-    assert.equal(conflict.outcome, "duplicate-conflict");
-  }
+  const app = memoryApp(config.operationTable);
+  const store = createOperationStore(app, config);
+  await store.claim({
+    operationKey: first.operationKey,
+    operationFingerprint: first.operationFingerprint,
+    action: "prepare_paid_subscription",
+    scopeId: "100000000000001",
+  });
+  const conflict = await store.claim({
+    operationKey: changed.operationKey,
+    operationFingerprint: changed.operationFingerprint,
+    action: "prepare_paid_subscription",
+    scopeId: "100000000000001",
+  });
+  assert.equal(conflict.outcome, "duplicate-conflict");
 });
 
 test("direct TEST customer claim is stable across Deals and lifecycle actions for one Account", async () => {
@@ -166,13 +169,13 @@ test("direct TEST customer claim is stable across Deals and lifecycle actions fo
   );
   const firstDealAction = deriveOperationIdentity(
     config,
-    "ensure_customer",
+    "prepare_paid_subscription",
     "100000000000001",
     { accountId },
   );
   const secondDealAction = deriveOperationIdentity(
     config,
-    "start_evaluation",
+    "prepare_paid_subscription",
     "100000000000004",
     { accountId },
   );
@@ -203,6 +206,8 @@ test("direct TEST customer claim is stable across Deals and lifecycle actions fo
     scopeId: accountId,
   });
   assert.equal(processingReplay.outcome, "duplicate-unresolved");
+  assert.equal(processingReplay.status, "processing");
+  assert.equal(processingReplay.lastOutcome, "claimed");
   await store.mark(claim.rowId, "completed", "customer_readback_confirmed");
   const completedReplay = await store.claim({
     operationKey: first.operationKey,

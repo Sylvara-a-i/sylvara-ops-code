@@ -101,7 +101,6 @@ function validPayload() {
     requestedTestRoute: "No Answer / Overflow Only",
     approvedTestRoute: "No Answer / Overflow Only",
     requestedStartDate: "2026-08-20",
-    testPhoneNumber: "555-010-2200",
     noAnswerDelay: "5 Rings",
     forwardingAdministratorName: "Synthetic Administrator",
     forwardingAdministratorMobile: "555-010-2300",
@@ -112,12 +111,21 @@ function validPayload() {
     urgentCallHandling: "Alert + Capture Callback",
     existingCustomerCallHandling: "Capture Callback Only",
     alertRecipientName: "Synthetic Alert Recipient",
-    alertRecipientMobile: "555-010-2600",
-    alertRecipientEmail: null,
+    alertRecipientEmail: "alerts@example.invalid",
     authorizedRepresentativeConfirmed: true,
     testScopeAccepted: true,
   };
 }
+
+test("rejects respondent-owned test-number assignment", () => {
+  assert.throws(
+    () => validateForm2Payload(
+      { ...validPayload(), testPhoneNumber: "555-010-2200" },
+      { existing: existingRecords(), ...SERVER_OPTIONS },
+    ),
+    (error) => error.message === "Unknown form field is prohibited",
+  );
+});
 
 const SERVER_OPTIONS = Object.freeze({
   trustedNow: "2026-08-14T18:00:00.000Z",
@@ -218,7 +226,7 @@ test("enforces conditional fields and both affirmative confirmations", () => {
     ["other service details", { servicesHandled: ["Other"], otherServiceDetails: null }],
     ["no-answer delay", { noAnswerDelay: null }],
     ["fallback number", { approvedFallbackNumber: null }],
-    ["alert channel", { alertRecipientMobile: null, alertRecipientEmail: null }],
+    ["alert email", { alertRecipientEmail: null }],
     ["authority", { authorizedRepresentativeConfirmed: false }],
     ["scope", { testScopeAccepted: false }],
   ];
@@ -274,13 +282,13 @@ test("preserves the approved conditional setup matrix despite stricter live Blue
   );
 
   assert.doesNotThrow(() => validateForm2Payload(
-    { ...validPayload(), alertRecipientMobile: null, alertRecipientEmail: "alerts@example.invalid" },
+    { ...validPayload(), alertRecipientEmail: "alerts@example.invalid" },
     { existing: existingRecords(), ...SERVER_OPTIONS },
   ));
-  assert.doesNotThrow(() => validateForm2Payload(
-    { ...validPayload(), alertRecipientMobile: "555-010-2600", alertRecipientEmail: null },
+  assert.throws(() => validateForm2Payload(
+    { ...validPayload(), alertRecipientMobile: "555-010-2600" },
     { existing: existingRecords(), ...SERVER_OPTIONS },
-  ));
+  ), (error) => error instanceof FormContractError && error.publicCode === "unknown_field");
 });
 
 test("private field-team choices fail closed unless unchanged or privately allowlisted", () => {

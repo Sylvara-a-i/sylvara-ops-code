@@ -144,19 +144,11 @@ function createFixture(testContext, scenario) {
     copiedController,
     "functions/form2_controller/lib/form-destination.js",
   );
-  if (scenario !== "destination-sentinel") {
+  if (scenario === "destination-template-mutated") {
     const formDestinationSource = fs.readFileSync(copiedFormDestination, "utf8");
-    assert.equal(
-      (formDestinationSource.match(/__SYLVARA_UNSTAMPED_FORM_DESTINATION_SHA256__/g) ?? [])
-        .length,
-      1,
-    );
     fs.writeFileSync(
       copiedFormDestination,
-      formDestinationSource.replace(
-        "__SYLVARA_UNSTAMPED_FORM_DESTINATION_SHA256__",
-        approvedFormDestinationSha256,
-      ),
+      formDestinationSource.replace("isolated temporary artifact", "temporary artifact"),
       "utf8",
     );
   }
@@ -359,32 +351,27 @@ function createFixture(testContext, scenario) {
     "real_node=" + shellQuote(realNode),
     "repo_root=" + shellQuote(repo),
     "expected_head=" + shellQuote(head),
-    "expected_destination=" + shellQuote(approvedFormDestinationSha256),
+    "expected_destination=" + shellQuote(
+      scenario === "alternate-destination" ? "d".repeat(64) : approvedFormDestinationSha256,
+    ),
     "evidence_path=" + shellQuote(evidence),
     "expected_token=" + shellQuote(syntheticToken),
     "scenario=" + shellQuote(scenario),
     "if [[ \"${1:-}\" == -v ]]; then",
-    "  printf '%s\\n' 'Catalyst CLI 1.26.1'",
+    "  printf '%s\\n' 'Catalyst CLI 1.26.0'",
     "  exit 0",
     "fi",
     "[[ \"${1:-}\" == deploy ]]",
-    "[[ -z \"${CATALYST_TOKEN+x}\" ]]",
+    "[[ \"${CATALYST_TOKEN:-}\" == \"$expected_token\" ]]",
     "function_root=\"$PWD/functions/form2_controller\"",
     "[[ \"$PWD\" == */deploy-export/src/zoho-catalyst/form2-controller ]]",
     "[[ ! -e \"$function_root/IGNORED_CHECKOUT_CANARY\" ]]",
     "[[ ! -e \"$function_root/REPLACEMENT_EXPORT_CANARY\" ]]",
     "[[ ! -e \"$function_root/lib/TEST_EXPORT_MUTATION.js\" ]]",
-    "token=''",
-    "while (($# > 0)); do",
-    "  if [[ \"$1\" == --token ]]; then",
-    "    [[ $# -ge 2 ]]",
-    "    token=\"$2\"",
-    "    shift 2",
-    "  else",
-    "    shift",
-    "  fi",
+    "for argument in \"$@\"; do",
+    "  [[ \"$argument\" != --token ]]",
+    "  [[ \"$argument\" != \"$expected_token\" ]]",
     "done",
-    "[[ \"$token\" == \"$expected_token\" ]]",
     "artifact=\"$(\"$real_node\" -e 'process.stdout.write(require(process.argv[1]).ARTIFACT_SOURCE_REVISION)' \"$function_root/lib/source-revision.js\")\"",
     "checkout=\"$(\"$real_node\" -e 'process.stdout.write(require(process.argv[1]).ARTIFACT_SOURCE_REVISION)' \"$repo_root/src/zoho-catalyst/form2-controller/functions/form2_controller/lib/source-revision.js\")\"",
     "artifact_destination=\"$(\"$real_node\" -e 'process.stdout.write(require(process.argv[1]).ARTIFACT_FORM_DESTINATION_SHA256)' \"$function_root/lib/form-destination.js\")\"",
@@ -392,7 +379,7 @@ function createFixture(testContext, scenario) {
     "[[ \"$artifact\" == \"$expected_head\" ]]",
     "[[ \"$checkout\" == __SYLVARA_UNSTAMPED_SOURCE_REVISION__ ]]",
     "[[ \"$artifact_destination\" == \"$expected_destination\" ]]",
-    "[[ \"$checkout_destination\" == \"$expected_destination\" ]]",
+    "[[ \"$checkout_destination\" == __SYLVARA_UNSTAMPED_FORM_DESTINATION_SHA256__ ]]",
     "printf 'deploy-called\\nartifact=%s\\ndestination=%s\\n' \"$artifact\" \"$artifact_destination\" >> \"$evidence_path\"",
     "if [[ \"$scenario\" == deploy-ambiguous ]]; then",
     "  printf '%s\\n' 'deployment-accepted' >> \"$evidence_path\"",
@@ -429,7 +416,7 @@ function createFixture(testContext, scenario) {
     `${"CATALYST_" + "TOKEN"}=${syntheticToken}`,
     `APPROVED_SOURCE_REVISION=${head}`,
     `APPROVED_FORM2_DESTINATION_SHA256=${
-      scenario === "destination-mismatch" ? "d".repeat(64) : approvedFormDestinationSha256
+      scenario === "alternate-destination" ? "d".repeat(64) : approvedFormDestinationSha256
     }`,
     `TMPDIR=${runtimeTmp}`,
     "NODE_OPTIONS=--synthetic-option-that-must-not-survive",
@@ -490,11 +477,7 @@ function assertCheckoutUnchanged(fixture) {
     path.join(fixture.copiedController, "functions/form2_controller/lib/form-destination.js"),
     "utf8",
   );
-  if (fixture.scenario === "destination-sentinel") {
-    assert.match(destinationSource, /__SYLVARA_UNSTAMPED_FORM_DESTINATION_SHA256__/);
-  } else {
-    assert.match(destinationSource, new RegExp(approvedFormDestinationSha256));
-  }
+  assert.match(destinationSource, /__SYLVARA_UNSTAMPED_FORM_DESTINATION_SHA256__/);
   assert.equal(
     fs.readdirSync(fixture.runtimeTmp).some((name) => name.startsWith("sylvara-form2-deploy.")),
     false,
@@ -546,25 +529,21 @@ test("the isolated Development deploy rejects source mutation in the deploy expo
   assertCheckoutUnchanged(fixture);
 });
 
-test("the isolated Development deploy rejects a destination not bound in reviewed source", {
+test("the isolated Development deploy stamps a separately approved destination only in its artifact", {
   skip: !supportedRunner,
 }, (testContext) => {
-  const fixture = createFixture(testContext, "destination-mismatch");
-  assert.notEqual(fixture.result.status, 0);
-  assert.match(
-    fixture.result.stderr,
-    /approved Form 2 destination does not match the reviewed source/,
-  );
-  assert.doesNotMatch(fixture.evidence, /^deploy-called$/m);
+  const fixture = createFixture(testContext, "alternate-destination");
+  assert.equal(fixture.result.status, 0, fixture.result.stderr);
+  assert.match(fixture.evidence, /^destination=d{64}$/m);
   assertCheckoutUnchanged(fixture);
 });
 
-test("the isolated Development deploy rejects an unstamped destination sentinel", {
+test("the isolated Development deploy rejects a mutated destination template", {
   skip: !supportedRunner,
 }, (testContext) => {
-  const fixture = createFixture(testContext, "destination-sentinel");
+  const fixture = createFixture(testContext, "destination-template-mutated");
   assert.notEqual(fixture.result.status, 0);
-  assert.match(fixture.result.stderr, /reviewed source form destination is not approved/);
+  assert.match(fixture.result.stderr, /not the exact unstamped template/);
   assert.doesNotMatch(fixture.evidence, /^deploy-called$/m);
   assertCheckoutUnchanged(fixture);
 });

@@ -5,12 +5,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 CONTRACT_PATH = ROOT / "docs" / "product" / "free-revenue-leak-test-release-contract.json"
+FORM2_ROUTES_PATH = ROOT / "src" / "zoho-catalyst" / "form2-controller" / "config" / "routes.json"
 
 
 class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+        cls.form2_routes = json.loads(FORM2_ROUTES_PATH.read_text(encoding="utf-8"))
 
     def test_commercial_boundary_is_exact(self):
         contract = self.contract
@@ -45,12 +47,32 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         )
 
     def test_billing_mapping_and_acceptance_gate_are_exact(self):
-        plans = self.contract["billing_test"]["plans"]
-        self.assertEqual(plans["Launch Monthly"], {"management_fee_usd": 349, "setup_fee_usd": 750, "connected_minute_usd": 0.4})
-        self.assertEqual(plans["Growth Monthly"], {"management_fee_usd": 749, "setup_fee_usd": 1500, "connected_minute_usd": 0.4})
-        self.assertEqual(plans["Scale Monthly"], {"management_fee_usd": 1299, "setup_fee_usd": 2500, "connected_minute_usd": 0.4})
-        self.assertEqual(self.contract["billing_test"]["positive_acceptance_plan"], "Growth Monthly")
-        self.assertFalse(self.contract["billing_test"]["real_charge"])
+        billing = self.contract["billing_test"]
+        self.assertEqual(
+            billing["commercial_terms_source"],
+            "private Catalyst Development PAID_COMMERCIAL_TERMS_JSON",
+        )
+        self.assertEqual(billing["required_plan_frequency_keys"], [
+            "Launch::Monthly",
+            "Growth::Monthly",
+            "Scale::Monthly",
+        ])
+        self.assertEqual(billing["commercial_terms_fields"], [
+            "currency",
+            "interval",
+            "intervalUnit",
+            "commonUsageRateMinor",
+            "plans.<exact-key>.recurringMinor",
+            "plans.<exact-key>.setupMinor",
+        ])
+        self.assertNotIn("plans", billing)
+        self.assertEqual(billing["positive_acceptance_plan"], "Growth Monthly")
+        self.assertFalse(billing["real_charge"])
+        configured = {
+            entry["name"]: entry
+            for entry in self.contract["required_new_environment_variables"]
+        }
+        self.assertTrue(configured["PAID_COMMERCIAL_TERMS_JSON"]["secret"])
 
     def test_prohibited_capabilities_remain_out_of_scope(self):
         excluded = set(self.contract["out_of_scope"])
@@ -65,6 +87,44 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             "payment collection",
         ):
             self.assertIn(value, excluded)
+
+    def test_form2_routes_and_runtime_tables_match_the_component_contract(self):
+        expected_routes = [
+            ("FORM2_ISSUE", "POST", "ISSUE_PATH"),
+            ("FORM2_ACCESS", "GET", "FORM2_ACCESS_PATH"),
+            ("FORM2_OTP_REQUEST", "POST", "FORM2_OTP_REQUEST_PATH"),
+            ("FORM2_OTP_VERIFY", "POST", "FORM2_OTP_VERIFY_PATH"),
+            ("FORM2_PREFILL", "POST", "PREFILL_PATH"),
+            ("FORM2_SUBMISSION", "POST", "SUBMISSION_PATH"),
+        ]
+        self.assertEqual(self.contract["form2"]["routes"], [route[0] for route in expected_routes])
+        component_routes = [
+            (route["id"], route["method"], route["path_reference"])
+            for route in self.form2_routes["routes"]
+        ]
+        self.assertEqual(component_routes, expected_routes)
+        central_routes = [
+            (route["id"], route["method"], route["path_reference"])
+            for route in self.contract["route_manifest"]
+            if route["id"].startswith("FORM2_")
+        ]
+        self.assertEqual(central_routes, expected_routes)
+        self.assertTrue(all(
+            route["function"] == "form2_controller"
+            for route in self.contract["route_manifest"]
+            if route["id"].startswith("FORM2_")
+        ))
+
+        data_contracts = self.contract["catalyst_data_contracts"]
+        self.assertEqual(data_contracts["required_form2_v3_tables"], [
+            "Form2SessionsV3Runtime",
+            "Form2PrefillsV3",
+            "Form2SubmissionsV3",
+            "Form2VerificationProofsV3",
+        ])
+        self.assertEqual(data_contracts["form2_v3_legacy_source_mapping"], {
+            "Form2SessionsV3": "Form2SessionsV3Runtime",
+        })
 
 
 if __name__ == "__main__":

@@ -13,6 +13,7 @@ const SHA_PATTERN = /^[0-9a-f]{40}$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ZIP_PATTERN = /^[0-9]{5}(?:-[0-9]{4})?$/;
 const CALL_STATUSES = new Set(['registered', 'not_connected', 'ongoing', 'ended', 'error']);
+const MAX_RETELL_CALL_DURATION_MS = 86_400_000;
 
 function isPlainObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype;
@@ -181,8 +182,10 @@ function validateEventEnvelope(input) {
   const endTimestamp = call.end_timestamp === undefined || call.end_timestamp === null
     ? null : unixMillis(call.end_timestamp, 'event webhook.call.end_timestamp');
   invariant(!endTimestamp || endTimestamp >= startTimestamp, 'INVALID_SCHEMA', 'Call timestamps are inconsistent.');
+  const durationMs = integer(call.duration_ms, 'event webhook.call.duration_ms',
+    0, MAX_RETELL_CALL_DURATION_MS);
   return Object.freeze({ event, call, callId, agentId, agentVersion, callStatus,
-    disconnectionReason, startTimestamp, endTimestamp });
+    disconnectionReason, startTimestamp, endTimestamp, durationMs });
 }
 
 function validateOutcome(value) {
@@ -215,5 +218,6 @@ module.exports = {
   validateOutcome,
   validateSourceRevision,
   E164_PATTERN,
+  MAX_RETELL_CALL_DURATION_MS,
   FreeTestError,
 };

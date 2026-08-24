@@ -10,14 +10,14 @@ const { Readable } = require('node:stream');
 const contracts = require('../lib/contracts');
 const { loadConfig, loadJobConfig } = require('../lib/config');
 const { verifyRetellSignature } = require('../lib/security');
-const { validateInboundPayload } = require('../lib/validation');
+const { validateInboundPayload, validateEventEnvelope, MAX_RETELL_CALL_DURATION_MS } = require('../lib/validation');
 const { extractAnalysis, validateValueEvidence } = require('../lib/analysis');
 const { CatalystMailAdapter, messageContent } = require('../lib/catalyst-mail');
 const { readRawBody } = require('../lib/http');
 const { csvCell } = require('../lib/reporting');
 const { timingSafeToken } = require('../lib/runtime-boundary');
 const { createSafeConsoleLogger } = require('../lib/logging');
-const { environment } = require('./runtime-fixture');
+const { environment, eventPayload } = require('./runtime-fixture');
 
 test('unit: approved gate taxonomies and event surface are exact', () => {
   assert.deepEqual([...contracts.COVERAGE_MODES], ['AfterHoursOnly', 'NoAnswerOverflowOnly', 'AfterHoursAndOverflow']);
@@ -29,6 +29,31 @@ test('unit: approved gate taxonomies and event surface are exact', () => {
   assert.deepEqual([...contracts.RETELL_EVENTS], ['call_ended', 'call_analyzed']);
   assert.equal(contracts.OUTCOMES.size, 11);
   assert.equal(contracts.VALUE_EVIDENCE_CLASSES.size, 5);
+  assert.deepEqual([...contracts.MVP_REPORT_VALUE_EVIDENCE_CLASSES],
+    ['unknown', 'customer_supplied_estimate']);
+  assert.deepEqual([...contracts.MVP_REPORT_VALUE_EVIDENCE_SOURCES], ['retell']);
+  assert.equal(contracts.CONTRACT.canonical_call_schema_version, 2);
+  assert.deepEqual(contracts.CONTRACT.legacy_canonical_call_schema_versions, [1]);
+  assert.deepEqual([...contracts.RETELL_CUSTOM_ANALYSIS_FIELDS], [
+    'outcome', 'coverage_trigger', 'caller_name', 'callback_number', 'customer_type',
+    'caller_intent', 'issue_summary', 'city_or_zip', 'urgency',
+    'specific_person_requested', 'sensitive_data_detected', 'bookable_opportunity',
+    'office_follow_up_required', 'workflow_failure_code', 'workflow_failure_text',
+  ]);
+  assert.deepEqual(contracts.CONTRACT.retell_custom_analysis_readback, {
+    runtime_supported_field_count: 15,
+    live_shared_agent_field_count: 11,
+    status: 'pending_retell_agent_qa',
+    missing_evidence_behavior: 'preserve null and withhold affected aggregates',
+  });
+  assert.deepEqual([...contracts.OPTIONAL_VALUE_EVIDENCE_FIELDS], [
+    'value_evidence_class', 'value_minor_units', 'value_currency',
+    'value_method_id', 'value_method_version',
+  ]);
+  assert.equal(contracts.CONTRACT.reporting.monthly_connected_minutes_methodology_id,
+    'retell_duration_elapsed_calendar_run_rate_v1');
+  assert.match(contracts.CONTRACT.reporting.in_flight_overshoot_methodology,
+    /max\(handled_call_count - call_limit, 0\)/);
   assert.equal(contracts.NOTIFICATION_STATES.has('DryRunRecorded'), true);
   assert.equal(contracts.STOP_REASON_TO_CRM.get('call_limit_reached'), 'Call Limit Reached');
 });
@@ -163,6 +188,16 @@ test('unit: optional bounded SIP headers are accepted then discarded', () => {
   assert.equal(Object.hasOwn(normalized, 'customSipHeaders'), false);
 });
 
+test('unit: Retell post-call duration is required, integral, and bounded', () => {
+  const payload = eventPayload('call_ended', 'duration_unit', {}, 'A');
+  payload.call.duration_ms = 45_000;
+  assert.equal(validateEventEnvelope(payload).durationMs, 45_000);
+  for (const duration of [undefined, -1, 1.5, MAX_RETELL_CALL_DURATION_MS + 1]) {
+    payload.call.duration_ms = duration;
+    assert.throws(() => validateEventEnvelope(payload), { code: 'INVALID_SCHEMA' });
+  }
+});
+
 test('unit: sensitive-data signals minimize every caller field before value validation', () => {
   for (const data of [
     { outcome: 'sensitive_data_ended', caller_name: 'Do Not Store', value_evidence_class: 'confirmed_revenue' },
@@ -170,24 +205,66 @@ test('unit: sensitive-data signals minimize every caller field before value vali
     { outcome: 'potential_job', issue_summary: 'My bank routing number is 123456789' },
     { outcome: 'potential_job', issue_summary: 'My medical diagnosis is diabetes' },
     { outcome: 'potential_job', callback_number: '+378282246310005' },
+    { outcome: 'potential_job', workflow_failure_code: 'unsafe_note',
+      workflow_failure_text: ['My SSN is 123', '45', '6789'].join('-'),
+      bookable_opportunity: true },
   ]) {
     const result = extractAnalysis({ call_analysis: { custom_analysis_data: data } });
     assert.equal(result.outcome, 'sensitive_data_ended');
     assert.equal(result.callerName, null);
     assert.equal(result.callbackNumber, null);
     assert.equal(result.issueSummary, null);
+    assert.equal(result.bookableOpportunity, false);
+    assert.equal(result.officeFollowUpRequired, false);
+    assert.equal(result.workflowFailureCode, null);
+    assert.equal(result.workflowFailureText, null);
     assert.equal(result.value.evidenceClass, 'unknown');
   }
 });
 
+test('unit: structured opportunity and workflow evidence is bounded and internally consistent', () => {
+  const result = extractAnalysis({ call_analysis: { custom_analysis_data: {
+    outcome: 'urgent_potential_job', coverage_trigger: 'AfterHours', urgency: 'urgent',
+    bookable_opportunity: true, office_follow_up_required: true,
+    workflow_failure_code: 'office_queue_unavailable',
+    workflow_failure_text: 'The office queue was unavailable during the test call.',
+  } } });
+  assert.equal(result.bookableOpportunity, true);
+  assert.equal(result.officeFollowUpRequired, true);
+  assert.equal(result.workflowFailureCode, 'office_queue_unavailable');
+  assert.equal(result.workflowFailureText, 'The office queue was unavailable during the test call.');
+  const incomplete = extractAnalysis({ call_analysis: { custom_analysis_data: {
+    outcome: 'potential_job', urgency: 'routine',
+  } } });
+  assert.equal(incomplete.bookableOpportunity, null);
+  assert.equal(incomplete.officeFollowUpRequired, null);
+  for (const custom_analysis_data of [
+    { outcome: 'potential_job', bookable_opportunity: 'true' },
+    { outcome: 'existing_customer', bookable_opportunity: true },
+    { outcome: 'potential_job', workflow_failure_code: 'UPPER_CASE' },
+    { outcome: 'potential_job', workflow_failure_text: 'Missing code.' },
+    { outcome: 'potential_job', workflow_failure_code: 'valid_code',
+      workflow_failure_text: 'x'.repeat(241) },
+    { outcome: 'urgent_potential_job', urgency: 'routine' },
+    { outcome: 'potential_job', urgency: 'urgent' },
+    { outcome: 'existing_customer', urgency: 'immediate_danger' },
+  ]) assert.throws(() => extractAnalysis({ call_analysis: { custom_analysis_data } }));
+  assert.equal(extractAnalysis({ call_analysis: { custom_analysis_data: {
+    outcome: 'unresolved', urgency: 'immediate_danger',
+  } } }).outcome, 'unresolved');
+});
+
 test('unit: Retell cannot assert confirmed, booked, or internal estimated revenue', () => {
-  assert.equal(validateValueEvidence({}).evidenceClass, 'unknown');
+  assert.equal(validateValueEvidence({}).source, 'retell');
   assert.equal(validateValueEvidence({ value_evidence_class: 'customer_supplied_estimate',
     value_minor_units: 12500, value_currency: 'USD' }).evidenceClass, 'customer_supplied_estimate');
   for (const value_evidence_class of ['confirmed_revenue', 'booked_revenue', 'internal_estimate_with_method']) {
     assert.throws(() => validateValueEvidence({ value_evidence_class, value_minor_units: 12500,
       value_currency: 'USD' }), { code: 'UNAUTHORIZED_VALUE_EVIDENCE' });
   }
+  assert.throws(() => validateValueEvidence({ value_evidence_class: 'confirmed_revenue',
+    value_minor_units: 12500, value_currency: 'USD' }, new Set(), 'verified_downstream'),
+  { code: 'UNAUTHORIZED_VALUE_EVIDENCE' });
 });
 
 test('unit: Catalyst Mail dry-run validates email ownership and never accesses email SDK', async () => {
@@ -299,9 +376,13 @@ test('unit: sanitized Development function inventory preserves the canonical sec
   assert.equal(inventory.authorization.manifest_is_deletion_authority, false);
   assert.equal(inventory.sanitization.function_ids_included, false);
   assert.equal(inventory.sanitization.invoke_urls_or_private_hosts_included, false);
+  assert.equal(inventory.topology_decision.retained_canonical_boundaries, 5);
+  assert.equal(inventory.topology_decision.combine_further, false);
   assert.deepEqual(Object.fromEntries(inventory.functions.map(({ api_name: name, classification }) => (
     [name, classification]
   ))), {
+    form1_assisted_controller: 'canonical',
+    form2_controller: 'canonical',
     retell_free_test: 'canonical',
     retell_free_test_retry: 'canonical',
     crm_billing_orchestrator: 'independently_necessary',

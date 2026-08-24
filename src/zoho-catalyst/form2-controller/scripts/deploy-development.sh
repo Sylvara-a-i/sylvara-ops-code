@@ -6,7 +6,10 @@ umask 077
 readonly NODE_VERSION="24.19.0"
 readonly NODE_ARCHIVE="node-v${NODE_VERSION}-linux-x64.tar.xz"
 readonly NODE_SHA256="14b342e71204f811bde6153be8e04b62aef63c236fef92b55f9c83154b409647"
-readonly CATALYST_CLI_VERSION="1.26.1"
+# 1.26.0 is the installed reviewed CLI. Its help contract includes every
+# deploy/global flag used below; keep the exact pin until a newer CLI is
+# installed and independently exercised by this script's integration test.
+readonly CATALYST_CLI_VERSION="1.26.0"
 
 fail() {
   printf '%s\n' "Form 2 Development deployment stopped: $1" >&2
@@ -30,7 +33,7 @@ done
 [[ "$CATALYST_TOKEN" != *[[:space:]]* ]] || fail "CATALYST_TOKEN is invalid"
 
 # The pipeline supplies deployment values in Bash's initial environment. Keep
-# them as readonly shell variables for validation and the final CLI argv, but do
+# them as readonly shell variables for validation and the final CLI environment, but do
 # not expose them to Git, Python, Node.js, npm, tests, or other child processes.
 export -n PROJECT_ID CATALYST_ORG CATALYST_TOKEN APPROVED_SOURCE_REVISION \
   APPROVED_FORM2_DESTINATION_SHA256
@@ -301,9 +304,9 @@ import sys
 
 EXPECTED_SOURCE = '''"use strict";
 
-// A CODEOWNERS-reviewed source change must replace this sentinel with the
-// SHA-256 of the one approved normalized Zoho Forms URL. The deploy script may
-// verify this value but must never derive or stamp it from runtime input.
+// The reviewed Development deploy script replaces this sentinel only in its
+// isolated temporary artifact. A checkout or manually packaged function stays
+// unstamped and therefore fails closed before reaching CRM or Data Store.
 const ARTIFACT_FORM_DESTINATION_SHA256 =
   "__SYLVARA_UNSTAMPED_FORM_DESTINATION_SHA256__";
 
@@ -518,6 +521,20 @@ form_destination_path="$deploy_project_root/functions/form2_controller/lib/form-
 readonly source_revision_path reference_revision_path form_destination_path
 stamp_revision "$source_revision_path"
 stamp_revision "$reference_revision_path"
+env -i \
+  PATH="$node_root/bin:/usr/bin:/bin" \
+  TMPDIR="$temp_parent" \
+  APPROVED_FORM2_DESTINATION_SHA256="$APPROVED_FORM2_DESTINATION_SHA256" \
+  "$node_root/bin/node" \
+  "$deploy_project_root/tools/stamp-form-destination.js" \
+  "$deploy_project_root"
+env -i \
+  PATH="$node_root/bin:/usr/bin:/bin" \
+  TMPDIR="$temp_parent" \
+  APPROVED_FORM2_DESTINATION_SHA256="$APPROVED_FORM2_DESTINATION_SHA256" \
+  "$node_root/bin/node" \
+  "$reference_project_root/tools/stamp-form-destination.js" \
+  "$reference_project_root"
 
 # The deploy tree starts from Git's immutable object database, not the runner's
 # working tree. Apart from the separately integrity-checked top-level function
@@ -582,17 +599,24 @@ deployment_interrupted() {
   exit 1
 }
 trap deployment_interrupted HUP INT TERM
-if ! env -i \
-  CI=1 \
-  HOME="$catalyst_home" \
-  PATH="$node_root/bin:$(dirname -- "$catalyst_path"):/usr/bin:/bin" \
+if ! (
+  # The official CLI accepts CATALYST_TOKEN from its environment. Remove every
+  # inherited export, then expose only the reviewed execution boundary so the
+  # credential never enters process argv or process-creation telemetry.
+  while IFS= read -r exported_variable; do
+    export -n "$exported_variable" 2>/dev/null || true
+  done < <(compgen -e)
+  export CI=1
+  export HOME="$catalyst_home"
+  export PATH="$node_root/bin:$(dirname -- "$catalyst_path"):/usr/bin:/bin"
+  export CATALYST_TOKEN
   "$catalyst_path" deploy \
-  --only functions:form2_controller \
-  --ignore-scripts \
-  --project "$PROJECT_ID" \
-  --org "$CATALYST_ORG" \
-  --token "$CATALYST_TOKEN" \
-  --dc us; then
+    --only functions:form2_controller \
+    --ignore-scripts \
+    --project "$PROJECT_ID" \
+    --org "$CATALYST_ORG" \
+    --dc us
+); then
   trap - HUP INT TERM
   deployment_ambiguity_warning
   exit 1

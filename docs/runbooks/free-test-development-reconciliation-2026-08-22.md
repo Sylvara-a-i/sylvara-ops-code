@@ -1,5 +1,7 @@
 # 7-Day Free Test Development Reconciliation
 
+> **Historical Retell/Catalyst milestone:** This record's classification applies only to the shared Retell call-runtime scope accepted on 2026-08-24. The broader Form 1 → CRM → Form 2 → Catalyst → report → paid-acceptance → Billing TEST release is governed by the [current E2E reconciliation](free-revenue-leak-test-e2e-reconciliation-2026-08-24.md), which is not yet ready for Retell Agent QA.
+
 Last updated: 2026-08-24
 
 Environment: Development only

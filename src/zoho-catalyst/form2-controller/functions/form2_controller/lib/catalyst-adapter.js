@@ -2,6 +2,7 @@
 
 const crypto = require("node:crypto");
 const { createCatalystDataStoreAdapter } = require("./catalyst-datastore-adapter");
+const { createCatalystMailAdapter } = require("./catalyst-mail");
 const { createConnectionAuthorizationProvider } = require("./connection-boundary");
 const { ConfigurationError, loadConfig } = require("./config");
 const { createCrmClient } = require("./crm-client");
@@ -9,7 +10,8 @@ const { handleForm2Request } = require("./handler");
 const { safeLog } = require("./safe-log");
 const { createCatalystSessionStore } = require("./session-store");
 const { createWorkflowStore } = require("./workflow-store");
-const { createDenyAllVerificationProofStore } = require("./verification-proof");
+const { createVerificationProofStore } = require("./verification-proof-store");
+const { createVerificationService } = require("./verification-service");
 
 const PUBLIC_CODES = new Set([
   "authentication_failed",
@@ -87,6 +89,23 @@ function sendJson(response, status, body) {
   else throw new Error("Catalyst response adapter is unavailable");
 }
 
+function sendControllerResult(response, result, requestId) {
+  if (typeof result?.body !== "string") {
+    sendJson(response, result.status, { ...result.body, requestId });
+    return;
+  }
+  if (typeof response.status === "function") response.status(result.status);
+  else response.statusCode = result.status;
+  if (typeof response.setHeader === "function") {
+    for (const [name, value] of Object.entries(result.headers ?? {})) {
+      response.setHeader(name, value);
+    }
+  }
+  if (typeof response.send === "function") response.send(result.body);
+  else if (typeof response.end === "function") response.end(result.body);
+  else throw new Error("Catalyst response adapter is unavailable");
+}
+
 function readCatalystEnvironmentHeader(request) {
   const headers = request?.headers;
   if (!headers || typeof headers !== "object" || Array.isArray(headers)) {
@@ -152,6 +171,11 @@ function createRequestListener({
       const dataStoreAdapter = createCatalystDataStoreAdapter(app, config);
       const sessionStore = createCatalystSessionStore(dataStoreAdapter, config, { now });
       const workflowStore = createWorkflowStore(dataStoreAdapter, config, { now, randomUUID });
+      const verificationProofStore = createVerificationProofStore(
+        dataStoreAdapter,
+        config,
+        { now },
+      );
       const crmClient = createCrmClient(config, {
         readAuthorizationProvider: createConnectionAuthorizationProvider(
           app,
@@ -168,12 +192,23 @@ function createRequestListener({
       if (typeof requestHandler !== "function") {
         throw new ConfigurationError("Controller request handler is unavailable");
       }
+      const verificationService = createVerificationService({
+        config,
+        crmClient,
+        mailAdapter: createCatalystMailAdapter(app, config),
+        proofStore: verificationProofStore,
+        sessionStore,
+        now,
+        randomInt: crypto.randomInt,
+        randomBytes: crypto.randomBytes,
+      });
       const result = await requestHandler(request, {
         config,
         crmClient,
         now,
+        randomBytes: crypto.randomBytes,
         sessionStore,
-        verificationProofStore: createDenyAllVerificationProofStore(),
+        verificationService,
         workflowStore,
       });
       safeLog(logger, result.status >= 500 ? "error" : "info", {
@@ -183,7 +218,7 @@ function createRequestListener({
         outcome: result.outcome,
         elapsedMs: now() - startedAt,
       });
-      sendJson(response, result.status, { ...result.body, requestId });
+      sendControllerResult(response, result, requestId);
     } catch (error) {
       const status = statusForError(error);
       const code = codeForError(error);
@@ -205,5 +240,6 @@ module.exports = {
   createRequestListener,
   readCatalystEnvironmentHeader,
   sendJson,
+  sendControllerResult,
   statusForError,
 };

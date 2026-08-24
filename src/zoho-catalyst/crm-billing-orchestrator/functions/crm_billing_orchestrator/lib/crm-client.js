@@ -3,10 +3,15 @@
 const { HttpBoundaryError, requestJson } = require("./http");
 
 const RECORD_ID = /^[1-9][0-9]{7,29}$/;
+// CRM returns the picklist's immutable API value, not its current UI label.
+// Keep this translation explicit so a metadata change fails closed instead of selecting a price.
+const CANONICAL_PLAN_BY_CRM_API_VALUE = Object.freeze({
+  "Option 1": "Launch",
+  "Option 2": "Growth",
+  Pro: "Scale",
+});
 const INTEGRATION_FIELDS = new Set([
   "Billing_Customer_ID",
-  "Billing_Evaluation_Subscription_ID",
-  "Billing_Evaluation_Status",
   "Billing_Subscription_ID",
   "Subscription_Status",
   "Billing_Automation_Status",
@@ -79,12 +84,28 @@ function parseUpdate(json, expectedId) {
   });
 }
 
+function normalizeDealPlan(deal) {
+  const canonicalPlan = CANONICAL_PLAN_BY_CRM_API_VALUE[deal.Plan];
+  if (!canonicalPlan) fail("CRM Plan API value is outside the approved catalog", {
+    publicCode: "crm_state_invalid",
+    status: 409,
+  });
+  return Object.freeze({ ...deal, Plan: canonicalPlan });
+}
+
 function classifyStatus(status, sideEffecting) {
   if (status === 412) return { publicCode: "record_stale", status: 409 };
+  if (!sideEffecting && retryableReadStatus(status)) {
+    return { publicCode: "crm_dependency_failed", status: 503 };
+  }
   if (!sideEffecting || [400, 401, 403, 404, 409, 422].includes(status)) {
     return { publicCode: "crm_rejected", status: 502 };
   }
   return { ambiguous: true, publicCode: "reconciliation_required", status: 503 };
+}
+
+function retryableReadStatus(status) {
+  return new Set([408, 425, 429, 500, 502, 503, 504]).has(status);
 }
 
 function createCrmClient(config, {
@@ -97,27 +118,24 @@ function createCrmClient(config, {
   }
   const dealFields = Object.freeze([
     "Modified_Time",
+    "Deal_Name",
     "Pipeline",
     "Stage",
     "Entry_Offer",
     "Type",
     "Account_Name",
-    "Go_Live_Approval_Status",
-    "Go_Live_Approved_At",
     "Test_Status",
-    "Test_Duration_Days",
-    "Test_Call_Limit",
-    "Test_Scope_Version",
-    "Test_Start_At",
-    "Test_End_At",
-    "Test_End_Reason",
     "Plan",
     "Billing_Frequency",
+    "MRR",
+    "Setup_Fee",
+    "Connected_AI_Minute_Rate",
     "Subscription_Start_Date",
     "Subscription_Acceptance_Status",
+    "Subscription_Accepted_At",
+    "Subscription_Acceptance_Version",
+    "Results_Review_At",
     "Billing_Customer_ID",
-    "Billing_Evaluation_Subscription_ID",
-    "Billing_Evaluation_Status",
     "Billing_Subscription_ID",
     "Subscription_Status",
     "Billing_Automation_Status",
@@ -127,32 +145,40 @@ function createCrmClient(config, {
   const accountFields = Object.freeze(["Modified_Time", "Account_Name"]);
 
   async function authorizedRequest(url, options, { write, sideEffecting }) {
-    let token;
-    try {
-      token = authorization(await (write ? writeAuthorizationProvider() : readAuthorizationProvider()));
-    } catch (error) {
-      if (error instanceof CrmClientError) throw error;
-      fail("CRM Connection is unavailable", { publicCode: "connection_unavailable" });
-    }
-    try {
-      return await requestJson(url, {
-        ...options,
-        headers: { ...options.headers, Authorization: token },
-      }, {
-        timeoutMs: config.outboundTimeoutMs,
-        maximumBytes: config.outboundMaxBytes,
-        sideEffecting,
-      }, fetchImpl);
-    } catch (error) {
-      if (error instanceof HttpBoundaryError) {
-        fail("CRM request did not return an authoritative result", {
-          ambiguous: error.ambiguous,
-          publicCode: error.publicCode === "dependency_failed" ? "crm_dependency_failed" : error.publicCode,
-          status: error.status,
-        });
+    const maximumAttempts = sideEffecting ? 1 : 2;
+    for (let attempt = 1; attempt <= maximumAttempts; attempt += 1) {
+      let token;
+      try {
+        token = authorization(await (write ? writeAuthorizationProvider() : readAuthorizationProvider()));
+      } catch (error) {
+        if (attempt < maximumAttempts) continue;
+        if (error instanceof CrmClientError) throw error;
+        fail("CRM Connection is unavailable", { publicCode: "connection_unavailable" });
       }
-      throw error;
+      try {
+        const response = await requestJson(url, {
+          ...options,
+          headers: { ...options.headers, Authorization: token },
+        }, {
+          timeoutMs: config.outboundTimeoutMs,
+          maximumBytes: config.outboundMaxBytes,
+          sideEffecting,
+        }, fetchImpl);
+        if (attempt < maximumAttempts && retryableReadStatus(response.status)) continue;
+        return response;
+      } catch (error) {
+        if (attempt < maximumAttempts && error instanceof HttpBoundaryError) continue;
+        if (error instanceof HttpBoundaryError) {
+          fail("CRM request did not return an authoritative result", {
+            ambiguous: error.ambiguous,
+            publicCode: error.publicCode === "dependency_failed" ? "crm_dependency_failed" : error.publicCode,
+            status: error.status,
+          });
+        }
+        throw error;
+      }
     }
+    fail("CRM read retry boundary was exhausted", { publicCode: "crm_dependency_failed" });
   }
 
   async function getRecord(module, id, fields) {
@@ -167,7 +193,7 @@ function createCrmClient(config, {
     return parseRecord(response.json, id);
   }
 
-  const getDeal = (id) => getRecord("Deals", id, dealFields);
+  const getDeal = async (id) => normalizeDealPlan(await getRecord("Deals", id, dealFields));
   const getAccount = (id) => getRecord("Accounts", id, accountFields);
 
   async function getContext(dealId) {
@@ -200,22 +226,33 @@ function createCrmClient(config, {
       })
     ) fail("CRM integration update is outside the allowlist", { publicCode: "configuration_invalid" });
 
-    const response = await authorizedRequest(`${config.crmApiBaseUrl}/Deals/${deal.id}`, {
-      method: "PUT",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        "If-Unmodified-Since": deal.Modified_Time,
-      },
-      body: JSON.stringify({
-        data: [{ id: deal.id, ...patch }],
-        trigger: [],
-        skip_feature_execution: [{ name: "cadences" }],
-      }),
-    }, { write: true, sideEffecting: true });
-    if (response.status !== 200) fail("CRM rejected the Deal update", classifyStatus(response.status, true));
-    parseUpdate(response.json, deal.id);
-    const readback = await getDeal(deal.id);
+    try {
+      const response = await authorizedRequest(`${config.crmApiBaseUrl}/Deals/${deal.id}`, {
+        method: "PUT",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          "If-Unmodified-Since": deal.Modified_Time,
+        },
+        body: JSON.stringify({
+          data: [{ id: deal.id, ...patch }],
+          trigger: [],
+          skip_feature_execution: [{ name: "cadences" }],
+        }),
+      }, { write: true, sideEffecting: true });
+      if (response.status === 200) parseUpdate(response.json, deal.id);
+    } catch {
+      // Once the write may have reached CRM, only readback can establish its outcome.
+    }
+    let readback;
+    try {
+      readback = await getDeal(deal.id);
+    } catch {
+      fail("CRM Deal update outcome requires reconciliation", {
+        ambiguous: true,
+        publicCode: "reconciliation_required",
+      });
+    }
     for (const [field, expected] of entries) {
       const matches = expected === null ? readback[field] == null : readback[field] === expected;
       if (!matches) fail("CRM Deal readback does not match", {
@@ -229,4 +266,9 @@ function createCrmClient(config, {
   return Object.freeze({ getAccount, getContext, getDeal, updateDealIntegration });
 }
 
-module.exports = { CrmClientError, INTEGRATION_FIELDS, createCrmClient };
+module.exports = {
+  CANONICAL_PLAN_BY_CRM_API_VALUE,
+  CrmClientError,
+  INTEGRATION_FIELDS,
+  createCrmClient,
+};

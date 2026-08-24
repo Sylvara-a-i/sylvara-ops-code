@@ -50,21 +50,97 @@
         "operation": "controller-mediated bounded update",
         "native_direct_write": false
       },
-      "required_hidden_or_locked_fields": [
-        "Setup_Form_Submission_ID",
-        "Setup_Form_Version",
-        "Test_Scope_Version",
+      "access": {
+        "entry": "Catalyst email-verification access page",
+        "proof_destination": "current CRM-bound Contact.Email only",
+        "native_email_otp": "disabled-after-catalyst-cutover",
+        "native_captcha": "optional-bot-mitigation-only-not-proof",
+        "sms_otp": false,
+        "sms_delivery": false
+      },
+      "controller_hidden_fields": ["setupToken", "prefillId"],
+      "server_generated_submission_field": {
+        "controller_key": "submissionId",
+        "source": "Zoho Forms Unique ID",
+        "format": "1-30 decimal digits without prefix or suffix"
+      },
+      "prohibited_hidden_fields": [
         "Contact_ID",
         "Account_ID",
         "Deal_ID",
-        "Issuance_Request_ID"
+        "Issuance_Request_ID",
+        "Setup_Form_Version",
+        "Test_Scope_Version"
       ],
-      "proof_field": {
-        "alias": "verification_code",
-        "type": "single-line text",
-        "prefill": false,
-        "retention": "not retained in Zoho Forms or CRM after controller verification"
+      "controller_proof": {
+        "location": "Catalyst access page",
+        "not_present_in_zoho_forms": true,
+        "retention": "raw code is not retained in Zoho Forms, CRM, or Catalyst"
       },
+      "prefill_webhook": {
+        "method": "POST",
+        "route_reference": "PREFILL_PATH",
+        "authentication": [
+          "Catalyst API key",
+          "FORMS_HEADER_NAME and PREFILL_HEADER_SECRET"
+        ],
+        "json_keys": ["setupToken"]
+      },
+      "submission_webhook": {
+        "method": "POST",
+        "route_reference": "SUBMISSION_PATH",
+        "authentication": [
+          "Catalyst API key",
+          "FORMS_HEADER_NAME and SUBMISSION_HEADER_SECRET"
+        ],
+        "server_keys": ["setupToken", "prefillId", "submissionId"],
+        "client_keys": [
+          "firstName",
+          "lastName",
+          "decisionMakerRole",
+          "jobTitle",
+          "decisionAuthority",
+          "businessEmail",
+          "directMobileNumber",
+          "companyName",
+          "legalBusinessName",
+          "mainBusinessNumber",
+          "phoneSystemProvider",
+          "primaryServiceArea",
+          "normalBusinessHours",
+          "fieldTeamSizeBand",
+          "servicesHandled",
+          "otherServiceDetails",
+          "currentCallHandling",
+          "requestedTestRoute",
+          "approvedTestRoute",
+          "requestedStartDate",
+          "noAnswerDelay",
+          "forwardingAdministratorName",
+          "forwardingAdministratorMobile",
+          "approvedFallbackDestination",
+          "approvedFallbackNumber",
+          "rollbackContactName",
+          "rollbackContactMobile",
+          "urgentCallHandling",
+          "existingCustomerCallHandling",
+          "alertRecipientName",
+          "alertRecipientEmail",
+          "authorizedRepresentativeConfirmed",
+          "testScopeAccepted"
+        ]
+      },
+      "required_fields": [
+        "alertRecipientEmail",
+        "authorizedRepresentativeConfirmed",
+        "testScopeAccepted"
+      ],
+      "prohibited_fields": [
+        "alertRecipientMobile",
+        "smsRecipient",
+        "paymentData",
+        "testPhoneNumber"
+      ],
       "required_copy": [
         "The representative authorizes the bounded Free Revenue Leak Test.",
         "The test lasts seven calendar days or 25 connected calls, whichever occurs first.",
@@ -79,9 +155,11 @@
         "caller_supplied_destination": false,
         "recipient_source": "CRM-bound authorized representative email"
       },
+      "confirmation_copy": "Your setup information was received for Sylvara review. This does not activate call routing, confirm go-live, accept paid service, create billing, or authorize SMS.",
       "required_behavior": [
         "prefill is bound to the exact Contact, Account, Deal, issuance request, and destination",
         "submission requires server-verifiable one-time proof",
+        "test-number assignment remains Setup/QA-owned and is not a respondent field",
         "authorization and scope affirmations must both be true",
         "duplicate submission has no duplicate effect",
         "no go-live approval, Billing action, paid acceptance, Zoho Sign request, or SMS"

@@ -94,7 +94,6 @@ const CLIENT_KEYS = Object.freeze([
   "requestedTestRoute",
   "approvedTestRoute",
   "requestedStartDate",
-  "testPhoneNumber",
   "noAnswerDelay",
   "forwardingAdministratorName",
   "forwardingAdministratorMobile",
@@ -105,7 +104,6 @@ const CLIENT_KEYS = Object.freeze([
   "urgentCallHandling",
   "existingCustomerCallHandling",
   "alertRecipientName",
-  "alertRecipientMobile",
   "alertRecipientEmail",
   "authorizedRepresentativeConfirmed",
   "testScopeAccepted",
@@ -582,7 +580,6 @@ function validateForm2Payload(payload, options = {}) {
   assertReadOnlyMatch(approvedTestRoute, existing.deal.Approved_Test_Route, "approvedTestRoute");
 
   const requestedStartDate = normalizeIsoDate(payload, "requestedStartDate");
-  const testPhoneNumber = normalizePhone(payload, "testPhoneNumber", { required: true });
   const noAnswerDelay = normalizeChoice(payload, "noAnswerDelay", CHOICES.noAnswerDelay);
   if (NO_ANSWER_ROUTES.has(approvedTestRoute) && noAnswerDelay === null) {
     fail("noAnswerDelay", "No-answer delay is required for the approved route");
@@ -637,11 +634,9 @@ function validateForm2Payload(payload, options = {}) {
     required: true,
     maximum: 255,
   });
-  const alertRecipientMobile = normalizePhone(payload, "alertRecipientMobile");
-  const alertRecipientEmail = normalizeEmail(payload, "alertRecipientEmail");
-  if (alertRecipientMobile === null && alertRecipientEmail === null) {
-    fail("alertRecipientMobile", "At least one alert channel is required");
-  }
+  const alertRecipientEmail = normalizeEmail(payload, "alertRecipientEmail", {
+    required: true,
+  });
 
   const authorizedRepresentativeConfirmed = requireAffirmation(
     payload,
@@ -678,7 +673,6 @@ function validateForm2Payload(payload, options = {}) {
     },
     dealUpdate: {
       Target_Start_Date: requestedStartDate,
-      Test_Phone_Number: testPhoneNumber,
       No_Answer_Delay: noAnswerDelay,
       Forwarding_Administrator_Name: forwardingAdministratorName,
       Forwarding_Administrator_Mobile: forwardingAdministratorMobile,
@@ -689,7 +683,6 @@ function validateForm2Payload(payload, options = {}) {
       Urgent_Call_Handling: urgentCallHandling,
       Existing_Customer_Call_Handling: existingCustomerCallHandling,
       Alert_Recipient_Name: alertRecipientName,
-      Alert_Recipient_Mobile: alertRecipientMobile,
       Alert_Recipient_Email: alertRecipientEmail,
       Authorized_Representative_Confirmed: authorizedRepresentativeConfirmed,
       Test_Scope_Accepted: testScopeAccepted,
@@ -779,7 +772,6 @@ function buildPrefillPayloadUnchecked({ contact, account, deal }, options = {}) 
     requestedTestRoute: prefillChoice(deal, "Requested_Test_Route", CHOICES.testRoute),
     approvedTestRoute,
     requestedStartDate: prefillDate(deal, "Target_Start_Date"),
-    testPhoneNumber: prefillPhone(deal, "Test_Phone_Number"),
     noAnswerDelay: prefillChoice(deal, "No_Answer_Delay", CHOICES.noAnswerDelay),
     forwardingAdministratorName: prefillText(deal, "Forwarding_Administrator_Name", 255),
     forwardingAdministratorMobile: prefillPhone(deal, "Forwarding_Administrator_Mobile"),
@@ -798,7 +790,6 @@ function buildPrefillPayloadUnchecked({ contact, account, deal }, options = {}) 
       CHOICES.existingCustomerCallHandling,
     ),
     alertRecipientName: prefillText(deal, "Alert_Recipient_Name", 255),
-    alertRecipientMobile: prefillPhone(deal, "Alert_Recipient_Mobile"),
     alertRecipientEmail: prefillEmail(deal, "Alert_Recipient_Email"),
     authorizedRepresentativeConfirmed: false,
     testScopeAccepted: false,

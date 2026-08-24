@@ -4,11 +4,15 @@ const {
   ARTIFACT_DEVELOPMENT_ZAID_HMAC_SHA256,
   ARTIFACT_SOURCE_REVISION,
 } = require("./source-revision");
+const {
+  PLAN_FREQUENCY_KEYS,
+  parsePaidCommercialTerms,
+} = require("./commercial-terms");
 
 const REVISION = /^[a-f0-9]{40}$/;
 const IDENTIFIER = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
 const PLAN_CODE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
-const CUSTOMER_PROVISIONING_MODES = new Set(["native_crm_import", "test_direct_customer"]);
+const CUSTOMER_PROVISIONING_MODES = new Set(["test_direct_customer"]);
 
 class ConfigurationError extends Error {
   constructor(message) {
@@ -48,11 +52,6 @@ function integer(environment, name, fallback, minimum, maximum) {
   return parsed;
 }
 
-function requiredInteger(environment, name, minimum, maximum) {
-  required(environment, name);
-  return integer(environment, name, null, minimum, maximum);
-}
-
 function requiredBoolean(environment, name) {
   const result = required(environment, name);
   if (!new Set(["true", "false"]).has(result)) {
@@ -78,6 +77,14 @@ function identifier(environment, name) {
 function planCode(environment, name) {
   const result = required(environment, name);
   if (!PLAN_CODE.test(result)) throw new ConfigurationError(`${name} is invalid`);
+  return result;
+}
+
+function billingRecordId(environment, name) {
+  const result = required(environment, name);
+  if (!/^[1-9][0-9]{7,29}$/.test(result)) {
+    throw new ConfigurationError(`${name} is invalid`);
+  }
   return result;
 }
 
@@ -134,7 +141,7 @@ function duplicateCodes(environment) {
   return Object.freeze(entries);
 }
 
-function paidPlanMap(environment, enabled) {
+function paidPlanMap(environment) {
   let parsed;
   try {
     parsed = JSON.parse(required(environment, "PAID_PLAN_CODE_MAP"));
@@ -145,7 +152,8 @@ function paidPlanMap(environment, enabled) {
     throw new ConfigurationError("PAID_PLAN_CODE_MAP must be an object");
   }
   const entries = Object.entries(parsed);
-  if (entries.length > 20 || (enabled && entries.length < 1) || (!enabled && entries.length !== 0)) {
+  const expectedKeys = [...PLAN_FREQUENCY_KEYS].sort();
+  if (JSON.stringify(entries.map(([key]) => key).sort()) !== JSON.stringify(expectedKeys)) {
     throw new ConfigurationError("PAID_PLAN_CODE_MAP has an invalid size");
   }
   const result = Object.create(null);
@@ -158,7 +166,33 @@ function paidPlanMap(environment, enabled) {
     ) throw new ConfigurationError("PAID_PLAN_CODE_MAP contains an invalid mapping");
     result[crmValue] = code;
   }
+  if (new Set(Object.values(result)).size !== Object.values(result).length) {
+    throw new ConfigurationError("PAID_PLAN_CODE_MAP plan codes must be unique");
+  }
   return Object.freeze(result);
+}
+
+function paidSubscriptionStatusMap(environment) {
+  let parsed;
+  try {
+    parsed = JSON.parse(required(environment, "PAID_SUBSCRIPTION_STATUS_MAP"));
+  } catch {
+    throw new ConfigurationError("PAID_SUBSCRIPTION_STATUS_MAP must be JSON");
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new ConfigurationError("PAID_SUBSCRIPTION_STATUS_MAP must be an object");
+  }
+  const entries = Object.entries(parsed);
+  const expectedKeys = ["future", "live"];
+  if (
+    JSON.stringify(entries.map(([key]) => key).sort()) !== JSON.stringify(expectedKeys) ||
+    entries.some(([, value]) => (
+      typeof value !== "string" || !value || value.length > 120 ||
+      /[\u0000-\u001f\u007f]/.test(value)
+    )) ||
+    new Set(entries.map(([, value]) => value)).size !== entries.length
+  ) throw new ConfigurationError("PAID_SUBSCRIPTION_STATUS_MAP is invalid");
+  return Object.freeze(Object.fromEntries(entries));
 }
 
 function loadConfig(environment = process.env, {
@@ -186,23 +220,24 @@ function loadConfig(environment = process.env, {
     environment,
     "ENABLE_PAID_SUBSCRIPTION_PREPARATION",
   );
-  if (enablePaidSubscriptionPreparation) {
-    throw new ConfigurationError(
-      "Paid subscription preparation is blocked until exact commercial terms are enforced",
-    );
-  }
   const selectedCustomerProvisioningMode = customerProvisioningMode(environment);
   const enableTestDirectCustomerProvisioning = requiredBoolean(
     environment,
     "ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING",
   );
-  if (
-    (selectedCustomerProvisioningMode === "test_direct_customer") !==
-    enableTestDirectCustomerProvisioning
-  ) {
+  if (!enableTestDirectCustomerProvisioning) {
     throw new ConfigurationError(
-      "Direct customer provisioning requires its exact Development test gate",
+      "Paid conversion requires the exact Development TEST customer gate",
     );
+  }
+  let paidCommercialTerms;
+  try {
+    paidCommercialTerms = parsePaidCommercialTerms(required(
+      environment,
+      "PAID_COMMERCIAL_TERMS_JSON",
+    ));
+  } catch {
+    throw new ConfigurationError("PAID_COMMERCIAL_TERMS_JSON is invalid");
   }
   return Object.freeze({
     deploymentEnvironment,
@@ -225,23 +260,20 @@ function loadConfig(environment = process.env, {
     operationTable: identifier(environment, "OPERATION_TABLE"),
     duplicateErrorCodes: duplicateCodes(environment),
     idempotencyPepper: secret(environment, "IDEMPOTENCY_PEPPER"),
-    evaluationPlanCode: planCode(environment, "EVALUATION_PLAN_CODE"),
     enablePaidSubscriptionPreparation,
-    paidPlanCodeMap: paidPlanMap(environment, false),
+    paidCommercialTerms,
+    paidPlanCodeMap: paidPlanMap(environment),
+    paidUsageAddonCode: planCode(environment, "PAID_USAGE_ADDON_CODE"),
+    paidUsageAddonUnit: boundedText(environment, "PAID_USAGE_ADDON_UNIT", 100),
+    paidUsageAddonProductId: billingRecordId(environment, "PAID_USAGE_ADDON_PRODUCT_ID"),
+    paidSubscriptionStatusMap: paidSubscriptionStatusMap(environment),
     paidAcceptanceValue: boundedText(environment, "PAID_ACCEPTANCE_VALUE"),
     revenueDeskPipelineValue: boundedText(environment, "REVENUE_DESK_PIPELINE_VALUE"),
     freeTestEntryOfferValue: boundedText(environment, "FREE_TEST_ENTRY_OFFER_VALUE"),
     initialSaleTypeValue: boundedText(environment, "INITIAL_SALE_TYPE_VALUE"),
-    setupQaStageValue: boundedText(environment, "SETUP_QA_STAGE_VALUE"),
-    testLiveStageValue: boundedText(environment, "TEST_LIVE_STAGE_VALUE"),
-    resultsReviewStageValue: boundedText(environment, "RESULTS_REVIEW_STAGE_VALUE"),
     subscriptionProposedStageValue: boundedText(environment, "SUBSCRIPTION_PROPOSED_STAGE_VALUE"),
-    closedLostStageValue: boundedText(environment, "CLOSED_LOST_STAGE_VALUE"),
-    goLiveApprovedValue: boundedText(environment, "GO_LIVE_APPROVED_VALUE"),
+    closedWonStageValue: boundedText(environment, "CLOSED_WON_STAGE_VALUE"),
     testCompletedStatusValue: boundedText(environment, "TEST_COMPLETED_STATUS_VALUE"),
-    paidReadyStatusValue: boundedText(environment, "PAID_READY_STATUS_VALUE"),
-    freeTestDurationDays: requiredInteger(environment, "FREE_TEST_DURATION_DAYS", 1, 30),
-    freeTestCallLimit: requiredInteger(environment, "FREE_TEST_CALL_LIMIT", 1, 1000),
     maxBodyBytes: integer(environment, "MAX_BODY_BYTES", 2048, 256, 8192),
     outboundTimeoutMs: integer(environment, "OUTBOUND_TIMEOUT_MS", 5000, 250, 10000),
     outboundMaxBytes: integer(environment, "OUTBOUND_MAX_BYTES", 262144, 4096, 524288),

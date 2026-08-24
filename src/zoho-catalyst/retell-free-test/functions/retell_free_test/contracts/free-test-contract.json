@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "contract_id": "sylvara-retell-seven-day-free-test-v1",
   "environment": "development",
   "engagement_type": "free_test",
@@ -8,6 +8,8 @@
   "configuration_unavailable_status": "ConfigurationUnavailable",
   "test_duration_days": 7,
   "handled_call_limit": 25,
+  "canonical_call_schema_version": 2,
+  "legacy_canonical_call_schema_versions": [1],
   "canonical_coverage_modes": [
     "AfterHoursOnly",
     "NoAnswerOverflowOnly",
@@ -83,6 +85,50 @@
     "internal_estimate_with_method",
     "unknown"
   ],
+  "mvp_report_value_evidence_classes": [
+    "unknown",
+    "customer_supplied_estimate"
+  ],
+  "mvp_report_value_evidence_sources": [
+    "retell"
+  ],
+  "retell_custom_analysis_fields": [
+    "outcome",
+    "coverage_trigger",
+    "caller_name",
+    "callback_number",
+    "customer_type",
+    "caller_intent",
+    "issue_summary",
+    "city_or_zip",
+    "urgency",
+    "specific_person_requested",
+    "sensitive_data_detected",
+    "bookable_opportunity",
+    "office_follow_up_required",
+    "workflow_failure_code",
+    "workflow_failure_text"
+  ],
+  "retell_custom_analysis_readback": {
+    "runtime_supported_field_count": 15,
+    "live_shared_agent_field_count": 11,
+    "status": "pending_retell_agent_qa",
+    "missing_evidence_behavior": "preserve null and withhold affected aggregates"
+  },
+  "optional_value_evidence_fields": [
+    "value_evidence_class",
+    "value_minor_units",
+    "value_currency",
+    "value_method_id",
+    "value_method_version"
+  ],
+  "reporting": {
+    "monthly_connected_minutes_methodology_id": "retell_duration_elapsed_calendar_run_rate_v1",
+    "monthly_min_calendar_days": 28,
+    "monthly_max_calendar_days": 31,
+    "in_flight_overshoot_methodology": "max(handled_call_count - call_limit, 0); overshoot represents calls already admitted before the stored threshold became visible and is not evidence of exact concurrent admission.",
+    "monthly_connected_minutes_methodology": "When every handled call has a validated authoritative Retell duration_ms, divide observed handled connected minutes by elapsed approved test calendar days and multiply by 28 and 31; round to two decimals. Timestamps define the test observation window but do not substitute for connected duration. This is a directional run-rate, not a usage guarantee, and applies no seasonality, growth, or revenue assumption."
+  },
   "retell_events": [
     "call_ended",
     "call_analyzed"

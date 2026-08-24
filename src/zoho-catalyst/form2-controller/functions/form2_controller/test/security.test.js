@@ -12,8 +12,14 @@ const {
   deriveAccessToken,
   deriveIssueRequestKey,
   generateAccessToken,
+  generateEmailOtp,
   hashAccessToken,
   isValidAccessToken,
+  normalizeProofEmail,
+  proofBindingDigest,
+  proofDestinationDigest,
+  proofKey,
+  proofOtpDigest,
   verifyAccessTokenHash,
   verifyCustomHeader,
 } = require("../lib/security");
@@ -43,6 +49,50 @@ test("fails closed when the injected random-byte provider is not exactly 256 bit
   ]) {
     assert.throws(() => generateAccessToken(provider), SecurityError);
   }
+});
+
+test("generates one bounded eight-digit email OTP from the injected secure source", () => {
+  let selectedBounds;
+  assert.equal(generateEmailOtp((minimum, maximum) => {
+    selectedBounds = [minimum, maximum];
+    return 42;
+  }), "00000042");
+  assert.deepEqual(selectedBounds, [0, 100000000]);
+  for (const provider of [null, () => -1, () => 100000000, () => 1.5]) {
+    assert.throws(() => generateEmailOtp(provider), SecurityError);
+  }
+});
+
+test("email proof identities are normalized, domain-separated, and binding-specific", () => {
+  const secret = "synthetic-proof-secret-0000000000000000000";
+  const destination = proofDestinationDigest("Casey@Example.invalid", secret);
+  assert.equal(normalizeProofEmail("Casey@Example.invalid"), "Casey@example.invalid");
+  assert.equal(destination, proofDestinationDigest("Casey@example.invalid", secret));
+  assert.notEqual(destination, proofDestinationDigest("casey@example.invalid", secret));
+  const selectedProofKey = proofKey("7000000000001", secret);
+  const binding = {
+    sessionRowId: "7000000000001",
+    issueRequestKey: "1".repeat(64),
+    tokenHash: "2".repeat(64),
+    crmContactId: `${"9".repeat(17)}1`,
+    crmAccountId: `${"9".repeat(17)}2`,
+    crmDealId: `${"9".repeat(17)}3`,
+  };
+  const bound = proofBindingDigest(binding, destination, secret);
+  const otp = proofOtpDigest({ selectedProofKey, generation: 1, otp: "12345678" }, secret);
+  for (const value of [selectedProofKey, destination, bound, otp]) {
+    assert.match(value, /^[a-f0-9]{64}$/);
+  }
+  assert.equal(new Set([selectedProofKey, destination, bound, otp]).size, 4);
+  assert.notEqual(
+    bound,
+    proofBindingDigest({ ...binding, crmDealId: `${"8".repeat(17)}3` }, destination, secret),
+  );
+  assert.notEqual(
+    otp,
+    proofOtpDigest({ selectedProofKey, generation: 2, otp: "12345678" }, secret),
+  );
+  assert.throws(() => normalizeProofEmail(" casey@example.invalid"), SecurityError);
 });
 
 test("rejects malformed and non-canonical access tokens", () => {

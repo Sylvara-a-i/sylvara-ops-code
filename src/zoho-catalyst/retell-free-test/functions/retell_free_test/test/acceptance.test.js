@@ -2,6 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { queryClientReport } = require('../lib/reporting');
 const {
   NOW, payloadInbound, eventPayload, invoke, runtimeFixture,
 } = require('./runtime-fixture');
@@ -171,7 +172,7 @@ test('acceptance: sensitive and immediate-danger evidence is minimized or preser
   await invoke(fixture.listener, { url: '/retell/events', payload: sensitive, env: fixture.env });
   const inboundB = await resolve(fixture, 'B');
   const safety = eventPayload('call_analyzed', 'safety_B', inboundB.body.call_inbound.metadata, 'B', {
-    urgency: 'immediate_danger', outcome: 'urgent_potential_job',
+    urgency: 'immediate_danger', outcome: 'unresolved',
   });
   await invoke(fixture.listener, { url: '/retell/events', payload: safety, env: fixture.env });
   const [sensitiveNotice, safetyNotice] = fixture.store.rows.get('FreeTestNotifications')
@@ -188,20 +189,24 @@ test('acceptance: sensitive and immediate-danger evidence is minimized or preser
 test('acceptance: already-resolved in-flight calls may produce documented practical overshoot only', async () => {
   const fixture = runtimeFixture();
   const deployment = fixture.store.rows.get('FreeTestDeployments')[0];
-  const seededKeys = Array.from({ length: 24 }, (_, index) => `call_${String(index).padStart(64, '0')}`);
-  deployment.HANDLED_COUNT = 24;
-  deployment.COUNTED_CALL_KEYS_JSON = JSON.stringify(seededKeys);
-  const first = await resolve(fixture, 'A');
-  const second = await resolve(fixture, 'A');
-  await invoke(fixture.listener, { url: '/retell/events', payload: eventPayload('call_ended', 'inflight_25',
-    first.body.call_inbound.metadata, 'A'), env: fixture.env });
-  const stoppedAt = deployment.STOPPED_AT;
-  fixture.clock.value += 60_000;
-  await invoke(fixture.listener, { url: '/retell/events', payload: eventPayload('call_ended', 'inflight_26',
-    second.body.call_inbound.metadata, 'A'), env: fixture.env });
+  const admitted = [];
+  for (let index = 0; index < 26; index += 1) admitted.push(await resolve(fixture, 'A'));
+  let stoppedAt = null;
+  for (let index = 0; index < admitted.length; index += 1) {
+    await invoke(fixture.listener, { url: '/retell/events',
+      payload: eventPayload('call_ended', `inflight_${index + 1}`,
+        admitted[index].body.call_inbound.metadata, 'A'), env: fixture.env });
+    if (index === 24) stoppedAt = deployment.STOPPED_AT;
+  }
   assert.equal(deployment.HANDLED_COUNT, 26);
   assert.equal(deployment.TEST_STATUS, 'Completed');
   assert.equal(deployment.STOPPED_AT, stoppedAt);
+  const report = await queryClientReport(fixture.store, fixture.config,
+    'client_A', 'deployment_A', fixture.clock.value);
+  assert.equal(report.inFlightOvershoot, 1);
+  assert.equal(report.callsRemaining, 0);
+  assert.equal(report.limitReached, true);
+  assert.match(report.dataConfidenceNotes.join(' '), /in-flight overshoot/i);
   const blocked = await resolve(fixture, 'A');
   assert.deepEqual(blocked.body, { call_inbound: { reject: true } });
 });

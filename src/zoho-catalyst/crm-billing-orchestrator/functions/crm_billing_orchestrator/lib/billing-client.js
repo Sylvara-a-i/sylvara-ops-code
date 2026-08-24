@@ -6,14 +6,22 @@ const {
   TEST_CUSTOMER_PROVISIONING_ACTION,
   deriveTestCustomerProvisioningIdentity,
 } = require("./idempotency");
+const {
+  containsCommercialTerms,
+  moneyMinor,
+} = require("./commercial-terms");
 
 const RECORD_ID = /^[1-9][0-9]{7,29}$/;
 const PLAN_CODE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
-const REFERENCE = /^syl-(?:customer|evaluation|paid)-[a-f0-9]{32}$/;
+const REFERENCE = /^syl-paid-[a-f0-9]{32}$/;
 const TEST_CUSTOMER_MARKER = /^syl-test-customer-[a-f0-9]{32}$/;
 
 class BillingClientError extends Error {
-  constructor(message, { ambiguous = false, publicCode = "billing_dependency_failed", status = 503 } = {}) {
+  constructor(message, {
+    ambiguous = false,
+    publicCode = "billing_dependency_failed",
+    status = 503,
+  } = {}) {
     super(message);
     this.name = "BillingClientError";
     this.ambiguous = ambiguous;
@@ -78,6 +86,14 @@ function decimal(value, name, { optionalZero = false } = {}) {
   return parsed;
 }
 
+function calendarDate(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const parsed = Date.parse(`${value}T00:00:00Z`);
+  return Number.isFinite(parsed) && new Date(parsed).toISOString().slice(0, 10) === value
+    ? parsed
+    : null;
+}
+
 function authorization(value) {
   if (typeof value !== "string" || !/^Zoho-oauthtoken [A-Za-z0-9._-]{16,4096}$/.test(value)) {
     fail("Billing Connection authorization is invalid", { publicCode: "connection_unavailable" });
@@ -86,10 +102,17 @@ function authorization(value) {
 }
 
 function classifyStatus(status, sideEffecting) {
+  if (!sideEffecting && retryableReadStatus(status)) {
+    return { publicCode: "billing_dependency_failed", status: 503 };
+  }
   if (!sideEffecting || [400, 401, 403, 404, 409, 422].includes(status)) {
     return { publicCode: "billing_rejected", status: 502 };
   }
   return { ambiguous: true, publicCode: "reconciliation_required", status: 503 };
+}
+
+function retryableReadStatus(status) {
+  return new Set([408, 425, 429, 500, 502, 503, 504]).has(status);
 }
 
 function createBillingClient(config, {
@@ -131,36 +154,44 @@ function createBillingClient(config, {
     if (query) {
       for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value);
     }
-    let token;
-    try {
-      token = authorization(await (write ? writeAuthorizationProvider() : readAuthorizationProvider()));
-    } catch (error) {
-      if (error instanceof BillingClientError) throw error;
-      fail("Billing Connection is unavailable", { publicCode: "connection_unavailable" });
+    const maximumAttempts = sideEffecting ? 1 : 2;
+    for (let attempt = 1; attempt <= maximumAttempts; attempt += 1) {
+      let token;
+      try {
+        token = authorization(await (write ? writeAuthorizationProvider() : readAuthorizationProvider()));
+      } catch (error) {
+        if (attempt < maximumAttempts) continue;
+        if (error instanceof BillingClientError) throw error;
+        fail("Billing Connection is unavailable", { publicCode: "connection_unavailable" });
+      }
+      try {
+        const response = await requestJson(url.toString(), {
+          ...options,
+          headers: {
+            ...options.headers,
+            Authorization: token,
+            "X-com-zoho-subscriptions-organizationid": config.billingOrganizationId,
+          },
+        }, {
+          timeoutMs: config.outboundTimeoutMs,
+          maximumBytes: config.outboundMaxBytes,
+          sideEffecting,
+        }, fetchImpl);
+        if (attempt < maximumAttempts && retryableReadStatus(response.status)) continue;
+        return response;
+      } catch (error) {
+        if (attempt < maximumAttempts && error instanceof HttpBoundaryError) continue;
+        if (error instanceof HttpBoundaryError) fail("Billing request did not return an authoritative result", {
+          ambiguous: error.ambiguous,
+          publicCode: error.publicCode === "dependency_failed"
+            ? "billing_dependency_failed"
+            : error.publicCode,
+          status: error.status,
+        });
+        throw error;
+      }
     }
-    try {
-      return await requestJson(url.toString(), {
-        ...options,
-        headers: {
-          ...options.headers,
-          Authorization: token,
-          "X-com-zoho-subscriptions-organizationid": config.billingOrganizationId,
-        },
-      }, {
-        timeoutMs: config.outboundTimeoutMs,
-        maximumBytes: config.outboundMaxBytes,
-        sideEffecting,
-      }, fetchImpl);
-    } catch (error) {
-      if (error instanceof HttpBoundaryError) fail("Billing request did not return an authoritative result", {
-        ambiguous: error.ambiguous,
-        publicCode: error.publicCode === "dependency_failed"
-          ? "billing_dependency_failed"
-          : error.publicCode,
-        status: error.status,
-      });
-      throw error;
-    }
+    fail("Billing read retry boundary was exhausted", { publicCode: "billing_dependency_failed" });
   }
 
   async function assertDirectTestOrganization() {
@@ -271,152 +302,75 @@ function createBillingClient(config, {
     });
   }
 
-  async function findNativeCustomerByCrmReference(crmAccountId) {
-    const selectedAccountId = id(crmAccountId, "CRM Account identifier");
-    const response = await authorizedRequest(`/customers/reference/${selectedAccountId}`, {
-      method: "GET",
-      headers: { Accept: "application/json" },
-      query: { reference_id_type: "zcrm_account_id" },
-    });
-    if (response.status === 404) return null;
-    if (response.status !== 200) fail("Billing rejected customer lookup", classifyStatus(response.status, false));
-    const customer = response.json?.customer;
-    if (!plainObject(customer)) fail("Billing CRM Account customer readback is incomplete", {
-      publicCode: "billing_state_invalid",
-    });
-    id(customer.customer_id, "Billing customer identifier");
-    if (String(customer.zcrm_account_id ?? "") !== selectedAccountId) {
-      fail("Billing customer reference readback does not match", { publicCode: "billing_state_invalid" });
-    }
-    return customer;
-  }
-
   async function findCustomerByCrmReference(crmAccountId) {
-    return config.customerProvisioningMode === "test_direct_customer"
-      ? findDirectTestCustomer(crmAccountId)
-      : findNativeCustomerByCrmReference(crmAccountId);
+    return findDirectTestCustomer(crmAccountId);
   }
 
   async function ensureCustomer({ crmAccountId }) {
     const selectedAccountId = id(crmAccountId, "CRM Account identifier");
-    let existing;
-    if (config.customerProvisioningMode === "test_direct_customer") {
-      const identity = directTestCustomerIdentity(config, selectedAccountId);
-      const operationIdentity = deriveTestCustomerProvisioningIdentity(config, selectedAccountId);
-      const claim = await operationStore.claim({
-        operationKey: operationIdentity.operationKey,
-        operationFingerprint: operationIdentity.operationFingerprint,
-        action: TEST_CUSTOMER_PROVISIONING_ACTION,
-        scopeId: selectedAccountId,
+    const identity = directTestCustomerIdentity(config, selectedAccountId);
+    const operationIdentity = deriveTestCustomerProvisioningIdentity(config, selectedAccountId);
+    // All fallible read-only checks happen before the durable mutation claim. A transient
+    // dependency failure can therefore be retried without leaving an unresolved claim.
+    let existing = await findDirectTestCustomer(selectedAccountId);
+    const claim = await operationStore.claim({
+      operationKey: operationIdentity.operationKey,
+      operationFingerprint: operationIdentity.operationFingerprint,
+      action: TEST_CUSTOMER_PROVISIONING_ACTION,
+      scopeId: selectedAccountId,
+    });
+    if (claim.outcome === "duplicate-completed") {
+      if (!existing) throw reconciliationError("Completed direct TEST customer claim has no customer");
+      return Object.freeze({
+        customer: existing,
+        created: false,
+        imported: false,
+        testDirect: true,
+        duplicateProvisioning: true,
       });
-      if (claim.outcome === "duplicate-completed") {
-        try {
-          existing = await findDirectTestCustomer(selectedAccountId);
-        } catch {
-          throw reconciliationError("Completed direct TEST customer claim could not be verified");
-        }
-        if (!existing) throw reconciliationError("Completed direct TEST customer claim has no customer");
-        return Object.freeze({
-          customer: existing,
-          imported: false,
-          testDirect: true,
-          duplicateProvisioning: true,
-        });
-      }
-      if (claim.outcome !== "claimed") {
-        throw reconciliationError("Direct TEST customer claim is unresolved");
-      }
-      try {
-        existing = await findDirectTestCustomer(selectedAccountId);
-      } catch (error) {
-        await markDirectTestCustomerClaim(
-          claim.rowId,
-          "failed",
-          /^[a-z0-9_]{1,80}$/.test(error?.publicCode)
-            ? error.publicCode
-            : "billing_dependency_failed",
-        );
-        throw error;
-      }
-      if (existing) {
-        await markDirectTestCustomerClaim(
-          claim.rowId,
-          "completed",
-          "customer_readback_confirmed",
-        );
-        return Object.freeze({ customer: existing, imported: false, testDirect: true });
-      }
-      try {
-        await assertDirectTestOrganization();
-      } catch (error) {
-        await markDirectTestCustomerClaim(
-          claim.rowId,
-          "failed",
-          /^[a-z0-9_]{1,80}$/.test(error?.publicCode)
-            ? error.publicCode
-            : "billing_dependency_failed",
-        );
-        throw error;
-      }
-      let createFailure = null;
-      try {
-        const response = await authorizedRequest("/customers", {
-          method: "POST",
-          write: true,
-          sideEffecting: true,
-          headers: { Accept: "application/json", "Content-Type": "application/json" },
-          body: JSON.stringify({
-            display_name: identity.displayName,
-            company_name: identity.displayName,
-            email: identity.email,
-            notes: identity.marker,
-            is_portal_enabled: false,
-            ach_supported: false,
-            payment_terms: 0,
-          }),
-        });
-        if (![200, 201].includes(response.status)) {
-          createFailure = new BillingClientError(
-            "Billing rejected direct TEST customer creation",
-            classifyStatus(response.status, true),
-          );
-        }
-      } catch (error) {
-        createFailure = error;
-      }
-      try {
-        existing = await findDirectTestCustomer(selectedAccountId);
-      } catch {
-        const unresolved = reconciliationError(
-          "Billing direct TEST customer post-create readback is unresolved",
-        );
-        await markDirectTestCustomerClaim(
-          claim.rowId,
-          "reconciliation_required",
-          unresolved.publicCode,
-        );
-        throw unresolved;
-      }
-      if (existing) {
-        await markDirectTestCustomerClaim(
-          claim.rowId,
-          "completed",
-          "customer_readback_confirmed",
-        );
-        return Object.freeze({ customer: existing, imported: false, testDirect: true });
-      }
-      if (createFailure instanceof BillingClientError && !createFailure.ambiguous) {
-        await markDirectTestCustomerClaim(
-          claim.rowId,
-          "failed",
-          /^[a-z0-9_]{1,80}$/.test(createFailure.publicCode)
-            ? createFailure.publicCode
-            : "billing_dependency_failed",
-        );
-        throw createFailure;
-      }
+    }
+    if (claim.outcome !== "claimed") {
+      throw reconciliationError("Direct TEST customer claim is unresolved");
+    }
+    if (existing) {
+      await markDirectTestCustomerClaim(
+        claim.rowId,
+        "completed",
+        "customer_readback_confirmed",
+      );
+      return Object.freeze({
+        customer: existing,
+        created: false,
+        imported: false,
+        testDirect: true,
+      });
+    }
+    try {
+      const response = await authorizedRequest("/customers", {
+        method: "POST",
+        write: true,
+        sideEffecting: true,
+        headers: { Accept: "application/json", "Content-Type": "application/json" },
+        body: JSON.stringify({
+          display_name: identity.displayName,
+          company_name: identity.displayName,
+          email: identity.email,
+          notes: identity.marker,
+          is_portal_enabled: false,
+          ach_supported: false,
+          payment_terms: 0,
+        }),
+      });
+      // A response is not authoritative after a write. The deterministic readback below is.
+      void response;
+    } catch {
+      // The request may have committed. Resolve only through deterministic readback.
+    }
+    try {
+      existing = await findDirectTestCustomer(selectedAccountId);
+    } catch {
       const unresolved = reconciliationError(
-        "Billing direct TEST customer creation outcome is unresolved",
+        "Billing direct TEST customer post-create readback is unresolved",
       );
       await markDirectTestCustomerClaim(
         claim.rowId,
@@ -425,32 +379,28 @@ function createBillingClient(config, {
       );
       throw unresolved;
     }
-    existing = await findNativeCustomerByCrmReference(selectedAccountId);
-    if (existing) return Object.freeze({ customer: existing, imported: false });
-    let importFailure = null;
-    try {
-      const response = await authorizedRequest(`/crm/account/${selectedAccountId}/import`, {
-        method: "POST",
-        write: true,
-        sideEffecting: true,
-        headers: { Accept: "application/json" },
+    if (existing) {
+      await markDirectTestCustomerClaim(
+        claim.rowId,
+        "completed",
+        "customer_readback_confirmed",
+      );
+      return Object.freeze({
+        customer: existing,
+        created: true,
+        imported: false,
+        testDirect: true,
       });
-      if (![200, 201].includes(response.status)) {
-        importFailure = new BillingClientError(
-          "Billing rejected CRM Account import",
-          classifyStatus(response.status, true),
-        );
-      }
-    } catch (error) {
-      importFailure = error;
     }
-    existing = await findNativeCustomerByCrmReference(selectedAccountId);
-    if (existing) return Object.freeze({ customer: existing, imported: true });
-    if (importFailure instanceof BillingClientError && !importFailure.ambiguous) throw importFailure;
-    fail("Billing CRM Account import outcome is unresolved", {
-      ambiguous: true,
-      publicCode: "reconciliation_required",
-    });
+    const unresolved = reconciliationError(
+      "Billing direct TEST customer creation outcome is unresolved",
+    );
+    await markDirectTestCustomerClaim(
+      claim.rowId,
+      "reconciliation_required",
+      unresolved.publicCode,
+    );
+    throw unresolved;
   }
 
   async function getPlan(code) {
@@ -467,22 +417,98 @@ function createBillingClient(config, {
     return plan;
   }
 
-  function assertActivePlan(plan) {
-    if (!plainObject(plan) || plan.status !== "active") {
-      fail("Billing plan is not active", { publicCode: "billing_state_invalid" });
+  async function getAddon(code) {
+    const selectedCode = planCode(code);
+    const response = await authorizedRequest(`/addons/${selectedCode}`, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+    });
+    if (response.status !== 200) fail(
+      "Billing rejected usage add-on lookup",
+      classifyStatus(response.status, false),
+    );
+    const addon = response.json?.addon;
+    if (!plainObject(addon) || addon.addon_code !== selectedCode) {
+      fail("Billing usage add-on readback is unavailable", {
+        publicCode: "billing_state_invalid",
+      });
+    }
+    return addon;
+  }
+
+  function exactMoney(value, expectedMinor, name, { ambiguous = false } = {}) {
+    if (moneyMinor(value) !== expectedMinor) {
+      fail(`${name} does not match the approved commercial terms`, {
+        ambiguous,
+        publicCode: "billing_state_invalid",
+      });
     }
   }
 
-  function assertEvaluationPlan(plan) {
-    assertActivePlan(plan);
+  function assertPaidPlan(plan, selectedPlanCode, commercialTerms, expectedProductId) {
     if (
-      decimal(plan.recurring_price ?? plan.price, "Evaluation recurring price") !== 0 ||
-      decimal(plan.setup_fee, "Evaluation setup fee", { optionalZero: true }) !== 0 ||
-      Number(plan.billing_cycles) !== 1 ||
-      Number(plan.trial_period) !== config.freeTestDurationDays
-    ) fail("Evaluation plan does not prove zero bounded exposure", {
+      !plainObject(plan) ||
+      !containsCommercialTerms(config.paidCommercialTerms, commercialTerms) ||
+      plan.plan_code !== selectedPlanCode ||
+      plan.status !== "active" ||
+      plan.currency_code !== config.paidCommercialTerms.currency ||
+      String(plan.product_id ?? "") !== expectedProductId ||
+      Number(plan.interval) !== config.paidCommercialTerms.interval ||
+      plan.interval_unit !== config.paidCommercialTerms.intervalUnit ||
+      Number(plan.trial_period ?? 0) !== 0
+    ) fail("Billing paid plan does not match the approved catalog", {
       publicCode: "billing_state_invalid",
     });
+    exactMoney(
+      plan.recurring_price ?? plan.price,
+      commercialTerms.recurringMinor,
+      "Billing recurring price",
+    );
+    exactMoney(plan.setup_fee, commercialTerms.setupMinor, "Billing setup fee");
+    return plan;
+  }
+
+  function assertUsageAddon(addon, selectedAddonCode, expectedUnit, expectedProductId) {
+    const brackets = addon?.price_brackets;
+    const bracket = Array.isArray(brackets) && brackets.length === 1 ? brackets[0] : null;
+    if (
+      !plainObject(addon) ||
+      addon.addon_code !== selectedAddonCode ||
+      addon.status !== "active" ||
+      addon.type !== "usage" ||
+      addon.pricing_scheme !== "unit" ||
+      addon.currency_code !== config.paidCommercialTerms.currency ||
+      Number(addon.interval) !== config.paidCommercialTerms.interval ||
+      addon.interval_unit !== config.paidCommercialTerms.intervalUnit ||
+      addon.unit !== expectedUnit ||
+      String(addon.product_id ?? "") !== expectedProductId ||
+      !plainObject(bracket) || Number(bracket.start_quantity) !== 1
+    ) fail("Billing usage add-on does not prove the approved metered contract", {
+      publicCode: "billing_state_invalid",
+    });
+    exactMoney(
+      bracket.price,
+      config.paidCommercialTerms.commonUsageRateMinor,
+      "Billing connected-minute rate",
+    );
+    return addon;
+  }
+
+  async function readPaidCatalog(selectedPlanCode, commercialTerms) {
+    await assertDirectTestOrganization();
+    const plan = assertPaidPlan(
+      await getPlan(selectedPlanCode),
+      selectedPlanCode,
+      commercialTerms,
+      config.paidUsageAddonProductId,
+    );
+    const addon = assertUsageAddon(
+      await getAddon(config.paidUsageAddonCode),
+      config.paidUsageAddonCode,
+      config.paidUsageAddonUnit,
+      config.paidUsageAddonProductId,
+    );
+    return Object.freeze({ plan, addon });
   }
 
   async function findSubscriptionByReference(deterministicReference) {
@@ -543,13 +569,12 @@ function createBillingClient(config, {
     return subscription;
   }
 
-  function verifySubscription(subscription, {
+  function verifyPaidSubscription(subscription, {
     customerId,
     deterministicReference,
     selectedPlanCode,
-    evaluation,
+    commercialTerms,
     startsAt,
-    allowedStatuses,
   }) {
     if (!plainObject(subscription)) fail("Billing subscription is unavailable", {
       publicCode: "billing_state_invalid",
@@ -560,76 +585,96 @@ function createBillingClient(config, {
       subscription.customer?.customer_id,
     ].filter((value) => value !== undefined && value !== null && String(value) !== "")
       .map(String);
-    const returnedStartDates = [
+    const originalStartDates = [
       subscription.start_date,
       subscription.starts_at,
-      subscription.current_term_starts_at,
     ].filter((value) => typeof value === "string" && value.length > 0);
+    const expectedStartAt = calendarDate(startsAt);
+    const currentTermValue = subscription.current_term_starts_at;
+    const currentTermStart = currentTermValue === undefined || currentTermValue === null || currentTermValue === ""
+      ? null
+      : calendarDate(currentTermValue);
     const hasNestedCard = plainObject(subscription.card) && Object.keys(subscription.card).length > 0;
     const hasNestedBankAccount = plainObject(subscription.bank_account) &&
       Object.keys(subscription.bank_account).length > 0;
-    if (
-      !Array.isArray(allowedStatuses) || allowedStatuses.length < 1 ||
-      allowedStatuses.some((status) => typeof status !== "string" || !status)
-    ) fail("Billing subscription status boundary is invalid", {
-      publicCode: "configuration_invalid",
-    });
+    const subscriptionPlan = subscription.plan;
+    const subscriptionAddons = subscription.addons;
+    const usageAddon = Array.isArray(subscriptionAddons) && subscriptionAddons.length === 1
+      ? subscriptionAddons[0]
+      : null;
+    const hasCoupon = Boolean(
+      subscription.coupon_id || subscription.coupon_code || subscription.coupon ||
+      (Array.isArray(subscription.coupons) && subscription.coupons.length),
+    );
+    const hasDiscount = Boolean(
+      subscription.discount ||
+      (Array.isArray(subscription.discounts) && subscription.discounts.length),
+    );
     if (
       returnedCustomerIds.length === 0 || returnedCustomerIds.some((value) => value !== customerId) ||
       subscription.reference_id !== deterministicReference ||
-      (subscription.plan?.plan_code ?? subscription.plan_code) !== selectedPlanCode ||
-      !allowedStatuses.includes(subscription.status) ||
+      String(subscription.product_id ?? "") !== config.paidUsageAddonProductId ||
+      !plainObject(subscriptionPlan) || subscriptionPlan.plan_code !== selectedPlanCode ||
+      !Object.hasOwn(config.paidSubscriptionStatusMap, subscription.status) ||
       subscription.auto_collect !== false ||
-      !Array.isArray(subscription.addons) || subscription.addons.length !== 0 ||
+      !plainObject(usageAddon) || usageAddon.addon_code !== config.paidUsageAddonCode ||
+      Number(usageAddon.quantity) !== 1 ||
       subscription.card_id || subscription.payment_method_id || subscription.payment_source_id ||
       subscription.bank_account_id || hasNestedCard || hasNestedBankAccount ||
-      (startsAt && (
-        returnedStartDates.length === 0 || returnedStartDates.some((value) => value !== startsAt)
+      hasCoupon || hasDiscount ||
+      subscription.trial_end || Number(subscription.trial_remaining_days ?? 0) !== 0 ||
+      expectedStartAt === null ||
+      originalStartDates.length === 0 || originalStartDates.some((value) => value !== startsAt) ||
+      (currentTermValue !== undefined && currentTermValue !== null && currentTermValue !== "" && (
+        currentTermStart === null || currentTermStart < expectedStartAt
       ))
     ) fail("Billing subscription violates the approved boundary", {
       ambiguous: true,
       publicCode: "reconciliation_required",
     });
-    if (evaluation) {
-      const amountEvidence = subscription.amount ?? subscription.recurring_price;
-      const setupFeeEvidence = subscription.plan?.setup_fee;
-      const trialDaysEvidence = subscription.plan?.trial_days;
-      const billingCyclesEvidence = subscription.plan?.billing_cycles;
-      if (
-        amountEvidence === undefined || amountEvidence === null || amountEvidence === "" ||
-        setupFeeEvidence === undefined || setupFeeEvidence === null || setupFeeEvidence === "" ||
-        !Number.isInteger(Number(trialDaysEvidence)) ||
-        Number(trialDaysEvidence) !== config.freeTestDurationDays ||
-        !Number.isInteger(Number(billingCyclesEvidence)) ||
-        Number(billingCyclesEvidence) !== 1 ||
-        decimal(amountEvidence, "Evaluation subscription amount") !== 0 ||
-        decimal(setupFeeEvidence, "Evaluation subscription setup fee") !== 0
-      ) fail("Evaluation subscription has financial exposure", {
-        ambiguous: true,
-        publicCode: "reconciliation_required",
-      });
-    }
+    exactMoney(
+      subscriptionPlan.recurring_price ?? subscriptionPlan.price,
+      commercialTerms.recurringMinor,
+      "Subscription recurring price",
+      { ambiguous: true },
+    );
+    exactMoney(
+      subscriptionPlan.setup_fee,
+      commercialTerms.setupMinor,
+      "Subscription setup fee",
+      { ambiguous: true },
+    );
+    exactMoney(
+      usageAddon.price,
+      config.paidCommercialTerms.commonUsageRateMinor,
+      "Subscription connected-minute rate",
+      { ambiguous: true },
+    );
+    if (
+      subscription.currency_code !== config.paidCommercialTerms.currency ||
+      Number(subscriptionPlan.interval) !== config.paidCommercialTerms.interval ||
+      subscriptionPlan.interval_unit !== config.paidCommercialTerms.intervalUnit
+    ) fail("Billing subscription commercial readback is incomplete", {
+      ambiguous: true,
+      publicCode: "reconciliation_required",
+    });
     return subscription;
   }
 
-  async function ensureSubscription({
+  async function ensurePaidSubscription({
     customerId,
     deterministicReference,
     selectedPlanCode,
-    evaluation,
+    commercialTerms,
     subscriptionStartDate,
   }) {
     id(customerId, "Billing customer identifier");
     reference(deterministicReference);
     planCode(selectedPlanCode);
-    const plan = await getPlan(selectedPlanCode);
-    if (evaluation) assertEvaluationPlan(plan);
-    else {
-      assertActivePlan(plan);
-      if (decimal(plan.recurring_price ?? plan.price, "Paid recurring price") <= 0) {
-        fail("Paid plan does not have a positive recurring price", { publicCode: "billing_state_invalid" });
-      }
+    if (!containsCommercialTerms(config.paidCommercialTerms, commercialTerms)) {
+      fail("Paid commercial terms are invalid", { publicCode: "configuration_invalid" });
     }
+    await readPaidCatalog(selectedPlanCode, commercialTerms);
 
     let subscription = await findSubscriptionByReference(deterministicReference);
     if (!subscription) {
@@ -643,111 +688,85 @@ function createBillingClient(config, {
             customer_id: customerId,
             reference_id: deterministicReference,
             auto_collect: false,
-            ...(evaluation ? {} : { starts_at: subscriptionStartDate }),
-            plan: evaluation ? {
-              plan_code: selectedPlanCode,
-              quantity: 1,
-              exclude_setup_fee: true,
-              billing_cycles: 1,
-              trial_days: config.freeTestDurationDays,
-            } : { plan_code: selectedPlanCode, quantity: 1 },
+            starts_at: subscriptionStartDate,
+            plan: { plan_code: selectedPlanCode, quantity: 1 },
+            addons: [{ addon_code: config.paidUsageAddonCode, quantity: 1 }],
           }),
         });
-        if (![200, 201].includes(response.status)) fail(
-          "Billing rejected subscription creation",
-          classifyStatus(response.status, true),
-        );
-      } catch (error) {
-        if (!(error instanceof BillingClientError) || !error.ambiguous) throw error;
+        // A response is not authoritative after a write. The deterministic readback below is.
+        void response;
+      } catch {
+        // The request may have committed. Resolve only through deterministic readback.
       }
-      subscription = await findSubscriptionByReference(deterministicReference);
+      try {
+        subscription = await findSubscriptionByReference(deterministicReference);
+      } catch {
+        fail("Billing subscription post-create readback is unresolved", {
+          ambiguous: true,
+          publicCode: "reconciliation_required",
+        });
+      }
     }
     if (!subscription) fail("Billing subscription creation outcome is unresolved", {
       ambiguous: true,
       publicCode: "reconciliation_required",
     });
     const readback = await getSubscription(subscription.subscription_id);
-    return verifySubscription(readback, {
-      customerId,
-      deterministicReference,
-      selectedPlanCode,
-      evaluation,
-      startsAt: evaluation ? undefined : subscriptionStartDate,
-      allowedStatuses: evaluation ? ["trial"] : ["future", "live"],
-    });
+    try {
+      // A second catalog read detects a plan or meter edit racing the subscription create.
+      await readPaidCatalog(selectedPlanCode, commercialTerms);
+      return verifyPaidSubscription(readback, {
+        customerId,
+        deterministicReference,
+        selectedPlanCode,
+        commercialTerms,
+        startsAt: subscriptionStartDate,
+      });
+    } catch (error) {
+      if (error instanceof BillingClientError && error.ambiguous) throw error;
+      fail("Paid subscription post-create readback requires reconciliation", {
+        ambiguous: true,
+        publicCode: "reconciliation_required",
+      });
+    }
   }
 
-  const ensureEvaluationSubscription = (input) => ensureSubscription({
-    ...input,
-    selectedPlanCode: config.evaluationPlanCode,
-    evaluation: true,
-  });
-  const ensurePaidSubscription = (input) => ensureSubscription({ ...input, evaluation: false });
-
-  async function findVerifiedEvaluationSubscription({ customerId, deterministicReference }) {
+  async function findVerifiedPaidSubscription({
+    customerId,
+    deterministicReference,
+    selectedPlanCode,
+    commercialTerms,
+    subscriptionStartDate,
+  }) {
     const selectedCustomerId = id(customerId, "Billing customer identifier");
     const selectedReference = reference(deterministicReference);
+    planCode(selectedPlanCode);
+    if (!containsCommercialTerms(config.paidCommercialTerms, commercialTerms)) {
+      fail("Paid commercial terms are invalid", { publicCode: "configuration_invalid" });
+    }
+    await readPaidCatalog(selectedPlanCode, commercialTerms);
     const candidate = await findSubscriptionByReference(selectedReference);
     if (!candidate) return null;
     const readback = await getSubscription(candidate.subscription_id);
-    return verifySubscription(readback, {
+    return verifyPaidSubscription(readback, {
       customerId: selectedCustomerId,
       deterministicReference: selectedReference,
-      selectedPlanCode: config.evaluationPlanCode,
-      evaluation: true,
-      allowedStatuses: ["trial", "live", "cancelled", "expired", "trial_expired"],
-    });
-  }
-
-  async function cancelEvaluation({ subscriptionId, customerId, deterministicReference }) {
-    const selectedId = id(subscriptionId, "Billing subscription identifier");
-    const selectedCustomerId = id(customerId, "Billing customer identifier");
-    const selectedReference = reference(deterministicReference);
-    const terminalStatuses = ["cancelled", "expired", "trial_expired"];
-    const before = await getSubscription(selectedId);
-    verifySubscription(before, {
-      customerId: selectedCustomerId,
-      deterministicReference: selectedReference,
-      selectedPlanCode: config.evaluationPlanCode,
-      evaluation: true,
-      allowedStatuses: ["trial", "live", ...terminalStatuses],
-    });
-    if (terminalStatuses.includes(before.status)) return before;
-    try {
-      const response = await authorizedRequest(`/subscriptions/${selectedId}/cancel`, {
-        method: "POST",
-        write: true,
-        sideEffecting: true,
-        query: { cancel_at_end: "false" },
-        headers: { Accept: "application/json" },
-      });
-      if (![200, 201].includes(response.status)) fail(
-        "Billing rejected evaluation cancellation",
-        classifyStatus(response.status, true),
-      );
-    } catch (error) {
-      if (!(error instanceof BillingClientError) || !error.ambiguous) throw error;
-    }
-    const readback = await getSubscription(selectedId);
-    return verifySubscription(readback, {
-      customerId: selectedCustomerId,
-      deterministicReference: selectedReference,
-      selectedPlanCode: config.evaluationPlanCode,
-      evaluation: true,
-      allowedStatuses: terminalStatuses,
+      selectedPlanCode,
+      commercialTerms,
+      startsAt: subscriptionStartDate,
     });
   }
 
   return Object.freeze({
-    cancelEvaluation,
     ensureCustomer,
-    ensureEvaluationSubscription,
     ensurePaidSubscription,
     findCustomerByCrmReference,
     findSubscriptionByReference,
-    findVerifiedEvaluationSubscription,
+    findVerifiedPaidSubscription,
+    getAddon,
     getPlan,
     getSubscription,
+    readPaidCatalog,
   });
 }
 

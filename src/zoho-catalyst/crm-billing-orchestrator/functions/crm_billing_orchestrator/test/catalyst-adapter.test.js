@@ -29,7 +29,7 @@ function responseCapture() {
 
 function requestFor(environment = baseEnvironment(), overrides = {}) {
   const body = JSON.stringify({
-    schemaVersion: "crm-billing-lifecycle-v1",
+    schemaVersion: "crm-billing-lifecycle-v2",
     action: "reconcile",
     dealId: "100000000000001",
   });

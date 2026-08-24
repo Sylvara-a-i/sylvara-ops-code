@@ -8,6 +8,7 @@ const crypto = require("node:crypto");
 // into an authorization or bearer-token exfiltration primitive.
 const APPROVED_CRM_API_HOSTS = Object.freeze(["www.zohoapis.com"]);
 const APPROVED_FORMS_PUBLIC_HOSTS = Object.freeze(["forms.zohopublic.com"]);
+const CATALYST_DEVELOPMENT_HOST_PATTERN = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+development\.(?:catalystserverless|zohocatalyst)\.(?:com|in|eu|ca|com\.au)$/;
 
 function isApprovedCrmApiHostname(hostname) {
   return APPROVED_CRM_API_HOSTS.includes(hostname);
@@ -15,6 +16,10 @@ function isApprovedCrmApiHostname(hostname) {
 
 function isApprovedFormsPublicHostname(hostname) {
   return APPROVED_FORMS_PUBLIC_HOSTS.includes(hostname);
+}
+
+function isApprovedCatalystDevelopmentHostname(hostname) {
+  return CATALYST_DEVELOPMENT_HOST_PATTERN.test(hostname ?? "");
 }
 
 function normalizeApprovedFormUrl(raw) {
@@ -63,6 +68,7 @@ function isArtifactBoundFormUrl(raw, approvedDigest) {
 module.exports = {
   APPROVED_CRM_API_HOSTS,
   APPROVED_FORMS_PUBLIC_HOSTS,
+  isApprovedCatalystDevelopmentHostname,
   destinationDigest,
   isApprovedCrmApiHostname,
   isApprovedFormsPublicHostname,

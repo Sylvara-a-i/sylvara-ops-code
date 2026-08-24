@@ -1,36 +1,25 @@
 "use strict";
 
-const TOKEN_HASH_PATTERN = /^[a-f0-9]{64}$/;
+const HASH_PATTERN = /^[a-f0-9]{64}$/;
 const RECORD_ID_PATTERN = /^[1-9][0-9]{9,29}$/;
 const ROW_ID_PATTERN = /^[0-9]{1,30}$/;
 const PROOF_KEYS = new Set([
   "status",
+  "proofKey",
   "sessionRowId",
-  "tokenHash",
-  "crmContactId",
-  "crmAccountId",
-  "crmDealId",
-  "emailOtpVerifiedAt",
-  "captchaVerifiedAt",
+  "bindingDigest",
+  "destinationDigest",
   "verifiedAt",
   "expiresAt",
 ]);
 
 class VerificationProofError extends Error {
-  constructor(message = "All verification factors are required") {
+  constructor(message = "Verified email access is required") {
     super(message);
     this.name = "VerificationProofError";
     this.publicCode = "verification_required";
     this.status = 403;
   }
-}
-
-function deny() {
-  throw new VerificationProofError();
-}
-
-function createDenyAllVerificationProofStore() {
-  return Object.freeze({ readAllFactorsVerifiedProof: deny });
 }
 
 function exactPlainObject(value, keys) {
@@ -54,6 +43,7 @@ function parseInstant(value) {
 function validBinding(binding, nowMs) {
   return exactPlainObject(binding, new Set([
     "sessionRowId",
+    "issueRequestKey",
     "tokenHash",
     "crmContactId",
     "crmAccountId",
@@ -62,7 +52,8 @@ function validBinding(binding, nowMs) {
     "expiresAt",
   ])) &&
     ROW_ID_PATTERN.test(String(binding.sessionRowId ?? "")) &&
-    TOKEN_HASH_PATTERN.test(binding.tokenHash ?? "") &&
+    HASH_PATTERN.test(binding.issueRequestKey ?? "") &&
+    HASH_PATTERN.test(binding.tokenHash ?? "") &&
     RECORD_ID_PATTERN.test(binding.crmContactId ?? "") &&
     RECORD_ID_PATTERN.test(binding.crmAccountId ?? "") &&
     RECORD_ID_PATTERN.test(binding.crmDealId ?? "") &&
@@ -74,49 +65,39 @@ function validBinding(binding, nowMs) {
 
 function validProof(proof, binding, nowMs) {
   if (!exactPlainObject(proof, PROOF_KEYS)) return false;
-  if (
-    proof.status !== "all_factors_verified" ||
-    String(proof.sessionRowId) !== String(binding.sessionRowId) ||
-    proof.tokenHash !== binding.tokenHash ||
-    proof.crmContactId !== binding.crmContactId ||
-    proof.crmAccountId !== binding.crmAccountId ||
-    proof.crmDealId !== binding.crmDealId
-  ) {
-    return false;
-  }
-  const issuedAtMs = parseInstant(binding.issuedAt);
-  const sessionExpiresAtMs = parseInstant(binding.expiresAt);
-  const factorInstants = [
-    parseInstant(proof.emailOtpVerifiedAt),
-    parseInstant(proof.captchaVerifiedAt),
-  ];
   const verifiedAtMs = parseInstant(proof.verifiedAt);
   const expiresAtMs = parseInstant(proof.expiresAt);
-  return factorInstants.every(
-    (instant) => Number.isFinite(instant) && instant >= issuedAtMs && instant <= verifiedAtMs,
-  ) &&
+  return proof.status === "consumed" &&
+    String(proof.sessionRowId) === String(binding.sessionRowId) &&
+    HASH_PATTERN.test(proof.proofKey ?? "") &&
+    HASH_PATTERN.test(proof.bindingDigest ?? "") &&
+    HASH_PATTERN.test(proof.destinationDigest ?? "") &&
     Number.isFinite(verifiedAtMs) &&
-    verifiedAtMs >= Math.max(...factorInstants) &&
+    verifiedAtMs >= parseInstant(binding.issuedAt) &&
     verifiedAtMs <= nowMs &&
     Number.isFinite(expiresAtMs) &&
-    expiresAtMs > nowMs &&
-    expiresAtMs <= sessionExpiresAtMs;
+    verifiedAtMs <= expiresAtMs &&
+    expiresAtMs <= parseInstant(binding.expiresAt);
 }
 
-async function requireAllFactorsVerified(store, binding, nowMs) {
+async function requireEmailOtpVerified(service, binding, destinationEmail, nowMs) {
   if (
-    typeof store?.readAllFactorsVerifiedProof !== "function" ||
-    !validBinding(binding, nowMs)
+    typeof service?.consumeVerifiedProof !== "function" ||
+    !validBinding(binding, nowMs) ||
+    typeof destinationEmail !== "string"
   ) {
     throw new VerificationProofError();
   }
-  const proof = await store.readAllFactorsVerifiedProof(Object.freeze({ ...binding }));
+  const proof = await service.consumeVerifiedProof(
+    Object.freeze({ ...binding }),
+    destinationEmail,
+    nowMs,
+  );
   if (!validProof(proof, binding, nowMs)) throw new VerificationProofError();
   return Object.freeze({ ...proof });
 }
 
 module.exports = {
   VerificationProofError,
-  createDenyAllVerificationProofStore,
-  requireAllFactorsVerified,
+  requireEmailOtpVerified,
 };

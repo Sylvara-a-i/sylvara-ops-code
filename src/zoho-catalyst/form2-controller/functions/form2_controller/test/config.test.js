@@ -5,6 +5,7 @@ const test = require("node:test");
 const { brotliCompressSync } = require("node:zlib");
 const {
   ConfigurationError,
+  FORM2_SESSION_TABLE_NAME,
   NUMERIC_LIMITS,
   PRIVATE_CHOICE_LIMITS,
   loadConfig,
@@ -30,10 +31,14 @@ function compressedChoices(choices) {
 function baseEnvironment(overrides = {}) {
   return {
     DEPLOYMENT_ENVIRONMENT: "development",
-    SESSION_TABLE_NAME: "Form2_Sessions",
-    PREFILL_TABLE_NAME: "Form2_Prefills",
-    SUBMISSION_TABLE_NAME: "Form2_Submissions",
+    SESSION_TABLE_NAME: FORM2_SESSION_TABLE_NAME,
+    PREFILL_TABLE_NAME: "Form2_Prefills_V3",
+    SUBMISSION_TABLE_NAME: "Form2_Submissions_V3",
+    FORM2_PROOF_TABLE_NAME: "Form2_Proofs_V3",
     ISSUE_PATH: "/form2/session/issue",
+    FORM2_ACCESS_PATH: "/form2/session/access",
+    FORM2_OTP_REQUEST_PATH: "/form2/session/otp/request",
+    FORM2_OTP_VERIFY_PATH: "/form2/session/otp/verify",
     PREFILL_PATH: "/form2/session/prefill",
     SUBMISSION_PATH: "/form2/session/submit",
     ISSUE_HEADER_NAME: "x-sylvara-issue-key",
@@ -42,7 +47,13 @@ function baseEnvironment(overrides = {}) {
     PREFILL_HEADER_SECRET: "F".repeat(43),
     SUBMISSION_HEADER_SECRET: "S".repeat(43),
     TOKEN_PEPPER: "P".repeat(43),
+    FORM2_PROOF_HMAC_SECRET: "V".repeat(43),
+    FORM2_ACCESS_PUBLIC_URL: "https://synthetic.development.catalystserverless.com/form2/session/access",
     FORM2_PUBLIC_URL,
+    FORM2_PROOF_MODE: "stub",
+    FORM2_MAIL_FROM: "synthetic@example.invalid",
+    FORM2_PROOF_ALLOWED_RECIPIENT_DIGESTS: "[]",
+    FORM2_PROOF_TEMPLATE_VERSION: "email-otp-v1",
     FORM2_TOKEN_FIELD_ALIAS: "access_token",
     FORM2_FORM_VERSION: "form2-v1",
     FORM2_ENTRY_OFFER_VALUE: "Synthetic Free Test",
@@ -72,10 +83,18 @@ function load(environment = baseEnvironment()) {
 test("loads an immutable Development-only configuration with bounded defaults", () => {
   const config = load();
   assert.equal(config.deploymentEnvironment, "development");
-  assert.equal(config.prefillTableName, "Form2_Prefills");
+  assert.equal(config.sessionTableName, FORM2_SESSION_TABLE_NAME);
+  assert.equal(config.prefillTableName, "Form2_Prefills_V3");
   assert.equal(config.sessionTtlSeconds, 3600);
   assert.equal(config.verifiedSessionTtlSeconds, 1800);
   assert.equal(config.maxVerificationAttempts, 3);
+  assert.equal(config.form2ProofTtlSeconds, 600);
+  assert.equal(config.form2ProofMaxAttempts, 5);
+  assert.equal(config.form2ProofMaxSends, 3);
+  assert.deepEqual(config.form2ProofAllowedRecipientDigests, []);
+  assert.ok(Object.isFrozen(config.form2ProofAllowedRecipientDigests));
+  assert.equal(config.form2ProofResendCooldownSeconds, 60);
+  assert.equal(config.form2ProofSendLeaseSeconds, 30);
   assert.equal(config.maxSubmissionAttempts, 3);
   assert.equal(config.maxBodyBytes, 32768);
   assert.equal(config.outboundMaxBytes, 131072);
@@ -98,6 +117,27 @@ test("loads an immutable Development-only configuration with bounded defaults", 
   });
   assert.ok(Object.isFrozen(config.form2AccessStatuses));
   assert.ok(Object.isFrozen(config));
+});
+
+test("Development proof delivery requires a bounded private recipient digest allowlist", () => {
+  const approvedDigest = "a".repeat(64);
+  const config = load(baseEnvironment({
+    FORM2_PROOF_MODE: "send_development",
+    FORM2_PROOF_ALLOWED_RECIPIENT_DIGESTS: JSON.stringify([approvedDigest]),
+  }));
+  assert.deepEqual(config.form2ProofAllowedRecipientDigests, [approvedDigest]);
+  for (const value of [
+    "[]",
+    '["not-a-digest"]',
+    JSON.stringify([approvedDigest, approvedDigest]),
+    JSON.stringify(Array.from({ length: 17 }, (_, index) =>
+      index.toString(16).padStart(64, "0"))),
+  ]) {
+    assert.throws(() => load(baseEnvironment({
+      FORM2_PROOF_MODE: "send_development",
+      FORM2_PROOF_ALLOWED_RECIPIENT_DIGESTS: value,
+    })), ConfigurationError);
+  }
 });
 
 test("accepts the 207-provider catalog and rejects growth above the reviewed bound", () => {
@@ -164,16 +204,20 @@ test("hard-blocks every environment other than exact Development", () => {
 
 test("requires separate safe Data Store table identifiers", () => {
   for (const overrides of [
+    { FORM2_ACCESS_PUBLIC_URL: "https://controller.example.invalid/form2/session/access" },
+    { FORM2_ACCESS_PUBLIC_URL: "https://synthetic.catalystserverless.com/form2/session/access" },
+    { FORM2_ACCESS_PUBLIC_URL: "https://synthetic.development.catalystserverless.com/form2/session/other" },
     { SESSION_TABLE_NAME: "unsafe-name" },
-    { PREFILL_TABLE_NAME: "Form2_Sessions" },
-    { SUBMISSION_TABLE_NAME: "Form2_Prefills" },
+    { SESSION_TABLE_NAME: "Form2_Sessions" },
+    { SESSION_TABLE_NAME: "Form2SessionsV3" },
+    { SUBMISSION_TABLE_NAME: "Form2_Prefills_V3" },
     { PREFILL_TABLE_NAME: "" },
   ]) {
     assert.throws(() => load(baseEnvironment(overrides)), ConfigurationError);
   }
 });
 
-test("requires three unique exact routes and isolated custom-header names", () => {
+test("requires six unique exact routes and isolated custom-header names", () => {
   for (const overrides of [
     { ISSUE_PATH: "/form2/session/prefill" },
     { PREFILL_PATH: "form2/session/prefill" },
@@ -256,6 +300,12 @@ test("parses all numeric controls as strict bounded base-10 integers", () => {
       SESSION_TTL_SECONDS: "sessionTtlSeconds",
       VERIFIED_SESSION_TTL_SECONDS: "verifiedSessionTtlSeconds",
       MAX_VERIFICATION_ATTEMPTS: "maxVerificationAttempts",
+      FORM2_PROOF_TTL_SECONDS: "form2ProofTtlSeconds",
+      FORM2_PROOF_MAX_ATTEMPTS: "form2ProofMaxAttempts",
+      FORM2_PROOF_MAX_SENDS: "form2ProofMaxSends",
+      FORM2_PROOF_RESEND_COOLDOWN_SECONDS: "form2ProofResendCooldownSeconds",
+      FORM2_PROOF_SEND_LEASE_SECONDS: "form2ProofSendLeaseSeconds",
+      FORM2_MAIL_TIMEOUT_MS: "form2MailTimeoutMs",
       MAX_SUBMISSION_ATTEMPTS: "maxSubmissionAttempts",
       MAX_BODY_BYTES: "maxBodyBytes",
       INBOUND_BODY_TIMEOUT_MS: "inboundBodyTimeoutMs",

@@ -1,8 +1,8 @@
 "use strict";
 
-// A CODEOWNERS-reviewed source change must replace this sentinel with the
-// SHA-256 of the one approved normalized Zoho Forms URL. The deploy script may
-// verify this value but must never derive or stamp it from runtime input.
+// The reviewed Development deploy script replaces this sentinel only in its
+// isolated temporary artifact. A checkout or manually packaged function stays
+// unstamped and therefore fails closed before reaching CRM or Data Store.
 const ARTIFACT_FORM_DESTINATION_SHA256 =
   "__SYLVARA_UNSTAMPED_FORM_DESTINATION_SHA256__";
 

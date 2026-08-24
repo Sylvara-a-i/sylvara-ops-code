@@ -3,6 +3,7 @@
 const { brotliDecompressSync } = require("node:zlib");
 
 const {
+  isApprovedCatalystDevelopmentHostname,
   isApprovedCrmApiHostname,
   isArtifactBoundFormUrl,
 } = require("./destinations");
@@ -31,6 +32,8 @@ const SOURCE_REVISION_PATTERN = /^[a-f0-9]{40}$/;
 const COMPRESSED_CHOICE_PREFIX = "br:";
 const MAX_COMPRESSED_CHOICE_CHARS = 4096;
 const MAX_DECOMPRESSED_CHOICE_BYTES = 32768;
+const FORM2_SESSION_TABLE_NAME = "Form2SessionsV3Runtime";
+const MAX_PROOF_ALLOWED_RECIPIENT_DIGESTS = 16;
 
 const NUMERIC_LIMITS = Object.freeze({
   // Invitation lifetime. The first successful verification replaces this
@@ -46,6 +49,20 @@ const NUMERIC_LIMITS = Object.freeze({
   // Two attempts preserve one bounded retry if prefill persistence fails after
   // the first successful verification transition.
   MAX_VERIFICATION_ATTEMPTS: Object.freeze({ fallback: 3, minimum: 2, maximum: 10 }),
+  FORM2_PROOF_TTL_SECONDS: Object.freeze({ fallback: 600, minimum: 300, maximum: 900 }),
+  FORM2_PROOF_MAX_ATTEMPTS: Object.freeze({ fallback: 5, minimum: 2, maximum: 10 }),
+  FORM2_PROOF_MAX_SENDS: Object.freeze({ fallback: 3, minimum: 1, maximum: 5 }),
+  FORM2_PROOF_RESEND_COOLDOWN_SECONDS: Object.freeze({
+    fallback: 60,
+    minimum: 30,
+    maximum: 300,
+  }),
+  FORM2_PROOF_SEND_LEASE_SECONDS: Object.freeze({
+    fallback: 30,
+    minimum: 10,
+    maximum: 120,
+  }),
+  FORM2_MAIL_TIMEOUT_MS: Object.freeze({ fallback: 5000, minimum: 250, maximum: 15000 }),
   MAX_SUBMISSION_ATTEMPTS: Object.freeze({ fallback: 3, minimum: 1, maximum: 10 }),
   MAX_BODY_BYTES: Object.freeze({ fallback: 32768, minimum: 1024, maximum: 262144 }),
   INBOUND_BODY_TIMEOUT_MS: Object.freeze({ fallback: 5000, minimum: 250, maximum: 15000 }),
@@ -100,6 +117,24 @@ function validateIdentifier(value, name) {
     throw new ConfigurationError(`${name} must be a safe platform identifier`);
   }
   return value;
+}
+
+function validateAdditiveV3Table(value, name) {
+  const selected = validateIdentifier(value, name);
+  if (!selected.endsWith("V3")) {
+    throw new ConfigurationError(`${name} must identify an additive version-3 table`);
+  }
+  return selected;
+}
+
+function validateSessionV3Table(value) {
+  const selected = validateIdentifier(value, "SESSION_TABLE_NAME");
+  if (selected !== FORM2_SESSION_TABLE_NAME) {
+    throw new ConfigurationError(
+      `SESSION_TABLE_NAME must be the reviewed ${FORM2_SESSION_TABLE_NAME} table`,
+    );
+  }
+  return selected;
 }
 
 function validateConnectionLinkName(value, name) {
@@ -204,6 +239,25 @@ function validateFormVersion(value) {
   return value;
 }
 
+function validateTemplateVersion(value) {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(value)) {
+    throw new ConfigurationError("FORM2_PROOF_TEMPLATE_VERSION has an invalid format");
+  }
+  return value;
+}
+
+function validateEmailAddress(value, name) {
+  if (
+    value.length > 254 ||
+    value !== value.trim() ||
+    /[\u0000-\u001f\u007f\s]/.test(value) ||
+    !/^[^@]+@[^@]+\.[^@]+$/.test(value)
+  ) {
+    throw new ConfigurationError(`${name} must be one bounded email address`);
+  }
+  return value;
+}
+
 function validateBoundedBusinessValue(value, name) {
   if (
     [...value].length > 120 ||
@@ -283,6 +337,27 @@ function parsePrivateChoiceList(
   return Object.freeze(choices);
 }
 
+function parseProofRecipientDigestAllowlist(environment) {
+  const name = "FORM2_PROOF_ALLOWED_RECIPIENT_DIGESTS";
+  let parsed;
+  try {
+    parsed = JSON.parse(readRequired(environment, name));
+  } catch (error) {
+    if (error instanceof ConfigurationError) throw error;
+    throw new ConfigurationError(`${name} must be a JSON array`);
+  }
+  if (!Array.isArray(parsed) || parsed.length > MAX_PROOF_ALLOWED_RECIPIENT_DIGESTS) {
+    throw new ConfigurationError(
+      `${name} must contain at most ${MAX_PROOF_ALLOWED_RECIPIENT_DIGESTS} digests`,
+    );
+  }
+  if (parsed.some((entry) => typeof entry !== "string" || !/^[a-f0-9]{64}$/.test(entry))) {
+    throw new ConfigurationError(`${name} contains an invalid digest`);
+  }
+  assertUnique(parsed, `${name} contains duplicate digests`);
+  return Object.freeze(parsed);
+}
+
 function assertUnique(values, message) {
   if (new Set(values).size !== values.length) {
     throw new ConfigurationError(message);
@@ -303,21 +378,24 @@ function loadConfig(
     );
   }
 
-  const sessionTableName = validateIdentifier(
+  const sessionTableName = validateSessionV3Table(
     readRequired(environment, "SESSION_TABLE_NAME"),
-    "SESSION_TABLE_NAME",
   );
-  const prefillTableName = validateIdentifier(
+  const prefillTableName = validateAdditiveV3Table(
     readRequired(environment, "PREFILL_TABLE_NAME"),
     "PREFILL_TABLE_NAME",
   );
-  const submissionTableName = validateIdentifier(
+  const submissionTableName = validateAdditiveV3Table(
     readRequired(environment, "SUBMISSION_TABLE_NAME"),
     "SUBMISSION_TABLE_NAME",
   );
+  const proofTableName = validateAdditiveV3Table(
+    readRequired(environment, "FORM2_PROOF_TABLE_NAME"),
+    "FORM2_PROOF_TABLE_NAME",
+  );
   assertUnique(
-    [sessionTableName, prefillTableName, submissionTableName],
-    "Session, prefill, and submission table names must be different",
+    [sessionTableName, prefillTableName, submissionTableName, proofTableName],
+    "Session, prefill, submission, and proof table names must be different",
   );
 
   const issuePath = validatePath(readRequired(environment, "ISSUE_PATH"), "ISSUE_PATH");
@@ -326,9 +404,21 @@ function loadConfig(
     readRequired(environment, "SUBMISSION_PATH"),
     "SUBMISSION_PATH",
   );
+  const accessPath = validatePath(
+    readRequired(environment, "FORM2_ACCESS_PATH"),
+    "FORM2_ACCESS_PATH",
+  );
+  const otpRequestPath = validatePath(
+    readRequired(environment, "FORM2_OTP_REQUEST_PATH"),
+    "FORM2_OTP_REQUEST_PATH",
+  );
+  const otpVerifyPath = validatePath(
+    readRequired(environment, "FORM2_OTP_VERIFY_PATH"),
+    "FORM2_OTP_VERIFY_PATH",
+  );
   assertUnique(
-    [issuePath, prefillPath, submissionPath],
-    "ISSUE_PATH, PREFILL_PATH, and SUBMISSION_PATH must be unique",
+    [issuePath, accessPath, otpRequestPath, otpVerifyPath, prefillPath, submissionPath],
+    "Every Form 2 route path must be unique",
   );
 
   const issueHeaderName = validateHeaderName(
@@ -360,10 +450,31 @@ function loadConfig(
     readRequired(environment, "SUBMISSION_HEADER_SECRET"),
     "SUBMISSION_HEADER_SECRET",
   );
-  assertUnique(
-    [tokenPepper, issueHeaderSecret, prefillHeaderSecret, submissionHeaderSecret],
-    "TOKEN_PEPPER and route secrets must be independently generated",
+  const proofHmacMaterial = validateSecret(
+    readRequired(environment, "FORM2_PROOF_HMAC_SECRET"),
+    "FORM2_PROOF_HMAC_SECRET",
   );
+  assertUnique(
+    [
+      tokenPepper,
+      issueHeaderSecret,
+      prefillHeaderSecret,
+      submissionHeaderSecret,
+      proofHmacMaterial,
+    ],
+    "TOKEN_PEPPER, proof HMAC secret, and route secrets must be independently generated",
+  );
+
+  const proofMode = readRequired(environment, "FORM2_PROOF_MODE");
+  if (!new Set(["stub", "send_development"]).has(proofMode)) {
+    throw new ConfigurationError("FORM2_PROOF_MODE must be stub or send_development");
+  }
+  const proofAllowedRecipientDigests = parseProofRecipientDigestAllowlist(environment);
+  if (proofMode === "send_development" && proofAllowedRecipientDigests.length === 0) {
+    throw new ConfigurationError(
+      "FORM2_PROOF_ALLOWED_RECIPIENT_DIGESTS must approve at least one Development recipient before sending",
+    );
+  }
 
   const crmReadConnectionLinkName = validateConnectionLinkName(
     readRequired(environment, "CRM_READ_CONNECTION_LINK_NAME"),
@@ -424,7 +535,11 @@ function loadConfig(
     sessionTableName,
     prefillTableName,
     submissionTableName,
+    proofTableName,
     issuePath,
+    accessPath,
+    otpRequestPath,
+    otpVerifyPath,
     prefillPath,
     submissionPath,
     issueHeaderName,
@@ -433,6 +548,29 @@ function loadConfig(
     issueHeaderSecret,
     prefillHeaderSecret,
     submissionHeaderSecret,
+    proofHmacSecret: proofHmacMaterial,
+    proofMode,
+    form2ProofAllowedRecipientDigests: proofAllowedRecipientDigests,
+    form2AccessPublicUrl: (() => {
+      const value = readRequired(environment, "FORM2_ACCESS_PUBLIC_URL");
+      const parsed = parseHttpsUrl(value, "FORM2_ACCESS_PUBLIC_URL");
+      if (
+        !isApprovedCatalystDevelopmentHostname(parsed.hostname) ||
+        parsed.pathname !== accessPath
+      ) {
+        throw new ConfigurationError(
+          "FORM2_ACCESS_PUBLIC_URL must use an approved Catalyst Development host and path",
+        );
+      }
+      return value;
+    })(),
+    form2MailFrom: validateEmailAddress(
+      readRequired(environment, "FORM2_MAIL_FROM"),
+      "FORM2_MAIL_FROM",
+    ),
+    form2ProofTemplateVersion: validateTemplateVersion(
+      readRequired(environment, "FORM2_PROOF_TEMPLATE_VERSION"),
+    ),
     form2PublicUrl: validatePublicFormUrl(
       readRequired(environment, "FORM2_PUBLIC_URL"),
       artifactFormDestinationSha256,
@@ -473,6 +611,21 @@ function loadConfig(
       environment,
       "MAX_VERIFICATION_ATTEMPTS",
     ),
+    form2ProofTtlSeconds: parseBoundedInteger(environment, "FORM2_PROOF_TTL_SECONDS"),
+    form2ProofMaxAttempts: parseBoundedInteger(
+      environment,
+      "FORM2_PROOF_MAX_ATTEMPTS",
+    ),
+    form2ProofMaxSends: parseBoundedInteger(environment, "FORM2_PROOF_MAX_SENDS"),
+    form2ProofResendCooldownSeconds: parseBoundedInteger(
+      environment,
+      "FORM2_PROOF_RESEND_COOLDOWN_SECONDS",
+    ),
+    form2ProofSendLeaseSeconds: parseBoundedInteger(
+      environment,
+      "FORM2_PROOF_SEND_LEASE_SECONDS",
+    ),
+    form2MailTimeoutMs: parseBoundedInteger(environment, "FORM2_MAIL_TIMEOUT_MS"),
     maxSubmissionAttempts: parseBoundedInteger(environment, "MAX_SUBMISSION_ATTEMPTS"),
     maxBodyBytes: parseBoundedInteger(environment, "MAX_BODY_BYTES"),
     inboundBodyTimeoutMs: parseBoundedInteger(environment, "INBOUND_BODY_TIMEOUT_MS"),
@@ -489,6 +642,7 @@ function loadConfig(
 }
 
 module.exports = {
+  FORM2_SESSION_TABLE_NAME,
   ConfigurationError,
   NUMERIC_LIMITS,
   PRIVATE_CHOICE_LIMITS,

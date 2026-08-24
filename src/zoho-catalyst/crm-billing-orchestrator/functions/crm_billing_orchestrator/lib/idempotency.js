@@ -71,6 +71,9 @@ function deriveScopedIdentity(config, action, scopeId, material, referencePrefix
     throw new IdempotencyError("Operation identity input is invalid", "operation_invalid");
   }
   const canonical = canonicalMaterial(material);
+  // The durable key and Billing reference intentionally exclude mutable acceptance and
+  // commercial fields. Those fields live in the immutable fingerprint, so a changed
+  // acceptance conflicts with the same unique operation instead of creating a second reference.
   const stableIdentity = `${config.deploymentEnvironment}\0${scopeId}\0${action}`;
   const key = crypto.createHmac("sha256", config.idempotencyPepper)
     .update(`operation\0${stableIdentity}`)
@@ -89,11 +92,7 @@ function deriveOperationIdentity(config, action, dealId, material) {
   if (!ACTION_SET.has(action)) {
     throw new IdempotencyError("Operation identity input is invalid", "operation_invalid");
   }
-  const referencePrefix = action === "start_evaluation"
-    ? "syl-evaluation-"
-    : action === "prepare_paid_subscription"
-      ? "syl-paid-"
-      : null;
+  const referencePrefix = action === "prepare_paid_subscription" ? "syl-paid-" : null;
   return deriveScopedIdentity(config, action, dealId, material, referencePrefix);
 }
 
@@ -135,7 +134,7 @@ function createOperationStore(app, config) {
   async function readByKey(operationKey) {
     if (!HASH.test(operationKey)) throw new IdempotencyError("Operation key is invalid");
     return query(
-      `SELECT ROWID, OPERATION_KEY, OPERATION_FINGERPRINT, ACTION, CRM_DEAL_ID, STATUS, LAST_OUTCOME FROM ${config.operationTable} WHERE OPERATION_KEY = '${operationKey}'`,
+      `SELECT ROWID, OPERATION_KEY, OPERATION_FINGERPRINT, ACTION, CRM_DEAL_ID, STATUS, SOURCE_REVISION, SOURCE_ENVIRONMENT, LAST_OUTCOME FROM ${config.operationTable} WHERE OPERATION_KEY = '${operationKey}'`,
     );
   }
 
@@ -184,6 +183,10 @@ function createOperationStore(app, config) {
     return Object.freeze({
       outcome: existing.STATUS === "completed" ? "duplicate-completed" : "duplicate-unresolved",
       rowId: rowId(existing.ROWID),
+      status: existing.STATUS,
+      lastOutcome: existing.LAST_OUTCOME,
+      sourceEnvironment: existing.SOURCE_ENVIRONMENT,
+      sourceRevision: existing.SOURCE_REVISION,
     });
   }
 

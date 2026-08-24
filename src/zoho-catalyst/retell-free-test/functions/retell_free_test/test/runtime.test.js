@@ -12,6 +12,18 @@ const {
   environment, payloadInbound, eventPayload, retryJobRequest, retryJobContext, invoke, runtimeFixture,
 } = require('./runtime-fixture');
 
+function downgradeCanonicalCallToV1(call) {
+  const legacy = JSON.parse(call.CANONICAL_CALL_JSON);
+  legacy.schemaVersion = 1;
+  delete legacy.durationMs;
+  delete legacy.bookableOpportunity;
+  delete legacy.officeFollowUpRequired;
+  delete legacy.workflowFailureCode;
+  delete legacy.workflowFailureText;
+  if (legacy.value) delete legacy.value.source;
+  call.CANONICAL_CALL_JSON = JSON.stringify(legacy);
+}
+
 test('integration: Catalyst adapter uses allowlisted ZCQL and unique insert readback', async () => {
   const config = loadConfig(environment());
   const statements = [];
@@ -158,6 +170,8 @@ test('integration: ended/analyzed convergence counts once, records one dry-run n
   const deployment = fixture.store.rows.get('FreeTestDeployments').find((row) => row.CLIENT_ID === 'client_A');
   assert.equal(calls.length, 1);
   assert.equal(calls[0].PROCESSING_STATE, 'Completed');
+  assert.equal(JSON.parse(calls[0].CANONICAL_CALL_JSON).schemaVersion, 2);
+  assert.equal(JSON.parse(calls[0].CANONICAL_CALL_JSON).durationMs, 60_000);
   assert.equal(deployment.HANDLED_COUNT, 1);
   assert.equal(notifications.length, 1);
   assert.equal(notifications[0].STATUS, 'DryRunRecorded');
@@ -188,6 +202,163 @@ test('integration: conflicting lifecycle timestamps are quarantined without rewr
   assert.equal(fixture.store.rows.get('FreeTestDeployments')[0].HANDLED_COUNT, countBefore);
   assert.equal(fixture.store.rows.get('FreeTestNotifications').length, 0);
   assert.equal(fixture.store.rows.get('FreeTestRetellEventReceipts').at(-1).STATUS, 'TerminalFailure');
+});
+
+test('integration: authoritative Retell duration converges across event order and conflicts fail closed', async () => {
+  const fixture = runtimeFixture();
+  const inbound = await invoke(fixture.listener, { url: '/retell/inbound',
+    payload: payloadInbound('A'), env: fixture.env });
+  const metadata = inbound.body.call_inbound.metadata;
+
+  const analyzedFirst = eventPayload('call_analyzed', 'duration_analyzed_first_A', metadata, 'A');
+  const endedSecond = eventPayload('call_ended', 'duration_analyzed_first_A', metadata, 'A');
+  analyzedFirst.call.duration_ms = 45_000;
+  endedSecond.call.duration_ms = 45_000;
+  assert.equal((await invoke(fixture.listener, { url: '/retell/events',
+    payload: analyzedFirst, env: fixture.env })).status, 200);
+  assert.equal((await invoke(fixture.listener, { url: '/retell/events',
+    payload: endedSecond, env: fixture.env })).status, 200);
+
+  const endedFirst = eventPayload('call_ended', 'duration_ended_first_A', metadata, 'A');
+  const analyzedSecond = eventPayload('call_analyzed', 'duration_ended_first_A', metadata, 'A');
+  endedFirst.call.duration_ms = 30_000;
+  analyzedSecond.call.duration_ms = 30_000;
+  assert.equal((await invoke(fixture.listener, { url: '/retell/events',
+    payload: endedFirst, env: fixture.env })).status, 200);
+  assert.equal((await invoke(fixture.listener, { url: '/retell/events',
+    payload: analyzedSecond, env: fixture.env })).status, 200);
+
+  const calls = fixture.store.rows.get('FreeTestCalls');
+  assert.deepEqual(calls.map((row) => JSON.parse(row.CANONICAL_CALL_JSON).durationMs).sort(),
+    [30_000, 45_000]);
+  const beforeConflict = structuredClone(calls.find((row) => JSON.parse(row.CANONICAL_CALL_JSON)
+    .durationMs === 45_000));
+  const conflict = eventPayload('call_analyzed', 'duration_analyzed_first_A', metadata, 'A');
+  conflict.call.duration_ms = 46_000;
+  const rejected = await invoke(fixture.listener, { url: '/retell/events',
+    payload: conflict, env: fixture.env });
+  assert.equal(rejected.status, 400);
+  assert.equal(rejected.body.code, 'DURABLE_IDEMPOTENCY_CONFLICT');
+  assert.deepEqual(calls.find((row) => row.CALL_KEY === beforeConflict.CALL_KEY), beforeConflict);
+  assert.equal(fixture.store.rows.get('FreeTestDeployments')[0].HANDLED_COUNT, 2);
+  assert.equal(fixture.store.rows.get('FreeTestNotifications').length, 2);
+});
+
+test('integration: settled schema-v1 replay is preserved while incomplete analysis is quarantined', async () => {
+  const fixture = runtimeFixture();
+  const inbound = await invoke(fixture.listener, { url: '/retell/inbound',
+    payload: payloadInbound('A'), env: fixture.env });
+  const metadata = inbound.body.call_inbound.metadata;
+  const callId = 'legacy_schema_v1_A';
+  assert.equal((await invoke(fixture.listener, { url: '/retell/events',
+    payload: eventPayload('call_ended', callId, metadata, 'A'), env: fixture.env })).status, 200);
+
+  const call = fixture.store.rows.get('FreeTestCalls')[0];
+  downgradeCanonicalCallToV1(call);
+  const callBefore = structuredClone(call);
+  const deploymentBefore = structuredClone(fixture.store.rows.get('FreeTestDeployments')[0]);
+
+  // Simulate a missing legacy receipt for otherwise fully settled call-ended
+  // state. The replay can be acknowledged without changing the durable call.
+  fixture.store.rows.set('FreeTestRetellEventReceipts', []);
+  const settledReplay = await invoke(fixture.listener, { url: '/retell/events',
+    payload: eventPayload('call_ended', callId, metadata, 'A'), env: fixture.env });
+  assert.equal(settledReplay.status, 200);
+  assert.equal(settledReplay.body.status, 'Completed');
+  assert.deepEqual(fixture.store.rows.get('FreeTestCalls')[0], callBefore);
+  assert.deepEqual(fixture.store.rows.get('FreeTestDeployments')[0], deploymentBefore);
+
+  const replayOrder = await invoke(fixture.listener, { url: '/retell/events',
+    payload: eventPayload('call_analyzed', callId, metadata, 'A', {
+      bookable_opportunity: true, office_follow_up_required: true,
+    }), env: fixture.env });
+  assert.equal(replayOrder.status, 409);
+  assert.equal(replayOrder.body.code, 'DURABLE_IDEMPOTENCY_CONFLICT');
+  assert.deepEqual(fixture.store.rows.get('FreeTestCalls')[0], callBefore);
+  assert.deepEqual(fixture.store.rows.get('FreeTestDeployments')[0], deploymentBefore);
+  assert.equal(fixture.store.rows.get('FreeTestNotifications').length, 0);
+  assert.equal(fixture.store.rows.get('FreeTestRetellEventReceipts').at(-1).STATUS,
+    'ReconciliationRequired');
+  assert.equal(fixture.store.rows.get('FreeTestRetellEventReceipts').at(-1).LAST_ERROR_CODE,
+    'DURABLE_IDEMPOTENCY_CONFLICT');
+
+  const report = await queryClientReport(fixture.store, fixture.config,
+    'client_A', 'deployment_A', fixture.clock.value);
+  assert.equal(report.callsCaptured, 1);
+  assert.equal(report.actualAverageCallDurationSeconds, null);
+  assert.equal(report.durationEvidenceComplete, false);
+  assert.equal(report.durationWithheldCalls, 1);
+  assert.equal(report.legacySchemaCallsWithheld, 1);
+  assert.equal(report.bookableOpportunities, null);
+  assert.equal(report.officeFollowUpCalls, null);
+  assert.equal(report.structuredAnalysisComplete, false);
+  assert.equal(report.calls[0].callDurationSeconds, null);
+  assert.equal(report.calls[0].bookableOpportunity, null);
+  assert.equal(report.calls[0].officeFollowUpRequired, null);
+  assert.equal(report.calls[0].evidenceWithheldReason, 'legacy_schema_v1');
+  assert.match(report.dataConfidenceNotes.join(' '), /no legacy duration is inferred/i);
+});
+
+test('integration: settled schema-v1 analysis proves its durable notification before completion', async () => {
+  const fixture = runtimeFixture();
+  const inbound = await invoke(fixture.listener, { url: '/retell/inbound',
+    payload: payloadInbound('A'), env: fixture.env });
+  const metadata = inbound.body.call_inbound.metadata;
+  const callId = 'legacy_schema_v1_settled_analysis_A';
+  const analyzed = eventPayload('call_analyzed', callId, metadata, 'A');
+  assert.equal((await invoke(fixture.listener, { url: '/retell/events',
+    payload: analyzed, env: fixture.env })).status, 200);
+
+  const call = fixture.store.rows.get('FreeTestCalls')[0];
+  downgradeCanonicalCallToV1(call);
+  const callBefore = structuredClone(call);
+  const deploymentBefore = structuredClone(fixture.store.rows.get('FreeTestDeployments')[0]);
+  const notificationBefore = structuredClone(fixture.store.rows.get('FreeTestNotifications')[0]);
+  fixture.store.rows.set('FreeTestRetellEventReceipts', []);
+
+  const replay = await invoke(fixture.listener, { url: '/retell/events',
+    payload: analyzed, env: fixture.env });
+  assert.equal(replay.status, 200);
+  assert.equal(replay.body.status, 'Completed');
+  assert.deepEqual(fixture.store.rows.get('FreeTestCalls')[0], callBefore);
+  assert.deepEqual(fixture.store.rows.get('FreeTestDeployments')[0], deploymentBefore);
+  assert.deepEqual(fixture.store.rows.get('FreeTestNotifications')[0], notificationBefore);
+  assert.equal(fixture.store.rows.get('FreeTestRetellEventReceipts')[0].STATUS, 'Completed');
+});
+
+test('integration: partial schema-v1 handled state is quarantined instead of silently completed', async () => {
+  const fixture = runtimeFixture();
+  const inbound = await invoke(fixture.listener, { url: '/retell/inbound',
+    payload: payloadInbound('A'), env: fixture.env });
+  const metadata = inbound.body.call_inbound.metadata;
+  const callId = 'legacy_schema_v1_partial_A';
+  assert.equal((await invoke(fixture.listener, { url: '/retell/events',
+    payload: eventPayload('call_ended', callId, metadata, 'A'), env: fixture.env })).status, 200);
+
+  const call = fixture.store.rows.get('FreeTestCalls')[0];
+  downgradeCanonicalCallToV1(call);
+  call.HANDLED_RECORDED = false;
+  fixture.store.rows.set('FreeTestRetellEventReceipts', []);
+
+  const replay = await invoke(fixture.listener, { url: '/retell/events',
+    payload: eventPayload('call_ended', callId, metadata, 'A'), env: fixture.env });
+  assert.equal(replay.status, 409);
+  assert.equal(replay.body.code, 'DURABLE_IDEMPOTENCY_CONFLICT');
+  assert.equal(call.HANDLED_RECORDED, false);
+  assert.equal(fixture.store.rows.get('FreeTestDeployments')[0].HANDLED_COUNT, 1);
+  assert.equal(fixture.store.rows.get('FreeTestNotifications').length, 0);
+  assert.equal(fixture.store.rows.get('FreeTestRetellEventReceipts')[0].STATUS,
+    'ReconciliationRequired');
+  assert.equal(fixture.store.rows.get('FreeTestRetellEventReceipts')[0].LAST_ERROR_CODE,
+    'DURABLE_IDEMPOTENCY_CONFLICT');
+
+  const duplicate = await invoke(fixture.listener, { url: '/retell/events',
+    payload: eventPayload('call_ended', callId, metadata, 'A'), env: fixture.env });
+  assert.equal(duplicate.status, 200);
+  assert.equal(duplicate.body.status, 'ReconciliationRequired');
+  assert.equal(duplicate.body.duplicate, true);
+  assert.equal(fixture.store.rows.get('FreeTestRetellEventReceipts').length, 1);
+  assert.equal(fixture.store.rows.get('FreeTestNotifications').length, 0);
 });
 
 test('integration: delayed analysis converges after a reviewed source revision changes', async () => {
@@ -668,25 +839,75 @@ test('integration: four-table report query and CSV remain client partitioned and
   const inbound = await invoke(fixture.listener, { url: '/retell/inbound', payload: payloadInbound('A'), env: fixture.env });
   const event = eventPayload('call_analyzed', 'report_A', inbound.body.call_inbound.metadata, 'A', {
     outcome: 'urgent_potential_job', urgency: 'urgent',
+    bookable_opportunity: true, office_follow_up_required: true,
+    workflow_failure_code: 'office_queue_unavailable',
+    workflow_failure_text: 'The synthetic office queue was unavailable.',
     value_evidence_class: 'customer_supplied_estimate', value_minor_units: 12500, value_currency: 'USD',
   });
+  // Provider connected duration is authoritative and intentionally differs from the wall-clock timestamps.
+  event.call.duration_ms = 45_000;
   await invoke(fixture.listener, { url: '/retell/events', payload: event, env: fixture.env });
   const completed = fixture.store.rows.get('FreeTestCalls')[0];
   fixture.store.rows.get('FreeTestCalls').push({ ...structuredClone(completed), ROWID: '999',
     CALL_KEY: `call_${'f'.repeat(64)}`, CORRELATION_ID: `corr_${'f'.repeat(32)}`,
-    HANDLED_RECORDED: false, OUTCOME: 'potential_job', PROCESSING_STATE: 'AwaitingAnalysis',
+    HANDLED_RECORDED: false, OUTCOME: 'unresolved', PROCESSING_STATE: 'AwaitingAnalysis',
     NOTIFICATION_STATE: null,
     CANONICAL_CALL_JSON: JSON.stringify({ ...JSON.parse(completed.CANONICAL_CALL_JSON),
       callKey: `call_${'f'.repeat(64)}`, correlationId: `corr_${'f'.repeat(32)}`,
-      outcome: 'potential_job' }) });
+      outcome: 'unresolved', urgency: 'unknown', bookableOpportunity: null,
+      officeFollowUpRequired: null }) });
   const report = await queryClientReport(fixture.store, fixture.config,
     'client_A', 'deployment_A', fixture.clock.value);
   assert.equal(report.clientId, 'client_A');
   assert.equal(report.metrics.totalCallsHandled, 1);
   assert.equal(report.metrics.urgentPotentialJobs, 1);
   assert.equal(report.metrics.potentialJobs, 0);
-  assert.equal(report.calls[0].valueEvidenceClass, 'customer_supplied_estimate');
+  assert.equal(report.schemaVersion, 2);
+  assert.equal(report.callsCaptured, 1);
+  assert.equal(report.actualAverageCallDurationSeconds, 45);
+  assert.equal(report.qualifiedOpportunities, 1);
+  assert.equal(report.existingCustomerCalls, 0);
+  assert.equal(report.outOfAreaOrWrongFitCalls, 0);
+  assert.equal(report.urgentRequests, 1);
+  assert.equal(report.bookableOpportunities, 1);
+  assert.equal(report.officeFollowUpCalls, 1);
+  assert.equal(report.observedWorkflowFailures, 1);
+  assert.equal(report.recommendedPaidCoverage, 'After Hours Only');
+  assert.equal(report.expectedMonthlyConnectedMinutesMin, 10.5);
+  assert.equal(report.expectedMonthlyConnectedMinutesMax, 11.63);
+  assert.match(report.expectedMonthlyConnectedMinutesMethodology,
+    /observed handled connected minutes.*28 and 31/i);
+  assert.equal(report.testStart, '2026-08-20T12:00:00.000Z');
+  assert.equal(report.testEnd, null);
+  assert.equal(report.testEndReason, null);
+  assert.equal(report.callsRemaining, 24);
+  assert.equal(report.limitReached, false);
+  assert.equal(report.inFlightOvershoot, 0);
+  assert.equal(report.durationEvidenceComplete, true);
+  assert.equal(report.structuredAnalysisComplete, true);
+  assert.equal(report.legacySchemaCallsWithheld, 0);
+  assert.equal(report.durationWithheldCalls, 0);
+  assert.equal(report.dataConfidenceNotes.length, 8);
+  assert.match(report.dataConfidenceNotes.join(' '), /0.75 observed minutes across 2 elapsed approved test days/);
+  assert.match(report.dataConfidenceNotes.join(' '), /source-qualified per call/);
+  const reportedCall = report.calls.find(({ outcome }) => outcome === 'urgent_potential_job');
+  assert.equal(reportedCall.callDurationSeconds, 45);
+  assert.equal(reportedCall.bookableOpportunity, true);
+  assert.equal(reportedCall.officeFollowUpRequired, true);
+  assert.equal(reportedCall.workflowFailureCode, 'office_queue_unavailable');
+  assert.equal(reportedCall.analysisEvidenceComplete, true);
+  assert.equal(reportedCall.evidenceWithheldReason, null);
+  assert.equal(Object.hasOwn(reportedCall, 'workflowFailureText'), false);
+  assert.equal(Object.hasOwn(reportedCall, 'callbackNumber'), false);
+  assert.equal(Object.hasOwn(reportedCall, 'callerName'), false);
+  assert.equal(Object.hasOwn(reportedCall, 'issueSummary'), false);
+  assert.equal(Object.hasOwn(reportedCall, 'cityOrZip'), false);
+  assert.equal(Object.hasOwn(reportedCall, 'specificPersonRequested'), false);
+  assert.equal(reportedCall.valueEvidenceClass, 'customer_supplied_estimate');
   assert.equal(report.notificationStates.DryRunRecorded, 1);
+  const serialized = JSON.stringify(report);
+  assert.doesNotMatch(serialized, /numberLookupHash|recording|transcript|\+15550000001/);
+  assert.doesNotMatch(serialized, /\+15551110001|Caller A|Leaking water heater|Lenexa/);
   const csv = reportToCsv(report);
   const [header, summary, ...callRows] = csv.split('\r\n');
   assert.match(header, /^recordType,clientId,deploymentId,configurationVersion,coverageMode,/);
@@ -694,8 +915,53 @@ test('integration: four-table report query and CSV remain client partitioned and
   assert.equal(callRows.length, report.calls.length);
   assert.ok(callRows.every((row) => row.startsWith('call,client_A,deployment_A,cfg_A_v1,')));
   assert.match(summary, /DryRunRecorded/);
+  assert.match(header, /actualAverageCallDurationSeconds,qualifiedOpportunities/);
+  assert.match(header, /recommendedPaidCoverage,expectedMonthlyConnectedMinutesMin/);
+  assert.match(header, /bookableOpportunity,officeFollowUpRequired,analysisEvidenceComplete/);
   assert.match(csv, /urgent_potential_job/);
+  assert.match(csv, /office_queue_unavailable/);
+  assert.doesNotMatch(csv, /\+15550000001|\+15551110001|Caller A|Leaking water heater|Lenexa|numberLookupHash|recording|transcript/);
   assert.doesNotMatch(csv, /client_B|Synthetic Plumbing B/);
+
+  const completedPeriod = await queryClientReport(fixture.store, fixture.config,
+    'client_A', 'deployment_A', Date.parse(report.testExpiresAt));
+  assert.equal(completedPeriod.testEnd, report.testExpiresAt);
+  assert.equal(completedPeriod.testEndReason, 'Seven-Day Limit Reached');
+  assert.equal(completedPeriod.testPeriodProgress, 1);
+  assert.equal(completedPeriod.expectedMonthlyConnectedMinutesMin, 3);
+  assert.equal(completedPeriod.expectedMonthlyConnectedMinutesMax, 3.32);
+});
+
+test('integration: report classifications distinguish existing-customer and wrong-fit calls', async () => {
+  const fixture = runtimeFixture();
+  const inbound = await invoke(fixture.listener, { url: '/retell/inbound',
+    payload: payloadInbound('A'), env: fixture.env });
+  for (const [callId, data] of [
+    ['report_existing_A', { outcome: 'existing_customer', customer_type: 'existing',
+      office_follow_up_required: true }],
+    ['report_out_of_area_A', { outcome: 'out_of_area' }],
+    ['report_unsupported_A', { outcome: 'unsupported_service' }],
+  ]) {
+    const response = await invoke(fixture.listener, { url: '/retell/events',
+      payload: eventPayload('call_analyzed', callId,
+        inbound.body.call_inbound.metadata, 'A', data), env: fixture.env });
+    assert.equal(response.status, 200);
+  }
+  const report = await queryClientReport(fixture.store, fixture.config,
+    'client_A', 'deployment_A', fixture.clock.value);
+  assert.equal(report.callsCaptured, 3);
+  assert.equal(report.qualifiedOpportunities, 0);
+  assert.equal(report.existingCustomerCalls, 1);
+  assert.equal(report.outOfAreaOrWrongFitCalls, 2);
+  assert.equal(report.urgentRequests, 0);
+  assert.equal(report.bookableOpportunities, null);
+  assert.equal(report.officeFollowUpCalls, null);
+  assert.equal(report.structuredAnalysisComplete, false);
+  assert.equal(report.observedWorkflowFailures, 0);
+  assert.equal(report.recommendedPaidCoverage, 'After Hours Only');
+  assert.equal(report.actualAverageCallDurationSeconds, 60);
+  assert.equal(report.expectedMonthlyConnectedMinutesMin, 42);
+  assert.equal(report.expectedMonthlyConnectedMinutesMax, 46.5);
 });
 
 test('integration: canonical JSON tenant conflicts fail before notification preparation or reporting', async () => {
@@ -751,7 +1017,10 @@ test('integration: reports fail closed on client, count, or notification reconci
     payload: payloadInbound('A'), env: fixture.env });
   await invoke(fixture.listener, { url: '/retell/events',
     payload: eventPayload('call_analyzed', 'report_reconcile_A',
-      inbound.body.call_inbound.metadata, 'A'), env: fixture.env });
+      inbound.body.call_inbound.metadata, 'A', {
+        value_evidence_class: 'customer_supplied_estimate',
+        value_minor_units: 10_000, value_currency: 'USD',
+      }), env: fixture.env });
 
   await assert.rejects(
     queryClientReport(fixture.store, fixture.config,
@@ -760,6 +1029,54 @@ test('integration: reports fail closed on client, count, or notification reconci
   );
 
   const call = fixture.store.rows.get('FreeTestCalls')[0];
+  const originalOutcome = call.OUTCOME;
+  call.OUTCOME = 'spam';
+  await assert.rejects(
+    queryClientReport(fixture.store, fixture.config,
+      'client_A', 'deployment_A', fixture.clock.value),
+    { code: 'REPORT_RECONCILIATION_REQUIRED' },
+  );
+  call.OUTCOME = originalOutcome;
+
+  const originalCanonical = call.CANONICAL_CALL_JSON;
+  const absentProvenance = JSON.parse(originalCanonical);
+  delete absentProvenance.value.source;
+  call.CANONICAL_CALL_JSON = JSON.stringify(absentProvenance);
+  const legacyAuthorized = await queryClientReport(fixture.store, fixture.config,
+    'client_A', 'deployment_A', fixture.clock.value);
+  assert.equal(legacyAuthorized.calls[0].valueEvidenceClass, 'customer_supplied_estimate');
+  assert.equal(legacyAuthorized.calls[0].bookableOpportunity, null);
+  assert.equal(legacyAuthorized.calls[0].officeFollowUpRequired, null);
+  assert.equal(legacyAuthorized.structuredAnalysisComplete, false);
+  assert.equal(legacyAuthorized.bookableOpportunities, null);
+  assert.equal(legacyAuthorized.officeFollowUpCalls, null);
+
+  for (const corrupted of [
+    { ...absentProvenance, customerType: 'unreviewed_type' },
+    { ...absentProvenance, sensitiveDataMinimized: true },
+    { ...absentProvenance, urgency: 'urgent' },
+    { ...absentProvenance, value: { ...absentProvenance.value,
+      evidenceClass: 'confirmed_revenue' } },
+    { ...absentProvenance, value: { ...absentProvenance.value,
+      source: 'verified_downstream' } },
+    { ...absentProvenance, value: { evidenceClass: 'confirmed_revenue',
+      valueMinorUnits: 10_000, currency: 'USD', methodId: null, methodVersion: null,
+      source: 'verified_downstream' } },
+    { ...absentProvenance, value: { evidenceClass: 'internal_estimate_with_method',
+      valueMinorUnits: 10_000, currency: 'USD', methodId: 'unapproved', methodVersion: 'v1',
+      source: 'server_method' } },
+    { ...absentProvenance, value: { ...absentProvenance.value,
+      unreviewedProvenance: 'untrusted' } },
+  ]) {
+    call.CANONICAL_CALL_JSON = JSON.stringify(corrupted);
+    await assert.rejects(
+      queryClientReport(fixture.store, fixture.config,
+        'client_A', 'deployment_A', fixture.clock.value),
+      { code: 'REPORT_DATA_INVALID' },
+    );
+  }
+  call.CANONICAL_CALL_JSON = originalCanonical;
+
   call.HANDLED_RECORDED = false;
   await assert.rejects(
     queryClientReport(fixture.store, fixture.config,

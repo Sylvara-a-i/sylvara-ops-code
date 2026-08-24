@@ -47,4 +47,14 @@ npm run ci
 
 The tests cover Development/source binding, credential separation, destination allowlists, opaque-token handling, fresh intake rotation, prefill-before-read reservation, stale binding rejection, exact request contracts, live table columns, bounded concurrent reservations, and separate CRM read/write credentials.
 
-When Catalyst's console rejects a valid multi-file ZIP, `tools/build-single-file.js` can produce a deterministic editor-safe `index.js` from the same reviewed modules. It stamps the exact reviewed commit, keeps Node built-ins and the Catalyst SDK as native imports, and fails if the source-revision sentinel is missing or remains unstamped.
+When Catalyst's console rejects a valid multi-file ZIP, `tools/build-single-file.js` produces a deterministic editor-safe `index.js`. It is a build-and-verify tool only; it never invokes Catalyst or deploys anything. The builder requires a clean checkout whose `HEAD` exactly matches the approved SHA, exports that immutable Git tree into a private temporary directory, stamps only the exported `lib/source-revision.js`, validates module containment, and writes a new artifact outside the checkout without overwriting an existing file.
+
+From the repository root, create a new empty external directory and run:
+
+```powershell
+$approvedRevision = git rev-parse HEAD
+$artifactDirectory = New-Item -ItemType Directory -Path (Join-Path ([IO.Path]::GetTempPath()) ("sylvara-form1-" + [guid]::NewGuid()))
+node src/zoho-catalyst/form1-controller/tools/build-single-file.js --approved-revision $approvedRevision --output (Join-Path $artifactDirectory.FullName "index.js")
+```
+
+The command fails closed for dirty or mismatched revisions, linked or special Git entries, dependency escape, linked output directories, in-repository output, or an existing destination. Review and read back the resulting artifact before any separately authorized Development upload. The committed checkout keeps the unstamped sentinel and remains unchanged.

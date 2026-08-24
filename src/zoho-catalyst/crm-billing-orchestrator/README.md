@@ -1,87 +1,105 @@
-# CRM-to-Billing Lifecycle Orchestrator
+# CRM-to-Billing Paid Conversion Orchestrator
 
-**Status: proposed, Development-only, and not authorized for Production.**
+**Status: Development-only and not authorized for Production.**
 
-This package mediates the approved CRM Deal lifecycle into bounded Zoho Billing customer and subscription operations. CRM remains authoritative for the commercial relationship and pipeline. Billing remains authoritative for subscription state. Zoho Books is deliberately absent from the runtime.
+This package performs one bounded operation after the Free Revenue Leak Test: an explicitly accepted CRM Deal may create or reconcile one Zoho Billing TEST customer and one paid TEST subscription. Billing is not used to start, run, stop, or measure the free test. CRM owns the relationship and accepted commercial state; Billing owns the resulting customer, catalog, subscription, and subscription status. Zoho Books is deliberately absent.
 
-## Lifecycle Contract
+## Public Contract
 
 | Action | Required authoritative CRM state | Bounded outcome |
 | --- | --- | --- |
-| `ensure_customer` | Free-test Deal, Initial Sale, valid Account | Reconcile one Billing customer and read the ID back into the Deal; use native CRM import by default or the TEST-only synthetic adapter when Zoho disables CRM integration |
-| `start_evaluation` | Setup and QA (or an idempotent replay after Test Live), go-live approved, configured duration/call limit, start timestamp | Reconcile or create one zero-exposure evaluation subscription in the dedicated evaluation fields before the Deal can move to Test Live |
-| `end_evaluation` | Test Live (or an idempotent replay after Results Review/Closed Lost), end timestamp/reason, evaluation subscription ID | Cancel the evaluation immediately, verify `Ended`, and only then permit Results Review |
-| `prepare_paid_subscription` | Subscription Proposed, completed evaluation, explicit paid acceptance, allowlisted Plan and Billing Frequency | Reconcile or create a paid subscription in the paid-only fields with collection disabled; do not close the Deal |
-| `reconcile` | Valid free-test Deal | Read Billing customer/subscription state without mutation |
+| `prepare_paid_subscription` | `ZZZ SYNTHETIC` Deal and Account; Revenue Desk free-test Deal; Initial Sale; Subscription Proposed; test Completed; results-review timestamp; acceptance Accepted with timestamp and version; exact approved monthly terms | Create or reconcile one TEST customer and one deterministic TEST subscription, then update only CRM integration fields after complete Billing readback |
+| `reconcile` | Same synthetic accepted Deal, including Subscription Proposed or Closed Won | Read and reconcile the existing paid operation without creating another customer or subscription |
 
 The request body contains only:
 
 ```json
-{"schemaVersion":"crm-billing-lifecycle-v1","action":"ensure_customer","dealId":"100000000000001"}
+{"schemaVersion":"crm-billing-lifecycle-v2","action":"prepare_paid_subscription","dealId":"100000000000001"}
 ```
 
-The handler rejects unknown fields, re-reads CRM, derives its own deterministic operation identity, and never trusts caller-supplied stage, plan, price, status, customer, or subscription facts.
+`ensure_customer`, `start_evaluation`, and `end_evaluation` are not public actions. Customer provisioning is private to accepted paid conversion. No Billing evaluation subscription is created for the free test.
 
-## Safety Boundary
+## Approved Commercial Contract
 
-- The artifact is privately stamped with an HMAC binding to the Development ZAID. Zoho assigns
-  different ZAIDs to Development and Production, so the exact Development host authority, environment
-  configuration, singular request ZAID, and artifact binding must agree before SDK initialization.
-  The host authority may be only the configured bare hostname or that same hostname with the explicit
-  default HTTPS port `:443`. The request project key must match the artifact HMAC without normalization.
-  Immediately after pure SDK initialization, the SDK project key must match the same HMAC and request
-  value, while its normalized environment must be Development, before any Connection, Data Store,
-  CRM, or Billing operation. This SDK comparison is a post-initialize consistency check over the same
-  Catalyst runtime identity, not independent provenance.
-- The ZAID and host arrive through Catalyst request metadata. Before any Development mutation,
-  a hosted spoof test must prove Catalyst either overwrites a caller-supplied project key with the
-  Development ZAID or rejects the request before the handler. Until that proof passes, the
-  function may run only read-only reconciliation and fail-closed probes.
-- The API Gateway must require an API key. The function also requires one route-specific shared header stored only in private platform configuration.
-- Separate read and write Catalyst Connections are required for CRM and Billing. Each must return exactly one OAuth `Authorization` header and no query parameters.
-- Billing organization identity is fixed in private configuration and sent only in the required organization header.
-- Evaluation plan readback must prove zero recurring price, zero setup fee, exactly one billing cycle, the approved trial duration, and active status. Created subscription readback must prove no add-ons, card, payment method, setup charge, or automatic collection.
-- Billing customer reconciliation defaults to `GET /customers/reference/{CRM Account ID}?reference_id_type=zcrm_account_id`. If absent, it invokes `POST /crm/account/{CRM Account ID}/import` and then re-reads that exact reference.
-- Zoho Billing TEST organizations disable native CRM integration. The explicit `test_direct_customer` adapter is therefore allowed only when the runtime first reads the configured organization from Zoho and proves `mode=test` with Billing as its sole joined app. It derives a reserved `example.com` email plus a synthetic name/note from an HMAC, sends no raw CRM ID or Account data, disables the portal and ACH, fixes payment terms at zero, paginates all customers for an exact unique synthetic email, and verifies the full customer by ID. Any missing or live/joined organization evidence fails before `POST /customers`. This validates real TEST subscription behavior but does not prove native CRM import parity.
-- Before that TEST-only adapter can look up or issue `POST /customers`, it must inspect or own the private durable `provision_test_customer` claim scoped to the CRM Account. All Deals and lifecycle actions for the same Account share that claim. Only the caller that creates the row may enter the create path. If that caller finds an exact pre-existing synthetic customer, it completes the claim without POST. A completed duplicate performs the same exact read-only TEST customer lookup and returns it for CRM synchronization; a conflicting, failed, processing, or otherwise unresolved row returns `reconciliation_required` without Billing work. Read-only `reconcile` permits a missing private row only for an exact legacy customer created before this claim existed; any present row must exactly match the expected key, fingerprint, action, Account scope, and completed status.
-- Billing plan readback uses `GET /plans/{plan_code}`. Subscription reconciliation uses paginated `reference_contains` queries followed by an exact `reference_id` filter; missing pagination metadata, an incomplete traversal, or more than one exact match fails closed.
-- This source revision code-blocks paid-subscription preparation. `ENABLE_PAID_SUBSCRIPTION_PREPARATION` must be `false`, the paid-plan map must remain empty, and the paid action rejects before any CRM or Billing mutation. A later reviewed revision must bind exact recurring price, setup fee, currency, interval, billing cycles, discount/coupon absence, and readback evidence before paid creation can be enabled.
-- CRM stage is never mutated here. `prepare_paid_subscription` runs while the Deal remains Subscription Proposed; the later Blueprint transition may require the verified Billing ID and status before Closed Won.
-- The Blueprint is sequenced around authoritative readback: `start_evaluation` runs while the Deal is still Setup and QA, and `Approve Go Live` requires `Billing_Automation_Status = Evaluation Verified`; `end_evaluation` runs while the Deal is still Test Live, and `Complete Free Test` requires `Billing_Evaluation_Status = Ended`. Replays after the transition are permitted only so the same deterministic operation can be reconciled safely.
-- `Billing_Evaluation_Subscription_ID` and `Billing_Evaluation_Status` are evaluation-only. `Billing_Subscription_ID` and `Subscription_Status` are paid-only. Successful readback also clears the sanitized automation error and records the last sync timestamp.
+Exact paid amounts are not duplicated in this component. Catalyst Development must provide
+`PAID_COMMERCIAL_TERMS_JSON` as a private secret containing exactly one currency, a one-month
+interval, one common usage rate in minor units, and recurring/setup minor units for exactly
+`Launch::Monthly`, `Growth::Monthly`, and `Scale::Monthly`. Unknown, missing, extra, fractional,
+zero, or malformed values fail configuration before any CRM, Data Store, or Billing operation.
+The runtime separately maps those three keys to private Billing plan codes plus one private
+metered add-on code, exact unit, and product ID. Annual plans and Enterprise are outside this runtime.
 
-## Durable Processing
+CRM currently returns the Plan picklist's API values rather than its display labels. The CRM boundary maps only `Option 1` to Launch, `Option 2` to Growth, and `Pro` to Scale. Any other API value fails closed before Billing access.
 
-`config/datastore-schema.json` defines one operation inbox. `OPERATION_KEY` is mandatory and unique. The function inserts `processing` before a side effect, classifies an exact completed replay as success, and treats a conflict or unresolved row as reconciliation-required. Every terminal state is independently read back. `CRM_DEAL_ID` is retained as the legacy physical column: public lifecycle rows store their CRM Deal ID, while the private `provision_test_customer` row stores its CRM Account ID. The private action is not part of the HTTP request contract.
+## Ordering And Readback
 
-Ambiguous Billing creates are resolved by authoritative readback; a timeout, 5xx, malformed response, incomplete pagination, missing record, or conflicting record after a possible customer POST leaves the Account claim `reconciliation_required`. Subscription creates use the deterministic `reference_id`; cancellation is resolved by subscription readback; CRM writes use `If-Unmodified-Since` and exact field readback. No uncertain mutation is blindly replayed.
+The handler:
 
-Public lifecycle operation keys and Billing references are stable for one environment, Deal, and action. The private customer-provisioning key is stable for one environment, CRM Account, and `provision_test_customer` action; its fingerprint also binds the Billing organization and provisioning mode. Mutable inputs are held only in the operation fingerprint, so an altered replay hits the same unique key and fails before another side effect. `IDEMPOTENCY_PEPPER` is an immutable environment identity secret: never rotate it without a separately reviewed versioned migration and authoritative reconciliation of every prior operation/reference.
+1. Re-reads the Deal and Account, requires both authoritative names to remain inside the `ZZZ SYNTHETIC` boundary, and validates pipeline, offer, type, stage, completed test, results review, acceptance status/timestamp/version, monthly plan, MRR, setup fee, connected-minute rate, and start date.
+2. Claims a durable Deal/action operation whose fingerprint binds the Account, Billing organization, acceptance evidence, selected plan code, add-on code/unit/product, recurring/setup/usage minor units, currency, interval, and start date.
+3. Creates or verifies the TEST customer without updating CRM.
+4. Re-reads CRM and revalidates every accepted input.
+5. Reads the Billing TEST organization, plan, and metered add-on before subscription creation. The plan and add-on must share the configured product ID, and the add-on unit must match exactly.
+6. Creates or reconciles one deterministic subscription with `auto_collect=false`, no payment method, the selected plan, and the common usage add-on.
+7. Reads the full subscription and the catalog again. The customer, reference, product association, plan, recurring price, setup fee, monthly interval, add-on identity/unit/product, metered rate, original start date, collection mode, payment boundary, and `future` or `live` status must all match. A returned `current_term_starts_at` may advance on renewal but can never precede or substitute for the separately verified original start.
+8. Makes one CRM integration update with the verified customer ID, subscription ID, mapped subscription status, `Paid Verified`, sync timestamp, and cleared safe error.
+9. Marks the operation complete only after CRM readback succeeds.
+
+Missing or unfamiliar plan, add-on, or subscription evidence fails closed. The Billing TEST catalog currently has no approved connected-minute usage add-on, so Development paid preparation must remain disabled until an approved add-on exists and live readback proves its code, unit, product association, pricing, and subscription representation. Source tests use synthetic fixtures and do not replace that readback.
+
+## Security And Idempotency
+
+- Production is code-blocked by environment, host, Catalyst project, and immutable artifact bindings.
+- The exact API Gateway route must require an API key. The function also requires its private route header.
+- CRM and Billing use separate read/write Connections and a fixed Billing organization.
+- The TEST-only direct customer adapter attests `mode=test`, requires Billing as the sole joined app, uses a deterministic reserved `example.com` identity, disables portal and ACH, and stores no CRM Account data in Billing.
+- `OPERATION_KEY` is mandatory and unique. A changed accepted term produces a fingerprint conflict, not another subscription.
+- Component v2 uses a stable operation key and Billing `reference_id` derived only from Development environment, Deal, and paid action. Acceptance version, plan/frequency, prices, start date, meter, Account, and Billing organization are bound to the immutable fingerprint. This stable-reference plus conflicting-fingerprint rule supersedes any design that puts mutable acceptance or commercial fields directly in the subscription reference: a changed acceptance cannot generate a second Billing lookup key.
+- Stored `SOURCE_REVISION` remains immutable audit evidence but is not an equality gate during reconciliation; a later reviewed deployment can reconcile an older operation with the same exact identity and Development environment.
+- Subscription lookup paginates `reference_contains` results and exact-filters `reference_id`.
+- Any unresolved state after a possible customer, subscription, or CRM side effect is marked `reconciliation_required`, never ordinary failed. Exact `processing` rows are also eligible for non-creating reconciliation after an uncertain completion mark. `reconcile` performs authoritative Billing readback, can complete an unresolved TEST-customer claim after exact readback, and may repair only non-conflicting CRM integration fields.
+- Read-only CRM and Billing requests retry at most once for a transient connection, network, timeout, rate-limit, or provider response; writes never auto-retry. Fallible customer and organization reads occur before the private customer mutation claim, so exhausted pre-write reads leave no durable wedge and a later request can retry safely.
+- `prepare_paid_subscription` never resumes a `processing` or `reconciliation_required` row. This intentionally avoids a second mutation owner when the original invocation or claim-insert response is uncertain. Only `reconcile` may inspect those rows, and it never creates a customer or subscription. If either authoritative resource is absent, reconciliation fails closed and leaves the operation untouched for operator containment.
+- CRM Stage, acceptance, plan, price, and free-test state are never mutated here.
+- Logs contain only request ID, source revision, coarse action, outcome, stage, and elapsed time.
 
 ## Development Setup
 
-1. Use the existing **Retell** Catalyst project in Development. Keep this orchestrator in its own function and `CRMBillingOperations` table, with function-specific private configuration, four least-privilege Connections, and one exact API Gateway route. Do not reuse the Retell call/event tables, routes, or credentials. Keep Production untouched.
-2. Create or select a dedicated Billing test organization. Do not point Development at the live Billing organization.
-3. In a Zoho Billing TEST organization, set `CUSTOMER_PROVISIONING_MODE=test_direct_customer` and `ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING=true`; authorize only `ZohoSubscriptions.settings.READ`, `ZohoSubscriptions.customers.READ`, `ZohoSubscriptions.customers.CREATE`, `ZohoSubscriptions.plans.READ`, `ZohoSubscriptions.subscriptions.READ`, and `ZohoSubscriptions.subscriptions.CREATE`. Zoho's current API assigns both subscription creation and immediate cancellation to `subscriptions.CREATE`; do not add `subscriptions.UPDATE` unless the runtime begins using its separate update endpoint. Verify organization attestation, the synthetic customer boundary, deterministic-reference subscription lookup, the reviewed create shapes, immediate cancellation, and every readback field enforced by this source. Keep native CRM import as a separate later live-canary gate.
-4. Configure every variable in the blank `.env.example` through Catalyst private configuration. Generate `DEVELOPMENT_RUNTIME_PROOF` independently and store it only in Development. Never upload a populated environment file.
-5. During immutable packaging, stamp `lib/source-revision.js` with the exact reviewed 40-character Git commit and the HMAC-SHA256 of the Development ZAID keyed by `DEVELOPMENT_RUNTIME_PROOF`; `SOURCE_REVISION` must match the commit. Within the tracked runtime payload, only those two sentinel substitutions may differ from the squash-merged source. Install dependencies from the reviewed lockfile and verify them separately. Never commit either private runtime value.
-6. From the exact Development URL, send one authenticated read-only reconciliation with a forged `x-zc-project-key`. Proceed only if Catalyst overwrites it with the bound Development ZAID or the handler rejects before SDK initialization. Preserve the private readback outside GitHub.
-7. Configure CRM Blueprint/custom-function calls only after the route and Development fixtures pass. Blueprint enrollment and transition attachment require separate CRM readback.
-8. Prove exact duplicate, conflict, timeout-before-commit, timeout-after-possible-commit, zero-exposure evaluation, explicit paid acceptance, cancellation, CRM readback, and sanitized logging with synthetic records.
+1. Use the existing Catalyst Development project and dedicated `CRMBillingOperations` table. Keep Production untouched.
+2. Point only to the isolated Zoho Billing TEST organization. For TEST customer creation use `CUSTOMER_PROVISIONING_MODE=test_direct_customer` with its explicit gate enabled.
+3. Configure all blank `.env.example` variables through private Catalyst configuration. `ENABLE_PAID_SUBSCRIPTION_PREPARATION=false` is the new-Billing-mutation kill switch; the catalog remains configured so reconciliation can read Billing and repair only verified CRM integration fields.
+4. Configure the strict private `PAID_COMMERCIAL_TERMS_JSON`, exactly three monthly plan-code mappings, the common usage add-on code, exact add-on unit, exact associated product ID, and the exact `future`/`live` CRM status map. Never copy the populated terms JSON into Git, logs, or test output.
+5. Stamp the artifact source revision and Development ZAID binding during immutable packaging.
+6. Before enabling paid preparation, independently read the TEST product, all three plans, common usage add-on, route, Connections, and function artifact. Then run one ZZZ SYNTHETIC Growth conversion, duplicate replay, negative acceptance cases, and reconciliation.
 
-The seven-day clock may be represented by Billing only after the test organization proves the plan cannot produce a paid renewal. The call-limit trigger must come from the authoritative call workflow; this function does not count calls or infer that the limit was reached.
+## Reproducible Development Artifact
+
+From the function directory, `npm run artifact:build` is the default build-and-verify path. It requires `APPROVED_SOURCE_REVISION`, `CATALYST_DEVELOPMENT_ZAID`, and `DEVELOPMENT_RUNTIME_PROOF` in the process environment. The builder accepts only a clean checkout whose `HEAD` exactly equals the approved SHA, exports that commit into a private temporary directory, rejects unsupported Git entries and dependency sources, installs the lockfile with lifecycle scripts disabled, validates symlinks remain inside the artifact, and stamps the source SHA plus Development ZAID HMAC only in the exported copy. It returns the isolated artifact and manifest paths without printing the private inputs or digest; the checkout remains unstamped. Build-only success intentionally retains that exact temporary artifact for inspection. After inspection, remove only the returned `artifactRoot` after verifying that it is beneath the operating-system temporary directory and its basename starts with `sylvara-crm-billing-artifact-`; failed builds clean their own temporary root.
+
+The default command cannot deploy. `npm run artifact:deploy-development` additionally requires the private Catalyst Development project, organization, and token variables plus `CONFIRM_CATALYST_DEVELOPMENT_DEPLOY=crm_billing_orchestrator`. Its CLI invocation is fixed to `functions:crm_billing_orchestrator`, US Development, and `--ignore-scripts`. The token is supplied only through the Catalyst CLI's supported `CATALYST_TOKEN` child environment, never through command-line arguments or emitted output. A nonzero or interrupted CLI result is ambiguous: independently read back the exact Development function before any retry. This command is not a Production deployment path.
+
+The function never collects payment and never advances the Deal to Closed Won. The Blueprint may do so only after verified paid fields are present.
 
 ## Containment
 
-Disable the API Gateway route first, then revoke the Billing write Connection if mutation must stop independently. Preserve operation rows and reconcile them against CRM and Billing. Do not delete evidence or retry unresolved rows. Restore only a separately reviewed Development artifact and re-enable the route only after the complete synthetic replay/readback suite passes.
+Set `ENABLE_PAID_SUBSCRIPTION_PREPARATION=false` to stop new paid mutations while preserving reconciliation. Disable the API Gateway route for complete containment, then revoke the Billing write Connection if needed. Preserve operation rows and independently reconcile CRM and Billing; do not delete evidence or retry unresolved rows blindly.
+
+An insert timeout can leave an exact operation row in `processing` even though the caller did not receive the claim result. There is deliberately no public reset or reclaim action. For an operator-contained Development reset:
+
+1. Disable the route and paid-mutation switch, confirm no invocation is still running, and preserve the exact row, key, fingerprint, status, timestamps, source revision, and Development environment in private evidence.
+2. Read CRM integration fields, the deterministic TEST customer marker, the complete paginated subscription lookup for the exact stable reference, and the relevant Billing audit/history. Record the read time and evidence source privately.
+3. If an exact customer and subscription exist, use only `reconcile`; never reset the claim. If either exists ambiguously or conflicts, keep the row contained for manual investigation.
+4. Only when authoritative readback proves that neither customer nor subscription mutation occurred may an authorized operator remove the one exact Development operation row through the Data Store control plane, preserving the exported prestate and approval. Re-enable the route only after independent readback proves the row is absent and the kill switch/configuration are correct.
+
+This reset is a controlled Development recovery procedure, not runtime behavior. It must never be inferred from a dependency error alone, and it is not authorized for Production.
 
 ## Local Validation
 
 From `functions/crm_billing_orchestrator` with Node.js 24:
 
 ```powershell
-npm ci --ignore-scripts
+npm ci --ignore-scripts --no-audit --no-fund
 npm run ci
 ```
 
-Passing tests prove local policy behavior only. They do not prove a live CRM, Billing, Catalyst, Connection, Data Store, API Gateway, Blueprint, or plan contract.
+Passing tests prove local policy behavior only. They do not prove the live CRM fields, Billing TEST catalog or metered-addon shape, Catalyst Connections, Data Store, API Gateway, Blueprint, or deployed artifact.

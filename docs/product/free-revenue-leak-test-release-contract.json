@@ -122,7 +122,14 @@
   },
   "form2": {
     "controller": "form2_controller",
-    "routes": ["FORM2_ISSUE", "FORM2_PREFILL", "FORM2_SUBMISSION"],
+    "routes": [
+      "FORM2_ISSUE",
+      "FORM2_ACCESS",
+      "FORM2_OTP_REQUEST",
+      "FORM2_OTP_VERIFY",
+      "FORM2_PREFILL",
+      "FORM2_SUBMISSION"
+    ],
     "proof": {
       "mechanism": "email_otp",
       "destination_source": "CRM-bound authorized representative email",
@@ -162,7 +169,8 @@
     "form2_schema": "../../src/zoho-catalyst/form2-controller/config/datastore-schema.json",
     "billing_operation_schema": "../../src/zoho-catalyst/crm-billing-orchestrator/config/datastore-schema.json",
     "form2_v3_policy": "Additive v3 tables only; preserve both existing v2 stores; promote no ambiguous, conflicting, terminal, or unverifiably bound row.",
-    "required_form2_v3_tables": ["Form2SessionsV3", "Form2PrefillsV3", "Form2SubmissionsV3", "Form2VerificationProofsV3"]
+    "required_form2_v3_tables": ["Form2SessionsV3Runtime", "Form2PrefillsV3", "Form2SubmissionsV3", "Form2VerificationProofsV3"],
+    "form2_v3_legacy_source_mapping": {"Form2SessionsV3": "Form2SessionsV3Runtime"}
   },
   "retell_integration": {
     "shared_agent_count": 1,
@@ -215,17 +223,19 @@
   "billing_test": {
     "environment": "TEST",
     "product": "Revenue Desk",
-    "plans": {
-      "Launch Monthly": {"management_fee_usd": 349, "setup_fee_usd": 750, "connected_minute_usd": 0.4},
-      "Growth Monthly": {"management_fee_usd": 749, "setup_fee_usd": 1500, "connected_minute_usd": 0.4},
-      "Scale Monthly": {"management_fee_usd": 1299, "setup_fee_usd": 2500, "connected_minute_usd": 0.4}
-    },
+    "commercial_terms_source": "private Catalyst Development PAID_COMMERCIAL_TERMS_JSON",
+    "required_plan_frequency_keys": ["Launch::Monthly", "Growth::Monthly", "Scale::Monthly"],
+    "commercial_terms_fields": ["currency", "interval", "intervalUnit", "commonUsageRateMinor", "plans.<exact-key>.recurringMinor", "plans.<exact-key>.setupMinor"],
+    "public_fixture_policy": "Tests use deliberately non-commercial synthetic minor-unit values; exact paid amounts remain outside this release contract and executable source.",
     "positive_acceptance_plan": "Growth Monthly",
     "public_checkout": false,
     "payment_method": false,
     "real_charge": false,
-    "customer_idempotency_key": "HMAC(account_id + billing_test_org)",
-    "subscription_idempotency_key": "HMAC(deal_id + acceptance_version + plan + billing_frequency)",
+    "customer_idempotency_key": "HMAC(development_environment + account_id + provision_test_customer_action)",
+    "customer_operation_fingerprint": "HMAC(development_environment + account_id + provision_test_customer_action + canonical(account_id + billing_test_org + customer_provisioning_mode))",
+    "subscription_idempotency_key": "HMAC(development_environment + deal_id + paid_action)",
+    "subscription_external_reference": "syl-paid- + first_32_hex(subscription_idempotency_key)",
+    "subscription_operation_fingerprint": "HMAC(development_environment + deal_id + paid_action + canonical(account_id + billing_test_org + acceptance_version + accepted_at + results_review_at + plan + billing_frequency + plan_code + recurring_price + setup_fee + currency + interval + interval_unit + subscription_start_date + usage_addon_code + usage_unit + usage_product_id + usage_rate))",
     "crm_update_gate": "authoritative Billing customer, subscription, plan, price, setup fee, usage rate, status, and metadata readback"
   },
   "idempotency_keys": {
@@ -259,9 +269,12 @@
     {"id": "RETELL_READINESS", "function": "retell_free_test", "method": "GET", "path_reference": "INTERNAL_READINESS_PATH", "authentication": "INTERNAL_READINESS_TOKEN", "caller": "Sylvara operator", "content_type": "none", "size_reference": "none"},
     {"id": "FORM1_ISSUE", "function": "form1_assisted_controller", "method": "POST", "path_reference": "ISSUE_PATH", "authentication": "ISSUE_HEADER_SECRET", "caller": "CRM button/function", "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"},
     {"id": "FORM1_PREFILL", "function": "form1_assisted_controller", "method": "POST", "path_reference": "PREFILL_PATH", "authentication": "PREFILL_HEADER_SECRET", "caller": "Zoho Forms prefill webhook", "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"},
-    {"id": "FORM2_ISSUE", "function": "form2_controller", "method": "POST", "path_reference": "ISSUE_PATH", "authentication": "ISSUE_HEADER_SECRET", "caller": "CRM button/function", "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"},
-    {"id": "FORM2_PREFILL", "function": "form2_controller", "method": "POST", "path_reference": "PREFILL_PATH", "authentication": "PREFILL_HEADER_SECRET", "caller": "Zoho Forms prefill webhook", "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"},
-    {"id": "FORM2_SUBMISSION", "function": "form2_controller", "method": "POST", "path_reference": "SUBMISSION_PATH", "authentication": "SUBMISSION_HEADER_SECRET plus one-time proof", "caller": "Zoho Forms submission webhook", "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"},
+    {"id": "FORM2_ISSUE", "function": "form2_controller", "method": "POST", "path_reference": "ISSUE_PATH", "authentication": "Catalyst API key plus ISSUE_HEADER_NAME and ISSUE_HEADER_SECRET", "caller": "administrator-restricted CRM action", "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"},
+    {"id": "FORM2_ACCESS", "function": "form2_controller", "method": "GET", "path_reference": "FORM2_ACCESS_PATH", "authentication": "high-entropy setup token retained in URL fragment", "caller": "authorized representative browser", "content_type": "none", "size_reference": "none"},
+    {"id": "FORM2_OTP_REQUEST", "function": "form2_controller", "method": "POST", "path_reference": "FORM2_OTP_REQUEST_PATH", "authentication": "high-entropy setup token possession plus same-origin JSON boundary", "caller": "same-origin Form 2 access page", "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"},
+    {"id": "FORM2_OTP_VERIFY", "function": "form2_controller", "method": "POST", "path_reference": "FORM2_OTP_VERIFY_PATH", "authentication": "high-entropy setup token possession plus eight-digit email OTP plus same-origin JSON boundary", "caller": "same-origin Form 2 access page", "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"},
+    {"id": "FORM2_PREFILL", "function": "form2_controller", "method": "POST", "path_reference": "PREFILL_PATH", "authentication": "Catalyst API key plus FORMS_HEADER_NAME and PREFILL_HEADER_SECRET plus consumed email proof", "caller": "Zoho Forms server-side Prefill Webhook", "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"},
+    {"id": "FORM2_SUBMISSION", "function": "form2_controller", "method": "POST", "path_reference": "SUBMISSION_PATH", "authentication": "Catalyst API key plus FORMS_HEADER_NAME and SUBMISSION_HEADER_SECRET plus verified session and one-time prefill", "caller": "Zoho Forms server-side submission webhook", "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"},
     {"id": "CRM_BILLING_ACCEPTED", "function": "crm_billing_orchestrator", "method": "POST", "path_reference": "ALLOWED_PATH", "authentication": "SHARED_HEADER_VALUE", "caller": "approved CRM paid-acceptance action", "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"}
   ],
   "environment_variable_registries": [
@@ -274,14 +287,17 @@
     {"name": "FORM2_PROOF_TABLE_NAME", "consumer": "form2_controller", "secret": false},
     {"name": "FORM2_PROOF_HMAC_SECRET", "consumer": "form2_controller", "secret": true},
     {"name": "FORM2_PROOF_MODE", "consumer": "form2_controller", "secret": false},
+    {"name": "FORM2_PROOF_ALLOWED_RECIPIENT_DIGESTS", "consumer": "form2_controller", "secret": true},
     {"name": "FORM2_PROOF_TTL_SECONDS", "consumer": "form2_controller", "secret": false},
     {"name": "FORM2_PROOF_MAX_ATTEMPTS", "consumer": "form2_controller", "secret": false},
+    {"name": "FORM2_PROOF_SEND_LEASE_SECONDS", "consumer": "form2_controller", "secret": false},
     {"name": "FORM2_MAIL_FROM", "consumer": "form2_controller", "secret": false},
     {"name": "FORM2_PROOF_TEMPLATE_VERSION", "consumer": "form2_controller", "secret": false},
-    {"name": "BILLING_LAUNCH_PLAN_CODE", "consumer": "crm_billing_orchestrator", "secret": false},
-    {"name": "BILLING_GROWTH_PLAN_CODE", "consumer": "crm_billing_orchestrator", "secret": false},
-    {"name": "BILLING_SCALE_PLAN_CODE", "consumer": "crm_billing_orchestrator", "secret": false},
-    {"name": "BILLING_CONNECTED_MINUTE_ADDON_CODE", "consumer": "crm_billing_orchestrator", "secret": false}
+    {"name": "PAID_COMMERCIAL_TERMS_JSON", "consumer": "crm_billing_orchestrator", "secret": true},
+    {"name": "PAID_PLAN_CODE_MAP", "consumer": "crm_billing_orchestrator", "secret": false},
+    {"name": "PAID_USAGE_ADDON_CODE", "consumer": "crm_billing_orchestrator", "secret": false},
+    {"name": "PAID_USAGE_ADDON_UNIT", "consumer": "crm_billing_orchestrator", "secret": false},
+    {"name": "PAID_USAGE_ADDON_PRODUCT_ID", "consumer": "crm_billing_orchestrator", "secret": false}
   ],
   "oauth_connection_references": {
     "form1_assisted_controller": ["CRM_READ_CONNECTION_LINK_NAME", "CRM_WRITE_CONNECTION_LINK_NAME"],

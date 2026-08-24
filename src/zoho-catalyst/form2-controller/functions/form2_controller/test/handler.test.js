@@ -5,7 +5,12 @@ const crypto = require("node:crypto");
 const test = require("node:test");
 const { destinationDigest } = require("../lib/destinations");
 const { CLIENT_KEYS } = require("../lib/form-contract");
-const { ControllerError, buildFormUrl, handleForm2Request } = require("../lib/handler");
+const {
+  ControllerError,
+  buildAccessUrl,
+  buildFormUrl,
+  handleForm2Request,
+} = require("../lib/handler");
 const {
   deriveAccessToken,
   deriveIssueRequestKey,
@@ -29,6 +34,9 @@ const IDS = Object.freeze({
 function config() {
   return Object.freeze({
     issuePath: "/form2/session/issue",
+    accessPath: "/form2/session/access",
+    otpRequestPath: "/form2/session/otp/request",
+    otpVerifyPath: "/form2/session/otp/verify",
     prefillPath: "/form2/session/prefill",
     submissionPath: "/form2/session/submit",
     issueHeaderName: "x-sylvara-issue-key",
@@ -37,6 +45,7 @@ function config() {
     prefillHeaderSecret: "F".repeat(43),
     submissionHeaderSecret: "S".repeat(43),
     tokenPepper: "P".repeat(43),
+    form2AccessPublicUrl: "https://synthetic.development.catalystserverless.com/form2/session/access",
     form2PublicUrl: FORM2_PUBLIC_URL,
     form2DestinationSha256: FORM2_DESTINATION_SHA256,
     form2TokenFieldAlias: "access_token",
@@ -79,6 +88,142 @@ test("form links are fail-closed to the exact approved Zoho Forms host", () => {
         !error.message.includes(setupToken),
     );
   }
+});
+
+test("access links are confined to an approved Catalyst Development host", () => {
+  const setupToken = deriveAccessToken(ISSUE_REQUEST_ID, config().tokenPepper);
+  for (const form2AccessPublicUrl of [
+    "https://controller.example.invalid/form2/session/access",
+    "https://synthetic.catalystserverless.com/form2/session/access",
+    "https://synthetic.development.catalystserverless.com/form2/session/other",
+  ]) {
+    assert.throws(
+      () => buildAccessUrl({ ...config(), form2AccessPublicUrl }, setupToken),
+      (error) => error instanceof ControllerError &&
+        error.publicCode === "configuration_invalid",
+    );
+  }
+});
+
+test("serves the email-verification access page with a locked browser boundary", async () => {
+  const selected = fixture();
+  const result = await handleForm2Request({
+    method: "GET",
+    url: selected.dependencies.config.accessPath,
+    headers: {},
+  }, selected.dependencies);
+  assert.equal(result.status, 200);
+  assert.equal(result.stage, "access");
+  assert.equal(result.headers["Content-Type"], "text/html; charset=utf-8");
+  assert.equal(result.headers["Cache-Control"], "no-store, max-age=0");
+  assert.match(result.headers["Content-Security-Policy"], /default-src 'none'/);
+  assert.match(result.body, /Verify your email/);
+  assert.equal(result.body.includes(IDS.contact), false);
+  assert.equal(result.body.includes(IDS.account), false);
+  assert.equal(result.body.includes(IDS.deal), false);
+});
+
+test("OTP request and verify need no browser-held shared secret and expose no CRM IDs", async () => {
+  const selected = fixture();
+  const setupToken = deriveAccessToken(ISSUE_REQUEST_ID, config().tokenPepper);
+  const requestBody = Buffer.from(JSON.stringify({ setupToken }));
+  const requested = await handleForm2Request({
+    method: "POST",
+    url: selected.dependencies.config.otpRequestPath,
+    headers: {
+      "content-type": "application/json",
+      "content-length": String(requestBody.length),
+    },
+    rawBody: requestBody,
+  }, selected.dependencies);
+  assert.equal(requested.status, 202);
+  assert.deepEqual(requested.body, { ok: true, state: "sent_confirmed" });
+  assert.equal(selected.events.includes("verification.email.request"), true);
+
+  const verifyBody = Buffer.from(JSON.stringify({ setupToken, code: "12345678" }));
+  const verified = await handleForm2Request({
+    method: "POST",
+    url: selected.dependencies.config.otpVerifyPath,
+    headers: {
+      "content-type": "application/json",
+      "content-length": String(verifyBody.length),
+    },
+    rawBody: verifyBody,
+  }, selected.dependencies);
+  assert.equal(verified.status, 200);
+  assert.equal(verified.body.ok, true);
+  assert.match(verified.body.formUrl, /^https:\/\/forms\.zohopublic\.com\//);
+  assert.equal(JSON.stringify(verified.body).includes(IDS.contact), false);
+  assert.equal(JSON.stringify(verified.body).includes(IDS.account), false);
+  assert.equal(JSON.stringify(verified.body).includes(IDS.deal), false);
+});
+
+test("an already verified token resumes at the exact stamped Form without another send", async () => {
+  const selected = fixture();
+  selected.dependencies.verificationService.requestEmailOtp = async () => ({
+    state: "already_verified",
+  });
+  const setupToken = deriveAccessToken(ISSUE_REQUEST_ID, config().tokenPepper);
+  const rawBody = Buffer.from(JSON.stringify({ setupToken }));
+  const result = await handleForm2Request({
+    method: "POST",
+    url: selected.dependencies.config.otpRequestPath,
+    headers: {
+      "content-type": "application/json",
+      "content-length": String(rawBody.length),
+    },
+    rawBody,
+  }, selected.dependencies);
+  assert.equal(result.status, 200);
+  assert.equal(result.outcome, "already_verified");
+  assert.match(result.body.formUrl, /^https:\/\/forms\.zohopublic\.com\//);
+});
+
+test("OTP delivery states never imply a send without provider evidence", async () => {
+  const setupToken = deriveAccessToken(ISSUE_REQUEST_ID, config().tokenPepper);
+  for (const [state, status] of [
+    ["sent_confirmed", 202],
+    ["in_flight", 202],
+    ["retryable_failure", 503],
+    ["delivery_disabled", 503],
+    ["terminal_failure", 503],
+  ]) {
+    const selected = fixture();
+    selected.dependencies.verificationService.requestEmailOtp = async () => ({ state });
+    const rawBody = Buffer.from(JSON.stringify({ setupToken }));
+    const result = await handleForm2Request({
+      method: "POST",
+      url: selected.dependencies.config.otpRequestPath,
+      headers: {
+        "content-type": "application/json",
+        "content-length": String(rawBody.length),
+      },
+      rawBody,
+    }, selected.dependencies);
+    assert.equal(result.status, status);
+    assert.equal(result.body.state, state);
+    assert.equal(result.outcome, state);
+  }
+});
+
+test("access and OTP route variants fail closed", async () => {
+  const selected = fixture();
+  const query = await handleForm2Request({
+    method: "GET",
+    url: `${selected.dependencies.config.accessPath}?setupToken=forbidden`,
+    headers: {},
+  }, selected.dependencies);
+  assert.equal(query.status, 404);
+  assert.deepEqual(query.body, { ok: false, code: "route_not_found" });
+
+  const wrongMethod = await handleForm2Request({
+    method: "POST",
+    url: selected.dependencies.config.accessPath,
+    headers: { "content-type": "application/json" },
+    rawBody: Buffer.from("{}"),
+  }, selected.dependencies);
+  assert.equal(wrongMethod.status, 405);
+  assert.deepEqual(wrongMethod.body, { ok: false, code: "method_not_allowed" });
 });
 
 function initialRecords() {
@@ -188,7 +333,6 @@ function validSubmission(prefillBody, overrides = {}) {
     submissionId: "10001",
     ...values,
     requestedStartDate: "2026-08-20",
-    testPhoneNumber: "555-010-2200",
     noAnswerDelay: "5 Rings",
     forwardingAdministratorName: "Synthetic Administrator",
     forwardingAdministratorMobile: "555-010-2300",
@@ -199,8 +343,7 @@ function validSubmission(prefillBody, overrides = {}) {
     urgentCallHandling: "Alert + Capture Callback",
     existingCustomerCallHandling: "Capture Callback Only",
     alertRecipientName: "Synthetic Alert Recipient",
-    alertRecipientMobile: "555-010-2600",
-    alertRecipientEmail: null,
+    alertRecipientEmail: "alerts@example.invalid",
     authorizedRepresentativeConfirmed: true,
     testScopeAccepted: true,
     ...overrides,
@@ -222,6 +365,9 @@ function fixture() {
   let crmReadError = null;
   let mintError = null;
   let verifyError = null;
+  let proofDenied = false;
+  let proofDestination = null;
+  let changeContactEmailAfterVerifyUpdate = false;
   let compositeReplay = false;
 
   function nextModifiedTime() {
@@ -243,6 +389,10 @@ function fixture() {
       assert.equal(id, IDS.deal);
       assert.equal(options.ifUnmodifiedSince, records.deal.Modified_Time);
       Object.assign(records.deal, clone(update), { Modified_Time: nextModifiedTime() });
+      if (changeContactEmailAfterVerifyUpdate && update.Setup_Access_Status === "Synthetic Verified") {
+        records.contact.Email = "changed-after-proof@example.invalid";
+        records.contact.Modified_Time = nextModifiedTime();
+      }
       return clone(records.deal);
     },
     async updateForm2Composite(existing, updates) {
@@ -632,18 +782,34 @@ function fixture() {
     },
   };
 
-  const verificationProofStore = {
-    async readAllFactorsVerifiedProof(binding) {
-      events.push("verification.proof.read");
+  const verificationService = {
+    async requestEmailOtp() {
+      events.push("verification.email.request");
+      return { state: "sent_confirmed" };
+    },
+    async verifyEmailOtp() {
+      events.push("verification.email.verify");
+      return { verified: true };
+    },
+    async consumeVerifiedProof(binding, destinationEmail) {
+      events.push("verification.proof.consume");
+      if (proofDenied) {
+        const error = new Error("synthetic verification required");
+        error.publicCode = "verification_required";
+        throw error;
+      }
+      proofDestination ??= destinationEmail;
+      if (destinationEmail !== proofDestination) {
+        const error = new Error("synthetic proof destination mismatch");
+        error.publicCode = "verification_required";
+        throw error;
+      }
       return Object.freeze({
-        status: "all_factors_verified",
+        status: "consumed",
+        proofKey: "1".repeat(64),
         sessionRowId: binding.sessionRowId,
-        tokenHash: binding.tokenHash,
-        crmContactId: binding.crmContactId,
-        crmAccountId: binding.crmAccountId,
-        crmDealId: binding.crmDealId,
-        emailOtpVerifiedAt: "2026-08-14T18:00:00.000Z",
-        captchaVerifiedAt: "2026-08-14T18:00:00.000Z",
+        bindingDigest: "2".repeat(64),
+        destinationDigest: "3".repeat(64),
         verifiedAt: "2026-08-14T18:00:00.000Z",
         expiresAt: "2026-08-14T18:30:00.000Z",
       });
@@ -654,7 +820,7 @@ function fixture() {
     config: selectedConfig,
     crmClient,
     sessionStore,
-    verificationProofStore,
+    verificationService,
     workflowStore,
     now: () => NOW_MS,
   };
@@ -673,6 +839,10 @@ function fixture() {
     setCrmReadError(value) { crmReadError = value; },
     setMintError(value) { mintError = value; },
     setVerifyError(value) { verifyError = value; },
+    setProofDenied(value) { proofDenied = value; },
+    setChangeContactEmailAfterVerifyUpdate(value) {
+      changeContactEmailAfterVerifyUpdate = value;
+    },
   };
 }
 
@@ -748,18 +918,19 @@ test("rejects a bad route-specific source header before body, stores, or CRM", a
   assert.deepEqual(selected.events, []);
 });
 
-test("issues one retry-stable URL containing only the opaque token and no CRM IDs", async () => {
+test("issues one retry-stable access URL with the opaque token only in its fragment", async () => {
   const selected = fixture();
   const first = await issue(selected);
   const retry = await issue(selected);
   assert.equal(first.status, 200);
   assert.equal(first.stage, "issue");
   assert.equal(first.outcome, "issued");
-  assert.equal(retry.body.formUrl, first.body.formUrl);
-  const formUrl = new URL(first.body.formUrl);
-  assert.deepEqual([...formUrl.searchParams.keys()], [config().form2TokenFieldAlias]);
+  assert.equal(retry.body.accessUrl, first.body.accessUrl);
+  const accessUrl = new URL(first.body.accessUrl);
+  assert.equal(accessUrl.search, "");
+  assert.deepEqual([...new URLSearchParams(accessUrl.hash.slice(1)).keys()], ["setupToken"]);
   assert.equal(
-    formUrl.searchParams.get(config().form2TokenFieldAlias),
+    new URLSearchParams(accessUrl.hash.slice(1)).get("setupToken"),
     deriveAccessToken(ISSUE_REQUEST_ID, config().tokenPepper),
   );
   const serialized = JSON.stringify(first.body);
@@ -809,7 +980,7 @@ test("two simultaneous exact issue retries converge without invalidating their s
 
   const results = await Promise.all([issue(selected), issue(selected)]);
   assert.deepEqual(results.map((result) => result.status), [200, 200]);
-  assert.equal(results[0].body.formUrl, results[1].body.formUrl);
+  assert.equal(results[0].body.accessUrl, results[1].body.accessUrl);
   assert.equal(selected.session.status, "issued");
   assert.equal(selected.events.includes("session.reconciliation"), false);
   assert.equal(selected.records.deal.Setup_Access_Status, "Synthetic Issued");
@@ -864,7 +1035,7 @@ test("two concurrent distinct issuance identities leave exactly one usable token
       results.filter((result) => new Set([409, 503]).has(result.status)).length,
       1,
     );
-    assert.equal(results.filter((result) => Object.hasOwn(result.body, "formUrl")).length, 1);
+    assert.equal(results.filter((result) => Object.hasOwn(result.body, "accessUrl")).length, 1);
     assert.deepEqual(selected.sessions.map((candidate) => candidate.status), ["issued"]);
   }
 });
@@ -1004,15 +1175,33 @@ test("verifies CRM, mints a bound prefill revision, and returns no IDs or token"
   const serialized = JSON.stringify(result.body);
   for (const id of Object.values(IDS)) assert.equal(serialized.includes(id), false);
   assert.equal(serialized.includes(deriveAccessToken(ISSUE_REQUEST_ID, config().tokenPepper)), false);
-  assert.ok(selected.events.indexOf("verification.proof.read") < selected.events.indexOf("crm.get.Contacts"));
+  assert.ok(selected.events.indexOf("crm.get.Contacts") < selected.events.indexOf("verification.proof.consume"));
   assert.ok(selected.events.indexOf("session.verify") < selected.events.indexOf("crm.update.Deals"));
   assert.ok(selected.events.indexOf("crm.update.Deals") < selected.events.indexOf("workflow.prefill.mint"));
+});
+
+test("a Contact email change after proof consumption blocks prefill minting", async () => {
+  const selected = fixture();
+  await issue(selected);
+  selected.setChangeContactEmailAfterVerifyUpdate(true);
+  selected.events.length = 0;
+
+  const result = await prefill(selected);
+
+  assert.equal(result.status, 503);
+  assert.deepEqual(result.body, { ok: false, code: "service_unavailable" });
+  assert.equal(selected.events.includes("workflow.prefill.mint"), false);
+  assert.equal(selected.session.status, "reconciliation_required");
+  assert.equal(
+    selected.events.filter((event) => event === "verification.proof.consume").length,
+    2,
+  );
 });
 
 test("token possession alone cannot establish verified state", async () => {
   const selected = fixture();
   await issue(selected);
-  delete selected.dependencies.verificationProofStore;
+  selected.setProofDenied(true);
   selected.events.length = 0;
 
   const result = await prefill(selected);
@@ -1021,7 +1210,7 @@ test("token possession alone cannot establish verified state", async () => {
   assert.deepEqual(result.body, { ok: false, code: "verification_required" });
   assert.equal(selected.session.status, "issued");
   assert.equal(selected.records.deal.Setup_Access_Status, "Synthetic Issued");
-  assert.deepEqual(selected.events, ["session.read"]);
+  assert.equal(selected.events.includes("verification.proof.consume"), true);
 });
 
 test("prefill contract defects do not consume verification state", async () => {
@@ -1198,9 +1387,9 @@ test("an ambiguous expiry write returns 404 only after exact independent CRM con
 test("a fresh issuance identity reissues an exact expired Deal without reviving the old token", async () => {
   const selected = fixture();
   const first = await issue(selected);
-  const firstToken = new URL(first.body.formUrl).searchParams.get(
-    selected.dependencies.config.form2TokenFieldAlias,
-  );
+  const firstToken = new URLSearchParams(
+    new URL(first.body.accessUrl).hash.slice(1),
+  ).get("setupToken");
   selected.session.issuedAt = "2026-08-14T17:00:00.000Z";
   selected.session.expiresAt = "2026-08-14T17:59:59.000Z";
   selected.records.deal.Setup_Access_Issued_At = selected.session.issuedAt;
@@ -1213,9 +1402,9 @@ test("a fresh issuance identity reissues an exact expired Deal without reviving 
   });
 
   assert.equal(reissued.status, 200);
-  const secondToken = new URL(reissued.body.formUrl).searchParams.get(
-    selected.dependencies.config.form2TokenFieldAlias,
-  );
+  const secondToken = new URLSearchParams(
+    new URL(reissued.body.accessUrl).hash.slice(1),
+  ).get("setupToken");
   assert.notEqual(secondToken, firstToken);
   assert.notEqual(selected.session.rowId, expiredSession.rowId);
   assert.equal(expiredSession.status, "expired");

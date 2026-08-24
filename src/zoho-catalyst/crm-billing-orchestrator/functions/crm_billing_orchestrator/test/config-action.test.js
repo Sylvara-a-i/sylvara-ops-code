@@ -5,39 +5,119 @@ const test = require("node:test");
 const { parseActionRequest, validatePayload } = require("../lib/action-contract");
 const { loadConfig } = require("../lib/config");
 const { safeLog } = require("../lib/safe-log");
-const { REVISION, baseEnvironment } = require("./helpers");
+const {
+  PAID_TERMS_VARIABLE,
+  REVISION,
+  SYNTHETIC_COMMERCIAL_TERMS,
+  baseEnvironment,
+} = require("./helpers");
 
 test("configuration is immutable Development-only and rejects Production", () => {
   const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
   assert.equal(config.deploymentEnvironment, "development");
   assert.equal(config.developmentFunctionHost, "synthetic.development.catalystserverless.com");
   assert.equal(config.developmentRuntimeProof.length, 64);
-  assert.equal(config.freeTestDurationDays, 7);
-  assert.equal(config.enablePaidSubscriptionPreparation, false);
-  assert.equal(config.customerProvisioningMode, "native_crm_import");
-  assert.equal(config.enableTestDirectCustomerProvisioning, false);
-  assert.equal(config.setupQaStageValue, "Setup and QA");
-  assert.deepEqual(Object.keys(config.paidPlanCodeMap), []);
+  assert.equal(config.enablePaidSubscriptionPreparation, true);
+  assert.equal(config.paidCommercialTerms.currency, "USD");
+  assert.equal(config.paidCommercialTerms.interval, 1);
+  assert.equal(config.paidCommercialTerms.intervalUnit, "months");
+  assert.equal(
+    config.paidCommercialTerms.commonUsageRateMinor,
+    SYNTHETIC_COMMERCIAL_TERMS.commonUsageRateMinor,
+  );
+  assert.deepEqual(Object.keys(config.paidCommercialTerms.plans).sort(), [
+    "Growth::Monthly",
+    "Launch::Monthly",
+    "Scale::Monthly",
+  ]);
+  assert.equal(config.customerProvisioningMode, "test_direct_customer");
+  assert.equal(config.enableTestDirectCustomerProvisioning, true);
+  assert.deepEqual(Object.keys(config.paidPlanCodeMap).sort(), [
+    "Growth::Monthly",
+    "Launch::Monthly",
+    "Scale::Monthly",
+  ]);
+  assert.equal(config.paidUsageAddonCode, "connected_minute_usage");
+  assert.equal(config.paidUsageAddonUnit, "Connected AI minute");
+  assert.equal(config.paidUsageAddonProductId, "400000000000001");
+  assert.deepEqual(config.paidSubscriptionStatusMap, { future: "Scheduled", live: "Active" });
   assert.throws(
     () => loadConfig(baseEnvironment({ DEPLOYMENT_ENVIRONMENT: "production" }), {
       artifactRevision: REVISION,
     }),
     /Production activation is blocked/,
   );
-  assert.throws(
-    () => loadConfig(baseEnvironment({
-      ENABLE_PAID_SUBSCRIPTION_PREPARATION: "true",
-      PAID_PLAN_CODE_MAP: JSON.stringify({ "Launch::Monthly": "launch_plan" }),
-    }), { artifactRevision: REVISION }),
-    /exact commercial terms/,
-  );
-  assert.throws(
-    () => loadConfig(baseEnvironment({
-      ENABLE_PAID_SUBSCRIPTION_PREPARATION: "false",
-      PAID_PLAN_CODE_MAP: JSON.stringify({ "Launch::Monthly": "launch_plan" }),
-    }), { artifactRevision: REVISION }),
-    /invalid size/,
-  );
+  const disabled = loadConfig(baseEnvironment({
+    ENABLE_PAID_SUBSCRIPTION_PREPARATION: "false",
+  }), { artifactRevision: REVISION });
+  assert.equal(disabled.enablePaidSubscriptionPreparation, false);
+  for (const invalidMap of [
+    {},
+    { "Launch::Monthly": "launch_monthly" },
+    {
+      "Launch::Monthly": "same",
+      "Growth::Monthly": "same",
+      "Scale::Monthly": "scale_monthly",
+    },
+    {
+      "Launch::Monthly": "launch_monthly",
+      "Growth::Annual": "growth_annual",
+      "Scale::Monthly": "scale_monthly",
+    },
+  ]) {
+    assert.throws(
+      () => loadConfig(baseEnvironment({ PAID_PLAN_CODE_MAP: JSON.stringify(invalidMap) }), {
+        artifactRevision: REVISION,
+      }),
+      /PAID_PLAN_CODE_MAP/,
+    );
+  }
+  for (const invalidTerms of [
+    "",
+    "not-json",
+    JSON.stringify({ ...SYNTHETIC_COMMERCIAL_TERMS, extra: true }),
+    JSON.stringify({ ...SYNTHETIC_COMMERCIAL_TERMS, currency: "usd" }),
+    JSON.stringify({ ...SYNTHETIC_COMMERCIAL_TERMS, interval: 2 }),
+    JSON.stringify({ ...SYNTHETIC_COMMERCIAL_TERMS, intervalUnit: "years" }),
+    JSON.stringify({ ...SYNTHETIC_COMMERCIAL_TERMS, commonUsageRateMinor: 0 }),
+    JSON.stringify({
+      ...SYNTHETIC_COMMERCIAL_TERMS,
+      plans: {
+        ...SYNTHETIC_COMMERCIAL_TERMS.plans,
+        "Growth::Monthly": {
+          ...SYNTHETIC_COMMERCIAL_TERMS.plans["Growth::Monthly"],
+          recurringMinor: "34567",
+        },
+      },
+    }),
+    JSON.stringify({
+      ...SYNTHETIC_COMMERCIAL_TERMS,
+      plans: {
+        "Launch::Monthly": SYNTHETIC_COMMERCIAL_TERMS.plans["Launch::Monthly"],
+        "Growth::Monthly": SYNTHETIC_COMMERCIAL_TERMS.plans["Growth::Monthly"],
+      },
+    }),
+  ]) {
+    assert.throws(
+      () => loadConfig(baseEnvironment({ [PAID_TERMS_VARIABLE]: invalidTerms }), {
+        artifactRevision: REVISION,
+      }),
+      /PAID_COMMERCIAL_TERMS_JSON/,
+    );
+  }
+  for (const unsafeStatusMap of [
+    {},
+    { future: "Scheduled" },
+    { future: "Ready", live: "Ready" },
+    { future: "Scheduled", trial: "Trial" },
+  ]) {
+    assert.throws(
+      () => loadConfig(baseEnvironment({
+        PAID_SUBSCRIPTION_STATUS_MAP: JSON.stringify(unsafeStatusMap),
+      }), { artifactRevision: REVISION }),
+      /PAID_SUBSCRIPTION_STATUS_MAP/,
+    );
+  }
   assert.throws(
     () => loadConfig(baseEnvironment(), { artifactRevision: "b".repeat(40) }),
     /immutable artifact/,
@@ -61,41 +141,55 @@ test("configuration is immutable Development-only and rejects Production", () =>
   assert.equal(direct.enableTestDirectCustomerProvisioning, true);
   for (const unsafe of [
     {
-      CUSTOMER_PROVISIONING_MODE: "test_direct_customer",
+      CUSTOMER_PROVISIONING_MODE: "native_crm_import",
       ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING: "false",
     },
-    {
-      CUSTOMER_PROVISIONING_MODE: "native_crm_import",
-      ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING: "true",
-    },
+    { ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING: "false" },
     { CUSTOMER_PROVISIONING_MODE: "unbounded" },
   ]) {
     assert.throws(
       () => loadConfig(baseEnvironment(unsafe), { artifactRevision: REVISION }),
-      /CUSTOMER_PROVISIONING_MODE|exact Development test gate/,
+      /CUSTOMER_PROVISIONING_MODE|Development TEST customer gate/,
+    );
+  }
+  for (const unsafe of [
+    { PAID_USAGE_ADDON_UNIT: "" },
+    { PAID_USAGE_ADDON_UNIT: "Connected\nAI minute" },
+    { PAID_USAGE_ADDON_PRODUCT_ID: "not-an-id" },
+  ]) {
+    assert.throws(
+      () => loadConfig(baseEnvironment(unsafe), { artifactRevision: REVISION }),
+      /PAID_USAGE_ADDON_UNIT|PAID_USAGE_ADDON_PRODUCT_ID/,
     );
   }
 });
 
 test("action payload is exactly schemaVersion, action, and dealId", () => {
   assert.deepEqual(validatePayload({
-    schemaVersion: "crm-billing-lifecycle-v1",
-    action: "ensure_customer",
+    schemaVersion: "crm-billing-lifecycle-v2",
+    action: "prepare_paid_subscription",
     dealId: "100000000000001",
   }), {
-    schemaVersion: "crm-billing-lifecycle-v1",
-    action: "ensure_customer",
+    schemaVersion: "crm-billing-lifecycle-v2",
+    action: "prepare_paid_subscription",
     dealId: "100000000000001",
   });
   assert.throws(() => validatePayload({
-    schemaVersion: "crm-billing-lifecycle-v1",
-    action: "ensure_customer",
+    schemaVersion: "crm-billing-lifecycle-v2",
+    action: "prepare_paid_subscription",
     dealId: "100000000000001",
     stage: "forged",
   }), /fields do not match/);
+  for (const action of ["ensure_customer", "start_evaluation", "end_evaluation", "provision_test_customer"]) {
+    assert.throws(() => validatePayload({
+      schemaVersion: "crm-billing-lifecycle-v2",
+      action,
+      dealId: "100000000000001",
+    }), /unsupported/);
+  }
   assert.throws(() => validatePayload({
     schemaVersion: "crm-billing-lifecycle-v1",
-    action: "provision_test_customer",
+    action: "prepare_paid_subscription",
     dealId: "100000000000001",
   }), /unsupported/);
 });
@@ -103,7 +197,7 @@ test("action payload is exactly schemaVersion, action, and dealId", () => {
 test("request boundary authenticates before accepting the exact JSON body", async () => {
   const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
   const body = JSON.stringify({
-    schemaVersion: "crm-billing-lifecycle-v1",
+    schemaVersion: "crm-billing-lifecycle-v2",
     action: "reconcile",
     dealId: "100000000000001",
   });

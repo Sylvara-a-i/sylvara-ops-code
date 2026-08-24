@@ -2,11 +2,8 @@
 
 const crypto = require("node:crypto");
 
-const SCHEMA_VERSION = "crm-billing-lifecycle-v1";
+const SCHEMA_VERSION = "crm-billing-lifecycle-v2";
 const ACTIONS = Object.freeze([
-  "ensure_customer",
-  "start_evaluation",
-  "end_evaluation",
   "prepare_paid_subscription",
   "reconcile",
 ]);
@@ -116,4 +113,3 @@ async function parseActionRequest(request, config) {
 }
 
 module.exports = { ACTIONS, RequestContractError, SCHEMA_VERSION, parseActionRequest, validatePayload };
-

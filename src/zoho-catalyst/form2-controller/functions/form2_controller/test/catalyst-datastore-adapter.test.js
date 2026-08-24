@@ -11,12 +11,14 @@ const { OperationTimeoutError } = require("../lib/operation-timeout");
 const SESSION_TABLE = "Form2_Sessions";
 const PREFILL_TABLE = "Form2_Prefills";
 const SUBMISSION_TABLE = "Form2_Submissions";
+const PROOF_TABLE = "Form2_Proofs";
 
 function config(overrides = {}) {
   return {
     sessionTableName: SESSION_TABLE,
     prefillTableName: PREFILL_TABLE,
     submissionTableName: SUBMISSION_TABLE,
+    proofTableName: PROOF_TABLE,
     platformOperationTimeoutMs: 250,
     ...overrides,
   };
@@ -121,7 +123,7 @@ test("executes exact hash and ROWID SELECT statements for every store lookup", a
   ]);
 });
 
-test("rejects tables outside the three-name allowlist and invalid adapter configuration", async () => {
+test("rejects tables outside the configured four-table allowlist and invalid adapter configuration", async () => {
   const { adapter, app } = fixture();
   await assert.rejects(
     adapter.insertRow("Other_Table", { STATUS: "issued" }),

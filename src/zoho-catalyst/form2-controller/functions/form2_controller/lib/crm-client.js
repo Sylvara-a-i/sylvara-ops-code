@@ -100,7 +100,6 @@ const UPDATE_FIELDS = Object.freeze({
   ]),
   Deals: new Set([
     "Target_Start_Date",
-    "Test_Phone_Number",
     "No_Answer_Delay",
     "Forwarding_Administrator_Name",
     "Forwarding_Administrator_Mobile",
@@ -111,7 +110,6 @@ const UPDATE_FIELDS = Object.freeze({
     "Urgent_Call_Handling",
     "Existing_Customer_Call_Handling",
     "Alert_Recipient_Name",
-    "Alert_Recipient_Mobile",
     "Alert_Recipient_Email",
     "Authorized_Representative_Confirmed",
     "Test_Scope_Accepted",
@@ -157,6 +155,9 @@ const PRESERVED_DEAL_FIELDS = Object.freeze([
   "Free_Test_Request_Submitted_At",
   "Intake_Submission_ID",
   "Free_Test_Request_Notes",
+  "Alert_Recipient_Mobile",
+  // Number assignment is Setup/QA-owned and cannot be overwritten by Form 2.
+  "Test_Phone_Number",
 ]);
 const PRESERVED_CONTACT_FIELDS = Object.freeze(["Email", "Mobile"]);
 

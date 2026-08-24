@@ -77,32 +77,77 @@ test("the Data Store schema matches the runtime and Catalyst uniqueness boundary
     PREFILL_STORED_FIELDS,
     SUBMISSION_STORED_FIELDS,
   } = require("../lib/workflow-store");
+  const { PROOF_STORED_FIELDS } = require("../lib/verification-proof-store");
   const runtimeFields = new Map([
     ["SESSION_TABLE_NAME", STORED_FIELDS],
     ["PREFILL_TABLE_NAME", PREFILL_STORED_FIELDS],
     ["SUBMISSION_TABLE_NAME", SUBMISSION_STORED_FIELDS],
+    ["FORM2_PROOF_TABLE_NAME", PROOF_STORED_FIELDS],
   ]);
   const expectedUniqueColumns = new Map([
     ["SESSION_TABLE_NAME", ["ISSUE_REQUEST_KEY", "DEAL_ISSUANCE_KEY"]],
     ["PREFILL_TABLE_NAME", ["PREFILL_KEY"]],
     ["SUBMISSION_TABLE_NAME", ["SUBMISSION_KEY"]],
+    ["FORM2_PROOF_TABLE_NAME", ["PROOF_KEY"]],
   ]);
 
-  assert.equal(schema.status, "proposed-development-only");
+  assert.equal(schema.status, "development-provisioned-schema-verified-not-cut-over");
   assert.equal(
     schema.live_state,
-    "retell-development-54-column-version-2-copy-verified-legacy-live-function-routes-variables-callers-not-cut-over-version-3-not-applied",
+    "retell-development-four-v3-runtime-targets-schema-verified-empty-probes-quarantined-callers-not-cut-over",
   );
-  assert.equal(schema.observed_at, "2026-08-22");
+  assert.equal(schema.observed_at, "2026-08-24");
+  assert.deepEqual(
+    schema.observed_development_readback.operational_targets.map((target) => [
+      target.api_name,
+      target.application_columns,
+      target.rows,
+    ]),
+    [
+      ["Form2SessionsV3Runtime", 20, 0],
+      ["Form2PrefillsV3", 19, 0],
+      ["Form2SubmissionsV3", 16, 0],
+      ["Form2VerificationProofsV3", 26, 0],
+    ],
+  );
+  assert.equal(schema.observed_development_readback.total_application_columns, 81);
+  assert.equal(schema.observed_development_readback.unique_columns, 5);
+  assert.equal(schema.observed_development_readback.audit_consent_columns, 25);
+  assert.equal(schema.observed_development_readback.schema_mismatches, 0);
+  assert.equal(schema.observed_development_readback.app_user_permissions_per_target, 0);
+  assert.equal(schema.observed_development_readback.runtime_bound, false);
+  assert.deepEqual(
+    schema.quarantined_unbound_probe_artifacts.map((artifact) => [
+      artifact.api_name,
+      artifact.application_column_count,
+      artifact.rows,
+      artifact.app_user_permissions,
+    ]),
+    [
+      ["Form2SessionsV3", 1, 0, 0],
+      ["ZZZ_Quarantined_Form2SessionsV3_ColumnProbe", 3, 0, 0],
+      ["ZZZ_Quarantined_Form2SessionsV3_TypeProbe", 0, 0, 0],
+    ],
+  );
+  assert.match(schema.probe_policy, /Never bind, rename, reuse, or delete/);
 
-  assert.equal(schema.tables.length, 3);
+  assert.equal(schema.tables.length, 4);
   assert.equal(
     schema.tables.reduce((total, table) => total + table.columns.length, 0),
-    55,
+    81,
   );
   assert.deepEqual(
     sorted(schema.tables.map((table) => table.runtime_variable)),
     sorted(runtimeFields.keys()),
+  );
+  assert.deepEqual(
+    schema.tables.map((table) => table.expected_api_name),
+    [
+      "Form2SessionsV3Runtime",
+      "Form2PrefillsV3",
+      "Form2SubmissionsV3",
+      "Form2VerificationProofsV3",
+    ],
   );
 
   for (const table of schema.tables) {
@@ -169,16 +214,8 @@ test("the Data Store schema matches the runtime and Catalyst uniqueness boundary
   assert.equal(sessionColumns.has("ISSUE_KEY"), false);
   assert.equal(sessionColumns.get("LAST_OUTCOME").pii_ephi, true);
   assert.match(sessionTable.retention, /Do not delete or alter any session row/);
-  assert.equal(
-    schema.deployment_gates.some((gate) =>
-      gate.includes("zero rows") && gate.includes("schema version 3")),
-    true,
-  );
-  assert.equal(
-    schema.deployment_gates.some((gate) =>
-      gate.includes("any row exists") && gate.includes("distinct version-3 table") && gate.includes("preserve")),
-    true,
-  );
+  assert.equal(schema.deployment_gates.some((gate) =>
+    gate.includes("four exact empty operational targets") && gate.includes("Never rename")), true);
   assert.equal(
     schema.deployment_gates.some((gate) =>
       gate.includes("LAST_OUTCOME") && gate.includes("read back")),
@@ -186,7 +223,7 @@ test("the Data Store schema matches the runtime and Catalyst uniqueness boundary
   );
   assert.equal(
     schema.deployment_gates.some((gate) =>
-      gate.includes("legacy Form 2 project live") && gate.includes("separate destructive action")),
+      gate.includes("preserve every legacy Form 2") && gate.includes("operational targets")),
     true,
   );
   assert.equal(JSON.stringify(schema).includes("RAW_PAYLOAD"), false);
@@ -226,8 +263,10 @@ test("the Catalyst and npm manifests describe one consistent Advanced IO target"
   assert.equal(catalystConfig.deployment.name, catalyst.functions.targets[0]);
   const expectedRuntimeSources = [
     "index.js",
+    "lib/access-page.js",
     "lib/catalyst-adapter.js",
     "lib/catalyst-datastore-adapter.js",
+    "lib/catalyst-mail.js",
     "lib/config.js",
     "lib/connection-boundary.js",
     "lib/crm-client.js",
@@ -242,7 +281,10 @@ test("the Catalyst and npm manifests describe one consistent Advanced IO target"
     "lib/session-store.js",
     "lib/snapshot.js",
     "lib/source-revision.js",
+    "lib/v2-reconciliation.js",
     "lib/verification-proof.js",
+    "lib/verification-proof-store.js",
+    "lib/verification-service.js",
     "lib/workflow-store.js",
   ];
   const expectedCheckScript = expectedRuntimeSources
@@ -364,6 +406,116 @@ test("the intended function archive excludes tests and environment files", () =>
   }
 });
 
+test("the route manifest exposes exactly the six reviewed fail-closed routes", () => {
+  const manifest = readJson(path.join(controllerRoot, "config/routes.json"));
+  assert.equal(manifest.environment, "Development");
+  assert.equal(manifest.gateway_state, "desired-disabled-until-project-wide-route-preservation-readback");
+  assert.equal(manifest.default_action, "reject");
+  assert.equal(manifest.cors, false);
+  assert.equal(manifest.query_strings, false);
+  assert.deepEqual(manifest.routes.map((route) => [route.id, route.method, route.path_reference]), [
+    ["FORM2_ISSUE", "POST", "ISSUE_PATH"],
+    ["FORM2_ACCESS", "GET", "FORM2_ACCESS_PATH"],
+    ["FORM2_OTP_REQUEST", "POST", "FORM2_OTP_REQUEST_PATH"],
+    ["FORM2_OTP_VERIFY", "POST", "FORM2_OTP_VERIFY_PATH"],
+    ["FORM2_PREFILL", "POST", "PREFILL_PATH"],
+    ["FORM2_SUBMISSION", "POST", "SUBMISSION_PATH"],
+  ]);
+  assert.equal(new Set(manifest.routes.map((route) => route.id)).size, 6);
+  assert.equal(manifest.routes.every((route) =>
+    Number.isSafeInteger(route.rate_limit_per_minute) &&
+    Number.isSafeInteger(route.rate_limit_per_ip_per_minute) &&
+    route.rate_limit_per_ip_per_minute <= route.rate_limit_per_minute), true);
+  assert.equal(manifest.common_controls.browser_routes_expose_shared_secret, false);
+  assert.equal(JSON.stringify(manifest).toLowerCase().includes("sms"), true);
+  assert.equal(
+    manifest.activation_gates.some((gate) => gate.includes("Never add SMS")),
+    true,
+  );
+});
+
+test("the Zoho Forms manifest is email-only and matches the runtime client contract", () => {
+  const manifest = readJson(path.join(
+    repositoryRoot,
+    "src/zoho-forms/free-revenue-leak-test/forms-manifest.json",
+  ));
+  const { CLIENT_KEYS } = require("../lib/form-contract");
+  const form2 = manifest.forms.find(
+    (form) => form.logical_name === "FORM2_FREE_REVENUE_LEAK_AUTHORIZATION",
+  );
+  assert.ok(form2);
+  assert.equal(form2.crm_integration.native_direct_write, false);
+  assert.equal(form2.access.sms_otp, false);
+  assert.equal(form2.access.sms_delivery, false);
+  assert.equal(form2.access.proof_destination, "current CRM-bound Contact.Email only");
+  assert.deepEqual(form2.controller_hidden_fields, ["setupToken", "prefillId"]);
+  assert.deepEqual(form2.prohibited_hidden_fields, [
+    "Contact_ID",
+    "Account_ID",
+    "Deal_ID",
+    "Issuance_Request_ID",
+    "Setup_Form_Version",
+    "Test_Scope_Version",
+  ]);
+  assert.equal(form2.server_generated_submission_field.controller_key, "submissionId");
+  assert.deepEqual(form2.submission_webhook.client_keys, CLIENT_KEYS);
+  assert.equal(form2.required_fields.includes("alertRecipientEmail"), true);
+  assert.equal(form2.prohibited_fields.includes("alertRecipientMobile"), true);
+  assert.equal(form2.submission_webhook.client_keys.includes("alertRecipientMobile"), false);
+  assert.match(form2.confirmation_copy, /does not activate call routing/);
+  assert.match(form2.confirmation_copy, /billing/i);
+  assert.match(form2.confirmation_copy, /SMS/);
+});
+
+test("the additive v3 migration manifest preserves v2 and authorizes no promotion", () => {
+  const manifest = readJson(path.join(controllerRoot, "config/migration-v2-to-v3.json"));
+  assert.equal(manifest.environment, "Development");
+  assert.equal(manifest.strategy, "additive-v3-zero-promotion");
+  assert.deepEqual(manifest.destination_tables, [
+    "Form2SessionsV3Runtime",
+    "Form2PrefillsV3",
+    "Form2SubmissionsV3",
+    "Form2VerificationProofsV3",
+  ]);
+  assert.deepEqual(manifest.form2_v3_legacy_source_mapping, {
+    Form2SessionsV3: "Form2SessionsV3Runtime",
+  });
+  assert.equal(manifest.destination_readback.all_targets_empty, true);
+  assert.equal(manifest.destination_readback.total_application_columns, 81);
+  assert.equal(manifest.destination_readback.schema_mismatches, 0);
+  assert.deepEqual(manifest.quarantined_unbound_probe_artifacts, [
+    "Form2SessionsV3",
+    "ZZZ_Quarantined_Form2SessionsV3_ColumnProbe",
+    "ZZZ_Quarantined_Form2SessionsV3_TypeProbe",
+  ]);
+  assert.equal(manifest.rules.some((rule) => /Never rename, update, delete, or backfill/.test(rule)), true);
+  assert.equal(manifest.rules.some((rule) => /Abort if any destination version-3 table is nonempty/.test(rule)), true);
+  assert.equal(manifest.observed_sanitized_disposition.promoted_sessions, 0);
+  assert.equal(manifest.observed_sanitized_disposition.promoted_prefills, 0);
+  assert.equal(manifest.observed_sanitized_disposition.promoted_submissions, 0);
+  assert.match(manifest.output_policy, /Never output rows, CRM IDs, emails, tokens/);
+});
+
+test("GitHub Linux CI executes the Form 2 deploy-artifact regressions", () => {
+  const workflow = fs.readFileSync(
+    path.join(repositoryRoot, ".github/workflows/repo-checks.yml"),
+    "utf8",
+  );
+  const packageManifest = readJson(path.join(functionRoot, "package.json"));
+  const deploymentTests = fs.readFileSync(
+    path.join(functionRoot, "test/deploy-development.integration.test.js"),
+    "utf8",
+  );
+  assert.match(workflow, /runs-on: ubuntu-24\.04/);
+  assert.match(
+    workflow,
+    /npm run ci --prefix src\/zoho-catalyst\/form2-controller\/functions\/form2_controller/,
+  );
+  assert.equal(packageManifest.scripts.test, "node --test test/*.test.js");
+  assert.match(deploymentTests, /process\.platform === "linux" && process\.arch === "x64"/);
+  assert.equal((deploymentTests.match(/skip: !supportedRunner/g) ?? []).length, 8);
+});
+
 test("the repository pipeline keeps approval but blocks Development deployment", () => {
   const pipelinePath = path.join(repositoryRoot, "catalyst-pipelines.yaml");
   const scriptPath = path.join(controllerRoot, "scripts/deploy-development.sh");
@@ -416,10 +568,12 @@ test("the repository pipeline keeps approval but blocks Development deployment",
   assert.doesNotMatch(deploymentJob, /deploy-development\.sh|\bcatalyst\s+deploy\b/);
   assert.doesNotMatch(pipeline, /BASH_ENV=|ENV=|SHELLOPTS=|PS4=/);
 
-  assert.notEqual(fs.statSync(scriptPath).mode & 0o111, 0, "deployment script is not executable");
+  if (process.platform !== "win32") {
+    assert.notEqual(fs.statSync(scriptPath).mode & 0o111, 0, "deployment script is not executable");
+  }
   assert.match(script, /^#!\/usr\/bin\/env bash\nset \+x\nset -euo pipefail$/m);
   assert.match(script, /readonly NODE_VERSION="24\.19\.0"/);
-  assert.match(script, /readonly CATALYST_CLI_VERSION="1\.26\.1"/);
+  assert.match(script, /readonly CATALYST_CLI_VERSION="1\.26\.0"/);
   assert.match(
     script,
     /readonly NODE_SHA256="14b342e71204f811bde6153be8e04b62aef63c236fef92b55f9c83154b409647"/,
@@ -438,9 +592,9 @@ module.exports = { ARTIFACT_SOURCE_REVISION };
 `);
   assert.equal(formDestinationModule, `"use strict";
 
-// A CODEOWNERS-reviewed source change must replace this sentinel with the
-// SHA-256 of the one approved normalized Zoho Forms URL. The deploy script may
-// verify this value but must never derive or stamp it from runtime input.
+// The reviewed Development deploy script replaces this sentinel only in its
+// isolated temporary artifact. A checkout or manually packaged function stays
+// unstamped and therefore fails closed before reaching CRM or Data Store.
 const ARTIFACT_FORM_DESTINATION_SHA256 =
   "__SYLVARA_UNSTAMPED_FORM_DESTINATION_SHA256__";
 
@@ -463,7 +617,7 @@ module.exports = { ARTIFACT_FORM_DESTINATION_SHA256 };
   assert.match(script, /APPROVED_FORM2_DESTINATION_SHA256.*\^\[a-f0-9\]\{64\}\$/);
   assert.match(script, /reviewed source form destination is not approved/);
   assert.match(script, /read_approved_form_destination "\$form_destination_path"/);
-  assert.doesNotMatch(script, /stamp_form_destination/);
+  assert.match(script, /tools\/stamp-form-destination\.js/);
   assert.match(
     script,
     /artifact_form_destination" == "\$APPROVED_FORM2_DESTINATION_SHA256/,
@@ -520,7 +674,10 @@ module.exports = { ARTIFACT_FORM_DESTINATION_SHA256 };
   assert.match(script, /--ignore-scripts/);
   assert.match(script, /--project "\$PROJECT_ID"/);
   assert.match(script, /--org "\$CATALYST_ORG"/);
-  assert.match(script, /--token "\$CATALYST_TOKEN"/);
+  const catalystTokenName = ["CATALYST", "TOKEN"].join("_");
+  assert.doesNotMatch(script, new RegExp(`--token|${catalystTokenName}=.*deploy`));
+  assert.match(script, /export CATALYST_TOKEN/);
+  assert.match(script, /compgen -e/);
   assert.match(script, /--dc us/);
   assert.doesNotMatch(script, /set -x|--verbose/);
 });

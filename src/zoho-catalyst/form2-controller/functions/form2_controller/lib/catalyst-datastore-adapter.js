@@ -144,6 +144,7 @@ function createCatalystDataStoreAdapter(app, config) {
     config?.sessionTableName,
     config?.prefillTableName,
     config?.submissionTableName,
+    config?.proofTableName,
   ];
   if (
     tableNames.some((name) => typeof name !== "string" || !TABLE_PATTERN.test(name)) ||
@@ -246,6 +247,11 @@ function createCatalystDataStoreAdapter(app, config) {
     "SUBMISSION_KEY",
     hash,
   );
+  const findRowsByProofKey = (tableName, hash) => findRowsByHash(
+    tableName,
+    "PROOF_KEY",
+    hash,
+  );
 
   async function findRowsByRowId(tableName, rowId) {
     const table = validateTableName(tableName, allowedTables);
@@ -264,6 +270,7 @@ function createCatalystDataStoreAdapter(app, config) {
     findRowsByDealIssuanceKey,
     findRowsByIssueRequestKey,
     findRowsByPrefillKey,
+    findRowsByProofKey,
     findRowsByRowId,
     findRowsBySubmissionKey,
     findRowsByTokenHash,

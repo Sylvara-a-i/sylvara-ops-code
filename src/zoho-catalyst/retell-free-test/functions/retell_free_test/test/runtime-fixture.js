@@ -127,7 +127,7 @@ function eventPayload(event, callId, metadata, letter = 'A', data = {}) {
     call_id: callId, agent_id: 'agent_shared_free_test', agent_version: 7,
     call_status: 'ended', disconnection_reason: 'user_hangup',
     to_number: letter === 'A' ? '+15550000001' : '+15550000002',
-    start_timestamp: NOW, end_timestamp: NOW + 60_000, metadata,
+    start_timestamp: NOW, end_timestamp: NOW + 60_000, duration_ms: 60_000, metadata,
   };
   if (event === 'call_analyzed') call.call_analysis = { custom_analysis_data: {
     caller_name: `Caller ${letter}`, callback_number: letter === 'A' ? '+15551110001' : '+15551110002',

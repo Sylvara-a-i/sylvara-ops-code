@@ -1,6 +1,9 @@
 "use strict";
 
-const { isArtifactBoundFormUrl } = require("./destinations");
+const {
+  isApprovedCatalystDevelopmentHostname,
+  isArtifactBoundFormUrl,
+} = require("./destinations");
 const {
   CLIENT_KEYS,
   FormContractError,
@@ -12,6 +15,7 @@ const {
 const {
   HttpBoundaryError,
   parseJsonObject,
+  parseRequestPath,
   readRawBody,
   validateJsonPost,
 } = require("./http");
@@ -24,14 +28,25 @@ const {
   verifyCustomHeader,
 } = require("./security");
 const { fingerprintSnapshot, fingerprintSubmission } = require("./snapshot");
-const { requireAllFactorsVerified } = require("./verification-proof");
+const { requireEmailOtpVerified } = require("./verification-proof");
+const { renderAccessPage } = require("./access-page");
 
 const ISSUE_REQUEST_KEYS = new Set(["dealId", "issueRequestId"]);
 const PREFILL_KEYS = new Set(["setupToken"]);
+const OTP_REQUEST_KEYS = new Set(["setupToken"]);
+const OTP_VERIFY_KEYS = new Set(["setupToken", "code"]);
 const SUBMISSION_KEYS = new Set(["setupToken", "prefillId", "submissionId", ...CLIENT_KEYS]);
 const RECORD_ID_PATTERN = /^[1-9][0-9]{9,29}$/;
 const SUBMISSION_ID_PATTERN = /^[0-9]{1,30}$/;
-const RESPONSE_STAGES = new Set(["request", "issue", "prefill", "submission"]);
+const RESPONSE_STAGES = new Set([
+  "request",
+  "issue",
+  "access",
+  "otp_request",
+  "otp_verify",
+  "prefill",
+  "submission",
+]);
 const RESPONSE_OUTCOME_PATTERN = /^[a-z][a-z0-9_]{1,63}$/;
 const NO_STORE_HEADERS = Object.freeze({
   "Cache-Control": "no-store, max-age=0",
@@ -52,7 +67,7 @@ class ControllerError extends Error {
   }
 }
 
-function response(status, body, stage, outcome) {
+function response(status, body, stage, outcome, headers = NO_STORE_HEADERS) {
   if (
     !RESPONSE_STAGES.has(stage) ||
     typeof outcome !== "string" ||
@@ -64,8 +79,8 @@ function response(status, body, stage, outcome) {
   }
   return Object.freeze({
     status,
-    headers: NO_STORE_HEADERS,
-    body: Object.freeze(body),
+    headers,
+    body: body && typeof body === "object" ? Object.freeze(body) : body,
     stage,
     outcome,
   });
@@ -157,6 +172,34 @@ function buildFormUrl(config, setupToken) {
     });
   }
   url.searchParams.set(config.form2TokenFieldAlias, setupToken);
+  return url.toString();
+}
+
+function buildAccessUrl(config, setupToken) {
+  if (!isValidAccessToken(setupToken)) throw genericSetupNotFound();
+  let url;
+  try {
+    url = new URL(config.form2AccessPublicUrl);
+  } catch {
+    throw new ControllerError("Access URL configuration is invalid", {
+      publicCode: "configuration_invalid",
+    });
+  }
+  if (
+    url.protocol !== "https:" ||
+    url.username ||
+    url.password ||
+    url.port ||
+    url.search ||
+    url.hash ||
+    !isApprovedCatalystDevelopmentHostname(url.hostname) ||
+    url.pathname !== config.accessPath
+  ) {
+    throw new ControllerError("Access URL configuration is invalid", {
+      publicCode: "configuration_invalid",
+    });
+  }
+  url.hash = new URLSearchParams({ setupToken }).toString();
   return url.toString();
 }
 
@@ -307,9 +350,17 @@ function publicError(error) {
   }
 
   if (error?.publicCode === "verification_required") {
-    return new ControllerError("All verification factors are required", {
+    return new ControllerError("Verified email access is required", {
       status: 403,
       publicCode: "verification_required",
+    });
+  }
+
+  if (error?.publicCode === "setup_not_found") return genericSetupNotFound();
+  if (new Set(["identity_mismatch", "relationship_mismatch"]).has(error?.publicCode)) {
+    return new ControllerError("Setup identity does not match", {
+      status: 409,
+      publicCode: "setup_conflict",
     });
   }
 
@@ -1118,7 +1169,7 @@ async function handleIssue(body, dependencies, nowMs) {
     200,
     {
       ok: true,
-      formUrl: buildFormUrl(dependencies.config, setupToken),
+      accessUrl: buildAccessUrl(dependencies.config, setupToken),
       expiresAt: session.expiresAt,
     },
     "issue",
@@ -1129,19 +1180,6 @@ async function handleIssue(body, dependencies, nowMs) {
 async function handlePrefill(body, dependencies, nowMs) {
   assertExactKeys(body, PREFILL_KEYS, "Prefill request is invalid");
   const candidate = await readPrefillSession(body.setupToken, dependencies, nowMs);
-  await requireAllFactorsVerified(
-    dependencies.verificationProofStore,
-    {
-      sessionRowId: candidate.session.rowId,
-      tokenHash: candidate.tokenHash,
-      crmContactId: candidate.session.crmContactId,
-      crmAccountId: candidate.session.crmAccountId,
-      crmDealId: candidate.session.crmDealId,
-      issuedAt: candidate.session.issuedAt,
-      expiresAt: candidate.session.expiresAt,
-    },
-    nowMs,
-  );
   let existing = await fetchSessionContext(dependencies.crmClient, candidate.session);
   const statuses = dependencies.config.form2AccessStatuses;
   requireEligibleContext(
@@ -1149,12 +1187,27 @@ async function handlePrefill(body, dependencies, nowMs) {
     dependencies.config,
     new Set([statuses.issued, statuses.verified]),
   );
-  // Fail deterministic CRM/Form contract defects before consuming a bounded
-  // prefill attempt or changing Deal state. Verified retries still consume an
-  // attempt so repeated prefill-row creation cannot continue until TTL.
+  // Fail deterministic CRM/Form contract defects before consuming the
+  // one-time email proof or changing durable session state.
   buildPrefillPayload(existing, {
     allowedPhoneSystemProviders: dependencies.config.form2PhoneSystemProviders,
   });
+  const proofBinding = {
+    sessionRowId: candidate.session.rowId,
+    issueRequestKey: candidate.session.issueRequestKey,
+    tokenHash: candidate.tokenHash,
+    crmContactId: candidate.session.crmContactId,
+    crmAccountId: candidate.session.crmAccountId,
+    crmDealId: candidate.session.crmDealId,
+    issuedAt: candidate.session.issuedAt,
+    expiresAt: candidate.session.expiresAt,
+  };
+  await requireEmailOtpVerified(
+    dependencies.verificationService,
+    proofBinding,
+    existing.contact.Email,
+    nowMs,
+  );
   const session = await verifyPrefillSession(
     candidate.session,
     candidate.tokenHash,
@@ -1205,6 +1258,27 @@ async function handlePrefill(body, dependencies, nowMs) {
 
   existing = await fetchSessionContext(dependencies.crmClient, session);
   requireEligibleContext(existing, dependencies.config, new Set([statuses.verified]));
+  try {
+    // CRM may have changed after proof consumption and the verified-state
+    // write. Re-read and rebind the consumed proof before minting any prefill.
+    await requireEmailOtpVerified(
+      dependencies.verificationService,
+      proofBinding,
+      existing.contact.Email,
+      nowMs,
+    );
+  } catch {
+    await markSessionReconciliation(
+      dependencies.sessionStore,
+      session,
+      "proof_destination_changed_after_consumption",
+    );
+    throw new ControllerError("Verified email destination changed", {
+      status: 503,
+      publicCode: "service_unavailable",
+      ambiguous: true,
+    });
+  }
   const prefill = buildPrefillPayload(existing, {
     allowedPhoneSystemProviders: dependencies.config.form2PhoneSystemProviders,
   });
@@ -1213,6 +1287,73 @@ async function handlePrefill(body, dependencies, nowMs) {
     prefillBinding(session, existing, snapshotFingerprint),
   );
   return response(200, { ...prefill, prefillId: minted.prefillId }, "prefill", "prepared");
+}
+
+function handleAccessPage(dependencies) {
+  const rendered = renderAccessPage({
+    otpRequestPath: dependencies.config.otpRequestPath,
+    otpVerifyPath: dependencies.config.otpVerifyPath,
+    randomBytes: dependencies.randomBytes,
+  });
+  return response(200, rendered.html, "access", "served", rendered.headers);
+}
+
+async function handleOtpRequest(body, dependencies) {
+  assertExactKeys(body, OTP_REQUEST_KEYS, "Verification request is invalid");
+  const result = await dependencies.verificationService.requestEmailOtp(body.setupToken);
+  if (!new Set([
+    "already_verified",
+    "sent_confirmed",
+    "in_flight",
+    "retryable_failure",
+    "delivery_disabled",
+    "terminal_failure",
+  ]).has(result?.state)) {
+    throw new ControllerError("Verification request did not converge", {
+      publicCode: "service_unavailable",
+    });
+  }
+  if (result.state === "already_verified") {
+    return response(
+      200,
+      { ok: true, state: result.state, formUrl: buildFormUrl(dependencies.config, body.setupToken) },
+      "otp_request",
+      "already_verified",
+    );
+  }
+  if (new Set(["sent_confirmed", "in_flight"]).has(result.state)) {
+    return response(
+      202,
+      { ok: true, state: result.state },
+      "otp_request",
+      result.state,
+    );
+  }
+  return response(
+    503,
+    { ok: false, state: result.state },
+    "otp_request",
+    result.state,
+  );
+}
+
+async function handleOtpVerify(body, dependencies) {
+  assertExactKeys(body, OTP_VERIFY_KEYS, "Verification request is invalid");
+  const result = await dependencies.verificationService.verifyEmailOtp(
+    body.setupToken,
+    body.code,
+  );
+  if (result?.verified !== true) {
+    throw new ControllerError("Verification did not converge", {
+      publicCode: "service_unavailable",
+    });
+  }
+  return response(
+    200,
+    { ok: true, formUrl: buildFormUrl(dependencies.config, body.setupToken) },
+    "otp_verify",
+    "verified",
+  );
 }
 
 function sessionOwnsSubmission(session, submissionFingerprint) {
@@ -1778,6 +1919,7 @@ async function handleSubmission(body, dependencies, nowMs) {
 }
 
 function verifyRouteHeader(request, path, config) {
+  if (new Set([config.otpRequestPath, config.otpVerifyPath]).has(path)) return;
   const selected = path === config.issuePath
     ? [config.issueHeaderName, config.issueHeaderSecret]
     : path === config.prefillPath
@@ -1797,7 +1939,8 @@ function validateDependencies(dependencies) {
     !isPlainObject(dependencies.config) ||
     !dependencies.sessionStore ||
     !dependencies.workflowStore ||
-    !dependencies.crmClient
+    !dependencies.crmClient ||
+    !dependencies.verificationService
   ) {
     throw new ControllerError("Controller dependencies are unavailable", {
       publicCode: "configuration_invalid",
@@ -1810,15 +1953,36 @@ async function handleForm2Request(request, dependencies) {
   try {
     validateDependencies(dependencies);
     const config = dependencies.config;
+    const requestedPath = parseRequestPath(request);
+    if (requestedPath === config.accessPath) {
+      stage = "access";
+      if (String(request?.method ?? "").toUpperCase() !== "GET") {
+        throw new HttpBoundaryError("Method is not approved", {
+          status: 405,
+          publicCode: "method_not_allowed",
+        });
+      }
+      return handleAccessPage(dependencies);
+    }
     const path = validateJsonPost(
       request,
-      new Set([config.issuePath, config.prefillPath, config.submissionPath]),
+      new Set([
+        config.issuePath,
+        config.otpRequestPath,
+        config.otpVerifyPath,
+        config.prefillPath,
+        config.submissionPath,
+      ]),
     );
     stage = path === config.issuePath
       ? "issue"
-      : path === config.prefillPath
-        ? "prefill"
-        : "submission";
+      : path === config.otpRequestPath
+        ? "otp_request"
+        : path === config.otpVerifyPath
+          ? "otp_verify"
+          : path === config.prefillPath
+            ? "prefill"
+            : "submission";
     verifyRouteHeader(request, path, config);
     const rawBody = await readRawBody(request, {
       maximumBytes: config.maxBodyBytes,
@@ -1828,6 +1992,8 @@ async function handleForm2Request(request, dependencies) {
     const now = typeof dependencies.now === "function" ? dependencies.now : Date.now;
     const nowMs = normalizeNow(now);
     if (path === config.issuePath) return await handleIssue(body, dependencies, nowMs);
+    if (path === config.otpRequestPath) return await handleOtpRequest(body, dependencies);
+    if (path === config.otpVerifyPath) return await handleOtpVerify(body, dependencies);
     if (path === config.prefillPath) return await handlePrefill(body, dependencies, nowMs);
     return await handleSubmission(body, dependencies, nowMs);
   } catch (error) {
@@ -1844,6 +2010,7 @@ async function handleForm2Request(request, dependencies) {
 module.exports = {
   ControllerError,
   buildFormUrl,
+  buildAccessUrl,
   fetchSessionContext,
   handleForm2Request,
 };

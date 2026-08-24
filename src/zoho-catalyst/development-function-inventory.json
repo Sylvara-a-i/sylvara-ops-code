@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "record_type": "sanitized_development_function_inventory",
   "environment": "Development",
   "production_authorized": false,
@@ -17,7 +17,43 @@
     "manifest_is_production_authority": false,
     "live_changes_require_scoped_approval_and_independent_readback": true
   },
+  "topology_decision": {
+    "retained_canonical_boundaries": 5,
+    "combine_further": false,
+    "reason": "Form intake, authorization proof, raw Retell webhooks, retry execution, and paid CRM/Billing mutation have different callers, credentials, runtimes, and failure blast radii. Combining them would reduce the function count while weakening least privilege and making rollback harder.",
+    "canonical_functions": [
+      "form1_assisted_controller",
+      "form2_controller",
+      "retell_free_test",
+      "retell_free_test_retry",
+      "crm_billing_orchestrator"
+    ]
+  },
   "functions": [
+    {
+      "api_name": "form1_assisted_controller",
+      "type": "Advanced I/O",
+      "classification": "canonical",
+      "owner": "free_test_form1_assisted_intake",
+      "source_path": "src/zoho-catalyst/form1-controller/functions/form1_assisted_controller",
+      "source_reproducibility": "repository_owned",
+      "desired_development_state": "deployed_unbound_until_direct_tests_and_forms_cutover",
+      "replacement": null,
+      "security_boundary": "Only administrator issue and authenticated Zoho Forms prefill calls; Lead-scoped read/update credentials and the assisted-session table remain outside authorization, call, and Billing runtimes.",
+      "decommission_action": "retain_separately"
+    },
+    {
+      "api_name": "form2_controller",
+      "type": "Advanced I/O",
+      "classification": "canonical",
+      "owner": "free_test_form2_authorization",
+      "source_path": "src/zoho-catalyst/form2-controller/functions/form2_controller",
+      "source_reproducibility": "repository_owned",
+      "desired_development_state": "deployed_unbound_until_email_proof_and_forms_cutover_pass",
+      "replacement": null,
+      "security_boundary": "Owns expiring access, email-only proof, bound prefill, and idempotent authorization submission. It cannot approve go-live, assign a test number, or create Billing state.",
+      "decommission_action": "retain_separately"
+    },
     {
       "api_name": "retell_free_test",
       "type": "Advanced I/O",

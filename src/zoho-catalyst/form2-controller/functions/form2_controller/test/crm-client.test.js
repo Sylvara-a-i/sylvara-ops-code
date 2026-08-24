@@ -19,6 +19,7 @@ const PROTECTED_DEAL_FIELDS = Object.freeze({
   Go_Live_Approval_Status: "Approved",
   Go_Live_Approved_At: "2026-08-14T18:10:00.654Z",
   Test_Status: "Live",
+  Test_Phone_Number: "555-010-2200",
 });
 
 function config(overrides = {}) {
@@ -73,6 +74,7 @@ function existingRecords() {
       Current_Call_Handling: "Office Staff / Dispatcher",
       Requested_Test_Route: "No Answer / Overflow Only",
       Approved_Test_Route: "No Answer / Overflow Only",
+      Alert_Recipient_Mobile: "555-010-2600",
       Setup_Access_Issued_At: "2026-08-14T17:55:00.000Z",
       Setup_Access_Verified_At: "2026-08-14T17:58:00.000Z",
       Free_Test_Authorization_Status: "Not Sent",
@@ -114,7 +116,6 @@ function updates() {
     },
     dealUpdate: {
       Target_Start_Date: "2026-08-20",
-      Test_Phone_Number: "555-010-2200",
       No_Answer_Delay: "5 Rings",
       Forwarding_Administrator_Name: "Synthetic Administrator",
       Forwarding_Administrator_Mobile: "555-010-2300",
@@ -125,8 +126,7 @@ function updates() {
       Urgent_Call_Handling: "Alert + Capture Callback",
       Existing_Customer_Call_Handling: "Capture Callback Only",
       Alert_Recipient_Name: "Synthetic Alert Recipient",
-      Alert_Recipient_Mobile: "555-010-2600",
-      Alert_Recipient_Email: null,
+      Alert_Recipient_Email: "alerts@example.invalid",
       Authorized_Representative_Confirmed: true,
       Test_Scope_Accepted: true,
       Authority_Confirmed_At: "2026-08-14T18:00:00.000Z",
