@@ -476,6 +476,111 @@ test('integration: repeated retryable Mail rejections stop durably after the thi
   assert.equal(sends, 3);
 });
 
+test('integration: transient pre-send reads remain retryable and invoke Mail only after recovery', async () => {
+  let sends = 0;
+  const fixture = runtimeFixture({
+    mailBehavior: async () => {
+      sends += 1;
+      return { isAsync: false, project_details: { id: 'synthetic-project' },
+        from_email: 'verified-sender@example.invalid', to_email: ['a@example.invalid'] };
+    },
+  });
+  const inbound = await invoke(fixture.listener, { url: '/retell/inbound',
+    payload: payloadInbound('A'), env: fixture.env });
+  await invoke(fixture.listener, { url: '/retell/events',
+    payload: eventPayload('call_analyzed', 'notification_read_retry_A',
+      inbound.body.call_inbound.metadata, 'A'), env: fixture.env });
+  const notification = fixture.store.rows.get('FreeTestNotifications')[0];
+  const call = fixture.store.rows.get('FreeTestCalls')[0];
+  Object.assign(notification, { STATUS: 'Pending', ATTEMPT_COUNT: 0, PROVIDER_CODE: 'NOT_ATTEMPTED',
+    PROVIDER_RESULT_REFERENCE: null, SEND_TOKEN: null, LAST_ATTEMPT_AT: null,
+    NEXT_ATTEMPT_AT: null, LAST_ERROR_CODE: null });
+  call.NOTIFICATION_STATE = 'Pending';
+
+  const query = fixture.store.query.bind(fixture.store);
+  let failCallRead = true;
+  fixture.store.query = async (...args) => {
+    if (failCallRead && args[0] === 'FreeTestCalls' && args[1] === 'CALL_KEY') {
+      failCallRead = false;
+      throw new FreeTestError('CATALYST_QUERY_FAILED', 'synthetic transient call read',
+        { httpStatus: 503, retryable: true });
+    }
+    return query(...args);
+  };
+  const sendEnvironment = { ...fixture.env, FREE_TEST_NOTIFICATION_MODE: 'send_development' };
+  const handler = createRetryJobHandler({ catalystSdk: fixture.catalystSdk,
+    environment: sendEnvironment, now: () => fixture.clock.value,
+    storeFactory: () => fixture.store });
+  const first = await handler(retryJobRequest(sendEnvironment), retryJobContext());
+  assert.deepEqual(first.notifications.results,
+    [{ status: 'RetryRequired', errorCode: 'CATALYST_QUERY_FAILED' }]);
+  assert.equal(notification.STATUS, 'RetryRequired');
+  assert.equal(notification.ATTEMPT_COUNT, 1);
+  assert.equal(notification.NEXT_ATTEMPT_AT,
+    new Date(fixture.clock.value + 1000).toISOString());
+  assert.equal(notification.PROVIDER_CODE, 'NOT_ATTEMPTED');
+  assert.equal(notification.LAST_ERROR_CODE, 'CATALYST_QUERY_FAILED');
+  assert.equal(call.NOTIFICATION_STATE, 'RetryRequired');
+  assert.equal(sends, 0);
+  assert.equal(fixture.mailAccesses, 0);
+
+  fixture.clock.value += 1000;
+  const recovered = await handler(retryJobRequest(sendEnvironment), retryJobContext());
+  assert.equal(recovered.notifications.results[0].status, 'Sent');
+  assert.equal(notification.STATUS, 'Sent');
+  assert.equal(notification.ATTEMPT_COUNT, 2);
+  assert.equal(notification.PROVIDER_CODE, 'CATALYST_MAIL_ACCEPTED');
+  assert.equal(call.NOTIFICATION_STATE, 'Sent');
+  assert.equal(sends, 1);
+  assert.equal(fixture.mailAccesses, 1);
+});
+
+test('integration: repeated pre-send read failures terminate without a provider invocation', async () => {
+  const fixture = runtimeFixture();
+  const inbound = await invoke(fixture.listener, { url: '/retell/inbound',
+    payload: payloadInbound('A'), env: fixture.env });
+  await invoke(fixture.listener, { url: '/retell/events',
+    payload: eventPayload('call_analyzed', 'notification_read_terminal_A',
+      inbound.body.call_inbound.metadata, 'A'), env: fixture.env });
+  const notification = fixture.store.rows.get('FreeTestNotifications')[0];
+  const call = fixture.store.rows.get('FreeTestCalls')[0];
+  Object.assign(notification, { STATUS: 'Pending', ATTEMPT_COUNT: 0, PROVIDER_CODE: 'NOT_ATTEMPTED',
+    PROVIDER_RESULT_REFERENCE: null, SEND_TOKEN: null, LAST_ATTEMPT_AT: null,
+    NEXT_ATTEMPT_AT: null, LAST_ERROR_CODE: null });
+  call.NOTIFICATION_STATE = 'Pending';
+
+  const query = fixture.store.query.bind(fixture.store);
+  let failNextCallRead = false;
+  fixture.store.query = async (...args) => {
+    if (failNextCallRead && args[0] === 'FreeTestCalls' && args[1] === 'CALL_KEY') {
+      failNextCallRead = false;
+      throw new FreeTestError('CATALYST_QUERY_FAILED', 'synthetic persistent call read',
+        { httpStatus: 503, retryable: true });
+    }
+    return query(...args);
+  };
+  const sendEnvironment = { ...fixture.env, FREE_TEST_NOTIFICATION_MODE: 'send_development' };
+  const handler = createRetryJobHandler({ catalystSdk: fixture.catalystSdk,
+    environment: sendEnvironment, now: () => fixture.clock.value,
+    storeFactory: () => fixture.store });
+  for (const delay of [0, 1000, 5000]) {
+    fixture.clock.value += delay;
+    failNextCallRead = true;
+    await handler(retryJobRequest(sendEnvironment), retryJobContext());
+  }
+  assert.equal(notification.STATUS, 'TerminalFailure');
+  assert.equal(notification.ATTEMPT_COUNT, 3);
+  assert.equal(notification.NEXT_ATTEMPT_AT, null);
+  assert.equal(notification.PROVIDER_CODE, 'NOT_ATTEMPTED');
+  assert.equal(notification.PROVIDER_RESULT_REFERENCE, null);
+  assert.equal(notification.LAST_ERROR_CODE, 'CATALYST_QUERY_FAILED');
+  assert.equal(call.NOTIFICATION_STATE, 'TerminalFailure');
+  assert.equal(fixture.mailAccesses, 0);
+  fixture.clock.value += 60_000;
+  assert.equal((await handler(retryJobRequest(sendEnvironment), retryJobContext()))
+    .notifications.examined, 0);
+});
+
 test('integration: stale Mail invocation becomes ambiguous in notification and call state without resending', async () => {
   const fixture = runtimeFixture();
   const inbound = await invoke(fixture.listener, { url: '/retell/inbound',
@@ -662,6 +767,16 @@ test('integration: reports fail closed on client, count, or notification reconci
     { code: 'REPORT_RECONCILIATION_REQUIRED' },
   );
   call.HANDLED_RECORDED = true;
+
+  const deployment = fixture.store.rows.get('FreeTestDeployments')[0];
+  const countedCallKeys = deployment.COUNTED_CALL_KEYS_JSON;
+  deployment.COUNTED_CALL_KEYS_JSON = JSON.stringify([`call_${'e'.repeat(64)}`]);
+  await assert.rejects(
+    queryClientReport(fixture.store, fixture.config,
+      'client_A', 'deployment_A', fixture.clock.value),
+    { code: 'REPORT_RECONCILIATION_REQUIRED' },
+  );
+  deployment.COUNTED_CALL_KEYS_JSON = countedCallKeys;
 
   const notification = fixture.store.rows.get('FreeTestNotifications')[0];
   notification.STATUS = 'RetryRequired';

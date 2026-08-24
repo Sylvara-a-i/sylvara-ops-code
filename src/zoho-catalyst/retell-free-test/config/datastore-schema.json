@@ -1,10 +1,11 @@
 {
-  "schema_version": 2,
-  "status": "development-mvp-schema-provisioned",
-  "live_state": "verified_development_schema_readback",
+  "schema_version": 3,
+  "status": "development-mvp-schema-contract",
+  "live_state": "requires_fresh_candidate_readback",
   "production_authorized": false,
-  "development_readback": {
-    "source_revision": "d4f5af31be310df400532641ef163c16de31066c",
+  "historical_development_readback": {
+    "status": "historical_only",
+    "observed_source_revision": "d4f5af31be310df400532641ef163c16de31066c",
     "runtime_table_count": 4,
     "all_declared_columns_constraints_and_max_lengths_match": true,
     "required_audit_consent_columns_match": true,

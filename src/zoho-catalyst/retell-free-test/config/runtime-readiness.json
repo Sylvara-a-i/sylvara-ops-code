@@ -1,14 +1,23 @@
 {
-  "schema_version": 4,
-  "decision": "ready_for_controlled_internal_phone_test",
-  "acceptance_classification": "READY_FOR_CONTROLLED_INTERNAL_PHONE_TEST",
-  "decision_date": "2026-08-24",
+  "schema_version": 5,
+  "record_type": "development_readiness_contract",
   "environment": "development",
   "entrypoint_policy": "authenticated_development_routes",
-  "source_revision": "d4f5af31be310df400532641ef163c16de31066c",
+  "status_authority": {
+    "current_status_not_committed": true,
+    "reason": "A source-controlled status file cannot authoritatively name the commit that contains it. Current readiness requires a post-deploy readback against the selected release-candidate SHA.",
+    "required_live_sources": [
+      "authenticated GET /internal/readiness",
+      "sanitized Advanced I/O package pullback comparison",
+      "sanitized retry Job package pullback comparison",
+      "Catalyst function, table, Job, Cron, route, and notification-mode readback"
+    ],
+    "release_candidate_revision_rule": "Both Development functions and every eligible synthetic deployment row must report the exact selected release-candidate SHA.",
+    "package_parity_rule": "The two deployed packages must match sanitized checksums computed from that release candidate."
+  },
   "scope": {
-    "catalyst_zoho_lane_complete": true,
-    "active_retell_development_number_count": 1,
+    "catalyst_zoho_lane_implemented": true,
+    "active_retell_development_number_count_at_last_observation": 1,
     "second_number_deferred": true,
     "paid_or_native_voice_testing_deferred": true,
     "provider_fallback_testing_deferred": true,
@@ -25,22 +34,21 @@
     "client-and-deployment-partitioned query plus sanitized JSON and CSV projections",
     "Production rejection before Catalyst Data Store or Mail access"
   ],
-  "verified_development_evidence": [
-    "FreeTestDeployments, FreeTestRetellEventReceipts, FreeTestCalls, and FreeTestNotifications match the committed schema; required encrypted JSON columns have audit_consent and App User permissions are empty",
-    "retell_free_test is Node.js 24 Advanced I/O at 256 MB and retell_free_test_retry is Node.js 18 Job Function at 256 MB",
-    "24 Advanced I/O and five retry-package source files matched revision d4f5af31be310df400532641ef163c16de31066c during sanitized pullback comparison",
-    "required private runtime configuration and a verified Development Mail sender are configured outside source control",
-    "readiness returned non-cacheable HTTP 200 with Development identity, exact source revision, four readable tables, and dry_run mode",
-    "missing, wrong, malformed, and duplicate readiness credentials plus unsupported methods, paths, query strings, and hosts failed closed",
-    "signed inbound requests resolved two synthetic clients independently and invalid signature, freshness, content, ownership, state, expiry, limit, configuration, and shared-agent cases failed closed",
-    "signed call_ended and call_analyzed events converged in either order; replay created no duplicate call, count, or notification",
-    "one unique handled call incremented once; seven-day expiry and the practical 25-call stop were exercised against durable Development state",
-    "manual empty and retryable-state Job runs completed while FreeTestRetry1m remained disabled",
-    "one controlled internal Development email received provider acceptance and inbox readback; replay caused no second provider invocation, and notification mode was restored to dry_run",
-    "one non-customer Retell Development number was bound to the published shared version; unbind and restore were read back as a route rollback exercise",
-    "CRM, Analytics, SMS, customer forwarding, Production, and prospect/customer traffic remained untouched"
-  ],
-  "blocking_evidence_gaps": [],
+  "historical_observation": {
+    "status": "superseded_by_later_source_change",
+    "observed_at": "2026-08-24",
+    "observed_source_revision": "8df5d8abc93a81dcbb714c0980c26a675209568b",
+    "classification_at_observation": "READY_FOR_CONTROLLED_INTERNAL_PHONE_TEST",
+    "evidence": [
+      "FreeTestDeployments, FreeTestRetellEventReceipts, FreeTestCalls, and FreeTestNotifications matched the committed schema; required encrypted JSON columns had audit_consent and App User permissions were empty",
+      "retell_free_test was Node.js 24 Advanced I/O at 256 MB and retell_free_test_retry was Node.js 18 Job Function at 256 MB",
+      "sanitized pullback comparison matched both deployed packages to the observed source revision",
+      "required private runtime configuration and a verified Development Mail sender were configured outside source control",
+      "readiness returned non-cacheable HTTP 200 with Development identity, exact source revision, four readable tables, and dry_run mode",
+      "signed inbound and event requests, replay convergence, seven-day expiry, practical 25-call stopping, manual retry, one controlled internal email, and route rollback were exercised",
+      "CRM, Analytics, SMS, customer forwarding, Production, and prospect/customer traffic remained untouched"
+    ]
+  },
   "deferred_evidence": [
     {
       "id": "second_retell_development_number",
@@ -68,20 +76,14 @@
     "Number reassignment is not a runtime feature. The current non-customer number remains frozen to its Development deployment and must enter cooldown before any separately reviewed reuse.",
     "Catalyst's edge buffers public request bodies before Advanced I/O execution; application timeout and aborted-stream codes are locally tested while public stalled or truncated requests are judged by fail-closed and zero-side-effect behavior."
   ],
-  "release_gate": {
+  "release_gate_contract": {
     "production_remains_prohibited": true,
-    "exact_recorded_revision_deployed_and_read_back": true,
-    "final_candidate_requires_redeployment_if_source_revision_changes": true,
-    "required_private_runtime_configuration_complete": true,
-    "signed_request_and_durable_runtime_proof_complete": true,
-    "retry_job_manual_proof_complete": true,
-    "retry_cron_enabled": false,
-    "one_controlled_development_mail_proof_complete": true,
-    "notification_mode_restored_to_dry_run": true,
-    "two_synthetic_clients_isolated_in_catalyst": true,
-    "one_retell_development_number_bound_to_shared_agent": true,
-    "second_live_number_required_for_current_classification": false,
-    "controlled_internal_phone_test_may_begin_after_test_specific_route_readback": true,
+    "current_candidate_requires_exact_revision_deployment_and_readback": true,
+    "current_candidate_requires_sanitized_package_parity": true,
+    "required_private_runtime_configuration": "complete_and_read_back_outside_source_control",
+    "required_notification_mode": "dry_run",
+    "required_retry_cron_state": "disabled",
+    "second_live_number_required_for_controlled_internal_phone_test": false,
     "first_controlled_prospect_technical_gate_complete": false,
     "prospect_test_requires_separate_launch_decision": true
   }

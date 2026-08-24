@@ -98,6 +98,10 @@ test('unit: default console logger emits only allowlisted opaque operational fie
 
 test('unit: Data Store schema contains exactly the four implemented MVP tables', () => {
   const schema = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', '..', 'config', 'datastore-schema.json'), 'utf8'));
+  assert.equal(schema.status, 'development-mvp-schema-contract');
+  assert.equal(schema.live_state, 'requires_fresh_candidate_readback');
+  assert.equal(Object.hasOwn(schema, 'development_readback'), false);
+  assert.equal(schema.historical_development_readback.status, 'historical_only');
   assert.deepEqual(schema.tables.map(({ api_name: name }) => name), [
     'FreeTestDeployments', 'FreeTestRetellEventReceipts', 'FreeTestCalls', 'FreeTestNotifications',
   ]);
@@ -266,18 +270,48 @@ test('unit: readiness token comparison is deterministic and timing-safe at the d
   assert.equal(timingSafeToken('short', 'b'.repeat(32)), false);
 });
 
-test('unit: runtime readiness records the one-number Development boundary', () => {
+test('unit: runtime readiness is a one-number contract whose current status requires live readback', () => {
   const readiness = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', '..', 'config', 'runtime-readiness.json'), 'utf8'));
-  assert.equal(readiness.decision, 'ready_for_controlled_internal_phone_test');
+  assert.equal(readiness.record_type, 'development_readiness_contract');
   assert.equal(readiness.environment, 'development');
-  assert.equal(readiness.release_gate.production_remains_prohibited, true);
-  assert.deepEqual(readiness.blocking_evidence_gaps, []);
-  assert.equal(readiness.scope.active_retell_development_number_count, 1);
+  assert.equal(Object.hasOwn(readiness, 'source_revision'), false);
+  assert.equal(Object.hasOwn(readiness, 'decision'), false);
+  assert.equal(readiness.status_authority.current_status_not_committed, true);
+  assert.equal(readiness.release_gate_contract.production_remains_prohibited, true);
+  assert.equal(readiness.release_gate_contract.current_candidate_requires_exact_revision_deployment_and_readback, true);
+  assert.equal(readiness.release_gate_contract.current_candidate_requires_sanitized_package_parity, true);
+  assert.equal(readiness.scope.active_retell_development_number_count_at_last_observation, 1);
   assert.equal(readiness.scope.second_number_deferred, true);
+  assert.equal(readiness.historical_observation.status, 'superseded_by_later_source_change');
+  assert.match(readiness.historical_observation.observed_source_revision, /^[0-9a-f]{40}$/);
   assert.deepEqual(new Set(readiness.deferred_evidence.map(({ id }) => id)), new Set([
     'second_retell_development_number', 'retell_voice_and_provider_fallback',
     'prospect_launch_review',
   ]));
+});
+
+test('unit: sanitized Development function inventory preserves the canonical security boundaries', () => {
+  const inventory = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', '..', '..',
+    'development-function-inventory.json'), 'utf8'));
+  assert.equal(inventory.record_type, 'sanitized_development_function_inventory');
+  assert.equal(inventory.environment, 'Development');
+  assert.equal(inventory.production_authorized, false);
+  assert.equal(inventory.authorization.manifest_is_deletion_authority, false);
+  assert.equal(inventory.sanitization.function_ids_included, false);
+  assert.equal(inventory.sanitization.invoke_urls_or_private_hosts_included, false);
+  assert.deepEqual(Object.fromEntries(inventory.functions.map(({ api_name: name, classification }) => (
+    [name, classification]
+  ))), {
+    retell_free_test: 'canonical',
+    retell_free_test_retry: 'canonical',
+    crm_billing_orchestrator: 'independently_necessary',
+    retell_inbound_resolver: 'legacy_rollback_only',
+    retell_route_approval_control: 'legacy_rollback_only',
+    retell_events: 'legacy_rollback_only',
+    process_retell_events: 'legacy_rollback_only',
+    analytics_sync: 'legacy_deferred',
+  });
+  assert.equal(inventory.rollback_policy.legacy_reactivation_is_not_the_canonical_rollback, true);
 });
 
 test('unit: Advanced I/O entrypoint exports the Catalyst request handler', () => {

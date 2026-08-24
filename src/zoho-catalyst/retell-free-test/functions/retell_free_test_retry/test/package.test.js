@@ -21,7 +21,11 @@ test('job target is independently deployable and imports a materialized reviewed
   const retryConfig = JSON.parse(fs.readFileSync(
     path.join(functionRoot, '..', '..', 'config', 'retry-job.json'), 'utf8',
   ));
+  assert.equal(retryConfig.record_type, 'development_retry_job_contract');
   assert.equal(retryConfig.environment, 'Development');
+  assert.equal(retryConfig.live_state, 'requires_fresh_candidate_readback');
+  assert.equal(Object.hasOwn(retryConfig, 'source_revision'), false);
+  assert.equal(retryConfig.historical_observation.status, 'historical_only');
   assert.equal(retryConfig.function_target.memory_mb, 256);
   assert.equal(retryConfig.job_pool.memory_mb, 512);
   assert.equal(retryConfig.job.target_name, 'retell_free_test_retry');

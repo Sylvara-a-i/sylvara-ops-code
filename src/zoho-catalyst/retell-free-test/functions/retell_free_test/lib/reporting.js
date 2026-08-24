@@ -42,6 +42,7 @@ async function queryClientReport(store, config, clientId, deploymentId, asOfMs =
     unsupportedCalls: 0, outOfAreaCalls: 0, otherCalls: 0, unresolvedCalls: 0,
   };
   const callsByKey = new Map();
+  const handledCallKeys = new Set();
   const calls = callRows.map((row) => {
     invariant(!callsByKey.has(row.CALL_KEY), 'REPORT_RECONCILIATION_REQUIRED',
       'Report contains duplicate call ownership.');
@@ -49,6 +50,7 @@ async function queryClientReport(store, config, clientId, deploymentId, asOfMs =
     const call = assertCanonicalCallIntegrity(row, parseCanonical(row), deployment,
       'REPORT_OWNERSHIP_CONFLICT');
     if (row.HANDLED_RECORDED === true) {
+      handledCallKeys.add(row.CALL_KEY);
       const metric = METRIC_BY_OUTCOME[call.outcome] || 'unresolvedCalls';
       metrics[metric] += 1;
     }
@@ -72,8 +74,10 @@ async function queryClientReport(store, config, clientId, deploymentId, asOfMs =
       valueCurrency: call.value?.currency ?? null,
     });
   }).sort((left, right) => left.callStartedAt.localeCompare(right.callStartedAt));
-  invariant(metrics.totalCallsHandled === deployment.handledCount,
-    'REPORT_RECONCILIATION_REQUIRED', 'Handled-call totals require reconciliation.');
+  invariant(metrics.totalCallsHandled === deployment.handledCount
+    && handledCallKeys.size === deployment.countedCallKeys.length
+    && deployment.countedCallKeys.every((callKey) => handledCallKeys.has(callKey)),
+    'REPORT_RECONCILIATION_REQUIRED', 'Handled-call identities require reconciliation.');
   const notificationStates = {};
   const notificationsByCallKey = new Map();
   for (const row of notificationRows) {

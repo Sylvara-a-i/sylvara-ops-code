@@ -32,6 +32,10 @@ const CONTAINED_EVENT_STATES = new Set([
 const CONTAINED_NOTIFICATION_STATES = new Set([
   'DryRunRecorded', 'Sent', 'Ambiguous', 'ReconciliationRequired', 'TerminalFailure',
 ]);
+const RETRYABLE_NOTIFICATION_STATES = new Set(['Pending', 'RetryRequired']);
+const NOTIFICATION_FAILURE_RESULT_STATES = new Set([
+  ...CONTAINED_NOTIFICATION_STATES, 'RetryRequired',
+]);
 const OWNERSHIP_METADATA_FIELDS = Object.freeze([
   'resolver_status', 'client_id', 'deployment_id', 'configuration_version', 'engagement_type',
   'capability_profile', 'coverage_mode', 'number_binding_id', 'number_binding_version',
@@ -612,22 +616,43 @@ function createRuntimeService({ store, mailAdapter, config, now = Date.now, logg
     let current = await store.unique(notificationTable, 'NOTIFICATION_KEY', candidate.NOTIFICATION_KEY);
     if (!current) return null;
     if (!CONTAINED_NOTIFICATION_STATES.has(current.STATUS)
-      && !new Set(['Pending', 'RetryRequired', 'Sending']).has(current.STATUS)) return null;
+      && !RETRYABLE_NOTIFICATION_STATES.has(current.STATUS)
+      && current.STATUS !== 'Sending') return null;
     const at = new Date(now()).toISOString();
     if (!CONTAINED_NOTIFICATION_STATES.has(current.STATUS)) {
-      const ambiguous = current.STATUS === 'Sending'
-        || (error instanceof FreeTestError && error.ambiguous);
-      const status = ambiguous ? 'Ambiguous' : 'ReconciliationRequired';
-      const providerCode = ambiguous
-        ? 'CATALYST_MAIL_UNRESOLVED_AFTER_INVOKE' : 'NOTIFICATION_RECONCILIATION_REQUIRED';
       current = await store.mutate(notificationTable, 'NOTIFICATION_KEY', candidate.NOTIFICATION_KEY,
-        'NOTIFICATION_VERSION', (row) => new Set(['Pending', 'RetryRequired', 'Sending']).has(row.STATUS) ? {
-          STATUS: status, PROVIDER_CODE: providerCode, PROVIDER_RESULT_REFERENCE: null,
-          SEND_TOKEN: null, NEXT_ATTEMPT_AT: null, LAST_ERROR_CODE: durableErrorCode(error),
-          UPDATED_AT: at,
-        } : null);
+        'NOTIFICATION_VERSION', (row) => {
+          if (CONTAINED_NOTIFICATION_STATES.has(row.STATUS)) return null;
+          const ambiguous = row.STATUS === 'Sending'
+            || (error instanceof FreeTestError && error.ambiguous);
+          if (ambiguous) return {
+            STATUS: 'Ambiguous', PROVIDER_CODE: 'CATALYST_MAIL_UNRESOLVED_AFTER_INVOKE',
+            PROVIDER_RESULT_REFERENCE: null, SEND_TOKEN: null, NEXT_ATTEMPT_AT: null,
+            LAST_ERROR_CODE: durableErrorCode(error), UPDATED_AT: at,
+          };
+          if (!RETRYABLE_NOTIFICATION_STATES.has(row.STATUS)) return null;
+          if (error instanceof FreeTestError && error.retryable) {
+            // ATTEMPT_COUNT covers the bounded delivery pipeline, including a safe
+            // pre-provider read attempt. Provider invocation evidence remains in
+            // PROVIDER_CODE and PROVIDER_RESULT_REFERENCE.
+            const attempt = integerColumn(row.ATTEMPT_COUNT, 'ATTEMPT_COUNT') + 1;
+            const exhausted = attempt >= config.notificationMaxAttempts;
+            return {
+              STATUS: exhausted ? 'TerminalFailure' : 'RetryRequired',
+              ATTEMPT_COUNT: attempt, SEND_TOKEN: null, LAST_ATTEMPT_AT: at,
+              NEXT_ATTEMPT_AT: exhausted ? null
+                : new Date(now() + NOTIFICATION_RETRY_DELAYS_MS[attempt - 1]).toISOString(),
+              LAST_ERROR_CODE: durableErrorCode(error), UPDATED_AT: at,
+            };
+          }
+          return {
+            STATUS: 'ReconciliationRequired', PROVIDER_CODE: 'NOTIFICATION_RECONCILIATION_REQUIRED',
+            PROVIDER_RESULT_REFERENCE: null, SEND_TOKEN: null, NEXT_ATTEMPT_AT: null,
+            LAST_ERROR_CODE: durableErrorCode(error), UPDATED_AT: at,
+          };
+        });
     }
-    if (!CONTAINED_NOTIFICATION_STATES.has(current.STATUS)) return null;
+    if (!NOTIFICATION_FAILURE_RESULT_STATES.has(current.STATUS)) return null;
     const call = await store.unique(callTable, 'CALL_KEY', current.CALL_KEY);
     invariant(call && call.CLIENT_ID === current.CLIENT_ID
       && call.DEPLOYMENT_ID === current.DEPLOYMENT_ID
