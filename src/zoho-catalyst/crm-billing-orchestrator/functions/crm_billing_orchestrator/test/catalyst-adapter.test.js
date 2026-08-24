@@ -71,17 +71,33 @@ function listenerOptions(environment = baseEnvironment(), overrides = {}) {
   };
 }
 
-test("request binding requires the exact Development host and ZAID HMAC", () => {
-  const environment = baseEnvironment();
-  const config = loadConfig(environment, {
+function configFor(environment = baseEnvironment()) {
+  return loadConfig(environment, {
     artifactRevision: REVISION,
     artifactDevelopmentZaidHmacSha256: DEVELOPMENT_ZAID_HMAC_SHA256,
   });
+}
+
+function addRealSdkHeaders(request, overrides = {}) {
+  Object.assign(request.headers, {
+    "x-zc-projectid": "100000000000001",
+    "x-zc-project-domain": "https://api.catalyst.zoho.com",
+    "x-zc-admin-cred-type": "token",
+    "x-zc-admin-cred-token": "synthetic-admin-token",
+    "x-zc-user-cred-type": "token",
+    "x-zc-user-cred-token": "synthetic-user-token",
+    ...overrides,
+  });
+  return request;
+}
+
+test("request binding requires an exact raw project key matching the Development ZAID HMAC", () => {
+  const environment = baseEnvironment();
+  const config = configFor(environment);
   assert.equal(
     assertCatalystRequestBinding(requestFor(environment), config),
     SYNTHETIC_DEVELOPMENT_ZAID,
   );
-
   for (const headers of [
     {},
     { host: environment.DEVELOPMENT_FUNCTION_HOST },
@@ -92,6 +108,14 @@ test("request binding requires the exact Development host and ZAID HMAC", () => 
     {
       host: environment.DEVELOPMENT_FUNCTION_HOST,
       "x-zc-project-key": "forged-development-zaid",
+    },
+    {
+      host: environment.DEVELOPMENT_FUNCTION_HOST,
+      "x-zc-project-key": ` ${SYNTHETIC_DEVELOPMENT_ZAID} `,
+    },
+    {
+      host: environment.DEVELOPMENT_FUNCTION_HOST,
+      "x-zc-project-key": [SYNTHETIC_DEVELOPMENT_ZAID],
     },
     {
       host: environment.DEVELOPMENT_FUNCTION_HOST,
@@ -107,6 +131,25 @@ test("request binding requires the exact Development host and ZAID HMAC", () => 
     assert.throws(
       () => assertCatalystRequestBinding({ headers }, config),
       /Catalyst runtime/,
+    );
+  }
+});
+
+test("Development host authority accepts only the configured bare host or explicit HTTPS port", () => {
+  const environment = baseEnvironment();
+  const config = configFor(environment);
+  const uppercaseHost = environment.DEVELOPMENT_FUNCTION_HOST.toUpperCase();
+  for (const host of [
+    environment.DEVELOPMENT_FUNCTION_HOST,
+    uppercaseHost,
+    `${environment.DEVELOPMENT_FUNCTION_HOST}:443`,
+    `${uppercaseHost}:443`,
+  ]) {
+    const request = requestFor(environment);
+    request.headers.host = host;
+    assert.equal(
+      assertCatalystRequestBinding(request, config),
+      SYNTHETIC_DEVELOPMENT_ZAID,
     );
   }
 });
@@ -169,33 +212,50 @@ test("unstamped or incorrect Development binding is rejected", () => {
   }
 });
 
-test("SDK binding requires the same injected Development ZAID and Development routing", () => {
+test("SDK binding requires the artifact-bound ZAID without normalizing project keys", () => {
+  const config = configFor();
   assert.doesNotThrow(() => assertCatalystSdkBinding(
     { config: { environment: "Development", projectKey: SYNTHETIC_DEVELOPMENT_ZAID } },
     SYNTHETIC_DEVELOPMENT_ZAID,
+    config,
   ));
   for (const app of [
     null,
     { config: {} },
     { config: { environment: "Development", projectKey: "forged-development-zaid" } },
+    { config: { environment: "Development", projectKey: [SYNTHETIC_DEVELOPMENT_ZAID] } },
+    { config: { environment: "Development", projectKey: ` ${SYNTHETIC_DEVELOPMENT_ZAID} ` } },
     { config: { environment: "Production", projectKey: SYNTHETIC_DEVELOPMENT_ZAID } },
   ]) {
     assert.throws(
-      () => assertCatalystSdkBinding(app, SYNTHETIC_DEVELOPMENT_ZAID),
+      () => assertCatalystSdkBinding(app, SYNTHETIC_DEVELOPMENT_ZAID, config),
       /SDK routing binding/,
     );
+  }
+  assert.throws(
+    () => assertCatalystSdkBinding(
+      { config: { environment: "Development", projectKey: SYNTHETIC_DEVELOPMENT_ZAID } },
+      "different-pre-sdk-project-key",
+      config,
+    ),
+    /SDK routing binding/,
+  );
+});
+
+test("SDK binding normalizes only Development environment casing and whitespace", () => {
+  const config = configFor();
+  for (const environment of ["Development", "development", "DEVELOPMENT", " Development "]) {
+    assert.doesNotThrow(() => assertCatalystSdkBinding(
+      { config: { environment, projectKey: SYNTHETIC_DEVELOPMENT_ZAID } },
+      SYNTHETIC_DEVELOPMENT_ZAID,
+      config,
+    ));
   }
 });
 
 test("listener accepts a real SDK initialization without x-zc-environment", async () => {
   const environment = baseEnvironment();
-  const request = requestFor(environment);
-  request.headers["x-zc-projectid"] = "100000000000001";
-  request.headers["x-zc-project-domain"] = "https://api.catalyst.zoho.com";
-  request.headers["x-zc-admin-cred-type"] = "token";
-  request.headers["x-zc-admin-cred-token"] = "synthetic-admin-token";
-  request.headers["x-zc-user-cred-type"] = "token";
-  request.headers["x-zc-user-cred-token"] = "synthetic-user-token";
+  const request = addRealSdkHeaders(requestFor(environment));
   const { response, result } = responseCapture();
   const handler = createRequestListener(listenerOptions(environment));
 
@@ -211,23 +271,29 @@ test("listener accepts a real SDK initialization without x-zc-environment", asyn
   });
 });
 
-test("listener rejects noncanonical real SDK routing metadata before any factory", async () => {
+test("listener accepts lowercase and whitespace-padded real SDK Development routing", async () => {
+  const environment = baseEnvironment();
+  for (const sdkEnvironment of ["development", " Development "]) {
+    const request = addRealSdkHeaders(requestFor(environment), {
+      "x-zc-environment": sdkEnvironment,
+    });
+    const { response, result } = responseCapture();
+    const handler = createRequestListener(listenerOptions(environment));
+
+    await handler(request, response);
+
+    assert.equal(result.statusCode, 200);
+    assert.equal(JSON.parse(result.body).ok, true);
+  }
+});
+
+test("listener rejects Production or normalized project-key metadata before any factory", async () => {
   const environment = baseEnvironment();
   for (const headers of [
     { "x-zc-environment": "Production" },
-    { "x-zc-environment": "development" },
-    { "x-zc-environment": " Development " },
     { "x-zc-project-key": ` ${SYNTHETIC_DEVELOPMENT_ZAID} ` },
   ]) {
-    const request = requestFor(environment);
-    Object.assign(request.headers, headers, {
-      "x-zc-projectid": "100000000000001",
-      "x-zc-project-domain": "https://api.catalyst.zoho.com",
-      "x-zc-admin-cred-type": "token",
-      "x-zc-admin-cred-token": "synthetic-admin-token",
-      "x-zc-user-cred-type": "token",
-      "x-zc-user-cred-token": "synthetic-user-token",
-    });
+    const request = addRealSdkHeaders(requestFor(environment), headers);
     let factoryCalled = false;
     const { response, result } = responseCapture();
     const options = listenerOptions(environment);
@@ -247,17 +313,21 @@ test("listener rejects noncanonical real SDK routing metadata before any factory
   }
 });
 
-test("runtime binding failures happen before SDK initialization", async () => {
+test("invalid Development host authorities fail before SDK initialization", async () => {
   const environment = baseEnvironment();
-  for (const request of [
-    requestFor(environment, { headers: { host: environment.DEVELOPMENT_FUNCTION_HOST } }),
-    requestFor(environment, {
-      headers: {
-        host: environment.DEVELOPMENT_FUNCTION_HOST,
-        "x-zc-project-key": "forged-development-zaid",
-      },
-    }),
+  for (const host of [
+    `${environment.DEVELOPMENT_FUNCTION_HOST}:80`,
+    `${environment.DEVELOPMENT_FUNCTION_HOST}:444`,
+    `${environment.DEVELOPMENT_FUNCTION_HOST}:0443`,
+    `user@${environment.DEVELOPMENT_FUNCTION_HOST}`,
+    `https://${environment.DEVELOPMENT_FUNCTION_HOST}`,
+    `${environment.DEVELOPMENT_FUNCTION_HOST}/path`,
+    `${environment.DEVELOPMENT_FUNCTION_HOST}:443/path`,
+    ` ${environment.DEVELOPMENT_FUNCTION_HOST}`,
+    `${environment.DEVELOPMENT_FUNCTION_HOST} `,
   ]) {
+    const request = requestFor(environment);
+    request.headers.host = host;
     let initialized = false;
     const { response, result } = responseCapture();
     const handler = createRequestListener(listenerOptions(environment, {
@@ -280,6 +350,111 @@ test("runtime binding failures happen before SDK initialization", async () => {
     assert.equal(result.statusCode, 503);
     assert.equal(JSON.parse(result.body).code, "configuration_invalid");
   }
+});
+
+test("forged project keys fail before SDK initialization", async () => {
+  const environment = baseEnvironment();
+  const request = requestFor(environment);
+  request.headers["x-zc-project-key"] = "forged-development-zaid";
+  let initialized = false;
+  const { response, result } = responseCapture();
+  const handler = createRequestListener(listenerOptions(environment, {
+    catalystSdk: {
+      initialize: () => {
+        initialized = true;
+        return {
+          config: {
+            environment: "Development",
+            projectKey: SYNTHETIC_DEVELOPMENT_ZAID,
+          },
+        };
+      },
+    },
+  }));
+
+  await handler(request, response);
+
+  assert.equal(initialized, false);
+  assert.equal(result.statusCode, 503);
+  assert.equal(JSON.parse(result.body).code, "configuration_invalid");
+});
+
+test("missing project keys fail before SDK initialization", async () => {
+  const environment = baseEnvironment();
+  const request = requestFor(environment);
+  delete request.headers["x-zc-project-key"];
+  let initialized = false;
+  const { response, result } = responseCapture();
+  const handler = createRequestListener(listenerOptions(environment, {
+    catalystSdk: {
+      initialize: () => {
+        initialized = true;
+        throw new Error("SDK must not initialize without the mandatory project key");
+      },
+    },
+  }));
+
+  await handler(request, response);
+
+  assert.equal(initialized, false);
+  assert.equal(result.statusCode, 503);
+  assert.equal(JSON.parse(result.body).code, "configuration_invalid");
+});
+
+test("SDK project-key HMAC mismatch fails before any factory", async () => {
+  const environment = baseEnvironment();
+  const request = requestFor(environment);
+  let initialized = false;
+  let factoryCalled = false;
+  const options = listenerOptions(environment, {
+    catalystSdk: {
+      initialize: () => {
+        initialized = true;
+        return {
+          config: {
+            environment: "Development",
+            projectKey: "forged-development-zaid",
+          },
+        };
+      },
+    },
+  });
+  for (const name of Object.keys(options.factories)) {
+    options.factories[name] = () => {
+      factoryCalled = true;
+      throw new Error("factory must not run");
+    };
+  }
+  const { response, result } = responseCapture();
+  const handler = createRequestListener(options);
+
+  await handler(request, response);
+
+  assert.equal(initialized, true);
+  assert.equal(factoryCalled, false);
+  assert.equal(result.statusCode, 503);
+  assert.equal(JSON.parse(result.body).code, "configuration_invalid");
+});
+
+test("GET with a valid mandatory project key returns 405 without SDK initialization", async () => {
+  const environment = baseEnvironment();
+  const request = requestFor(environment, { method: "GET" });
+  let initialized = false;
+  const { response, result } = responseCapture();
+  const handler = createRequestListener(listenerOptions(environment, {
+    catalystSdk: {
+      initialize: () => {
+        initialized = true;
+        throw new Error("SDK must not initialize for a rejected method");
+      },
+    },
+  }));
+
+  await handler(request, response);
+
+  assert.equal(initialized, false);
+  assert.equal(result.statusCode, 405);
+  assert.equal(JSON.parse(result.body).code, "method_not_allowed");
 });
 
 test("copied Development configuration rejects Production host and ZAID metadata", async () => {

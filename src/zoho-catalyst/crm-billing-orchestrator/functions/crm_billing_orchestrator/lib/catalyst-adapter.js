@@ -12,18 +12,18 @@ const { safeLog } = require("./safe-log");
 
 const SHA256_HEX = /^[a-f0-9]{64}$/;
 
-function validatedHeaderValue(values) {
+function validatedHeaderValue(values, maximumLength = 253) {
   if (values.length !== 1 || typeof values[0] !== "string") {
     throw new ConfigurationError("Catalyst runtime binding is unavailable");
   }
-  const result = values[0].trim();
-  if (!result || result.length > 253 || /[\u0000-\u0020\u007f]/.test(result)) {
+  const result = values[0];
+  if (!result || result.length > maximumLength || /[\u0000-\u0020\u007f]/.test(result)) {
     throw new ConfigurationError("Catalyst runtime binding is invalid");
   }
   return result;
 }
 
-function readSingleHeader(request, headerName) {
+function readSingleHeader(request, headerName, maximumLength = 253) {
   const normalizedName = headerName.toLowerCase();
   const distinctEntries = Object.entries(request?.headersDistinct ?? {})
     .filter(([name]) => name.toLowerCase() === normalizedName);
@@ -31,7 +31,7 @@ function readSingleHeader(request, headerName) {
     if (distinctEntries.length !== 1 || !Array.isArray(distinctEntries[0][1])) {
       throw new ConfigurationError("Catalyst runtime binding is unavailable");
     }
-    return validatedHeaderValue(distinctEntries[0][1]);
+    return validatedHeaderValue(distinctEntries[0][1], maximumLength);
   }
 
   const rawHeaders = request?.rawHeaders;
@@ -46,13 +46,13 @@ function readSingleHeader(request, headerName) {
         rawHeaders[index].toLowerCase() === normalizedName
       ) rawValues.push(rawHeaders[index + 1]);
     }
-    if (rawValues.length > 0) return validatedHeaderValue(rawValues);
+    if (rawValues.length > 0) return validatedHeaderValue(rawValues, maximumLength);
   }
 
   const values = Object.entries(request?.headers ?? {})
     .filter(([name]) => name.toLowerCase() === normalizedName)
     .map(([, value]) => value);
-  return validatedHeaderValue(values);
+  return validatedHeaderValue(values, maximumLength);
 }
 
 function equalHexDigest(left, right) {
@@ -60,35 +60,57 @@ function equalHexDigest(left, right) {
   return crypto.timingSafeEqual(Buffer.from(left, "hex"), Buffer.from(right, "hex"));
 }
 
+function matchesArtifactDevelopmentZaid(projectKey, config) {
+  if (
+    typeof projectKey !== "string" || !projectKey || projectKey.length > 253 ||
+    /[\u0000-\u0020\u007f]/.test(projectKey)
+  ) return false;
+  const actualHmac = crypto
+    .createHmac("sha256", config.developmentRuntimeProof)
+    .update(projectKey, "utf8")
+    .digest("hex");
+  return equalHexDigest(actualHmac, config.artifactDevelopmentZaidHmacSha256);
+}
+
+function assertDevelopmentHostAuthority(authority, configuredHost) {
+  if (typeof authority !== "string" || typeof configuredHost !== "string") {
+    throw new ConfigurationError("Catalyst runtime is outside the approved Development host");
+  }
+  const defaultPortSuffix = ":443";
+  const hostname = authority.endsWith(defaultPortSuffix)
+    ? authority.slice(0, -defaultPortSuffix.length)
+    : authority;
+  if (hostname.toLowerCase() !== configuredHost) {
+    throw new ConfigurationError("Catalyst runtime is outside the approved Development host");
+  }
+}
+
 function assertCatalystRequestBinding(request, config) {
   if (config.deploymentEnvironment !== "development") {
     throw new ConfigurationError("Production activation is blocked in this source revision");
   }
-  const host = readSingleHeader(request, "host").toLowerCase();
-  if (host !== config.developmentFunctionHost) {
-    throw new ConfigurationError("Catalyst runtime is outside the approved Development host");
-  }
+  assertDevelopmentHostAuthority(
+    readSingleHeader(request, "host", 257),
+    config.developmentFunctionHost,
+  );
   const developmentZaid = readSingleHeader(request, "x-zc-project-key");
-  const actualHmac = crypto
-    .createHmac("sha256", config.developmentRuntimeProof)
-    .update(developmentZaid, "utf8")
-    .digest("hex");
-  if (!equalHexDigest(actualHmac, config.artifactDevelopmentZaidHmacSha256)) {
+  if (!matchesArtifactDevelopmentZaid(developmentZaid, config)) {
     throw new ConfigurationError("Catalyst runtime is outside the approved Development project");
   }
   return developmentZaid;
 }
 
-function assertCatalystSdkBinding(app, expectedDevelopmentZaid) {
+function assertCatalystSdkBinding(app, preSdkDevelopmentZaid, config) {
   const sdkProjectKey = typeof app?.config?.projectKey === "string"
     ? app.config.projectKey
     : "";
   const sdkEnvironment = typeof app?.config?.environment === "string"
-    ? app.config.environment
+    ? app.config.environment.trim().toLowerCase()
     : "";
   if (
-    !sdkProjectKey || sdkProjectKey !== expectedDevelopmentZaid ||
-    sdkEnvironment !== "Development"
+    !matchesArtifactDevelopmentZaid(sdkProjectKey, config) ||
+    sdkProjectKey !== preSdkDevelopmentZaid ||
+    sdkEnvironment !== "development"
   ) {
     throw new ConfigurationError("Catalyst SDK routing binding is invalid");
   }
@@ -166,12 +188,12 @@ function createRequestListener({
         artifactDevelopmentZaidHmacSha256,
       });
       sourceRevision = config.sourceRevision;
-      const expectedDevelopmentZaid = assertCatalystRequestBinding(request, config);
+      const preSdkDevelopmentZaid = assertCatalystRequestBinding(request, config);
       const payload = await parseActionRequest(request, config);
       action = payload.action;
       const sdk = catalystSdk ?? require("zcatalyst-sdk-node");
       const app = sdk.initialize(request);
-      assertCatalystSdkBinding(app, expectedDevelopmentZaid);
+      assertCatalystSdkBinding(app, preSdkDevelopmentZaid, config);
 
       const crmRead = createConnectionAuthorizationProvider(
         app,
@@ -245,6 +267,7 @@ function createRequestListener({
 }
 
 module.exports = {
+  assertDevelopmentHostAuthority,
   assertCatalystRequestBinding,
   assertCatalystSdkBinding,
   codeForError,

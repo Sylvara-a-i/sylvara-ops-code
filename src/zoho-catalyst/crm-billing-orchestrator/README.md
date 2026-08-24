@@ -25,10 +25,14 @@ The handler rejects unknown fields, re-reads CRM, derives its own deterministic 
 ## Safety Boundary
 
 - The artifact is privately stamped with an HMAC binding to the Development ZAID. Zoho assigns
-  different ZAIDs to Development and Production, so the exact Development host, environment
-  configuration, injected ZAID, SDK routing environment, and artifact binding must all agree
-  before any Connection, Data Store, CRM, or Billing operation. The SDK project-key comparison
-  is a consistency check over the same Catalyst request metadata, not independent provenance.
+  different ZAIDs to Development and Production, so the exact Development host authority, environment
+  configuration, singular request ZAID, and artifact binding must agree before SDK initialization.
+  The host authority may be only the configured bare hostname or that same hostname with the explicit
+  default HTTPS port `:443`. The request project key must match the artifact HMAC without normalization.
+  Immediately after pure SDK initialization, the SDK project key must match the same HMAC and request
+  value, while its normalized environment must be Development, before any Connection, Data Store,
+  CRM, or Billing operation. This SDK comparison is a post-initialize consistency check over the same
+  Catalyst runtime identity, not independent provenance.
 - The ZAID and host arrive through Catalyst request metadata. Before any Development mutation,
   a hosted spoof test must prove Catalyst either overwrites a caller-supplied project key with the
   Development ZAID or rejects the request before the handler. Until that proof passes, the
