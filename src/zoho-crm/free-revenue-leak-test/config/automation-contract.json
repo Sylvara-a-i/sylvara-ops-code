@@ -19,25 +19,25 @@
     "billing": "crm_billing_orchestrator after acceptance only"
   },
   "deal_fields_to_add": [
-    { "api_name": "Approved_Deployment_Record_ID", "label": "Approved Deployment Record ID", "data_type": "text", "length": 100 },
-    { "api_name": "Approved_Configuration_Version", "label": "Approved Configuration Version", "data_type": "text", "length": 100 },
+    { "api_name": "Approved_Deployment_Record_ID", "label": "Approved Deployment ID", "data_type": "text", "length": 100 },
+    { "api_name": "Approved_Configuration_Version", "label": "Approved Config Version", "data_type": "text", "length": 100 },
     { "api_name": "Subscription_Accepted_At", "label": "Subscription Accepted At", "data_type": "datetime" },
-    { "api_name": "Subscription_Acceptance_Version", "label": "Subscription Acceptance Version", "data_type": "text", "length": 100 },
-    { "api_name": "Test_Actual_Avg_Call_Duration_Seconds", "label": "Test Actual Avg Call Duration Seconds", "data_type": "integer", "length": 9 },
-    { "api_name": "Test_Out_Of_Area_Or_Wrong_Fit_Calls", "label": "Test Out Of Area Or Wrong Fit Calls", "data_type": "integer", "length": 9 },
+    { "api_name": "Subscription_Acceptance_Version", "label": "Paid Acceptance Version", "data_type": "text", "length": 100 },
+    { "api_name": "Test_Actual_Avg_Call_Duration_Seconds", "label": "Test Avg Call Sec", "data_type": "integer", "length": 9 },
+    { "api_name": "Test_Out_Of_Area_Or_Wrong_Fit_Calls", "label": "Test Wrong Fit Calls", "data_type": "integer", "length": 9 },
     { "api_name": "Test_Urgent_Requests", "label": "Test Urgent Requests", "data_type": "integer", "length": 9 },
-    { "api_name": "Test_Bookable_Opportunities", "label": "Test Bookable Opportunities", "data_type": "integer", "length": 9 },
-    { "api_name": "Test_Office_Follow_Up_Calls", "label": "Test Office Follow Up Calls", "data_type": "integer", "length": 9 },
-    { "api_name": "Test_Observed_Workflow_Failures", "label": "Test Observed Workflow Failures", "data_type": "textarea", "length": 2000 },
+    { "api_name": "Test_Bookable_Opportunities", "label": "Test Bookable Opps", "data_type": "integer", "length": 9 },
+    { "api_name": "Test_Office_Follow_Up_Calls", "label": "Test Office Follow Up", "data_type": "integer", "length": 9 },
+    { "api_name": "Test_Observed_Workflow_Failures", "label": "Test Workflow Failures", "data_type": "textarea", "length": 2000, "textarea": { "type": "small" } },
     {
       "api_name": "Recommended_Paid_Coverage",
-      "label": "Recommended Paid Coverage",
+      "label": "Recommended Coverage",
       "data_type": "picklist",
       "pick_list_values": ["After Hours Only", "No Answer / Overflow Only", "After Hours + Overflow"]
     },
-    { "api_name": "Expected_Monthly_Connected_Minutes_Min", "label": "Expected Monthly Connected Minutes Min", "data_type": "integer", "length": 9 },
-    { "api_name": "Expected_Monthly_Connected_Minutes_Max", "label": "Expected Monthly Connected Minutes Max", "data_type": "integer", "length": 9 },
-    { "api_name": "Test_Data_Confidence_Notes", "label": "Test Data Confidence Notes", "data_type": "textarea", "length": 2000 }
+    { "api_name": "Expected_Monthly_Connected_Minutes_Min", "label": "Expected Minutes Min", "data_type": "integer", "length": 9 },
+    { "api_name": "Expected_Monthly_Connected_Minutes_Max", "label": "Expected Minutes Max", "data_type": "integer", "length": 9 },
+    { "api_name": "Test_Data_Confidence_Notes", "label": "Test Confidence Notes", "data_type": "textarea", "length": 2000, "textarea": { "type": "small" } }
   ],
   "lead_conversion_defaults": {
     "pipeline": "Revenue Desk Sales",
