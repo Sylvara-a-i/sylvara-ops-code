@@ -36,9 +36,21 @@ test('job target is independently deployable and imports a materialized reviewed
     /createSafeConsoleLogger\(console\)/);
   const corePackagePath = require.resolve('retell_free_test/package.json');
   const corePackageRoot = path.dirname(corePackagePath);
+  const coreSourceRoot = path.join(functionRoot, '..', 'retell_free_test');
   assert.equal(require(corePackagePath).name, 'retell_free_test');
   assert.equal(fs.lstatSync(corePackageRoot).isSymbolicLink(), false,
     'run npm ci with --install-links before Catalyst packages the job target');
   assert.equal(path.relative(functionRoot, fs.realpathSync(corePackageRoot)).startsWith('node_modules'), true);
+  const runtimeFiles = [
+    'index.js', 'package.json', path.join('contracts', 'free-test-contract.json'),
+    ...fs.readdirSync(path.join(coreSourceRoot, 'lib')).sort().map((name) => path.join('lib', name)),
+  ];
+  for (const relativePath of runtimeFiles) {
+    assert.equal(
+      fs.readFileSync(path.join(corePackageRoot, relativePath), 'utf8'),
+      fs.readFileSync(path.join(coreSourceRoot, relativePath), 'utf8'),
+      `materialized core package is stale: ${relativePath}`,
+    );
+  }
   assert.equal(typeof require('../index'), 'function');
 });
