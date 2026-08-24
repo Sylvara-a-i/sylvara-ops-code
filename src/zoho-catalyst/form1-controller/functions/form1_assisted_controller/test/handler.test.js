@@ -196,6 +196,60 @@ test("stale intake binding fails closed and consumes no response disclosure", as
   assert.deepEqual(events, ["cancel"]);
 });
 
+test("expired assisted sessions are contained before any CRM disclosure", async () => {
+  const token = generateToken(() => Buffer.alloc(32, 6));
+  const events = [];
+  const session = {
+    rowId: "1",
+    leadId: LEAD_ID,
+    intakeSubmissionId: INTAKE_ID,
+    tokenHash: hashToken(token, PEPPER),
+    status: "issued",
+    expiresAt: "2026-08-21T22:59:59.000Z",
+  };
+
+  await assert.rejects(
+    () => handleRequest(
+      request("/form1/prefill-test", "x-sylvara-prefill-test", PREFILL_SECRET, { token }),
+      {
+        config: config(),
+        now: () => Date.parse("2026-08-21T23:00:00.000Z"),
+        crmClient: {
+          getLead: async () => assert.fail("expired sessions must not read CRM"),
+        },
+        sessionStore: {
+          readByTokenHash: async () => session,
+          markExpired: async (value) => {
+            events.push("expired");
+            assert.equal(value, session);
+          },
+          reservePrefill: async () => assert.fail("expired sessions must not reserve disclosure"),
+        },
+      },
+    ),
+    (error) => error.status === 404 && error.publicCode === "session_not_found",
+  );
+  assert.deepEqual(events, ["expired"]);
+});
+
+test("issue rejects a CRM response for the wrong Lead before creating a session", async () => {
+  await assert.rejects(
+    () => handleRequest(
+      request("/form1/issue-test", "x-sylvara-issue-test", ISSUE_SECRET, { leadId: LEAD_ID }),
+      {
+        config: config(),
+        crmClient: {
+          getLead: async () => lead({ id: "8".repeat(19) }),
+        },
+        sessionStore: {
+          createSession: async () => assert.fail("wrong Lead context must not create a session"),
+        },
+      },
+    ),
+    (error) => error.status === 409 && error.publicCode === "context_conflict",
+  );
+});
+
 test("route secret and exact body contract are checked before business work", async () => {
   const dependencies = {
     config: config(),
@@ -218,5 +272,28 @@ test("route secret and exact body contract are checked before business work", as
       dependencies,
     ),
     (error) => error.status === 422 && error.publicCode === "request_invalid",
+  );
+
+  const malformed = request(
+    "/form1/issue-test",
+    "x-sylvara-issue-test",
+    ISSUE_SECRET,
+    { leadId: LEAD_ID },
+  );
+  malformed.rawBody = Buffer.from("{", "utf8");
+  await assert.rejects(
+    () => handleRequest(malformed, dependencies),
+    (error) => error.status === 400 && error.publicCode === "body_invalid",
+  );
+
+  const queried = request(
+    "/form1/issue-test?leadId=forbidden",
+    "x-sylvara-issue-test",
+    ISSUE_SECRET,
+    { leadId: LEAD_ID },
+  );
+  await assert.rejects(
+    () => handleRequest(queried, dependencies),
+    (error) => error.status === 404 && error.publicCode === "route_not_found",
   );
 });

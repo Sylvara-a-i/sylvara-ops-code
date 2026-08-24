@@ -1,0 +1,187 @@
+{
+  "schema_version": 1,
+  "status": "desired_state_pending_synthetic_acceptance",
+  "customer_facing_offer": "Free Revenue Leak Test",
+  "legacy_internal_offer_value": "7-Day Revenue Leak Test",
+  "environment_boundary": {
+    "crm_organization_type": "production-type existing organization",
+    "permitted_records": "ZZZ SYNTHETIC only",
+    "real_customer_or_prospect_mutation": false,
+    "production_traffic_authorized": false
+  },
+  "authorities": {
+    "form1": "Zoho Forms native Lead upsert plus one CRM review workflow",
+    "lead_conversion": "explicit human-operated native CRM conversion",
+    "form2": "form2_controller bounded Deal update",
+    "go_live": "version-specific internal Sylvara approval plus Catalyst validation",
+    "call_state": "Catalyst",
+    "paid_acceptance": "separate explicit commercial acceptance record",
+    "billing": "crm_billing_orchestrator after acceptance only"
+  },
+  "deal_fields_to_add": [
+    { "api_name": "Approved_Deployment_Record_ID", "label": "Approved Deployment Record ID", "data_type": "text", "length": 100 },
+    { "api_name": "Approved_Configuration_Version", "label": "Approved Configuration Version", "data_type": "text", "length": 100 },
+    { "api_name": "Subscription_Accepted_At", "label": "Subscription Accepted At", "data_type": "datetime" },
+    { "api_name": "Subscription_Acceptance_Version", "label": "Subscription Acceptance Version", "data_type": "text", "length": 100 },
+    { "api_name": "Test_Actual_Avg_Call_Duration_Seconds", "label": "Test Actual Avg Call Duration Seconds", "data_type": "integer", "length": 9 },
+    { "api_name": "Test_Out_Of_Area_Or_Wrong_Fit_Calls", "label": "Test Out Of Area Or Wrong Fit Calls", "data_type": "integer", "length": 9 },
+    { "api_name": "Test_Urgent_Requests", "label": "Test Urgent Requests", "data_type": "integer", "length": 9 },
+    { "api_name": "Test_Bookable_Opportunities", "label": "Test Bookable Opportunities", "data_type": "integer", "length": 9 },
+    { "api_name": "Test_Office_Follow_Up_Calls", "label": "Test Office Follow Up Calls", "data_type": "integer", "length": 9 },
+    { "api_name": "Test_Observed_Workflow_Failures", "label": "Test Observed Workflow Failures", "data_type": "textarea", "length": 2000 },
+    {
+      "api_name": "Recommended_Paid_Coverage",
+      "label": "Recommended Paid Coverage",
+      "data_type": "picklist",
+      "pick_list_values": ["After Hours Only", "No Answer / Overflow Only", "After Hours + Overflow"]
+    },
+    { "api_name": "Expected_Monthly_Connected_Minutes_Min", "label": "Expected Monthly Connected Minutes Min", "data_type": "integer", "length": 9 },
+    { "api_name": "Expected_Monthly_Connected_Minutes_Max", "label": "Expected Monthly Connected Minutes Max", "data_type": "integer", "length": 9 },
+    { "api_name": "Test_Data_Confidence_Notes", "label": "Test Data Confidence Notes", "data_type": "textarea", "length": 2000 }
+  ],
+  "lead_conversion_defaults": {
+    "pipeline": "Revenue Desk Sales",
+    "stage": "Setup and Authorization",
+    "type": "Initial Sale",
+    "test_status": "Not Started",
+    "setup_access_status": "Not Issued",
+    "go_live_approval_status": "Not Ready",
+    "billing_effect": "none"
+  },
+  "workflow_set": [
+    {
+      "logical_name": "FORM1_INTAKE_REVIEW",
+      "module": "Leads",
+      "single_active_rule": "Leads Free Test Intake Review",
+      "criteria": [
+        "Entry_Offer equals legacy_internal_offer_value",
+        "Intake_Submission_ID is present",
+        "Lead_Status equals Free Test Requested",
+        "Free_Test_Contact_Consent equals true"
+      ],
+      "effects": ["create one internal review task"],
+      "repeat": false
+    },
+    {
+      "logical_name": "DEAL_INITIALIZATION",
+      "module": "Deals",
+      "single_active_rule": "Deals Free Test Initialize Controls",
+      "criteria": [
+        "Entry_Offer equals legacy_internal_offer_value",
+        "Setup_Form_Submission_ID is empty"
+      ],
+      "effects": [
+        "initialize Setup Access Status",
+        "initialize Free Test Authorization Status",
+        "initialize Go-Live Approval Status",
+        "initialize Test Status",
+        "initialize seven-day duration",
+        "initialize 25-call limit",
+        "initialize Test Scope Version",
+        "initialize Type as Initial Sale"
+      ],
+      "repeat": false,
+      "supersedes": ["Deals Free Test Initialize Limits"]
+    },
+    {
+      "logical_name": "FORM2_SUBMISSION",
+      "module": "Deals",
+      "single_active_rule": "Deals Form 2 Controller Proof Candidate",
+      "trusted_evidence_required": true,
+      "effects": [
+        "set Setup Access Status to Submitted",
+        "set Free Test Authorization Status to Signed",
+        "set Test Status to Setup Pending",
+        "create one internal setup-and-QA task"
+      ],
+      "prohibited_effects": [
+        "go-live approval",
+        "Test Start At",
+        "Billing action",
+        "Closed Won",
+        "Zoho Sign action",
+        "SMS"
+      ],
+      "repeat": false,
+      "supersedes": ["Deals Free Test Form 2 Submitted"]
+    }
+  ],
+  "blueprint": {
+    "name": "Revenue Desk Free Test v6 - Control Candidate",
+    "module": "Deals",
+    "pipeline": "Revenue Desk Sales",
+    "field": "Stage",
+    "criteria": "Entry_Offer equals legacy_internal_offer_value",
+    "states": [
+      "Setup and Authorization",
+      "Test Authorized",
+      "Setup and QA",
+      "Test Live",
+      "Results Review",
+      "Subscription Proposed",
+      "Closed Won",
+      "Closed Lost"
+    ],
+    "required_transition_invariants": {
+      "Confirm Authorization": [
+        "trusted Form 2 proof accepted",
+        "canonical Form 2 evidence complete",
+        "Go-Live Approval is not Approved"
+      ],
+      "Begin Setup and QA": [
+        "email notification recipient present",
+        "approved coverage and fallback present",
+        "deployment and configuration version present",
+        "rollback contacts present"
+      ],
+      "Approve Go Live": [
+        "QA passed",
+        "Go-Live Approval Status equals Approved",
+        "Go-Live Approved At present",
+        "Approved Deployment Record ID equals Deployment Record ID",
+        "Approved Configuration Version equals Configuration Version",
+        "Catalyst independently validates the same version-specific approval"
+      ],
+      "Complete Free Test": [
+        "call totals reconciled",
+        "test end timestamp and reason present",
+        "all report summary fields present"
+      ],
+      "Propose Subscription": [
+        "results review completed",
+        "paid plan and exact commercial terms recorded",
+        "Subscription Acceptance Status equals Pending",
+        "no Billing subscription exists"
+      ],
+      "Activate Subscription": [
+        "Subscription Acceptance Status equals Accepted",
+        "Subscription Accepted At and Acceptance Version present",
+        "Billing Automation Status equals Paid Verified",
+        "Billing customer and subscription IDs present",
+        "authoritative Billing sync timestamp present"
+      ]
+    },
+    "automatic_actions_prohibited": [
+      "go-live approval",
+      "Billing creation from Form 2",
+      "automatic paid acceptance",
+      "premature Closed Won",
+      "Zoho Sign",
+      "SMS"
+    ]
+  },
+  "synthetic_acceptance": {
+    "record_prefix": "ZZZ SYNTHETIC",
+    "expected_records": { "lead": 1, "account": 1, "contact": 1, "deal": 1, "review_task": 1, "form2_task": 1 },
+    "must_prove": [
+      "Form 1 replay does not duplicate Lead or review task",
+      "native conversion produces one Account, Contact, and Deal",
+      "Form 2 replay does not duplicate task or mutate go-live/Billing state",
+      "no active Zoho Sign assumption",
+      "no Form-driven go-live",
+      "no Form-driven Billing",
+      "no Closed Won before authoritative Billing readback"
+    ],
+    "reset": "Return disposable ZZZ SYNTHETIC records to a documented stopped/non-customer baseline; never delete or mutate real records."
+  }
+}
