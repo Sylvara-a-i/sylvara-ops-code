@@ -308,38 +308,36 @@ test('integration: documented Development hosts pass while a production-shaped h
 test('integration: Catalyst platform environment and project identity fail closed before store or Mail use', async () => {
   const noHeader = runtimeFixture();
   const acceptedWithoutOptionalHeader = await invoke(noHeader.listener, { url: '/retell/inbound',
-    payload: payloadInbound('A'), env: noHeader.env, headers: { 'x-zc-environment': null } });
+    payload: payloadInbound('A'), env: noHeader.env });
   assert.equal(acceptedWithoutOptionalHeader.status, 200);
   assert.equal(acceptedWithoutOptionalHeader.body.call_inbound.dynamic_variables.resolver_status, 'Resolved');
+
+  const untrustedHeader = runtimeFixture();
+  const acceptedWithUntrustedHeader = await invoke(untrustedHeader.listener, { url: '/retell/inbound',
+    payload: payloadInbound('A'), env: untrustedHeader.env,
+    headers: { 'x-zc-environment': 'Production' } });
+  assert.equal(acceptedWithUntrustedHeader.status, 200);
+  assert.equal(acceptedWithUntrustedHeader.body.call_inbound.dynamic_variables.resolver_status, 'Resolved');
 
   const productionSdk = runtimeFixture();
   productionSdk.app.config.environment = 'production';
   const rejectedProductionSdk = await invoke(productionSdk.listener, { url: '/retell/inbound',
-    payload: payloadInbound('A'), env: productionSdk.env, headers: { 'x-zc-environment': null } });
+    payload: payloadInbound('A'), env: productionSdk.env });
   assert.equal(rejectedProductionSdk.status, 503);
   assert.equal(rejectedProductionSdk.body.code, 'CATALYST_ENVIRONMENT_MISMATCH');
   assert.equal(productionSdk.store.rows.get('FreeTestCalls').length, 0);
   assert.equal(productionSdk.mailAccesses, 0);
 
-  const headerMismatch = runtimeFixture();
-  const rejectedHeader = await invoke(headerMismatch.listener, { url: '/retell/inbound',
-    payload: payloadInbound('A'), env: headerMismatch.env,
-    headers: { 'x-zc-environment': 'Production' } });
-  assert.equal(rejectedHeader.status, 503);
-  assert.equal(rejectedHeader.body.code, 'CATALYST_ENVIRONMENT_MISMATCH');
-  assert.equal(headerMismatch.store.rows.get('FreeTestCalls').length, 0);
-  assert.equal(headerMismatch.mailAccesses, 0);
-
-  const duplicateHeader = runtimeFixture();
-  const rejectedDuplicate = await invoke(duplicateHeader.listener, { url: '/retell/inbound',
-    payload: payloadInbound('A'), env: duplicateHeader.env,
-    headersDistinct: { host: [duplicateHeader.env.FREE_TEST_DEVELOPMENT_HOST],
-      'content-type': ['application/json'], 'x-retell-signature': ['synthetic'],
-      'x-zc-environment': ['Development', 'Development'] } });
-  assert.equal(rejectedDuplicate.status, 400);
-  assert.equal(rejectedDuplicate.body.code, 'INVALID_REQUEST_HEADER');
-  assert.equal(duplicateHeader.store.rows.get('FreeTestCalls').length, 0);
-  assert.equal(duplicateHeader.mailAccesses, 0);
+  for (const environmentValue of ['', null, undefined, {}]) {
+    const missingSdkEnvironment = runtimeFixture();
+    missingSdkEnvironment.app.config.environment = environmentValue;
+    const rejectedMissingSdkEnvironment = await invoke(missingSdkEnvironment.listener, {
+      url: '/retell/inbound', payload: payloadInbound('A'), env: missingSdkEnvironment.env });
+    assert.equal(rejectedMissingSdkEnvironment.status, 503);
+    assert.equal(rejectedMissingSdkEnvironment.body.code, 'CATALYST_ENVIRONMENT_MISMATCH');
+    assert.equal(missingSdkEnvironment.store.rows.get('FreeTestCalls').length, 0);
+    assert.equal(missingSdkEnvironment.mailAccesses, 0);
+  }
 
   const sdkMismatch = runtimeFixture();
   sdkMismatch.app.config.projectId = '999';

@@ -59,7 +59,7 @@ Number reassignment is not a launch dependency or runtime API. Do not reuse or m
 
 ## Security controls
 
-- Development requires the configured private Advanced I/O host as an early check, then the platform `x-zc-environment`, SDK environment, and exact SDK project identity before Data Store or Mail access. No request header alone is sufficient authority.
+- Development requires the configured private Advanced I/O host before SDK initialization, then the pinned SDK's Development environment and exact project identity before Data Store or Mail access. The public request's internal environment header is deliberately ignored because Catalyst can expose it in a non-scalar form; no caller-controlled header can select the SDK project or environment.
 - The retry Job validates Catalyst's platform-injected `X_ZOHO_CATALYST_ENVIRONMENT` as `Development`, then matches the exact private project and Function Job pool identifiers from the Job Request before SDK initialization. Job parameters and undocumented Context headers cannot select a project or pool. Catalyst currently documents both `getJobPoolDetails()` and `getJobpoolDetails()` casing, so the boundary accepts either method but requires the same exact returned ID and `Function` type. The exact live environment and Job Request shapes still require Development readback before enabling the schedule.
 - The Advanced I/O target is deployed in Catalyst Development on Node.js 24 with 256 MB function memory. The independently packaged retry target is deployed on Node.js 18 with 256 MB function memory, and its Function Job pool is provisioned with 512 MB. All were independently read back. The shared core declares compatibility with both stacks.
 - Production is rejected by source.

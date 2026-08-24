@@ -42,13 +42,6 @@ function scalarHeader(request, name) {
   return values[0];
 }
 
-function optionalScalarHeader(request, name) {
-  const values = headerValues(request, name);
-  invariant(values.length <= 1 && (values.length === 0 || typeof values[0] === 'string'),
-    'INVALID_REQUEST_HEADER', 'Request header is ambiguous.', { httpStatus: 400 });
-  return values.length === 0 ? null : values[0];
-}
-
 function assertDevelopmentHost(request, config) {
   const authority = scalarHeader(request, 'host').trim().toLowerCase();
   const host = authority.endsWith(':443') ? authority.slice(0, -4) : authority;
@@ -59,19 +52,15 @@ function assertDevelopmentHost(request, config) {
 
 function assertPlatformDevelopment(request, app, config) {
   assertDevelopmentHost(request, config);
-  const platformEnvironmentHeader = optionalScalarHeader(request, 'x-zc-environment');
-  const platformEnvironment = platformEnvironmentHeader === null
-    ? null : platformEnvironmentHeader.trim().toLowerCase();
   const sdkEnvironment = typeof app?.config?.environment === 'string'
     ? app.config.environment.trim().toLowerCase() : '';
   const sdkProjectId = app?.config?.projectId;
   const sdkProjectKey = typeof app?.config?.projectKey === 'string'
     ? app.config.projectKey : '';
-  // Catalyst may omit x-zc-environment on live Advanced I/O requests, but the
-  // pinned SDK defaults that missing header to Development. Never allow an SDK
-  // app reporting Production to reach Data Store or Mail.
-  invariant((platformEnvironment === null || platformEnvironment === 'development')
-    && sdkEnvironment === 'development',
+  // Catalyst's public Advanced I/O request may contain an internal environment
+  // header in a non-scalar form. The pinned SDK's immutable app binding is the
+  // authoritative platform identity; never let a request header select it.
+  invariant(sdkEnvironment === 'development',
   'CATALYST_ENVIRONMENT_MISMATCH', 'Catalyst runtime is not Development.',
   { httpStatus: 503 });
   invariant(String(sdkProjectId || '') === config.developmentProjectId
@@ -193,5 +182,5 @@ function createRequestListener(options = {}) {
 
 module.exports = {
   createRequestListener, assertDevelopmentHost, assertPlatformDevelopment, timingSafeToken,
-  scalarHeader, optionalScalarHeader, RETELL_SIGNATURE_HEADER,
+  scalarHeader, RETELL_SIGNATURE_HEADER,
 };
