@@ -1,20 +1,22 @@
 # Sylvara Operations Code
 
-Public, sanitized technical source of truth for Sylvara's managed inbound-reception product and the business systems that support its delivery.
+Public, sanitized technical source of truth for Sylvara's managed Revenue Desk product and the business systems that support its delivery.
 
 This repository is publicly viewable but is not open source. See [`NOTICE.md`](NOTICE.md).
 
 ## Current Product Direction
 
-Sylvara is validating a managed inbound receptionist and front-office service for independent residential plumbing companies, beginning in Kansas City with after-hours and overflow calls that staff cannot answer reliably. The product must complete and attribute bounded business workflows; it is not a generic voice-agent subscription or a broad custom-automation agency. Dispatch activity remains limited to separately approved intake, routing, and integration behavior.
+Sylvara's official strategy is a managed Revenue Desk for one-location residential service plumbing companies with approximately 5–15 active field technicians. The acquisition offer is a 7-Day / 25-Call Revenue Leak Test on an approved after-hours and/or no-answer/overflow route. Paid Launch is a complete managed AI receptionist with metered usage; Growth is the recommended managed Revenue Desk; Scale and Enterprise add broader revenue operations only when paid scope and delivery evidence justify them. The product completes and attributes bounded business workflows; it is not a generic voice-agent subscription or a broad custom-automation agency.
 
-The canonical public boundary is [`docs/product/README.md`](docs/product/README.md), supported by [ADR 0002](docs/adr/0002-managed-home-service-receptionist-product-boundary.md). [ADR 0003](docs/adr/0003-initial-after-hours-service-request-workflow.md) selects `after-hours-new-residential-service-request-v1` for offline synthetic validation. [ADR 0004](docs/adr/0004-retell-catalyst-crm-analytics-integration-boundary.md) fixes the general system-ownership boundary. [ADR 0006](docs/adr/0006-shared-seven-day-monitor-with-client-number-isolation.md) is authoritative for the free-test MVP: one shared agent, one dedicated Retell number and versioned Catalyst deployment/configuration per active client, the exact fail-closed resolver gate, practical seven-day/25-handled-call enforcement, Catalyst Mail email-only notification records, and Catalyst query/CSV reporting. Those documents do not establish a live service, customer deployment, telephone route, current pricing, or customer-facing approval.
+The direct strategy pointer is [`STRATEGY.md`](STRATEGY.md). The canonical operating document is [`docs/product/README.md`](docs/product/README.md), adopted by [ADR 0007](docs/adr/0007-revenue-desk-commercial-strategy.md). [ADR 0002](docs/adr/0002-managed-home-service-receptionist-product-boundary.md) remains historical rationale for the plumbing-first managed-product boundary. [ADR 0003](docs/adr/0003-initial-after-hours-service-request-workflow.md) selects `after-hours-new-residential-service-request-v1` for offline synthetic validation. [ADR 0004](docs/adr/0004-retell-catalyst-crm-analytics-integration-boundary.md) fixes the general system-ownership boundary. [ADR 0006](docs/adr/0006-shared-seven-day-monitor-with-client-number-isolation.md) is authoritative for the free-test MVP: one shared agent, one dedicated Retell number and versioned Catalyst deployment/configuration per active client, the exact fail-closed resolver gate, practical seven-day/25-handled-call enforcement, Catalyst Mail email-only notification records, and Catalyst query/CSV reporting.
+
+The strategy establishes the approved ICP, public commercial terms, plan architecture, differentiation, margin gates, and expansion sequence. It does not establish a live service, customer deployment, telephone route, customer-specific legal approval, or production readiness.
 
 Current free-test classification is **READY FOR DEVELOPMENT DEPLOYMENT**. It is **NOT READY** for a controlled internal phone test until the deployed Catalyst and Retell paths are independently read back with two synthetic numbers on the same shared agent version, provider fallback is proved safe, one controlled Development email is delivered exactly once and read back, and the notification mode is restored to `dry_run`.
 
 ## Repository Boundary
 
-GitHub owns versioned code and sanitized technical context. It does not own live customer data, accounting records, call data, credentials, production configuration, or deployment state.
+GitHub owns versioned code, approved public commercial terms, and sanitized technical context. It does not own live customer data, accounting records, call data, credentials, production configuration, or deployment state.
 
 | Area | Operational source of truth |
 |---|---|
@@ -35,7 +37,7 @@ GitHub owns versioned code and sanitized technical context. It does not own live
 | Derived reporting and dashboards | Zoho Analytics, never transactional authority |
 | Secure middleware, webhook verification, deduplication, and retry controls | Zoho Catalyst or the approved middleware runtime |
 | Credentials and tokens | Platform secret stores only |
-| Sanitized code, tests, schemas, runbooks, and decisions | This repository |
+| Sanitized code, tests, schemas, runbooks, decisions, and approved public commercial terms | This repository |
 
 The detailed ownership map is in [`docs/architecture/system-overview.md`](docs/architecture/system-overview.md).
 
@@ -52,7 +54,9 @@ tools/safety/  Public-repository and workflow-policy validation
 Current governed artifacts:
 
 - [`docs/standards/README.md`](docs/standards/README.md) contains durable operator-facing drafting and code-review standards. Portable documents use Inter by default; San Francisco is preferred only when supplied natively or separately licensed.
-- [`docs/product/README.md`](docs/product/README.md) is the public implementation filter for the managed plumbing-first receptionist product. It records the initial audience and use case, progressive deployment model, proposed capability gates, validation dimensions, non-goals, and the private research boundary without publishing the source report or commercial model.
+- [`STRATEGY.md`](STRATEGY.md) is the root pointer to the official Revenue Desk strategy and its effective timestamp.
+- [`docs/product/README.md`](docs/product/README.md) is the approved product and commercial source of truth for the plumbing-first Revenue Desk. It controls the ICP, Revenue Leak Test, management fees, metered usage, implementation fees, plan architecture, positioning, margin gates, expansion sequence, non-goals, and implementation boundary.
+- [`docs/adr/0007-revenue-desk-commercial-strategy.md`](docs/adr/0007-revenue-desk-commercial-strategy.md) records the current commercial decision, rejected alternatives, review triggers, and explicit separation between strategy approval and live deployment authority.
 - [`docs/adr/0003-initial-after-hours-service-request-workflow.md`](docs/adr/0003-initial-after-hours-service-request-workflow.md) fixes the first provider-neutral workflow, four offline dispositions, exclusions, expansion gates, and kill criteria without authorizing calls or downstream writes.
 - [`docs/adr/0004-retell-catalyst-crm-analytics-integration-boundary.md`](docs/adr/0004-retell-catalyst-crm-analytics-integration-boundary.md) defines the proposed Retell event ingress, Catalyst call state, CRM summary boundary, customer-system reconciliation, Analytics reporting path, and direct-API-versus-MCP split. Its earlier agent-lifecycle choice is superseded by ADR 0006.
 - [`docs/adr/0006-shared-seven-day-monitor-with-client-number-isolation.md`](docs/adr/0006-shared-seven-day-monitor-with-client-number-isolation.md) defines the exact seven-field gate, explicit resolver rejection versus shared-agent fallback, practical seven-day/25-handled-call stop with transparent in-flight overshoot, immutable call ownership, Catalyst Mail email-only state, client query/CSV reporting, and no-degraded-intake Configuration Unavailable path.
@@ -105,7 +109,7 @@ runtime selection, and direct CI-script ownership.
 
 ## Commercial Constraint
 
-Prioritize the initial managed residential-plumbing receptionist workflow. Build only what supports a validated demo, qualified pilot, customer commitment, or paid delivery inside that boundary. Custom work must strengthen a reusable plumbing capability and justify its implementation and maintenance cost.
+Prioritize selling and delivering the Revenue Leak Test, Launch, and the first paid Growth workflow for the approved plumbing ICP. Build only what supports a qualified prospect conversation, controlled test, customer commitment, paid implementation, reliable delivery, or measurable retention inside that boundary. Custom work must strengthen a reusable Revenue Desk capability and justify its implementation and maintenance cost.
 
 Do not create a generalized agent platform, custom telephony stack, client portal, multi-tenant SaaS layer, simultaneous second vertical, or regulated call workflow without evidence that the simpler managed-service path is insufficient and a separate reviewed decision approves expansion.
 
