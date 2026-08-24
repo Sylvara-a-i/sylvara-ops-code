@@ -286,18 +286,26 @@ test('integration: documented Development hosts pass while a production-shaped h
 
 test('integration: Catalyst platform environment and project identity fail closed before store or Mail use', async () => {
   const noHeader = runtimeFixture();
-  noHeader.app.config.environment = 'production';
   const acceptedWithoutOptionalHeader = await invoke(noHeader.listener, { url: '/retell/inbound',
     payload: payloadInbound('A'), env: noHeader.env, headers: { 'x-zc-environment': null } });
   assert.equal(acceptedWithoutOptionalHeader.status, 200);
   assert.equal(acceptedWithoutOptionalHeader.body.call_inbound.dynamic_variables.resolver_status, 'Resolved');
+
+  const productionSdk = runtimeFixture();
+  productionSdk.app.config.environment = 'production';
+  const rejectedProductionSdk = await invoke(productionSdk.listener, { url: '/retell/inbound',
+    payload: payloadInbound('A'), env: productionSdk.env, headers: { 'x-zc-environment': null } });
+  assert.equal(rejectedProductionSdk.status, 503);
+  assert.equal(rejectedProductionSdk.body.code, 'CATALYST_ENVIRONMENT_MISMATCH');
+  assert.equal(productionSdk.store.rows.get('FreeTestCalls').length, 0);
+  assert.equal(productionSdk.mailAccesses, 0);
 
   const headerMismatch = runtimeFixture();
   const rejectedHeader = await invoke(headerMismatch.listener, { url: '/retell/inbound',
     payload: payloadInbound('A'), env: headerMismatch.env,
     headers: { 'x-zc-environment': 'Production' } });
   assert.equal(rejectedHeader.status, 503);
-  assert.equal(rejectedHeader.body.code, 'PRODUCTION_BLOCKED');
+  assert.equal(rejectedHeader.body.code, 'CATALYST_ENVIRONMENT_MISMATCH');
   assert.equal(headerMismatch.store.rows.get('FreeTestCalls').length, 0);
   assert.equal(headerMismatch.mailAccesses, 0);
 
@@ -317,7 +325,7 @@ test('integration: Catalyst platform environment and project identity fail close
   const rejectedProject = await invoke(sdkMismatch.listener, { url: '/retell/inbound',
     payload: payloadInbound('A'), env: sdkMismatch.env });
   assert.equal(rejectedProject.status, 503);
-  assert.equal(rejectedProject.body.code, 'PRODUCTION_BLOCKED');
+  assert.equal(rejectedProject.body.code, 'CATALYST_PROJECT_MISMATCH');
   assert.equal(sdkMismatch.store.rows.get('FreeTestCalls').length, 0);
   assert.equal(sdkMismatch.mailAccesses, 0);
 
@@ -326,7 +334,7 @@ test('integration: Catalyst platform environment and project identity fail close
     payload: payloadInbound('A'), env: requestProjectMismatch.env,
     headers: { 'x-zc-projectid': '999' } });
   assert.equal(rejectedRequestProject.status, 503);
-  assert.equal(rejectedRequestProject.body.code, 'PRODUCTION_BLOCKED');
+  assert.equal(rejectedRequestProject.body.code, 'CATALYST_PROJECT_MISMATCH');
   assert.equal(requestProjectMismatch.store.rows.get('FreeTestCalls').length, 0);
   assert.equal(requestProjectMismatch.mailAccesses, 0);
 
@@ -335,7 +343,7 @@ test('integration: Catalyst platform environment and project identity fail close
   const rejectedProjectKey = await invoke(projectKeyMismatch.listener, { url: '/retell/inbound',
     payload: payloadInbound('A'), env: projectKeyMismatch.env });
   assert.equal(rejectedProjectKey.status, 503);
-  assert.equal(rejectedProjectKey.body.code, 'PRODUCTION_BLOCKED');
+  assert.equal(rejectedProjectKey.body.code, 'CATALYST_PROJECT_MISMATCH');
   assert.equal(projectKeyMismatch.store.rows.get('FreeTestCalls').length, 0);
   assert.equal(projectKeyMismatch.mailAccesses, 0);
 });

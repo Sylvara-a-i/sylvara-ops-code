@@ -68,20 +68,18 @@ function assertPlatformDevelopment(request, app, config) {
   const sdkProjectId = app?.config?.projectId;
   const sdkProjectKey = typeof app?.config?.projectKey === 'string'
     ? app.config.projectKey : '';
-  // Catalyst's live Advanced I/O proxy omits x-zc-environment. In that case the
-  // SDK reports its Production default even on a Development function, so the
-  // exact Development host plus the independently read request/SDK project
-  // bindings are authoritative. If Catalyst supplies an environment header, it
-  // and the SDK must both corroborate Development.
-  const environmentBinding = platformEnvironment === null
-    ? new Set(['', 'development', 'production']).has(sdkEnvironment)
-    : platformEnvironment === 'development' && sdkEnvironment === 'development';
-  invariant(environmentBinding
-    && platformProjectId === config.developmentProjectId
+  // Catalyst may omit x-zc-environment on live Advanced I/O requests, but the
+  // pinned SDK defaults that missing header to Development. Never allow an SDK
+  // app reporting Production to reach Data Store or Mail.
+  invariant((platformEnvironment === null || platformEnvironment === 'development')
+    && sdkEnvironment === 'development',
+  'CATALYST_ENVIRONMENT_MISMATCH', 'Catalyst runtime is not Development.',
+  { httpStatus: 503 });
+  invariant(platformProjectId === config.developmentProjectId
     && String(sdkProjectId || '') === config.developmentProjectId
     && /^[A-Za-z0-9_-]{8,253}$/.test(platformProjectKey)
     && sdkProjectKey === platformProjectKey,
-  'PRODUCTION_BLOCKED', 'Catalyst runtime environment is not the approved Development project.',
+  'CATALYST_PROJECT_MISMATCH', 'Catalyst runtime is not the approved Development project.',
   { httpStatus: 503 });
 }
 
@@ -104,6 +102,7 @@ function safeError(error) {
     'STALE_SIGNATURE', 'REQUEST_ABORTED', 'REQUEST_BODY_TIMEOUT', 'REQUEST_STREAM_ERROR',
     'REQUEST_TOO_LARGE', 'READINESS_UNAUTHORIZED', 'PRODUCTION_BLOCKED',
     'INVALID_RUNTIME_CONFIGURATION', 'INVALID_SCHEMA', 'INVALID_EVENT',
+    'CATALYST_ENVIRONMENT_MISMATCH', 'CATALYST_PROJECT_MISMATCH',
     'EVENT_TIMESTAMP_MISMATCH', 'CALL_OWNERSHIP_UNRESOLVED', 'INVALID_ANALYSIS',
     'CATALYST_OPERATION_TIMEOUT', 'CATALYST_QUERY_FAILED', 'CATALYST_INSERT_FAILED',
     'CATALYST_UPDATE_FAILED', 'CATALYST_CONCURRENCY_CONFLICT', 'DURABLE_IDEMPOTENCY_CONFLICT',
