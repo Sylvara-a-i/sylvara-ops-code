@@ -22,7 +22,8 @@
     "reason": "The recurring scan and four-table state machine own bounded retry; overlapping provider-level retries are disabled."
   },
   "cron": {
-    "name": "FreeTestRetryEveryMinute",
+    "name": "FreeTestRetry1m",
+    "platform_name_max_characters": 20,
     "execution_type": "pre-defined",
     "type": "Periodic",
     "status_on_initial_provisioning": "disabled",

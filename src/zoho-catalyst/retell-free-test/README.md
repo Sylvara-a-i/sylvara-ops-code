@@ -96,6 +96,8 @@ npm run ci
 
 The root [`catalyst.json`](catalyst.json) repeats the retry package's `npm ci --install-links` step as a `predeploy` hook. `--install-links` is required: it materializes the reviewed local core package inside the Job archive instead of leaving a sibling-directory link that Catalyst cannot deploy. [`config/retry-job.json`](config/retry-job.json) fixes the Development Function Job pool, no-parameter job, disabled-first one-minute Cron, activation readback, and rollback. The Cron—not the pool alone—submits the recurring retry Job.
 
+The Cron resource is named `FreeTestRetry1m`; Catalyst enforces a 20-character Cron-name limit. It is provisioned disabled and remains disabled throughout this Development phase.
+
 The suites cover contract/environment/schema validation, raw signatures, sensitive-data minimization, revenue-source restrictions, Data Store SDK calls, two-client resolution and lifecycle isolation, cross-client rejection, replay, reordered events, 7-day/25-call enforcement, documented in-flight overshoot, dry-run containment, private retry/readiness, and Production pre-access rejection.
 
 ## Required Development proof

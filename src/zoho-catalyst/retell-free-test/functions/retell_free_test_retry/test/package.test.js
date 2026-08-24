@@ -27,6 +27,10 @@ test('job target is independently deployable and imports a materialized reviewed
   assert.equal(retryConfig.job.target_name, 'retell_free_test_retry');
   assert.deepEqual(retryConfig.job.params, {});
   assert.equal(retryConfig.job.platform_retries_enabled, false);
+  assert.equal(retryConfig.cron.name, 'FreeTestRetry1m');
+  assert.equal(retryConfig.cron.platform_name_max_characters, 20);
+  assert.equal(retryConfig.cron.name.length <= retryConfig.cron.platform_name_max_characters, true,
+    'Catalyst rejects Cron names longer than 20 characters');
   assert.equal(retryConfig.cron.status_on_initial_provisioning, 'disabled');
   assert.deepEqual(retryConfig.cron.detail,
     { hour: 0, minute: 1, second: 0, repetition_type: 'every' });
