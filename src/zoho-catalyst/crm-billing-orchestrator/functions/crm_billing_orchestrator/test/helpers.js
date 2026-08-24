@@ -1,11 +1,21 @@
 "use strict";
 
+const crypto = require("node:crypto");
+
 const REVISION = "a".repeat(40);
+const DEVELOPMENT_RUNTIME_PROOF = "r".repeat(64);
+const SYNTHETIC_DEVELOPMENT_ZAID = "synthetic-development-zaid";
+const DEVELOPMENT_ZAID_HMAC_SHA256 = crypto
+  .createHmac("sha256", DEVELOPMENT_RUNTIME_PROOF)
+  .update(SYNTHETIC_DEVELOPMENT_ZAID, "utf8")
+  .digest("hex");
 
 function baseEnvironment(overrides = {}) {
   return {
     DEPLOYMENT_ENVIRONMENT: "development",
     SOURCE_REVISION: REVISION,
+    DEVELOPMENT_FUNCTION_HOST: "synthetic.development.catalystserverless.com",
+    DEVELOPMENT_RUNTIME_PROOF,
     ALLOWED_PATH: "/synthetic/crm-billing",
     SHARED_HEADER_NAME: "x-synthetic-lifecycle-key",
     SHARED_HEADER_VALUE: "s".repeat(32),
@@ -53,4 +63,11 @@ function jsonResponse(status, body) {
   });
 }
 
-module.exports = { REVISION, baseEnvironment, jsonResponse };
+module.exports = {
+  DEVELOPMENT_RUNTIME_PROOF,
+  DEVELOPMENT_ZAID_HMAC_SHA256,
+  REVISION,
+  SYNTHETIC_DEVELOPMENT_ZAID,
+  baseEnvironment,
+  jsonResponse,
+};

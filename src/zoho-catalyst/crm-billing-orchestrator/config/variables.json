@@ -8,6 +8,8 @@
   "variables": [
     { "name": "DEPLOYMENT_ENVIRONMENT", "class": "environment-binding", "required": true },
     { "name": "SOURCE_REVISION", "class": "artifact-binding", "required": true },
+    { "name": "DEVELOPMENT_FUNCTION_HOST", "class": "environment-binding", "required": true },
+    { "name": "DEVELOPMENT_RUNTIME_PROOF", "class": "secret", "required": true },
     { "name": "ALLOWED_PATH", "class": "private-route", "required": true },
     { "name": "SHARED_HEADER_NAME", "class": "private-route-auth", "required": true },
     { "name": "SHARED_HEADER_VALUE", "class": "secret", "required": true },
