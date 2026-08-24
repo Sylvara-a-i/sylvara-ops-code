@@ -24,11 +24,15 @@ Complete raw responses, connector labels, runtime-derived variable names, prompt
 
 The approved provider-neutral coverage-mode enum, exact CRM-label mapping, and per-call trigger compatibility rules live in the Catalyst-owned [`coverage-mode-contract.json`](../zoho-catalyst/retell-inbound-resolver/contracts/coverage-mode-contract.json). This public contract does not expose a live deployment mapping, runtime value, or private resolver configuration.
 
-## Current Observation
+## Historical Snapshot Observation
 
 The 2026-08-20 read-only audit resolved one current draft for each managed agent. A published configuration did not resolve through the audited read path, so a draft-versus-published comparison was unavailable. Each agent referenced a distinct private conversation-flow resource.
 
 This is historical observation only. Assignment references are not treated as publication, deployment, phone binding, or production-routing proof. Runtime-derived names, counts, topology, voice details, connector labels, and control settings remain in the ignored private audit store only.
+
+## Current Development Readback
+
+The later sanitized 2026-08-24 readback is recorded in the free-test [`conversation-contract.json`](agents/7-day-free-test/contracts/conversation-contract.json) and [Development reconciliation](../../docs/runbooks/free-test-development-reconciliation-2026-08-22.md). It proves one published shared free-test version, the shared-agent post-call webhook, one bound non-customer Development number, and the reviewed first-node gate/capability boundary. Paid/native voice and provider-fallback cases, a second live number, prospect/customer routing, and Production remain deferred or unauthorized. Do not edit the immutable 2026-08-20 snapshots to reflect later runtime state.
 
 ## Provider-Neutral Acceptance Contract
 

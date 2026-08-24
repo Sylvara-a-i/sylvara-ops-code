@@ -1,6 +1,5 @@
 'use strict';
 
-const http = require('node:http');
 const { createRequestListener } = require('./lib/runtime-boundary');
 const { createSafeConsoleLogger } = require('./lib/logging');
 
@@ -13,8 +12,10 @@ const catalyst = {
   },
 };
 
-// Catalyst Advanced I/O loads an exported native Node HTTP server.
-module.exports = http.createServer(createRequestListener({
+// Catalyst invokes the exported Advanced I/O handler with native request and
+// response objects. Exporting an http.Server fails in the hosted runtime even
+// though it behaves correctly when exercised as a local Node server.
+module.exports = createRequestListener({
   catalystSdk: catalyst,
   logger: createSafeConsoleLogger(console),
-}));
+});

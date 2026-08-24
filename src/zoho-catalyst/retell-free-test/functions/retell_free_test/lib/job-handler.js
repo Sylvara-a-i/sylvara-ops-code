@@ -64,6 +64,18 @@ function createRetryJobHandler(options = {}) {
     const store = storeFactory(app, config);
     const service = serviceFactory({ store, mailAdapter: mailFactory(app, config), config, now, logger });
     const result = await service.runRetryJob(25);
+    const failed = [...result.events.results, ...result.notifications.results]
+      .some((item) => item.status === 'Failed');
+    if (failed) {
+      logger.error({ event: 'retell_retry_job_failed', state: 'Failed',
+        eventCount: result.events.examined, notificationCount: result.notifications.examined });
+      if (context && typeof context.closeWithFailure === 'function') {
+        context.closeWithFailure();
+        return result;
+      }
+      invariant(false, 'RETRY_JOB_FAILED', 'Retry Job contains an uncontained row failure.',
+        { httpStatus: 503 });
+    }
     logger.info({ event: 'retell_retry_job_completed', eventCount: result.events.examined,
       notificationCount: result.notifications.examined,
       reconciliationRequired: result.notifications.reconciliationRequired });

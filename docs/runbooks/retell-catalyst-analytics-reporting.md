@@ -3,7 +3,7 @@
 ## Status
 
 - Runbook status: **Proposed**
-- Implementation status: **READY FOR DEVELOPMENT DEPLOYMENT; routes, runtime/source parity, controlled email delivery, and phone behavior remain unproven**
+- Implementation status: **READY FOR CONTROLLED INTERNAL PHONE TEST for the one-number Development scope; Catalyst/Zoho lifecycle is proven and later Retell voice/fallback work is deferred**
 - Live Retell, Catalyst, CRM, or Analytics change authorized by this file: **No**
 - Production call path: **Not authorized; required operating evidence and approvals are absent**
 
@@ -11,7 +11,7 @@ This runbook preserves the general future reporting boundary in [ADR 0004](../ad
 
 ### Free-Test MVP Override
 
-The free-test MVP uses the exact configuration gate plus a durable handled-count check; it has no pre-call reservation/orphan state and may report calls already in flight after the 25th handled call. Its only notification channel is Catalyst Mail email. Committed/default Development mode records `DryRunRecorded`, zero attempts, and `CATALYST_MAIL_DRY_RUN` without invoking `sendMail`; one controlled `send_development` proof, provider/inbox readback, replay without a duplicate, and restoration to `dry_run` are required before internal-phone readiness. Internal reporting is a client/deployment-scoped Catalyst query and sanitized CSV export. CRM is disabled and Analytics is deferred; neither is an internal-test blocker. Initial validation numbers are frozen and enter documented cooldown after completion; reassignment is deferred.
+The free-test MVP uses the exact configuration gate plus a durable handled-count check; it has no pre-call reservation/orphan state and may report calls already in flight after the 25th handled call. Its only notification channel is Catalyst Mail email. Default Development mode records `DryRunRecorded`, zero attempts, and `CATALYST_MAIL_DRY_RUN` without invoking `sendMail`; one controlled `send_development` proof received provider/inbox readback, replay caused no second provider invocation, and mode returned to `dry_run`. Internal reporting is a client/deployment-scoped Catalyst query and sanitized JSON/CSV export. CRM is disabled and Analytics is deferred. The current one-number route is frozen and enters cooldown after completion; reassignment and a second live number are deferred.
 
 ## Objective
 
@@ -189,7 +189,7 @@ Required processing order:
 10. return an empty 2xx response inside the provider timeout; and
 11. process slow or retrying downstream work asynchronously.
 
-The current source includes the separate `retell_free_test_retry` Catalyst Function Job target, but repository presence is not deployment evidence. Before an internal phone test, prove the packaged Job identity, trigger/request shape, bounded backoff, event/notification recovery, and ambiguous-state readback in Development. Do not describe webhook acknowledgement, Catalyst persistence, or Job execution as durable until the exact boundary, failure recovery, and readback are observed.
+The separate `retell_free_test_retry` Function, 512 MB Job pool, and disabled one-minute `FreeTestRetry1m` Cron with zero platform retries are deployed/read back from the recorded revision. Manual empty and controlled retryable-state Job runs proved the trigger/request shape, bounded attempts, tenant isolation, and durable recovery without duplicate calls, notifications, or real email in `dry_run`. Keep the Cron disabled until a separately authorized later stage requires recurring recovery and exact final source parity has been read back.
 
 Logging is limited to:
 
@@ -293,7 +293,7 @@ Controls:
 
 After one eligible call is durably processed, Catalyst creates one idempotent email notification record for the destination already approved in that deployment snapshot. Callers cannot choose the destination and Retell never sends the message.
 
-Development defaults to `dry_run`: the row terminates at `DryRunRecorded`, `attempts = 0`, provider code `CATALYST_MAIL_DRY_RUN`, and `app.email().sendMail` is not invoked. This proves correlation, minimization, recipient isolation, and replay idempotency but not delivery. Before internal-phone readiness, enable `send_development` only for one verified Development sender and approved synthetic recipient, read back provider acceptance and inbox delivery, prove replay creates no second delivery, handle ambiguity without blind resend, and restore `dry_run`. Prospect/customer delivery remains separately unresolved. See the [shared-agent runbook](shared-seven-day-monitor-number-routing.md).
+Development defaults to `dry_run`: the row terminates at `DryRunRecorded`, `attempts = 0`, provider code `CATALYST_MAIL_DRY_RUN`, and `app.email().sendMail` is not invoked. Private configuration and the verified sender are present. One controlled `send_development` call produced one provider-accepted durable `Sent` record and one inbox message; replay created no second provider invocation or message, and mode was restored to `dry_run`. Ambiguous post-invocation outcomes remain quarantined rather than blindly resent. Prospect/customer delivery remains separately unresolved. See the [shared-agent runbook](shared-seven-day-monitor-number-routing.md).
 
 ## Phase 7: Reconcile Customer Outcomes
 

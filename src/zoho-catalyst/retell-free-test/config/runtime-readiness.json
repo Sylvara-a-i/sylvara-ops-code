@@ -1,65 +1,88 @@
 {
-  "schema_version": 2,
-  "decision": "source_ready_for_development_provisioning",
-  "decision_date": "2026-08-22",
+  "schema_version": 4,
+  "decision": "ready_for_controlled_internal_phone_test",
+  "acceptance_classification": "READY_FOR_CONTROLLED_INTERNAL_PHONE_TEST",
+  "decision_date": "2026-08-24",
   "environment": "development",
   "entrypoint_policy": "authenticated_development_routes",
+  "source_revision": "d4f5af31be310df400532641ef163c16de31066c",
+  "scope": {
+    "catalyst_zoho_lane_complete": true,
+    "active_retell_development_number_count": 1,
+    "second_number_deferred": true,
+    "paid_or_native_voice_testing_deferred": true,
+    "provider_fallback_testing_deferred": true,
+    "agent_refinement_deferred": true,
+    "prospect_customer_and_production_traffic_authorized": false
+  },
   "implemented_source": [
     "POST /retell/inbound with bounded raw-body verification and fail-closed resolver",
     "POST /retell/events with durable receipts, replay deduplication, canonical call convergence, and handled-call counting",
-    "GET /internal/readiness with constant-time bearer authentication",
-    "separate deployable Development Function Job target plus disabled-first one-minute predefined Cron contract for due minimized event receipts and notification state recovery",
-    "exactly four new Development Data Store tables",
-    "Catalyst Mail email-only dry-run recording plus separately gated send_development source; committed mode does not invoke sendMail",
-    "client-partitioned four-table report query and sanitized CSV projection",
+    "GET /internal/readiness with X-Free-Test-Readiness-Token authentication",
+    "separate Development Function Job target and disabled one-minute retry Cron",
+    "exactly four Development Data Store tables",
+    "Catalyst Mail email-only dry_run and bounded send_development modes",
+    "client-and-deployment-partitioned query plus sanitized JSON and CSV projections",
     "Production rejection before Catalyst Data Store or Mail access"
   ],
-  "blocking_evidence_gaps": [
-    {
-      "id": "catalyst_development_readback",
-      "severity": "P0",
-      "status": "unverified",
-      "missing_evidence": "The four tables and PII/ePHI validators, unique columns, conditional ZCQL behavior, Advanced I/O raw bytes/host, packaged Function Job target, immediate Job, disabled-first one-minute Cron, and pinned SDK response shapes have not been provisioned and independently read back in Catalyst Development."
-    },
-    {
-      "id": "catalyst_mail_delivery",
-      "severity": "P1",
-      "status": "unverified",
-      "missing_evidence": "Catalyst Mail sender verification, the approved synthetic Development recipient, live response mapping, exactly-once delivery/replay evidence, and restoration to dry_run have not been exercised. Source defaults to DryRunRecorded and contains a bounded send_development path; no delivery is claimed."
-    },
-    {
-      "id": "retell_inbound_fallback_readback",
-      "severity": "P1",
-      "status": "unverified",
-      "missing_evidence": "The number-bound shared agent's actual provider behavior has not been read back for resolver timeout, 503, malformed JSON, invalid override, or endpoint unavailability. Its exact first-node no-data gate is verified, but provider fallback behavior still requires a controlled Development route test."
-    },
-    {
-      "id": "controlled_phone_e2e",
-      "severity": "P1",
-      "status": "unverified",
-      "missing_evidence": "No Development phone call has proven resolver-to-call-to-notification-record lifecycle and practical 25-call behavior."
-    }
+  "verified_development_evidence": [
+    "FreeTestDeployments, FreeTestRetellEventReceipts, FreeTestCalls, and FreeTestNotifications match the committed schema; required encrypted JSON columns have audit_consent and App User permissions are empty",
+    "retell_free_test is Node.js 24 Advanced I/O at 256 MB and retell_free_test_retry is Node.js 18 Job Function at 256 MB",
+    "24 Advanced I/O and five retry-package source files matched revision d4f5af31be310df400532641ef163c16de31066c during sanitized pullback comparison",
+    "required private runtime configuration and a verified Development Mail sender are configured outside source control",
+    "readiness returned non-cacheable HTTP 200 with Development identity, exact source revision, four readable tables, and dry_run mode",
+    "missing, wrong, malformed, and duplicate readiness credentials plus unsupported methods, paths, query strings, and hosts failed closed",
+    "signed inbound requests resolved two synthetic clients independently and invalid signature, freshness, content, ownership, state, expiry, limit, configuration, and shared-agent cases failed closed",
+    "signed call_ended and call_analyzed events converged in either order; replay created no duplicate call, count, or notification",
+    "one unique handled call incremented once; seven-day expiry and the practical 25-call stop were exercised against durable Development state",
+    "manual empty and retryable-state Job runs completed while FreeTestRetry1m remained disabled",
+    "one controlled internal Development email received provider acceptance and inbox readback; replay caused no second provider invocation, and notification mode was restored to dry_run",
+    "one non-customer Retell Development number was bound to the published shared version; unbind and restore were read back as a route rollback exercise",
+    "CRM, Analytics, SMS, customer forwarding, Production, and prospect/customer traffic remained untouched"
   ],
-  "closed_external_evidence": [
+  "blocking_evidence_gaps": [],
+  "deferred_evidence": [
     {
-      "id": "retell_safe_fallback_flow",
-      "status": "verified_development_readback_and_native_simulation",
-      "evidence": "The reviewed shared Development agent passed the exact configuration gate, direct no-data fallback, deliberate closing, and all 25 native simulation cases without hard-coded client ownership."
+      "id": "second_retell_development_number",
+      "severity": "P2",
+      "status": "deferred_by_owner",
+      "boundary": "Not required to begin one-number controlled internal phone testing. A second number and live two-number isolation proof are required before claiming the separate first-controlled-prospect technical gate."
+    },
+    {
+      "id": "retell_voice_and_provider_fallback",
+      "severity": "P2",
+      "status": "deferred_by_owner",
+      "boundary": "Paid/native voice cases, interruption and noise refinement, and number-webhook timeout/503/malformed/invalid-override/unavailable behavior remain controlled Retell work. They do not invalidate the completed Catalyst lifecycle."
+    },
+    {
+      "id": "prospect_launch_review",
+      "severity": "P2",
+      "status": "separately_gated",
+      "boundary": "A real contractor test still requires prospect-facing legal/privacy review, approved recipient and route, and explicit routing approval."
     }
   ],
   "known_mvp_tradeoffs": [
     "There is no pre-call reservation. Concurrent calls already in flight when the 25th handled call converges may create a visible practical overshoot.",
-    "Every first valid terminal ended post-call event counts once; error/not-connected lifecycle rows remain uncounted and notification remains pending until call_analyzed arrives.",
-    "Reporting is a minimized per-client Data Store query or sanitized CSV export; Analytics and CRM writes are absent.",
-    "Number reassignment is not a runtime feature or an initial-validation requirement. Do not reuse either test number during initial validation; after a test ends, preserve ownership metadata and place the number into a documented cooldown before any separately reviewed future reuse."
+    "Every first valid terminal ended post-call event counts once; error and not-connected lifecycle rows remain uncounted and notification waits for call_analyzed.",
+    "Catalyst query plus JSON or CSV is the reporting path; Analytics and CRM writes are absent.",
+    "Number reassignment is not a runtime feature. The current non-customer number remains frozen to its Development deployment and must enter cooldown before any separately reviewed reuse.",
+    "Catalyst's edge buffers public request bodies before Advanced I/O execution; application timeout and aborted-stream codes are locally tested while public stalled or truncated requests are judged by fail-closed and zero-side-effect behavior."
   ],
   "release_gate": {
     "production_remains_prohibited": true,
-    "development_source_upload_and_independent_readback_required": true,
-    "retry_job_and_cron_readback_required": true,
-    "mail_send_requires_verified_development_sender_and_approved_synthetic_recipient": true,
-    "two_synthetic_numbers_must_use_the_same_shared_agent_version": true,
-    "all_p0_p1_evidence_gaps_must_close_before_controlled_internal_phone_test": true,
-    "prospect_test_requires_a_separate_launch_decision": true
+    "exact_recorded_revision_deployed_and_read_back": true,
+    "final_candidate_requires_redeployment_if_source_revision_changes": true,
+    "required_private_runtime_configuration_complete": true,
+    "signed_request_and_durable_runtime_proof_complete": true,
+    "retry_job_manual_proof_complete": true,
+    "retry_cron_enabled": false,
+    "one_controlled_development_mail_proof_complete": true,
+    "notification_mode_restored_to_dry_run": true,
+    "two_synthetic_clients_isolated_in_catalyst": true,
+    "one_retell_development_number_bound_to_shared_agent": true,
+    "second_live_number_required_for_current_classification": false,
+    "controlled_internal_phone_test_may_begin_after_test_specific_route_readback": true,
+    "first_controlled_prospect_technical_gate_complete": false,
+    "prospect_test_requires_separate_launch_decision": true
   }
 }

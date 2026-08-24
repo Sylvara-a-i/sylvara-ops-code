@@ -2,7 +2,9 @@
 
 This checklist separates offline/synthetic Development, a controlled internal Development phone test, and a later prospect/Production workflow. The [legal archive](../legal-compliance/README.md) preserves a conservative historical profile but does not itself decide authorization for a particular test.
 
-Current classification is **READY FOR DEVELOPMENT DEPLOYMENT**. A controlled internal Development phone test remains **NOT READY** until every item in that section is proved by deployed readback.
+Current classification is **READY FOR CONTROLLED INTERNAL PHONE TEST** for the one-number Development scope. This is readiness to begin a bounded internal phone test, not evidence that the voice test passed and not authorization for a prospect, customer, or Production route.
+
+Current sanitized Catalyst evidence: the exact four-table schema and App User denial, two 256 MB functions at revision `d4f5af31be310df400532641ef163c16de31066c`, 29-file source parity, a 512 MB Job pool, disabled one-minute Cron with zero platform retries, complete private configuration, verified sender, non-cacheable HTTP 200 readiness, signed inbound/event matrices, durable call/count/notification rows, manual Job execution, seven-day and practical 25-call stops, one controlled internal email with replay suppression, restored `dry_run`, and rollback readback are proven. CRM, Analytics, SMS, Production, prospect/customer traffic, and contractor forwarding remained untouched. If the final reviewed commit changes, redeploy and repeat parity/readiness before using this classification.
 
 ## Safety Preconditions
 
@@ -19,7 +21,7 @@ Current classification is **READY FOR DEVELOPMENT DEPLOYMENT**. A controlled int
 - [ ] Required tests, linting, formatting, type checks, and repository safety checks pass.
 - [ ] The committed diff contains no secrets, private identifiers, or generated sensitive artifacts.
 - [ ] Documentation reflects the implemented boundary and rollback path.
-- [ ] The pull request is approved and merged; deployment remains a separate authorized action.
+- [ ] The exact reviewed immutable commit is selected and the pull-request state is recorded; merge remains a separate action and is not implied by Development deployment.
 
 ## Historical Conservative Profile Checks
 
@@ -38,8 +40,8 @@ Use this section only if the owner explicitly adopts the historical internal-QA 
 This scope exercises source locally or in a separately authorized isolated Development deployment with synthetic fixtures. It must not bind a callable number, receive audio, contact a recipient, write CRM, import Analytics, or expose a public route.
 
 - [ ] The source revision, `development` environment, component-owned variable registry, exact `FREE_TEST_NOTIFICATION_MODE=dry_run`, privately configured verified `FREE_TEST_MAIL_FROM`, disabled CRM mode, and absent Analytics integration are verified; `CATALYST_MAIL_MODE` is not accepted.
-- [ ] Two synthetic clients use different client/deployment/configuration-version/company/service-area/recipient/number values and the same reviewed shared agent version.
-- [ ] Each synthetic number resolves only its own versioned deployment/configuration.
+- [ ] Two synthetic Catalyst clients use different client/deployment/configuration-version/company/service-area/recipient/number values and the same reviewed shared agent version.
+- [ ] Each synthetic number value resolves only its own versioned deployment/configuration; this backend isolation proof does not require buying a second live Retell number.
 - [ ] All seven exact gate values and every ownership/approval/status/expiry/count invariant pass before normal intake.
 - [ ] Every known authenticated invalid, unknown, ambiguous, mismatched, inactive, expired, or exhausted resolution returns HTTP 200 with `{ "call_inbound": { "reject": true } }`, starts no agent, and creates no resolver-side write.
 - [ ] Transport/authentication/timeout/503/unavailable, malformed-response, and invalid-override cases may fall back only to the number-bound shared agent; its exact Configuration Unavailable gate collects no caller data.
@@ -48,7 +50,7 @@ This scope exercises source locally or in a separately authorized isolated Devel
 - [ ] Replay produces no duplicate call, handled-count increment, email dry-run row, or CSV row.
 - [ ] The email row terminates at `DryRunRecorded` with zero attempts and `CATALYST_MAIL_DRY_RUN`; `sendMail` is never invoked and recipient references never cross clients.
 - [ ] Catalyst queries and sanitized CSV exports require both Client ID and Deployment ID and contain one client only.
-- [ ] Neither initial validation number is reused or moved; historical ownership is retained and the completed-number cooldown procedure is documented.
+- [ ] The current Development number is not reused or moved; historical ownership is retained and the completed-number cooldown procedure is documented.
 - [ ] One immutable correlation chain follows resolver decision, event, call/outcome/count, email dry-run row, and query/CSV export.
 - [ ] All required caller, configuration, isolation, replay, retry, and provider-failure scenarios pass with zero P0/P1 defects.
 - [ ] Rollback leaves the deployment inactive, evidence preserved, and subsequent configuration attempts safely unavailable.
@@ -57,17 +59,24 @@ Passing this section proves only offline/synthetic readiness. It does not prove 
 
 ## Controlled Internal Development Phone Test
 
-- [ ] An explicit owner-approved test record identifies the internal tester, synthetic script, two Development numbers, shared agent/Catalyst resources, data handling, time window, kill switch, and rollback.
-- [ ] The deployed artifact, exact Development routes, four tables, secrets, retry Job, both number bindings, and one shared agent version are independently read back.
+This readiness classification is technical, not authorization to place a call. Before any
+telephone execution, the owner must approve a current test-specific profile and route. The
+historical conservative profile applies only when expressly adopted; otherwise a separately
+reviewed profile must supersede it before the test proceeds.
+
+- [ ] An explicit owner-approved test record identifies the internal tester, synthetic script, one non-customer Development number, shared agent/Catalyst resources, data handling, time window, kill switch, and rollback.
+- [ ] The deployed artifact, exact Development routes, four tables, secrets, retry Job, current number binding, and shared agent version are independently read back.
 - [ ] No client forwarding, Production resource, real customer/prospect data, prospect/customer email, CRM mutation, or Analytics import is enabled.
 - [ ] Catalyst Mail first proves `dry_run`; then one `send_development` email uses only the verified Development sender and approved synthetic recipient, receives provider/inbox readback, and replay produces no second delivery; mode is restored to `dry_run`.
-- [ ] Each dedicated synthetic number reaches only its own client configuration while both use the same reviewed shared agent version.
+- [ ] The dedicated Development number reaches only its active synthetic deployment and the shared reviewed agent version.
 - [ ] The exact gate, company identity, bounded intake, interruption/correction behavior, and deliberate closing pass on the approved internal calls.
-- [ ] The complete call/event/outcome/count/email/query/CSV correlation trace reconciles independently for both synthetic deployments.
-- [ ] Both initial numbers remain frozen through validation and enter documented cooldown after completion; reassignment is not exercised.
+- [ ] The complete call/event/outcome/count/email/query/CSV correlation trace reconciles for the active phone deployment; backend A/B isolation remains covered by signed Catalyst tests.
+- [ ] The current number remains frozen through validation and enters documented cooldown after completion; reassignment is not exercised.
 - [ ] The route is disabled or restored to the approved inactive state after the test and read back.
 
 Passing this section supports only the scoped controlled internal Development phone test. It does not authorize a prospect, customer, or Production route.
+
+A second live Development number, live two-number/same-version isolation, paid/native voice expansion, and provider-fallback fault injection are deferred. Complete the second-number proof before activating two concurrent deployments or claiming the first-controlled-prospect technical gate.
 
 ## Future Prospect Or Production Checks — Separately Approved
 

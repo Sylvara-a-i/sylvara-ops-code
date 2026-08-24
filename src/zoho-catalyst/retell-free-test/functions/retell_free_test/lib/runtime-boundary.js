@@ -10,45 +10,64 @@ const { CatalystMailAdapter } = require('./catalyst-mail');
 const { createRuntimeService } = require('./runtime-service');
 
 const RETELL_SIGNATURE_HEADER = 'x-retell-signature';
+const READINESS_TOKEN_HEADER = 'x-free-test-readiness-token';
+
+function headerValues(request, name) {
+  const normalized = name.toLowerCase();
+  const distinct = Object.entries(request?.headersDistinct || {})
+    .filter(([candidate]) => candidate.toLowerCase() === normalized);
+  if (distinct.length > 0) {
+    invariant(distinct.length === 1 && Array.isArray(distinct[0][1]),
+      'INVALID_REQUEST_HEADER', 'Required request header is unavailable.', { httpStatus: 400 });
+    return distinct[0][1];
+  }
+  if (Array.isArray(request?.rawHeaders)) {
+    invariant(request.rawHeaders.length % 2 === 0,
+      'INVALID_REQUEST_HEADER', 'Required request header is unavailable.', { httpStatus: 400 });
+    const raw = [];
+    for (let index = 0; index < request.rawHeaders.length; index += 2) {
+      if (typeof request.rawHeaders[index] === 'string'
+        && request.rawHeaders[index].toLowerCase() === normalized) raw.push(request.rawHeaders[index + 1]);
+    }
+    if (raw.length > 0) return raw;
+  }
+  return Object.entries(request?.headers || {})
+    .filter(([candidate]) => candidate.toLowerCase() === normalized)
+    .map(([, value]) => value);
+}
 
 function scalarHeader(request, name) {
-  const matches = Object.entries(request?.headers || {})
-    .filter(([candidate]) => candidate.toLowerCase() === name);
-  invariant(matches.length === 1 && typeof matches[0][1] === 'string',
+  const values = headerValues(request, name);
+  invariant(values.length === 1 && typeof values[0] === 'string',
     'INVALID_REQUEST_HEADER', 'Required request header is unavailable.', { httpStatus: 400 });
-  return matches[0][1];
+  return values[0];
 }
 
 function assertDevelopmentHost(request, config) {
-  const host = scalarHeader(request, 'host').trim().toLowerCase();
+  const authority = scalarHeader(request, 'host').trim().toLowerCase();
+  const host = authority.endsWith(':443') ? authority.slice(0, -4) : authority;
   invariant(host === config.developmentHost && host.includes('.development.')
     && config.environment === 'development',
-  'PRODUCTION_BLOCKED', 'Catalyst runtime environment is not Development.', { httpStatus: 503 });
+  'CATALYST_HOST_MISMATCH', 'Catalyst runtime host is not the approved Development host.', { httpStatus: 503 });
 }
 
 function assertPlatformDevelopment(request, app, config) {
   assertDevelopmentHost(request, config);
-  const environmentHeaders = Object.entries(request?.headers || {})
-    .filter(([candidate]) => candidate.toLowerCase() === 'x-zc-environment');
-  const platformEnvironment = environmentHeaders.length === 1
-    && typeof environmentHeaders[0][1] === 'string'
-    ? environmentHeaders[0][1].trim().toLowerCase() : '';
   const sdkEnvironment = typeof app?.config?.environment === 'string'
     ? app.config.environment.trim().toLowerCase() : '';
   const sdkProjectId = app?.config?.projectId;
-  // The host is an early containment check. Catalyst's platform environment and
-  // SDK project identity provide the authoritative boundary before any store or Mail use.
-  invariant(platformEnvironment === 'development' && sdkEnvironment === 'development'
-    && String(sdkProjectId || '') === config.developmentProjectId,
-  'PRODUCTION_BLOCKED', 'Catalyst runtime environment is not the approved Development project.',
+  const sdkProjectKey = typeof app?.config?.projectKey === 'string'
+    ? app.config.projectKey : '';
+  // Catalyst's public Advanced I/O request may contain an internal environment
+  // header in a non-scalar form. The pinned SDK's immutable app binding is the
+  // authoritative platform identity; never let a request header select it.
+  invariant(sdkEnvironment === 'development',
+  'CATALYST_ENVIRONMENT_MISMATCH', 'Catalyst runtime is not Development.',
   { httpStatus: 503 });
-}
-
-function bearerToken(request) {
-  const value = scalarHeader(request, 'authorization');
-  invariant(value.startsWith('Bearer '), 'READINESS_UNAUTHORIZED',
-    'Private route authorization is required.', { httpStatus: 401 });
-  return value.slice(7);
+  invariant(String(sdkProjectId || '') === config.developmentProjectId
+    && /^[A-Za-z0-9_-]{8,253}$/.test(sdkProjectKey),
+  'CATALYST_PROJECT_MISMATCH', 'Catalyst runtime is not the approved Development project.',
+  { httpStatus: 503 });
 }
 
 function timingSafeToken(actual, expected) {
@@ -62,7 +81,9 @@ function safeError(error) {
     'INVALID_JSON', 'INVALID_REQUEST_HEADER', 'INVALID_SIGNATURE', 'MISSING_SIGNATURE',
     'STALE_SIGNATURE', 'REQUEST_ABORTED', 'REQUEST_BODY_TIMEOUT', 'REQUEST_STREAM_ERROR',
     'REQUEST_TOO_LARGE', 'READINESS_UNAUTHORIZED', 'PRODUCTION_BLOCKED',
+    'CATALYST_HOST_MISMATCH',
     'INVALID_RUNTIME_CONFIGURATION', 'INVALID_SCHEMA', 'INVALID_EVENT',
+    'CATALYST_ENVIRONMENT_MISMATCH', 'CATALYST_PROJECT_MISMATCH',
     'EVENT_TIMESTAMP_MISMATCH', 'CALL_OWNERSHIP_UNRESOLVED', 'INVALID_ANALYSIS',
     'CATALYST_OPERATION_TIMEOUT', 'CATALYST_QUERY_FAILED', 'CATALYST_INSERT_FAILED',
     'CATALYST_UPDATE_FAILED', 'CATALYST_CONCURRENCY_CONFLICT', 'DURABLE_IDEMPOTENCY_CONFLICT',
@@ -103,7 +124,7 @@ function createRequestListener(options = {}) {
 
       if (routePath === config.readinessPath) {
         invariant(request.method === 'GET', 'METHOD_NOT_ALLOWED', 'Readiness requires GET.', { httpStatus: 405 });
-        invariant(timingSafeToken(bearerToken(request), config.readinessToken),
+        invariant(timingSafeToken(scalarHeader(request, READINESS_TOKEN_HEADER), config.readinessToken),
           'READINESS_UNAUTHORIZED', 'Readiness authorization failed.', { httpStatus: 401 });
         const store = storeFactory(app, config);
         const service = serviceFactory({ store, mailAdapter: mailFactory(app, config), config, now, logger });
@@ -155,5 +176,5 @@ function createRequestListener(options = {}) {
 
 module.exports = {
   createRequestListener, assertDevelopmentHost, assertPlatformDevelopment, timingSafeToken,
-  RETELL_SIGNATURE_HEADER,
+  scalarHeader, RETELL_SIGNATURE_HEADER, READINESS_TOKEN_HEADER,
 };

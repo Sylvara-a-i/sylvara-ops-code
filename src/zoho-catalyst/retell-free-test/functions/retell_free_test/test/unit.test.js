@@ -12,7 +12,7 @@ const { loadConfig, loadJobConfig } = require('../lib/config');
 const { verifyRetellSignature } = require('../lib/security');
 const { validateInboundPayload } = require('../lib/validation');
 const { extractAnalysis, validateValueEvidence } = require('../lib/analysis');
-const { CatalystMailAdapter } = require('../lib/catalyst-mail');
+const { CatalystMailAdapter, messageContent } = require('../lib/catalyst-mail');
 const { readRawBody } = require('../lib/http');
 const { csvCell } = require('../lib/reporting');
 const { timingSafeToken } = require('../lib/runtime-boundary');
@@ -37,12 +37,14 @@ test('unit: environment registry exactly matches reads and rejects Production or
   const registry = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', '..', 'config', 'variables.json'), 'utf8'));
   const env = environment();
   assert.deepEqual(Object.keys(env).sort(), registry.variables.map(({ name }) => name).sort());
+  assert.deepEqual(registry.variables.filter(({ name }) => name.startsWith('CATALYST_')), [],
+    'Catalyst reserves the CATALYST_ environment-variable namespace');
   assert.equal(loadConfig(env).tables.DEPLOYMENT_TABLE, 'FreeTestDeployments');
   const jobOnly = { ...env };
   for (const name of [
     'RETELL_WEBHOOK_API_KEY', 'NUMBER_LOOKUP_HMAC_SECRET', 'INTERNAL_READINESS_TOKEN',
     'RETELL_INBOUND_PATH', 'RETELL_EVENTS_PATH', 'INTERNAL_READINESS_PATH',
-    'CATALYST_DEVELOPMENT_HOST', 'RETELL_SIGNATURE_MAX_AGE_MS', 'MAX_WEBHOOK_BYTES',
+    'FREE_TEST_DEVELOPMENT_HOST', 'RETELL_SIGNATURE_MAX_AGE_MS', 'MAX_WEBHOOK_BYTES',
     'INBOUND_BODY_TIMEOUT_MS',
   ]) delete jobOnly[name];
   assert.equal(loadJobConfig(jobOnly).retryJobPoolId, env.FREE_TEST_RETRY_JOB_POOL_ID);
@@ -110,7 +112,13 @@ test('unit: Data Store schema contains exactly the four implemented MVP tables',
       assert.equal(column.type, 'encrypted_text', name);
       assert.equal(column.audit_consent, true, name);
     }
+    for (const column of table.columns.filter(({ type }) => type === 'encrypted_text')) {
+      assert.equal(column.max_length, 10_000, column.api_name);
+    }
   }
+  const deploymentSchema = schema.tables.find(({ api_name: name }) => name === 'FreeTestDeployments');
+  assert.deepEqual(deploymentSchema.required_unique_columns, ['DEPLOYMENT_KEY', 'NUMBER_LOOKUP_HASH']);
+  assert.equal(deploymentSchema.columns.find(({ api_name: name }) => name === 'DEPLOYMENT_ID').unique, false);
   const receiptColumns = new Set(schema.tables.find(({ api_name: name }) => name === 'FreeTestRetellEventReceipts')
     .columns.map(({ api_name: name }) => name));
   for (const field of ['EVENT_DATA_JSON', 'RECEIPT_VERSION', 'LEASE_TOKEN', 'NEXT_ATTEMPT_AT']) {
@@ -228,6 +236,18 @@ test('unit: Catalyst Mail real Development path uses official SDK shape and trea
   assert.equal(unverifiedResult.providerCode, 'CATALYST_MAIL_RESPONSE_INVALID');
 });
 
+test('unit: Catalyst Mail escapes caller text and preserves the capability disclaimer', () => {
+  const content = messageContent({
+    callerName: '<script>alert("caller")</script>',
+    issueSummary: '<img src=x onerror=alert("issue")>',
+    callOutcome: 'potential_job',
+  });
+  assert.doesNotMatch(content, /<script|<img/i);
+  assert.match(content, /&lt;script&gt;alert\(&quot;caller&quot;\)&lt;\/script&gt;/);
+  assert.match(content, /&lt;img src=x onerror=alert\(&quot;issue&quot;\)&gt;/);
+  assert.match(content, /No appointment or dispatch has been confirmed\./);
+});
+
 test('unit: raw-body reader enforces the byte ceiling', async () => {
   const request = Readable.from([Buffer.alloc(1025)]);
   await assert.rejects(readRawBody(request, { maximumBytes: 1024, timeoutMs: 1000 }),
@@ -246,22 +266,23 @@ test('unit: readiness token comparison is deterministic and timing-safe at the d
   assert.equal(timingSafeToken('short', 'b'.repeat(32)), false);
 });
 
-test('unit: runtime readiness reports source implementation without deployment claims', () => {
+test('unit: runtime readiness records the one-number Development boundary', () => {
   const readiness = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', '..', 'config', 'runtime-readiness.json'), 'utf8'));
-  assert.equal(readiness.decision, 'source_ready_for_development_provisioning');
+  assert.equal(readiness.decision, 'ready_for_controlled_internal_phone_test');
   assert.equal(readiness.environment, 'development');
   assert.equal(readiness.release_gate.production_remains_prohibited, true);
-  assert.deepEqual(new Set(readiness.blocking_evidence_gaps.map(({ id }) => id)), new Set([
-    'catalyst_development_readback', 'catalyst_mail_delivery', 'retell_inbound_fallback_readback',
-    'controlled_phone_e2e',
+  assert.deepEqual(readiness.blocking_evidence_gaps, []);
+  assert.equal(readiness.scope.active_retell_development_number_count, 1);
+  assert.equal(readiness.scope.second_number_deferred, true);
+  assert.deepEqual(new Set(readiness.deferred_evidence.map(({ id }) => id)), new Set([
+    'second_retell_development_number', 'retell_voice_and_provider_fallback',
+    'prospect_launch_review',
   ]));
-  assert.equal(readiness.closed_external_evidence.some(({ id }) => id === 'retell_safe_fallback_flow'), true);
 });
 
-test('unit: Advanced I/O entrypoint exports a native server without listening locally', () => {
+test('unit: Advanced I/O entrypoint exports the Catalyst request handler', () => {
   const functionConfig = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'catalyst-config.json'), 'utf8'));
   assert.equal(require('../package.json').name, functionConfig.deployment.name);
-  const server = require('../index');
-  assert.equal(server.listening, false);
-  assert.equal(server.listeners('request').length, 1);
+  const handler = require('../index');
+  assert.equal(typeof handler, 'function');
 });

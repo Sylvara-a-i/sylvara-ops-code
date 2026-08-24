@@ -40,6 +40,8 @@
   "number_binding_policy": {
     "one_dedicated_number_per_deployment": true,
     "one_shared_agent_for_all_free_tests": true,
+    "current_controlled_internal_live_number_count": 1,
+    "second_live_number_deferred_until_multi_deployment_or_prospect_gate": true,
     "number_reassignment_supported_during_initial_validation": false,
     "completed_number_requires_documented_cooldown_before_future_reuse": true,
     "historical_call_ownership_metadata_is_immutable": true
@@ -356,11 +358,11 @@
     "analytics_readback_required_before_first_prospect_report": true
   },
   "development_readback": {
-    "observed_on": "2026-08-22",
+    "observed_on": "2026-08-24",
     "matching_shared_agent_count": 1,
     "observed_agent_version": 0,
     "observed_flow_version": 0,
-    "published_version_resolved": false,
+    "published_version_resolved": true,
     "first_node_is_configuration_gate": true,
     "first_node_gate_matches_this_contract": true,
     "first_node_gap": null,
@@ -372,7 +374,7 @@
       "call_ended",
       "call_analyzed"
     ],
-    "agent_level_webhook_configured": false,
+    "agent_level_webhook_configured": true,
     "observed_post_call_field_count": 11,
     "post_call_fields_match_minimal_schema": true,
     "observed_data_storage_setting": "everything_except_pii",
@@ -384,7 +386,7 @@
     "observed_interruption_sensitivity": 0.65,
     "naturalness_matches_text_simulation_acceptance": true,
     "voice_audio_naturalness_validated": false,
-    "native_simulation_runs_observed": 26,
+    "native_simulation_runs_observed": 78,
     "pre_reconciliation_baseline": {
       "run_count": 1,
       "passed": 0,
@@ -396,10 +398,32 @@
       "failed": 0,
       "errors": 0
     },
+    "current_validation_first_batch": {
+      "run_count": 25,
+      "passed": 24,
+      "failed": 1,
+      "errors": 0,
+      "transient_case": "caller_interruption"
+    },
+    "current_validation_targeted_rerun": {
+      "run_count": 2,
+      "passed": 2,
+      "failed": 0,
+      "errors": 0
+    },
+    "current_validation_final_batch": {
+      "run_count": 25,
+      "passed": 25,
+      "failed": 0,
+      "errors": 0
+    },
     "development_number_inventory_count": 1,
-    "development_numbers_bound_to_shared_agent": 0,
+    "development_numbers_bound_to_shared_agent": 1,
     "retell_draft_reconciled": true,
-    "runtime_reconciled": false
+    "runtime_reconciled": true,
+    "controlled_voice_test_deferred": true,
+    "provider_fallback_test_deferred": true,
+    "second_live_number_deferred": true
   },
-  "interpretation": "Sanitized provider-neutral behavior and acceptance requirements plus 2026-08-22 Development draft readback. The shared unpublished draft now matches the exact gate, safe missing-configuration path, minimal extraction schema, and deliberate close; 25 supported native text simulations passed after one failed pre-reconciliation baseline. Publication, webhook binding, two-number routing, voice/audio behavior, Catalyst deployment, durable lifecycle evidence, and notification delivery remain unproven."
+  "interpretation": "Sanitized provider-neutral behavior and acceptance requirements plus 2026-08-24 Development readback. The single shared version is published, its agent-level post-call webhook and one non-customer Development number are configured, and the exact gate, safe missing-configuration path, minimal extraction schema, prohibited-capability boundary, and deliberate close match this contract. The final native text batch passed 25 of 25 after one transient interruption failure passed two targeted reruns. Catalyst signed lifecycle, durable state, limits, retry, one internal email, replay suppression, and rollback are proven separately. Paid/native voice behavior, provider-fallback fault cases, and a second live number are intentionally deferred; no prospect/customer or Production authorization is implied."
 }

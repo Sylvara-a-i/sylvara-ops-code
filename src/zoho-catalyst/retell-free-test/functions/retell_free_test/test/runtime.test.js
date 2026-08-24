@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loadConfig } = require('../lib/config');
 const { FreeTestError } = require('../lib/errors');
-const { createCatalystStore } = require('../lib/catalyst-store');
+const { createCatalystStore, MAX_CATALYST_TEXT_BYTES } = require('../lib/catalyst-store');
 const { createRequestListener } = require('../lib/runtime-boundary');
 const { createRetryJobHandler } = require('../lib/job-handler');
 const { queryClientReport, reportToCsv } = require('../lib/reporting');
@@ -40,6 +40,44 @@ test('integration: Catalyst adapter uses allowlisted ZCQL and unique insert read
   await store.query('FreeTestCalls', 'ROWID', '101');
   assert.match(statements.at(-1), /WHERE ROWID = 101$/);
   await assert.rejects(store.query('NotAllowed', 'CALL_KEY', call.CALL_KEY), { code: 'INVALID_DATASTORE_QUERY' });
+});
+
+test('integration: Catalyst adapter rejects text beyond the provider 10,000-byte boundary', async () => {
+  const config = loadConfig(environment());
+  const inserted = [];
+  const app = {
+    datastore() { return { table() { return { async insertRow(row) {
+      inserted.push(row);
+      return row;
+    } }; } }; },
+    zcql() { return { async executeZCQLQuery() { return []; } }; },
+  };
+  const store = createCatalystStore(app, config);
+  await store.insert('FreeTestRetellEventReceipts', {
+    EVENT_DATA_JSON: 'x'.repeat(MAX_CATALYST_TEXT_BYTES),
+  });
+  await assert.rejects(store.insert('FreeTestRetellEventReceipts', {
+    EVENT_DATA_JSON: 'x'.repeat(MAX_CATALYST_TEXT_BYTES + 1),
+  }), { code: 'INVALID_DATASTORE_ROW' });
+  assert.equal(inserted.length, 1);
+});
+
+test('integration: ambiguous deployment IDs fail closed without database uniqueness', async () => {
+  const config = loadConfig(environment());
+  const app = {
+    datastore() { return { table() { return { async insertRow() { throw new Error('not used'); } }; } }; },
+    zcql() { return { async executeZCQLQuery() {
+      return [
+        { FreeTestDeployments: { ROWID: '101', DEPLOYMENT_ID: 'deployment_A' } },
+        { FreeTestDeployments: { ROWID: '102', DEPLOYMENT_ID: 'deployment_A' } },
+      ];
+    } }; },
+  };
+  const store = createCatalystStore(app, config);
+  await assert.rejects(
+    store.unique('FreeTestDeployments', 'DEPLOYMENT_ID', 'deployment_A'),
+    { code: 'AMBIGUOUS_DURABLE_OWNERSHIP' },
+  );
 });
 
 test('integration: Catalyst optimistic mutation does not mistake a competing write for its own', async () => {
@@ -90,6 +128,19 @@ test('integration: Advanced I/O resolver isolates two clients and rejects unknow
   const rejected = await invoke(fixture.listener, { url: '/retell/inbound', payload: unknown, env: fixture.env });
   assert.deepEqual(rejected.body, { call_inbound: { reject: true } });
   assert.doesNotMatch(JSON.stringify(rejected.body), /client_[AB]|Synthetic Plumbing/);
+});
+
+test('integration: resolver fails closed on an oversized encrypted configuration snapshot', async () => {
+  const fixture = runtimeFixture();
+  const deployment = fixture.store.rows.get('FreeTestDeployments')[0];
+  const currentBytes = Buffer.byteLength(deployment.CONFIGURATION_JSON, 'utf8');
+  deployment.CONFIGURATION_JSON += ' '.repeat(MAX_CATALYST_TEXT_BYTES - currentBytes + 1);
+  const result = await invoke(fixture.listener, {
+    url: '/retell/inbound', payload: payloadInbound('A'), env: fixture.env,
+  });
+  assert.deepEqual(result.body, { call_inbound: { reject: true } });
+  assert.equal(fixture.store.rows.get('FreeTestCalls').length, 0);
+  assert.equal(fixture.store.rows.get('FreeTestNotifications').length, 0);
 });
 
 test('integration: ended/analyzed convergence counts once, records one dry-run notification, and replays safely', async () => {
@@ -201,10 +252,10 @@ test('integration: failed call lifecycle is preserved but is not counted or noti
 test('integration: readiness is private and Production fails before SDK or Data Store access', async () => {
   const fixture = runtimeFixture();
   const denied = await invoke(fixture.listener, { method: 'GET', url: '/internal/readiness', env: fixture.env,
-    headers: { authorization: 'Bearer wrong-token' } });
+    headers: { 'x-free-test-readiness-token': 'wrong-token' } });
   assert.equal(denied.status, 401);
   const ready = await invoke(fixture.listener, { method: 'GET', url: '/internal/readiness', env: fixture.env,
-    headers: { authorization: `Bearer ${fixture.env.INTERNAL_READINESS_TOKEN}` } });
+    headers: { 'x-free-test-readiness-token': fixture.env.INTERNAL_READINESS_TOKEN } });
   assert.equal(ready.body.table_count, 4);
   assert.equal(ready.body.mail_mode, 'dry_run');
 
@@ -219,38 +270,105 @@ test('integration: readiness is private and Production fails before SDK or Data 
 
 test('integration: documented Development hosts pass while a production-shaped host fails before SDK initialization', async () => {
   const alternateDevelopmentHost = 'retell-free-test.development.zohocatalyst.com';
-  const alternate = runtimeFixture({ environment: { CATALYST_DEVELOPMENT_HOST: alternateDevelopmentHost } });
+  const alternate = runtimeFixture({ environment: { FREE_TEST_DEVELOPMENT_HOST: alternateDevelopmentHost } });
   const accepted = await invoke(alternate.listener, { url: '/retell/inbound', payload: payloadInbound('A'),
     env: alternate.env, headers: { host: alternateDevelopmentHost } });
   assert.equal(accepted.status, 200);
   assert.equal(accepted.body.call_inbound.dynamic_variables.resolver_status, 'Resolved');
 
+  const defaultTlsPort = runtimeFixture();
+  const acceptedDefaultTlsPort = await invoke(defaultTlsPort.listener, { url: '/retell/inbound',
+    payload: payloadInbound('A'), env: defaultTlsPort.env,
+    headers: { host: `${defaultTlsPort.env.FREE_TEST_DEVELOPMENT_HOST}:443` } });
+  assert.equal(acceptedDefaultTlsPort.status, 200);
+  assert.equal(acceptedDefaultTlsPort.body.call_inbound.dynamic_variables.resolver_status, 'Resolved');
+
   const fixture = runtimeFixture();
   const rejected = await invoke(fixture.listener, { url: '/retell/inbound', payload: payloadInbound('A'),
     env: fixture.env, headers: { host: 'retell-free-test.catalystserverless.com' } });
   assert.equal(rejected.status, 503);
-  assert.equal(rejected.body.code, 'PRODUCTION_BLOCKED');
+  assert.equal(rejected.body.code, 'CATALYST_HOST_MISMATCH');
   assert.equal(fixture.initialized, 0);
+
+  for (const invalidAuthority of [
+    `${fixture.env.FREE_TEST_DEVELOPMENT_HOST}:80`,
+    `${fixture.env.FREE_TEST_DEVELOPMENT_HOST}:444`,
+    `user@${fixture.env.FREE_TEST_DEVELOPMENT_HOST}`,
+    `${fixture.env.FREE_TEST_DEVELOPMENT_HOST}/path`,
+  ]) {
+    const invalid = runtimeFixture();
+    const result = await invoke(invalid.listener, { url: '/retell/inbound', payload: payloadInbound('A'),
+      env: invalid.env, headers: { host: invalidAuthority } });
+    assert.equal(result.status, 503);
+    assert.equal(result.body.code, 'CATALYST_HOST_MISMATCH');
+    assert.equal(invalid.initialized, 0);
+  }
 });
 
 test('integration: Catalyst platform environment and project identity fail closed before store or Mail use', async () => {
-  const headerMismatch = runtimeFixture();
-  const rejectedHeader = await invoke(headerMismatch.listener, { url: '/retell/inbound',
-    payload: payloadInbound('A'), env: headerMismatch.env,
+  const noHeader = runtimeFixture();
+  const acceptedWithoutOptionalHeader = await invoke(noHeader.listener, { url: '/retell/inbound',
+    payload: payloadInbound('A'), env: noHeader.env });
+  assert.equal(acceptedWithoutOptionalHeader.status, 200);
+  assert.equal(acceptedWithoutOptionalHeader.body.call_inbound.dynamic_variables.resolver_status, 'Resolved');
+
+  const untrustedHeader = runtimeFixture();
+  const acceptedWithUntrustedHeader = await invoke(untrustedHeader.listener, { url: '/retell/inbound',
+    payload: payloadInbound('A'), env: untrustedHeader.env,
     headers: { 'x-zc-environment': 'Production' } });
-  assert.equal(rejectedHeader.status, 503);
-  assert.equal(rejectedHeader.body.code, 'PRODUCTION_BLOCKED');
-  assert.equal(headerMismatch.store.rows.get('FreeTestCalls').length, 0);
-  assert.equal(headerMismatch.mailAccesses, 0);
+  assert.equal(acceptedWithUntrustedHeader.status, 200);
+  assert.equal(acceptedWithUntrustedHeader.body.call_inbound.dynamic_variables.resolver_status, 'Resolved');
+
+  const productionSdk = runtimeFixture();
+  productionSdk.app.config.environment = 'production';
+  const rejectedProductionSdk = await invoke(productionSdk.listener, { url: '/retell/inbound',
+    payload: payloadInbound('A'), env: productionSdk.env });
+  assert.equal(rejectedProductionSdk.status, 503);
+  assert.equal(rejectedProductionSdk.body.code, 'CATALYST_ENVIRONMENT_MISMATCH');
+  assert.equal(productionSdk.store.rows.get('FreeTestCalls').length, 0);
+  assert.equal(productionSdk.mailAccesses, 0);
+
+  for (const environmentValue of ['', null, undefined, {}]) {
+    const missingSdkEnvironment = runtimeFixture();
+    missingSdkEnvironment.app.config.environment = environmentValue;
+    const rejectedMissingSdkEnvironment = await invoke(missingSdkEnvironment.listener, {
+      url: '/retell/inbound', payload: payloadInbound('A'), env: missingSdkEnvironment.env });
+    assert.equal(rejectedMissingSdkEnvironment.status, 503);
+    assert.equal(rejectedMissingSdkEnvironment.body.code, 'CATALYST_ENVIRONMENT_MISMATCH');
+    assert.equal(missingSdkEnvironment.store.rows.get('FreeTestCalls').length, 0);
+    assert.equal(missingSdkEnvironment.mailAccesses, 0);
+  }
 
   const sdkMismatch = runtimeFixture();
   sdkMismatch.app.config.projectId = '999';
   const rejectedProject = await invoke(sdkMismatch.listener, { url: '/retell/inbound',
     payload: payloadInbound('A'), env: sdkMismatch.env });
   assert.equal(rejectedProject.status, 503);
-  assert.equal(rejectedProject.body.code, 'PRODUCTION_BLOCKED');
+  assert.equal(rejectedProject.body.code, 'CATALYST_PROJECT_MISMATCH');
   assert.equal(sdkMismatch.store.rows.get('FreeTestCalls').length, 0);
   assert.equal(sdkMismatch.mailAccesses, 0);
+
+  const projectKeyMismatch = runtimeFixture();
+  projectKeyMismatch.app.config.projectKey = 'invalid project key';
+  const rejectedProjectKey = await invoke(projectKeyMismatch.listener, { url: '/retell/inbound',
+    payload: payloadInbound('A'), env: projectKeyMismatch.env });
+  assert.equal(rejectedProjectKey.status, 503);
+  assert.equal(rejectedProjectKey.body.code, 'CATALYST_PROJECT_MISMATCH');
+  assert.equal(projectKeyMismatch.store.rows.get('FreeTestCalls').length, 0);
+  assert.equal(projectKeyMismatch.mailAccesses, 0);
+});
+
+test('integration: duplicate readiness token header fails closed', async () => {
+  const fixture = runtimeFixture();
+  const token = fixture.env.INTERNAL_READINESS_TOKEN;
+  const rejected = await invoke(fixture.listener, { method: 'GET', url: '/internal/readiness', env: fixture.env,
+    headers: { 'x-free-test-readiness-token': token }, rawHeaders: [
+      'host', fixture.env.FREE_TEST_DEVELOPMENT_HOST,
+      'x-free-test-readiness-token', token,
+      'x-free-test-readiness-token', token,
+    ] });
+  assert.equal(rejected.status, 400);
+  assert.equal(rejected.body.code, 'INVALID_REQUEST_HEADER');
 });
 
 test('integration: exact Advanced I/O routes reject query variants', async () => {
@@ -410,6 +528,36 @@ test('integration: Catalyst retry job replays a due minimized event receipt with
   assert.equal(fixture.store.rows.get('FreeTestDeployments')[0].HANDLED_COUNT, 1);
 });
 
+test('integration: retry Job durably terminates an unreadable claimed event receipt', async () => {
+  const fixture = runtimeFixture();
+  const inbound = await invoke(fixture.listener, { url: '/retell/inbound',
+    payload: payloadInbound('A'), env: fixture.env });
+  const event = eventPayload('call_ended', 'event_job_invalid_A',
+    inbound.body.call_inbound.metadata, 'A');
+  const query = fixture.store.query.bind(fixture.store);
+  let failOnce = true;
+  fixture.store.query = async (...args) => {
+    if (failOnce && args[0] === 'FreeTestDeployments' && args[1] === 'DEPLOYMENT_ID') {
+      failOnce = false;
+      throw new FreeTestError('CATALYST_QUERY_FAILED', 'synthetic transient query',
+        { httpStatus: 503, retryable: true });
+    }
+    return query(...args);
+  };
+  await invoke(fixture.listener, { url: '/retell/events', payload: event, env: fixture.env });
+  const receipt = fixture.store.rows.get('FreeTestRetellEventReceipts')[0];
+  receipt.EVENT_DATA_JSON = '{';
+  fixture.clock.value += 1000;
+  const handler = createRetryJobHandler({ catalystSdk: fixture.catalystSdk, environment: fixture.env,
+    now: () => fixture.clock.value, storeFactory: () => fixture.store });
+  const result = await handler(retryJobRequest(fixture.env), retryJobContext());
+  assert.deepEqual(result.events.results,
+    [{ status: 'TerminalFailure', errorCode: 'CONFIGURATION_UNAVAILABLE' }]);
+  assert.equal(receipt.STATUS, 'TerminalFailure');
+  assert.equal(receipt.LEASE_TOKEN, null);
+  assert.equal(receipt.LAST_ERROR_CODE, 'CONFIGURATION_UNAVAILABLE');
+});
+
 test('integration: four-table report query and CSV remain client partitioned and value-evidence explicit', async () => {
   const fixture = runtimeFixture();
   const inbound = await invoke(fixture.listener, { url: '/retell/inbound', payload: payloadInbound('A'), env: fixture.env });
@@ -422,10 +570,12 @@ test('integration: four-table report query and CSV remain client partitioned and
   fixture.store.rows.get('FreeTestCalls').push({ ...structuredClone(completed), ROWID: '999',
     CALL_KEY: `call_${'f'.repeat(64)}`, CORRELATION_ID: `corr_${'f'.repeat(32)}`,
     HANDLED_RECORDED: false, OUTCOME: 'potential_job', PROCESSING_STATE: 'AwaitingAnalysis',
+    NOTIFICATION_STATE: null,
     CANONICAL_CALL_JSON: JSON.stringify({ ...JSON.parse(completed.CANONICAL_CALL_JSON),
       callKey: `call_${'f'.repeat(64)}`, correlationId: `corr_${'f'.repeat(32)}`,
       outcome: 'potential_job' }) });
-  const report = await queryClientReport(fixture.store, fixture.config, 'deployment_A', fixture.clock.value);
+  const report = await queryClientReport(fixture.store, fixture.config,
+    'client_A', 'deployment_A', fixture.clock.value);
   assert.equal(report.clientId, 'client_A');
   assert.equal(report.metrics.totalCallsHandled, 1);
   assert.equal(report.metrics.urgentPotentialJobs, 1);
@@ -433,6 +583,12 @@ test('integration: four-table report query and CSV remain client partitioned and
   assert.equal(report.calls[0].valueEvidenceClass, 'customer_supplied_estimate');
   assert.equal(report.notificationStates.DryRunRecorded, 1);
   const csv = reportToCsv(report);
+  const [header, summary, ...callRows] = csv.split('\r\n');
+  assert.match(header, /^recordType,clientId,deploymentId,configurationVersion,coverageMode,/);
+  assert.match(summary, /^summary,client_A,deployment_A,cfg_A_v1,AfterHoursOnly,1,0,1,/);
+  assert.equal(callRows.length, report.calls.length);
+  assert.ok(callRows.every((row) => row.startsWith('call,client_A,deployment_A,cfg_A_v1,')));
+  assert.match(summary, /DryRunRecorded/);
   assert.match(csv, /urgent_potential_job/);
   assert.doesNotMatch(csv, /client_B|Synthetic Plumbing B/);
 });
@@ -470,13 +626,49 @@ test('integration: canonical JSON tenant conflicts fail before notification prep
   });
   const retry = await handler(retryJobRequest(fixture.env), retryJobContext());
   assert.deepEqual(retry.notifications.results,
-    [{ status: 'Failed', errorCode: 'CALL_OWNERSHIP_UNRESOLVED' }]);
+    [{ status: 'ReconciliationRequired', errorCode: 'CALL_OWNERSHIP_UNRESOLVED' }]);
+  assert.equal(retry.notifications.reconciliationRequired, 1);
   assert.equal(prepares, 0);
   assert.equal(sends, 0);
-  assert.equal(notification.STATUS, 'Pending');
+  assert.equal(notification.STATUS, 'ReconciliationRequired');
+  assert.equal(notification.LAST_ERROR_CODE, 'CALL_OWNERSHIP_UNRESOLVED');
+  assert.equal(call.NOTIFICATION_STATE, 'ReconciliationRequired');
   await assert.rejects(
-    queryClientReport(fixture.store, fixture.config, 'deployment_A', fixture.clock.value),
+    queryClientReport(fixture.store, fixture.config,
+      'client_A', 'deployment_A', fixture.clock.value),
     { code: 'REPORT_OWNERSHIP_CONFLICT' },
+  );
+});
+
+test('integration: reports fail closed on client, count, or notification reconciliation drift', async () => {
+  const fixture = runtimeFixture();
+  const inbound = await invoke(fixture.listener, { url: '/retell/inbound',
+    payload: payloadInbound('A'), env: fixture.env });
+  await invoke(fixture.listener, { url: '/retell/events',
+    payload: eventPayload('call_analyzed', 'report_reconcile_A',
+      inbound.body.call_inbound.metadata, 'A'), env: fixture.env });
+
+  await assert.rejects(
+    queryClientReport(fixture.store, fixture.config,
+      'client_B', 'deployment_A', fixture.clock.value),
+    { code: 'REPORT_OWNERSHIP_CONFLICT' },
+  );
+
+  const call = fixture.store.rows.get('FreeTestCalls')[0];
+  call.HANDLED_RECORDED = false;
+  await assert.rejects(
+    queryClientReport(fixture.store, fixture.config,
+      'client_A', 'deployment_A', fixture.clock.value),
+    { code: 'REPORT_RECONCILIATION_REQUIRED' },
+  );
+  call.HANDLED_RECORDED = true;
+
+  const notification = fixture.store.rows.get('FreeTestNotifications')[0];
+  notification.STATUS = 'RetryRequired';
+  await assert.rejects(
+    queryClientReport(fixture.store, fixture.config,
+      'client_A', 'deployment_A', fixture.clock.value),
+    { code: 'REPORT_RECONCILIATION_REQUIRED' },
   );
 });
 

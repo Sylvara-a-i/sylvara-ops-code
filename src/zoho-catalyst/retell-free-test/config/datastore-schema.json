@@ -1,8 +1,17 @@
 {
   "schema_version": 2,
-  "status": "development-mvp-source-contract",
-  "live_state": "unverified",
+  "status": "development-mvp-schema-provisioned",
+  "live_state": "verified_development_schema_readback",
   "production_authorized": false,
+  "development_readback": {
+    "source_revision": "d4f5af31be310df400532641ef163c16de31066c",
+    "runtime_table_count": 4,
+    "all_declared_columns_constraints_and_max_lengths_match": true,
+    "required_audit_consent_columns_match": true,
+    "app_user_permissions": [],
+    "runtime_mutation_behavior_verified": true,
+    "note": "Signed Development requests, inserts, conditional updates, replay and reorder convergence, canonical call creation, handled-count stopping, notification state, and tenant isolation were exercised separately from schema readback."
+  },
   "data_policy": {
     "raw_retell_payloads_stored": false,
     "raw_transcripts_stored": false,
@@ -10,7 +19,7 @@
     "called_number_storage": "keyed HMAC lookup only",
     "caller_fields": "bounded encrypted canonical call JSON",
     "catalyst_pii_ephi_validator": "required and read back as audit_consent=true on every encrypted caller- or recipient-bearing JSON column",
-    "notification_mode": "committed default dry_run; send_development source separately gated and not activated",
+    "notification_mode": "current dry_run; one gated send_development proof completed and mode restored",
     "client_access": "none"
   },
   "tables": [
@@ -18,7 +27,7 @@
       "runtime_variable": "DEPLOYMENT_TABLE",
       "api_name": "FreeTestDeployments",
       "purpose": "One active Development free-test deployment with its current number binding, immutable configuration snapshot, and handled-call convergence keys.",
-      "required_unique_columns": ["DEPLOYMENT_KEY", "DEPLOYMENT_ID", "NUMBER_LOOKUP_HASH"],
+      "required_unique_columns": ["DEPLOYMENT_KEY", "NUMBER_LOOKUP_HASH"],
       "required_pii_ephi_columns": ["CONFIGURATION_JSON"],
       "columns": [
         { "api_name": "DEPLOYMENT_KEY", "type": "varchar", "max_length": 80, "mandatory": true, "unique": true, "private": true },
@@ -26,9 +35,9 @@
         { "api_name": "BINDING_ID", "type": "varchar", "max_length": 128, "mandatory": true, "unique": false, "private": true },
         { "api_name": "BINDING_VERSION", "type": "bigint", "mandatory": true, "unique": false },
         { "api_name": "CLIENT_ID", "type": "varchar", "max_length": 128, "mandatory": true, "unique": false, "private": true },
-        { "api_name": "DEPLOYMENT_ID", "type": "varchar", "max_length": 128, "mandatory": true, "unique": true, "private": true },
+        { "api_name": "DEPLOYMENT_ID", "type": "varchar", "max_length": 128, "mandatory": true, "unique": false, "private": true },
         { "api_name": "CONFIGURATION_VERSION", "type": "varchar", "max_length": 128, "mandatory": true, "unique": false, "private": true },
-        { "api_name": "CONFIGURATION_JSON", "type": "encrypted_text", "mandatory": true, "unique": false, "private": true, "audit_consent": true },
+        { "api_name": "CONFIGURATION_JSON", "type": "encrypted_text", "max_length": 10000, "mandatory": true, "unique": false, "private": true, "audit_consent": true },
         { "api_name": "ENGAGEMENT_TYPE", "type": "varchar", "max_length": 32, "mandatory": true, "unique": false },
         { "api_name": "CAPABILITY_PROFILE", "type": "varchar", "max_length": 64, "mandatory": true, "unique": false },
         { "api_name": "MONITOR_AGENT_ID", "type": "varchar", "max_length": 128, "mandatory": true, "unique": false, "private": true },
@@ -42,7 +51,7 @@
         { "api_name": "CALL_LIMIT", "type": "bigint", "mandatory": true, "unique": false },
         { "api_name": "HANDLED_COUNT", "type": "bigint", "mandatory": true, "unique": false },
         { "api_name": "COUNT_VERSION", "type": "bigint", "mandatory": true, "unique": false },
-        { "api_name": "COUNTED_CALL_KEYS_JSON", "type": "encrypted_text", "mandatory": true, "unique": false, "private": true },
+        { "api_name": "COUNTED_CALL_KEYS_JSON", "type": "encrypted_text", "max_length": 10000, "mandatory": true, "unique": false, "private": true },
         { "api_name": "STOP_REASON", "type": "varchar", "max_length": 64, "mandatory": false, "unique": false },
         { "api_name": "STOPPED_AT", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false },
         { "api_name": "SOURCE_REVISION", "type": "varchar", "max_length": 40, "mandatory": true, "unique": false },
@@ -61,7 +70,7 @@
         { "api_name": "CALL_KEY", "type": "varchar", "max_length": 80, "mandatory": true, "unique": false, "private": true },
         { "api_name": "PAYLOAD_FINGERPRINT", "type": "varchar", "max_length": 64, "mandatory": true, "unique": false, "private": true },
         { "api_name": "EVENT_TYPE", "type": "varchar", "max_length": 32, "mandatory": true, "unique": false },
-        { "api_name": "EVENT_DATA_JSON", "type": "encrypted_text", "mandatory": true, "unique": false, "private": true, "audit_consent": true },
+        { "api_name": "EVENT_DATA_JSON", "type": "encrypted_text", "max_length": 10000, "mandatory": true, "unique": false, "private": true, "audit_consent": true },
         { "api_name": "CORRELATION_ID", "type": "varchar", "max_length": 64, "mandatory": false, "unique": false, "private": true },
         { "api_name": "DEPLOYMENT_ID", "type": "varchar", "max_length": 128, "mandatory": false, "unique": false, "private": true },
         { "api_name": "STATUS", "type": "varchar", "max_length": 32, "mandatory": true, "unique": false },
@@ -92,7 +101,7 @@
         { "api_name": "CONFIGURATION_VERSION", "type": "varchar", "max_length": 128, "mandatory": true, "unique": false, "private": true },
         { "api_name": "BINDING_ID", "type": "varchar", "max_length": 128, "mandatory": true, "unique": false, "private": true },
         { "api_name": "BINDING_VERSION", "type": "bigint", "mandatory": true, "unique": false },
-        { "api_name": "CANONICAL_CALL_JSON", "type": "encrypted_text", "mandatory": true, "unique": false, "private": true, "audit_consent": true },
+        { "api_name": "CANONICAL_CALL_JSON", "type": "encrypted_text", "max_length": 10000, "mandatory": true, "unique": false, "private": true, "audit_consent": true },
         { "api_name": "OUTCOME", "type": "varchar", "max_length": 40, "mandatory": true, "unique": false },
         { "api_name": "PROCESSING_STATE", "type": "varchar", "max_length": 40, "mandatory": true, "unique": false },
         { "api_name": "HANDLED_RECORDED", "type": "boolean", "mandatory": true, "unique": false },
@@ -120,7 +129,7 @@
         { "api_name": "CONFIGURATION_VERSION", "type": "varchar", "max_length": 128, "mandatory": true, "unique": false, "private": true },
         { "api_name": "RECIPIENT_FINGERPRINT", "type": "varchar", "max_length": 64, "mandatory": true, "unique": false, "private": true },
         { "api_name": "TEMPLATE_VERSION", "type": "varchar", "max_length": 64, "mandatory": true, "unique": false },
-        { "api_name": "PAYLOAD_JSON", "type": "encrypted_text", "mandatory": true, "unique": false, "private": true, "audit_consent": true },
+        { "api_name": "PAYLOAD_JSON", "type": "encrypted_text", "max_length": 10000, "mandatory": true, "unique": false, "private": true, "audit_consent": true },
         { "api_name": "STATUS", "type": "varchar", "max_length": 32, "mandatory": true, "unique": false },
         { "api_name": "ATTEMPT_COUNT", "type": "bigint", "mandatory": true, "unique": false },
         { "api_name": "PROVIDER_CODE", "type": "varchar", "max_length": 64, "mandatory": true, "unique": false },
@@ -136,14 +145,17 @@
       ]
     }
   ],
+  "verified_development_controls": [
+    "Exactly these four runtime tables and all declared columns and constraints were independently read back in Catalyst Development.",
+    "The Catalyst PII/ePHI validator was read back as audit_consent=true for CONFIGURATION_JSON, EVENT_DATA_JSON, CANONICAL_CALL_JSON, and PAYLOAD_JSON.",
+    "App User has no permissions on any of the four runtime tables."
+  ],
   "development_gates": [
-    "Provision and independently read back exactly these four tables and columns in Catalyst Development.",
-    "Read back the Catalyst PII/ePHI validator as audit_consent=true for CONFIGURATION_JSON, EVENT_DATA_JSON, CANONICAL_CALL_JSON, and PAYLOAD_JSON.",
-    "Verify unique insert and conditional ZCQL update/readback behavior with synthetic duplicate and concurrent events.",
+    "Unique insert and conditional ZCQL update/readback behavior passed with signed synthetic duplicate, reorder, and replay events.",
+    "Catalyst permits at most two unique varchar columns per table. FreeTestDeployments uses database uniqueness for DEPLOYMENT_KEY and NUMBER_LOOKUP_HASH; every DEPLOYMENT_ID lookup still requires exactly one row and fails closed on ambiguity.",
     "No pre-call reservation is used; calls already in flight when the 25th handled call converges may create a documented practical overshoot.",
-    "Catalyst Mail must remain dry_run until a separately approved synthetic Development send/readback test.",
+    "Catalyst Mail was exercised once with an approved internal Development recipient; replay made no second provider invocation and the current mode is restored to dry_run.",
     "CRM and Analytics integrations are absent from this MVP runtime.",
-    "Block app-user and client access to all four tables.",
     "Do not deploy to Production; source rejects Production before Data Store or Mail access."
   ]
 }

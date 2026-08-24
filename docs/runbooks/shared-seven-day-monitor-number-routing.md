@@ -7,7 +7,8 @@
 - Retell contract: [`conversation-contract.json`](../../src/retell/agents/7-day-free-test/contracts/conversation-contract.json)
 - Sanitized audit: [Development reconciliation](free-test-development-reconciliation-2026-08-22.md)
 - Offline/synthetic Development testing: permitted by this repository workflow; verify the current suite before relying on it
-- Controlled internal Development phone test: live Development readback and the scoped internal test record remain required
+- Catalyst Development deployment: **Complete at the recorded revision**; private configuration, signed lifecycle, retry, Mail, time/count enforcement, and rollback were read back
+- Controlled internal Development phone test: **Ready** for the one-number scope; actual voice/provider-fallback execution is deferred
 - Controlled prospect test: approval unresolved; not authorized by this runbook
 - Production authorization: **Not granted**
 
@@ -59,7 +60,7 @@ Do not collapse these lanes into one readiness claim.
 | Lane | Allowed scope | Required approval/evidence | Current boundary |
 | --- | --- | --- | --- |
 | Offline/synthetic Development | Local or isolated tests with synthetic clients, numbers, events, email dry-run results, queries, and CSV | Reviewed source revision and passing test evidence | No call, external route, email, or client data |
-| Controlled internal Development phone test | Designated internal testers, synthetic client facts, Development-only numbers/agent/Catalyst route, no customer forwarding, and one controlled Development email/readback | Provider/route/settings readback, data-handling record, rollback, exactly-once email proof, and zero open scoped P0/P1 | Does not authorize a prospect or Production call |
+| Controlled internal Development phone test | Designated internal testers, synthetic client facts, one existing Development-only number/agent/Catalyst route, no customer forwarding, and the completed controlled Development email/readback | Provider/route/settings readback, data-handling record, rollback, replay-safe email proof, and zero open scoped P0/P1 | Ready to begin later; does not authorize a prospect or Production call |
 | Controlled prospect test | Real prospect route and caller workflow | Separate business, privacy, security, vendor, client, data, notification, route, rollback, and any professional review required for the actual facts | Unresolved; this runbook does not approve it |
 
 The [legal and compliance archive](../legal-compliance/README.md) preserves a conservative historical internal-QA proposal and source research. It is not legal advice and is not, by itself, approval or prohibition for a specific test. The responsible owner records the actual approval basis and any required professional review privately.
@@ -149,7 +150,7 @@ Use two fixtures with different values and the same reviewed shared agent versio
 
 Fixtures must not contain a real company, person, number, address, or recipient. Adding another synthetic client means adding a new configuration fixture and isolation assertions; it never means adding Retell nodes or cloning the agent.
 
-For controlled internal validation, bind two dedicated non-customer Development numbers to these two synthetic deployments and pin both to the same reviewed shared agent version. Do not reuse or move either number during initial validation. After completion, preserve its ownership evidence and record the required cooldown before any separately reviewed future reuse.
+For backend isolation, the two fictional E.164 values remain distinct without purchasing a second live number. The current controlled-internal phone scope binds the existing non-customer Development number to one active synthetic deployment and pins it to the reviewed shared agent version. Do not reuse or move it during validation. Before activating a second deployment or claiming the first-controlled-prospect technical gate, add a second dedicated number and repeat live same-version isolation proof.
 
 ## Inbound Resolution Proof
 
@@ -291,11 +292,11 @@ Treat cross-client exposure, incorrect safety behavior, configuration-gate bypas
 
 The MVP has no automatic number-reassignment workflow.
 
-1. Assign two dedicated synthetic numbers once for initial validation and pin both to the same shared agent version.
-2. Do not reuse, exchange, or move either number between deployments during initial validation.
+1. Assign the existing non-customer Development number once to the active phone-test deployment and pin it to the shared reviewed version.
+2. Do not reuse, exchange, or move the number between deployments during validation.
 3. When a deployment completes or stops, disable its route and preserve canonical calls plus embedded client/deployment/configuration ownership.
 4. Record the completed number's cooldown start, owner, prior deployment/configuration, and earliest separately reviewed reuse point in the private operator record.
-5. Keep the number inactive throughout cooldown. Any later reuse requires a separately controlled stopped-route update, readback, two-client re-QA, and new route approval.
+5. Keep the number inactive throughout cooldown. Any later reuse requires a separately controlled stopped-route update, readback, ownership re-QA, and new route approval.
 
 Automatic reassignment, live rebinding, and assignment-history automation are deferred. Their absence is not an internal-test blocker; the initial test does not exercise reassignment.
 
@@ -307,7 +308,7 @@ For one synthetic call, follow the same immutable correlation through:
 | --- | --- | --- |
 | Fixture | Case ID and source revision | No real identity or data |
 | Number/config | Number reference, deployment, version | Exactly one tenant configuration |
-| Shared agent | Agent/version readback | Same shared version for A and B |
+| Shared agent | Agent/version readback | Reviewed shared version; live A/B same-version proof is deferred until a second number exists |
 | Resolver | Decision and configuration version | Exact gate, time, and count pass |
 | Conversation | Case/native result | Correct identity, bounded intake, natural close |
 | Event | Authenticated deduplication key | One durable claim |
@@ -321,16 +322,16 @@ Missing correlation, mixed tenant rows, or unexplained counts fails acceptance.
 
 ## Controlled Internal Development Phone Test
 
-Only after offline acceptance passes and the operator has explicit authority for the external actions:
+Catalyst prerequisites 1–4 below are complete at the recorded revision; repeat parity/readiness if the final reviewed revision changes. When the Retell test lane resumes:
 
-1. deploy/read back the Development Catalyst routes, four tables/validators, target-specific variables, both functions, Function Job pool, immediate synthetic Job, and disabled-first one-minute Cron;
-2. publish/pin/read back the shared Retell Development agent and conversational settings;
-3. bind two non-customer Development numbers to two synthetic deployments using the same reviewed agent version;
-4. prove Catalyst Mail dry-run, execute/read back one controlled Development email to the approved synthetic recipient, prove replay sends no duplicate, and restore dry-run; keep CRM/Analytics disabled;
-5. document the approved tester, synthetic script, data-handling settings, test window, kill switch, and rollback;
-6. place only the approved internal test calls;
-7. trace call, outcome, email state/delivery, count, and query/CSV result; and
-8. disable or return the route to its approved inactive state immediately after the test.
+1. read back the four tables, both functions, disabled Cron, HTTP 200 readiness, `dry_run`, and exact final source revision;
+2. read back the published shared Retell version, the existing non-customer number binding, inbound webhook, and shared-agent event webhook;
+3. document the approved tester, synthetic script, data-handling settings, test window, kill switch, and rollback;
+4. place only the minimum approved internal test calls needed for voice and provider-fallback evidence;
+5. trace each call, outcome, notification state, count, and query/CSV result; and
+6. disable or return the route to its approved inactive state immediately after the test.
+
+Do not buy a second number for this one-number internal test. Add it only before two concurrent deployments or the first-controlled-prospect technical gate.
 
 This procedure does not authorize a prospect, customer, business-line forwarding rule, external email, Production resource, or retained content beyond the separately approved Development test configuration.
 
@@ -358,13 +359,13 @@ Do not route through a completed voicemail interaction before Retell. Record the
 
 Do not delete evidence, switch to a client-specific free-test clone, leave `send_development` enabled, reuse a cooling number, silently enable prospect/customer email, or activate paid service.
 
-## Manual Actions Requiring Separate Authority
+## Remaining External Actions
 
-An operator with the relevant credentials must perform and read back the Development deployment, Catalyst secret/table/validator configuration, retry Job/Cron configuration, Retell version publication, synthetic number binding, Catalyst Mail sender/recipient enablement, and phone-test activation. Contractor forwarding and any prospect/customer action remain outside this task.
+No Catalyst secret, sender, table, function, Job, or email setup remains for the present lane. The next external action is a later, explicitly scoped internal inbound call using the existing non-customer number. A second number and further Retell refinement are deferred. Contractor forwarding and any prospect/customer action remain outside this runbook.
 
 ## Readiness Rule
 
-Current deployment status is **READY FOR DEVELOPMENT DEPLOYMENT**. Report readiness separately for offline/synthetic, Development deployment/readback, controlled internal phone, and controlled prospect lanes. Never use an offline pass to imply a deployed phone path, and never use an internal phone pass to imply prospect or Production approval. The next acceptance target is **READY FOR CONTROLLED INTERNAL PHONE TEST**, which requires successful Development deployment/readback, live Retell parity, the scoped two-client trace, one exactly-once Development email, and rollback proof.
+Current deployment status is **READY FOR CONTROLLED INTERNAL PHONE TEST** for one existing non-customer Development number. The four-table schema, App User denial, two-function parity at the recorded revision, private configuration, HTTP 200 readiness, signed request handling, durable replay-safe rows, manual Job execution, seven-day and practical 25-call stops, one controlled internal email with no replay send, restored `dry_run`, shared published Retell version, one number binding, and rollback are proven. Paid/native voice and provider-fallback behavior, a second live number, and further agent refinement are P2 deferred work. Never use this internal readiness to imply prospect or Production approval.
 
 Stop building when the controlled internal MVP path proves shared-agent isolation, exact configuration failure, practical time/count stop, idempotent calls, durable email state plus one exactly-once controlled delivery, query/CSV reporting, natural closing, correlation, and rollback. Analytics, CRM, exact-cap reservations, automatic number reassignment, SMS, and provider abstraction are not required.
 

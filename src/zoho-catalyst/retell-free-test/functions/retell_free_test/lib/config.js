@@ -87,8 +87,8 @@ function loadSharedConfig(env) {
     ),
     sharedAgentVersion: integer(Number(required(env, 'RETELL_SHARED_AGENT_VERSION', { maximum: 10 })), 'RETELL_SHARED_AGENT_VERSION', 0, 100_000),
     developmentProjectId: patterned(
-      required(env, 'CATALYST_DEVELOPMENT_PROJECT_ID', { maximum: 30 }),
-      'CATALYST_DEVELOPMENT_PROJECT_ID',
+      required(env, 'FREE_TEST_DEVELOPMENT_PROJECT_ID', { maximum: 30 }),
+      'FREE_TEST_DEVELOPMENT_PROJECT_ID',
       /^[0-9]{1,30}$/,
       'must be the exact numeric Catalyst Development project ID',
     ),
@@ -126,10 +126,10 @@ function loadConfig(env = process.env) {
   invariant(inboundPath === '/retell/inbound' && eventsPath === '/retell/events'
     && readinessPath === '/internal/readiness',
     'INVALID_RUNTIME_CONFIGURATION', 'Webhook paths must match the reviewed contract.', { httpStatus: 503 });
-  const developmentHost = required(env, 'CATALYST_DEVELOPMENT_HOST', { maximum: 253 }).toLowerCase();
+  const developmentHost = required(env, 'FREE_TEST_DEVELOPMENT_HOST', { maximum: 253 }).toLowerCase();
   invariant(!/^<.*>$/.test(developmentHost)
     && /^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?\.development\.(?:catalystserverless|zohocatalyst)\.(?:com|in|eu|ca|com\.au)$/.test(developmentHost),
-  'INVALID_RUNTIME_CONFIGURATION', 'CATALYST_DEVELOPMENT_HOST must be the exact private Development Advanced I/O host.', { httpStatus: 503 });
+  'INVALID_RUNTIME_CONFIGURATION', 'FREE_TEST_DEVELOPMENT_HOST must be the exact private Development Advanced I/O host.', { httpStatus: 503 });
   return Object.freeze({
     ...shared,
     retellVerificationKey,

@@ -1,126 +1,86 @@
-# 7-Day Free Test Development Reconciliation — 2026-08-22
+# 7-Day Free Test Development Reconciliation
 
-## Scope And Evidence Boundary
+Last updated: 2026-08-24
 
-This sanitized record separates three evidence layers:
+Environment: Development only
 
-1. Development metadata and the shared Retell draft observed during the 2026-08-22 audit, with final table/Retell readback on 2026-08-23;
-2. the current repository MVP source, offline tests, and Retell-native text simulations; and
-3. Catalyst Development deployment/readback, which has not yet been performed.
+Current classification: **READY FOR CONTROLLED INTERNAL PHONE TEST**
 
-It contains no private identifiers, endpoints, customer facts, credentials, call content, or real destinations. No Production system, prospect/client record, telephone route, email, billing state, CRM record, or Analytics workspace was changed. [ADR 0006](../adr/0006-shared-seven-day-monitor-with-client-number-isolation.md) is authoritative.
+This sanitized record reconciles the repository, Catalyst Development, and the minimum Retell configuration needed to hand the system to a later controlled internal phone test. It contains no private identifiers, endpoints, phone numbers, recipients, secrets, payloads, transcripts, recordings, or caller content. Production, prospects, customers, contractor forwarding, CRM, Analytics, SMS, billing, booking, dispatch, transfers, pricing, and payments remained untouched.
+
+[ADR 0006](../adr/0006-shared-seven-day-monitor-with-client-number-isolation.md) remains authoritative: one shared free-test agent, one dedicated number per active deployment, and client variation in immutable Catalyst configuration. The present scope uses one non-customer Retell Development number for one active phone deployment. A second live number and paid/native voice or provider-fallback testing are deferred; this document does not claim the first-controlled-prospect technical gate.
 
 ## Current-State Audit
 
-| Component | Expected MVP state | Development observation | Gap | Repository action | Final evidence status |
+| Component | Expected state | Actual Development state | Gap | Action taken | Final status |
 | --- | --- | --- | --- | --- | --- |
-| Retell shared agent | One shared free-test agent | One shared unpublished Development draft/version was read back and reconciled | Webhook URL, publication/pin, number bindings, and voice/audio behavior remain unproven | Draft now has the minimal 11-field extraction schema and conservative naturalness settings | Draft parity/readback proven; publication waits for Catalyst deployment |
-| Retell flow | Shared bounded intake with exact gate and natural close | Development flow now has 47 nodes, the exact seven-field gate, direct no-data failure, client greeting, and deliberate close | Real voice/audio behavior and provider webhook-failure fallback still require controlled testing | Exact gate, 30-case contract, shadow corpus, and 11 outcomes are source controlled; 25 supported native simulations passed | Retell-native text simulation 25/25; voice/audio and bound-route evidence remain |
-| Retell number model | Two dedicated synthetic numbers for internal validation, both on the same shared version | One Development number was observed and was not bound to the shared-agent deployment path | Second number and two-client provider binding/readback are absent | Source freezes both initial numbers, preserves ownership, and requires documented cooldown after completion; reassignment is deferred | Source contract exists; provider binding/readback remains |
-| Inbound resolver | Unique `to_number`, exact gate, time/count eligibility, explicit reject or safe fallback | A reproducible deployed resolver could not be proved | Reachable route, live Data Store response, and provider fallback were unproven | Known authenticated failures return HTTP 200 reject with no agent/write; transport/auth/timeout/503/malformed/invalid override can reach only the shared no-intake gate | Source/synthetic proof only until deployed route/provider readback |
-| Configuration store | Versioned per-client deployment configuration | Eighteen tables were observed; the only overlapping name, legacy `RetellEventReceipts`, has an incompatible 40-column contract, while the other three MVP names are absent | The legacy table cannot safely host this runtime and the exact four-table MVP schema is not deployed | Preserve the legacy table untouched; use the distinct new `FreeTestRetellEventReceipts` name with the other three minimized tables and an allowlisted Catalyst adapter | Source/runtime name collision reconciled; exact new tables/constraints/readback remain |
-| Route approval | Explicit approval before activation | CRM approval/status controls existed as setup evidence | No accepted Catalyst configuration/readback | Resolver requires the deployment's approved active state; CRM is not called at runtime | Source behavior requires Development proof; CRM runtime correctly disabled |
-| Seven-day stop | `now < expires_at` on every resolver request | No accepted runtime enforcement was proved | Deployed clock/boundary readback absent | Exact deterministic time gate is implemented/tested in source | Source/synthetic proof only until Development execution |
-| 25-call stop | Resolver requires handled count below 25; 25th processed call completes; in-flight overshoot visible | No accepted runtime enforcement was proved | Deployed concurrency/count behavior absent | MVP removed reservations/orphans and uses idempotent durable handled count with honest overshoot | Source/synthetic proof only; exact no-overshoot cap deliberately not claimed |
-| Retell event ingestion | Authenticated, validated, minimized, idempotent HTTP path | Six undeployed function definitions were observed; route listing failed | No reachable route or successful event readback | Raw-body verification, schema checks, durable deduplication, safe errors, and Development-only boundary are represented | Source/synthetic proof only until deployment/readback |
-| Event/call processor | One canonical call/outcome/count under replay/reorder/retry | No accepted execution/readback evidence | Catalyst durable behavior and Job packaging are unproven | Opaque call key, immutable ownership, idempotent count/outcome, reordered-event behavior, and separate `retell_free_test_retry` Function Job are represented | Source/synthetic proof only until Data Store and Job execution/readback |
-| Canonical call store | One client/deployment/config-bound call row | No end-to-end Development call row was observed | Durable uniqueness and tenant partition unproven | Keyed-HMAC lookup and immutable ownership checks are represented | Source/synthetic proof only until Development table/readback evidence |
-| Email notification | Email only; durable state; default `dry_run` plus one controlled send proof | No notification implementation/delivery evidence was observed | Catalyst Mail/runtime/provider/inbox readback absent | Source defaults to `DryRunRecorded` and models `send_development`, retry, ambiguity, terminal failure, and no blind resend | Source/synthetic proof only; one controlled delivery/replay/readback and restoration to `dry_run` remain |
-| Internal reporting | Fixed client/deployment Catalyst query and sanitized CSV | Existing reporting contracts were Analytics-oriented | No MVP query/export execution evidence | Metric contract and runtime boundary use canonical call rows; Analytics outbox/import removed from MVP | Query/CSV source contract exists; deployed export/isolation proof remains |
-| CRM | Disabled in free-test call lifecycle | CRM setup/automation controls exist outside this runtime | Risk of implying call-path dependency | MVP performs no CRM read/write | Correctly disabled; not an internal-test blocker |
-| Zoho Analytics | Deferred optional later presentation layer | Analytics access/workspace/import remained unproven | Prior docs treated Analytics as acceptance-critical | Analytics adapter/outbox/import removed from MVP documentation and source target | Correctly deferred; not an offline/internal-test blocker |
-| Security | Development-only, authenticated, validated, redacted, tenant-partitioned | Repository controls existed; runtime grants/logs/routes were not read back | Effective permissions/settings unproven | Fail-closed config, environment rejection, HMAC identifiers, request bounds, target-specific least-privilege variables, PII/ePHI validator requirements, safe errors, and dry-run mail boundary are represented | Source/synthetic proof only until Development identity/grant/log readback |
-| Runtime/source parity | MVP runtime reproducible from one revision and read back in Development | Observed metadata did not map to an accepted deployed revision | Deployment/source parity remains unproven | Advanced I/O routes, four-table adapter, email modes, retry Job/Cron, query/CSV, schema, variables, and tests are represented; core package CI passed 46/46 (17 unit, 20 integration, 9 acceptance) and retry-package CI passed 1/1 | **READY FOR DEVELOPMENT DEPLOYMENT**; runtime parity and phone readiness still require readback |
+| Retell shared agent | One shared bounded-intake agent | Exactly one shared agent is published at reviewed version 0 | Voice/audio refinement deferred | Read back agent, flow, version, capabilities, storage, retention, naturalness, and post-call fields | Ready for later controlled voice testing |
+| Retell flow | Exact first-node gate, neutral failure, natural close | Published 47-node flow has the seven-field gate, no-data Configuration Unavailable path, client greeting, and deliberate close | Paid/native voice behavior not run | Final full native text batch passed 25/25; no prohibited tools found | Text/readback accepted; voice deferred |
+| Retell number model | One dedicated number per active deployment | One non-customer Development number is bound to the shared version and inbound webhook | Second live number intentionally deferred | Unbound, read back, rebound, and resolved the existing number | One-number internal route ready; two-number prospect proof not claimed |
+| Inbound resolver | Signed, unique called-number resolution and exact gate | Valid signed A/B synthetic requests resolved only their deployment; invalid cases failed closed | Public edge buffers bodies before function execution | Exercised signature, freshness, media type, size, ownership, state, expiry, count, configuration, and agent-binding cases | Accepted for controlled internal test |
+| Configuration store | Four exact private Development tables | All tables, columns, constraints, encrypted/audited JSON fields, and empty App User permissions match source | None in current scope | Read back schema; legacy `RetellEventReceipts` left untouched | Verified |
+| Approval control | Only approved active routes resolve | Unapproved, inactive, stopped, expired, exhausted, and mismatched deployments rejected without intake | None | Exercised durable row-state matrix | Verified |
+| Seven-day stop | Reject at expiration | Expired synthetic deployment rejected | None | Exercised exact Development boundary | Verified |
+| Practical 25-call stop | Count each unique handled call once and stop at 25 | Unique calls reached 25, deployment completed with `call_limit_reached`, and later inbound rejected | In-flight overlap can still overshoot | Exercised durable sequential limit; no reservation system added | Verified within approved MVP tradeoff |
+| Event ingestion | Signed, minimized, idempotent receipts | `call_ended` and `call_analyzed` were accepted in either order; malformed/ownership conflicts quarantined | None | Exercised replay, reorder, conflict, and minimization paths | Verified |
+| Event/call processor | One canonical call and count under replay | Replays remained duplicate-safe with one canonical call, one count, and one notification row | None | Exercised both event orders and full replay | Verified |
+| Retry Job | Bounded manual recovery; recurring schedule disabled | Empty and controlled retryable-state runs completed; `FreeTestRetry1m` remains disabled | None | Read back Job pool/target/source and durable result | Verified; Cron intentionally disabled |
+| Canonical call store | Tenant-bound, minimized call record | A and B synthetic calls remained partitioned; raw payload, transcript, recording URL, and plaintext called number were not retained | One stopped historical synthetic binding artifact is excluded from active reports | Preserved immutable evidence instead of rewriting history | Active-deployment behavior verified; archival artifact is P2 |
+| Email notification | Catalyst Mail only, durable state, replay-safe | Verified sender; one internal Development message accepted and observed once; replay made no second provider invocation; mode restored to `dry_run` | No prospect/customer sending authorized | Exercised `send_development` once and restored containment | Verified for internal Development |
+| Internal reporting | Deterministic per-client query and JSON/CSV projection | Client/deployment allowlist and sanitized export source/tests are complete; a private active-deployment JSON/CSV export reconciled to Catalyst | Later phone-test data is not yet present | Added fixed summary plus call rows; Analytics remains deferred | Verified for current Development data |
+| CRM summary path | Disabled | No CRM read or write in free-test runtime | None | Kept disabled | Verified |
+| Analytics path | Not required for internal test | No Analytics integration or write | Prospect report readback remains later work | Kept reporting in Catalyst | Correctly deferred |
+| Security | Development-only, verified, bounded, redacted | Positive readiness is 200; negative token/method/path/query/host cases fail closed; logs use opaque correlation | Retell provider-fallback phone behavior deferred | Exercised signed matrices, minimization, isolation, and Production rejection | Catalyst controls accepted; fallback is P2 |
+| Runtime/source parity | Exact reviewed revision deployed and independently read back | Revision `d4f5af31be310df400532641ef163c16de31066c` matched 24 Advanced I/O and five retry-package files | Any later final commit requires redeploy/readback | Sanitized pullback comparison completed | Proven for recorded revision; repeat after final commit |
 
-## Readiness By Validation Lane
+## Catalyst Development Snapshot
 
-| Lane | Status | Meaning |
+- `retell_free_test`: Advanced I/O, Node.js 24, 256 MB.
+- `retell_free_test_retry`: Job Function, Node.js 18, 256 MB.
+- Function Job pool: 512 MB.
+- `FreeTestRetry1m`: every minute, zero platform retries, disabled.
+- Tables: `FreeTestDeployments`, `FreeTestRetellEventReceipts`, `FreeTestCalls`, and `FreeTestNotifications`.
+- Readiness: HTTP 200, Development identity, exact source revision, all four tables readable, notification mode `dry_run`, non-cacheable response.
+- Notification: one provider-accepted internal Development send, one inbox message, no second provider invocation on replay, restored `dry_run`.
+- Rollback: function delete/absence/redeploy was previously proven; the current Retell number was unbound/read back/rebound and the signed resolver passed after restoration.
+
+Secrets and private sender/recipient values remain only in platform configuration. Do not publish or reproduce them.
+
+## Signed Lifecycle Evidence
+
+The deployed handler was exercised with valid and invalid Retell-compatible signatures without exposing the verification key.
+
+- Valid inbound A and B requests returned only their configuration and did not increment handled count.
+- Invalid, stale, missing, or malformed signatures; malformed JSON; incorrect content type; oversized bodies; unknown numbers; invalid deployment states; ownership/version/capability/coverage/agent mismatches; expiry; and stored count 25 all failed closed.
+- The Catalyst edge completed public-body buffering before Advanced I/O execution. A stalled public body therefore reached the function only after buffering, while a truncated request terminated at the gateway. Local stream tests cover application timeout/abort codes; the public acceptance criterion is fail-closed with zero unintended writes.
+- `call_ended` then `call_analyzed` and the reverse order converged.
+- Duplicate delivery produced no duplicate call, count, notification, or provider send.
+- Shared `agent_id` alone never established client ownership.
+- Sensitive synthetic content was minimized; raw payloads, transcripts, recordings, and plaintext called numbers were not retained.
+
+## Readiness Lanes
+
+| Lane | Status | Evidence boundary |
 | --- | --- | --- |
-| Offline/synthetic Development | Source, backend synthetic, and Retell-native evidence | Uses only synthetic clients/events; 25/25 supported native simulations passed; no phone, external email, CRM, or Analytics |
-| Development end-to-end deployment test | **READY FOR DEVELOPMENT DEPLOYMENT** | Source is ready for a Development-only deployment with exact target, rollback, and independent readback |
-| Controlled internal Development phone test | **NOT READY** | Requires successful deployed E2E evidence, Retell parity/native tests, two non-customer Development numbers on the same shared version, one controlled email proof, explicit owner-approved tester/scope/settings/data/rollback, and route readback |
-| Controlled prospect test | **NOT READY — approval unresolved** | Requires a separate real-prospect operating decision, actual email approval, route/recipient/data handling, rollback, and every approval appropriate to the facts |
-| Production | **Not authorized** | Outside this work |
+| Catalyst/Zoho Development lifecycle | **Complete** | Four tables, two functions, readiness, signatures, durable lifecycle, retry, email, count/expiry, and rollback controls proven |
+| Controlled internal Development phone test | **READY** | One existing non-customer number may be used for the minimum internal voice/fallback work later; no prospect/customer route |
+| Live two-number isolation | **Deferred** | Backend two-client isolation is proven; purchase and live second-number proof were declined for now |
+| Controlled prospect test | **NOT READY** | Requires live two-number evidence if multiple deployments are active, phone/voice/fallback acceptance, prospect-facing legal/privacy review, approved recipient, and explicit route approval |
+| Production | **Not authorized** | Outside this PR and task |
 
-**Current classification: READY FOR DEVELOPMENT DEPLOYMENT.** Controlled internal phone testing remains **NOT READY**. The next acceptance target is **READY FOR CONTROLLED INTERNAL PHONE TEST**, and that status may be used only after the Development runtime and Retell route are deployed and independently read back with the evidence below.
+## Deferred Work And Defect Classification
 
-## Current Blockers
+No scoped Catalyst P0 or P1 behavior defect remains.
 
-These are current evidence gaps, not claims that every item is a permanent product gate:
+- **P2 — Retell controlled voice/fallback evidence:** interruption/noise/correction quality and timeout/503/malformed/invalid-override/unavailable number-webhook behavior remain untested by a real inbound call. Deferred by owner to conserve Retell credits.
+- **P2 — Second Development number:** live two-number/same-version isolation is deferred. This is not required to begin a one-number internal test, but the first-controlled-prospect technical gate cannot be claimed without it when two deployments are to be active.
+- **P2 — Historical synthetic evidence artifact:** one stopped synthetic record reflects an earlier temporary binding. It is excluded from active-deployment reporting; immutable evidence was preserved rather than rewritten.
+- **P3 — Analytics/CRM presentation:** automated Analytics ingestion and CRM summaries remain intentionally absent.
 
-1. no reviewed immutable build has been deployed and read back in the intended Catalyst Development project;
-2. the required four-table schema, uniqueness behavior, PII/ePHI validators, conditional count update, least-privilege grants, and target-specific variables have not been proved in that runtime;
-3. the authenticated resolver, event, and readiness routes have not passed deployed request/response and durable-row readback;
-4. the separate `retell_free_test_retry` Function Job and its disabled-first one-minute predefined Cron have not been deployed, immediately triggered, enabled, or read back in the exact Development pool;
-5. Retell's actual provider behavior for resolver authentication failure, timeout, 503, malformed JSON, invalid override, and endpoint unavailability remains unproven, even though the shared agent's exact no-intake gate passed native simulation;
-6. the reconciled Retell draft has not been published/pinned, its webhook is unset, one observed Development number remains unbound, and a second dedicated synthetic number is unavailable;
-7. no deployed two-client trace yet proves resolver, call/outcome/count, notification state, fixed-scope query/CSV isolation, and same-version routing;
-8. one controlled `send_development` delivery, provider/inbox readback, replay-without-duplicate proof, and restoration to `dry_run` have not occurred;
-9. rollback, initial-number freeze, post-completion cooldown, and route disablement have not been rehearsed against the deployed Development path; and
-10. the controlled internal tester, two synthetic number bindings, test window, deployed route, data readback, and rollback evidence do not yet exist.
+## Operating Boundary
 
-Zoho Analytics, CRM mutation, exact-cap reservations, orphan-slot reconciliation, automatic number reassignment, and SMS are outside this internal MVP. One exact Development email delivery/readback is still required for the requested internal-phone readiness classification; it cannot be attempted until a verified sender and approved Development recipient exist in deployed configuration.
+The current Development number remains frozen to its active synthetic phone deployment. Do not reuse it during validation. On completion, stop the deployment, unbind the number, preserve immutable ownership evidence, and place the number into cooldown before any separately reviewed reuse.
 
-The [legal archive](../legal-compliance/README.md) preserves research and a conservative historical internal-QA proposal. It is not legal advice and does not itself grant or deny a specific test. This reconciliation records engineering and operating authority only.
+Before any real contractor call, separately record the prospect-facing legal/privacy decision, approved caller/data/retention treatment, approved recipient, exact route and rollback, and explicit route approval. This record makes no legal conclusion and grants no Production or prospect authorization.
 
-## Development End-To-End Evidence Still Required
-
-An authorized operator must produce, not assume:
-
-1. exact source revision/build, Catalyst Development identity, four-table schema, constraints, variables, and least-privilege readback;
-2. deployed resolver/event/readiness routes and safe error behavior;
-3. two synthetic clients using two dedicated numbers on the same reviewed shared agent version with disjoint configurations/email references;
-4. exact gate rejection and strict seven-day behavior;
-5. handled-count behavior at 24, 25, and already-in-flight overshoot, with no new intake after the observed threshold;
-6. duplicate/reordered/malformed event behavior with one canonical call/outcome/count/email row;
-7. Catalyst Mail dry-run containment followed by one approved `send_development` delivery, one provider response, one durable success row, and no duplicate on replay;
-8. fixed client/deployment queries and a sanitized CSV whose rows/counts reconcile;
-9. proof that CRM and Analytics were untouched;
-10. one immutable correlation trace from resolver through event, call/outcome/count, notification state/delivery, and CSV; and
-11. initial-number freeze, documented post-completion cooldown, route disablement, and rollback readback.
-
-Exact reservation/orphan reconciliation, an exact concurrency cap, automatic number reassignment, CRM summary, and Analytics import are not MVP evidence requirements. Bounded notification retry and terminal/ambiguous failure behavior remain required and are represented in source tests.
-
-The notification variables must match the component registry exactly:
-
-| Variable | Consumer | Secret | Format | Development | Production |
-| --- | --- | --- | --- | --- | --- |
-| `FREE_TEST_NOTIFICATION_MODE` | Catalyst Mail adapter | No | `dry_run` or `send_development` | Defaults are forbidden; committed example is `dry_run`; switch only for the single controlled Development send | Rejected by this package |
-| `FREE_TEST_MAIL_FROM` | Catalyst Mail adapter | No value in Git; treat the configured sender as private operational configuration | Verified Development sender email address | Required and independently read back before the controlled send | Not supported by this package |
-
-The complete public registry is [`variables.json`](../../src/zoho-catalyst/retell-free-test/config/variables.json). Never substitute `CATALYST_MAIL_MODE`, root Retell/Make variables, or an undocumented default.
-
-## Before A Controlled Internal Development Phone Test
-
-After Development E2E succeeds, record privately:
-
-- the explicit owner-approved internal tester, scope, synthetic script, window, both dedicated synthetic numbers, Development resources, data handling, settings, kill switch, and rollback;
-- the shared Retell agent/version and conversational-settings readback already recorded on 2026-08-22;
-- two non-customer Development numbers bound to two synthetic deployments on the same reviewed shared agent version;
-- proof of default `dry_run`, one controlled `send_development` provider/inbox delivery, no duplicate on replay, restoration to `dry_run`, and continued disablement of CRM, Analytics, Production, customer forwarding, and prospect/customer email;
-- the 25/25 native text-simulation result plus voice/audio interruption, correction, noise, callback, safety, sensitive-data, and deliberate-close results; and
-- post-test route disablement/readback.
-
-This is an operating approval, not a legal conclusion or prospect authorization.
-
-## Before A Controlled Prospect Test
-
-Do not infer prospect readiness from synthetic or internal results. The actual prospect workflow needs explicit business/client, privacy, security, vendor, caller/data/retention, sender/recipient, route, rollback, notification-delivery, and any professional review required for its facts. Actual Catalyst Mail sending must have a separately approved sender/template/recipient and delivery/failure readback. Production remains out of scope.
-
-## Operator Evidence Record
-
-Keep the following in the approved private evidence system:
-
-- immutable source revision and artifact;
-- environment and target identity;
-- shared agent/version and route readback;
-- both current number/deployment/configuration bindings, initial-validation freeze, and cooldown state;
-- test clock, handled count, limit, overshoot, status, and stop reason;
-- event, opaque call, outcome, durable email state/delivery, and export correlation identifiers;
-- sanitized query/CSV reconciliation and export hash;
-- CRM/Analytics disabled proof;
-- scoped P0/P1 disposition;
-- operator and approval references; and
-- rollback result/readback.
-
-Do not place private identifiers, addresses, message bodies, call content, or secrets in GitHub.
+Before final PR handoff, if the reviewed commit differs from `d4f5af31be310df400532641ef163c16de31066c`, redeploy that exact revision, update both `SOURCE_REVISION` variables and synthetic deployment rows, re-run readiness and one signed resolver/lifecycle smoke test, and repeat sanitized source pullback parity. Keep the retry Cron disabled and notification mode `dry_run`.

@@ -7,6 +7,10 @@ const COLUMN_PATTERN = /^[A-Z][A-Z0-9_]{0,63}$/;
 const ROW_ID_PATTERN = /^[0-9]{1,30}$/;
 const MAX_STATEMENT_BYTES = 65_536;
 const MAX_ROW_BYTES = 48_000;
+// Catalyst caps both Text and Encrypted Text columns at 10,000 characters.
+// A UTF-8 byte bound is intentionally conservative and prevents an accepted
+// runtime value from reaching the provider with an unsupported encoded size.
+const MAX_CATALYST_TEXT_BYTES = 10_000;
 const QUERY_COLUMNS = new Set([
   'DEPLOYMENT_KEY', 'DEPLOYMENT_ID', 'NUMBER_LOOKUP_HASH', 'EVENT_KEY', 'CALL_KEY',
   'NOTIFICATION_KEY', 'STATUS', 'SOURCE_REVISION', 'ROWID',
@@ -33,7 +37,7 @@ function validatePrimitive(value) {
   invariant(value === null || typeof value === 'string' || typeof value === 'boolean'
     || (typeof value === 'number' && Number.isSafeInteger(value)),
   'INVALID_DATASTORE_ROW', 'Catalyst rows may contain only bounded primitives.', { httpStatus: 503 });
-  if (typeof value === 'string') invariant(Buffer.byteLength(value, 'utf8') <= 32_768,
+  if (typeof value === 'string') invariant(Buffer.byteLength(value, 'utf8') <= MAX_CATALYST_TEXT_BYTES,
     'INVALID_DATASTORE_ROW', 'Catalyst row value is too large.', { httpStatus: 503 });
   return value;
 }
@@ -212,4 +216,4 @@ function createCatalystStore(app, config) {
   return Object.freeze({ query, unique, insert, insertUnique, conditionalUpdate, mutate, readiness });
 }
 
-module.exports = { createCatalystStore, unwrapRows, sqlValue };
+module.exports = { createCatalystStore, unwrapRows, sqlValue, MAX_CATALYST_TEXT_BYTES };

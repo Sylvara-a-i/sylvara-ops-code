@@ -11,6 +11,7 @@ const {
   publicCorrelationId, keyedDigest,
 } = require('./security');
 const { extractAnalysis, triggerAllowedForMode, makeNotificationPayload } = require('./analysis');
+const { MAX_CATALYST_TEXT_BYTES } = require('./catalyst-store');
 
 const RECEIPT_IMMUTABLE = Object.freeze([
   'EVENT_KEY', 'CALL_KEY', 'PAYLOAD_FINGERPRINT', 'EVENT_TYPE', 'EVENT_DATA_JSON',
@@ -25,6 +26,12 @@ const NOTIFICATION_IMMUTABLE = Object.freeze([
 ]);
 const EVENT_RETRY_DELAYS_MS = Object.freeze([1000, 5000]);
 const NOTIFICATION_RETRY_DELAYS_MS = Object.freeze([1000, 5000]);
+const CONTAINED_EVENT_STATES = new Set([
+  'Completed', 'RetryRequired', 'TerminalFailure', 'ReconciliationRequired',
+]);
+const CONTAINED_NOTIFICATION_STATES = new Set([
+  'DryRunRecorded', 'Sent', 'Ambiguous', 'ReconciliationRequired', 'TerminalFailure',
+]);
 const OWNERSHIP_METADATA_FIELDS = Object.freeze([
   'resolver_status', 'client_id', 'deployment_id', 'configuration_version', 'engagement_type',
   'capability_profile', 'coverage_mode', 'number_binding_id', 'number_binding_version',
@@ -47,8 +54,13 @@ function integerColumn(value, name, minimum = 0) {
   return parsed;
 }
 
+function durableErrorCode(error) {
+  return typeof error?.code === 'string' && /^[A-Z][A-Z0-9_]{0,63}$/.test(error.code)
+    ? error.code : 'UNEXPECTED_ERROR';
+}
+
 function parseJsonColumn(value, name) {
-  invariant(typeof value === 'string' && Buffer.byteLength(value, 'utf8') <= 32_768,
+  invariant(typeof value === 'string' && Buffer.byteLength(value, 'utf8') <= MAX_CATALYST_TEXT_BYTES,
     'CONFIGURATION_UNAVAILABLE', `${name} is invalid.`);
   try {
     const parsed = JSON.parse(value);
@@ -308,7 +320,7 @@ function normalizeEventForReceipt(payload, config) {
     metadata,
     analysis,
   });
-  invariant(Buffer.byteLength(JSON.stringify(eventData), 'utf8') <= 32_768,
+  invariant(Buffer.byteLength(JSON.stringify(eventData), 'utf8') <= MAX_CATALYST_TEXT_BYTES,
     'INVALID_SCHEMA', 'Minimized event exceeds the durable bound.');
   return Object.freeze({ callId: envelope.callId, eventData });
 }
@@ -570,6 +582,64 @@ function createRuntimeService({ store, mailAdapter, config, now = Date.now, logg
     return row;
   }
 
+  async function containClaimedEventFailure(candidate, workerToken, error) {
+    if (!workerToken) return null;
+    const current = await store.unique(receiptTable, 'EVENT_KEY', candidate.EVENT_KEY);
+    if (!current) return null;
+    if (CONTAINED_EVENT_STATES.has(current.STATUS)) return current.STATUS;
+    if (current.STATUS !== 'Processing' || current.LEASE_TOKEN !== workerToken) return null;
+    const attempt = Number(current.ATTEMPT_COUNT);
+    const code = durableErrorCode(error);
+    let status = error instanceof FreeTestError && error.ambiguous
+      ? 'ReconciliationRequired' : 'TerminalFailure';
+    let nextAttemptAt = null;
+    if (error instanceof FreeTestError && error.retryable
+      && Number.isSafeInteger(attempt) && attempt <= EVENT_RETRY_DELAYS_MS.length) {
+      status = 'RetryRequired';
+      nextAttemptAt = new Date(now() + EVENT_RETRY_DELAYS_MS[attempt - 1]).toISOString();
+    }
+    const at = new Date(now()).toISOString();
+    const contained = await store.mutate(receiptTable, 'EVENT_KEY', candidate.EVENT_KEY,
+      'RECEIPT_VERSION', (row) => row.STATUS === 'Processing' && workerToken === row.LEASE_TOKEN ? {
+        STATUS: status, LEASE_TOKEN: null, LEASE_EXPIRES_AT: null,
+        NEXT_ATTEMPT_AT: nextAttemptAt, LAST_ERROR_CODE: code,
+        PROCESSED_AT: status === 'RetryRequired' ? null : at,
+      } : null);
+    return CONTAINED_EVENT_STATES.has(contained.STATUS) ? contained.STATUS : null;
+  }
+
+  async function containNotificationFailure(candidate, error) {
+    let current = await store.unique(notificationTable, 'NOTIFICATION_KEY', candidate.NOTIFICATION_KEY);
+    if (!current) return null;
+    if (!CONTAINED_NOTIFICATION_STATES.has(current.STATUS)
+      && !new Set(['Pending', 'RetryRequired', 'Sending']).has(current.STATUS)) return null;
+    const at = new Date(now()).toISOString();
+    if (!CONTAINED_NOTIFICATION_STATES.has(current.STATUS)) {
+      const ambiguous = current.STATUS === 'Sending'
+        || (error instanceof FreeTestError && error.ambiguous);
+      const status = ambiguous ? 'Ambiguous' : 'ReconciliationRequired';
+      const providerCode = ambiguous
+        ? 'CATALYST_MAIL_UNRESOLVED_AFTER_INVOKE' : 'NOTIFICATION_RECONCILIATION_REQUIRED';
+      current = await store.mutate(notificationTable, 'NOTIFICATION_KEY', candidate.NOTIFICATION_KEY,
+        'NOTIFICATION_VERSION', (row) => new Set(['Pending', 'RetryRequired', 'Sending']).has(row.STATUS) ? {
+          STATUS: status, PROVIDER_CODE: providerCode, PROVIDER_RESULT_REFERENCE: null,
+          SEND_TOKEN: null, NEXT_ATTEMPT_AT: null, LAST_ERROR_CODE: durableErrorCode(error),
+          UPDATED_AT: at,
+        } : null);
+    }
+    if (!CONTAINED_NOTIFICATION_STATES.has(current.STATUS)) return null;
+    const call = await store.unique(callTable, 'CALL_KEY', current.CALL_KEY);
+    invariant(call && call.CLIENT_ID === current.CLIENT_ID
+      && call.DEPLOYMENT_ID === current.DEPLOYMENT_ID
+      && call.CONFIGURATION_VERSION === current.CONFIGURATION_VERSION,
+    'CALL_OWNERSHIP_UNRESOLVED', 'Notification failure cannot be correlated to its call.');
+    await store.mutate(callTable, 'CALL_KEY', call.CALL_KEY, 'CALL_VERSION', (row) => (
+      row.NOTIFICATION_STATE === current.STATUS ? null
+        : { NOTIFICATION_STATE: current.STATUS, UPDATED_AT: at }
+    ));
+    return current.STATUS;
+  }
+
   async function executeClaimedEvent(eventData, callKey, receiptKey, workerToken) {
     const at = new Date(now()).toISOString();
     try {
@@ -719,17 +789,23 @@ function createRuntimeService({ store, mailAdapter, config, now = Date.now, logg
       .slice(0, limit);
     const results = [];
     for (const candidate of candidates) {
+      let workerToken = null;
       try {
         const claimed = await claimExistingReceipt(candidate.EVENT_KEY, candidate);
         if (claimed.terminal) {
           results.push({ status: claimed.terminal.status });
           continue;
         }
+        workerToken = claimed.workerToken;
         const eventData = parseJsonColumn(candidate.EVENT_DATA_JSON, 'EVENT_DATA_JSON');
         results.push(await executeClaimedEvent(eventData, candidate.CALL_KEY, candidate.EVENT_KEY,
           claimed.workerToken));
       } catch (error) {
-        results.push({ status: 'Failed', errorCode: error.code || 'UNEXPECTED_ERROR' });
+        let containedStatus = null;
+        try {
+          containedStatus = await containClaimedEventFailure(candidate, workerToken, error);
+        } catch (_) { /* The Job result remains Failed and is surfaced to Catalyst. */ }
+        results.push({ status: containedStatus || 'Failed', errorCode: durableErrorCode(error) });
       }
     }
     return Object.freeze({ examined: candidates.length, results: Object.freeze(results) });
@@ -781,12 +857,17 @@ function createRuntimeService({ store, mailAdapter, config, now = Date.now, logg
         ));
         results.push({ status });
       } catch (error) {
-        results.push({ status: 'Failed', errorCode: error.code || 'UNEXPECTED_ERROR' });
+        let containedStatus = null;
+        try {
+          containedStatus = await containNotificationFailure(candidate, error);
+        } catch (_) { /* The Job result remains Failed and is surfaced to Catalyst. */ }
+        results.push({ status: containedStatus || 'Failed', errorCode: durableErrorCode(error) });
       }
     }
     const ambiguous = (await store.query(notificationTable, 'STATUS', 'Ambiguous')).length;
+    const reconciliation = (await store.query(notificationTable, 'STATUS', 'ReconciliationRequired')).length;
     return Object.freeze({ examined: due.length, staleSending: staleSending.length,
-      reconciliationRequired: ambiguous, results: Object.freeze(results) });
+      reconciliationRequired: ambiguous + reconciliation, results: Object.freeze(results) });
   }
 
   async function runRetryJob(limit = 25) {
