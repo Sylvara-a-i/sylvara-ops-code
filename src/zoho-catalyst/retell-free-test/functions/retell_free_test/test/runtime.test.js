@@ -570,10 +570,12 @@ test('integration: four-table report query and CSV remain client partitioned and
   fixture.store.rows.get('FreeTestCalls').push({ ...structuredClone(completed), ROWID: '999',
     CALL_KEY: `call_${'f'.repeat(64)}`, CORRELATION_ID: `corr_${'f'.repeat(32)}`,
     HANDLED_RECORDED: false, OUTCOME: 'potential_job', PROCESSING_STATE: 'AwaitingAnalysis',
+    NOTIFICATION_STATE: null,
     CANONICAL_CALL_JSON: JSON.stringify({ ...JSON.parse(completed.CANONICAL_CALL_JSON),
       callKey: `call_${'f'.repeat(64)}`, correlationId: `corr_${'f'.repeat(32)}`,
       outcome: 'potential_job' }) });
-  const report = await queryClientReport(fixture.store, fixture.config, 'deployment_A', fixture.clock.value);
+  const report = await queryClientReport(fixture.store, fixture.config,
+    'client_A', 'deployment_A', fixture.clock.value);
   assert.equal(report.clientId, 'client_A');
   assert.equal(report.metrics.totalCallsHandled, 1);
   assert.equal(report.metrics.urgentPotentialJobs, 1);
@@ -581,6 +583,12 @@ test('integration: four-table report query and CSV remain client partitioned and
   assert.equal(report.calls[0].valueEvidenceClass, 'customer_supplied_estimate');
   assert.equal(report.notificationStates.DryRunRecorded, 1);
   const csv = reportToCsv(report);
+  const [header, summary, ...callRows] = csv.split('\r\n');
+  assert.match(header, /^recordType,clientId,deploymentId,configurationVersion,coverageMode,/);
+  assert.match(summary, /^summary,client_A,deployment_A,cfg_A_v1,AfterHoursOnly,1,0,1,/);
+  assert.equal(callRows.length, report.calls.length);
+  assert.ok(callRows.every((row) => row.startsWith('call,client_A,deployment_A,cfg_A_v1,')));
+  assert.match(summary, /DryRunRecorded/);
   assert.match(csv, /urgent_potential_job/);
   assert.doesNotMatch(csv, /client_B|Synthetic Plumbing B/);
 });
@@ -626,8 +634,41 @@ test('integration: canonical JSON tenant conflicts fail before notification prep
   assert.equal(notification.LAST_ERROR_CODE, 'CALL_OWNERSHIP_UNRESOLVED');
   assert.equal(call.NOTIFICATION_STATE, 'ReconciliationRequired');
   await assert.rejects(
-    queryClientReport(fixture.store, fixture.config, 'deployment_A', fixture.clock.value),
+    queryClientReport(fixture.store, fixture.config,
+      'client_A', 'deployment_A', fixture.clock.value),
     { code: 'REPORT_OWNERSHIP_CONFLICT' },
+  );
+});
+
+test('integration: reports fail closed on client, count, or notification reconciliation drift', async () => {
+  const fixture = runtimeFixture();
+  const inbound = await invoke(fixture.listener, { url: '/retell/inbound',
+    payload: payloadInbound('A'), env: fixture.env });
+  await invoke(fixture.listener, { url: '/retell/events',
+    payload: eventPayload('call_analyzed', 'report_reconcile_A',
+      inbound.body.call_inbound.metadata, 'A'), env: fixture.env });
+
+  await assert.rejects(
+    queryClientReport(fixture.store, fixture.config,
+      'client_B', 'deployment_A', fixture.clock.value),
+    { code: 'REPORT_OWNERSHIP_CONFLICT' },
+  );
+
+  const call = fixture.store.rows.get('FreeTestCalls')[0];
+  call.HANDLED_RECORDED = false;
+  await assert.rejects(
+    queryClientReport(fixture.store, fixture.config,
+      'client_A', 'deployment_A', fixture.clock.value),
+    { code: 'REPORT_RECONCILIATION_REQUIRED' },
+  );
+  call.HANDLED_RECORDED = true;
+
+  const notification = fixture.store.rows.get('FreeTestNotifications')[0];
+  notification.STATUS = 'RetryRequired';
+  await assert.rejects(
+    queryClientReport(fixture.store, fixture.config,
+      'client_A', 'deployment_A', fixture.clock.value),
+    { code: 'REPORT_RECONCILIATION_REQUIRED' },
   );
 });
 

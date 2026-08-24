@@ -44,11 +44,11 @@ For the 7-Day Free Test, also contain immediately on unknown/ambiguous number re
 2. If the shared agent or resolver is suspect, stop every affected deployment. Never switch to a client-specific free-test clone or degraded intake.
 3. Restore `FREE_TEST_NOTIFICATION_MODE=dry_run`, independently read it back, and pause query/CSV export without deleting calls, bindings, counts, or notification rows.
 4. Determine scope from immutable deployment and call bindings, not display names, the shared Agent ID, or the number's current owner.
-5. Do not reuse or move either initial validation number. Preserve historical ownership, keep the stopped number inactive, and record its cooldown. Any later reuse is a separately reviewed stopped-route action with readback and re-QA.
+5. Do not reuse or move the current validation number. Preserve historical ownership, keep the stopped number inactive, and record its cooldown. Any later reuse is a separately reviewed stopped-route action with readback and re-QA.
 6. Verify no email record, query, or CSV crossed clients and treat any contamination as a P0 incident.
 7. Restore only a previously approved inactive/provider route or carrier destination, then independently read it back.
 8. Confirm known authenticated failures receive explicit rejection or no traffic, and provider fallback reaches only the shared Configuration Unavailable gate; neither path may collect degraded intake.
-9. Re-enable only after the full two-number/same-version, practical limit/overshoot, replay, notification-state, query/CSV, correlation, cooldown, and rollback suites pass with zero scoped P0/P1 and new route approval.
+9. Re-enable the current one-number internal route only after its practical limit/overshoot, replay, notification-state, query/CSV, correlation, cooldown, and rollback checks pass with zero scoped P0/P1 and new route approval. Before enabling two simultaneous deployments or a first controlled prospect test, also complete live two-number/same-version isolation.
 
 Stopping a test never activates paid service or a Revenue Desk.
 

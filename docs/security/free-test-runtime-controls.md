@@ -2,7 +2,7 @@
 
 ## Status
 
-These controls govern offline/synthetic Development validation and any separately approved controlled internal Development phone test for [ADR 0006](../adr/0006-shared-seven-day-monitor-with-client-number-isolation.md). They are not a security certification, legal conclusion, Production authorization, or proof of runtime configuration. Prospect/customer approval remains a separate unresolved decision. Current evidence gaps are recorded in the [Development reconciliation](../runbooks/free-test-development-reconciliation-2026-08-22.md).
+These controls govern offline/synthetic Development validation and a separately scoped controlled internal Development phone test for [ADR 0006](../adr/0006-shared-seven-day-monitor-with-client-number-isolation.md). They are not a security certification, legal conclusion, Production authorization, or prospect/customer approval. The Catalyst controls below were exercised in Development; deferred Retell voice/provider-fallback evidence is recorded in the [Development reconciliation](../runbooks/free-test-development-reconciliation-2026-08-22.md).
 
 ## Trust And Tenant Boundary
 
@@ -45,18 +45,22 @@ Cross-client configuration, call ownership, email notification, query, or CSV ex
 
 ## Security Acceptance
 
-Before a controlled internal Development phone test, prove with two synthetic clients, two dedicated synthetic numbers, and the same reviewed shared agent version:
+Before a controlled internal Development phone test, prove two-client isolation with distinct synthetic number values in Catalyst and use the single existing non-customer Development number only for the active phone deployment. A second live number is deferred and is not required to begin this one-number internal test. Before activating two concurrent deployments or claiming the first-controlled-prospect technical gate, bind two dedicated numbers to the same reviewed shared agent version and repeat live isolation proof.
+
+The current Catalyst acceptance evidence covers:
 
 1. authenticity rejection and timestamp/replay defense;
 2. exact configuration gate and fail-closed missing-variable behavior;
 3. strict seven-day eligibility and the practical handled-count stop, including honest in-flight overshoot;
 4. no cross-client state in resolution, calls, metadata, email rows, queries, or CSV exports;
 5. one durable result under event replay/retry/reordering;
-6. initial-validation number freeze, documented post-completion cooldown, and delayed-event ownership safety without reassignment;
+6. current-number freeze, documented post-completion cooldown, and delayed-event ownership safety without reassignment;
 7. one controlled `send_development` delivery with provider/inbox readback, no duplicate on replay, safe ambiguity handling, and restoration to `dry_run`;
 8. redacted logs/errors/provider responses;
 9. least-privilege Development identities and no Production reachability;
 10. immutable lifecycle correlation; and
 11. rehearsed containment with preserved evidence.
 
-Current classification is **NOT READY**: the Catalyst Development phase is incomplete and controlled internal phone testing is not ready. The four-table schema and App User denial, two-function source parity, disabled retry Cron, non-secret `dry_run` configuration, fail-closed 503 readiness response, and function delete/redeploy rollback are proven. The four runtime secrets and verified mail sender are absent, and no signed request, durable row, immediate Job, email, Retell route, or call has been exercised. No scoped P0/P1 may remain before **READY FOR CONTROLLED INTERNAL PHONE TEST**. A phone test additionally requires an explicit owner-approved scope, Development route/settings readback, data-handling decision, tester/script boundary, and rollback. The [legal archive](../legal-compliance/README.md) is research and a historical conservative profile, not legal advice or an automatic approval/prohibition; record any professional review required for the actual facts privately.
+Current classification is **READY FOR CONTROLLED INTERNAL PHONE TEST** for the one-number Development scope. Readback proves the four-table schema and App User denial, two-function parity at the recorded revision, private configuration, HTTP 200 readiness, signed inbound/event handling, durable replay-safe lifecycle, manual retry Job, seven-day and practical 25-call stops, one controlled email with no duplicate provider invocation, restored `dry_run`, and route rollback. The retry Cron remains disabled. No scoped Catalyst P0/P1 remains.
+
+Retell voice/audio quality and provider behavior for timeout, 503, malformed response, invalid override, and endpoint unavailability remain P2 deferred evidence to collect during later controlled internal calls. A second live number is also deferred. Neither deferral authorizes a prospect call or weakens the one-number ownership rule. The [legal archive](../legal-compliance/README.md) is research and a historical conservative profile, not legal advice or an automatic approval/prohibition; prospect-facing review and route approval remain separate.

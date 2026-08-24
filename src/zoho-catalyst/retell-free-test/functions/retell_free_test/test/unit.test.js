@@ -12,7 +12,7 @@ const { loadConfig, loadJobConfig } = require('../lib/config');
 const { verifyRetellSignature } = require('../lib/security');
 const { validateInboundPayload } = require('../lib/validation');
 const { extractAnalysis, validateValueEvidence } = require('../lib/analysis');
-const { CatalystMailAdapter } = require('../lib/catalyst-mail');
+const { CatalystMailAdapter, messageContent } = require('../lib/catalyst-mail');
 const { readRawBody } = require('../lib/http');
 const { csvCell } = require('../lib/reporting');
 const { timingSafeToken } = require('../lib/runtime-boundary');
@@ -236,6 +236,18 @@ test('unit: Catalyst Mail real Development path uses official SDK shape and trea
   assert.equal(unverifiedResult.providerCode, 'CATALYST_MAIL_RESPONSE_INVALID');
 });
 
+test('unit: Catalyst Mail escapes caller text and preserves the capability disclaimer', () => {
+  const content = messageContent({
+    callerName: '<script>alert("caller")</script>',
+    issueSummary: '<img src=x onerror=alert("issue")>',
+    callOutcome: 'potential_job',
+  });
+  assert.doesNotMatch(content, /<script|<img/i);
+  assert.match(content, /&lt;script&gt;alert\(&quot;caller&quot;\)&lt;\/script&gt;/);
+  assert.match(content, /&lt;img src=x onerror=alert\(&quot;issue&quot;\)&gt;/);
+  assert.match(content, /No appointment or dispatch has been confirmed\./);
+});
+
 test('unit: raw-body reader enforces the byte ceiling', async () => {
   const request = Readable.from([Buffer.alloc(1025)]);
   await assert.rejects(readRawBody(request, { maximumBytes: 1024, timeoutMs: 1000 }),
@@ -254,16 +266,18 @@ test('unit: readiness token comparison is deterministic and timing-safe at the d
   assert.equal(timingSafeToken('short', 'b'.repeat(32)), false);
 });
 
-test('unit: runtime readiness reports source implementation without deployment claims', () => {
+test('unit: runtime readiness records the one-number Development boundary', () => {
   const readiness = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', '..', 'config', 'runtime-readiness.json'), 'utf8'));
-  assert.equal(readiness.decision, 'source_ready_for_development_provisioning');
+  assert.equal(readiness.decision, 'ready_for_controlled_internal_phone_test');
   assert.equal(readiness.environment, 'development');
   assert.equal(readiness.release_gate.production_remains_prohibited, true);
-  assert.deepEqual(new Set(readiness.blocking_evidence_gaps.map(({ id }) => id)), new Set([
-    'catalyst_development_readback', 'catalyst_mail_delivery', 'retell_inbound_fallback_readback',
-    'controlled_phone_e2e',
+  assert.deepEqual(readiness.blocking_evidence_gaps, []);
+  assert.equal(readiness.scope.active_retell_development_number_count, 1);
+  assert.equal(readiness.scope.second_number_deferred, true);
+  assert.deepEqual(new Set(readiness.deferred_evidence.map(({ id }) => id)), new Set([
+    'second_retell_development_number', 'retell_voice_and_provider_fallback',
+    'prospect_launch_review',
   ]));
-  assert.equal(readiness.closed_external_evidence.some(({ id }) => id === 'retell_safe_fallback_flow'), true);
 });
 
 test('unit: Advanced I/O entrypoint exports the Catalyst request handler', () => {

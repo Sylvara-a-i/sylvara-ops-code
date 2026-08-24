@@ -2,8 +2,8 @@
 
 - Status: Accepted as the current free-test architecture
 - Date: 2026-08-18
-- Reconciled: 2026-08-22 for the Development MVP
-- Current deployment status: **NOT READY**; Catalyst Development base resources and source parity are proven, but private configuration and lifecycle execution remain incomplete
+- Reconciled: 2026-08-24 for the Development MVP
+- Current deployment status: **READY FOR CONTROLLED INTERNAL PHONE TEST** for one non-customer Development number; Catalyst lifecycle is proven, while paid/native voice, provider fallback, and a second live number are deferred
 - Supersedes: [ADR 0005](0005-client-specific-retell-test-agent-isolation.md)
 - Supersedes within [ADR 0004](0004-retell-catalyst-crm-analytics-integration-boundary.md): the client-specific evaluation-agent lifecycle, agent-first tenancy model, and Analytics-first free-test reporting path
 - Production authorization: Not granted
@@ -138,7 +138,7 @@ The test never auto-extends, auto-converts, or starts a Revenue Desk.
 
 Each active deployment owns one dedicated number. Normal request processing never selects between overlapping assignments and never changes number ownership.
 
-The two initial validation numbers are not reused or moved between deployments during initial validation. When a test completes or stops, preserve the binding and ownership evidence, disable the route, and place the number into a documented cooldown before any separately reviewed future reuse. Historical call rows retain their embedded client, deployment, and configuration ownership.
+The current controlled-internal scope uses one existing non-customer Development number for one active phone deployment. It is not reused or moved during validation. When a test completes or stops, preserve the binding and ownership evidence, disable the route, and place the number into a documented cooldown before any separately reviewed future reuse. Historical call rows retain their embedded client, deployment, and configuration ownership. A second live number is required before activating a second concurrent deployment, but it is deferred from the present one-number internal test.
 
 Automatic reassignment and live rebinding are deferred. A future post-cooldown reuse process requires its own stopped-route administration, readback, and re-QA, including proof that number reassignment cannot resolve stale ownership, but that future feature is not an internal MVP blocker.
 
@@ -167,7 +167,7 @@ Catalyst is the canonical operational store for minimized Retell event reference
 
 Webhook delivery may be duplicated, delayed, retried, reordered, or malformed. The runtime target verifies authenticity against the raw body, validates the schema, claims the event durably, and makes post-call processing idempotent. Replay must not create a duplicate canonical call, handled-count increment, email record, or report row.
 
-The current source/runtime evidence is documented in the dated [Development reconciliation](../runbooks/free-test-development-reconciliation-2026-08-22.md). It proves the four-table schema and App User denial, two-function source parity, Job pool, disabled Cron, non-secret `dry_run` configuration, fail-closed readiness response, and function rollback. It does not prove a signed request, durable row, retry execution, Retell route, email, call, or Production behavior. A passing in-memory core or deployed artifact alone does not prove the complete Catalyst lifecycle.
+The current source/runtime evidence is documented in the dated [Development reconciliation](../runbooks/free-test-development-reconciliation-2026-08-22.md). It proves the four-table schema and App User denial, two-function parity at the recorded revision, private configuration, HTTP 200 readiness, signed inbound/event behavior, durable replay-safe state, manual Job recovery, seven-day and practical 25-call stops, one controlled internal email with replay suppression, restored `dry_run`, one Development number binding, and rollback. It does not prove a completed voice test, provider-fallback fault cases, two live-number isolation, prospect behavior, legal approval, or Production behavior.
 
 ## Email Notification MVP
 
@@ -183,7 +183,7 @@ The committed/default Development mode is `dry_run`:
 
 The adapter consumes `FREE_TEST_NOTIFICATION_MODE` with the reviewed values `dry_run` or `send_development` and `FREE_TEST_MAIL_FROM` with a privately configured verified Development sender. Both are required and validated; do not substitute `CATALYST_MAIL_MODE` or an undocumented default. The committed mode is `dry_run`, and this package rejects Production mode.
 
-Before the internal-phone readiness classification, use `send_development` once with only the verified Development sender and approved synthetic recipient, independently read back the provider result and inbox delivery, prove replay does not send again, then restore `dry_run`. Retell never sends the email directly. Prospect delivery remains a separate unresolved decision.
+The internal-phone readiness proof used `send_development` once with only the verified Development sender and approved synthetic recipient, independently read back the provider result and inbox delivery, proved replay did not invoke the provider again, and restored `dry_run`. Retell never sends the email directly. Prospect delivery remains a separate unresolved decision.
 
 The future email body remains limited to approved useful fields: caller name, callback number, new/existing classification, city or ZIP signal, issue summary, routine/urgent, requested person, timestamp, and outcome.
 
@@ -215,7 +215,7 @@ The [legal and compliance archive](../legal-compliance/README.md) contains a con
 
 ## Development Acceptance Gate
 
-Before an internal phone test, prove with two synthetic clients, two distinct synthetic numbers, and the same shared agent and reviewed version that:
+Before an internal phone test, prove with two synthetic clients, two distinct synthetic numbers, and the same shared agent and reviewed version in Catalyst that:
 
 1. each number resolves only its client, deployment, version, company, service area, urgency rules, and approved email reference;
 2. understood invalid configuration is explicitly rejected with zero writes, while transport/response failure reaches only the shared agent's no-data Configuration Unavailable branch;
@@ -227,13 +227,15 @@ Before an internal phone test, prove with two synthetic clients, two distinct sy
 8. the caller experience has a deliberate natural close; and
 9. containment disables new intake while preserving evidence.
 
+The backend A/B proof does not require purchasing a second live number. The current controlled-internal phone lane may use one existing non-customer number for one active phone deployment. Before two deployments are active simultaneously or the first-controlled-prospect technical gate is claimed, bind a second dedicated number to the same shared version and repeat live number/greeting/ownership/notification/report isolation.
+
 Any cross-client state, safety failure, configuration-gate bypass, failure to stop after an observed limit/expiration, prohibited sensitive retention, Production action, or uncontrolled route is P0. No P0/P1 may remain for the scoped lane being approved.
 
 ## Rejected Alternatives
 
-### One Shared Retell Number
+### One Shared Retell Number Across Multiple Active Clients
 
-Rejected because `to_number` would not identify the contractor deployment.
+Rejected because `to_number` would not identify the contractor deployment. Using one dedicated number for one active controlled-internal deployment is compatible with this ADR; reusing that number for two simultaneous deployments is not.
 
 ### One Free-Test Agent Clone Per Client
 

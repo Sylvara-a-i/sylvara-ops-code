@@ -2,7 +2,7 @@
 
 - Status: Accepted as a proposed integration boundary; free-test topology and tenancy sections superseded by [ADR 0006](0006-shared-seven-day-monitor-with-client-number-isolation.md)
 - Date: 2026-08-18
-- Deployment status: **NOT READY**; Catalyst Development base resources and source parity are proven, but private configuration and lifecycle execution remain incomplete
+- Deployment status: **READY FOR CONTROLLED INTERNAL PHONE TEST** for one non-customer Development number; Catalyst/Zoho lifecycle proof is complete, while Retell voice/fallback and a second live number are deferred
 - Product scope: `after-hours-new-residential-service-request-v1` and later separately approved extensions
 
 ## Context
@@ -37,7 +37,7 @@ Zoho Catalyst ingress and durable call state
         +----> Catalyst query / sanitized CSV report
 ```
 
-The boundaries below are architectural intent. The dated [Development reconciliation](../runbooks/free-test-development-reconciliation-2026-08-22.md) now verifies the sanitized Catalyst function, table, Job-pool, disabled-Cron, non-secret-configuration, source-parity, and function-rollback facts. Private identities, secrets, rows, signed runtime behavior, Retell route/settings, numbers, mail delivery, CRM, Analytics, calls, and Production remain unknown or unexercised as stated there. The separately documented 2026-08-22 initial copy readback for Form 1 and Form 2 tables in Retell Development does not verify or activate this voice/reporting path; the legacy form projects remain live and no function, route, Connection, variable, caller, or runtime cutover is established by that copy.
+The boundaries below are implemented for the Catalyst/Zoho Development lane. The dated [Development reconciliation](../runbooks/free-test-development-reconciliation-2026-08-22.md) verifies the four tables, both functions, private configuration, HTTP 200 readiness, signed lifecycle, practical time/count enforcement, manual retry, one internal email with replay suppression, restored `dry_run`, one non-customer Retell number binding, source parity at the recorded revision, and rollback. Voice/provider-fallback behavior, a second live number, prospects/customers, and Production remain deferred or unauthorized. The separately documented 2026-08-22 Form 1/Form 2 copy readback remains unrelated legacy evidence and does not activate this path.
 
 ## Free-Test Lifecycle
 
@@ -47,7 +47,7 @@ The boundaries below are architectural intent. The dated [Development reconcilia
 4. Keep service areas, schedules, eligibility, urgency, route approval, notification destinations, and test limits in the immutable deployment snapshot. Retell presents approved values but is not their authority.
 5. For a known authenticated invalid, unknown, ambiguous, inactive, expired, or exhausted resolution, return HTTP 200 with `{ "call_inbound": { "reject": true } }`, start no agent, and create no resolver-side write. Transport, authentication, timeout, 503/unavailable, malformed-response, or invalid-override failure may instead cause Retell to use the number-bound shared agent; its exact first-node gate must terminate through Configuration Unavailable with no intake. There is no degraded intake or client-clone fallback.
 6. After a separately approved conversion, create and accept a dedicated Revenue Desk agent if deeper client-specific behavior is required. The shared free-test agent is not promoted into paid service.
-7. Do not reuse either number during initial validation. When a test completes, preserve its binding evidence and place the number into a documented cooldown. Any later reuse is a separately reviewed stopped-route administrative process; automatic reassignment is deferred and is not an internal-test blocker. Historical calls retain their embedded deployment/configuration ownership.
+7. Do not reuse the number assigned to an active deployment during validation. When a test completes, preserve its binding evidence and place the number into a documented cooldown. Any later reuse is a separately reviewed stopped-route administrative process; automatic reassignment is deferred. Historical calls retain embedded deployment/configuration ownership.
 
 ## Source-Of-Truth Matrix
 
@@ -124,7 +124,7 @@ The current bounded processing sequence is:
 4. create one idempotent Catalyst Mail email record for the pre-approved deployment recipient; and
 5. make the minimized row available to fixed-partition query/CSV reporting.
 
-The free test does not book, dispatch, quote, collect payment, or mutate the customer operating system. The deployed non-secret notification mode is `dry_run`, but missing secrets and a verified `FREE_TEST_MAIL_FROM` keep readiness fail-closed; no `DryRunRecorded` row or `sendMail` action has occurred. Before internal-phone readiness, dry-run persistence must be proved, then one controlled `send_development` email must receive provider/inbox readback, replay must create no second delivery, and configuration must return to `dry_run`. CRM is disabled and Analytics is outside the MVP. Current runtime gaps are recorded in the Development reconciliation.
+The free test does not book, dispatch, quote, collect payment, or mutate the customer operating system. Development defaults to `dry_run`; durable dry-run state was proved, one controlled `send_development` email received provider/inbox readback, replay caused no second provider invocation, and configuration returned to `dry_run`. CRM is disabled and Analytics is outside the MVP. Current runtime evidence and deferred Retell work are recorded in the Development reconciliation.
 
 No ambiguous write is blindly retried. The worker first reads the target or job status and determines whether the prior attempt completed, failed, or requires operator reconciliation.
 
@@ -198,15 +198,15 @@ Rejected because fixed-client reviewed reports are sufficient for validation. A 
 
 ## Activation Gates
 
-No live path is authorized until all applicable gates pass:
+No prospect/customer or Production path is authorized until all applicable gates pass. A one-number controlled internal Development test may begin after the narrower ADR 0006 Development gate and test-specific route/readback boundary pass:
 
 1. current Retell contract, account, agent, number, recording, transcription, retention, training, webhook, and data-region settings are verified;
 2. the business, privacy, security, vendor, customer, disclosure, consent, and any professional review required for the actual call path are recorded privately;
 3. Catalyst Development proves signature verification, explicit known-failure rejection, safe provider-fallback gating, duplicate handling, exact configuration gating, number/deployment ownership, seven-day eligibility, the practical 25-handled-call stop and visible overshoot, minimized logging, Job retry/readback, email state, tenant-partitioned query/CSV, and durable readback with synthetic events;
-4. two synthetic numbers on the same shared agent version prove client isolation, and prohibited exports remain absent;
+4. two synthetic called-number values prove Catalyst client isolation; before two simultaneous live deployments or the first-controlled-prospect technical gate, two dedicated Retell numbers on the same shared agent version must repeat that proof;
 5. CRM mutation and Analytics import are verified disabled;
 6. one controlled `send_development` email is independently read back, replay sends no duplicate, and mode is restored to `dry_run`;
-7. completed validation numbers enter documented cooldown and are not reused during initial validation;
+7. each completed validation number enters documented cooldown and is not reused during its validation window;
 8. containment and rollback are rehearsed; and
 9. Gabriel separately approves the exact external artifact, target, route, configuration, and readback plan.
 
