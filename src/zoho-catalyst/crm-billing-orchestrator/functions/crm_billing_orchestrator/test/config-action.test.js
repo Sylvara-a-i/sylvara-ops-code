@@ -93,6 +93,11 @@ test("action payload is exactly schemaVersion, action, and dealId", () => {
     dealId: "100000000000001",
     stage: "forged",
   }), /fields do not match/);
+  assert.throws(() => validatePayload({
+    schemaVersion: "crm-billing-lifecycle-v1",
+    action: "provision_test_customer",
+    dealId: "100000000000001",
+  }), /unsupported/);
 });
 
 test("request boundary authenticates before accepting the exact JSON body", async () => {

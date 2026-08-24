@@ -103,10 +103,14 @@ function directTestCustomer(config, overrides = {}) {
   };
 }
 
-function clientFor(config, responses, calls = []) {
+function clientFor(config, responses, calls = [], operationStore = {
+  claim: async () => ({ outcome: "claimed", rowId: "1" }),
+  mark: async () => undefined,
+}) {
   return createBillingClient(config, {
     readAuthorizationProvider: async () => token,
     writeAuthorizationProvider: async () => token,
+    operationStore,
     fetchImpl: async (url, options) => {
       calls.push({ url, options });
       const response = responses.shift();
@@ -270,6 +274,262 @@ test("an ambiguous direct customer create is accepted only after exact TEST read
   const result = await client.ensureCustomer({ crmAccountId });
   assert.equal(result.customer.customer_id, customerId);
   assert.equal(result.testDirect, true);
+});
+
+test("a new Account claim completes from an exact pre-existing customer without POST", async () => {
+  const config = loadConfig(baseEnvironment({
+    CUSTOMER_PROVISIONING_MODE: "test_direct_customer",
+    ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING: "true",
+  }), { artifactRevision: REVISION });
+  const calls = [];
+  const marks = [];
+  const customer = directTestCustomer(config);
+  const client = clientFor(config, [
+    jsonResponse(200, { organization: testOrganization(config) }),
+    jsonResponse(200, customerPage([{ customer_id: customerId, email: customer.email }])),
+    jsonResponse(200, { customer }),
+  ], calls, {
+    claim: async () => {
+      assert.equal(calls.length, 0);
+      return { outcome: "claimed", rowId: "1" };
+    },
+    mark: async (...args) => { marks.push(args); },
+  });
+
+  const result = await client.ensureCustomer({ crmAccountId });
+  assert.equal(result.customer.customer_id, customerId);
+  assert.equal(result.testDirect, true);
+  assert.equal(calls.some(({ options }) => options.method === "POST"), false);
+  assert.deepEqual(marks, [["1", "completed", "customer_readback_confirmed"]]);
+});
+
+test("an uncertain Account claim completion is not followed by a second terminal mark", async () => {
+  const config = loadConfig(baseEnvironment({
+    CUSTOMER_PROVISIONING_MODE: "test_direct_customer",
+    ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING: "true",
+  }), { artifactRevision: REVISION });
+  const customer = directTestCustomer(config);
+  const marks = [];
+  const client = clientFor(config, [
+    jsonResponse(200, { organization: testOrganization(config) }),
+    jsonResponse(200, customerPage([{ customer_id: customerId, email: customer.email }])),
+    jsonResponse(200, { customer }),
+  ], [], {
+    claim: async () => ({ outcome: "claimed", rowId: "1" }),
+    mark: async (...args) => {
+      marks.push(args);
+      throw new Error("synthetic uncertain completion");
+    },
+  });
+
+  await assert.rejects(client.ensureCustomer({ crmAccountId }), (error) => {
+    assert.equal(error.publicCode, "reconciliation_required");
+    return true;
+  });
+  assert.deepEqual(marks, [["1", "completed", "customer_readback_confirmed"]]);
+});
+
+test("a completed direct customer claim requires exact readback and never creates again", async () => {
+  const config = loadConfig(baseEnvironment({
+    CUSTOMER_PROVISIONING_MODE: "test_direct_customer",
+    ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING: "true",
+  }), { artifactRevision: REVISION });
+  const calls = [];
+  const customer = directTestCustomer(config);
+  const client = clientFor(config, [
+    jsonResponse(200, { organization: testOrganization(config) }),
+    jsonResponse(200, customerPage([{ customer_id: customerId, email: customer.email }])),
+    jsonResponse(200, { customer }),
+  ], calls, {
+    claim: async () => {
+      assert.equal(calls.length, 0);
+      return { outcome: "duplicate-completed", rowId: "1" };
+    },
+    mark: async () => assert.fail("completed duplicate must not be marked again"),
+  });
+
+  const result = await client.ensureCustomer({ crmAccountId });
+  assert.equal(result.customer.customer_id, customerId);
+  assert.equal(result.duplicateProvisioning, true);
+  assert.equal(calls.some(({ options }) => options.method === "POST"), false);
+  assert.equal(calls.at(-1).url, `${config.billingApiBaseUrl}/customers/${customerId}`);
+});
+
+test("an unresolved or conflicting direct customer claim cannot reach customer creation", async () => {
+  const config = loadConfig(baseEnvironment({
+    CUSTOMER_PROVISIONING_MODE: "test_direct_customer",
+    ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING: "true",
+  }), { artifactRevision: REVISION });
+  for (const outcome of ["duplicate-unresolved", "duplicate-conflict"]) {
+    const calls = [];
+    const client = clientFor(config, [], calls, {
+      claim: async () => ({ outcome, rowId: "1" }),
+      mark: async () => assert.fail("unresolved claim must not be changed"),
+    });
+    await assert.rejects(client.ensureCustomer({ crmAccountId }), (error) => {
+      assert.equal(error.publicCode, "reconciliation_required");
+      assert.equal(error.ambiguous, true);
+      return true;
+    });
+    assert.equal(calls.some(({ options }) => options.method === "POST"), false);
+  }
+});
+
+test("competing direct customer claims permit at most one POST path", async () => {
+  const config = loadConfig(baseEnvironment({
+    CUSTOMER_PROVISIONING_MODE: "test_direct_customer",
+    ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING: "true",
+  }), { artifactRevision: REVISION });
+  const customer = directTestCustomer(config);
+  let operation = null;
+  let claimCount = 0;
+  let releaseClaims;
+  const bothClaims = new Promise((resolve) => { releaseClaims = resolve; });
+  const operationStore = {
+    claim: async () => {
+      claimCount += 1;
+      if (claimCount === 2) releaseClaims();
+      if (!operation) {
+        operation = { status: "processing" };
+        await bothClaims;
+        return { outcome: "claimed", rowId: "1" };
+      }
+      return {
+        outcome: operation.status === "completed"
+          ? "duplicate-completed"
+          : "duplicate-unresolved",
+        rowId: "1",
+      };
+    },
+    mark: async (_rowId, status) => { operation.status = status; },
+  };
+  let customerCreated = false;
+  let postCount = 0;
+  const client = createBillingClient(config, {
+    readAuthorizationProvider: async () => token,
+    writeAuthorizationProvider: async () => token,
+    operationStore,
+    fetchImpl: async (url, options) => {
+      const parsed = new URL(url);
+      if (parsed.pathname.endsWith(`/organizations/${config.billingOrganizationId}`)) {
+        return jsonResponse(200, { organization: testOrganization(config) });
+      }
+      if (parsed.pathname.endsWith("/customers") && options.method === "GET") {
+        if (!customerCreated) {
+          return jsonResponse(200, customerPage([]));
+        }
+        return jsonResponse(200, customerPage([
+          { customer_id: customerId, email: customer.email },
+        ]));
+      }
+      if (parsed.pathname.endsWith("/customers") && options.method === "POST") {
+        await bothClaims;
+        postCount += 1;
+        customerCreated = true;
+        return jsonResponse(201, { customer });
+      }
+      if (parsed.pathname.endsWith(`/customers/${customerId}`)) {
+        return jsonResponse(200, { customer });
+      }
+      throw new Error("unexpected synthetic Billing request");
+    },
+  });
+
+  const results = await Promise.allSettled([
+    client.ensureCustomer({ crmAccountId }),
+    client.ensureCustomer({ crmAccountId }),
+  ]);
+  assert.equal(results.filter(({ status }) => status === "fulfilled").length, 1);
+  const rejected = results.find(({ status }) => status === "rejected");
+  assert.equal(rejected.reason.publicCode, "reconciliation_required");
+  assert.equal(postCount, 1);
+});
+
+test("post-create lookup timeout, 5xx, and malformed JSON require reconciliation", async () => {
+  const config = loadConfig(baseEnvironment({
+    CUSTOMER_PROVISIONING_MODE: "test_direct_customer",
+    ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING: "true",
+  }), { artifactRevision: REVISION });
+  const failures = [
+    new Error("synthetic lookup timeout"),
+    jsonResponse(503, { code: 1000 }),
+    new Response("{", { status: 200, headers: { "content-type": "application/json" } }),
+  ];
+  for (const readbackFailure of failures) {
+    const marks = [];
+    const client = clientFor(config, [
+      jsonResponse(200, { organization: testOrganization(config) }),
+      jsonResponse(200, customerPage([])),
+      jsonResponse(200, { organization: testOrganization(config) }),
+      jsonResponse(201, { customer: directTestCustomer(config) }),
+      jsonResponse(200, { organization: testOrganization(config) }),
+      readbackFailure,
+    ], [], {
+      claim: async () => ({ outcome: "claimed", rowId: "1" }),
+      mark: async (...args) => { marks.push(args); },
+    });
+    await assert.rejects(client.ensureCustomer({ crmAccountId }), (error) => {
+      assert.equal(error.publicCode, "reconciliation_required");
+      assert.equal(error.ambiguous, true);
+      return true;
+    });
+    assert.deepEqual(marks, [["1", "reconciliation_required", "reconciliation_required"]]);
+  }
+});
+
+test("an authoritative direct customer POST rejection remains non-ambiguous", async () => {
+  const config = loadConfig(baseEnvironment({
+    CUSTOMER_PROVISIONING_MODE: "test_direct_customer",
+    ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING: "true",
+  }), { artifactRevision: REVISION });
+  const calls = [];
+  const marks = [];
+  const client = clientFor(config, [
+    jsonResponse(200, { organization: testOrganization(config) }),
+    jsonResponse(200, customerPage([])),
+    jsonResponse(200, { organization: testOrganization(config) }),
+    jsonResponse(422, { code: 1001 }),
+    jsonResponse(200, { organization: testOrganization(config) }),
+    jsonResponse(200, customerPage([])),
+  ], calls, {
+    claim: async () => ({ outcome: "claimed", rowId: "1" }),
+    mark: async (...args) => { marks.push(args); },
+  });
+  await assert.rejects(client.ensureCustomer({ crmAccountId }), (error) => {
+    assert.equal(error.publicCode, "billing_rejected");
+    assert.equal(error.ambiguous, false);
+    return true;
+  });
+  assert.equal(calls.length, 6);
+  assert.deepEqual(marks, [["1", "failed", "billing_rejected"]]);
+});
+
+test("a duplicate POST rejection completes after exact deterministic customer readback", async () => {
+  const config = loadConfig(baseEnvironment({
+    CUSTOMER_PROVISIONING_MODE: "test_direct_customer",
+    ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING: "true",
+  }), { artifactRevision: REVISION });
+  const calls = [];
+  const marks = [];
+  const customer = directTestCustomer(config);
+  const client = clientFor(config, [
+    jsonResponse(200, { organization: testOrganization(config) }),
+    jsonResponse(200, customerPage([])),
+    jsonResponse(200, { organization: testOrganization(config) }),
+    jsonResponse(409, { code: 1001 }),
+    jsonResponse(200, { organization: testOrganization(config) }),
+    jsonResponse(200, customerPage([{ customer_id: customerId, email: customer.email }])),
+    jsonResponse(200, { customer }),
+  ], calls, {
+    claim: async () => ({ outcome: "claimed", rowId: "1" }),
+    mark: async (...args) => { marks.push(args); },
+  });
+
+  const result = await client.ensureCustomer({ crmAccountId });
+  assert.equal(result.customer.customer_id, customerId);
+  assert.equal(result.testDirect, true);
+  assert.equal(calls.filter(({ options }) => options.method === "POST").length, 1);
+  assert.deepEqual(marks, [["1", "completed", "customer_readback_confirmed"]]);
 });
 
 test("customer lookup rejects a response without the exact CRM Account reference", async () => {
