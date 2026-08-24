@@ -252,10 +252,10 @@ test('integration: failed call lifecycle is preserved but is not counted or noti
 test('integration: readiness is private and Production fails before SDK or Data Store access', async () => {
   const fixture = runtimeFixture();
   const denied = await invoke(fixture.listener, { method: 'GET', url: '/internal/readiness', env: fixture.env,
-    headers: { authorization: 'Bearer wrong-token' } });
+    headers: { 'x-free-test-readiness-token': 'wrong-token' } });
   assert.equal(denied.status, 401);
   const ready = await invoke(fixture.listener, { method: 'GET', url: '/internal/readiness', env: fixture.env,
-    headers: { authorization: `Bearer ${fixture.env.INTERNAL_READINESS_TOKEN}` } });
+    headers: { 'x-free-test-readiness-token': fixture.env.INTERNAL_READINESS_TOKEN } });
   assert.equal(ready.body.table_count, 4);
   assert.equal(ready.body.mail_mode, 'dry_run');
 
@@ -358,14 +358,14 @@ test('integration: Catalyst platform environment and project identity fail close
   assert.equal(projectKeyMismatch.mailAccesses, 0);
 });
 
-test('integration: duplicate readiness authorization fails closed', async () => {
+test('integration: duplicate readiness token header fails closed', async () => {
   const fixture = runtimeFixture();
-  const token = `Bearer ${fixture.env.INTERNAL_READINESS_TOKEN}`;
+  const token = fixture.env.INTERNAL_READINESS_TOKEN;
   const rejected = await invoke(fixture.listener, { method: 'GET', url: '/internal/readiness', env: fixture.env,
-    headers: { authorization: token }, rawHeaders: [
+    headers: { 'x-free-test-readiness-token': token }, rawHeaders: [
       'host', fixture.env.FREE_TEST_DEVELOPMENT_HOST,
-      'authorization', token,
-      'authorization', token,
+      'x-free-test-readiness-token', token,
+      'x-free-test-readiness-token', token,
     ] });
   assert.equal(rejected.status, 400);
   assert.equal(rejected.body.code, 'INVALID_REQUEST_HEADER');

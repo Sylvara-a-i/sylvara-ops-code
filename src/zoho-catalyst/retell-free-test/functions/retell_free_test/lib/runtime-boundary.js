@@ -10,6 +10,7 @@ const { CatalystMailAdapter } = require('./catalyst-mail');
 const { createRuntimeService } = require('./runtime-service');
 
 const RETELL_SIGNATURE_HEADER = 'x-retell-signature';
+const READINESS_TOKEN_HEADER = 'x-free-test-readiness-token';
 
 function headerValues(request, name) {
   const normalized = name.toLowerCase();
@@ -69,13 +70,6 @@ function assertPlatformDevelopment(request, app, config) {
   { httpStatus: 503 });
 }
 
-function bearerToken(request) {
-  const value = scalarHeader(request, 'authorization');
-  invariant(value.startsWith('Bearer '), 'READINESS_UNAUTHORIZED',
-    'Private route authorization is required.', { httpStatus: 401 });
-  return value.slice(7);
-}
-
 function timingSafeToken(actual, expected) {
   const actualDigest = crypto.createHash('sha256').update(actual, 'utf8').digest();
   const expectedDigest = crypto.createHash('sha256').update(expected, 'utf8').digest();
@@ -130,7 +124,7 @@ function createRequestListener(options = {}) {
 
       if (routePath === config.readinessPath) {
         invariant(request.method === 'GET', 'METHOD_NOT_ALLOWED', 'Readiness requires GET.', { httpStatus: 405 });
-        invariant(timingSafeToken(bearerToken(request), config.readinessToken),
+        invariant(timingSafeToken(scalarHeader(request, READINESS_TOKEN_HEADER), config.readinessToken),
           'READINESS_UNAUTHORIZED', 'Readiness authorization failed.', { httpStatus: 401 });
         const store = storeFactory(app, config);
         const service = serviceFactory({ store, mailAdapter: mailFactory(app, config), config, now, logger });
@@ -182,5 +176,5 @@ function createRequestListener(options = {}) {
 
 module.exports = {
   createRequestListener, assertDevelopmentHost, assertPlatformDevelopment, timingSafeToken,
-  scalarHeader, RETELL_SIGNATURE_HEADER,
+  scalarHeader, RETELL_SIGNATURE_HEADER, READINESS_TOKEN_HEADER,
 };
