@@ -12,7 +12,7 @@ Lead with the recommendation. Make a reasonable assumption and proceed unless an
 - For diagnosis, identify the root cause and evidence. Implement a fix only when fixing is part of the request.
 - For an authorized build or change, implement the smallest complete change, test it in proportion to risk, and finish the safe repository workflow.
 - For strategy or architecture, compare the proposal with a smaller workflow-first option and test it against sellability, repeatability, support burden, and kill criteria.
-- Repository permission never authorizes a live tenant write, payment, customer communication, call route, deployment, purchase, publication, or production configuration change. Those actions require approval for the exact target and operation.
+- Repository permission never authorizes a live tenant write, payment, customer communication, call route, deployment, purchase, publication outside the reviewed repository artifact, or production configuration change. Those actions require approval for the exact target and operation.
 - Stop when a required live contract, authoritative source, private input, rollback, or high-risk decision is unknown. State what evidence or approval would unblock the work.
 
 ## Required Reading Router
@@ -21,7 +21,7 @@ Read only the material triggered by the task, plus any nearer `AGENTS.md` file. 
 
 | Work in scope | Read before acting |
 | --- | --- |
-| Product, voice, telephony, CRM, scheduling, dispatch, sales support, or roadmap | [`docs/product/README.md`](docs/product/README.md) |
+| Product, pricing, voice, telephony, CRM, scheduling, dispatch, sales support, or roadmap | [`docs/product/README.md`](docs/product/README.md) |
 | Voice agent, phone route, recording, consent, privacy, customer messaging, or regulated workflow | [`docs/legal-compliance/README.md`](docs/legal-compliance/README.md) |
 | Zoho product, Deluge, schema, integration, or Zoho MCP | [`docs/zoho/README.md`](docs/zoho/README.md) |
 | Accounting, tax, bookkeeping, revenue, payroll, reconciliation, or close | [`docs/accounting/README.md`](docs/accounting/README.md) |
@@ -33,17 +33,17 @@ Do not load unrelated standards merely because they exist.
 
 ## Permanent Public Boundary
 
-Treat every Git object and CI log as permanently public. Commit only sanitized source, synthetic fixtures, safe configuration names, and documentation approved for publication.
+Treat every Git object and CI log as permanently public. Commit only sanitized source, synthetic fixtures, safe configuration names, approved public commercial terms, and documentation approved for publication.
 
-Never commit or print credentials, tokens, populated environment files, secret-bearing URLs, customer or caller PII, recordings, transcripts, raw prompts, production payloads or logs, financial or legal records, signed documents, private source material, production identifiers, private endpoints, or security details that materially enable abuse. Do not expose private strategy, pricing, projections, account lists, or exact validation thresholds. Use explicit placeholders and synthetic examples. Keep original private source outside GitHub and create only an allowlisted sanitized derivative.
+Never commit or print credentials, tokens, populated environment files, private keys, credential-bearing URLs, customer or caller PII, recordings, transcripts, raw prompts, production payloads or logs, financial or legal records, signed documents, private source material, production identifiers, private endpoints, or security details that materially enable abuse. Do not expose private projections, vendor-cost worksheets, account lists, account-level margin or support data, prospect evidence, exact private acceptance thresholds, or unpublished strategy. Public pricing is allowed only when it matches the approved current terms in [`docs/product/README.md`](docs/product/README.md). Keep original private source outside GitHub and create only an approved sanitized derivative.
 
 `archive/` is reference-only. It is not active source, tested production code, or deployment authority.
 
 ## Current Product Boundary
 
-Sylvara is validating a managed inbound receptionist and front-office service for independent residential plumbing companies, starting with after-hours and overflow call conversion. The product is bounded workflow completion, outcome attribution, managed quality, and safe exception handling, not generic voice-agent access or a generalized automation platform.
+Sylvara's approved strategy targets one-location residential service plumbing companies with approximately 5–15 field technicians. The acquisition offer is a 7-Day / 25-Call Revenue Leak Test on after-hours and/or no-answer/overflow. Paid Launch is a complete managed AI receptionist with metered usage; Growth is the recommended managed Revenue Desk; Scale and Enterprise add broader revenue operations only when paid scope and delivery evidence justify them. Coverage volume alone is not a plan gate.
 
-Other trades, property management, primary reception, broad dispatch, and unrelated custom automation remain deferred. The controlled internal, non-sales QA telephone profile is proposed and not launch-approved. Any prospect-facing demo, pilot, live route, booking, outbound message, payment flow, or production integration must pass the product and legal gates linked above.
+The product is bounded workflow completion, revenue recovery, outcome attribution, managed quality, and safe exception handling—not generic voice-agent access, a generalized automation platform, or a custom call center. Other trades and unrelated verticals remain deferred. Commercial approval does not prove implementation: any prospect-facing demo, pilot, live route, booking, transfer, outbound message, payment flow, or production integration must pass the product, technical, legal, and customer-specific gates.
 
 ## Engineering And Verification
 
