@@ -18,8 +18,8 @@ function environment(overrides = {}) {
     RETELL_SHARED_AGENT_ID: 'agent_shared_free_test', RETELL_SHARED_AGENT_VERSION: '7',
     RETELL_INBOUND_PATH: '/retell/inbound', RETELL_EVENTS_PATH: '/retell/events',
     INTERNAL_READINESS_PATH: '/internal/readiness', RETELL_SIGNATURE_MAX_AGE_MS: '300000',
-    CATALYST_DEVELOPMENT_HOST: 'retell-free-test.development.catalystserverless.com',
-    CATALYST_DEVELOPMENT_PROJECT_ID: '101000001',
+    FREE_TEST_DEVELOPMENT_HOST: 'retell-free-test.development.catalystserverless.com',
+    FREE_TEST_DEVELOPMENT_PROJECT_ID: '101000001',
     FREE_TEST_RETRY_JOB_POOL_ID: '101000002',
     MAX_WEBHOOK_BYTES: '262144', INBOUND_BODY_TIMEOUT_MS: '5000',
     EVENT_HMAC_SECRET: 'event-runtime-secret-material-aaaaaaaa',
@@ -148,7 +148,7 @@ function signature(rawBody, key, timestamp = NOW) {
 
 function retryJobRequest(runtimeEnvironment) {
   return {
-    getProjectDetails() { return { id: runtimeEnvironment.CATALYST_DEVELOPMENT_PROJECT_ID }; },
+    getProjectDetails() { return { id: runtimeEnvironment.FREE_TEST_DEVELOPMENT_PROJECT_ID }; },
     getJobPoolDetails() { return { id: runtimeEnvironment.FREE_TEST_RETRY_JOB_POOL_ID, type: 'Function' }; },
   };
 }
@@ -164,7 +164,7 @@ async function invoke(listener, { method = 'POST', url, payload, env, headers = 
   request.method = method;
   request.url = url;
   request.headers = {
-    host: runtimeEnvironment.CATALYST_DEVELOPMENT_HOST, 'content-type': 'application/json',
+    host: runtimeEnvironment.FREE_TEST_DEVELOPMENT_HOST, 'content-type': 'application/json',
     'x-zc-environment': 'Development',
     ...(payload === undefined ? {} : { 'x-retell-signature': signature(rawBody, runtimeEnvironment.RETELL_WEBHOOK_API_KEY, signatureTimestamp) }),
     ...headers,
@@ -183,7 +183,7 @@ function runtimeFixture(overrides = {}) {
   const store = new RuntimeMemoryStore(config);
   let initialized = 0;
   let mailAccesses = 0;
-  const app = { config: { environment: 'development', projectId: env.CATALYST_DEVELOPMENT_PROJECT_ID },
+  const app = { config: { environment: 'development', projectId: env.FREE_TEST_DEVELOPMENT_PROJECT_ID },
     email() { mailAccesses += 1; return { sendMail: overrides.mailBehavior || (() => {
       throw new Error('send boundary must remain unreachable');
     }) }; } };

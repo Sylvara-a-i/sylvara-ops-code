@@ -37,12 +37,14 @@ test('unit: environment registry exactly matches reads and rejects Production or
   const registry = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', '..', 'config', 'variables.json'), 'utf8'));
   const env = environment();
   assert.deepEqual(Object.keys(env).sort(), registry.variables.map(({ name }) => name).sort());
+  assert.deepEqual(registry.variables.filter(({ name }) => name.startsWith('CATALYST_')), [],
+    'Catalyst reserves the CATALYST_ environment-variable namespace');
   assert.equal(loadConfig(env).tables.DEPLOYMENT_TABLE, 'FreeTestDeployments');
   const jobOnly = { ...env };
   for (const name of [
     'RETELL_WEBHOOK_API_KEY', 'NUMBER_LOOKUP_HMAC_SECRET', 'INTERNAL_READINESS_TOKEN',
     'RETELL_INBOUND_PATH', 'RETELL_EVENTS_PATH', 'INTERNAL_READINESS_PATH',
-    'CATALYST_DEVELOPMENT_HOST', 'RETELL_SIGNATURE_MAX_AGE_MS', 'MAX_WEBHOOK_BYTES',
+    'FREE_TEST_DEVELOPMENT_HOST', 'RETELL_SIGNATURE_MAX_AGE_MS', 'MAX_WEBHOOK_BYTES',
     'INBOUND_BODY_TIMEOUT_MS',
   ]) delete jobOnly[name];
   assert.equal(loadJobConfig(jobOnly).retryJobPoolId, env.FREE_TEST_RETRY_JOB_POOL_ID);

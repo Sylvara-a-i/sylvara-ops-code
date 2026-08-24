@@ -73,6 +73,8 @@ Number reassignment is not a launch dependency or runtime API. Do not reuse or m
 
 [`functions/retell_free_test/.env.example`](functions/retell_free_test/.env.example), [`functions/retell_free_test_retry/.env.example`](functions/retell_free_test_retry/.env.example), and [`config/variables.json`](config/variables.json) are the exact public registry. The two target-specific files enforce least privilege: the retry Job does not receive the Retell webhook key, number-lookup key, readiness token, route paths, request limits, or Advanced I/O host. Real secrets, private agent IDs, sender address, client identifiers, phone numbers, and customer data stay outside Git. Missing, malformed, placeholder, mismatched, or Production values fail closed.
 
+Operator-defined variables use the `FREE_TEST_` namespace. Catalyst rejects custom names beginning with its reserved `CATALYST_` prefix; the platform-provided `X_ZOHO_CATALYST_ENVIRONMENT` value is the only Catalyst-owned environment signal in the registry.
+
 ## Tests
 
 From `functions/retell_free_test`:

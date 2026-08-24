@@ -237,7 +237,7 @@ test('integration: readiness is private and Production fails before SDK or Data 
 
 test('integration: documented Development hosts pass while a production-shaped host fails before SDK initialization', async () => {
   const alternateDevelopmentHost = 'retell-free-test.development.zohocatalyst.com';
-  const alternate = runtimeFixture({ environment: { CATALYST_DEVELOPMENT_HOST: alternateDevelopmentHost } });
+  const alternate = runtimeFixture({ environment: { FREE_TEST_DEVELOPMENT_HOST: alternateDevelopmentHost } });
   const accepted = await invoke(alternate.listener, { url: '/retell/inbound', payload: payloadInbound('A'),
     env: alternate.env, headers: { host: alternateDevelopmentHost } });
   assert.equal(accepted.status, 200);
