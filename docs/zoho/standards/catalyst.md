@@ -3,7 +3,8 @@
 ## Status
 
 - Repository standard: **Proposed**
-- Sylvara Catalyst organizations, projects, environments, routes, functions, pipelines, variables, and deployments: **Unknown**
+- Narrow Development evidence: **Form 1 and Form 2 table copies in the existing Retell project were provisioned and received initial readback on 2026-08-22; all four function-specific CRM Connections were read back in the Retell Development console as Connected with the exact approved scopes on 2026-08-23**
+- CRM-organization binding, Functions, routes, variables, callers, pipelines, deployments, runtime behavior, Production, and other Catalyst resources: **Not cut over or Unknown**
 
 Use Catalyst only when a defined integration needs controls that a managed connector cannot safely provide. Zoho documents [Catalyst resource deployment](https://docs.catalyst.zoho.com/en/cli/v1/deploy-resources/introduction/) and [function implementation and variables](https://docs.catalyst.zoho.com/en/serverless/help/functions/implementation/). Product capability does not establish a live Sylvara project or authorize deployment.
 
@@ -69,7 +70,7 @@ Production promotion and break-glass exercises require separately scoped approva
 
 ## Manual Setup
 
-All live setup is currently **Unknown**. Before deployment, verify or configure:
+Except for the narrow copied-table and Connection-console evidence above, live setup is **Unknown**. The legacy form projects remain live. Before deployment or cutover, verify or configure:
 
 - the intended organization, project, data center, Development and Production environments, and roles;
 - secret and variable names in the private platform configuration;

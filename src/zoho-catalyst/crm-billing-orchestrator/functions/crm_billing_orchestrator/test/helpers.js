@@ -1,17 +1,29 @@
 "use strict";
 
+const crypto = require("node:crypto");
+
 const REVISION = "a".repeat(40);
+const DEVELOPMENT_RUNTIME_PROOF = "r".repeat(64);
+const SYNTHETIC_DEVELOPMENT_ZAID = "synthetic-development-zaid";
+const DEVELOPMENT_ZAID_HMAC_SHA256 = crypto
+  .createHmac("sha256", DEVELOPMENT_RUNTIME_PROOF)
+  .update(SYNTHETIC_DEVELOPMENT_ZAID, "utf8")
+  .digest("hex");
 
 function baseEnvironment(overrides = {}) {
   return {
     DEPLOYMENT_ENVIRONMENT: "development",
     SOURCE_REVISION: REVISION,
+    DEVELOPMENT_FUNCTION_HOST: "synthetic.development.catalystserverless.com",
+    DEVELOPMENT_RUNTIME_PROOF,
     ALLOWED_PATH: "/synthetic/crm-billing",
     SHARED_HEADER_NAME: "x-synthetic-lifecycle-key",
     SHARED_HEADER_VALUE: "s".repeat(32),
     CRM_API_BASE_URL: "https://www.zohoapis.com/crm/v8",
     BILLING_API_BASE_URL: "https://www.zohoapis.com/billing/v1",
     BILLING_ORGANIZATION_ID: "100000000000001",
+    CUSTOMER_PROVISIONING_MODE: "native_crm_import",
+    ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING: "false",
     CRM_READ_CONNECTION_LINK_NAME: "CrmRead",
     CRM_WRITE_CONNECTION_LINK_NAME: "CrmWrite",
     BILLING_READ_CONNECTION_LINK_NAME: "BillingRead",
@@ -51,4 +63,11 @@ function jsonResponse(status, body) {
   });
 }
 
-module.exports = { REVISION, baseEnvironment, jsonResponse };
+module.exports = {
+  DEVELOPMENT_RUNTIME_PROOF,
+  DEVELOPMENT_ZAID_HMAC_SHA256,
+  REVISION,
+  SYNTHETIC_DEVELOPMENT_ZAID,
+  baseEnvironment,
+  jsonResponse,
+};

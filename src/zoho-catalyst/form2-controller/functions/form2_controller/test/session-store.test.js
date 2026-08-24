@@ -11,6 +11,7 @@ const {
 } = require("../lib/session-store");
 
 const TABLE = "Form2_Sessions";
+const ISSUE_REQUEST_KEY = "b".repeat(64);
 const TOKEN_HASH = "a".repeat(64);
 const NOW_MS = Date.parse("2026-08-14T18:00:00.000Z");
 const SUBMISSION_FINGERPRINT = "f".repeat(64);
@@ -20,7 +21,7 @@ function dealIssuanceKey(kind, input = issueInput()) {
     .createHash("sha256")
     .update(`sylvara-form2:development:deal-${kind}\0`, "utf8")
     .update(input.crmDealId, "utf8")
-    .update(kind === "generation" ? `\0${input.tokenHash}` : "", "utf8")
+    .update(kind === "generation" ? `\0${input.issueRequestKey}` : "", "utf8")
     .digest("hex");
 }
 
@@ -29,6 +30,7 @@ function config(overrides = {}) {
     sessionTableName: TABLE,
     deploymentEnvironment: "development",
     sessionTtlSeconds: 3600,
+    verifiedSessionTtlSeconds: 1800,
     maxVerificationAttempts: 3,
     sourceRevision: "a".repeat(40),
     ...overrides,
@@ -44,6 +46,7 @@ function fixture({
     insert: [],
     update: [],
     dealKeyQueries: [],
+    issueRequestKeyQueries: [],
     tokenQueries: [],
     rowQueries: [],
   };
@@ -54,7 +57,7 @@ function fixture({
     async insertRow(tableName, row) {
       calls.insert.push({ tableName, row: { ...row } });
       if (rows.some((candidate) =>
-        candidate.TOKEN_HASH === row.TOKEN_HASH ||
+        candidate.ISSUE_REQUEST_KEY === row.ISSUE_REQUEST_KEY ||
         candidate.DEAL_ISSUANCE_KEY === row.DEAL_ISSUANCE_KEY)) {
         throw new Error("synthetic unique session-key conflict");
       }
@@ -85,7 +88,13 @@ function fixture({
     async findRowsByTokenHash(tableName, tokenHash) {
       calls.tokenQueries.push({ tableName, tokenHash });
       return rows
-        .filter((row) => row.TOKEN_HASH === tokenHash)
+        .filter((row) => row.ACCESS_TOKEN_HASH === tokenHash)
+        .map((row) => ({ [TABLE]: { ...row } }));
+    },
+    async findRowsByIssueRequestKey(tableName, issueRequestKey) {
+      calls.issueRequestKeyQueries.push({ tableName, issueRequestKey });
+      return rows
+        .filter((row) => row.ISSUE_REQUEST_KEY === issueRequestKey)
         .map((row) => ({ [TABLE]: { ...row } }));
     },
     async findRowsByRowId(tableName, rowId) {
@@ -104,6 +113,7 @@ function fixture({
 
 function issueInput(overrides = {}) {
   return {
+    issueRequestKey: ISSUE_REQUEST_KEY,
     tokenHash: TOKEN_HASH,
     crmContactId: `${"1".repeat(18)}1`,
     crmAccountId: `${"1".repeat(18)}2`,
@@ -116,6 +126,7 @@ test("issues and reads back a Development session containing no raw token or for
   const { calls, store } = fixture();
   const issuing = await store.issue(issueInput());
   assert.equal(issuing.status, "issuing");
+  assert.equal(issuing.issueRequestKey, ISSUE_REQUEST_KEY);
   assert.equal(issuing.tokenHash, TOKEN_HASH);
   assert.equal(issuing.expiresAt, "2026-08-14T19:00:00.000Z");
   assert.equal(
@@ -220,21 +231,29 @@ test("recovers an exact active issuance retry across source revisions", async ()
 });
 
 test("verifies a live session, increments its bounded attempt counter, and supports submission", async () => {
-  const { calls, store } = fixture();
+  const { calls, clock, store } = fixture();
   const issued = await store.issue(issueInput());
   await store.markIssued(issued.rowId);
   const result = await store.verify(TOKEN_HASH);
   assert.equal(result.outcome, "verified");
   assert.equal(result.session.attemptCount, 1);
   assert.equal(result.session.verifiedAt, "2026-08-14T18:00:00.000Z");
+  assert.equal(result.session.expiresAt, "2026-08-14T18:30:00.000Z");
   assert.deepEqual(calls.update[1].expected, { STATUS: "issued", ATTEMPT_COUNT: 0 });
+
+  const firstVerifiedExpiry = result.session.expiresAt;
+  clock.nowMs += 5 * 60 * 1000;
+  const retried = await store.verify(TOKEN_HASH);
+  assert.equal(retried.session.attemptCount, 2);
+  assert.equal(retried.session.verifiedAt, result.session.verifiedAt);
+  assert.equal(retried.session.expiresAt, firstVerifiedExpiry);
 
   const submitting = await store.beginSubmission(issued.rowId, SUBMISSION_FINGERPRINT);
   assert.equal(submitting.status, "submitting");
   assert.equal(submitting.lastOutcome, `submitting_${SUBMISSION_FINGERPRINT}`);
   const submitted = await store.markSubmitted(issued.rowId, SUBMISSION_FINGERPRINT);
   assert.equal(submitted.status, "submitted");
-  assert.equal(submitted.submittedAt, "2026-08-14T18:00:00.000Z");
+  assert.equal(submitted.submittedAt, "2026-08-14T18:05:00.000Z");
   assert.equal((await store.verify(TOKEN_HASH)).outcome, "submitted");
 });
 
@@ -346,6 +365,7 @@ test("the unique active Deal key blocks competitors and is freed only by synchro
   await selected.store.markIssued(first.rowId);
 
   const competing = issueInput({
+    issueRequestKey: "e".repeat(64),
     tokenHash: "d".repeat(64),
   });
   await assert.rejects(
@@ -496,4 +516,13 @@ test("fails closed on non-unique token hashes and unsafe adapter or environment 
     () => createCatalystSessionStore(duplicate.adapter, config({ sessionTtlSeconds: 86401 })),
     SessionStoreError,
   );
+  for (const verifiedSessionTtlSeconds of [1799, 1801, undefined]) {
+    assert.throws(
+      () => createCatalystSessionStore(
+        duplicate.adapter,
+        config({ verifiedSessionTtlSeconds }),
+      ),
+      SessionStoreError,
+    );
+  }
 });

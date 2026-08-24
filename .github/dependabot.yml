@@ -21,3 +21,58 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: "chore(zoho-catalyst)"
+
+  - package-ecosystem: npm
+    directory: /src/zoho-catalyst/crm-billing-orchestrator/functions/crm_billing_orchestrator
+    schedule:
+      interval: weekly
+      day: monday
+      time: "13:40"
+      timezone: America/Chicago
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(zoho-catalyst)"
+
+  - package-ecosystem: npm
+    directory: /src/zoho-catalyst/form1-controller/functions/form1_assisted_controller
+    schedule:
+      interval: weekly
+      day: monday
+      time: "13:50"
+      timezone: America/Chicago
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(zoho-catalyst)"
+
+  - package-ecosystem: npm
+    directory: /src/zoho-catalyst/form2-controller/functions/form2_controller
+    schedule:
+      interval: weekly
+      day: monday
+      time: "14:00"
+      timezone: America/Chicago
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(zoho-catalyst)"
+
+  - package-ecosystem: npm
+    directory: /src/zoho-catalyst/retell-free-test/functions/retell_free_test
+    schedule:
+      interval: weekly
+      day: monday
+      time: "14:10"
+      timezone: America/Chicago
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(zoho-catalyst)"
+
+  - package-ecosystem: npm
+    directory: /src/zoho-catalyst/retell-free-test/functions/retell_free_test_retry
+    schedule:
+      interval: weekly
+      day: monday
+      time: "14:20"
+      timezone: America/Chicago
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(zoho-catalyst)"

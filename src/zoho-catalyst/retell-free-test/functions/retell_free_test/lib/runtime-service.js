@@ -563,9 +563,9 @@ function createRuntimeService({ store, mailAdapter, config, now = Date.now, logg
 
   async function mutateClaimedReceipt(receiptKey, workerToken, patch) {
     const row = await store.mutate(receiptTable, 'EVENT_KEY', receiptKey, 'RECEIPT_VERSION', (current) => (
-      current.STATUS === 'Processing' && current.LEASE_TOKEN === workerToken ? patch(current) : null
+      current.STATUS === 'Processing' && workerToken === current.LEASE_TOKEN ? patch(current) : null
     ));
-    invariant(row.LEASE_TOKEN === workerToken, 'EVENT_LEASE_LOST',
+    invariant(workerToken === row.LEASE_TOKEN, 'EVENT_LEASE_LOST',
       'Event processing lease was lost.', { httpStatus: 503, retryable: true });
     return row;
   }

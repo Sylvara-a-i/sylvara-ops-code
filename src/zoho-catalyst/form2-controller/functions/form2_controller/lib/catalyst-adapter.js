@@ -9,6 +9,7 @@ const { handleForm2Request } = require("./handler");
 const { safeLog } = require("./safe-log");
 const { createCatalystSessionStore } = require("./session-store");
 const { createWorkflowStore } = require("./workflow-store");
+const { createDenyAllVerificationProofStore } = require("./verification-proof");
 
 const PUBLIC_CODES = new Set([
   "authentication_failed",
@@ -37,6 +38,7 @@ const PUBLIC_CODES = new Set([
   "submission_conflict",
   "submission_unresolved",
   "unknown_field",
+  "verification_required",
 ]);
 
 function statusForError(error) {
@@ -60,6 +62,7 @@ function statusForError(error) {
     setup_not_found: 404,
     submission_conflict: 409,
     submission_unresolved: 409,
+    verification_required: 403,
   };
   return byCode[error?.publicCode] ?? 500;
 }
@@ -121,6 +124,7 @@ function createRequestListener({
   catalystSdk,
   environment = process.env,
   artifactSourceRevision,
+  artifactFormDestinationSha256,
   logger = console,
   randomUUID = crypto.randomUUID,
   now = Date.now,
@@ -130,15 +134,19 @@ function createRequestListener({
   // Keep the SDK load at the runtime boundary so pure policy tests can run
   // without installing deployment dependencies. Catalyst installs this exact
   // pinned package from package-lock.json for the deployed function.
-  const runtimeSdk = catalystSdk ?? require("zcatalyst-sdk-node");
   return async function requestListener(request, response) {
     const startedAt = now();
     const requestId = randomUUID();
     let sourceRevision = "unavailable";
     try {
-      const config = loadConfig(environment, artifactSourceRevision);
+      const config = loadConfig(
+        environment,
+        artifactSourceRevision,
+        artifactFormDestinationSha256,
+      );
       sourceRevision = config.sourceRevision;
       readCatalystEnvironmentHeader(request);
+      const runtimeSdk = catalystSdk ?? require("zcatalyst-sdk-node");
       const app = runtimeSdk.initialize(request);
       assertCatalystEnvironment(request, app, config.deploymentEnvironment);
       const dataStoreAdapter = createCatalystDataStoreAdapter(app, config);
@@ -165,6 +173,7 @@ function createRequestListener({
         crmClient,
         now,
         sessionStore,
+        verificationProofStore: createDenyAllVerificationProofStore(),
         workflowStore,
       });
       safeLog(logger, result.status >= 500 ? "error" : "info", {

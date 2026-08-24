@@ -10,6 +10,7 @@ const {
   SecurityError,
   constantTimeEqual,
   deriveAccessToken,
+  deriveIssueRequestKey,
   generateAccessToken,
   hashAccessToken,
   isValidAccessToken,
@@ -94,6 +95,21 @@ test("derives one retry-stable token identity from each immutable issue request"
   );
 });
 
+test("derives a pepper-independent issuance tombstone from the immutable request", () => {
+  const issueRequestKey = deriveIssueRequestKey(ISSUE_REQUEST_ID);
+  assert.match(issueRequestKey, /^[a-f0-9]{64}$/);
+  assert.equal(issueRequestKey, deriveIssueRequestKey(ISSUE_REQUEST_ID));
+  assert.notEqual(
+    deriveAccessToken(ISSUE_REQUEST_ID, PEPPER),
+    deriveAccessToken(ISSUE_REQUEST_ID, "different-synthetic-pepper-0000000000000"),
+  );
+  assert.equal(issueRequestKey, deriveIssueRequestKey(ISSUE_REQUEST_ID));
+  assert.notEqual(
+    issueRequestKey,
+    deriveIssueRequestKey("8bad1e54-498b-4684-897a-1e063760191c"),
+  );
+});
+
 test("accepts only canonical lowercase UUID v4 issue request IDs", () => {
   for (const issueRequestId of [
     ISSUE_REQUEST_ID.toUpperCase(),
@@ -104,6 +120,7 @@ test("accepts only canonical lowercase UUID v4 issue request IDs", () => {
     null,
   ]) {
     assert.throws(() => deriveAccessToken(issueRequestId, PEPPER), SecurityError);
+    assert.throws(() => deriveIssueRequestKey(issueRequestId), SecurityError);
   }
 });
 

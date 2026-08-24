@@ -27,14 +27,27 @@ function Join-PathSegments {
 
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $GatewayRoot = Join-PathSegments $RepoRoot @("src", "zoho-catalyst", "billing-webhook-gateway")
+$CrmBillingOrchestratorRoot = Join-PathSegments $RepoRoot @(
+    "src", "zoho-catalyst", "crm-billing-orchestrator", "functions", "crm_billing_orchestrator"
+)
+$Form1ControllerRoot = Join-PathSegments $RepoRoot @(
+    "src", "zoho-catalyst", "form1-controller", "functions", "form1_assisted_controller"
+)
+$Form2ControllerRoot = Join-PathSegments $RepoRoot @(
+    "src", "zoho-catalyst", "form2-controller", "functions", "form2_controller"
+)
 $RetellResolverRoot = Join-PathSegments $RepoRoot @("src", "zoho-catalyst", "retell-inbound-resolver")
 $RetellFreeTestRoot = Join-PathSegments $RepoRoot @(
     "src", "zoho-catalyst", "retell-free-test", "functions", "retell_free_test"
+)
+$RetellFreeTestRetryRoot = Join-PathSegments $RepoRoot @(
+    "src", "zoho-catalyst", "retell-free-test", "functions", "retell_free_test_retry"
 )
 $RequirementsPath = Join-PathSegments $RepoRoot @("tools", "safety", "requirements.txt")
 $VenvParent = Join-PathSegments $RepoRoot @(".codex-tmp")
 $VenvRoot = Join-PathSegments $VenvParent @("safety-venv")
 $ManagedVenvMarker = ".sylvara-verify-venv"
+$ExpectedNodeVersion = "24.19.0"
 $OnWindows = [System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT
 $VenvPython = if ($OnWindows) {
     Join-PathSegments $VenvRoot @("Scripts", "python.exe")
@@ -331,7 +344,7 @@ function Assert-PythonDependencies {
 function Assert-NodeBaseline {
     $node = Resolve-Application -Name "node"
     if ($null -eq $node) {
-        throw "Node.js 24 was not found on PATH. Install Node.js 24 and retry."
+        throw "Node.js $ExpectedNodeVersion was not found on PATH. Install the exact verified runtime and retry."
     }
     try {
         $version = & $node -p "process.versions.node" 2>$null
@@ -343,9 +356,9 @@ function Assert-NodeBaseline {
     if ($probeExitCode -ne 0 -or -not $version) {
         throw "Could not query the Node.js runtime."
     }
-    $major = [int](($version | Select-Object -Last 1).Split(".")[0])
-    if ($major -ne 24) {
-        throw "Expected Node.js 24, but $node reported $version."
+    $reportedVersion = ($version | Select-Object -Last 1).Trim()
+    if ($reportedVersion -ne $ExpectedNodeVersion) {
+        throw "Expected Node.js $ExpectedNodeVersion, but $node reported $reportedVersion."
     }
     return $node
 }
@@ -354,7 +367,7 @@ function Resolve-Npm {
     $name = if ($OnWindows) { "npm.cmd" } else { "npm" }
     $npm = Resolve-Application -Name $name
     if ($null -eq $npm) {
-        throw "$name was not found on PATH. Install npm for Node.js 24 and retry."
+        throw "$name was not found on PATH. Install npm for Node.js $ExpectedNodeVersion and retry."
     }
     return $npm
 }
@@ -393,10 +406,36 @@ try {
                     "ci", "--ignore-scripts", "--no-audit", "--no-fund",
                     "--prefix", $GatewayRoot
                 )
-            Invoke-Native -Label "Validate exact free-test package lock" `
+            Invoke-Native -Label "Install exact CRM-Billing orchestrator dependencies" `
+                -Executable $npm -Arguments @(
+                    "ci", "--ignore-scripts", "--no-audit", "--no-fund",
+                    "--prefix", $CrmBillingOrchestratorRoot
+                )
+            Invoke-Native -Label "Install exact Form 1 controller dependencies" `
+                -Executable $npm -Arguments @(
+                    "ci", "--ignore-scripts", "--no-audit", "--no-fund",
+                    "--prefix", $Form1ControllerRoot
+                )
+            Invoke-Native -Label "Install exact Form 2 controller dependencies" `
+                -Executable $npm -Arguments @(
+                    "ci", "--ignore-scripts", "--no-audit", "--no-fund",
+                    "--prefix", $Form2ControllerRoot
+                )
+            Invoke-Native -Label "Validate exact Retell resolver package lock" `
+                -Executable $npm -Arguments @(
+                    "ci", "--ignore-scripts", "--no-audit", "--no-fund",
+                    "--prefix", $RetellResolverRoot
+                )
+            Invoke-Native -Label "Install exact Retell free-test dependencies" `
                 -Executable $npm -Arguments @(
                     "ci", "--ignore-scripts", "--no-audit", "--no-fund",
                     "--prefix", $RetellFreeTestRoot
+                )
+            Invoke-Native -Label "Install exact Retell retry dependencies" `
+                -Executable $npm -Arguments @(
+                    "ci", "--ignore-scripts", "--no-audit", "--no-fund",
+                    "--install-links",
+                    "--prefix", $RetellFreeTestRetryRoot
                 )
         } else {
             $env:npm_config_offline = "true"
@@ -405,11 +444,32 @@ try {
         }
 
         Assert-PythonDependencies -Executable $python -ExpectedVersion $expectedPyYaml
-        $gatewayDependency = Join-PathSegments $GatewayRoot @(
+        $nodePackages = @(
+            @{ Label = "Gateway"; Root = $GatewayRoot },
+            @{ Label = "CRM-Billing orchestrator"; Root = $CrmBillingOrchestratorRoot },
+            @{ Label = "Form 1 controller"; Root = $Form1ControllerRoot },
+            @{ Label = "Form 2 controller"; Root = $Form2ControllerRoot },
+            @{ Label = "Retell free-test"; Root = $RetellFreeTestRoot }
+        )
+        foreach ($package in $nodePackages) {
+            $dependency = Join-PathSegments -BasePath $package.Root -Segments @(
+                "node_modules", "zcatalyst-sdk-node", "package.json"
+            )
+            if (-not (Test-Path -LiteralPath $dependency -PathType Leaf)) {
+                throw "$($package.Label) dependencies are missing. Run .\tools\verify.cmd -Bootstrap once before offline Quick verification."
+            }
+        }
+        $retellRetryDependency = Join-PathSegments $RetellFreeTestRetryRoot @(
+            "node_modules", "retell_free_test", "package.json"
+        )
+        $retellRetryCatalystSdk = Join-PathSegments $RetellFreeTestRetryRoot @(
             "node_modules", "zcatalyst-sdk-node", "package.json"
         )
-        if (-not (Test-Path -LiteralPath $gatewayDependency -PathType Leaf)) {
-            throw "Gateway dependencies are missing. Run .\tools\verify.cmd -Bootstrap once before offline Quick verification."
+        if (
+            (-not (Test-Path -LiteralPath $retellRetryDependency -PathType Leaf)) -or
+            (-not (Test-Path -LiteralPath $retellRetryCatalystSdk -PathType Leaf))
+        ) {
+            throw "Retell retry dependencies are missing. Run .\tools\verify.cmd -Bootstrap once before offline Quick verification."
         }
         Invoke-Native -Label "Public repository safety scan" -Executable $python `
             -Arguments @("tools/safety/pre-commit-safety-check.py")
@@ -422,23 +482,56 @@ try {
             )
 
         if ($Mode -eq "All") {
-            Invoke-Native -Label "Production dependency audit" -Executable $npm `
+            Invoke-Native -Label "Gateway production dependency audit" -Executable $npm `
                 -Arguments @(
-                    "audit", "--omit=dev", "--audit-level=high",
+                    "audit", "--omit=dev", "--audit-level=moderate",
                     "--prefix", $GatewayRoot
                 )
-            Invoke-Native -Label "Free-test production dependency audit" -Executable $npm `
+            Invoke-Native -Label "CRM-Billing orchestrator production dependency audit" `
+                -Executable $npm -Arguments @(
+                    "audit", "--omit=dev", "--audit-level=moderate",
+                    "--prefix", $CrmBillingOrchestratorRoot
+                )
+            Invoke-Native -Label "Form 1 controller production dependency audit" `
+                -Executable $npm -Arguments @(
+                    "audit", "--omit=dev", "--audit-level=moderate",
+                    "--prefix", $Form1ControllerRoot
+                )
+            Invoke-Native -Label "Form 2 controller production dependency audit" `
+                -Executable $npm -Arguments @(
+                    "audit", "--omit=dev", "--audit-level=moderate",
+                    "--prefix", $Form2ControllerRoot
+                )
+            Invoke-Native -Label "Retell resolver production dependency audit" -Executable $npm `
                 -Arguments @(
-                    "audit", "--omit=dev", "--audit-level=high",
+                    "audit", "--omit=dev", "--audit-level=moderate",
+                    "--prefix", $RetellResolverRoot
+                )
+            Invoke-Native -Label "Retell free-test production dependency audit" -Executable $npm `
+                -Arguments @(
+                    "audit", "--omit=dev", "--audit-level=moderate",
                     "--prefix", $RetellFreeTestRoot
+                )
+            Invoke-Native -Label "Retell retry production dependency audit" -Executable $npm `
+                -Arguments @(
+                    "audit", "--omit=dev", "--audit-level=moderate",
+                    "--prefix", $RetellFreeTestRetryRoot
                 )
         }
         Invoke-Native -Label "Billing gateway checks and tests" -Executable $npm `
             -Arguments @("run", "ci", "--prefix", $GatewayRoot)
+        Invoke-Native -Label "CRM-Billing orchestrator checks and tests" -Executable $npm `
+            -Arguments @("run", "ci", "--prefix", $CrmBillingOrchestratorRoot)
+        Invoke-Native -Label "Form 1 controller checks and tests" -Executable $npm `
+            -Arguments @("run", "ci", "--prefix", $Form1ControllerRoot)
+        Invoke-Native -Label "Form 2 controller checks and tests" -Executable $npm `
+            -Arguments @("run", "ci", "--prefix", $Form2ControllerRoot)
         Invoke-Native -Label "Retell resolver contract checks" -Executable $npm `
             -Arguments @("run", "ci", "--prefix", $RetellResolverRoot)
         Invoke-Native -Label "Retell free-test checks and tests" -Executable $npm `
             -Arguments @("run", "ci", "--prefix", $RetellFreeTestRoot)
+        Invoke-Native -Label "Retell retry checks and tests" -Executable $npm `
+            -Arguments @("run", "ci", "--prefix", $RetellFreeTestRetryRoot)
 
         Write-Host "Verification passed ($Mode mode)."
     } finally {

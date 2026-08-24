@@ -15,21 +15,27 @@ fail() {
 
 # Validate the deployment inputs with Bash builtins before command discovery or
 # any other external process can inherit the pipeline's credential environment.
-for required_variable in PROJECT_ID CATALYST_ORG CATALYST_TOKEN APPROVED_SOURCE_REVISION; do
+for required_variable in \
+  PROJECT_ID CATALYST_ORG CATALYST_TOKEN APPROVED_SOURCE_REVISION \
+  APPROVED_FORM2_DESTINATION_SHA256; do
   [[ -n "${!required_variable:-}" ]] || fail "$required_variable is required"
 done
 
 [[ "$PROJECT_ID" =~ ^[1-9][0-9]{0,29}$ ]] || fail "PROJECT_ID is invalid"
 [[ "$CATALYST_ORG" =~ ^[1-9][0-9]{0,29}$ ]] || fail "CATALYST_ORG is invalid"
 [[ "$APPROVED_SOURCE_REVISION" =~ ^[a-f0-9]{40}$ ]] || fail "APPROVED_SOURCE_REVISION is invalid"
+[[ "$APPROVED_FORM2_DESTINATION_SHA256" =~ ^[a-f0-9]{64}$ ]] || \
+  fail "APPROVED_FORM2_DESTINATION_SHA256 is invalid"
 [[ ${#CATALYST_TOKEN} -ge 16 && ${#CATALYST_TOKEN} -le 4096 ]] || fail "CATALYST_TOKEN is invalid"
 [[ "$CATALYST_TOKEN" != *[[:space:]]* ]] || fail "CATALYST_TOKEN is invalid"
 
 # The pipeline supplies deployment values in Bash's initial environment. Keep
 # them as readonly shell variables for validation and the final CLI argv, but do
 # not expose them to Git, Python, Node.js, npm, tests, or other child processes.
-export -n PROJECT_ID CATALYST_ORG CATALYST_TOKEN APPROVED_SOURCE_REVISION
-readonly PROJECT_ID CATALYST_ORG CATALYST_TOKEN APPROVED_SOURCE_REVISION
+export -n PROJECT_ID CATALYST_ORG CATALYST_TOKEN APPROVED_SOURCE_REVISION \
+  APPROVED_FORM2_DESTINATION_SHA256
+readonly PROJECT_ID CATALYST_ORG CATALYST_TOKEN APPROVED_SOURCE_REVISION \
+  APPROVED_FORM2_DESTINATION_SHA256
 unset BASH_ENV DEPLOY_APPROVER_EMAIL ENV NODE_AUTH_TOKEN NODE_OPTIONS NODE_PATH \
   NPM_TOKEN PYTHONHOME PYTHONPATH XDG_CONFIG_HOME
 while IFS= read -r inherited_variable; do
@@ -286,6 +292,36 @@ sys.stdout.write(match.group(1))
 PY
 }
 
+read_approved_form_destination() {
+  local destination_path="$1"
+  python3 -I -S - "$destination_path" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+EXPECTED_SOURCE = '''"use strict";
+
+// A CODEOWNERS-reviewed source change must replace this sentinel with the
+// SHA-256 of the one approved normalized Zoho Forms URL. The deploy script may
+// verify this value but must never derive or stamp it from runtime input.
+const ARTIFACT_FORM_DESTINATION_SHA256 =
+  "__SYLVARA_UNSTAMPED_FORM_DESTINATION_SHA256__";
+
+module.exports = { ARTIFACT_FORM_DESTINATION_SHA256 };
+'''
+
+sentinel = "__SYLVARA_UNSTAMPED_FORM_DESTINATION_SHA256__"
+pattern = re.escape(EXPECTED_SOURCE).replace(
+    re.escape(sentinel),
+    r"([a-f0-9]{64})",
+)
+match = re.fullmatch(pattern, Path(sys.argv[1]).read_text(encoding="utf-8"))
+if match is None:
+    raise SystemExit("reviewed source form destination is not approved")
+sys.stdout.write(match.group(1))
+PY
+}
+
 manifest_tree() {
   local tree_root="$1"
   local manifest_path="$2"
@@ -478,7 +514,8 @@ readonly deploy_function_node_modules
 
 source_revision_path="$deploy_project_root/functions/form2_controller/lib/source-revision.js"
 reference_revision_path="$reference_project_root/functions/form2_controller/lib/source-revision.js"
-readonly source_revision_path reference_revision_path
+form_destination_path="$deploy_project_root/functions/form2_controller/lib/form-destination.js"
+readonly source_revision_path reference_revision_path form_destination_path
 stamp_revision "$source_revision_path"
 stamp_revision "$reference_revision_path"
 
@@ -502,8 +539,14 @@ artifact_revision="$(read_stamped_revision "$source_revision_path")"
 readonly artifact_revision
 [[ "$artifact_revision" == "$actual_revision" ]] || \
   fail "the deployable function source revision was not stamped exactly"
+artifact_form_destination="$(read_approved_form_destination "$form_destination_path")"
+readonly artifact_form_destination
+[[ "$artifact_form_destination" == "$APPROVED_FORM2_DESTINATION_SHA256" ]] || \
+  fail "the approved Form 2 destination does not match the reviewed source"
 env -i PATH="$node_root/bin:/usr/bin:/bin" \
   "$node_root/bin/node" --check "$source_revision_path"
+env -i PATH="$node_root/bin:/usr/bin:/bin" \
+  "$node_root/bin/node" --check "$form_destination_path"
 
 deploy_function_root="$deploy_project_root/functions/form2_controller"
 readonly deploy_function_root

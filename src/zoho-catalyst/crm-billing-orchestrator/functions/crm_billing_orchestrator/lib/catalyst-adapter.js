@@ -10,29 +10,88 @@ const { createOperationStore } = require("./idempotency");
 const { createLifecycleHandler } = require("./lifecycle-handler");
 const { safeLog } = require("./safe-log");
 
-function readCatalystEnvironmentHeader(request) {
-  const entries = Object.entries(request?.headers ?? {})
-    .filter(([name]) => name.toLowerCase() === "x-zc-environment");
-  if (entries.length !== 1 || typeof entries[0][1] !== "string") {
-    throw new ConfigurationError("Catalyst environment header is unavailable");
+const SHA256_HEX = /^[a-f0-9]{64}$/;
+
+function validatedHeaderValue(values) {
+  if (values.length !== 1 || typeof values[0] !== "string") {
+    throw new ConfigurationError("Catalyst runtime binding is unavailable");
   }
-  const value = entries[0][1].trim().toLowerCase();
-  if (value !== "development") {
-    throw new ConfigurationError("Production activation is blocked in this source revision");
+  const result = values[0].trim();
+  if (!result || result.length > 253 || /[\u0000-\u0020\u007f]/.test(result)) {
+    throw new ConfigurationError("Catalyst runtime binding is invalid");
   }
-  return value;
+  return result;
 }
 
-function assertCatalystEnvironment(request, app, configuredEnvironment) {
-  const headerEnvironment = readCatalystEnvironmentHeader(request);
-  const runtimeEnvironment = typeof app?.config?.environment === "string"
-    ? app.config.environment.trim().toLowerCase()
+function readSingleHeader(request, headerName) {
+  const normalizedName = headerName.toLowerCase();
+  const distinctEntries = Object.entries(request?.headersDistinct ?? {})
+    .filter(([name]) => name.toLowerCase() === normalizedName);
+  if (distinctEntries.length > 0) {
+    if (distinctEntries.length !== 1 || !Array.isArray(distinctEntries[0][1])) {
+      throw new ConfigurationError("Catalyst runtime binding is unavailable");
+    }
+    return validatedHeaderValue(distinctEntries[0][1]);
+  }
+
+  const rawHeaders = request?.rawHeaders;
+  if (Array.isArray(rawHeaders)) {
+    if (rawHeaders.length % 2 !== 0) {
+      throw new ConfigurationError("Catalyst runtime binding is unavailable");
+    }
+    const rawValues = [];
+    for (let index = 0; index < rawHeaders.length; index += 2) {
+      if (
+        typeof rawHeaders[index] === "string" &&
+        rawHeaders[index].toLowerCase() === normalizedName
+      ) rawValues.push(rawHeaders[index + 1]);
+    }
+    if (rawValues.length > 0) return validatedHeaderValue(rawValues);
+  }
+
+  const values = Object.entries(request?.headers ?? {})
+    .filter(([name]) => name.toLowerCase() === normalizedName)
+    .map(([, value]) => value);
+  return validatedHeaderValue(values);
+}
+
+function equalHexDigest(left, right) {
+  if (!SHA256_HEX.test(left) || !SHA256_HEX.test(right)) return false;
+  return crypto.timingSafeEqual(Buffer.from(left, "hex"), Buffer.from(right, "hex"));
+}
+
+function assertCatalystRequestBinding(request, config) {
+  if (config.deploymentEnvironment !== "development") {
+    throw new ConfigurationError("Production activation is blocked in this source revision");
+  }
+  const host = readSingleHeader(request, "host").toLowerCase();
+  if (host !== config.developmentFunctionHost) {
+    throw new ConfigurationError("Catalyst runtime is outside the approved Development host");
+  }
+  const developmentZaid = readSingleHeader(request, "x-zc-project-key");
+  const actualHmac = crypto
+    .createHmac("sha256", config.developmentRuntimeProof)
+    .update(developmentZaid, "utf8")
+    .digest("hex");
+  if (!equalHexDigest(actualHmac, config.artifactDevelopmentZaidHmacSha256)) {
+    throw new ConfigurationError("Catalyst runtime is outside the approved Development project");
+  }
+  return developmentZaid;
+}
+
+function assertCatalystSdkBinding(app, expectedDevelopmentZaid) {
+  const sdkProjectKey = typeof app?.config?.projectKey === "string"
+    ? app.config.projectKey
+    : "";
+  const sdkEnvironment = typeof app?.config?.environment === "string"
+    ? app.config.environment
     : "";
   if (
-    configuredEnvironment !== "development" ||
-    headerEnvironment !== "development" ||
-    runtimeEnvironment !== "development"
-  ) throw new ConfigurationError("Catalyst runtime is outside Development");
+    !sdkProjectKey || sdkProjectKey !== expectedDevelopmentZaid ||
+    sdkEnvironment !== "Development"
+  ) {
+    throw new ConfigurationError("Catalyst SDK routing binding is invalid");
+  }
 }
 
 function statusForError(error) {
@@ -87,6 +146,7 @@ function createRequestListener({
   now = Date.now,
   fetchImpl = globalThis.fetch,
   artifactRevision,
+  artifactDevelopmentZaidHmacSha256,
   factories = {},
 } = {}) {
   const makeCrmClient = factories.createCrmClient ?? createCrmClient;
@@ -101,14 +161,17 @@ function createRequestListener({
     let action = "unknown";
     let stage = "request";
     try {
-      const config = loadConfig(environment, artifactRevision ? { artifactRevision } : undefined);
+      const config = loadConfig(environment, {
+        artifactRevision,
+        artifactDevelopmentZaidHmacSha256,
+      });
       sourceRevision = config.sourceRevision;
-      readCatalystEnvironmentHeader(request);
+      const expectedDevelopmentZaid = assertCatalystRequestBinding(request, config);
       const payload = await parseActionRequest(request, config);
       action = payload.action;
       const sdk = catalystSdk ?? require("zcatalyst-sdk-node");
       const app = sdk.initialize(request);
-      assertCatalystEnvironment(request, app, config.deploymentEnvironment);
+      assertCatalystSdkBinding(app, expectedDevelopmentZaid);
 
       const crmRead = createConnectionAuthorizationProvider(
         app,
@@ -181,10 +244,12 @@ function createRequestListener({
 }
 
 module.exports = {
-  assertCatalystEnvironment,
+  assertCatalystRequestBinding,
+  assertCatalystSdkBinding,
   codeForError,
   createRequestListener,
-  readCatalystEnvironmentHeader,
+  equalHexDigest,
+  readSingleHeader,
   sendJson,
   statusForError,
 };

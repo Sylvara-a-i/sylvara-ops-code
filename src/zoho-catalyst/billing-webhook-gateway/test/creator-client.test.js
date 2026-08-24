@@ -4,7 +4,29 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const { loadConfig } = require("../lib/config");
 const { CreatorDeliveryError, createCreatorClient } = require("../lib/creator-client");
-const { TEST_EVENT_TIME, TEST_NOW_MS, creatorEnvironment } = require("./helpers");
+const {
+  CREATOR_DESTINATION_SHA256,
+  CREATOR_FORWARD_URL,
+  TEST_EVENT_TIME,
+  TEST_NOW_MS,
+  TEST_SOURCE_REVISION,
+  creatorEnvironment,
+} = require("./helpers");
+
+function creatorConfig() {
+  return loadConfig(creatorEnvironment(), {
+    nowMs: TEST_NOW_MS,
+    artifactCreatorDestinationSha256: CREATOR_DESTINATION_SHA256,
+    artifactSourceRevision: TEST_SOURCE_REVISION,
+  });
+}
+
+function creatorClient(config, dependencies) {
+  return createCreatorClient(config, {
+    ...dependencies,
+    artifactCreatorDestinationSha256: CREATOR_DESTINATION_SHA256,
+  });
+}
 
 function jsonResponse(value, status = 200) {
   return new Response(JSON.stringify(value), {
@@ -25,10 +47,10 @@ function envelope() {
 }
 
 test("uses Catalyst Connection authorization and requires authoritative readback", async () => {
-  const config = loadConfig(creatorEnvironment(), { nowMs: TEST_NOW_MS });
+  const config = creatorConfig();
   const requests = [];
   let authorizationCalls = 0;
-  const client = createCreatorClient(config, {
+  const client = creatorClient(config, {
     authorizationProvider: async () => {
       authorizationCalls += 1;
       return "Zoho-oauthtoken SyntheticAccessToken1234";
@@ -52,13 +74,13 @@ test("uses Catalyst Connection authorization and requires authoritative readback
   assert.equal(requests[0].options.headers.environment, undefined);
   assert.equal(
     requests[0].url,
-    "https://creator.example.invalid/creator/custom/sylvara/billing_gateway",
+    CREATOR_FORWARD_URL,
   );
 });
 
 test("missing or mismatched downstream readback is ambiguous", async () => {
-  const config = loadConfig(creatorEnvironment(), { nowMs: TEST_NOW_MS });
-  const client = createCreatorClient(config, {
+  const config = creatorConfig();
+  const client = creatorClient(config, {
     authorizationProvider: async () => "Zoho-oauthtoken SyntheticAccessToken1234",
     fetchImpl: async () => jsonResponse({
       accepted: true,
@@ -73,9 +95,9 @@ test("missing or mismatched downstream readback is ambiguous", async () => {
 });
 
 test("Connection authorization failure occurs before the side-effecting request", async () => {
-  const config = loadConfig(creatorEnvironment(), { nowMs: TEST_NOW_MS });
+  const config = creatorConfig();
   let fetchCalls = 0;
-  const client = createCreatorClient(config, {
+  const client = creatorClient(config, {
     authorizationProvider: async () => { throw new Error("synthetic connection failure"); },
     fetchImpl: async () => {
       fetchCalls += 1;
@@ -86,5 +108,30 @@ test("Connection authorization failure occurs before the side-effecting request"
     client.deliver(envelope()),
     (error) => error instanceof CreatorDeliveryError && error.ambiguous === false,
   );
+  assert.equal(fetchCalls, 0);
+});
+
+test("revalidates the artifact destination before requesting authorization", async () => {
+  const forged = Object.freeze({
+    ...creatorConfig(),
+    creatorUrl: "https://www.zohoapis.com/creator/custom/other/billing_gateway",
+  });
+  let authorizationCalls = 0;
+  let fetchCalls = 0;
+  const client = creatorClient(forged, {
+    authorizationProvider: async () => {
+      authorizationCalls += 1;
+      return "Zoho-oauthtoken SyntheticAccessToken1234";
+    },
+    fetchImpl: async () => {
+      fetchCalls += 1;
+      return jsonResponse({});
+    },
+  });
+  await assert.rejects(
+    client.deliver(envelope()),
+    (error) => error instanceof CreatorDeliveryError && error.ambiguous === false,
+  );
+  assert.equal(authorizationCalls, 0);
   assert.equal(fetchCalls, 0);
 });

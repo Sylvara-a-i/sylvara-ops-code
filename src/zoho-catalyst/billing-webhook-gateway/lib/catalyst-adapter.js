@@ -1,7 +1,6 @@
 "use strict";
 
 const crypto = require("node:crypto");
-const catalyst = require("zcatalyst-sdk-node");
 const { createConnectionAuthorizationProvider } = require("./connection-boundary");
 const { ConfigurationError, loadConfig } = require("./config");
 const { createCreatorClient } = require("./creator-client");
@@ -96,24 +95,30 @@ function assertCatalystEnvironment(request, app, configuredEnvironment) {
 }
 
 function createRequestListener({
-  catalystSdk = catalyst,
+  catalystSdk,
   environment = process.env,
   logger = console,
   randomUUID = crypto.randomUUID,
   now = Date.now,
   fetchImpl = globalThis.fetch,
+  artifactCreatorDestinationSha256,
+  artifactSourceRevision,
 } = {}) {
   return async function requestListener(request, response) {
     const startedAt = now();
     const requestId = randomUUID();
     let sourceRevision = "unavailable";
     try {
-      const config = loadConfig(environment);
+      const config = loadConfig(environment, {
+        artifactCreatorDestinationSha256,
+        artifactSourceRevision,
+      });
       sourceRevision = config.sourceRevision;
       // Require Catalyst's injected header explicitly because the pinned SDK
       // otherwise defaults absent environment metadata to Development.
       readCatalystEnvironmentHeader(request);
-      const app = catalystSdk.initialize(request);
+      const runtimeSdk = catalystSdk ?? require("zcatalyst-sdk-node");
+      const app = runtimeSdk.initialize(request);
       // The platform-derived environment, not an editable variable alone,
       // anchors every source-tier and delivery-mode safety decision.
       assertCatalystEnvironment(request, app, config.deploymentEnvironment);
@@ -122,6 +127,7 @@ function createRequestListener({
         ? createCreatorClient(config, {
           authorizationProvider: createConnectionAuthorizationProvider(app, config),
           fetchImpl,
+          artifactCreatorDestinationSha256,
         })
         : null;
       const result = await handleBillingWebhook(request, {

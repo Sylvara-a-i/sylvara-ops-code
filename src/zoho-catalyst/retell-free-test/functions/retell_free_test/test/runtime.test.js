@@ -385,7 +385,7 @@ test('integration: stale Mail invocation becomes ambiguous in notification and c
     env: fixture.env });
   const notification = fixture.store.rows.get('FreeTestNotifications')[0];
   const call = fixture.store.rows.get('FreeTestCalls')[0];
-  Object.assign(notification, { STATUS: 'Sending', SEND_TOKEN: 'stale-token',
+  Object.assign(notification, { STATUS: 'Sending', SEND_TOKEN: 'e'.repeat(32),
     LAST_ATTEMPT_AT: new Date(fixture.clock.value - 10_000).toISOString() });
   call.NOTIFICATION_STATE = 'Sending';
   const handler = createRetryJobHandler({ catalystSdk: fixture.catalystSdk, environment: fixture.env,

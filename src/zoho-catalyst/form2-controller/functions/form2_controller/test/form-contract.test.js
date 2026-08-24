@@ -148,8 +148,19 @@ test("normalizes the approved Form 2 payload into three bounded CRM updates", ()
   assert.equal(updates.dealUpdate.Setup_Form_Version, "form2-v1");
   assert.equal(updates.dealUpdate.Setup_Form_Submitted_At, SERVER_OPTIONS.trustedNow);
   assert.equal(updates.dealUpdate.Setup_Access_Status, "Synthetic Submitted");
+  assert.equal(updates.dealUpdate.Authorized_Representative_Confirmed, true);
+  assert.equal(updates.dealUpdate.Test_Scope_Accepted, true);
   assert.equal(updates.dealUpdate.Authority_Confirmed_At, SERVER_OPTIONS.trustedNow);
   assert.equal(updates.dealUpdate.Test_Scope_Accepted_At, SERVER_OPTIONS.trustedNow);
+  for (const field of [
+    "Free_Test_Authorization_Status",
+    "Authorization_Signed_At",
+    "Go_Live_Approval_Status",
+    "Go_Live_Approved_At",
+    "Test_Status",
+  ]) {
+    assert.equal(updates.dealUpdate[field], undefined, field);
+  }
   assert.equal(updates.dealUpdate.Test_Duration_Days, undefined);
   assert.equal(updates.dealUpdate.Test_Call_Limit, undefined);
   assert.equal(updates.dealUpdate.Test_Scope_Version, undefined);
@@ -182,6 +193,11 @@ test("rejects client-owned IDs, server-owned fields, unknown keys, and pollution
     "testScopeVersion",
     "setupFormVersion",
     "setupFormSubmittedAt",
+    "freeTestAuthorizationStatus",
+    "authorizationSignedAt",
+    "goLiveApprovalStatus",
+    "goLiveApprovedAt",
+    "testStatus",
   ]) {
     const payload = { ...validPayload(), [key]: "synthetic" };
     assert.throws(

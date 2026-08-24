@@ -1,10 +1,12 @@
 "use strict";
 
+const crypto = require("node:crypto");
 const { HttpBoundaryError, requestJson } = require("./http");
 
 const RECORD_ID = /^[1-9][0-9]{7,29}$/;
 const PLAN_CODE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
 const REFERENCE = /^syl-(?:customer|evaluation|paid)-[a-f0-9]{32}$/;
+const TEST_CUSTOMER_MARKER = /^syl-test-customer-[a-f0-9]{32}$/;
 
 class BillingClientError extends Error {
   constructor(message, { ambiguous = false, publicCode = "billing_dependency_failed", status = 503 } = {}) {
@@ -44,6 +46,19 @@ function reference(value) {
     fail("Billing deterministic reference is invalid", { publicCode: "configuration_invalid" });
   }
   return value;
+}
+
+function directTestCustomerIdentity(config, crmAccountId) {
+  const selectedAccountId = id(crmAccountId, "CRM Account identifier");
+  const digest = crypto.createHmac("sha256", config.idempotencyPepper)
+    .update(`test-customer\0${config.deploymentEnvironment}\0${selectedAccountId}`)
+    .digest("hex");
+  const token = digest.slice(0, 32);
+  return Object.freeze({
+    email: `billing-sandbox+${token}@example.com`,
+    marker: `syl-test-customer-${token}`,
+    displayName: `ZZZ SYNTHETIC Billing Customer ${token.slice(0, 12)} - DO NOT CONTACT`,
+  });
 }
 
 function decimal(value, name, { optionalZero = false } = {}) {
@@ -119,7 +134,115 @@ function createBillingClient(config, {
     }
   }
 
-  async function findCustomerByCrmReference(crmAccountId) {
+  async function assertDirectTestOrganization() {
+    if (
+      config.customerProvisioningMode !== "test_direct_customer" ||
+      config.enableTestDirectCustomerProvisioning !== true
+    ) fail("Direct customer provisioning is not enabled", {
+      publicCode: "configuration_invalid",
+    });
+    const response = await authorizedRequest(`/organizations/${config.billingOrganizationId}`, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+    });
+    if (response.status !== 200) fail(
+      "Billing rejected test organization attestation",
+      classifyStatus(response.status, false),
+    );
+    const organization = response.json?.organization;
+    const joinedApps = organization?.org_joined_app_list;
+    if (
+      !plainObject(organization) ||
+      String(organization.organization_id ?? "") !== config.billingOrganizationId ||
+      organization.mode !== "test" ||
+      !Array.isArray(joinedApps) || joinedApps.length !== 1 || joinedApps[0] !== "subscriptions"
+    ) fail("Billing organization is not the isolated Billing TEST tenant", {
+      ambiguous: true,
+      publicCode: "billing_state_invalid",
+    });
+    return organization;
+  }
+
+  async function getCustomer(customerId) {
+    const selectedId = id(customerId, "Billing customer identifier");
+    const response = await authorizedRequest(`/customers/${selectedId}`, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+    });
+    if (response.status !== 200) fail("Billing rejected customer readback", classifyStatus(response.status, false));
+    const customer = response.json?.customer;
+    if (!plainObject(customer) || String(customer.customer_id ?? "") !== selectedId) {
+      fail("Billing customer readback is incomplete", { publicCode: "billing_state_invalid" });
+    }
+    return customer;
+  }
+
+  function verifyDirectTestCustomer(customer, identity) {
+    if (!plainObject(customer) || !plainObject(identity) || !TEST_CUSTOMER_MARKER.test(identity.marker)) {
+      fail("Direct TEST customer boundary is invalid", { publicCode: "configuration_invalid" });
+    }
+    id(customer.customer_id, "Billing customer identifier");
+    if (
+      customer.email !== identity.email ||
+      customer.display_name !== identity.displayName ||
+      customer.company_name !== identity.displayName ||
+      customer.notes !== identity.marker ||
+      customer.status !== "active" ||
+      customer.is_portal_enabled !== false ||
+      customer.ach_supported !== false ||
+      Number(customer.payment_terms) !== 0 ||
+      customer.is_linked_with_zohocrm !== false ||
+      String(customer.zcrm_account_id ?? "") !== "" ||
+      decimal(customer.outstanding, "Direct TEST customer outstanding") !== 0 ||
+      decimal(customer.unused_credits, "Direct TEST customer unused credits") !== 0
+    ) fail("Direct TEST customer readback violates the isolated boundary", {
+      ambiguous: true,
+      publicCode: "reconciliation_required",
+    });
+    return customer;
+  }
+
+  async function findDirectTestCustomer(crmAccountId) {
+    await assertDirectTestOrganization();
+    const identity = directTestCustomerIdentity(config, crmAccountId);
+    const candidates = [];
+    for (let page = 1; page <= 25; page += 1) {
+      const response = await authorizedRequest("/customers", {
+        method: "GET",
+        headers: { Accept: "application/json" },
+        query: { filter_by: "Status.All", page: String(page), per_page: "200" },
+      });
+      if (response.status !== 200) fail("Billing rejected direct TEST customer lookup", {
+        ...classifyStatus(response.status, false),
+      });
+      const customers = response.json?.customers;
+      const pageContext = response.json?.page_context;
+      if (
+        !Array.isArray(customers) || customers.some((customer) => !plainObject(customer)) ||
+        !plainObject(pageContext) || typeof pageContext.has_more_page !== "boolean" ||
+        !Number.isInteger(Number(pageContext.page)) || Number(pageContext.page) !== page
+      ) fail("Billing customer pagination is incomplete", {
+        ambiguous: true,
+        publicCode: "reconciliation_required",
+      });
+      candidates.push(...customers.filter((customer) => customer.email === identity.email));
+      if (candidates.length > 1) fail("Direct TEST customer identity is not unique", {
+        ambiguous: true,
+        publicCode: "reconciliation_required",
+      });
+      if (!pageContext.has_more_page) {
+        if (candidates.length === 0) return null;
+        const customer = await getCustomer(candidates[0].customer_id);
+        return verifyDirectTestCustomer(customer, identity);
+      }
+    }
+    fail("Billing customer pagination exceeded the reconciliation bound", {
+      ambiguous: true,
+      publicCode: "reconciliation_required",
+    });
+  }
+
+  async function findNativeCustomerByCrmReference(crmAccountId) {
     const selectedAccountId = id(crmAccountId, "CRM Account identifier");
     const response = await authorizedRequest(`/customers/reference/${selectedAccountId}`, {
       method: "GET",
@@ -139,10 +262,53 @@ function createBillingClient(config, {
     return customer;
   }
 
+  async function findCustomerByCrmReference(crmAccountId) {
+    return config.customerProvisioningMode === "test_direct_customer"
+      ? findDirectTestCustomer(crmAccountId)
+      : findNativeCustomerByCrmReference(crmAccountId);
+  }
+
   async function ensureCustomer({ crmAccountId }) {
     const selectedAccountId = id(crmAccountId, "CRM Account identifier");
     let existing = await findCustomerByCrmReference(selectedAccountId);
     if (existing) return Object.freeze({ customer: existing, imported: false });
+    if (config.customerProvisioningMode === "test_direct_customer") {
+      const identity = directTestCustomerIdentity(config, selectedAccountId);
+      let createFailure = null;
+      await assertDirectTestOrganization();
+      try {
+        const response = await authorizedRequest("/customers", {
+          method: "POST",
+          write: true,
+          sideEffecting: true,
+          headers: { Accept: "application/json", "Content-Type": "application/json" },
+          body: JSON.stringify({
+            display_name: identity.displayName,
+            company_name: identity.displayName,
+            email: identity.email,
+            notes: identity.marker,
+            is_portal_enabled: false,
+            ach_supported: false,
+            payment_terms: 0,
+          }),
+        });
+        if (![200, 201].includes(response.status)) {
+          createFailure = new BillingClientError(
+            "Billing rejected direct TEST customer creation",
+            classifyStatus(response.status, true),
+          );
+        }
+      } catch (error) {
+        createFailure = error;
+      }
+      existing = await findDirectTestCustomer(selectedAccountId);
+      if (existing) return Object.freeze({ customer: existing, imported: false, testDirect: true });
+      if (createFailure instanceof BillingClientError && !createFailure.ambiguous) throw createFailure;
+      fail("Billing direct TEST customer creation outcome is unresolved", {
+        ambiguous: true,
+        publicCode: "reconciliation_required",
+      });
+    }
     let importFailure = null;
     try {
       const response = await authorizedRequest(`/crm/account/${selectedAccountId}/import`, {
@@ -160,7 +326,7 @@ function createBillingClient(config, {
     } catch (error) {
       importFailure = error;
     }
-    existing = await findCustomerByCrmReference(selectedAccountId);
+    existing = await findNativeCustomerByCrmReference(selectedAccountId);
     if (existing) return Object.freeze({ customer: existing, imported: true });
     if (importFailure instanceof BillingClientError && !importFailure.ambiguous) throw importFailure;
     fail("Billing CRM Account import outcome is unresolved", {
@@ -467,4 +633,9 @@ function createBillingClient(config, {
   });
 }
 
-module.exports = { BillingClientError, REFERENCE, createBillingClient };
+module.exports = {
+  BillingClientError,
+  REFERENCE,
+  createBillingClient,
+  directTestCustomerIdentity,
+};

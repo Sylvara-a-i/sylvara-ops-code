@@ -1,10 +1,14 @@
 "use strict";
 
-const { ARTIFACT_SOURCE_REVISION } = require("./source-revision");
+const {
+  ARTIFACT_DEVELOPMENT_ZAID_HMAC_SHA256,
+  ARTIFACT_SOURCE_REVISION,
+} = require("./source-revision");
 
 const REVISION = /^[a-f0-9]{40}$/;
 const IDENTIFIER = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
 const PLAN_CODE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
+const CUSTOMER_PROVISIONING_MODES = new Set(["native_crm_import", "test_direct_customer"]);
 
 class ConfigurationError extends Error {
   constructor(message) {
@@ -57,6 +61,14 @@ function requiredBoolean(environment, name) {
   return result === "true";
 }
 
+function customerProvisioningMode(environment) {
+  const result = required(environment, "CUSTOMER_PROVISIONING_MODE");
+  if (!CUSTOMER_PROVISIONING_MODES.has(result)) {
+    throw new ConfigurationError("CUSTOMER_PROVISIONING_MODE is invalid");
+  }
+  return result;
+}
+
 function identifier(environment, name) {
   const result = required(environment, name);
   if (!IDENTIFIER.test(result)) throw new ConfigurationError(`${name} is invalid`);
@@ -91,6 +103,15 @@ function exactPath(environment) {
     !/^\/[A-Za-z0-9][A-Za-z0-9/_-]{0,159}$/.test(result) ||
     result.includes("//") || result.endsWith("/")
   ) throw new ConfigurationError("ALLOWED_PATH is invalid");
+  return result;
+}
+
+function developmentFunctionHost(environment) {
+  const result = required(environment, "DEVELOPMENT_FUNCTION_HOST").toLowerCase();
+  if (
+    result.length > 253 ||
+    !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.development\.catalystserverless\.com$/.test(result)
+  ) throw new ConfigurationError("DEVELOPMENT_FUNCTION_HOST is invalid");
   return result;
 }
 
@@ -140,7 +161,10 @@ function paidPlanMap(environment, enabled) {
   return Object.freeze(result);
 }
 
-function loadConfig(environment = process.env, { artifactRevision = ARTIFACT_SOURCE_REVISION } = {}) {
+function loadConfig(environment = process.env, {
+  artifactRevision = ARTIFACT_SOURCE_REVISION,
+  artifactDevelopmentZaidHmacSha256 = ARTIFACT_DEVELOPMENT_ZAID_HMAC_SHA256,
+} = {}) {
   const deploymentEnvironment = required(environment, "DEPLOYMENT_ENVIRONMENT");
   if (deploymentEnvironment !== "development") {
     throw new ConfigurationError("Production activation is blocked in this source revision");
@@ -167,15 +191,33 @@ function loadConfig(environment = process.env, { artifactRevision = ARTIFACT_SOU
       "Paid subscription preparation is blocked until exact commercial terms are enforced",
     );
   }
+  const selectedCustomerProvisioningMode = customerProvisioningMode(environment);
+  const enableTestDirectCustomerProvisioning = requiredBoolean(
+    environment,
+    "ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING",
+  );
+  if (
+    (selectedCustomerProvisioningMode === "test_direct_customer") !==
+    enableTestDirectCustomerProvisioning
+  ) {
+    throw new ConfigurationError(
+      "Direct customer provisioning requires its exact Development test gate",
+    );
+  }
   return Object.freeze({
     deploymentEnvironment,
     sourceRevision,
+    artifactDevelopmentZaidHmacSha256,
+    developmentFunctionHost: developmentFunctionHost(environment),
+    developmentRuntimeProof: secret(environment, "DEVELOPMENT_RUNTIME_PROOF"),
     allowedPath: exactPath(environment),
     sharedHeaderName: headerName,
     sharedHeaderValue: secret(environment, "SHARED_HEADER_VALUE"),
     crmApiBaseUrl: apiBase(environment, "CRM_API_BASE_URL", "/crm/v8"),
     billingApiBaseUrl: apiBase(environment, "BILLING_API_BASE_URL", "/billing/v1"),
     billingOrganizationId: organizationId,
+    customerProvisioningMode: selectedCustomerProvisioningMode,
+    enableTestDirectCustomerProvisioning,
     crmReadConnectionLinkName: identifier(environment, "CRM_READ_CONNECTION_LINK_NAME"),
     crmWriteConnectionLinkName: identifier(environment, "CRM_WRITE_CONNECTION_LINK_NAME"),
     billingReadConnectionLinkName: identifier(environment, "BILLING_READ_CONNECTION_LINK_NAME"),

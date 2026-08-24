@@ -10,6 +10,7 @@ const HMAC_DOMAINS = Object.freeze({
   linkDerivation: "sylvara.form2.access-token.v1",
   linkDigest: "sylvara.form2.access-token-hash.v1",
 });
+const ISSUE_REQUEST_DOMAIN = "sylvara.form2.issue-request-key.v1";
 
 class SecurityError extends Error {
   constructor(message, publicCode = "security_configuration_invalid") {
@@ -82,6 +83,16 @@ function deriveAccessToken(issueRequestId, pepper) {
   return token;
 }
 
+function deriveIssueRequestKey(issueRequestId) {
+  assertIssueRequestId(issueRequestId);
+  return crypto
+    .createHash("sha256")
+    .update(ISSUE_REQUEST_DOMAIN, "utf8")
+    .update(Buffer.from([0]))
+    .update(issueRequestId, "utf8")
+    .digest("hex");
+}
+
 function hashAccessToken(token, pepper) {
   if (!isValidAccessToken(token)) {
     throw new SecurityError("Access token is invalid", "access_token_invalid");
@@ -144,6 +155,7 @@ module.exports = {
   SecurityError,
   constantTimeEqual,
   deriveAccessToken,
+  deriveIssueRequestKey,
   generateAccessToken,
   hashAccessToken,
   isValidAccessToken,

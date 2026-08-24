@@ -11,6 +11,11 @@ const {
   statusForError,
 } = require("../lib/catalyst-adapter");
 const { ConfigurationError } = require("../lib/config");
+const { destinationDigest } = require("../lib/destinations");
+
+const FORM2_PUBLIC_URL =
+  "https://forms.zohopublic.com/synthetic/form/perma/synthetic";
+const FORM2_DESTINATION_SHA256 = destinationDigest(FORM2_PUBLIC_URL);
 
 function listenerEnvironment() {
   return {
@@ -27,7 +32,7 @@ function listenerEnvironment() {
     PREFILL_HEADER_SECRET: "F".repeat(43),
     SUBMISSION_HEADER_SECRET: "S".repeat(43),
     TOKEN_PEPPER: "P".repeat(43),
-    FORM2_PUBLIC_URL: "https://forms.zohopublic.com/synthetic/form/perma/synthetic",
+    FORM2_PUBLIC_URL,
     FORM2_TOKEN_FIELD_ALIAS: "access_token",
     FORM2_FORM_VERSION: "form2-v1",
     FORM2_ENTRY_OFFER_VALUE: "Synthetic Free Test",
@@ -132,6 +137,7 @@ test("listener logs stage and outcome for controller successes and handled error
       catalystSdk: catalystSdkStub(),
       environment: listenerEnvironment(),
       artifactSourceRevision: listenerEnvironment().SOURCE_REVISION,
+      artifactFormDestinationSha256: FORM2_DESTINATION_SHA256,
       logger: {
         info(line) { lines.push(["info", line]); },
         error(line) { lines.push(["error", line]); },
@@ -186,4 +192,31 @@ test("listener fails before SDK initialization when runtime and artifact revisio
     code: "configuration_invalid",
     requestId: "10000000-0000-4000-8000-000000000001",
   });
+});
+
+test("listener fails before SDK initialization when the artifact destination differs", async () => {
+  let initialized = false;
+  const sdk = catalystSdkStub();
+  const originalInitialize = sdk.initialize.bind(sdk);
+  sdk.initialize = (...argumentsList) => {
+    initialized = true;
+    return originalInitialize(...argumentsList);
+  };
+  const environment = listenerEnvironment();
+  const listener = createRequestListener({
+    catalystSdk: sdk,
+    environment,
+    artifactSourceRevision: environment.SOURCE_REVISION,
+    artifactFormDestinationSha256: "b".repeat(64),
+    logger: { info() {}, error() {} },
+    randomUUID: () => "10000000-0000-4000-8000-000000000001",
+    now: () => 100,
+  });
+  const output = responseStub();
+
+  await listener({ headers: { "x-zc-environment": "Development" } }, output);
+
+  assert.equal(initialized, false);
+  assert.equal(output.statusCode, 503);
+  assert.equal(JSON.parse(output.payload).code, "configuration_invalid");
 });

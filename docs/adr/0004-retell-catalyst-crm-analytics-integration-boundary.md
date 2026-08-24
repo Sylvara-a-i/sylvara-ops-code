@@ -37,7 +37,7 @@ Zoho Catalyst ingress and durable call state
         +----> Catalyst query / sanitized CSV report
 ```
 
-The boundaries below are architectural intent. The dated [Development reconciliation](../runbooks/free-test-development-reconciliation-2026-08-22.md) now verifies the sanitized Catalyst function, table, Job-pool, disabled-Cron, non-secret-configuration, source-parity, and function-rollback facts. Private identities, secrets, rows, signed runtime behavior, Retell route/settings, numbers, mail delivery, CRM, Analytics, calls, and Production remain unknown or unexercised as stated there.
+The boundaries below are architectural intent. The dated [Development reconciliation](../runbooks/free-test-development-reconciliation-2026-08-22.md) now verifies the sanitized Catalyst function, table, Job-pool, disabled-Cron, non-secret-configuration, source-parity, and function-rollback facts. Private identities, secrets, rows, signed runtime behavior, Retell route/settings, numbers, mail delivery, CRM, Analytics, calls, and Production remain unknown or unexercised as stated there. The separately documented 2026-08-22 initial copy readback for Form 1 and Form 2 tables in Retell Development does not verify or activate this voice/reporting path; the legacy form projects remain live and no function, route, Connection, variable, caller, or runtime cutover is established by that copy.
 
 ## Free-Test Lifecycle
 

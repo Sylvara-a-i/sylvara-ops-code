@@ -30,7 +30,8 @@ class VerifyEntrypointTests(unittest.TestCase):
         self.assertIn('$Info.implementation -eq "CPython"', self.script)
         self.assertIn("$Info.minor -eq 12", self.script)
         self.assertIn("$Info.bits -eq 64", self.script)
-        self.assertIn("$major -ne 24", self.script)
+        self.assertIn('$ExpectedNodeVersion = "24.19.0"', self.script)
+        self.assertIn('$reportedVersion -ne $ExpectedNodeVersion', self.script)
         self.assertIn(
             ".cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
             self.script,
@@ -42,8 +43,17 @@ class VerifyEntrypointTests(unittest.TestCase):
         self.assertIn('if ($useRegistry) {', self.script)
         self.assertIn('"--require-hashes"', self.script)
         self.assertIn('"ci", "--ignore-scripts", "--no-audit", "--no-fund"', self.script)
+        self.assertEqual(
+            7,
+            self.script.count('"ci", "--ignore-scripts", "--no-audit", "--no-fund"'),
+        )
+        self.assertIn('"--install-links"', self.script)
         self.assertIn('if ($Mode -eq "All") {', self.script)
-        self.assertIn('"audit", "--omit=dev", "--audit-level=high"', self.script)
+        self.assertIn('"audit", "--omit=dev", "--audit-level=moderate"', self.script)
+        self.assertEqual(
+            7,
+            self.script.count('"audit", "--omit=dev", "--audit-level=moderate"'),
+        )
         self.assertIn('$env:npm_config_offline = "true"', self.script)
         self.assertIn('$env:npm_config_update_notifier = "false"', self.script)
         for unsafe_downloader in ("Invoke-WebRequest", "curl.exe", "Start-BitsTransfer"):
@@ -55,8 +65,12 @@ class VerifyEntrypointTests(unittest.TestCase):
             "tools/safety/validate_workflows.py",
             '"-m", "unittest", "discover"',
             '"run", "ci", "--prefix", $GatewayRoot',
+            '"run", "ci", "--prefix", $CrmBillingOrchestratorRoot',
+            '"run", "ci", "--prefix", $Form1ControllerRoot',
+            '"run", "ci", "--prefix", $Form2ControllerRoot',
             '"run", "ci", "--prefix", $RetellResolverRoot',
             '"run", "ci", "--prefix", $RetellFreeTestRoot',
+            '"run", "ci", "--prefix", $RetellFreeTestRetryRoot',
         ):
             with self.subTest(fragment=required_fragment):
                 self.assertIn(required_fragment, self.script)
@@ -73,6 +87,14 @@ class VerifyEntrypointTests(unittest.TestCase):
             with self.subTest(path=nonportable):
                 self.assertNotIn(nonportable, self.script)
         self.assertIn("function Join-PathSegments", self.script)
+        self.assertIn('$CrmBillingOrchestratorRoot = Join-PathSegments $RepoRoot @(', self.script)
+        self.assertIn('$Form1ControllerRoot = Join-PathSegments $RepoRoot @(', self.script)
+        self.assertIn('$Form2ControllerRoot = Join-PathSegments $RepoRoot @(', self.script)
+        self.assertIn('$RetellResolverRoot = Join-PathSegments $RepoRoot @(', self.script)
+        self.assertIn('$RetellFreeTestRoot = Join-PathSegments $RepoRoot @(', self.script)
+        self.assertIn('$RetellFreeTestRetryRoot = Join-PathSegments $RepoRoot @(', self.script)
+        self.assertIn('"node_modules", "retell_free_test", "package.json"', self.script)
+        self.assertIn('"node_modules", "zcatalyst-sdk-node", "package.json"', self.script)
         self.assertIn("function Ensure-LocalPythonEnvironment", self.script)
         self.assertIn("Get-ManagedVenvPythonCandidates", self.script)
         self.assertIn("safety-venv-cpython-3.12-x64-", self.script)

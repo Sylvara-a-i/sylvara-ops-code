@@ -9,6 +9,11 @@ const {
   PRIVATE_CHOICE_LIMITS,
   loadConfig,
 } = require("../lib/config");
+const { destinationDigest } = require("../lib/destinations");
+
+const FORM2_PUBLIC_URL =
+  "https://forms.zohopublic.com/synthetic/form/perma/synthetic";
+const FORM2_DESTINATION_SHA256 = destinationDigest(FORM2_PUBLIC_URL);
 
 function providerChoices(count) {
   return Array.from(
@@ -37,7 +42,7 @@ function baseEnvironment(overrides = {}) {
     PREFILL_HEADER_SECRET: "F".repeat(43),
     SUBMISSION_HEADER_SECRET: "S".repeat(43),
     TOKEN_PEPPER: "P".repeat(43),
-    FORM2_PUBLIC_URL: "https://forms.zohopublic.com/synthetic/form/perma/synthetic",
+    FORM2_PUBLIC_URL,
     FORM2_TOKEN_FIELD_ALIAS: "access_token",
     FORM2_FORM_VERSION: "form2-v1",
     FORM2_ENTRY_OFFER_VALUE: "Synthetic Free Test",
@@ -57,7 +62,11 @@ function baseEnvironment(overrides = {}) {
 }
 
 function load(environment = baseEnvironment()) {
-  return loadConfig(environment, environment.SOURCE_REVISION);
+  return loadConfig(
+    environment,
+    environment.SOURCE_REVISION,
+    FORM2_DESTINATION_SHA256,
+  );
 }
 
 test("loads an immutable Development-only configuration with bounded defaults", () => {
@@ -65,6 +74,7 @@ test("loads an immutable Development-only configuration with bounded defaults", 
   assert.equal(config.deploymentEnvironment, "development");
   assert.equal(config.prefillTableName, "Form2_Prefills");
   assert.equal(config.sessionTtlSeconds, 3600);
+  assert.equal(config.verifiedSessionTtlSeconds, 1800);
   assert.equal(config.maxVerificationAttempts, 3);
   assert.equal(config.maxSubmissionAttempts, 3);
   assert.equal(config.maxBodyBytes, 32768);
@@ -177,10 +187,11 @@ test("requires three unique exact routes and isolated custom-header names", () =
 });
 
 test("requires independently generated printable route secrets and token pepper", () => {
+  const syntheticValueWithNewline = `${"F".repeat(32)}\n`;
   for (const overrides of [
     { TOKEN_PEPPER: "short" },
     { ISSUE_HEADER_SECRET: "I".repeat(31) },
-    { PREFILL_HEADER_SECRET: `${"F".repeat(32)}\n` },
+    { PREFILL_HEADER_SECRET: syntheticValueWithNewline },
     { SUBMISSION_HEADER_SECRET: "P".repeat(43) },
     { PREFILL_HEADER_SECRET: "S".repeat(43) },
   ]) {
@@ -193,23 +204,57 @@ test("accepts only exact HTTPS form and regional Zoho CRM API URLs", () => {
     { FORM2_PUBLIC_URL: "http://forms.zohopublic.com/synthetic/form" },
     { FORM2_PUBLIC_URL: "https://forms.zohopublic.com/" },
     { FORM2_PUBLIC_URL: "https://forms.zohopublic.com/synthetic/form?token=value" },
+    { FORM2_PUBLIC_URL: "https://forms.zohopublic.com/synthetic/form/perma/synthetic?" },
+    { FORM2_PUBLIC_URL: "https://forms.zohopublic.com/synthetic/form/perma/synthetic#" },
+    { FORM2_PUBLIC_URL: "https://FORMS.ZOHOPUBLIC.COM/synthetic/form/perma/synthetic" },
+    { FORM2_PUBLIC_URL: "https://forms.zohopublic.com:443/synthetic/form/perma/synthetic" },
+    {
+      FORM2_PUBLIC_URL: [
+        "https://synthetic-user",
+        "forms.zohopublic.com/synthetic/form/perma/synthetic",
+      ].join("@"),
+    },
+    { FORM2_PUBLIC_URL: "https://forms.zohopublic.com/synthetic/form/other/../perma/synthetic" },
+    { FORM2_PUBLIC_URL: "https://forms.zohopublic.com/synthetic/form/perma/%73ynthetic" },
     { FORM2_PUBLIC_URL: "https://forms.zohopublic.evil.com/synthetic/form" },
     { FORM2_PUBLIC_URL: "https://forms.example.invalid/synthetic/form" },
+    { FORM2_PUBLIC_URL: "https://forms.zohopublic.com/other/form/perma/synthetic" },
     { CRM_API_BASE_URL: "https://example.invalid/crm/v8" },
     { CRM_API_BASE_URL: "https://zohoapis.evil.com/crm/v8" },
     { CRM_API_BASE_URL: "https://www.zohoapis.evil.com/crm/v8" },
     { CRM_API_BASE_URL: "https://www.zohoapis.eu/crm/v8" },
     { CRM_API_BASE_URL: "https://www.zohoapis.com/crm/v8/Leads" },
     { CRM_API_BASE_URL: "https://www.zohoapis.com:444/crm/v8" },
+    { CRM_API_BASE_URL: "https://WWW.ZOHOAPIS.COM/crm/v8" },
+    { CRM_API_BASE_URL: "https://www.zohoapis.com:443/crm/v8" },
+    { CRM_API_BASE_URL: "https://www.zohoapis.com/crm/v8?" },
+    { CRM_API_BASE_URL: "https://www.zohoapis.com/crm/v8#" },
   ]) {
     assert.throws(() => load(baseEnvironment(overrides)), ConfigurationError);
   }
+});
+
+test("requires the exact form destination stamped into the artifact", () => {
+  const environment = baseEnvironment();
+  assert.throws(
+    () => loadConfig(environment, environment.SOURCE_REVISION),
+    ConfigurationError,
+  );
+  assert.throws(
+    () => loadConfig(
+      environment,
+      environment.SOURCE_REVISION,
+      "0".repeat(64),
+    ),
+    ConfigurationError,
+  );
 });
 
 test("parses all numeric controls as strict bounded base-10 integers", () => {
   for (const [name, limits] of Object.entries(NUMERIC_LIMITS)) {
     const propertyByName = {
       SESSION_TTL_SECONDS: "sessionTtlSeconds",
+      VERIFIED_SESSION_TTL_SECONDS: "verifiedSessionTtlSeconds",
       MAX_VERIFICATION_ATTEMPTS: "maxVerificationAttempts",
       MAX_SUBMISSION_ATTEMPTS: "maxSubmissionAttempts",
       MAX_BODY_BYTES: "maxBodyBytes",
@@ -233,6 +278,12 @@ test("parses all numeric controls as strict bounded base-10 integers", () => {
     () => load(baseEnvironment({ MAX_VERIFICATION_ATTEMPTS: "1" })),
     ConfigurationError,
   );
+  for (const value of ["1799", "1801"]) {
+    assert.throws(
+      () => load(baseEnvironment({ VERIFIED_SESSION_TTL_SECONDS: value })),
+      ConfigurationError,
+    );
+  }
 });
 
 test("rejects malformed aliases, versions, revisions, and Connection link names", () => {
@@ -267,5 +318,12 @@ test("binds the runtime source revision to the stamped deployed artifact", () =>
     () => loadConfig(environment, "b".repeat(40)),
     ConfigurationError,
   );
-  assert.equal(loadConfig(environment, environment.SOURCE_REVISION).sourceRevision, "a".repeat(40));
+  assert.equal(
+    loadConfig(
+      environment,
+      environment.SOURCE_REVISION,
+      FORM2_DESTINATION_SHA256,
+    ).sourceRevision,
+    "a".repeat(40),
+  );
 });

@@ -10,8 +10,12 @@ const { REVISION, baseEnvironment } = require("./helpers");
 test("configuration is immutable Development-only and rejects Production", () => {
   const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
   assert.equal(config.deploymentEnvironment, "development");
+  assert.equal(config.developmentFunctionHost, "synthetic.development.catalystserverless.com");
+  assert.equal(config.developmentRuntimeProof.length, 64);
   assert.equal(config.freeTestDurationDays, 7);
   assert.equal(config.enablePaidSubscriptionPreparation, false);
+  assert.equal(config.customerProvisioningMode, "native_crm_import");
+  assert.equal(config.enableTestDirectCustomerProvisioning, false);
   assert.equal(config.setupQaStageValue, "Setup and QA");
   assert.deepEqual(Object.keys(config.paidPlanCodeMap), []);
   assert.throws(
@@ -38,6 +42,39 @@ test("configuration is immutable Development-only and rejects Production", () =>
     () => loadConfig(baseEnvironment(), { artifactRevision: "b".repeat(40) }),
     /immutable artifact/,
   );
+  for (const unsafe of [
+    { DEVELOPMENT_FUNCTION_HOST: "synthetic.catalystserverless.com" },
+    { DEVELOPMENT_FUNCTION_HOST: "synthetic.development.catalystserverless.com:443" },
+    { DEVELOPMENT_RUNTIME_PROOF: "" },
+    { DEVELOPMENT_RUNTIME_PROOF: "short" },
+  ]) {
+    assert.throws(
+      () => loadConfig(baseEnvironment(unsafe), { artifactRevision: REVISION }),
+      /DEVELOPMENT_FUNCTION_HOST|DEVELOPMENT_RUNTIME_PROOF/,
+    );
+  }
+  const direct = loadConfig(baseEnvironment({
+    CUSTOMER_PROVISIONING_MODE: "test_direct_customer",
+    ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING: "true",
+  }), { artifactRevision: REVISION });
+  assert.equal(direct.customerProvisioningMode, "test_direct_customer");
+  assert.equal(direct.enableTestDirectCustomerProvisioning, true);
+  for (const unsafe of [
+    {
+      CUSTOMER_PROVISIONING_MODE: "test_direct_customer",
+      ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING: "false",
+    },
+    {
+      CUSTOMER_PROVISIONING_MODE: "native_crm_import",
+      ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING: "true",
+    },
+    { CUSTOMER_PROVISIONING_MODE: "unbounded" },
+  ]) {
+    assert.throws(
+      () => loadConfig(baseEnvironment(unsafe), { artifactRevision: REVISION }),
+      /CUSTOMER_PROVISIONING_MODE|exact Development test gate/,
+    );
+  }
 });
 
 test("action payload is exactly schemaVersion, action, and dealId", () => {
