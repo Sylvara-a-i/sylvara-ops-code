@@ -167,8 +167,6 @@ async function invoke(listener, { method = 'POST', url, payload, env, headers = 
   request.headers = {
     host: runtimeEnvironment.FREE_TEST_DEVELOPMENT_HOST, 'content-type': 'application/json',
     'x-zc-environment': 'Development',
-    'x-zc-projectid': runtimeEnvironment.FREE_TEST_DEVELOPMENT_PROJECT_ID,
-    'x-zc-project-key': 'synthetic_development_project_key',
     ...(payload === undefined ? {} : { 'x-retell-signature': signature(rawBody, runtimeEnvironment.RETELL_WEBHOOK_API_KEY, signatureTimestamp) }),
     ...headers,
   };

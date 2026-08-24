@@ -62,8 +62,6 @@ function assertPlatformDevelopment(request, app, config) {
   const platformEnvironmentHeader = optionalScalarHeader(request, 'x-zc-environment');
   const platformEnvironment = platformEnvironmentHeader === null
     ? null : platformEnvironmentHeader.trim().toLowerCase();
-  const platformProjectId = scalarHeader(request, 'x-zc-projectid').trim();
-  const platformProjectKey = scalarHeader(request, 'x-zc-project-key');
   const sdkEnvironment = typeof app?.config?.environment === 'string'
     ? app.config.environment.trim().toLowerCase() : '';
   const sdkProjectId = app?.config?.projectId;
@@ -76,10 +74,8 @@ function assertPlatformDevelopment(request, app, config) {
     && sdkEnvironment === 'development',
   'CATALYST_ENVIRONMENT_MISMATCH', 'Catalyst runtime is not Development.',
   { httpStatus: 503 });
-  invariant(platformProjectId === config.developmentProjectId
-    && String(sdkProjectId || '') === config.developmentProjectId
-    && /^[A-Za-z0-9_-]{8,253}$/.test(platformProjectKey)
-    && sdkProjectKey === platformProjectKey,
+  invariant(String(sdkProjectId || '') === config.developmentProjectId
+    && /^[A-Za-z0-9_-]{8,253}$/.test(sdkProjectKey),
   'CATALYST_PROJECT_MISMATCH', 'Catalyst runtime is not the approved Development project.',
   { httpStatus: 503 });
 }

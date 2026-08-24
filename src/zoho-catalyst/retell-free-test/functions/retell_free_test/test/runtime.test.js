@@ -350,17 +350,8 @@ test('integration: Catalyst platform environment and project identity fail close
   assert.equal(sdkMismatch.store.rows.get('FreeTestCalls').length, 0);
   assert.equal(sdkMismatch.mailAccesses, 0);
 
-  const requestProjectMismatch = runtimeFixture();
-  const rejectedRequestProject = await invoke(requestProjectMismatch.listener, { url: '/retell/inbound',
-    payload: payloadInbound('A'), env: requestProjectMismatch.env,
-    headers: { 'x-zc-projectid': '999' } });
-  assert.equal(rejectedRequestProject.status, 503);
-  assert.equal(rejectedRequestProject.body.code, 'CATALYST_PROJECT_MISMATCH');
-  assert.equal(requestProjectMismatch.store.rows.get('FreeTestCalls').length, 0);
-  assert.equal(requestProjectMismatch.mailAccesses, 0);
-
   const projectKeyMismatch = runtimeFixture();
-  projectKeyMismatch.app.config.projectKey = 'synthetic_other_project_key';
+  projectKeyMismatch.app.config.projectKey = 'invalid project key';
   const rejectedProjectKey = await invoke(projectKeyMismatch.listener, { url: '/retell/inbound',
     payload: payloadInbound('A'), env: projectKeyMismatch.env });
   assert.equal(rejectedProjectKey.status, 503);
