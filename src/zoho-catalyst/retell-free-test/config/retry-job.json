@@ -1,7 +1,8 @@
 {
   "schema_version": 1,
   "environment": "Development",
-  "live_state": "unverified",
+  "live_state": "development_provisioned_disabled",
+  "source_revision": "430f4ae628c9b5f3e8e068c802016bc0513e80b5",
   "function_target": {
     "name": "retell_free_test_retry",
     "stack": "node18",
@@ -11,7 +12,8 @@
     "name": "FreeTestRetryDevelopment",
     "type": "Function",
     "memory_mb": 512,
-    "id_runtime_variable": "FREE_TEST_RETRY_JOB_POOL_ID"
+    "id_runtime_variable": "FREE_TEST_RETRY_JOB_POOL_ID",
+    "development_readback": "verified"
   },
   "job": {
     "name": "FreeTestRetryScan",
@@ -19,6 +21,7 @@
     "target_name": "retell_free_test_retry",
     "params": {},
     "platform_retries_enabled": false,
+    "development_immediate_job_run": "not_run",
     "reason": "The recurring scan and four-table state machine own bounded retry; overlapping provider-level retries are disabled."
   },
   "cron": {
@@ -27,6 +30,9 @@
     "execution_type": "pre-defined",
     "type": "Periodic",
     "status_on_initial_provisioning": "disabled",
+    "development_status_readback": "disabled",
+    "development_platform_retry_count_readback": 0,
+    "development_pool_and_target_readback": "verified",
     "detail": {
       "hour": 0,
       "minute": 1,
@@ -34,11 +40,20 @@
       "repetition_type": "every"
     }
   },
-  "activation_gate": [
-    "Deploy and read back both Development function targets from the same SOURCE_REVISION.",
-    "Provision and read back the exact four-table schema, unique constraints, permissions, and PII/ePHI validators.",
-    "Run one immediate synthetic retry Job and verify safe logs and durable state convergence.",
-    "Enable the predefined Cron only after the immediate Job passes; then read back enabled status and target/pool ownership."
+  "development_evidence": [
+    "The retry function was deployed from the pinned source revision as Node.js 18 with 256 MB.",
+    "The Function Job pool was independently read back at 512 MB.",
+    "The predefined Cron was independently read back with the intended pool and function target, every-one-minute schedule, zero platform retries, and disabled status.",
+    "No immediate Job, retry convergence, notification attempt, or Cron execution is claimed."
   ],
-  "rollback": "Disable the Cron first, then stop the two synthetic deployment rows and remove the Retell number webhook bindings. Preserve durable rows."
+  "activation_gate": [
+    "Privately configure the required runtime secrets and FREE_TEST_MAIL_FROM without placing values in source, logs, chat, or evidence.",
+    "Run one immediate synthetic retry Job and verify safe logs and durable state convergence.",
+    "Keep the predefined Cron disabled for this Catalyst phase. Enabling it requires a separately authorized later stage after the immediate Job passes, followed by readback of enabled status and target/pool ownership."
+  ],
+  "rollback": {
+    "proven_primitive": "Function delete, independent absence readback, and redeploy were exercised before the final source deployment.",
+    "current_containment": "Keep FreeTestRetry1m disabled. If containment is required later, disable the Cron first, stop synthetic deployment rows, and preserve durable rows.",
+    "retell_scope": "No Retell route or number binding was created or changed as part of this Catalyst Development evidence."
+  }
 }

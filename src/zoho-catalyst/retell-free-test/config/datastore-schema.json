@@ -1,8 +1,17 @@
 {
   "schema_version": 2,
-  "status": "development-mvp-source-contract",
-  "live_state": "unverified",
+  "status": "development-mvp-schema-provisioned",
+  "live_state": "verified_development_schema_readback",
   "production_authorized": false,
+  "development_readback": {
+    "source_revision": "430f4ae628c9b5f3e8e068c802016bc0513e80b5",
+    "runtime_table_count": 4,
+    "all_declared_columns_constraints_and_max_lengths_match": true,
+    "required_audit_consent_columns_match": true,
+    "app_user_permissions": [],
+    "runtime_mutation_behavior_verified": false,
+    "note": "Schema and access readback is not evidence of a signed request, insert, conditional update, replay convergence, or canonical call row."
+  },
   "data_policy": {
     "raw_retell_payloads_stored": false,
     "raw_transcripts_stored": false,
@@ -136,15 +145,17 @@
       ]
     }
   ],
+  "verified_development_controls": [
+    "Exactly these four runtime tables and all declared columns and constraints were independently read back in Catalyst Development.",
+    "The Catalyst PII/ePHI validator was read back as audit_consent=true for CONFIGURATION_JSON, EVENT_DATA_JSON, CANONICAL_CALL_JSON, and PAYLOAD_JSON.",
+    "App User has no permissions on any of the four runtime tables."
+  ],
   "development_gates": [
-    "Provision and independently read back exactly these four tables and columns in Catalyst Development.",
-    "Read back the Catalyst PII/ePHI validator as audit_consent=true for CONFIGURATION_JSON, EVENT_DATA_JSON, CANONICAL_CALL_JSON, and PAYLOAD_JSON.",
     "Verify unique insert and conditional ZCQL update/readback behavior with synthetic duplicate and concurrent events.",
     "Catalyst permits at most two unique varchar columns per table. FreeTestDeployments uses database uniqueness for DEPLOYMENT_KEY and NUMBER_LOOKUP_HASH; every DEPLOYMENT_ID lookup still requires exactly one row and fails closed on ambiguity.",
     "No pre-call reservation is used; calls already in flight when the 25th handled call converges may create a documented practical overshoot.",
     "Catalyst Mail must remain dry_run until a separately approved synthetic Development send/readback test.",
     "CRM and Analytics integrations are absent from this MVP runtime.",
-    "Block app-user and client access to all four tables.",
     "Do not deploy to Production; source rejects Production before Data Store or Mail access."
   ]
 }

@@ -3,7 +3,7 @@
 - Status: Accepted as the current free-test architecture
 - Date: 2026-08-18
 - Reconciled: 2026-08-22 for the Development MVP
-- Current deployment status: **READY FOR DEVELOPMENT DEPLOYMENT**; controlled phone testing still requires deployed readback and the remaining evidence below
+- Current deployment status: **NOT READY**; Catalyst Development base resources and source parity are proven, but private configuration and lifecycle execution remain incomplete
 - Supersedes: [ADR 0005](0005-client-specific-retell-test-agent-isolation.md)
 - Supersedes within [ADR 0004](0004-retell-catalyst-crm-analytics-integration-boundary.md): the client-specific evaluation-agent lifecycle, agent-first tenancy model, and Analytics-first free-test reporting path
 - Production authorization: Not granted
@@ -167,7 +167,7 @@ Catalyst is the canonical operational store for minimized Retell event reference
 
 Webhook delivery may be duplicated, delayed, retried, reordered, or malformed. The runtime target verifies authenticity against the raw body, validates the schema, claims the event durably, and makes post-call processing idempotent. Replay must not create a duplicate canonical call, handled-count increment, email record, or report row.
 
-The current source/runtime evidence must be documented separately. A passing in-memory core does not prove Catalyst HTTP, Data Store, or deployed route behavior.
+The current source/runtime evidence is documented in the dated [Development reconciliation](../runbooks/free-test-development-reconciliation-2026-08-22.md). It proves the four-table schema and App User denial, two-function source parity, Job pool, disabled Cron, non-secret `dry_run` configuration, fail-closed readiness response, and function rollback. It does not prove a signed request, durable row, retry execution, Retell route, email, call, or Production behavior. A passing in-memory core or deployed artifact alone does not prove the complete Catalyst lifecycle.
 
 ## Email Notification MVP
 

@@ -7,6 +7,7 @@
 - Retell contract: [`conversation-contract.json`](../../src/retell/agents/7-day-free-test/contracts/conversation-contract.json)
 - Sanitized audit: [Development reconciliation](free-test-development-reconciliation-2026-08-22.md)
 - Offline/synthetic Development testing: permitted by this repository workflow; verify the current suite before relying on it
+- Catalyst Development deployment: **Incomplete**; base resources and source parity are proven, but required private configuration and lifecycle execution remain
 - Controlled internal Development phone test: live Development readback and the scoped internal test record remain required
 - Controlled prospect test: approval unresolved; not authorized by this runbook
 - Production authorization: **Not granted**
@@ -323,7 +324,7 @@ Missing correlation, mixed tenant rows, or unexplained counts fails acceptance.
 
 Only after offline acceptance passes and the operator has explicit authority for the external actions:
 
-1. deploy/read back the Development Catalyst routes, four tables/validators, target-specific variables, both functions, Function Job pool, immediate synthetic Job, and disabled-first one-minute Cron;
+1. retain/read back the deployed four tables, both functions, Function Job pool, and disabled one-minute Cron; configure the missing secrets and verified mail sender, obtain ready status, then run/read back one immediate synthetic Job while the Cron remains disabled;
 2. publish/pin/read back the shared Retell Development agent and conversational settings;
 3. bind two non-customer Development numbers to two synthetic deployments using the same reviewed agent version;
 4. prove Catalyst Mail dry-run, execute/read back one controlled Development email to the approved synthetic recipient, prove replay sends no duplicate, and restore dry-run; keep CRM/Analytics disabled;
@@ -360,11 +361,11 @@ Do not delete evidence, switch to a client-specific free-test clone, leave `send
 
 ## Manual Actions Requiring Separate Authority
 
-An operator with the relevant credentials must perform and read back the Development deployment, Catalyst secret/table/validator configuration, retry Job/Cron configuration, Retell version publication, synthetic number binding, Catalyst Mail sender/recipient enablement, and phone-test activation. Contractor forwarding and any prospect/customer action remain outside this task.
+An operator with the relevant credentials must privately configure the four missing runtime secrets and verified Catalyst Mail sender, then perform/read back readiness, signed route tests, one immediate synthetic retry Job, Retell version publication, synthetic number binding, the one controlled Development email, and phone-test activation. The four tables, two functions, Job pool, disabled Cron, and non-secret variables are already deployed/read back; do not recreate them. Contractor forwarding and any prospect/customer action remain outside this task.
 
 ## Readiness Rule
 
-Current deployment status is **READY FOR DEVELOPMENT DEPLOYMENT**. Report readiness separately for offline/synthetic, Development deployment/readback, controlled internal phone, and controlled prospect lanes. Never use an offline pass to imply a deployed phone path, and never use an internal phone pass to imply prospect or Production approval. The next acceptance target is **READY FOR CONTROLLED INTERNAL PHONE TEST**, which requires successful Development deployment/readback, live Retell parity, the scoped two-client trace, one exactly-once Development email, and rollback proof.
+Current deployment status is **NOT READY**: the Catalyst Development phase is incomplete. The four-table schema, App User denial, two-function source parity, Job pool, disabled Cron, non-secret `dry_run` configuration, fail-closed readiness response, and function rollback are proven; signed request handling, durable rows, immediate Job execution, Retell parity/routing, email, and calls are not. Report readiness separately for offline/synthetic, Development deployment/readback, controlled internal phone, and controlled prospect lanes. Never use an offline pass to imply a deployed phone path, and never use an internal phone pass to imply prospect or Production approval. The next acceptance target is **READY FOR CONTROLLED INTERNAL PHONE TEST**, which requires completion of the Development lifecycle, live Retell parity, the scoped two-client trace, one exactly-once Development email, and rollback proof.
 
 Stop building when the controlled internal MVP path proves shared-agent isolation, exact configuration failure, practical time/count stop, idempotent calls, durable email state plus one exactly-once controlled delivery, query/CSV reporting, natural closing, correlation, and rollback. Analytics, CRM, exact-cap reservations, automatic number reassignment, SMS, and provider abstraction are not required.
 

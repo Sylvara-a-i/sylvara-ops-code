@@ -2,7 +2,9 @@
 
 This checklist separates offline/synthetic Development, a controlled internal Development phone test, and a later prospect/Production workflow. The [legal archive](../legal-compliance/README.md) preserves a conservative historical profile but does not itself decide authorization for a particular test.
 
-Current classification is **READY FOR DEVELOPMENT DEPLOYMENT**. A controlled internal Development phone test remains **NOT READY** until every item in that section is proved by deployed readback.
+Current classification is **NOT READY**. The Catalyst Development phase is incomplete, and a controlled internal Development phone test remains **NOT READY** until every item in that section is proved by deployed readback.
+
+Current sanitized Catalyst evidence: the exact four-table schema and App User denial, two 256 MB functions at revision `430f4ae628c9b5f3e8e068c802016bc0513e80b5`, 29-file source parity, a 512 MB Job pool, disabled one-minute Cron with zero platform retries, non-secret `dry_run` configuration, and function delete/absence/redeploy rollback are proven. Readiness currently returns non-cacheable HTTP 503 `INVALID_RUNTIME_CONFIGURATION` because four required secrets and a verified mail sender are absent. No signed request, durable row, immediate Job, email, Retell change, call, Production action, CRM write, or Analytics write is proven.
 
 ## Safety Preconditions
 
@@ -19,7 +21,7 @@ Current classification is **READY FOR DEVELOPMENT DEPLOYMENT**. A controlled int
 - [ ] Required tests, linting, formatting, type checks, and repository safety checks pass.
 - [ ] The committed diff contains no secrets, private identifiers, or generated sensitive artifacts.
 - [ ] Documentation reflects the implemented boundary and rollback path.
-- [ ] The pull request is approved and merged; deployment remains a separate authorized action.
+- [ ] The exact reviewed immutable commit is selected and the pull-request state is recorded; merge remains a separate action and is not implied by Development deployment.
 
 ## Historical Conservative Profile Checks
 

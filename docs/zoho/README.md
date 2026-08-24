@@ -77,7 +77,7 @@ The [product reference collection](reference/README.md) covers the currently gov
 
 These files stay beside their artifacts because they describe exact source, validation, deployment, provenance, or rollback behavior. Reusable policy belongs here under `docs/zoho/`.
 
-The free-test source is Development-only and **READY FOR DEVELOPMENT DEPLOYMENT**. The MVP uses Catalyst Mail email-only durable state, defaults to `dry_run`, and permits one controlled `send_development` delivery/readback before internal-phone readiness; replay must send no duplicate and mode must return to `dry_run`. The separate Function Job handles due retryable state without blindly resending ambiguity. CRM remains disabled, Analytics is omitted, and reporting uses tenant-scoped Catalyst queries plus sanitized CSV. Offline/synthetic, Development deployment, controlled internal phone, and prospect launch decisions remain separate. Repository presence is not deployment or route evidence.
+The free-test Catalyst Development phase is **INCOMPLETE**, and controlled internal phone testing is **NOT READY**. At revision `430f4ae628c9b5f3e8e068c802016bc0513e80b5`, four exact tables, two functions, a Function Job pool, a disabled one-minute Cron, non-secret `dry_run` configuration, source parity, and function delete/redeploy rollback were read back. Four required secrets and a verified `FREE_TEST_MAIL_FROM` remain absent, so readiness correctly returns non-cacheable HTTP 503 `INVALID_RUNTIME_CONFIGURATION`. No signed request, durable call row, retry Job execution, email, Retell change, call, Production action, CRM write, or Analytics write has occurred. See the dated reconciliation for the exact evidence boundary.
 
 ## Portability Boundary
 

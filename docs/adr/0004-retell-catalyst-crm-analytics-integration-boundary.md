@@ -2,7 +2,7 @@
 
 - Status: Accepted as a proposed integration boundary; free-test topology and tenancy sections superseded by [ADR 0006](0006-shared-seven-day-monitor-with-client-number-isolation.md)
 - Date: 2026-08-18
-- Deployment status: **READY FOR DEVELOPMENT DEPLOYMENT**; runtime/source parity, controlled email delivery, provider fallback, and phone behavior still require deployed readback
+- Deployment status: **NOT READY**; Catalyst Development base resources and source parity are proven, but private configuration and lifecycle execution remain incomplete
 - Product scope: `after-hours-new-residential-service-request-v1` and later separately approved extensions
 
 ## Context
@@ -37,7 +37,7 @@ Zoho Catalyst ingress and durable call state
         +----> Catalyst query / sanitized CSV report
 ```
 
-The boundaries below are architectural intent. Current tenant identities, permissions, agents, numbers, projects, functions, tables, workspaces, views, OAuth grants, schedules, and runtime behavior remain **Unknown** until independently verified.
+The boundaries below are architectural intent. The dated [Development reconciliation](../runbooks/free-test-development-reconciliation-2026-08-22.md) now verifies the sanitized Catalyst function, table, Job-pool, disabled-Cron, non-secret-configuration, source-parity, and function-rollback facts. Private identities, secrets, rows, signed runtime behavior, Retell route/settings, numbers, mail delivery, CRM, Analytics, calls, and Production remain unknown or unexercised as stated there.
 
 ## Free-Test Lifecycle
 
@@ -114,7 +114,7 @@ The canonical lookup key is a keyed-HMAC of the provider call identifier. The ra
 
 ## Post-Call Processing
 
-The current free-test source includes a separate Catalyst Function Job target for due minimized event receipts and retryable notification rows. Development must still prove the packaged Job identity, trigger/request shape, bounded backoff, lease/conditional-write behavior, and ambiguous-result readback before an internal phone test. Repository source is not deployment evidence.
+The current free-test deployment includes the separate Catalyst Function Job target for due minimized event receipts and retryable notification rows. Its 256 MB Function, 512 MB pool, and disabled one-minute Cron with zero platform retries are read back. Development must still prove one immediate synthetic execution, trigger/request shape, bounded backoff, lease/conditional-write behavior, and ambiguous-result readback before an internal phone test.
 
 The current bounded processing sequence is:
 
@@ -124,7 +124,7 @@ The current bounded processing sequence is:
 4. create one idempotent Catalyst Mail email record for the pre-approved deployment recipient; and
 5. make the minimized row available to fixed-partition query/CSV reporting.
 
-The free test does not book, dispatch, quote, collect payment, or mutate the customer operating system. Development Catalyst Mail defaults to `dry_run` (`DryRunRecorded`, zero attempts, no `sendMail` call). Before internal-phone readiness, one controlled `send_development` email must receive provider/inbox readback, replay must create no second delivery, and configuration must return to `dry_run`. CRM is disabled and Analytics is outside the MVP. Current source/runtime gaps are recorded in the Development reconciliation; repository source never proves deployment.
+The free test does not book, dispatch, quote, collect payment, or mutate the customer operating system. The deployed non-secret notification mode is `dry_run`, but missing secrets and a verified `FREE_TEST_MAIL_FROM` keep readiness fail-closed; no `DryRunRecorded` row or `sendMail` action has occurred. Before internal-phone readiness, dry-run persistence must be proved, then one controlled `send_development` email must receive provider/inbox readback, replay must create no second delivery, and configuration must return to `dry_run`. CRM is disabled and Analytics is outside the MVP. Current runtime gaps are recorded in the Development reconciliation.
 
 No ambiguous write is blindly retried. The worker first reads the target or job status and determines whether the prior attempt completed, failed, or requires operator reconciliation.
 
