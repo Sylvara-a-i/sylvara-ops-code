@@ -600,7 +600,7 @@ function createRuntimeService({ store, mailAdapter, config, now = Date.now, logg
     }
     const at = new Date(now()).toISOString();
     const contained = await store.mutate(receiptTable, 'EVENT_KEY', candidate.EVENT_KEY,
-      'RECEIPT_VERSION', (row) => row.STATUS === 'Processing' && row.LEASE_TOKEN === workerToken ? {
+      'RECEIPT_VERSION', (row) => row.STATUS === 'Processing' && workerToken === row.LEASE_TOKEN ? {
         STATUS: status, LEASE_TOKEN: null, LEASE_EXPIRES_AT: null,
         NEXT_ATTEMPT_AT: nextAttemptAt, LAST_ERROR_CODE: code,
         PROCESSED_AT: status === 'RetryRequired' ? null : at,
