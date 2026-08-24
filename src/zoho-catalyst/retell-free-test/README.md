@@ -27,6 +27,8 @@ Only these new Development tables are supported:
 
 [`config/datastore-schema.json`](config/datastore-schema.json) is the exact source schema. It is not evidence that the tables or constraints exist in Catalyst. Table/column provisioning, unique-constraint readback, ZCQL compare-and-set behavior, encrypted-field access, the PII/ePHI validator (`audit_consent=true`) on all four caller- or recipient-bearing JSON columns, and SDK response shapes must be proven in Development before routing.
 
+Catalyst currently permits at most two unique `varchar` columns on one table. `FreeTestDeployments` therefore places database uniqueness on `DEPLOYMENT_KEY` and the resolver-critical `NUMBER_LOOKUP_HASH`. `DEPLOYMENT_ID` remains mandatory and every runtime lookup uses `store.unique()`, which rejects more than one matching row as `AMBIGUOUS_DURABLE_OWNERSHIP`; an ambiguous deployment ID cannot resolve, count, notify, or report.
+
 ## Eligibility and counting
 
 Inbound resolution requires all approved gate values plus:

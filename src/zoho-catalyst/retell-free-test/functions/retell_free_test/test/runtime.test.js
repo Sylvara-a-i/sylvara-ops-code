@@ -42,6 +42,24 @@ test('integration: Catalyst adapter uses allowlisted ZCQL and unique insert read
   await assert.rejects(store.query('NotAllowed', 'CALL_KEY', call.CALL_KEY), { code: 'INVALID_DATASTORE_QUERY' });
 });
 
+test('integration: ambiguous deployment IDs fail closed without database uniqueness', async () => {
+  const config = loadConfig(environment());
+  const app = {
+    datastore() { return { table() { return { async insertRow() { throw new Error('not used'); } }; } }; },
+    zcql() { return { async executeZCQLQuery() {
+      return [
+        { FreeTestDeployments: { ROWID: '101', DEPLOYMENT_ID: 'deployment_A' } },
+        { FreeTestDeployments: { ROWID: '102', DEPLOYMENT_ID: 'deployment_A' } },
+      ];
+    } }; },
+  };
+  const store = createCatalystStore(app, config);
+  await assert.rejects(
+    store.unique('FreeTestDeployments', 'DEPLOYMENT_ID', 'deployment_A'),
+    { code: 'AMBIGUOUS_DURABLE_OWNERSHIP' },
+  );
+});
+
 test('integration: Catalyst optimistic mutation does not mistake a competing write for its own', async () => {
   const config = loadConfig(environment());
   const row = {

@@ -111,6 +111,9 @@ test('unit: Data Store schema contains exactly the four implemented MVP tables',
       assert.equal(column.audit_consent, true, name);
     }
   }
+  const deploymentSchema = schema.tables.find(({ api_name: name }) => name === 'FreeTestDeployments');
+  assert.deepEqual(deploymentSchema.required_unique_columns, ['DEPLOYMENT_KEY', 'NUMBER_LOOKUP_HASH']);
+  assert.equal(deploymentSchema.columns.find(({ api_name: name }) => name === 'DEPLOYMENT_ID').unique, false);
   const receiptColumns = new Set(schema.tables.find(({ api_name: name }) => name === 'FreeTestRetellEventReceipts')
     .columns.map(({ api_name: name }) => name));
   for (const field of ['EVENT_DATA_JSON', 'RECEIPT_VERSION', 'LEASE_TOKEN', 'NEXT_ATTEMPT_AT']) {
@@ -258,10 +261,9 @@ test('unit: runtime readiness reports source implementation without deployment c
   assert.equal(readiness.closed_external_evidence.some(({ id }) => id === 'retell_safe_fallback_flow'), true);
 });
 
-test('unit: Advanced I/O entrypoint exports a native server without listening locally', () => {
+test('unit: Advanced I/O entrypoint exports the Catalyst request handler', () => {
   const functionConfig = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'catalyst-config.json'), 'utf8'));
   assert.equal(require('../package.json').name, functionConfig.deployment.name);
-  const server = require('../index');
-  assert.equal(server.listening, false);
-  assert.equal(server.listeners('request').length, 1);
+  const handler = require('../index');
+  assert.equal(typeof handler, 'function');
 });
