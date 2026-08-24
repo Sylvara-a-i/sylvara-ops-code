@@ -1,6 +1,6 @@
 # CRM-to-Billing Lifecycle Orchestrator
 
-**Status: proposed, Development-only, not deployed, and code-blocked from Production.**
+**Status: proposed, Development-only, and not authorized for Production.**
 
 This package mediates the approved CRM Deal lifecycle into bounded Zoho Billing customer and subscription operations. CRM remains authoritative for the commercial relationship and pipeline. Billing remains authoritative for subscription state. Zoho Books is deliberately absent from the runtime.
 
@@ -24,7 +24,15 @@ The handler rejects unknown fields, re-reads CRM, derives its own deterministic 
 
 ## Safety Boundary
 
-- Catalyst, the route, and configured environment must all report Development.
+- The artifact is privately stamped with an HMAC binding to the Development ZAID. Zoho assigns
+  different ZAIDs to Development and Production, so the exact Development host, environment
+  configuration, injected ZAID, SDK routing environment, and artifact binding must all agree
+  before any Connection, Data Store, CRM, or Billing operation. The SDK project-key comparison
+  is a consistency check over the same Catalyst request metadata, not independent provenance.
+- The ZAID and host arrive through Catalyst request metadata. Before any Development mutation,
+  a hosted spoof test must prove Catalyst either overwrites a caller-supplied project key with the
+  Development ZAID or rejects the request before the handler. Until that proof passes, the
+  function may run only read-only reconciliation and fail-closed probes.
 - The API Gateway must require an API key. The function also requires one route-specific shared header stored only in private platform configuration.
 - Separate read and write Catalyst Connections are required for CRM and Billing. Each must return exactly one OAuth `Authorization` header and no query parameters.
 - Billing organization identity is fixed in private configuration and sent only in the required organization header.
@@ -50,10 +58,11 @@ The operation key and Billing reference are stable for one environment, Deal, an
 1. Use the existing **Retell** Catalyst project in Development. Keep this orchestrator in its own function and `CRMBillingOperations` table, with function-specific private configuration, four least-privilege Connections, and one exact API Gateway route. Do not reuse the Retell call/event tables, routes, or credentials. Keep Production untouched.
 2. Create or select a dedicated Billing test organization. Do not point Development at the live Billing organization.
 3. In a Zoho Billing TEST organization, set `CUSTOMER_PROVISIONING_MODE=test_direct_customer` and `ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING=true`; authorize only `ZohoSubscriptions.settings.READ`, `ZohoSubscriptions.customers.READ`, `ZohoSubscriptions.customers.CREATE`, `ZohoSubscriptions.plans.READ`, `ZohoSubscriptions.subscriptions.READ`, and `ZohoSubscriptions.subscriptions.CREATE`. Zoho's current API assigns both subscription creation and immediate cancellation to `subscriptions.CREATE`; do not add `subscriptions.UPDATE` unless the runtime begins using its separate update endpoint. Verify organization attestation, the synthetic customer boundary, deterministic-reference subscription lookup, the reviewed create shapes, immediate cancellation, and every readback field enforced by this source. Keep native CRM import as a separate later live-canary gate.
-4. Configure every variable in the blank `.env.example` through Catalyst private configuration. Never upload a populated environment file.
-5. Stamp `lib/source-revision.js` with the exact reviewed 40-character Git commit during immutable packaging; `SOURCE_REVISION` must match it.
-6. Configure CRM Blueprint/custom-function calls only after the route and Development fixtures pass. Blueprint enrollment and transition attachment require separate CRM readback.
-7. Prove exact duplicate, conflict, timeout-before-commit, timeout-after-possible-commit, zero-exposure evaluation, explicit paid acceptance, cancellation, CRM readback, and sanitized logging with synthetic records.
+4. Configure every variable in the blank `.env.example` through Catalyst private configuration. Generate `DEVELOPMENT_RUNTIME_PROOF` independently and store it only in Development. Never upload a populated environment file.
+5. During immutable packaging, stamp `lib/source-revision.js` with the exact reviewed 40-character Git commit and the HMAC-SHA256 of the Development ZAID keyed by `DEVELOPMENT_RUNTIME_PROOF`; `SOURCE_REVISION` must match the commit. Within the tracked runtime payload, only those two sentinel substitutions may differ from the squash-merged source. Install dependencies from the reviewed lockfile and verify them separately. Never commit either private runtime value.
+6. From the exact Development URL, send one authenticated read-only reconciliation with a forged `x-zc-project-key`. Proceed only if Catalyst overwrites it with the bound Development ZAID or the handler rejects before SDK initialization. Preserve the private readback outside GitHub.
+7. Configure CRM Blueprint/custom-function calls only after the route and Development fixtures pass. Blueprint enrollment and transition attachment require separate CRM readback.
+8. Prove exact duplicate, conflict, timeout-before-commit, timeout-after-possible-commit, zero-exposure evaluation, explicit paid acceptance, cancellation, CRM readback, and sanitized logging with synthetic records.
 
 The seven-day clock may be represented by Billing only after the test organization proves the plan cannot produce a paid renewal. The call-limit trigger must come from the authoritative call workflow; this function does not count calls or infer that the limit was reached.
 

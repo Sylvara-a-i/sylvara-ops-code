@@ -1,6 +1,9 @@
 "use strict";
 
-const { ARTIFACT_SOURCE_REVISION } = require("./source-revision");
+const {
+  ARTIFACT_DEVELOPMENT_ZAID_HMAC_SHA256,
+  ARTIFACT_SOURCE_REVISION,
+} = require("./source-revision");
 
 const REVISION = /^[a-f0-9]{40}$/;
 const IDENTIFIER = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
@@ -103,6 +106,15 @@ function exactPath(environment) {
   return result;
 }
 
+function developmentFunctionHost(environment) {
+  const result = required(environment, "DEVELOPMENT_FUNCTION_HOST").toLowerCase();
+  if (
+    result.length > 253 ||
+    !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.development\.catalystserverless\.com$/.test(result)
+  ) throw new ConfigurationError("DEVELOPMENT_FUNCTION_HOST is invalid");
+  return result;
+}
+
 function secret(environment, name) {
   const result = required(environment, name);
   if (Buffer.byteLength(result, "utf8") < 32 || Buffer.byteLength(result, "utf8") > 256) {
@@ -149,7 +161,10 @@ function paidPlanMap(environment, enabled) {
   return Object.freeze(result);
 }
 
-function loadConfig(environment = process.env, { artifactRevision = ARTIFACT_SOURCE_REVISION } = {}) {
+function loadConfig(environment = process.env, {
+  artifactRevision = ARTIFACT_SOURCE_REVISION,
+  artifactDevelopmentZaidHmacSha256 = ARTIFACT_DEVELOPMENT_ZAID_HMAC_SHA256,
+} = {}) {
   const deploymentEnvironment = required(environment, "DEPLOYMENT_ENVIRONMENT");
   if (deploymentEnvironment !== "development") {
     throw new ConfigurationError("Production activation is blocked in this source revision");
@@ -192,6 +207,9 @@ function loadConfig(environment = process.env, { artifactRevision = ARTIFACT_SOU
   return Object.freeze({
     deploymentEnvironment,
     sourceRevision,
+    artifactDevelopmentZaidHmacSha256,
+    developmentFunctionHost: developmentFunctionHost(environment),
+    developmentRuntimeProof: secret(environment, "DEVELOPMENT_RUNTIME_PROOF"),
     allowedPath: exactPath(environment),
     sharedHeaderName: headerName,
     sharedHeaderValue: secret(environment, "SHARED_HEADER_VALUE"),
