@@ -276,12 +276,33 @@ test('integration: documented Development hosts pass while a production-shaped h
   assert.equal(accepted.status, 200);
   assert.equal(accepted.body.call_inbound.dynamic_variables.resolver_status, 'Resolved');
 
+  const defaultTlsPort = runtimeFixture();
+  const acceptedDefaultTlsPort = await invoke(defaultTlsPort.listener, { url: '/retell/inbound',
+    payload: payloadInbound('A'), env: defaultTlsPort.env,
+    headers: { host: `${defaultTlsPort.env.FREE_TEST_DEVELOPMENT_HOST}:443` } });
+  assert.equal(acceptedDefaultTlsPort.status, 200);
+  assert.equal(acceptedDefaultTlsPort.body.call_inbound.dynamic_variables.resolver_status, 'Resolved');
+
   const fixture = runtimeFixture();
   const rejected = await invoke(fixture.listener, { url: '/retell/inbound', payload: payloadInbound('A'),
     env: fixture.env, headers: { host: 'retell-free-test.catalystserverless.com' } });
   assert.equal(rejected.status, 503);
-  assert.equal(rejected.body.code, 'PRODUCTION_BLOCKED');
+  assert.equal(rejected.body.code, 'CATALYST_HOST_MISMATCH');
   assert.equal(fixture.initialized, 0);
+
+  for (const invalidAuthority of [
+    `${fixture.env.FREE_TEST_DEVELOPMENT_HOST}:80`,
+    `${fixture.env.FREE_TEST_DEVELOPMENT_HOST}:444`,
+    `user@${fixture.env.FREE_TEST_DEVELOPMENT_HOST}`,
+    `${fixture.env.FREE_TEST_DEVELOPMENT_HOST}/path`,
+  ]) {
+    const invalid = runtimeFixture();
+    const result = await invoke(invalid.listener, { url: '/retell/inbound', payload: payloadInbound('A'),
+      env: invalid.env, headers: { host: invalidAuthority } });
+    assert.equal(result.status, 503);
+    assert.equal(result.body.code, 'CATALYST_HOST_MISMATCH');
+    assert.equal(invalid.initialized, 0);
+  }
 });
 
 test('integration: Catalyst platform environment and project identity fail closed before store or Mail use', async () => {

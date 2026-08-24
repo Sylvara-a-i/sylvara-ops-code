@@ -50,10 +50,11 @@ function optionalScalarHeader(request, name) {
 }
 
 function assertDevelopmentHost(request, config) {
-  const host = scalarHeader(request, 'host').trim().toLowerCase();
+  const authority = scalarHeader(request, 'host').trim().toLowerCase();
+  const host = authority.endsWith(':443') ? authority.slice(0, -4) : authority;
   invariant(host === config.developmentHost && host.includes('.development.')
     && config.environment === 'development',
-  'PRODUCTION_BLOCKED', 'Catalyst runtime environment is not Development.', { httpStatus: 503 });
+  'CATALYST_HOST_MISMATCH', 'Catalyst runtime host is not the approved Development host.', { httpStatus: 503 });
 }
 
 function assertPlatformDevelopment(request, app, config) {
@@ -101,6 +102,7 @@ function safeError(error) {
     'INVALID_JSON', 'INVALID_REQUEST_HEADER', 'INVALID_SIGNATURE', 'MISSING_SIGNATURE',
     'STALE_SIGNATURE', 'REQUEST_ABORTED', 'REQUEST_BODY_TIMEOUT', 'REQUEST_STREAM_ERROR',
     'REQUEST_TOO_LARGE', 'READINESS_UNAUTHORIZED', 'PRODUCTION_BLOCKED',
+    'CATALYST_HOST_MISMATCH',
     'INVALID_RUNTIME_CONFIGURATION', 'INVALID_SCHEMA', 'INVALID_EVENT',
     'CATALYST_ENVIRONMENT_MISMATCH', 'CATALYST_PROJECT_MISMATCH',
     'EVENT_TIMESTAMP_MISMATCH', 'CALL_OWNERSHIP_UNRESOLVED', 'INVALID_ANALYSIS',
