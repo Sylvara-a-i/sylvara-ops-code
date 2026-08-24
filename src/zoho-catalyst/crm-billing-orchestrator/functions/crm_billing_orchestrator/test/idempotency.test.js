@@ -3,7 +3,12 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const { loadConfig } = require("../lib/config");
-const { createOperationStore, deriveOperationIdentity } = require("../lib/idempotency");
+const {
+  TEST_CUSTOMER_PROVISIONING_ACTION,
+  createOperationStore,
+  deriveOperationIdentity,
+  deriveTestCustomerProvisioningIdentity,
+} = require("../lib/idempotency");
 const { REVISION, baseEnvironment } = require("./helpers");
 
 function memoryApp(tableName) {
@@ -54,7 +59,7 @@ test("durable operation claim returns completed replay and rejects conflicts", a
     operationKey: identity.operationKey,
     operationFingerprint: identity.operationFingerprint,
     action: "start_evaluation",
-    dealId: "100000000000001",
+    scopeId: "100000000000001",
   });
   assert.equal(first.outcome, "claimed");
   await store.mark(first.rowId, "completed", "evaluation_readback_confirmed");
@@ -62,14 +67,14 @@ test("durable operation claim returns completed replay and rejects conflicts", a
     operationKey: identity.operationKey,
     operationFingerprint: identity.operationFingerprint,
     action: "start_evaluation",
-    dealId: "100000000000001",
+    scopeId: "100000000000001",
   });
   assert.equal(replay.outcome, "duplicate-completed");
   const conflict = await store.claim({
     operationKey: identity.operationKey,
     operationFingerprint: "d".repeat(64),
     action: "start_evaluation",
-    dealId: "100000000000001",
+    scopeId: "100000000000001",
   });
   assert.equal(conflict.outcome, "duplicate-conflict");
 });
@@ -134,14 +139,83 @@ test("evaluation and paid references stay stable when mutable Deal material chan
       operationKey: first.operationKey,
       operationFingerprint: first.operationFingerprint,
       action: candidate.action,
-      dealId: "100000000000001",
+      scopeId: "100000000000001",
     });
     const conflict = await store.claim({
       operationKey: changed.operationKey,
       operationFingerprint: changed.operationFingerprint,
       action: candidate.action,
-      dealId: "100000000000001",
+      scopeId: "100000000000001",
     });
     assert.equal(conflict.outcome, "duplicate-conflict");
   }
+});
+
+test("direct TEST customer claim is stable across Deals and lifecycle actions for one Account", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const accountId = "100000000000002";
+  const first = deriveTestCustomerProvisioningIdentity(config, accountId);
+  const fromAnotherDealAndAction = deriveTestCustomerProvisioningIdentity(config, accountId);
+  const otherAccount = deriveTestCustomerProvisioningIdentity(config, "100000000000003");
+  const changedOrganization = loadConfig(baseEnvironment({
+    BILLING_ORGANIZATION_ID: "100000000000009",
+  }), { artifactRevision: REVISION });
+  const changedConfiguration = deriveTestCustomerProvisioningIdentity(
+    changedOrganization,
+    accountId,
+  );
+  const firstDealAction = deriveOperationIdentity(
+    config,
+    "ensure_customer",
+    "100000000000001",
+    { accountId },
+  );
+  const secondDealAction = deriveOperationIdentity(
+    config,
+    "start_evaluation",
+    "100000000000004",
+    { accountId },
+  );
+
+  assert.equal(first.operationKey, fromAnotherDealAndAction.operationKey);
+  assert.equal(first.operationFingerprint, fromAnotherDealAndAction.operationFingerprint);
+  assert.equal(first.billingReference, null);
+  assert.notEqual(first.operationKey, otherAccount.operationKey);
+  assert.equal(first.operationKey, changedConfiguration.operationKey);
+  assert.notEqual(first.operationFingerprint, changedConfiguration.operationFingerprint);
+  assert.notEqual(firstDealAction.operationKey, secondDealAction.operationKey);
+
+  const app = memoryApp(config.operationTable);
+  const store = createOperationStore(app, config);
+  const claim = await store.claim({
+    operationKey: first.operationKey,
+    operationFingerprint: first.operationFingerprint,
+    action: TEST_CUSTOMER_PROVISIONING_ACTION,
+    scopeId: accountId,
+  });
+  assert.equal(claim.outcome, "claimed");
+  assert.equal(app.rows[0].CRM_DEAL_ID, accountId);
+  assert.equal(app.rows[0].ACTION, TEST_CUSTOMER_PROVISIONING_ACTION);
+  const processingReplay = await store.claim({
+    operationKey: first.operationKey,
+    operationFingerprint: first.operationFingerprint,
+    action: TEST_CUSTOMER_PROVISIONING_ACTION,
+    scopeId: accountId,
+  });
+  assert.equal(processingReplay.outcome, "duplicate-unresolved");
+  await store.mark(claim.rowId, "completed", "customer_readback_confirmed");
+  const completedReplay = await store.claim({
+    operationKey: first.operationKey,
+    operationFingerprint: first.operationFingerprint,
+    action: TEST_CUSTOMER_PROVISIONING_ACTION,
+    scopeId: accountId,
+  });
+  assert.equal(completedReplay.outcome, "duplicate-completed");
+  const configurationConflict = await store.claim({
+    operationKey: changedConfiguration.operationKey,
+    operationFingerprint: changedConfiguration.operationFingerprint,
+    action: TEST_CUSTOMER_PROVISIONING_ACTION,
+    scopeId: accountId,
+  });
+  assert.equal(configurationConflict.outcome, "duplicate-conflict");
 });

@@ -1,6 +1,10 @@
 "use strict";
 
-const { deriveOperationIdentity } = require("./idempotency");
+const {
+  TEST_CUSTOMER_PROVISIONING_ACTION,
+  deriveOperationIdentity,
+  deriveTestCustomerProvisioningIdentity,
+} = require("./idempotency");
 
 const AUTOMATION_STATUS = Object.freeze({
   customer: "Customer Verified",
@@ -417,6 +421,22 @@ function createLifecycleHandler(config, { crmClient, billingClient, operationSto
       if (operation && operation.STATUS !== "completed") hasUnresolvedOperation = true;
       operations[action] = operation;
     }
+    if (config.customerProvisioningMode === "test_direct_customer") {
+      const provisioningIdentity = deriveTestCustomerProvisioningIdentity(config, state.accountId);
+      const provisioningOperation = await operationStore.readByKey(
+        provisioningIdentity.operationKey,
+      );
+      if (provisioningOperation && (
+        provisioningOperation.OPERATION_KEY !== provisioningIdentity.operationKey ||
+        provisioningOperation.OPERATION_FINGERPRINT !==
+          provisioningIdentity.operationFingerprint ||
+        provisioningOperation.ACTION !== TEST_CUSTOMER_PROVISIONING_ACTION ||
+        String(provisioningOperation.CRM_DEAL_ID ?? "") !== state.accountId ||
+        provisioningOperation.STATUS !== "completed"
+      )) {
+        hasUnresolvedOperation = true;
+      }
+    }
 
     const customer = await billingClient.findCustomerByCrmReference(state.accountId);
     if (!customer) fail("Billing customer is missing", {
@@ -501,7 +521,7 @@ function createLifecycleHandler(config, { crmClient, billingClient, operationSto
       operationKey: identity.operationKey,
       operationFingerprint: identity.operationFingerprint,
       action: payload.action,
-      dealId: payload.dealId,
+      scopeId: payload.dealId,
     });
     if (claim.outcome === "duplicate-completed") {
       await reconcile(state);

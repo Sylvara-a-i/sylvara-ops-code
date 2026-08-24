@@ -198,12 +198,13 @@ function createRequestListener({
         writeAuthorizationProvider: crmWrite,
         fetchImpl,
       });
+      const operationStore = makeOperationStore(app, config);
       const billingClient = makeBillingClient(config, {
         readAuthorizationProvider: billingRead,
         writeAuthorizationProvider: billingWrite,
+        operationStore,
         fetchImpl,
       });
-      const operationStore = makeOperationStore(app, config);
       const lifecycle = makeLifecycleHandler(config, {
         crmClient,
         billingClient,

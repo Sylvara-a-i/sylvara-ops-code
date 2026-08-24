@@ -3,7 +3,11 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const { loadConfig } = require("../lib/config");
-const { deriveOperationIdentity } = require("../lib/idempotency");
+const {
+  TEST_CUSTOMER_PROVISIONING_ACTION,
+  deriveOperationIdentity,
+  deriveTestCustomerProvisioningIdentity,
+} = require("../lib/idempotency");
 const { createLifecycleHandler } = require("../lib/lifecycle-handler");
 const { REVISION, baseEnvironment } = require("./helpers");
 
@@ -78,8 +82,11 @@ function harness(config, initialContext, options = {}) {
     },
   };
   const billingClient = {
-    ensureCustomer: async () => {
+    ensureCustomer: async (input) => {
       calls.push(["customer"]);
+      if (typeof options.ensureCustomer === "function") {
+        return options.ensureCustomer(input);
+      }
       return { customer: {
         customer_id: "200000000000001",
         zcrm_account_id: current.account.id,
@@ -456,6 +463,28 @@ test("customer verification never occupies paid subscription fields", async () =
   assert.equal(Object.hasOwn(patch, "Subscription_Status"), false);
 });
 
+test("a completed Account-scoped provisioning duplicate still synchronizes the Deal", async () => {
+  const config = loadConfig(baseEnvironment({
+    CUSTOMER_PROVISIONING_MODE: "test_direct_customer",
+    ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING: "true",
+  }), { artifactRevision: REVISION });
+  const verified = harness(config, context(config), {
+    ensureCustomer: async () => ({
+      customer: { customer_id: "200000000000001" },
+      duplicateProvisioning: true,
+      testDirect: true,
+    }),
+  });
+  const result = await verified.lifecycle.handle({
+    action: "ensure_customer",
+    dealId: "100000000000001",
+  });
+  assert.equal(result.outcome, "customer_readback_confirmed");
+  const patch = verified.calls.find(([kind]) => kind === "crm_update")[1];
+  assert.equal(patch.Billing_Customer_ID, "200000000000001");
+  assert.equal(patch.Billing_Automation_Status, "Customer Verified");
+});
+
 test("reconcile searches deterministic references and verifies operation state", async () => {
   const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
   const reconciled = harness(config, context(config, {
@@ -502,6 +531,66 @@ test("reconcile searches deterministic references and verifies operation state",
     action: "reconcile",
     dealId: "100000000000001",
   }), /operation is unresolved/);
+});
+
+test("direct-mode reconcile validates the complete private Account claim", async () => {
+  const config = loadConfig(baseEnvironment({
+    CUSTOMER_PROVISIONING_MODE: "test_direct_customer",
+    ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING: "true",
+  }), { artifactRevision: REVISION });
+  const provisioningIdentity = deriveTestCustomerProvisioningIdentity(
+    config,
+    "100000000000002",
+  );
+  const validRow = {
+    OPERATION_KEY: provisioningIdentity.operationKey,
+    OPERATION_FINGERPRINT: provisioningIdentity.operationFingerprint,
+    ACTION: TEST_CUSTOMER_PROVISIONING_ACTION,
+    CRM_DEAL_ID: "100000000000002",
+    STATUS: "completed",
+  };
+
+  const legacyWithoutRow = harness(config, context(config, {
+    Billing_Customer_ID: "200000000000001",
+  }));
+  const legacyResult = await legacyWithoutRow.lifecycle.handle({
+    action: "reconcile",
+    dealId: "100000000000001",
+  });
+  assert.equal(legacyResult.outcome, "authoritative_readback_confirmed");
+
+  for (const invalidRow of [
+    { ...validRow, STATUS: "processing" },
+    { ...validRow, OPERATION_KEY: "e".repeat(64) },
+    { ...validRow, OPERATION_FINGERPRINT: "d".repeat(64) },
+    { ...validRow, ACTION: "ensure_customer" },
+    { ...validRow, CRM_DEAL_ID: "100000000000003" },
+  ]) {
+    const invalid = harness(config, context(config, {
+      Billing_Customer_ID: "200000000000001",
+    }), {
+      readOperation: async (operationKey) => (
+        operationKey === provisioningIdentity.operationKey ? invalidRow : null
+      ),
+    });
+    await assert.rejects(invalid.lifecycle.handle({
+      action: "reconcile",
+      dealId: "100000000000001",
+    }), /operation is unresolved/);
+  }
+
+  const verified = harness(config, context(config, {
+    Billing_Customer_ID: "200000000000001",
+  }), {
+    readOperation: async (operationKey) => (
+      operationKey === provisioningIdentity.operationKey ? validRow : null
+    ),
+  });
+  const result = await verified.lifecycle.handle({
+    action: "reconcile",
+    dealId: "100000000000001",
+  });
+  assert.equal(result.outcome, "authoritative_readback_confirmed");
 });
 
 test("completed duplicates perform authoritative reconciliation before success", async () => {

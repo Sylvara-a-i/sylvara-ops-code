@@ -6,11 +6,18 @@
     { "name": "OPERATION_KEY", "type": "Var Char", "max_length": 64, "mandatory": true, "unique": true, "private": true },
     { "name": "OPERATION_FINGERPRINT", "type": "Var Char", "max_length": 64, "mandatory": true, "unique": false, "private": true },
     { "name": "ACTION", "type": "Var Char", "max_length": 40, "mandatory": true, "unique": false, "private": false },
-    { "name": "CRM_DEAL_ID", "type": "Var Char", "max_length": 30, "mandatory": true, "unique": false, "private": true },
+    {
+      "name": "CRM_DEAL_ID",
+      "type": "Var Char",
+      "max_length": 30,
+      "mandatory": true,
+      "unique": false,
+      "private": true,
+      "semantics": "Legacy physical column: CRM Deal ID for public lifecycle rows; CRM Account ID for the private provision_test_customer row."
+    },
     { "name": "STATUS", "type": "Var Char", "max_length": 32, "mandatory": true, "unique": false, "private": false },
     { "name": "SOURCE_REVISION", "type": "Var Char", "max_length": 40, "mandatory": true, "unique": false, "private": false },
     { "name": "SOURCE_ENVIRONMENT", "type": "Var Char", "max_length": 16, "mandatory": true, "unique": false, "private": false },
     { "name": "LAST_OUTCOME", "type": "Var Char", "max_length": 80, "mandatory": true, "unique": false, "private": false }
   ]
 }
-

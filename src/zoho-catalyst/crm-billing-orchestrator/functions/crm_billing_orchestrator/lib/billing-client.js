@@ -2,6 +2,10 @@
 
 const crypto = require("node:crypto");
 const { HttpBoundaryError, requestJson } = require("./http");
+const {
+  TEST_CUSTOMER_PROVISIONING_ACTION,
+  deriveTestCustomerProvisioningIdentity,
+} = require("./idempotency");
 
 const RECORD_ID = /^[1-9][0-9]{7,29}$/;
 const PLAN_CODE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
@@ -91,10 +95,35 @@ function classifyStatus(status, sideEffecting) {
 function createBillingClient(config, {
   readAuthorizationProvider,
   writeAuthorizationProvider,
+  operationStore,
   fetchImpl = globalThis.fetch,
 } = {}) {
   if (typeof readAuthorizationProvider !== "function" || typeof writeAuthorizationProvider !== "function") {
     fail("Billing authorization providers are unavailable", { publicCode: "configuration_invalid" });
+  }
+  if (
+    config.customerProvisioningMode === "test_direct_customer" &&
+    (typeof operationStore?.claim !== "function" || typeof operationStore?.mark !== "function")
+  ) fail("Direct TEST customer operation store is unavailable", {
+    publicCode: "configuration_invalid",
+  });
+
+  async function markDirectTestCustomerClaim(rowId, status, lastOutcome) {
+    try {
+      await operationStore.mark(rowId, status, lastOutcome);
+    } catch {
+      fail("Direct TEST customer claim result requires reconciliation", {
+        ambiguous: true,
+        publicCode: "reconciliation_required",
+      });
+    }
+  }
+
+  function reconciliationError(message) {
+    return new BillingClientError(message, {
+      ambiguous: true,
+      publicCode: "reconciliation_required",
+    });
   }
 
   async function authorizedRequest(path, { query = null, write = false, sideEffecting = false, ...options }) {
@@ -270,12 +299,66 @@ function createBillingClient(config, {
 
   async function ensureCustomer({ crmAccountId }) {
     const selectedAccountId = id(crmAccountId, "CRM Account identifier");
-    let existing = await findCustomerByCrmReference(selectedAccountId);
-    if (existing) return Object.freeze({ customer: existing, imported: false });
+    let existing;
     if (config.customerProvisioningMode === "test_direct_customer") {
       const identity = directTestCustomerIdentity(config, selectedAccountId);
+      const operationIdentity = deriveTestCustomerProvisioningIdentity(config, selectedAccountId);
+      const claim = await operationStore.claim({
+        operationKey: operationIdentity.operationKey,
+        operationFingerprint: operationIdentity.operationFingerprint,
+        action: TEST_CUSTOMER_PROVISIONING_ACTION,
+        scopeId: selectedAccountId,
+      });
+      if (claim.outcome === "duplicate-completed") {
+        try {
+          existing = await findDirectTestCustomer(selectedAccountId);
+        } catch {
+          throw reconciliationError("Completed direct TEST customer claim could not be verified");
+        }
+        if (!existing) throw reconciliationError("Completed direct TEST customer claim has no customer");
+        return Object.freeze({
+          customer: existing,
+          imported: false,
+          testDirect: true,
+          duplicateProvisioning: true,
+        });
+      }
+      if (claim.outcome !== "claimed") {
+        throw reconciliationError("Direct TEST customer claim is unresolved");
+      }
+      try {
+        existing = await findDirectTestCustomer(selectedAccountId);
+      } catch (error) {
+        await markDirectTestCustomerClaim(
+          claim.rowId,
+          "failed",
+          /^[a-z0-9_]{1,80}$/.test(error?.publicCode)
+            ? error.publicCode
+            : "billing_dependency_failed",
+        );
+        throw error;
+      }
+      if (existing) {
+        await markDirectTestCustomerClaim(
+          claim.rowId,
+          "completed",
+          "customer_readback_confirmed",
+        );
+        return Object.freeze({ customer: existing, imported: false, testDirect: true });
+      }
+      try {
+        await assertDirectTestOrganization();
+      } catch (error) {
+        await markDirectTestCustomerClaim(
+          claim.rowId,
+          "failed",
+          /^[a-z0-9_]{1,80}$/.test(error?.publicCode)
+            ? error.publicCode
+            : "billing_dependency_failed",
+        );
+        throw error;
+      }
       let createFailure = null;
-      await assertDirectTestOrganization();
       try {
         const response = await authorizedRequest("/customers", {
           method: "POST",
@@ -301,14 +384,49 @@ function createBillingClient(config, {
       } catch (error) {
         createFailure = error;
       }
-      existing = await findDirectTestCustomer(selectedAccountId);
-      if (existing) return Object.freeze({ customer: existing, imported: false, testDirect: true });
-      if (createFailure instanceof BillingClientError && !createFailure.ambiguous) throw createFailure;
-      fail("Billing direct TEST customer creation outcome is unresolved", {
-        ambiguous: true,
-        publicCode: "reconciliation_required",
-      });
+      try {
+        existing = await findDirectTestCustomer(selectedAccountId);
+      } catch {
+        const unresolved = reconciliationError(
+          "Billing direct TEST customer post-create readback is unresolved",
+        );
+        await markDirectTestCustomerClaim(
+          claim.rowId,
+          "reconciliation_required",
+          unresolved.publicCode,
+        );
+        throw unresolved;
+      }
+      if (existing) {
+        await markDirectTestCustomerClaim(
+          claim.rowId,
+          "completed",
+          "customer_readback_confirmed",
+        );
+        return Object.freeze({ customer: existing, imported: false, testDirect: true });
+      }
+      if (createFailure instanceof BillingClientError && !createFailure.ambiguous) {
+        await markDirectTestCustomerClaim(
+          claim.rowId,
+          "failed",
+          /^[a-z0-9_]{1,80}$/.test(createFailure.publicCode)
+            ? createFailure.publicCode
+            : "billing_dependency_failed",
+        );
+        throw createFailure;
+      }
+      const unresolved = reconciliationError(
+        "Billing direct TEST customer creation outcome is unresolved",
+      );
+      await markDirectTestCustomerClaim(
+        claim.rowId,
+        "reconciliation_required",
+        unresolved.publicCode,
+      );
+      throw unresolved;
     }
+    existing = await findNativeCustomerByCrmReference(selectedAccountId);
+    if (existing) return Object.freeze({ customer: existing, imported: false });
     let importFailure = null;
     try {
       const response = await authorizedRequest(`/crm/account/${selectedAccountId}/import`, {
