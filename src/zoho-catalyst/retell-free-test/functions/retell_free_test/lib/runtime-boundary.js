@@ -61,14 +61,26 @@ function assertPlatformDevelopment(request, app, config) {
   const platformEnvironmentHeader = optionalScalarHeader(request, 'x-zc-environment');
   const platformEnvironment = platformEnvironmentHeader === null
     ? null : platformEnvironmentHeader.trim().toLowerCase();
+  const platformProjectId = scalarHeader(request, 'x-zc-projectid').trim();
+  const platformProjectKey = scalarHeader(request, 'x-zc-project-key');
   const sdkEnvironment = typeof app?.config?.environment === 'string'
     ? app.config.environment.trim().toLowerCase() : '';
   const sdkProjectId = app?.config?.projectId;
-  // The host is an early containment check. SDK environment and project identity
-  // are authoritative; a platform header, when present, may only corroborate them.
-  invariant((platformEnvironment === null || platformEnvironment === 'development')
-    && sdkEnvironment === 'development'
-    && String(sdkProjectId || '') === config.developmentProjectId,
+  const sdkProjectKey = typeof app?.config?.projectKey === 'string'
+    ? app.config.projectKey : '';
+  // Catalyst's live Advanced I/O proxy omits x-zc-environment. In that case the
+  // SDK reports its Production default even on a Development function, so the
+  // exact Development host plus the independently read request/SDK project
+  // bindings are authoritative. If Catalyst supplies an environment header, it
+  // and the SDK must both corroborate Development.
+  const environmentBinding = platformEnvironment === null
+    ? new Set(['', 'development', 'production']).has(sdkEnvironment)
+    : platformEnvironment === 'development' && sdkEnvironment === 'development';
+  invariant(environmentBinding
+    && platformProjectId === config.developmentProjectId
+    && String(sdkProjectId || '') === config.developmentProjectId
+    && /^[A-Za-z0-9_-]{8,253}$/.test(platformProjectKey)
+    && sdkProjectKey === platformProjectKey,
   'PRODUCTION_BLOCKED', 'Catalyst runtime environment is not the approved Development project.',
   { httpStatus: 503 });
 }

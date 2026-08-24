@@ -286,6 +286,7 @@ test('integration: documented Development hosts pass while a production-shaped h
 
 test('integration: Catalyst platform environment and project identity fail closed before store or Mail use', async () => {
   const noHeader = runtimeFixture();
+  noHeader.app.config.environment = 'production';
   const acceptedWithoutOptionalHeader = await invoke(noHeader.listener, { url: '/retell/inbound',
     payload: payloadInbound('A'), env: noHeader.env, headers: { 'x-zc-environment': null } });
   assert.equal(acceptedWithoutOptionalHeader.status, 200);
@@ -319,6 +320,24 @@ test('integration: Catalyst platform environment and project identity fail close
   assert.equal(rejectedProject.body.code, 'PRODUCTION_BLOCKED');
   assert.equal(sdkMismatch.store.rows.get('FreeTestCalls').length, 0);
   assert.equal(sdkMismatch.mailAccesses, 0);
+
+  const requestProjectMismatch = runtimeFixture();
+  const rejectedRequestProject = await invoke(requestProjectMismatch.listener, { url: '/retell/inbound',
+    payload: payloadInbound('A'), env: requestProjectMismatch.env,
+    headers: { 'x-zc-projectid': '999' } });
+  assert.equal(rejectedRequestProject.status, 503);
+  assert.equal(rejectedRequestProject.body.code, 'PRODUCTION_BLOCKED');
+  assert.equal(requestProjectMismatch.store.rows.get('FreeTestCalls').length, 0);
+  assert.equal(requestProjectMismatch.mailAccesses, 0);
+
+  const projectKeyMismatch = runtimeFixture();
+  projectKeyMismatch.app.config.projectKey = 'synthetic_other_project_key';
+  const rejectedProjectKey = await invoke(projectKeyMismatch.listener, { url: '/retell/inbound',
+    payload: payloadInbound('A'), env: projectKeyMismatch.env });
+  assert.equal(rejectedProjectKey.status, 503);
+  assert.equal(rejectedProjectKey.body.code, 'PRODUCTION_BLOCKED');
+  assert.equal(projectKeyMismatch.store.rows.get('FreeTestCalls').length, 0);
+  assert.equal(projectKeyMismatch.mailAccesses, 0);
 });
 
 test('integration: duplicate readiness authorization fails closed', async () => {

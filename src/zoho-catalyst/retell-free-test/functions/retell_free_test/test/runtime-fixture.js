@@ -167,6 +167,8 @@ async function invoke(listener, { method = 'POST', url, payload, env, headers = 
   request.headers = {
     host: runtimeEnvironment.FREE_TEST_DEVELOPMENT_HOST, 'content-type': 'application/json',
     'x-zc-environment': 'Development',
+    'x-zc-projectid': runtimeEnvironment.FREE_TEST_DEVELOPMENT_PROJECT_ID,
+    'x-zc-project-key': 'synthetic_development_project_key',
     ...(payload === undefined ? {} : { 'x-retell-signature': signature(rawBody, runtimeEnvironment.RETELL_WEBHOOK_API_KEY, signatureTimestamp) }),
     ...headers,
   };
@@ -189,7 +191,8 @@ function runtimeFixture(overrides = {}) {
   const store = new RuntimeMemoryStore(config);
   let initialized = 0;
   let mailAccesses = 0;
-  const app = { config: { environment: 'development', projectId: env.FREE_TEST_DEVELOPMENT_PROJECT_ID },
+  const app = { config: { environment: 'development', projectId: env.FREE_TEST_DEVELOPMENT_PROJECT_ID,
+    projectKey: 'synthetic_development_project_key' },
     email() { mailAccesses += 1; return { sendMail: overrides.mailBehavior || (() => {
       throw new Error('send boundary must remain unreachable');
     }) }; } };
