@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "status": "development-desired-state",
+  "customer_facing_offer": "Free Revenue Leak Test",
+  "real_form_ids_or_urls_in_git": false,
+  "forms": [
+    {
+      "logical_name": "FORM1_FREE_REVENUE_LEAK_REQUEST",
+      "title": "Free Revenue Leak Test",
+      "purpose": "Public or CRM-assisted request intake",
+      "crm_integration": {
+        "module": "Leads",
+        "operation": "upsert",
+        "deduplication_order": ["Intake_Submission_ID", "Email"],
+        "blank_overwrite": false,
+        "lead_status": "Free Test Requested",
+        "entry_offer": "Free Revenue Leak Test"
+      },
+      "required_hidden_or_locked_fields": [
+        "Intake_Submission_ID",
+        "Free_Test_Contact_Consent_Version",
+        "Intake_Form_Version",
+        "Entry_Offer",
+        "Lead_Status",
+        "Submission_Channel",
+        "Source_Page"
+      ],
+      "assisted_prefill": {
+        "enabled": true,
+        "controller": "form1_assisted_controller",
+        "route_reference": "PREFILL_PATH",
+        "token_alias_reference": "FORM1_TOKEN_FIELD_ALIAS",
+        "server_side_only": true
+      },
+      "required_behavior": [
+        "immutable intake-submission identity is supplied before CRM upsert",
+        "contact consent, consent version, and consent time are retained",
+        "source and UTM attribution are retained",
+        "duplicate submission updates one Lead",
+        "one CRM review task is created",
+        "no Billing, routing, SMS, or paid-service action"
+      ]
+    },
+    {
+      "logical_name": "FORM2_FREE_REVENUE_LEAK_AUTHORIZATION",
+      "title": "Free Revenue Leak Test Setup and Authorization",
+      "purpose": "CRM-bound setup details, bounded-test authorization, and email proof",
+      "crm_integration": {
+        "module": "Deals",
+        "operation": "controller-mediated bounded update",
+        "native_direct_write": false
+      },
+      "required_hidden_or_locked_fields": [
+        "Setup_Form_Submission_ID",
+        "Setup_Form_Version",
+        "Test_Scope_Version",
+        "Contact_ID",
+        "Account_ID",
+        "Deal_ID",
+        "Issuance_Request_ID"
+      ],
+      "proof_field": {
+        "alias": "verification_code",
+        "type": "single-line text",
+        "prefill": false,
+        "retention": "not retained in Zoho Forms or CRM after controller verification"
+      },
+      "required_copy": [
+        "The representative authorizes the bounded Free Revenue Leak Test.",
+        "The test lasts seven calendar days or 25 connected calls, whichever occurs first.",
+        "Coverage is After Hours, No Answer / Overflow, or both as selected.",
+        "Submitting this form does not approve phone-routing go-live.",
+        "Sylvara separately completes setup, QA, and version-specific go-live approval.",
+        "This form does not authorize paid service."
+      ],
+      "notification": {
+        "proof_channel": "email",
+        "sms": false,
+        "caller_supplied_destination": false,
+        "recipient_source": "CRM-bound authorized representative email"
+      },
+      "required_behavior": [
+        "prefill is bound to the exact Contact, Account, Deal, issuance request, and destination",
+        "submission requires server-verifiable one-time proof",
+        "authorization and scope affirmations must both be true",
+        "duplicate submission has no duplicate effect",
+        "no go-live approval, Billing action, paid acceptance, Zoho Sign request, or SMS"
+      ]
+    }
+  ],
+  "cutover_order": [
+    "direct controller tests",
+    "exact function and route readback",
+    "CRM organization and Connection proof",
+    "Form 1 assisted prefill caller",
+    "Form 1 public ZZZ SYNTHETIC submission",
+    "Form 2 issue and prefill callers",
+    "Form 2 submission caller",
+    "one controlled internal email proof",
+    "legacy-route rollback test"
+  ]
+}
