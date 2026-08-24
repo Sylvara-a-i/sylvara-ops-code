@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { loadJobConfig } = require('../lib/config');
-const { assertDevelopmentJob } = require('../lib/job-handler');
+const { createRetryJobHandler, assertDevelopmentJob } = require('../lib/job-handler');
 const { environment } = require('./runtime-fixture');
 
 const config = loadJobConfig(environment());
@@ -38,4 +38,24 @@ test('unit: retry Job supports both currently documented Job Pool method casings
   assert.doesNotThrow(() => assertDevelopmentJob(lowerCaseMethod, runtimeEnvironment, config));
   assert.throws(() => assertDevelopmentJob(request({ getJobPoolDetails: undefined }), runtimeEnvironment, config),
     { code: 'PRODUCTION_BLOCKED' });
+});
+
+test('unit: retry Job closes with failure when a row failure remains uncontained', async () => {
+  const result = {
+    events: { examined: 1, results: [{ status: 'Failed', errorCode: 'CATALYST_QUERY_FAILED' }] },
+    notifications: { examined: 0, reconciliationRequired: 0, results: [] },
+  };
+  const context = {
+    failed: false, succeeded: false,
+    closeWithFailure() { this.failed = true; },
+    closeWithSuccess() { this.succeeded = true; },
+  };
+  const handler = createRetryJobHandler({
+    catalystSdk: { initialize() { return {}; } }, environment: runtimeEnvironment,
+    storeFactory: () => ({}), mailFactory: () => ({}),
+    serviceFactory: () => ({ async runRetryJob() { return result; } }),
+  });
+  assert.equal(await handler(request(), context), result);
+  assert.equal(context.failed, true);
+  assert.equal(context.succeeded, false);
 });

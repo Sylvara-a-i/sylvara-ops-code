@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loadConfig } = require('../lib/config');
 const { FreeTestError } = require('../lib/errors');
-const { createCatalystStore } = require('../lib/catalyst-store');
+const { createCatalystStore, MAX_CATALYST_TEXT_BYTES } = require('../lib/catalyst-store');
 const { createRequestListener } = require('../lib/runtime-boundary');
 const { createRetryJobHandler } = require('../lib/job-handler');
 const { queryClientReport, reportToCsv } = require('../lib/reporting');
@@ -40,6 +40,26 @@ test('integration: Catalyst adapter uses allowlisted ZCQL and unique insert read
   await store.query('FreeTestCalls', 'ROWID', '101');
   assert.match(statements.at(-1), /WHERE ROWID = 101$/);
   await assert.rejects(store.query('NotAllowed', 'CALL_KEY', call.CALL_KEY), { code: 'INVALID_DATASTORE_QUERY' });
+});
+
+test('integration: Catalyst adapter rejects text beyond the provider 10,000-byte boundary', async () => {
+  const config = loadConfig(environment());
+  const inserted = [];
+  const app = {
+    datastore() { return { table() { return { async insertRow(row) {
+      inserted.push(row);
+      return row;
+    } }; } }; },
+    zcql() { return { async executeZCQLQuery() { return []; } }; },
+  };
+  const store = createCatalystStore(app, config);
+  await store.insert('FreeTestRetellEventReceipts', {
+    EVENT_DATA_JSON: 'x'.repeat(MAX_CATALYST_TEXT_BYTES),
+  });
+  await assert.rejects(store.insert('FreeTestRetellEventReceipts', {
+    EVENT_DATA_JSON: 'x'.repeat(MAX_CATALYST_TEXT_BYTES + 1),
+  }), { code: 'INVALID_DATASTORE_ROW' });
+  assert.equal(inserted.length, 1);
 });
 
 test('integration: ambiguous deployment IDs fail closed without database uniqueness', async () => {
@@ -108,6 +128,19 @@ test('integration: Advanced I/O resolver isolates two clients and rejects unknow
   const rejected = await invoke(fixture.listener, { url: '/retell/inbound', payload: unknown, env: fixture.env });
   assert.deepEqual(rejected.body, { call_inbound: { reject: true } });
   assert.doesNotMatch(JSON.stringify(rejected.body), /client_[AB]|Synthetic Plumbing/);
+});
+
+test('integration: resolver fails closed on an oversized encrypted configuration snapshot', async () => {
+  const fixture = runtimeFixture();
+  const deployment = fixture.store.rows.get('FreeTestDeployments')[0];
+  const currentBytes = Buffer.byteLength(deployment.CONFIGURATION_JSON, 'utf8');
+  deployment.CONFIGURATION_JSON += ' '.repeat(MAX_CATALYST_TEXT_BYTES - currentBytes + 1);
+  const result = await invoke(fixture.listener, {
+    url: '/retell/inbound', payload: payloadInbound('A'), env: fixture.env,
+  });
+  assert.deepEqual(result.body, { call_inbound: { reject: true } });
+  assert.equal(fixture.store.rows.get('FreeTestCalls').length, 0);
+  assert.equal(fixture.store.rows.get('FreeTestNotifications').length, 0);
 });
 
 test('integration: ended/analyzed convergence counts once, records one dry-run notification, and replays safely', async () => {
@@ -428,6 +461,36 @@ test('integration: Catalyst retry job replays a due minimized event receipt with
   assert.equal(fixture.store.rows.get('FreeTestDeployments')[0].HANDLED_COUNT, 1);
 });
 
+test('integration: retry Job durably terminates an unreadable claimed event receipt', async () => {
+  const fixture = runtimeFixture();
+  const inbound = await invoke(fixture.listener, { url: '/retell/inbound',
+    payload: payloadInbound('A'), env: fixture.env });
+  const event = eventPayload('call_ended', 'event_job_invalid_A',
+    inbound.body.call_inbound.metadata, 'A');
+  const query = fixture.store.query.bind(fixture.store);
+  let failOnce = true;
+  fixture.store.query = async (...args) => {
+    if (failOnce && args[0] === 'FreeTestDeployments' && args[1] === 'DEPLOYMENT_ID') {
+      failOnce = false;
+      throw new FreeTestError('CATALYST_QUERY_FAILED', 'synthetic transient query',
+        { httpStatus: 503, retryable: true });
+    }
+    return query(...args);
+  };
+  await invoke(fixture.listener, { url: '/retell/events', payload: event, env: fixture.env });
+  const receipt = fixture.store.rows.get('FreeTestRetellEventReceipts')[0];
+  receipt.EVENT_DATA_JSON = '{';
+  fixture.clock.value += 1000;
+  const handler = createRetryJobHandler({ catalystSdk: fixture.catalystSdk, environment: fixture.env,
+    now: () => fixture.clock.value, storeFactory: () => fixture.store });
+  const result = await handler(retryJobRequest(fixture.env), retryJobContext());
+  assert.deepEqual(result.events.results,
+    [{ status: 'TerminalFailure', errorCode: 'CONFIGURATION_UNAVAILABLE' }]);
+  assert.equal(receipt.STATUS, 'TerminalFailure');
+  assert.equal(receipt.LEASE_TOKEN, null);
+  assert.equal(receipt.LAST_ERROR_CODE, 'CONFIGURATION_UNAVAILABLE');
+});
+
 test('integration: four-table report query and CSV remain client partitioned and value-evidence explicit', async () => {
   const fixture = runtimeFixture();
   const inbound = await invoke(fixture.listener, { url: '/retell/inbound', payload: payloadInbound('A'), env: fixture.env });
@@ -488,10 +551,13 @@ test('integration: canonical JSON tenant conflicts fail before notification prep
   });
   const retry = await handler(retryJobRequest(fixture.env), retryJobContext());
   assert.deepEqual(retry.notifications.results,
-    [{ status: 'Failed', errorCode: 'CALL_OWNERSHIP_UNRESOLVED' }]);
+    [{ status: 'ReconciliationRequired', errorCode: 'CALL_OWNERSHIP_UNRESOLVED' }]);
+  assert.equal(retry.notifications.reconciliationRequired, 1);
   assert.equal(prepares, 0);
   assert.equal(sends, 0);
-  assert.equal(notification.STATUS, 'Pending');
+  assert.equal(notification.STATUS, 'ReconciliationRequired');
+  assert.equal(notification.LAST_ERROR_CODE, 'CALL_OWNERSHIP_UNRESOLVED');
+  assert.equal(call.NOTIFICATION_STATE, 'ReconciliationRequired');
   await assert.rejects(
     queryClientReport(fixture.store, fixture.config, 'deployment_A', fixture.clock.value),
     { code: 'REPORT_OWNERSHIP_CONFLICT' },

@@ -112,6 +112,9 @@ test('unit: Data Store schema contains exactly the four implemented MVP tables',
       assert.equal(column.type, 'encrypted_text', name);
       assert.equal(column.audit_consent, true, name);
     }
+    for (const column of table.columns.filter(({ type }) => type === 'encrypted_text')) {
+      assert.equal(column.max_length, 10_000, column.api_name);
+    }
   }
   const deploymentSchema = schema.tables.find(({ api_name: name }) => name === 'FreeTestDeployments');
   assert.deepEqual(deploymentSchema.required_unique_columns, ['DEPLOYMENT_KEY', 'NUMBER_LOOKUP_HASH']);
