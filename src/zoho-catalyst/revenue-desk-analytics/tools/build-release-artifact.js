@@ -11,6 +11,8 @@ const FUNCTION_TARGET = 'analytics_sync';
 const SOURCE_REVISION_SENTINEL = '__SYLVARA_UNSTAMPED_SOURCE_REVISION__';
 const REVISION_PATTERN = /^[a-f0-9]{40}$/;
 const MAX_ARTIFACT_BYTES = 24 * 1024 * 1024;
+const ARTIFACT_VERIFY_SCRIPT =
+  'node verify-artifact.js && npm ls --omit=dev --all --ignore-scripts';
 
 class ArtifactBuildError extends Error {}
 
@@ -59,7 +61,10 @@ function releaseRelativePath(repositoryPath) {
   const functionPrefix = `functions/${FUNCTION_TARGET}/`;
   if (!relative.startsWith(functionPrefix)) return null;
   const functionRelative = relative.slice(functionPrefix.length);
-  if (new Set(['catalyst-config.json', 'index.js', 'package.json', 'package-lock.json'])
+  if (new Set([
+    'catalyst-config.json', 'index.js', 'package.json', 'package-lock.json',
+    'verify-artifact.js',
+  ])
     .has(functionRelative)) return relative;
   if (/^lib\/[A-Za-z0-9][A-Za-z0-9-]*\.js$/.test(functionRelative)) return relative;
   return null;
@@ -86,6 +91,7 @@ function parseReleaseTree(tree) {
     'catalyst.json', `functions/${FUNCTION_TARGET}/catalyst-config.json`,
     `functions/${FUNCTION_TARGET}/index.js`, `functions/${FUNCTION_TARGET}/package.json`,
     `functions/${FUNCTION_TARGET}/package-lock.json`,
+    `functions/${FUNCTION_TARGET}/verify-artifact.js`,
     `functions/${FUNCTION_TARGET}/lib/source-revision.js`,
   ]) {
     if (!paths.has(required)) fail('approved Analytics release tree is incomplete');
@@ -155,6 +161,7 @@ function validateRelease(projectRoot) {
   const lock = readJson(path.join(functionRoot, 'package-lock.json'), 'package-lock.json');
   if (packageJson?.name !== FUNCTION_TARGET || lock?.name !== FUNCTION_TARGET
     || lock?.lockfileVersion !== 3 || lock?.packages?.['']?.name !== FUNCTION_TARGET
+    || packageJson?.scripts?.['artifact:verify'] !== ARTIFACT_VERIFY_SCRIPT
     || JSON.stringify(packageJson.dependencies || {})
       !== JSON.stringify(lock.packages[''].dependencies || {})) {
     fail('Analytics package lock does not bind the release package');
@@ -249,5 +256,5 @@ if (require.main === module) {
   }
 }
 
-module.exports = { ArtifactBuildError, COMPONENT_SUBPATH, FUNCTION_TARGET, build,
-  parseReleaseTree, safeCleanup, stampArtifact, validateRelease };
+module.exports = { ARTIFACT_VERIFY_SCRIPT, ArtifactBuildError, COMPONENT_SUBPATH,
+  FUNCTION_TARGET, build, parseReleaseTree, safeCleanup, stampArtifact, validateRelease };

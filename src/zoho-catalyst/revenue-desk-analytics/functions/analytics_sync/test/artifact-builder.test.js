@@ -8,6 +8,8 @@ const { spawnSync } = require('node:child_process');
 const test = require('node:test');
 
 const builderPath = path.resolve(__dirname, '../../../tools/build-release-artifact.js');
+const verifierPath = path.resolve(__dirname, '../verify-artifact.js');
+const { ARTIFACT_VERIFY_SCRIPT } = require(builderPath);
 const SENTINEL = '__SYLVARA_UNSTAMPED_SOURCE_REVISION__';
 const COMPONENT = 'src/zoho-catalyst/revenue-desk-analytics';
 const TARGET = 'analytics_sync';
@@ -19,6 +21,11 @@ function run(command, arguments_, options = {}) {
   assert.equal(result.error, undefined, result.error?.message);
   assert.equal(result.status, 0, result.stderr);
   return result.stdout.trim();
+}
+
+function runNpm(arguments_, options = {}) {
+  assert.ok(process.env.npm_execpath, 'npm_execpath is required for the artifact test');
+  return run(process.execPath, [process.env.npm_execpath, ...arguments_], options);
 }
 
 function writeJson(file, value) {
@@ -38,6 +45,7 @@ function fixture(testContext) {
   fs.mkdirSync(path.join(functionRoot, 'test'), { recursive: true });
   fs.mkdirSync(artifactParent);
   fs.copyFileSync(builderPath, path.join(component, 'tools', path.basename(builderPath)));
+  fs.copyFileSync(verifierPath, path.join(functionRoot, path.basename(verifierPath)));
   writeJson(path.join(component, 'catalyst.json'), {
     functions: { source: 'functions', targets: [TARGET], ignore: ['test/**', '.env*'] },
   });
@@ -47,6 +55,7 @@ function fixture(testContext) {
   });
   writeJson(path.join(functionRoot, 'package.json'), {
     name: TARGET, version: '1.0.0', private: true, main: 'index.js', dependencies: {},
+    scripts: { 'artifact:verify': ARTIFACT_VERIFY_SCRIPT },
   });
   writeJson(path.join(functionRoot, 'package-lock.json'), {
     name: TARGET, version: '1.0.0', lockfileVersion: 3, requires: true,
@@ -82,10 +91,36 @@ test('release builder exports and stamps exact clean Git source without mutating
   assert.equal(output.deployed, false);
   const checkoutStamp = path.join(source.component, 'functions', TARGET, 'lib', 'source-revision.js');
   const artifactStamp = path.join(output.projectRoot, 'functions', TARGET, 'lib', 'source-revision.js');
+  const artifactFunctionRoot = path.dirname(path.dirname(artifactStamp));
   assert.match(fs.readFileSync(checkoutStamp, 'utf8'), new RegExp(SENTINEL));
   assert.match(fs.readFileSync(artifactStamp, 'utf8'), new RegExp(source.revision));
-  assert.equal(fs.existsSync(path.join(output.projectRoot, 'functions', TARGET, 'test')), false);
-  assert.equal(fs.existsSync(path.join(output.projectRoot, 'functions', TARGET, '.env.example')), false);
+  assert.equal(fs.existsSync(path.join(artifactFunctionRoot, 'test')), false);
+  assert.equal(fs.existsSync(path.join(artifactFunctionRoot, 'tools')), false);
+  assert.equal(fs.existsSync(path.join(output.projectRoot, 'tools')), false);
+  assert.equal(fs.existsSync(path.join(artifactFunctionRoot, '.env.example')), false);
+  runNpm(['ci', '--omit=dev', '--ignore-scripts'], { cwd: artifactFunctionRoot });
+  const verificationEnvironment = {
+    ...process.env,
+    APPROVED_SOURCE_REVISION: source.revision,
+  };
+  assert.match(runNpm(['run', 'artifact:verify'], {
+    cwd: artifactFunctionRoot,
+    env: verificationEnvironment,
+  }),
+    /analytics_sync artifact verification passed/);
+  const wrongRevision = source.revision === 'f'.repeat(40) ? 'e'.repeat(40) : 'f'.repeat(40);
+  const staleResult = spawnSync(process.execPath, [
+    process.env.npm_execpath, 'run', 'artifact:verify',
+  ], {
+    cwd: artifactFunctionRoot,
+    encoding: 'utf8',
+    shell: false,
+    windowsHide: true,
+    env: { ...process.env, APPROVED_SOURCE_REVISION: wrongRevision },
+  });
+  assert.equal(staleResult.error, undefined, staleResult.error?.message);
+  assert.notEqual(staleResult.status, 0);
+  assert.match(staleResult.stderr, /does not match APPROVED_SOURCE_REVISION/);
   assert.ok(fs.statSync(output.manifestPath).isFile());
   assert.equal(run('git', ['-C', source.repository, 'status', '--porcelain=v1',
     '--untracked-files=all']), '');

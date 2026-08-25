@@ -50,7 +50,7 @@ The exact public registry is [`config/variables.json`](config/variables.json). P
 - [`config/datastore-schema.json`](config/datastore-schema.json) is the additive v2 row contract, not a destructive provisioning script.
 - [`functions/analytics_sync/catalyst-config.json`](functions/analytics_sync/catalyst-config.json) declares one Node 18 Job.
 - [`RUNBOOK.md`](RUNBOOK.md) contains migration, activation, containment, readback, and rollback gates.
-- [`tools/build-release-artifact.js`](tools/build-release-artifact.js) exports only the deployable project/function files from a clean exact Git revision into an isolated temporary release directory, stamps that export, verifies it, and never deploys or modifies the checkout.
+- [`tools/build-release-artifact.js`](tools/build-release-artifact.js) exports only the deployable project/function files from a clean exact Git revision into an isolated temporary release directory, stamps that export, verifies it, and never deploys or modifies the checkout. The export includes a self-contained `verify-artifact.js`, but excludes source tests and tools.
 
 The general reporting boundary remains documented in the central [Retell/Catalyst/CRM/Analytics reporting runbook](../../../docs/runbooks/retell-catalyst-analytics-reporting.md) and [Zoho Analytics standard](../../../docs/zoho/standards/analytics.md). The v2 Job uses the official Zoho Analytics asynchronous `updateadd` import, import-Job polling, asynchronous export, and download APIs. These official contracts were reviewed on 2026-08-24; live Sylvara access and target metadata remain separate evidence.
 
@@ -62,6 +62,16 @@ From `functions/analytics_sync`:
 npm ci --ignore-scripts
 npm run ci
 ```
+
+For an isolated export returned by the release builder, install only locked production dependencies and run the artifact-specific check instead of source CI:
+
+```powershell
+$env:APPROVED_SOURCE_REVISION = "<exact-lowercase-40-character-reviewed-revision>"
+npm ci --omit=dev --ignore-scripts
+npm run artifact:verify
+```
+
+The artifact check requires the explicit approved revision and compares it to the stamp exactly. It also validates the exact Catalyst Job descriptor, deployable JavaScript, package/lock binding, artifact filesystem boundaries, and installed production dependency tree. It does not require or copy the source-only tests or builder into the deployment artifact.
 
 Tests are synthetic. Passing tests prove repository behavior only; they do not prove a Catalyst deployment, Connection scope, Analytics schema, provider response, migration, schedule, dashboard, or source/runtime parity.
 

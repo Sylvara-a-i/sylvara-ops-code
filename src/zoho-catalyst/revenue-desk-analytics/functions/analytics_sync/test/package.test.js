@@ -24,7 +24,10 @@ test('package is exactly one private analytics_sync Job target with no HTTP rout
   assert.deepEqual(deployment.deployment,
     { name: 'analytics_sync', stack: 'node18', type: 'job' });
   assert.equal(deployment.execution.main, 'index.js');
-  assert.equal(require('../package.json').name, 'analytics_sync');
+  const packageJson = require('../package.json');
+  assert.equal(packageJson.name, 'analytics_sync');
+  assert.equal(packageJson.scripts['artifact:verify'],
+    'node verify-artifact.js && npm ls --omit=dev --all --ignore-scripts');
   assert.equal(typeof require('../index'), 'function');
 });
 
@@ -171,7 +174,11 @@ test('README and runbook link the central standards and block a thinner live rep
   const parity = json(path.join('config', 'live-source-parity.json'));
   assert.match(readme, /Retell\/Catalyst\/CRM\/Analytics reporting runbook/);
   assert.match(readme, /Zoho Analytics standard/);
+  assert.match(readme, /npm run artifact:verify/);
+  assert.match(readme, /APPROVED_SOURCE_REVISION/);
   assert.match(runbook, /thinner candidate is not an acceptable replacement/);
+  assert.match(runbook, /npm run artifact:verify/);
+  assert.match(runbook, /APPROVED_SOURCE_REVISION/);
   assert.equal(parity.deployment_replacement_authorized, false);
   assert.ok(parity.live_modules.some((module) => module.name === 'daily-rollup.js'
     && module.repository_candidate.includes('functions/analytics_sync/lib/daily-rollup.js')
