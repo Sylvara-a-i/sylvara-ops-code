@@ -71,13 +71,13 @@ The [product reference collection](reference/README.md) covers the currently gov
 - [Sanitized 2026-08-22 Development runtime/source reconciliation](../runbooks/free-test-development-reconciliation-2026-08-22.md)
 - [Free-test runtime security controls](../security/free-test-runtime-controls.md)
 - [Retell-to-reporting deployment and containment runbook](../runbooks/retell-catalyst-analytics-reporting.md)
-- [Free-test Catalyst runtime contract](../../src/zoho-catalyst/retell-free-test/functions/retell_free_test/contracts/free-test-contract.json)
-- [Free-test environment-variable registry](../../src/zoho-catalyst/retell-free-test/config/variables.json)
-- [Free-test Catalyst Data Store schema](../../src/zoho-catalyst/retell-free-test/config/datastore-schema.json)
+- [Revenue Desk shared call-runtime contract](../../src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_gateway/contracts/revenue-desk-call-contract.json)
+- [Revenue Desk call-runtime environment-variable registry](../../src/zoho-catalyst/revenue-desk-call-runtime/config/variables.json)
+- [Revenue Desk canonical Catalyst Data Store schema](../../src/zoho-catalyst/revenue-desk-call-runtime/config/datastore-schema.json)
 
 These files stay beside their artifacts because they describe exact source, validation, deployment, provenance, or rollback behavior. Reusable policy belongs here under `docs/zoho/`.
 
-The free-test Catalyst/Zoho Development lane is **READY FOR CONTROLLED INTERNAL PHONE TEST** at recorded revision `d4f5af31be310df400532641ef163c16de31066c`. Readback covers the four exact tables and App User denial, both functions, Function Job pool, disabled one-minute Cron, private configuration, verified sender, HTTP 200 readiness, signed resolver/event behavior, durable replay-safe calls and notifications, manual Job execution, seven-day and practical 25-call stops, one internal Development email with no replay send, restored `dry_run`, source parity, and rollback. One existing non-customer Retell Development number is sufficient for the next minimal internal phone step. A second number, paid/native voice and provider-fallback testing, agent refinement, prospect/customer routing, Production, CRM writes, and Analytics writes remain deferred or prohibited. See the dated reconciliation for the exact evidence boundary, including the requirement to redeploy and repeat parity if the final reviewed revision changes.
+The consolidated Catalyst/Zoho release is **NOT READY FOR RETELL AGENT TESTING**. The prior Development revision and four-table/two-function proof are migration evidence only; they do not prove the canonical six-function, two-pool, thirteen-table, CRM/Billing, Analytics, cleanup, rotation, final-main, or dark-Production state. The [final release contract](../product/free-revenue-leak-test-release-contract.md) and [current reconciliation](../runbooks/free-revenue-leak-test-e2e-reconciliation-2026-08-24.md) are authoritative.
 
 ## Portability Boundary
 

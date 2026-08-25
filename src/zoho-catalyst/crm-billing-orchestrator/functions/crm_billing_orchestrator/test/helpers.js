@@ -28,12 +28,14 @@ const SYNTHETIC_COMMERCIAL_TERMS = Object.freeze({
 function baseEnvironment(overrides = {}) {
   const environment = {
     DEPLOYMENT_ENVIRONMENT: "development",
+    DEPLOYMENT_MODE: "active",
     SOURCE_REVISION: REVISION,
     DEVELOPMENT_FUNCTION_HOST: "synthetic.development.catalystserverless.com",
     DEVELOPMENT_RUNTIME_PROOF,
     ALLOWED_PATH: "/synthetic/crm-billing",
     SHARED_HEADER_NAME: "x-synthetic-lifecycle-key",
     SHARED_HEADER_VALUE: "s".repeat(32),
+    REPORT_SUMMARY_HEADER_VALUE: "u".repeat(32),
     CRM_API_BASE_URL: "https://www.zohoapis.com/crm/v8",
     BILLING_API_BASE_URL: "https://www.zohoapis.com/billing/v1",
     BILLING_ORGANIZATION_ID: "100000000000001",
@@ -43,9 +45,11 @@ function baseEnvironment(overrides = {}) {
     CRM_WRITE_CONNECTION_LINK_NAME: "CrmWrite",
     BILLING_READ_CONNECTION_LINK_NAME: "BillingRead",
     BILLING_WRITE_CONNECTION_LINK_NAME: "BillingWrite",
-    OPERATION_TABLE: "LifecycleOperations",
+    OPERATION_TABLE: "CRMBillingOperations",
+    ANALYTICS_OUTBOX_TABLE: "AnalyticsSyncOutbox",
     DATASTORE_DUPLICATE_ERROR_CODES: "DUPLICATE",
     IDEMPOTENCY_PEPPER: "p".repeat(32),
+    ANALYTICS_PARTITION_HMAC_SECRET: "q".repeat(32),
     ENABLE_PAID_SUBSCRIPTION_PREPARATION: "true",
     PAID_PLAN_CODE_MAP: JSON.stringify({
       "Launch::Monthly": "launch_monthly",

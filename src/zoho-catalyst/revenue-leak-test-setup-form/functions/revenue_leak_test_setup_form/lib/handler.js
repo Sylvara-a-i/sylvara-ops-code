@@ -1282,7 +1282,10 @@ async function handlePrefill(body, dependencies, nowMs) {
   const prefill = buildPrefillPayload(existing, {
     allowedPhoneSystemProviders: dependencies.config.form2PhoneSystemProviders,
   });
-  const snapshotFingerprint = fingerprintSnapshot(prefill, dependencies.config.tokenPepper);
+  const snapshotFingerprint = fingerprintSnapshot(
+    prefill,
+    dependencies.config.workflowKeyMaterial,
+  );
   const minted = await dependencies.workflowStore.mintPrefill(
     prefillBinding(session, existing, snapshotFingerprint),
   );
@@ -1653,7 +1656,7 @@ async function handleSubmission(body, dependencies, nowMs) {
     submissionId: namespacedSubmissionId,
     prefillId: body.prefillId,
     values: formPayload,
-  }, dependencies.config.tokenPepper);
+  }, dependencies.config.workflowKeyMaterial);
   const submissionBinding = {
     submissionId: namespacedSubmissionId,
     prefillId: body.prefillId,
@@ -1804,7 +1807,7 @@ async function handleSubmission(body, dependencies, nowMs) {
       buildPrefillPayload(existing, {
         allowedPhoneSystemProviders: dependencies.config.form2PhoneSystemProviders,
       }),
-      dependencies.config.tokenPepper,
+      dependencies.config.workflowKeyMaterial,
     );
     if (currentFingerprint !== revision.snapshotFingerprint) {
       throw new ControllerError("Prefill snapshot no longer matches", {

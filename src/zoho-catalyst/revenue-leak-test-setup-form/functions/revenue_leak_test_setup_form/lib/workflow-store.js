@@ -68,6 +68,7 @@ const MODIFIED_TIME_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})
 const ISO_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const SUBMISSION_ID_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
 const OUTCOME_PATTERN = /^[a-z0-9_]{1,80}$/;
+const WORKFLOW_KEY_DOMAIN = "sylvara.form2.workflow-key.v1";
 
 const PREFILL_BINDING_KEYS = new Set([
   "sessionRowId",
@@ -128,17 +129,17 @@ function validateAdapter(adapter) {
 
 function validateConfig(config) {
   const safeTable = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
-  const pepper = config?.tokenPepper;
+  const workflowSecret = config?.workflowKeyMaterial;
   if (
     !safeTable.test(config?.prefillTableName ?? "") ||
     !safeTable.test(config?.submissionTableName ?? "") ||
     config.prefillTableName === config.submissionTableName ||
     config?.deploymentEnvironment !== "development" ||
     !SOURCE_REVISION_PATTERN.test(config?.sourceRevision ?? "") ||
-    typeof pepper !== "string" ||
-    Buffer.byteLength(pepper, "utf8") < 32 ||
-    Buffer.byteLength(pepper, "utf8") > 256 ||
-    !/^[\x21-\x7e]+$/.test(pepper) ||
+    typeof workflowSecret !== "string" ||
+    Buffer.byteLength(workflowSecret, "utf8") < 32 ||
+    Buffer.byteLength(workflowSecret, "utf8") > 256 ||
+    !/^[\x21-\x7e]+$/.test(workflowSecret) ||
     !Number.isSafeInteger(config?.platformOperationTimeoutMs) ||
     config.platformOperationTimeoutMs < 250 ||
     config.platformOperationTimeoutMs > 15000 ||
@@ -441,8 +442,8 @@ function createWorkflowStore(
       key = hashIdentifier
         ? hashIdentifier(kind, rawIdentifier)
         : crypto
-          .createHmac("sha256", config.tokenPepper)
-          .update(`sylvara-form2:${config.deploymentEnvironment}:${kind}\0`, "utf8")
+          .createHmac("sha256", config.workflowKeyMaterial)
+          .update(`${WORKFLOW_KEY_DOMAIN}\0${config.deploymentEnvironment}\0${kind}\0`, "utf8")
           .update(rawIdentifier, "utf8")
           .digest("hex");
     } catch {
@@ -458,9 +459,9 @@ function createWorkflowStore(
     let bytes;
     try {
       bytes = crypto
-        .createHmac("sha256", config.tokenPepper)
+        .createHmac("sha256", config.workflowKeyMaterial)
         .update(
-          `sylvara-form2:${config.deploymentEnvironment}:prefill-id\0`,
+          `${WORKFLOW_KEY_DOMAIN}\0${config.deploymentEnvironment}\0prefill-id\0`,
           "utf8",
         )
         .update(sessionRowId, "utf8")

@@ -9,16 +9,20 @@ function createAdapter() {
   let row = null;
   return {
     async insertRow(table, input) {
-      assert.equal(table, "Form1AssistedSessions");
+      assert.equal(table, "RevenueLeakTestRequestFormSessions");
       assert.equal(row, null);
       row = { ROWID: "1", ...input };
       return row;
     },
     async findRowsByTokenHash(_table, tokenHash) {
-      return row?.TOKEN_HASH === tokenHash ? [{ Form1AssistedSessions: { ...row } }] : [];
+      return row?.TOKEN_HASH === tokenHash
+        ? [{ RevenueLeakTestRequestFormSessions: { ...row } }]
+        : [];
     },
     async findRowsByRowId(_table, rowId) {
-      return row?.ROWID === rowId ? [{ Form1AssistedSessions: { ...row } }] : [];
+      return row?.ROWID === rowId
+        ? [{ RevenueLeakTestRequestFormSessions: { ...row } }]
+        : [];
     },
     async updateRow(_table, update, expected) {
       const matches = row && Object.entries(expected).every(([key, value]) => row[key] === value);
@@ -37,7 +41,7 @@ test("live single-table schema enforces one unique prefill reservation owner", a
   const store = createSessionStore(
     adapter,
     {
-      sessionTableName: "Form1AssistedSessions",
+      sessionTableName: "RevenueLeakTestRequestFormSessions",
       deploymentEnvironment: "development",
       sourceRevision: REVISION,
       sessionTtlSeconds: 900,

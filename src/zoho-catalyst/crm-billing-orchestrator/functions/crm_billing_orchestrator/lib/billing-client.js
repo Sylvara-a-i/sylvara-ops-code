@@ -15,6 +15,7 @@ const RECORD_ID = /^[1-9][0-9]{7,29}$/;
 const PLAN_CODE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
 const REFERENCE = /^syl-paid-[a-f0-9]{32}$/;
 const TEST_CUSTOMER_MARKER = /^syl-test-customer-[a-f0-9]{32}$/;
+const TEST_CUSTOMER_IDENTITY_DOMAIN = "sylvara.crm-billing.test-customer.v1";
 
 class BillingClientError extends Error {
   constructor(message, {
@@ -63,7 +64,9 @@ function reference(value) {
 function directTestCustomerIdentity(config, crmAccountId) {
   const selectedAccountId = id(crmAccountId, "CRM Account identifier");
   const digest = crypto.createHmac("sha256", config.idempotencyPepper)
-    .update(`test-customer\0${config.deploymentEnvironment}\0${selectedAccountId}`)
+    .update(
+      `${TEST_CUSTOMER_IDENTITY_DOMAIN}\0${config.deploymentEnvironment}\0${selectedAccountId}`,
+    )
     .digest("hex");
   const token = digest.slice(0, 32);
   return Object.freeze({

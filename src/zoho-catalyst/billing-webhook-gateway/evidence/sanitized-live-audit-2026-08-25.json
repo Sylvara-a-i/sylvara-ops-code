@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "record_type": "billing_webhook_gateway_sanitized_live_audit",
+  "observation_date_utc": "2026-08-25",
+  "classification": "required_hardening_pending",
+  "scope": "Read-only structural and configuration audit; no live change was made",
+  "disclosure_controls": {
+    "raw_source_included": false,
+    "identifiers_included": false,
+    "endpoints_or_route_values_included": false,
+    "secrets_or_oauth_material_included": false,
+    "source_or_destination_hashes_included": false,
+    "customer_or_webhook_payload_data_included": false
+  },
+  "billing_webhook": {
+    "subscription_webhook_state": "active",
+    "target_binding_assessment": "exactly_matches_development_route_path",
+    "private_target_disclosed": false,
+    "activation_or_ownership_inference": "not_permitted_from_route_match_alone"
+  },
+  "billing_webhook_history": {
+    "queries": [
+      {
+        "window_start": "2026-05-25",
+        "window_end": "2026-08-25",
+        "visible_delivery_rows": 0,
+        "visible_status_codes": 0,
+        "visible_timestamps": 0
+      },
+      {
+        "window_start": "2025-08-25",
+        "window_end": "2026-08-25",
+        "visible_delivery_rows": 0,
+        "visible_status_codes": 0,
+        "visible_timestamps": 0
+      }
+    ],
+    "interpretation": "No history evidence was visible in either read-only query; this is not proof that no delivery or execution occurred"
+  },
+  "private_full_source_scan": {
+    "reviewed_live_revision_count": 3,
+    "reviewed_revision_labels": [
+      "development_snake_case",
+      "production_snake_case",
+      "production_camel_case"
+    ],
+    "direct_dependency_references_present": [
+      "zoho_billing",
+      "zoho_creator",
+      "raw_oauth_refresh_material"
+    ],
+    "direct_dependency_references_absent": [
+      "zoho_crm",
+      "zoho_books",
+      "zoho_analytics",
+      "website"
+    ],
+    "catalyst_connection_usage_reference_count": 0,
+    "raw_source_exported": false,
+    "repository_source_parity": "unverified_until_immutable_development_deployment_and_readback"
+  },
+  "creator_custom_api_inventory": {
+    "status": "unverified",
+    "reason": "Creator UI and an authorized Creator MCP capability were unavailable",
+    "absence_inference_permitted": false
+  },
+  "decision": {
+    "classification": "required_hardening_pending",
+    "repository_artifact_status": "required_hardening_pending",
+    "repository_release_scope": "development_only",
+    "hardening_complete": false,
+    "required_before_reclassification": [
+      "Creator Custom API inventory and exact authentication contract proven",
+      "immutable reviewed Development artifact deployed and independently read back",
+      "Billing webhook to Development route ownership and disabled-change-state proof",
+      "Production duplicate removal, rollback, and independent absence-readback proof",
+      "Billing webhook and durable event-fingerprint secrets rotated with old-key rejection",
+      "least-privilege Creator Connection grant rotated and independently read back",
+      "all historical raw OAuth grants revoked and retired runtime variables proven absent",
+      "final Billing, Catalyst, Connection, inbox, Creator, route, source-revision, and Production-block readback"
+    ],
+    "live_changes": "approval_gated",
+    "development_deployment_authorized": false,
+    "credential_rotation_authorized": false,
+    "duplicate_removal_authorized": false,
+    "production_activation_authorized": false,
+    "production_code_block_retained": true
+  }
+}

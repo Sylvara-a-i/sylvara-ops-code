@@ -21,6 +21,17 @@ test("the variable registry and placeholder environment stay in lockstep", () =>
   const registry = readJson(path.join(controllerRoot, "config/variables.json"));
   const names = registry.variables.map((entry) => entry.name);
   assert.equal(new Set(names).size, names.length);
+  assert.equal(
+    registry.variables.find((entry) => entry.name === "SESSION_TABLE_NAME")?.safe_default,
+    "RevenueLeakTestRequestFormSessions",
+  );
+
+  const schema = readJson(path.join(controllerRoot, "config/datastore-schema.json"));
+  assert.equal(schema.schema_version, 2);
+  assert.deepEqual(
+    schema.tables.map((table) => [table.runtime_variable, table.expected_api_name]),
+    [["SESSION_TABLE_NAME", "RevenueLeakTestRequestFormSessions"]],
+  );
 
   const example = fs.readFileSync(path.join(functionRoot, ".env.example"), "utf8");
   const exampleNames = example
@@ -28,6 +39,7 @@ test("the variable registry and placeholder environment stay in lockstep", () =>
     .filter((line) => line && !line.startsWith("#"))
     .map((line) => line.slice(0, line.indexOf("=")));
   assert.deepEqual(sorted(names), sorted(exampleNames));
+  assert.match(example, /^SESSION_TABLE_NAME=RevenueLeakTestRequestFormSessions$/m);
   assert.doesNotMatch(example, /Zoho-oauthtoken|client_secret|refresh_token|@/i);
 });
 

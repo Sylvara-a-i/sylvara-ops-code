@@ -5,7 +5,10 @@ const test = require("node:test");
 const { brotliCompressSync } = require("node:zlib");
 const {
   ConfigurationError,
+  FORM2_PREFILL_TABLE_NAME,
+  FORM2_PROOF_TABLE_NAME,
   FORM2_SESSION_TABLE_NAME,
+  FORM2_SUBMISSION_TABLE_NAME,
   NUMERIC_LIMITS,
   PRIVATE_CHOICE_LIMITS,
   loadConfig,
@@ -31,10 +34,11 @@ function compressedChoices(choices) {
 function baseEnvironment(overrides = {}) {
   return {
     DEPLOYMENT_ENVIRONMENT: "development",
+    DEPLOYMENT_MODE: "active",
     SESSION_TABLE_NAME: FORM2_SESSION_TABLE_NAME,
-    PREFILL_TABLE_NAME: "Form2_Prefills_V3",
-    SUBMISSION_TABLE_NAME: "Form2_Submissions_V3",
-    FORM2_PROOF_TABLE_NAME: "Form2_Proofs_V3",
+    PREFILL_TABLE_NAME: FORM2_PREFILL_TABLE_NAME,
+    SUBMISSION_TABLE_NAME: FORM2_SUBMISSION_TABLE_NAME,
+    FORM2_PROOF_TABLE_NAME: FORM2_PROOF_TABLE_NAME,
     ISSUE_PATH: "/form2/session/issue",
     FORM2_ACCESS_PATH: "/form2/session/access",
     FORM2_OTP_REQUEST_PATH: "/form2/session/otp/request",
@@ -47,6 +51,7 @@ function baseEnvironment(overrides = {}) {
     PREFILL_HEADER_SECRET: "F".repeat(43),
     SUBMISSION_HEADER_SECRET: "S".repeat(43),
     TOKEN_PEPPER: "P".repeat(43),
+    WORKFLOW_HMAC_SECRET: "W".repeat(43),
     FORM2_PROOF_HMAC_SECRET: "V".repeat(43),
     FORM2_ACCESS_PUBLIC_URL: "https://synthetic.development.catalystserverless.com/form2/session/access",
     FORM2_PUBLIC_URL,
@@ -80,11 +85,17 @@ function load(environment = baseEnvironment()) {
   );
 }
 
-test("loads an immutable Development-only configuration with bounded defaults", () => {
+test("loads an immutable active Development configuration with bounded defaults", () => {
   const config = load();
   assert.equal(config.deploymentEnvironment, "development");
+  assert.equal(config.deploymentMode, "active");
+  assert.equal(config.darkMode, false);
+  assert.equal(config.tokenPepper, "P".repeat(43));
+  assert.equal(config.workflowKeyMaterial, "W".repeat(43));
   assert.equal(config.sessionTableName, FORM2_SESSION_TABLE_NAME);
-  assert.equal(config.prefillTableName, "Form2_Prefills_V3");
+  assert.equal(config.prefillTableName, FORM2_PREFILL_TABLE_NAME);
+  assert.equal(config.submissionTableName, FORM2_SUBMISSION_TABLE_NAME);
+  assert.equal(config.proofTableName, FORM2_PROOF_TABLE_NAME);
   assert.equal(config.sessionTtlSeconds, 3600);
   assert.equal(config.verifiedSessionTtlSeconds, 1800);
   assert.equal(config.maxVerificationAttempts, 3);
@@ -193,10 +204,29 @@ test("bounds and validates compressed private-choice configuration", () => {
   );
 });
 
-test("hard-blocks every environment other than exact Development", () => {
-  for (const value of ["production", "Production", "development ", "test", ""]) {
+test("allows only active Development or dependency-free dark Production", () => {
+  const darkEnvironment = baseEnvironment({
+    DEPLOYMENT_ENVIRONMENT: "production",
+    DEPLOYMENT_MODE: "dark",
+  });
+  const dark = load(darkEnvironment);
+  assert.deepEqual(dark, {
+    darkMode: true,
+    deploymentEnvironment: "production",
+    deploymentMode: "dark",
+    sourceRevision: darkEnvironment.SOURCE_REVISION,
+  });
+
+  for (const [deploymentEnvironment, deploymentMode] of [
+    ["production", "active"],
+    ["Production", "dark"],
+    ["development ", "active"],
+    ["development", "dark"],
+    ["test", "dark"],
+    ["", "active"],
+  ]) {
     assert.throws(
-      () => load(baseEnvironment({ DEPLOYMENT_ENVIRONMENT: value })),
+      () => load(baseEnvironment({ DEPLOYMENT_ENVIRONMENT: deploymentEnvironment, DEPLOYMENT_MODE: deploymentMode })),
       ConfigurationError,
     );
   }
@@ -210,7 +240,9 @@ test("requires separate safe Data Store table identifiers", () => {
     { SESSION_TABLE_NAME: "unsafe-name" },
     { SESSION_TABLE_NAME: "Form2_Sessions" },
     { SESSION_TABLE_NAME: "Form2SessionsV3" },
-    { SUBMISSION_TABLE_NAME: "Form2_Prefills_V3" },
+    { PREFILL_TABLE_NAME: "AlternatePrefillsV3" },
+    { SUBMISSION_TABLE_NAME: FORM2_PREFILL_TABLE_NAME },
+    { FORM2_PROOF_TABLE_NAME: "AlternateProofsV3" },
     { PREFILL_TABLE_NAME: "" },
   ]) {
     assert.throws(() => load(baseEnvironment(overrides)), ConfigurationError);
@@ -230,10 +262,12 @@ test("requires six unique exact routes and isolated custom-header names", () => 
   }
 });
 
-test("requires independently generated printable route secrets and token pepper", () => {
+test("requires independently generated printable route and key-derivation secrets", () => {
   const syntheticValueWithNewline = `${"F".repeat(32)}\n`;
   for (const overrides of [
     { TOKEN_PEPPER: "short" },
+    { WORKFLOW_HMAC_SECRET: "short" },
+    { WORKFLOW_HMAC_SECRET: "P".repeat(43) },
     { ISSUE_HEADER_SECRET: "I".repeat(31) },
     { PREFILL_HEADER_SECRET: syntheticValueWithNewline },
     { SUBMISSION_HEADER_SECRET: "P".repeat(43) },

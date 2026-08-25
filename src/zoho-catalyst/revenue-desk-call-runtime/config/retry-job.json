@@ -1,0 +1,54 @@
+{
+  "schema_version": 3,
+  "record_type": "revenue_desk_call_worker_job_contract",
+  "current_status": "unverified_requires_development_provisioning_and_readback",
+  "environment": "Development",
+  "function_target": {
+    "name": "revenue_desk_call_worker",
+    "stack": "node18",
+    "type": "job",
+    "memory_mb": 256
+  },
+  "job_pool": {
+    "name": "RevenueDeskCallJobs",
+    "type": "Function",
+    "memory_mb": 512,
+    "id_runtime_variable": "REVENUE_DESK_WORKER_JOB_POOL_ID"
+  },
+  "sdk_submission": {
+    "sdk_version": "3.4.0",
+    "shape": "app.jobScheduling().JOB.submitJob(payload)",
+    "target_type": "Function",
+    "target_name": "revenue_desk_call_worker",
+    "jobpool_name": "RevenueDeskCallJobs",
+    "platform_retries": 0
+  },
+  "scheduled_retry_scan": {
+    "job_name": "RevenueDeskRetryScan",
+    "params": {
+      "mode": "retry_scan"
+    },
+    "cron_name": "RevenueDeskRetry1m",
+    "cron_name_max_characters": 20,
+    "initial_status": "disabled",
+    "schedule": {
+      "hour": 0,
+      "minute": 1,
+      "second": 0,
+      "repetition_type": "every"
+    }
+  },
+  "private_modes": {
+    "process_event": ["mode", "event_key"],
+    "retry_scan": ["mode"],
+    "rebuild_report": ["mode", "deployment_id"],
+    "reconcile_deployment": ["mode", "deployment_id"]
+  },
+  "activation_gate": [
+    "Deploy only an isolated artifact stamped with the selected final-main SHA.",
+    "Materialize the gateway file dependency with npm ci --ignore-scripts --install-links in the staged worker directory.",
+    "Read back the exact target, Function pool, parameters, zero platform retries, and disabled Cron.",
+    "Keep the Cron disabled until a separately authorized Development workflow requires recurring scans."
+  ],
+  "rollback": "Disable the Cron first, stop eligible deployment rows, preserve every receipt/call/notification/outbox row, and read back containment."
+}

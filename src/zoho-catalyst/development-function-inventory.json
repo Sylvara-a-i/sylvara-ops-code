@@ -1,217 +1,311 @@
 {
-  "schema_version": 3,
-  "record_type": "sanitized_development_function_inventory",
-  "environment": "Development",
-  "production_authorized": false,
-  "purpose": "Record the intended Catalyst function boundary and safe legacy decommission order without publishing private runtime identifiers or configuration.",
+  "schema_version": 6,
+  "record_type": "sanitized_canonical_revenue_desk_function_inventory",
+  "status": "desired_final_state_with_sanitized_development_table_count_readback",
+  "environment_scope": ["Development", "dark Production"],
+  "production_traffic_authorized": false,
+  "purpose": "Define the exact final Revenue Desk function, Job-pool, table, migration, and cleanup boundary without publishing private runtime identity or configuration.",
   "sanitization": {
     "function_ids_included": false,
     "project_or_account_ids_included": false,
     "invoke_urls_or_private_hosts_included": false,
-    "environment_values_included": false,
+    "credentials_or_secret_values_included": false,
     "customer_or_caller_data_included": false,
-    "live_counts_or_logs_included": false
+    "sanitized_aggregate_table_counts_included": true,
+    "row_contents_or_logs_included": false
   },
   "authorization": {
+    "manifest_is_live_state_evidence": false,
     "manifest_is_deletion_authority": false,
-    "manifest_is_production_authority": false,
+    "manifest_is_production_traffic_authority": false,
     "live_changes_require_scoped_approval_and_independent_readback": true
   },
-  "topology_decision": {
-    "retained_canonical_boundaries": 5,
-    "combine_further": false,
-    "reason": "Form intake, authorization proof, raw Retell webhooks, retry execution, and paid CRM/Billing mutation have different callers, credentials, runtimes, and failure blast radii. Combining them would reduce the function count while weakening least privilege and making rollback harder.",
-    "canonical_functions": [
-      "revenue_leak_test_request_form",
-      "revenue_leak_test_setup_form",
-      "retell_free_test",
-      "retell_free_test_retry",
-      "crm_billing_orchestrator"
+  "development_data_store_readback_2026_08_24": {
+    "evidence_scope": "sanitized aggregate row-count readback only; no project identifier, row content, customer data, caller data, or private configuration",
+    "readback_page_size": 300,
+    "pagination_completed_for_counts": true,
+    "observed_table_count": 29,
+    "observed_nonzero_table_count": 16,
+    "observed_zero_row_table_count": 13,
+    "nonzero_table_counts": {
+      "AnalyticsSyncCheckpoints": 10,
+      "AnalyticsSyncOutbox": 307,
+      "Calls": 13,
+      "ClientDailyMetrics": 10,
+      "ClientDeployments": 2,
+      "ConfigurationVersions": 2,
+      "Form1AssistedSessions": 8,
+      "Free_Test_Setup_Prefills": 13,
+      "Free_Test_Setup_Sessions": 4,
+      "FreeTestCalls": 30,
+      "FreeTestDeployments": 3,
+      "FreeTestNotifications": 6,
+      "FreeTestRetellEventReceipts": 39,
+      "InboundResolverEvents": 13,
+      "OutcomeLinks": 5,
+      "ReportRuns": 1
+    },
+    "zero_row_table_names_included": false,
+    "interpretation": "Nonzero legacy, predecessor, and Analytics stores prove that no table is presumptively disposable. Zero rows also do not establish that a table is obsolete or safe to delete.",
+    "table_migration_or_deletion_authorized": false,
+    "required_gate_evidence": [
+      "classify every one of the 29 tables by owner, purpose, environment, generation, active reader, active writer, and final disposition",
+      "map every retained source table and key to its canonical destination or approved quarantine",
+      "capture fresh pre-migration row counts for all source and destination tables",
+      "compute deterministic per-table and per-partition row digests over an approved sanitized canonical projection",
+      "perform additive migration with no source deletion or in-place rewrite",
+      "read back destination counts, exact key sets, digests, environment isolation, and active reader and writer bindings",
+      "approve and rehearse rollback before any source-table deletion",
+      "independently read back absence after any later approved deletion"
     ]
   },
-  "development_cleanup_readback": {
-    "owner_authorized_without_clients": true,
-    "production_changed": false,
-    "canonical_retell_inbound_binding_verified": true,
-    "canonical_retell_event_binding_verified": true,
-    "api_gateway_enabled": false,
-    "obsolete_analytics_crons_deleted_count": 7,
-    "obsolete_analytics_job_pool_deleted": true,
-    "obsolete_retell_processing_job_pool_deleted": true,
-    "canonical_retry_cron_retained_disabled": true,
-    "function_deletion_capability_available": false
+  "topology_decision": {
+    "canonical_project_count": 1,
+    "final_active_function_count": 6,
+    "final_active_functions": [
+      "revenue_leak_test_request_form",
+      "revenue_leak_test_setup_form",
+      "revenue_desk_call_gateway",
+      "revenue_desk_call_worker",
+      "crm_billing_orchestrator",
+      "analytics_sync"
+    ],
+    "separate_free_and_paid_call_stacks_allowed": false,
+    "additional_function_requires_explicit_approval": true
+  },
+  "function_job_pools": [
+    {
+      "name": "RevenueDeskCallJobs",
+      "target": "revenue_desk_call_worker",
+      "allowed_modes": ["process_event", "retry_scan", "rebuild_report", "reconcile_deployment"]
+    },
+    {
+      "name": "RevenueDeskAnalyticsJobs",
+      "target": "analytics_sync",
+      "job_params": {},
+      "caller_controlled_job_params_allowed": false,
+      "runtime_modes": {
+        "Development": ["disabled", "readiness", "active"],
+        "Production": ["disabled", "readiness"]
+      }
+    }
+  ],
+  "shared_runtime": {
+    "gateway": "revenue_desk_call_gateway",
+    "worker": "revenue_desk_call_worker",
+    "engagement_types": ["free_test", "paid_service"],
+    "free_profile": {
+      "name": "call_gap_monitor_v1",
+      "status": "active",
+      "publication_status": "published",
+      "limit_policy": "seven_calendar_days_or_25_connected_calls_v1"
+    },
+    "paid_profiles": [
+      {
+        "name": "launch_v1",
+        "plan_tier": "Launch",
+        "status": "disabled",
+        "publication_status": "draft",
+        "runtime_activation_allowed": false
+      },
+      {
+        "name": "growth_v1",
+        "plan_tier": "Growth",
+        "status": "disabled",
+        "publication_status": "draft",
+        "runtime_activation_allowed": false
+      },
+      {
+        "name": "scale_v1",
+        "plan_tier": "Scale",
+        "status": "disabled",
+        "publication_status": "draft",
+        "runtime_activation_allowed": false
+      }
+    ],
+    "unknown_unpublished_disabled_or_mismatched_profile_behavior": "reject"
+  },
+  "route_approval_control_plane": {
+    "classification": "out_of_band_private_change_control_not_a_function_route_or_job_mode",
+    "runbook": "revenue-desk-call-runtime/route-approval-control-plane-runbook.md",
+    "function_count_increment": 0,
+    "gateway_routes": ["POST /retell/inbound", "POST /retell/events", "GET /internal/readiness"],
+    "worker_modes": ["process_event", "retry_scan", "rebuild_report", "reconcile_deployment"],
+    "approval_transition": "Ready for Approval/Pending Internal Approval to Scheduled/Approved with immutable exact-version receipt and no clock",
+    "activation_transition": "Scheduled/Approved to Live only after authoritative route readback and a chained activation receipt",
+    "approval_invalidation": "any governed configuration, route fingerprint, binding, agent/version, coverage, call limit, number hash, or source revision change",
+    "capacity_reservation_subsystem_present": false,
+    "production_activation_authorized": false
+  },
+  "canonical_tables": {
+    "call_runtime": [
+      "RevenueDeskDeployments",
+      "RevenueDeskConfigurationVersions",
+      "RevenueDeskEventReceipts",
+      "RevenueDeskCalls",
+      "RevenueDeskNotifications"
+    ],
+    "form1": ["RevenueLeakTestRequestFormSessions"],
+    "form2": ["Form2SessionsV3Runtime", "Form2PrefillsV3", "Form2SubmissionsV3", "Form2VerificationProofsV3"],
+    "supporting": ["CRMBillingOperations", "AnalyticsSyncCheckpoints", "AnalyticsSyncOutbox"],
+    "app_user_access_allowed": false,
+    "configuration_version_authority": "RevenueDeskConfigurationVersions"
   },
   "functions": [
     {
       "api_name": "revenue_leak_test_request_form",
       "workflow_name": "RevenueLeakTestRequestForm",
+      "customer_facing_form": "Free Revenue Leak Test Request",
       "type": "Advanced I/O",
-      "classification": "canonical",
-      "owner": "free_test_request_form_assisted_intake",
+      "classification": "canonical_active_target",
+      "owner": "request_intake_and_lead_prefill",
       "source_path": "src/zoho-catalyst/revenue-leak-test-request-form/functions/revenue_leak_test_request_form",
-      "source_reproducibility": "repository_owned",
-      "desired_development_state": "deployed_unbound_until_direct_tests_and_forms_cutover",
-      "replacement": null,
-      "security_boundary": "Only administrator issue and authenticated Zoho Forms prefill calls; Lead-scoped read/update credentials and the assisted-session table remain outside authorization, call, and Billing runtimes.",
-      "decommission_action": "retain_separately"
+      "desired_state": "deployed_and_read_back_in_Development_and_dark_Production"
     },
     {
       "api_name": "revenue_leak_test_setup_form",
       "workflow_name": "RevenueLeakTestSetupForm",
+      "customer_facing_form": "Free Revenue Leak Test Setup and Authorization",
       "type": "Advanced I/O",
-      "classification": "canonical",
-      "owner": "free_test_setup_form_authorization",
+      "classification": "canonical_active_target",
+      "owner": "setup_authorization_and_email_proof",
       "source_path": "src/zoho-catalyst/revenue-leak-test-setup-form/functions/revenue_leak_test_setup_form",
-      "source_reproducibility": "repository_owned",
-      "desired_development_state": "deployed_unbound_until_email_proof_and_forms_cutover_pass",
-      "replacement": null,
-      "security_boundary": "Owns expiring access, email-only proof, bound prefill, and idempotent authorization submission. It cannot approve go-live, assign a test number, or create Billing state.",
-      "decommission_action": "retain_separately"
+      "desired_state": "deployed_and_read_back_in_Development_and_dark_Production"
     },
     {
-      "api_name": "retell_free_test",
+      "api_name": "revenue_desk_call_gateway",
       "type": "Advanced I/O",
-      "classification": "canonical",
-      "owner": "shared_7_day_free_test",
-      "source_path": "src/zoho-catalyst/retell-free-test/functions/retell_free_test",
-      "source_reproducibility": "repository_owned",
-      "desired_development_state": "deployed_after_exact_candidate_parity",
-      "replacement": null,
-      "security_boundary": "Only raw-body Retell inbound/events and private readiness routes; Development-only Data Store and Mail access.",
-      "decommission_action": "retain"
+      "classification": "canonical_active_target",
+      "owner": "shared_free_and_paid_call_ingress",
+      "source_path": "src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_gateway",
+      "desired_state": "only_retell_http_boundary_with_fast_durable_job_submission"
     },
     {
-      "api_name": "retell_free_test_retry",
+      "api_name": "revenue_desk_call_worker",
       "type": "Job",
-      "classification": "canonical",
-      "owner": "shared_7_day_free_test",
-      "source_path": "src/zoho-catalyst/retell-free-test/functions/retell_free_test_retry",
-      "source_reproducibility": "repository_owned",
-      "desired_development_state": "deployed_manual_job_available_recurring_cron_disabled",
-      "replacement": null,
-      "security_boundary": "Separate least-privilege retry trigger without the Retell webhook key, number resolver key, readiness token, routes, or HTTP host.",
-      "decommission_action": "retain_separately"
+      "classification": "canonical_active_target",
+      "owner": "shared_free_and_paid_call_processing",
+      "source_path": "src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_worker",
+      "desired_state": "only_call_processing_and_retry_job_target",
+      "analytics_facts_produced": ["call", "deployment", "final_test_result"]
     },
     {
       "api_name": "crm_billing_orchestrator",
       "type": "Advanced I/O",
-      "classification": "independently_necessary",
-      "owner": "paid_acceptance_and_billing",
+      "classification": "canonical_active_target",
+      "owner": "accepted_paid_crm_and_billing",
       "source_path": "src/zoho-catalyst/crm-billing-orchestrator/functions/crm_billing_orchestrator",
-      "source_reproducibility": "repository_owned",
-      "desired_development_state": "retain_as_separate_security_boundary",
-      "replacement": null,
-      "security_boundary": "Billing and CRM write authority must never enter the free-test call runtime.",
-      "decommission_action": "retain_separately"
-    },
-    {
-      "api_name": "retell_inbound_resolver",
-      "type": "Advanced I/O",
-      "classification": "legacy_deletion_approved",
-      "owner": "superseded_retell_runtime",
-      "source_path": null,
-      "source_contract_path": "src/zoho-catalyst/retell-inbound-resolver",
-      "source_reproducibility": "superseding_repository_contract_preserved",
-      "desired_development_state": "delete_manually_after_completed_binding_removal",
-      "replacement": "retell_free_test",
-      "security_boundary": "A direct Advanced I/O URL remains an ingress surface even when API Gateway is disabled.",
-      "decommission_action": "delete_development_function"
-    },
-    {
-      "api_name": "retell_route_approval_control",
-      "type": "Advanced I/O",
-      "classification": "legacy_deletion_approved",
-      "owner": "superseded_retell_runtime",
-      "source_path": null,
-      "source_reproducibility": "superseding_repository_contract_preserved",
-      "desired_development_state": "delete_manually_after_completed_binding_removal",
-      "replacement": "retell_free_test plus separately approved relationship and route controls",
-      "security_boundary": "Superseded approval behavior must not remain independently callable or bypass the canonical deployment gate.",
-      "decommission_action": "delete_development_function"
-    },
-    {
-      "api_name": "retell_events",
-      "type": "Advanced I/O",
-      "classification": "legacy_deletion_approved",
-      "owner": "superseded_retell_runtime",
-      "source_path": null,
-      "source_reproducibility": "superseding_repository_contract_preserved",
-      "desired_development_state": "delete_manually_after_completed_binding_removal",
-      "replacement": "retell_free_test",
-      "security_boundary": "A second event receiver would split idempotency and tenant ownership across incompatible stores.",
-      "decommission_action": "delete_development_function"
-    },
-    {
-      "api_name": "process_retell_events",
-      "type": "Job",
-      "classification": "legacy_deletion_approved",
-      "owner": "superseded_retell_runtime",
-      "source_path": null,
-      "source_reproducibility": "superseding_repository_contract_preserved",
-      "desired_development_state": "delete_manually_after_completed_job_pool_removal",
-      "replacement": "retell_free_test_retry",
-      "security_boundary": "A legacy processor must not consume or mutate canonical four-table state.",
-      "decommission_action": "delete_development_function"
+      "desired_state": "separate_privileged_boundary",
+      "analytics_facts_produced": ["conversion_status"]
     },
     {
       "api_name": "analytics_sync",
       "type": "Job",
-      "classification": "legacy_deletion_approved",
-      "owner": "superseded_analytics_path",
-      "source_path": null,
-      "source_reproducibility": "deterministic_json_csv_replacement_preserved",
-      "desired_development_state": "delete_manually_after_completed_cron_and_pool_removal",
-      "replacement": "deterministic client-scoped Catalyst JSON and CSV reporting",
-      "security_boundary": "Analytics is derived reporting and must not become transactional authority or a free-test launch dependency.",
-      "decommission_action": "delete_development_function"
+      "classification": "canonical_active_target",
+      "owner": "sanitized_analytics_synchronization",
+      "source_path": "src/zoho-catalyst/revenue-desk-analytics/functions/analytics_sync",
+      "desired_state": "only_analytics_job_target_bound_to_RevenueDeskAnalyticsJobs"
     }
   ],
-  "decommission_sequence": [
+  "superseded_functions": [
     {
-      "order": 1,
-      "action": "Read back canonical Retell inbound and post-call webhook bindings, confirm Catalyst API Gateway is disabled, and retain the canonical retry Cron disabled."
+      "api_name": "retell_events",
+      "replacement": ["revenue_desk_call_gateway", "revenue_desk_call_worker"],
+      "deletion_gate": "source, dependency, reusable-logic, and test extraction plus shared-runtime Development acceptance"
     },
     {
-      "order": 2,
-      "action": "Confirm there are no clients, customer routes, or Production changes and record the owner's Development-only destructive cleanup authorization."
+      "api_name": "retell_inbound_resolver",
+      "replacement": ["revenue_desk_call_gateway"],
+      "deletion_gate": "ownership, coverage, configuration-version, and test extraction plus shared-runtime Development acceptance"
     },
     {
-      "order": 3,
-      "action": "Permanently remove the seven disabled Analytics Crons and the obsolete AnalyticsSync and RetellProcessing Job pools, then independently read back the remaining Cron and pool inventory."
+      "api_name": "retell_route_approval_control",
+      "replacement": ["out-of-band private change control", "revenue_desk_call_gateway strict receipt validation"],
+      "deletion_gate": "complete source/dependency/test export, live route/Job/schedule/webhook/internal-caller binding proof, historical approval quarantine mapping, canonical Development approval plus post-readback activation acceptance, rollback rehearsal, and independent absence readback"
     },
     {
-      "order": 4,
-      "action": "Delete retell_events, retell_inbound_resolver, retell_route_approval_control, process_retell_events, and analytics_sync through the Catalyst console because the approved connector has no function-deletion operation."
+      "api_name": "process_retell_events",
+      "replacement": ["revenue_desk_call_worker"],
+      "deletion_gate": "event convergence, outcome, and test extraction plus shared-runtime Development acceptance"
     },
     {
-      "order": 5,
-      "action": "Independently read back function absence while retaining retell_free_test, retell_free_test_retry, crm_billing_orchestrator, FreeTestRetryDevelopment, FreeTestRetry1m, and RetellProbes."
+      "api_name": "retell_free_test",
+      "replacement": ["revenue_desk_call_gateway", "revenue_desk_call_worker"],
+      "deletion_gate": "free-test parity, migration, Development E2E, and rollback rehearsal"
     },
     {
-      "order": 6,
-      "action": "Deploy revenue_leak_test_request_form and revenue_leak_test_setup_form into the Retell Development project only through a reviewed source-upload capability."
-    },
-    {
-      "order": 7,
-      "action": "Resolve the mismatched legacy and target Form Data Store rows with an explicit preserve-or-discard disposition, then intentionally retire the old Forms callers."
-    },
-    {
-      "order": 8,
-      "action": "Delete the two legacy Forms projects only after target function deployment and row disposition; keep Client Portal separate and Production untouched."
+      "api_name": "retell_free_test_retry",
+      "replacement": ["revenue_desk_call_worker"],
+      "deletion_gate": "retry_scan parity, migration, Development E2E, and rollback rehearsal"
     }
   ],
-  "rollback_policy": {
-    "legacy_reactivation_is_not_the_canonical_rollback": true,
-    "containment": "Stop synthetic deployment rows, unbind Development Retell routes, keep notification mode dry_run, keep Crons disabled, and preserve durable evidence.",
-    "code_rollback": "Redeploy a previously reviewed canonical package and independently repeat source, route, readiness, and synthetic lifecycle readback.",
-    "production_impact": "none"
+  "staged_cleanup": {
+    "historical_analytics_crons_and_job_pool_removed": true,
+    "canonical_analytics_function_must_be_deployed": true,
+    "legacy_function_source_export_required": true,
+    "legacy_routes_jobs_webhooks_and_exclusive_credentials_removed_before_function_deletion": true,
+    "legacy_call_tables_removed_before_first_Production_deployment": true,
+    "duplicate_probe_and_v2_form_tables_removed_before_first_Production_deployment": true,
+    "standalone_form_projects_removed_after_target_cutover_and_dark_Production_smoke": true,
+    "retained_Development_credentials_rotated": true,
+    "deleted_function_credentials_revoked": true,
+    "Production_credentials_independent": true,
+    "every_removal_requires_independent_absence_readback": true,
+    "current_table_migration_or_deletion_allowed": false,
+    "current_blocker": "The 29-table Development inventory has aggregate count evidence only, and legacy retell_route_approval_control source plus live binding evidence is incomplete. Table classification, source-to-destination mapping, fresh counts, deterministic digests, authorization reconciliation, migration readback, and rollback evidence remain required."
   },
-  "private_evidence_required_before_decommission": [
-    "function identity and type readback",
-    "sanitized package checksum",
-    "route and trigger reference readback",
-    "last-access review",
-    "function-specific configuration inventory by variable name only",
-    "disable or removal result and independent absence readback"
-  ]
+  "environment_targets": {
+    "Development": {
+      "synthetic_e2e_required": true,
+      "source_runtime_parity_required": true,
+      "rollback_rehearsal_required": true
+    },
+    "Production": {
+      "mode": "dark",
+      "final_main_only": true,
+      "independent_credentials_required": true,
+      "synthetic_isolated_e2e_required": true,
+      "retell_binding_allowed": false,
+      "recurring_trigger_allowed": false,
+      "real_records_allowed": false,
+      "real_calls_allowed": false,
+      "traffic_activation_allowed": false
+    }
+  },
+  "client_portal_gateway": {
+    "merge_into_revenue_desk": false,
+    "classification": "required_hardening_pending",
+    "observed_revision_count": 3,
+    "observed_revisions_identical": false,
+    "billing_webhook_active": true,
+    "development_route_target_match_proven": true,
+    "one_year_visible_delivery_history_rows": 0,
+    "raw_oauth_refresh_material_observed_privately": true,
+    "catalyst_connection_usage_observed": false,
+    "direct_crm_books_analytics_or_website_dependency_observed": false,
+    "creator_custom_api_inventory_proven": false,
+    "all_external_dependencies_proven": false,
+    "repository_hardening_package": "src/zoho-catalyst/billing-webhook-gateway",
+    "required_current_action": "required_hardening_pending",
+    "hardening_complete": false,
+    "hardening_required_before_reclassification": [
+      "Creator Custom API inventory and exact authentication contract proven",
+      "immutable reviewed Development artifact deployed and independently read back",
+      "Billing webhook to Development route ownership and disabled-change-state proof",
+      "Production duplicate removal, rollback, and independent absence-readback proof",
+      "Billing webhook and durable event-fingerprint secrets rotated with old-key rejection",
+      "least-privilege Creator Connection grant rotated and independently read back",
+      "all historical raw OAuth grants revoked and retired runtime variables proven absent",
+      "final Billing, Catalyst, Connection, inbox, Creator, route, source-revision, and Production-block readback"
+    ],
+    "recent_log_silence_is_deletion_authority": false,
+    "development_deployment_authorized": false,
+    "credential_rotation_authorized": false,
+    "duplicate_removal_authorized": false
+  },
+  "rollback_policy": {
+    "containment_first": "Keep Production dark, stop synthetic deployments, unbind Retell routes, disable Jobs and Crons, and preserve durable evidence.",
+    "code_rollback": "Redeploy the last reviewed canonical six-function revision and independently repeat source, route, pool, readiness, migration, and synthetic lifecycle readback.",
+    "data_rollback": "Use reconciled migration evidence to restore readers to the prior generation without deleting ambiguous or unreconciled rows."
+  }
 }

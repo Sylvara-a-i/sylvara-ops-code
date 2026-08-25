@@ -1,14 +1,23 @@
 "use strict";
 
+const crypto = require("node:crypto");
+
 const {
   TEST_CUSTOMER_PROVISIONING_ACTION,
   deriveOperationIdentity,
   deriveTestCustomerProvisioningIdentity,
+  isReportSummaryPreWrite,
 } = require("./idempotency");
 const {
   moneyMinor,
   selectCommercialTerms,
 } = require("./commercial-terms");
+const {
+  REPORT_SUMMARY_ACTION,
+  reportSummaryPatch,
+  validateReportOperation,
+} = require("./report-summary");
+const { CANONICAL_PLAN_BY_CRM_API_VALUE } = require("./crm-client");
 
 const PAID_ACTION = "prepare_paid_subscription";
 const AUTOMATION_STATUS = "Paid Verified";
@@ -59,6 +68,20 @@ function acceptanceVersion(value) {
     typeof value !== "string" ||
     !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/.test(value)
   ) fail("Subscription_Acceptance_Version is invalid");
+  return value;
+}
+
+function deploymentIdentifier(value, name) {
+  if (typeof value !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/.test(value)) {
+    fail(`${name} is invalid`);
+  }
+  return value;
+}
+
+function configurationVersion(value, name) {
+  if (typeof value !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/.test(value)) {
+    fail(`${name} is invalid`);
+  }
   return value;
 }
 
@@ -122,8 +145,27 @@ function validatePaidAction(state, config, currentTimestamp, { reconciliation = 
   const subscriptionAcceptanceVersion = acceptanceVersion(
     state.deal.Subscription_Acceptance_Version,
   );
+  const deploymentId = deploymentIdentifier(
+    state.deal.Deployment_Record_ID, "Deployment_Record_ID",
+  );
+  const approvedDeploymentId = deploymentIdentifier(
+    state.deal.Approved_Deployment_Record_ID, "Approved_Deployment_Record_ID",
+  );
+  const selectedConfigurationVersion = configurationVersion(
+    state.deal.Configuration_Version, "Configuration_Version",
+  );
+  const approvedConfigurationVersion = configurationVersion(
+    state.deal.Approved_Configuration_Version, "Approved_Configuration_Version",
+  );
+  if (deploymentId !== approvedDeploymentId
+    || selectedConfigurationVersion !== approvedConfigurationVersion) {
+    fail("Paid acceptance is not bound to the approved deployment configuration");
+  }
 
-  const plan = String(state.deal.Plan ?? "");
+  const selectedPlanValue = String(state.deal.Plan ?? "");
+  const plan = CANONICAL_PLAN_BY_CRM_API_VALUE[selectedPlanValue]
+    ?? (new Set(Object.values(CANONICAL_PLAN_BY_CRM_API_VALUE)).has(selectedPlanValue)
+      ? selectedPlanValue : "");
   const billingFrequency = String(state.deal.Billing_Frequency ?? "");
   const commercialTerms = selectCommercialTerms(
     config.paidCommercialTerms,
@@ -168,12 +210,13 @@ function validatePaidAction(state, config, currentTimestamp, { reconciliation = 
     subscriptionAcceptedAt: state.deal.Subscription_Accepted_At,
     resultsReviewAt: state.deal.Results_Review_At,
     subscriptionStartDate,
+    deploymentId,
+    configurationVersion: selectedConfigurationVersion,
   });
 }
 
 function operationMaterial(state, validation, config) {
   return {
-    accepted: true,
     accountId: state.accountId,
     billingFrequency: validation.commercialTerms.billingFrequency,
     billingOrganizationId: config.billingOrganizationId,
@@ -192,11 +235,16 @@ function operationMaterial(state, validation, config) {
     usageAddonProductId: config.paidUsageAddonProductId,
     usageAddonUnit: config.paidUsageAddonUnit,
     usageRateMinor: config.paidCommercialTerms.commonUsageRateMinor,
+    deploymentId: validation.deploymentId,
+    configurationVersion: validation.configurationVersion,
   };
 }
 
-function createLifecycleHandler(config, { crmClient, billingClient, operationStore, now = Date.now }) {
-  for (const dependency of [crmClient, billingClient, operationStore]) {
+function createLifecycleHandler(
+  config,
+  { crmClient, billingClient, operationStore, analyticsOutbox, now = Date.now },
+) {
+  for (const dependency of [crmClient, billingClient, operationStore, analyticsOutbox]) {
     if (!dependency || typeof dependency !== "object") {
       fail("Lifecycle dependency is unavailable", { publicCode: "configuration_invalid", status: 503 });
     }
@@ -304,11 +352,260 @@ function createLifecycleHandler(config, { crmClient, billingClient, operationSto
       publicCode: "reconciliation_required",
       status: 503,
     });
-    await crmClient.updateDealIntegration(
+    const authoritativeDeal = await crmClient.updateDealIntegration(
       refreshed.state.deal,
       successPatch(customerId, subscriptionId, subscriptionStatus),
     );
-    return "paid_subscription_readback_confirmed";
+    return Object.freeze({
+      outcome: "paid_subscription_readback_confirmed",
+      authoritativeDeal,
+      subscriptionStatus,
+      validation: refreshed.validation,
+    });
+  }
+
+  async function emitConversionStatus(state, validation, authoritativeDeal, subscriptionStatus) {
+    try {
+      await analyticsOutbox.ensureConversionStatus({
+        deal: authoritativeDeal,
+        accountId: state.accountId,
+        deploymentId: validation.deploymentId,
+        configurationVersion: validation.configurationVersion,
+        billingStatus: subscriptionStatus,
+      }, lastSyncAt());
+    } catch {
+      throw new LifecycleError("Conversion Analytics fact requires reconciliation", {
+        ambiguous: true,
+        publicCode: "reconciliation_required",
+        status: 503,
+      });
+    }
+  }
+
+  async function syncReportSummary(state, operationKey) {
+    const reportRevisionProtected = (deal) => deal.Results_Review_At != null
+      || deal.Subscription_Acceptance_Status != null
+      || deal.Subscription_Accepted_At != null
+      || deal.Billing_Customer_ID != null
+      || deal.Billing_Subscription_ID != null;
+    const deploymentId = deploymentIdentifier(
+      state.deal.Deployment_Record_ID, "Deployment_Record_ID",
+    );
+    const selectedConfigurationVersion = configurationVersion(
+      state.deal.Configuration_Version, "Configuration_Version",
+    );
+    if (!/^[a-f0-9]{64}$/.test(String(operationKey ?? ""))) {
+      fail("CRM report-summary operation key is invalid", { publicCode: "operation_invalid" });
+    }
+    const operation = await operationStore.readByKey(operationKey);
+    const { summary } = validateReportOperation(config, operation, state.deal.id);
+    if (summary.deploymentId !== deploymentId
+      || summary.configurationVersion !== selectedConfigurationVersion) {
+      fail("Terminal report does not match the authoritative Deal deployment", {
+        publicCode: "record_stale", status: 409,
+      });
+    }
+    if (!new Set(["pending", "processing", "reconciliation_required", "completed"])
+      .has(operation.STATUS)) fail("CRM report-summary operation is unresolved", {
+      ambiguous: true, publicCode: "reconciliation_required", status: 503,
+    });
+    const patch = reportSummaryPatch(config, summary);
+    const patchMatches = (deal) => Object.entries(patch).every(([field, expected]) => (
+      expected === null ? deal[field] == null
+        : new Set(["Test_Start_At", "Test_End_At"]).has(field)
+          ? Number.isFinite(Date.parse(deal[field]))
+            && Date.parse(deal[field]) === Date.parse(expected)
+          : deal[field] === expected
+    ));
+    const freshReportMatches = async () => {
+      try {
+        const refreshed = validateCommon(await crmClient.getContext(state.deal.id), config);
+        return refreshed.deal.id === state.deal.id
+          && refreshed.accountId === state.accountId
+          && deploymentIdentifier(
+            refreshed.deal.Deployment_Record_ID, "Deployment_Record_ID",
+          ) === summary.deploymentId
+          && configurationVersion(
+            refreshed.deal.Configuration_Version, "Configuration_Version",
+          ) === summary.configurationVersion
+          && patchMatches(refreshed.deal);
+      } catch {
+        // Missing authoritative readback is itself incompatible with a trusted completion marker.
+        return false;
+      }
+    };
+    const requireReportReconciliation = async (cursor, lastOutcome, message) => {
+      try {
+        const completedCursor = cursor?.STATUS === "completed"
+          && cursor?.LAST_OUTCOME === "report_summary_readback_confirmed";
+        let result = null;
+        if (!completedCursor || !(await freshReportMatches())) {
+          result = await operationStore.transitionReportSummary(
+            cursor,
+            "reconciliation_required",
+            completedCursor ? "report_summary_readback_required" : lastOutcome,
+            lastSyncAt(),
+          );
+        }
+        const lostToCompleted = !result?.transitioned
+          && result?.row?.STATUS === "completed"
+          && result.row.LAST_OUTCOME === "report_summary_readback_confirmed";
+        if (lostToCompleted && !(await freshReportMatches())) {
+          // A stale containment cursor may lose to completion. Fresh CRM conflict
+          // evidence authorizes one bounded CAS from the returned completed cursor.
+          await operationStore.transitionReportSummary(
+            result.row,
+            "reconciliation_required",
+            "report_summary_readback_required",
+            lastSyncAt(),
+          );
+        }
+      } catch {
+        // The request still fails closed if durable containment readback is unavailable.
+      }
+      throw new LifecycleError(message, {
+        ambiguous: true, publicCode: "reconciliation_required", status: 503,
+      });
+    };
+    const completeReport = async (cursor) => {
+      // The request-level CRM state predates the operation read. Re-read immediately
+      // before completion so a newer containment cursor cannot be completed from stale evidence.
+      if (!(await freshReportMatches())) {
+        await requireReportReconciliation(
+          cursor,
+          cursor?.STATUS === "reconciliation_required"
+            ? cursor.LAST_OUTCOME
+            : "report_summary_readback_required",
+          "CRM report-summary completion requires fresh Deal readback",
+        );
+      }
+      if (cursor?.STATUS === "completed"
+        && cursor?.LAST_OUTCOME === "report_summary_readback_confirmed") return cursor;
+      try {
+        const result = await operationStore.transitionReportSummary(
+          cursor, "completed", "report_summary_readback_confirmed", lastSyncAt(),
+        );
+        if (result.transitioned) return result.row;
+      } catch {
+        // A failed or semantically conflicting CAS is never retried with a stale cursor.
+      }
+      throw new LifecycleError("CRM report-summary completion requires reconciliation", {
+        ambiguous: true, publicCode: "reconciliation_required", status: 503,
+      });
+    };
+    const matches = patchMatches(state.deal);
+    if (operation.STATUS === "completed") {
+      await completeReport(operation);
+      return Object.freeze({ outcome: "report_summary_readback_confirmed", duplicate: true });
+    }
+    if (operation.STATUS === "reconciliation_required") {
+      await completeReport(operation);
+      return Object.freeze({ outcome: "report_summary_readback_confirmed", duplicate: true });
+    }
+    if (operation.STATUS === "processing" && !isReportSummaryPreWrite(operation)) {
+      await completeReport(operation);
+      return Object.freeze({ outcome: "report_summary_readback_confirmed", duplicate: true });
+    }
+    if (matches) {
+      await completeReport(operation);
+      return Object.freeze({ outcome: "report_summary_readback_confirmed", duplicate: true });
+    }
+    if (reportRevisionProtected(state.deal)) {
+      await requireReportReconciliation(
+        operation,
+        "report_revision_protected",
+        "Reviewed or accepted Deal evidence cannot be revised automatically",
+      );
+    }
+    if (state.deal.Test_Status !== "Live") {
+      await requireReportReconciliation(
+        operation,
+        "report_test_status_conflict",
+        "Deal Test_Status does not permit an automatic terminal report transition",
+      );
+    }
+    const claimToken = `report_claim_${crypto.randomBytes(16).toString("hex")}`;
+    const claim = await operationStore.claimReportSummary(operation, claimToken, lastSyncAt());
+    if (!claim.claimed) {
+      const refreshed = validateCommon(await crmClient.getContext(state.deal.id), config);
+      if (refreshed.accountId === state.accountId && patchMatches(refreshed.deal)) {
+        await completeReport(claim.row);
+        return Object.freeze({ outcome: "report_summary_readback_confirmed", duplicate: true });
+      }
+      fail("CRM report-summary claim is owned by another execution", {
+        ambiguous: true, publicCode: "reconciliation_required", status: 503,
+      });
+    }
+    let refreshed;
+    try {
+      refreshed = validateCommon(await crmClient.getContext(state.deal.id), config);
+    } catch {
+      // No write-start marker exists yet, so another retry may safely reclaim this claim.
+      throw new LifecycleError("CRM report-summary pre-write verification can be retried", {
+        ambiguous: true, publicCode: "reconciliation_required", status: 503,
+      });
+    }
+    if (refreshed.accountId !== state.accountId
+      || deploymentIdentifier(refreshed.deal.Deployment_Record_ID, "Deployment_Record_ID") !== deploymentId
+      || configurationVersion(refreshed.deal.Configuration_Version, "Configuration_Version")
+        !== selectedConfigurationVersion) {
+      await requireReportReconciliation(
+        claim.row,
+        "report_binding_stale", "Deal report binding changed during claim",
+      );
+    }
+    const refreshedMatches = patchMatches(refreshed.deal);
+    if (!refreshedMatches && reportRevisionProtected(refreshed.deal)) {
+      await requireReportReconciliation(
+        claim.row,
+        "report_revision_protected",
+        "Reviewed or accepted Deal evidence cannot be revised automatically",
+      );
+    }
+    if (!refreshedMatches && refreshed.deal.Test_Status !== "Live") {
+      await requireReportReconciliation(
+        claim.row,
+        "report_test_status_conflict",
+        "Deal Test_Status does not permit an automatic terminal report transition",
+      );
+    }
+    if (refreshedMatches) {
+      await completeReport(claim.row);
+      return Object.freeze({ outcome: "report_summary_readback_confirmed", duplicate: true });
+    }
+
+    let writeStart;
+    try {
+      writeStart = await operationStore.beginReportSummaryWrite(
+        claim.row, claimToken, lastSyncAt(),
+      );
+    } catch {
+      throw new LifecycleError("CRM report-summary write-start requires reconciliation", {
+        ambiguous: true, publicCode: "reconciliation_required", status: 503,
+      });
+    }
+    if (!writeStart.started) {
+      const latest = validateCommon(await crmClient.getContext(state.deal.id), config);
+      if (latest.accountId === state.accountId && patchMatches(latest.deal)) {
+        await completeReport(writeStart.row);
+        return Object.freeze({ outcome: "report_summary_readback_confirmed", duplicate: true });
+      }
+      fail("CRM report-summary write-start is owned by another execution", {
+        ambiguous: true, publicCode: "reconciliation_required", status: 503,
+      });
+    }
+
+    try {
+      await crmClient.updateDealReportSummary(refreshed.deal, patch);
+    } catch {
+      await requireReportReconciliation(
+        writeStart.row,
+        "report_summary_readback_required",
+        "CRM report-summary outcome requires reconciliation",
+      );
+    }
+    await completeReport(writeStart.row);
+    return Object.freeze({ outcome: "report_summary_readback_confirmed", duplicate: false });
   }
 
   function exactOperationRow(operation, identity, state) {
@@ -404,7 +701,9 @@ function createLifecycleHandler(config, { crmClient, billingClient, operationSto
       field === "Billing_Last_Sync_At" ||
       (expected === null ? state.deal[field] == null : state.deal[field] === expected)
     ));
-    if (!integrationMatches) await crmClient.updateDealIntegration(state.deal, expectedPatch);
+    const authoritativeDeal = integrationMatches
+      ? state.deal
+      : await crmClient.updateDealIntegration(state.deal, expectedPatch);
     if (operation.STATUS !== "completed") {
       await operationStore.mark(
         operation.ROWID,
@@ -412,12 +711,18 @@ function createLifecycleHandler(config, { crmClient, billingClient, operationSto
         "paid_subscription_readback_confirmed",
       );
     }
+    await emitConversionStatus(
+      state, validation, authoritativeDeal, subscriptionStatus,
+    );
     return Object.freeze({ outcome: "authoritative_readback_confirmed", duplicate: false });
   }
 
   async function handle(payload) {
     const context = await crmClient.getContext(payload.dealId);
     const state = validateCommon(context, config);
+    if (payload.action === REPORT_SUMMARY_ACTION) {
+      return syncReportSummary(state, payload.operationKey);
+    }
     if (payload.action === "reconcile") return reconcile(state);
     if (payload.action !== PAID_ACTION) {
       fail("Lifecycle action is unsupported", { publicCode: "operation_invalid" });
@@ -440,9 +745,9 @@ function createLifecycleHandler(config, { crmClient, billingClient, operationSto
       status: 503,
     });
 
-    let outcome;
+    let execution;
     try {
-      outcome = await executePaid(state, identity);
+      execution = await executePaid(state, identity);
     } catch (error) {
       const lastOutcome = String(error?.publicCode ?? "lifecycle_failed");
       try {
@@ -465,7 +770,7 @@ function createLifecycleHandler(config, { crmClient, billingClient, operationSto
       });
     }
     try {
-      await operationStore.mark(claim.rowId, "completed", outcome);
+      await operationStore.mark(claim.rowId, "completed", execution.outcome);
     } catch {
       throw new LifecycleError("Lifecycle completion requires reconciliation", {
         ambiguous: true,
@@ -473,7 +778,13 @@ function createLifecycleHandler(config, { crmClient, billingClient, operationSto
         status: 503,
       });
     }
-    return Object.freeze({ outcome, duplicate: false });
+    await emitConversionStatus(
+      state,
+      execution.validation,
+      execution.authoritativeDeal,
+      execution.subscriptionStatus,
+    );
+    return Object.freeze({ outcome: execution.outcome, duplicate: false });
   }
 
   return Object.freeze({ handle });

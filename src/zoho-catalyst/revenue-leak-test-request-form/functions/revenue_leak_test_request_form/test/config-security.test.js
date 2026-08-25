@@ -2,7 +2,7 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { loadConfig } = require("../lib/config");
+const { FORM1_SESSION_TABLE_NAME, loadConfig } = require("../lib/config");
 const {
   generateToken,
   hashToken,
@@ -11,16 +11,37 @@ const {
 } = require("../lib/security");
 const { REVISION, environment } = require("./helpers");
 
-test("configuration is Development-only and bound to the stamped revision", () => {
+test("configuration binds active Development and dark Production to the stamped revision", () => {
   const config = loadConfig(environment(), REVISION);
   assert.equal(config.deploymentEnvironment, "development");
+  assert.equal(config.deploymentMode, "active");
+  assert.equal(config.darkMode, false);
+  assert.equal(config.sessionTableName, FORM1_SESSION_TABLE_NAME);
   assert.equal(config.sourceRevision, REVISION);
 
+  const dark = loadConfig(environment({
+    DEPLOYMENT_ENVIRONMENT: "production",
+    DEPLOYMENT_MODE: "dark",
+  }), REVISION);
+  assert.deepEqual(dark, {
+    darkMode: true,
+    deploymentEnvironment: "production",
+    deploymentMode: "dark",
+    sourceRevision: REVISION,
+  });
   assert.throws(
     () => loadConfig(environment({ DEPLOYMENT_ENVIRONMENT: "production" }), REVISION),
-    /must be development/,
+    /production\/dark/,
+  );
+  assert.throws(
+    () => loadConfig(environment({ DEPLOYMENT_MODE: "dark" }), REVISION),
+    /development\/active/,
   );
   assert.throws(() => loadConfig(environment(), "2".repeat(40)), /stamped function artifact/);
+  assert.throws(
+    () => loadConfig(environment({ SESSION_TABLE_NAME: "Form1AssistedSessions" }), REVISION),
+    /canonical RevenueLeakTestRequestFormSessions table/,
+  );
   assert.throws(
     () => loadConfig(environment(), "__SYLVARA_UNSTAMPED_SOURCE_REVISION__"),
     /40-character Git commit/,

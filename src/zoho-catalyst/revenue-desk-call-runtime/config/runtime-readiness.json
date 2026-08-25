@@ -1,0 +1,87 @@
+{
+  "schema_version": 8,
+  "record_type": "revenue_desk_call_runtime_readiness_contract",
+  "current_status": "unverified_requires_deployment_and_readback",
+  "source_revision_committed": false,
+  "targets": [
+    "revenue_desk_call_gateway",
+    "revenue_desk_call_worker"
+  ],
+  "development": {
+    "deployment_mode": "active",
+    "active_profile": "free_test/call_gap_monitor_v1",
+    "paid_profiles": "disabled_draft_fail_closed",
+    "readiness_route": "authenticated_get_internal_readiness",
+    "readiness_evidence": "provider_ordered_local_status_and_configuration_relationships",
+    "readiness_page_limit": 100,
+    "capped_or_incomplete_evidence": "traffic_disabled_and_pending_reported"
+  },
+  "production": {
+    "deployment_mode": "dark",
+    "required_variables": [
+      "DEPLOYMENT_ENVIRONMENT",
+      "DEPLOYMENT_MODE",
+      "SOURCE_REVISION"
+    ],
+    "all_gateway_and_worker_invocations": "503_before_sdk_or_store",
+    "traffic_or_activation_authorized": false
+  },
+  "tables": {
+    "canonical_operational": [
+      "RevenueDeskDeployments",
+      "RevenueDeskConfigurationVersions",
+      "RevenueDeskEventReceipts",
+      "RevenueDeskCalls",
+      "RevenueDeskNotifications"
+    ],
+    "delivery_infrastructure": [
+      "AnalyticsSyncOutbox",
+      "CRMBillingOperations"
+    ]
+  },
+  "terminal_report_gate": {
+    "queue_owner": "revenue_desk_call_worker retry_scan",
+    "dispatch_limit_per_scan": 5,
+    "operation_action": "sync_report_summary",
+    "required_operation_status": "completed",
+    "required_last_outcome": "report_summary_readback_confirmed",
+    "requires_exact_analytics_artifact": true,
+    "completed_artifact_verification_owner": "retry_scan_level_triggered_bounded_fair_cursor",
+    "completed_marker_without_exact_artifacts": "retry_scan_fences_and_repairs_the_derived_artifact_then_requires_exact_readback",
+    "readiness_artifact_walk": "disabled_to_preserve_strict_query_budget",
+    "results_review_at": "human_only"
+  },
+  "approval_control": {
+    "execution_boundary": "out_of_band_private_change_control_only",
+    "adds_gateway_route_function_or_worker_mode": false,
+    "approval_status": "Scheduled",
+    "activation_status": "Live",
+    "seven_day_clock_origin": "authoritative_route_activation_readback_then_activation_receipt",
+    "runtime_requires_exact_approval_and_activation_receipts": true,
+    "governed_configuration_route_or_source_change_invalidates_approval": true,
+    "capacity_reservation_subsystem_present": false,
+    "runbook": "../route-approval-control-plane-runbook.md"
+  },
+  "release_artifact": {
+    "checkout_is_unstamped": true,
+    "isolated_builder": "scripts/build-release.js",
+    "exact_artifact_and_environment_revision_required": true,
+    "sanitized_package_pullback_required": true
+  },
+  "live_gates": [
+    "fresh exact function, table, permission, variable, Job pool, and disabled schedule readback",
+    "schema-v5 nullable authorization columns and unique authorization receipt keys read back",
+    "approval receipt bound to the exact active configuration, route fingerprint, source revision, and row version",
+    "activation receipt chained to approval only after fresh authoritative external-route readback",
+    "authenticated readiness reports the expected active_authorized_deployment_count with readiness_scan_capped=false and terminal_reconciliation_pending_count=0",
+    "release-manifest and sanitized deployed-package parity",
+    "synthetic inbound, provider-event, retry, report, outbox, and rollback verification",
+    "private migration counts, keyed digests, samples, conflicts, and rollback evidence"
+  ],
+  "legacy_deletion_gate": {
+    "safe": false,
+    "source_export_required": true,
+    "live_binding_proof_required": true,
+    "reason": "Legacy route-approval source, dependencies, callers, routes, Jobs, schedules, webhooks, authorization evidence, and rollback remain unverified and unreconciled."
+  }
+}

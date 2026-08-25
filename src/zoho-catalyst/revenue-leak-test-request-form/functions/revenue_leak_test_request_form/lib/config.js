@@ -5,6 +5,8 @@ const {
   isApprovedFormsPublicHostname,
 } = require("./destinations");
 
+const FORM1_SESSION_TABLE_NAME = "RevenueLeakTestRequestFormSessions";
+
 const NUMERIC_LIMITS = Object.freeze({
   SESSION_TTL_SECONDS: Object.freeze({ fallback: 900, minimum: 300, maximum: 3600 }),
   MAX_PREFILLS: Object.freeze({ fallback: 20, minimum: 2, maximum: 100 }),
@@ -67,6 +69,16 @@ function validateIdentifier(value, name, maximum = 64) {
     throw new ConfigurationError(`${name} is not a safe Catalyst identifier`);
   }
   return value;
+}
+
+function validateSessionTable(value) {
+  const selected = validateIdentifier(value, "SESSION_TABLE_NAME");
+  if (selected !== FORM1_SESSION_TABLE_NAME) {
+    throw new ConfigurationError(
+      `SESSION_TABLE_NAME must be the canonical ${FORM1_SESSION_TABLE_NAME} table`,
+    );
+  }
+  return selected;
 }
 
 function validatePath(value, name) {
@@ -145,10 +157,33 @@ function validateCrmBase(value) {
 
 function loadConfig(environment = process.env, artifactRevision) {
   const deploymentEnvironment = readRequired(environment, "DEPLOYMENT_ENVIRONMENT");
-  // Production activation requires separate acceptance evidence and a reviewed
-  // source change. An environment variable alone cannot lift this gate.
-  if (deploymentEnvironment !== "development") {
-    throw new ConfigurationError("DEPLOYMENT_ENVIRONMENT must be development");
+  const deploymentMode = readRequired(environment, "DEPLOYMENT_MODE");
+  if (
+    !(
+      (deploymentEnvironment === "development" && deploymentMode === "active") ||
+      (deploymentEnvironment === "production" && deploymentMode === "dark")
+    )
+  ) {
+    throw new ConfigurationError(
+      "DEPLOYMENT_ENVIRONMENT and DEPLOYMENT_MODE must be development/active or production/dark",
+    );
+  }
+
+  const sourceRevision = validateRevision(readRequired(environment, "SOURCE_REVISION"));
+  const stampedRevision = validateRevision(artifactRevision);
+  if (sourceRevision !== stampedRevision) {
+    throw new ConfigurationError("SOURCE_REVISION does not match the stamped function artifact");
+  }
+
+  // Dark Production proves only that the reviewed artifact can be installed.
+  // It intentionally loads no routes, secrets, stores, Connections, or form destination.
+  if (deploymentMode === "dark") {
+    return Object.freeze({
+      darkMode: true,
+      deploymentEnvironment,
+      deploymentMode,
+      sourceRevision,
+    });
   }
 
   const issuePath = validatePath(readRequired(environment, "ISSUE_PATH"), "ISSUE_PATH");
@@ -200,12 +235,6 @@ function loadConfig(environment = process.env, artifactRevision) {
   if (crmReadConnectionLinkName === crmWriteConnectionLinkName) {
     throw new ConfigurationError("CRM read and update Connections must use different link names");
   }
-  const sourceRevision = validateRevision(readRequired(environment, "SOURCE_REVISION"));
-  const stampedRevision = validateRevision(artifactRevision);
-  if (sourceRevision !== stampedRevision) {
-    throw new ConfigurationError("SOURCE_REVISION does not match the stamped function artifact");
-  }
-
   return Object.freeze({
     assistedConstants: Object.freeze({
       assistedBy: readBoundedText(environment, "FORM1_ASSISTED_BY_VALUE", 100),
@@ -222,7 +251,9 @@ function loadConfig(environment = process.env, artifactRevision) {
     crmApiBaseUrl: validateCrmBase(readRequired(environment, "CRM_API_BASE_URL")),
     crmReadConnectionLinkName,
     crmWriteConnectionLinkName,
+    darkMode: false,
     deploymentEnvironment,
+    deploymentMode,
     form1PublicUrl: validateFormUrl(readRequired(environment, "FORM1_PUBLIC_URL")),
     form1TokenFieldAlias,
     inboundBodyTimeoutMs: readBoundedInteger(environment, "INBOUND_BODY_TIMEOUT_MS"),
@@ -240,14 +271,11 @@ function loadConfig(environment = process.env, artifactRevision) {
     prefillHeaderName,
     prefillHeaderSecret,
     prefillPath,
-    sessionTableName: validateIdentifier(
-      readRequired(environment, "SESSION_TABLE_NAME"),
-      "SESSION_TABLE_NAME",
-    ),
+    sessionTableName: validateSessionTable(readRequired(environment, "SESSION_TABLE_NAME")),
     sessionTtlSeconds: readBoundedInteger(environment, "SESSION_TTL_SECONDS"),
     sourceRevision,
     tokenPepper,
   });
 }
 
-module.exports = { ConfigurationError, loadConfig };
+module.exports = { ConfigurationError, FORM1_SESSION_TABLE_NAME, loadConfig };

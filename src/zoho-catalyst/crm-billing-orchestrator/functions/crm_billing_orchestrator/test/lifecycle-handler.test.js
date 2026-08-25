@@ -9,6 +9,7 @@ const {
   deriveTestCustomerProvisioningIdentity,
 } = require("../lib/idempotency");
 const { createLifecycleHandler } = require("../lib/lifecycle-handler");
+const { reportSummaryIdentity, reportSummaryPatch } = require("../lib/report-summary");
 const { REVISION, baseEnvironment } = require("./helpers");
 
 function context(config, overrides = {}) {
@@ -34,6 +35,10 @@ function context(config, overrides = {}) {
       Subscription_Accepted_At: "2026-08-21T10:00:00-05:00",
       Subscription_Acceptance_Version: "paid-acceptance-v1",
       Results_Review_At: "2026-08-21T09:00:00-05:00",
+      Deployment_Record_ID: "deployment_A",
+      Configuration_Version: "cfg_A_v1",
+      Approved_Deployment_Record_ID: "deployment_A",
+      Approved_Configuration_Version: "cfg_A_v1",
       Billing_Customer_ID: null,
       Billing_Subscription_ID: null,
       Subscription_Status: null,
@@ -59,7 +64,6 @@ function paidIdentity(config, current) {
     "prepare_paid_subscription",
     current.deal.id,
     {
-      accepted: true,
       accountId: current.account.id,
       billingFrequency: current.deal.Billing_Frequency,
       billingOrganizationId: config.billingOrganizationId,
@@ -80,8 +84,77 @@ function paidIdentity(config, current) {
       usageAddonProductId: config.paidUsageAddonProductId,
       usageAddonUnit: config.paidUsageAddonUnit,
       usageRateMinor: config.paidCommercialTerms.commonUsageRateMinor,
+      deploymentId: current.deal.Deployment_Record_ID,
+      configurationVersion: current.deal.Configuration_Version,
     },
   );
+}
+
+function terminalSummary(overrides = {}) {
+  return {
+    schemaVersion: 1,
+    dealId: "100000000000001",
+    deploymentId: "deployment_A",
+    configurationVersion: "cfg_A_v1",
+    reportSchemaVersion: 2,
+    callSetDigest: "c".repeat(64),
+    testStatus: "Completed",
+    testStartAt: "2026-08-21T15:00:00.000Z",
+    testEndAt: "2026-08-22T16:00:00.000Z",
+    testEndReason: "Call Limit Reached",
+    callTotalsReconciled: true,
+    callsCaptured: 25,
+    qualifiedOpportunities: 8,
+    existingCustomerCalls: 4,
+    actualAverageCallDurationSeconds: 60.6,
+    outOfAreaOrWrongFitCalls: 2,
+    urgentRequests: 3,
+    bookableOpportunities: 6,
+    officeFollowUpCalls: 2,
+    observedWorkflowFailures: 1,
+    recommendedPaidCoverage: "After Hours + Overflow",
+    expectedMonthlyConnectedMinutesMin: 100.9,
+    expectedMonthlyConnectedMinutesMax: 200.1,
+    dataConfidenceNotes: "Synthetic terminal evidence is complete.",
+    ...overrides,
+  };
+}
+
+function reportOperation(config, selectedSummary, status = "pending") {
+  const identity = reportSummaryIdentity(config, selectedSummary);
+  const lastOutcome = {
+    pending: "terminal_report_ready",
+    processing: `report_write_started_${"1".repeat(32)}`,
+    reconciliation_required: "report_summary_readback_required",
+    completed: "report_summary_readback_confirmed",
+  }[status];
+  return {
+    ROWID: "9",
+    OPERATION_KEY: identity.operationKey,
+    OPERATION_FINGERPRINT: identity.operationFingerprint,
+    ACTION: "sync_report_summary",
+    CRM_DEAL_ID: selectedSummary.dealId,
+    STATUS: status,
+    SOURCE_REVISION: config.sourceRevision,
+    SOURCE_ENVIRONMENT: config.deploymentEnvironment,
+    LAST_OUTCOME: lastOutcome,
+    OPERATION_PAYLOAD_JSON: JSON.stringify(selectedSummary),
+    OPERATION_VERSION: status === "pending" ? 1 : 3,
+    CREATED_AT: "2026-08-22T16:00:00.000Z",
+    UPDATED_AT: "2026-08-22T16:00:00.000Z",
+  };
+}
+
+function unreviewedReportDeal(overrides = {}) {
+  return {
+    Plan: null,
+    Results_Review_At: null,
+    Subscription_Acceptance_Status: null,
+    Subscription_Accepted_At: null,
+    Billing_Customer_ID: null,
+    Billing_Subscription_ID: null,
+    ...overrides,
+  };
 }
 
 function harness(config, initialContext, options = {}) {
@@ -100,6 +173,18 @@ function harness(config, initialContext, options = {}) {
     updateDealIntegration: async (deal, patch) => {
       calls.push(["crm_update", patch]);
       if (typeof options.updateDeal === "function") return options.updateDeal(deal, patch);
+      current.deal = {
+        ...deal,
+        ...patch,
+        Modified_Time: "2026-08-21T10:01:00-05:00",
+      };
+      return structuredClone(current.deal);
+    },
+    updateDealReportSummary: async (deal, patch) => {
+      calls.push(["crm_report_update", patch]);
+      if (typeof options.updateDealReportSummary === "function") {
+        return options.updateDealReportSummary(deal, patch);
+      }
       current.deal = {
         ...deal,
         ...patch,
@@ -170,10 +255,66 @@ function harness(config, initialContext, options = {}) {
         SOURCE_ENVIRONMENT: config.deploymentEnvironment,
       };
     },
+    claimReportSummary: async (...args) => {
+      calls.push(["claim_report", ...args]);
+      if (typeof options.claimReportSummary === "function") {
+        return options.claimReportSummary(...args);
+      }
+      return {
+        claimed: true,
+        row: {
+          ...args[0],
+          STATUS: "processing",
+          LAST_OUTCOME: args[1],
+          OPERATION_VERSION: Number(args[0].OPERATION_VERSION) + 1,
+          UPDATED_AT: args[2],
+        },
+      };
+    },
+    beginReportSummaryWrite: async (...args) => {
+      calls.push(["begin_report_write", ...args]);
+      if (typeof options.beginReportSummaryWrite === "function") {
+        return options.beginReportSummaryWrite(...args);
+      }
+      return {
+        started: true,
+        row: {
+          ...args[0],
+          LAST_OUTCOME: args[1].replace("report_claim_", "report_write_started_"),
+          OPERATION_VERSION: Number(args[0].OPERATION_VERSION) + 1,
+          UPDATED_AT: args[2],
+        },
+      };
+    },
+    transitionReportSummary: async (...args) => {
+      calls.push(["report_transition", ...args]);
+      if (typeof options.reportTransition === "function") {
+        return options.reportTransition(...args);
+      }
+      return {
+        transitioned: true,
+        row: {
+          ...args[0],
+          STATUS: args[1],
+          LAST_OUTCOME: args[2],
+          OPERATION_VERSION: Number(args[0].OPERATION_VERSION) + 1,
+          UPDATED_AT: args[3],
+        },
+      };
+    },
     mark: async (...args) => {
       calls.push(["mark", ...args]);
       if (typeof options.mark === "function") return options.mark(...args);
       return undefined;
+    },
+  };
+  const analyticsOutbox = {
+    ensureConversionStatus: async (...args) => {
+      calls.push(["analytics", ...args]);
+      if (typeof options.ensureConversionStatus === "function") {
+        return options.ensureConversionStatus(...args);
+      }
+      return { inserted: true, row: { RECORD_TYPE: "conversion_status" } };
     },
   };
   return {
@@ -183,10 +324,567 @@ function harness(config, initialContext, options = {}) {
       crmClient,
       billingClient,
       operationStore,
+      analyticsOutbox,
       now: options.now ?? (() => Date.parse("2026-08-21T15:02:00.000Z")),
     }),
   };
 }
+
+test("report summary claims once, writes exact fields without Plan, and leaves human review untouched", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const selectedSummary = terminalSummary();
+  const operation = reportOperation(config, selectedSummary);
+  const selected = harness(config, context(config, unreviewedReportDeal({
+    Stage: "Test Live",
+    Test_Status: "Live",
+  })), {
+    readOperation: async () => operation,
+  });
+  const result = await selected.lifecycle.handle({
+    action: "sync_report_summary",
+    dealId: selectedSummary.dealId,
+    operationKey: operation.OPERATION_KEY,
+  });
+  assert.equal(result.outcome, "report_summary_readback_confirmed");
+  assert.equal(selected.calls.filter(([kind]) => kind === "claim_report").length, 1);
+  assert.equal(selected.calls.filter(([kind]) => kind === "crm_report_update").length, 1);
+  const patch = selected.calls.find(([kind]) => kind === "crm_report_update")[1];
+  assert.equal(Object.hasOwn(patch, "Stage"), false);
+  assert.equal(Object.hasOwn(patch, "Results_Review_At"), false);
+  assert.equal(selected.current().deal.Results_Review_At, null);
+  assert.equal(selected.current().deal.Stage, "Test Live");
+  assert.equal(selected.current().deal.Test_Status, "Completed");
+});
+
+test("a pre-write report claim left by a crashed execution is safely reclaimed", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const selectedSummary = terminalSummary();
+  let operation = {
+    ...reportOperation(config, selectedSummary, "processing"),
+    LAST_OUTCOME: `report_claim_${"1".repeat(32)}`,
+    OPERATION_VERSION: 2,
+  };
+  const selected = harness(
+    config,
+    context(config, unreviewedReportDeal({ Test_Status: "Live" })),
+    {
+      readOperation: async () => structuredClone(operation),
+      claimReportSummary: async (_current, claimToken, claimedAt) => {
+        operation = {
+          ...operation,
+          LAST_OUTCOME: claimToken,
+          OPERATION_VERSION: operation.OPERATION_VERSION + 1,
+          UPDATED_AT: claimedAt,
+        };
+        return { claimed: true, row: structuredClone(operation) };
+      },
+      beginReportSummaryWrite: async (_current, claimToken, startedAt) => {
+        operation = {
+          ...operation,
+          LAST_OUTCOME: claimToken.replace("report_claim_", "report_write_started_"),
+          OPERATION_VERSION: operation.OPERATION_VERSION + 1,
+          UPDATED_AT: startedAt,
+        };
+        return { started: true, row: structuredClone(operation) };
+      },
+      reportTransition: async (cursor, status, lastOutcome, transitionedAt) => {
+        operation = {
+          ...operation,
+          STATUS: status,
+          LAST_OUTCOME: lastOutcome,
+          OPERATION_VERSION: Number(cursor.OPERATION_VERSION) + 1,
+          UPDATED_AT: transitionedAt,
+        };
+        return { transitioned: true, row: structuredClone(operation) };
+      },
+    },
+  );
+
+  const result = await selected.lifecycle.handle({
+    action: "sync_report_summary",
+    dealId: selectedSummary.dealId,
+    operationKey: operation.OPERATION_KEY,
+  });
+  assert.equal(result.outcome, "report_summary_readback_confirmed");
+  assert.equal(selected.calls.filter(([kind]) => kind === "claim_report").length, 1);
+  assert.equal(selected.calls.filter(([kind]) => kind === "begin_report_write").length, 1);
+  assert.equal(selected.calls.filter(([kind]) => kind === "crm_report_update").length, 1);
+  assert.equal(operation.STATUS, "completed");
+  assert.equal(operation.LAST_OUTCOME, "report_summary_readback_confirmed");
+});
+
+test("an ambiguous CRM report PUT is never repeated automatically", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const selectedSummary = terminalSummary();
+  let operation = reportOperation(config, selectedSummary);
+  const selected = harness(
+    config,
+    context(config, unreviewedReportDeal({ Test_Status: "Live" })),
+    {
+      readOperation: async () => structuredClone(operation),
+      claimReportSummary: async (_current, claimToken, claimedAt) => {
+        operation = {
+          ...operation,
+          STATUS: "processing",
+          LAST_OUTCOME: claimToken,
+          OPERATION_VERSION: operation.OPERATION_VERSION + 1,
+          UPDATED_AT: claimedAt,
+        };
+        return { claimed: true, row: structuredClone(operation) };
+      },
+      beginReportSummaryWrite: async (_current, claimToken, startedAt) => {
+        operation = {
+          ...operation,
+          LAST_OUTCOME: claimToken.replace("report_claim_", "report_write_started_"),
+          OPERATION_VERSION: operation.OPERATION_VERSION + 1,
+          UPDATED_AT: startedAt,
+        };
+        return { started: true, row: structuredClone(operation) };
+      },
+      updateDealReportSummary: async () => {
+        throw new Error("synthetic ambiguous CRM PUT");
+      },
+      reportTransition: async (cursor, status, lastOutcome, transitionedAt) => {
+        operation = {
+          ...operation,
+          STATUS: status,
+          LAST_OUTCOME: lastOutcome,
+          OPERATION_VERSION: Number(cursor.OPERATION_VERSION) + 1,
+          UPDATED_AT: transitionedAt,
+        };
+        return { transitioned: true, row: structuredClone(operation) };
+      },
+    },
+  );
+
+  const payload = {
+    action: "sync_report_summary",
+    dealId: selectedSummary.dealId,
+    operationKey: operation.OPERATION_KEY,
+  };
+  await assert.rejects(
+    selected.lifecycle.handle(payload),
+    (error) => error.publicCode === "reconciliation_required",
+  );
+  assert.equal(operation.STATUS, "reconciliation_required");
+  assert.equal(operation.LAST_OUTCOME, "report_summary_readback_required");
+  await assert.rejects(
+    selected.lifecycle.handle(payload),
+    (error) => error.publicCode === "reconciliation_required",
+  );
+  assert.equal(selected.calls.filter(([kind]) => kind === "crm_report_update").length, 1);
+  assert.equal(selected.calls.filter(([kind]) => kind === "begin_report_write").length, 1);
+});
+
+test("write-started report operation never writes again and only exact CRM readback can complete it", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const selectedSummary = terminalSummary();
+  const operation = reportOperation(config, selectedSummary, "processing");
+  const unresolved = harness(config, context(config, unreviewedReportDeal()), {
+    readOperation: async () => operation,
+  });
+  await assert.rejects(() => unresolved.lifecycle.handle({
+    action: "sync_report_summary", dealId: selectedSummary.dealId,
+    operationKey: operation.OPERATION_KEY,
+  }), (error) => error.publicCode === "reconciliation_required");
+  assert.equal(unresolved.calls.some(([kind]) => kind === "crm_report_update"), false);
+  assert.equal(unresolved.calls.some(([kind]) => kind === "claim_report"), false);
+
+  const exactPatch = reportSummaryPatch(config, selectedSummary);
+  const reconciled = harness(config, context(config, unreviewedReportDeal({
+    ...exactPatch,
+    Test_Start_At: "2026-08-21T10:00:00-05:00",
+    Test_End_At: "2026-08-22T11:00:00-05:00",
+  })), { readOperation: async () => operation });
+  const result = await reconciled.lifecycle.handle({
+    action: "sync_report_summary", dealId: selectedSummary.dealId,
+    operationKey: operation.OPERATION_KEY,
+  });
+  assert.equal(result.duplicate, true);
+  assert.equal(reconciled.calls.some(([kind]) => kind === "crm_report_update"), false);
+  assert.equal(reconciled.calls.some(([kind]) => kind === "report_transition"), true);
+});
+
+test("reviewed Deal permits exact report replay but rejects a differing report revision", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const selectedSummary = terminalSummary();
+  let operation = reportOperation(config, selectedSummary);
+  const differing = harness(config, context(config), {
+    readOperation: async () => structuredClone(operation),
+    reportTransition: async (cursor, status, lastOutcome, transitionedAt) => {
+      operation = {
+        ...operation,
+        STATUS: status,
+        LAST_OUTCOME: lastOutcome,
+        OPERATION_VERSION: Number(cursor.OPERATION_VERSION) + 1,
+        UPDATED_AT: transitionedAt,
+      };
+      return { transitioned: true, row: structuredClone(operation) };
+    },
+  });
+  await assert.rejects(() => differing.lifecycle.handle({
+    action: "sync_report_summary", dealId: selectedSummary.dealId,
+    operationKey: operation.OPERATION_KEY,
+  }), (error) => error.publicCode === "reconciliation_required");
+  assert.equal(differing.calls.some(([kind]) => kind === "claim_report"), false);
+  assert.equal(differing.calls.some(([kind]) => kind === "crm_report_update"), false);
+  assert.equal(operation.STATUS, "reconciliation_required");
+  assert.equal(operation.LAST_OUTCOME, "report_revision_protected");
+
+  operation = reportOperation(config, selectedSummary);
+  const exact = harness(config, context(config, reportSummaryPatch(config, selectedSummary)), {
+    readOperation: async () => operation,
+  });
+  const replay = await exact.lifecycle.handle({
+    action: "sync_report_summary", dealId: selectedSummary.dealId,
+    operationKey: operation.OPERATION_KEY,
+  });
+  assert.equal(replay.duplicate, true);
+  assert.equal(exact.calls.some(([kind]) => kind === "crm_report_update"), false);
+  assert.equal(exact.calls.some(([kind]) => kind === "report_transition"), true);
+});
+
+test("report sync permits only Live to Completed and Completed exact replay", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const selectedSummary = terminalSummary();
+  for (const testStatus of ["Failed", "Rolled Back"]) {
+    let operation = reportOperation(config, selectedSummary);
+    const rejected = harness(
+      config,
+      context(config, unreviewedReportDeal({ Test_Status: testStatus })),
+      {
+        readOperation: async () => structuredClone(operation),
+        reportTransition: async (cursor, status, lastOutcome, transitionedAt) => {
+          operation = {
+            ...operation,
+            STATUS: status,
+            LAST_OUTCOME: lastOutcome,
+            OPERATION_VERSION: Number(cursor.OPERATION_VERSION) + 1,
+            UPDATED_AT: transitionedAt,
+          };
+          return { transitioned: true, row: structuredClone(operation) };
+        },
+      },
+    );
+    await assert.rejects(
+      rejected.lifecycle.handle({
+        action: "sync_report_summary",
+        dealId: selectedSummary.dealId,
+        operationKey: operation.OPERATION_KEY,
+      }),
+      (error) => error.publicCode === "reconciliation_required",
+    );
+    assert.equal(operation.STATUS, "reconciliation_required");
+    assert.equal(operation.LAST_OUTCOME, "report_test_status_conflict");
+    assert.equal(rejected.calls.some(([kind]) => kind === "claim_report"), false);
+    assert.equal(rejected.calls.some(([kind]) => kind === "crm_report_update"), false);
+  }
+
+  const completedOperation = reportOperation(config, selectedSummary, "completed");
+  const exact = harness(
+    config,
+    context(config, unreviewedReportDeal(reportSummaryPatch(config, selectedSummary))),
+    { readOperation: async () => completedOperation },
+  );
+  assert.equal((await exact.lifecycle.handle({
+    action: "sync_report_summary",
+    dealId: selectedSummary.dealId,
+    operationKey: completedOperation.OPERATION_KEY,
+  })).duplicate, true);
+  assert.equal(exact.calls.some(([kind]) => kind === "crm_report_update"), false);
+  assert.equal(exact.calls.some(([kind]) => kind === "report_transition"), false);
+  assert.equal(exact.calls.filter(([kind]) => kind === "crm_read").length, 2);
+
+  let conflictingOperation = structuredClone(completedOperation);
+  const conflicting = harness(config, context(config, unreviewedReportDeal()), {
+    readOperation: async () => structuredClone(conflictingOperation),
+    reportTransition: async (cursor, status, lastOutcome, transitionedAt) => {
+      conflictingOperation = {
+        ...conflictingOperation,
+        STATUS: status,
+        LAST_OUTCOME: lastOutcome,
+        OPERATION_VERSION: Number(cursor.OPERATION_VERSION) + 1,
+        UPDATED_AT: transitionedAt,
+      };
+      return { transitioned: true, row: structuredClone(conflictingOperation) };
+    },
+  });
+  await assert.rejects(
+    conflicting.lifecycle.handle({
+      action: "sync_report_summary",
+      dealId: selectedSummary.dealId,
+      operationKey: completedOperation.OPERATION_KEY,
+    }),
+    (error) => error.publicCode === "reconciliation_required",
+  );
+  assert.equal(conflicting.calls.some(([kind]) => kind === "crm_report_update"), false);
+  assert.equal(conflictingOperation.STATUS, "reconciliation_required");
+  assert.equal(conflictingOperation.LAST_OUTCOME, "report_summary_readback_required");
+  assert.equal(conflictingOperation.OPERATION_VERSION, completedOperation.OPERATION_VERSION + 1);
+  assert.equal(conflicting.calls.filter(([kind]) => kind === "crm_read").length, 3);
+
+  let newerSemanticOperation = structuredClone(completedOperation);
+  const staleMismatch = harness(config, context(config, unreviewedReportDeal()), {
+    readOperation: async () => structuredClone(newerSemanticOperation),
+    reportTransition: async (cursor) => {
+      newerSemanticOperation = {
+        ...newerSemanticOperation,
+        STATUS: "reconciliation_required",
+        LAST_OUTCOME: "report_revision_protected",
+        OPERATION_VERSION: newerSemanticOperation.OPERATION_VERSION + 1,
+      };
+      assert.equal(cursor.STATUS, "completed");
+      return { transitioned: false, row: structuredClone(newerSemanticOperation) };
+    },
+  });
+  await assert.rejects(
+    staleMismatch.lifecycle.handle({
+      action: "sync_report_summary",
+      dealId: selectedSummary.dealId,
+      operationKey: completedOperation.OPERATION_KEY,
+    }),
+    (error) => error.publicCode === "reconciliation_required",
+  );
+  assert.equal(newerSemanticOperation.STATUS, "reconciliation_required");
+  assert.equal(newerSemanticOperation.LAST_OUTCOME, "report_revision_protected");
+  assert.equal(newerSemanticOperation.OPERATION_VERSION, completedOperation.OPERATION_VERSION + 1);
+});
+
+test("stale report completion and containment invocations cannot overwrite each other", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const selectedSummary = terminalSummary();
+  const payload = {
+    action: "sync_report_summary",
+    dealId: selectedSummary.dealId,
+    operationKey: reportOperation(config, selectedSummary).OPERATION_KEY,
+  };
+  const exactDeal = context(
+    config,
+    unreviewedReportDeal(reportSummaryPatch(config, selectedSummary)),
+  );
+  const protectedDeal = context(config);
+
+  function deferred() {
+    let resolve;
+    const promise = new Promise((selectedResolve) => { resolve = selectedResolve; });
+    return { promise, resolve };
+  }
+
+  for (const firstTarget of ["completed", "reconciliation_required"]) {
+    let operation = reportOperation(config, selectedSummary);
+    const staleEntered = deferred();
+    const releaseStale = deferred();
+    const cas = async (cursor, status, lastOutcome, transitionedAt) => {
+      const matches = cursor.ROWID === operation.ROWID
+        && cursor.STATUS === operation.STATUS
+        && cursor.LAST_OUTCOME === operation.LAST_OUTCOME
+        && cursor.OPERATION_VERSION === operation.OPERATION_VERSION;
+      if (!matches) return { transitioned: false, row: structuredClone(operation) };
+      operation = {
+        ...operation,
+        STATUS: status,
+        LAST_OUTCOME: lastOutcome,
+        OPERATION_VERSION: operation.OPERATION_VERSION + 1,
+        UPDATED_AT: transitionedAt,
+      };
+      return { transitioned: true, row: structuredClone(operation) };
+    };
+    const staleIsCompletion = firstTarget === "completed";
+    const stale = harness(config, staleIsCompletion ? exactDeal : protectedDeal, {
+      readOperation: async () => structuredClone(operation),
+      reportTransition: async (...args) => {
+        staleEntered.resolve();
+        await releaseStale.promise;
+        return cas(...args);
+      },
+    });
+    const newer = harness(config, staleIsCompletion ? protectedDeal : exactDeal, {
+      readOperation: async () => structuredClone(operation),
+      reportTransition: cas,
+    });
+
+    const staleResult = stale.lifecycle.handle(payload);
+    await staleEntered.promise;
+    if (staleIsCompletion) {
+      await assert.rejects(
+        newer.lifecycle.handle(payload),
+        (error) => error.publicCode === "reconciliation_required",
+      );
+      assert.equal(operation.STATUS, "reconciliation_required");
+      assert.equal(operation.LAST_OUTCOME, "report_revision_protected");
+    } else {
+      assert.equal((await newer.lifecycle.handle(payload)).duplicate, true);
+      assert.equal(operation.STATUS, "completed");
+      assert.equal(operation.LAST_OUTCOME, "report_summary_readback_confirmed");
+    }
+    releaseStale.resolve();
+    await assert.rejects(
+      staleResult,
+      (error) => error.publicCode === "reconciliation_required",
+    );
+    assert.equal(operation.STATUS, "reconciliation_required");
+    assert.equal(
+      operation.LAST_OUTCOME,
+      staleIsCompletion ? "report_revision_protected" : "report_summary_readback_required",
+    );
+    assert.equal(operation.OPERATION_VERSION, staleIsCompletion ? 2 : 3);
+  }
+});
+
+test("fresh CRM read blocks stale completion after a newer reconciliation cursor", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const selectedSummary = terminalSummary();
+  const exactPatch = reportSummaryPatch(config, selectedSummary);
+  let conflictObserved = false;
+  let operation = {
+    ...reportOperation(config, selectedSummary),
+    STATUS: "reconciliation_required",
+    LAST_OUTCOME: "report_revision_protected",
+    OPERATION_VERSION: 2,
+  };
+  const selected = harness(
+    config,
+    context(config, unreviewedReportDeal(exactPatch)),
+    {
+      readOperation: async () => {
+        // This models B changing CRM and fencing the row after A's initial CRM
+        // snapshot but before A observes the operation cursor.
+        conflictObserved = true;
+        return structuredClone(operation);
+      },
+      onGetContext: (current) => conflictObserved ? context(config) : current,
+      reportTransition: async (cursor, status, lastOutcome, transitionedAt) => {
+        operation = {
+          ...operation,
+          STATUS: status,
+          LAST_OUTCOME: lastOutcome,
+          OPERATION_VERSION: Number(cursor.OPERATION_VERSION) + 1,
+          UPDATED_AT: transitionedAt,
+        };
+        return { transitioned: true, row: structuredClone(operation) };
+      },
+    },
+  );
+
+  await assert.rejects(
+    selected.lifecycle.handle({
+      action: "sync_report_summary",
+      dealId: selectedSummary.dealId,
+      operationKey: operation.OPERATION_KEY,
+    }),
+    (error) => error.publicCode === "reconciliation_required",
+  );
+  assert.deepEqual(
+    selected.calls.slice(0, 3).map(([kind]) => kind),
+    ["crm_read", "read_operation", "crm_read"],
+  );
+  assert.equal(operation.STATUS, "reconciliation_required");
+  assert.equal(operation.LAST_OUTCOME, "report_revision_protected");
+  assert.equal(operation.OPERATION_VERSION, 3);
+  assert.equal(selected.calls.filter(([kind]) => kind === "report_transition").length, 1);
+  assert.equal(selected.calls.some(([kind]) => kind === "crm_report_update"), false);
+});
+
+test("newer CRM conflict repairs a completed marker that won the stale CAS race", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const selectedSummary = terminalSummary();
+  let operation = reportOperation(config, selectedSummary);
+  const payload = {
+    action: "sync_report_summary",
+    dealId: selectedSummary.dealId,
+    operationKey: operation.OPERATION_KEY,
+  };
+  const exactEntered = {};
+  exactEntered.promise = new Promise((resolve) => { exactEntered.resolve = resolve; });
+  const releaseExact = {};
+  releaseExact.promise = new Promise((resolve) => { releaseExact.resolve = resolve; });
+  const conflictEntered = {};
+  conflictEntered.promise = new Promise((resolve) => { conflictEntered.resolve = resolve; });
+  const releaseConflict = {};
+  releaseConflict.promise = new Promise((resolve) => { releaseConflict.resolve = resolve; });
+  const cas = async (cursor, status, lastOutcome, transitionedAt) => {
+    const matches = cursor.ROWID === operation.ROWID
+      && cursor.STATUS === operation.STATUS
+      && cursor.LAST_OUTCOME === operation.LAST_OUTCOME
+      && cursor.OPERATION_VERSION === operation.OPERATION_VERSION;
+    if (!matches) return { transitioned: false, row: structuredClone(operation) };
+    operation = {
+      ...operation,
+      STATUS: status,
+      LAST_OUTCOME: lastOutcome,
+      OPERATION_VERSION: operation.OPERATION_VERSION + 1,
+      UPDATED_AT: transitionedAt,
+    };
+    return { transitioned: true, row: structuredClone(operation) };
+  };
+  const exact = harness(
+    config,
+    context(config, unreviewedReportDeal(reportSummaryPatch(config, selectedSummary))),
+    {
+      readOperation: async () => structuredClone(operation),
+      reportTransition: async (...args) => {
+        exactEntered.resolve();
+        await releaseExact.promise;
+        return cas(...args);
+      },
+    },
+  );
+  let conflictTransitionCalls = 0;
+  const conflict = harness(config, context(config), {
+    readOperation: async () => structuredClone(operation),
+    reportTransition: async (...args) => {
+      conflictTransitionCalls += 1;
+      if (conflictTransitionCalls === 1) {
+        conflictEntered.resolve();
+        await releaseConflict.promise;
+      }
+      return cas(...args);
+    },
+  });
+
+  const exactResult = exact.lifecycle.handle(payload);
+  await exactEntered.promise;
+  const conflictResult = conflict.lifecycle.handle(payload);
+  await conflictEntered.promise;
+  releaseExact.resolve();
+  assert.equal((await exactResult).duplicate, true);
+  assert.equal(operation.STATUS, "completed");
+  assert.equal(operation.OPERATION_VERSION, 2);
+  releaseConflict.resolve();
+  await assert.rejects(
+    conflictResult,
+    (error) => error.publicCode === "reconciliation_required",
+  );
+  assert.equal(operation.STATUS, "reconciliation_required");
+  assert.equal(operation.LAST_OUTCOME, "report_summary_readback_required");
+  assert.equal(operation.OPERATION_VERSION, 3);
+  assert.equal(conflictTransitionCalls, 2);
+  assert.equal(conflict.calls.filter(([kind]) => kind === "crm_read").length, 2);
+  assert.equal(exact.calls.filter(([kind]) => kind === "crm_read").length, 2);
+});
+
+test("concurrent report-summary requests permit only the owned claim to issue a CRM write", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const selectedSummary = terminalSummary();
+  const operation = reportOperation(config, selectedSummary);
+  let claimed = false;
+  const selected = harness(config, context(config, unreviewedReportDeal({ Test_Status: "Live" })), {
+    readOperation: async () => operation,
+    claimReportSummary: async () => {
+      if (claimed) return { claimed: false, row: { ...operation, STATUS: "processing" } };
+      claimed = true;
+      return { claimed: true, row: { ...operation, STATUS: "processing" } };
+    },
+  });
+  const results = await Promise.allSettled([
+    selected.lifecycle.handle({ action: "sync_report_summary", dealId: selectedSummary.dealId,
+      operationKey: operation.OPERATION_KEY }),
+    selected.lifecycle.handle({ action: "sync_report_summary", dealId: selectedSummary.dealId,
+      operationKey: operation.OPERATION_KEY }),
+  ]);
+  assert.ok(results.some(({ status }) => status === "fulfilled"));
+  assert.equal(selected.calls.filter(([kind]) => kind === "crm_report_update").length, 1);
+});
 
 test("all approved monthly plans bind exact terms and update CRM once after Billing readback", async () => {
   const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
@@ -207,7 +905,13 @@ test("all approved monthly plans bind exact terms and update CRM once after Bill
     assert.equal(selected.calls.filter(([kind]) => kind === "crm_update").length, 1);
     const paidIndex = selected.calls.findIndex(([kind]) => kind === "paid");
     const updateIndex = selected.calls.findIndex(([kind]) => kind === "crm_update");
+    const completedIndex = selected.calls.findIndex(
+      ([kind, , status]) => kind === "mark" && status === "completed",
+    );
+    const analyticsIndex = selected.calls.findIndex(([kind]) => kind === "analytics");
     assert.ok(updateIndex > paidIndex);
+    assert.ok(analyticsIndex > completedIndex);
+    assert.equal(selected.calls.filter(([kind]) => kind === "analytics").length, 1);
     const paidInput = selected.calls[paidIndex][1];
     assert.equal(paidInput.selectedPlanCode, config.paidPlanCodeMap[`${plan}::Monthly`]);
     assert.equal(paidInput.commercialTerms.recurringMinor, terms.recurringMinor);
@@ -222,6 +926,27 @@ test("all approved monthly plans bind exact terms and update CRM once after Bill
       Billing_Automation_Error: null,
     });
   }
+});
+
+test("unknown completion and upstream failures never emit a conversion success fact", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const billingFailure = harness(config, context(config), {
+    ensurePaid: async () => { throw new Error("synthetic Billing uncertainty"); },
+  });
+  await assert.rejects(() => billingFailure.lifecycle.handle({
+    action: "prepare_paid_subscription", dealId: "100000000000001",
+  }), (error) => error.publicCode === "reconciliation_required");
+  assert.equal(billingFailure.calls.some(([kind]) => kind === "analytics"), false);
+
+  const completionFailure = harness(config, context(config), {
+    mark: async (_rowId, status) => {
+      if (status === "completed") throw new Error("synthetic uncertain completion");
+    },
+  });
+  await assert.rejects(() => completionFailure.lifecycle.handle({
+    action: "prepare_paid_subscription", dealId: "100000000000001",
+  }), (error) => error.publicCode === "reconciliation_required");
+  assert.equal(completionFailure.calls.some(([kind]) => kind === "analytics"), false);
 });
 
 test("missing, pending, declined, or premature acceptance never reaches Billing", async () => {
@@ -275,6 +1000,23 @@ test("acceptance evidence, chronology, and ZZZ SYNTHETIC ownership fail closed b
     dealId: "100000000000001",
   }), /ZZZ SYNTHETIC/);
   assert.equal(rejectedAccount.calls.some(([kind]) => kind === "claim"), false);
+});
+
+test("paid conversion requires exact current and approved deployment configuration identity", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  for (const overrides of [
+    { Approved_Deployment_Record_ID: "deployment_B" },
+    { Approved_Configuration_Version: "cfg_A_v2" },
+    { Deployment_Record_ID: null },
+    { Configuration_Version: "unsafe version" },
+  ]) {
+    const rejected = harness(config, context(config, overrides));
+    await assert.rejects(() => rejected.lifecycle.handle({
+      action: "prepare_paid_subscription", dealId: "100000000000001",
+    }), /invalid|approved deployment configuration/);
+    assert.equal(rejected.calls.some(([kind]) => kind === "claim"), false);
+    assert.equal(rejected.calls.some(([kind]) => kind === "analytics"), false);
+  }
 });
 
 test("acceptance version is bound to the claimed paid operation", async () => {

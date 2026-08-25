@@ -1,15 +1,24 @@
 {
   "schema_version": 1,
-  "status": "proposed",
-  "live_state": "unknown",
-  "scope": "Reviewed variable-name registry attested to cover the supplied export and proposed replacement",
-  "coverage_attestation": "Locally compared with the privately supplied export on 2026-08-04; public readers cannot independently reproduce that source comparison.",
+  "status": "required_hardening_pending",
+  "live_state": "sanitized read-only audit recorded; immutable deployment parity and Creator Custom API inventory remain unverified",
+  "scope": "Reviewed variable-name registry attested to cover three private live source revisions and the hardened replacement",
+  "coverage_attestation": "Locally compared with the privately supplied export across all three reviewed live source revisions through 2026-08-25; public readers cannot independently reproduce that source comparison.",
   "rules": {
     "public_registry": "Names, classifications, rules, and explicitly safe defaults are versioned here.",
     "secret_values": "Secret values exist only in the platform secret store and are never committed or logged.",
     "private_values": "Routes, hosts, table names, OAuth identity, and deployment topology remain private even when not credentials.",
     "runtime_logging": "Only variables marked value may appear in runtime logs; presence-only is permitted only for a future reviewed diagnostic that emits a boolean.",
     "unknowns": "A documented variable does not prove that a live value exists or is correct."
+  },
+  "release_artifact": {
+    "builder": "tools/build-development-artifact.js",
+    "function_target": "sylvara_client_portal_hmac_gateway_function",
+    "function_type": "advancedio",
+    "environment_scope": "development-only",
+    "private_build_inputs_are_runtime_variables": false,
+    "creator_destination_digest_manifest_disclosure": "prohibited",
+    "deployment_side_effect": "none"
   },
   "variables": [
     {

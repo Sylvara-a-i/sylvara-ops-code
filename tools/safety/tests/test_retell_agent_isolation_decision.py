@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 import unittest
 from pathlib import Path
@@ -7,8 +8,19 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 SUPERSEDED = ROOT / "docs" / "adr" / "0005-client-specific-retell-test-agent-isolation.md"
-CURRENT = ROOT / "docs" / "adr" / "0006-shared-seven-day-monitor-with-client-number-isolation.md"
+HISTORICAL = ROOT / "docs" / "adr" / "0006-shared-seven-day-monitor-with-client-number-isolation.md"
 RUNBOOK = ROOT / "docs" / "runbooks" / "shared-seven-day-monitor-number-routing.md"
+RELEASE_CONTRACT = ROOT / "docs" / "product" / "free-revenue-leak-test-release-contract.json"
+CAPABILITY_PROFILES = (
+    ROOT
+    / "src"
+    / "zoho-catalyst"
+    / "revenue-desk-call-runtime"
+    / "functions"
+    / "revenue_desk_call_gateway"
+    / "contracts"
+    / "capability-profiles.json"
+)
 LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 
 
@@ -16,15 +28,17 @@ class RetellAgentIsolationDecisionTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.superseded_text = SUPERSEDED.read_text(encoding="utf-8")
-        cls.current_text = CURRENT.read_text(encoding="utf-8")
+        cls.historical_text = HISTORICAL.read_text(encoding="utf-8")
         cls.runbook_text = RUNBOOK.read_text(encoding="utf-8")
-        cls.current_lower = cls.current_text.lower()
+        cls.contract = json.loads(RELEASE_CONTRACT.read_text(encoding="utf-8"))
+        cls.profiles = json.loads(CAPABILITY_PROFILES.read_text(encoding="utf-8"))
+        cls.historical_lower = cls.historical_text.lower()
         cls.runbook_lower = cls.runbook_text.lower()
 
     def test_decisions_and_runbook_have_one_h1_and_local_links_resolve(self) -> None:
         for path, text in (
             (SUPERSEDED, self.superseded_text),
-            (CURRENT, self.current_text),
+            (HISTORICAL, self.historical_text),
             (RUNBOOK, self.runbook_text),
         ):
             with self.subTest(path=path):
@@ -37,106 +51,89 @@ class RetellAgentIsolationDecisionTests(unittest.TestCase):
                         continue
                     self.assertTrue((path.parent / target).resolve().is_file())
 
-    def test_old_client_monitor_clone_decision_is_superseded(self) -> None:
-        lower = self.superseded_text.lower()
-        self.assertIn("status: **superseded**", lower)
-        self.assertIn("superseded by: [adr 0006]", lower)
-        self.assertIn("do not implement the client-specific monitor-clone", lower)
+    def test_historical_agent_decisions_are_explicitly_superseded(self) -> None:
+        old_lower = self.superseded_text.lower()
+        self.assertIn("status: **superseded**", old_lower)
+        self.assertIn("superseded by: [adr 0006]", old_lower)
+        self.assertIn("do not implement the client-specific monitor-clone", old_lower)
 
-    def test_current_topology_is_unambiguous(self) -> None:
-        required = (
-            "use one shared free-test agent",
-            "one dedicated retell number per active test client",
-            "one versioned catalyst deployment/configuration record per active test",
-            "one shared inbound resolver",
-            "the shared free-test agent is never promoted into a revenue desk",
-            "not a generalized multi-tenant voice platform",
-        )
-        for marker in required:
-            with self.subTest(marker=marker):
-                self.assertIn(marker, self.current_lower)
+        self.assertIn("status: superseded by", self.historical_lower)
+        self.assertIn("final consolidated release contract", self.historical_lower)
+        self.assertIn("not ready for retell agent testing", self.historical_lower)
+        self.assertIn("historical number-isolation", self.historical_lower)
 
-    def test_monitor_and_revenue_desk_are_separate_agent_products(self) -> None:
-        self.assertIn("shared **7-day free test** agent", self.current_lower)
-        self.assertIn("**revenue desk**", self.current_lower)
-        self.assertIn(
-            "the shared free-test agent is never promoted into a revenue desk",
-            self.current_lower,
-        )
-        self.assertIn(
-            "never auto-extend, auto-convert, or start a revenue desk",
-            self.runbook_lower,
-        )
+    def test_current_topology_uses_one_shared_free_and_paid_runtime(self) -> None:
+        runtime = self.contract["shared_call_runtime"]
+        self.assertEqual(runtime["engagement_types"], ["free_test", "paid_service"])
+        self.assertEqual(runtime["gateway"], "revenue_desk_call_gateway")
+        self.assertEqual(runtime["worker"], "revenue_desk_call_worker")
+        self.assertEqual(runtime["gateway_routes"], [
+            "POST /retell/inbound",
+            "POST /retell/events",
+            "GET /internal/readiness",
+        ])
+        self.assertEqual(runtime["gateway_route_count"], 3)
+        self.assertIn("same gateway/worker", self.runbook_lower)
 
-    def test_number_not_agent_is_the_shared_monitor_client_boundary(self) -> None:
-        self.assertIn(
-            "called `to_number` identifies the dedicated forwarding destination",
-            self.current_lower,
-        )
-        self.assertIn(
-            "catalyst binds that number to exactly one client deployment",
-            self.current_lower,
-        )
-        self.assertIn(
-            "the shared retell `agent_id` identifies the free-test product; it is not sufficient evidence of client ownership",
-            self.current_lower,
-        )
-        self.assertIn(
-            "the shared `agent_id` identifies the product, never the tenant",
-            self.runbook_lower,
-        )
+    def test_free_profile_is_bounded_and_paid_profiles_fail_closed(self) -> None:
+        profiles = {item["id"]: item for item in self.profiles["profiles"]}
+        self.assertEqual(self.profiles["engagement_types"], ["free_test", "paid_service"])
+        self.assertEqual(self.profiles["unknown_or_disabled_behavior"], "fail_closed")
+        self.assertFalse(self.profiles["production_traffic_enabled"])
 
-    def test_one_shared_inbound_resolver_is_required(self) -> None:
-        for marker in (
-            "one shared inbound resolver",
-            "the called `to_number` maps to exactly one eligible number assignment",
-            "return only allowlisted metadata, shared agent/version, and approved dynamic variables",
-        ):
-            with self.subTest(marker=marker):
-                self.assertIn(marker, self.current_lower + self.runbook_lower)
-
-    def test_post_call_resolution_does_not_use_shared_agent_as_tenancy_key(self) -> None:
-        ordered_markers = (
-            "validated `deployment_id` from call metadata",
-            "existing durable call-to-deployment binding",
-            "unique validated `to_number` assignment effective for the call",
-            "`agent_id` only if it maps to exactly one deployment",
+        free = profiles["call_gap_monitor_v1"]
+        self.assertTrue(free["enabled"])
+        self.assertEqual(
+            free["limit_policy"],
+            "seven_calendar_days_or_25_connected_calls_v1",
         )
-        positions = [self.current_lower.index(marker) for marker in ordered_markers]
-        self.assertEqual(positions, sorted(positions))
-        self.assertIn(
-            "the shared free-test `agent_id` maps to multiple deployments and therefore is not sufficient ownership evidence",
-            self.current_lower,
+        for profile_id in ("launch_v1", "growth_v1", "scale_v1"):
+            with self.subTest(profile_id=profile_id):
+                profile = profiles[profile_id]
+                self.assertEqual(profile["engagement_type"], "paid_service")
+                self.assertEqual(profile["status"], "draft")
+                self.assertFalse(profile["enabled"])
+                self.assertEqual(profile["traffic_environments"], [])
+
+    def test_number_and_immutable_configuration_establish_tenant(self) -> None:
+        retell = self.contract["retell_integration"]
+        self.assertEqual(retell["shared_agent_count"], 1)
+        self.assertTrue(retell["dedicated_number_per_active_deployment"])
+        self.assertFalse(retell["agent_id_alone_establishes_tenant"])
+        self.assertEqual(retell["ownership_priority"], [
+            "validated deployment_id",
+            "durable call binding",
+            "unique validated to_number",
+            "unique agent_id mapping only when not shared",
+        ])
+        gate = retell["required_resolver_gate"]
+        self.assertEqual(gate["resolver_status"], "Resolved")
+        self.assertEqual(gate["engagement_type"], ["free_test", "paid_service"])
+
+    def test_approval_never_activates_or_starts_the_clock(self) -> None:
+        approval = self.contract["shared_call_runtime"]["approval_control"]
+        self.assertTrue(approval["approval_and_activation_are_distinct"])
+        self.assertTrue(approval["activation_requires_authoritative_route_readback"])
+        self.assertEqual(
+            approval["seven_day_clock_origin"],
+            "activation_receipt_decision_after_route_readback",
         )
+        self.assertEqual(approval["capacity_reservation_subsystem"], "absent")
 
-    def test_configuration_failure_terminates_before_intake(self) -> None:
-        self.assertIn("neutral **configuration unavailable** termination", self.current_lower)
-        self.assertIn("collects no caller details", self.current_lower)
-        self.assertIn("continues with a degraded generic intake", self.current_lower)
-        self.assertIn("configuration unavailable is a direct neutral termination", self.runbook_lower)
-        self.assertIn("call_lookup_key = hmac", self.current_lower)
-        self.assertIn("the raw provider identifier is not stored", self.current_lower)
-        self.assertIn("reporting remains partitioned by `client_id`, `deployment_id`", self.current_lower)
-
-    def test_two_client_acceptance_is_required_and_clone_fallback_is_rejected(self) -> None:
-        self.assertIn(
-            "two synthetic clients, two distinct synthetic numbers, and the same shared agent",
-            self.current_lower,
-        )
-        self.assertIn("number reassignment cannot resolve stale ownership", self.current_lower)
-        self.assertIn("the two-client suite must additionally prove", self.runbook_lower)
-        self.assertIn("do not switch to a client clone or degraded intake", self.runbook_lower)
-
-    def test_scope_remains_narrow_and_live_authority_is_not_claimed(self) -> None:
-        self.assertIn("not a generalized multi-tenant voice platform", self.current_lower)
-        self.assertIn("production authorization: not granted", self.current_lower)
+    def test_scope_remains_dark_and_retell_testing_is_not_yet_authorized(self) -> None:
+        production = self.contract["production_scope"]
+        self.assertEqual(production["mode"], "dark")
+        self.assertFalse(production["retell_number_or_webhook_binding"])
+        self.assertFalse(production["real_calls_allowed"])
+        self.assertFalse(production["traffic_activation_allowed"])
+        self.assertIn("not ready for retell agent testing", self.runbook_lower)
         self.assertIn("production authorization: **not granted**", self.runbook_lower)
-        self.assertNotIn("is deployed and working", self.current_lower)
+        self.assertNotIn("ready for controlled internal phone test", self.runbook_lower)
 
     def test_provider_claims_use_only_official_retell_sources(self) -> None:
         urls = [
             target
-            for text in (self.current_text, self.runbook_text)
+            for text in (self.historical_text, self.runbook_text)
             for target in LINK_RE.findall(text)
             if target.startswith("https://")
         ]

@@ -1,0 +1,120 @@
+{
+  "schema_version": 2,
+  "status": "repository-approved-live-creation-and-sharing-blocked",
+  "production_authorized": false,
+  "workspace_strategy": {
+    "action": "reuse-existing-workspace-after-private-identity-and-schema-readback",
+    "create_new_workspace": false,
+    "existing_assets_are_migration_evidence": true,
+    "rename_or_delete_existing_assets": false
+  },
+  "source_contract": {
+    "record_types": [
+      "deployment",
+      "call",
+      "daily_metric",
+      "final_test_result",
+      "conversion_status"
+    ],
+    "partition_columns": [
+      "ENVIRONMENT",
+      "CLIENT_KEY",
+      "DEPLOYMENT_KEY",
+      "CONFIGURATION_VERSION",
+      "ENGAGEMENT_TYPE"
+    ],
+    "engagement_semantics": {
+      "partition_field": "ENGAGEMENT_TYPE",
+      "partition_meaning": "The engagement that originated the evidence; it is never rewritten to the destination commercial state.",
+      "conversion_status": {
+        "origin_field": "ENGAGEMENT_TYPE",
+        "origin_value": "free_test",
+        "target_field": "TARGET_ENGAGEMENT_TYPE",
+        "target_value": "paid_service",
+        "rule": "A free-test conversion remains in the free_test source partition while its separately named target identifies the proposed paid engagement."
+      }
+    },
+    "deduplication": "Use the exact imported RECORD_KEY within the immutable environment, client, and deployment partition. Same-watermark conflicts block publication.",
+    "time_zone": "UTC",
+    "currency_rule": "Never add values across currency codes or evidence classes. Suppress value metrics when evidence or currency is incomplete.",
+    "freshness_rule": "Every view displays the maximum SOURCE_MODIFIED_AT and is suppressed when its required partitions are stale or reconciliation is unresolved."
+  },
+  "dashboards": [
+    {
+      "title": "Free-Test Operations Dashboard",
+      "audience": "internal-revenue-desk-operators-only",
+      "required_filters": [
+        { "column": "ENVIRONMENT", "required": true, "single_value": true },
+        { "column": "ENGAGEMENT_TYPE", "required": true, "fixed_value": "free_test" },
+        { "column": "CLIENT_KEY", "required": false, "single_value": false },
+        { "column": "DEPLOYMENT_KEY", "required": false, "single_value": false }
+      ],
+      "widgets": [
+        { "title": "Active Free Tests", "type": "summary", "source": "deployment", "definition": "Distinct current DEPLOYMENT_KEY values with DEPLOYMENT_STATUS=live inside the selected Development partition." },
+        { "title": "Connected Calls", "type": "summary", "source": "daily_metric", "definition": "Sum TOTAL_CALLS_HANDLED after exact partition and period filters." },
+        { "title": "Qualified Opportunities", "type": "summary", "source": "daily_metric", "definition": "Sum QUALIFIED_OPPORTUNITIES; never infer a booking or revenue outcome." },
+        { "title": "Calls Remaining", "type": "summary", "source": "deployment", "definition": "Maximum of zero and CALL_LIMIT minus HANDLED_COUNT from the latest deployment fact." },
+        { "title": "Tests Ending Soon", "type": "table", "source": "deployment", "definition": "Latest live deployments ordered by EXPIRES_AT, showing only opaque partitions, status, handled count, call limit, start, and expiry." },
+        { "title": "Daily Call Outcomes", "type": "chart", "source": "daily_metric", "definition": "UTC trend of TOTAL_CALLS_HANDLED, QUALIFIED_OPPORTUNITIES, URGENT_REQUESTS, and UNRESOLVED_CALLS." },
+        { "title": "Exception Mix", "type": "chart", "source": "daily_metric", "definition": "Separate WRONG_FIT_CALLS, SPAM_CALLS, and UNRESOLVED_CALLS; missing fields remain unknown rather than zero." },
+        { "title": "Final Test Results", "type": "table", "source": "final_test_result", "definition": "Terminal results only, including end reason, captured calls, limits, evidence-completeness flags, and UTC period." },
+        { "title": "Conversion Readiness", "type": "table", "source": "conversion_status", "definition": "Free-test-origin rows only (ENGAGEMENT_TYPE=free_test), with TARGET_ENGAGEMENT_TYPE=paid_service plus CRM, Billing, Results Review, and paid-acceptance classifications after authoritative readback; this widget performs no writeback." },
+        { "title": "Data Freshness", "type": "label", "source": "all", "definition": "Maximum source watermark plus a blocking stale or reconciliation-required state." }
+      ],
+      "access": {
+        "workspace_admin_only": true,
+        "public_link": false,
+        "embed": false,
+        "scheduled_export": false,
+        "direct_customer_access": false
+      }
+    },
+    {
+      "title": "Customer Results Dashboard",
+      "audience": "internal-results-review-and-approved-fixed-client-render",
+      "required_filters": [
+        { "column": "ENVIRONMENT", "required": true, "single_value": true },
+        { "column": "ENGAGEMENT_TYPE", "required": true, "fixed_value": "free_test" },
+        { "column": "CLIENT_KEY", "required": true, "single_value": true, "locked_before_render": true },
+        { "column": "DEPLOYMENT_KEY", "required": true, "single_value": true, "locked_before_render": true }
+      ],
+      "widgets": [
+        { "title": "Test Period", "type": "summary", "source": "final_test_result", "definition": "TEST_STARTED_AT through TEST_ENDED_AT in UTC with TEST_END_REASON." },
+        { "title": "Connected Calls", "type": "summary", "source": "final_test_result", "definition": "CALLS_CAPTURED from one terminal reconciled test result." },
+        { "title": "Qualified Opportunities", "type": "summary", "source": "final_test_result", "definition": "QUALIFIED_OPPORTUNITIES; label as an observed call classification, not booked or confirmed revenue." },
+        { "title": "Urgent Requests", "type": "summary", "source": "final_test_result", "definition": "URGENT_REQUESTS from handled calls." },
+        { "title": "Daily Results", "type": "chart", "source": "daily_metric", "definition": "UTC trend for calls, qualified opportunities, urgent requests, and existing-customer calls." },
+        { "title": "Call Mix", "type": "chart", "source": "daily_metric", "definition": "Qualified, existing-customer, wrong-fit, spam, and unresolved classifications shown separately." },
+        { "title": "Bookable Evidence", "type": "summary", "source": "final_test_result", "definition": "BOOKABLE_OPPORTUNITIES only when ANALYSIS_EVIDENCE_COMPLETE=true and the optional field is present; otherwise display Not Available." },
+        { "title": "Office Follow-Up", "type": "summary", "source": "final_test_result", "definition": "OFFICE_FOLLOW_UP_CALLS only when evidence is complete and the optional field is present; otherwise display Not Available." },
+        { "title": "Value Evidence", "type": "table", "source": "call", "definition": "Aggregate VALUE_MINOR_UNITS separately by VALUE_EVIDENCE_CLASS and VALUE_CURRENCY. Never label estimated value as verified, invoiced, paid, or guaranteed." },
+        { "title": "Data Freshness", "type": "label", "source": "all", "definition": "Maximum source watermark, evidence-completeness status, and a blocking stale or unresolved state." }
+      ],
+      "access": {
+        "workspace_admin_only": true,
+        "public_link": false,
+        "embed": false,
+        "scheduled_export": false,
+        "direct_customer_access": false,
+        "fixed_client_render_requires_manual_review": true
+      }
+    }
+  ],
+  "creation_order": [
+    "Read back the exact Analytics organization, workspace, tables, columns, keys, row counts, views, permissions, and current shares.",
+    "Reconcile existing Dim_Client, Fact_Calls, Fact_Client_Daily, templates, and dashboards to the v2 record-type contract without overwrite or deletion.",
+    "Prove the five target tables with synthetic Development imports, provider jobs, exact row/hash/watermark readback, and one-client isolation.",
+    "Create the reports required by each widget with exact filters and null behavior.",
+    "Assemble both exact dashboard titles in the native Analytics console because the approved Changes connector exposes report creation but not dashboard creation.",
+    "Test stale-data suppression, cross-client isolation, export restrictions, and non-admin access.",
+    "Record screenshots and live IDs only in the approved private evidence package; commit only sanitized readback results.",
+    "Do not enable public links, embeds, scheduled delivery, or direct customer access in this task."
+  ],
+  "rollback": [
+    "Disable analytics_sync active mode and stop new import Jobs.",
+    "Preserve unresolved imports, existing views, and imported rows for reconciliation.",
+    "Hide newly created reports and dashboards from every non-admin audience.",
+    "Delete only synthetic views or rows whose exact ownership and zero-dependency readback are proven and separately approved.",
+    "Re-read target row counts, watermarks, permissions, shares, and existing dashboard availability."
+  ]
+}

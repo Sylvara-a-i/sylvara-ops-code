@@ -19,7 +19,7 @@
     {
       "logical_name": "REVENUE_LEAK_TEST_REQUEST_FORM",
       "platform_name": "RevenueLeakTestRequestForm",
-      "title": "Free Revenue Leak Test",
+      "title": "Free Revenue Leak Test Request",
       "purpose": "Public or CRM-assisted request intake",
       "crm_integration": {
         "module": "Leads",

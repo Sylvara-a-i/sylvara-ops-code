@@ -33,6 +33,9 @@ const COMPRESSED_CHOICE_PREFIX = "br:";
 const MAX_COMPRESSED_CHOICE_CHARS = 4096;
 const MAX_DECOMPRESSED_CHOICE_BYTES = 32768;
 const FORM2_SESSION_TABLE_NAME = "Form2SessionsV3Runtime";
+const FORM2_PREFILL_TABLE_NAME = "Form2PrefillsV3";
+const FORM2_SUBMISSION_TABLE_NAME = "Form2SubmissionsV3";
+const FORM2_PROOF_TABLE_NAME = "Form2VerificationProofsV3";
 const MAX_PROOF_ALLOWED_RECIPIENT_DIGESTS = 16;
 
 const NUMERIC_LIMITS = Object.freeze({
@@ -119,22 +122,16 @@ function validateIdentifier(value, name) {
   return value;
 }
 
-function validateAdditiveV3Table(value, name) {
+function validateReviewedTable(value, name, expected) {
   const selected = validateIdentifier(value, name);
-  if (!selected.endsWith("V3")) {
-    throw new ConfigurationError(`${name} must identify an additive version-3 table`);
+  if (selected !== expected) {
+    throw new ConfigurationError(`${name} must be the reviewed ${expected} table`);
   }
   return selected;
 }
 
 function validateSessionV3Table(value) {
-  const selected = validateIdentifier(value, "SESSION_TABLE_NAME");
-  if (selected !== FORM2_SESSION_TABLE_NAME) {
-    throw new ConfigurationError(
-      `SESSION_TABLE_NAME must be the reviewed ${FORM2_SESSION_TABLE_NAME} table`,
-    );
-  }
-  return selected;
+  return validateReviewedTable(value, "SESSION_TABLE_NAME", FORM2_SESSION_TABLE_NAME);
 }
 
 function validateConnectionLinkName(value, name) {
@@ -370,28 +367,60 @@ function loadConfig(
   artifactFormDestinationSha256 = ARTIFACT_FORM_DESTINATION_SHA256,
 ) {
   const deploymentEnvironment = readRequired(environment, "DEPLOYMENT_ENVIRONMENT");
-  // Production remains impossible in code until Development acceptance evidence,
-  // connection scopes, rollback, and an explicit source change are reviewed.
-  if (deploymentEnvironment !== "development") {
+  const deploymentMode = readRequired(environment, "DEPLOYMENT_MODE");
+  if (
+    !(
+      (deploymentEnvironment === "development" && deploymentMode === "active") ||
+      (deploymentEnvironment === "production" && deploymentMode === "dark")
+    )
+  ) {
     throw new ConfigurationError(
-      "DEPLOYMENT_ENVIRONMENT must be development; production activation is code-blocked",
+      "DEPLOYMENT_ENVIRONMENT and DEPLOYMENT_MODE must be development/active or production/dark",
     );
+  }
+
+  const sourceRevision = validateRevision(
+    readRequired(environment, "SOURCE_REVISION"),
+    "SOURCE_REVISION",
+  );
+  const builtRevision = validateRevision(
+    artifactRevision,
+    "Artifact source revision",
+  );
+  if (sourceRevision !== builtRevision) {
+    throw new ConfigurationError(
+      "SOURCE_REVISION does not match the deployed artifact source revision",
+    );
+  }
+
+  // Dark Production intentionally has no form route, store, mail, CRM, or secret
+  // dependency. A deployed artifact therefore cannot become active through variables.
+  if (deploymentMode === "dark") {
+    return Object.freeze({
+      darkMode: true,
+      deploymentEnvironment,
+      deploymentMode,
+      sourceRevision,
+    });
   }
 
   const sessionTableName = validateSessionV3Table(
     readRequired(environment, "SESSION_TABLE_NAME"),
   );
-  const prefillTableName = validateAdditiveV3Table(
+  const prefillTableName = validateReviewedTable(
     readRequired(environment, "PREFILL_TABLE_NAME"),
     "PREFILL_TABLE_NAME",
+    FORM2_PREFILL_TABLE_NAME,
   );
-  const submissionTableName = validateAdditiveV3Table(
+  const submissionTableName = validateReviewedTable(
     readRequired(environment, "SUBMISSION_TABLE_NAME"),
     "SUBMISSION_TABLE_NAME",
+    FORM2_SUBMISSION_TABLE_NAME,
   );
-  const proofTableName = validateAdditiveV3Table(
+  const proofTableName = validateReviewedTable(
     readRequired(environment, "FORM2_PROOF_TABLE_NAME"),
     "FORM2_PROOF_TABLE_NAME",
+    FORM2_PROOF_TABLE_NAME,
   );
   assertUnique(
     [sessionTableName, prefillTableName, submissionTableName, proofTableName],
@@ -438,6 +467,10 @@ function loadConfig(
     readRequired(environment, "TOKEN_PEPPER"),
     "TOKEN_PEPPER",
   );
+  const workflowKeyMaterial = validateSecret(
+    readRequired(environment, "WORKFLOW_HMAC_SECRET"),
+    "WORKFLOW_HMAC_SECRET",
+  );
   const issueHeaderSecret = validateSecret(
     readRequired(environment, "ISSUE_HEADER_SECRET"),
     "ISSUE_HEADER_SECRET",
@@ -457,12 +490,13 @@ function loadConfig(
   assertUnique(
     [
       tokenPepper,
+      workflowKeyMaterial,
       issueHeaderSecret,
       prefillHeaderSecret,
       submissionHeaderSecret,
       proofHmacMaterial,
     ],
-    "TOKEN_PEPPER, proof HMAC secret, and route secrets must be independently generated",
+    "Token, workflow, proof, and route secrets must be independently generated",
   );
 
   const proofMode = readRequired(environment, "FORM2_PROOF_MODE");
@@ -516,22 +550,10 @@ function loadConfig(
     "Form 2 setup-access status values must be different",
   );
 
-  const sourceRevision = validateRevision(
-    readRequired(environment, "SOURCE_REVISION"),
-    "SOURCE_REVISION",
-  );
-  const builtRevision = validateRevision(
-    artifactRevision,
-    "Artifact source revision",
-  );
-  if (sourceRevision !== builtRevision) {
-    throw new ConfigurationError(
-      "SOURCE_REVISION does not match the deployed artifact source revision",
-    );
-  }
-
   const config = {
+    darkMode: false,
     deploymentEnvironment,
+    deploymentMode,
     sessionTableName,
     prefillTableName,
     submissionTableName,
@@ -545,6 +567,7 @@ function loadConfig(
     issueHeaderName,
     formsHeaderName,
     tokenPepper,
+    workflowKeyMaterial,
     issueHeaderSecret,
     prefillHeaderSecret,
     submissionHeaderSecret,
@@ -642,7 +665,10 @@ function loadConfig(
 }
 
 module.exports = {
+  FORM2_PREFILL_TABLE_NAME,
+  FORM2_PROOF_TABLE_NAME,
   FORM2_SESSION_TABLE_NAME,
+  FORM2_SUBMISSION_TABLE_NAME,
   ConfigurationError,
   NUMERIC_LIMITS,
   PRIVATE_CHOICE_LIMITS,

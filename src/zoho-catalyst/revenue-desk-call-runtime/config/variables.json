@@ -1,0 +1,339 @@
+{
+  "schema_version": 3,
+  "record_type": "revenue_desk_call_runtime_variable_registry",
+  "committed_values_are_synthetic_or_placeholders": true,
+  "fixed_public_runtime_contract": {
+    "worker_job_pool_name": "RevenueDeskCallJobs",
+    "worker_target_name": "revenue_desk_call_worker",
+    "worker_modes": [
+      "process_event",
+      "retry_scan",
+      "rebuild_report",
+      "reconcile_deployment"
+    ]
+  },
+  "variables": [
+    {
+      "name": "DEPLOYMENT_ENVIRONMENT",
+      "consumer": "both",
+      "secret": false,
+      "required": true,
+      "format": "development or production",
+      "boundary": "Development permits active runtime behavior; Production is unconditional dark containment."
+    },
+    {
+      "name": "DEPLOYMENT_MODE",
+      "consumer": "both",
+      "secret": false,
+      "required": true,
+      "format": "active in Development; dark in Production",
+      "boundary": "Production requires only DEPLOYMENT_ENVIRONMENT, DEPLOYMENT_MODE, and SOURCE_REVISION and rejects every invocation before SDK or store access."
+    },
+    {
+      "name": "X_ZOHO_CATALYST_ENVIRONMENT",
+      "consumer": "worker",
+      "secret": false,
+      "required": true,
+      "format": "Catalyst-injected Development",
+      "boundary": "Worker rejects missing, Production, or mismatched platform identity before SDK initialization."
+    },
+    {
+      "name": "ZOHO_CATALYST_ZCQL_PARSER",
+      "consumer": "both",
+      "secret": false,
+      "required": true,
+      "format": "exact V2",
+      "boundary": "Required for bounded conditional updates."
+    },
+    {
+      "name": "SOURCE_REVISION",
+      "consumer": "both",
+      "secret": false,
+      "required": true,
+      "format": "reviewed 40-character lowercase Git SHA",
+      "boundary": "Must exactly match the immutable revision embedded by the isolated release-artifact builder."
+    },
+    {
+      "name": "REVENUE_DESK_RUNTIME_HOST",
+      "consumer": "gateway",
+      "secret": false,
+      "required": true,
+      "format": "exact private Catalyst Advanced I/O host",
+      "boundary": "Must match the configured environment and request Host; value stays outside Git."
+    },
+    {
+      "name": "REVENUE_DESK_PROJECT_ID",
+      "consumer": "both",
+      "secret": false,
+      "required": true,
+      "format": "exact private numeric Catalyst project ID",
+      "boundary": "Must match the immutable SDK/Job project identity; value stays outside Git."
+    },
+    {
+      "name": "REVENUE_DESK_WORKER_JOB_POOL_ID",
+      "consumer": "worker",
+      "secret": false,
+      "required": true,
+      "format": "exact private numeric Development Function Job pool ID",
+      "boundary": "Worker validates it before SDK, Data Store, or Mail access."
+    },
+    {
+      "name": "CRM_BILLING_ORCHESTRATOR_HOST",
+      "consumer": "worker",
+      "secret": false,
+      "required": true,
+      "format": "exact private Development Catalyst Advanced I/O host",
+      "boundary": "Must exactly match CRM_BILLING_ORCHESTRATOR_URL; Production remains dark and does not load it."
+    },
+    {
+      "name": "CRM_BILLING_ORCHESTRATOR_URL",
+      "consumer": "worker",
+      "secret": true,
+      "required": true,
+      "format": "exact HTTPS Development Catalyst route with no query, fragment, credentials, or non-default port",
+      "boundary": "Sole bounded route for sync_report_summary; the value and private path stay outside Git."
+    },
+    {
+      "name": "CRM_BILLING_API_GATEWAY_KEY",
+      "consumer": "worker",
+      "secret": true,
+      "required": true,
+      "format": "16-4096 non-whitespace characters sent only as ZCFKEY",
+      "boundary": "Platform-generated Development Catalyst API Gateway key, which may be common across Development projects and is never sole authorization. Regenerate/replace it only when the Catalyst control plane exposes that operation and old-key rejection can be proven; otherwise record it non-rotatable and rotate the independent report-only second factor. Production uses a separately generated key."
+    },
+    {
+      "name": "CRM_BILLING_SHARED_HEADER_NAME",
+      "consumer": "worker",
+      "secret": false,
+      "required": true,
+      "format": "exact private x-* header name",
+      "boundary": "Must equal the orchestrator SHARED_HEADER_NAME; it is not ZCFKEY or x-api-key."
+    },
+    {
+      "name": "CRM_BILLING_SHARED_HEADER_VALUE",
+      "consumer": "worker",
+      "secret": true,
+      "required": true,
+      "format": "32-4096 non-whitespace characters",
+      "boundary": "Report-only caller credential paired with orchestrator REPORT_SUMMARY_HEADER_VALUE; it cannot authorize paid or reconcile actions."
+    },
+    {
+      "name": "CRM_BILLING_DISPATCH_TIMEOUT_MS",
+      "consumer": "worker",
+      "secret": false,
+      "required": true,
+      "format": "integer 250-5000",
+      "boundary": "End-to-end timeout includes response headers and a maximum 4096-byte JSON body."
+    },
+    {
+      "name": "RETELL_WEBHOOK_API_KEY",
+      "consumer": "gateway",
+      "secret": true,
+      "required": true,
+      "format": "24-4096 non-whitespace characters",
+      "boundary": "Retell signature verification only."
+    },
+    {
+      "name": "RETELL_SHARED_AGENT_ID",
+      "consumer": "both",
+      "secret": false,
+      "required": true,
+      "format": "private provider agent ID",
+      "boundary": "Exact shared free-test monitor binding; paid capability profiles remain disabled."
+    },
+    {
+      "name": "RETELL_SHARED_AGENT_VERSION",
+      "consumer": "both",
+      "secret": false,
+      "required": true,
+      "format": "integer 0-100000",
+      "boundary": "Exact shared monitor version."
+    },
+    {
+      "name": "RETELL_INBOUND_PATH",
+      "consumer": "gateway",
+      "secret": false,
+      "required": true,
+      "format": "exact /retell/inbound",
+      "boundary": "No alternate ingress route."
+    },
+    {
+      "name": "RETELL_EVENTS_PATH",
+      "consumer": "gateway",
+      "secret": false,
+      "required": true,
+      "format": "exact /retell/events",
+      "boundary": "Authenticated durable event ingress."
+    },
+    {
+      "name": "RETELL_SIGNATURE_MAX_AGE_MS",
+      "consumer": "gateway",
+      "secret": false,
+      "required": true,
+      "format": "exact 300000",
+      "boundary": "Five-minute signature window."
+    },
+    {
+      "name": "MAX_WEBHOOK_BYTES",
+      "consumer": "gateway",
+      "secret": false,
+      "required": true,
+      "format": "integer 1024-262144",
+      "boundary": "Raw request limit before JSON parse."
+    },
+    {
+      "name": "INBOUND_BODY_TIMEOUT_MS",
+      "consumer": "gateway",
+      "secret": false,
+      "required": true,
+      "format": "integer 250-5000",
+      "boundary": "Bounded raw-body read."
+    },
+    {
+      "name": "EVENT_HMAC_SECRET",
+      "consumer": "both",
+      "secret": true,
+      "required": true,
+      "format": "32-256 non-whitespace characters",
+      "boundary": "Durable keys, fingerprints, and ownership tokens."
+    },
+    {
+      "name": "ANALYTICS_PARTITION_HMAC_SECRET",
+      "consumer": "both",
+      "secret": true,
+      "required": true,
+      "format": "32-4096 non-whitespace characters",
+      "boundary": "Dedicated shared key for stable opaque Analytics client/deployment partitions across approved producers; distinct from runtime event identity."
+    },
+    {
+      "name": "NUMBER_LOOKUP_HMAC_SECRET",
+      "consumer": "gateway",
+      "secret": true,
+      "required": true,
+      "format": "32-4096 non-whitespace characters",
+      "boundary": "Non-reversible called-number lookup only."
+    },
+    {
+      "name": "INTERNAL_READINESS_TOKEN",
+      "consumer": "gateway",
+      "secret": true,
+      "required": true,
+      "format": "32-256 non-whitespace characters",
+      "boundary": "Authenticates GET /internal/readiness."
+    },
+    {
+      "name": "INTERNAL_READINESS_PATH",
+      "consumer": "gateway",
+      "secret": false,
+      "required": true,
+      "format": "exact /internal/readiness",
+      "boundary": "Development-only private readiness route. Production dark mode returns 503 on every path."
+    },
+    {
+      "name": "DEPLOYMENT_TABLE",
+      "consumer": "both",
+      "secret": false,
+      "required": true,
+      "format": "exact RevenueDeskDeployments",
+      "boundary": "Canonical route deployment state."
+    },
+    {
+      "name": "CONFIGURATION_VERSION_TABLE",
+      "consumer": "both",
+      "secret": false,
+      "required": true,
+      "format": "exact RevenueDeskConfigurationVersions",
+      "boundary": "Authoritative immutable configuration versions."
+    },
+    {
+      "name": "EVENT_RECEIPT_TABLE",
+      "consumer": "both",
+      "secret": false,
+      "required": true,
+      "format": "exact RevenueDeskEventReceipts",
+      "boundary": "Durable event claim, dispatch, lease, and replay state."
+    },
+    {
+      "name": "CANONICAL_CALL_TABLE",
+      "consumer": "both",
+      "secret": false,
+      "required": true,
+      "format": "exact RevenueDeskCalls",
+      "boundary": "Canonical tenant-bound call outcomes."
+    },
+    {
+      "name": "NOTIFICATION_TABLE",
+      "consumer": "both",
+      "secret": false,
+      "required": true,
+      "format": "exact RevenueDeskNotifications",
+      "boundary": "Durable dry-run or bounded Development email state."
+    },
+    {
+      "name": "ANALYTICS_OUTBOX_TABLE",
+      "consumer": "both",
+      "secret": false,
+      "required": true,
+      "format": "exact AnalyticsSyncOutbox",
+      "boundary": "Sanitized additive-v2 delivery infrastructure; never reverse-writes runtime authority."
+    },
+    {
+      "name": "OPERATION_TABLE",
+      "consumer": "both",
+      "secret": false,
+      "required": true,
+      "format": "exact CRMBillingOperations",
+      "boundary": "Producer-only terminal report-summary handoff. crm_billing_orchestrator owns consumption and CRM write/readback."
+    },
+    {
+      "name": "PLATFORM_OPERATION_TIMEOUT_MS",
+      "consumer": "both",
+      "secret": false,
+      "required": true,
+      "format": "integer 250-5000",
+      "boundary": "Bounded Catalyst calls including Function Job submission."
+    },
+    {
+      "name": "REVENUE_DESK_NOTIFICATION_MODE",
+      "consumer": "both",
+      "secret": false,
+      "required": true,
+      "format": "dry_run or send_development",
+      "boundary": "Production accepts dry_run only; committed default is dry_run."
+    },
+    {
+      "name": "REVENUE_DESK_MAIL_FROM",
+      "consumer": "both",
+      "secret": false,
+      "required": true,
+      "format": "verified Catalyst Mail sender",
+      "boundary": "Private environment-specific sender; no committed value."
+    },
+    {
+      "name": "REVENUE_DESK_MAIL_TIMEOUT_MS",
+      "consumer": "both",
+      "secret": false,
+      "required": true,
+      "format": "integer 250-5000",
+      "boundary": "Provider invocation ceiling."
+    },
+    {
+      "name": "REVENUE_DESK_NOTIFICATION_MAX_ATTEMPTS",
+      "consumer": "both",
+      "secret": false,
+      "required": true,
+      "format": "exact 3",
+      "boundary": "Bounded retry state machine."
+    }
+  ],
+  "secret_rules": [
+    "Real secrets, private IDs, hosts, sender addresses, customer data, and provider identifiers stay in Catalyst private configuration.",
+    "Webhook, event-HMAC, Analytics-partition, number-lookup, readiness, API Gateway, and report-caller secrets must be distinct.",
+    "Logs contain only safe event names, modes, public correlation IDs, bounded states, and error codes."
+  ],
+  "production_rules": [
+    "Production configuration contains only DEPLOYMENT_ENVIRONMENT=production, DEPLOYMENT_MODE=dark, and the release-stamped SOURCE_REVISION.",
+    "Every Production gateway path and worker invocation fails with 503 before SDK initialization or durable access.",
+    "No repository change, dark deployment, table provisioning, or draft paid profile authorizes activation."
+  ]
+}

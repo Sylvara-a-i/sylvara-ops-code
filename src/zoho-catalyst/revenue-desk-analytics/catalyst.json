@@ -1,0 +1,15 @@
+{
+  "functions": {
+    "source": "functions",
+    "targets": [
+      "analytics_sync"
+    ],
+    "ignore": [
+      "test/**",
+      ".env*"
+    ],
+    "scripts": {
+      "predeploy": "npm --prefix analytics_sync ci --ignore-scripts"
+    }
+  }
+}

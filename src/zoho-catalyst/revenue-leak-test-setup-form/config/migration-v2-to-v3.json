@@ -28,12 +28,12 @@
     "ZZZ_Quarantined_Form2SessionsV3_TypeProbe"
   ],
   "rules": [
-    "Never rename, update, delete, or backfill either version-2 store.",
+    "Never rename, update, delete, or backfill either version-2 store during migration, cutover, or rollback rehearsal. A later removal is a separate post-cutover cleanup requiring private archive and restore proof, recovery-window expiry, scoped destructive approval, and independent absence readback.",
     "Never infer ISSUE_REQUEST_KEY from ACCESS_TOKEN_HASH, CRM state, timestamps, or row order.",
     "Never select the more advanced status when two stores disagree.",
     "Promote no terminal, ambiguous, conflicting, missing, or unverifiably bound row.",
     "Abort if any destination version-3 table is nonempty.",
-    "Never bind, migrate into, rename, reuse, or delete a quarantined probe artifact.",
+    "Never bind, migrate into, rename, reuse, or delete a quarantined probe artifact during Form 2 deployment, cutover, or rollback rehearsal. A later removal is a separate post-cutover cleanup requiring dependency-absence proof, private schema restoration evidence, recovery-window expiry, scoped destructive approval, and independent absence readback.",
     "Cut over callers only after every live version-2 invitation is expired or separately contained."
   ],
   "reason_codes": [

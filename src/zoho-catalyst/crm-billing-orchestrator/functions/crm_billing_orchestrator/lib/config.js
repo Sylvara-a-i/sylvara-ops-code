@@ -13,6 +13,8 @@ const REVISION = /^[a-f0-9]{40}$/;
 const IDENTIFIER = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
 const PLAN_CODE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
 const CUSTOMER_PROVISIONING_MODES = new Set(["test_direct_customer"]);
+const OPERATION_TABLE_NAME = "CRMBillingOperations";
+const ANALYTICS_OUTBOX_TABLE_NAME = "AnalyticsSyncOutbox";
 
 class ConfigurationError extends Error {
   constructor(message) {
@@ -72,6 +74,26 @@ function identifier(environment, name) {
   const result = required(environment, name);
   if (!IDENTIFIER.test(result)) throw new ConfigurationError(`${name} is invalid`);
   return result;
+}
+
+function operationTable(environment) {
+  const selected = identifier(environment, "OPERATION_TABLE");
+  if (selected !== OPERATION_TABLE_NAME) {
+    throw new ConfigurationError(
+      `OPERATION_TABLE must be the canonical ${OPERATION_TABLE_NAME} table`,
+    );
+  }
+  return selected;
+}
+
+function analyticsOutboxTable(environment) {
+  const selected = identifier(environment, "ANALYTICS_OUTBOX_TABLE");
+  if (selected !== ANALYTICS_OUTBOX_TABLE_NAME) {
+    throw new ConfigurationError(
+      `ANALYTICS_OUTBOX_TABLE must be the canonical ${ANALYTICS_OUTBOX_TABLE_NAME} table`,
+    );
+  }
+  return selected;
 }
 
 function planCode(environment, name) {
@@ -200,12 +222,30 @@ function loadConfig(environment = process.env, {
   artifactDevelopmentZaidHmacSha256 = ARTIFACT_DEVELOPMENT_ZAID_HMAC_SHA256,
 } = {}) {
   const deploymentEnvironment = required(environment, "DEPLOYMENT_ENVIRONMENT");
-  if (deploymentEnvironment !== "development") {
-    throw new ConfigurationError("Production activation is blocked in this source revision");
+  const deploymentMode = required(environment, "DEPLOYMENT_MODE");
+  if (
+    !(
+      (deploymentEnvironment === "development" && deploymentMode === "active") ||
+      (deploymentEnvironment === "production" && deploymentMode === "dark")
+    )
+  ) {
+    throw new ConfigurationError(
+      "DEPLOYMENT_ENVIRONMENT and DEPLOYMENT_MODE must be development/active or production/dark",
+    );
   }
   const sourceRevision = required(environment, "SOURCE_REVISION");
   if (!REVISION.test(sourceRevision) || !REVISION.test(artifactRevision) || sourceRevision !== artifactRevision) {
     throw new ConfigurationError("SOURCE_REVISION does not match the immutable artifact");
+  }
+  // Dark Production is installation evidence only. It loads no route, credential,
+  // organization, catalog, Connection, operation table, or mutation capability.
+  if (deploymentMode === "dark") {
+    return Object.freeze({
+      darkMode: true,
+      deploymentEnvironment,
+      deploymentMode,
+      sourceRevision,
+    });
   }
   const headerName = required(environment, "SHARED_HEADER_NAME").toLowerCase();
   if (
@@ -239,15 +279,28 @@ function loadConfig(environment = process.env, {
   } catch {
     throw new ConfigurationError("PAID_COMMERCIAL_TERMS_JSON is invalid");
   }
+  const idempotencyPepper = secret(environment, "IDEMPOTENCY_PEPPER");
+  const analyticsPartitionSecret = secret(environment, "ANALYTICS_PARTITION_HMAC_SECRET");
+  const sharedHeaderValue = secret(environment, "SHARED_HEADER_VALUE");
+  const reportSummaryHeaderValue = secret(environment, "REPORT_SUMMARY_HEADER_VALUE");
+  if (analyticsPartitionSecret === idempotencyPepper) {
+    throw new ConfigurationError("Analytics partition and operation identity secrets must differ");
+  }
+  if (sharedHeaderValue === reportSummaryHeaderValue) {
+    throw new ConfigurationError("Paid and report-summary caller secrets must differ");
+  }
   return Object.freeze({
+    darkMode: false,
     deploymentEnvironment,
+    deploymentMode,
     sourceRevision,
     artifactDevelopmentZaidHmacSha256,
     developmentFunctionHost: developmentFunctionHost(environment),
     developmentRuntimeProof: secret(environment, "DEVELOPMENT_RUNTIME_PROOF"),
     allowedPath: exactPath(environment),
     sharedHeaderName: headerName,
-    sharedHeaderValue: secret(environment, "SHARED_HEADER_VALUE"),
+    sharedHeaderValue,
+    reportSummaryHeaderValue,
     crmApiBaseUrl: apiBase(environment, "CRM_API_BASE_URL", "/crm/v8"),
     billingApiBaseUrl: apiBase(environment, "BILLING_API_BASE_URL", "/billing/v1"),
     billingOrganizationId: organizationId,
@@ -257,9 +310,11 @@ function loadConfig(environment = process.env, {
     crmWriteConnectionLinkName: identifier(environment, "CRM_WRITE_CONNECTION_LINK_NAME"),
     billingReadConnectionLinkName: identifier(environment, "BILLING_READ_CONNECTION_LINK_NAME"),
     billingWriteConnectionLinkName: identifier(environment, "BILLING_WRITE_CONNECTION_LINK_NAME"),
-    operationTable: identifier(environment, "OPERATION_TABLE"),
+    operationTable: operationTable(environment),
+    analyticsOutboxTable: analyticsOutboxTable(environment),
     duplicateErrorCodes: duplicateCodes(environment),
-    idempotencyPepper: secret(environment, "IDEMPOTENCY_PEPPER"),
+    idempotencyPepper,
+    analyticsPartitionSecret,
     enablePaidSubscriptionPreparation,
     paidCommercialTerms,
     paidPlanCodeMap: paidPlanMap(environment),
@@ -287,4 +342,6 @@ function loadConfig(environment = process.env, {
   });
 }
 
-module.exports = { ConfigurationError, REVISION, loadConfig };
+module.exports = {
+  ANALYTICS_OUTBOX_TABLE_NAME, ConfigurationError, OPERATION_TABLE_NAME, REVISION, loadConfig,
+};

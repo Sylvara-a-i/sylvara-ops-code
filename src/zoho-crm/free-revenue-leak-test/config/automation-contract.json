@@ -1,10 +1,10 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "status": "desired_state_pending_synthetic_acceptance",
   "customer_facing_offer": "Free Revenue Leak Test",
   "legacy_internal_offer_value": "7-Day Revenue Leak Test",
   "identifier_migration": {
-    "from_schema_version": 1,
+    "from_schema_version": 2,
     "controller_aliases": {
       "form2_controller": "revenue_leak_test_setup_form"
     },
@@ -20,16 +20,20 @@
     "form1": "Zoho Forms native Lead upsert plus one CRM review workflow",
     "lead_conversion": "explicit human-operated native CRM conversion",
     "form2": "revenue_leak_test_setup_form bounded Deal update",
-    "go_live": "version-specific internal Sylvara approval plus Catalyst validation",
+    "go_live": "version-specific internal Sylvara approval plus separate post-route-readback Catalyst activation validation",
     "call_state": "Catalyst",
+    "terminal_report_handoff": "revenue_desk_call_worker retry_scan dispatches an immutable CRMBillingOperations revision to crm_billing_orchestrator for exact CRM write/readback",
     "paid_acceptance": "separate explicit commercial acceptance record",
     "billing": "crm_billing_orchestrator after acceptance only"
   },
-  "deal_fields_to_add": [
+  "deal_fields_existing": [
     { "api_name": "Approved_Deployment_Record_ID", "label": "Approved Deployment ID", "data_type": "text", "length": 100 },
     { "api_name": "Approved_Configuration_Version", "label": "Approved Config Version", "data_type": "text", "length": 100 },
     { "api_name": "Subscription_Accepted_At", "label": "Subscription Accepted At", "data_type": "datetime" },
     { "api_name": "Subscription_Acceptance_Version", "label": "Paid Acceptance Version", "data_type": "text", "length": 100 },
+    { "api_name": "Test_Calls_Reaching_Route", "label": "Test Calls Reaching Route", "data_type": "integer", "length": 9 },
+    { "api_name": "Test_Qualified_Opportunities", "label": "Test Qualified Opportunities", "data_type": "integer", "length": 9 },
+    { "api_name": "Test_Existing_Customer_Calls", "label": "Test Existing Customer Calls", "data_type": "integer", "length": 9 },
     { "api_name": "Test_Actual_Avg_Call_Duration_Seconds", "label": "Test Avg Call Sec", "data_type": "integer", "length": 9 },
     { "api_name": "Test_Out_Of_Area_Or_Wrong_Fit_Calls", "label": "Test Wrong Fit Calls", "data_type": "integer", "length": 9 },
     { "api_name": "Test_Urgent_Requests", "label": "Test Urgent Requests", "data_type": "integer", "length": 9 },
@@ -46,6 +50,14 @@
     { "api_name": "Expected_Monthly_Connected_Minutes_Max", "label": "Expected Minutes Max", "data_type": "integer", "length": 9 },
     { "api_name": "Test_Data_Confidence_Notes", "label": "Test Confidence Notes", "data_type": "textarea", "length": 2000, "textarea": { "type": "small" } }
   ],
+  "deal_fields_to_add": [],
+  "deal_field_metadata_evidence": {
+    "verified_at_utc_date": "2026-08-24",
+    "method": "read-only live Deals field-metadata audit",
+    "result": "all 17 API names exist with the expected writable field families",
+    "private_identifiers_committed": false,
+    "write_performed": false
+  },
   "lead_conversion_defaults": {
     "pipeline": "Revenue Desk Sales",
     "stage": "Setup and Authorization",
@@ -144,18 +156,33 @@
         "deployment and configuration version present",
         "rollback contacts present"
       ],
-      "Approve Go Live": [
+      "Record Internal Approval": [
         "QA passed",
         "Go-Live Approval Status equals Approved",
         "Go-Live Approved At present",
         "Approved Deployment Record ID equals Deployment Record ID",
         "Approved Configuration Version equals Configuration Version",
-        "Catalyst independently validates the same version-specific approval"
+        "Catalyst independently validates the same version-specific approval receipt",
+        "Test Status equals Scheduled",
+        "Actual Start At and Expires At remain empty"
+      ],
+      "Activate Test Route": [
+        "Record Internal Approval completed",
+        "approved deployment and configuration still match current values",
+        "authoritative external-route activation readback present",
+        "Catalyst independently validates the activation receipt chained to approval",
+        "Test Status equals Live",
+        "Actual Start At follows route readback",
+        "Expires At equals Actual Start At plus exactly seven days"
       ],
       "Complete Free Test": [
-        "call totals reconciled",
-        "test end timestamp and reason present",
-        "all report summary fields present"
+        "CRMBillingOperations exact report revision has STATUS completed and LAST_OUTCOME report_summary_readback_confirmed",
+        "Test Status equals Completed; Test Start At, Test End At, and Test End Reason match the terminal summary",
+        "Call Totals Reconciled equals true",
+        "Test Calls Reaching Route, Test Qualified Opportunities, and Test Existing Customer Calls match the authoritative report counts",
+        "verified average-duration, wrong-fit, urgent, bookable, office-follow-up, workflow-failure, coverage, monthly-minute, and confidence fields match the authoritative summary",
+        "Test New Service Inquiries is excluded and must not be inferred because the report contract has no separate authoritative metric with that semantic",
+        "a human operator invokes the valid Complete Free Test Blueprint transition only after summary readback; normal Deal update does not mutate Stage"
       ],
       "Propose Subscription": [
         "results review completed",
@@ -179,6 +206,32 @@
       "Zoho Sign",
       "SMS"
     ]
+  },
+  "terminal_report_handoff": {
+    "sole_caller": "revenue_desk_call_worker retry_scan mode in the existing RevenueDeskCallJobs Function Job pool",
+    "trigger": "after exact terminal call/event/notification settlement materializes a pending sync_report_summary row, and on each bounded one-minute retry scan while that row is pending, processing, or reconciliation_required",
+    "scan_bound": "at most five report-summary operations per retry_scan; provider event and notification work retains its separate bound",
+    "durable_evidence": "exact CRMBillingOperations OPERATION_KEY, OPERATION_FINGERPRINT, ACTION, CRM_DEAL_ID, SOURCE_ENVIRONMENT, OPERATION_PAYLOAD_JSON, OPERATION_VERSION, CREATED_AT, and UPDATED_AT readback",
+    "request": {
+      "route": "existing crm_billing_orchestrator Advanced I/O route only",
+      "method": "POST",
+      "body_fields": ["schemaVersion", "action", "dealId", "operationKey"],
+      "schemaVersion": "crm-billing-lifecycle-v2",
+      "action": "sync_report_summary"
+    },
+    "authentication": [
+      "Catalyst Development API Gateway ZCFKEY, which may be common across Development projects and is never the sole authorization factor",
+      "the private action-scoped header whose worker CRM_BILLING_SHARED_HEADER_VALUE equals orchestrator REPORT_SUMMARY_HEADER_VALUE"
+    ],
+    "least_privilege": "the report credential cannot authorize prepare_paid_subscription or reconcile, and the paid caller credential cannot authorize sync_report_summary",
+    "timeout_and_body_bound": "single end-to-end timeout of at most 5000 ms through response-body completion; application/json only; response body at most 4096 bytes",
+    "replay": "the consumer atomically claims pending or reclaims only a processing report_claim pre-write row by OPERATION_VERSION; after exact report_write_started readback, processing or reconciliation_required never causes a second CRM write and converges only through exact Deal readback",
+    "terminal_transition": "completion and containment compare expected ROWID, STATUS, LAST_OUTCOME, and OPERATION_VERSION, increment the version, and require exact readback; one bounded retry accepts only cursor advancement with unchanged status/outcome, never a semantic conflict; after observing the operation cursor, every transition to completed and every completed replay fresh-reads the authoritative Deal account, deployment/configuration binding, and exact patch; mismatch or unavailable readback CAS-keeps or demotes reconciliation, and stale containment that observes a winning completion gets one fresh read plus at most one repair CAS",
+    "deal_status_boundary": "only an unreviewed Live Test_Status may receive a differing terminal patch to Completed; Completed is exact-replay-only, and Failed, Rolled Back, reviewed, or accepted evidence is moved to reconciliation_required without an automatic overwrite",
+    "success_readback": "HTTP 200 with report_summary_readback_confirmed plus CRMBillingOperations STATUS completed and LAST_OUTCOME report_summary_readback_confirmed",
+    "readiness_gate": "deployment REPORT_RECONCILIATION_STATUS remains Pending until exact Analytics evidence and the completed CRM operation are read back",
+    "prohibited_mutations": ["Stage", "Results_Review_At", "paid acceptance", "Billing state"],
+    "post_handoff_owner": "a human CRM operator may invoke the valid Complete Free Test Blueprint transition after exact summary readback; Results_Review_At remains human-only"
   },
   "synthetic_acceptance": {
     "record_prefix": "ZZZ SYNTHETIC",

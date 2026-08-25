@@ -18,6 +18,17 @@ const INTEGRATION_FIELDS = new Set([
   "Billing_Last_Sync_At",
   "Billing_Automation_Error",
 ]);
+const REPORT_SUMMARY_FIELDS = new Set([
+  "Test_Status", "Test_Start_At", "Test_End_At", "Test_End_Reason",
+  "Call_Totals_Reconciled", "Test_Calls_Reaching_Route",
+  "Test_Qualified_Opportunities", "Test_Existing_Customer_Calls",
+  "Test_Actual_Avg_Call_Duration_Seconds",
+  "Test_Out_Of_Area_Or_Wrong_Fit_Calls", "Test_Urgent_Requests",
+  "Test_Bookable_Opportunities", "Test_Office_Follow_Up_Calls",
+  "Test_Observed_Workflow_Failures", "Recommended_Paid_Coverage",
+  "Expected_Monthly_Connected_Minutes_Min", "Expected_Monthly_Connected_Minutes_Max",
+  "Test_Data_Confidence_Notes",
+]);
 
 class CrmClientError extends Error {
   constructor(message, { ambiguous = false, publicCode = "crm_dependency_failed", status = 503 } = {}) {
@@ -84,15 +95,6 @@ function parseUpdate(json, expectedId) {
   });
 }
 
-function normalizeDealPlan(deal) {
-  const canonicalPlan = CANONICAL_PLAN_BY_CRM_API_VALUE[deal.Plan];
-  if (!canonicalPlan) fail("CRM Plan API value is outside the approved catalog", {
-    publicCode: "crm_state_invalid",
-    status: 409,
-  });
-  return Object.freeze({ ...deal, Plan: canonicalPlan });
-}
-
 function classifyStatus(status, sideEffecting) {
   if (status === 412) return { publicCode: "record_stale", status: 409 };
   if (!sideEffecting && retryableReadStatus(status)) {
@@ -135,6 +137,27 @@ function createCrmClient(config, {
     "Subscription_Accepted_At",
     "Subscription_Acceptance_Version",
     "Results_Review_At",
+    "Test_Start_At",
+    "Test_End_At",
+    "Test_End_Reason",
+    "Call_Totals_Reconciled",
+    "Test_Calls_Reaching_Route",
+    "Test_Qualified_Opportunities",
+    "Test_Existing_Customer_Calls",
+    "Test_Actual_Avg_Call_Duration_Seconds",
+    "Test_Out_Of_Area_Or_Wrong_Fit_Calls",
+    "Test_Urgent_Requests",
+    "Test_Bookable_Opportunities",
+    "Test_Office_Follow_Up_Calls",
+    "Test_Observed_Workflow_Failures",
+    "Recommended_Paid_Coverage",
+    "Expected_Monthly_Connected_Minutes_Min",
+    "Expected_Monthly_Connected_Minutes_Max",
+    "Test_Data_Confidence_Notes",
+    "Deployment_Record_ID",
+    "Configuration_Version",
+    "Approved_Deployment_Record_ID",
+    "Approved_Configuration_Version",
     "Billing_Customer_ID",
     "Billing_Subscription_ID",
     "Subscription_Status",
@@ -193,7 +216,9 @@ function createCrmClient(config, {
     return parseRecord(response.json, id);
   }
 
-  const getDeal = async (id) => normalizeDealPlan(await getRecord("Deals", id, dealFields));
+  // Report synchronization legitimately runs before a paid Plan is selected. Preserve raw Deal
+  // state here; the paid-action validator owns exact Plan API-value normalization.
+  const getDeal = (id) => getRecord("Deals", id, dealFields);
   const getAccount = (id) => getRecord("Accounts", id, accountFields);
 
   async function getContext(dealId) {
@@ -263,12 +288,78 @@ function createCrmClient(config, {
     return readback;
   }
 
-  return Object.freeze({ getAccount, getContext, getDeal, updateDealIntegration });
+  async function updateDealReportSummary(deal, patch) {
+    if (!plainObject(deal) || !plainObject(patch)) {
+      fail("CRM report-summary update is malformed", { publicCode: "configuration_invalid" });
+    }
+    recordId(deal.id);
+    modifiedTime(deal.Modified_Time);
+    const entries = Object.entries(patch);
+    if (entries.length !== REPORT_SUMMARY_FIELDS.size
+      || entries.some(([field, candidate]) => {
+        if (!REPORT_SUMMARY_FIELDS.has(field)) return true;
+        if (candidate === null) return false;
+        if (field === "Call_Totals_Reconciled") return candidate !== true;
+        if (typeof candidate === "number") return !Number.isSafeInteger(candidate)
+          || candidate < 0 || candidate > 999999999;
+        return typeof candidate !== "string" || !candidate || candidate.length > 2000
+          || Buffer.byteLength(candidate, "utf8") > 2000
+          || /[\u0000-\u001f\u007f]/.test(candidate);
+      })) fail("CRM report-summary update is outside the allowlist", {
+      publicCode: "configuration_invalid",
+    });
+
+    try {
+      const response = await authorizedRequest(`${config.crmApiBaseUrl}/Deals/${deal.id}`, {
+        method: "PUT",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          "If-Unmodified-Since": deal.Modified_Time,
+        },
+        body: JSON.stringify({
+          data: [{ id: deal.id, ...patch }],
+          trigger: [],
+          skip_feature_execution: [{ name: "cadences" }],
+        }),
+      }, { write: true, sideEffecting: true });
+      if (response.status === 200) parseUpdate(response.json, deal.id);
+    } catch {
+      // A write timeout is ambiguous. The exact Deal readback below is the only
+      // authority and prevents a retry from fabricating a second state transition.
+    }
+    let readback;
+    try {
+      readback = await getDeal(deal.id);
+    } catch {
+      fail("CRM report-summary update outcome requires reconciliation", {
+        ambiguous: true,
+        publicCode: "reconciliation_required",
+      });
+    }
+    for (const [field, expected] of entries) {
+      const matches = expected === null ? readback[field] == null
+        : new Set(["Test_Start_At", "Test_End_At"]).has(field)
+          ? Number.isFinite(Date.parse(readback[field]))
+            && Date.parse(readback[field]) === Date.parse(expected)
+          : readback[field] === expected;
+      if (!matches) fail("CRM report-summary readback does not match", {
+        ambiguous: true,
+        publicCode: "reconciliation_required",
+      });
+    }
+    return readback;
+  }
+
+  return Object.freeze({
+    getAccount, getContext, getDeal, updateDealIntegration, updateDealReportSummary,
+  });
 }
 
 module.exports = {
   CANONICAL_PLAN_BY_CRM_API_VALUE,
   CrmClientError,
   INTEGRATION_FIELDS,
+  REPORT_SUMMARY_FIELDS,
   createCrmClient,
 };

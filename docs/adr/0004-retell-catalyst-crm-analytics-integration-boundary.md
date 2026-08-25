@@ -1,8 +1,8 @@
 # ADR 0004: Retell, Catalyst, CRM, And Analytics Integration Boundary
 
-- Status: Accepted as a proposed integration boundary; free-test topology and tenancy sections superseded by [ADR 0006](0006-shared-seven-day-monitor-with-client-number-isolation.md)
+- Status: Historical integration-boundary evidence; topology and execution are superseded by the [final consolidated release contract](../product/free-revenue-leak-test-release-contract.md)
 - Date: 2026-08-18
-- Deployment status: **READY FOR CONTROLLED INTERNAL PHONE TEST** for one non-customer Development number; Catalyst/Zoho lifecycle proof is complete, while Retell voice/fallback and a second live number are deferred
+- Deployment status: **NOT READY FOR RETELL AGENT TESTING**; prior lifecycle proof is migration evidence only
 - Product scope: `after-hours-new-residential-service-request-v1` and later separately approved extensions
 
 ## Context

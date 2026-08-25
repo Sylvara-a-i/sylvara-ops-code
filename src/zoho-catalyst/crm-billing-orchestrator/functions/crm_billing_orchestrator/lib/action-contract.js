@@ -4,6 +4,7 @@ const crypto = require("node:crypto");
 
 const SCHEMA_VERSION = "crm-billing-lifecycle-v2";
 const ACTIONS = Object.freeze([
+  "sync_report_summary",
   "prepare_paid_subscription",
   "reconcile",
 ]);
@@ -61,8 +62,12 @@ function validatePayload(payload) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     throw new RequestContractError("JSON body must be an object");
   }
+  const reportAction = payload.action === "sync_report_summary";
+  const expectedKeys = reportAction
+    ? ["action", "dealId", "operationKey", "schemaVersion"]
+    : ["action", "dealId", "schemaVersion"];
   const keys = Object.keys(payload).sort();
-  if (JSON.stringify(keys) !== JSON.stringify(["action", "dealId", "schemaVersion"])) {
+  if (JSON.stringify(keys) !== JSON.stringify(expectedKeys)) {
     throw new RequestContractError("JSON body fields do not match the contract");
   }
   if (payload.schemaVersion !== SCHEMA_VERSION || !ACTION_SET.has(payload.action)) {
@@ -71,10 +76,15 @@ function validatePayload(payload) {
   if (typeof payload.dealId !== "string" || !/^[1-9][0-9]{7,29}$/.test(payload.dealId)) {
     throw new RequestContractError("Deal identifier is invalid", 422);
   }
+  if (reportAction && (typeof payload.operationKey !== "string"
+    || !/^[a-f0-9]{64}$/.test(payload.operationKey))) {
+    throw new RequestContractError("Report operation key is invalid", 422);
+  }
   return Object.freeze({
     schemaVersion: payload.schemaVersion,
     action: payload.action,
     dealId: payload.dealId,
+    ...(reportAction ? { operationKey: payload.operationKey } : {}),
   });
 }
 
@@ -99,7 +109,10 @@ async function parseActionRequest(request, config) {
   if (declaredLength && (!/^[0-9]+$/.test(declaredLength) || Number(declaredLength) > config.maxBodyBytes)) {
     throw new RequestContractError("Content length is invalid", 413, "body_too_large");
   }
-  if (!safeEqual(getHeader(request, config.sharedHeaderName), config.sharedHeaderValue)) {
+  const suppliedCredential = getHeader(request, config.sharedHeaderName);
+  const paidCredential = safeEqual(suppliedCredential, config.sharedHeaderValue);
+  const reportCredential = safeEqual(suppliedCredential, config.reportSummaryHeaderValue);
+  if (!paidCredential && !reportCredential) {
     throw new RequestContractError("Request authentication failed", 401, "authentication_failed");
   }
   const raw = await readBody(request, config.maxBodyBytes);
@@ -109,7 +122,12 @@ async function parseActionRequest(request, config) {
   } catch {
     throw new RequestContractError("Body is not valid UTF-8 JSON");
   }
-  return validatePayload(payload);
+  const validated = validatePayload(payload);
+  if ((validated.action === "sync_report_summary") !== reportCredential) {
+    throw new RequestContractError("Caller is not authorized for this action", 401,
+      "authentication_failed");
+  }
+  return validated;
 }
 
 module.exports = { ACTIONS, RequestContractError, SCHEMA_VERSION, parseActionRequest, validatePayload };

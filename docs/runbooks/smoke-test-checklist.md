@@ -2,9 +2,9 @@
 
 This checklist separates offline/synthetic Development, a controlled internal Development phone test, and a later prospect/Production workflow. The [legal archive](../legal-compliance/README.md) preserves a conservative historical profile but does not itself decide authorization for a particular test.
 
-Current classification is **READY FOR CONTROLLED INTERNAL PHONE TEST** for the one-number Development scope. This is readiness to begin a bounded internal phone test, not evidence that the voice test passed and not authorization for a prospect, customer, or Production route.
+Current classification is **NOT READY FOR RETELL AGENT TESTING**. No phone call, Retell simulation, prospect/customer route, or Production traffic is authorized by this checklist.
 
-Current sanitized Catalyst evidence: the exact four-table schema and App User denial, two 256 MB functions at revision `d4f5af31be310df400532641ef163c16de31066c`, 29-file source parity, a 512 MB Job pool, disabled one-minute Cron with zero platform retries, complete private configuration, verified sender, non-cacheable HTTP 200 readiness, signed inbound/event matrices, durable call/count/notification rows, manual Job execution, seven-day and practical 25-call stops, one controlled internal email with replay suppression, restored `dry_run`, and rollback readback are proven. CRM, Analytics, SMS, Production, prospect/customer traffic, and contractor forwarding remained untouched. If the final reviewed commit changes, redeploy and repeat parity/readiness before using this classification.
+The earlier four-table/two-function Development proof is historical migration evidence. Readiness now requires the exact final-main six-function and two-pool topology, canonical migration/reconciliation, CRM and Billing TEST lifecycle, both Analytics dashboards, staged cleanup, exposed-key rotation and revocation, dark-Production zero-traffic proof, rollback, and zero open P0/P1 defects under the [final release contract](../product/free-revenue-leak-test-release-contract.md).
 
 ## Safety Preconditions
 

@@ -17,7 +17,7 @@ from validate_workspace import find_public_data_problems
 ROOT = Path(__file__).resolve().parents[3]
 CONTRACT = ROOT / "src/retell/agents/7-day-free-test/contracts/shadow-qa-contract.json"
 CLASSIFICATION = ROOT / "src/retell/agents/7-day-free-test/contracts/nonurgent-classification-contract.json"
-COVERAGE = ROOT / "src/zoho-catalyst/retell-inbound-resolver/contracts/coverage-mode-contract.json"
+COVERAGE = ROOT / "src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_gateway/contracts/revenue-desk-call-contract.json"
 CORPUS = ROOT / "src/retell/agents/7-day-free-test/tests/fixtures/shadow-qa-corpus.json"
 OUTPUT_ROOT = ROOT / ".codex-tmp"
 PRIVATE_ROOT = (ROOT.parent / "retell-private-audit") if ROOT.parent.name == ".codex-tmp" else OUTPUT_ROOT / "retell-private-audit"

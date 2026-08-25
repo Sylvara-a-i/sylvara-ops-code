@@ -21,8 +21,8 @@ class FreeRevenueLeakCrmContractTests(unittest.TestCase):
 
     def test_crm_contract_is_synthetic_only_and_contains_no_active_sign_or_sms_path(self):
         contract = self.contract
-        self.assertEqual(contract["schema_version"], 2)
-        self.assertEqual(contract["identifier_migration"]["from_schema_version"], 1)
+        self.assertEqual(contract["schema_version"], 3)
+        self.assertEqual(contract["identifier_migration"]["from_schema_version"], 2)
         self.assertEqual(
             contract["identifier_migration"]["controller_aliases"]["form2_controller"],
             "revenue_leak_test_setup_form",
@@ -40,15 +40,24 @@ class FreeRevenueLeakCrmContractTests(unittest.TestCase):
         self.assertNotIn("send sms", rendered)
         self.assertNotIn("create sign", rendered)
 
-    def test_crm_contract_defines_each_required_additive_field_once(self):
-        fields = self.contract["deal_fields_to_add"]
+    def test_crm_contract_records_each_verified_existing_field_once(self):
+        fields = self.contract["deal_fields_existing"]
         names = [field["api_name"] for field in fields]
-        self.assertEqual(len(names), 14)
+        self.assertEqual(len(names), 17)
         self.assertEqual(len(names), len(set(names)))
         self.assertIn("Approved_Deployment_Record_ID", names)
         self.assertIn("Approved_Configuration_Version", names)
         self.assertIn("Subscription_Acceptance_Version", names)
         self.assertIn("Test_Data_Confidence_Notes", names)
+        self.assertIn("Test_Calls_Reaching_Route", names)
+        self.assertIn("Test_Qualified_Opportunities", names)
+        self.assertIn("Test_Existing_Customer_Calls", names)
+        self.assertNotIn("Test_New_Service_Inquiries", names)
+        self.assertEqual(self.contract["deal_fields_to_add"], [])
+        evidence = self.contract["deal_field_metadata_evidence"]
+        self.assertEqual(evidence["method"], "read-only live Deals field-metadata audit")
+        self.assertFalse(evidence["private_identifiers_committed"])
+        self.assertFalse(evidence["write_performed"])
 
     def test_crm_contract_has_one_form2_rule_and_one_blueprint(self):
         form2_rules = [
@@ -76,12 +85,21 @@ class FreeRevenueLeakCrmContractTests(unittest.TestCase):
             "Revenue Desk Free Test v6 - Control Candidate",
         )
 
-    def test_go_live_and_paid_conversion_are_separate_fail_closed_gates(self):
+    def test_approval_activation_and_paid_conversion_are_separate_fail_closed_gates(self):
         transitions = self.contract["blueprint"]["required_transition_invariants"]
-        go_live = transitions["Approve Go Live"]
+        approval = transitions["Record Internal Approval"]
+        activation = transitions["Activate Test Route"]
         paid = transitions["Activate Subscription"]
-        self.assertIn("Approved Deployment Record ID equals Deployment Record ID", go_live)
-        self.assertIn("Approved Configuration Version equals Configuration Version", go_live)
+        self.assertIn("Approved Deployment Record ID equals Deployment Record ID", approval)
+        self.assertIn("Approved Configuration Version equals Configuration Version", approval)
+        self.assertIn("Test Status equals Scheduled", approval)
+        self.assertIn("Actual Start At and Expires At remain empty", approval)
+        self.assertIn("authoritative external-route activation readback present", activation)
+        self.assertIn(
+            "Catalyst independently validates the activation receipt chained to approval",
+            activation,
+        )
+        self.assertIn("Test Status equals Live", activation)
         self.assertIn("Subscription Acceptance Status equals Accepted", paid)
         self.assertIn("Billing Automation Status equals Paid Verified", paid)
         self.assertIn("no Billing subscription exists", transitions["Propose Subscription"])

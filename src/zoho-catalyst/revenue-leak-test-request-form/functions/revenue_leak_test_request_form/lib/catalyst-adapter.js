@@ -99,12 +99,22 @@ function createRequestListener({
   requestHandler = handleRequest,
   artifactSourceRevision = ARTIFACT_SOURCE_REVISION,
 } = {}) {
-  const runtimeSdk = catalystSdk ?? require("zcatalyst-sdk-node");
   return async function requestListener(request, response) {
     const startedAt = now();
     const requestId = randomUUID();
     try {
       const config = loadConfig(environment, artifactSourceRevision);
+      if (config.darkMode) {
+        safeLog(logger, "info", {
+          requestId,
+          stage: "request",
+          outcome: "dark_mode",
+          elapsedMs: now() - startedAt,
+        });
+        sendJson(response, 503, { ok: false, code: "service_unavailable", requestId });
+        return;
+      }
+      const runtimeSdk = catalystSdk ?? require("zcatalyst-sdk-node");
       readCatalystEnvironmentHeader(request);
       const app = runtimeSdk.initialize(request);
       assertCatalystEnvironment(request, app, config.deploymentEnvironment);

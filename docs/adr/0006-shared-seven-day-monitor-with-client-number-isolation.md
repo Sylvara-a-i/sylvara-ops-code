@@ -1,12 +1,14 @@
 # ADR 0006: Shared Seven-Day Free-Test Agent With Client Number Isolation
 
-- Status: Accepted as the current free-test architecture
+- Status: Superseded by the [final consolidated release contract](../product/free-revenue-leak-test-release-contract.md)
 - Date: 2026-08-18
 - Reconciled: 2026-08-24 for the Development MVP
-- Current deployment status: **READY FOR CONTROLLED INTERNAL PHONE TEST** for one non-customer Development number; Catalyst lifecycle is proven, while paid/native voice, provider fallback, and a second live number are deferred
+- Current deployment status: **NOT READY FOR RETELL AGENT TESTING**; the recorded Development proof is historical migration evidence only
 - Supersedes: [ADR 0005](0005-client-specific-retell-test-agent-isolation.md)
 - Supersedes within [ADR 0004](0004-retell-catalyst-crm-analytics-integration-boundary.md): the client-specific evaluation-agent lifecycle, agent-first tenancy model, and Analytics-first free-test reporting path
 - Production authorization: Not granted
+
+This ADR is retained as historical number-isolation and provider-failure evidence. Its separate free-test/Revenue-Desk runtime, Analytics deferral, Production rejection, and stopping-point decisions are no longer authoritative. Use the consolidated release contract and current E2E reconciliation for execution.
 
 ## Context
 
@@ -82,7 +84,7 @@ Configuration values are private runtime data. GitHub contains schemas, validati
 
 ## Canonical Coverage Modes
 
-The machine-readable authority is [`coverage-mode-contract.json`](../../src/zoho-catalyst/retell-inbound-resolver/contracts/coverage-mode-contract.json).
+The machine-readable authority is the canonical [`revenue-desk-call-contract.json`](../../src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_gateway/contracts/revenue-desk-call-contract.json), including its exact display-label mapping, per-mode trigger compatibility matrix, and explicit `Unknown` trigger policy.
 
 | Approved display label | Canonical `coverage_mode` |
 | --- | --- |

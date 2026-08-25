@@ -42,7 +42,7 @@
       "app_user_permissions": 0
     }
   ],
-  "probe_policy": "Never bind, rename, reuse, or delete these empty Development probe artifacts as part of Form 2 deployment or rollback.",
+  "probe_policy": "Never bind, rename, reuse, or delete these empty Development probe artifacts during Form 2 deployment, cutover, or rollback rehearsal. Later removal is a separately approved post-cutover cleanup with dependency-absence and restoration proof.",
   "data_policy": {
     "direct_form_payloads_stored": false,
     "raw_tokens_or_submission_ids_stored": false,
@@ -172,7 +172,7 @@
   ],
   "deployment_gates": [
     "Use only the existing Retell Catalyst project in Development and independently re-read both existing version-2 stores before binding any version-3 runtime target.",
-    "Use only the four exact empty operational targets recorded in observed_development_readback. Never rename, overwrite, backfill, update, or delete either existing version-2 store.",
+    "Use only the four exact empty operational targets recorded in observed_development_readback. Never rename, overwrite, backfill, update, or delete either existing version-2 store during migration, cutover, or rollback rehearsal; later removal requires the separate superseding-contract cleanup gate.",
     "Promote no version-2 row whose immutable ISSUE_REQUEST_KEY, ownership, or state cannot be proven. Conflicting, terminal, missing, and unverifiably bound rows remain quarantined in version 2.",
     "Independently read back all 81 version-3 application columns, four session/workflow unique constraints plus PROOF_KEY, every mandatory/privacy flag including LAST_OUTCOME, table access, and App User denial before source upload or route activation.",
     "Bind revenue_leak_test_setup_form only to the four distinct reviewed operational targets, never any quarantined probe artifact, and preserve every legacy Setup Form, Retell, and Request Form function, route, table, Connection, variable, and deployment.",

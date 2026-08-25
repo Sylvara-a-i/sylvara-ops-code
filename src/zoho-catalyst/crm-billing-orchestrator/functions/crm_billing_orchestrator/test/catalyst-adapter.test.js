@@ -63,6 +63,7 @@ function listenerOptions(environment = baseEnvironment(), overrides = {}) {
         }),
       }),
       createOperationStore: () => ({}),
+      createAnalyticsOutboxStore: () => ({}),
     },
     logger: { error: () => {}, info: () => {} },
     now: () => 100,
@@ -554,4 +555,41 @@ test("Production configuration and missing proof fail before SDK initialization"
     assert.equal(result.statusCode, 503);
     assert.equal(JSON.parse(result.body).code, "configuration_invalid");
   }
+});
+
+test("dark Production returns unavailable before request parsing, SDK, or factories", async () => {
+  const environment = {
+    DEPLOYMENT_ENVIRONMENT: "production",
+    DEPLOYMENT_MODE: "dark",
+    SOURCE_REVISION: REVISION,
+  };
+  let initialized = false;
+  let factoryCalls = 0;
+  const { response, result } = responseCapture();
+  const handler = createRequestListener(listenerOptions(environment, {
+    catalystSdk: {
+      initialize: () => {
+        initialized = true;
+        throw new Error("must not initialize");
+      },
+    },
+    factories: {
+      createBillingClient: () => { factoryCalls += 1; },
+      createCrmClient: () => { factoryCalls += 1; },
+      createLifecycleHandler: () => { factoryCalls += 1; },
+      createOperationStore: () => { factoryCalls += 1; },
+      createAnalyticsOutboxStore: () => { factoryCalls += 1; },
+    },
+  }));
+
+  await handler({ method: "POST", url: "/unrouted", headers: {} }, response);
+
+  assert.equal(initialized, false);
+  assert.equal(factoryCalls, 0);
+  assert.equal(result.statusCode, 503);
+  assert.deepEqual(JSON.parse(result.body), {
+    ok: false,
+    code: "service_unavailable",
+    request_id: "00000000-0000-4000-8000-000000000000",
+  });
 });

@@ -7,6 +7,7 @@ const { createConnectionAuthorizationProvider } = require("./connection-boundary
 const { ConfigurationError, loadConfig } = require("./config");
 const { createCrmClient } = require("./crm-client");
 const { createOperationStore } = require("./idempotency");
+const { createAnalyticsOutboxStore } = require("./analytics-outbox");
 const { createLifecycleHandler } = require("./lifecycle-handler");
 const { safeLog } = require("./safe-log");
 
@@ -174,6 +175,8 @@ function createRequestListener({
   const makeCrmClient = factories.createCrmClient ?? createCrmClient;
   const makeBillingClient = factories.createBillingClient ?? createBillingClient;
   const makeOperationStore = factories.createOperationStore ?? createOperationStore;
+  const makeAnalyticsOutboxStore = factories.createAnalyticsOutboxStore
+    ?? createAnalyticsOutboxStore;
   const makeLifecycleHandler = factories.createLifecycleHandler ?? createLifecycleHandler;
 
   return async function requestListener(request, response) {
@@ -188,6 +191,22 @@ function createRequestListener({
         artifactDevelopmentZaidHmacSha256,
       });
       sourceRevision = config.sourceRevision;
+      if (config.darkMode) {
+        safeLog(logger, "info", {
+          requestId,
+          sourceRevision,
+          stage: "request",
+          action: "unknown",
+          outcome: "dark_mode",
+          elapsedMs: now() - startedAt,
+        });
+        sendJson(response, 503, {
+          ok: false,
+          code: "service_unavailable",
+          request_id: requestId,
+        });
+        return;
+      }
       const preSdkDevelopmentZaid = assertCatalystRequestBinding(request, config);
       const payload = await parseActionRequest(request, config);
       action = payload.action;
@@ -221,6 +240,7 @@ function createRequestListener({
         fetchImpl,
       });
       const operationStore = makeOperationStore(app, config);
+      const analyticsOutbox = makeAnalyticsOutboxStore(app, config);
       const billingClient = makeBillingClient(config, {
         readAuthorizationProvider: billingRead,
         writeAuthorizationProvider: billingWrite,
@@ -231,6 +251,7 @@ function createRequestListener({
         crmClient,
         billingClient,
         operationStore,
+        analyticsOutbox,
         now,
       });
       stage = "readback";

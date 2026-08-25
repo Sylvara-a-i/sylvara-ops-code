@@ -45,6 +45,7 @@ function config() {
     prefillHeaderSecret: "F".repeat(43),
     submissionHeaderSecret: "S".repeat(43),
     tokenPepper: "P".repeat(43),
+    workflowKeyMaterial: "W".repeat(43),
     form2AccessPublicUrl: "https://synthetic.development.catalystserverless.com/form2/session/access",
     form2PublicUrl: FORM2_PUBLIC_URL,
     form2DestinationSha256: FORM2_DESTINATION_SHA256,

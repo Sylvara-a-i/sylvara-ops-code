@@ -232,6 +232,88 @@ class SafetyCheckTests(unittest.TestCase):
             with self.assertRaises(safety_check.SecretRegistryError):
                 safety_check.load_registry_secret_names(root)
 
+    def test_registry_paths_use_the_canonical_revenue_desk_packages(self) -> None:
+        current_paths = {
+            path.as_posix() for path in safety_check.SECRET_REGISTRY_PATHS
+        }
+        self.assertIn(
+            "src/zoho-catalyst/revenue-desk-call-runtime/config/variables.json",
+            current_paths,
+        )
+        self.assertIn(
+            "src/zoho-catalyst/revenue-desk-analytics/config/variables.json",
+            current_paths,
+        )
+        self.assertNotIn(
+            "src/zoho-catalyst/retell-free-test/config/variables.json",
+            current_paths,
+        )
+
+    def test_staged_registry_migration_accepts_only_a_complete_generation(self) -> None:
+        legacy_paths = (
+            *safety_check.STABLE_SECRET_REGISTRY_PATHS,
+            *safety_check.LEGACY_REVENUE_DESK_SECRET_REGISTRY_PATHS,
+        )
+        contents = {}
+        for index, relative_path in enumerate(legacy_paths, start=1):
+            contents[relative_path.as_posix()] = json.dumps(
+                {
+                    "variables": [
+                        {
+                            "name": f"LEGACY_GENERATION_SECRET_{index}",
+                            "classification": "secret",
+                        }
+                    ]
+                }
+            ).encode("utf-8")
+
+        names = safety_check.load_index_registry_secret_names_from_contents(contents)
+        self.assertIn("LEGACY_GENERATION_SECRET_1", names)
+
+        contents.pop(safety_check.STABLE_SECRET_REGISTRY_PATHS[0].as_posix())
+        with self.assertRaises(safety_check.SecretRegistryError):
+            safety_check.load_index_registry_secret_names_from_contents(contents)
+
+    def test_committed_legacy_registry_names_remain_protected_during_migration(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            self._git(root, "init", "--quiet")
+            legacy_paths = (
+                *safety_check.STABLE_SECRET_REGISTRY_PATHS,
+                *safety_check.LEGACY_REVENUE_DESK_SECRET_REGISTRY_PATHS,
+            )
+            protected_name = "LEGACY_REVENUE_DESK_SIGNING_MATERIAL"
+            for index, relative_path in enumerate(legacy_paths, start=1):
+                path = root.joinpath(*relative_path.parts)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                name = protected_name if index == len(legacy_paths) else f"BASE_SECRET_{index}"
+                path.write_text(
+                    json.dumps(
+                        {
+                            "variables": [
+                                {"name": name, "classification": "secret"}
+                            ]
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+            self._git(root, "add", ".")
+            self._git(
+                root,
+                "-c",
+                "user.name=Synthetic Test",
+                "-c",
+                "user.email=operator@example.invalid",
+                "commit",
+                "--quiet",
+                "-m",
+                "legacy registry baseline",
+            )
+
+            names = safety_check.load_head_registry_secret_names(root)
+
+        self.assertIn(protected_name, names)
+
     def test_registry_loader_normalizes_the_reviewed_legacy_class_schema(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
@@ -318,6 +400,39 @@ class SafetyCheckTests(unittest.TestCase):
 
             with self.assertRaises(safety_check.SecretRegistryError):
                 safety_check.load_registry_secret_names(root)
+
+    def test_registry_loader_accepts_reviewed_analytics_classifications(self) -> None:
+        contents = {}
+        for index, relative_path in enumerate(
+            safety_check.SECRET_REGISTRY_PATHS, start=1
+        ):
+            classifications = ["secret"]
+            if index == len(safety_check.SECRET_REGISTRY_PATHS):
+                classifications = [
+                    "private-platform-map",
+                    "sanitized-evidence-digest",
+                    "secret",
+                ]
+            contents[relative_path.as_posix()] = json.dumps(
+                {
+                    "variables": [
+                        {
+                            "name": f"ANALYTICS_REGISTRY_VALUE_{index}_{offset}",
+                            "classification": classification,
+                        }
+                        for offset, classification in enumerate(
+                            classifications, start=1
+                        )
+                    ]
+                }
+            ).encode("utf-8")
+
+        names = safety_check.load_registry_secret_names_from_contents(contents)
+
+        self.assertIn(
+            f"ANALYTICS_REGISTRY_VALUE_{len(safety_check.SECRET_REGISTRY_PATHS)}_3",
+            names,
+        )
 
     def test_generic_uppercase_secret_suffixes_are_scanned(self) -> None:
         value = "live-material-AlphaBeta987654321"

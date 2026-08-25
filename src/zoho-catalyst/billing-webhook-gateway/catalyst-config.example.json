@@ -1,6 +1,6 @@
 {
   "deployment": {
-    "name": "billing_webhook_gateway_reference",
+    "name": "sylvara_client_portal_hmac_gateway_function",
     "stack": "node24",
     "type": "advancedio"
   },

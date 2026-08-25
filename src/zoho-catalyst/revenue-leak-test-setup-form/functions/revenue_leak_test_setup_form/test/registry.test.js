@@ -56,14 +56,35 @@ test("the public variable registry and placeholder environment file stay in lock
   const registry = readJson(registryPath);
   const names = registry.variables.map((entry) => entry.name);
   assert.equal(new Set(names).size, names.length);
+  assert.deepEqual(
+    Object.fromEntries(
+      registry.variables
+        .filter((entry) => entry.name.endsWith("TABLE_NAME"))
+        .map((entry) => [entry.name, entry.safe_default]),
+    ),
+    {
+      SESSION_TABLE_NAME: "Form2SessionsV3Runtime",
+      PREFILL_TABLE_NAME: "Form2PrefillsV3",
+      SUBMISSION_TABLE_NAME: "Form2SubmissionsV3",
+      FORM2_PROOF_TABLE_NAME: "Form2VerificationProofsV3",
+    },
+  );
 
   const exampleNames = fs.readFileSync(path.join(functionRoot, ".env.example"), "utf8")
     .split(/\r?\n/)
     .filter((line) => line && !line.startsWith("#"))
     .map((line) => line.slice(0, line.indexOf("=")));
   assert.deepEqual([...names].sort(), [...exampleNames].sort());
-
   const example = fs.readFileSync(path.join(functionRoot, ".env.example"), "utf8");
+  for (const tableName of [
+    "Form2SessionsV3Runtime",
+    "Form2PrefillsV3",
+    "Form2SubmissionsV3",
+    "Form2VerificationProofsV3",
+  ]) {
+    assert.match(example, new RegExp(`=${tableName}$`, "m"));
+  }
+
   assert.doesNotMatch(example, /Zoho-oauthtoken|client_secret|refresh_token|@/i);
   assert.equal(registry.variables.filter((entry) => entry.classification.includes("secret"))
     .every((entry) => entry.example_allowed === false), true);

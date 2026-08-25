@@ -22,7 +22,7 @@ For every future Retell update:
 
 Complete raw responses, connector labels, runtime-derived variable names, prompts, routing conditions and destinations, security-control structure, runtime defaults, production identifiers, private endpoints, precise platform timestamps, calls, transcripts, and secrets never enter Git. Public acceptance artifacts use independent provider-neutral aliases and never publish their private runtime mapping.
 
-The approved provider-neutral coverage-mode enum, exact CRM-label mapping, and per-call trigger compatibility rules live in the Catalyst-owned [`coverage-mode-contract.json`](../zoho-catalyst/retell-inbound-resolver/contracts/coverage-mode-contract.json). This public contract does not expose a live deployment mapping, runtime value, or private resolver configuration.
+The approved provider-neutral coverage-mode enum, exact CRM-label mapping, explicit unknown-trigger policy, and per-call trigger compatibility rules live in the canonical Catalyst-owned [`revenue-desk-call-contract.json`](../zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_gateway/contracts/revenue-desk-call-contract.json). This public contract does not expose a live deployment mapping, runtime value, or private resolver configuration.
 
 ## Historical Snapshot Observation
 

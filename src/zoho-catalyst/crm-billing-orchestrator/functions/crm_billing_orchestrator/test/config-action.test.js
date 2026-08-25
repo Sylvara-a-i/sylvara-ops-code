@@ -3,7 +3,9 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const { parseActionRequest, validatePayload } = require("../lib/action-contract");
-const { loadConfig } = require("../lib/config");
+const {
+  ANALYTICS_OUTBOX_TABLE_NAME, OPERATION_TABLE_NAME, loadConfig,
+} = require("../lib/config");
 const { safeLog } = require("../lib/safe-log");
 const {
   PAID_TERMS_VARIABLE,
@@ -12,12 +14,17 @@ const {
   baseEnvironment,
 } = require("./helpers");
 
-test("configuration is immutable Development-only and rejects Production", () => {
+test("configuration is immutable active Development or dependency-free dark Production", () => {
   const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
   assert.equal(config.deploymentEnvironment, "development");
+  assert.equal(config.deploymentMode, "active");
+  assert.equal(config.darkMode, false);
   assert.equal(config.developmentFunctionHost, "synthetic.development.catalystserverless.com");
   assert.equal(config.developmentRuntimeProof.length, 64);
   assert.equal(config.enablePaidSubscriptionPreparation, true);
+  assert.notEqual(config.reportSummaryHeaderValue, config.sharedHeaderValue);
+  assert.equal(config.operationTable, OPERATION_TABLE_NAME);
+  assert.equal(config.analyticsOutboxTable, ANALYTICS_OUTBOX_TABLE_NAME);
   assert.equal(config.paidCommercialTerms.currency, "USD");
   assert.equal(config.paidCommercialTerms.interval, 1);
   assert.equal(config.paidCommercialTerms.intervalUnit, "months");
@@ -41,11 +48,24 @@ test("configuration is immutable Development-only and rejects Production", () =>
   assert.equal(config.paidUsageAddonUnit, "Connected AI minute");
   assert.equal(config.paidUsageAddonProductId, "400000000000001");
   assert.deepEqual(config.paidSubscriptionStatusMap, { future: "Scheduled", live: "Active" });
+  const dark = loadConfig(baseEnvironment({
+    DEPLOYMENT_ENVIRONMENT: "production",
+    DEPLOYMENT_MODE: "dark",
+  }), { artifactRevision: REVISION });
+  assert.deepEqual(dark, {
+    darkMode: true,
+    deploymentEnvironment: "production",
+    deploymentMode: "dark",
+    sourceRevision: REVISION,
+  });
   assert.throws(
-    () => loadConfig(baseEnvironment({ DEPLOYMENT_ENVIRONMENT: "production" }), {
+    () => loadConfig(baseEnvironment({
+      DEPLOYMENT_ENVIRONMENT: "production",
+      DEPLOYMENT_MODE: "active",
+    }), {
       artifactRevision: REVISION,
     }),
-    /Production activation is blocked/,
+    /production\/dark/,
   );
   const disabled = loadConfig(baseEnvironment({
     ENABLE_PAID_SUBSCRIPTION_PREPARATION: "false",
@@ -122,6 +142,25 @@ test("configuration is immutable Development-only and rejects Production", () =>
     () => loadConfig(baseEnvironment(), { artifactRevision: "b".repeat(40) }),
     /immutable artifact/,
   );
+  assert.throws(
+    () => loadConfig(baseEnvironment({ OPERATION_TABLE: "LifecycleOperations" }), {
+      artifactRevision: REVISION,
+    }),
+    /canonical CRMBillingOperations table/,
+  );
+  assert.throws(
+    () => loadConfig(baseEnvironment({ ANALYTICS_OUTBOX_TABLE: "AnotherOutbox" }), {
+      artifactRevision: REVISION,
+    }),
+    /canonical AnalyticsSyncOutbox table/,
+  );
+  const reusedSecretEnvironment = baseEnvironment();
+  reusedSecretEnvironment[["ANALYTICS", "PARTITION", "HMAC", "SECRET"].join("_")] =
+    reusedSecretEnvironment.IDEMPOTENCY_PEPPER;
+  assert.throws(
+    () => loadConfig(reusedSecretEnvironment, { artifactRevision: REVISION }),
+    /must differ/,
+  );
   for (const unsafe of [
     { DEVELOPMENT_FUNCTION_HOST: "synthetic.catalystserverless.com" },
     { DEVELOPMENT_FUNCTION_HOST: "synthetic.development.catalystserverless.com:443" },
@@ -164,7 +203,7 @@ test("configuration is immutable Development-only and rejects Production", () =>
   }
 });
 
-test("action payload is exactly schemaVersion, action, and dealId", () => {
+test("action payload is exact and only report sync accepts an operation key", () => {
   assert.deepEqual(validatePayload({
     schemaVersion: "crm-billing-lifecycle-v2",
     action: "prepare_paid_subscription",
@@ -192,6 +231,24 @@ test("action payload is exactly schemaVersion, action, and dealId", () => {
     action: "prepare_paid_subscription",
     dealId: "100000000000001",
   }), /unsupported/);
+  const operationKey = "a".repeat(64);
+  assert.deepEqual(validatePayload({
+    schemaVersion: "crm-billing-lifecycle-v2",
+    action: "sync_report_summary",
+    dealId: "100000000000001",
+    operationKey,
+  }), {
+    schemaVersion: "crm-billing-lifecycle-v2",
+    action: "sync_report_summary",
+    dealId: "100000000000001",
+    operationKey,
+  });
+  assert.throws(() => validatePayload({
+    schemaVersion: "crm-billing-lifecycle-v2",
+    action: "reconcile",
+    dealId: "100000000000001",
+    operationKey,
+  }), /fields do not match/);
 });
 
 test("request boundary authenticates before accepting the exact JSON body", async () => {
@@ -214,6 +271,42 @@ test("request boundary authenticates before accepting the exact JSON body", asyn
   assert.equal((await parseActionRequest(request, config)).action, "reconcile");
   request.headers[config.sharedHeaderName] = "wrong";
   await assert.rejects(parseActionRequest(request, config), /authentication failed/);
+});
+
+test("paid and report caller credentials cannot authorize each other's actions", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const makeRequest = (body, credential) => ({
+    method: "POST",
+    url: config.allowedPath,
+    headers: {
+      "content-type": "application/json",
+      "content-length": String(Buffer.byteLength(body)),
+      [config.sharedHeaderName]: credential,
+    },
+    body,
+  });
+  const reportBody = JSON.stringify({
+    schemaVersion: "crm-billing-lifecycle-v2",
+    action: "sync_report_summary",
+    dealId: "100000000000001",
+    operationKey: "a".repeat(64),
+  });
+  const paidBody = JSON.stringify({
+    schemaVersion: "crm-billing-lifecycle-v2",
+    action: "prepare_paid_subscription",
+    dealId: "100000000000001",
+  });
+  assert.equal((await parseActionRequest(
+    makeRequest(reportBody, config.reportSummaryHeaderValue), config,
+  )).action, "sync_report_summary");
+  await assert.rejects(
+    parseActionRequest(makeRequest(reportBody, config.sharedHeaderValue), config),
+    /not authorized/,
+  );
+  await assert.rejects(
+    parseActionRequest(makeRequest(paidBody, config.reportSummaryHeaderValue), config),
+    /not authorized/,
+  );
 });
 
 test("safe logger accepts only its coarse six-field contract", () => {

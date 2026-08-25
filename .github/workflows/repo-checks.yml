@@ -125,21 +125,21 @@ jobs:
           npm ci --ignore-scripts --no-audit --no-fund
           --prefix src/zoho-catalyst/revenue-leak-test-setup-form/functions/revenue_leak_test_setup_form
 
-      - name: Validate exact Retell resolver package lock
+      - name: Install exact Revenue Desk call-gateway dependencies without lifecycle scripts
         run: >-
           npm ci --ignore-scripts --no-audit --no-fund
-          --prefix src/zoho-catalyst/retell-inbound-resolver
+          --prefix src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_gateway
 
-      - name: Install exact Retell free-test dependencies without lifecycle scripts
-        run: >-
-          npm ci --ignore-scripts --no-audit --no-fund
-          --prefix src/zoho-catalyst/retell-free-test/functions/retell_free_test
-
-      - name: Install exact Retell retry dependencies without lifecycle scripts
+      - name: Install exact Revenue Desk call-worker dependencies without lifecycle scripts
         run: >-
           npm ci --ignore-scripts --no-audit --no-fund
           --install-links
-          --prefix src/zoho-catalyst/retell-free-test/functions/retell_free_test_retry
+          --prefix src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_worker
+
+      - name: Install exact Revenue Desk Analytics dependencies without lifecycle scripts
+        run: >-
+          npm ci --ignore-scripts --no-audit --no-fund
+          --prefix src/zoho-catalyst/revenue-desk-analytics/functions/analytics_sync
 
       - name: Audit production gateway dependencies
         run: >-
@@ -161,20 +161,20 @@ jobs:
           npm audit --omit=dev --audit-level=moderate
           --prefix src/zoho-catalyst/revenue-leak-test-setup-form/functions/revenue_leak_test_setup_form
 
-      - name: Audit Retell resolver production dependencies
+      - name: Audit Revenue Desk call-gateway production dependencies
         run: >-
           npm audit --omit=dev --audit-level=moderate
-          --prefix src/zoho-catalyst/retell-inbound-resolver
+          --prefix src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_gateway
 
-      - name: Audit Retell free-test production dependencies
+      - name: Audit Revenue Desk call-worker production dependencies
         run: >-
           npm audit --omit=dev --audit-level=moderate
-          --prefix src/zoho-catalyst/retell-free-test/functions/retell_free_test
+          --prefix src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_worker
 
-      - name: Audit Retell retry production dependencies
+      - name: Audit Revenue Desk Analytics production dependencies
         run: >-
           npm audit --omit=dev --audit-level=moderate
-          --prefix src/zoho-catalyst/retell-free-test/functions/retell_free_test_retry
+          --prefix src/zoho-catalyst/revenue-desk-analytics/functions/analytics_sync
 
       - name: Run Billing gateway checks and tests
         run: npm run ci --prefix src/zoho-catalyst/billing-webhook-gateway
@@ -190,14 +190,14 @@ jobs:
       - name: Run Revenue Leak Test Setup Form checks and tests
         run: npm run ci --prefix src/zoho-catalyst/revenue-leak-test-setup-form/functions/revenue_leak_test_setup_form
 
-      - name: Run Retell resolver checks and tests
-        run: npm run ci --prefix src/zoho-catalyst/retell-inbound-resolver
+      - name: Run Revenue Desk call-gateway checks and tests
+        run: npm run ci --prefix src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_gateway
 
-      - name: Run Retell free-test checks and tests
-        run: npm run ci --prefix src/zoho-catalyst/retell-free-test/functions/retell_free_test
+      - name: Run Revenue Desk call-worker checks and tests
+        run: npm run ci --prefix src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_worker
 
-      - name: Run Retell retry checks and tests
-        run: npm run ci --prefix src/zoho-catalyst/retell-free-test/functions/retell_free_test_retry
+      - name: Run Revenue Desk Analytics checks and tests
+        run: npm run ci --prefix src/zoho-catalyst/revenue-desk-analytics/functions/analytics_sync
 
       - name: Run the canonical verifier on Linux
         shell: pwsh

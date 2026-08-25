@@ -34,6 +34,69 @@ function memoryApp(tableName) {
     datastore: () => ({ table: () => table }),
     zcql: () => ({
       executeZCQLQuery: async (statement) => {
+        if (statement.startsWith(`UPDATE ${tableName} SET STATUS = 'processing'`)) {
+          const id = statement.match(/ROWID = ([0-9]+)/)?.[1];
+          const expectedVersion = Number(statement.match(/AND OPERATION_VERSION = ([0-9]+)/)?.[1]);
+          const nextVersion = Number(statement.match(/OPERATION_VERSION = ([0-9]+), UPDATED_AT/)?.[1]);
+          const claimToken = statement.match(/LAST_OUTCOME = '(report_claim_[a-f0-9]{32})'/)?.[1];
+          const expectedStatus = statement.match(/AND STATUS = '([^']+)'/)?.[1];
+          const expectedOutcome = statement.match(/AND LAST_OUTCOME = '([^']+)'/)?.[1];
+          const updatedAt = statement.match(/UPDATED_AT = '([^']+)'/)?.[1];
+          const selected = rows.find((candidate) => candidate.ROWID === id);
+          if (selected?.STATUS === expectedStatus
+            && selected.LAST_OUTCOME === expectedOutcome
+            && selected.OPERATION_VERSION === expectedVersion) {
+            Object.assign(selected, {
+              STATUS: "processing",
+              LAST_OUTCOME: claimToken,
+              OPERATION_VERSION: nextVersion,
+              UPDATED_AT: updatedAt,
+            });
+          }
+          return [];
+        }
+        if (statement.startsWith(`UPDATE ${tableName} SET LAST_OUTCOME = 'report_write_started_`)) {
+          const id = statement.match(/ROWID = ([0-9]+)/)?.[1];
+          const expectedVersion = Number(statement.match(/AND OPERATION_VERSION = ([0-9]+)/)?.[1]);
+          const nextVersion = Number(statement.match(/OPERATION_VERSION = ([0-9]+), UPDATED_AT/)?.[1]);
+          const writeStarted = statement.match(/SET LAST_OUTCOME = '(report_write_started_[a-f0-9]{32})'/)?.[1];
+          const claimToken = statement.match(/AND LAST_OUTCOME = '(report_claim_[a-f0-9]{32})'/)?.[1];
+          const updatedAt = statement.match(/UPDATED_AT = '([^']+)'/)?.[1];
+          const selected = rows.find((candidate) => candidate.ROWID === id);
+          if (selected?.STATUS === "processing"
+            && selected.LAST_OUTCOME === claimToken
+            && selected.OPERATION_VERSION === expectedVersion) {
+            Object.assign(selected, {
+              LAST_OUTCOME: writeStarted,
+              OPERATION_VERSION: nextVersion,
+              UPDATED_AT: updatedAt,
+            });
+          }
+          return [];
+        }
+        if (statement.startsWith(`UPDATE ${tableName} SET STATUS = 'completed'`)
+          || statement.startsWith(`UPDATE ${tableName} SET STATUS = 'reconciliation_required'`)) {
+          const id = statement.match(/ROWID = ([0-9]+)/)?.[1];
+          const status = statement.match(/SET STATUS = '([^']+)'/)?.[1];
+          const lastOutcome = statement.match(/, LAST_OUTCOME = '([^']+)'/)?.[1];
+          const nextVersion = Number(statement.match(/OPERATION_VERSION = ([0-9]+), UPDATED_AT/)?.[1]);
+          const expectedStatus = statement.match(/AND STATUS = '([^']+)'/)?.[1];
+          const expectedOutcome = statement.match(/AND LAST_OUTCOME = '([^']+)'/)?.[1];
+          const expectedVersion = Number(statement.match(/AND OPERATION_VERSION = ([0-9]+)/)?.[1]);
+          const updatedAt = statement.match(/UPDATED_AT = '([^']+)'/)?.[1];
+          const selected = rows.find((candidate) => candidate.ROWID === id);
+          if (selected?.STATUS === expectedStatus
+            && selected.LAST_OUTCOME === expectedOutcome
+            && selected.OPERATION_VERSION === expectedVersion) {
+            Object.assign(selected, {
+              STATUS: status,
+              LAST_OUTCOME: lastOutcome,
+              OPERATION_VERSION: nextVersion,
+              UPDATED_AT: updatedAt,
+            });
+          }
+          return [];
+        }
         const key = statement.match(/OPERATION_KEY = '([a-f0-9]{64})'/)?.[1];
         const id = statement.match(/ROWID = ([0-9]+)/)?.[1];
         const row = key
@@ -81,6 +144,167 @@ test("durable operation claim returns completed replay and rejects conflicts", a
     scopeId: "100000000000001",
   });
   assert.equal(conflict.outcome, "duplicate-conflict");
+});
+
+test("report-summary claim and write-start fences permit pre-write reclaim only", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const app = memoryApp(config.operationTable);
+  const row = {
+    ROWID: "1",
+    OPERATION_KEY: "a".repeat(64),
+    OPERATION_FINGERPRINT: "b".repeat(64),
+    ACTION: "sync_report_summary",
+    CRM_DEAL_ID: "100000000000001",
+    STATUS: "pending",
+    SOURCE_REVISION: config.sourceRevision,
+    SOURCE_ENVIRONMENT: config.deploymentEnvironment,
+    LAST_OUTCOME: "terminal_report_ready",
+    OPERATION_PAYLOAD_JSON: "{}",
+    OPERATION_VERSION: 1,
+    CREATED_AT: "2026-08-21T15:00:00.000Z",
+    UPDATED_AT: "2026-08-21T15:00:00.000Z",
+  };
+  app.rows.push(row);
+  const store = createOperationStore(app, config);
+  const [left, right] = await Promise.all([
+    store.claimReportSummary({ ...row }, `report_claim_${"1".repeat(32)}`, "2026-08-21T15:01:00.000Z"),
+    store.claimReportSummary({ ...row }, `report_claim_${"2".repeat(32)}`, "2026-08-21T15:01:00.000Z"),
+  ]);
+  assert.equal([left, right].filter(({ claimed }) => claimed).length, 1);
+  assert.equal(app.rows[0].STATUS, "processing");
+  assert.equal(app.rows[0].OPERATION_VERSION, 2);
+  const firstOwner = [left, right].find(({ claimed }) => claimed);
+  const reclaimed = await store.claimReportSummary(
+    { ...app.rows[0] }, `report_claim_${"3".repeat(32)}`, "2026-08-21T15:02:00.000Z",
+  );
+  assert.equal(reclaimed.claimed, true);
+  assert.equal(app.rows[0].OPERATION_VERSION, 3);
+  const fencedOldOwner = await store.beginReportSummaryWrite(
+    firstOwner.row,
+    firstOwner.row.LAST_OUTCOME,
+    "2026-08-21T15:03:00.000Z",
+  );
+  assert.equal(fencedOldOwner.started, false);
+  const writeStart = await store.beginReportSummaryWrite(
+    reclaimed.row,
+    reclaimed.row.LAST_OUTCOME,
+    "2026-08-21T15:03:00.000Z",
+  );
+  assert.equal(writeStart.started, true);
+  assert.equal(app.rows[0].OPERATION_VERSION, 4);
+  assert.match(app.rows[0].LAST_OUTCOME, /^report_write_started_[a-f0-9]{32}$/);
+  await assert.rejects(
+    store.claimReportSummary(
+      { ...app.rows[0] }, `report_claim_${"4".repeat(32)}`, "2026-08-21T15:04:00.000Z",
+    ),
+    /claim input is invalid/,
+  );
+});
+
+test("report terminal CAS preserves newer semantic state and tolerates cursor-only advances", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  function pendingRow(operationKey) {
+    return {
+      ROWID: "1",
+      OPERATION_KEY: operationKey,
+      OPERATION_FINGERPRINT: "b".repeat(64),
+      ACTION: "sync_report_summary",
+      CRM_DEAL_ID: "100000000000001",
+      STATUS: "pending",
+      SOURCE_REVISION: config.sourceRevision,
+      SOURCE_ENVIRONMENT: config.deploymentEnvironment,
+      LAST_OUTCOME: "terminal_report_ready",
+      OPERATION_PAYLOAD_JSON: "{}",
+      OPERATION_VERSION: 1,
+      CREATED_AT: "2026-08-21T15:00:00.000Z",
+      UPDATED_AT: "2026-08-21T15:00:00.000Z",
+    };
+  }
+
+  const containmentApp = memoryApp(config.operationTable);
+  containmentApp.rows.push(pendingRow("a".repeat(64)));
+  const containmentStore = createOperationStore(containmentApp, config);
+  const staleCompletionCursor = { ...containmentApp.rows[0] };
+  const contained = await containmentStore.transitionReportSummary(
+    { ...containmentApp.rows[0] },
+    "reconciliation_required",
+    "report_revision_protected",
+    "2026-08-21T15:01:00.000Z",
+  );
+  assert.equal(contained.transitioned, true);
+  const staleCompletion = await containmentStore.transitionReportSummary(
+    staleCompletionCursor,
+    "completed",
+    "report_summary_readback_confirmed",
+    "2026-08-21T15:02:00.000Z",
+  );
+  assert.equal(staleCompletion.transitioned, false);
+  assert.equal(containmentApp.rows[0].STATUS, "reconciliation_required");
+  assert.equal(containmentApp.rows[0].LAST_OUTCOME, "report_revision_protected");
+  assert.equal(containmentApp.rows[0].OPERATION_VERSION, 2);
+
+  const completionApp = memoryApp(config.operationTable);
+  completionApp.rows.push(pendingRow("c".repeat(64)));
+  const completionStore = createOperationStore(completionApp, config);
+  const staleContainmentCursor = { ...completionApp.rows[0] };
+  assert.equal((await completionStore.transitionReportSummary(
+    { ...completionApp.rows[0] },
+    "completed",
+    "report_summary_readback_confirmed",
+    "2026-08-21T15:01:00.000Z",
+  )).transitioned, true);
+  assert.equal((await completionStore.transitionReportSummary(
+    staleContainmentCursor,
+    "reconciliation_required",
+    "report_test_status_conflict",
+    "2026-08-21T15:02:00.000Z",
+  )).transitioned, false);
+  assert.equal(completionApp.rows[0].STATUS, "completed");
+  assert.equal(completionApp.rows[0].LAST_OUTCOME, "report_summary_readback_confirmed");
+  assert.equal(completionApp.rows[0].OPERATION_VERSION, 2);
+
+  const cursorApp = memoryApp(config.operationTable);
+  cursorApp.rows.push(pendingRow("d".repeat(64)));
+  const cursorStore = createOperationStore(cursorApp, config);
+  const staleCursor = { ...cursorApp.rows[0] };
+  cursorApp.rows[0].OPERATION_VERSION = 2;
+  cursorApp.rows[0].UPDATED_AT = "2026-08-21T15:00:30.000Z";
+  const afterCursorAdvance = await cursorStore.transitionReportSummary(
+    staleCursor,
+    "completed",
+    "report_summary_readback_confirmed",
+    "2026-08-21T15:03:00.000Z",
+  );
+  assert.equal(afterCursorAdvance.transitioned, true);
+  assert.equal(cursorApp.rows[0].STATUS, "completed");
+  assert.equal(cursorApp.rows[0].OPERATION_VERSION, 3);
+
+  const completedMismatchApp = memoryApp(config.operationTable);
+  completedMismatchApp.rows.push(pendingRow("e".repeat(64)));
+  const completedMismatchStore = createOperationStore(completedMismatchApp, config);
+  await completedMismatchStore.transitionReportSummary(
+    { ...completedMismatchApp.rows[0] },
+    "completed",
+    "report_summary_readback_confirmed",
+    "2026-08-21T15:01:00.000Z",
+  );
+  const staleCompletedCursor = { ...completedMismatchApp.rows[0] };
+  await completedMismatchStore.transitionReportSummary(
+    { ...completedMismatchApp.rows[0] },
+    "reconciliation_required",
+    "report_revision_protected",
+    "2026-08-21T15:02:00.000Z",
+  );
+  const staleReadbackContainment = await completedMismatchStore.transitionReportSummary(
+    staleCompletedCursor,
+    "reconciliation_required",
+    "report_summary_readback_required",
+    "2026-08-21T15:03:00.000Z",
+  );
+  assert.equal(staleReadbackContainment.transitioned, false);
+  assert.equal(completedMismatchApp.rows[0].STATUS, "reconciliation_required");
+  assert.equal(completedMismatchApp.rows[0].LAST_OUTCOME, "report_revision_protected");
+  assert.equal(completedMismatchApp.rows[0].OPERATION_VERSION, 3);
 });
 
 test("paid references stay stable while accepted commercial changes conflict", async () => {

@@ -164,6 +164,17 @@ function createRequestListener({
         artifactFormDestinationSha256,
       );
       sourceRevision = config.sourceRevision;
+      if (config.darkMode) {
+        safeLog(logger, "info", {
+          requestId,
+          sourceRevision,
+          stage: "request",
+          outcome: "dark_mode",
+          elapsedMs: now() - startedAt,
+        });
+        sendJson(response, 503, { ok: false, code: "connection_unavailable", requestId });
+        return;
+      }
       readCatalystEnvironmentHeader(request);
       const runtimeSdk = catalystSdk ?? require("zcatalyst-sdk-node");
       const app = runtimeSdk.initialize(request);

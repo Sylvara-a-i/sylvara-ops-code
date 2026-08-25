@@ -56,7 +56,7 @@ updates:
       prefix: "chore(zoho-catalyst)"
 
   - package-ecosystem: npm
-    directory: /src/zoho-catalyst/retell-free-test/functions/retell_free_test
+    directory: /src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_gateway
     schedule:
       interval: weekly
       day: monday
@@ -67,11 +67,22 @@ updates:
       prefix: "chore(zoho-catalyst)"
 
   - package-ecosystem: npm
-    directory: /src/zoho-catalyst/retell-free-test/functions/retell_free_test_retry
+    directory: /src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_worker
     schedule:
       interval: weekly
       day: monday
       time: "14:20"
+      timezone: America/Chicago
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(zoho-catalyst)"
+
+  - package-ecosystem: npm
+    directory: /src/zoho-catalyst/revenue-desk-analytics/functions/analytics_sync
+    schedule:
+      interval: weekly
+      day: monday
+      time: "14:30"
       timezone: America/Chicago
     open-pull-requests-limit: 5
     commit-message:

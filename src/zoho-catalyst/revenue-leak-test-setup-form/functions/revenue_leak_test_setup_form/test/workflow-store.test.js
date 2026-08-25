@@ -28,7 +28,7 @@ function config(overrides = {}) {
     deploymentEnvironment: "development",
     platformOperationTimeoutMs: 5000,
     maxSubmissionAttempts: 3,
-    tokenPepper: "synthetic-pepper-value-32-bytes-minimum-do-not-use",
+    workflowKeyMaterial: "synthetic-workflow-key-material-32-bytes-minimum-do-not-use",
     ...overrides,
   };
 }
@@ -210,6 +210,36 @@ test("mints a unique prefill revision and stores no raw identifier, payload, or 
   assert.doesNotMatch(
     JSON.stringify(stored),
     /email|phone|first.name|last.name|address|raw.payload|submission.id/i,
+  );
+});
+
+test("bearer-token rotation cannot change durable workflow identities", async () => {
+  const first = fixture({
+    configOverrides: { tokenPepper: "P".repeat(43) },
+  });
+  const rotatedBearer = fixture({
+    configOverrides: { tokenPepper: "Q".repeat(43) },
+  });
+  const rotatedWorkflowKey = fixture({
+    configOverrides: {
+      tokenPepper: "Q".repeat(43),
+      workflowKeyMaterial: "different-synthetic-workflow-key-material-32-bytes-minimum",
+    },
+  });
+
+  const original = await first.store.mintPrefill(prefillBinding());
+  const sameDurableIdentity = await rotatedBearer.store.mintPrefill(prefillBinding());
+  const rekeyed = await rotatedWorkflowKey.store.mintPrefill(prefillBinding());
+
+  assert.equal(sameDurableIdentity.prefillId, original.prefillId);
+  assert.equal(
+    rotatedBearer.calls.insert[0].row.PREFILL_KEY,
+    first.calls.insert[0].row.PREFILL_KEY,
+  );
+  assert.notEqual(rekeyed.prefillId, original.prefillId);
+  assert.notEqual(
+    rotatedWorkflowKey.calls.insert[0].row.PREFILL_KEY,
+    first.calls.insert[0].row.PREFILL_KEY,
   );
 });
 

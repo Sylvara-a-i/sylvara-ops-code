@@ -11,12 +11,16 @@ SCRIPT = ROOT / "tools" / "verify.ps1"
 WRAPPER = ROOT / "tools" / "verify.cmd"
 TOOLS_README = ROOT / "tools" / "README.md"
 ROOT_README = ROOT / "README.md"
+WORKFLOW = ROOT / ".github" / "workflows" / "repo-checks.yml"
+DEPENDABOT = ROOT / ".github" / "dependabot.yml"
 
 
 class VerifyEntrypointTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.script = SCRIPT.read_text(encoding="utf-8")
+        cls.workflow = WORKFLOW.read_text(encoding="utf-8")
+        cls.dependabot = DEPENDABOT.read_text(encoding="utf-8")
 
     def test_canonical_entrypoint_and_parameter_contract_exist(self) -> None:
         self.assertTrue(SCRIPT.is_file())
@@ -36,7 +40,9 @@ class VerifyEntrypointTests(unittest.TestCase):
             ".cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
             self.script,
         )
-        self.assertIn('if ($OnWindows) { "npm.cmd" } else { "npm" }', self.script)
+        self.assertIn('Get-Command -Name "npm.cmd" -CommandType Application', self.script)
+        self.assertIn('"node_modules", "npm", "bin", "npm-cli.js"', self.script)
+        self.assertIn("$script:VerifiedNodeExecutable $script:NpmCliPath @Arguments", self.script)
 
     def test_quick_is_offline_and_all_or_bootstrap_enables_installs(self) -> None:
         self.assertIn('$useRegistry = $Bootstrap -or $Mode -eq "All"', self.script)
@@ -68,9 +74,9 @@ class VerifyEntrypointTests(unittest.TestCase):
             '"run", "ci", "--prefix", $CrmBillingOrchestratorRoot',
             '"run", "ci", "--prefix", $RequestFormRoot',
             '"run", "ci", "--prefix", $SetupFormRoot',
-            '"run", "ci", "--prefix", $RetellResolverRoot',
-            '"run", "ci", "--prefix", $RetellFreeTestRoot',
-            '"run", "ci", "--prefix", $RetellFreeTestRetryRoot',
+            '"run", "ci", "--prefix", $RevenueDeskCallGatewayRoot',
+            '"run", "ci", "--prefix", $RevenueDeskCallWorkerRoot',
+            '"run", "ci", "--prefix", $RevenueDeskAnalyticsRoot',
         ):
             with self.subTest(fragment=required_fragment):
                 self.assertIn(required_fragment, self.script)
@@ -90,11 +96,13 @@ class VerifyEntrypointTests(unittest.TestCase):
         self.assertIn('$CrmBillingOrchestratorRoot = Join-PathSegments $RepoRoot @(', self.script)
         self.assertIn('$RequestFormRoot = Join-PathSegments $RepoRoot @(', self.script)
         self.assertIn('$SetupFormRoot = Join-PathSegments $RepoRoot @(', self.script)
-        self.assertIn('$RetellResolverRoot = Join-PathSegments $RepoRoot @(', self.script)
-        self.assertIn('$RetellFreeTestRoot = Join-PathSegments $RepoRoot @(', self.script)
-        self.assertIn('$RetellFreeTestRetryRoot = Join-PathSegments $RepoRoot @(', self.script)
-        self.assertIn('"node_modules", "retell_free_test", "package.json"', self.script)
+        self.assertIn('$RevenueDeskCallGatewayRoot = Join-PathSegments $RepoRoot @(', self.script)
+        self.assertIn('$RevenueDeskCallWorkerRoot = Join-PathSegments $RepoRoot @(', self.script)
+        self.assertIn('$RevenueDeskAnalyticsRoot = Join-PathSegments $RepoRoot @(', self.script)
+        self.assertIn('"node_modules", "revenue_desk_call_gateway", "package.json"', self.script)
         self.assertIn('"node_modules", "zcatalyst-sdk-node", "package.json"', self.script)
+        self.assertNotIn("retell-free-test", self.script)
+        self.assertNotIn("RetellFreeTest", self.script)
         self.assertIn("function Ensure-LocalPythonEnvironment", self.script)
         self.assertIn("Get-ManagedVenvPythonCandidates", self.script)
         self.assertIn("safety-venv-cpython-3.12-x64-", self.script)
@@ -105,6 +113,42 @@ class VerifyEntrypointTests(unittest.TestCase):
             "Refusing to create a managed verification environment through a reparse-point",
             self.script,
         )
+
+    def test_revenue_desk_topology_is_fail_closed_and_exact(self) -> None:
+        self.assertIn("function Assert-RevenueDeskTopology", self.script)
+        self.assertIn("canonical_project_count -ne 1", self.script)
+        self.assertIn("final_active_function_count -ne 6", self.script)
+        for exact_fragment in (
+            "revenue_leak_test_request_form|Advanced I/O",
+            "revenue_leak_test_setup_form|Advanced I/O",
+            "revenue_desk_call_gateway|Advanced I/O",
+            "revenue_desk_call_worker|Job",
+            "crm_billing_orchestrator|Advanced I/O",
+            "analytics_sync|Job",
+            "RevenueDeskCallJobs|revenue_desk_call_worker",
+            "RevenueDeskAnalyticsJobs|analytics_sync",
+        ):
+            with self.subTest(fragment=exact_fragment):
+                self.assertIn(exact_fragment, self.script)
+        self.assertIn("Assert-RevenueDeskTopology", self.script)
+
+    def test_ci_and_dependabot_use_only_the_new_revenue_desk_packages(self) -> None:
+        canonical_paths = (
+            "src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_gateway",
+            "src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_worker",
+            "src/zoho-catalyst/revenue-desk-analytics/functions/analytics_sync",
+        )
+        for path in canonical_paths:
+            with self.subTest(path=path):
+                self.assertEqual(3, self.workflow.count(path))
+                self.assertEqual(1, self.dependabot.count(f"/{path}"))
+        for obsolete in (
+            "src/zoho-catalyst/retell-free-test/functions/retell_free_test",
+            "src/zoho-catalyst/retell-free-test/functions/retell_free_test_retry",
+        ):
+            with self.subTest(obsolete=obsolete):
+                self.assertNotIn(obsolete, self.workflow)
+                self.assertNotIn(obsolete, self.dependabot)
 
     def test_documentation_uses_the_canonical_command(self) -> None:
         root_readme = ROOT_README.read_text(encoding="utf-8")

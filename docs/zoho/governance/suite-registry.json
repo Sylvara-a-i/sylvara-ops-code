@@ -90,9 +90,9 @@
         "../runbooks/free-test-development-reconciliation-2026-08-22.md",
         "../security/free-test-runtime-controls.md",
         "../runbooks/retell-catalyst-analytics-reporting.md",
-        "../../src/zoho-catalyst/retell-free-test/functions/retell_free_test/contracts/free-test-contract.json",
-        "../../src/zoho-catalyst/retell-free-test/config/variables.json",
-        "../../src/zoho-catalyst/retell-free-test/config/datastore-schema.json",
+        "../../src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_gateway/contracts/revenue-desk-call-contract.json",
+        "../../src/zoho-catalyst/revenue-desk-call-runtime/config/variables.json",
+        "../../src/zoho-catalyst/revenue-desk-call-runtime/config/datastore-schema.json",
         "reference/products/zoho-catalyst.md"
       ],
       "mcp_observation": "configured-selections-observed-2026-08-04",

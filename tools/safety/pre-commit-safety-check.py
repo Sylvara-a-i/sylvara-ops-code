@@ -22,12 +22,22 @@ from typing import Mapping, NamedTuple
 
 ROOT = Path(__file__).resolve().parents[2]
 
-SECRET_REGISTRY_PATHS = (
+STABLE_SECRET_REGISTRY_PATHS = (
     PurePosixPath("src/zoho-catalyst/billing-webhook-gateway/config/variables.json"),
     PurePosixPath("src/zoho-catalyst/crm-billing-orchestrator/config/variables.json"),
     PurePosixPath("src/zoho-catalyst/revenue-leak-test-request-form/config/variables.json"),
     PurePosixPath("src/zoho-catalyst/revenue-leak-test-setup-form/config/variables.json"),
+)
+CANONICAL_REVENUE_DESK_SECRET_REGISTRY_PATHS = (
+    PurePosixPath("src/zoho-catalyst/revenue-desk-call-runtime/config/variables.json"),
+    PurePosixPath("src/zoho-catalyst/revenue-desk-analytics/config/variables.json"),
+)
+LEGACY_REVENUE_DESK_SECRET_REGISTRY_PATHS = (
     PurePosixPath("src/zoho-catalyst/retell-free-test/config/variables.json"),
+)
+SECRET_REGISTRY_PATHS = (
+    *STABLE_SECRET_REGISTRY_PATHS,
+    *CANONICAL_REVENUE_DESK_SECRET_REGISTRY_PATHS,
 )
 SECRET_REGISTRY_CLASSIFICATIONS = frozenset({"secret", "stable-secret"})
 LEGACY_REGISTRY_CLASSIFICATIONS = {
@@ -67,6 +77,7 @@ ALLOWED_REGISTRY_CLASSIFICATIONS = frozenset(
         "private-oauth-identity",
         "private-outbound-allowlist",
         "private-platform-identifier",
+        "private-platform-map",
         "private-regional-endpoint",
         "private-route",
         "private-security-configuration",
@@ -77,6 +88,7 @@ ALLOWED_REGISTRY_CLASSIFICATIONS = frozenset(
         "safe-boolean",
         "safe-bounded-scalar",
         "safe-enum",
+        "sanitized-evidence-digest",
         "secret",
         "security-and-reliability-policy",
         "security-policy",
@@ -367,12 +379,14 @@ def load_registry_secret_names_from_contents(
     registry_contents: Mapping[str, bytes],
     *,
     require_all: bool = True,
+    registry_paths: tuple[PurePosixPath, ...] | None = None,
 ) -> frozenset[str]:
     """Parse exact registry bytes from one repository view, failing closed."""
 
+    selected_paths = SECRET_REGISTRY_PATHS if registry_paths is None else registry_paths
     names = set(ADDITIONAL_SECRET_ASSIGNMENT_NAMES)
     loaded_registry_count = 0
-    for relative_path in SECRET_REGISTRY_PATHS:
+    for relative_path in selected_paths:
         registry_key = relative_path.as_posix()
         raw = registry_contents.get(registry_key)
         if raw is None:
@@ -430,6 +444,32 @@ def load_registry_secret_names_from_contents(
     return frozenset(names)
 
 
+def load_index_registry_secret_names_from_contents(
+    registry_contents: Mapping[str, bytes],
+) -> frozenset[str]:
+    """Load one complete staged registry generation during the path migration."""
+
+    available_paths = set(registry_contents)
+    canonical_paths = {path.as_posix() for path in SECRET_REGISTRY_PATHS}
+    if canonical_paths.issubset(available_paths):
+        return load_registry_secret_names_from_contents(registry_contents)
+
+    legacy_paths = (
+        *STABLE_SECRET_REGISTRY_PATHS,
+        *LEGACY_REVENUE_DESK_SECRET_REGISTRY_PATHS,
+    )
+    legacy_path_names = {path.as_posix() for path in legacy_paths}
+    if legacy_path_names.issubset(available_paths):
+        return load_registry_secret_names_from_contents(
+            registry_contents,
+            registry_paths=legacy_paths,
+        )
+
+    raise SecretRegistryError(
+        "The staged secret registry set is neither the complete canonical nor legacy generation"
+    )
+
+
 def load_registry_secret_names(root: Path = ROOT) -> frozenset[str]:
     """Load every secret-classified working-tree variable name, failing closed."""
 
@@ -448,6 +488,10 @@ def load_registry_secret_names(root: Path = ROOT) -> frozenset[str]:
 def load_head_registry_secret_names(root: Path = ROOT) -> frozenset[str]:
     """Load the committed registry baseline so a candidate cannot downgrade it."""
 
+    baseline_paths = (
+        *SECRET_REGISTRY_PATHS,
+        *LEGACY_REVENUE_DESK_SECRET_REGISTRY_PATHS,
+    )
     try:
         result = subprocess.run(
             [
@@ -456,7 +500,7 @@ def load_head_registry_secret_names(root: Path = ROOT) -> frozenset[str]:
                 "-z",
                 "HEAD",
                 "--",
-                *(path.as_posix() for path in SECRET_REGISTRY_PATHS),
+                *(path.as_posix() for path in baseline_paths),
             ],
             cwd=root,
             check=False,
@@ -473,7 +517,7 @@ def load_head_registry_secret_names(root: Path = ROOT) -> frozenset[str]:
             "Could not read the committed secret variable registry baseline"
         )
 
-    expected_paths = {path.as_posix() for path in SECRET_REGISTRY_PATHS}
+    expected_paths = {path.as_posix() for path in baseline_paths}
     entries: dict[str, TrackedEntry] = {}
     for record in result.stdout.split(b"\0"):
         if not record:
@@ -507,12 +551,34 @@ def load_head_registry_secret_names(root: Path = ROOT) -> frozenset[str]:
             )
         entries[rel] = TrackedEntry(mode, object_id.lower())
 
+    required_stable_paths = {
+        path.as_posix() for path in STABLE_SECRET_REGISTRY_PATHS
+    }
+    if not required_stable_paths.issubset(entries):
+        raise SecretRegistryError(
+            "The committed secret registry baseline is missing a stable registry"
+        )
+    call_registry_generations = {
+        CANONICAL_REVENUE_DESK_SECRET_REGISTRY_PATHS[0].as_posix(),
+        LEGACY_REVENUE_DESK_SECRET_REGISTRY_PATHS[0].as_posix(),
+    }
+    if not call_registry_generations.intersection(entries):
+        raise SecretRegistryError(
+            "The committed secret registry baseline has no Revenue Desk call registry"
+        )
+
     contents, problems = load_index_blobs(root, entries)
     if problems:
         raise SecretRegistryError(
             "Could not inspect the committed secret variable registry baseline"
         )
-    return load_registry_secret_names_from_contents(contents, require_all=False)
+    found_paths = tuple(
+        path for path in baseline_paths if path.as_posix() in contents
+    )
+    return load_registry_secret_names_from_contents(
+        contents,
+        registry_paths=found_paths,
+    )
 
 
 SECRET_ASSIGNMENT_NAMES = load_registry_secret_names()
@@ -1365,7 +1431,9 @@ def scan_repository(root: Path = ROOT) -> list[str]:
     problems.extend(_label_problems(index_load_problems, "staged index"))
 
     try:
-        index_secret_names = load_registry_secret_names_from_contents(index_contents)
+        index_secret_names = load_index_registry_secret_names_from_contents(
+            index_contents
+        )
     except SecretRegistryError as exc:
         problems.append(f"{exc} [staged index]")
         index_secret_names = SECRET_ASSIGNMENT_NAMES

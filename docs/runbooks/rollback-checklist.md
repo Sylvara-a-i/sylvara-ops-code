@@ -40,15 +40,16 @@ For the 7-Day Free Test, also contain immediately on unknown/ambiguous number re
 
 ## 7-Day Free-Test Containment
 
-1. Disable the affected number assignment/forwarding route where authorized and set route approval to revoked or blocked and deployment to stopped.
-2. If the shared agent or resolver is suspect, stop every affected deployment. Never switch to a client-specific free-test clone or degraded intake.
-3. Restore `FREE_TEST_NOTIFICATION_MODE=dry_run`, independently read it back, and pause query/CSV export without deleting calls, bindings, counts, or notification rows.
-4. Determine scope from immutable deployment and call bindings, not display names, the shared Agent ID, or the number's current owner.
-5. Do not reuse or move the current validation number. Preserve historical ownership, keep the stopped number inactive, and record its cooldown. Any later reuse is a separately reviewed stopped-route action with readback and re-QA.
-6. Verify no email record, query, or CSV crossed clients and treat any contamination as a P0 incident.
-7. Restore only a previously approved inactive/provider route or carrier destination, then independently read it back.
-8. Confirm known authenticated failures receive explicit rejection or no traffic, and provider fallback reaches only the shared Configuration Unavailable gate; neither path may collect degraded intake.
-9. Re-enable the current one-number internal route only after its practical limit/overshoot, replay, notification-state, query/CSV, correlation, cooldown, and rollback checks pass with zero scoped P0/P1 and new route approval. Before enabling two simultaneous deployments or a first controlled prospect test, also complete live two-number/same-version isolation.
+1. Fail closed in Data Store first: conditionally set the affected deployment to `TEST_STATUS=Stopped`, `GO_LIVE_APPROVAL_STATUS=Revoked`, `STOP_REASON=sylvara_stopped`, and a canonical `STOPPED_AT`, then independently read back the exact row and version. Never clear evidence to manufacture a clean rollback.
+2. Disable the affected number assignment/forwarding route only with separately scoped authorization, then independently prove the provider route is stopped or restored to the approved fallback. An ambiguous provider response remains contained and unreconciled.
+3. If the shared agent or resolver is suspect, stop every affected deployment. Never switch to a client-specific free-test clone or degraded intake.
+4. Restore the canonical notification mode to `dry_run`, independently read it back, and pause query/CSV export without deleting calls, bindings, counts, authorization receipts, or notification rows.
+5. Determine scope from immutable deployment, approval, activation, and call bindings—not display names, the shared Agent ID, or the number's current owner.
+6. Do not reuse or move the current validation number. Preserve historical ownership, keep the stopped number inactive, and record its cooldown. Any later reuse is a separately reviewed stopped-route action with readback and re-QA.
+7. Verify no email record, query, or CSV crossed clients and treat any contamination as a P0 incident.
+8. Restore only a previously approved inactive/provider route or carrier destination, then independently read it back.
+9. Confirm known authenticated failures receive explicit rejection or no traffic, and provider fallback reaches only the shared Configuration Unavailable gate; neither path may collect degraded intake.
+10. Re-enable the current one-number internal route only after its practical limit/overshoot, replay, notification-state, query/CSV, correlation, cooldown, and rollback checks pass with zero scoped P0/P1, a fresh exact-version approval receipt, authoritative route-activation readback, and a chained activation receipt. Set `ACTUAL_START_AT` only after that readback and require `EXPIRES_AT - ACTUAL_START_AT = 604800000` milliseconds. Before enabling two simultaneous deployments or a first controlled prospect test, also complete live two-number/same-version isolation.
 
 Stopping a test never activates paid service or a Revenue Desk.
 

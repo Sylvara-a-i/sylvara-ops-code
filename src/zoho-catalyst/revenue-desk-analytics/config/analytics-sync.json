@@ -1,0 +1,148 @@
+{
+  "schema_version": 2,
+  "record_type": "revenue_desk_analytics_sync_contract",
+  "status": "repository-implemented-additive-v2-live-binding-unverified",
+  "live_state": "existing-development-rows-preserved-schema-and-lineage-require-fresh-readback",
+  "production_authorized": false,
+  "shared_project_target": true,
+  "function": {
+    "target_name": "analytics_sync",
+    "type": "Job",
+    "stack": "node18",
+    "public_http_endpoint": false
+  },
+  "job_pool": {
+    "name": "RevenueDeskAnalyticsJobs",
+    "type": "Function",
+    "memory_mb": 512,
+    "platform_retries_enabled": false,
+    "job_params": {}
+  },
+  "owned_tables": [
+    "AnalyticsSyncCheckpoints",
+    "AnalyticsSyncOutbox"
+  ],
+  "observed_development_inventory_2026_08_24": {
+    "AnalyticsSyncOutbox": 307,
+    "AnalyticsSyncCheckpoints": 10,
+    "ClientDailyMetrics": 10,
+    "ReportRuns": 1,
+    "Calls": 13,
+    "FreeTestCalls": 30,
+    "authority": "fresh live count readback only; schema, normalized keys, and lineage remain unverified",
+    "deletion_authorized": false
+  },
+  "compatibility": {
+    "new_row_schema_version": 2,
+    "legacy_rows_automatically_claimed": false,
+    "existing_columns_changed_or_removed": false,
+    "additive_columns_physical_mandatory": false,
+    "v2_outbox_state_column": "SYNC_STATUS",
+    "documented_v1_outbox_state_column": "Status",
+    "nullable_unique_semantics": "unverified_activation_blocker",
+    "activation_gate": "fresh metadata, source counts, normalized-key digest, immutable-fact reconciliation, target counts and watermarks, and rollback evidence",
+    "containment": "disable the Job or set ANALYTICS_SYNC_MODE=disabled; do not mutate or delete legacy rows"
+  },
+  "source_boundary": {
+    "canonical_call_table": "RevenueDeskCalls",
+    "canonical_deployment_table": "RevenueDeskDeployments",
+    "direct_source_reads": false,
+    "producer_candidates": {
+      "deployment_and_call": "../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/analytics-outbox.js",
+      "final_test_result": "../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/analytics-outbox.js after terminal report reconciliation",
+      "conversion_status": "../crm-billing-orchestrator/functions/crm_billing_orchestrator/lib/analytics-outbox.js after authoritative CRM/Billing and durable operation completion"
+    },
+    "engagement_semantics": {
+      "ENGAGEMENT_TYPE": "originating engagement and immutable dashboard partition",
+      "conversion_status_origin": "free_test",
+      "conversion_status_target_field": "TARGET_ENGAGEMENT_TYPE",
+      "conversion_status_target": "paid_service"
+    },
+    "rule": "Package-local producers create immutable minimized source outbox facts with the exact v2/provider-version contract and deterministic readback; analytics_sync owns bounded deterministic daily-metric derivation plus Analytics outbox/checkpoint processing",
+    "daily_rollup": {
+      "owner": "analytics_sync",
+      "grain": "one UTC date, client key, deployment key, configuration version, engagement type, and environment",
+      "candidate": "functions/analytics_sync/lib/daily-rollup.js",
+      "persistence_parity": "blocked_pending_private_fixture_diff_and_live_binding"
+    }
+  },
+  "record_types": [
+    "deployment",
+    "call",
+    "daily_metric",
+    "final_test_result",
+    "conversion_status"
+  ],
+  "runtime_modes": {
+    "development": [
+      "disabled",
+      "readiness",
+      "active"
+    ],
+    "production": [
+      "disabled",
+      "readiness"
+    ]
+  },
+  "production_dark_contract": {
+    "required_runtime_configuration": [
+      "DEPLOYMENT_ENVIRONMENT",
+      "SOURCE_REVISION",
+      "ANALYTICS_SYNC_MODE",
+      "EXPECTED_CATALYST_PROJECT_ID",
+      "ANALYTICS_JOB_POOL_ID"
+    ],
+    "native_identity_header": "X_ZOHO_CATALYST_ENVIRONMENT=Production",
+    "tables_required": false,
+    "connections_required": false,
+    "provider_settings_required": false,
+    "sdk_initialization": false,
+    "datastore_reads": 0,
+    "datastore_writes": 0,
+    "analytics_reads": 0,
+    "analytics_writes": 0,
+    "result": "DarkNoOp"
+  },
+  "provider_contract": {
+    "connection_references": {
+      "read": "ANALYTICS_READ_CONNECTION_LINK_NAME",
+      "write": "ANALYTICS_WRITE_CONNECTION_LINK_NAME",
+      "must_be_distinct": true
+    },
+    "import_type": "updateadd",
+    "file_type": "json",
+    "on_error": "abort",
+    "matching_columns": [
+      "RECORD_KEY",
+      "CLIENT_KEY",
+      "DEPLOYMENT_KEY",
+      "ENVIRONMENT"
+    ],
+    "provider_version_fence": {
+      "column": "PROVIDER_VERSION_KEY",
+      "domain": "analytics-provider-version-v1",
+      "identity_columns": [
+        "RECORD_TYPE",
+        "ENVIRONMENT",
+        "CLIENT_KEY",
+        "DEPLOYMENT_KEY",
+        "RECORD_KEY",
+        "SOURCE_MODIFIED_AT"
+      ],
+      "provider_unique_constraint_required": true,
+      "same_key_different_payload": "DURABLE_IDEMPOTENCY_CONFLICT"
+    },
+    "completion_rule": "import completion plus exact key/hash/environment readback",
+    "unknown_outcome": "ReconciliationRequired"
+  },
+  "privacy": {
+    "raw_phone_numbers": false,
+    "personal_email_addresses": false,
+    "raw_names": false,
+    "raw_transcripts": false,
+    "audio_or_recording_references": false,
+    "raw_provider_payloads": false,
+    "secrets": false,
+    "opaque_partition_keys_only": true
+  }
+}

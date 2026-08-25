@@ -7,6 +7,7 @@ const INTAKE_ID = "f1a_11111111-1111-4111-8111-111111111111";
 function environment(overrides = {}) {
   return {
     DEPLOYMENT_ENVIRONMENT: "development",
+    DEPLOYMENT_MODE: "active",
     SOURCE_REVISION: REVISION,
     ISSUE_PATH: "/form1/issue-test",
     PREFILL_PATH: "/form1/prefill-test",
@@ -27,7 +28,7 @@ function environment(overrides = {}) {
     CRM_API_BASE_URL: "https://www.zohoapis.com/crm/v8",
     CRM_READ_CONNECTION_LINK_NAME: "form1_leads_read",
     CRM_WRITE_CONNECTION_LINK_NAME: "form1_leads_update",
-    SESSION_TABLE_NAME: "Form1AssistedSessions",
+    SESSION_TABLE_NAME: "RevenueLeakTestRequestFormSessions",
     SESSION_TTL_SECONDS: "900",
     MAX_PREFILLS: "10",
     MAX_BODY_BYTES: "4096",

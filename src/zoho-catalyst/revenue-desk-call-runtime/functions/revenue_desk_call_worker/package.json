@@ -1,0 +1,19 @@
+{
+  "name": "revenue_desk_call_worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Private Catalyst Function Job worker for Revenue Desk event processing and bounded maintenance modes.",
+  "main": "index.js",
+  "type": "commonjs",
+  "engines": {
+    "node": "18.x"
+  },
+  "scripts": {
+    "check": "node --check index.js",
+    "test": "node --test test/package.test.js",
+    "ci": "npm run check && npm test"
+  },
+  "dependencies": {
+    "revenue_desk_call_gateway": "file:../revenue_desk_call_gateway"
+  }
+}

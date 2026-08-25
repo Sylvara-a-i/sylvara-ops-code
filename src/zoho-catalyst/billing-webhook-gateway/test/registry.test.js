@@ -44,6 +44,7 @@ const suppliedNames = [
 ];
 
 test("registry includes every supplied variable name exactly once", () => {
+  assert.equal(registry.status, "required_hardening_pending");
   const names = registry.variables.map((entry) => entry.name);
   assert.equal(new Set(names).size, names.length);
   for (const name of suppliedNames) assert.ok(names.includes(name), name);
@@ -79,6 +80,65 @@ test("only the public source revision may be logged by value", () => {
   assert.deepEqual(valueLogged.map((entry) => entry.name), ["SOURCE_REVISION"]);
 });
 
+test("release registry binds one Development target without treating private build input as runtime config", () => {
+  assert.deepEqual(registry.release_artifact, {
+    builder: "tools/build-development-artifact.js",
+    function_target: "sylvara_client_portal_hmac_gateway_function",
+    function_type: "advancedio",
+    environment_scope: "development-only",
+    private_build_inputs_are_runtime_variables: false,
+    creator_destination_digest_manifest_disclosure: "prohibited",
+    deployment_side_effect: "none",
+  });
+  assert.equal(registryNames.has("APPROVED_SOURCE_REVISION"), false);
+  assert.equal(registryNames.has("APPROVED_CREATOR_DESTINATION_SHA256"), false);
+});
+
+test("sanitized live-audit evidence preserves uncertainty and approval gates", () => {
+  const evidencePath = path.join(
+    __dirname,
+    "..",
+    "evidence",
+    "sanitized-live-audit-2026-08-25.json",
+  );
+  const evidenceText = fs.readFileSync(evidencePath, "utf8");
+  const evidence = JSON.parse(evidenceText);
+  assert.equal(evidence.classification, "required_hardening_pending");
+  assert.equal(evidence.billing_webhook.subscription_webhook_state, "active");
+  assert.equal(
+    evidence.billing_webhook.target_binding_assessment,
+    "exactly_matches_development_route_path",
+  );
+  assert.deepEqual(
+    evidence.billing_webhook_history.queries.map((entry) => entry.visible_delivery_rows),
+    [0, 0],
+  );
+  assert.equal(evidence.private_full_source_scan.reviewed_live_revision_count, 3);
+  assert.equal(evidence.private_full_source_scan.catalyst_connection_usage_reference_count, 0);
+  assert.equal(evidence.creator_custom_api_inventory.status, "unverified");
+  assert.equal(evidence.decision.live_changes, "approval_gated");
+  assert.equal(evidence.decision.repository_artifact_status, "required_hardening_pending");
+  assert.equal(evidence.decision.hardening_complete, false);
+  assert.deepEqual(evidence.decision.required_before_reclassification, [
+    "Creator Custom API inventory and exact authentication contract proven",
+    "immutable reviewed Development artifact deployed and independently read back",
+    "Billing webhook to Development route ownership and disabled-change-state proof",
+    "Production duplicate removal, rollback, and independent absence-readback proof",
+    "Billing webhook and durable event-fingerprint secrets rotated with old-key rejection",
+    "least-privilege Creator Connection grant rotated and independently read back",
+    "all historical raw OAuth grants revoked and retired runtime variables proven absent",
+    "final Billing, Catalyst, Connection, inbox, Creator, route, source-revision, and Production-block readback",
+  ]);
+  assert.equal(evidence.decision.development_deployment_authorized, false);
+  assert.equal(evidence.decision.credential_rotation_authorized, false);
+  assert.equal(evidence.decision.duplicate_removal_authorized, false);
+  assert.equal(evidence.decision.production_activation_authorized, false);
+  assert.equal(evidence.decision.production_code_block_retained, true);
+  assert.equal(evidenceText.includes("http://"), false);
+  assert.equal(evidenceText.includes("https://"), false);
+  assert.doesNotMatch(evidenceText, /\b[a-f0-9]{40,64}\b/i);
+});
+
 test("the package syntax-checks every runtime source file", () => {
   const packageJson = JSON.parse(fs.readFileSync(
     path.join(__dirname, "..", "package.json"),
@@ -109,9 +169,17 @@ test("the package syntax-checks every runtime source file", () => {
       .map((entry) => `lib/${entry.name}`),
   ];
   assert.deepEqual(actualRuntimeSources.sort(), expectedRuntimeSources.sort());
+  const expectedCheckedSources = [
+    ...expectedRuntimeSources,
+    "tools/build-development-artifact.js",
+  ];
   assert.equal(
     packageJson.scripts.check,
-    expectedRuntimeSources.map((source) => `node --check ${source}`).join(" && "),
+    expectedCheckedSources.map((source) => `node --check ${source}`).join(" && "),
+  );
+  assert.equal(
+    packageJson.scripts["artifact:build"],
+    "node tools/build-development-artifact.js",
   );
 });
 

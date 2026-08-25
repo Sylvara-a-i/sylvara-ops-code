@@ -20,10 +20,11 @@ const FORM2_DESTINATION_SHA256 = destinationDigest(FORM2_PUBLIC_URL);
 function listenerEnvironment() {
   return {
     DEPLOYMENT_ENVIRONMENT: "development",
+    DEPLOYMENT_MODE: "active",
     SESSION_TABLE_NAME: "Form2SessionsV3Runtime",
-    PREFILL_TABLE_NAME: "Form2_Prefills_V3",
-    SUBMISSION_TABLE_NAME: "Form2_Submissions_V3",
-    FORM2_PROOF_TABLE_NAME: "Form2_Proofs_V3",
+    PREFILL_TABLE_NAME: "Form2PrefillsV3",
+    SUBMISSION_TABLE_NAME: "Form2SubmissionsV3",
+    FORM2_PROOF_TABLE_NAME: "Form2VerificationProofsV3",
     ISSUE_PATH: "/form2/session/issue",
     FORM2_ACCESS_PATH: "/form2/session/access",
     FORM2_OTP_REQUEST_PATH: "/form2/session/otp/request",
@@ -36,6 +37,7 @@ function listenerEnvironment() {
     PREFILL_HEADER_SECRET: "F".repeat(43),
     SUBMISSION_HEADER_SECRET: "S".repeat(43),
     TOKEN_PEPPER: "P".repeat(43),
+    WORKFLOW_HMAC_SECRET: "W".repeat(43),
     FORM2_PROOF_HMAC_SECRET: "V".repeat(43),
     FORM2_ACCESS_PUBLIC_URL: "https://synthetic.development.catalystserverless.com/form2/session/access",
     FORM2_PUBLIC_URL,
@@ -230,4 +232,36 @@ test("listener fails before SDK initialization when the artifact destination dif
   assert.equal(initialized, false);
   assert.equal(output.statusCode, 503);
   assert.equal(JSON.parse(output.payload).code, "configuration_invalid");
+});
+
+test("dark Production rejects before SDK, route, store, mail, CRM, or secret access", async () => {
+  let initialized = false;
+  let handled = false;
+  const environment = {
+    DEPLOYMENT_ENVIRONMENT: "production",
+    DEPLOYMENT_MODE: "dark",
+    SOURCE_REVISION: "a".repeat(40),
+  };
+  const listener = createRequestListener({
+    catalystSdk: { initialize() { initialized = true; throw new Error("must not initialize"); } },
+    environment,
+    artifactSourceRevision: environment.SOURCE_REVISION,
+    artifactFormDestinationSha256: "b".repeat(64),
+    logger: { info() {}, error() {} },
+    randomUUID: () => "10000000-0000-4000-8000-000000000001",
+    now: () => 100,
+    requestHandler: async () => { handled = true; throw new Error("must not handle"); },
+  });
+  const output = responseStub();
+
+  await listener({ headers: {} }, output);
+
+  assert.equal(initialized, false);
+  assert.equal(handled, false);
+  assert.equal(output.statusCode, 503);
+  assert.deepEqual(JSON.parse(output.payload), {
+    ok: false,
+    code: "connection_unavailable",
+    requestId: "10000000-0000-4000-8000-000000000001",
+  });
 });
