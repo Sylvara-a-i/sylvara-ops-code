@@ -1,8 +1,15 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "status": "desired_state_pending_synthetic_acceptance",
   "customer_facing_offer": "Free Revenue Leak Test",
   "legacy_internal_offer_value": "7-Day Revenue Leak Test",
+  "identifier_migration": {
+    "from_schema_version": 1,
+    "controller_aliases": {
+      "form2_controller": "revenue_leak_test_setup_form"
+    },
+    "workflow_rename_policy": "rename an independently read-back existing Development rule in place; never create a second rule while the observed name exists"
+  },
   "environment_boundary": {
     "crm_organization_type": "production-type existing organization",
     "permitted_records": "ZZZ SYNTHETIC only",
@@ -12,7 +19,7 @@
   "authorities": {
     "form1": "Zoho Forms native Lead upsert plus one CRM review workflow",
     "lead_conversion": "explicit human-operated native CRM conversion",
-    "form2": "form2_controller bounded Deal update",
+    "form2": "revenue_leak_test_setup_form bounded Deal update",
     "go_live": "version-specific internal Sylvara approval plus Catalyst validation",
     "call_state": "Catalyst",
     "paid_acceptance": "separate explicit commercial acceptance record",
@@ -86,7 +93,10 @@
     {
       "logical_name": "FORM2_SUBMISSION",
       "module": "Deals",
-      "single_active_rule": "Deals Form 2 Controller Proof Candidate",
+      "single_active_rule": "Deals Revenue Leak Test Setup Form Proof Candidate",
+      "observed_development_rule": "Deals Form 2 Controller Proof Candidate",
+      "desired_development_rule": "Deals Revenue Leak Test Setup Form Proof Candidate",
+      "rename_requires_independent_readback": true,
       "trusted_evidence_required": true,
       "effects": [
         "set Setup Access Status to Submitted",

@@ -1,0 +1,60 @@
+# RevenueLeakTestRequestForm
+
+This isolated Node.js 24 Advanced I/O function supports the CRM record-details button **Start Free Revenue Leak Test Request** without expanding into the setup-form workflow. It is Development-only and exposes exactly two JSON `POST` routes. The exact desired authentication, throttling, caller, and rollback controls are versioned in [`config/routes.json`](config/routes.json); the cross-system Forms configuration is in [`../../zoho-forms/free-revenue-leak-test/forms-manifest.json`](../../zoho-forms/free-revenue-leak-test/forms-manifest.json).
+
+**Development status, 2026-08-24:** The Request Form table has been provisioned in the existing Retell Catalyst Development project and its initial copy was independently read back. Both Request Form CRM Connections were read back in the Retell Development console as Connected with the exact approved scopes; their private link names remain outside Git, and CRM-organization binding and runtime behavior are still unverified. The legacy project remains live under its former Form 1 name. The Retell-target `revenue_leak_test_request_form`, routes, variables, CRM button, and Forms Prefill Webhook have not been cut over or runtime-tested. Production remains code-blocked.
+
+1. **Issue** accepts one Lead ID from the CRM button, reads that Lead, creates a fresh intake identity and a 256-bit opaque token, stores only the token HMAC, updates and reads back `Intake_Submission_ID`, then returns the existing Form 1 permalink with the token field alias.
+2. **Prefill** receives the token from Zoho Forms' server-side Prefill Webhook, validates expiry and bounded disclosure state, reads the bound Lead, proves the Lead still has the session intake identity, and returns only the allowlisted Form 1 values.
+
+Form 1's existing native CRM integration remains the only submission writer. Its current upsert order is `Intake Submission ID` first and `Contact Email` second, with blank overwrite disabled. There is no Catalyst submission route.
+
+## Security contract
+
+- Production is blocked in source, and an unstamped or source-revision-mismatched artifact fails configuration.
+- Every new issue rotates the Lead intake identity, which invalidates older still-unexpired tokens.
+- The URL contains no Lead ID or PII. Raw tokens, request bodies, CRM responses, headers, and secrets are never logged or stored.
+- API Gateway route secrets are independent, verified before parsing business input, and kept out of source.
+- The read Connection has only `ZohoCRM.modules.leads.READ`; the write Connection has only `ZohoCRM.modules.leads.UPDATE`.
+- A unique Data Store reservation is acquired before each CRM prefill read, preventing concurrent requests from bypassing the configured disclosure ceiling.
+- Consent fields, consent timestamps, and `Free_Test_Request_Notes` are excluded from prefill.
+- Only the exact US Zoho CRM V8 and Zoho Forms public hosts are accepted.
+
+## Prefill allowlist
+
+The current allowlist is: first and last name, company, decision-maker role, exact job title, contact email, mobile phone, company phone, the existing CRM Lead Source, current call handling, requested test route, phone-system provider, primary service area, field-team-size band, the fresh intake identity, and the assisted-mode provenance values held only in Catalyst Development configuration. The original Lead Source is preserved; assisted intake is attributed separately through Submission Channel and Source Page.
+
+## Development setup
+
+1. Confirm the exact existing Retell Catalyst project and Development environment, inventory its current functions, routes, tables, Connections, and variables, and independently re-read the copied Form 1 table before deployment. Keep the legacy project live and Production untouched.
+2. Create or update only `revenue_leak_test_request_form`. Upload only a clean reviewed artifact whose `lib/source-revision.js` sentinel is stamped with the matching Git commit; do not add the Setup Form or any Retell function to this package's `catalyst.json` target list.
+3. Configure the variables in `config/variables.json` on this function. Keep all private values in Catalyst and bind `SESSION_TABLE_NAME` only to the distinct copied Form 1 table.
+4. **Connection-console check completed on 2026-08-23:** both Form 1-specific Catalyst CRM Connections are Connected with the exact scopes above. Re-read their private link names and grants, then prove the intended CRM organization through a harmless authenticated read before binding the function variables. Do not reuse the Form 2 or Retell call-processing Connections.
+5. Create the two exact private routes from `config/routes.json`, with the declared throttling and independent shared-header authentication. Preserve every existing Retell route and do not enable or reconfigure API Gateway until a complete project-wide route/security snapshot and rollback test exist. No CORS is required.
+6. Add one hidden or locked Zoho Forms Prefill-Webhook field with the configured alias. POST `{"token":"<field value>"}` to the prefill route, send the prefill shared header, and map only `lib/form-contract.js` outputs.
+7. Create a CRM Button-category Deluge function that receives the Lead ID plus runtime-held issue URL and secret, POSTs `{"leadId":"..."}`, validates the 201 JSON response and exact Form host/path, then calls `openUrl(..., "new window")`.
+8. Associate it with a Leads **View page** button named **Start Free-Test Request**, initially restricted to the Administrator profile.
+9. Run a clearly synthetic canary: issue link, verify prefill, submit Form 1, prove the same Lead was updated and no duplicate Lead was created. Do not create a Bookings appointment. Cut over callers only after function, route, Connection, table, variable, source-revision, and downstream readback all pass; legacy cleanup is a separate destructive action.
+
+## Verification
+
+Run from `functions/revenue_leak_test_request_form` with Node.js 24:
+
+```text
+npm ci --ignore-scripts
+npm run ci
+```
+
+The tests cover Development/source binding, credential separation, destination allowlists, opaque-token handling, fresh intake rotation, prefill-before-read reservation, stale binding rejection, exact request contracts, live table columns, bounded concurrent reservations, and separate CRM read/write credentials.
+
+When Catalyst's console rejects a valid multi-file ZIP, `tools/build-single-file.js` produces a deterministic editor-safe `index.js`. It is a build-and-verify tool only; it never invokes Catalyst or deploys anything. The builder requires a clean checkout whose `HEAD` exactly matches the approved SHA, exports that immutable Git tree into a private temporary directory, stamps only the exported `lib/source-revision.js`, validates module containment, and writes a new artifact outside the checkout without overwriting an existing file.
+
+From the repository root, create a new empty external directory and run:
+
+```powershell
+$approvedRevision = git rev-parse HEAD
+$artifactDirectory = New-Item -ItemType Directory -Path (Join-Path ([IO.Path]::GetTempPath()) ("sylvara-revenue-leak-test-request-form-" + [guid]::NewGuid()))
+node src/zoho-catalyst/revenue-leak-test-request-form/tools/build-single-file.js --approved-revision $approvedRevision --output (Join-Path $artifactDirectory.FullName "index.js")
+```
+
+The command fails closed for dirty or mismatched revisions, linked or special Git entries, dependency escape, linked output directories, in-repository output, or an existing destination. Review and read back the resulting artifact before any separately authorized Development upload. The committed checkout keeps the unstamped sentinel and remains unchanged.

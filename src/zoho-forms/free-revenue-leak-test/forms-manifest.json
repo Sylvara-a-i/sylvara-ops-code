@@ -1,11 +1,24 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "status": "development-desired-state",
   "customer_facing_offer": "Free Revenue Leak Test",
   "real_form_ids_or_urls_in_git": false,
+  "identifier_migration": {
+    "from_schema_version": 1,
+    "logical_name_aliases": {
+      "FORM1_FREE_REVENUE_LEAK_REQUEST": "REVENUE_LEAK_TEST_REQUEST_FORM",
+      "FORM2_FREE_REVENUE_LEAK_AUTHORIZATION": "REVENUE_LEAK_TEST_SETUP_FORM"
+    },
+    "controller_aliases": {
+      "form1_assisted_controller": "revenue_leak_test_request_form",
+      "form2_controller": "revenue_leak_test_setup_form"
+    },
+    "legacy_aliases_are_deployment_targets": false
+  },
   "forms": [
     {
-      "logical_name": "FORM1_FREE_REVENUE_LEAK_REQUEST",
+      "logical_name": "REVENUE_LEAK_TEST_REQUEST_FORM",
+      "platform_name": "RevenueLeakTestRequestForm",
       "title": "Free Revenue Leak Test",
       "purpose": "Public or CRM-assisted request intake",
       "crm_integration": {
@@ -27,7 +40,7 @@
       ],
       "assisted_prefill": {
         "enabled": true,
-        "controller": "form1_assisted_controller",
+        "controller": "revenue_leak_test_request_form",
         "route_reference": "PREFILL_PATH",
         "token_alias_reference": "FORM1_TOKEN_FIELD_ALIAS",
         "server_side_only": true
@@ -42,9 +55,11 @@
       ]
     },
     {
-      "logical_name": "FORM2_FREE_REVENUE_LEAK_AUTHORIZATION",
+      "logical_name": "REVENUE_LEAK_TEST_SETUP_FORM",
+      "platform_name": "RevenueLeakTestSetupForm",
       "title": "Free Revenue Leak Test Setup and Authorization",
       "purpose": "CRM-bound setup details, bounded-test authorization, and email proof",
+      "controller": "revenue_leak_test_setup_form",
       "crm_integration": {
         "module": "Deals",
         "operation": "controller-mediated bounded update",

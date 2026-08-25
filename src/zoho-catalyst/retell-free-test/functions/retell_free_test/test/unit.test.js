@@ -381,17 +381,21 @@ test('unit: sanitized Development function inventory preserves the canonical sec
   assert.deepEqual(Object.fromEntries(inventory.functions.map(({ api_name: name, classification }) => (
     [name, classification]
   ))), {
-    form1_assisted_controller: 'canonical',
-    form2_controller: 'canonical',
+    revenue_leak_test_request_form: 'canonical',
+    revenue_leak_test_setup_form: 'canonical',
     retell_free_test: 'canonical',
     retell_free_test_retry: 'canonical',
     crm_billing_orchestrator: 'independently_necessary',
-    retell_inbound_resolver: 'legacy_rollback_only',
-    retell_route_approval_control: 'legacy_rollback_only',
-    retell_events: 'legacy_rollback_only',
-    process_retell_events: 'legacy_rollback_only',
-    analytics_sync: 'legacy_deferred',
+    retell_inbound_resolver: 'legacy_deletion_approved',
+    retell_route_approval_control: 'legacy_deletion_approved',
+    retell_events: 'legacy_deletion_approved',
+    process_retell_events: 'legacy_deletion_approved',
+    analytics_sync: 'legacy_deletion_approved',
   });
+  assert.equal(inventory.development_cleanup_readback.obsolete_analytics_crons_deleted_count, 7);
+  assert.equal(inventory.development_cleanup_readback.obsolete_analytics_job_pool_deleted, true);
+  assert.equal(inventory.development_cleanup_readback.obsolete_retell_processing_job_pool_deleted, true);
+  assert.equal(inventory.development_cleanup_readback.function_deletion_capability_available, false);
   assert.equal(inventory.rollback_policy.legacy_reactivation_is_not_the_canonical_rollback, true);
 });
 

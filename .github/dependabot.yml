@@ -34,7 +34,7 @@ updates:
       prefix: "chore(zoho-catalyst)"
 
   - package-ecosystem: npm
-    directory: /src/zoho-catalyst/form1-controller/functions/form1_assisted_controller
+    directory: /src/zoho-catalyst/revenue-leak-test-request-form/functions/revenue_leak_test_request_form
     schedule:
       interval: weekly
       day: monday
@@ -45,7 +45,7 @@ updates:
       prefix: "chore(zoho-catalyst)"
 
   - package-ecosystem: npm
-    directory: /src/zoho-catalyst/form2-controller/functions/form2_controller
+    directory: /src/zoho-catalyst/revenue-leak-test-setup-form/functions/revenue_leak_test_setup_form
     schedule:
       interval: weekly
       day: monday

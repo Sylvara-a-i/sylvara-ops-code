@@ -30,11 +30,11 @@ $GatewayRoot = Join-PathSegments $RepoRoot @("src", "zoho-catalyst", "billing-we
 $CrmBillingOrchestratorRoot = Join-PathSegments $RepoRoot @(
     "src", "zoho-catalyst", "crm-billing-orchestrator", "functions", "crm_billing_orchestrator"
 )
-$Form1ControllerRoot = Join-PathSegments $RepoRoot @(
-    "src", "zoho-catalyst", "form1-controller", "functions", "form1_assisted_controller"
+$RequestFormRoot = Join-PathSegments $RepoRoot @(
+    "src", "zoho-catalyst", "revenue-leak-test-request-form", "functions", "revenue_leak_test_request_form"
 )
-$Form2ControllerRoot = Join-PathSegments $RepoRoot @(
-    "src", "zoho-catalyst", "form2-controller", "functions", "form2_controller"
+$SetupFormRoot = Join-PathSegments $RepoRoot @(
+    "src", "zoho-catalyst", "revenue-leak-test-setup-form", "functions", "revenue_leak_test_setup_form"
 )
 $RetellResolverRoot = Join-PathSegments $RepoRoot @("src", "zoho-catalyst", "retell-inbound-resolver")
 $RetellFreeTestRoot = Join-PathSegments $RepoRoot @(
@@ -411,15 +411,15 @@ try {
                     "ci", "--ignore-scripts", "--no-audit", "--no-fund",
                     "--prefix", $CrmBillingOrchestratorRoot
                 )
-            Invoke-Native -Label "Install exact Form 1 controller dependencies" `
+            Invoke-Native -Label "Install exact Revenue Leak Test Request Form dependencies" `
                 -Executable $npm -Arguments @(
                     "ci", "--ignore-scripts", "--no-audit", "--no-fund",
-                    "--prefix", $Form1ControllerRoot
+                    "--prefix", $RequestFormRoot
                 )
-            Invoke-Native -Label "Install exact Form 2 controller dependencies" `
+            Invoke-Native -Label "Install exact Revenue Leak Test Setup Form dependencies" `
                 -Executable $npm -Arguments @(
                     "ci", "--ignore-scripts", "--no-audit", "--no-fund",
-                    "--prefix", $Form2ControllerRoot
+                    "--prefix", $SetupFormRoot
                 )
             Invoke-Native -Label "Validate exact Retell resolver package lock" `
                 -Executable $npm -Arguments @(
@@ -447,8 +447,8 @@ try {
         $nodePackages = @(
             @{ Label = "Gateway"; Root = $GatewayRoot },
             @{ Label = "CRM-Billing orchestrator"; Root = $CrmBillingOrchestratorRoot },
-            @{ Label = "Form 1 controller"; Root = $Form1ControllerRoot },
-            @{ Label = "Form 2 controller"; Root = $Form2ControllerRoot },
+            @{ Label = "Revenue Leak Test Request Form"; Root = $RequestFormRoot },
+            @{ Label = "Revenue Leak Test Setup Form"; Root = $SetupFormRoot },
             @{ Label = "Retell free-test"; Root = $RetellFreeTestRoot }
         )
         foreach ($package in $nodePackages) {
@@ -492,15 +492,15 @@ try {
                     "audit", "--omit=dev", "--audit-level=moderate",
                     "--prefix", $CrmBillingOrchestratorRoot
                 )
-            Invoke-Native -Label "Form 1 controller production dependency audit" `
+            Invoke-Native -Label "Revenue Leak Test Request Form production dependency audit" `
                 -Executable $npm -Arguments @(
                     "audit", "--omit=dev", "--audit-level=moderate",
-                    "--prefix", $Form1ControllerRoot
+                    "--prefix", $RequestFormRoot
                 )
-            Invoke-Native -Label "Form 2 controller production dependency audit" `
+            Invoke-Native -Label "Revenue Leak Test Setup Form production dependency audit" `
                 -Executable $npm -Arguments @(
                     "audit", "--omit=dev", "--audit-level=moderate",
-                    "--prefix", $Form2ControllerRoot
+                    "--prefix", $SetupFormRoot
                 )
             Invoke-Native -Label "Retell resolver production dependency audit" -Executable $npm `
                 -Arguments @(
@@ -522,10 +522,10 @@ try {
             -Arguments @("run", "ci", "--prefix", $GatewayRoot)
         Invoke-Native -Label "CRM-Billing orchestrator checks and tests" -Executable $npm `
             -Arguments @("run", "ci", "--prefix", $CrmBillingOrchestratorRoot)
-        Invoke-Native -Label "Form 1 controller checks and tests" -Executable $npm `
-            -Arguments @("run", "ci", "--prefix", $Form1ControllerRoot)
-        Invoke-Native -Label "Form 2 controller checks and tests" -Executable $npm `
-            -Arguments @("run", "ci", "--prefix", $Form2ControllerRoot)
+        Invoke-Native -Label "Revenue Leak Test Request Form checks and tests" -Executable $npm `
+            -Arguments @("run", "ci", "--prefix", $RequestFormRoot)
+        Invoke-Native -Label "Revenue Leak Test Setup Form checks and tests" -Executable $npm `
+            -Arguments @("run", "ci", "--prefix", $SetupFormRoot)
         Invoke-Native -Label "Retell resolver contract checks" -Executable $npm `
             -Arguments @("run", "ci", "--prefix", $RetellResolverRoot)
         Invoke-Native -Label "Retell free-test checks and tests" -Executable $npm `

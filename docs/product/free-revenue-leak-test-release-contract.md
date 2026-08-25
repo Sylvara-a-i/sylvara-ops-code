@@ -14,11 +14,11 @@ The final Development topology uses five cohesive boundaries:
 
 1. `retell_free_test` — one internet-facing Retell signature boundary for inbound resolution, post-call events, readiness, canonical calls, notifications, and reporting.
 2. `retell_free_test_retry` — a separate Job because scheduled retries have a different trigger and smaller secret set.
-3. `form1_assisted_controller` — separate because it owns Lead-only CRM access and assisted Form 1 sessions.
-4. `form2_controller` — separate because it owns one-time email proof and Contact/Account/Deal authorization state.
+3. `revenue_leak_test_request_form` (`RevenueLeakTestRequestForm`) — separate because it owns Lead-only CRM access and assisted request-form sessions.
+4. `revenue_leak_test_setup_form` (`RevenueLeakTestSetupForm`) — separate because it owns one-time email proof and Contact/Account/Deal setup authorization state.
 5. `crm_billing_orchestrator` — separate because Billing write authority must never exist in intake or call-processing runtimes.
 
-The split `retell_events`, `retell_inbound_resolver`, `retell_route_approval_control`, and `process_retell_events` units are replaced by the consolidated Retell runtime. Their active routes or triggers must be disabled after readback proves no caller depends on them; rollback source and durable evidence remain preserved. `analytics_sync` is not part of this release and remains disabled because JSON/CSV reporting is sufficient.
+The split `retell_events`, `retell_inbound_resolver`, `retell_route_approval_control`, and `process_retell_events` units are replaced by the consolidated Retell runtime. Current Development readback proves that Retell uses the canonical inbound and event paths, Catalyst API Gateway is disabled, and the legacy event-processing Job pool is removed. `analytics_sync` is not part of this release; its seven disabled Crons and obsolete Job pool were removed because deterministic JSON/CSV reporting is sufficient. The five unbound legacy functions are approved for Development deletion, but the current Catalyst connector cannot perform function deletion.
 
 This is the smallest safe topology. Combining the Form or Billing handlers with the Retell webhook would reduce the function count but expand credentials, caller types, and failure blast radius.
 

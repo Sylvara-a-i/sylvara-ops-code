@@ -5,7 +5,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 CONTRACT_PATH = ROOT / "docs" / "product" / "free-revenue-leak-test-release-contract.json"
-FORM2_ROUTES_PATH = ROOT / "src" / "zoho-catalyst" / "form2-controller" / "config" / "routes.json"
+FORM2_ROUTES_PATH = ROOT / "src" / "zoho-catalyst" / "revenue-leak-test-setup-form" / "config" / "routes.json"
 
 
 class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
@@ -16,6 +16,15 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
 
     def test_commercial_boundary_is_exact(self):
         contract = self.contract
+        self.assertEqual(contract["schema_version"], 2)
+        self.assertEqual(contract["contract_id"], "sylvara-free-revenue-leak-test-e2e-v2")
+        migration = contract["identifier_migration"]
+        self.assertEqual(migration["from_schema_version"], 1)
+        self.assertEqual(
+            migration["function_aliases"]["form1_assisted_controller"],
+            "revenue_leak_test_request_form",
+        )
+        self.assertFalse(migration["legacy_aliases_are_deployment_targets"])
         self.assertEqual(contract["customer_facing_name"], "Free Revenue Leak Test")
         self.assertEqual(contract["commercial_boundary"]["duration_calendar_days"], 7)
         self.assertEqual(contract["commercial_boundary"]["connected_call_limit"], 25)
@@ -26,16 +35,22 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         decisions = {entry["name"]: entry["decision"] for entry in self.contract["function_boundaries"]}
         self.assertEqual(decisions["retell_free_test"], "retain")
         self.assertEqual(decisions["retell_free_test_retry"], "retain_separate")
-        self.assertEqual(decisions["form1_assisted_controller"], "retain_separate")
-        self.assertEqual(decisions["form2_controller"], "retain_separate")
+        self.assertEqual(decisions["revenue_leak_test_request_form"], "retain_separate")
+        self.assertEqual(decisions["revenue_leak_test_setup_form"], "retain_separate")
         self.assertEqual(decisions["crm_billing_orchestrator"], "retain_separate")
         for obsolete in (
             "retell_events",
             "retell_inbound_resolver",
             "retell_route_approval_control",
             "process_retell_events",
+            "analytics_sync",
         ):
-            self.assertIn("disable", decisions[obsolete])
+            self.assertEqual(decisions[obsolete], "delete_development_function")
+        cleanup = self.contract["development_cleanup"]
+        self.assertTrue(cleanup["owner_authorized_without_clients"])
+        self.assertFalse(cleanup["production_changed"])
+        self.assertTrue(cleanup["canonical_retell_bindings_verified"])
+        self.assertEqual(cleanup["obsolete_analytics_crons_deleted_count"], 7)
 
     def test_retell_and_coverage_contract_is_exact(self):
         self.assertEqual(self.contract["retell_integration"]["shared_agent_count"], 1)
@@ -110,7 +125,7 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         ]
         self.assertEqual(central_routes, expected_routes)
         self.assertTrue(all(
-            route["function"] == "form2_controller"
+            route["function"] == "revenue_leak_test_setup_form"
             for route in self.contract["route_manifest"]
             if route["id"].startswith("FORM2_")
         ))

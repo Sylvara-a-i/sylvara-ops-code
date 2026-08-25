@@ -66,8 +66,8 @@ class VerifyEntrypointTests(unittest.TestCase):
             '"-m", "unittest", "discover"',
             '"run", "ci", "--prefix", $GatewayRoot',
             '"run", "ci", "--prefix", $CrmBillingOrchestratorRoot',
-            '"run", "ci", "--prefix", $Form1ControllerRoot',
-            '"run", "ci", "--prefix", $Form2ControllerRoot',
+            '"run", "ci", "--prefix", $RequestFormRoot',
+            '"run", "ci", "--prefix", $SetupFormRoot',
             '"run", "ci", "--prefix", $RetellResolverRoot',
             '"run", "ci", "--prefix", $RetellFreeTestRoot',
             '"run", "ci", "--prefix", $RetellFreeTestRetryRoot',
@@ -88,8 +88,8 @@ class VerifyEntrypointTests(unittest.TestCase):
                 self.assertNotIn(nonportable, self.script)
         self.assertIn("function Join-PathSegments", self.script)
         self.assertIn('$CrmBillingOrchestratorRoot = Join-PathSegments $RepoRoot @(', self.script)
-        self.assertIn('$Form1ControllerRoot = Join-PathSegments $RepoRoot @(', self.script)
-        self.assertIn('$Form2ControllerRoot = Join-PathSegments $RepoRoot @(', self.script)
+        self.assertIn('$RequestFormRoot = Join-PathSegments $RepoRoot @(', self.script)
+        self.assertIn('$SetupFormRoot = Join-PathSegments $RepoRoot @(', self.script)
         self.assertIn('$RetellResolverRoot = Join-PathSegments $RepoRoot @(', self.script)
         self.assertIn('$RetellFreeTestRoot = Join-PathSegments $RepoRoot @(', self.script)
         self.assertIn('$RetellFreeTestRetryRoot = Join-PathSegments $RepoRoot @(', self.script)

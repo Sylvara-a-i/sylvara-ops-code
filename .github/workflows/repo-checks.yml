@@ -115,15 +115,15 @@ jobs:
           npm ci --ignore-scripts --no-audit --no-fund
           --prefix src/zoho-catalyst/crm-billing-orchestrator/functions/crm_billing_orchestrator
 
-      - name: Install exact Form 1 controller dependencies without lifecycle scripts
+      - name: Install exact Revenue Leak Test Request Form dependencies without lifecycle scripts
         run: >-
           npm ci --ignore-scripts --no-audit --no-fund
-          --prefix src/zoho-catalyst/form1-controller/functions/form1_assisted_controller
+          --prefix src/zoho-catalyst/revenue-leak-test-request-form/functions/revenue_leak_test_request_form
 
-      - name: Install exact Form 2 controller dependencies without lifecycle scripts
+      - name: Install exact Revenue Leak Test Setup Form dependencies without lifecycle scripts
         run: >-
           npm ci --ignore-scripts --no-audit --no-fund
-          --prefix src/zoho-catalyst/form2-controller/functions/form2_controller
+          --prefix src/zoho-catalyst/revenue-leak-test-setup-form/functions/revenue_leak_test_setup_form
 
       - name: Validate exact Retell resolver package lock
         run: >-
@@ -151,15 +151,15 @@ jobs:
           npm audit --omit=dev --audit-level=moderate
           --prefix src/zoho-catalyst/crm-billing-orchestrator/functions/crm_billing_orchestrator
 
-      - name: Audit production Form 1 controller dependencies
+      - name: Audit production Revenue Leak Test Request Form dependencies
         run: >-
           npm audit --omit=dev --audit-level=moderate
-          --prefix src/zoho-catalyst/form1-controller/functions/form1_assisted_controller
+          --prefix src/zoho-catalyst/revenue-leak-test-request-form/functions/revenue_leak_test_request_form
 
-      - name: Audit production Form 2 controller dependencies
+      - name: Audit production Revenue Leak Test Setup Form dependencies
         run: >-
           npm audit --omit=dev --audit-level=moderate
-          --prefix src/zoho-catalyst/form2-controller/functions/form2_controller
+          --prefix src/zoho-catalyst/revenue-leak-test-setup-form/functions/revenue_leak_test_setup_form
 
       - name: Audit Retell resolver production dependencies
         run: >-
@@ -184,11 +184,11 @@ jobs:
           npm run ci
           --prefix src/zoho-catalyst/crm-billing-orchestrator/functions/crm_billing_orchestrator
 
-      - name: Run Form 1 controller checks and tests
-        run: npm run ci --prefix src/zoho-catalyst/form1-controller/functions/form1_assisted_controller
+      - name: Run Revenue Leak Test Request Form checks and tests
+        run: npm run ci --prefix src/zoho-catalyst/revenue-leak-test-request-form/functions/revenue_leak_test_request_form
 
-      - name: Run Form 2 controller checks and tests
-        run: npm run ci --prefix src/zoho-catalyst/form2-controller/functions/form2_controller
+      - name: Run Revenue Leak Test Setup Form checks and tests
+        run: npm run ci --prefix src/zoho-catalyst/revenue-leak-test-setup-form/functions/revenue_leak_test_setup_form
 
       - name: Run Retell resolver checks and tests
         run: npm run ci --prefix src/zoho-catalyst/retell-inbound-resolver

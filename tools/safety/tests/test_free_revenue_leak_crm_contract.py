@@ -21,6 +21,12 @@ class FreeRevenueLeakCrmContractTests(unittest.TestCase):
 
     def test_crm_contract_is_synthetic_only_and_contains_no_active_sign_or_sms_path(self):
         contract = self.contract
+        self.assertEqual(contract["schema_version"], 2)
+        self.assertEqual(contract["identifier_migration"]["from_schema_version"], 1)
+        self.assertEqual(
+            contract["identifier_migration"]["controller_aliases"]["form2_controller"],
+            "revenue_leak_test_setup_form",
+        )
         self.assertEqual(
             contract["environment_boundary"]["permitted_records"],
             "ZZZ SYNTHETIC only",
@@ -53,8 +59,17 @@ class FreeRevenueLeakCrmContractTests(unittest.TestCase):
         self.assertEqual(len(form2_rules), 1)
         self.assertEqual(
             form2_rules[0]["single_active_rule"],
+            "Deals Revenue Leak Test Setup Form Proof Candidate",
+        )
+        self.assertEqual(
+            form2_rules[0]["observed_development_rule"],
             "Deals Form 2 Controller Proof Candidate",
         )
+        self.assertEqual(
+            form2_rules[0]["desired_development_rule"],
+            form2_rules[0]["single_active_rule"],
+        )
+        self.assertTrue(form2_rules[0]["rename_requires_independent_readback"])
         self.assertFalse(form2_rules[0]["repeat"])
         self.assertEqual(
             self.contract["blueprint"]["name"],

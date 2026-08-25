@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "record_type": "sanitized_development_function_inventory",
   "environment": "Development",
   "production_authorized": false,
@@ -22,20 +22,33 @@
     "combine_further": false,
     "reason": "Form intake, authorization proof, raw Retell webhooks, retry execution, and paid CRM/Billing mutation have different callers, credentials, runtimes, and failure blast radii. Combining them would reduce the function count while weakening least privilege and making rollback harder.",
     "canonical_functions": [
-      "form1_assisted_controller",
-      "form2_controller",
+      "revenue_leak_test_request_form",
+      "revenue_leak_test_setup_form",
       "retell_free_test",
       "retell_free_test_retry",
       "crm_billing_orchestrator"
     ]
   },
+  "development_cleanup_readback": {
+    "owner_authorized_without_clients": true,
+    "production_changed": false,
+    "canonical_retell_inbound_binding_verified": true,
+    "canonical_retell_event_binding_verified": true,
+    "api_gateway_enabled": false,
+    "obsolete_analytics_crons_deleted_count": 7,
+    "obsolete_analytics_job_pool_deleted": true,
+    "obsolete_retell_processing_job_pool_deleted": true,
+    "canonical_retry_cron_retained_disabled": true,
+    "function_deletion_capability_available": false
+  },
   "functions": [
     {
-      "api_name": "form1_assisted_controller",
+      "api_name": "revenue_leak_test_request_form",
+      "workflow_name": "RevenueLeakTestRequestForm",
       "type": "Advanced I/O",
       "classification": "canonical",
-      "owner": "free_test_form1_assisted_intake",
-      "source_path": "src/zoho-catalyst/form1-controller/functions/form1_assisted_controller",
+      "owner": "free_test_request_form_assisted_intake",
+      "source_path": "src/zoho-catalyst/revenue-leak-test-request-form/functions/revenue_leak_test_request_form",
       "source_reproducibility": "repository_owned",
       "desired_development_state": "deployed_unbound_until_direct_tests_and_forms_cutover",
       "replacement": null,
@@ -43,11 +56,12 @@
       "decommission_action": "retain_separately"
     },
     {
-      "api_name": "form2_controller",
+      "api_name": "revenue_leak_test_setup_form",
+      "workflow_name": "RevenueLeakTestSetupForm",
       "type": "Advanced I/O",
       "classification": "canonical",
-      "owner": "free_test_form2_authorization",
-      "source_path": "src/zoho-catalyst/form2-controller/functions/form2_controller",
+      "owner": "free_test_setup_form_authorization",
+      "source_path": "src/zoho-catalyst/revenue-leak-test-setup-form/functions/revenue_leak_test_setup_form",
       "source_reproducibility": "repository_owned",
       "desired_development_state": "deployed_unbound_until_email_proof_and_forms_cutover_pass",
       "replacement": null,
@@ -93,97 +107,97 @@
     {
       "api_name": "retell_inbound_resolver",
       "type": "Advanced I/O",
-      "classification": "legacy_rollback_only",
+      "classification": "legacy_deletion_approved",
       "owner": "superseded_retell_runtime",
       "source_path": null,
       "source_contract_path": "src/zoho-catalyst/retell-inbound-resolver",
-      "source_reproducibility": "deployed_package_requires_private_pullback_before_removal",
-      "desired_development_state": "no_active_route",
+      "source_reproducibility": "superseding_repository_contract_preserved",
+      "desired_development_state": "delete_manually_after_completed_binding_removal",
       "replacement": "retell_free_test",
       "security_boundary": "A direct Advanced I/O URL remains an ingress surface even when API Gateway is disabled.",
-      "decommission_action": "detach_route_observe_then_remove"
+      "decommission_action": "delete_development_function"
     },
     {
       "api_name": "retell_route_approval_control",
       "type": "Advanced I/O",
-      "classification": "legacy_rollback_only",
+      "classification": "legacy_deletion_approved",
       "owner": "superseded_retell_runtime",
       "source_path": null,
-      "source_reproducibility": "deployed_package_requires_private_pullback_before_removal",
-      "desired_development_state": "no_active_route",
+      "source_reproducibility": "superseding_repository_contract_preserved",
+      "desired_development_state": "delete_manually_after_completed_binding_removal",
       "replacement": "retell_free_test plus separately approved relationship and route controls",
       "security_boundary": "Superseded approval behavior must not remain independently callable or bypass the canonical deployment gate.",
-      "decommission_action": "detach_route_observe_then_remove"
+      "decommission_action": "delete_development_function"
     },
     {
       "api_name": "retell_events",
       "type": "Advanced I/O",
-      "classification": "legacy_rollback_only",
+      "classification": "legacy_deletion_approved",
       "owner": "superseded_retell_runtime",
       "source_path": null,
-      "source_reproducibility": "deployed_package_requires_private_pullback_before_removal",
-      "desired_development_state": "no_active_route",
+      "source_reproducibility": "superseding_repository_contract_preserved",
+      "desired_development_state": "delete_manually_after_completed_binding_removal",
       "replacement": "retell_free_test",
       "security_boundary": "A second event receiver would split idempotency and tenant ownership across incompatible stores.",
-      "decommission_action": "detach_route_observe_then_remove"
+      "decommission_action": "delete_development_function"
     },
     {
       "api_name": "process_retell_events",
       "type": "Job",
-      "classification": "legacy_rollback_only",
+      "classification": "legacy_deletion_approved",
       "owner": "superseded_retell_runtime",
       "source_path": null,
-      "source_reproducibility": "deployed_package_requires_private_pullback_before_removal",
-      "desired_development_state": "no_job_or_cron_trigger",
+      "source_reproducibility": "superseding_repository_contract_preserved",
+      "desired_development_state": "delete_manually_after_completed_job_pool_removal",
       "replacement": "retell_free_test_retry",
       "security_boundary": "A legacy processor must not consume or mutate canonical four-table state.",
-      "decommission_action": "disable_trigger_observe_then_remove"
+      "decommission_action": "delete_development_function"
     },
     {
       "api_name": "analytics_sync",
       "type": "Job",
-      "classification": "legacy_deferred",
+      "classification": "legacy_deletion_approved",
       "owner": "superseded_analytics_path",
       "source_path": null,
-      "source_reproducibility": "deployed_package_requires_private_pullback_before_removal",
-      "desired_development_state": "all_triggers_disabled",
+      "source_reproducibility": "deterministic_json_csv_replacement_preserved",
+      "desired_development_state": "delete_manually_after_completed_cron_and_pool_removal",
       "replacement": "deterministic client-scoped Catalyst JSON and CSV reporting",
       "security_boundary": "Analytics is derived reporting and must not become transactional authority or a free-test launch dependency.",
-      "decommission_action": "keep_disabled_observe_then_remove_from_mvp"
+      "decommission_action": "delete_development_function"
     }
   ],
   "decommission_sequence": [
     {
       "order": 1,
-      "action": "Prove the canonical Advanced I/O and retry Job packages match the exact selected source revision, readiness passes, notification mode is dry_run, and the recurring retry Cron is disabled."
+      "action": "Read back canonical Retell inbound and post-call webhook bindings, confirm Catalyst API Gateway is disabled, and retain the canonical retry Cron disabled."
     },
     {
       "order": 2,
-      "action": "Privately preserve sanitized package checksums and the minimum rollback evidence for every legacy function; do not commit packages, private identifiers, URLs, values, logs, or caller data."
+      "action": "Confirm there are no clients, customer routes, or Production changes and record the owner's Development-only destructive cleanup authorization."
     },
     {
       "order": 3,
-      "action": "Read back Retell webhook targets, Catalyst Job pools, Jobs, Crons, and any other callers; stop if any legacy dependency remains."
+      "action": "Permanently remove the seven disabled Analytics Crons and the obsolete AnalyticsSync and RetellProcessing Job pools, then independently read back the remaining Cron and pool inventory."
     },
     {
       "order": 4,
-      "action": "Keep analytics_sync triggers disabled and disable every process_retell_events trigger before changing HTTP functions."
+      "action": "Delete retell_events, retell_inbound_resolver, retell_route_approval_control, process_retell_events, and analytics_sync through the Catalyst console because the approved connector has no function-deletion operation."
     },
     {
       "order": 5,
-      "action": "Detach retell_inbound_resolver and retell_route_approval_control routes, then independently prove canonical inbound resolution still fails closed and resolves the approved synthetic deployment."
+      "action": "Independently read back function absence while retaining retell_free_test, retell_free_test_retry, crm_billing_orchestrator, FreeTestRetryDevelopment, FreeTestRetry1m, and RetellProbes."
     },
     {
       "order": 6,
-      "action": "Detach retell_events only after the canonical post-call webhook is read back; replay a synthetic event and prove one canonical call, one count, and one notification state."
+      "action": "Deploy revenue_leak_test_request_form and revenue_leak_test_setup_form into the Retell Development project only through a reviewed source-upload capability."
     },
     {
       "order": 7,
-      "action": "Observe the legacy functions with no active callers, then remove only their Development function binaries and revoke function-specific configuration after absence readback."
+      "action": "Resolve the mismatched legacy and target Form Data Store rows with an explicit preserve-or-discard disposition, then intentionally retire the old Forms callers."
     },
     {
       "order": 8,
-      "action": "Keep legacy durable tables private and read-only until a separate retention decision; do not migrate incompatible rows into the canonical four-table model."
+      "action": "Delete the two legacy Forms projects only after target function deployment and row disposition; keep Client Portal separate and Production untouched."
     }
   ],
   "rollback_policy": {

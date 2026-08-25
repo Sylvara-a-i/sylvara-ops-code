@@ -1,0 +1,10 @@
+{
+  "deployment": {
+    "name": "revenue_leak_test_setup_form",
+    "stack": "node24",
+    "type": "advancedio"
+  },
+  "execution": {
+    "main": "index.js"
+  }
+}

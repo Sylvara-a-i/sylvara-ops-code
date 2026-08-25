@@ -25,8 +25,8 @@ ROOT = Path(__file__).resolve().parents[2]
 SECRET_REGISTRY_PATHS = (
     PurePosixPath("src/zoho-catalyst/billing-webhook-gateway/config/variables.json"),
     PurePosixPath("src/zoho-catalyst/crm-billing-orchestrator/config/variables.json"),
-    PurePosixPath("src/zoho-catalyst/form1-controller/config/variables.json"),
-    PurePosixPath("src/zoho-catalyst/form2-controller/config/variables.json"),
+    PurePosixPath("src/zoho-catalyst/revenue-leak-test-request-form/config/variables.json"),
+    PurePosixPath("src/zoho-catalyst/revenue-leak-test-setup-form/config/variables.json"),
     PurePosixPath("src/zoho-catalyst/retell-free-test/config/variables.json"),
 )
 SECRET_REGISTRY_CLASSIFICATIONS = frozenset({"secret", "stable-secret"})

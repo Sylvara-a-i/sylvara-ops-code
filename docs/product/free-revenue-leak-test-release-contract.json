@@ -1,6 +1,6 @@
 {
-  "schema_version": 1,
-  "contract_id": "sylvara-free-revenue-leak-test-e2e-v1",
+  "schema_version": 2,
+  "contract_id": "sylvara-free-revenue-leak-test-e2e-v2",
   "status": "development-release-candidate",
   "environment": "development",
   "customer_facing_name": "Free Revenue Leak Test",
@@ -8,6 +8,19 @@
     "engagement_type": "free_test",
     "capability_profile": "call_gap_monitor_v1",
     "note": "Stable internal API values remain for compatibility; customer-facing copy uses Free Revenue Leak Test."
+  },
+  "identifier_migration": {
+    "from_schema_version": 1,
+    "previous_contract_id": "sylvara-free-revenue-leak-test-e2e-v1",
+    "function_aliases": {
+      "form1_assisted_controller": "revenue_leak_test_request_form",
+      "form2_controller": "revenue_leak_test_setup_form"
+    },
+    "form_logical_name_aliases": {
+      "FORM1_FREE_REVENUE_LEAK_REQUEST": "REVENUE_LEAK_TEST_REQUEST_FORM",
+      "FORM2_FREE_REVENUE_LEAK_AUTHORIZATION": "REVENUE_LEAK_TEST_SETUP_FORM"
+    },
+    "legacy_aliases_are_deployment_targets": false
   },
   "commercial_boundary": {
     "duration_calendar_days": 7,
@@ -88,6 +101,7 @@
     }
   ],
   "form1": {
+    "workflow_name": "RevenueLeakTestRequestForm",
     "public_path": {
       "writer": "native Zoho Forms CRM integration",
       "deduplication_key": "Intake_Submission_ID",
@@ -95,7 +109,7 @@
       "task_owner": "one CRM workflow action"
     },
     "assisted_path": {
-      "controller": "form1_assisted_controller",
+      "controller": "revenue_leak_test_request_form",
       "routes": ["FORM1_ISSUE", "FORM1_PREFILL"],
       "writer": "native Zoho Forms CRM integration",
       "controller_must_not_submit_crm_lead": true
@@ -121,7 +135,8 @@
     "prohibited_effects": ["Billing action", "routing action", "SMS", "paid-service acceptance", "go-live approval"]
   },
   "form2": {
-    "controller": "form2_controller",
+    "workflow_name": "RevenueLeakTestSetupForm",
+    "controller": "revenue_leak_test_setup_form",
     "routes": [
       "FORM2_ISSUE",
       "FORM2_ACCESS",
@@ -165,8 +180,8 @@
   },
   "catalyst_data_contracts": {
     "retell_runtime_schema": "../../src/zoho-catalyst/retell-free-test/config/datastore-schema.json",
-    "form1_schema": "../../src/zoho-catalyst/form1-controller/config/datastore-schema.json",
-    "form2_schema": "../../src/zoho-catalyst/form2-controller/config/datastore-schema.json",
+    "form1_schema": "../../src/zoho-catalyst/revenue-leak-test-request-form/config/datastore-schema.json",
+    "form2_schema": "../../src/zoho-catalyst/revenue-leak-test-setup-form/config/datastore-schema.json",
     "billing_operation_schema": "../../src/zoho-catalyst/crm-billing-orchestrator/config/datastore-schema.json",
     "form2_v3_policy": "Additive v3 tables only; preserve both existing v2 stores; promote no ambiguous, conflicting, terminal, or unverifiably bound row.",
     "required_form2_v3_tables": ["Form2SessionsV3Runtime", "Form2PrefillsV3", "Form2SubmissionsV3", "Form2VerificationProofsV3"],
@@ -254,45 +269,56 @@
   "function_boundaries": [
     {"name": "retell_free_test", "type": "Advanced I/O", "decision": "retain", "reason": "Single raw-body Retell signature boundary for inbound resolution, events, readiness, durable call processing, notification, and report queries."},
     {"name": "retell_free_test_retry", "type": "Job", "decision": "retain_separate", "reason": "Scheduled retry execution and least-privilege variables differ from internet-facing HTTP handling."},
-    {"name": "form1_assisted_controller", "type": "Advanced I/O", "decision": "retain_separate", "reason": "CRM Lead-only Connections and assisted-intake authentication must not expand the Retell webhook blast radius."},
-    {"name": "form2_controller", "type": "Advanced I/O", "decision": "retain_separate", "reason": "Trusted proof, CRM Contact/Account/Deal access, and authorization data require an isolated security boundary."},
+    {"name": "revenue_leak_test_request_form", "workflow_name": "RevenueLeakTestRequestForm", "type": "Advanced I/O", "decision": "retain_separate", "reason": "CRM Lead-only Connections and assisted-intake authentication must not expand the Retell webhook blast radius."},
+    {"name": "revenue_leak_test_setup_form", "workflow_name": "RevenueLeakTestSetupForm", "type": "Advanced I/O", "decision": "retain_separate", "reason": "Trusted proof, CRM Contact/Account/Deal access, and authorization data require an isolated security boundary."},
     {"name": "crm_billing_orchestrator", "type": "Advanced I/O", "decision": "retain_separate", "reason": "Billing write credentials and paid-acceptance gate must not exist in any free-test intake or call runtime."},
-    {"name": "retell_events", "type": "Advanced I/O", "decision": "rollback_only_disable_route", "replacement": "retell_free_test"},
-    {"name": "retell_inbound_resolver", "type": "Advanced I/O", "decision": "rollback_only_disable_route", "replacement": "retell_free_test"},
-    {"name": "retell_route_approval_control", "type": "Advanced I/O", "decision": "rollback_only_disable_route", "replacement": "retell_free_test plus version-specific CRM approval"},
-    {"name": "process_retell_events", "type": "Job", "decision": "rollback_only_disable_trigger", "replacement": "retell_free_test_retry"},
-    {"name": "analytics_sync", "type": "Job", "decision": "deferred_disable_trigger", "replacement": "deterministic JSON/CSV report"}
+    {"name": "retell_events", "type": "Advanced I/O", "decision": "delete_development_function", "replacement": "retell_free_test"},
+    {"name": "retell_inbound_resolver", "type": "Advanced I/O", "decision": "delete_development_function", "replacement": "retell_free_test"},
+    {"name": "retell_route_approval_control", "type": "Advanced I/O", "decision": "delete_development_function", "replacement": "retell_free_test plus version-specific CRM approval"},
+    {"name": "process_retell_events", "type": "Job", "decision": "delete_development_function", "replacement": "retell_free_test_retry"},
+    {"name": "analytics_sync", "type": "Job", "decision": "delete_development_function", "replacement": "deterministic JSON/CSV report"}
   ],
+  "development_cleanup": {
+    "owner_authorized_without_clients": true,
+    "production_changed": false,
+    "canonical_retell_bindings_verified": true,
+    "api_gateway_enabled": false,
+    "obsolete_analytics_crons_deleted_count": 7,
+    "obsolete_job_pools_deleted": ["AnalyticsSync", "RetellProcessing"],
+    "canonical_retry_cron_retained_disabled": true,
+    "manual_function_deletion_required": ["retell_events", "retell_inbound_resolver", "retell_route_approval_control", "process_retell_events", "analytics_sync"],
+    "legacy_forms_projects_deletion_blocked_until": ["reviewed replacement functions deployed in Retell Development", "mismatched legacy and target rows receive explicit preserve-or-discard disposition"]
+  },
   "route_manifest": [
     {"id": "RETELL_INBOUND", "function": "retell_free_test", "method": "POST", "path_reference": "RETELL_INBOUND_PATH", "authentication": "Retell raw-body signature", "caller": "Retell", "content_type": "application/json", "size_reference": "MAX_WEBHOOK_BYTES"},
     {"id": "RETELL_EVENTS", "function": "retell_free_test", "method": "POST", "path_reference": "RETELL_EVENTS_PATH", "authentication": "Retell raw-body signature", "caller": "Retell", "content_type": "application/json", "size_reference": "MAX_WEBHOOK_BYTES"},
     {"id": "RETELL_READINESS", "function": "retell_free_test", "method": "GET", "path_reference": "INTERNAL_READINESS_PATH", "authentication": "INTERNAL_READINESS_TOKEN", "caller": "Sylvara operator", "content_type": "none", "size_reference": "none"},
-    {"id": "FORM1_ISSUE", "function": "form1_assisted_controller", "method": "POST", "path_reference": "ISSUE_PATH", "authentication": "ISSUE_HEADER_SECRET", "caller": "CRM button/function", "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"},
-    {"id": "FORM1_PREFILL", "function": "form1_assisted_controller", "method": "POST", "path_reference": "PREFILL_PATH", "authentication": "PREFILL_HEADER_SECRET", "caller": "Zoho Forms prefill webhook", "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"},
-    {"id": "FORM2_ISSUE", "function": "form2_controller", "method": "POST", "path_reference": "ISSUE_PATH", "authentication": "Catalyst API key plus ISSUE_HEADER_NAME and ISSUE_HEADER_SECRET", "caller": "administrator-restricted CRM action", "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"},
-    {"id": "FORM2_ACCESS", "function": "form2_controller", "method": "GET", "path_reference": "FORM2_ACCESS_PATH", "authentication": "high-entropy setup token retained in URL fragment", "caller": "authorized representative browser", "content_type": "none", "size_reference": "none"},
-    {"id": "FORM2_OTP_REQUEST", "function": "form2_controller", "method": "POST", "path_reference": "FORM2_OTP_REQUEST_PATH", "authentication": "high-entropy setup token possession plus same-origin JSON boundary", "caller": "same-origin Form 2 access page", "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"},
-    {"id": "FORM2_OTP_VERIFY", "function": "form2_controller", "method": "POST", "path_reference": "FORM2_OTP_VERIFY_PATH", "authentication": "high-entropy setup token possession plus eight-digit email OTP plus same-origin JSON boundary", "caller": "same-origin Form 2 access page", "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"},
-    {"id": "FORM2_PREFILL", "function": "form2_controller", "method": "POST", "path_reference": "PREFILL_PATH", "authentication": "Catalyst API key plus FORMS_HEADER_NAME and PREFILL_HEADER_SECRET plus consumed email proof", "caller": "Zoho Forms server-side Prefill Webhook", "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"},
-    {"id": "FORM2_SUBMISSION", "function": "form2_controller", "method": "POST", "path_reference": "SUBMISSION_PATH", "authentication": "Catalyst API key plus FORMS_HEADER_NAME and SUBMISSION_HEADER_SECRET plus verified session and one-time prefill", "caller": "Zoho Forms server-side submission webhook", "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"},
+    {"id": "FORM1_ISSUE", "function": "revenue_leak_test_request_form", "method": "POST", "path_reference": "ISSUE_PATH", "authentication": "ISSUE_HEADER_SECRET", "caller": "CRM button/function", "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"},
+    {"id": "FORM1_PREFILL", "function": "revenue_leak_test_request_form", "method": "POST", "path_reference": "PREFILL_PATH", "authentication": "PREFILL_HEADER_SECRET", "caller": "Zoho Forms prefill webhook", "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"},
+    {"id": "FORM2_ISSUE", "function": "revenue_leak_test_setup_form", "method": "POST", "path_reference": "ISSUE_PATH", "authentication": "Catalyst API key plus ISSUE_HEADER_NAME and ISSUE_HEADER_SECRET", "caller": "administrator-restricted CRM action", "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"},
+    {"id": "FORM2_ACCESS", "function": "revenue_leak_test_setup_form", "method": "GET", "path_reference": "FORM2_ACCESS_PATH", "authentication": "high-entropy setup token retained in URL fragment", "caller": "authorized representative browser", "content_type": "none", "size_reference": "none"},
+    {"id": "FORM2_OTP_REQUEST", "function": "revenue_leak_test_setup_form", "method": "POST", "path_reference": "FORM2_OTP_REQUEST_PATH", "authentication": "high-entropy setup token possession plus same-origin JSON boundary", "caller": "same-origin setup-form access page", "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"},
+    {"id": "FORM2_OTP_VERIFY", "function": "revenue_leak_test_setup_form", "method": "POST", "path_reference": "FORM2_OTP_VERIFY_PATH", "authentication": "high-entropy setup token possession plus eight-digit email OTP plus same-origin JSON boundary", "caller": "same-origin setup-form access page", "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"},
+    {"id": "FORM2_PREFILL", "function": "revenue_leak_test_setup_form", "method": "POST", "path_reference": "PREFILL_PATH", "authentication": "Catalyst API key plus FORMS_HEADER_NAME and PREFILL_HEADER_SECRET plus consumed email proof", "caller": "Zoho Forms server-side Prefill Webhook", "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"},
+    {"id": "FORM2_SUBMISSION", "function": "revenue_leak_test_setup_form", "method": "POST", "path_reference": "SUBMISSION_PATH", "authentication": "Catalyst API key plus FORMS_HEADER_NAME and SUBMISSION_HEADER_SECRET plus verified session and one-time prefill", "caller": "Zoho Forms server-side submission webhook", "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"},
     {"id": "CRM_BILLING_ACCEPTED", "function": "crm_billing_orchestrator", "method": "POST", "path_reference": "ALLOWED_PATH", "authentication": "SHARED_HEADER_VALUE", "caller": "approved CRM paid-acceptance action", "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"}
   ],
   "environment_variable_registries": [
     "../../src/zoho-catalyst/retell-free-test/config/variables.json",
-    "../../src/zoho-catalyst/form1-controller/config/variables.json",
-    "../../src/zoho-catalyst/form2-controller/config/variables.json",
+    "../../src/zoho-catalyst/revenue-leak-test-request-form/config/variables.json",
+    "../../src/zoho-catalyst/revenue-leak-test-setup-form/config/variables.json",
     "../../src/zoho-catalyst/crm-billing-orchestrator/config/variables.json"
   ],
   "required_new_environment_variables": [
-    {"name": "FORM2_PROOF_TABLE_NAME", "consumer": "form2_controller", "secret": false},
-    {"name": "FORM2_PROOF_HMAC_SECRET", "consumer": "form2_controller", "secret": true},
-    {"name": "FORM2_PROOF_MODE", "consumer": "form2_controller", "secret": false},
-    {"name": "FORM2_PROOF_ALLOWED_RECIPIENT_DIGESTS", "consumer": "form2_controller", "secret": true},
-    {"name": "FORM2_PROOF_TTL_SECONDS", "consumer": "form2_controller", "secret": false},
-    {"name": "FORM2_PROOF_MAX_ATTEMPTS", "consumer": "form2_controller", "secret": false},
-    {"name": "FORM2_PROOF_SEND_LEASE_SECONDS", "consumer": "form2_controller", "secret": false},
-    {"name": "FORM2_MAIL_FROM", "consumer": "form2_controller", "secret": false},
-    {"name": "FORM2_PROOF_TEMPLATE_VERSION", "consumer": "form2_controller", "secret": false},
+    {"name": "FORM2_PROOF_TABLE_NAME", "consumer": "revenue_leak_test_setup_form", "secret": false},
+    {"name": "FORM2_PROOF_HMAC_SECRET", "consumer": "revenue_leak_test_setup_form", "secret": true},
+    {"name": "FORM2_PROOF_MODE", "consumer": "revenue_leak_test_setup_form", "secret": false},
+    {"name": "FORM2_PROOF_ALLOWED_RECIPIENT_DIGESTS", "consumer": "revenue_leak_test_setup_form", "secret": true},
+    {"name": "FORM2_PROOF_TTL_SECONDS", "consumer": "revenue_leak_test_setup_form", "secret": false},
+    {"name": "FORM2_PROOF_MAX_ATTEMPTS", "consumer": "revenue_leak_test_setup_form", "secret": false},
+    {"name": "FORM2_PROOF_SEND_LEASE_SECONDS", "consumer": "revenue_leak_test_setup_form", "secret": false},
+    {"name": "FORM2_MAIL_FROM", "consumer": "revenue_leak_test_setup_form", "secret": false},
+    {"name": "FORM2_PROOF_TEMPLATE_VERSION", "consumer": "revenue_leak_test_setup_form", "secret": false},
     {"name": "PAID_COMMERCIAL_TERMS_JSON", "consumer": "crm_billing_orchestrator", "secret": true},
     {"name": "PAID_PLAN_CODE_MAP", "consumer": "crm_billing_orchestrator", "secret": false},
     {"name": "PAID_USAGE_ADDON_CODE", "consumer": "crm_billing_orchestrator", "secret": false},
@@ -300,8 +326,8 @@
     {"name": "PAID_USAGE_ADDON_PRODUCT_ID", "consumer": "crm_billing_orchestrator", "secret": false}
   ],
   "oauth_connection_references": {
-    "form1_assisted_controller": ["CRM_READ_CONNECTION_LINK_NAME", "CRM_WRITE_CONNECTION_LINK_NAME"],
-    "form2_controller": ["CRM_READ_CONNECTION_LINK_NAME", "CRM_WRITE_CONNECTION_LINK_NAME"],
+    "revenue_leak_test_request_form": ["CRM_READ_CONNECTION_LINK_NAME", "CRM_WRITE_CONNECTION_LINK_NAME"],
+    "revenue_leak_test_setup_form": ["CRM_READ_CONNECTION_LINK_NAME", "CRM_WRITE_CONNECTION_LINK_NAME"],
     "crm_billing_orchestrator": ["CRM_READ_CONNECTION_LINK_NAME", "CRM_WRITE_CONNECTION_LINK_NAME", "BILLING_READ_CONNECTION_LINK_NAME", "BILLING_WRITE_CONNECTION_LINK_NAME"],
     "retell_free_test": []
   },

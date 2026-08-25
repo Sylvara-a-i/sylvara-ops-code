@@ -8,7 +8,7 @@ Use the root verifier as the single local validation implementation. On Windows:
 
 `Quick` is the default. It is offline and runs the repository safety scan,
 workflow policy validator, complete Python regression suite, and the Billing
-gateway, Form 1 controller, and Form 2 controller checks against dependencies
+gateway, Revenue Leak Test Request Form, and Revenue Leak Test Setup Form checks against dependencies
 already installed in the checkout.
 
 On a new checkout, bootstrap the hash-pinned Python and exact npm dependencies,

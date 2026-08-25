@@ -7,12 +7,12 @@ jobs:
       type-variables:
         reviewers:
           - << env.DEPLOY_APPROVER_EMAIL >>
-        message: Approve the reviewed Form 2 controller revision for the existing Retell Catalyst Development target.
-  deploy_form2_development:
+        message: Approve the reviewed RevenueLeakTestSetupForm revision for the existing Retell Catalyst Development target.
+  deploy_revenue_leak_test_setup_form_development:
     steps:
       - |
         set +x
-        printf '%s\n' 'BLOCKED: Form 2 Development deployment requires a verified native secret binding.' >&2
+        printf '%s\n' 'BLOCKED: RevenueLeakTestSetupForm Development deployment requires a verified native secret binding.' >&2
         exit 1
 
 stages:
@@ -21,4 +21,4 @@ stages:
       - approve
   - name: development
     jobs:
-      - deploy_form2_development
+      - deploy_revenue_leak_test_setup_form_development
