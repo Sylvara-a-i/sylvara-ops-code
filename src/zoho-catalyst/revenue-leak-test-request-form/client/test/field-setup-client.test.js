@@ -12,14 +12,23 @@ const BROWSER_FILES = [
   path.join(ROUTE_ROOT, "index.html"),
   path.join(ROUTE_ROOT, "styles.css"),
   path.join(ROUTE_ROOT, "launch-fragment.js"),
+  path.join(ROUTE_ROOT, "protocol.generated.js"),
   path.join(ROUTE_ROOT, "state-model.js"),
   path.join(ROUTE_ROOT, "api-adapter.js"),
   path.join(ROUTE_ROOT, "main.js")
 ];
 
 const launchContract = require(path.join(ROUTE_ROOT, "launch-fragment.js"));
+const generatedProtocol = require(path.join(ROUTE_ROOT, "protocol.generated.js"));
 const stateModel = require(path.join(ROUTE_ROOT, "state-model.js"));
 const apiContract = require(path.join(ROUTE_ROOT, "api-adapter.js"));
+const canonicalProtocol = require(path.join(
+  PROJECT_ROOT,
+  "functions",
+  "revenue_leak_test_request_form",
+  "lib",
+  "field-setup-protocol.js"
+));
 
 function read(filePath) {
   return fs.readFileSync(filePath, "utf8");
@@ -75,6 +84,29 @@ test("the state inventory contains the exact 22 required screens in order", () =
   assert.equal(new Set(stateModel.FIELD_SETUP_STATES.map((state) => state.id)).size, 22);
 });
 
+test("the generated client protocol exactly matches the one canonical server contract", () => {
+  assert.deepEqual(generatedProtocol, canonicalProtocol);
+  assert.equal(stateModel.PROTOCOL_ID, canonicalProtocol.protocolId);
+  assert.equal(stateModel.PROTOCOL_SCHEMA_VERSION, canonicalProtocol.schemaVersion);
+  assert.deepEqual(
+    stateModel.FIELD_SETUP_STATES.map((state) => state.id),
+    canonicalProtocol.states.map((state) => state.id)
+  );
+  for (const state of stateModel.FIELD_SETUP_STATES) {
+    const contract = canonicalProtocol.states.find((candidate) => candidate.id === state.id);
+    assert.deepEqual(
+      [state.primaryAction, ...state.secondaryActions].map((action) => ({
+        id: action.id,
+        nextState: action.syntheticNextState
+      })),
+      [contract.primaryAction, ...contract.secondaryActions].map((action) => ({
+        id: action.id,
+        nextState: action.nextState
+      }))
+    );
+  }
+});
+
 test("every screen has exactly one primary action", () => {
   for (const state of stateModel.FIELD_SETUP_STATES) {
     assert.deepEqual(Object.keys(state).filter((key) => key === "primaryAction"), ["primaryAction"]);
@@ -98,7 +130,7 @@ test("qualification criteria and decision choices match the operator contract", 
     "Decision-Maker Is Present"
   ]);
 
-  const qualification = stateModel.getState("operator-qualification-review");
+  const qualification = stateModel.getState("operator_qualification_review");
   assert.equal(qualification.serverOutcomeRequired, true);
   assert.equal(qualification.primaryAction.label, "Qualified — Continue Setup");
   assert.deepEqual(qualification.secondaryActions.map((action) => action.label), [
@@ -152,15 +184,15 @@ test("fragment removal script runs synchronously before route styles and applica
 test("the synthetic adapter autosaves safe state only and exposes no activation operation", async () => {
   const storage = memoryStorage();
   const api = apiContract.createSyntheticApi({ stateModel, storage });
-  const validation = stateModel.getState("session-validation");
+  const validation = stateModel.getState("loading_session_validation");
   const outcome = await api.completeStep({
     stateId: validation.id,
     actionId: validation.primaryAction.id
   });
 
   assert.equal(outcome.authoritative, false);
-  assert.equal(outcome.nextState, "company-progress-summary");
-  assert.deepEqual(storage.readValues(), ["company-progress-summary"]);
+  assert.equal(outcome.nextState, "company_progress_summary");
+  assert.deepEqual(storage.readValues(), ["company_progress_summary"]);
 
   const operationNames = Object.keys(api).join(" ").toLowerCase();
   assert.doesNotMatch(operationNames, /activate|approve|start.?test|route.?traffic/);
@@ -178,7 +210,44 @@ test("a launch nonce cannot be exchanged by the source-preview adapter", async (
   const outcome = await api.loadJourney({ launchNonce: "a".repeat(43) });
 
   assert.equal(outcome.authoritative, false);
-  assert.equal(outcome.nextState, "recoverable-blocked");
+  assert.equal(outcome.nextState, "recoverable_blocked");
+});
+
+test("the qualification UI submits exactly six booleans plus the matching decision", async () => {
+  const api = apiContract.createSyntheticApi({ stateModel });
+  const allTrue = Object.fromEntries(
+    stateModel.QUALIFICATION_FACTORS.map((factor) => [factor.id, true])
+  );
+  const qualified = {
+    ...allTrue,
+    decision: "qualified_continue_setup"
+  };
+  assert.deepEqual(
+    Object.keys(stateModel.normalizeQualificationPayload("qualification_qualified", qualified)).sort(),
+    [...stateModel.QUALIFICATION_FACTORS.map((factor) => factor.id), "decision"].sort()
+  );
+  const outcome = await api.submitOperatorDecision({
+    stateId: "operator_qualification_review",
+    actionId: "qualification_qualified",
+    qualification: qualified
+  });
+  assert.equal(outcome.authoritative, false);
+  assert.equal(outcome.nextState, "lead_conversion_preview");
+
+  const incomplete = { ...qualified, decisionMakerIsPresent: false };
+  const blocked = await api.submitOperatorDecision({
+    stateId: "operator_qualification_review",
+    actionId: "qualification_qualified",
+    qualification: incomplete
+  });
+  assert.equal(blocked.nextState, "recoverable_blocked");
+
+  const main = read(path.join(ROUTE_ROOT, "main.js"));
+  const css = read(path.join(ROUTE_ROOT, "styles.css"));
+  assert.match(main, /data-qualification-factor/);
+  assert.match(main, /collectQualificationPayload/);
+  assert.match(main, /payload\.decision = action\.qualificationDecision/);
+  assert.match(css, /\.qualification-option\s*\{[^}]*min-height:\s*44px;/s);
 });
 
 test("the browser bundle has no network primitive, secret-shaped value, PII, or durable identifier", () => {

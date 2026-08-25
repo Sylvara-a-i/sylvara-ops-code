@@ -5,6 +5,7 @@ const { createCatalystDataStoreAdapter } = require("./catalyst-datastore-adapter
 const { createConnectionAuthorizationProvider } = require("./connection-boundary");
 const { ConfigurationError, loadConfig } = require("./config");
 const { createCrmClient } = require("./crm-client");
+const { createDefaultDeniedFieldSetupComposition } = require("./field-setup-composition");
 const { handleRequest } = require("./handler");
 const { safeLog } = require("./safe-log");
 const { createSessionStore } = require("./session-store");
@@ -40,7 +41,7 @@ function codeForError(error) {
   return PUBLIC_CODES.has(error?.publicCode) ? error.publicCode : "internal_error";
 }
 
-function sendJson(response, status, body) {
+function sendJson(response, status, body, { setCookie } = {}) {
   const serialized = JSON.stringify(body);
   if (typeof response.status === "function") response.status(status);
   else response.statusCode = status;
@@ -50,6 +51,16 @@ function sendJson(response, status, body) {
     response.setHeader("pragma", "no-cache");
     response.setHeader("x-content-type-options", "nosniff");
     response.setHeader("referrer-policy", "no-referrer");
+    if (setCookie !== undefined) {
+      if (
+        typeof setCookie !== "string" ||
+        setCookie.length > 4096 ||
+        !/^__Host-sylvara_field_setup=[A-Za-z0-9_-]{43}; Path=\/; Max-Age=[1-9][0-9]{1,3}; Secure; HttpOnly; SameSite=Strict$/.test(setCookie)
+      ) {
+        throw new ConfigurationError("Field-setup response cookie is invalid");
+      }
+      response.setHeader("set-cookie", setCookie);
+    }
   }
   if (typeof response.send === "function") response.send(serialized);
   else if (typeof response.end === "function") response.end(serialized);
@@ -97,8 +108,23 @@ function createRequestListener({
   randomUUID = crypto.randomUUID,
   fetchImpl = globalThis.fetch,
   requestHandler = handleRequest,
+  fieldSetupComposition = createDefaultDeniedFieldSetupComposition(),
   artifactSourceRevision = ARTIFACT_SOURCE_REVISION,
 } = {}) {
+  if (
+    !fieldSetupComposition ||
+    fieldSetupComposition.status !== "NOT_READY" ||
+    fieldSetupComposition.catalystHeaderMapping !== "NOT_READY_INJECTED_ONLY" ||
+    fieldSetupComposition.catalystIdentityMapping !== "NOT_READY_INJECTED_ONLY" ||
+    fieldSetupComposition.catalystStoreMapping !== "NOT_READY_INJECTED_ONLY" ||
+    fieldSetupComposition.deploymentAuthorized !== false ||
+    fieldSetupComposition.runtimeAuthority !== false ||
+    typeof fieldSetupComposition.claimsRequest !== "function" ||
+    typeof fieldSetupComposition.dispatch !== "function" ||
+    typeof fieldSetupComposition.assertNoRouteCollision !== "function"
+  ) {
+    throw new ConfigurationError("Field-setup composition is invalid");
+  }
   return async function requestListener(request, response) {
     const startedAt = now();
     const requestId = randomUUID();
@@ -118,36 +144,48 @@ function createRequestListener({
       readCatalystEnvironmentHeader(request);
       const app = runtimeSdk.initialize(request);
       assertCatalystEnvironment(request, app, config.deploymentEnvironment);
-      const adapter = createCatalystDataStoreAdapter(app, config);
-      const sessionStore = createSessionStore(adapter, config, { now });
-      const crmClient = createCrmClient(config, {
-        readAuthorizationProvider: createConnectionAuthorizationProvider(
-          app,
-          config.crmReadConnectionLinkName,
-          config.platformOperationTimeoutMs,
-        ),
-        writeAuthorizationProvider: createConnectionAuthorizationProvider(
-          app,
-          config.crmWriteConnectionLinkName,
-          config.platformOperationTimeoutMs,
-        ),
-        fetchImpl,
-      });
-      const result = await requestHandler(request, {
-        config,
-        crmClient,
-        now,
-        randomBytes,
-        randomUUID,
-        sessionStore,
-      });
+      fieldSetupComposition.assertNoRouteCollision([config.issuePath, config.prefillPath]);
+      let result;
+      const fieldSetupClaimed = fieldSetupComposition.claimsRequest(request);
+      if (typeof fieldSetupClaimed !== "boolean") {
+        throw new ConfigurationError("Field-setup route claim is invalid");
+      }
+      if (fieldSetupClaimed) {
+        result = await fieldSetupComposition.dispatch(request, { app });
+      } else {
+        // Preserve the existing Form 1 dependency path exactly. The default field-setup
+        // composition claims no routes, so issue/prefill continue through this branch only.
+        const adapter = createCatalystDataStoreAdapter(app, config);
+        const sessionStore = createSessionStore(adapter, config, { now });
+        const crmClient = createCrmClient(config, {
+          readAuthorizationProvider: createConnectionAuthorizationProvider(
+            app,
+            config.crmReadConnectionLinkName,
+            config.platformOperationTimeoutMs,
+          ),
+          writeAuthorizationProvider: createConnectionAuthorizationProvider(
+            app,
+            config.crmWriteConnectionLinkName,
+            config.platformOperationTimeoutMs,
+          ),
+          fetchImpl,
+        });
+        result = await requestHandler(request, {
+          config,
+          crmClient,
+          now,
+          randomBytes,
+          randomUUID,
+          sessionStore,
+        });
+      }
       safeLog(logger, result.status >= 500 ? "error" : "info", {
         requestId,
         stage: result.stage,
         outcome: result.outcome,
         elapsedMs: now() - startedAt,
       });
-      sendJson(response, result.status, result.body);
+      sendJson(response, result.status, result.body, { setCookie: result.setCookie });
     } catch (error) {
       const status = statusForError(error);
       const code = codeForError(error);

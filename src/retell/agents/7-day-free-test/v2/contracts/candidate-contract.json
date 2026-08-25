@@ -24,7 +24,7 @@
     "provider_parser_implemented": false,
     "provider_field_mapping": {},
     "importable_provider_configuration": false,
-    "reason": "exact_public_transfer_event_schema_unconfirmed",
+    "reason": "public_transfer_configuration_families_and_canonical_event_names_are_confirmed_but_exact_draft_serialization_complete_payload_variations_failure_casing_and_runtime_behavior_remain_unverified",
     "live_readback_required": true,
     "draft_import_review_required": true
   },
@@ -225,6 +225,28 @@
     "target_fingerprint_persisted": true,
     "provisional_attempt_seconds": 25
   },
+  "handoff_evidence": {
+    "caller_intent_authority": "structured_call_classification",
+    "service_eligibility_authority": "immutable_client_configuration",
+    "area_eligibility_authority": "immutable_client_configuration",
+    "destination_authority": "immutable_client_configuration",
+    "loop_proof_authority": "server_route_graph",
+    "eligible_service_value": "supported",
+    "eligible_area_value": "in_area",
+    "eligible_destination_value": "valid",
+    "eligible_loop_proof_value": "passed",
+    "destination_fingerprint_only": true,
+    "raw_destination_allowed": false,
+    "denied_caller_intents": [
+      "vendor",
+      "spam",
+      "job_applicant",
+      "wrong_number",
+      "sales"
+    ],
+    "routine_call_transfer_allowed": false,
+    "untrusted_or_inconsistent_evidence_behavior": "configuration_failure_no_transfer"
+  },
   "canonical_handoff_states": [
     "NotApplicable",
     "NotConfigured",
@@ -305,6 +327,22 @@
     "owner": "catalyst",
     "provider_mode": "dry_run_mock_only",
     "durable_rows_per_actionable_call": 1,
+    "durable_rows_per_call_including_suppression": 1,
+    "durable_suppression_tombstone_required": true,
+    "notification_disposition_precedence": [
+      "SensitiveSuppressed",
+      "NonactionableSuppressed",
+      "ActionableIntent"
+    ],
+    "suppressed_payload_must_be_null": true,
+    "actionable_to_actionable_payload_mutable_only": "handoff_state",
+    "irreversible_suppression_projection": {
+      "channel": null,
+      "delivery_state": "Suppressed",
+      "delivery_claimed": false,
+      "provider_calls": 0,
+      "payload": null
+    },
     "provider_calls_in_local_mode": 0,
     "actionable_outcomes": [
       "potential_job",

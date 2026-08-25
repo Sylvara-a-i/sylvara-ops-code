@@ -8,6 +8,14 @@ ROOT = Path(__file__).resolve().parents[3]
 RELEASE = ROOT / "docs" / "product" / "free-revenue-leak-test-release-contract.json"
 REQUEST = ROOT / "src" / "zoho-catalyst" / "revenue-leak-test-request-form"
 SETUP = ROOT / "src" / "zoho-catalyst" / "revenue-leak-test-setup-form"
+GATEWAY = (
+    ROOT
+    / "src"
+    / "zoho-catalyst"
+    / "revenue-desk-call-runtime"
+    / "functions"
+    / "revenue_desk_call_gateway"
+)
 CRM = ROOT / "src" / "zoho-crm" / "free-revenue-leak-test"
 FORMS = ROOT / "src" / "zoho-forms" / "free-revenue-leak-test" / "forms-manifest.json"
 
@@ -85,10 +93,27 @@ class FreeTestFieldSetupContractTests(unittest.TestCase):
     def test_client_has_exact_22_states_and_required_responsive_contract(self):
         client = REQUEST / "client" / "field-setup"
         state_source = (client / "state-model.js").read_text(encoding="utf-8")
-        state_block = state_source.split("const FIELD_SETUP_STATES", 1)[1].split(
-            "const STATE_BY_ID", 1
-        )[0]
-        self.assertEqual(22, len(re.findall(r'\bid:\s*"[a-z0-9-]+"', state_block)))
+        protocol_source = (
+            REQUEST
+            / "functions"
+            / "revenue_leak_test_request_form"
+            / "lib"
+            / "field-setup-protocol.js"
+        ).read_text(encoding="utf-8")
+        protocol = json.loads(
+            protocol_source.split("module.exports = ", 1)[1].rsplit(";", 1)[0]
+        )
+        self.assertEqual(22, len(protocol["states"]))
+        self.assertEqual(22, len({state["id"] for state in protocol["states"]}))
+        self.assertEqual(
+            protocol,
+            json.loads(
+                (client / "protocol.generated.js")
+                .read_text(encoding="utf-8")
+                .split("  const protocol =\n", 1)[1]
+                .split(";\n\n  function deepFreeze", 1)[0]
+            ),
+        )
         self.assertIn("width: 768, height: 1024", state_source)
         self.assertIn("width: 1024, height: 1366", state_source)
         styles = (client / "styles.css").read_text(encoding="utf-8")
@@ -207,6 +232,19 @@ class FreeTestFieldSetupContractTests(unittest.TestCase):
             )
         )
         verification = proposed["route_verification"]
+        gateway = json.loads(
+            (
+                GATEWAY
+                / "contracts"
+                / "call-gap-capture-handoff-v2.proposed.json"
+            ).read_text(encoding="utf-8")
+        )["route_verification"]
+        self.assertEqual(verification["window_fields"], gateway["window_fields"])
+        self.assertEqual(
+            verification["authoritative_call_fields"],
+            gateway["authoritative_call_binding_fields"],
+        )
+        self.assertEqual(verification["receipt_fields"], gateway["receipt_fields"])
         disposition = verification["verified_qa_runtime_disposition"]
         self.assertFalse(disposition["collect_agent_intake"])
         self.assertFalse(disposition["start_agent"])

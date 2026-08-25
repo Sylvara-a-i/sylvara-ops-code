@@ -57,7 +57,65 @@
     ]
   },
   "route_verification": {
-    "store_adapter_semantics": "atomic_open_and_single_use_evidence_claim",
+    "contract_owner": "revenue_desk_call_gateway",
+    "setup_responsibility": "atomically_expire_stale_open_window_then_issue_server_generated_open_window_only",
+    "gateway_responsibility": "atomically_consume_open_window_and_create_receipt",
+    "issue_command_authority": "server_resolved_from_authenticated_operator_and_stored_journey_only",
+    "store_adapter_semantics": "one_atomic_operation_closes_any_expired_open_binding_before_enforcing_one_active_server_issued_window",
+    "issue_store_request_fields": [
+      "operation_fingerprint",
+      "request_binding_key",
+      "current_time",
+      "proposed_window"
+    ],
+    "current_time_source": "injected_server_clock",
+    "window_ttl_ms": 300000,
+    "setup_window_statuses": ["Open", "Expired"],
+    "stale_open_policy": "expires_at less than or equal to current_time is atomically changed to Expired with closed_at equal to current_time before a fresh operation may issue",
+    "expired_operation_replay_policy": "the original operation always fails closed with operation_expired and can never reopen or replace its expired window",
+    "window_fields": [
+      "window_key",
+      "status",
+      "environment_fingerprint",
+      "client_fingerprint",
+      "journey_fingerprint",
+      "deployment_fingerprint",
+      "configuration_fingerprint",
+      "number_fingerprint",
+      "route_fingerprint",
+      "approved_qa_caller_fingerprint",
+      "issued_at",
+      "expires_at",
+      "closed_at"
+    ],
+    "authoritative_call_fields": [
+      "actual_call_fingerprint",
+      "environment_fingerprint",
+      "client_fingerprint",
+      "journey_fingerprint",
+      "deployment_fingerprint",
+      "configuration_fingerprint",
+      "number_fingerprint",
+      "route_fingerprint",
+      "qa_caller_fingerprint",
+      "observed_at"
+    ],
+    "receipt_fields": [
+      "verification_claim_key",
+      "window_key",
+      "actual_call_fingerprint",
+      "environment_fingerprint",
+      "client_fingerprint",
+      "journey_fingerprint",
+      "deployment_fingerprint",
+      "configuration_fingerprint",
+      "number_fingerprint",
+      "route_fingerprint",
+      "approved_qa_caller_fingerprint",
+      "issued_at",
+      "expires_at",
+      "consumed_at"
+    ],
     "window_and_receipt_binding": [
       "environment_fingerprint",
       "journey_fingerprint",
@@ -70,7 +128,10 @@
       "expires_at"
     ],
     "additional_isolation_binding": "client_fingerprint",
-    "replay_policy": "exact_evidence_is_idempotent; different_evidence_or_binding_fails_closed",
+    "issuance_replay_policy": "an exact unexpired open-window request is idempotent; changed binding, expired old operation, or second active unexpired window fails closed",
+    "consumption_replay_policy": "every consumed-window replay is rejected by the gateway",
+    "browser_supplied_window_allowed": false,
+    "setup_evidence_consumption_allowed": false,
     "verified_qa_runtime_disposition": {
       "start_agent": false,
       "collect_agent_intake": false,

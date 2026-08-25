@@ -65,6 +65,35 @@ EXPECTED_HANDOFF_STATES = [
     "Failed",
     "Unknown",
 ]
+EXPECTED_STRUCTURED_STATE_PRECEDENCE = [
+    "Bridged",
+    "Failed",
+    "Ended",
+    "Cancelled",
+    "Started",
+]
+EXPECTED_HANDOFF_EVIDENCE = {
+    "caller_intent_authority": "structured_call_classification",
+    "service_eligibility_authority": "immutable_client_configuration",
+    "area_eligibility_authority": "immutable_client_configuration",
+    "destination_authority": "immutable_client_configuration",
+    "loop_proof_authority": "server_route_graph",
+    "eligible_service_value": "supported",
+    "eligible_area_value": "in_area",
+    "eligible_destination_value": "valid",
+    "eligible_loop_proof_value": "passed",
+    "destination_fingerprint_only": True,
+    "raw_destination_allowed": False,
+    "denied_caller_intents": [
+        "vendor",
+        "spam",
+        "job_applicant",
+        "wrong_number",
+        "sales",
+    ],
+    "routine_call_transfer_allowed": False,
+    "untrusted_or_inconsistent_evidence_behavior": "configuration_failure_no_transfer",
+}
 EXPECTED_NOTIFICATION_FIELDS = [
     "caller_name",
     "confirmed_callback_number",
@@ -500,6 +529,8 @@ def _contract_problems(contract: Mapping[str, Any], adapter: Mapping[str, Any]) 
         )
     ):
         problems.append("candidate-contract: bounded warm-transfer controls mismatch")
+    if contract.get("handoff_evidence") != EXPECTED_HANDOFF_EVIDENCE:
+        problems.append("candidate-contract: authoritative handoff evidence mismatch")
     notification = contract.get("notification_policy", {})
     if not isinstance(notification, Mapping):
         problems.append("candidate-contract: notification policy invalid")
@@ -508,6 +539,24 @@ def _contract_problems(contract: Mapping[str, Any], adapter: Mapping[str, Any]) 
             problems.append("candidate-contract: Catalyst must own notification")
         if notification.get("durable_rows_per_actionable_call") != 1:
             problems.append("candidate-contract: one durable notification row required")
+        if (
+            notification.get("durable_rows_per_call_including_suppression") != 1
+            or notification.get("durable_suppression_tombstone_required") is not True
+            or notification.get("notification_disposition_precedence")
+            != ["SensitiveSuppressed", "NonactionableSuppressed", "ActionableIntent"]
+            or notification.get("suppressed_payload_must_be_null") is not True
+            or notification.get("actionable_to_actionable_payload_mutable_only")
+            != "handoff_state"
+            or notification.get("irreversible_suppression_projection")
+            != {
+                "channel": None,
+                "delivery_state": "Suppressed",
+                "delivery_claimed": False,
+                "provider_calls": 0,
+                "payload": None,
+            }
+        ):
+            problems.append("candidate-contract: durable notification suppression mismatch")
         if notification.get("provider_calls_in_local_mode") != 0:
             problems.append("candidate-contract: local provider calls prohibited")
         if notification.get("allowed_fields") != EXPECTED_NOTIFICATION_FIELDS:
@@ -539,6 +588,8 @@ def _contract_problems(contract: Mapping[str, Any], adapter: Mapping[str, Any]) 
         problems.append("transfer-adapter: fabricated provider parser is prohibited")
     if adapter.get("canonical_states") != EXPECTED_HANDOFF_STATES:
         problems.append("transfer-adapter: state set mismatch")
+    if adapter.get("structured_event_state_precedence") != EXPECTED_STRUCTURED_STATE_PRECEDENCE:
+        problems.append("transfer-adapter: structured state precedence mismatch")
     convergence = adapter.get("convergence_rules", {})
     if not isinstance(convergence, Mapping) or not all(value is True or value == 1 for value in convergence.values()):
         problems.append("transfer-adapter: convergence rules incomplete")

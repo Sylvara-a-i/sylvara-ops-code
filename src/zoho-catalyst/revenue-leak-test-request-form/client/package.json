@@ -4,7 +4,7 @@
   "private": true,
   "description": "Zero-dependency source preview and contract tests for the operator-led field setup journey.",
   "scripts": {
-    "check": "node --check field-setup/launch-fragment.js && node --check field-setup/state-model.js && node --check field-setup/api-adapter.js && node --check field-setup/main.js",
+    "check": "node tools/protocol-codegen.js --check && node --check field-setup/protocol.generated.js && node --check field-setup/launch-fragment.js && node --check field-setup/state-model.js && node --check field-setup/api-adapter.js && node --check field-setup/main.js",
     "test": "node --test test/*.test.js",
     "ci": "npm run check && npm test"
   },

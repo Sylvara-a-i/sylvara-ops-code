@@ -1,5 +1,10 @@
 (function exposeFieldSetupStateModel(root, factory) {
-  const model = factory();
+  const protocol = root && root.FieldSetupProtocol
+    ? root.FieldSetupProtocol
+    : typeof module === "object" && module.exports
+      ? require("./protocol.generated.js")
+      : null;
+  const model = factory(protocol);
 
   if (typeof module === "object" && module.exports) {
     module.exports = model;
@@ -8,24 +13,25 @@
   if (root) {
     root.FieldSetupStateModel = model;
   }
-})(typeof globalThis === "object" ? globalThis : undefined, function createFieldSetupStateModel() {
+})(typeof globalThis === "object" ? globalThis : undefined, function createFieldSetupStateModel(protocol) {
   "use strict";
+
+  if (!protocol || protocol.schemaVersion !== 1 || !Array.isArray(protocol.states)) {
+    throw new Error("Canonical field-setup protocol is unavailable.");
+  }
 
   const SUPPORTED_VIEWPORTS = Object.freeze([
     Object.freeze({ width: 768, height: 1024 }),
     Object.freeze({ width: 1024, height: 1366 })
   ]);
 
-  const QUALIFICATION_CRITERIA = Object.freeze([
-    "Company Has Meaningful Call Volume",
-    "Can Accept Additional Profitable Work",
-    "Has A Repeatable Intake Process",
-    "Will Authorize A Controlled Forwarding Path",
-    "Has An Accountable Callback / Handoff Owner",
-    "Decision-Maker Is Present"
-  ]);
+  const QUALIFICATION_FACTORS = Object.freeze(protocol.qualification.factors.map((factor) => Object.freeze({
+    id: factor.id,
+    label: factor.label
+  })));
+  const QUALIFICATION_CRITERIA = Object.freeze(QUALIFICATION_FACTORS.map((factor) => factor.label));
 
-  const FIELD_SETUP_STATES = Object.freeze([
+  const PRESENTATION_STATES = Object.freeze([
     defineState({
       id: "session-validation",
       name: "Loading and session validation",
@@ -290,7 +296,36 @@
     })
   ]);
 
+  if (PRESENTATION_STATES.length !== protocol.states.length) {
+    throw new Error("Field-setup presentation inventory does not match the canonical protocol.");
+  }
+  const FIELD_SETUP_STATES = Object.freeze(protocol.states.map((contract, index) => {
+    const presentation = PRESENTATION_STATES[index];
+    return Object.freeze({
+      ...presentation,
+      id: contract.id,
+      name: contract.name,
+      primaryAction: actionFromContract(contract.primaryAction),
+      qualificationFactors: Object.freeze(
+        contract.id === "operator_qualification_review" ? [...QUALIFICATION_FACTORS] : []
+      ),
+      qualificationCriteria: Object.freeze(
+        contract.id === "operator_qualification_review" ? [...QUALIFICATION_CRITERIA] : []
+      ),
+      secondaryActions: Object.freeze(contract.secondaryActions.map(actionFromContract)),
+      serverOutcomeRequired: contract.serverOutcomeRequired
+    });
+  }));
   const STATE_BY_ID = Object.freeze(Object.fromEntries(FIELD_SETUP_STATES.map((state) => [state.id, state])));
+
+  function actionFromContract(contract) {
+    return Object.freeze({
+      id: contract.id,
+      label: contract.label,
+      qualificationDecision: contract.qualificationDecision || null,
+      syntheticNextState: contract.nextState
+    });
+  }
 
   function action(id, label, syntheticNextState) {
     return Object.freeze({ id, label, syntheticNextState });
@@ -299,6 +334,7 @@
   function defineState(definition) {
     return Object.freeze({
       secondaryActions: Object.freeze([]),
+      qualificationFactors: Object.freeze([]),
       qualificationCriteria: Object.freeze([]),
       serverOutcomeRequired: false,
       ...definition,
@@ -309,7 +345,7 @@
   }
 
   function getState(stateId) {
-    return STATE_BY_ID[stateId] || STATE_BY_ID["recoverable-blocked"];
+    return STATE_BY_ID[stateId] || STATE_BY_ID[protocol.blockedState];
   }
 
   function getStateIndex(stateId) {
@@ -317,11 +353,45 @@
     return index < 0 ? FIELD_SETUP_STATES.length - 1 : index;
   }
 
+  function normalizeQualificationPayload(actionId, payload) {
+    const state = STATE_BY_ID.operator_qualification_review;
+    const action = [state.primaryAction, ...state.secondaryActions]
+      .find((candidate) => candidate.id === actionId);
+    const expectedKeys = [...QUALIFICATION_FACTORS.map((factor) => factor.id), "decision"].sort();
+    const actualKeys = payload && typeof payload === "object" && !Array.isArray(payload)
+      ? Object.keys(payload).sort()
+      : [];
+    if (
+      !action ||
+      actualKeys.length !== expectedKeys.length ||
+      actualKeys.some((key, index) => key !== expectedKeys[index]) ||
+      payload.decision !== action.qualificationDecision
+    ) {
+      throw new Error("Qualification payload does not match the canonical protocol.");
+    }
+    for (const factor of QUALIFICATION_FACTORS) {
+      if (typeof payload[factor.id] !== "boolean") {
+        throw new Error("Every qualification factor must be an explicit boolean.");
+      }
+    }
+    if (
+      action.qualificationDecision === "qualified_continue_setup" &&
+      QUALIFICATION_FACTORS.some((factor) => payload[factor.id] !== true)
+    ) {
+      throw new Error("Qualified requires all six factors.");
+    }
+    return Object.freeze(Object.fromEntries(expectedKeys.map((key) => [key, payload[key]])));
+  }
+
   return Object.freeze({
     FIELD_SETUP_STATES,
     QUALIFICATION_CRITERIA,
+    QUALIFICATION_FACTORS,
+    PROTOCOL_ID: protocol.protocolId,
+    PROTOCOL_SCHEMA_VERSION: protocol.schemaVersion,
     SUPPORTED_VIEWPORTS,
     getState,
-    getStateIndex
+    getStateIndex,
+    normalizeQualificationPayload
   });
 });

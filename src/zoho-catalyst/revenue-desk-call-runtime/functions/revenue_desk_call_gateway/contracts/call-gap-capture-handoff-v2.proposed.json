@@ -30,10 +30,40 @@
     "source_status": "NOT_READY",
     "recognized_disposition": "verified_qa_route",
     "authoritative_window_store": "server_issued_only",
+    "window_issuer": "revenue_leak_test_setup_form",
+    "window_issuer_operation": "issueWindowAtomically",
+    "window_fields": [
+      "window_key",
+      "status",
+      "environment_fingerprint",
+      "client_fingerprint",
+      "journey_fingerprint",
+      "deployment_fingerprint",
+      "configuration_fingerprint",
+      "number_fingerprint",
+      "route_fingerprint",
+      "approved_qa_caller_fingerprint",
+      "issued_at",
+      "expires_at",
+      "closed_at"
+    ],
     "atomic_store_operation": "consumeOpenWindow",
+    "atomic_store_request_fields": [
+      "window_key",
+      "current_time",
+      "authoritative_call",
+      "required_window_ttl_ms",
+      "maximum_observation_skew_ms"
+    ],
+    "atomic_store_outcomes": ["consumed", "expired", "rejected"],
     "required_initial_window_status": "Open",
     "success_window_status": "Consumed",
+    "expired_window_status": "Expired",
+    "window_ttl_ms": 300000,
     "success_closes_window": true,
+    "expired_or_invalid_open_window_closes_atomically": true,
+    "receipt_created_only_with_consumed_transition": true,
+    "binding_or_freshness_rejection_preserves_valid_open_window": true,
     "consumed_replay_behavior": "reject",
     "current_time_source": "injected_server_clock",
     "maximum_observation_skew_seconds": 30,
@@ -49,6 +79,22 @@
       "route_fingerprint",
       "qa_caller_fingerprint",
       "observed_at"
+    ],
+    "receipt_fields": [
+      "verification_claim_key",
+      "window_key",
+      "actual_call_fingerprint",
+      "environment_fingerprint",
+      "client_fingerprint",
+      "journey_fingerprint",
+      "deployment_fingerprint",
+      "configuration_fingerprint",
+      "number_fingerprint",
+      "route_fingerprint",
+      "approved_qa_caller_fingerprint",
+      "issued_at",
+      "expires_at",
+      "consumed_at"
     ],
     "intercept_before": [
       "agent_start",
@@ -67,6 +113,96 @@
       "activate_deployment": false,
       "perform_operational_action": false
     }
+  },
+  "handoff_event_ledger": {
+    "source_status": "NOT_READY",
+    "injected_store_required": true,
+    "atomic_store_operation": "reconcileCallEvents",
+    "atomic_store_request_fields": [
+      "binding",
+      "normalized_events",
+      "maximum_unique_claims_per_call"
+    ],
+    "atomic_store_result_fields": [
+      "cumulative_normalized_events",
+      "unique_claim_count"
+    ],
+    "immutable_binding_fields": [
+      "call_binding_key",
+      "client_scope_key",
+      "deployment_scope_key",
+      "configuration_version_key",
+      "authorized_target_fingerprint"
+    ],
+    "nullable_immutable_binding_fields": [
+      "authorized_target_fingerprint"
+    ],
+    "immutable_binding_conflict_behavior": "reject_without_mutation",
+    "maximum_unique_claims_per_call": 64,
+    "cumulative_snapshot_required": true,
+    "duplicate_identical_claim_behavior": "noop",
+    "conflicting_claim_behavior": "reject_without_mutation",
+    "raw_provider_payload_allowed": false
+  },
+  "notification_intent_store": {
+    "source_status": "NOT_READY",
+    "injected_store_required": true,
+    "atomic_store_operation": "reconcileOne",
+    "atomic_store_request_fields": [
+      "intent",
+      "notification_disposition_precedence",
+      "monotone_handoff_state_precedence"
+    ],
+    "atomic_store_result_fields": [
+      "inserted",
+      "updated",
+      "previous_notification_disposition",
+      "previous_handoff_state",
+      "intent"
+    ],
+    "durable_rows_per_actionable_call": 1,
+    "durable_rows_per_call": 1,
+    "durable_suppression_tombstone_required": true,
+    "notification_disposition_precedence": [
+      "SensitiveSuppressed",
+      "NonactionableSuppressed",
+      "ActionableIntent"
+    ],
+    "irreversible_suppression_dispositions": [
+      "SensitiveSuppressed",
+      "NonactionableSuppressed"
+    ],
+    "immutable_identity_fields": [
+      "intent_key",
+      "call_binding_key",
+      "client_scope_key",
+      "recipient_fingerprint"
+    ],
+    "suppressed_payload_must_be_null": true,
+    "actionable_to_actionable_payload_mutable_only": "handoff_state",
+    "irreversible_suppression_projection": {
+      "channel": null,
+      "delivery_state": "Suppressed",
+      "delivery_claimed": false,
+      "provider_calls": 0,
+      "payload": null
+    },
+    "monotone_handoff_state_precedence": [
+      "Bridged",
+      "Failed",
+      "Ended",
+      "Cancelled",
+      "Started",
+      "Declined",
+      "Offered",
+      "NotConfigured",
+      "NotApplicable",
+      "Unknown"
+    ],
+    "update_requires_unclaimed_delivery": true,
+    "required_delivery_claimed": false,
+    "required_provider_calls": 0,
+    "provider_send_allowed": false
   },
   "handoff_evidence": {
     "caller_intent_authority": "structured_call_classification",

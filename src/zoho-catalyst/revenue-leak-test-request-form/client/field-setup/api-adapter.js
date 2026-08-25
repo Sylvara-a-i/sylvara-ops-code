@@ -36,11 +36,11 @@
 
     function readSafeState() {
       if (!storage || typeof storage.getItem !== "function") {
-        return "session-validation";
+        return "loading_session_validation";
       }
 
       const stored = storage.getItem(STORAGE_KEY);
-      return stored ? stateModel.getState(stored).id : "session-validation";
+      return stored ? stateModel.getState(stored).id : "loading_session_validation";
     }
 
     function syntheticOutcome(actionId, requestedNextState) {
@@ -58,34 +58,39 @@
 
       loadJourney({ launchNonce, previewState } = {}) {
         if (launchNonce) {
-          return syntheticOutcome("launch-exchange-unavailable", "recoverable-blocked");
+          return syntheticOutcome("launch_exchange_unavailable", "recoverable_blocked");
         }
 
         const requestedState = previewState || readSafeState();
-        return syntheticOutcome("load-source-preview", stateModel.getState(requestedState).id);
+        return syntheticOutcome("load_source_preview", stateModel.getState(requestedState).id);
       },
 
       completeStep({ stateId, actionId }) {
         const state = stateModel.getState(stateId);
-        if (state.primaryAction.id !== actionId) {
-          return syntheticOutcome("invalid-primary-action", "recoverable-blocked");
+        if (state.id === "operator_qualification_review" || state.primaryAction.id !== actionId) {
+          return syntheticOutcome("invalid_primary_action", "recoverable_blocked");
         }
         return syntheticOutcome(actionId, state.primaryAction.syntheticNextState);
       },
 
-      submitOperatorDecision({ stateId, actionId }) {
+      submitOperatorDecision({ stateId, actionId, qualification }) {
         const state = stateModel.getState(stateId);
         const permittedAction = [state.primaryAction, ...state.secondaryActions]
           .find((candidate) => candidate.id === actionId);
 
-        if (!permittedAction || state.id !== "operator-qualification-review") {
-          return syntheticOutcome("invalid-operator-decision", "recoverable-blocked");
+        if (!permittedAction || state.id !== "operator_qualification_review") {
+          return syntheticOutcome("invalid_operator_decision", "recoverable_blocked");
+        }
+        try {
+          stateModel.normalizeQualificationPayload(actionId, qualification);
+        } catch (_error) {
+          return syntheticOutcome("invalid_qualification_payload", "recoverable_blocked");
         }
         return syntheticOutcome(actionId, permittedAction.syntheticNextState);
       },
 
       requestStop() {
-        return syntheticOutcome("stop-source-preview", "stop-rollback-status");
+        return syntheticOutcome("stop_source_preview", "stop_rollback_status");
       }
     });
   }

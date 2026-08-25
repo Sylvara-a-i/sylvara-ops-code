@@ -14,7 +14,7 @@ This source lane authorizes local code, tests, sanitized screenshots, and read-o
 
 ## Current Read-Only Facts
 
-Verified on 2026-08-25 through sanitized read-only CRM Audit:
+Verified on 2026-08-25 through bounded sanitized read-only CRM and public Retell evidence:
 
 - the active legacy Form 1 button-category function contains one hardcoded Catalyst key and one hardcoded custom-header secret, has no named Connection, and remains untouched;
 - actual button placement, label, layout, profile access, and argument mapping are unavailable from the connector;
@@ -24,7 +24,7 @@ Verified on 2026-08-25 through sanitized read-only CRM Audit:
 - the Free-Test Blueprint candidate is Draft with zero enrollment; no active Free-Test Blueprint was returned;
 - Lead and Form 2 workflows are active and have current successful task/action evidence, while both initializer rules still have zero successful condition/action use;
 - conversion mappings exist for the core company/contact/offer/source/route fields, but record-specific conversion options and duplicate candidates were intentionally not read;
-- no current live Form, Catalyst-hosted-client, Retell-transfer-schema, or provider-route readback is claimed.
+- the public Retell API schema confirms native `transfer_call` destinations and cold/warm/agentic-warm options, and current official webhook documentation confirms the canonical `transfer_started`, `transfer_bridged`, `transfer_cancelled`, and `transfer_ended` events; no authenticated Draft serialization, complete payload-variation, provider-route, or live-runtime readback is claimed.
 
 ## Architecture
 
@@ -47,8 +47,8 @@ CRM Deal — Approve & Start Free Test (separate Gabriel-only action)
         |
         v
 Dedicated number -> shared 7-Day Free Test agent
-        |-- routine actionable call -> one durable Catalyst email
-        `-- bounded eligible handoff -> provider event convergence + one email
+        |-- routine actionable call -> one durable notification intent
+        `-- bounded eligible handoff -> provider-event convergence + one monotone notification intent
 ```
 
 The browser cannot convert, reserve, verify, activate, stop a live route, or roll back a live route without an independently authenticated operator/control-plane decision.
@@ -81,6 +81,8 @@ Every screen has one primary action, a visible `Stop Setup`, keyboard/focus supp
 8. Replay, wrong operator, wrong record, wrong environment, malformed token, expiration, and ambiguous storage fail closed without CRM disclosure.
 
 The current deployed Request Form instruction limits its controller to issue and prefill routes. The new field-setup route manifest remains a disabled proposal until that repository/deployment boundary is explicitly reconciled. Existing Form 1 behavior is unchanged.
+
+The browser submits intent only. Every guarded transition requires an injected server prerequisite resolver to return one exact receipt bound to the current action, environment, journey, module, operator, record, revision, session, state, statuses, and required fingerprints. Browser-supplied receipts and authority fields are rejected. The server verifies the stored invariants before compare-and-set persistence and then performs exact readback. The committed default composition injects no resolver and registers no routes, so guarded progression stops at the first server-required state and remains `NOT_READY`.
 
 ## Form And Conversion Rules
 
@@ -116,15 +118,17 @@ Retain the Deal-bound email proof and require both authorization boxes. Form 2 c
 - A provider receives instructions only after current official forwarding and rollback evidence is reviewed. Unknown provider means `Technical Setup Required`; invent no star code.
 - Never request a password, MFA code, token, recovery code, or remote-control session.
 - Human handoff, Retell infrastructure fallback, and customer rollback are separate fields and runtime flags. Do not promote legacy fallback values automatically.
-- A verification window binds exact Development environment, journey, deployment/configuration fingerprints, assigned-number fingerprint, route fingerprint, approved QA-caller fingerprint, issue time, and expiry.
-- Verification success produces one immutable receipt, closes the window, starts no agent intake, increments no handled-call count, sends no client notification, and leaves the deployment non-live.
+- The authenticated setup controller issues one exact 300-second `Open` verification window bound to the exact Development environment, journey, deployment/configuration fingerprints, assigned-number fingerprint, route fingerprint, approved QA-caller fingerprint, issue time, and expiry. The browser cannot supply or extend the window. Before a fresh issue, the server atomically closes a stale `Open` row as `Expired`; concurrent fresh requests can leave only one `Open` window.
+- The call gateway alone may atomically consume or expire that `Open` window. Verification success produces one immutable receipt, rejects every consumed-window replay, starts no agent intake, increments no handled-call count, sends no client notification, and leaves the deployment non-live. Expired, corrupt, underlong, or overlong windows close as `Expired` and produce no receipt; an old-operation replay remains rejected after expiry.
 - If the provider cannot prove the route before agent start, verification remains `NOT_READY`.
 
 ## Retell V2 Boundary
 
-`call_gap_monitor_v1` remains unchanged. `call_gap_capture_handoff_v2` remains Draft, disabled, bound to no traffic environment, and non-importable until exact Retell transfer node/event schemas are authoritatively read back.
+`call_gap_monitor_v1` remains unchanged. `call_gap_capture_handoff_v2` remains Draft, disabled, bound to no traffic environment, and non-importable. The current public Retell API schema confirms the native transfer configuration families and official documentation confirms canonical transfer lifecycle event names, but no provider parser is implemented because authenticated Draft serialization, complete event variations/casing, failure detail, and runtime behavior remain unverified.
 
-Routine actionable calls never transfer and create one durable Catalyst email. An urgent/existing-customer/specific-person transfer requires exact configuration, safe direct human destination, loop checks, coverage eligibility, and caller consent. Immediate danger uses the safety path; vendors, spam, applicants, routine calls, and configuration failures never transfer. Structured provider events are authoritative; model analysis cannot claim connection or success.
+Routine actionable calls never transfer and may project one bounded Catalyst-owned notification intent. An urgent/existing-customer/specific-person transfer requires exact configuration, safe direct human destination, loop checks, coverage eligibility, and caller consent. Immediate danger uses the safety path; vendors, spam, applicants, routine calls, and configuration failures never transfer. Structured provider events are authoritative; model analysis cannot claim connection or success.
+
+The source service requires an injected durable handoff-event ledger that returns one complete cumulative snapshot and rejects conflicting or over-limit claims. Its immutable call binding includes the server-authoritative configured destination fingerprint before consent, so one target can progress from offered to accepted while a later target rebind is rejected before claim mutation. Lifecycle state converges monotonically as `Bridged > Failed > Ended > Cancelled > Started`, independent of event order; caller-supplied prior state is forbidden. A separate injected notification store must atomically reconcile exactly one row before any delivery claim. Sensitive or nonactionable classification irreversibly replaces or precedes an actionable dry-run intent with a payload-null suppression tombstone, preventing retained caller content and later intent resurrection across replay or concurrency. These are source contracts only: no live ledger adapter, notification adapter, delivery path, provider parser, or route registration is supplied by this candidate.
 
 ## Development Installation Checklist
 
@@ -141,7 +145,7 @@ Routine actionable calls never transfer and create one durable Catalyst email. A
 - [ ] Confirm current number inventory and atomic reservation behavior without purchasing.
 - [ ] Add provider instructions only from current official sources.
 - [ ] Prove pre-agent QA-call interception and immutable route receipt.
-- [ ] Obtain authoritative Retell Draft transfer schema; build/import only after separate approval.
+- [ ] Read back an authorized Retell Draft against the confirmed public transfer schema, capture sanitized complete event variations, and implement/review the exact provider parser; build/import only after separate approval.
 - [ ] Keep v2 disabled and v1 unchanged.
 - [ ] Run zero-network component, scenario, mutation, screenshot, safety, and full repository verification.
 
@@ -179,8 +183,8 @@ If the source or future Development install misbehaves:
 
 ## Current Stop Conditions
 
-Field setup remains `NOT_READY` because the live hosted-client inventory, exact button metadata, Request Form route-instruction reconciliation, Catalyst authenticated-user contract, record-specific conversion options, live Forms readback, provider forwarding evidence, number-reservation API, and pre-agent route-verification behavior are not all proven.
+Field setup remains `NOT_READY` because the live hosted-client inventory, exact button metadata, Catalyst authenticated-user contract, record-specific conversion options on a safely identified synthetic Lead, live Forms readback, provider forwarding evidence, number-reservation API, and pre-agent route-verification behavior are not all proven. The available Catalyst connector currently denies the required project readback, and the CRM connector exposes no custom-button metadata operation.
 
-Retell remains `NOT_READY` because exact provider transfer node and lifecycle event schemas are unavailable without authenticated draft readback. The public source therefore contains only a provider-neutral disabled v2 contract and deterministic local oracle.
+Retell remains `NOT_READY` because the confirmed public configuration contract and canonical lifecycle event names do not prove exact Draft serialization, complete webhook payload variations, failure subtyping/casing, or live behavior. The public source therefore keeps the provider parser absent and contains only a disabled v2 acceptance contract and deterministic local oracle.
 
 Live installation remains `NOT_AUTHORIZED`.

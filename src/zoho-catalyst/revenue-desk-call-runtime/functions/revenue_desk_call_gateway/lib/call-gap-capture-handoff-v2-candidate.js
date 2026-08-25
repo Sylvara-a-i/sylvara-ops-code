@@ -2,7 +2,11 @@
 
 const crypto = require('node:crypto');
 const { invariant } = require('./errors');
-const { convergeHandoffEvidence } = require('./handoff-v2-convergence');
+const {
+  canonicalizeHandoffEvents,
+  convergeHandoffEvidence,
+  STRUCTURED_STATE_PRECEDENCE,
+} = require('./handoff-v2-convergence');
 
 const EXPECTED_NOTIFICATION_FIELDS = Object.freeze([
   'caller_name',
@@ -71,6 +75,51 @@ const ROUTE_VERIFICATION_RECEIPT_FIELDS = Object.freeze([
   'expires_at',
   'consumed_at',
 ]);
+const ROUTE_VERIFICATION_WINDOW_TTL_MS = 300_000;
+const ROUTE_VERIFICATION_STORE_REQUEST_FIELDS = Object.freeze([
+  'window_key',
+  'current_time',
+  'authoritative_call',
+  'required_window_ttl_ms',
+  'maximum_observation_skew_ms',
+]);
+const HANDOFF_EVENT_BINDING_FIELDS = Object.freeze([
+  'call_binding_key',
+  'client_scope_key',
+  'deployment_scope_key',
+  'configuration_version_key',
+]);
+const HANDOFF_EVENT_LEDGER_BINDING_FIELDS = Object.freeze([
+  ...HANDOFF_EVENT_BINDING_FIELDS,
+  'authorized_target_fingerprint',
+]);
+const HANDOFF_EVENT_LEDGER_MAXIMUM_CLAIMS = 64;
+const NOTIFICATION_HANDOFF_STATE_PRECEDENCE = Object.freeze([
+  ...STRUCTURED_STATE_PRECEDENCE,
+  'Declined',
+  'Offered',
+  'NotConfigured',
+  'NotApplicable',
+  'Unknown',
+]);
+const NOTIFICATION_DISPOSITION_PRECEDENCE = Object.freeze([
+  'SensitiveSuppressed',
+  'NonactionableSuppressed',
+  'ActionableIntent',
+]);
+const NOTIFICATION_IDENTITY_FIELDS = Object.freeze([
+  'intent_key',
+  'call_binding_key',
+  'client_scope_key',
+  'recipient_fingerprint',
+]);
+const NOTIFICATION_SUPPRESSION_PROJECTION = Object.freeze({
+  channel: null,
+  delivery_state: 'Suppressed',
+  delivery_claimed: false,
+  provider_calls: 0,
+  payload: null,
+});
 const NON_TRANSFER_OUTCOMES = new Set([
   'spam',
   'unsupported_service',
@@ -168,6 +217,16 @@ function assertV2CandidateContracts(manifest, candidateContract, adapterContract
   invariant(exactArray(candidateContract.canonical_handoff_states,
     adapterContract.canonical_states),
   'V2_CONTRACT_INVALID', 'Retell handoff state contracts are inconsistent.');
+  invariant(exactArray(adapterContract.structured_event_state_precedence,
+    STRUCTURED_STATE_PRECEDENCE)
+    && exactArray(adapterContract.durable_structured_states,
+      ['Started', 'Bridged', 'Cancelled', 'Ended', 'Failed'])
+    && exactArray(adapterContract.model_handoff_disposition_allowlist,
+      ['not_applicable', 'not_configured', 'offered_declined', 'attempted',
+        'failure_branch', 'unknown'])
+    && exactArray(adapterContract.prohibited_model_success_claims,
+      ['connected', 'bridged', 'human_connected', 'transfer_succeeded']),
+  'V2_CONTRACT_INVALID', 'Retell handoff convergence contract is inconsistent.');
   invariant(exactArray(candidateContract.notification_policy?.allowed_fields,
     EXPECTED_NOTIFICATION_FIELDS)
     && candidateContract.notification_policy?.owner === 'catalyst'
@@ -186,17 +245,82 @@ function assertV2CandidateContracts(manifest, candidateContract, adapterContract
     && manifest.local_execution?.notification_provider_calls === 0,
   'V2_CONTRACT_INVALID', 'Gateway candidate containment is invalid.');
   invariant(manifest.route_verification?.authoritative_window_store === 'server_issued_only'
+    && manifest.route_verification?.window_issuer === 'revenue_leak_test_setup_form'
+    && manifest.route_verification?.window_issuer_operation === 'issueWindowAtomically'
+    && exactArray(manifest.route_verification?.window_fields,
+      ROUTE_VERIFICATION_WINDOW_FIELDS)
     && manifest.route_verification?.atomic_store_operation === 'consumeOpenWindow'
+    && exactArray(manifest.route_verification?.atomic_store_request_fields,
+      ROUTE_VERIFICATION_STORE_REQUEST_FIELDS)
+    && exactArray(manifest.route_verification?.atomic_store_outcomes,
+      ['consumed', 'expired', 'rejected'])
     && manifest.route_verification?.required_initial_window_status === 'Open'
     && manifest.route_verification?.success_window_status === 'Consumed'
+    && manifest.route_verification?.expired_window_status === 'Expired'
+    && manifest.route_verification?.window_ttl_ms === ROUTE_VERIFICATION_WINDOW_TTL_MS
     && manifest.route_verification?.success_closes_window === true
+    && manifest.route_verification?.expired_or_invalid_open_window_closes_atomically === true
+    && manifest.route_verification?.receipt_created_only_with_consumed_transition === true
+    && manifest.route_verification
+      ?.binding_or_freshness_rejection_preserves_valid_open_window === true
     && manifest.route_verification?.consumed_replay_behavior === 'reject'
     && manifest.route_verification?.current_time_source === 'injected_server_clock'
     && Number.isSafeInteger(manifest.route_verification?.maximum_observation_skew_seconds)
     && manifest.route_verification.maximum_observation_skew_seconds > 0
     && exactArray(manifest.route_verification?.authoritative_call_binding_fields,
-      ROUTE_VERIFICATION_CALL_FIELDS),
+      ROUTE_VERIFICATION_CALL_FIELDS)
+    && exactArray(manifest.route_verification?.receipt_fields,
+      ROUTE_VERIFICATION_RECEIPT_FIELDS),
   'V2_CONTRACT_INVALID', 'Route-verification atomic-consume contract is invalid.');
+  invariant(manifest.handoff_event_ledger?.source_status === 'NOT_READY'
+    && manifest.handoff_event_ledger?.injected_store_required === true
+    && manifest.handoff_event_ledger?.atomic_store_operation === 'reconcileCallEvents'
+    && exactArray(manifest.handoff_event_ledger?.atomic_store_request_fields,
+      ['binding', 'normalized_events', 'maximum_unique_claims_per_call'])
+    && exactArray(manifest.handoff_event_ledger?.atomic_store_result_fields,
+      ['cumulative_normalized_events', 'unique_claim_count'])
+    && exactArray(manifest.handoff_event_ledger?.immutable_binding_fields,
+      HANDOFF_EVENT_LEDGER_BINDING_FIELDS)
+    && exactArray(manifest.handoff_event_ledger?.nullable_immutable_binding_fields,
+      ['authorized_target_fingerprint'])
+    && manifest.handoff_event_ledger?.immutable_binding_conflict_behavior
+      === 'reject_without_mutation'
+    && manifest.handoff_event_ledger?.maximum_unique_claims_per_call
+      === HANDOFF_EVENT_LEDGER_MAXIMUM_CLAIMS
+    && manifest.handoff_event_ledger?.cumulative_snapshot_required === true
+    && manifest.handoff_event_ledger?.duplicate_identical_claim_behavior === 'noop'
+    && manifest.handoff_event_ledger?.conflicting_claim_behavior === 'reject_without_mutation'
+    && manifest.handoff_event_ledger?.raw_provider_payload_allowed === false,
+  'V2_CONTRACT_INVALID', 'Handoff event-ledger contract is invalid.');
+  invariant(manifest.notification_intent_store?.source_status === 'NOT_READY'
+    && manifest.notification_intent_store?.injected_store_required === true
+    && manifest.notification_intent_store?.atomic_store_operation === 'reconcileOne'
+    && exactArray(manifest.notification_intent_store?.atomic_store_request_fields,
+      ['intent', 'notification_disposition_precedence', 'monotone_handoff_state_precedence'])
+    && exactArray(manifest.notification_intent_store?.atomic_store_result_fields,
+      ['inserted', 'updated', 'previous_notification_disposition',
+        'previous_handoff_state', 'intent'])
+    && manifest.notification_intent_store?.durable_rows_per_actionable_call === 1
+    && manifest.notification_intent_store?.durable_rows_per_call === 1
+    && manifest.notification_intent_store?.durable_suppression_tombstone_required === true
+    && exactArray(manifest.notification_intent_store?.notification_disposition_precedence,
+      NOTIFICATION_DISPOSITION_PRECEDENCE)
+    && exactArray(manifest.notification_intent_store?.irreversible_suppression_dispositions,
+      ['SensitiveSuppressed', 'NonactionableSuppressed'])
+    && exactArray(manifest.notification_intent_store?.immutable_identity_fields,
+      NOTIFICATION_IDENTITY_FIELDS)
+    && manifest.notification_intent_store?.suppressed_payload_must_be_null === true
+    && manifest.notification_intent_store?.actionable_to_actionable_payload_mutable_only
+      === 'handoff_state'
+    && stableJson(manifest.notification_intent_store?.irreversible_suppression_projection)
+      === stableJson(NOTIFICATION_SUPPRESSION_PROJECTION)
+    && exactArray(manifest.notification_intent_store?.monotone_handoff_state_precedence,
+      NOTIFICATION_HANDOFF_STATE_PRECEDENCE)
+    && manifest.notification_intent_store?.update_requires_unclaimed_delivery === true
+    && manifest.notification_intent_store?.required_delivery_claimed === false
+    && manifest.notification_intent_store?.required_provider_calls === 0
+    && manifest.notification_intent_store?.provider_send_allowed === false,
+  'V2_CONTRACT_INVALID', 'Notification reconciliation contract is invalid.');
   invariant(manifest.handoff_evidence?.destination_fingerprint_only === true
     && manifest.handoff_evidence?.raw_destination_allowed === false
     && manifest.sensitive_terminal?.outcome === 'sensitive_data_ended'
@@ -461,6 +585,72 @@ function notificationIntentKey(binding) {
   ].join('\0'), 'utf8').digest('hex')}`;
 }
 
+function handoffEventBinding(binding) {
+  return Object.freeze(Object.fromEntries(HANDOFF_EVENT_BINDING_FIELDS
+    .map((field) => [field, binding[field]])));
+}
+
+function handoffLedgerBinding(binding, authorizedTargetFingerprint) {
+  return Object.freeze({
+    ...handoffEventBinding(binding),
+    authorized_target_fingerprint: authorizedTargetFingerprint,
+  });
+}
+
+function eventClaimMap(events) {
+  const claims = new Map();
+  for (const event of events) {
+    const fingerprint = stableJson(event);
+    const prior = claims.get(event.event_claim_key);
+    invariant(prior === undefined || prior === fingerprint,
+      'V2_EVENT_REPLAY_CONFLICT', 'An event claim key was reused with different evidence.');
+    claims.set(event.event_claim_key, fingerprint);
+  }
+  return claims;
+}
+
+async function reconcileHandoffEvents(
+  binding, normalizedEvents, authorizedTargetFingerprint, eventLedger, policy,
+) {
+  const eventBinding = handoffEventBinding(binding);
+  const ledgerBinding = handoffLedgerBinding(binding, authorizedTargetFingerprint);
+  const currentEvents = canonicalizeHandoffEvents({
+    binding: eventBinding,
+    normalized_events: normalizedEvents,
+  }, policy.adapterContract, policy.candidateContract);
+  const currentClaims = eventClaimMap(currentEvents);
+  invariant(eventLedger && typeof eventLedger.reconcileCallEvents === 'function',
+    'V2_EVENT_LEDGER_INVALID', 'Durable handoff event ledger is unavailable.');
+  const result = await eventLedger.reconcileCallEvents({
+    binding: ledgerBinding,
+    normalized_events: currentEvents,
+    maximum_unique_claims_per_call: policy.manifest.handoff_event_ledger
+      .maximum_unique_claims_per_call,
+  });
+  invariant(isPlainObject(result)
+    && exactArray(Object.keys(result).sort(),
+      ['cumulative_normalized_events', 'unique_claim_count'])
+    && Array.isArray(result.cumulative_normalized_events)
+    && Number.isSafeInteger(result.unique_claim_count)
+    && result.unique_claim_count >= 0
+    && result.unique_claim_count <= policy.manifest.handoff_event_ledger
+      .maximum_unique_claims_per_call,
+  'V2_EVENT_LEDGER_INVALID', 'Durable handoff event ledger result is invalid.');
+  const cumulativeEvents = canonicalizeHandoffEvents({
+    binding: eventBinding,
+    normalized_events: result.cumulative_normalized_events,
+  }, policy.adapterContract, policy.candidateContract);
+  const cumulativeClaims = eventClaimMap(cumulativeEvents);
+  invariant(cumulativeEvents.length === cumulativeClaims.size
+    && result.unique_claim_count === cumulativeClaims.size,
+  'V2_EVENT_LEDGER_INVALID', 'Durable handoff event ledger snapshot is incomplete.');
+  for (const [claimKey, fingerprint] of currentClaims) {
+    invariant(cumulativeClaims.get(claimKey) === fingerprint,
+      'V2_EVENT_LEDGER_INVALID', 'Durable handoff event ledger omitted current evidence.');
+  }
+  return cumulativeEvents;
+}
+
 function assertRecipientFingerprint(value, name = 'recipient_fingerprint') {
   invariant(typeof value === 'string' && RECIPIENT_FINGERPRINT_PATTERN.test(value),
     'V2_RECIPIENT_INVALID', `${name} is invalid.`);
@@ -470,35 +660,117 @@ function canonicalIntent(intent) {
   return stableJson(intent);
 }
 
-async function ensureNotificationIntent(input, notificationStore, policy) {
-  const payload = notificationPayload(input.analysis, input.handoff_state,
-    input.call_timestamp, policy);
-  if (payload === null) return null;
-  assertRecipientFingerprint(input.binding.recipient_fingerprint,
-    'binding recipient_fingerprint');
-  assertRecipientFingerprint(input.recipient_fingerprint);
-  invariant(input.binding.recipient_fingerprint === input.recipient_fingerprint,
-    'V2_RECIPIENT_SCOPE_MISMATCH', 'Notification recipient does not match the call binding.');
-  invariant(notificationStore && typeof notificationStore.ensureOne === 'function',
-    'V2_NOTIFICATION_STORE_INVALID', 'Durable notification intent store is unavailable.');
-  const intent = Object.freeze({
+function strongerNotificationHandoffState(previousState, requestedState, policy) {
+  const precedence = policy.manifest.notification_intent_store
+    .monotone_handoff_state_precedence;
+  const previousRank = precedence.indexOf(previousState);
+  const requestedRank = precedence.indexOf(requestedState);
+  invariant(previousRank >= 0 && requestedRank >= 0,
+    'V2_NOTIFICATION_IDEMPOTENCY_CONFLICT',
+    'Notification handoff state is outside the monotone reconciliation contract.');
+  return requestedRank < previousRank ? requestedState : previousState;
+}
+
+function strongerNotificationDisposition(previousDisposition, requestedDisposition, policy) {
+  const precedence = policy.manifest.notification_intent_store
+    .notification_disposition_precedence;
+  const previousRank = precedence.indexOf(previousDisposition);
+  const requestedRank = precedence.indexOf(requestedDisposition);
+  invariant(previousRank >= 0 && requestedRank >= 0,
+    'V2_NOTIFICATION_IDEMPOTENCY_CONFLICT',
+    'Notification disposition is outside the durable suppression contract.');
+  return requestedRank < previousRank ? requestedDisposition : previousDisposition;
+}
+
+function notificationDisposition(analysis, payload) {
+  if (analysis.outcome === 'sensitive_data_ended') return 'SensitiveSuppressed';
+  return payload === null ? 'NonactionableSuppressed' : 'ActionableIntent';
+}
+
+function notificationRecord(input, disposition, payload) {
+  const identity = {
     intent_key: notificationIntentKey(input.binding),
     call_binding_key: input.binding.call_binding_key,
     client_scope_key: input.binding.client_scope_key,
     recipient_fingerprint: input.recipient_fingerprint,
+  };
+  if (disposition !== 'ActionableIntent') {
+    return Object.freeze({
+      ...identity,
+      notification_disposition: disposition,
+      ...NOTIFICATION_SUPPRESSION_PROJECTION,
+    });
+  }
+  return Object.freeze({
+    ...identity,
+    notification_disposition: disposition,
     channel: 'email',
     delivery_state: 'DryRunIntended',
     delivery_claimed: false,
     provider_calls: 0,
     payload,
   });
-  const result = await notificationStore.ensureOne(intent);
-  invariant(isPlainObject(result) && typeof result.inserted === 'boolean'
-    && isPlainObject(result.intent)
-    && canonicalIntent(result.intent) === canonicalIntent(intent),
+}
+
+async function ensureNotificationIntent(input, notificationStore, policy) {
+  const payload = notificationPayload(input.analysis, input.handoff_state,
+    input.call_timestamp, policy);
+  const requestedDisposition = notificationDisposition(input.analysis, payload);
+  assertRecipientFingerprint(input.binding.recipient_fingerprint,
+    'binding recipient_fingerprint');
+  assertRecipientFingerprint(input.recipient_fingerprint);
+  invariant(input.binding.recipient_fingerprint === input.recipient_fingerprint,
+    'V2_RECIPIENT_SCOPE_MISMATCH', 'Notification recipient does not match the call binding.');
+  invariant(notificationStore && typeof notificationStore.reconcileOne === 'function',
+    'V2_NOTIFICATION_STORE_INVALID', 'Durable notification intent store is unavailable.');
+  const intent = notificationRecord(input, requestedDisposition, payload);
+  const result = await notificationStore.reconcileOne({
+    intent,
+    notification_disposition_precedence: policy.manifest.notification_intent_store
+      .notification_disposition_precedence,
+    monotone_handoff_state_precedence: policy.manifest.notification_intent_store
+      .monotone_handoff_state_precedence,
+  });
+  invariant(isPlainObject(result)
+    && exactArray(Object.keys(result).sort(),
+      ['inserted', 'intent', 'previous_handoff_state',
+        'previous_notification_disposition', 'updated'])
+    && typeof result.inserted === 'boolean'
+    && typeof result.updated === 'boolean'
+    && isPlainObject(result.intent),
+  'V2_NOTIFICATION_STORE_INVALID', 'Notification reconciliation result is invalid.');
+  const previousDisposition = result.previous_notification_disposition;
+  const previousState = result.previous_handoff_state;
+  invariant((result.inserted && previousDisposition === null
+      && previousState === null && result.updated === false)
+    || (!result.inserted
+      && NOTIFICATION_DISPOSITION_PRECEDENCE.includes(previousDisposition)
+      && ((previousDisposition === 'ActionableIntent' && typeof previousState === 'string')
+        || (previousDisposition !== 'ActionableIntent' && previousState === null))),
+  'V2_NOTIFICATION_STORE_INVALID', 'Notification reconciliation history is invalid.');
+  const expectedDisposition = result.inserted ? requestedDisposition
+    : strongerNotificationDisposition(previousDisposition, requestedDisposition, policy);
+  const expectedState = expectedDisposition === 'ActionableIntent'
+    ? (result.inserted ? payload.handoff_state
+      : strongerNotificationHandoffState(previousState, payload.handoff_state, policy))
+    : null;
+  const expectedIntent = expectedDisposition === 'ActionableIntent'
+    ? { ...intent, payload: { ...payload, handoff_state: expectedState } }
+    : notificationRecord(input, expectedDisposition, null);
+  const expectedUpdated = !result.inserted && (expectedDisposition !== previousDisposition
+    || (expectedDisposition === 'ActionableIntent' && expectedState !== previousState));
+  invariant(result.updated === expectedUpdated
+    && result.intent.delivery_claimed === false
+    && result.intent.provider_calls === 0
+    && canonicalIntent(result.intent) === canonicalIntent(expectedIntent),
   'V2_NOTIFICATION_IDEMPOTENCY_CONFLICT',
-  'Durable notification intent conflicts with the existing call intent.');
-  return Object.freeze({ intent, inserted: result.inserted });
+  'Durable notification intent conflicts with the monotone call intent.');
+  return Object.freeze({
+    intent: Object.freeze(result.intent),
+    inserted: result.inserted,
+    updated: result.updated,
+    actionable: expectedDisposition === 'ActionableIntent',
+  });
 }
 
 function assertVerificationFingerprint(value, name) {
@@ -557,9 +829,34 @@ function assertConsumedWindow(window, request, now, policy) {
   const expiresAt = Date.parse(window.expires_at);
   const observedAt = Date.parse(call.observed_at);
   const nowMs = Date.parse(now);
+  invariant(expiresAt - issuedAt === policy.manifest.route_verification.window_ttl_ms,
+    'V2_ROUTE_VERIFICATION_WINDOW_INVALID',
+    'Verification window does not use the exact authoritative TTL.');
   invariant(issuedAt <= observedAt && observedAt < expiresAt
     && issuedAt <= nowMs && nowMs < expiresAt,
   'V2_ROUTE_VERIFICATION_WINDOW_CLOSED', 'Verification window is not currently open.');
+}
+
+function assertExpiredWindow(window, request, now, policy) {
+  invariant(isPlainObject(window)
+    && exactArray(Object.keys(window).sort(), [...ROUTE_VERIFICATION_WINDOW_FIELDS].sort()),
+  'V2_ROUTE_VERIFICATION_STORE_INVALID', 'Expired verification window is invalid.');
+  invariant(window.status === policy.manifest.route_verification.expired_window_status
+    && window.window_key === request.window_key && window.closed_at === now,
+  'V2_ROUTE_VERIFICATION_STORE_INVALID',
+  'Expired verification window did not close atomically.');
+  assertVerificationFingerprint(window.window_key, 'window_key');
+  for (const field of ROUTE_VERIFICATION_WINDOW_FIELDS.slice(2, -3)) {
+    assertVerificationFingerprint(window[field], field);
+  }
+  for (const field of ['issued_at', 'expires_at', 'closed_at']) {
+    invariant(exactIsoTimestamp(window[field]),
+      'V2_ROUTE_VERIFICATION_STORE_INVALID', 'Expired verification timestamp is invalid.');
+  }
+  invariant(Date.parse(window.expires_at) - Date.parse(window.issued_at)
+    === policy.manifest.route_verification.window_ttl_ms,
+  'V2_ROUTE_VERIFICATION_WINDOW_INVALID',
+  'Verification window was atomically closed because its TTL was invalid.');
 }
 
 function assertVerificationReceipt(receipt, window, request, now) {
@@ -605,21 +902,41 @@ async function interceptRouteVerification(routeVerification, verificationStore, 
   const observedSkewMs = Math.abs(
     Date.parse(now) - Date.parse(routeVerification.authoritative_call.observed_at),
   );
-  invariant(observedSkewMs <= policy.manifest.route_verification
-    .maximum_observation_skew_seconds * 1000,
-  'V2_ROUTE_VERIFICATION_CALL_STALE', 'Authoritative call observation is stale.');
+  const maximumObservationSkewMs = policy.manifest.route_verification
+    .maximum_observation_skew_seconds * 1000;
   invariant(verificationStore && typeof verificationStore.consumeOpenWindow === 'function',
     'V2_ROUTE_VERIFICATION_STORE_INVALID', 'Route-verification store is unavailable.');
   const consumed = await verificationStore.consumeOpenWindow({
     window_key: routeVerification.window_key,
     current_time: now,
     authoritative_call: routeVerification.authoritative_call,
+    required_window_ttl_ms: policy.manifest.route_verification.window_ttl_ms,
+    maximum_observation_skew_ms: maximumObservationSkewMs,
   });
-  invariant(isPlainObject(consumed) && consumed.consumed === true,
-    'V2_ROUTE_VERIFICATION_CONSUME_REJECTED',
-    'Server-issued route-verification window was not atomically consumed.');
-  invariant(exactArray(Object.keys(consumed).sort(), ['consumed', 'receipt', 'window']),
-    'V2_ROUTE_VERIFICATION_STORE_INVALID', 'Route-verification consume result is invalid.');
+  invariant(isPlainObject(consumed)
+    && policy.manifest.route_verification.atomic_store_outcomes.includes(consumed.outcome),
+  'V2_ROUTE_VERIFICATION_STORE_INVALID', 'Route-verification consume result is invalid.');
+  if (consumed.outcome === 'expired') {
+    invariant(exactArray(Object.keys(consumed).sort(), ['outcome', 'window']),
+      'V2_ROUTE_VERIFICATION_STORE_INVALID', 'Route-verification expiry result is invalid.');
+    assertExpiredWindow(consumed.window, routeVerification, now, policy);
+    invariant(false, 'V2_ROUTE_VERIFICATION_WINDOW_CLOSED',
+      'Server-issued route-verification window is closed.');
+  }
+  if (consumed.outcome === 'rejected') {
+    invariant(exactArray(Object.keys(consumed), ['outcome']),
+      'V2_ROUTE_VERIFICATION_STORE_INVALID', 'Route-verification rejection is invalid.');
+    invariant(observedSkewMs <= maximumObservationSkewMs,
+      'V2_ROUTE_VERIFICATION_CALL_STALE', 'Authoritative call observation is stale.');
+    invariant(false, 'V2_ROUTE_VERIFICATION_CONSUME_REJECTED',
+      'Server-issued route-verification window was not atomically consumed.');
+  }
+  invariant(consumed.outcome === 'consumed'
+    && exactArray(Object.keys(consumed).sort(), ['outcome', 'receipt', 'window']),
+  'V2_ROUTE_VERIFICATION_STORE_INVALID', 'Route-verification consume result is invalid.');
+  invariant(observedSkewMs <= maximumObservationSkewMs,
+    'V2_ROUTE_VERIFICATION_STORE_INVALID',
+    'Route-verification store consumed stale authoritative call evidence.');
   assertConsumedWindow(consumed.window, routeVerification, now, policy);
   assertVerificationReceipt(consumed.receipt, consumed.window, routeVerification, now);
   return Object.freeze({
@@ -643,6 +960,7 @@ function createV2CandidateService({
   candidateContract,
   adapterContract,
   notificationStore,
+  handoffEventLedger,
   verificationStore,
   clock,
 }) {
@@ -660,6 +978,11 @@ function createV2CandidateService({
       );
       if (intercepted !== null) return intercepted;
 
+      // Only the injected cumulative event ledger may supply cross-request lifecycle evidence.
+      // A normalized request cannot self-assert a durable prior state such as Bridged.
+      invariant(!Object.hasOwn(input, 'prior_handoff_state'),
+        'V2_PRIOR_HANDOFF_STATE_FORBIDDEN',
+        'Caller-supplied prior handoff state is forbidden.');
       invariant(isPlainObject(input.binding), 'V2_BINDING_INVALID', 'Call binding is invalid.');
       assertRecipientFingerprint(input.binding.recipient_fingerprint,
         'binding recipient_fingerprint');
@@ -669,28 +992,52 @@ function createV2CandidateService({
       assertSensitiveAnalysisConsistency(input.analysis);
       const handoff = decideHandoff(input.handoff_facts, policy);
       assertAnalysisHandoffConsistency(input.analysis, input.handoff_facts);
-      const convergence = convergeHandoffEvidence({
-        binding: {
-          call_binding_key: input.binding.call_binding_key,
-          client_scope_key: input.binding.client_scope_key,
-          deployment_scope_key: input.binding.deployment_scope_key,
-          configuration_version_key: input.binding.configuration_version_key,
-        },
+      // Bind the server-authoritative configured destination for the entire call, independent of
+      // caller consent or current provider evidence. This permits Offered -> Started progression
+      // for one target while preventing a later request from rebinding the same durable ledger.
+      const authorizedTargetFingerprint = input.handoff_facts.destination_fingerprint;
+      const convergenceInput = {
+        binding: handoffEventBinding(input.binding),
         initial_state: handoff.initial_state,
-        prior_state: input.prior_handoff_state,
         normalized_events: input.normalized_events || [],
         authoritative_provider_state: input.authoritative_provider_state,
         model_handoff_disposition: input.analysis?.handoff_disposition,
+      };
+      // Validate every current event and the model disposition before any durable ledger write.
+      // The ledger then atomically returns the complete bounded claim set for cross-request replay.
+      const currentConvergence = convergeHandoffEvidence(
+        convergenceInput, policy.adapterContract, policy.candidateContract,
+      );
+      invariant(handoff.attempt_allowed
+        || currentConvergence.handoff_state === handoff.initial_state,
+        'V2_UNAUTHORIZED_TRANSFER_EVIDENCE',
+        'Structured transfer evidence is incompatible with the bounded handoff policy.');
+      if (handoff.attempt_allowed && currentConvergence.target_fingerprint !== null) {
+        invariant(currentConvergence.target_fingerprint
+          === input.handoff_facts.destination_fingerprint,
+        'V2_TARGET_FINGERPRINT_CONFLICT',
+        'Transfer evidence conflicts with the authoritative destination fingerprint.');
+      }
+      const cumulativeEvents = await reconcileHandoffEvents(
+        input.binding,
+        input.normalized_events || [],
+        authorizedTargetFingerprint,
+        handoffEventLedger,
+        policy,
+      );
+      const convergence = convergeHandoffEvidence({
+        ...convergenceInput,
+        normalized_events: cumulativeEvents,
       }, policy.adapterContract, policy.candidateContract);
       invariant(handoff.attempt_allowed
         || convergence.handoff_state === handoff.initial_state,
-        'V2_UNAUTHORIZED_TRANSFER_EVIDENCE',
-        'Structured transfer evidence is incompatible with the bounded handoff policy.');
+      'V2_UNAUTHORIZED_TRANSFER_EVIDENCE',
+      'Cumulative transfer evidence is incompatible with the bounded handoff policy.');
       if (handoff.attempt_allowed && convergence.target_fingerprint !== null) {
         invariant(convergence.target_fingerprint
           === input.handoff_facts.destination_fingerprint,
         'V2_TARGET_FINGERPRINT_CONFLICT',
-        'Transfer evidence conflicts with the authoritative destination fingerprint.');
+        'Cumulative transfer evidence conflicts with the authoritative destination fingerprint.');
       }
       const notification = await ensureNotificationIntent({
         analysis: input.analysis,
@@ -708,8 +1055,9 @@ function createV2CandidateService({
         target_fingerprint: handoff.attempt_allowed
           ? input.handoff_facts.destination_fingerprint : null,
         would_increment_handled_call_count: true,
-        notification_intent_count: notification === null ? 0 : 1,
-        notification_intent_inserted: notification?.inserted || false,
+        notification_intent_count: notification.actionable ? 1 : 0,
+        notification_intent_inserted: notification.actionable && notification.inserted,
+        notification_intent_updated: notification.actionable && notification.updated,
         notification_provider_calls: 0,
         delivery_claimed: false,
       });

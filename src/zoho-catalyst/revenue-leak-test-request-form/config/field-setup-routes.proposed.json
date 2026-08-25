@@ -5,6 +5,25 @@
   "function": "revenue_leak_test_request_form",
   "default_action": "reject",
   "cors": false,
+  "source_composition": {
+    "runtime_status": "NOT_READY",
+    "default_dispatcher": "claims no field-setup routes",
+    "catalyst_header_mapping": "NOT_READY_INJECTED_ONLY",
+    "catalyst_identity_mapping": "NOT_READY_INJECTED_ONLY",
+    "catalyst_store_mapping": "NOT_READY_INJECTED_ONLY",
+    "deployment_authorized": false,
+    "route_paths": "injected; no live path is committed",
+    "browser_origin": "injected exact HTTPS origin",
+    "browser_controls": [
+      "exact Origin",
+      "Sec-Fetch-Site same-origin",
+      "Secure HttpOnly SameSite=Strict bound session",
+      "session-derived CSRF token in an injected exact header",
+      "authenticated operator resolver independent of request body"
+    ],
+    "response_policy": "allowlisted journey state, progress, revision, expiry, launch URL, and CSRF bootstrap only",
+    "activation_path": false
+  },
   "routes": [
     {
       "id": "FIELD_SETUP_LAUNCH",

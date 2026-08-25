@@ -275,6 +275,40 @@ h1:focus {
   font-size: 1rem;
 }
 
+.qualification-fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.qualification-fieldset legend {
+  padding: 0;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.qualification-option {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: center;
+  min-height: 44px;
+}
+
+.qualification-option input {
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  accent-color: var(--brand);
+}
+
+.qualification-option label {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  font-weight: 650;
+}
+
 .error-message {
   margin: 1rem 0 0;
   padding: 0.8rem 1rem;

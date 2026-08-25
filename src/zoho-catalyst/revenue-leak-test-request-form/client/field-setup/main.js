@@ -11,7 +11,7 @@
     storage: safeSessionStorage(root)
   });
   const elements = readElements(documentLike);
-  let currentState = model.getState("session-validation");
+  let currentState = model.getState("loading_session_validation");
   let busy = false;
 
   render(currentState, false);
@@ -84,9 +84,13 @@
     clearError();
 
     try {
-      const isQualification = currentState.id === "operator-qualification-review";
+      const isQualification = currentState.id === "operator_qualification_review";
       const outcome = isQualification
-        ? await api.submitOperatorDecision({ stateId: currentState.id, actionId: action.id })
+        ? await api.submitOperatorDecision({
+          stateId: currentState.id,
+          actionId: action.id,
+          qualification: collectQualificationPayload(action)
+        })
         : await api.completeStep({ stateId: currentState.id, actionId: action.id });
       render(model.getState(outcome.nextState), true);
     } catch (_error) {
@@ -131,7 +135,7 @@
     elements.primary.textContent = state.primaryAction.label;
 
     replaceListItems(elements.details, state.details);
-    renderQualification(state.qualificationCriteria);
+    renderQualification(state.qualificationFactors);
     renderSecondaryActions(state.secondaryActions);
     clearError();
 
@@ -149,21 +153,58 @@
     }));
   }
 
-  function renderQualification(criteria) {
-    if (criteria.length === 0) {
+  function renderQualification(factors) {
+    if (factors.length === 0) {
       elements.qualification.hidden = true;
       elements.qualification.replaceChildren();
       return;
     }
 
-    const heading = documentLike.createElement("h2");
-    heading.textContent = "Qualification conditions";
-    const list = documentLike.createElement("ul");
-    list.className = "qualification-list";
-    list.setAttribute("aria-label", "Qualification conditions requiring operator review");
-    replaceListItems(list, criteria);
-    elements.qualification.replaceChildren(heading, list);
+    const fieldset = documentLike.createElement("fieldset");
+    fieldset.className = "qualification-fieldset";
+    const legend = documentLike.createElement("legend");
+    legend.textContent = "Qualification conditions";
+    const options = documentLike.createElement("div");
+    options.className = "qualification-list";
+    for (const factor of factors) {
+      const option = documentLike.createElement("div");
+      option.className = "qualification-option";
+      const checkbox = documentLike.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.id = `qualification-${factor.id}`;
+      checkbox.setAttribute("data-qualification-factor", factor.id);
+      checkbox.addEventListener("change", syncQualificationPrimary);
+      const label = documentLike.createElement("label");
+      label.htmlFor = checkbox.id;
+      label.textContent = factor.label;
+      option.append(checkbox, label);
+      options.append(option);
+    }
+    fieldset.append(legend, options);
+    elements.qualification.replaceChildren(fieldset);
     elements.qualification.hidden = false;
+    syncQualificationPrimary();
+  }
+
+  function collectQualificationPayload(action) {
+    const payload = {};
+    for (const factor of model.QUALIFICATION_FACTORS) {
+      const input = elements.qualification.querySelector(
+        `input[data-qualification-factor="${factor.id}"]`
+      );
+      payload[factor.id] = input ? input.checked === true : false;
+    }
+    payload.decision = action.qualificationDecision;
+    return payload;
+  }
+
+  function syncQualificationPrimary() {
+    if (busy || currentState.id !== "operator_qualification_review") {
+      return;
+    }
+    const inputs = elements.qualification.querySelectorAll("input[data-qualification-factor]");
+    elements.primary.disabled = inputs.length !== model.QUALIFICATION_FACTORS.length ||
+      [...inputs].some((input) => input.checked !== true);
   }
 
   function renderSecondaryActions(actions) {
@@ -184,6 +225,9 @@
     elements.stop.disabled = nextBusy;
     for (const button of elements.decisions.querySelectorAll("button")) {
       button.disabled = nextBusy;
+    }
+    if (!nextBusy) {
+      syncQualificationPrimary();
     }
     if (statusText) {
       elements.announcer.textContent = statusText;

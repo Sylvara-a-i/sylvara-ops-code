@@ -1,6 +1,6 @@
 "use strict";
 
-const { createHash } = require("node:crypto");
+const { createHash, randomBytes } = require("node:crypto");
 
 const FINGERPRINT_PATTERN = /^[a-f0-9]{64}$/;
 
@@ -44,24 +44,58 @@ const RESERVATION_KEYS = new Set([
   "configurationFingerprint",
 ]);
 
-const ROUTE_WINDOW_KEYS = new Set([
-  "windowFingerprint",
-  "clientFingerprint",
-  "environmentFingerprint",
-  "journeyFingerprint",
-  "deploymentFingerprint",
-  "configurationFingerprint",
-  "numberFingerprint",
-  "routeFingerprint",
-  "approvedQaCallerFingerprint",
-  "issuedAt",
-  "expiresAt",
+const ROUTE_WINDOW_TTL_MS = 300_000;
+
+// This is the exact window shape consumed by the v2 gateway candidate. The setup
+// function may issue this record, but it must never accept or consume one from a
+// browser request. Consumption and receipt creation belong to the gateway only.
+const ROUTE_VERIFICATION_WINDOW_FIELDS = Object.freeze([
+  "window_key",
+  "status",
+  "environment_fingerprint",
+  "client_fingerprint",
+  "journey_fingerprint",
+  "deployment_fingerprint",
+  "configuration_fingerprint",
+  "number_fingerprint",
+  "route_fingerprint",
+  "approved_qa_caller_fingerprint",
+  "issued_at",
+  "expires_at",
+  "closed_at",
 ]);
 
-const OPEN_WINDOW_RECORD_KEYS = new Set([
-  ...ROUTE_WINDOW_KEYS,
-  "bindingFingerprint",
-  "status",
+const ROUTE_WINDOW_ISSUE_COMMAND_FIELDS = new Set([
+  "operation_fingerprint",
+  "environment_fingerprint",
+  "client_fingerprint",
+  "journey_fingerprint",
+  "deployment_fingerprint",
+  "configuration_fingerprint",
+  "number_fingerprint",
+  "route_fingerprint",
+  "approved_qa_caller_fingerprint",
+]);
+
+const ROUTE_WINDOW_FINGERPRINT_PREFIXES = Object.freeze({
+  operation_fingerprint: "operation",
+  environment_fingerprint: "environment",
+  client_fingerprint: "client",
+  journey_fingerprint: "journey",
+  deployment_fingerprint: "deployment",
+  configuration_fingerprint: "configuration",
+  number_fingerprint: "number",
+  route_fingerprint: "route",
+  approved_qa_caller_fingerprint: "qa_caller",
+});
+
+const ROUTE_ACTIVE_BINDING_FIELDS = Object.freeze([
+  "environment_fingerprint",
+  "client_fingerprint",
+  "deployment_fingerprint",
+  "configuration_fingerprint",
+  "number_fingerprint",
+  "route_fingerprint",
 ]);
 
 class FieldSetupOperationError extends Error {
@@ -257,188 +291,203 @@ function resolveForwardingInstructions(providerFingerprint, reviewedRegistry = [
   });
 }
 
-function routeWindowBindingFingerprint(window) {
-  return fingerprint([
-    ["window", window.windowFingerprint],
-    ["client", window.clientFingerprint],
-    ["environment", window.environmentFingerprint],
-    ["journey", window.journeyFingerprint],
-    ["deployment", window.deploymentFingerprint],
-    ["configuration", window.configurationFingerprint],
-    ["number", window.numberFingerprint],
-    ["route", window.routeFingerprint],
-    ["approved_qa_caller", window.approvedQaCallerFingerprint],
-    ["issued_at", window.issuedAt],
-    ["expires_at", window.expiresAt],
-  ]);
+function typedFingerprint(value, prefix) {
+  return typeof value === "string" && new RegExp(`^${prefix}_[a-f0-9]{64}$`).test(value);
 }
 
-function assertRouteWindowCommand(command, nowMs) {
-  if (!exactPlainObject(command, ROUTE_WINDOW_KEYS)) {
-    throw new FieldSetupOperationError("route_window_invalid", 400);
+function assertRouteWindowIssueCommand(command) {
+  if (!exactPlainObject(command, ROUTE_WINDOW_ISSUE_COMMAND_FIELDS)) {
+    throw new FieldSetupOperationError("route_window_issue_invalid", 400);
   }
-  for (const key of ROUTE_WINDOW_KEYS) {
-    if (!key.endsWith("At")) assertFingerprint(command[key], "route_window_invalid");
+  for (const [field, prefix] of Object.entries(ROUTE_WINDOW_FINGERPRINT_PREFIXES)) {
+    if (!typedFingerprint(command[field], prefix)) {
+      throw new FieldSetupOperationError("route_window_issue_invalid", 400);
+    }
   }
-  const issuedAtMs = canonicalInstant(command.issuedAt);
-  const expiresAtMs = canonicalInstant(command.expiresAt);
+}
+
+function routeWindowRequestBindingKey(command) {
+  return `request_${fingerprint([
+    ["operation", command.operation_fingerprint],
+    ["environment", command.environment_fingerprint],
+    ["client", command.client_fingerprint],
+    ["journey", command.journey_fingerprint],
+    ["deployment", command.deployment_fingerprint],
+    ["configuration", command.configuration_fingerprint],
+    ["number", command.number_fingerprint],
+    ["route", command.route_fingerprint],
+    ["approved_qa_caller", command.approved_qa_caller_fingerprint],
+  ])}`;
+}
+
+function assertIssuedWindow(window, command, selectedNow, proposedWindow, outcome) {
   if (
-    !Number.isSafeInteger(nowMs) ||
-    nowMs < 0 ||
+    !exactPlainObject(window, new Set(ROUTE_VERIFICATION_WINDOW_FIELDS)) ||
+    window.status !== "Open" ||
+    window.closed_at !== null ||
+    !typedFingerprint(window.window_key, "window")
+  ) {
+    throw new FieldSetupOperationError("route_window_response_invalid", 502);
+  }
+  for (const field of [
+    "environment_fingerprint",
+    "client_fingerprint",
+    "journey_fingerprint",
+    "deployment_fingerprint",
+    "configuration_fingerprint",
+    "number_fingerprint",
+    "route_fingerprint",
+    "approved_qa_caller_fingerprint",
+  ]) {
+    if (window[field] !== command[field]) {
+      throw new FieldSetupOperationError("route_window_response_invalid", 502);
+    }
+  }
+  const issuedAtMs = canonicalInstant(window.issued_at);
+  const expiresAtMs = canonicalInstant(window.expires_at);
+  if (
     !Number.isFinite(issuedAtMs) ||
     !Number.isFinite(expiresAtMs) ||
-    issuedAtMs > nowMs ||
-    expiresAtMs <= nowMs ||
-    expiresAtMs <= issuedAtMs
+    issuedAtMs > selectedNow ||
+    selectedNow >= expiresAtMs ||
+    expiresAtMs - issuedAtMs !== ROUTE_WINDOW_TTL_MS
   ) {
-    throw new FieldSetupOperationError("route_window_invalid", 400);
+    throw new FieldSetupOperationError("route_window_response_invalid", 502);
+  }
+  if (
+    outcome === "issued" &&
+    ROUTE_VERIFICATION_WINDOW_FIELDS.some((field) => window[field] !== proposedWindow[field])
+  ) {
+    throw new FieldSetupOperationError("route_window_response_invalid", 502);
   }
 }
 
-async function openRouteVerificationWindow(command, dependencies) {
+function assertExpiredWindow(
+  window,
+  command,
+  selectedNow,
+  { closedInCurrentTransaction = false, requireFullBinding = false } = {},
+) {
   if (
-    typeof dependencies?.verificationStore?.openWindowAtomically !== "function" ||
+    !exactPlainObject(window, new Set(ROUTE_VERIFICATION_WINDOW_FIELDS)) ||
+    window.status !== "Expired" ||
+    !typedFingerprint(window.window_key, "window")
+  ) {
+    throw new FieldSetupOperationError("route_window_response_invalid", 502);
+  }
+  for (const [field, prefix] of Object.entries(ROUTE_WINDOW_FINGERPRINT_PREFIXES)) {
+    if (field === "operation_fingerprint") continue;
+    if (!typedFingerprint(window[field], prefix)) {
+      throw new FieldSetupOperationError("route_window_response_invalid", 502);
+    }
+  }
+  const fields = requireFullBinding
+    ? Object.keys(ROUTE_WINDOW_FINGERPRINT_PREFIXES).filter(
+      (field) => field !== "operation_fingerprint",
+    )
+    : ROUTE_ACTIVE_BINDING_FIELDS;
+  if (fields.some((field) => window[field] !== command[field])) {
+    throw new FieldSetupOperationError("route_window_response_invalid", 502);
+  }
+  const issuedAtMs = canonicalInstant(window.issued_at);
+  const expiresAtMs = canonicalInstant(window.expires_at);
+  const closedAtMs = canonicalInstant(window.closed_at);
+  if (
+    !Number.isFinite(issuedAtMs) ||
+    !Number.isFinite(expiresAtMs) ||
+    !Number.isFinite(closedAtMs) ||
+    expiresAtMs - issuedAtMs !== ROUTE_WINDOW_TTL_MS ||
+    expiresAtMs > selectedNow ||
+    closedAtMs < expiresAtMs ||
+    closedAtMs > selectedNow ||
+    (closedInCurrentTransaction && closedAtMs !== selectedNow)
+  ) {
+    throw new FieldSetupOperationError("route_window_response_invalid", 502);
+  }
+}
+
+async function issueRouteVerificationWindow(command, dependencies) {
+  if (
+    typeof dependencies?.verificationStore?.issueWindowAtomically !== "function" ||
     typeof dependencies?.nowMs !== "function"
   ) {
     throw new FieldSetupOperationError("route_verification_dependency_unavailable", 503);
   }
+  assertRouteWindowIssueCommand(command);
   const selectedNow = dependencies.nowMs();
-  assertRouteWindowCommand(command, selectedNow);
-  const bindingFingerprint = routeWindowBindingFingerprint(command);
-  const requestedWindow = deepFreeze({
-    ...command,
-    bindingFingerprint,
-    status: "open",
+  if (
+    !Number.isSafeInteger(selectedNow) ||
+    selectedNow < 0 ||
+    selectedNow > 8_640_000_000_000_000 - ROUTE_WINDOW_TTL_MS
+  ) {
+    throw new FieldSetupOperationError("route_verification_clock_invalid", 503);
+  }
+  const windowKeyFactory = dependencies.windowKeyFactory ?? (() => (
+    `window_${randomBytes(32).toString("hex")}`
+  ));
+  if (typeof windowKeyFactory !== "function") {
+    throw new FieldSetupOperationError("route_verification_dependency_unavailable", 503);
+  }
+  let windowKey;
+  try {
+    windowKey = windowKeyFactory();
+  } catch {
+    throw new FieldSetupOperationError("route_verification_key_invalid", 503);
+  }
+  if (!typedFingerprint(windowKey, "window")) {
+    throw new FieldSetupOperationError("route_verification_key_invalid", 503);
+  }
+  const proposedWindow = deepFreeze({
+    window_key: windowKey,
+    status: "Open",
+    environment_fingerprint: command.environment_fingerprint,
+    client_fingerprint: command.client_fingerprint,
+    journey_fingerprint: command.journey_fingerprint,
+    deployment_fingerprint: command.deployment_fingerprint,
+    configuration_fingerprint: command.configuration_fingerprint,
+    number_fingerprint: command.number_fingerprint,
+    route_fingerprint: command.route_fingerprint,
+    approved_qa_caller_fingerprint: command.approved_qa_caller_fingerprint,
+    issued_at: new Date(selectedNow).toISOString(),
+    expires_at: new Date(selectedNow + ROUTE_WINDOW_TTL_MS).toISOString(),
+    closed_at: null,
   });
-  const result = await dependencies.verificationStore.openWindowAtomically(requestedWindow);
-
-  if (exactPlainObject(result, new Set(["outcome"])) && result.outcome === "binding_conflict") {
-    throw new FieldSetupOperationError("route_window_binding_conflict");
+  const issueRequest = deepFreeze({
+    operation_fingerprint: command.operation_fingerprint,
+    request_binding_key: routeWindowRequestBindingKey(command),
+    current_time: proposedWindow.issued_at,
+    proposed_window: proposedWindow,
+  });
+  const result = await dependencies.verificationStore.issueWindowAtomically(issueRequest);
+  if (
+    exactPlainObject(result, new Set(["outcome", "window"])) &&
+    result.outcome === "operation_expired"
+  ) {
+    assertExpiredWindow(result.window, command, selectedNow, { requireFullBinding: true });
+    throw new FieldSetupOperationError("route_window_operation_expired");
   }
   if (
-    !exactPlainObject(result, new Set(["outcome", "window"])) ||
-    !["opened", "idempotent_replay"].includes(result.outcome) ||
-    !exactPlainObject(result.window, OPEN_WINDOW_RECORD_KEYS) ||
-    Object.keys(requestedWindow).some((key) => result.window[key] !== requestedWindow[key])
+    exactPlainObject(result, new Set(["outcome"])) &&
+    ["operation_conflict", "active_window_conflict"].includes(result.outcome)
+  ) {
+    throw new FieldSetupOperationError(`route_window_${result.outcome}`);
+  }
+  if (
+    !exactPlainObject(result, new Set(["outcome", "window", "expired_window"])) ||
+    !["issued", "idempotent_replay"].includes(result.outcome)
   ) {
     throw new FieldSetupOperationError("route_window_response_invalid", 502);
   }
+  if (result.expired_window !== null) {
+    if (result.outcome !== "issued") {
+      throw new FieldSetupOperationError("route_window_response_invalid", 502);
+    }
+    assertExpiredWindow(result.expired_window, command, selectedNow, {
+      closedInCurrentTransaction: true,
+    });
+  }
+  assertIssuedWindow(result.window, command, selectedNow, proposedWindow, result.outcome);
   return deepFreeze({ outcome: result.outcome, window: { ...result.window } });
-}
-
-function assertOpenWindow(window) {
-  if (!exactPlainObject(window, OPEN_WINDOW_RECORD_KEYS) || window.status !== "open") {
-    throw new FieldSetupOperationError("route_window_invalid", 400);
-  }
-  for (const key of ROUTE_WINDOW_KEYS) {
-    if (!key.endsWith("At")) assertFingerprint(window[key], "route_window_invalid");
-  }
-  if (
-    !FINGERPRINT_PATTERN.test(window.bindingFingerprint ?? "") ||
-    routeWindowBindingFingerprint(window) !== window.bindingFingerprint ||
-    !Number.isFinite(canonicalInstant(window.issuedAt)) ||
-    canonicalInstant(window.expiresAt) <= canonicalInstant(window.issuedAt)
-  ) {
-    throw new FieldSetupOperationError("route_window_invalid", 400);
-  }
-}
-
-function receiptFingerprint(window, evidenceFingerprint, verifiedAt) {
-  return fingerprint([
-    ["type", "route-verification-receipt-v1"],
-    ["binding", window.bindingFingerprint],
-    ["evidence", evidenceFingerprint],
-    ["verified_at", verifiedAt],
-  ]);
-}
-
-async function verifyQaRouteEvidence(command, dependencies) {
-  if (!exactPlainObject(command, new Set(["window", "evidenceFingerprint", "observedAt"]))) {
-    throw new FieldSetupOperationError("route_evidence_invalid", 400);
-  }
-  assertOpenWindow(command.window);
-  assertFingerprint(command.evidenceFingerprint, "route_evidence_invalid");
-  const observedAtMs = canonicalInstant(command.observedAt);
-  const currentMs = typeof dependencies?.nowMs === "function" ? dependencies.nowMs() : NaN;
-  if (
-    typeof dependencies?.verificationStore?.consumeQaEvidenceAtomically !== "function" ||
-    !Number.isSafeInteger(currentMs) ||
-    currentMs < 0
-  ) {
-    throw new FieldSetupOperationError("route_verification_dependency_unavailable", 503);
-  }
-  if (
-    !Number.isFinite(observedAtMs) ||
-    observedAtMs < canonicalInstant(command.window.issuedAt) ||
-    observedAtMs > canonicalInstant(command.window.expiresAt) ||
-    observedAtMs > currentMs ||
-    currentMs > canonicalInstant(command.window.expiresAt)
-  ) {
-    throw new FieldSetupOperationError("route_evidence_expired");
-  }
-
-  const expectedReceiptFingerprint = receiptFingerprint(
-    command.window,
-    command.evidenceFingerprint,
-    command.observedAt,
-  );
-  const claim = deepFreeze({
-    windowFingerprint: command.window.windowFingerprint,
-    bindingFingerprint: command.window.bindingFingerprint,
-    evidenceFingerprint: command.evidenceFingerprint,
-    receiptFingerprint: expectedReceiptFingerprint,
-    verifiedAt: command.observedAt,
-  });
-  const result = await dependencies.verificationStore.consumeQaEvidenceAtomically(claim);
-
-  if (
-    exactPlainObject(result, new Set(["outcome"])) &&
-    ["binding_conflict", "replay_conflict", "not_open", "expired"].includes(result.outcome)
-  ) {
-    throw new FieldSetupOperationError(`route_evidence_${result.outcome}`);
-  }
-  const expectedKeys = new Set([
-    "outcome",
-    "windowFingerprint",
-    "bindingFingerprint",
-    "evidenceFingerprint",
-    "receiptFingerprint",
-    "verifiedAt",
-    "status",
-  ]);
-  if (
-    !exactPlainObject(result, expectedKeys) ||
-    !["verified", "idempotent_replay"].includes(result.outcome) ||
-    result.windowFingerprint !== claim.windowFingerprint ||
-    result.bindingFingerprint !== claim.bindingFingerprint ||
-    result.evidenceFingerprint !== claim.evidenceFingerprint ||
-    result.receiptFingerprint !== claim.receiptFingerprint ||
-    result.verifiedAt !== claim.verifiedAt ||
-    result.status !== "verified"
-  ) {
-    throw new FieldSetupOperationError("route_evidence_response_invalid", 502);
-  }
-
-  const receipt = {
-    receiptFingerprint: result.receiptFingerprint,
-    windowFingerprint: command.window.windowFingerprint,
-    bindingFingerprint: command.window.bindingFingerprint,
-    clientFingerprint: command.window.clientFingerprint,
-    environmentFingerprint: command.window.environmentFingerprint,
-    journeyFingerprint: command.window.journeyFingerprint,
-    deploymentFingerprint: command.window.deploymentFingerprint,
-    configurationFingerprint: command.window.configurationFingerprint,
-    numberFingerprint: command.window.numberFingerprint,
-    routeFingerprint: command.window.routeFingerprint,
-    approvedQaCallerFingerprint: command.window.approvedQaCallerFingerprint,
-    evidenceFingerprint: result.evidenceFingerprint,
-    issuedAt: command.window.issuedAt,
-    expiresAt: command.window.expiresAt,
-    verifiedAt: result.verifiedAt,
-    status: "verified",
-    runtimeDisposition: QA_RUNTIME_DISPOSITION,
-  };
-  return deepFreeze({ outcome: result.outcome, receipt });
 }
 
 function applyBrowserSetupControl(command) {
@@ -489,10 +538,11 @@ module.exports = {
   FieldSetupOperationError,
   NUMBER_STATES,
   QA_RUNTIME_DISPOSITION,
+  ROUTE_VERIFICATION_WINDOW_FIELDS,
+  ROUTE_WINDOW_TTL_MS,
   applyBrowserSetupControl,
   createForwardingRegistry,
-  openRouteVerificationWindow,
+  issueRouteVerificationWindow,
   reserveExistingAvailableNumber,
   resolveForwardingInstructions,
-  verifyQaRouteEvidence,
 };

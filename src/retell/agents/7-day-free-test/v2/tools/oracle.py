@@ -60,6 +60,13 @@ NONTRANSFER_INTENTS = {
     "sales",
     "job_applicant",
 }
+HANDOFF_EVIDENCE_AUTHORITIES = {
+    "caller_intent_authority": "structured_call_classification",
+    "service_eligibility_authority": "immutable_client_configuration",
+    "area_eligibility_authority": "immutable_client_configuration",
+    "destination_authority": "immutable_client_configuration",
+    "loop_proof_authority": "server_route_graph",
+}
 FAILURE_EVENTS = {
     "transfer_failed:no_answer",
     "transfer_failed:busy",
@@ -70,6 +77,28 @@ FAILURE_EVENTS = {
     "transfer_failed:invalid_destination",
     "transfer_failed:unknown",
 }
+MODEL_HANDOFF_DISPOSITIONS = {
+    "not_applicable",
+    "not_configured",
+    "offered_declined",
+    "attempted",
+    "failure_branch",
+    "unknown",
+}
+STRUCTURED_EVENT_STATE_PRECEDENCE = (
+    "Bridged",
+    "Failed",
+    "Ended",
+    "Cancelled",
+    "Started",
+)
+NOTIFICATION_HANDOFF_STATE_PRECEDENCE = STRUCTURED_EVENT_STATE_PRECEDENCE + (
+    "Declined",
+    "Offered",
+    "NotConfigured",
+    "NotApplicable",
+    "Unknown",
+)
 CLIENT_CONTEXTS = {
     "client_alpha": {
         "company_marker": "Synthetic Alpha Plumbing",
@@ -342,6 +371,8 @@ def primary_classification(facts: dict[str, Any], rules: Rules) -> tuple[str, st
 
 
 def handoff_reason(outcome: str, facts: dict[str, Any]) -> str:
+    if facts.get("intent", "new_service") in NONTRANSFER_INTENTS:
+        return "none"
     if facts.get("specific_person", False):
         return "specific_person"
     if outcome == "urgent_potential_job":
@@ -351,14 +382,162 @@ def handoff_reason(outcome: str, facts: dict[str, Any]) -> str:
     return "none"
 
 
+def _canonical_caller_intent(facts: dict[str, Any]) -> str:
+    intent = str(facts.get("intent", "new_service"))
+    return "service_request" if intent == "new_service" else intent
+
+
+def _derived_eligibility(value: Any, eligible: str, ineligible: str) -> str:
+    if value == eligible:
+        return eligible
+    if value == ineligible:
+        return ineligible
+    return "unknown"
+
+
+def authoritative_handoff_evidence(
+    facts: dict[str, Any],
+    configuration: dict[str, str],
+    context: dict[str, str],
+) -> dict[str, Any]:
+    """Build the provider-neutral evidence envelope from authoritative symbolic facts."""
+    target_state = facts.get("handoff_target_state", "valid_direct")
+    handoff_configured = configuration.get("handoff_enabled") == "true"
+    if not handoff_configured:
+        destination_validity = "not_configured"
+    elif target_state in {"missing", "invalid", "voicemail"}:
+        destination_validity = "invalid"
+    else:
+        destination_validity = "valid"
+    destination_validity = str(
+        facts.get("authoritative_destination_validity", destination_validity)
+    )
+
+    if destination_validity == "valid":
+        destination_fingerprint: Any = context["target_fingerprint"]
+    else:
+        destination_fingerprint = None
+    if "authoritative_destination_fingerprint" in facts:
+        destination_fingerprint = facts["authoritative_destination_fingerprint"]
+
+    if not handoff_configured:
+        loop_proof = "not_required"
+    elif target_state in {"assigned_number", "forwarding_main", "failover", "nested_loop"}:
+        loop_proof = "failed"
+    else:
+        loop_proof = "passed"
+
+    return {
+        "caller_intent": str(
+            facts.get("authoritative_caller_intent", _canonical_caller_intent(facts))
+        ),
+        "caller_intent_authority": str(
+            facts.get(
+                "caller_intent_authority",
+                HANDOFF_EVIDENCE_AUTHORITIES["caller_intent_authority"],
+            )
+        ),
+        "service_eligibility": str(
+            facts.get(
+                "authoritative_service_eligibility",
+                _derived_eligibility(facts.get("service", "supported"), "supported", "unsupported"),
+            )
+        ),
+        "service_eligibility_authority": str(
+            facts.get(
+                "service_eligibility_authority",
+                HANDOFF_EVIDENCE_AUTHORITIES["service_eligibility_authority"],
+            )
+        ),
+        "area_eligibility": str(
+            facts.get(
+                "authoritative_area_eligibility",
+                _derived_eligibility(facts.get("area", "in_area"), "in_area", "out_of_area"),
+            )
+        ),
+        "area_eligibility_authority": str(
+            facts.get(
+                "area_eligibility_authority",
+                HANDOFF_EVIDENCE_AUTHORITIES["area_eligibility_authority"],
+            )
+        ),
+        "destination_validity": destination_validity,
+        "destination_fingerprint": destination_fingerprint,
+        "destination_authority": str(
+            facts.get(
+                "destination_authority",
+                HANDOFF_EVIDENCE_AUTHORITIES["destination_authority"],
+            )
+        ),
+        "loop_proof": str(facts.get("authoritative_loop_proof", loop_proof)),
+        "loop_proof_authority": str(
+            facts.get(
+                "loop_proof_authority",
+                HANDOFF_EVIDENCE_AUTHORITIES["loop_proof_authority"],
+            )
+        ),
+    }
+
+
+def handoff_evidence_problem(
+    outcome: str,
+    reason: str,
+    facts: dict[str, Any],
+    evidence: dict[str, Any],
+    rules: Rules,
+) -> str | None:
+    if any(
+        evidence.get(field) != authority
+        for field, authority in HANDOFF_EVIDENCE_AUTHORITIES.items()
+    ):
+        return "handoff_evidence_untrusted"
+
+    intent = evidence["caller_intent"]
+    if intent in NONTRANSFER_INTENTS:
+        expected_outcome = "other_general_inquiry" if intent == "job_applicant" else "spam"
+        if outcome != expected_outcome or reason != "none":
+            return "handoff_classification_inconsistent"
+    elif outcome in {
+        "potential_job",
+        "urgent_potential_job",
+        "unsupported_service",
+        "out_of_area",
+    } and intent != "service_request":
+        return "handoff_classification_inconsistent"
+    elif outcome == "existing_customer" and intent != "existing_customer":
+        return "handoff_classification_inconsistent"
+    elif reason == "specific_person" and intent != "person_request":
+        return "handoff_classification_inconsistent"
+
+    if (evidence["service_eligibility"] == "unsupported") != (
+        outcome == "unsupported_service"
+    ):
+        return "handoff_service_inconsistent"
+    if (evidence["area_eligibility"] == "out_of_area") != (outcome == "out_of_area"):
+        return "handoff_area_inconsistent"
+    if (
+        evidence["destination_validity"] == "valid"
+        and not evidence["destination_fingerprint"]
+    ):
+        return "handoff_destination_fingerprint_missing"
+    if evidence["destination_validity"] == "invalid" and not rules.allow_invalid_handoff:
+        return "handoff_destination_invalid"
+    if evidence["loop_proof"] == "failed" and not rules.allow_route_loop:
+        return "handoff_route_loop"
+    if facts.get("safety") == "immediate_danger" and reason != "none":
+        return "handoff_classification_inconsistent"
+    return None
+
+
 def handoff_offer_allowed(
     outcome: str,
     reason: str,
     configuration: dict[str, str],
     facts: dict[str, Any],
+    evidence: dict[str, Any],
     rules: Rules,
 ) -> bool:
-    intent = facts.get("intent", "new_service")
+    intent = evidence["caller_intent"]
     if facts.get("safety") == "immediate_danger":
         return False
     if intent in NONTRANSFER_INTENTS and not (rules.vendor_transfer and intent == "vendor"):
@@ -367,7 +546,17 @@ def handoff_offer_allowed(
         return True
     if rules.routine_transfer and outcome == "potential_job":
         return True
+    if evidence["service_eligibility"] != "supported":
+        return False
+    if evidence["area_eligibility"] != "in_area":
+        return False
     if configuration.get("handoff_enabled") != "true":
+        return False
+    if evidence["destination_validity"] != "valid" and not rules.allow_invalid_handoff:
+        return False
+    if not evidence["destination_fingerprint"] and not rules.allow_invalid_handoff:
+        return False
+    if evidence["loop_proof"] != "passed" and not rules.allow_route_loop:
         return False
     flag = {
         "urgent": "urgent_handoff_enabled",
@@ -380,26 +569,29 @@ def handoff_offer_allowed(
 def reduce_transfer(
     events: list[str], analysis_disposition: str, rules: Rules
 ) -> str:
-    state = "Offered"
-    observed: set[str] = set()
-    for event in events:
-        if event in observed:
-            continue
-        observed.add(event)
-        if state == "Bridged":
-            continue
-        if event == "transfer_bridged":
-            state = "Bridged"
-        elif event == "transfer_started" and state in {"Offered", "Unknown"}:
-            state = "Started"
-        elif event == "transfer_cancelled":
-            state = "Cancelled"
-        elif event == "transfer_ended":
-            state = "Ended"
-        elif event in FAILURE_EVENTS:
-            state = "Failed"
-        elif event.startswith("transfer_"):
-            state = "Unknown"
+    if analysis_disposition not in MODEL_HANDOFF_DISPOSITIONS:
+        raise ValueError("model handoff disposition is not allowlisted")
+    observed = set(events)
+    structured_states: set[str] = set()
+    if "transfer_bridged" in observed:
+        structured_states.add("Bridged")
+    if observed & FAILURE_EVENTS:
+        structured_states.add("Failed")
+    if "transfer_ended" in observed:
+        structured_states.add("Ended")
+    if "transfer_cancelled" in observed:
+        structured_states.add("Cancelled")
+    if "transfer_started" in observed:
+        structured_states.add("Started")
+
+    state = next(
+        (candidate for candidate in STRUCTURED_EVENT_STATE_PRECEDENCE if candidate in structured_states),
+        "Offered",
+    )
+    if state == "Offered" and any(
+        event.startswith("transfer_") for event in observed
+    ):
+        state = "Unknown"
 
     if rules.analysis_overrides_bridged and analysis_disposition in {
         "failure_branch",
@@ -409,6 +601,75 @@ def reduce_transfer(
     if state == "Offered" and analysis_disposition == "failure_branch":
         return "Failed"
     return state
+
+
+def staged_event_trace(
+    facts: dict[str, Any],
+    initial_state: str,
+    notification_required: bool,
+    offer_allowed: bool,
+    consent: str,
+    rules: Rules,
+) -> list[dict[str, Any]]:
+    """Evaluate symbolic event order instead of reusing only final aggregate facts."""
+    sequence = facts.get("event_sequence", [])
+    if not isinstance(sequence, list) or not sequence:
+        return []
+    observed_transfer_events: list[str] = []
+    current_state = initial_state
+    notification_state: str | None = None
+    analysis_available = False
+    trace: list[dict[str, Any]] = []
+    disposition = str(facts.get("analysis_disposition", "attempted"))
+
+    for event_name_value in sequence:
+        event_name = str(event_name_value)
+        if event_name.startswith("transfer_"):
+            normalized_event = (
+                "transfer_failed:unknown" if event_name == "transfer_failed" else event_name
+            )
+            observed_transfer_events.append(normalized_event)
+            if offer_allowed and consent == "accepted":
+                current_state = reduce_transfer(
+                    observed_transfer_events, disposition, rules
+                )
+        if event_name in {"call_analyzed", "call_ended"}:
+            analysis_available = True
+            if offer_allowed and consent == "accepted":
+                current_state = reduce_transfer(
+                    observed_transfer_events, disposition, rules
+                )
+
+        action = "none"
+        should_reconcile = analysis_available and event_name != "notification_retry"
+        if event_name == "notification_retry" and notification_state is not None:
+            should_reconcile = True
+        if notification_required and should_reconcile:
+            if notification_state is None:
+                notification_state = current_state
+                action = "inserted"
+            else:
+                previous_rank = NOTIFICATION_HANDOFF_STATE_PRECEDENCE.index(
+                    notification_state
+                )
+                requested_rank = NOTIFICATION_HANDOFF_STATE_PRECEDENCE.index(
+                    current_state
+                )
+                if requested_rank < previous_rank:
+                    notification_state = current_state
+                    action = "updated"
+                else:
+                    action = "unchanged"
+        trace.append(
+            {
+                "event": event_name,
+                "handoff_state": current_state,
+                "notification_intent_count": 1 if notification_state is not None else 0,
+                "notification_handoff_state": notification_state,
+                "notification_action": action,
+            }
+        )
+    return trace
 
 
 def _question_cap(facts: dict[str, Any]) -> bool:
@@ -447,6 +708,7 @@ def _configuration_failure(problem: str, facts: dict[str, Any], rules: Rules) ->
         "target_fingerprint": None,
         "recipient_fingerprint": None,
         "reporting_partition": None,
+        "event_sequence_trace": [],
     }
 
 
@@ -455,6 +717,8 @@ def evaluate(facts: dict[str, Any], rules: Rules = DEFAULT_RULES) -> dict[str, A
     problem = configuration_problem(configuration, facts, rules)
     if problem is not None:
         return _configuration_failure(problem, facts, rules)
+    if str(facts.get("analysis_disposition", "attempted")) not in MODEL_HANDOFF_DISPOSITIONS:
+        return _configuration_failure("model_handoff_disposition_invalid", facts, rules)
 
     test_state = facts.get("test_state", "Live")
     existing_binding = bool(facts.get("existing_call_binding", False))
@@ -472,7 +736,13 @@ def evaluate(facts: dict[str, Any], rules: Rules = DEFAULT_RULES) -> dict[str, A
     if context is None:
         return _configuration_failure("client_context_unresolved", facts, rules)
     reason = handoff_reason(outcome, facts)
-    offer_allowed = handoff_offer_allowed(outcome, reason, configuration, facts, rules)
+    evidence = authoritative_handoff_evidence(facts, configuration, context)
+    evidence_problem = handoff_evidence_problem(outcome, reason, facts, evidence, rules)
+    if evidence_problem is not None:
+        return _configuration_failure(evidence_problem, facts, rules)
+    offer_allowed = handoff_offer_allowed(
+        outcome, reason, configuration, facts, evidence, rules
+    )
     consent = facts.get("transfer_consent", "not_offered")
     if reason == "none":
         state = "NotApplicable"
@@ -506,6 +776,22 @@ def evaluate(facts: dict[str, Any], rules: Rules = DEFAULT_RULES) -> dict[str, A
     notification_count = 1 if notification_required else 0
     if rules.duplicate_notification and facts.get("notification_replay") and notification_required:
         notification_count = 2
+    if reason == "none":
+        staged_initial_state = "NotApplicable"
+    elif not offer_allowed:
+        staged_initial_state = "NotConfigured"
+    elif consent == "declined":
+        staged_initial_state = "Declined"
+    else:
+        staged_initial_state = "Offered"
+    event_sequence_trace = staged_event_trace(
+        facts,
+        staged_initial_state,
+        notification_required,
+        offer_allowed,
+        str(consent),
+        rules,
+    )
 
     if facts.get("safety") == "immediate_danger":
         terminal = "immediate_danger"
@@ -555,6 +841,7 @@ def evaluate(facts: dict[str, Any], rules: Rules = DEFAULT_RULES) -> dict[str, A
         "retained_sensitive_fields": retained_sensitive_fields,
         "isolation_preserved": True,
         "question_cap_passed": _question_cap(facts),
+        "event_sequence_trace": event_sequence_trace,
         "context_scope": facts.get("client_scope", "client_alpha"),
         **context,
     }

@@ -8,7 +8,7 @@
     "implemented": false,
     "importable": false,
     "field_mapping": {},
-    "blocker": "exact_retell_transfer_lifecycle_schema_requires_authoritative_draft_readback"
+    "blocker": "public_transfer_configuration_families_and_canonical_event_names_are_confirmed_but_exact_draft_serialization_complete_payload_variations_failure_casing_and_runtime_behavior_remain_unverified"
   },
   "normalized_event_types": [
     "transfer_started",
@@ -49,15 +49,53 @@
     "Failed",
     "Unknown"
   ],
-  "transition_rules": [
-    {"event_type": "offer_created", "from_states": ["NotApplicable", "NotConfigured"], "to_state": "Offered"},
-    {"event_type": "caller_declined", "from_states": ["Offered"], "to_state": "Declined"},
-    {"event_type": "transfer_started", "from_states": ["Offered", "Unknown"], "to_state": "Started"},
-    {"event_type": "transfer_bridged", "from_states": ["Offered", "Started", "Unknown"], "to_state": "Bridged"},
-    {"event_type": "transfer_cancelled", "from_states": ["Offered", "Started", "Unknown"], "to_state": "Cancelled"},
-    {"event_type": "transfer_ended", "from_states": ["Offered", "Started", "Cancelled", "Unknown"], "to_state": "Ended"},
-    {"event_type": "transfer_failed", "from_states": ["Offered", "Started", "Unknown"], "to_state": "Failed"}
+  "structured_event_state_precedence": [
+    "Bridged",
+    "Failed",
+    "Ended",
+    "Cancelled",
+    "Started"
   ],
+  "durable_structured_states": [
+    "Started",
+    "Bridged",
+    "Cancelled",
+    "Ended",
+    "Failed"
+  ],
+  "model_handoff_disposition_allowlist": [
+    "not_applicable",
+    "not_configured",
+    "offered_declined",
+    "attempted",
+    "failure_branch",
+    "unknown"
+  ],
+  "prohibited_model_success_claims": [
+    "connected",
+    "bridged",
+    "human_connected",
+    "transfer_succeeded"
+  ],
+  "transition_rules": [
+    {"event_type": "transfer_started", "contributes_state": "Started"},
+    {"event_type": "transfer_bridged", "contributes_state": "Bridged"},
+    {"event_type": "transfer_cancelled", "contributes_state": "Cancelled"},
+    {"event_type": "transfer_ended", "contributes_state": "Ended"},
+    {"event_type": "transfer_failed", "contributes_state": "Failed"}
+  ],
+  "transition_reduction": "union_current_event_states_with_durable_prior_structured_state_then_apply_structured_event_state_precedence",
+  "non_lifecycle_fallback_semantics": "initial_authoritative_and_allowlisted_model_fallbacks_are_unchanged_when_no_structured_state_exists",
+  "cumulative_claim_ledger_contract": {
+    "injected_durable_store_required": true,
+    "atomic_operation": "reconcileCallEvents",
+    "maximum_unique_claims_per_call": 64,
+    "authorized_target_fingerprint_is_immutable": true,
+    "binding_conflict_rejected_without_mutation": true,
+    "duplicate_identical_claim_is_noop": true,
+    "conflicting_claim_rejected_without_mutation": true,
+    "complete_cumulative_snapshot_returned": true
+  },
   "convergence_rules": {
     "duplicate_event_is_noop": true,
     "reordered_event_is_deterministic": true,
@@ -65,6 +103,9 @@
     "cross_client_event_rejected": true,
     "conflicting_ownership_rejected": true,
     "bridged_evidence_never_downgraded_by_stale_cancel_or_model_signal": true,
+    "every_durable_structured_state_uses_the_same_precedence_as_current_events": true,
+    "model_disposition_validated_even_when_structured_evidence_exists": true,
+    "cross_request_claim_conflict_requires_atomic_durable_ledger": true,
     "model_signal_never_claims_human_connection": true,
     "notification_side_effects_per_call": 1
   },

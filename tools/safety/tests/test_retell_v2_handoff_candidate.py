@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import itertools
 import json
 import sys
 import unittest
@@ -116,10 +117,18 @@ class RetellV2HandoffCandidateTests(unittest.TestCase):
         self.assertIs(parser["importable"], False)
         self.assertEqual({}, parser["field_mapping"])
         self.assertEqual("NOT_READY", self.adapter["retell_source_status"])
-        self.assertIn(
-            "exact_retell_transfer_lifecycle_schema",
+        self.assertEqual(
             parser["blocker"],
+            self.contract["provider_boundary"]["reason"],
         )
+        for required_evidence_boundary in (
+            "public_transfer_configuration_families_and_canonical_event_names_are_confirmed",
+            "exact_draft_serialization",
+            "complete_payload_variations",
+            "failure_casing",
+            "runtime_behavior_remain_unverified",
+        ):
+            self.assertIn(required_evidence_boundary, parser["blocker"])
         handoff = self.contract["handoff_policy"]
         self.assertEqual("Warm Transfer", handoff["transfer_type"])
         self.assertEqual(1, handoff["warm_transfer_node_count"])
@@ -130,6 +139,14 @@ class RetellV2HandoffCandidateTests(unittest.TestCase):
         self.assertIs(handoff["caller_id_override_allowed"], False)
         self.assertIs(handoff["provider_target_mapping_deferred"], True)
         self.assertEqual(5, len(handoff["loop_rejection_categories"]))
+        self.assertEqual(
+            self.validator.EXPECTED_HANDOFF_EVIDENCE,
+            self.contract["handoff_evidence"],
+        )
+        self.assertEqual(
+            self.validator.EXPECTED_STRUCTURED_STATE_PRECEDENCE,
+            self.adapter["structured_event_state_precedence"],
+        )
 
     def test_analysis_and_notification_allowlists_are_exact(self) -> None:
         self.assertEqual(
@@ -156,6 +173,27 @@ class RetellV2HandoffCandidateTests(unittest.TestCase):
             notification["allowed_fields"],
         )
         self.assertEqual(1, notification["durable_rows_per_actionable_call"])
+        self.assertEqual(1, notification["durable_rows_per_call_including_suppression"])
+        self.assertIs(notification["durable_suppression_tombstone_required"], True)
+        self.assertEqual(
+            ["SensitiveSuppressed", "NonactionableSuppressed", "ActionableIntent"],
+            notification["notification_disposition_precedence"],
+        )
+        self.assertIs(notification["suppressed_payload_must_be_null"], True)
+        self.assertEqual(
+            "handoff_state",
+            notification["actionable_to_actionable_payload_mutable_only"],
+        )
+        self.assertEqual(
+            {
+                "channel": None,
+                "delivery_state": "Suppressed",
+                "delivery_claimed": False,
+                "provider_calls": 0,
+                "payload": None,
+            },
+            notification["irreversible_suppression_projection"],
+        )
         self.assertEqual(0, notification["provider_calls_in_local_mode"])
         self.assertIs(notification["delivery_claim_allowed"], False)
         self.assertIn("handoff_number", notification["prohibited_content"])
@@ -212,14 +250,81 @@ class RetellV2HandoffCandidateTests(unittest.TestCase):
             self.oracle.DEFAULT_RULES,
         )
         self.assertEqual("Bridged", state)
-        self.assertEqual(
-            "Bridged",
+        with self.assertRaisesRegex(ValueError, "not allowlisted"):
             self.oracle.reduce_transfer(
                 ["transfer_started", "transfer_bridged", "transfer_bridged"],
                 "connected",
                 self.oracle.DEFAULT_RULES,
+            )
+
+    def test_structured_lifecycle_convergence_is_order_independent(self) -> None:
+        cases = (
+            (
+                [
+                    "transfer_started",
+                    "transfer_cancelled",
+                    "transfer_ended",
+                    "transfer_failed:no_answer",
+                    "transfer_bridged",
+                ],
+                "Bridged",
             ),
+            (
+                [
+                    "transfer_started",
+                    "transfer_cancelled",
+                    "transfer_ended",
+                    "transfer_failed:no_answer",
+                ],
+                "Failed",
+            ),
+            (["transfer_started", "transfer_cancelled", "transfer_ended"], "Ended"),
+            (["transfer_started", "transfer_cancelled"], "Cancelled"),
         )
+        for events, expected in cases:
+            for reordered in itertools.permutations(events):
+                with self.subTest(events=reordered):
+                    self.assertEqual(
+                        expected,
+                        self.oracle.reduce_transfer(
+                            list(reordered), "failure_branch", self.oracle.DEFAULT_RULES
+                        ),
+                    )
+
+    def test_handoff_requires_authoritative_consistent_eligibility_evidence(self) -> None:
+        eligible = {
+            "urgency": "urgent",
+            "configuration_profile": "urgent_handoff",
+            "transfer_consent": "accepted",
+            "transfer_events": ["transfer_started"],
+        }
+        self.assertTrue(self.oracle.evaluate(eligible)["handoff_eligible"])
+
+        for authority in self.validator.EXPECTED_HANDOFF_EVIDENCE:
+            if not authority.endswith("_authority"):
+                continue
+            with self.subTest(authority=authority):
+                result = self.oracle.evaluate({**eligible, authority: "untrusted"})
+                self.assertFalse(result["configuration_valid"])
+                self.assertEqual("handoff_evidence_untrusted", result["configuration_problem"])
+                self.assertFalse(result["handoff_eligible"])
+                self.assertEqual(0, result["notification_count"])
+
+        hostile = (
+            ({"authoritative_caller_intent": "vendor"}, "handoff_classification_inconsistent"),
+            ({"authoritative_service_eligibility": "unsupported"}, "handoff_service_inconsistent"),
+            ({"authoritative_area_eligibility": "out_of_area"}, "handoff_area_inconsistent"),
+            ({"authoritative_destination_validity": "invalid"}, "handoff_destination_invalid"),
+            ({"authoritative_destination_fingerprint": None}, "handoff_destination_fingerprint_missing"),
+            ({"authoritative_loop_proof": "failed"}, "handoff_route_loop"),
+        )
+        for overrides, expected_problem in hostile:
+            with self.subTest(overrides=overrides):
+                result = self.oracle.evaluate({**eligible, **overrides})
+                self.assertFalse(result["configuration_valid"])
+                self.assertEqual(expected_problem, result["configuration_problem"])
+                self.assertFalse(result["handoff_eligible"])
+                self.assertEqual(0, result["notification_count"])
 
     def test_provider_neutral_transfer_lifecycle_covers_non_success_states(self) -> None:
         base = {
@@ -239,18 +344,55 @@ class RetellV2HandoffCandidateTests(unittest.TestCase):
         failure_branch = self.oracle.evaluate(
             {**base, "transfer_events": [], "analysis_disposition": "failure_branch"}
         )
-        false_model_success = self.oracle.evaluate(
-            {
-                **base,
-                "transfer_events": ["transfer_started"],
-                "analysis_disposition": "connected",
-            }
-        )
         self.assertEqual("Offered", offered["handoff_state"])
         self.assertEqual("Cancelled", cancelled["handoff_state"])
         self.assertEqual("Ended", ended["handoff_state"])
         self.assertEqual("Failed", failure_branch["handoff_state"])
-        self.assertEqual("Started", false_model_success["handoff_state"])
+        for prohibited_success in ("connected", "bridged", "human_connected", "transfer_succeeded"):
+            with self.subTest(prohibited_success=prohibited_success):
+                false_model_success = self.oracle.evaluate(
+                    {
+                        **base,
+                        "transfer_events": ["transfer_started", "transfer_bridged"],
+                        "analysis_disposition": prohibited_success,
+                    }
+                )
+                self.assertFalse(false_model_success["configuration_valid"])
+                self.assertEqual(
+                    "model_handoff_disposition_invalid",
+                    false_model_success["configuration_problem"],
+                )
+                self.assertEqual(0, false_model_success["notification_count"])
+
+    def test_event_sequence_drives_staged_notification_reconciliation(self) -> None:
+        base = {
+            "urgency": "urgent",
+            "configuration_profile": "urgent_handoff",
+            "transfer_consent": "accepted",
+            "transfer_events": ["transfer_started", "transfer_ended"],
+        }
+        analysis_first = self.oracle.evaluate(
+            {**base, "event_sequence": ["call_analyzed", "transfer_ended"]}
+        )
+        terminal_first = self.oracle.evaluate(
+            {**base, "event_sequence": ["transfer_ended", "call_analyzed"]}
+        )
+        self.assertEqual("Ended", analysis_first["handoff_state"])
+        self.assertEqual("Ended", terminal_first["handoff_state"])
+        self.assertEqual(1, analysis_first["notification_count"])
+        self.assertEqual(1, terminal_first["notification_count"])
+        self.assertEqual(
+            ["inserted", "updated"],
+            [stage["notification_action"] for stage in analysis_first["event_sequence_trace"]],
+        )
+        self.assertEqual(
+            ["none", "inserted"],
+            [stage["notification_action"] for stage in terminal_first["event_sequence_trace"]],
+        )
+        self.assertNotEqual(
+            analysis_first["event_sequence_trace"],
+            terminal_first["event_sequence_trace"],
+        )
 
     def test_transfer_failure_and_decline_have_truthful_bounded_paths(self) -> None:
         failed = self.oracle.evaluate(

@@ -34,6 +34,7 @@ const STRUCTURED_STATE_PRECEDENCE = Object.freeze([
   'Cancelled',
   'Started',
 ]);
+const STRUCTURED_LIFECYCLE_STATES = new Set(STRUCTURED_STATE_PRECEDENCE);
 const MODEL_DISPOSITIONS = new Set([
   'not_applicable',
   'not_configured',
@@ -133,6 +134,21 @@ function modelState(initialState, disposition) {
   return initialState;
 }
 
+function canonicalizeHandoffEvents(input, adapterContract, candidateContract) {
+  invariant(isPlainObject(input), 'V2_CONVERGENCE_INPUT_INVALID',
+    'Handoff convergence input is invalid.');
+  invariant(isPlainObject(adapterContract) && isPlainObject(candidateContract),
+    'V2_CONTRACT_INVALID', 'Injected v2 contracts are invalid.');
+  assertBinding(input.binding);
+  invariant(Array.isArray(input.normalized_events),
+    'V2_EVENT_INVALID', 'Normalized events must be an array.');
+  const allowedEventTypes = new Set(adapterContract.normalized_event_types || []);
+  const failureReasons = new Set(candidateContract.handoff_failure_reasons || []);
+  return Object.freeze(input.normalized_events.map((eventValue) => (
+    canonicalEvent(eventValue, allowedEventTypes, failureReasons, input.binding)
+  )));
+}
+
 function convergeHandoffEvidence(input, adapterContract, candidateContract) {
   invariant(isPlainObject(input), 'V2_CONVERGENCE_INPUT_INVALID',
     'Handoff convergence input is invalid.');
@@ -154,16 +170,19 @@ function convergeHandoffEvidence(input, adapterContract, candidateContract) {
   const priorState = input.prior_state ?? input.initial_state;
   invariant(canonicalStates.has(priorState),
     'V2_INITIAL_STATE_INVALID', 'Prior handoff state is invalid.');
-  const allowedEventTypes = new Set(adapterContract.normalized_event_types || []);
-  const failureReasons = new Set(candidateContract.handoff_failure_reasons || []);
-  invariant(Array.isArray(input.normalized_events),
-    'V2_EVENT_INVALID', 'Normalized events must be an array.');
+  // Validate the secondary model signal even when stronger structured evidence is present. This
+  // prevents a prohibited success claim from hiding behind an otherwise valid lifecycle event.
+  const modelDisposition = input.model_handoff_disposition ?? 'unknown';
+  invariant(typeof modelDisposition === 'string' && MODEL_DISPOSITIONS.has(modelDisposition),
+    'V2_MODEL_DISPOSITION_INVALID', 'Model handoff disposition is invalid.');
+  const normalizedEvents = canonicalizeHandoffEvents(input, adapterContract, candidateContract);
 
   const claims = new Map();
+  const currentStates = new Set();
   const states = new Set();
+  if (STRUCTURED_LIFECYCLE_STATES.has(priorState)) states.add(priorState);
   let targetFingerprint = null;
-  for (const eventValue of input.normalized_events) {
-    const event = canonicalEvent(eventValue, allowedEventTypes, failureReasons, input.binding);
+  for (const event of normalizedEvents) {
     const fingerprint = eventFingerprint(event);
     const previous = claims.get(event.event_claim_key);
     invariant(previous === undefined || previous === fingerprint,
@@ -171,7 +190,10 @@ function convergeHandoffEvidence(input, adapterContract, candidateContract) {
     if (previous !== undefined) continue;
     claims.set(event.event_claim_key, fingerprint);
     const eventState = STATE_BY_EVENT[event.event_type];
-    if (eventState) states.add(eventState);
+    if (eventState) {
+      currentStates.add(eventState);
+      states.add(eventState);
+    }
     if (event.target_fingerprint) {
       invariant(targetFingerprint === null || targetFingerprint === event.target_fingerprint,
         'V2_TARGET_FINGERPRINT_CONFLICT', 'Transfer target fingerprints conflict.');
@@ -179,22 +201,18 @@ function convergeHandoffEvidence(input, adapterContract, candidateContract) {
     }
   }
 
-  let state = priorState === 'Bridged' ? 'Bridged' : null;
-  if (state === null) {
-    state = STRUCTURED_STATE_PRECEDENCE.find((candidate) => states.has(candidate)) || null;
-  }
-  let evidenceSource = state === null ? null : 'structured_transfer_lifecycle_event';
-  if (priorState === 'Bridged' && states.size === 0) evidenceSource = 'durable_prior_state';
+  let state = STRUCTURED_STATE_PRECEDENCE.find((candidate) => states.has(candidate)) || null;
+  let evidenceSource = state === null ? null : (
+    currentStates.has(state) ? 'structured_transfer_lifecycle_event' : 'durable_prior_state'
+  );
   if (state === null) {
     state = authoritativeState(input.authoritative_provider_state, canonicalStates);
     if (state !== null) evidenceSource = 'authoritative_provider_call_field';
   }
   if (state === null) {
-    state = modelState(input.initial_state, input.model_handoff_disposition || 'unknown');
+    state = modelState(input.initial_state, modelDisposition);
     evidenceSource = state === input.initial_state ? 'unknown' : 'post_call_secondary_signal';
   }
-  // A stale provider summary or post-call signal cannot downgrade durable bridged evidence.
-  if (priorState === 'Bridged') state = 'Bridged';
   return Object.freeze({
     handoff_state: state,
     evidence_source: evidenceSource,
@@ -204,8 +222,10 @@ function convergeHandoffEvidence(input, adapterContract, candidateContract) {
 }
 
 module.exports = Object.freeze({
+  canonicalizeHandoffEvents,
   convergeHandoffEvidence,
   REQUIRED_EVENT_FIELDS,
   OPTIONAL_EVENT_FIELDS,
   TARGET_FINGERPRINT_PATTERN,
+  STRUCTURED_STATE_PRECEDENCE,
 });

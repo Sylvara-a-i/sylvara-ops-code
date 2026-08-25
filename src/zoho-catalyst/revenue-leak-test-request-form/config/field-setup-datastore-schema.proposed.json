@@ -45,6 +45,51 @@
       { "api_name": "UPDATED_AT", "type": "varchar", "max_length": 32, "mandatory": true, "unique": false }
     ]
   },
+  "canonical_protocol": {
+    "schema_version": 1,
+    "source": "functions/revenue_leak_test_request_form/lib/field-setup-protocol.js",
+    "generated_client_derivative": "client/field-setup/protocol.generated.js",
+    "state_count": 22,
+    "client_derivative_must_match_source": true
+  },
+  "source_property_map": {
+    "JOURNEY_KEY": "journeyKey",
+    "LAUNCH_DIGEST": "launchDigest",
+    "SESSION_DIGEST": "sessionDigest",
+    "CRM_MODULE": "moduleApiName",
+    "CRM_RECORD_ID": "recordId",
+    "OPERATOR_USER_ID": "operatorUserId",
+    "SOURCE_ENVIRONMENT": "environment",
+    "STATE": "state",
+    "FORM1_STATUS": "form1Status",
+    "QUALIFICATION_STATUS": "qualificationStatus",
+    "CONVERSION_STATUS": "conversionStatus",
+    "FORM2_STATUS": "form2Status",
+    "NUMBER_STATUS": "numberStatus",
+    "FORWARDING_STATUS": "forwardingStatus",
+    "ROUTE_VERIFICATION_STATUS": "routeVerificationStatus",
+    "ROLLBACK_STATUS": "rollbackStatus",
+    "CONVERSION_PREVIEW_FINGERPRINT": "conversionPreviewFingerprint",
+    "CONVERSION_SIDE_EFFECT_FINGERPRINT": "conversionSideEffectFingerprint",
+    "CONVERSION_OUTCOME_FINGERPRINT": "conversionOutcomeFingerprint",
+    "CONFIG_VERSION_FINGERPRINT": "configVersionFingerprint",
+    "ISSUED_AT": "issuedAt",
+    "LAUNCH_EXPIRES_AT": "launchExpiresAt",
+    "ABSOLUTE_EXPIRES_AT": "absoluteExpiresAt",
+    "IDLE_EXPIRES_AT": "idleExpiresAt",
+    "LAUNCH_CONSUMED_AT": "launchConsumedAt",
+    "REVISION": "revision",
+    "LAST_OUTCOME": "lastOutcome",
+    "UPDATED_AT": "updatedAt"
+  },
+  "compare_and_set_contract": {
+    "launch_exchange_match": ["LAUNCH_DIGEST", "OPERATOR_USER_ID", "SOURCE_ENVIRONMENT", "STATE=loading_session_validation", "REVISION=1", "SESSION_DIGEST=null", "LAUNCH_CONSUMED_AT=null", "LAUNCH_EXPIRES_AT>current_time"],
+    "launch_exchange_update": ["SESSION_DIGEST", "STATE=company_progress_summary", "IDLE_EXPIRES_AT", "LAUNCH_CONSUMED_AT", "REVISION=2", "LAST_OUTCOME=launch_exchanged", "UPDATED_AT"],
+    "session_transition_match": ["SESSION_DIGEST", "OPERATOR_USER_ID", "SOURCE_ENVIRONMENT", "expected STATE", "expected REVISION"],
+    "session_transition_update": ["next STATE", "REVISION=expected+1", "bounded status patch", "IDLE_EXPIRES_AT", "LAST_OUTCOME", "UPDATED_AT"],
+    "stale_or_ambiguous_result": "fail closed with no retry or assumed state change",
+    "readback": "validate every canonical row property after insert and compare-and-set"
+  },
   "data_policy": {
     "stored": ["keyed digests", "minimum restricted CRM binding", "bounded state", "timestamps", "fingerprints"],
     "prohibited": ["raw nonce", "raw session cookie", "name", "email", "phone", "form body", "secret", "private route", "Retell identifier", "customer-derived Deal name", "private conversion plan", "converted Account identifier", "converted Contact identifier", "converted Deal identifier"]
