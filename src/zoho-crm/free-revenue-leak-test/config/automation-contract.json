@@ -3,6 +3,12 @@
   "status": "desired_state_pending_synthetic_acceptance",
   "customer_facing_offer": "Free Revenue Leak Test",
   "legacy_internal_offer_value": "7-Day Revenue Leak Test",
+  "entry_offer_values": {
+    "crm_display_value": "7-Day Revenue Leak Test",
+    "crm_actual_reference_value": "Free 7-Day Missed-Call",
+    "forms_choice_value": "Free 7-Day Missed-Call",
+    "customer_label": "Free Revenue Leak Test"
+  },
   "identifier_migration": {
     "from_schema_version": 2,
     "controller_aliases": {
@@ -73,7 +79,7 @@
       "module": "Leads",
       "single_active_rule": "Leads Free Test Intake Review",
       "criteria": [
-        "Entry_Offer equals legacy_internal_offer_value",
+        "Entry_Offer equals entry_offer_values.crm_display_value",
         "Intake_Submission_ID is present",
         "Lead_Status equals Free Test Requested",
         "Free_Test_Contact_Consent equals true"
@@ -86,7 +92,7 @@
       "module": "Deals",
       "single_active_rule": "Deals Free Test Initialize Controls",
       "criteria": [
-        "Entry_Offer equals legacy_internal_offer_value",
+        "Entry_Offer equals entry_offer_values.crm_display_value",
         "Setup_Form_Submission_ID is empty"
       ],
       "effects": [
@@ -133,7 +139,7 @@
     "module": "Deals",
     "pipeline": "Revenue Desk Sales",
     "field": "Stage",
-    "criteria": "Entry_Offer equals legacy_internal_offer_value",
+    "criteria": "Entry_Offer equals entry_offer_values.crm_display_value",
     "states": [
       "Setup and Authorization",
       "Test Authorized",

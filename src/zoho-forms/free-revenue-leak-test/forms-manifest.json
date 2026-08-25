@@ -27,8 +27,28 @@
         "deduplication_order": ["Intake_Submission_ID", "Email"],
         "blank_overwrite": false,
         "lead_status": "Free Test Requested",
-        "entry_offer": "Free Revenue Leak Test"
+        "entry_offer": "Free 7-Day Missed-Call",
+        "entry_offer_crm_display_value": "7-Day Revenue Leak Test",
+        "entry_offer_customer_label": "Free Revenue Leak Test"
       },
+      "fixed_metadata": {
+        "intake_form_version": "revenue-leak-test-request-v1",
+        "contact_consent_version": "form1-contact-consent-v1"
+      },
+      "contact_consent": {
+        "field_type": "Decision Box",
+        "required": true,
+        "default": false,
+        "sms": false,
+        "copy": "I agree to receive calls and emails from Sylvara about my request, setup, and follow-up. Consent is not required to purchase."
+      },
+      "native_notifications": {
+        "email": false,
+        "sms": false,
+        "whatsapp": false
+      },
+      "native_otp": false,
+      "confirmation_copy": "Your Free Revenue Leak Test request was received. Sylvara will review your business, service area, and call gap before setup. This does not change call routing, activate the test, or start paid service.",
       "required_hidden_or_locked_fields": [
         "Intake_Submission_ID",
         "Free_Test_Contact_Consent_Version",

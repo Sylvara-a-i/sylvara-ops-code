@@ -140,6 +140,42 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             "Free Revenue Leak Test Setup and Authorization",
         )
 
+        form1 = contract["form1"]
+        form1_manifest = forms["REVENUE_LEAK_TEST_REQUEST_FORM"]
+        self.assertEqual(form1["fixed_values"], {
+            "entry_offer_form_value": "Free 7-Day Missed-Call",
+            "entry_offer_crm_display_value": "7-Day Revenue Leak Test",
+            "entry_offer_customer_label": "Free Revenue Leak Test",
+            "intake_form_version": "revenue-leak-test-request-v1",
+            "contact_consent_version": "form1-contact-consent-v1",
+        })
+        self.assertEqual(
+            form1_manifest["crm_integration"]["entry_offer"],
+            form1["fixed_values"]["entry_offer_form_value"],
+        )
+        self.assertEqual(
+            form1_manifest["crm_integration"]["entry_offer_crm_display_value"],
+            form1["fixed_values"]["entry_offer_crm_display_value"],
+        )
+        self.assertEqual(
+            form1_manifest["crm_integration"]["entry_offer_customer_label"],
+            form1["fixed_values"]["entry_offer_customer_label"],
+        )
+        self.assertEqual(
+            form1_manifest["fixed_metadata"]["intake_form_version"],
+            form1["fixed_values"]["intake_form_version"],
+        )
+        self.assertLessEqual(len(form1["fixed_values"]["intake_form_version"]), 30)
+        self.assertEqual(
+            form1_manifest["fixed_metadata"]["contact_consent_version"],
+            form1["fixed_values"]["contact_consent_version"],
+        )
+        self.assertEqual(form1_manifest["contact_consent"]["copy"], form1["contact_consent_copy"])
+        self.assertFalse(form1_manifest["contact_consent"]["sms"])
+        self.assertEqual(form1_manifest["native_notifications"], form1["native_notifications"])
+        self.assertFalse(form1["native_otp"])
+        self.assertEqual(form1_manifest["confirmation_copy"], form1["confirmation_copy"])
+
         boundary = contract["commercial_boundary"]
         self.assertEqual(boundary["duration_calendar_days"], 7)
         self.assertEqual(boundary["connected_call_limit"], 25)

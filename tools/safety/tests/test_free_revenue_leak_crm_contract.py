@@ -59,6 +59,36 @@ class FreeRevenueLeakCrmContractTests(unittest.TestCase):
         self.assertFalse(evidence["private_identifiers_committed"])
         self.assertFalse(evidence["write_performed"])
 
+    def test_entry_offer_values_preserve_crm_display_and_reference_semantics(self):
+        values = self.contract["entry_offer_values"]
+        self.assertEqual(values, {
+            "crm_display_value": "7-Day Revenue Leak Test",
+            "crm_actual_reference_value": "Free 7-Day Missed-Call",
+            "forms_choice_value": "Free 7-Day Missed-Call",
+            "customer_label": "Free Revenue Leak Test",
+        })
+        self.assertEqual(
+            self.contract["legacy_internal_offer_value"],
+            values["crm_display_value"],
+        )
+        workflow_criteria = [
+            criterion
+            for rule in self.contract["workflow_set"]
+            for criterion in rule.get("criteria", [])
+            if criterion.startswith("Entry_Offer equals ")
+        ]
+        self.assertEqual(
+            workflow_criteria,
+            [
+                "Entry_Offer equals entry_offer_values.crm_display_value",
+                "Entry_Offer equals entry_offer_values.crm_display_value",
+            ],
+        )
+        self.assertEqual(
+            self.contract["blueprint"]["criteria"],
+            "Entry_Offer equals entry_offer_values.crm_display_value",
+        )
+
     def test_crm_contract_has_one_form2_rule_and_one_blueprint(self):
         form2_rules = [
             rule

@@ -94,7 +94,26 @@ test("the concrete Forms desired state keeps RevenueLeakTestRequestForm idempote
   assert.ok(form1);
   assert.ok(form2);
   assert.deepEqual(form1.crm_integration.deduplication_order, ["Intake_Submission_ID", "Email"]);
-  assert.equal(form1.crm_integration.entry_offer, "Free Revenue Leak Test");
+  assert.equal(form1.crm_integration.entry_offer, "Free 7-Day Missed-Call");
+  assert.equal(form1.crm_integration.entry_offer_crm_display_value, "7-Day Revenue Leak Test");
+  assert.equal(form1.crm_integration.entry_offer_customer_label, "Free Revenue Leak Test");
+  assert.equal(form1.fixed_metadata.intake_form_version, "revenue-leak-test-request-v1");
+  assert.ok(form1.fixed_metadata.intake_form_version.length <= 30);
+  assert.equal(form1.fixed_metadata.contact_consent_version, "form1-contact-consent-v1");
+  assert.equal(form1.contact_consent.field_type, "Decision Box");
+  assert.equal(form1.contact_consent.required, true);
+  assert.equal(form1.contact_consent.default, false);
+  assert.equal(form1.contact_consent.sms, false);
+  assert.match(form1.contact_consent.copy, /calls and emails/i);
+  assert.doesNotMatch(form1.contact_consent.copy, /text|sms|message and data|reply stop/i);
+  assert.deepEqual(form1.native_notifications, {
+    email: false,
+    sms: false,
+    whatsapp: false,
+  });
+  assert.equal(form1.native_otp, false);
+  assert.match(form1.confirmation_copy, /does not change call routing/i);
+  assert.match(form1.confirmation_copy, /start paid service/i);
   assert.equal(form2.notification.proof_channel, "email");
   assert.equal(form2.notification.sms, false);
   assert.equal(form2.notification.caller_supplied_destination, false);
