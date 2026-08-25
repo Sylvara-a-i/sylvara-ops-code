@@ -1,5 +1,5 @@
 {
-  "name": "sylvara-revenue-leak-test-request-form",
+  "name": "revenue_leak_test_request_form",
   "version": "1.0.0",
   "private": true,
   "description": "Isolated Zoho Catalyst Advanced I/O handler for RevenueLeakTestRequestForm issue and prefill.",

@@ -281,7 +281,16 @@ test("the Catalyst and npm manifests describe one consistent Advanced IO target"
     },
     execution: { main: "index.js" },
   });
-  assert.equal(catalystConfig.deployment.name, catalyst.functions.targets[0]);
+  assert.deepEqual(
+    [
+      path.basename(targetRoot),
+      catalystConfig.deployment.name,
+      packageJson.name,
+      packageLock.name,
+      packageLock.packages[""].name,
+    ],
+    Array(5).fill(catalyst.functions.targets[0]),
+  );
   const expectedRuntimeSources = [
     "index.js",
     "lib/access-page.js",
@@ -312,7 +321,7 @@ test("the Catalyst and npm manifests describe one consistent Advanced IO target"
     .map((sourceFile) => `node --check ${sourceFile}`)
     .join(" && ");
   assert.deepEqual(packageJson, {
-    name: "sylvara-revenue-leak-test-setup-form",
+    name: "revenue_leak_test_setup_form",
     version: "0.1.0",
     private: true,
     description: "Development-blocked RevenueLeakTestSetupForm prefill and submission handler for Zoho Catalyst.",

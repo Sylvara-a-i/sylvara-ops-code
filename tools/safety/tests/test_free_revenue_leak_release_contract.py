@@ -55,12 +55,12 @@ FUNCTION_PACKAGE_SPECS = (
     (
         "revenue-leak-test-request-form",
         (("revenue_leak_test_request_form", "Advanced I/O", "advancedio", "node24",
-          "sylvara-revenue-leak-test-request-form", "24.x"),),
+          "revenue_leak_test_request_form", "24.x"),),
     ),
     (
         "revenue-leak-test-setup-form",
         (("revenue_leak_test_setup_form", "Advanced I/O", "advancedio", "node24",
-          "sylvara-revenue-leak-test-setup-form", "24.x"),),
+          "revenue_leak_test_setup_form", "24.x"),),
     ),
     (
         "revenue-desk-call-runtime",
@@ -279,8 +279,11 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
                     package = json.loads((source / "package.json").read_text(encoding="utf-8"))
                     lock = json.loads((source / "package-lock.json").read_text(encoding="utf-8"))
                     self.assertEqual(package["name"], package_name)
+                    self.assertEqual(package["name"], name)
                     self.assertEqual(package["engines"]["node"], node_engine)
+                    self.assertEqual(lock["name"], name)
                     self.assertEqual(lock["packages"][""]["name"], package_name)
+                    self.assertEqual(lock["packages"][""]["name"], name)
                     self.assertEqual(lock["packages"][""]["engines"]["node"], node_engine)
                     if name == "revenue_desk_call_worker":
                         dependency = "file:../revenue_desk_call_gateway"

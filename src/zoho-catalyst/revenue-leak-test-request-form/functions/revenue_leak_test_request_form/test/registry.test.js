@@ -108,7 +108,17 @@ test("the package and Catalyst manifests name one Node 24 Advanced I/O target", 
   assert.deepEqual(catalyst.functions.targets, ["revenue_leak_test_request_form"]);
   const catalystConfig = readJson(path.join(functionRoot, "catalyst-config.json"));
   const packageJson = readJson(path.join(functionRoot, "package.json"));
-  assert.equal(target, catalystConfig.deployment.name);
+  const packageLock = readJson(path.join(functionRoot, "package-lock.json"));
+  assert.deepEqual(
+    [
+      path.basename(functionRoot),
+      catalystConfig.deployment.name,
+      packageJson.name,
+      packageLock.name,
+      packageLock.packages[""].name,
+    ],
+    Array(5).fill(target),
+  );
   assert.equal(catalystConfig.deployment.stack, "node24");
   assert.equal(catalystConfig.deployment.type, "advancedio");
   assert.equal(packageJson.engines.node, "24.x");

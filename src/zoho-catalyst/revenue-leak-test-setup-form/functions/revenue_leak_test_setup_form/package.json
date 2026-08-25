@@ -1,5 +1,5 @@
 {
-  "name": "sylvara-revenue-leak-test-setup-form",
+  "name": "revenue_leak_test_setup_form",
   "version": "0.1.0",
   "private": true,
   "description": "Development-blocked RevenueLeakTestSetupForm prefill and submission handler for Zoho Catalyst.",
