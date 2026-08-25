@@ -301,6 +301,7 @@ test("the Catalyst and npm manifests describe one consistent Advanced IO target"
     "lib/connection-boundary.js",
     "lib/crm-client.js",
     "lib/destinations.js",
+    "lib/field-setup-operations.js",
     "lib/form-destination.js",
     "lib/form-contract.js",
     "lib/handler.js",

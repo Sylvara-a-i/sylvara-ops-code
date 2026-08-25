@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "classification": "public-provider-neutral-transfer-adapter-interface",
+  "runtime_authority": false,
+  "deployment_authorized": false,
+  "retell_source_status": "NOT_READY",
+  "provider_parser": {
+    "implemented": false,
+    "importable": false,
+    "field_mapping": {},
+    "blocker": "exact_retell_transfer_lifecycle_schema_requires_authoritative_draft_readback"
+  },
+  "normalized_event_types": [
+    "transfer_started",
+    "transfer_bridged",
+    "transfer_cancelled",
+    "transfer_ended",
+    "transfer_failed",
+    "call_ended",
+    "call_analyzed"
+  ],
+  "normalized_event_envelope": {
+    "required_symbolic_fields": [
+      "event_type",
+      "event_claim_key",
+      "call_binding_key",
+      "client_scope_key",
+      "deployment_scope_key",
+      "configuration_version_key",
+      "observed_order"
+    ],
+    "optional_symbolic_fields": [
+      "failure_reason",
+      "target_fingerprint",
+      "model_handoff_disposition"
+    ],
+    "raw_provider_payload_retained": false,
+    "raw_target_retained": false
+  },
+  "canonical_states": [
+    "NotApplicable",
+    "NotConfigured",
+    "Offered",
+    "Declined",
+    "Started",
+    "Bridged",
+    "Cancelled",
+    "Ended",
+    "Failed",
+    "Unknown"
+  ],
+  "transition_rules": [
+    {"event_type": "offer_created", "from_states": ["NotApplicable", "NotConfigured"], "to_state": "Offered"},
+    {"event_type": "caller_declined", "from_states": ["Offered"], "to_state": "Declined"},
+    {"event_type": "transfer_started", "from_states": ["Offered", "Unknown"], "to_state": "Started"},
+    {"event_type": "transfer_bridged", "from_states": ["Offered", "Started", "Unknown"], "to_state": "Bridged"},
+    {"event_type": "transfer_cancelled", "from_states": ["Offered", "Started", "Unknown"], "to_state": "Cancelled"},
+    {"event_type": "transfer_ended", "from_states": ["Offered", "Started", "Cancelled", "Unknown"], "to_state": "Ended"},
+    {"event_type": "transfer_failed", "from_states": ["Offered", "Started", "Unknown"], "to_state": "Failed"}
+  ],
+  "convergence_rules": {
+    "duplicate_event_is_noop": true,
+    "reordered_event_is_deterministic": true,
+    "delayed_event_uses_immutable_call_binding": true,
+    "cross_client_event_rejected": true,
+    "conflicting_ownership_rejected": true,
+    "bridged_evidence_never_downgraded_by_stale_cancel_or_model_signal": true,
+    "model_signal_never_claims_human_connection": true,
+    "notification_side_effects_per_call": 1
+  },
+  "implementation_note": "This interface accepts only already-normalized synthetic events. It intentionally does not parse, name, or infer provider payload fields."
+}

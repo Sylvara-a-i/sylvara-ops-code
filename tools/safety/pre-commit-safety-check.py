@@ -122,9 +122,17 @@ GENERIC_CODE_KEY_MATERIAL_NAME_RE = re.compile(
 MAX_TEXT_BYTES = 2 * 1024 * 1024
 MAX_APPROVED_BINARY_BYTES = 5 * 1024 * 1024
 
-# No binaries are approved in the initial public repository. A future binary
-# must be deliberately added here with an independently reviewed SHA-256 hash.
-APPROVED_BINARY_SHA256: dict[str, str] = {}
+# Every public binary must be deliberately approved by exact path and an
+# independently reviewed SHA-256 hash. These two images are synthetic browser-QA
+# evidence; their dimensions and source-only status are enforced separately.
+APPROVED_BINARY_SHA256: dict[str, str] = {
+    "docs/runbooks/assets/free-revenue-leak-test-field-setup/field-setup-768x1024.jpg": (
+        "3a92c9930c72a6b254830a66c9275ff30df060f658619cd0c60a54b576d7b28c"
+    ),
+    "docs/runbooks/assets/free-revenue-leak-test-field-setup/field-setup-1024x1366.jpg": (
+        "9520566935b606e3789be75be6773836a990ec131a1ca86358d54a43e5b75292"
+    ),
+}
 
 ALLOWED_GIT_MODES = {"100644", "100755"}
 VENDOR_OR_CACHE_DIRS = {

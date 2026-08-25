@@ -543,5 +543,68 @@
   "deployment_order": ["superseding repository contract and tests", "six canonical function packages", "canonical call and Analytics schemas", "legacy source and dependency extraction", "additive canonical tables", "Development functions with callers unchanged", "direct signed and Job-mode synthetic tests", "canonical table migration and row reconciliation", "route, auth, pool, and trigger readback", "CRM fields and inactive automation", "Zoho Forms desired state", "Form 1 cutover", "Form 2 cutover", "shared-runtime Development E2E", "Billing TEST and hidden live catalog readback", "Analytics synchronization and dashboard readback", "rollback rehearsal", "staged legacy cleanup", "coordinated Development key and credential rotation", "merge PR", "final-main Development deployment and parity", "dark-Production deployment with independent credentials", "dark-Production zero-traffic synthetic E2E", "final attack-surface and rollback audit"],
   "rollback_order": ["keep Production traffic dark", "disable CRM paid-acceptance action", "disable Form 2 callers and restore the last proven route only while its rollback window remains", "disable Form 1 callers and restore the last proven route only while its rollback window remains", "stop synthetic deployment", "unbind Retell number and webhook routes", "disable call and Analytics schedules", "restore prior reviewed canonical function revisions", "restore canonical-table readers to the reconciled generation", "preserve migration, operation, call, Billing TEST, and rollback evidence"],
   "acceptance_scenarios": ["successful free test to accepted Growth TEST subscription", "results review declined with no subscription", "Form 2 invalid or replayed proof with no downstream effects", "approval does not activate a route or start time", "activation requires a fresh authoritative route readback and exact chained receipts", "configuration, route, fingerprint, and source changes invalidate approval", "status strings without exact authorization receipts fail closed", "seven-day and 25-call limits", "free and paid engagement isolation", "disabled paid profile rejection", "routing and Job-submission failures fail closed", "replay at every boundary", "Analytics checkpoint and retry convergence", "canonical table migration and reconciliation", "legacy approval source export and live-binding proof", "Development rollback", "dark-Production zero-traffic E2E", "Production rollback with evidence preserved"],
-  "out_of_scope": ["prospect or customer traffic", "real customer data", "contractor forwarding", "real charge", "payment method", "SMS", "Retell call", "Retell native simulation", "conversation-flow tuning", "prompt tuning", "voice, model, interruption, or latency tuning", "booking", "dispatch", "pricing quotes", "payment collection", "outbound marketing", "paid capability activation", "Launch, Growth, or Scale conversation behavior", "client portal product build"]
+  "field_setup_candidate": {
+    "status": "NOT_READY",
+    "live_install_status": "NOT_AUTHORIZED",
+    "operator_led": true,
+    "client_portal": false,
+    "durable_client_account": false,
+    "forms_preserved": ["REVENUE_LEAK_TEST_REQUEST_FORM", "REVENUE_LEAK_TEST_SETUP_FORM"],
+    "form3_allowed": false,
+    "new_catalyst_function_count": 0,
+    "maximum_new_journey_table_count": 1,
+    "journey_table": "RevenueLeakTestFieldSetupJourneys",
+    "web_client_source": "../../src/zoho-catalyst/revenue-leak-test-request-form/client",
+    "web_client_deployment_or_publication_authorized": false,
+    "launch_protocol": {
+      "nonce_entropy_bits": 256,
+      "nonce_storage": "keyed digest only",
+      "maximum_ttl_seconds": 60,
+      "url_content": "fragment nonce only",
+      "session_cookie": ["Secure", "HttpOnly", "SameSite=Strict", "bounded idle expiry", "bounded absolute expiry"]
+    },
+    "crm_button_manifest": "../../src/zoho-crm/free-revenue-leak-test/buttons/button-manifest.json",
+    "browser_activation_allowed": false,
+    "route_verification_normal_intake_allowed": false,
+    "route_verification_handled_call_increment": 0,
+    "route_verification_notification_allowed": false,
+    "runbook": "../runbooks/free-revenue-leak-test-field-setup.md",
+    "adr": "../adr/0008-bounded-free-test-human-handoff-and-operator-led-field-setup.md",
+    "unresolved": [
+      "live hosted-client inventory",
+      "Request Form route-instruction reconciliation",
+      "exact Catalyst authenticated-user contract",
+      "record-specific CRM conversion options and duplicates",
+      "live Forms readback",
+      "atomic number-inventory adapter",
+      "provider forwarding evidence",
+      "pre-agent route-verification behavior"
+    ]
+  },
+  "retell_v2_candidate": {
+    "status": "NOT_READY",
+    "profile": "call_gap_capture_handoff_v2",
+    "engagement_type": "free_test",
+    "draft": true,
+    "enabled": false,
+    "traffic_environments": [],
+    "billing_mode": "none",
+    "limit_policy": "seven_calendar_days_or_25_connected_calls_v1",
+    "v1_profile_preserved": "call_gap_monitor_v1",
+    "provider_event_parser_implemented": false,
+    "provider_neutral_state_machine_only": true,
+    "analysis_field_count": 17,
+    "routine_transfer_allowed": false,
+    "retell_email_allowed": false,
+    "catalyst_actionable_notification_count_per_call": 1,
+    "provider_import_or_publication_authorized": false,
+    "unresolved": [
+      "exact Retell Call Transfer node JSON",
+      "exact transfer lifecycle event payloads",
+      "warm-transfer carrier behavior",
+      "human and voicemail detection",
+      "voice, pacing, interruption, noise, and latency"
+    ]
+  },
+  "out_of_scope": ["prospect or customer traffic", "real customer data", "contractor forwarding", "real charge", "payment method", "SMS", "Retell call", "Retell native simulation", "conversation-flow tuning", "prompt tuning", "provider-specific v2 transfer import", "voice, model, interruption, or latency tuning", "booking", "dispatch", "pricing quotes", "payment collection", "outbound marketing", "paid capability activation", "Launch, Growth, or Scale conversation behavior", "client portal product build"]
 }

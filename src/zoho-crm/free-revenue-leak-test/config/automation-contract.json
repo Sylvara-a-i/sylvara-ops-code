@@ -22,6 +22,40 @@
     "real_customer_or_prospect_mutation": false,
     "production_traffic_authorized": false
   },
+  "field_setup_source_candidate": {
+    "status": "NOT_READY",
+    "live_install_status": "NOT_AUTHORIZED",
+    "manifest": "../buttons/button-manifest.json",
+    "parallel_buttons": [
+      { "module": "Leads", "label": "Open Free-Test Setup", "source": "../functions/open_free_test_setup_lead.deluge" },
+      { "module": "Deals", "label": "Open Free-Test Setup", "source": "../functions/open_free_test_setup_deal.deluge" },
+      { "module": "Deals", "label": "Approve & Start Free Test", "source": "../functions/approve_and_start_free_test.deluge" },
+      { "module": "Deals", "label": "Stop / Roll Back Test", "source": "../functions/stop_or_roll_back_free_test.deluge" }
+    ],
+    "current_live_button_preserved": true,
+    "browser_activation_allowed": false,
+    "private_endpoint_or_connection_committed": false,
+    "installation_requires_separate_approval": true
+  },
+  "field_setup_read_only_evidence_2026_08_25": {
+    "organization_verified": true,
+    "legacy_button_function_active": true,
+    "legacy_button_function_uses_named_connection": false,
+    "legacy_button_function_hardcoded_credential_literals": 2,
+    "credential_values_or_private_endpoint_committed": false,
+    "custom_button_metadata_available": false,
+    "lead_relevant_fields_observed": 13,
+    "deal_relevant_fields_observed": 55,
+    "entry_offer_customer_label_present_in_crm": false,
+    "entry_offer_legacy_display_value": "7-Day Revenue Leak Test",
+    "entry_offer_legacy_actual_value": "Free 7-Day Missed-Call",
+    "deal_save_required_fields": ["Deal_Name", "Stage", "Pipeline", "Account_Name", "Closing_Date", "Type"],
+    "free_test_blueprint_status": "Draft",
+    "free_test_blueprint_enrollment_count": 0,
+    "active_free_test_blueprint_observed": false,
+    "record_specific_conversion_options_read": false,
+    "write_performed": false
+  },
   "authorities": {
     "form1": "Zoho Forms native Lead upsert plus one CRM review workflow",
     "lead_conversion": "explicit human-operated native CRM conversion",

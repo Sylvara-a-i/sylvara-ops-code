@@ -147,3 +147,9 @@ Unlabeled paths must be treated as **Unknown**.
 - Do not copy a legacy identifier, connection name, endpoint, field name, or prompt into a current implementation without live metadata verification.
 - If current and archived evidence conflict, stop and resolve ownership before writing to any live system.
 - Promote a legacy path to current only through an architecture decision, tests, deployment approval, and post-deployment readback.
+
+## Source-Only Operator Field Setup And Handoff V2
+
+[ADR 0008](../adr/0008-bounded-free-test-human-handoff-and-operator-led-field-setup.md) adds a disabled source candidate without changing the six-function boundary. A temporary Catalyst web client coordinates existing Form 1, Gabriel-only qualification and conversion confirmation, existing Form 2, existing-number reservation, forwarding/rollback preparation, and isolated route verification. It uses at most one workflow-specific journey table and never becomes a portal, durable client account, or activation surface.
+
+The shared `7-Day Free Test` agent remains the product identity; dedicated number plus exact client/deployment/configuration ownership remains the tenant boundary. `call_gap_monitor_v1` is unchanged. `call_gap_capture_handoff_v2` is Draft, disabled, bound to no traffic, and provider-neutral only. Human handoff, Retell infrastructure fallback, and customer phone-system rollback are separate configuration concepts. Exact provider transfer and pre-agent route-verification adapters remain `NOT_READY`; live installation is `NOT_AUTHORIZED`.

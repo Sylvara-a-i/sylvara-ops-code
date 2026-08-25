@@ -1,0 +1,36 @@
+// Source-only candidate. This button is Gabriel-only and remains unavailable
+// until stop, rollback, and provider route readback are separately approved.
+string button.Stop_Or_Roll_Back_Free_Test(string deal_id)
+{
+	if(deal_id == null || !deal_id.matches("^[0-9]{1,30}$"))
+	{
+		return "Stop blocked: invalid Deal context.";
+	}
+	deal_record = zoho.crm.getRecordById("Deals",deal_id.toLong());
+	if(deal_record == null || deal_record.get("id").toString() != deal_id)
+	{
+		return "Stop blocked: Deal readback failed.";
+	}
+	control_endpoint = zoho.crm.getOrgVariable("RevenueDeskFieldSetupRollbackEndpoint");
+	if(control_endpoint == null || !control_endpoint.startsWith("https://"))
+	{
+		return "Stop blocked: rollback configuration is incomplete.";
+	}
+	payload = Map();
+	payload.put("schemaVersion","field-setup-stop-intent-v1");
+	payload.put("dealId",deal_id);
+	payload.put("intent","stop_and_rollback");
+	stop_response = invokeurl
+	[
+		url :control_endpoint
+		type :POST
+		parameters:payload.toString()
+		content-type:"application/json"
+		connection:"<PRIVATE_FIELD_SETUP_CONNECTION_LINK_NAME>"
+	];
+	if(stop_response == null || stop_response.get("ok") != true || stop_response.get("readbackStatus") != "rollback_readback_confirmed")
+	{
+		return "Stop requires reconciliation: rollback readback was not confirmed.";
+	}
+	return "Stop and rollback readback confirmed. Preserve all evidence for reconciliation.";
+}

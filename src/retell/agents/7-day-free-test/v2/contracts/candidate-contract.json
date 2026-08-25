@@ -1,0 +1,404 @@
+{
+  "schema_version": 1,
+  "classification": "public-provider-neutral-disabled-candidate",
+  "runtime_authority": false,
+  "deployment_authorized": false,
+  "retell_source_status": "NOT_READY",
+  "scope": "bounded-free-test-capture-and-human-handoff",
+  "agent": {
+    "local_key": "agent_7_day_free_test",
+    "display_name": "7-Day Free Test",
+    "shared_agent_required": true
+  },
+  "capability_profile": {
+    "name": "call_gap_capture_handoff_v2",
+    "engagement_type": "free_test",
+    "status": "draft",
+    "enabled": false,
+    "traffic_environments": [],
+    "billing_mode": "none",
+    "limit_policy": "seven_calendar_days_or_25_connected_calls_v1",
+    "v1_rollback_profile": "call_gap_monitor_v1"
+  },
+  "provider_boundary": {
+    "provider_parser_implemented": false,
+    "provider_field_mapping": {},
+    "importable_provider_configuration": false,
+    "reason": "exact_public_transfer_event_schema_unconfirmed",
+    "live_readback_required": true,
+    "draft_import_review_required": true
+  },
+  "configuration_gate": {
+    "required_exact_strings": {
+      "resolver_status": "Resolved",
+      "engagement_type": "free_test",
+      "capability_profile": "call_gap_capture_handoff_v2"
+    },
+    "required_nonblank_strings": [
+      "client_id",
+      "deployment_id",
+      "configuration_version"
+    ],
+    "coverage_modes": [
+      "AfterHoursOnly",
+      "NoAnswerOverflowOnly",
+      "AfterHoursAndOverflow"
+    ],
+    "injected_string_variables": [
+      "resolver_status",
+      "client_id",
+      "deployment_id",
+      "configuration_version",
+      "engagement_type",
+      "capability_profile",
+      "coverage_mode",
+      "company_name",
+      "services_handled_json",
+      "unsupported_services_json",
+      "service_area_json",
+      "urgent_conditions_json",
+      "caller_number_candidate",
+      "coverage_trigger",
+      "coverage_trigger_source",
+      "handoff_enabled",
+      "handoff_number",
+      "handoff_display_name",
+      "handoff_destination_type",
+      "urgent_handoff_enabled",
+      "existing_customer_handoff_enabled",
+      "specific_person_handoff_enabled",
+      "handoff_failure_behavior"
+    ],
+    "boolean_string_values": [
+      "true",
+      "false"
+    ],
+    "undeclared_legacy_variables_prohibited": [
+      "configuration_ready",
+      "route_activation_approved"
+    ],
+    "recipient_injection_prohibited": true,
+    "client_prompt_fragment_injection_prohibited": true,
+    "failure_terminal": "configuration_unavailable",
+    "failure_collects_caller_data": false,
+    "failure_uses_stale_or_other_client_data": false
+  },
+  "conversation_boundary": {
+    "default_opening": "Thanks for calling {{company_name}}. I’m an automated assistant helping while the team is unavailable. This call may be recorded. How can I help?",
+    "company_name_is_data_only": true,
+    "routine_target_questions": 4,
+    "routine_hard_cap_questions": 6,
+    "existing_customer_target_questions": 3,
+    "existing_customer_hard_cap_questions": 4,
+    "immediate_danger_max_agent_turns": 2,
+    "open_ended_anything_else_question": false,
+    "routine_transfer_allowed": false,
+    "booking_allowed": false,
+    "dispatch_allowed": false,
+    "pricing_allowed": false,
+    "payment_allowed": false,
+    "sms_allowed": false,
+    "direct_retell_email_allowed": false,
+    "closing_language": {
+      "routine_qualified": "Thanks. I’ve recorded your details for the team to review. This does not confirm an appointment, dispatch, or callback time. Goodbye.",
+      "existing_customer_or_general_message": "Thanks. I’ve recorded your message for the team. I can’t access accounts or change appointments, and no callback time is confirmed. Goodbye.",
+      "approved_urgent_transfer_offer": "This may need prompt attention. I can try to reach the approved on-call contact now, but I can’t guarantee someone will answer. Would you like me to try?",
+      "before_dialing": "Okay. I’ll try the on-call contact now. Please hold.",
+      "transfer_failure": "I wasn’t able to reach a person. I’ve recorded your details for the team to review. No callback, appointment, or dispatch is confirmed. If the situation becomes unsafe, move to a safe place and contact 911 or the appropriate utility emergency line. Goodbye.",
+      "immediate_danger": "Move to a safe location and contact 911 or the appropriate utility emergency line now. I cannot diagnose or dispatch help. Goodbye.",
+      "configuration_unavailable": "I’m sorry, the call configuration is unavailable, so I can’t safely collect any details. Please try again later. Goodbye."
+    },
+    "warm_transfer_private_whisper": "This is the Sylvara automated assistant for {{company_name}}. I have a caller on the line through the approved free-test handoff path. Please speak directly with the caller after connection."
+  },
+  "outcomes": [
+    "potential_job",
+    "existing_customer",
+    "urgent_potential_job",
+    "spam",
+    "unsupported_service",
+    "out_of_area",
+    "other_general_inquiry",
+    "sensitive_data_ended",
+    "configuration_failure",
+    "caller_abandoned",
+    "unresolved"
+  ],
+  "analysis_fields": [
+    "outcome",
+    "coverage_trigger",
+    "caller_name",
+    "callback_number",
+    "customer_type",
+    "caller_intent",
+    "issue_summary",
+    "city_or_zip",
+    "urgency",
+    "specific_person_requested",
+    "sensitive_data_detected",
+    "bookable_opportunity",
+    "office_follow_up_required",
+    "workflow_failure_code",
+    "workflow_failure_text",
+    "handoff_reason",
+    "handoff_disposition"
+  ],
+  "analysis_field_constraints": {
+    "enum_fields": {
+      "outcome": ["potential_job", "existing_customer", "urgent_potential_job", "spam", "unsupported_service", "out_of_area", "other_general_inquiry", "sensitive_data_ended", "configuration_failure", "caller_abandoned", "unresolved"],
+      "coverage_trigger": ["AfterHours", "NoAnswerOverflow", "Unknown"],
+      "customer_type": ["new", "existing", "unknown"],
+      "urgency": ["routine", "urgent", "immediate_danger", "unknown"],
+      "handoff_reason": ["urgent", "existing_customer", "specific_person", "none", "unknown"],
+      "handoff_disposition": ["not_applicable", "not_configured", "offered_declined", "attempted", "failure_branch", "unknown"]
+    },
+    "boolean_fields": [
+      "sensitive_data_detected",
+      "bookable_opportunity",
+      "office_follow_up_required"
+    ],
+    "bounded_string_maximum_characters": {
+      "caller_name": 120,
+      "callback_number": 32,
+      "caller_intent": 120,
+      "issue_summary": 500,
+      "city_or_zip": 64,
+      "specific_person_requested": 120,
+      "workflow_failure_code": 64,
+      "workflow_failure_text": 300
+    },
+    "null_for_unavailable_optional_value": true,
+    "transcript_or_recording_copy_allowed": false
+  },
+  "handoff_reasons": [
+    "urgent",
+    "existing_customer",
+    "specific_person",
+    "none",
+    "unknown"
+  ],
+  "model_handoff_dispositions": [
+    "not_applicable",
+    "not_configured",
+    "offered_declined",
+    "attempted",
+    "failure_branch",
+    "unknown"
+  ],
+  "model_success_claims_prohibited": [
+    "bridged",
+    "connected",
+    "successful",
+    "human_answered"
+  ],
+  "handoff_policy": {
+    "transfer_type": "Warm Transfer",
+    "allowed_reasons": [
+      "urgent",
+      "existing_customer",
+      "specific_person"
+    ],
+    "caller_acceptance_required": true,
+    "direct_human_target_required": true,
+    "e164_target_required_when_enabled": true,
+    "human_detection_required": true,
+    "bridge_to_voicemail_or_nonhuman_allowed": false,
+    "press_digit_required": false,
+    "caller_id_override_allowed": false,
+    "provider_target_mapping_deferred": true,
+    "voicemail_target_allowed": false,
+    "route_loop_allowed": false,
+    "loop_rejection_categories": [
+      "assigned_retell_number",
+      "forwarding_main_number",
+      "route_failover_number",
+      "known_forward_into_sylvara",
+      "nested_return_to_same_retell_number"
+    ],
+    "immediate_danger_transfer_allowed": false,
+    "vendor_transfer_allowed": false,
+    "sales_transfer_allowed": false,
+    "job_applicant_transfer_allowed": false,
+    "spam_transfer_allowed": false,
+    "warm_transfer_node_count": 1,
+    "failure_edge_required": true,
+    "raw_target_persisted": false,
+    "target_fingerprint_persisted": true,
+    "provisional_attempt_seconds": 25
+  },
+  "canonical_handoff_states": [
+    "NotApplicable",
+    "NotConfigured",
+    "Offered",
+    "Declined",
+    "Started",
+    "Bridged",
+    "Cancelled",
+    "Ended",
+    "Failed",
+    "Unknown"
+  ],
+  "handoff_failure_reasons": [
+    "no_answer",
+    "busy",
+    "voicemail_or_nonhuman",
+    "timeout",
+    "caller_cancelled",
+    "provider_error",
+    "invalid_destination",
+    "unknown"
+  ],
+  "evidence_precedence": [
+    "structured_transfer_lifecycle_event",
+    "authoritative_provider_call_field",
+    "post_call_secondary_signal",
+    "unknown"
+  ],
+  "flow_graph": {
+    "first_node": "configuration_gate",
+    "allowed_node_types": [
+      "Conversation",
+      "Logic Split",
+      "Extract Variable",
+      "Call Transfer",
+      "Ending",
+      "Note"
+    ],
+    "nodes": [
+      {"key": "configuration_gate", "type": "Logic Split"},
+      {"key": "configuration_unavailable", "type": "Ending"},
+      {"key": "safety_gate", "type": "Logic Split"},
+      {"key": "immediate_danger", "type": "Ending"},
+      {"key": "consent_and_sensitive_gate", "type": "Logic Split"},
+      {"key": "sensitive_redirect", "type": "Conversation"},
+      {"key": "sensitive_end", "type": "Ending"},
+      {"key": "intent_and_intake", "type": "Conversation"},
+      {"key": "classification", "type": "Extract Variable"},
+      {"key": "handoff_policy_gate", "type": "Logic Split"},
+      {"key": "handoff_offer", "type": "Conversation"},
+      {"key": "warm_transfer", "type": "Call Transfer"},
+      {"key": "transfer_failure_close", "type": "Ending"},
+      {"key": "actionable_close", "type": "Ending"},
+      {"key": "nonactionable_close", "type": "Ending"}
+    ],
+    "edges": [
+      {"key": "configuration_valid", "from": "configuration_gate", "to": "safety_gate"},
+      {"key": "configuration_invalid", "from": "configuration_gate", "to": "configuration_unavailable"},
+      {"key": "safe", "from": "safety_gate", "to": "consent_and_sensitive_gate"},
+      {"key": "immediate_danger", "from": "safety_gate", "to": "immediate_danger"},
+      {"key": "normal_consent", "from": "consent_and_sensitive_gate", "to": "intent_and_intake"},
+      {"key": "first_sensitive_attempt", "from": "consent_and_sensitive_gate", "to": "sensitive_redirect"},
+      {"key": "persistent_sensitive_attempt", "from": "consent_and_sensitive_gate", "to": "sensitive_end"},
+      {"key": "safe_redirect", "from": "sensitive_redirect", "to": "intent_and_intake"},
+      {"key": "classified", "from": "intent_and_intake", "to": "classification"},
+      {"key": "handoff_candidate", "from": "classification", "to": "handoff_policy_gate"},
+      {"key": "ordinary_actionable", "from": "classification", "to": "actionable_close"},
+      {"key": "ordinary_nonactionable", "from": "classification", "to": "nonactionable_close"},
+      {"key": "handoff_allowed", "from": "handoff_policy_gate", "to": "handoff_offer"},
+      {"key": "handoff_not_allowed", "from": "handoff_policy_gate", "to": "actionable_close"},
+      {"key": "caller_accepts", "from": "handoff_offer", "to": "warm_transfer"},
+      {"key": "caller_declines", "from": "handoff_offer", "to": "actionable_close"},
+      {"key": "transfer_failure", "from": "warm_transfer", "to": "transfer_failure_close"}
+    ]
+  },
+  "notification_policy": {
+    "name": "EmailAfterActionableCall",
+    "owner": "catalyst",
+    "provider_mode": "dry_run_mock_only",
+    "durable_rows_per_actionable_call": 1,
+    "provider_calls_in_local_mode": 0,
+    "actionable_outcomes": [
+      "potential_job",
+      "urgent_potential_job",
+      "existing_customer",
+      "other_general_inquiry_with_office_follow_up",
+      "unresolved_with_safe_follow_up"
+    ],
+    "excluded_categories": [
+      "spam",
+      "vendor",
+      "job_applicant",
+      "wrong_number",
+      "out_of_area",
+      "unsupported_service",
+      "sensitive_data_ended",
+      "configuration_failure"
+    ],
+    "allowed_fields": [
+      "caller_name",
+      "confirmed_callback_number",
+      "customer_type",
+      "city_or_zip",
+      "issue_summary",
+      "urgency",
+      "outcome",
+      "handoff_reason",
+      "handoff_state",
+      "call_timestamp"
+    ],
+    "prohibited_content": [
+      "transcript",
+      "recording",
+      "full_address",
+      "sensitive_data",
+      "handoff_number",
+      "recipient_address",
+      "provider_call_id",
+      "private_deployment_id",
+      "revenue_estimate"
+    ],
+    "delivery_claim_allowed": false,
+    "replay_suppression_required": true,
+    "cross_client_recipient_rejected": true
+  },
+  "sensitive_data_policy": {
+    "intentionally_collected": false,
+    "first_attempt_action": "interrupt_and_redirect_without_repetition",
+    "persistent_attempt_action": "end_and_minimize",
+    "terminal_outcome": "sensitive_data_ended",
+    "terminal_retained_fields": 0,
+    "transfer_due_only_to_sensitive_attempt": false
+  },
+  "settings_constraints": {
+    "language": "en-US",
+    "expressive_mode_enabled": false,
+    "backchannel_enabled": true,
+    "backchannel_frequency": 0.3,
+    "responsiveness": 0.65,
+    "interruption_sensitivity": 0.65,
+    "speech_to_text_mode": "accurate",
+    "dtmf_enabled": false,
+    "noise_and_background_speech_cancellation_enabled": true,
+    "data_storage": "everything_except_pii",
+    "retention_days": 30,
+    "provider_mapping_readback_required": true,
+    "voice_and_carrier_behavior_validated": false
+  },
+  "local_test_boundary": {
+    "network_allowed": false,
+    "external_model_allowed": false,
+    "guarded_python_surfaces": [
+      "socket.create_connection",
+      "socket.socket.connect",
+      "urllib.request.urlopen",
+      "http.client.HTTPConnection.request",
+      "requests.Session.request"
+    ],
+    "guarded_node_surfaces": [
+      "net.connect",
+      "net.createConnection",
+      "http.request",
+      "https.request",
+      "global.fetch",
+      "undici.request"
+    ],
+    "required_network_attempt_count": 0
+  },
+  "validation_boundary": {
+    "scenario_count": 100,
+    "critical_mutation_count": 16,
+    "critical_mutation_kill_rate_required": 1.0,
+    "overall_mutation_kill_rate_required": 0.9,
+    "retell_environment_interactions_allowed": 0,
+    "live_telephony_claims_allowed": false
+  }
+}

@@ -381,3 +381,9 @@ The only permitted stopping status is `READY FOR RETELL AGENT TESTING ONLY`, and
 - [Update phone number](https://docs.retellai.com/api-references/update-phone-number)
 - [Agent versioning and environment tags](https://docs.retellai.com/agent/version)
 - [Call-event webhook overview](https://docs.retellai.com/features/webhook-overview)
+
+## Disabled V2 Handoff Candidate
+
+The source-only `call_gap_capture_handoff_v2` candidate is governed by [ADR 0008](../adr/0008-bounded-free-test-human-handoff-and-operator-led-field-setup.md) and the [field-setup runbook](free-revenue-leak-test-field-setup.md). It does not alter `call_gap_monitor_v1`, reserve or purchase a number, bind traffic, import a Retell Draft, or authorize a call.
+
+Routine actionable calls remain email-only. Eligible urgent, existing-customer, and specific-person handoff is provider-neutral until exact Retell transfer-node and lifecycle-event schemas are authoritatively read back. Route verification must be intercepted before normal agent intake and create no handled-call count or notification. Until those provider contracts and live route behavior are proven, v2 and route verification are `NOT_READY`.

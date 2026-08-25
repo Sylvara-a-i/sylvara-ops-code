@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "status": "source-only-disabled-not-wired",
+  "environment": "Development",
+  "function": "revenue_leak_test_request_form",
+  "default_action": "reject",
+  "cors": false,
+  "routes": [
+    {
+      "id": "FIELD_SETUP_LAUNCH",
+      "method": "POST",
+      "caller": "administrator-restricted CRM button through a named Connection",
+      "authentication": ["Catalyst authenticated server context", "Gabriel operator role", "named Connection"],
+      "body": ["schemaVersion", "moduleApiName", "recordId"],
+      "response": ["single-use fragment-only launch URL", "expiry"],
+      "enabled": false
+    },
+    {
+      "id": "FIELD_SETUP_EXCHANGE",
+      "method": "POST",
+      "caller": "same-origin Catalyst-hosted field-setup client",
+      "authentication": ["Gabriel authenticated Catalyst user context", "single-use launch nonce"],
+      "response": ["Secure HttpOnly SameSite session cookie", "sanitized journey summary"],
+      "enabled": false
+    },
+    {
+      "id": "FIELD_SETUP_STATUS",
+      "method": "GET",
+      "caller": "same-origin Catalyst-hosted field-setup client",
+      "authentication": ["Gabriel authenticated Catalyst user context", "bound session cookie"],
+      "response": ["sanitized current state only"],
+      "enabled": false
+    },
+    {
+      "id": "FIELD_SETUP_OPERATOR_DECISION",
+      "method": "POST",
+      "caller": "same-origin Catalyst-hosted field-setup client after return to Gabriel",
+      "authentication": ["Gabriel authenticated Catalyst user context", "bound session cookie", "current journey revision"],
+      "browser_cannot_authorize": ["Lead conversion without server-side qualification receipt", "number reservation", "route verification", "activation"],
+      "enabled": false
+    }
+  ],
+  "unresolved": [
+    "Existing Request Form instruction currently limits the deployed controller to issue and prefill routes.",
+    "Exact Catalyst authenticated-user header/SDK contract requires Development readback.",
+    "Exact live Advanced I/O paths and private Connection link name are not public source."
+  ]
+}

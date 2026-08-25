@@ -113,3 +113,15 @@ The Client Portal Billing webhook gateway remains a separate trust boundary clas
 `READY FOR RETELL AGENT TESTING ONLY` is permitted only after PR merge, final-main Development and dark-Production parity, six-function and two-pool inventory readback, Forms, CRM, Billing TEST, live hidden Billing catalog, Analytics, security rotation, replay safety, migration, cleanup, rollback, and synthetic E2E all pass with zero P0/P1 defects.
 
 Only Retell simulations, voice/audio testing, latency and interruption testing, provider caller-experience testing, and prompt, wording, or conversation-flow refinement may remain.
+
+## Operator-Led Field Setup And Retell V2 Source Candidate
+
+The bounded field-setup and handoff decision is recorded in [ADR 0008](../adr/0008-bounded-free-test-human-handoff-and-operator-led-field-setup.md) and the [field-setup runbook](../runbooks/free-revenue-leak-test-field-setup.md).
+
+This addition is source-only and currently `NOT_READY`. It keeps existing Form 1 and Form 2, creates no Form 3, adds no seventh Catalyst function, and treats the mobile web journey as a temporary operator-led session rather than a client portal. The journey uses a 256-bit single-use fragment nonce, digest-only storage, Gabriel's authenticated Development context, and a bounded Secure/HttpOnly/SameSite session. It cannot approve or activate a test.
+
+Fresh sanitized CRM readback on 2026-08-25 confirmed that the legacy Form 1 button function still contains two hardcoded credential literals and no named Connection. The source replacement uses private install-time bindings and a parallel rollback-safe cutover plan; the live function remains unchanged. Current CRM button metadata, record-specific conversion options, the live hosted-client inventory, and live Forms/Catalyst route contracts remain unresolved.
+
+`call_gap_monitor_v1` remains unchanged. The distinct `call_gap_capture_handoff_v2` candidate is Draft, disabled, bound to no traffic environment, and not importable. Its public source defines exactly 17 analysis fields, a provider-neutral handoff state machine, one Catalyst-owned durable notification for each actionable call, 100 deterministic synthetic scenarios, and mutation/network guards. Exact Retell transfer-node and lifecycle-event payloads are not fabricated; the provider adapter and Retell readiness therefore remain `NOT_READY` until authoritative authenticated Draft readback and separate approval.
+
+Live install status is `NOT_AUTHORIZED`. Passing local source tests does not authorize a CRM install, Catalyst deploy/publish, Forms change, Retell import, call, number reservation, route change, message, Production traffic, or merge.

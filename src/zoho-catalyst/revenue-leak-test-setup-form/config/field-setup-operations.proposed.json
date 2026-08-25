@@ -1,0 +1,90 @@
+{
+  "schema_version": "1.0.0",
+  "status": "SOURCE_ONLY_NOT_DEPLOYABLE",
+  "provider_route_verification_readiness": "NOT_READY",
+  "provider_route_verification_blocker": "Exact provider evidence for proving the forwarded route while suppressing the agent before intake remains unresolved.",
+  "topology": {
+    "owning_function": "revenue_leak_test_setup_form",
+    "new_functions": 0,
+    "new_routes": 0,
+    "new_tables": 0,
+    "existing_handler_changed": false
+  },
+  "data_boundary": {
+    "identifiers": "sha256_fingerprints_only",
+    "forbidden": [
+      "raw_phone_numbers",
+      "raw_record_ids",
+      "provider_credentials",
+      "tokens",
+      "private_endpoints"
+    ]
+  },
+  "number_inventory": {
+    "source": "existing_approved_inventory_only",
+    "purchase_allowed": false,
+    "claim_semantics": "atomic_idempotent_available_to_reserved",
+    "binding": [
+      "client_fingerprint",
+      "environment_fingerprint",
+      "journey_fingerprint",
+      "deployment_fingerprint",
+      "configuration_fingerprint"
+    ],
+    "no_inventory_message": "Test Number Required — Sylvara Must Assign A Number Before Continuing",
+    "states": [
+      { "value": "Available", "color": "Gray" },
+      { "value": "Reserved", "color": "Blue" },
+      { "value": "Assigned", "color": "Teal" },
+      { "value": "Live", "color": "Green" },
+      { "value": "Cooldown", "color": "Amber" },
+      { "value": "Retired", "color": "Red" }
+    ]
+  },
+  "forwarding": {
+    "reviewed_provider_entries": [],
+    "unknown_provider_status": "Technical Setup Required",
+    "invent_steps_or_codes": false,
+    "states": [
+      { "value": "Not Configured", "color": "Gray" },
+      { "value": "Instructions Issued", "color": "Blue" },
+      { "value": "Customer Reported Enabled", "color": "Amber" },
+      { "value": "Verification In Progress", "color": "Orange" },
+      { "value": "Verified", "color": "Green" },
+      { "value": "Verification Failed", "color": "Red" },
+      { "value": "Disabled", "color": "Gray" },
+      { "value": "Rollback Verified", "color": "Purple" }
+    ]
+  },
+  "route_verification": {
+    "store_adapter_semantics": "atomic_open_and_single_use_evidence_claim",
+    "window_and_receipt_binding": [
+      "environment_fingerprint",
+      "journey_fingerprint",
+      "deployment_fingerprint",
+      "configuration_fingerprint",
+      "number_fingerprint",
+      "route_fingerprint",
+      "approved_qa_caller_fingerprint",
+      "issued_at",
+      "expires_at"
+    ],
+    "additional_isolation_binding": "client_fingerprint",
+    "replay_policy": "exact_evidence_is_idempotent; different_evidence_or_binding_fails_closed",
+    "verified_qa_runtime_disposition": {
+      "start_agent": false,
+      "collect_agent_intake": false,
+      "create_transcript": false,
+      "create_post_call_analysis": false,
+      "increment_handled_call_count": false,
+      "send_notification": false,
+      "activate_deployment": false,
+      "perform_operational_action": false
+    }
+  },
+  "browser_setup_control": {
+    "allowed_actions": ["stop", "resume"],
+    "forbidden_actions": ["activate", "mutate_live_route"],
+    "activation_requires_separate_operator_approval": true
+  }
+}

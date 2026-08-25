@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "status": "source-only-disabled-pending-live-metadata-and-install-review",
+  "environment": "Development",
+  "customer_facing_offer": "Free Revenue Leak Test",
+  "installation_authorized": false,
+  "execution_authorized": false,
+  "live_button_preservation": {
+    "current_lead_button": "preserve unchanged",
+    "cutover": "parallel install, synthetic readback, then separately approved switch",
+    "rollback": "disable the parallel buttons and restore the prior button assignment; never delete the prior function during the first cutover"
+  },
+  "private_bindings": {
+    "connection_link_name": "injected during an approved private install; never committed",
+    "control_plane_endpoint": "read from an approved CRM organization variable; never committed",
+    "allowed_connection_scopes": [
+      "Catalyst field-setup control-plane invocation only"
+    ]
+  },
+  "buttons": [
+    {
+      "logical_name": "OPEN_FREE_TEST_SETUP_LEAD",
+      "label": "Open Free-Test Setup",
+      "module": "Leads",
+      "placement": "record_detail",
+      "source": "functions/open_free_test_setup_lead.deluge",
+      "operator": "Gabriel",
+      "allowed_effects": [
+        "read the selected Lead",
+        "request one short-lived launch nonce through the named Connection",
+        "open the Catalyst-hosted field-setup journey"
+      ],
+      "prohibited_effects": [
+        "submit Form 1",
+        "send email or SMS",
+        "create a task",
+        "convert a Lead",
+        "reserve a number",
+        "create or activate a route",
+        "approve or start a test"
+      ]
+    },
+    {
+      "logical_name": "OPEN_FREE_TEST_SETUP_DEAL",
+      "label": "Open Free-Test Setup",
+      "module": "Deals",
+      "placement": "record_detail",
+      "source": "functions/open_free_test_setup_deal.deluge",
+      "operator": "Gabriel",
+      "allowed_effects": [
+        "read the selected Deal",
+        "request or resume one short-lived journey through the named Connection",
+        "open the authoritative current setup step"
+      ],
+      "prohibited_effects": [
+        "send email or SMS",
+        "reserve a number without explicit setup action",
+        "approve or activate a test"
+      ]
+    },
+    {
+      "logical_name": "APPROVE_AND_START_FREE_TEST",
+      "label": "Approve & Start Free Test",
+      "module": "Deals",
+      "placement": "record_detail",
+      "source": "functions/approve_and_start_free_test.deluge",
+      "operator": "Gabriel",
+      "browser_exposed": false,
+      "preconditions": [
+        "current Form 2 authorization evidence",
+        "dedicated number assignment",
+        "immutable configuration version",
+        "route-verification receipt",
+        "rollback readiness",
+        "resolver and client-isolation checks",
+        "seven-day and 25-connected-call limits",
+        "shared-agent binding",
+        "current route fingerprint and approval receipt",
+        "fresh provider-route readback"
+      ]
+    },
+    {
+      "logical_name": "STOP_OR_ROLL_BACK_FREE_TEST",
+      "label": "Stop / Roll Back Test",
+      "module": "Deals",
+      "placement": "record_detail",
+      "source": "functions/stop_or_roll_back_free_test.deluge",
+      "operator": "Gabriel",
+      "browser_exposed": false,
+      "preconditions": [
+        "exact current deployment and route readback",
+        "idempotent stop intent",
+        "preserved customer rollback instructions",
+        "post-action route and CRM readback"
+      ]
+    }
+  ],
+  "install_gates": [
+    "Read back existing buttons without executing them.",
+    "Confirm exact module API names, button argument contract, operator role, organization-variable support, and Connection binding.",
+    "Confirm the private Catalyst endpoint and least-privilege Connection in Development.",
+    "Install only as parallel disabled candidates and run a ZZZ SYNTHETIC readback under separate approval.",
+    "Do not enable, execute, cut over, or delete a live button in this source lane."
+  ]
+}
