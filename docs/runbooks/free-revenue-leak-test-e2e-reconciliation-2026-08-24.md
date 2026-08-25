@@ -43,6 +43,14 @@ The latest sanitized Development readback confirms that the single Retell number
 
 Deletion is nevertheless blocked. None of the five canonical functions reports the reviewed PR revision, the approved Catalyst connector exposes neither function-source upload nor function deletion, and it cannot enumerate standalone Job bindings. Do not delete a legacy function based only on `is_deployed=false` or absent Cron evidence. The safe order remains: deploy and pull back the exact reviewed source, pass signed lifecycle and rollback tests, prove every route and standalone Job binding absent, remove the seven disabled Analytics Crons and their obsolete pool, then delete the five legacy functions through a reviewed Development-capable interface.
 
+### Catalyst Project Consolidation Decision
+
+Use the existing Retell Development project as the single Free Revenue Leak Test integration project. It is already the reviewed destination for the copied Form 1 and Form 2 tables and their dedicated CRM Connections. Deploy the five canonical functions into that project as separate function targets; do not combine their code, routes, credentials, triggers, or rollback boundaries.
+
+The separate `SylvaraForm1AssistedIntake` and `SylvaraForm2Controller` projects are temporary legacy runtime and rollback paths, not the desired final topology. Both contain durable Development rows and still have caller/cutover work outstanding. Delete either project only after the exact reviewed target function is deployed in Retell, every CRM/Forms caller is cut over, direct synthetic acceptance and restore tests pass, no route/Job/Connection/caller references the old project, and its session/evidence retention disposition is recorded. The approved Catalyst connector currently exposes neither function-source upload nor project deletion, so no project deletion is authorized from incomplete readback.
+
+Keep `SylvaraClientPortalHMACGateway` separate and untouched. It has a different authentication and release boundary and includes a Production environment; merging it into Development telephony would expand privilege and accidental-Production risk. The `Polls` card visible in the Catalyst console is a Zoho demo launcher, not a Sylvara project.
+
 ## Form 2 Data Store Readback
 
 | Runtime binding | Application columns | Unique | Audited | Rows | App User permissions |
