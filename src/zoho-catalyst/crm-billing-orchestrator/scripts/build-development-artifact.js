@@ -395,7 +395,7 @@ function safeCleanup(createdRoot, temporaryParent) {
 function build({ deploy = false, environment = process.env, scriptPath = __filename } = {}) {
   const approvedRevision = String(environment.APPROVED_SOURCE_REVISION ?? "");
   if (!SHA.test(approvedRevision)) fail("APPROVED_SOURCE_REVISION is missing or invalid");
-  const developmentZaid = requiredPrivate(environment, "CATALYST_DEVELOPMENT_ZAID");
+  const developmentZaid = requiredPrivate(environment, "CATALYST_DEVELOPMENT_ZAID", 1);
   const runtimeProof = requiredPrivate(environment, "DEVELOPMENT_RUNTIME_PROOF", 32, 256);
 
   // Remove private inputs before any child process is started. Child environments are

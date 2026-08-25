@@ -18,7 +18,7 @@ const {
 } = require(builderPath);
 
 const SOURCE_TEMPLATE = `"use strict";\n\nconst ARTIFACT_SOURCE_REVISION = "__SYLVARA_UNSTAMPED_SOURCE_REVISION__";\nconst ARTIFACT_DEVELOPMENT_ZAID_HMAC_SHA256 =\n  "__SYLVARA_UNSTAMPED_DEVELOPMENT_ZAID_HMAC_SHA256__";\n\nmodule.exports = { ARTIFACT_DEVELOPMENT_ZAID_HMAC_SHA256, ARTIFACT_SOURCE_REVISION };\n`;
-const SYNTHETIC_ZAID = "synthetic-development-project-key";
+const SYNTHETIC_ZAID = "synthetic-z";
 const SYNTHETIC_PROOF = "synthetic-runtime-proof-with-at-least-thirty-two-bytes";
 const DEPLOY_FIXTURE_VALUE = "synthetic-catalyst-credential";
 
@@ -106,7 +106,8 @@ function builderEnvironment(fixture) {
   };
 }
 
-test("builder exports clean approved Git state, stamps only the artifact, and never deploys by default", (testContext) => {
+test("builder accepts an 11-character ZAID, exports clean Git state, and never deploys by default", (testContext) => {
+  assert.equal(SYNTHETIC_ZAID.length, 11);
   const fixture = syntheticRepository(testContext);
   const result = spawnSync(process.execPath, [fixture.script], {
     cwd: fixture.repository,
@@ -159,6 +160,29 @@ test("builder exports clean approved Git state, stamps only the artifact, and ne
   assert.deepEqual(fs.readdirSync(fixture.artifactParent).sort(), rootsBeforeDirtyFailure);
   assert.doesNotMatch(`${dirty.stdout}${dirty.stderr}`, new RegExp(SYNTHETIC_ZAID));
   assert.doesNotMatch(`${dirty.stdout}${dirty.stderr}`, new RegExp(SYNTHETIC_PROOF));
+});
+
+test("builder rejects empty, control-character, and oversized ZAIDs", (testContext) => {
+  const fixture = syntheticRepository(testContext);
+  const rootsBefore = fs.readdirSync(fixture.artifactParent).sort();
+  const invalidZaids = ["", "synthetic\tzaid", "z".repeat(4097)];
+
+  for (const zaid of invalidZaids) {
+    const result = spawnSync(process.execPath, [fixture.script], {
+      cwd: fixture.repository,
+      encoding: "utf8",
+      env: { ...builderEnvironment(fixture), CATALYST_DEVELOPMENT_ZAID: zaid },
+      maxBuffer: 16 * 1024 * 1024,
+      shell: false,
+      timeout: 30_000,
+      windowsHide: true,
+    });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /CATALYST_DEVELOPMENT_ZAID is missing or invalid/);
+    assert.equal(result.stdout, "");
+    assert.deepEqual(fs.readdirSync(fixture.artifactParent).sort(), rootsBefore);
+    if (zaid) assert.doesNotMatch(result.stderr, new RegExp(zaid.replace(/\t/g, "\\t")));
+  }
 });
 
 test("deploy arguments are hard-scoped to the one Development function", () => {
