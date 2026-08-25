@@ -551,6 +551,32 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             ["AnalyticsSyncCheckpoints", "AnalyticsSyncOutbox"],
         )
 
+        call_outbox = next(
+            entry for entry in call_schema["tables"]
+            if entry["api_name"] == "AnalyticsSyncOutbox"
+        )
+        analytics_outbox = next(
+            entry for entry in analytics_schema["tables"]
+            if entry["api_name"] == "AnalyticsSyncOutbox"
+        )
+        parity_fields = (
+            "api_name", "type", "max_length", "mandatory", "unique",
+            "private", "audit_consent", "required_for_v2_rows",
+        )
+        normalize = lambda column: {
+            field: column.get(field) for field in parity_fields
+        }
+        self.assertEqual(
+            {
+                column["api_name"]: normalize(column)
+                for column in call_outbox["columns"]
+            },
+            {
+                column["api_name"]: normalize(column)
+                for column in analytics_outbox["columns"]
+            },
+        )
+
     def test_all_development_tables_have_lossless_fail_closed_dispositions(self):
         plan = self.table_disposition
         self.assertEqual(plan["schema_version"], 1)

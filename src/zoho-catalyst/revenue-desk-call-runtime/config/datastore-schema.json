@@ -930,7 +930,7 @@
         { "api_name": "RECORD_KEY", "type": "varchar", "max_length": 80, "mandatory": false, "unique": false, "private": true, "required_for_v2_rows": true },
         { "api_name": "CLIENT_KEY", "type": "varchar", "max_length": 80, "mandatory": false, "unique": false, "private": true, "required_for_v2_rows": true },
         { "api_name": "DEPLOYMENT_KEY", "type": "varchar", "max_length": 80, "mandatory": false, "unique": false, "private": true, "required_for_v2_rows": true },
-        { "api_name": "CONFIGURATION_VERSION", "type": "varchar", "max_length": 100, "mandatory": false, "unique": false, "private": true, "required_for_v2_rows": true },
+        { "api_name": "CONFIGURATION_VERSION", "type": "varchar", "max_length": 128, "mandatory": false, "unique": false, "private": true, "required_for_v2_rows": true },
         { "api_name": "ENGAGEMENT_TYPE", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false, "required_for_v2_rows": true },
         { "api_name": "ENVIRONMENT", "type": "varchar", "max_length": 16, "mandatory": false, "unique": false, "required_for_v2_rows": true },
         { "api_name": "SOURCE_DATE_UTC", "type": "varchar", "max_length": 10, "mandatory": false, "unique": false, "required_for_v2_rows": true },

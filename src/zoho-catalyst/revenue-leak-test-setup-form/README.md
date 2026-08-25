@@ -189,6 +189,22 @@ Then run the repository verifier from the repository root:
 pwsh -NoProfile -File ./tools/verify.ps1
 ```
 
+To prepare a complete immutable Catalyst CLI project without deploying it, provide the separately reviewed normalized Form 2 destination digest only through the process environment. Create only the parent directory; the output child must not already exist:
+
+```powershell
+$approvedRevision = git rev-parse HEAD
+$artifactParent = New-Item -ItemType Directory -Path (Join-Path ([IO.Path]::GetTempPath()) ("sylvara-setup-cli-artifact-" + [guid]::NewGuid()))
+$artifactRoot = Join-Path $artifactParent.FullName "revenue-leak-test-setup-form"
+$env:APPROVED_FORM2_DESTINATION_SHA256 = "<reviewed-lowercase-sha256>"
+try {
+  node src/zoho-catalyst/revenue-leak-test-setup-form/tools/build-release-artifact.js --approved-revision $approvedRevision --output $artifactRoot
+} finally {
+  Remove-Item Env:APPROVED_FORM2_DESTINATION_SHA256 -ErrorAction SilentlyContinue
+}
+```
+
+The build-only command never invokes Catalyst and never prints the destination digest. It exports the exact clean approved commit, runs the function CI before pruning, installs only locked production dependencies with lifecycle scripts disabled, stamps the source revision and destination digest only in the artifact, and writes `artifact-manifest.json` with canonical per-file SHA-256 values and an aggregate digest. Deployment and live readback remain separate approval-gated actions.
+
 Tests use synthetic records only. Passing tests prove local policy behavior, not a live Forms, CRM, Connection, Data Store, API Gateway, pipeline, or deployment contract.
 
 The eight deploy-artifact integration cases intentionally skip on non-Linux hosts. GitHub's `repo-checks` job runs on `ubuntu-24.04` and executes this same component `npm run ci`, so those cases must run—not skip—on every pull request before deployment evidence is accepted.

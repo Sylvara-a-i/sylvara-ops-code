@@ -59,9 +59,11 @@ test("rejects invalid digests and any non-exact artifact template", (context) =>
   );
 });
 
-test("rejects a repository checkout or a relative artifact root", () => {
+test("rejects a repository checkout or a relative artifact root", (context) => {
+  const checkout = createArtifact(context);
+  fs.mkdirSync(path.join(checkout.root, ".git"));
   assert.throws(
-    () => stampFormDestination({ artifactRoot: functionRoot, digest: "d".repeat(64) }),
+    () => stampFormDestination({ artifactRoot: checkout.root, digest: "d".repeat(64) }),
     /must not be a repository checkout/,
   );
   assert.throws(
