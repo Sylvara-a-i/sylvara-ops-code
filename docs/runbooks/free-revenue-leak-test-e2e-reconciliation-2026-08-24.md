@@ -37,6 +37,12 @@ Retain these five boundaries:
 
 Combining them would mix unrelated callers and credentials, enlarge the failure blast radius, and make rollback harder. The excess function count comes from legacy split Retell units, not these five boundaries. Legacy units remain disabled or unbound until the canonical packages and callers are independently proven; this document is not deletion authority.
 
+### Legacy Function Decommission Gate
+
+The latest sanitized Development readback confirms that the single Retell number uses the canonical `/retell/inbound` webhook and the shared agent uses the canonical `/retell/events` webhook for `call_ended` and `call_analyzed`. Catalyst API Gateway is disabled, and no Cron targets `retell_events`, `retell_inbound_resolver`, `retell_route_approval_control`, or `process_retell_events`. Seven disabled Crons still target `analytics_sync`; the canonical retry Cron is also disabled and correctly targets `retell_free_test_retry`.
+
+Deletion is nevertheless blocked. None of the five canonical functions reports the reviewed PR revision, the approved Catalyst connector exposes neither function-source upload nor function deletion, and it cannot enumerate standalone Job bindings. Do not delete a legacy function based only on `is_deployed=false` or absent Cron evidence. The safe order remains: deploy and pull back the exact reviewed source, pass signed lifecycle and rollback tests, prove every route and standalone Job binding absent, remove the seven disabled Analytics Crons and their obsolete pool, then delete the five legacy functions through a reviewed Development-capable interface.
+
 ## Form 2 Data Store Readback
 
 | Runtime binding | Application columns | Unique | Audited | Rows | App User permissions |
