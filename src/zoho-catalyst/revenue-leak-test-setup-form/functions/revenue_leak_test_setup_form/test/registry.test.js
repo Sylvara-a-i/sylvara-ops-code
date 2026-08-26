@@ -301,9 +301,6 @@ test("the Catalyst and npm manifests describe one consistent Advanced IO target"
     "lib/connection-boundary.js",
     "lib/crm-client.js",
     "lib/destinations.js",
-    "lib/field-setup-operations-composition.js",
-    "lib/field-setup-operations-dispatcher.js",
-    "lib/field-setup-operations.js",
     "lib/form-destination.js",
     "lib/form-contract.js",
     "lib/handler.js",
@@ -546,7 +543,7 @@ test("GitHub Linux CI executes the RevenueLeakTestSetupForm deploy-artifact regr
   );
   assert.equal(packageManifest.scripts.test, "node --test test/*.test.js");
   assert.match(deploymentTests, /process\.platform === "linux" && process\.arch === "x64"/);
-  assert.equal((deploymentTests.match(/skip: !supportedRunner/g) ?? []).length, 8);
+  assert.equal((deploymentTests.match(/skip: !supportedRunner/g) ?? []).length, 9);
 });
 
 test("the repository pipeline keeps approval but blocks Development deployment", () => {
@@ -686,6 +683,12 @@ module.exports = { ARTIFACT_FORM_DESTINATION_SHA256 };
     script,
     /export -n PROJECT_ID CATALYST_ORG CATALYST_TOKEN APPROVED_SOURCE_REVISION/,
   );
+  assert.match(script, /APPROVED_CATALYST_PROJECT_ID_SHA256/);
+  assert.match(
+    script,
+    /project_id_sha256" == "\$APPROVED_CATALYST_PROJECT_ID_SHA256/,
+  );
+  assert.match(script, /does not match the separately approved Catalyst project digest/);
   assert.match(script, /GIT_\*\|npm_config_\*\|NPM_CONFIG_\*/);
   const unexportIndex = script.indexOf(
     "export -n PROJECT_ID CATALYST_ORG CATALYST_TOKEN APPROVED_SOURCE_REVISION",

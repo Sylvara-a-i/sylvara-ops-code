@@ -6,6 +6,7 @@ const {
 } = require("./destinations");
 
 const FORM1_SESSION_TABLE_NAME = "RevenueLeakTestRequestFormSessions";
+const SHA256_HEX_PATTERN = /^[a-f0-9]{64}$/;
 
 const NUMERIC_LIMITS = Object.freeze({
   SESSION_TTL_SECONDS: Object.freeze({ fallback: 900, minimum: 300, maximum: 3600 }),
@@ -110,6 +111,15 @@ function validateSecret(value, name) {
 function validateRevision(value) {
   if (!/^[a-f0-9]{40}$/.test(value)) {
     throw new ConfigurationError("SOURCE_REVISION must be a lowercase 40-character Git commit");
+  }
+  return value;
+}
+
+function validateProjectIdDigest(value) {
+  if (!SHA256_HEX_PATTERN.test(value)) {
+    throw new ConfigurationError(
+      "EXPECTED_CATALYST_PROJECT_ID_SHA256 must be one lowercase SHA-256 digest",
+    );
   }
   return value;
 }
@@ -254,6 +264,9 @@ function loadConfig(environment = process.env, artifactRevision) {
     darkMode: false,
     deploymentEnvironment,
     deploymentMode,
+    expectedCatalystProjectIdSha256: validateProjectIdDigest(
+      readRequired(environment, "EXPECTED_CATALYST_PROJECT_ID_SHA256"),
+    ),
     form1PublicUrl: validateFormUrl(readRequired(environment, "FORM1_PUBLIC_URL")),
     form1TokenFieldAlias,
     inboundBodyTimeoutMs: readBoundedInteger(environment, "INBOUND_BODY_TIMEOUT_MS"),

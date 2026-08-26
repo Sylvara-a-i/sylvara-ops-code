@@ -1,6 +1,13 @@
 "use strict";
 
+const crypto = require("node:crypto");
+
 const REVISION = "1".repeat(40);
+const SYNTHETIC_CATALYST_PROJECT_ID = "100000000000001";
+const SYNTHETIC_CATALYST_PROJECT_ID_SHA256 = crypto
+  .createHash("sha256")
+  .update(SYNTHETIC_CATALYST_PROJECT_ID, "utf8")
+  .digest("hex");
 const LEAD_ID = "9".repeat(19);
 const INTAKE_ID = "f1a_11111111-1111-4111-8111-111111111111";
 
@@ -8,6 +15,7 @@ function environment(overrides = {}) {
   return {
     DEPLOYMENT_ENVIRONMENT: "development",
     DEPLOYMENT_MODE: "active",
+    EXPECTED_CATALYST_PROJECT_ID_SHA256: SYNTHETIC_CATALYST_PROJECT_ID_SHA256,
     SOURCE_REVISION: REVISION,
     ISSUE_PATH: "/form1/issue-test",
     PREFILL_PATH: "/form1/prefill-test",
@@ -64,4 +72,12 @@ function lead(overrides = {}) {
   };
 }
 
-module.exports = { INTAKE_ID, LEAD_ID, REVISION, environment, lead };
+module.exports = {
+  INTAKE_ID,
+  LEAD_ID,
+  REVISION,
+  SYNTHETIC_CATALYST_PROJECT_ID,
+  SYNTHETIC_CATALYST_PROJECT_ID_SHA256,
+  environment,
+  lead,
+};

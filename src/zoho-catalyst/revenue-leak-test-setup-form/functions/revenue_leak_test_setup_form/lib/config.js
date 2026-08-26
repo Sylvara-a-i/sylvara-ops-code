@@ -29,6 +29,7 @@ const SESSION_STATUSES = Object.freeze([
   "reconciliation_required",
 ]);
 const SOURCE_REVISION_PATTERN = /^[a-f0-9]{40}$/;
+const SHA256_HEX_PATTERN = /^[a-f0-9]{64}$/;
 const COMPRESSED_CHOICE_PREFIX = "br:";
 const MAX_COMPRESSED_CHOICE_CHARS = 4096;
 const MAX_DECOMPRESSED_CHOICE_BYTES = 32768;
@@ -224,6 +225,15 @@ function validateRevision(value, name) {
   if (!SOURCE_REVISION_PATTERN.test(value)) {
     throw new ConfigurationError(
       `${name} must be a lowercase 40-character Git commit`,
+    );
+  }
+  return value;
+}
+
+function validateProjectIdDigest(value) {
+  if (!SHA256_HEX_PATTERN.test(value)) {
+    throw new ConfigurationError(
+      "EXPECTED_CATALYST_PROJECT_ID_SHA256 must be one lowercase SHA-256 digest",
     );
   }
   return value;
@@ -554,6 +564,9 @@ function loadConfig(
     darkMode: false,
     deploymentEnvironment,
     deploymentMode,
+    expectedCatalystProjectIdSha256: validateProjectIdDigest(
+      readRequired(environment, "EXPECTED_CATALYST_PROJECT_ID_SHA256"),
+    ),
     sessionTableName,
     prefillTableName,
     submissionTableName,

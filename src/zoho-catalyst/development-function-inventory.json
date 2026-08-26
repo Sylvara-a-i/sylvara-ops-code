@@ -59,6 +59,22 @@
       "independently read back absence after any later approved deletion"
     ]
   },
+  "development_resource_readback_2026_08_26": {
+    "evidence_scope": "sanitized metadata, aggregate counts, and bounded row-presence only; no project identifier, row content, customer data, caller data, or private configuration",
+    "observed_table_count": 35,
+    "canonical_table_count": 13,
+    "noncanonical_table_count": 22,
+    "observed_nonzero_table_count": 16,
+    "observed_zero_row_table_count": 19,
+    "configuration_version_table_row_count": 0,
+    "analytics_outbox_row_count": 308,
+    "analytics_outbox_legacy_v1_row_count": 308,
+    "analytics_outbox_additive_v2_row_count": 0,
+    "provider_version_backfill_required_before_additive_column": false,
+    "live_prestate_evidence": "evidence/free-revenue-leak-test-live-prestate-2026-08-26.json",
+    "legacy_source_capture_evidence": "evidence/legacy-retell-source-capture-2026-08-26.json",
+    "interpretation": "All thirteen canonical tables exist, but two require additive schema changes. Every noncanonical table remains retained pending exact classification, mapping, migration, reconciliation, rollback, and later scoped cleanup approval."
+  },
   "topology_decision": {
     "canonical_project_count": 1,
     "final_active_function_count": 6,
@@ -243,6 +259,9 @@
     "historical_analytics_crons_and_job_pool_removed": true,
     "canonical_analytics_function_must_be_deployed": true,
     "legacy_function_source_export_required": true,
+    "legacy_function_source_export_status": "all-six-native-provider-archives-captured-privately",
+    "legacy_function_test_parity_complete": false,
+    "legacy_function_live_binding_inventory_complete": false,
     "legacy_routes_jobs_webhooks_and_exclusive_credentials_removed_before_function_deletion": true,
     "legacy_call_tables_removed_before_first_Production_deployment": true,
     "duplicate_probe_and_v2_form_tables_removed_before_first_Production_deployment": true,
@@ -252,7 +271,7 @@
     "Production_credentials_independent": true,
     "every_removal_requires_independent_absence_readback": true,
     "current_table_migration_or_deletion_allowed": false,
-    "current_blocker": "The 29-table Development inventory has aggregate count evidence only, and legacy retell_route_approval_control source plus live binding evidence is incomplete. Table classification, source-to-destination mapping, fresh counts, deterministic digests, authorization reconciliation, migration readback, and rollback evidence remain required."
+    "current_blocker": "The refreshed 35-table Development inventory has sanitized row-presence evidence and all six legacy provider source archives are preserved privately, but full test parity is incomplete for three legacy packages and live route, Job, schedule, webhook, caller, and credential bindings are not fully reconciled. Exact table classification, source-to-destination mapping, deterministic digests, authorization reconciliation, canonical migration readback, shared-runtime Development acceptance, and rollback evidence remain required."
   },
   "environment_targets": {
     "Development": {

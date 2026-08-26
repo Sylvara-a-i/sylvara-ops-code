@@ -1,9 +1,12 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const crypto = require("node:crypto");
 const test = require("node:test");
 const {
   assertCatalystEnvironment,
+  assertCatalystRequestBinding,
+  assertCatalystSdkBinding,
   codeForError,
   createRequestListener,
   readCatalystEnvironmentHeader,
@@ -16,11 +19,25 @@ const { destinationDigest } = require("../lib/destinations");
 const FORM2_PUBLIC_URL =
   "https://forms.zohopublic.com/synthetic/form/perma/synthetic";
 const FORM2_DESTINATION_SHA256 = destinationDigest(FORM2_PUBLIC_URL);
+const SYNTHETIC_CATALYST_PROJECT_ID = "100000000000001";
+const SYNTHETIC_CATALYST_PROJECT_ID_SHA256 = crypto
+  .createHash("sha256")
+  .update(SYNTHETIC_CATALYST_PROJECT_ID, "utf8")
+  .digest("hex");
+
+function catalystHeaders(overrides = {}) {
+  return {
+    "x-zc-environment": "Development",
+    "x-zc-projectid": SYNTHETIC_CATALYST_PROJECT_ID,
+    ...overrides,
+  };
+}
 
 function listenerEnvironment() {
   return {
     DEPLOYMENT_ENVIRONMENT: "development",
     DEPLOYMENT_MODE: "active",
+    EXPECTED_CATALYST_PROJECT_ID_SHA256: SYNTHETIC_CATALYST_PROJECT_ID_SHA256,
     SESSION_TABLE_NAME: "Form2SessionsV3Runtime",
     PREFILL_TABLE_NAME: "Form2PrefillsV3",
     SUBMISSION_TABLE_NAME: "Form2SubmissionsV3",
@@ -66,7 +83,10 @@ function catalystSdkStub() {
   return {
     initialize() {
       return {
-        config: { environment: "development" },
+        config: {
+          environment: "development",
+          projectId: SYNTHETIC_CATALYST_PROJECT_ID,
+        },
         datastore() { return { table() { return {}; } }; },
         zcql() { return {}; },
         connections() { return {}; },
@@ -84,39 +104,116 @@ function responseStub() {
   };
 }
 
-function fieldSetupOperationsComposition(overrides = {}) {
-  return {
-    status: "NOT_READY",
-    catalystHeaderMapping: "NOT_READY_INJECTED_ONLY",
-    catalystIdentityMapping: "NOT_READY_INJECTED_ONLY",
-    catalystStoreMapping: "NOT_READY_INJECTED_ONLY",
-    deploymentAuthorized: false,
-    runtimeAuthority: false,
-    assertNoRouteCollision() {},
-    claimsRequest() { return false; },
-    async dispatch() {
-      throw new Error("must not dispatch");
-    },
-    ...overrides,
+test("requires request and SDK identity to match the reviewed Development project digest", () => {
+  const request = { headers: catalystHeaders() };
+  const config = {
+    deploymentEnvironment: "development",
+    expectedCatalystProjectIdSha256: SYNTHETIC_CATALYST_PROJECT_ID_SHA256,
   };
-}
-
-test("requires one injected Development header matching the SDK and configuration", () => {
-  const request = { headers: { "x-zc-environment": "Development" } };
+  const app = {
+    config: {
+      environment: "development",
+      projectId: SYNTHETIC_CATALYST_PROJECT_ID,
+    },
+  };
   assert.equal(readCatalystEnvironmentHeader(request), "development");
+  assert.equal(assertCatalystRequestBinding(request, config), SYNTHETIC_CATALYST_PROJECT_ID);
+  assert.doesNotThrow(() => assertCatalystSdkBinding(
+    app,
+    SYNTHETIC_CATALYST_PROJECT_ID,
+    config,
+  ));
   assert.doesNotThrow(() => assertCatalystEnvironment(
     request,
-    { config: { environment: "development" } },
+    app,
     "development",
+    SYNTHETIC_CATALYST_PROJECT_ID_SHA256,
   ));
-  for (const candidate of [
-    [{ headers: {} }, { config: { environment: "development" } }, "development"],
-    [request, { config: { environment: "production" } }, "development"],
-    [{ headers: { "x-zc-environment": "production" } }, { config: { environment: "production" } }, "production"],
-    [{ headers: { "X-ZC-Environment": "development", "x-zc-environment": "development" } }, { config: { environment: "development" } }, "development"],
-  ]) {
-    assert.throws(() => assertCatalystEnvironment(...candidate), ConfigurationError);
-  }
+  assert.throws(
+    () => assertCatalystRequestBinding({ headers: catalystHeaders({
+      "x-zc-projectid": "100000000000002",
+    }) }, config),
+    ConfigurationError,
+  );
+  assert.throws(
+    () => assertCatalystRequestBinding({ headers: {
+      ...catalystHeaders(),
+      "X-ZC-ProjectId": SYNTHETIC_CATALYST_PROJECT_ID,
+    } }, config),
+    ConfigurationError,
+  );
+  assert.throws(
+    () => assertCatalystSdkBinding(
+      { config: { environment: "development", projectId: "100000000000002" } },
+      SYNTHETIC_CATALYST_PROJECT_ID,
+      config,
+    ),
+    ConfigurationError,
+  );
+});
+
+test("project mismatch fails before SDK or Form 2 platform side effects", async () => {
+  let initialized = false;
+  let handled = false;
+  const wrongRequestListener = createRequestListener({
+    catalystSdk: {
+      initialize() {
+        initialized = true;
+        throw new Error("must not initialize");
+      },
+    },
+    environment: listenerEnvironment(),
+    artifactSourceRevision: listenerEnvironment().SOURCE_REVISION,
+    artifactFormDestinationSha256: FORM2_DESTINATION_SHA256,
+    logger: { info() {}, error() {} },
+    randomUUID: () => "10000000-0000-4000-8000-000000000001",
+    now: () => 100,
+    requestHandler: async () => {
+      handled = true;
+      throw new Error("must not handle");
+    },
+  });
+  const wrongRequestOutput = responseStub();
+  await wrongRequestListener({ headers: catalystHeaders({
+    "x-zc-projectid": "100000000000002",
+  }) }, wrongRequestOutput);
+  assert.equal(initialized, false);
+  assert.equal(handled, false);
+  assert.equal(wrongRequestOutput.statusCode, 503);
+  assert.equal(JSON.parse(wrongRequestOutput.payload).code, "configuration_invalid");
+
+  let platformAccessed = false;
+  const wrongSdkListener = createRequestListener({
+    catalystSdk: {
+      initialize() {
+        initialized = true;
+        return {
+          config: { environment: "development", projectId: "100000000000002" },
+          connections() { platformAccessed = true; },
+          datastore() { platformAccessed = true; },
+          email() { platformAccessed = true; },
+          zcql() { platformAccessed = true; },
+        };
+      },
+    },
+    environment: listenerEnvironment(),
+    artifactSourceRevision: listenerEnvironment().SOURCE_REVISION,
+    artifactFormDestinationSha256: FORM2_DESTINATION_SHA256,
+    logger: { info() {}, error() {} },
+    randomUUID: () => "10000000-0000-4000-8000-000000000002",
+    now: () => 100,
+    requestHandler: async () => {
+      handled = true;
+      throw new Error("must not handle");
+    },
+  });
+  const wrongSdkOutput = responseStub();
+  await wrongSdkListener({ headers: catalystHeaders() }, wrongSdkOutput);
+  assert.equal(initialized, true);
+  assert.equal(platformAccessed, false);
+  assert.equal(handled, false);
+  assert.equal(wrongSdkOutput.statusCode, 503);
+  assert.equal(JSON.parse(wrongSdkOutput.payload).code, "configuration_invalid");
 });
 
 test("maps only approved public codes and bounded statuses", () => {
@@ -181,7 +278,7 @@ test("listener logs stage and outcome for controller successes and handled error
     });
     const output = responseStub();
     await listener(
-      { headers: { "x-zc-environment": "Development" } },
+      { headers: catalystHeaders() },
       output,
     );
     assert.equal(lines.length, 1);
@@ -193,107 +290,6 @@ test("listener logs stage and outcome for controller successes and handled error
     assert.equal(publicBody.stage, undefined);
     assert.equal(publicBody.outcome, undefined);
   }
-});
-
-test("listener explicitly dispatches an injected setup-operation route without entering Form 2", async () => {
-  let handled = false;
-  let dispatched = false;
-  let collisionPaths;
-  let dispatchContext;
-  const listener = createRequestListener({
-    catalystSdk: catalystSdkStub(),
-    environment: listenerEnvironment(),
-    artifactSourceRevision: listenerEnvironment().SOURCE_REVISION,
-    artifactFormDestinationSha256: FORM2_DESTINATION_SHA256,
-    logger: { info() {}, error() {} },
-    randomUUID: () => "10000000-0000-4000-8000-000000000001",
-    now: () => 100,
-    requestHandler: async () => {
-      handled = true;
-      throw new Error("must not enter Form 2");
-    },
-    fieldSetupOperationsComposition: fieldSetupOperationsComposition({
-      assertNoRouteCollision(paths) { collisionPaths = paths; },
-      claimsRequest(request) {
-        return request.url === "/field-setup/operations/number/status";
-      },
-      async dispatch(_request, context) {
-        dispatched = true;
-        dispatchContext = context;
-        return {
-          status: 200,
-          body: {
-            ok: true,
-            state: "Available",
-            color: "Gray",
-            protocolId: "free_revenue_leak_test_field_setup_v1",
-            schemaVersion: 1,
-          },
-          stage: "field_setup_operations",
-          outcome: "number_status_read",
-        };
-      },
-    }),
-  });
-  const output = responseStub();
-
-  await listener({
-    method: "GET",
-    url: "/field-setup/operations/number/status",
-    headers: { "x-zc-environment": "Development" },
-  }, output);
-
-  assert.equal(dispatched, true);
-  assert.equal(handled, false);
-  assert.equal(typeof dispatchContext.app.datastore, "function");
-  assert.deepEqual(collisionPaths, [
-    "/form2/session/issue",
-    "/form2/session/access",
-    "/form2/session/otp/request",
-    "/form2/session/otp/verify",
-    "/form2/session/prefill",
-    "/form2/session/submit",
-  ]);
-  assert.deepEqual(JSON.parse(output.payload), {
-    ok: true,
-    state: "Available",
-    color: "Gray",
-    protocolId: "free_revenue_leak_test_field_setup_v1",
-    schemaVersion: 1,
-  });
-});
-
-test("default setup-operation composition preserves the existing Form 2 handler path", async () => {
-  let handled = false;
-  const listener = createRequestListener({
-    catalystSdk: catalystSdkStub(),
-    environment: listenerEnvironment(),
-    artifactSourceRevision: listenerEnvironment().SOURCE_REVISION,
-    artifactFormDestinationSha256: FORM2_DESTINATION_SHA256,
-    logger: { info() {}, error() {} },
-    randomUUID: () => "10000000-0000-4000-8000-000000000001",
-    now: () => 100,
-    requestHandler: async () => {
-      handled = true;
-      return {
-        status: 404,
-        body: { ok: false, code: "route_not_found" },
-        stage: "request",
-        outcome: "route_not_found",
-      };
-    },
-  });
-  const output = responseStub();
-
-  await listener({
-    method: "GET",
-    url: "/field-setup/operations/number/status",
-    headers: { "x-zc-environment": "Development" },
-  }, output);
-
-  assert.equal(handled, true);
-  assert.equal(output.statusCode, 404);
-  assert.equal(JSON.parse(output.payload).code, "route_not_found");
 });
 
 test("listener fails before SDK initialization when runtime and artifact revisions differ", async () => {
@@ -314,7 +310,7 @@ test("listener fails before SDK initialization when runtime and artifact revisio
   });
   const output = responseStub();
 
-  await listener({ headers: { "x-zc-environment": "Development" } }, output);
+  await listener({ headers: catalystHeaders() }, output);
 
   assert.equal(initialized, false);
   assert.equal(output.statusCode, 503);
@@ -345,7 +341,7 @@ test("listener fails before SDK initialization when the artifact destination dif
   });
   const output = responseStub();
 
-  await listener({ headers: { "x-zc-environment": "Development" } }, output);
+  await listener({ headers: catalystHeaders() }, output);
 
   assert.equal(initialized, false);
   assert.equal(output.statusCode, 503);
@@ -355,7 +351,6 @@ test("listener fails before SDK initialization when the artifact destination dif
 test("dark Production rejects before SDK, route, store, mail, CRM, or secret access", async () => {
   let initialized = false;
   let handled = false;
-  let compositionUsed = false;
   const environment = {
     DEPLOYMENT_ENVIRONMENT: "production",
     DEPLOYMENT_MODE: "dark",
@@ -370,11 +365,6 @@ test("dark Production rejects before SDK, route, store, mail, CRM, or secret acc
     randomUUID: () => "10000000-0000-4000-8000-000000000001",
     now: () => 100,
     requestHandler: async () => { handled = true; throw new Error("must not handle"); },
-    fieldSetupOperationsComposition: fieldSetupOperationsComposition({
-      assertNoRouteCollision() { compositionUsed = true; },
-      claimsRequest() { compositionUsed = true; return true; },
-      async dispatch() { compositionUsed = true; throw new Error("must not dispatch"); },
-    }),
   });
   const output = responseStub();
 
@@ -382,7 +372,6 @@ test("dark Production rejects before SDK, route, store, mail, CRM, or secret acc
 
   assert.equal(initialized, false);
   assert.equal(handled, false);
-  assert.equal(compositionUsed, false);
   assert.equal(output.statusCode, 503);
   assert.deepEqual(JSON.parse(output.payload), {
     ok: false,

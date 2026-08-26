@@ -5,11 +5,13 @@ const { createCatalystDataStoreAdapter } = require("./catalyst-datastore-adapter
 const { createConnectionAuthorizationProvider } = require("./connection-boundary");
 const { ConfigurationError, loadConfig } = require("./config");
 const { createCrmClient } = require("./crm-client");
-const { createDefaultDeniedFieldSetupComposition } = require("./field-setup-composition");
 const { handleRequest } = require("./handler");
 const { safeLog } = require("./safe-log");
 const { createSessionStore } = require("./session-store");
 const { ARTIFACT_SOURCE_REVISION } = require("./source-revision");
+
+const CATALYST_PROJECT_ID_PATTERN = /^[1-9][0-9]{0,29}$/;
+const SHA256_HEX_PATTERN = /^[a-f0-9]{64}$/;
 
 const PUBLIC_CODES = new Set([
   "authentication_failed",
@@ -22,13 +24,8 @@ const PUBLIC_CODES = new Set([
   "content_encoding_not_allowed",
   "content_length_invalid",
   "content_type_not_allowed",
-  "context_conflict",
   "method_not_allowed",
-  "reconciliation_required",
-  "request_invalid",
   "route_not_found",
-  "service_unavailable",
-  "session_not_found",
 ]);
 
 function statusForError(error) {
@@ -42,7 +39,7 @@ function codeForError(error) {
   return PUBLIC_CODES.has(error?.publicCode) ? error.publicCode : "internal_error";
 }
 
-function sendJson(response, status, body, { setCookie } = {}) {
+function sendJson(response, status, body) {
   const serialized = JSON.stringify(body);
   if (typeof response.status === "function") response.status(status);
   else response.statusCode = status;
@@ -52,16 +49,6 @@ function sendJson(response, status, body, { setCookie } = {}) {
     response.setHeader("pragma", "no-cache");
     response.setHeader("x-content-type-options", "nosniff");
     response.setHeader("referrer-policy", "no-referrer");
-    if (setCookie !== undefined) {
-      if (
-        typeof setCookie !== "string" ||
-        setCookie.length > 4096 ||
-        !/^__Host-sylvara_field_setup=[A-Za-z0-9_-]{43}; Path=\/; Max-Age=[1-9][0-9]{1,3}; Secure; HttpOnly; SameSite=Strict$/.test(setCookie)
-      ) {
-        throw new ConfigurationError("Field-setup response cookie is invalid");
-      }
-      response.setHeader("set-cookie", setCookie);
-    }
   }
   if (typeof response.send === "function") response.send(serialized);
   else if (typeof response.end === "function") response.end(serialized);
@@ -86,18 +73,101 @@ function readCatalystEnvironmentHeader(request) {
   return value;
 }
 
-function assertCatalystEnvironment(request, app, configuredEnvironment) {
-  const headerEnvironment = readCatalystEnvironmentHeader(request);
-  const sdkEnvironment = typeof app?.config?.environment === "string"
-    ? app.config.environment.trim().toLowerCase()
-    : "";
+function headerValues(request, headerName) {
+  const normalizedName = headerName.toLowerCase();
+  const distinctEntries = Object.entries(request?.headersDistinct ?? {})
+    .filter(([name]) => name.toLowerCase() === normalizedName);
+  if (distinctEntries.length > 0) {
+    return distinctEntries.length === 1 && Array.isArray(distinctEntries[0][1])
+      ? distinctEntries[0][1]
+      : [];
+  }
+
+  if (Array.isArray(request?.rawHeaders)) {
+    if (request.rawHeaders.length % 2 !== 0) return [];
+    const rawValues = [];
+    for (let index = 0; index < request.rawHeaders.length; index += 2) {
+      if (
+        typeof request.rawHeaders[index] === "string" &&
+        request.rawHeaders[index].toLowerCase() === normalizedName
+      ) rawValues.push(request.rawHeaders[index + 1]);
+    }
+    if (rawValues.length > 0) return rawValues;
+  }
+
+  return Object.entries(request?.headers ?? {})
+    .filter(([name]) => name.toLowerCase() === normalizedName)
+    .map(([, value]) => value);
+}
+
+function readCatalystProjectIdHeader(request) {
+  const values = headerValues(request, "x-zc-projectid");
   if (
-    sdkEnvironment !== "development" ||
-    headerEnvironment !== sdkEnvironment ||
-    sdkEnvironment !== configuredEnvironment
+    values.length !== 1 ||
+    typeof values[0] !== "string" ||
+    !CATALYST_PROJECT_ID_PATTERN.test(values[0])
+  ) {
+    throw new ConfigurationError("Catalyst project identity header is unavailable");
+  }
+  return values[0];
+}
+
+function matchesExpectedProjectId(projectId, expectedSha256) {
+  if (
+    !CATALYST_PROJECT_ID_PATTERN.test(projectId) ||
+    !SHA256_HEX_PATTERN.test(expectedSha256)
+  ) return false;
+  const actual = crypto.createHash("sha256").update(projectId, "utf8").digest();
+  return crypto.timingSafeEqual(actual, Buffer.from(expectedSha256, "hex"));
+}
+
+function assertCatalystRequestBinding(request, config) {
+  // The pinned Catalyst SDK derives app.config.projectId from this injected
+  // header. Validate the header first, then cross-check the initialized SDK so
+  // a wrong project cannot reach Data Store or Connection-backed operations.
+  const headerEnvironment = readCatalystEnvironmentHeader(request);
+  if (
+    headerEnvironment !== "development" ||
+    config?.deploymentEnvironment !== "development"
   ) {
     throw new ConfigurationError("Catalyst runtime environment does not match configuration");
   }
+  const requestProjectId = readCatalystProjectIdHeader(request);
+  if (!matchesExpectedProjectId(requestProjectId, config.expectedCatalystProjectIdSha256)) {
+    throw new ConfigurationError("Catalyst runtime project does not match configuration");
+  }
+  return requestProjectId;
+}
+
+function assertCatalystSdkBinding(app, requestProjectId, config) {
+  const sdkEnvironment = typeof app?.config?.environment === "string"
+    ? app.config.environment.trim().toLowerCase()
+    : "";
+  const rawSdkProjectId = app?.config?.projectId;
+  const sdkProjectId = typeof rawSdkProjectId === "string"
+    ? rawSdkProjectId
+    : Number.isSafeInteger(rawSdkProjectId) && rawSdkProjectId > 0
+      ? String(rawSdkProjectId)
+      : "";
+  if (
+    sdkEnvironment !== "development" ||
+    sdkEnvironment !== config.deploymentEnvironment ||
+    sdkProjectId !== requestProjectId ||
+    !matchesExpectedProjectId(sdkProjectId, config.expectedCatalystProjectIdSha256)
+  ) {
+    throw new ConfigurationError("Catalyst SDK project binding does not match configuration");
+  }
+}
+
+function assertCatalystEnvironment(
+  request,
+  app,
+  configuredEnvironment,
+  expectedCatalystProjectIdSha256,
+) {
+  const config = { deploymentEnvironment: configuredEnvironment, expectedCatalystProjectIdSha256 };
+  const requestProjectId = assertCatalystRequestBinding(request, config);
+  assertCatalystSdkBinding(app, requestProjectId, config);
 }
 
 function createRequestListener({
@@ -109,23 +179,8 @@ function createRequestListener({
   randomUUID = crypto.randomUUID,
   fetchImpl = globalThis.fetch,
   requestHandler = handleRequest,
-  fieldSetupComposition = createDefaultDeniedFieldSetupComposition(),
   artifactSourceRevision = ARTIFACT_SOURCE_REVISION,
 } = {}) {
-  if (
-    !fieldSetupComposition ||
-    fieldSetupComposition.status !== "NOT_READY" ||
-    fieldSetupComposition.catalystHeaderMapping !== "NOT_READY_INJECTED_ONLY" ||
-    fieldSetupComposition.catalystIdentityMapping !== "NOT_READY_INJECTED_ONLY" ||
-    fieldSetupComposition.catalystStoreMapping !== "NOT_READY_INJECTED_ONLY" ||
-    fieldSetupComposition.deploymentAuthorized !== false ||
-    fieldSetupComposition.runtimeAuthority !== false ||
-    typeof fieldSetupComposition.claimsRequest !== "function" ||
-    typeof fieldSetupComposition.dispatch !== "function" ||
-    typeof fieldSetupComposition.assertNoRouteCollision !== "function"
-  ) {
-    throw new ConfigurationError("Field-setup composition is invalid");
-  }
   return async function requestListener(request, response) {
     const startedAt = now();
     const requestId = randomUUID();
@@ -141,52 +196,40 @@ function createRequestListener({
         sendJson(response, 503, { ok: false, code: "service_unavailable", requestId });
         return;
       }
+      const requestProjectId = assertCatalystRequestBinding(request, config);
       const runtimeSdk = catalystSdk ?? require("zcatalyst-sdk-node");
-      readCatalystEnvironmentHeader(request);
       const app = runtimeSdk.initialize(request);
-      assertCatalystEnvironment(request, app, config.deploymentEnvironment);
-      fieldSetupComposition.assertNoRouteCollision([config.issuePath, config.prefillPath]);
-      let result;
-      const fieldSetupClaimed = fieldSetupComposition.claimsRequest(request);
-      if (typeof fieldSetupClaimed !== "boolean") {
-        throw new ConfigurationError("Field-setup route claim is invalid");
-      }
-      if (fieldSetupClaimed) {
-        result = await fieldSetupComposition.dispatch(request, { app });
-      } else {
-        // Preserve the existing Form 1 dependency path exactly. The default field-setup
-        // composition claims no routes, so issue/prefill continue through this branch only.
-        const adapter = createCatalystDataStoreAdapter(app, config);
-        const sessionStore = createSessionStore(adapter, config, { now });
-        const crmClient = createCrmClient(config, {
-          readAuthorizationProvider: createConnectionAuthorizationProvider(
-            app,
-            config.crmReadConnectionLinkName,
-            config.platformOperationTimeoutMs,
-          ),
-          writeAuthorizationProvider: createConnectionAuthorizationProvider(
-            app,
-            config.crmWriteConnectionLinkName,
-            config.platformOperationTimeoutMs,
-          ),
-          fetchImpl,
-        });
-        result = await requestHandler(request, {
-          config,
-          crmClient,
-          now,
-          randomBytes,
-          randomUUID,
-          sessionStore,
-        });
-      }
+      assertCatalystSdkBinding(app, requestProjectId, config);
+      const adapter = createCatalystDataStoreAdapter(app, config);
+      const sessionStore = createSessionStore(adapter, config, { now });
+      const crmClient = createCrmClient(config, {
+        readAuthorizationProvider: createConnectionAuthorizationProvider(
+          app,
+          config.crmReadConnectionLinkName,
+          config.platformOperationTimeoutMs,
+        ),
+        writeAuthorizationProvider: createConnectionAuthorizationProvider(
+          app,
+          config.crmWriteConnectionLinkName,
+          config.platformOperationTimeoutMs,
+        ),
+        fetchImpl,
+      });
+      const result = await requestHandler(request, {
+        config,
+        crmClient,
+        now,
+        randomBytes,
+        randomUUID,
+        sessionStore,
+      });
       safeLog(logger, result.status >= 500 ? "error" : "info", {
         requestId,
         stage: result.stage,
         outcome: result.outcome,
         elapsedMs: now() - startedAt,
       });
-      sendJson(response, result.status, result.body, { setCookie: result.setCookie });
+      sendJson(response, result.status, result.body);
     } catch (error) {
       const status = statusForError(error);
       const code = codeForError(error);
@@ -203,9 +246,12 @@ function createRequestListener({
 
 module.exports = {
   assertCatalystEnvironment,
+  assertCatalystRequestBinding,
+  assertCatalystSdkBinding,
   codeForError,
   createRequestListener,
   readCatalystEnvironmentHeader,
+  readCatalystProjectIdHeader,
   sendJson,
   statusForError,
 };

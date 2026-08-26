@@ -6,15 +6,15 @@ const { createCatalystMailAdapter } = require("./catalyst-mail");
 const { createConnectionAuthorizationProvider } = require("./connection-boundary");
 const { ConfigurationError, loadConfig } = require("./config");
 const { createCrmClient } = require("./crm-client");
-const {
-  createDefaultDeniedFieldSetupOperationsComposition,
-} = require("./field-setup-operations-composition");
 const { handleForm2Request } = require("./handler");
 const { safeLog } = require("./safe-log");
 const { createCatalystSessionStore } = require("./session-store");
 const { createWorkflowStore } = require("./workflow-store");
 const { createVerificationProofStore } = require("./verification-proof-store");
 const { createVerificationService } = require("./verification-service");
+
+const CATALYST_PROJECT_ID_PATTERN = /^[1-9][0-9]{0,29}$/;
+const SHA256_HEX_PATTERN = /^[a-f0-9]{64}$/;
 
 const PUBLIC_CODES = new Set([
   "authentication_failed",
@@ -27,7 +27,6 @@ const PUBLIC_CODES = new Set([
   "connection_unavailable",
   "content_length_invalid",
   "content_type_not_allowed",
-  "context_conflict",
   "context_invalid",
   "context_mismatch",
   "form_invalid",
@@ -39,10 +38,7 @@ const PUBLIC_CODES = new Set([
   "record_stale",
   "reconciliation_required",
   "relationship_mismatch",
-  "request_invalid",
   "route_not_found",
-  "service_unavailable",
-  "session_not_found",
   "setup_not_found",
   "submission_conflict",
   "submission_unresolved",
@@ -60,7 +56,6 @@ function statusForError(error) {
     body_too_large: 413,
     configuration_invalid: 503,
     connection_unavailable: 503,
-    context_conflict: 409,
     context_invalid: 409,
     context_mismatch: 409,
     identity_mismatch: 409,
@@ -69,7 +64,6 @@ function statusForError(error) {
     prefill_stale: 409,
     reconciliation_required: 503,
     relationship_mismatch: 409,
-    session_not_found: 404,
     setup_not_found: 404,
     submission_conflict: 409,
     submission_unresolved: 409,
@@ -100,13 +94,7 @@ function sendJson(response, status, body) {
 
 function sendControllerResult(response, result, requestId) {
   if (typeof result?.body !== "string") {
-    // Field-setup operation bodies are an exact cross-function protocol shared
-    // with the request-form web client. Do not append the legacy requestId field
-    // to this lane; all other setup-form controller responses retain it.
-    const body = result.stage === "field_setup_operations"
-      ? result.body
-      : { ...result.body, requestId };
-    sendJson(response, result.status, body);
+    sendJson(response, result.status, { ...result.body, requestId });
     return;
   }
   if (typeof response.status === "function") response.status(result.status);
@@ -138,20 +126,101 @@ function readCatalystEnvironmentHeader(request) {
   return value;
 }
 
-function assertCatalystEnvironment(request, app, configuredEnvironment) {
+function headerValues(request, headerName) {
+  const normalizedName = headerName.toLowerCase();
+  const distinctEntries = Object.entries(request?.headersDistinct ?? {})
+    .filter(([name]) => name.toLowerCase() === normalizedName);
+  if (distinctEntries.length > 0) {
+    return distinctEntries.length === 1 && Array.isArray(distinctEntries[0][1])
+      ? distinctEntries[0][1]
+      : [];
+  }
+
+  if (Array.isArray(request?.rawHeaders)) {
+    if (request.rawHeaders.length % 2 !== 0) return [];
+    const rawValues = [];
+    for (let index = 0; index < request.rawHeaders.length; index += 2) {
+      if (
+        typeof request.rawHeaders[index] === "string" &&
+        request.rawHeaders[index].toLowerCase() === normalizedName
+      ) rawValues.push(request.rawHeaders[index + 1]);
+    }
+    if (rawValues.length > 0) return rawValues;
+  }
+
+  return Object.entries(request?.headers ?? {})
+    .filter(([name]) => name.toLowerCase() === normalizedName)
+    .map(([, value]) => value);
+}
+
+function readCatalystProjectIdHeader(request) {
+  const values = headerValues(request, "x-zc-projectid");
+  if (
+    values.length !== 1 ||
+    typeof values[0] !== "string" ||
+    !CATALYST_PROJECT_ID_PATTERN.test(values[0])
+  ) {
+    throw new ConfigurationError("Catalyst project identity header is unavailable");
+  }
+  return values[0];
+}
+
+function matchesExpectedProjectId(projectId, expectedSha256) {
+  if (
+    !CATALYST_PROJECT_ID_PATTERN.test(projectId) ||
+    !SHA256_HEX_PATTERN.test(expectedSha256)
+  ) return false;
+  const actual = crypto.createHash("sha256").update(projectId, "utf8").digest();
+  return crypto.timingSafeEqual(actual, Buffer.from(expectedSha256, "hex"));
+}
+
+function assertCatalystRequestBinding(request, config) {
+  // The pinned Catalyst SDK derives app.config.projectId from this injected
+  // header. Validate the header first, then cross-check the initialized SDK so
+  // a wrong project cannot reach Data Store, Mail, or Connection operations.
   const headerEnvironment = readCatalystEnvironmentHeader(request);
-  const sdkEnvironment = typeof app?.config?.environment === "string"
-    ? app.config.environment.trim().toLowerCase()
-    : "";
   if (
     headerEnvironment !== "development" ||
-    sdkEnvironment !== "development" ||
-    configuredEnvironment !== "development" ||
-    headerEnvironment !== sdkEnvironment ||
-    sdkEnvironment !== configuredEnvironment
+    config?.deploymentEnvironment !== "development"
   ) {
     throw new ConfigurationError("Catalyst runtime environment does not match Development");
   }
+  const requestProjectId = readCatalystProjectIdHeader(request);
+  if (!matchesExpectedProjectId(requestProjectId, config.expectedCatalystProjectIdSha256)) {
+    throw new ConfigurationError("Catalyst runtime project does not match configuration");
+  }
+  return requestProjectId;
+}
+
+function assertCatalystSdkBinding(app, requestProjectId, config) {
+  const sdkEnvironment = typeof app?.config?.environment === "string"
+    ? app.config.environment.trim().toLowerCase()
+    : "";
+  const rawSdkProjectId = app?.config?.projectId;
+  const sdkProjectId = typeof rawSdkProjectId === "string"
+    ? rawSdkProjectId
+    : Number.isSafeInteger(rawSdkProjectId) && rawSdkProjectId > 0
+      ? String(rawSdkProjectId)
+      : "";
+  if (
+    sdkEnvironment !== "development" ||
+    sdkEnvironment !== config.deploymentEnvironment ||
+    sdkProjectId !== requestProjectId ||
+    !matchesExpectedProjectId(sdkProjectId, config.expectedCatalystProjectIdSha256)
+  ) {
+    throw new ConfigurationError("Catalyst SDK project binding does not match configuration");
+  }
+}
+
+function assertCatalystEnvironment(
+  request,
+  app,
+  configuredEnvironment,
+  expectedCatalystProjectIdSha256,
+) {
+  const config = { deploymentEnvironment: configuredEnvironment, expectedCatalystProjectIdSha256 };
+  const requestProjectId = assertCatalystRequestBinding(request, config);
+  assertCatalystSdkBinding(app, requestProjectId, config);
 }
 
 function createRequestListener({
@@ -164,22 +233,7 @@ function createRequestListener({
   now = Date.now,
   fetchImpl = globalThis.fetch,
   requestHandler = handleForm2Request,
-  fieldSetupOperationsComposition = createDefaultDeniedFieldSetupOperationsComposition(),
 } = {}) {
-  if (
-    !fieldSetupOperationsComposition ||
-    fieldSetupOperationsComposition.status !== "NOT_READY" ||
-    fieldSetupOperationsComposition.catalystHeaderMapping !== "NOT_READY_INJECTED_ONLY" ||
-    fieldSetupOperationsComposition.catalystIdentityMapping !== "NOT_READY_INJECTED_ONLY" ||
-    fieldSetupOperationsComposition.catalystStoreMapping !== "NOT_READY_INJECTED_ONLY" ||
-    fieldSetupOperationsComposition.deploymentAuthorized !== false ||
-    fieldSetupOperationsComposition.runtimeAuthority !== false ||
-    typeof fieldSetupOperationsComposition.claimsRequest !== "function" ||
-    typeof fieldSetupOperationsComposition.dispatch !== "function" ||
-    typeof fieldSetupOperationsComposition.assertNoRouteCollision !== "function"
-  ) {
-    throw new ConfigurationError("Field-setup operations composition is invalid");
-  }
   // Keep the SDK load at the runtime boundary so pure policy tests can run
   // without installing deployment dependencies. Catalyst installs this exact
   // pinned package from package-lock.json for the deployed function.
@@ -205,73 +259,53 @@ function createRequestListener({
         sendJson(response, 503, { ok: false, code: "connection_unavailable", requestId });
         return;
       }
-      readCatalystEnvironmentHeader(request);
+      const requestProjectId = assertCatalystRequestBinding(request, config);
       const runtimeSdk = catalystSdk ?? require("zcatalyst-sdk-node");
       const app = runtimeSdk.initialize(request);
-      assertCatalystEnvironment(request, app, config.deploymentEnvironment);
-      fieldSetupOperationsComposition.assertNoRouteCollision([
-        config.issuePath,
-        config.accessPath,
-        config.otpRequestPath,
-        config.otpVerifyPath,
-        config.prefillPath,
-        config.submissionPath,
-      ]);
-      const operationsClaimed = fieldSetupOperationsComposition.claimsRequest(request);
-      if (typeof operationsClaimed !== "boolean") {
-        throw new ConfigurationError("Field-setup operation route claim is invalid");
+      assertCatalystSdkBinding(app, requestProjectId, config);
+      const dataStoreAdapter = createCatalystDataStoreAdapter(app, config);
+      const sessionStore = createCatalystSessionStore(dataStoreAdapter, config, { now });
+      const workflowStore = createWorkflowStore(dataStoreAdapter, config, { now, randomUUID });
+      const verificationProofStore = createVerificationProofStore(
+        dataStoreAdapter,
+        config,
+        { now },
+      );
+      const crmClient = createCrmClient(config, {
+        readAuthorizationProvider: createConnectionAuthorizationProvider(
+          app,
+          config.crmReadConnectionLinkName,
+          config.platformOperationTimeoutMs,
+        ),
+        writeAuthorizationProvider: createConnectionAuthorizationProvider(
+          app,
+          config.crmWriteConnectionLinkName,
+          config.platformOperationTimeoutMs,
+        ),
+        fetchImpl,
+      });
+      if (typeof requestHandler !== "function") {
+        throw new ConfigurationError("Controller request handler is unavailable");
       }
-      let result;
-      if (operationsClaimed) {
-        result = await fieldSetupOperationsComposition.dispatch(request, { app });
-      } else {
-        // The committed default composition claims no operation routes, preserving
-        // the six existing Form 2 paths until exact Development auth and stores are
-        // separately injected and read back.
-        const dataStoreAdapter = createCatalystDataStoreAdapter(app, config);
-        const sessionStore = createCatalystSessionStore(dataStoreAdapter, config, { now });
-        const workflowStore = createWorkflowStore(dataStoreAdapter, config, { now, randomUUID });
-        const verificationProofStore = createVerificationProofStore(
-          dataStoreAdapter,
-          config,
-          { now },
-        );
-        const crmClient = createCrmClient(config, {
-          readAuthorizationProvider: createConnectionAuthorizationProvider(
-            app,
-            config.crmReadConnectionLinkName,
-            config.platformOperationTimeoutMs,
-          ),
-          writeAuthorizationProvider: createConnectionAuthorizationProvider(
-            app,
-            config.crmWriteConnectionLinkName,
-            config.platformOperationTimeoutMs,
-          ),
-          fetchImpl,
-        });
-        if (typeof requestHandler !== "function") {
-          throw new ConfigurationError("Controller request handler is unavailable");
-        }
-        const verificationService = createVerificationService({
-          config,
-          crmClient,
-          mailAdapter: createCatalystMailAdapter(app, config),
-          proofStore: verificationProofStore,
-          sessionStore,
-          now,
-          randomInt: crypto.randomInt,
-          randomBytes: crypto.randomBytes,
-        });
-        result = await requestHandler(request, {
-          config,
-          crmClient,
-          now,
-          randomBytes: crypto.randomBytes,
-          sessionStore,
-          verificationService,
-          workflowStore,
-        });
-      }
+      const verificationService = createVerificationService({
+        config,
+        crmClient,
+        mailAdapter: createCatalystMailAdapter(app, config),
+        proofStore: verificationProofStore,
+        sessionStore,
+        now,
+        randomInt: crypto.randomInt,
+        randomBytes: crypto.randomBytes,
+      });
+      const result = await requestHandler(request, {
+        config,
+        crmClient,
+        now,
+        randomBytes: crypto.randomBytes,
+        sessionStore,
+        verificationService,
+        workflowStore,
+      });
       safeLog(logger, result.status >= 500 ? "error" : "info", {
         requestId,
         sourceRevision,
@@ -297,9 +331,12 @@ function createRequestListener({
 
 module.exports = {
   assertCatalystEnvironment,
+  assertCatalystRequestBinding,
+  assertCatalystSdkBinding,
   codeForError,
   createRequestListener,
   readCatalystEnvironmentHeader,
+  readCatalystProjectIdHeader,
   sendJson,
   sendControllerResult,
   statusForError,

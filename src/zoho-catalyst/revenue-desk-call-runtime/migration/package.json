@@ -1,0 +1,16 @@
+{
+  "name": "revenue-desk-canonical-table-migration",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Offline-first, adapter-gated planner and executor for one-way Revenue Desk canonical-table migration.",
+  "main": "index.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18 <25"
+  },
+  "scripts": {
+    "check": "node --check index.js && node --check lib/canonical.js && node --check lib/contract.js && node --check lib/cursor.js && node --check lib/digests.js && node --check lib/errors.js && node --check lib/executor.js && node --check lib/planner.js",
+    "test": "node --test test/*.test.js",
+    "ci": "npm run check && npm test"
+  }
+}

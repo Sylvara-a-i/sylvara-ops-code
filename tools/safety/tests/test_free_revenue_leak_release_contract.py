@@ -182,6 +182,304 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         self.assertFalse(boundary["billing_required_to_start"])
         self.assertFalse(boundary["automatic_paid_conversion"])
 
+    def test_forms_contract_matrix_is_exact_and_separates_live_observation(self):
+        forms = {
+            entry["logical_name"]: entry for entry in self.forms_manifest["forms"]
+        }
+        form1 = forms["REVENUE_LEAK_TEST_REQUEST_FORM"]
+        form2 = forms["REVENUE_LEAK_TEST_SETUP_FORM"]
+
+        evidence = self.forms_manifest["evidence_boundary"]
+        self.assertEqual("2026-08-26", evidence["live_readback_date"])
+        self.assertTrue(evidence["sanitized"])
+        self.assertFalse(
+            evidence["live_ids_urls_aliases_and_private_destinations_in_git"]
+        )
+
+        dedup = form1["deduplication_contract"]
+        self.assertEqual("Intake_Submission_ID", dedup["primary"])
+        self.assertEqual("Email", dedup["fallback"])
+        self.assertEqual(
+            ["Intake_Submission_ID", "Email"], dedup["live_order_observed"]
+        )
+        self.assertTrue(dedup["fallback_never_replaces_generated_primary_identity"])
+        self.assertFalse(dedup["blank_overwrite"])
+        self.assertTrue(dedup["workflow_trigger"])
+        self.assertEqual(form1["crm_integration"]["deduplication_order"],
+                         dedup["live_order_observed"])
+        self.assertEqual(
+            self.contract["form1"]["public_path"]["deduplication_key"],
+            dedup["primary"],
+        )
+        self.assertEqual(
+            self.contract["form1"]["public_path"]["deduplication_fallback"],
+            dedup["fallback"],
+        )
+
+        form1_fields = form1["field_contract"]
+        self.assertEqual(
+            [
+                "Entry_Offer",
+                "Submission_Channel",
+                "Free_Test_Contact_Consent_At",
+                "Free_Test_Contact_Consent_Version",
+                "Free_Test_Request_Submitted_At",
+                "Intake_Form_Version",
+                "Intake_Submission_ID",
+                "Lead_Status",
+            ],
+            form1_fields["unconditional_hidden_audit_fields"],
+        )
+        self.assertEqual(
+            ["Source_Page", "assisted_by"],
+            form1_fields["assisted_path_hidden_audit_fields"],
+        )
+        self.assertEqual(
+            [
+                "Lead_Source",
+                "Source_Page",
+                "UTM_Source",
+                "UTM_Medium",
+                "UTM_Campaign",
+                "UTM_Content",
+                "UTM_Term",
+            ],
+            form1_fields["optional_attribution_fields"],
+        )
+        self.assertFalse(form1_fields["respondent_editable"])
+        self.assertEqual(
+            ["assisted_by"],
+            form1_fields[
+                "source_required_without_verified_live_field_or_crm_destination"
+            ],
+        )
+        self.assertEqual(
+            [
+                "field aliases",
+                "mandatory flags",
+                "personal flags",
+                "encryption flags",
+                "read-only flags",
+            ],
+            form1_fields["unresolved_live_properties"],
+        )
+        self.assertIsNone(form1["assisted_prefill"]["live_alias"])
+        self.assertFalse(
+            form1["assisted_prefill"][
+                "live_dynamic_prefill_webhook_field_configured"
+            ]
+        )
+        release_form1_fields = self.contract["form1"]["hidden_audit_field_contract"]
+        self.assertEqual(
+            form1_fields["unconditional_hidden_audit_fields"],
+            release_form1_fields["unconditional"],
+        )
+        self.assertEqual(
+            form1_fields["assisted_path_hidden_audit_fields"],
+            release_form1_fields["assisted_path"],
+        )
+        self.assertEqual(
+            form1_fields["optional_attribution_fields"],
+            release_form1_fields["optional_attribution"],
+        )
+
+        matrix = form2["field_contract"]
+        unconditional = [
+            "firstName",
+            "lastName",
+            "decisionMakerRole",
+            "decisionAuthority",
+            "businessEmail",
+            "directMobileNumber",
+            "companyName",
+            "legalBusinessName",
+            "mainBusinessNumber",
+            "phoneSystemProvider",
+            "primaryServiceArea",
+            "normalBusinessHours",
+            "servicesHandled",
+            "approvedTestRoute",
+            "forwardingAdministratorName",
+            "forwardingAdministratorMobile",
+            "approvedFallbackDestination",
+            "rollbackContactName",
+            "rollbackContactMobile",
+            "urgentCallHandling",
+            "existingCustomerCallHandling",
+            "alertRecipientName",
+            "alertRecipientEmail",
+            "authorizedRepresentativeConfirmed",
+            "testScopeAccepted",
+        ]
+        conditional = [
+            {
+                "field": "otherServiceDetails",
+                "required_when": "servicesHandled contains Other",
+                "otherwise": "must_be_null",
+            },
+            {
+                "field": "noAnswerDelay",
+                "required_when": (
+                    "approvedTestRoute is No Answer / Overflow Only or "
+                    "After Hours + Overflow"
+                ),
+                "otherwise": "must_be_null",
+            },
+            {
+                "field": "approvedFallbackNumber",
+                "required_when": (
+                    "approvedFallbackDestination is Existing Office Line, "
+                    "On-Call Mobile, or Other"
+                ),
+                "otherwise": "must_be_null",
+            },
+        ]
+        optional = [
+            "jobTitle",
+            "fieldTeamSizeBand",
+            "currentCallHandling",
+            "requestedTestRoute",
+            "requestedStartDate",
+        ]
+        self.assertEqual(unconditional, matrix["unconditional_required_client_fields"])
+        self.assertEqual(unconditional, form2["required_fields"])
+        self.assertEqual(conditional, matrix["conditional_client_fields"])
+        self.assertEqual(optional, matrix["optional_client_fields"])
+        self.assertEqual(33, matrix["runtime_client_field_count"])
+        partitions = [
+            set(unconditional),
+            {entry["field"] for entry in conditional},
+            set(optional),
+        ]
+        self.assertTrue(all(
+            partitions[index].isdisjoint(partitions[other])
+            for index in range(len(partitions))
+            for other in range(index + 1, len(partitions))
+        ))
+        self.assertEqual(
+            set(form2["submission_webhook"]["client_keys"]),
+            set().union(*partitions),
+        )
+        self.assertEqual(
+            36,
+            len(form2["submission_webhook"]["server_keys"])
+            + len(form2["submission_webhook"]["client_keys"]),
+        )
+        self.assertEqual(
+            36, form2["submission_webhook"]["required_parameter_count"]
+        )
+        self.assertEqual([], form2["submission_webhook"]["live_required_parameters_missing"])
+        self.assertEqual(
+            ["testPhoneNumber", "alertRecipientMobile"],
+            form2["submission_webhook"]["live_prohibited_extra_parameters"],
+        )
+        self.assertTrue(
+            set(matrix["prohibited_client_fields"]).isdisjoint(
+                form2["submission_webhook"]["client_keys"]
+            )
+        )
+        self.assertEqual(
+            [
+                "businessEmail",
+                "directMobileNumber",
+                "currentCallHandling",
+                "requestedTestRoute",
+                "approvedTestRoute",
+            ],
+            matrix["source_read_only_after_prefill"],
+        )
+        self.assertEqual("unresolved", matrix["live_read_only_flags"])
+
+        controller_policy = {
+            entry["key"]: entry for entry in form2["controller_field_policy"]
+        }
+        self.assertEqual({"setupToken", "prefillId"}, set(controller_policy))
+        for key in ("setupToken", "prefillId"):
+            source = controller_policy[key]["source_policy"]
+            self.assertTrue(source["mandatory"])
+            self.assertTrue(source["personal"])
+            self.assertTrue(source["encrypted"])
+            self.assertFalse(source["respondent_editable"])
+            self.assertIsNone(controller_policy[key]["live_alias"])
+            self.assertEqual(
+                "unresolved", controller_policy[key]["live_readback"]["read_only"]
+            )
+        self.assertFalse(controller_policy["setupToken"]["live_readback"]["mandatory"])
+        self.assertFalse(controller_policy["setupToken"]["live_readback"]["personal"])
+        self.assertFalse(controller_policy["setupToken"]["live_readback"]["encrypted"])
+        self.assertFalse(
+            controller_policy["setupToken"]["live_readback"]
+            ["dynamic_prefill_webhook_field_configured"]
+        )
+        self.assertFalse(controller_policy["prefillId"]["live_readback"]["mandatory"])
+        self.assertTrue(controller_policy["prefillId"]["live_readback"]["personal"])
+        self.assertTrue(controller_policy["prefillId"]["live_readback"]["encrypted"])
+
+        respondent_policy = {
+            entry["key"]: entry for entry in form2["respondent_field_policy"]
+        }
+        for key in ("authorizedRepresentativeConfirmed", "testScopeAccepted"):
+            self.assertEqual(
+                respondent_policy[key]["source_policy"],
+                respondent_policy[key]["live_readback"]
+                | {"respondent_editable": True, "default": False},
+            )
+        self.assertTrue(respondent_policy["alertRecipientEmail"]["source_policy"]["mandatory"])
+        self.assertFalse(respondent_policy["alertRecipientEmail"]["live_readback"]["mandatory"])
+
+        native = form2["native_action_policy"]
+        for key in (
+            "native_email_notifications_allowed",
+            "native_sms_notifications_allowed",
+            "native_approvals_allowed",
+            "zoho_sign_allowed",
+            "live_native_email_notification_configured",
+            "live_sms_gateway_configured",
+            "live_native_approval_configured",
+            "live_zoho_sign_connection_or_action_observed",
+        ):
+            self.assertFalse(native[key], key)
+        self.assertTrue(native["live_sms_instruction_or_mobile_field_present"])
+
+        release_form2 = self.contract["form2"]
+        self.assertEqual(
+            release_form2["field_contract"]["unconditional_required_client_fields"],
+            unconditional,
+        )
+        self.assertEqual(
+            release_form2["field_contract"]["conditional_client_fields"],
+            conditional,
+        )
+        self.assertEqual(
+            release_form2["field_contract"]["optional_client_fields"], optional
+        )
+        self.assertEqual(
+            release_form2["field_contract"]["prohibited_client_fields"],
+            matrix["prohibited_client_fields"],
+        )
+        self.assertEqual(
+            release_form2["controller_field_policy"],
+            {
+                "setupToken": controller_policy["setupToken"]["source_policy"],
+                "prefillId": controller_policy["prefillId"]["source_policy"],
+                "submissionId": form2["server_generated_submission_field"]
+                ["source_policy"],
+            },
+        )
+        self.assertEqual(
+            release_form2["native_action_policy"],
+            {
+                key: native[key]
+                for key in (
+                    "proof_email_owner",
+                    "native_email_notifications_allowed",
+                    "native_sms_notifications_allowed",
+                    "native_approvals_allowed",
+                    "zoho_sign_allowed",
+                )
+            },
+        )
+
     def test_exact_six_function_and_two_pool_topology(self):
         expected_functions = [
             ("revenue_leak_test_request_form", "Advanced I/O"),

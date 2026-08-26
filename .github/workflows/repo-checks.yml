@@ -196,8 +196,14 @@ jobs:
       - name: Run Revenue Desk call-worker checks and tests
         run: npm run ci --prefix src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_worker
 
+      - name: Run Revenue Desk canonical-table migration checks and tests
+        run: npm run ci --prefix src/zoho-catalyst/revenue-desk-call-runtime/migration
+
       - name: Run Revenue Desk Analytics checks and tests
         run: npm run ci --prefix src/zoho-catalyst/revenue-desk-analytics/functions/analytics_sync
+
+      - name: Run Revenue Desk six-function release checks
+        run: npm test --prefix src/zoho-catalyst/revenue-desk-release
 
       - name: Run the canonical verifier on Linux
         shell: pwsh

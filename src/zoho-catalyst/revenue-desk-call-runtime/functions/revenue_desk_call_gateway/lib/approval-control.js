@@ -1,7 +1,8 @@
 'use strict';
 
 const crypto = require('node:crypto');
-const { CONTRACT, CAPABILITY_PROFILES, COVERAGE_MODES } = require('./contracts');
+const { CONTRACT, COVERAGE_MODES } = require('./contracts');
+const { validateConfigurationVersionRow } = require('./configuration-version');
 const { invariant } = require('./errors');
 const { keyedDigest } = require('./security');
 
@@ -218,23 +219,28 @@ function validateRoute(route) {
 
 function configurationSnapshotFingerprint(configurationVersion) {
   const code = 'INVALID_ROUTE_FINGERPRINT_INPUT';
-  invariant(isPlainObject(configurationVersion), code,
-    'Configuration-version snapshot is unavailable.');
+  const validated = validateConfigurationVersionRow(configurationVersion, { code });
   const snapshot = {
-    configuration_version: configurationVersion.CONFIGURATION_VERSION,
-    configuration_json: configurationVersion.CONFIGURATION_JSON,
-    engagement_type: configurationVersion.ENGAGEMENT_TYPE,
-    capability_profile: configurationVersion.CAPABILITY_PROFILE,
+    engagement_type: validated.engagementType,
+    capability_profile: validated.capabilityProfile,
+    plan_tier: validated.planTier,
+    configuration_version: validated.configurationVersion,
+    deployment_status: validated.deploymentStatus,
+    go_live_approval_status: validated.goLiveApprovalStatus,
+    limit_policy: validated.limitPolicy,
+    billing_mode: validated.billingMode,
+    number_ownership: validated.numberOwnership,
+    environment: validated.environment,
+    source_revision: validated.sourceRevision,
+    configuration_json: validated.configurationJson,
     status: configurationVersion.STATUS,
     approval_status: configurationVersion.APPROVAL_STATUS,
-    source_revision: configurationVersion.SOURCE_REVISION,
-    environment: configurationVersion.SOURCE_ENVIRONMENT,
   };
   invariant(Object.values(snapshot).every((value) => typeof value === 'string')
     && Buffer.byteLength(snapshot.configuration_json, 'utf8') <= 10_000,
   code, 'Configuration-version snapshot is invalid.');
   return `config_${crypto.createHash('sha256')
-    .update('revenue-desk-configuration-authorization-v1\0', 'utf8')
+    .update('revenue-desk-configuration-authorization-v2\0', 'utf8')
     .update(JSON.stringify(snapshot), 'utf8').digest('hex')}`;
 }
 
@@ -305,6 +311,12 @@ function validateActivationEvidence(evidence) {
 function validateApprovalRows(deployment, configurationVersion, intent, expectedRoute) {
   invariant(isPlainObject(deployment) && isPlainObject(configurationVersion),
     'APPROVAL_PRECONDITION_FAILED', 'Approval rows are unavailable.');
+  const version = validateConfigurationVersionRow(configurationVersion, {
+    code: 'APPROVAL_PRECONDITION_FAILED',
+    expectedDeploymentId: intent.deployment_id,
+    expectedEnvironment: deployment.SOURCE_ENVIRONMENT,
+    expectedSourceRevision: intent.evidence_revision,
+  });
   invariant(deployment.DEPLOYMENT_ID === intent.deployment_id
     && deployment.ACTIVE_CONFIGURATION_VERSION_ID === intent.configuration_version_id
     && configurationVersion.CONFIGURATION_VERSION_ID === intent.configuration_version_id
@@ -318,8 +330,10 @@ function validateApprovalRows(deployment, configurationVersion, intent, expected
   'APPROVAL_PRECONDITION_FAILED', 'Approval source revision is inconsistent.');
   invariant(deployment.COUNT_VERSION === intent.expected_deployment_version,
     'APPROVAL_CONCURRENT_CHANGE', 'Deployment changed after operator review.');
-  const profile = CAPABILITY_PROFILES.get(configurationVersion.CAPABILITY_PROFILE);
-  invariant(configurationVersion.ENGAGEMENT_TYPE === 'free_test'
+  const profile = version.profile;
+  invariant(version.engagementType === 'free_test'
+    && version.deploymentStatus === CONTRACT.active_test_status
+    && version.goLiveApprovalStatus === CONTRACT.approved_go_live_status
     && profile?.engagement_type === 'free_test'
     && profile.enabled === true && profile.status === 'active'
     && profile.traffic_environments.includes('development'),
@@ -508,12 +522,20 @@ function evaluateActivationTransition({
     && deployment.COUNT_VERSION === activationIntent.expected_deployment_version,
   'ACTIVATION_PRECONDITION_FAILED',
   'Activation is not bound to the currently approved deployment and configuration version.');
+  const version = validateConfigurationVersionRow(configurationVersion, {
+    code: 'ACTIVATION_PRECONDITION_FAILED',
+    expectedDeploymentId: activationIntent.deployment_id,
+    expectedEnvironment: 'development',
+    expectedSourceRevision: activationIntent.evidence_revision,
+  });
   const approvedAt = canonicalTimestamp(deployment.GO_LIVE_APPROVED_AT,
     'ACTIVATION_PRECONDITION_FAILED', 'Approval timestamp');
   invariant(approvedAt <= nowMs + CLOCK_SKEW_MS,
     'ACTIVATION_PRECONDITION_FAILED', 'Approval timestamp is in the future.');
-  const profile = CAPABILITY_PROFILES.get(configurationVersion.CAPABILITY_PROFILE);
-  invariant(configurationVersion.ENGAGEMENT_TYPE === 'free_test'
+  const profile = version.profile;
+  invariant(version.engagementType === 'free_test'
+    && version.deploymentStatus === CONTRACT.active_test_status
+    && version.goLiveApprovalStatus === CONTRACT.approved_go_live_status
     && profile?.engagement_type === 'free_test'
     && profile.enabled === true && profile.status === 'active'
     && profile.traffic_environments.includes('development')

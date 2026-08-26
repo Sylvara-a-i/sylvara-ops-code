@@ -1891,7 +1891,8 @@ test('integration: readiness is query-bounded and fails closed on capped or malf
   assert.equal(unboundedSourceQueries, 0);
   assert.equal(readiness.readinessScanCapped, true);
   assert.equal(readiness.sourceDeploymentCount, 100);
-  assert.equal(readiness.activeDeploymentCount, 100);
-  assert.equal(readiness.terminalReconciliationPendingCount >= 1, true,
-    'a full evidence page remains explicitly unverified');
+  assert.equal(readiness.activeDeploymentCount, 2,
+    'only deployments with exact version-specific authorization readback are active');
+  assert.equal(readiness.terminalReconciliationPendingCount >= 99, true,
+    'shallow cloned status rows and the capped evidence page remain explicitly unverified');
 });

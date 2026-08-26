@@ -9,13 +9,21 @@ const {
   isValidToken,
   normalizeLeadId,
 } = require("../lib/security");
-const { REVISION, environment } = require("./helpers");
+const {
+  REVISION,
+  SYNTHETIC_CATALYST_PROJECT_ID_SHA256,
+  environment,
+} = require("./helpers");
 
 test("configuration binds active Development and dark Production to the stamped revision", () => {
   const config = loadConfig(environment(), REVISION);
   assert.equal(config.deploymentEnvironment, "development");
   assert.equal(config.deploymentMode, "active");
   assert.equal(config.darkMode, false);
+  assert.equal(
+    config.expectedCatalystProjectIdSha256,
+    SYNTHETIC_CATALYST_PROJECT_ID_SHA256,
+  );
   assert.equal(config.sessionTableName, FORM1_SESSION_TABLE_NAME);
   assert.equal(config.sourceRevision, REVISION);
 
@@ -41,6 +49,10 @@ test("configuration binds active Development and dark Production to the stamped 
   assert.throws(
     () => loadConfig(environment({ SESSION_TABLE_NAME: "Form1AssistedSessions" }), REVISION),
     /canonical RevenueLeakTestRequestFormSessions table/,
+  );
+  assert.throws(
+    () => loadConfig(environment({ EXPECTED_CATALYST_PROJECT_ID_SHA256: "A".repeat(64) }), REVISION),
+    /lowercase SHA-256 digest/,
   );
   assert.throws(
     () => loadConfig(environment(), "__SYLVARA_UNSTAMPED_SOURCE_REVISION__"),

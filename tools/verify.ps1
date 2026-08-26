@@ -44,8 +44,14 @@ $RevenueDeskCallGatewayRoot = Join-PathSegments $RepoRoot @(
 $RevenueDeskCallWorkerRoot = Join-PathSegments $RepoRoot @(
     "src", "zoho-catalyst", "revenue-desk-call-runtime", "functions", "revenue_desk_call_worker"
 )
+$RevenueDeskMigrationRoot = Join-PathSegments $RepoRoot @(
+    "src", "zoho-catalyst", "revenue-desk-call-runtime", "migration"
+)
 $RevenueDeskAnalyticsRoot = Join-PathSegments $RepoRoot @(
     "src", "zoho-catalyst", "revenue-desk-analytics", "functions", "analytics_sync"
+)
+$RevenueDeskReleaseRoot = Join-PathSegments $RepoRoot @(
+    "src", "zoho-catalyst", "revenue-desk-release"
 )
 $RevenueDeskInventoryPath = Join-PathSegments $RepoRoot @(
     "src", "zoho-catalyst", "development-function-inventory.json"
@@ -640,8 +646,12 @@ try {
             -Arguments @("run", "ci", "--prefix", $RevenueDeskCallGatewayRoot)
         Invoke-Native -Label "Revenue Desk call-worker checks and tests" -Executable $npm `
             -Arguments @("run", "ci", "--prefix", $RevenueDeskCallWorkerRoot)
+        Invoke-Native -Label "Revenue Desk canonical-table migration checks and tests" `
+            -Executable $npm -Arguments @("run", "ci", "--prefix", $RevenueDeskMigrationRoot)
         Invoke-Native -Label "Revenue Desk Analytics checks and tests" -Executable $npm `
             -Arguments @("run", "ci", "--prefix", $RevenueDeskAnalyticsRoot)
+        Invoke-Native -Label "Revenue Desk six-function release checks" -Executable $npm `
+            -Arguments @("test", "--prefix", $RevenueDeskReleaseRoot)
 
         Write-Host "Verification passed ($Mode mode)."
     } finally {

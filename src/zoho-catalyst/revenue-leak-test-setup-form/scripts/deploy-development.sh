@@ -20,7 +20,7 @@ fail() {
 # any other external process can inherit the pipeline's credential environment.
 for required_variable in \
   PROJECT_ID CATALYST_ORG CATALYST_TOKEN APPROVED_SOURCE_REVISION \
-  APPROVED_FORM2_DESTINATION_SHA256; do
+  APPROVED_FORM2_DESTINATION_SHA256 APPROVED_CATALYST_PROJECT_ID_SHA256; do
   [[ -n "${!required_variable:-}" ]] || fail "$required_variable is required"
 done
 
@@ -29,6 +29,8 @@ done
 [[ "$APPROVED_SOURCE_REVISION" =~ ^[a-f0-9]{40}$ ]] || fail "APPROVED_SOURCE_REVISION is invalid"
 [[ "$APPROVED_FORM2_DESTINATION_SHA256" =~ ^[a-f0-9]{64}$ ]] || \
   fail "APPROVED_FORM2_DESTINATION_SHA256 is invalid"
+[[ "$APPROVED_CATALYST_PROJECT_ID_SHA256" =~ ^[a-f0-9]{64}$ ]] || \
+  fail "APPROVED_CATALYST_PROJECT_ID_SHA256 is invalid"
 [[ ${#CATALYST_TOKEN} -ge 16 && ${#CATALYST_TOKEN} -le 4096 ]] || fail "CATALYST_TOKEN is invalid"
 [[ "$CATALYST_TOKEN" != *[[:space:]]* ]] || fail "CATALYST_TOKEN is invalid"
 
@@ -36,9 +38,9 @@ done
 # them as readonly shell variables for validation and the final CLI environment, but do
 # not expose them to Git, Python, Node.js, npm, tests, or other child processes.
 export -n PROJECT_ID CATALYST_ORG CATALYST_TOKEN APPROVED_SOURCE_REVISION \
-  APPROVED_FORM2_DESTINATION_SHA256
+  APPROVED_FORM2_DESTINATION_SHA256 APPROVED_CATALYST_PROJECT_ID_SHA256
 readonly PROJECT_ID CATALYST_ORG CATALYST_TOKEN APPROVED_SOURCE_REVISION \
-  APPROVED_FORM2_DESTINATION_SHA256
+  APPROVED_FORM2_DESTINATION_SHA256 APPROVED_CATALYST_PROJECT_ID_SHA256
 unset BASH_ENV DEPLOY_APPROVER_EMAIL ENV NODE_AUTH_TOKEN NODE_OPTIONS NODE_PATH \
   NPM_TOKEN PYTHONHOME PYTHONPATH XDG_CONFIG_HOME
 while IFS= read -r inherited_variable; do
@@ -50,6 +52,13 @@ done < <(compgen -v)
 for required_command in bash catalyst cmp curl dirname env find git mkdir mktemp python3 rm sha256sum stat tar uname wc xz; do
   command -v "$required_command" >/dev/null 2>&1 || fail "$required_command is required"
 done
+# PROJECT_ID selects the CLI mutation target. Bind it to an independently
+# reviewed digest before Git export, dependency installation, or Catalyst use.
+project_id_sha256="$(printf '%s' "$PROJECT_ID" | sha256sum)"
+project_id_sha256="${project_id_sha256%% *}"
+readonly project_id_sha256
+[[ "$project_id_sha256" == "$APPROVED_CATALYST_PROJECT_ID_SHA256" ]] || \
+  fail "PROJECT_ID does not match the separately approved Catalyst project digest"
 catalyst_path="$(type -P catalyst)"
 readonly catalyst_path
 [[ -n "$catalyst_path" && -x "$catalyst_path" ]] || fail "catalyst is not an executable file"

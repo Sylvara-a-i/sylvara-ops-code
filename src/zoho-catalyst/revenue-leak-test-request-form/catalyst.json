@@ -8,17 +8,5 @@
       "test/**",
       ".env*"
     ]
-  },
-  "x-sylvara-source-only-client": {
-    "source": "client",
-    "route": "/field-setup/",
-    "published": false,
-    "deploymentAllowed": false,
-    "registrationRequired": true,
-    "deploymentGate": "SEPARATE_DEVELOPMENT_WEB_CLIENT_REGISTRATION_AND_PUBLISH_APPROVAL_REQUIRED",
-    "ignoreWhenRegistered": [
-      "package.json",
-      "test/**"
-    ]
   }
 }

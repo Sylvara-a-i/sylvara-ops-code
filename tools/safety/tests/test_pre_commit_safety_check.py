@@ -594,30 +594,12 @@ class SafetyCheckTests(unittest.TestCase):
 
     def test_binary_documents_archives_and_images_are_blocked(self) -> None:
         path = InMemoryFile(b"synthetic")
-        for suffix in (".xlsx", ".xls", ".docx", ".pdf", ".zip", ".png", ".jpg"):
+        for suffix in (".xlsx", ".xls", ".docx", ".pdf", ".zip", ".png"):
             with self.subTest(suffix=suffix):
                 problems, text = safety_check.scan_file_policy(
                     f"artifact{suffix}", path
                 )
                 self.assertTrue(problems)
-                self.assertIsNone(text)
-
-    def test_exact_synthetic_browser_qa_images_are_hash_approved(self) -> None:
-        repo_root = Path(__file__).resolve().parents[3]
-        for relative, expected_hash in safety_check.APPROVED_BINARY_SHA256.items():
-            with self.subTest(relative=relative):
-                content = (repo_root / relative).read_bytes()
-                self.assertEqual(expected_hash, safety_check._sha256(content))
-                self.assertEqual(
-                    ([], None),
-                    safety_check.scan_file_policy(relative, InMemoryFile(content)),
-                )
-
-                altered = content[:-1] + bytes([content[-1] ^ 1])
-                problems, text = safety_check.scan_file_policy(
-                    relative, InMemoryFile(altered)
-                )
-                self.assertTrue(any("hash mismatch" in item for item in problems))
                 self.assertIsNone(text)
 
     def test_unknown_binary_and_non_utf8_content_are_blocked(self) -> None:

@@ -20,7 +20,7 @@ const { timingSafeToken } = require('../lib/runtime-boundary');
 const { boundedPendingDeployments } = require('../lib/runtime-service');
 const { createSafeConsoleLogger } = require('../lib/logging');
 const {
-  createOutboxRow, ensureOutboxRow, providerVersionKey,
+  createOutboxRow, deploymentFact, ensureOutboxRow, providerVersionKey,
 } = require('../lib/analytics-outbox');
 const { SOURCE_REVISION, environment, eventPayload } = require('./runtime-fixture');
 
@@ -144,6 +144,29 @@ test('unit: final-test facts reject a changed payload at the same terminal water
   }, { tables: { ANALYTICS_OUTBOX_TABLE: 'AnalyticsSyncOutbox' } },
   'final_test_result', { ...fact, QUALIFIED_OPPORTUNITIES: 2 },
   '2026-08-27T12:01:00.000Z'), { code: 'DURABLE_IDEMPOTENCY_CONFLICT' });
+});
+
+test('unit: deployment analytics reads historical policy from the immutable version snapshot', () => {
+  const fact = deploymentFact({ analyticsPartitionSecret: 'e'.repeat(32) }, {
+    configurationVersionId: 'configuration_version_archived',
+    engagementType: 'free_test', capabilityProfile: 'call_gap_monitor_v1',
+    planTier: 'ArchivedTier', limitPolicy: 'archived_limit_policy_v1',
+    billingMode: 'archived_mode', numberOwnership: 'dedicated_deployment',
+    environment: 'development', coverageMode: 'AfterHoursOnly',
+  }, {
+    CLIENT_ID: 'client_archived', DEPLOYMENT_ID: 'deployment_archived',
+    TEST_STATUS: 'Completed', GO_LIVE_APPROVAL_STATUS: 'Approved',
+    HANDLED_COUNT: 7, CALL_LIMIT: 25,
+    ACTUAL_START_AT: '2026-08-20T12:00:00.000Z',
+    EXPIRES_AT: '2026-08-27T12:00:00.000Z',
+    SOURCE_ENVIRONMENT: 'development', SOURCE_REVISION,
+    UPDATED_AT: '2026-08-27T12:00:00.000Z',
+  });
+  assert.deepEqual([
+    fact.PLAN_TIER, fact.LIMIT_POLICY, fact.BILLING_MODE,
+  ], ['archived_tier', 'archived_limit_policy_v1', 'archived_mode']);
+  assert.notEqual(fact.PLAN_TIER,
+    contracts.CAPABILITY_PROFILES.get('call_gap_monitor_v1').plan_tier);
 });
 
 test('unit: approved gate taxonomies, engagement types, and capability profiles are exact', () => {
@@ -336,6 +359,7 @@ test('unit: default console logger emits only allowlisted opaque operational fie
 
 test('unit: Data Store schema contains five canonical tables plus Analytics delivery outbox', () => {
   const schema = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', '..', 'config', 'datastore-schema.json'), 'utf8'));
+  assert.equal(schema.schema_version, 6);
   assert.equal(schema.status, 'proposed_requires_environment_specific_provisioning_and_readback');
   assert.deepEqual(schema.tables.map(({ api_name: name }) => name), [
     'RevenueDeskDeployments', 'RevenueDeskConfigurationVersions',
@@ -382,9 +406,24 @@ test('unit: Data Store schema contains five canonical tables plus Analytics deli
     ({ api_name: name }) => name === 'RevenueDeskConfigurationVersions',
   );
   assert.deepEqual(configurationSchema.required_unique_columns, ['CONFIGURATION_VERSION_ID']);
-  for (const field of [
-    'CONFIGURATION_JSON', 'ENGAGEMENT_TYPE', 'CAPABILITY_PROFILE', 'STATUS', 'APPROVAL_STATUS',
-  ]) assert.equal(configurationSchema.columns.some(({ api_name: name }) => name === field), true, field);
+  const configurationColumns = new Map(configurationSchema.columns.map(
+    (column) => [column.api_name, column],
+  ));
+  const immutableConfigurationFields = [
+    'ENGAGEMENT_TYPE', 'CAPABILITY_PROFILE', 'PLAN_TIER', 'CONFIGURATION_VERSION',
+    'DEPLOYMENT_STATUS', 'GO_LIVE_APPROVAL_STATUS', 'LIMIT_POLICY', 'BILLING_MODE',
+    'NUMBER_OWNERSHIP', 'ENVIRONMENT', 'SOURCE_REVISION',
+  ];
+  for (const field of immutableConfigurationFields) {
+    assert.equal(configurationColumns.get(field)?.mandatory, true, field);
+  }
+  assert.equal(configurationColumns.get('CONFIGURATION_VERSION').max_length, 100);
+  assert.equal(configurationColumns.get('CONFIGURATION_VERSION').private, true);
+  for (const field of ['CONFIGURATION_JSON', 'STATUS', 'APPROVAL_STATUS']) {
+    assert.equal(configurationColumns.has(field), true, field);
+  }
+  assert.equal(configurationColumns.get('CONFIGURATION_JSON').private, true);
+  assert.equal(configurationColumns.get('CONFIGURATION_JSON').audit_consent, true);
   const receiptColumns = new Set(schema.tables.find(({ api_name: name }) => name === 'RevenueDeskEventReceipts')
     .columns.map(({ api_name: name }) => name));
   for (const field of [

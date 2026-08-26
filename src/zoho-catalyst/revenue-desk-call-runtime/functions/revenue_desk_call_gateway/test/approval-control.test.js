@@ -61,6 +61,13 @@ function rows(overrides = {}) {
     CONFIGURATION_JSON: JSON.stringify({ companyName: 'Synthetic Plumbing' }),
     ENGAGEMENT_TYPE: 'free_test',
     CAPABILITY_PROFILE: 'call_gap_monitor_v1',
+    PLAN_TIER: 'none',
+    DEPLOYMENT_STATUS: 'Live',
+    GO_LIVE_APPROVAL_STATUS: 'Approved',
+    LIMIT_POLICY: 'seven_calendar_days_or_25_connected_calls_v1',
+    BILLING_MODE: 'none',
+    NUMBER_OWNERSHIP: 'dedicated_deployment',
+    ENVIRONMENT: 'development',
     STATUS: 'Active',
     APPROVAL_STATUS: 'Approved',
     SOURCE_REVISION: 'a'.repeat(40),
@@ -293,7 +300,7 @@ test('approval and activation fail closed on invalid signature, stale state, cap
 
   const production = approvalFixture('approve', {
     deployment: { SOURCE_ENVIRONMENT: 'production' },
-    configurationVersion: { SOURCE_ENVIRONMENT: 'production' },
+    configurationVersion: { ENVIRONMENT: 'production', SOURCE_ENVIRONMENT: 'production' },
   });
   assert.throws(() => evaluateApprovalTransition(production), { code: 'PRODUCTION_DARK' });
 
@@ -314,6 +321,13 @@ test('any governed configuration, route, source, or readback change invalidates 
     (fixture) => { fixture.deployment.APPROVED_CONFIGURATION_VERSION_ID = 'configuration_changed'; },
     (fixture) => { fixture.deployment.ACTUAL_START_AT = new Date(ACTIVATION_NOW).toISOString(); },
     (fixture) => { fixture.configurationVersion.CONFIGURATION_JSON = JSON.stringify({ changed: true }); },
+    (fixture) => { fixture.configurationVersion.PLAN_TIER = 'Launch'; },
+    (fixture) => { fixture.configurationVersion.DEPLOYMENT_STATUS = 'Paused'; },
+    (fixture) => { fixture.configurationVersion.GO_LIVE_APPROVAL_STATUS = 'Blocked'; },
+    (fixture) => { fixture.configurationVersion.LIMIT_POLICY = 'disabled'; },
+    (fixture) => { fixture.configurationVersion.BILLING_MODE = 'disabled'; },
+    (fixture) => { fixture.configurationVersion.NUMBER_OWNERSHIP = 'client_owned'; },
+    (fixture) => { fixture.configurationVersion.ENVIRONMENT = 'production'; },
     (fixture) => { fixture.deployment.BINDING_VERSION += 1; },
     (fixture) => { fixture.deployment.MONITOR_AGENT_VERSION += 1; },
     (fixture) => { fixture.deployment.COVERAGE_MODE = 'NoAnswerOverflowOnly'; },

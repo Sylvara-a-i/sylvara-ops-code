@@ -24,42 +24,6 @@ One Node.js 24 Advanced I/O function accepts six exact paths:
 5. **Prefill (`POST`):** Zoho Forms supplies the bearer token. The controller consumes one exact verified proof, verifies CRM relationships and versions, marks setup access verified, creates an immutable prefill revision, and returns only allowlisted fields plus an opaque `prefillId`.
 6. **Submission (`POST`):** Zoho Forms supplies the token, `prefillId`, server-generated Unique ID, and allowlisted fields. The controller claims one durable receipt, rejects a stale revision, consumes the prefill once, and sends one ordered rollback-enabled CRM Composite request: Contact, Account, then Deal. Success requires independent CRM readback and a durable succeeded receipt.
 
-The same Advanced I/O entrypoint now contains an explicit, source-only five-route
-field-setup operations composition for number-status read, control-fenced atomic
-existing-number claim, reviewed forwarding instructions, exact control-fenced
-300-second route-window issuance, and setup-control intents. Forwarding instructions
-use exact `POST {journeyRevision, view}` input with `view` limited to `enable` or
-`rollback`. Browser control is limited to `confirm_forwarding_enabled`,
-`confirm_rollback_ready`, `stop`, and `resume`; instruction issuance is an internal
-server action. The committed default composition claims none of those paths. The
-injected candidate accepts only the existing field-setup session cookie, same-origin
-request, session-derived CSRF token, and a server-resolved operator/journey binding.
-Every mutation requires atomic adapter output plus independent authoritative
-readback.
-
-One authoritative `stateCoordinator` must expose `readNumberReservationStatus`,
-`claimExistingAvailableNumberWithControlFenceAtomically`,
-`readNumberReservationReceiptByOperationFingerprint`,
-`issueWindowWithControlFenceAtomically`,
-`readLatestWindowByOperationScopeFingerprint`,
-`applyControlIntentAtomically`, and `readControlOperationByOperationFingerprint`. The nullable
-`latestControlOperationFingerprint` on the authenticated current-control aggregate identifies
-the exact immutable receipt for no-op or lost-response replay; bindings are not receipt keys.
-Number-claim idempotency is stable across session, revision, and fence rotation: its operation
-fingerprint binds only the claim route and exact client/environment/journey/deployment/configuration
-reservation binding. The immutable receipt records the accepted pre-claim fence and recomputed
-post-claim aggregate fence, and an exact replay cannot create a second inventory transition.
-Its one-table strict-record-family topology is currently unprovisioned and must prove one serializable
-cross-record transaction domain for control-fence checks, global number claim, immutable
-claim/control receipts, coordinator-owned monotone route-window attempt allocation,
-stale-window expiry, and gateway consumption. Window, authoritative-call, and receipt evidence bind
-the current control fence, provider, and exact displayed instruction evidence. Stop
-changes authoritative setup status/fence only; it never claims that the physical route
-was rolled back. No provider client, number-purchase method, route mutation, activation,
-setup-side verification-consumption method, live route, or Production authority is
-composed. Exact private paths and Catalyst identity/store mappings remain unconfigured
-and `NOT_READY`; the six reviewed Form 2 routes above are unchanged.
-
 Possession of the opaque invitation token alone cannot set setup access to Verified. A fresh email OTP must be delivered to the current CRM-bound Contact email, verified within the configured lifetime and attempt ceiling, and durably consumed for the exact session and CRM binding. Destination changes, replay, provider ambiguity, and state conflicts fail closed or enter reconciliation. Native Forms Email OTP and CAPTCHA are not trusted proof for this controller. Do not configure an SMS provider or SMS OTP.
 
 The Deal subrequest is last so the active Form 2 workflow evaluates only after the related Contact and Account changes succeed. CRM's documented rollback behavior defers automation until all subrequests succeed; a rollback does not trigger the automation.
@@ -67,6 +31,7 @@ The Deal subrequest is last so the active Form 2 workflow evaluates only after t
 ## Security Contract
 
 - Production activation is rejected in `loadConfig()`. Only `production`/`dark` is accepted, loads no operational dependencies, and returns unavailable; no variable can activate it.
+- Active Development requires the request project ID and SDK project ID to agree and match the private `EXPECTED_CATALYST_PROJECT_ID_SHA256` binding before any Data Store, Mail, Connection, or CRM access.
 - The Catalyst access URL contains one 256-bit opaque bearer token in its fragment and no CRM ID or PII. Its host must be an approved Catalyst Development host. The token is never stored or logged; only a domain-separated HMAC is stored.
 - An immutable issuance UUID produces the same token on an exact retry while the pepper is unchanged. A mandatory unique, domain-separated SHA-256 digest of that UUID is the durable issuance identity and remains stable across `TOKEN_PEPPER` rotation. The separately stored token HMAC is the bearer lookup key; a rotated pepper therefore invalidates the prior bearer without allowing the same UUID to mint a new one.
 - A mandatory unique, domain-separated SHA-256 digest of the Deal ID is stable across token-pepper rotation and is the atomic active-generation lock. After exact expiry synchronization, the controller salts the released generation digest with the stable issuance-request digest so prior tombstones can coexist. The restricted session row already contains the bound Deal ID; the digests and every payload-derived `submitting_<fingerprint>` outcome are therefore private operational data.
@@ -142,10 +107,10 @@ Keep table, column, row, pipeline, deployment, route, and function deletion disa
 
 1. Confirm and use the existing **Retell Catalyst project in Development**. Inventory and independently read back its current functions, routes, tables, Connections, variables, Security Rules or API Gateway state, and deployments before any cutover. Keep the copied version-2 tables and legacy Form 2 project live and Production untouched.
 2. Do not create, enable, or manually execute a GitHub-sourced Catalyst deployment pipeline from this repository yet. If one already references [`catalyst-pipelines.yaml`](../../../catalyst-pipelines.yaml), keep it disabled. The checked-in Development job exits unconditionally and is containment, not deployment authorization. Before future activation, pin the exact repository and reviewed `main` revision, grant minimum repository permission, prohibit force-push and direct push, and enforce independent pull-request and CODEOWNERS approval for the pipeline and [`scripts/deploy-development.sh`](scripts/deploy-development.sh). The current sole-owner CODEOWNERS configuration is not independent approval.
-3. The prior pipeline design interpolated `PROJECT_ID`, `CATALYST_ORG`, `CATALYST_TOKEN`, and `APPROVED_SOURCE_REVISION` directly into shell command text. Shell quoting and masking cannot make pre-script substitution safe. Keep the unconditional failure step until current Catalyst documentation and a harmless isolated Development test independently prove a native secret/config binding that supplies exact process-environment values—including `APPROVED_FORM2_DESTINATION_SHA256`—without rendering them into command text, validates the reviewed revision and normalized Form URL digest outside attacker-controlled shell text, prevents disclosure, and supports a least-privilege deployer. Restoring script invocation requires a separate security review, regression tests, and reviewed source change. Never paste a credential into chat, GitHub, source, command text, or logs.
+3. The prior pipeline design interpolated `PROJECT_ID`, `CATALYST_ORG`, `CATALYST_TOKEN`, and `APPROVED_SOURCE_REVISION` directly into shell command text. Shell quoting and masking cannot make pre-script substitution safe. Keep the unconditional failure step until current Catalyst documentation and a harmless isolated Development test independently prove a native secret/config binding that supplies exact process-environment values—including `APPROVED_FORM2_DESTINATION_SHA256` and `APPROVED_CATALYST_PROJECT_ID_SHA256`—without rendering them into command text, validates the reviewed revision, normalized Form URL digest, and deployment project digest outside attacker-controlled shell text, prevents disclosure, and supports a least-privilege deployer. Restoring script invocation requires a separate security review, regression tests, and reviewed source change. Never paste a credential into chat, GitHub, source, command text, or logs.
 4. **Connection-console check completed on 2026-08-23:** both Form 2-specific CRM Connections are Connected with exactly the scopes above. Re-read their private link names and grants, then prove the intended CRM organization through harmless authenticated reads before binding variables. Do not treat legacy Connections as target evidence or reuse Form 1 or Retell call-processing Connections. If the UI cannot express the composite scope, stop rather than broadening access.
 5. **Version 3 targets verified but not bound:** the four exact operational targets are empty and match [`config/datastore-schema.json`](config/datastore-schema.json). Re-read them immediately before deployment and abort on any row or schema drift. Preserve every version-2 row; do not rename, overwrite, backfill, or promote it. The current sanitized reconciliation remains zero-promotion: two terminal sessions, one reconciliation quarantine, one state conflict, eight missing prefills, 13 retained prefills, and no submissions. Both nonterminal sessions are time-expired. Keep all three probe artifacts quarantined and unbound.
-6. Set every variable name in [`functions/revenue_leak_test_setup_form/.env.example`](functions/revenue_leak_test_setup_form/.env.example) in Catalyst Development. Set `SOURCE_REVISION` to the reviewed commit. Normalize the reviewed `FORM2_PUBLIC_URL`, calculate its lowercase SHA-256, and provide it only to the isolated artifact-stamping step as `APPROVED_FORM2_DESTINATION_SHA256`; a checkout remains unstamped and fails closed. Use independent values for every secret, exact endpoints and statuses, and private identifiers. Never upload a populated environment file.
+6. Set every variable name in [`functions/revenue_leak_test_setup_form/.env.example`](functions/revenue_leak_test_setup_form/.env.example) in Catalyst Development. Set `SOURCE_REVISION` to the reviewed commit. Calculate the lowercase SHA-256 of the separately reviewed target project ID and bind it privately as `EXPECTED_CATALYST_PROJECT_ID_SHA256`; the deployment candidate separately requires the same reviewed digest as `APPROVED_CATALYST_PROJECT_ID_SHA256`. Normalize the reviewed `FORM2_PUBLIC_URL`, calculate its lowercase SHA-256, and provide it only to the isolated artifact-stamping step as `APPROVED_FORM2_DESTINATION_SHA256`; a checkout remains unstamped and fails closed. Use independent values for every secret, exact endpoints and statuses, and private identifiers. Never upload a populated environment file.
 7. Keep [`scripts/deploy-development.sh`](scripts/deploy-development.sh) unreachable while the native secret-binding contract is unverified. It remains a reviewed Development-only candidate: it rejects a dirty or different checkout, verifies pinned Node and Catalyst CLI versions, runs the safety scanner, proves artifact equivalence, and stamps the reviewed revision and approved Form destination only into isolated temporary exports. A separately reviewed pipeline change plus independent post-deployment readback are still required.
 8. After function and deployment readback, create the six exact routes in [`config/routes.json`](config/routes.json): one `GET` Access route and five `POST` routes. Never use `ANY`. Apply the listed authentication and both general/IP throttles. Because this shared project contains other workloads, leave API Gateway disabled until every existing route has an equivalent preservation and rollback plan.
 9. Record the Development function, deployment, pipeline, routes, table schemas, Connection scope readback, source revision, and smoke-test result in the private deployment log. Do not publish identifiers or screenshots containing values.
@@ -174,7 +139,7 @@ Activation requires current synthetic evidence for every item below:
 - all four additive version-3 tables are independently read back against the full 81-column contract, including privacy, uniqueness, permissions, and client-access denial;
 - the read-only reconciliation output matches the approved zero-promotion counts and contains no row, CRM ID, token, email, or platform identifier;
 - the Development pipeline job still exits unconditionally, or a separately reviewed replacement uses an independently verified native binding that never renders credentials, secrets, or release identifiers into shell command text;
-- the hosted runtime injects or overwrites `x-zc-environment`, and the SDK reports the same Development environment;
+- the hosted runtime injects or overwrites `x-zc-environment` and `x-zc-projectid`, the SDK reports the same Development environment and project ID, and the project ID matches the private reviewed digest;
 - both Connections return exactly one approved Authorization header and the composite scope succeeds;
 - the Catalyst access page proves one CRM-destination email OTP before Prefill can mark setup access Verified; wrong, expired, replayed, changed-destination, unexpected, or bypassed proofs fail closed without CRM disclosure;
 - the first successful verification sets an exact 30-minute deadline and later retries do not extend it; post-deadline Prefill and submission both fail closed;

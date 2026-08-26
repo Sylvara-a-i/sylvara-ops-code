@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "record_type": "sanitized_legacy_retell_function_source_capture",
+  "observed_at": "2026-08-26",
+  "environment": "Development",
+  "capture_method": "native-catalyst-console-function-download",
+  "authorization": "read-only-source-preservation",
+  "contains_project_or_function_ids": false,
+  "contains_credentials_or_private_configuration": false,
+  "contains_source_or_test_contents": false,
+  "private_archive_location_included": false,
+  "provider_downloads": [
+    {
+      "function": "retell_events",
+      "archive_sha256": "82690d94e4747a685176a2ae8c76e6bed5f8fa9d3dce3db06f1414e024b74231",
+      "archive_bytes": 325273,
+      "provider_archive_file_count": 231,
+      "non_dependency_file_count": 31,
+      "javascript_file_count": 22,
+      "package_test_result": "32-of-32-passed"
+    },
+    {
+      "function": "process_retell_events",
+      "archive_sha256": "a40de00366e1287b12f79b4f62ba7580b40f8d79c4e6da337c93a60a0bdc19f4",
+      "archive_bytes": 324861,
+      "provider_archive_file_count": 228,
+      "non_dependency_file_count": 28,
+      "javascript_file_count": 17,
+      "package_test_result": "35-of-35-passed"
+    },
+    {
+      "function": "retell_inbound_resolver",
+      "archive_sha256": "f1bbf3e635513da66c5cc37f1701d1e8268a4649ea7941f65a650e3bd16b52a9",
+      "archive_bytes": 287740,
+      "provider_archive_file_count": 216,
+      "non_dependency_file_count": 16,
+      "javascript_file_count": 13,
+      "syntax_result": "13-of-13-passed",
+      "package_test_result": "exit-zero-with-zero-tests-discovered",
+      "declared_check_script_result": "blocked-missing-tools-check-syntax-js",
+      "recovery_search_result": "no-exact-copy-found-in-current-or-reachable-or-unreachable-git-history"
+    },
+    {
+      "function": "retell_route_approval_control",
+      "archive_sha256": "1a4da5970ca7d07d4f5be2e314786a3d809e44c1c02d64b387b1111909b91730",
+      "archive_bytes": 295198,
+      "provider_archive_file_count": 208,
+      "non_dependency_file_count": 8,
+      "javascript_file_count": 5,
+      "syntax_result": "5-of-5-passed",
+      "package_test_result": "exit-zero-with-zero-tests-discovered"
+    },
+    {
+      "function": "retell_free_test",
+      "archive_sha256": "b578fd1d713ed93b9c3121f37adcda8114be07f67b6fc59cee9e3daecdbe2946",
+      "archive_bytes": 298644,
+      "provider_archive_file_count": 219,
+      "non_dependency_file_count_after_historical_test_recovery": 24,
+      "javascript_file_count_after_historical_test_recovery": 20,
+      "syntax_result": "20-of-20-passed",
+      "historical_test_recovery": "five-exact-test-files-restored-privately-from-final-pre-consolidation-commit",
+      "source_tree_comparison": "13-of-19-provider-export-source-files-match-the-historical-tree-and-six-differ",
+      "provider_source_manifest_sha256": "ab0697889e7edfc6ed068f1de2fada4ddfe46d25dc1102ceb9362f707339b7a3",
+      "exact_generation_search": "zero-matches-across-150-reachable-and-unreachable-commits-and-22-unique-historical-subtrees",
+      "preserved_layout_test_result": "49-of-64-passed-and-15-failed",
+      "remaining_test_failure_classification": "semantic-source-generation-divergence-in-six-captured-contract-analysis-reporting-runtime-and-validation-files"
+    },
+    {
+      "function": "retell_free_test_retry",
+      "archive_sha256": "fe33806e1443f4f5bfa89f7ddfcda8404d90c460bf71c0b8fe73da1ed7f2a1e2",
+      "archive_bytes": 300350,
+      "provider_archive_file_count": 221,
+      "non_dependency_file_count_after_historical_test_recovery": 5,
+      "javascript_file_count_after_historical_test_recovery": 2,
+      "syntax_result": "2-of-2-passed",
+      "historical_test_recovery": "one-exact-test-file-restored-privately-from-final-pre-consolidation-commit",
+      "source_tree_comparison": "provider-export-source-files-exactly-match-the-historical-tree",
+      "preserved_layout_test_result": "1-of-1-passed"
+    }
+  ],
+  "historical_test_source_revision": "9b698bb6bcd2e7667705e7ceb467eaecb4d5faba",
+  "native_provider_archive_capture_complete_for_all_six_legacy_functions": true,
+  "source_dependency_and_test_extraction_gate_complete": false,
+  "test_parity_complete_for_all_six_legacy_functions": false,
+  "private_preserved_layout_validation": "52-of-52-copied-artifacts-byte-matched-37-of-37-javascript-files-parsed-and-15-of-15-json-files-parsed",
+  "live_binding_inventory_complete": false,
+  "shared_runtime_development_acceptance_complete": false,
+  "migration_and_reconciliation_complete": false,
+  "rollback_rehearsal_complete": false,
+  "legacy_function_deletion_authorized": false,
+  "private_archives_and_recovered_tests_committed": false
+}

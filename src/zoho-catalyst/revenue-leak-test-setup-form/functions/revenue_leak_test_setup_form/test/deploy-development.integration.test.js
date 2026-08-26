@@ -14,6 +14,11 @@ const repositoryRoot = path.resolve(controllerRoot, "../../..");
 const supportedRunner = process.platform === "linux" && process.arch === "x64";
 const syntheticToken = "0123456789abcdef0123456789abcdef";
 const approvedFormDestinationSha256 = "c".repeat(64);
+const syntheticProjectId = "1";
+const approvedCatalystProjectIdSha256 = crypto
+  .createHash("sha256")
+  .update(syntheticProjectId, "utf8")
+  .digest("hex");
 
 function findExecutable(name) {
   for (const entry of (process.env.PATH || "").split(path.delimiter)) {
@@ -411,12 +416,15 @@ function createFixture(testContext, scenario) {
   const isolatedArguments = [
     "-i",
     `PATH=${stubBin}${path.delimiter}${process.env.PATH || ""}`,
-    "PROJECT_ID=1",
+    `PROJECT_ID=${syntheticProjectId}`,
     "CATALYST_ORG=2",
     `${"CATALYST_" + "TOKEN"}=${syntheticToken}`,
     `APPROVED_SOURCE_REVISION=${head}`,
     `APPROVED_FORM2_DESTINATION_SHA256=${
       scenario === "alternate-destination" ? "d".repeat(64) : approvedFormDestinationSha256
+    }`,
+    `APPROVED_CATALYST_PROJECT_ID_SHA256=${
+      scenario === "wrong-project" ? "d".repeat(64) : approvedCatalystProjectIdSha256
     }`,
     `TMPDIR=${runtimeTmp}`,
     "NODE_OPTIONS=--synthetic-option-that-must-not-survive",
@@ -535,6 +543,16 @@ test("the isolated Development deploy stamps a separately approved destination o
   const fixture = createFixture(testContext, "alternate-destination");
   assert.equal(fixture.result.status, 0, fixture.result.stderr);
   assert.match(fixture.evidence, /^destination=d{64}$/m);
+  assertCheckoutUnchanged(fixture);
+});
+
+test("the isolated Development deploy rejects a project outside the separately reviewed binding", {
+  skip: !supportedRunner,
+}, (testContext) => {
+  const fixture = createFixture(testContext, "wrong-project");
+  assert.notEqual(fixture.result.status, 0);
+  assert.match(fixture.result.stderr, /does not match the separately approved Catalyst project digest/);
+  assert.doesNotMatch(fixture.evidence, /^deploy-called$/m);
   assertCheckoutUnchanged(fixture);
 });
 

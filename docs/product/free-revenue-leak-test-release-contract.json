@@ -103,9 +103,12 @@
   "form1": {
     "workflow_name": "RevenueLeakTestRequestForm",
     "customer_facing_name": "Free Revenue Leak Test Request",
+    "forms_manifest": "../../src/zoho-forms/free-revenue-leak-test/forms-manifest.json",
     "public_path": {
       "writer": "native Zoho Forms CRM integration",
       "deduplication_key": "Intake_Submission_ID",
+      "deduplication_fallback": "Email",
+      "deduplication_semantics": "Intake_Submission_ID is the canonical primary idempotency key; case-insensitive Email is secondary only after no primary match and never replaces generation of the primary identity.",
       "crm_target": "Leads",
       "task_owner": "one CRM workflow action"
     },
@@ -133,6 +136,14 @@
       "utm_content": "UTM_Content",
       "utm_term": "UTM_Term"
     },
+    "hidden_audit_field_contract": {
+      "unconditional": ["Entry_Offer", "Submission_Channel", "Free_Test_Contact_Consent_At", "Free_Test_Contact_Consent_Version", "Free_Test_Request_Submitted_At", "Intake_Form_Version", "Intake_Submission_ID", "Lead_Status"],
+      "assisted_path": ["Source_Page", "assisted_by"],
+      "optional_attribution": ["Lead_Source", "Source_Page", "UTM_Source", "UTM_Medium", "UTM_Campaign", "UTM_Content", "UTM_Term"],
+      "respondent_editable": false,
+      "unresolved_source_required": ["assisted_by", "assisted prefill token field"],
+      "unresolved_live_properties": ["field aliases", "mandatory flags", "personal flags", "encryption flags", "read-only flags"]
+    },
     "fixed_values": {
       "entry_offer_form_value": "Free 7-Day Missed-Call",
       "entry_offer_crm_display_value": "7-Day Revenue Leak Test",
@@ -153,6 +164,7 @@
   "form2": {
     "workflow_name": "RevenueLeakTestSetupForm",
     "customer_facing_name": "Free Revenue Leak Test Setup and Authorization",
+    "forms_manifest": "../../src/zoho-forms/free-revenue-leak-test/forms-manifest.json",
     "controller": "revenue_leak_test_setup_form",
     "routes": [
       "FORM2_ISSUE",
@@ -176,6 +188,31 @@
       "sms_allowed": false
     },
     "required_affirmations": ["Authorized_Representative_Confirmed", "Test_Scope_Accepted"],
+    "field_contract": {
+      "runtime_client_field_count": 33,
+      "unconditional_required_client_fields": ["firstName", "lastName", "decisionMakerRole", "decisionAuthority", "businessEmail", "directMobileNumber", "companyName", "legalBusinessName", "mainBusinessNumber", "phoneSystemProvider", "primaryServiceArea", "normalBusinessHours", "servicesHandled", "approvedTestRoute", "forwardingAdministratorName", "forwardingAdministratorMobile", "approvedFallbackDestination", "rollbackContactName", "rollbackContactMobile", "urgentCallHandling", "existingCustomerCallHandling", "alertRecipientName", "alertRecipientEmail", "authorizedRepresentativeConfirmed", "testScopeAccepted"],
+      "conditional_client_fields": [
+        {"field": "otherServiceDetails", "required_when": "servicesHandled contains Other", "otherwise": "must_be_null"},
+        {"field": "noAnswerDelay", "required_when": "approvedTestRoute is No Answer / Overflow Only or After Hours + Overflow", "otherwise": "must_be_null"},
+        {"field": "approvedFallbackNumber", "required_when": "approvedFallbackDestination is Existing Office Line, On-Call Mobile, or Other", "otherwise": "must_be_null"}
+      ],
+      "optional_client_fields": ["jobTitle", "fieldTeamSizeBand", "currentCallHandling", "requestedTestRoute", "requestedStartDate"],
+      "source_read_only_after_prefill": ["businessEmail", "directMobileNumber", "currentCallHandling", "requestedTestRoute", "approvedTestRoute"],
+      "live_read_only_flags": "unresolved",
+      "prohibited_client_fields": ["testPhoneNumber", "alertRecipientMobile", "smsRecipient", "paymentData"]
+    },
+    "controller_field_policy": {
+      "setupToken": {"mandatory": true, "personal": true, "encrypted": true, "respondent_editable": false},
+      "prefillId": {"mandatory": true, "personal": true, "encrypted": true, "respondent_editable": false},
+      "submissionId": {"mandatory": "generated before submission webhook", "personal": false, "encrypted": false, "respondent_editable": false}
+    },
+    "native_action_policy": {
+      "proof_email_owner": "Catalyst controller",
+      "native_email_notifications_allowed": false,
+      "native_sms_notifications_allowed": false,
+      "native_approvals_allowed": false,
+      "zoho_sign_allowed": false
+    },
     "crm_field_mapping": {
       "submission_id": "Setup_Form_Submission_ID",
       "submitted_at": "Setup_Form_Submitted_At",
@@ -211,9 +248,6 @@
     },
     "required_form1_tables": ["RevenueLeakTestRequestFormSessions"],
     "required_form2_v3_tables": ["Form2SessionsV3Runtime", "Form2PrefillsV3", "Form2SubmissionsV3", "Form2VerificationProofsV3"],
-    "required_source_only_field_setup_tables": ["RevenueLeakTestFieldSetupJourneys"],
-    "required_source_only_field_setup_record_types": ["journey", "current_control", "control_operation", "number_inventory", "reservation_receipt", "verification_attempt", "verification_window"],
-    "source_only_field_setup_tables_provisioned": false,
     "form2_v3_legacy_source_mapping": {"Form2SessionsV3": "Form2SessionsV3Runtime"},
     "supporting_tables": ["CRMBillingOperations", "AnalyticsSyncCheckpoints", "AnalyticsSyncOutbox"],
     "app_user_access": false,
@@ -546,153 +580,5 @@
   "deployment_order": ["superseding repository contract and tests", "six canonical function packages", "canonical call and Analytics schemas", "legacy source and dependency extraction", "additive canonical tables", "Development functions with callers unchanged", "direct signed and Job-mode synthetic tests", "canonical table migration and row reconciliation", "route, auth, pool, and trigger readback", "CRM fields and inactive automation", "Zoho Forms desired state", "Form 1 cutover", "Form 2 cutover", "shared-runtime Development E2E", "Billing TEST and hidden live catalog readback", "Analytics synchronization and dashboard readback", "rollback rehearsal", "staged legacy cleanup", "coordinated Development key and credential rotation", "merge PR", "final-main Development deployment and parity", "dark-Production deployment with independent credentials", "dark-Production zero-traffic synthetic E2E", "final attack-surface and rollback audit"],
   "rollback_order": ["keep Production traffic dark", "disable CRM paid-acceptance action", "disable Form 2 callers and restore the last proven route only while its rollback window remains", "disable Form 1 callers and restore the last proven route only while its rollback window remains", "stop synthetic deployment", "unbind Retell number and webhook routes", "disable call and Analytics schedules", "restore prior reviewed canonical function revisions", "restore canonical-table readers to the reconciled generation", "preserve migration, operation, call, Billing TEST, and rollback evidence"],
   "acceptance_scenarios": ["successful free test to accepted Growth TEST subscription", "results review declined with no subscription", "Form 2 invalid or replayed proof with no downstream effects", "approval does not activate a route or start time", "activation requires a fresh authoritative route readback and exact chained receipts", "configuration, route, fingerprint, and source changes invalidate approval", "status strings without exact authorization receipts fail closed", "seven-day and 25-call limits", "free and paid engagement isolation", "disabled paid profile rejection", "routing and Job-submission failures fail closed", "replay at every boundary", "Analytics checkpoint and retry convergence", "canonical table migration and reconciliation", "legacy approval source export and live-binding proof", "Development rollback", "dark-Production zero-traffic E2E", "Production rollback with evidence preserved"],
-  "field_setup_candidate": {
-    "status": "NOT_READY",
-    "live_install_status": "NOT_AUTHORIZED",
-    "operator_led": true,
-    "client_portal": false,
-    "durable_client_account": false,
-    "forms_preserved": ["REVENUE_LEAK_TEST_REQUEST_FORM", "REVENUE_LEAK_TEST_SETUP_FORM"],
-    "form3_allowed": false,
-    "new_catalyst_function_count": 0,
-    "maximum_new_journey_table_count": 1,
-    "required_new_candidate_table_count": 1,
-    "provisioned_candidate_table_count": 0,
-    "journey_table": "RevenueLeakTestFieldSetupJourneys",
-    "shared_table_record_types": ["journey", "current_control", "control_operation", "number_inventory", "reservation_receipt", "verification_attempt", "verification_window"],
-    "state_coordinator_transaction_contract": "one authoritative serializable transaction domain across strict recordType families in the single workflow-specific table; the journey adapter projects only the exact canonical journey properties, and install fails closed if the target store cannot implement every compare-and-set and idempotency boundary",
-    "web_client_source": "../../src/zoho-catalyst/revenue-leak-test-request-form/client",
-    "web_client_deployment_or_publication_authorized": false,
-    "launch_protocol": {
-      "schema_version": 1,
-      "protocol_id": "free_revenue_leak_test_field_setup_v1",
-      "nonce_entropy_bits": 256,
-      "nonce_storage": "keyed digest only",
-      "maximum_ttl_seconds": 60,
-      "url_content": "fragment nonce only",
-      "session_cookie": ["Secure", "HttpOnly", "SameSite=Strict", "bounded idle expiry", "bounded absolute expiry"],
-      "new_journey_module": "Leads",
-      "resume_modules": ["Leads", "Deals"],
-      "resume_binding": "keyed Development/module/record digest plus exact authenticated-operator binding",
-      "runtime_protocol_headers_required": ["x-sylvara-field-setup-protocol-id", "x-sylvara-field-setup-protocol-version"],
-      "successful_responses_echo_protocol_identity": true,
-      "form_navigation": {
-        "mode": "top_level_only",
-        "destination_binding": "exact privately injected HTTPS origin and path",
-        "approved_public_hosts": ["forms.zohopublic.com"]
-      }
-    },
-    "source_wiring": {
-      "request_form": {
-        "default_route_claim_count": 0,
-        "default_client_mode": "synthetic_zero_network_preview",
-        "injected_route_count": 6,
-        "injected_routes": ["launch", "exchange", "status", "operator_decision", "conversion_preview", "conversion_confirm"],
-        "catalyst_header_mapping": "NOT_READY_INJECTED_ONLY",
-        "catalyst_identity_mapping": "NOT_READY_INJECTED_ONLY",
-        "catalyst_store_mapping": "NOT_READY_INJECTED_ONLY",
-        "conversion_preview_refresh": "authoritative pre-write change atomically replaces only the exact current preview receipt at lead_conversion_confirmation/preview_ready, increments revision once, and requires the refreshed display before confirmation",
-        "deployment_authorized": false
-      },
-      "web_client": {
-        "injected_distinct_path_count": 10,
-        "injected_distinct_paths": ["conversionConfirmPath", "conversionPreviewPath", "decisionPath", "exchangePath", "forwardingInstructionsPath", "numberClaimPath", "numberStatusPath", "routeVerificationWindowPath", "setupControlPath", "statusPath"],
-        "forwarding_instruction_request": {"method": "POST", "body": ["journeyRevision", "view"], "allowed_views": ["enable", "rollback"]},
-        "conversion_confirmation_locked_until_preview_displayed": true
-      },
-      "setup_form": {
-        "default_operation_route_claim_count": 0,
-        "existing_form2_route_count_preserved": 6,
-        "injected_operation_route_count": 5,
-        "injected_operations": ["existing_number_status", "atomic_existing_number_claim_with_control_fence", "reviewed_forwarding_instructions", "route_verification_window_issue_with_control_fence", "setup_control"],
-        "setup_control_browser_actions": ["confirm_forwarding_enabled", "confirm_rollback_ready", "stop", "resume"],
-        "setup_control_server_internal_action": "issue_forwarding_instructions",
-        "authoritative_state_coordinator_methods": ["readNumberReservationStatus", "readNumberReservationReceiptByOperationFingerprint", "claimExistingAvailableNumberWithControlFenceAtomically", "issueWindowWithControlFenceAtomically", "readLatestWindowByOperationScopeFingerprint", "applyControlIntentAtomically", "readControlOperationByOperationFingerprint"],
-        "control_receipt_readback": "readControlOperationByOperationFingerprint using the exact selected operation fingerprint; nullable latestControlOperationFingerprint is stored on current_control for no-op and lost-response replay",
-        "number_claim_operation_fingerprint": "stable FIELD_SETUP_NUMBER_CLAIM route identity plus exact client/environment/journey/deployment/configuration reservation binding; excludes session, journey revision, number, control scope, and control fence",
-        "number_claim_receipt_fences": ["previousControlFenceFingerprint (accepted pre-claim fence)", "controlFenceFingerprint (recomputed post-claim aggregate fence)"],
-        "number_claim_current_control_update": ["bindingFingerprint", "numberFingerprint", "numberState=Reserved", "controlFenceFingerprint", "updatedAt"],
-        "number_claim_replay_rule": "the same operation may replay only with its exact stored pre-claim fence during the concurrent transition or its stored post-claim current fence; every other fence fails closed without another inventory transition or receipt",
-        "control_fence_safety_inputs": ["numberState", "approvedQaCallerFingerprint"],
-        "route_window_operation_scope_field": "operation_scope_fingerprint",
-        "route_window_attempt_epoch_authority": "coordinator-owned monotone allocation",
-        "provider_client_injected": false,
-        "number_purchase_adapter_injected": false,
-        "activation_adapter_injected": false,
-        "live_route_mutation_adapter_injected": false,
-        "verification_consumption_adapter_injected": false,
-        "stop_never_claims_physical_route_rollback": true,
-        "deployment_authorized": false
-      }
-    },
-    "route_verification_binding_fields": ["control_fence_fingerprint", "provider_fingerprint", "instruction_evidence_fingerprint"],
-    "gateway_atomic_consume_operation": "consumeOpenWindowAtCurrentControlFence",
-    "route_verification_control_fence_representation": {
-      "current_control": "raw lowercase sha256 digest of exactly 64 characters",
-      "window_call_receipt": "control_fence_ followed by the exact raw current-control digest",
-      "required_store_request": "raw lowercase sha256 digest of exactly 64 characters",
-      "atomic_equality": "authoritative_call.control_fence_fingerprint === verification_window.control_fence_fingerprint === 'control_fence_' + current_control.controlFenceFingerprint"
-    },
-    "gateway_stale_control_fence_outcome": "stale_control_fence",
-    "crm_button_manifest": "../../src/zoho-crm/free-revenue-leak-test/buttons/button-manifest.json",
-    "browser_activation_allowed": false,
-    "route_verification_normal_intake_allowed": false,
-    "route_verification_handled_call_increment": 0,
-    "route_verification_notification_allowed": false,
-    "runbook": "../runbooks/free-revenue-leak-test-field-setup.md",
-    "adr": "../adr/0008-bounded-free-test-human-handoff-and-operator-led-field-setup.md",
-    "unresolved": [
-      "live hosted-client inventory",
-      "Request Form route-instruction reconciliation",
-      "exact Catalyst authenticated-user and runtime-header mapping",
-      "private Catalyst route and store mappings for both injected compositions",
-      "record-specific CRM conversion options and duplicates",
-      "live Forms readback",
-      "live atomic number-inventory adapter and readback",
-      "provider forwarding evidence",
-      "pre-agent route-verification behavior"
-    ]
-  },
-  "retell_v2_candidate": {
-    "status": "NOT_READY",
-    "profile": "call_gap_capture_handoff_v2",
-    "engagement_type": "free_test",
-    "draft": true,
-    "enabled": false,
-    "traffic_environments": [],
-    "billing_mode": "none",
-    "limit_policy": "seven_calendar_days_or_25_connected_calls_v1",
-    "v1_profile_preserved": "call_gap_monitor_v1",
-    "provider_event_parser_implemented": true,
-    "provider_neutral_state_machine_only": false,
-    "private_connected_candidate": {
-      "node_count": 15,
-      "reachable_node_count": 15,
-      "ordinary_directed_cycle_present": false,
-      "reachable_warm_transfer_node_count": 1,
-      "transfer_requires_policy_gate": true,
-      "transfer_requires_explicit_caller_acceptance": true,
-      "transfer_failure_edge_text": "Transfer failed",
-      "webhook_event_count": 6,
-      "network_interaction_count": 0,
-      "provider_interaction_count": 0,
-      "ignored_private_artifact": true,
-      "published": false,
-      "bound_to_traffic": false,
-      "publicly_importable": false
-    },
-    "analysis_field_count": 17,
-    "routine_transfer_allowed": false,
-    "retell_email_allowed": false,
-    "catalyst_actionable_notification_count_per_call": 1,
-    "provider_import_or_publication_authorized": false,
-    "unresolved": [
-      "isolated Retell Draft import and independent readback",
-      "exact sanitized transfer lifecycle event payload variations",
-      "warm-transfer carrier behavior",
-      "live human and voicemail detection behavior",
-      "voice, pacing, interruption, noise, and latency"
-    ]
-  },
-  "out_of_scope": ["prospect or customer traffic", "real customer data", "contractor forwarding", "real charge", "payment method", "SMS", "Retell call", "Retell native simulation", "conversation-flow tuning", "prompt tuning", "provider-specific v2 transfer import", "voice, model, interruption, or latency tuning", "booking", "dispatch", "pricing quotes", "payment collection", "outbound marketing", "paid capability activation", "Launch, Growth, or Scale conversation behavior", "client portal product build"]
+  "out_of_scope": ["prospect or customer traffic", "real customer data", "contractor forwarding", "real charge", "payment method", "SMS", "Retell call", "Retell native simulation", "conversation-flow tuning", "prompt tuning", "voice, model, interruption, or latency tuning", "booking", "dispatch", "pricing quotes", "payment collection", "outbound marketing", "paid capability activation", "Launch, Growth, or Scale conversation behavior", "client portal product build"]
 }

@@ -1,0 +1,8 @@
+{
+  "name": "sylvara-revenue-desk-release",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  }
+}

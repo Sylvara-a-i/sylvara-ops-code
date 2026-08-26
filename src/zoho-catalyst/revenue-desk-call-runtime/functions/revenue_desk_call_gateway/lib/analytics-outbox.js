@@ -3,7 +3,6 @@
 const crypto = require('node:crypto');
 const { invariant } = require('./errors');
 const { keyedDigest } = require('./security');
-const { CAPABILITY_PROFILES } = require('./contracts');
 
 const OUTBOX_IMMUTABLE = Object.freeze([
   'OUTBOX_KEY', 'PROVIDER_VERSION_KEY', 'ROW_SCHEMA_VERSION', 'RECORD_TYPE',
@@ -97,9 +96,14 @@ function callFact(config, row, canonical) {
 }
 
 function deploymentFact(config, deployment, row) {
-  const profile = CAPABILITY_PROFILES.get(deployment.capabilityProfile);
-  invariant(profile && profile.engagement_type === deployment.engagementType,
-    'ANALYTICS_FACT_INVALID', 'Deployment capability profile is not authoritative.');
+  // The registry gates whether a profile may run now; immutable version rows own historical
+  // plan, limit, and billing attribution so later registry edits cannot rewrite old facts.
+  invariant(typeof deployment.planTier === 'string'
+    && typeof deployment.limitPolicy === 'string'
+    && typeof deployment.billingMode === 'string'
+    && typeof deployment.numberOwnership === 'string'
+    && deployment.environment === row.SOURCE_ENVIRONMENT,
+  'ANALYTICS_FACT_INVALID', 'Immutable deployment configuration is unavailable.');
   const recordKey = opaqueKeys(config, row.CLIENT_ID, row.DEPLOYMENT_ID).DEPLOYMENT_KEY;
   return Object.freeze({
     ...commonFact(config, {
@@ -108,11 +112,11 @@ function deploymentFact(config, deployment, row) {
       ENGAGEMENT_TYPE: deployment.engagementType,
     }, recordKey),
     CAPABILITY_PROFILE: safeEnum(deployment.capabilityProfile),
-    PLAN_TIER: safeEnum(profile.plan_tier),
+    PLAN_TIER: safeEnum(deployment.planTier),
     DEPLOYMENT_STATUS: safeEnum(row.TEST_STATUS),
     GO_LIVE_APPROVAL_STATUS: safeEnum(row.GO_LIVE_APPROVAL_STATUS),
-    LIMIT_POLICY: profile.limit_policy,
-    BILLING_MODE: profile.billing_mode,
+    LIMIT_POLICY: safeEnum(deployment.limitPolicy),
+    BILLING_MODE: safeEnum(deployment.billingMode),
     COVERAGE_MODE: safeEnum(deployment.coverageMode),
     HANDLED_COUNT: Number(row.HANDLED_COUNT),
     CALL_LIMIT: Number(row.CALL_LIMIT),

@@ -2,9 +2,9 @@
 
 const crypto = require('node:crypto');
 const {
-  CONTRACT, COVERAGE_MODES, NOTIFICATION_STATES, ENGAGEMENT_TYPES, CAPABILITY_PROFILES,
-  CRM_TEST_STATUSES,
+  CONTRACT, COVERAGE_MODES, NOTIFICATION_STATES, CRM_TEST_STATUSES,
 } = require('./contracts');
+const { validateConfigurationVersionRow } = require('./configuration-version');
 const { RevenueDeskError, invariant } = require('./errors');
 const {
   validateInboundPayload, validateEventEnvelope, validateConfiguration, e164, isPlainObject,
@@ -213,10 +213,13 @@ function parseJsonColumn(value, name) {
 
 function deploymentFromRow(row, configurationRow, config) {
   invariant(isPlainObject(row), 'CONFIGURATION_UNAVAILABLE', 'Deployment row is unavailable.');
-  invariant(isPlainObject(configurationRow), 'CONFIGURATION_UNAVAILABLE',
-    'Active configuration version is unavailable.');
+  const version = validateConfigurationVersionRow(configurationRow, {
+    expectedDeploymentId: row.DEPLOYMENT_ID,
+    expectedEnvironment: config.environment,
+    expectedSourceRevision: config.sourceRevision,
+  });
   const configuration = validateConfiguration(
-    parseJsonColumn(configurationRow.CONFIGURATION_JSON, 'CONFIGURATION_JSON'),
+    parseJsonColumn(version.configurationJson, 'CONFIGURATION_JSON'),
   );
   const approvedStartAt = canonicalTimestamp(row.APPROVED_START_AT, 'APPROVED_START_AT');
   const actualStartAt = optionalTimestamp(row.ACTUAL_START_AT, 'ACTUAL_START_AT');
@@ -252,7 +255,7 @@ function deploymentFromRow(row, configurationRow, config) {
   invariant(CRM_TEST_STATUSES.has(row.TEST_STATUS)
     && /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/.test(String(row.DEPLOYMENT_ID ?? ''))
     && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$/.test(
-      String(configurationRow.CONFIGURATION_VERSION ?? ''),
+      String(version.configurationVersion ?? ''),
     ),
   'CONFIGURATION_UNAVAILABLE', 'Deployment CRM report identity is invalid.');
   invariant(Array.isArray(countedCallKeys) && countedCallKeys.every((key) => /^call_[a-f0-9]{64}$/.test(key))
@@ -260,27 +263,28 @@ function deploymentFromRow(row, configurationRow, config) {
     && countedCallKeys.length === handledCount,
   'CONFIGURATION_UNAVAILABLE', 'Handled-call convergence state is inconsistent.');
   invariant(row.SOURCE_ENVIRONMENT === config.environment
-    && configurationRow.SOURCE_ENVIRONMENT === config.environment,
+    && version.environment === config.environment,
   'CONFIGURATION_UNAVAILABLE', 'Deployment environment binding is invalid.');
   invariant(row.SOURCE_REVISION === config.sourceRevision
-    && configurationRow.SOURCE_REVISION === config.sourceRevision,
+    && version.sourceRevision === config.sourceRevision,
   'CONFIGURATION_UNAVAILABLE', 'Deployment source revision does not match this runtime.');
   invariant(typeof row.ACTIVE_CONFIGURATION_VERSION_ID === 'string'
-    && row.ACTIVE_CONFIGURATION_VERSION_ID === configurationRow.CONFIGURATION_VERSION_ID
-    && configurationRow.DEPLOYMENT_ID === row.DEPLOYMENT_ID
+    && row.ACTIVE_CONFIGURATION_VERSION_ID === version.configurationVersionId
+    && version.deploymentId === row.DEPLOYMENT_ID
     && configurationRow.STATUS === 'Active'
     && configurationRow.APPROVAL_STATUS === 'Approved',
   'CONFIGURATION_UNAVAILABLE', 'Active configuration-version reference is invalid.');
-  invariant(ENGAGEMENT_TYPES.has(configurationRow.ENGAGEMENT_TYPE),
-    'CONFIGURATION_UNAVAILABLE', 'Engagement type is not registered.');
-  const capability = CAPABILITY_PROFILES.get(configurationRow.CAPABILITY_PROFILE);
+  const capability = version.profile;
   invariant(capability
-    && capability.engagement_type === configurationRow.ENGAGEMENT_TYPE
+    && capability.engagement_type === version.engagementType
     && capability.enabled === true
     && capability.status === 'active'
     && capability.traffic_environments.includes(config.environment),
   'CONFIGURATION_UNAVAILABLE', 'Capability profile is disabled or unavailable.');
-  const completedFreeTest = configurationRow.ENGAGEMENT_TYPE === 'free_test'
+  invariant(version.deploymentStatus === CONTRACT.active_test_status
+    && version.goLiveApprovalStatus === CONTRACT.approved_go_live_status,
+  'CONFIGURATION_UNAVAILABLE', 'Configuration version is not approved for live routing.');
+  const completedFreeTest = version.engagementType === 'free_test'
     && row.TEST_STATUS === 'Completed';
   invariant(completedFreeTest
     ? new Set(['Pending', 'AwaitingSettlement', 'Completed']).has(reportReconciliationStatus)
@@ -330,7 +334,7 @@ function deploymentFromRow(row, configurationRow, config) {
     && configuration.notificationRecipient.channel === 'email'
     && configuration.clientId === row.CLIENT_ID
     && configuration.deploymentId === row.DEPLOYMENT_ID
-    && configuration.configurationVersion === configurationRow.CONFIGURATION_VERSION
+    && configuration.configurationVersion === version.configurationVersion
     && configuration.coverageMode === row.COVERAGE_MODE,
   'CONFIGURATION_UNAVAILABLE', 'Embedded configuration ownership is invalid.');
   invariant(/^[1-9][0-9]{7,29}$/.test(configuration.crmDealId),
@@ -350,10 +354,17 @@ function deploymentFromRow(row, configurationRow, config) {
     clientId: row.CLIENT_ID,
     crmDealId: configuration.crmDealId,
     deploymentId: row.DEPLOYMENT_ID,
-    configurationVersionId: configurationRow.CONFIGURATION_VERSION_ID,
-    configurationVersion: configurationRow.CONFIGURATION_VERSION,
-    engagementType: configurationRow.ENGAGEMENT_TYPE,
-    capabilityProfile: configurationRow.CAPABILITY_PROFILE,
+    configurationVersionId: version.configurationVersionId,
+    configurationVersion: version.configurationVersion,
+    engagementType: version.engagementType,
+    capabilityProfile: version.capabilityProfile,
+    planTier: version.planTier,
+    configuredDeploymentStatus: version.deploymentStatus,
+    configuredGoLiveApprovalStatus: version.goLiveApprovalStatus,
+    limitPolicy: version.limitPolicy,
+    billingMode: version.billingMode,
+    numberOwnership: version.numberOwnership,
+    environment: version.environment,
     bindingId: row.BINDING_ID,
     bindingVersion: integerColumn(row.BINDING_VERSION, 'BINDING_VERSION', 1),
     numberLookupHash: row.NUMBER_LOOKUP_HASH,
@@ -2113,51 +2124,31 @@ function createRuntimeService({
       'CREATED_AT',
       READINESS_DEPLOYMENT_LIMIT,
     );
-    const configurations = new Map(configurationRows.map((row) => (
-      [row.CONFIGURATION_VERSION_ID, row]
-    )));
     const readinessScanCapped = Boolean(base.sourceDeploymentCountCapped)
       || rows.length === READINESS_DEPLOYMENT_LIMIT
       || configurationRows.length === READINESS_DEPLOYMENT_LIMIT;
     let activeDeploymentCount = 0;
     let terminalReconciliationPendingCount = readinessScanCapped ? 1 : 0;
     for (const row of rows) {
-      const configurationRow = configurations.get(row.ACTIVE_CONFIGURATION_VERSION_ID);
-      const reconciliationVersion = Number(row.REPORT_RECONCILIATION_VERSION);
-      const validBase = CRM_TEST_STATUSES.has(row.TEST_STATUS)
-        && Number.isFinite(Date.parse(row.UPDATED_AT))
-        && row.SOURCE_ENVIRONMENT === config.environment
-        && row.SOURCE_REVISION === config.sourceRevision
-        && configurationRow?.DEPLOYMENT_ID === row.DEPLOYMENT_ID
-        && configurationRow.SOURCE_ENVIRONMENT === config.environment
-        && configurationRow.SOURCE_REVISION === config.sourceRevision
-        && configurationRow.STATUS === 'Active'
-        && configurationRow.APPROVAL_STATUS === 'Approved'
-        && ENGAGEMENT_TYPES.has(configurationRow.ENGAGEMENT_TYPE)
-        && Number.isSafeInteger(reconciliationVersion)
-        && reconciliationVersion >= 0;
-      const terminalFreeTest = configurationRow?.ENGAGEMENT_TYPE === 'free_test'
-        && row.TEST_STATUS === 'Completed';
-      const validReconciliation = terminalFreeTest
-        ? TERMINAL_RECONCILIATION_STATES.includes(row.REPORT_RECONCILIATION_STATUS)
-          && reconciliationVersion >= 1
-        : row.REPORT_RECONCILIATION_STATUS === 'NotRequired';
-      if (!validBase || !validReconciliation) {
+      let deployment;
+      try {
+        // Readiness uses the same exact immutable-version and authorization-receipt readback
+        // as ingress; status strings or shallow row shape can never make a route ready.
+        deployment = await loadDeployment(store, row, config);
+      } catch (error) {
+        if (!(error instanceof RevenueDeskError)) throw error;
         terminalReconciliationPendingCount += 1;
         continue;
       }
-      if (row.TEST_STATUS === CONTRACT.active_test_status) {
-        const activeEvidenceValid = row.GO_LIVE_APPROVAL_STATUS
-          === CONTRACT.approved_go_live_status
-          && typeof row.ACTIVATION_EVENT_KEY === 'string'
-          && Number.isFinite(Date.parse(row.ACTUAL_START_AT))
-          && Number.isFinite(Date.parse(row.EXPIRES_AT));
-        if (!activeEvidenceValid || Date.parse(row.EXPIRES_AT) <= now()) {
+      const terminalFreeTest = deployment.engagementType === 'free_test'
+        && deployment.testStatus === 'Completed';
+      if (deployment.testStatus === CONTRACT.active_test_status) {
+        if (Date.parse(deployment.expiresAt) <= now()) {
           terminalReconciliationPendingCount += 1;
         } else {
           activeDeploymentCount += 1;
         }
-      } else if (terminalFreeTest && row.REPORT_RECONCILIATION_STATUS !== 'Completed') {
+      } else if (terminalFreeTest && deployment.reportReconciliationStatus !== 'Completed') {
         terminalReconciliationPendingCount += 1;
       }
     }

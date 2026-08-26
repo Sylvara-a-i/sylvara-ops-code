@@ -18,6 +18,11 @@ const { destinationDigest } = require("../lib/destinations");
 const FORM2_PUBLIC_URL =
   "https://forms.zohopublic.com/synthetic/form/perma/synthetic";
 const FORM2_DESTINATION_SHA256 = destinationDigest(FORM2_PUBLIC_URL);
+const SYNTHETIC_CATALYST_PROJECT_ID = "100000000000001";
+const SYNTHETIC_CATALYST_PROJECT_ID_SHA256 = require("node:crypto")
+  .createHash("sha256")
+  .update(SYNTHETIC_CATALYST_PROJECT_ID, "utf8")
+  .digest("hex");
 
 function providerChoices(count) {
   return Array.from(
@@ -35,6 +40,7 @@ function baseEnvironment(overrides = {}) {
   return {
     DEPLOYMENT_ENVIRONMENT: "development",
     DEPLOYMENT_MODE: "active",
+    EXPECTED_CATALYST_PROJECT_ID_SHA256: SYNTHETIC_CATALYST_PROJECT_ID_SHA256,
     SESSION_TABLE_NAME: FORM2_SESSION_TABLE_NAME,
     PREFILL_TABLE_NAME: FORM2_PREFILL_TABLE_NAME,
     SUBMISSION_TABLE_NAME: FORM2_SUBMISSION_TABLE_NAME,
@@ -90,6 +96,10 @@ test("loads an immutable active Development configuration with bounded defaults"
   assert.equal(config.deploymentEnvironment, "development");
   assert.equal(config.deploymentMode, "active");
   assert.equal(config.darkMode, false);
+  assert.equal(
+    config.expectedCatalystProjectIdSha256,
+    SYNTHETIC_CATALYST_PROJECT_ID_SHA256,
+  );
   assert.equal(config.tokenPepper, "P".repeat(43));
   assert.equal(config.workflowKeyMaterial, "W".repeat(43));
   assert.equal(config.sessionTableName, FORM2_SESSION_TABLE_NAME);
@@ -148,6 +158,15 @@ test("Development proof delivery requires a bounded private recipient digest all
       FORM2_PROOF_MODE: "send_development",
       FORM2_PROOF_ALLOWED_RECIPIENT_DIGESTS: value,
     })), ConfigurationError);
+  }
+});
+
+test("requires one private lowercase digest for the reviewed Catalyst project", () => {
+  for (const value of ["", "A".repeat(64), "a".repeat(63), "not-a-digest"]) {
+    assert.throws(
+      () => load(baseEnvironment({ EXPECTED_CATALYST_PROJECT_ID_SHA256: value })),
+      ConfigurationError,
+    );
   }
 });
 

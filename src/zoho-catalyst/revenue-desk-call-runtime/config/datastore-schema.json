@@ -1,5 +1,5 @@
 {
-  "schema_version": 5,
+  "schema_version": 6,
   "record_type": "revenue_desk_call_runtime_datastore_contract",
   "status": "proposed_requires_environment_specific_provisioning_and_readback",
   "ownership": {
@@ -305,6 +305,55 @@
           "api_name": "CAPABILITY_PROFILE",
           "type": "varchar",
           "max_length": 64,
+          "mandatory": true,
+          "unique": false
+        },
+        {
+          "api_name": "PLAN_TIER",
+          "type": "varchar",
+          "max_length": 64,
+          "mandatory": true,
+          "unique": false
+        },
+        {
+          "api_name": "DEPLOYMENT_STATUS",
+          "type": "varchar",
+          "max_length": 32,
+          "mandatory": true,
+          "unique": false
+        },
+        {
+          "api_name": "GO_LIVE_APPROVAL_STATUS",
+          "type": "varchar",
+          "max_length": 32,
+          "mandatory": true,
+          "unique": false
+        },
+        {
+          "api_name": "LIMIT_POLICY",
+          "type": "varchar",
+          "max_length": 100,
+          "mandatory": true,
+          "unique": false
+        },
+        {
+          "api_name": "BILLING_MODE",
+          "type": "varchar",
+          "max_length": 64,
+          "mandatory": true,
+          "unique": false
+        },
+        {
+          "api_name": "NUMBER_OWNERSHIP",
+          "type": "varchar",
+          "max_length": 64,
+          "mandatory": true,
+          "unique": false
+        },
+        {
+          "api_name": "ENVIRONMENT",
+          "type": "varchar",
+          "max_length": 16,
           "mandatory": true,
           "unique": false
         },

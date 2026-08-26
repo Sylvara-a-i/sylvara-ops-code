@@ -134,6 +134,39 @@ test('acceptance: every required deployment/configuration gate failure rejects w
     ['wrong capability profile', (_row, configurationRow) => {
       configurationRow.CAPABILITY_PROFILE = 'revenue_desk';
     }],
+    ['missing immutable plan tier', (_row, configurationRow) => {
+      delete configurationRow.PLAN_TIER;
+    }],
+    ['immutable plan tier conflicts with profile', (_row, configurationRow) => {
+      configurationRow.PLAN_TIER = 'Launch';
+    }],
+    ['missing immutable deployment status', (_row, configurationRow) => {
+      delete configurationRow.DEPLOYMENT_STATUS;
+    }],
+    ['immutable deployment is not live-capable', (_row, configurationRow) => {
+      configurationRow.DEPLOYMENT_STATUS = 'Setup Pending';
+    }],
+    ['missing immutable go-live approval status', (_row, configurationRow) => {
+      delete configurationRow.GO_LIVE_APPROVAL_STATUS;
+    }],
+    ['immutable go-live status is not approved', (_row, configurationRow) => {
+      configurationRow.GO_LIVE_APPROVAL_STATUS = 'Pending Internal Approval';
+    }],
+    ['immutable limit policy conflicts with profile', (_row, configurationRow) => {
+      configurationRow.LIMIT_POLICY = 'disabled';
+    }],
+    ['immutable billing mode conflicts with profile', (_row, configurationRow) => {
+      configurationRow.BILLING_MODE = 'disabled';
+    }],
+    ['missing immutable number ownership', (_row, configurationRow) => {
+      delete configurationRow.NUMBER_OWNERSHIP;
+    }],
+    ['immutable environment alias mismatch', (_row, configurationRow) => {
+      configurationRow.ENVIRONMENT = 'production';
+    }],
+    ['configuration version exceeds canonical length', (_row, configurationRow) => {
+      configurationRow.CONFIGURATION_VERSION = `v${'1'.repeat(100)}`;
+    }],
     ['invalid coverage mode', (row) => { row.COVERAGE_MODE = 'After Hours Only'; }],
     ['inactive test', (row) => { row.TEST_STATUS = 'Stopped'; }],
     ['active row with stopped timestamp', (row) => {

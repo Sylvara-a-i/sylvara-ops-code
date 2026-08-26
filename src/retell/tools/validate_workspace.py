@@ -8,7 +8,6 @@ are never masked copies of Retell responses.
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import json
 import re
 import sys
@@ -46,15 +45,6 @@ SHADOW_QA_PUBLIC_FILES = {
     "agents/7-day-free-test/tests/fixtures/acceptance-cases.json",
     "agents/7-day-free-test/tests/fixtures/shadow-qa-corpus.json",
     "tools/run_shadow_qa.py",
-}
-V2_CANDIDATE_PUBLIC_FILES = {
-    "agents/7-day-free-test/v2/README.md",
-    "agents/7-day-free-test/v2/contracts/candidate-contract.json",
-    "agents/7-day-free-test/v2/contracts/transfer-adapter-contract.json",
-    "agents/7-day-free-test/v2/tests/fixtures/scenario-matrix.json",
-    "agents/7-day-free-test/v2/tools/network_guard.py",
-    "agents/7-day-free-test/v2/tools/oracle.py",
-    "agents/7-day-free-test/v2/tools/validate_candidate.py",
 }
 NONURGENT_CLASSIFICATION_CONTRACT = {
     "schema_version": 1,
@@ -723,7 +713,6 @@ def _expected_file_inventory(
         "tools/validate_workspace.py",
         NONURGENT_CONTRACT_RELATIVE_PATH,
         *SHADOW_QA_PUBLIC_FILES,
-        *V2_CANDIDATE_PUBLIC_FILES,
     }
     expected.update(f"agents/{slug}/manifest.json" for slug in EXPECTED_AGENTS)
     for snapshot_id in snapshot_ids:
@@ -744,34 +733,6 @@ def _expected_file_inventory(
             elif layouts.get((slug, snapshot_id)) == "unresolved":
                 expected.add(f"{prefix}/published/resolution.json")
     return expected
-
-
-def _validate_v2_candidate(root: Path) -> list[str]:
-    """Run the v2-only validator without changing the immutable v1 contracts."""
-
-    validator_path = (
-        root
-        / "agents"
-        / "7-day-free-test"
-        / "v2"
-        / "tools"
-        / "validate_candidate.py"
-    )
-    try:
-        spec = importlib.util.spec_from_file_location(
-            "retell_v2_candidate_validator", validator_path
-        )
-        if spec is None or spec.loader is None:
-            return ["Retell v2 candidate validator could not be loaded"]
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        with module.network_blocked() as guard:
-            candidate_problems = module.validate_candidate(validator_path.parents[1])
-        if guard.attempt_count:
-            candidate_problems.append("network attempt detected")
-    except Exception as exc:  # Fail closed without printing private inputs.
-        return [f"Retell v2 candidate validator failed: {type(exc).__name__}"]
-    return [f"Retell v2 candidate: {problem}" for problem in candidate_problems]
 
 
 def _observed_file_inventory(root: Path) -> tuple[set[str], list[str]]:
@@ -1075,7 +1036,6 @@ def validate_workspace(root: Path = RETELL_ROOT) -> list[str]:
             )
         problems.extend(_validate_integrity(root, snapshot_id, layouts))
 
-    problems.extend(_validate_v2_candidate(root))
     return sorted(set(problems))
 
 
