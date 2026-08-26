@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
-  "status": "canonical-target-proposed-legacy-source-readback-only",
-  "live_state": "legacy Form1AssistedSessions source is preserved; RevenueLeakTestRequestFormSessions requires Development provisioning, migration, and readback before cutover",
-  "observed_at": "2026-08-24",
+  "status": "canonical-target-readback-exact-empty-legacy-source-preserved",
+  "live_state": "legacy Form1AssistedSessions source is preserved with 8 rows; RevenueLeakTestRequestFormSessions exists in Development with the exact 14 application columns, 0 rows, no App User permissions, and no administrator DELETE permission; runtime and caller readback remain pending before cutover",
+  "observed_at": "2026-08-26",
   "data_policy": {
     "raw_tokens_or_form_payloads_stored": false,
     "crm_record_ids_stored": true,
@@ -37,7 +37,7 @@
     }
   ],
   "deployment_gates": [
-    "Use only the existing Retell Catalyst project in Development, provision RevenueLeakTestRequestFormSessions additively, and independently read back the exact API name and every column constraint before function deployment.",
+    "Use only the existing Retell Catalyst project in Development and freshly read back RevenueLeakTestRequestFormSessions with the exact API name, all 14 application columns and constraints, no App User permissions, no administrator DELETE permission, and 0 rows before function deployment.",
     "Keep the legacy Form 1 project live and unchanged until the Retell-target function, routes, Connections, variables, callers, synthetic canary, containment, and rollback have independent readback; legacy deletion is a separate destructive action.",
     "Bind the Form 1 function only to RevenueLeakTestRequestFormSessions and preserve the legacy Form1AssistedSessions source plus every Retell and Form 2 function, route, table, Connection, variable, and deployment until migration evidence authorizes cleanup.",
     "Block all App User permissions and remove administrator DELETE permission.",

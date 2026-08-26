@@ -1,7 +1,7 @@
 {
   "schema_version": 6,
   "record_type": "revenue_desk_call_runtime_datastore_contract",
-  "status": "proposed_requires_environment_specific_provisioning_and_readback",
+  "status": "development_tables_present_requires_additive_schema_completion_and_binding_readback",
   "ownership": {
     "source_of_truth": "Zoho Catalyst Data Store",
     "analytics_boundary": "Derived reporting may read canonical calls but must never reverse-write runtime state.",
@@ -1033,8 +1033,8 @@
   ],
   "migration_gates": [
     "Do not delete, rename, or write through the existing legacy tables.",
-    "Provision the five canonical operational tables plus shared AnalyticsSyncOutbox delivery infrastructure independently in Development and read back exact columns, types, uniqueness, encrypted-column consent, and empty App User permissions. Every additive outbox column is physically nullable so existing rows remain untouched; required_for_v2_rows is enforced by runtime validation. The OUTBOX_KEY and PROVIDER_VERSION_KEY unique nullable constraints are both activation gates and must be proven to permit multiple legacy nulls.",
-    "Add REPORT_RECONCILIATION_STATUS and REPORT_RECONCILIATION_VERSION as nullable deployment columns, then migrate every retained row to an independently reconciled NotRequired, Pending, AwaitingSettlement, or Completed state before this runtime starts; a null or invented Completed marker fails closed.",
+    "Freshly read back the five existing canonical operational tables plus shared AnalyticsSyncOutbox in Development. Complete only reviewed additive columns, then independently read back exact columns, types, uniqueness, encrypted-column consent, and empty App User permissions before binding any runtime. Every additive outbox column is physically nullable so existing rows remain untouched; required_for_v2_rows is enforced by runtime validation. The OUTBOX_KEY and PROVIDER_VERSION_KEY unique nullable constraints are both activation gates and must be proven to permit multiple legacy nulls.",
+    "Freshly read back REPORT_RECONCILIATION_STATUS and REPORT_RECONCILIATION_VERSION as nullable columns on the empty RevenueDeskDeployments table. Reconfirm the empty state and exact constraints before binding this runtime; every runtime-created row must carry an independently reconciled NotRequired, Pending, AwaitingSettlement, or Completed state, and a null or invented Completed marker fails closed.",
     "Build a one-way, sanitized migration utility only after an immutable field map is approved. Preserve source keys, engagement and environment ownership, configuration-version identity, receipt idempotency, notification state, and handled-call convergence.",
     "Before cutover, compare private source and destination counts plus per-partition keyed digests; independently read back samples and all conflict rows. Backfill and verify PROVIDER_VERSION_KEY for every retained v2 row before enabling either producer or consumer; a duplicate provider-version key with different OUTBOX_KEY or PAYLOAD_HASH blocks activation.",
     "Keep the old route stopped but recoverable until the rollback window and reconciliation evidence are approved. Repository changes do not authorize migration or route activation."

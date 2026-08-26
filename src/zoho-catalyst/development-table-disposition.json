@@ -12,11 +12,27 @@
     "scoped_destructive_approval_required": true,
     "independent_readback_required": true
   },
-  "observed_state": {
+  "exact_row_count_snapshot": {
     "table_count": 29,
     "row_count": 466,
     "nonzero_table_count": 16,
     "zero_row_table_count": 13
+  },
+  "current_table_presence": {
+    "observed_at": "2026-08-26",
+    "method": "metadata-inventory-and-bounded-one-row-readback",
+    "table_count": 35,
+    "nonzero_table_count": 16,
+    "zero_row_table_count": 19,
+    "exact_aggregate_row_count_refreshed": false,
+    "new_canonical_tables_confirmed_empty": [
+      "RevenueDeskDeployments",
+      "RevenueDeskConfigurationVersions",
+      "RevenueDeskEventReceipts",
+      "RevenueDeskCalls",
+      "RevenueDeskNotifications",
+      "RevenueLeakTestRequestFormSessions"
+    ]
   },
   "row_accounting": {
     "retained_in_place": 317,
@@ -24,11 +40,11 @@
     "discarded_without_evidence": 0
   },
   "disposition_counts": {
-    "retain_additive": 2,
-    "retain_bind_canonical": 5,
+    "retain_additive": 3,
+    "retain_bind_canonical": 10,
     "quarantine_then_delete": 14,
     "delete_after_dependency_absence": 8,
-    "create_additive_canonical": 6,
+    "create_additive_canonical": 0,
     "final_canonical_tables": 13
   },
   "final_canonical_tables": [
@@ -78,6 +94,114 @@
       "active_promotion_allowed": false,
       "gate_profile": "retain_additive_nonempty",
       "rollback": "Disable canonical producers and the Analytics Job; retain every legacy and version-2 row."
+    },
+    {
+      "api_name": "RevenueDeskDeployments",
+      "observed_rows": 0,
+      "row_count_observed_at": "2026-08-26",
+      "row_count_method": "empty-page-readback",
+      "owner": "revenue_desk_call_gateway-and-worker",
+      "purpose": "Canonical call-route deployment, activation-gate, and handled-call convergence state.",
+      "generation": "canonical-call-runtime",
+      "expected_readers": ["revenue_desk_call_gateway", "revenue_desk_call_worker"],
+      "expected_writers": ["revenue_desk_call_worker"],
+      "active_bindings_verified": false,
+      "ownership_evidence": "repository-exact-live-function-binding-readback-required",
+      "semantic_successors": ["RevenueDeskDeployments"],
+      "action": "retain_bind_canonical",
+      "active_promotion_allowed": false,
+      "gate_profile": "retain_bind_empty",
+      "rollback": "Disable both canonical call-runtime functions and retain the empty canonical table."
+    },
+    {
+      "api_name": "RevenueDeskConfigurationVersions",
+      "observed_rows": 0,
+      "row_count_observed_at": "2026-08-26",
+      "row_count_method": "empty-page-readback",
+      "owner": "revenue_desk_call_gateway-and-worker",
+      "purpose": "Authoritative immutable call-runtime configuration versions.",
+      "generation": "canonical-call-runtime-incomplete-schema",
+      "expected_readers": ["revenue_desk_call_gateway", "revenue_desk_call_worker"],
+      "expected_writers": [],
+      "active_bindings_verified": false,
+      "ownership_evidence": "fresh-schema-readback-additive-completion-and-private-binding-proof-required",
+      "semantic_successors": ["RevenueDeskConfigurationVersions"],
+      "action": "retain_additive",
+      "active_promotion_allowed": false,
+      "gate_profile": "retain_additive_empty",
+      "rollback": "Disable both canonical call-runtime functions, leave additive columns unused, and retain the empty canonical table."
+    },
+    {
+      "api_name": "RevenueDeskEventReceipts",
+      "observed_rows": 0,
+      "row_count_observed_at": "2026-08-26",
+      "row_count_method": "empty-page-readback",
+      "owner": "revenue_desk_call_gateway-and-worker",
+      "purpose": "Canonical minimized provider, resolver, and authorization event receipts.",
+      "generation": "canonical-call-runtime",
+      "expected_readers": ["revenue_desk_call_gateway", "revenue_desk_call_worker"],
+      "expected_writers": ["revenue_desk_call_gateway", "revenue_desk_call_worker"],
+      "active_bindings_verified": false,
+      "ownership_evidence": "repository-exact-live-function-binding-readback-required",
+      "semantic_successors": ["RevenueDeskEventReceipts"],
+      "action": "retain_bind_canonical",
+      "active_promotion_allowed": false,
+      "gate_profile": "retain_bind_empty",
+      "rollback": "Disable both canonical call-runtime functions and retain every event receipt."
+    },
+    {
+      "api_name": "RevenueDeskCalls",
+      "observed_rows": 0,
+      "row_count_observed_at": "2026-08-26",
+      "row_count_method": "empty-page-readback",
+      "owner": "revenue_desk_call_worker",
+      "purpose": "Canonical tenant-bound call outcomes and processing state.",
+      "generation": "canonical-call-runtime",
+      "expected_readers": ["revenue_desk_call_gateway", "revenue_desk_call_worker"],
+      "expected_writers": ["revenue_desk_call_worker"],
+      "active_bindings_verified": false,
+      "ownership_evidence": "repository-exact-live-function-binding-readback-required",
+      "semantic_successors": ["RevenueDeskCalls"],
+      "action": "retain_bind_canonical",
+      "active_promotion_allowed": false,
+      "gate_profile": "retain_bind_empty",
+      "rollback": "Disable both canonical call-runtime functions and retain every canonical call row."
+    },
+    {
+      "api_name": "RevenueDeskNotifications",
+      "observed_rows": 0,
+      "row_count_observed_at": "2026-08-26",
+      "row_count_method": "empty-page-readback",
+      "owner": "revenue_desk_call_worker",
+      "purpose": "Canonical durable notification delivery and retry state.",
+      "generation": "canonical-call-runtime",
+      "expected_readers": ["revenue_desk_call_gateway", "revenue_desk_call_worker"],
+      "expected_writers": ["revenue_desk_call_worker"],
+      "active_bindings_verified": false,
+      "ownership_evidence": "repository-exact-live-function-binding-readback-required",
+      "semantic_successors": ["RevenueDeskNotifications"],
+      "action": "retain_bind_canonical",
+      "active_promotion_allowed": false,
+      "gate_profile": "retain_bind_empty",
+      "rollback": "Disable both canonical call-runtime functions and retain every notification record."
+    },
+    {
+      "api_name": "RevenueLeakTestRequestFormSessions",
+      "observed_rows": 0,
+      "row_count_observed_at": "2026-08-26",
+      "row_count_method": "empty-page-readback",
+      "owner": "revenue_leak_test_request_form",
+      "purpose": "Canonical Form 1 assisted-intake issuance and bounded prefill sessions.",
+      "generation": "canonical-form1",
+      "expected_readers": ["revenue_leak_test_request_form"],
+      "expected_writers": ["revenue_leak_test_request_form"],
+      "active_bindings_verified": false,
+      "ownership_evidence": "fresh-exact-schema-readback-and-private-function-binding-proof-required",
+      "semantic_successors": ["RevenueLeakTestRequestFormSessions"],
+      "action": "retain_bind_canonical",
+      "active_promotion_allowed": false,
+      "gate_profile": "retain_bind_empty",
+      "rollback": "Disable the canonical Form 1 function and retain every issuance tombstone."
     },
     {
       "api_name": "Calls",
@@ -512,50 +636,7 @@
       "rollback": "Recreate the schema-only probe from private metadata; never bind it to runtime."
     }
   ],
-  "canonical_tables_to_create": [
-    {
-      "api_name": "RevenueDeskDeployments",
-      "owner": "revenue_desk_call_gateway-and-worker",
-      "source_schema": "revenue-desk-call-runtime/config/datastore-schema.json",
-      "action": "create_additive_canonical",
-      "gate_profile": "create_canonical"
-    },
-    {
-      "api_name": "RevenueDeskConfigurationVersions",
-      "owner": "revenue_desk_call_gateway-and-worker",
-      "source_schema": "revenue-desk-call-runtime/config/datastore-schema.json",
-      "action": "create_additive_canonical",
-      "gate_profile": "create_canonical"
-    },
-    {
-      "api_name": "RevenueDeskEventReceipts",
-      "owner": "revenue_desk_call_gateway-and-worker",
-      "source_schema": "revenue-desk-call-runtime/config/datastore-schema.json",
-      "action": "create_additive_canonical",
-      "gate_profile": "create_canonical"
-    },
-    {
-      "api_name": "RevenueDeskCalls",
-      "owner": "revenue_desk_call_worker",
-      "source_schema": "revenue-desk-call-runtime/config/datastore-schema.json",
-      "action": "create_additive_canonical",
-      "gate_profile": "create_canonical"
-    },
-    {
-      "api_name": "RevenueDeskNotifications",
-      "owner": "revenue_desk_call_worker",
-      "source_schema": "revenue-desk-call-runtime/config/datastore-schema.json",
-      "action": "create_additive_canonical",
-      "gate_profile": "create_canonical"
-    },
-    {
-      "api_name": "RevenueLeakTestRequestFormSessions",
-      "owner": "revenue_leak_test_request_form",
-      "source_schema": "revenue-leak-test-request-form/config/datastore-schema.json",
-      "action": "create_additive_canonical",
-      "gate_profile": "create_canonical"
-    }
-  ],
+  "canonical_tables_to_create": [],
   "gate_profiles": {
     "retain_additive_nonempty": [
       "Read back exact existing schema, constraints, permissions, row count, and active bindings.",
@@ -569,6 +650,13 @@
       "Read back exact schema, unique constraints, permissions, and App User denial.",
       "Bind only the exact canonical function and run isolated synthetic concurrency tests.",
       "Disable the function route or Job and retain rows for rollback."
+    ],
+    "retain_additive_empty": [
+      "Confirm the table remains empty immediately before every additive change.",
+      "Read back exact existing schema, constraints, permissions, and case-insensitive column noncollision.",
+      "Add only the reviewed missing columns one at a time and independently read back each result.",
+      "Bind no function, route, Job, Cron, or caller until the completed schema passes exact readback.",
+      "On any mismatch, stop and leave additive columns unused; do not delete or rebuild the table."
     ],
     "legacy_nonzero_quarantine": [
       "Disable and read back every writer, reader, route, Job, Cron, webhook, and caller.",
@@ -584,12 +672,6 @@
       "Preserve a private schema, constraint, permission, and restoration export.",
       "Wait through the approved recovery window and pass canonical rollback rehearsal.",
       "Obtain scoped destructive approval and independently read back absence."
-    ],
-    "create_canonical": [
-      "Create only from the exact checked-in schema in Development.",
-      "Read back every column, type, length, mandatory flag, unique constraint, and permission.",
-      "Prove App User denial, empty initial state, concurrent unique-conflict behavior, and rollback containment.",
-      "Bind only the exact canonical function after source-revision readback."
     ]
   },
   "privacy_boundary": {

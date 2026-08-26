@@ -91,6 +91,27 @@
         "private_role_and_user_metadata_omitted": true
       },
       "schema_prestate": {
+        "RevenueLeakTestRequestFormSessions": {
+          "row_count": 0,
+          "total_column_count": 18,
+          "required_application_column_count": 14,
+          "required_application_columns_exact": true,
+          "case_insensitive_column_collisions": [],
+          "app_user_permissions": [],
+          "administrator_permissions": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "scope": "GLOBAL",
+          "legacy_source": {
+            "table": "Form1AssistedSessions",
+            "row_count": 8,
+            "preserved": true,
+            "promoted_to_canonical_target": false
+          },
+          "runtime_and_caller_readback": "pending-before-cutover"
+        },
         "RevenueDeskConfigurationVersions": {
           "configuration_version_max_length": 100,
           "row_count": 0,
@@ -113,7 +134,26 @@
           "legacy_v1_rows": 307,
           "additive_v2_rows": 0,
           "provider_version_backfill_required_before_v2_activation": false,
-          "readback_note": "All retained rows use the legacy Status-only shape. No row contains any additive-v2 field, so the nullable unique provider-version column can be added without rewriting retained rows."
+          "same_table_nullable_unique_varchar64_proof": {
+            "column": "OUTBOX_KEY",
+            "mandatory": false,
+            "unique": true,
+            "max_length": 64,
+            "audit_consent": true,
+            "search_indexed": false,
+            "observed_null_rows": 307,
+            "observed_non_null_rows": 0,
+            "full_row_pagination_complete": true
+          },
+          "proposed_provider_version_key_contract": {
+            "type": "varchar",
+            "max_length": 64,
+            "mandatory": false,
+            "unique": true,
+            "audit_consent": true,
+            "search_indexed": false
+          },
+          "readback_note": "All retained rows use the legacy Status-only shape. The same table already permits multiple null values in nullable unique OUTBOX_KEY, demonstrating data compatibility with the proposed nullable-unique PROVIDER_VERSION_KEY shape without rewriting retained rows. Column creation remains separately blocked until the exact write path is approved and independently read back."
         }
       },
       "legacy_or_duplicate_nonempty_tables": [
@@ -150,7 +190,7 @@
         "canonical_function_create_or_source_deploy": "blocked-no-callable-tool",
         "function_environment_readback": "blocked-no-matching-function-scoped-audit-contract",
         "api_gateway_route": "blocked-target-path-contract-mismatch-and-gateway-disabled",
-        "typed_job_pool_create": "available-but-intentionally-deferred-until-functions-can-be-deployed"
+        "typed_job_pool_create": "available-typed-approval-gated-and-not-invoked"
       }
     }
   },

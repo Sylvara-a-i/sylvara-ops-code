@@ -360,7 +360,10 @@ test('unit: default console logger emits only allowlisted opaque operational fie
 test('unit: Data Store schema contains five canonical tables plus Analytics delivery outbox', () => {
   const schema = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', '..', 'config', 'datastore-schema.json'), 'utf8'));
   assert.equal(schema.schema_version, 6);
-  assert.equal(schema.status, 'proposed_requires_environment_specific_provisioning_and_readback');
+  assert.equal(
+    schema.status,
+    'development_tables_present_requires_additive_schema_completion_and_binding_readback',
+  );
   assert.deepEqual(schema.tables.map(({ api_name: name }) => name), [
     'RevenueDeskDeployments', 'RevenueDeskConfigurationVersions',
     'RevenueDeskEventReceipts', 'RevenueDeskCalls', 'RevenueDeskNotifications',

@@ -922,17 +922,27 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         self.assertTrue(plan["authorization"]["independent_readback_required"])
 
         observed = plan["observed_tables"]
-        self.assertEqual(len(observed), 29)
-        self.assertEqual(len({entry["api_name"] for entry in observed}), 29)
+        self.assertEqual(len(observed), 35)
+        self.assertEqual(len({entry["api_name"] for entry in observed}), 35)
         self.assertEqual(sum(entry["observed_rows"] for entry in observed), 466)
         self.assertEqual(sum(entry["observed_rows"] > 0 for entry in observed), 16)
-        self.assertEqual(sum(entry["observed_rows"] == 0 for entry in observed), 13)
-        self.assertEqual(plan["observed_state"], {
+        self.assertEqual(sum(entry["observed_rows"] == 0 for entry in observed), 19)
+        self.assertEqual(plan["observed_at"], "2026-08-24")
+        self.assertEqual(plan["exact_row_count_snapshot"], {
             "table_count": 29,
             "row_count": 466,
             "nonzero_table_count": 16,
             "zero_row_table_count": 13,
         })
+        current_presence = plan["current_table_presence"]
+        self.assertEqual(current_presence["observed_at"], "2026-08-26")
+        self.assertEqual(current_presence["method"], (
+            "metadata-inventory-and-bounded-one-row-readback"
+        ))
+        self.assertEqual(current_presence["table_count"], 35)
+        self.assertEqual(current_presence["nonzero_table_count"], 16)
+        self.assertEqual(current_presence["zero_row_table_count"], 19)
+        self.assertFalse(current_presence["exact_aggregate_row_count_refreshed"])
         self.assertEqual(plan["row_accounting"], {
             "retained_in_place": 317,
             "private_quarantine_required": 149,
@@ -941,7 +951,7 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         self.assertEqual(
             plan["row_accounting"]["retained_in_place"]
             + plan["row_accounting"]["private_quarantine_required"],
-            plan["observed_state"]["row_count"],
+            plan["exact_row_count_snapshot"]["row_count"],
         )
 
         by_action = {}
@@ -957,8 +967,8 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             self.assertIn(entry["gate_profile"], plan["gate_profiles"])
             self.assertTrue(plan["gate_profiles"][entry["gate_profile"]])
 
-        self.assertEqual(len(by_action["retain_additive"]), 2)
-        self.assertEqual(len(by_action["retain_bind_canonical"]), 5)
+        self.assertEqual(len(by_action["retain_additive"]), 3)
+        self.assertEqual(len(by_action["retain_bind_canonical"]), 10)
         self.assertEqual(len(by_action["quarantine_then_delete"]), 14)
         self.assertEqual(len(by_action["delete_after_dependency_absence"]), 8)
         self.assertTrue(all(
@@ -995,7 +1005,7 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             if entry["action"] in {"retain_additive", "retain_bind_canonical"}
         }
         created = {entry["api_name"] for entry in plan["canonical_tables_to_create"]}
-        self.assertEqual(len(created), 6)
+        self.assertEqual(len(created), 0)
         self.assertEqual(retained | created, expected_final)
         self.assertEqual(set(plan["final_canonical_tables"]), expected_final)
         self.assertEqual(len(plan["final_canonical_tables"]), 13)
@@ -1008,19 +1018,76 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             ROOT / "src" / "zoho-catalyst" / "revenue-leak-test-request-form"
             / "config" / "datastore-schema.json"
         ).read_text(encoding="utf-8"))
-        schema_create_targets = {
+        schema_retained_targets = {
             entry["api_name"] for entry in call_schema["tables"]
-            if entry["api_name"] in created
+            if entry["api_name"] in contracts["canonical_call_tables"]
         } | {
             entry["expected_api_name"] for entry in request_schema["tables"]
-            if entry["expected_api_name"] in created
         }
-        self.assertEqual(schema_create_targets, created)
+        expected_newly_observed = {
+            *contracts["canonical_call_tables"],
+            *contracts["required_form1_tables"],
+        }
+        self.assertEqual(schema_retained_targets, expected_newly_observed)
+        self.assertTrue(schema_retained_targets <= retained)
+        self.assertEqual(
+            set(current_presence["new_canonical_tables_confirmed_empty"]),
+            expected_newly_observed,
+        )
 
         analytics = {entry["api_name"]: entry for entry in observed}
         for name in ("AnalyticsSyncCheckpoints", "AnalyticsSyncOutbox"):
             self.assertEqual(analytics[name]["action"], "retain_additive")
             self.assertEqual(analytics[name]["gate_profile"], "retain_additive_nonempty")
+        self.assertEqual(
+            analytics["RevenueDeskConfigurationVersions"]["action"],
+            "retain_additive",
+        )
+        self.assertEqual(
+            analytics["RevenueDeskConfigurationVersions"]["gate_profile"],
+            "retain_additive_empty",
+        )
+        for name in (
+            "RevenueDeskDeployments",
+            "RevenueDeskEventReceipts",
+            "RevenueDeskCalls",
+            "RevenueDeskNotifications",
+            "RevenueLeakTestRequestFormSessions",
+        ):
+            self.assertEqual(analytics[name]["action"], "retain_bind_canonical")
+            self.assertEqual(analytics[name]["gate_profile"], "retain_bind_empty")
+        expected_runtime_io = {
+            "RevenueDeskDeployments": (
+                ["revenue_desk_call_gateway", "revenue_desk_call_worker"],
+                ["revenue_desk_call_worker"],
+            ),
+            "RevenueDeskConfigurationVersions": (
+                ["revenue_desk_call_gateway", "revenue_desk_call_worker"],
+                [],
+            ),
+            "RevenueDeskEventReceipts": (
+                ["revenue_desk_call_gateway", "revenue_desk_call_worker"],
+                ["revenue_desk_call_gateway", "revenue_desk_call_worker"],
+            ),
+            "RevenueDeskCalls": (
+                ["revenue_desk_call_gateway", "revenue_desk_call_worker"],
+                ["revenue_desk_call_worker"],
+            ),
+            "RevenueDeskNotifications": (
+                ["revenue_desk_call_gateway", "revenue_desk_call_worker"],
+                ["revenue_desk_call_worker"],
+            ),
+            "RevenueLeakTestRequestFormSessions": (
+                ["revenue_leak_test_request_form"],
+                ["revenue_leak_test_request_form"],
+            ),
+        }
+        for name, (readers, writers) in expected_runtime_io.items():
+            self.assertEqual(analytics[name]["observed_rows"], 0)
+            self.assertEqual(analytics[name]["row_count_observed_at"], "2026-08-26")
+            self.assertEqual(analytics[name]["row_count_method"], "empty-page-readback")
+            self.assertEqual(analytics[name]["expected_readers"], readers)
+            self.assertEqual(analytics[name]["expected_writers"], writers)
         probes = {
             "Form2SessionsV3",
             "ZZZ_Quarantined_Form2SessionsV3_ColumnProbe",
