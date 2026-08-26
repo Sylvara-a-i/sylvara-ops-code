@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "environment": "Development",
+  "physical_route_count": 12,
+  "gateway_prestate": "disabled-with-zero-routes",
+  "activation_authorized": false,
+  "routes": [
+    {"id":"RETELL_INBOUND","function":"revenue_desk_call_gateway","method":"POST","path_reference":"RETELL_INBOUND_PATH","authentication":[],"overall_per_minute":120,"per_ip_per_minute":120},
+    {"id":"RETELL_EVENTS","function":"revenue_desk_call_gateway","method":"POST","path_reference":"RETELL_EVENTS_PATH","authentication":[],"overall_per_minute":300,"per_ip_per_minute":300},
+    {"id":"RETELL_READINESS","function":"revenue_desk_call_gateway","method":"GET","path_reference":"INTERNAL_READINESS_PATH","authentication":[],"overall_per_minute":30,"per_ip_per_minute":10},
+    {"id":"FORM1_ISSUE","function":"revenue_leak_test_request_form","method":"POST","path_reference":"ISSUE_PATH","authentication":[],"overall_per_minute":30,"per_ip_per_minute":10},
+    {"id":"FORM1_PREFILL","function":"revenue_leak_test_request_form","method":"POST","path_reference":"PREFILL_PATH","authentication":[],"overall_per_minute":120,"per_ip_per_minute":30},
+    {"id":"FORM2_ISSUE","function":"revenue_leak_test_setup_form","method":"POST","path_reference":"ISSUE_PATH","authentication":["APIKey"],"overall_per_minute":30,"per_ip_per_minute":10},
+    {"id":"FORM2_ACCESS","function":"revenue_leak_test_setup_form","method":"GET","path_reference":"FORM2_ACCESS_PATH","authentication":[],"overall_per_minute":120,"per_ip_per_minute":30},
+    {"id":"FORM2_OTP_REQUEST","function":"revenue_leak_test_setup_form","method":"POST","path_reference":"FORM2_OTP_REQUEST_PATH","authentication":[],"overall_per_minute":30,"per_ip_per_minute":5},
+    {"id":"FORM2_OTP_VERIFY","function":"revenue_leak_test_setup_form","method":"POST","path_reference":"FORM2_OTP_VERIFY_PATH","authentication":[],"overall_per_minute":60,"per_ip_per_minute":10},
+    {"id":"FORM2_PREFILL","function":"revenue_leak_test_setup_form","method":"POST","path_reference":"PREFILL_PATH","authentication":["APIKey"],"overall_per_minute":120,"per_ip_per_minute":30},
+    {"id":"FORM2_SUBMISSION","function":"revenue_leak_test_setup_form","method":"POST","path_reference":"SUBMISSION_PATH","authentication":["APIKey"],"overall_per_minute":60,"per_ip_per_minute":15},
+    {"id":"CRM_BILLING","function":"crm_billing_orchestrator","method":"POST","path_reference":"ALLOWED_PATH","authentication":["APIKey"],"overall_per_minute":30,"per_ip_per_minute":10}
+  ],
+  "rollback": {
+    "restore_callers_before_routes": true,
+    "restore_global_gateway_state": "disabled",
+    "preserve_legacy_resources": true
+  }
+}

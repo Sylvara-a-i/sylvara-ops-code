@@ -71,6 +71,32 @@ function normalizeReadback(payload) {
   });
 }
 
+function validateTargetBinding(payload, provider, target) {
+  const view = responseData(payload).views;
+  invariant(view && typeof view === 'object' && !Array.isArray(view)
+    && typeof view.viewId === 'string'
+    && typeof view.viewName === 'string'
+    && typeof view.viewType === 'string'
+    && typeof view.workspaceId === 'string'
+    && typeof view.orgId === 'string',
+  'ANALYTICS_TARGET_BINDING_INVALID',
+  'Zoho Analytics target metadata is incomplete.');
+  invariant(view.viewId === target.viewId
+    && view.viewName === target.table
+    && view.viewType === 'Table'
+    && view.workspaceId === provider.workspaceId
+    && view.orgId === provider.organizationId,
+  'ANALYTICS_TARGET_BINDING_MISMATCH',
+  'Zoho Analytics target metadata does not match the fixed import binding.');
+  return Object.freeze({
+    viewId: view.viewId,
+    viewName: view.viewName,
+    viewType: view.viewType,
+    workspaceId: view.workspaceId,
+    orgId: view.orgId,
+  });
+}
+
 function createAnalyticsClient(options) {
   const {
     config,
@@ -146,6 +172,11 @@ function createAnalyticsClient(options) {
     const payload = JSON.stringify(rows);
     invariant(Buffer.byteLength(payload, 'utf8') <= 1_000_000,
       'ANALYTICS_BATCH_INVALID', 'Analytics import payload exceeds the package bound.');
+    // Never cache this binding. A fresh read-only metadata call immediately before
+    // each POST prevents a renamed table or swapped private view ID from receiving data.
+    const metadataUrl = `${provider.apiBaseUrl}/restapi/v2/views/${target.viewId}`;
+    validateTargetBinding(await request(metadataUrl, { method: 'GET' },
+      readAuthorizationProvider, 'read'), provider, target);
     const form = new FormData();
     form.append('FILE', new Blob([payload], { type: 'application/json' }), 'revenue-desk-facts.json');
     const importConfig = {
@@ -227,4 +258,5 @@ function createAnalyticsClient(options) {
 
 module.exports = {
   createAnalyticsClient, normalizeReadback, parseJobCode, quoteSqlIdentifier, quoteSqlValue,
+  validateTargetBinding,
 };

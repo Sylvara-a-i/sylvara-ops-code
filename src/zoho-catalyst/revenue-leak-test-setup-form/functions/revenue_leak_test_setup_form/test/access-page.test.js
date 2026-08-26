@@ -22,6 +22,9 @@ test("renders a self-contained no-store access page with a nonce-only CSP", () =
   assert.equal(result.html.includes('body.state === "retryable_failure"'), true);
   assert.equal(result.html.includes('body.state === "delivery_disabled"'), true);
   assert.equal(result.html.includes("Send another code"), true);
+  assert.equal(result.html.includes("background:#00A6C1"), true);
+  assert.equal(result.html.includes("#173f35"), false);
+  assert.equal(result.html.includes("#49645d"), false);
   assert.equal(result.html.includes("localStorage"), false);
   assert.equal(result.html.includes("sessionStorage"), false);
   assert.equal(result.headers["Cache-Control"], "no-store, max-age=0");

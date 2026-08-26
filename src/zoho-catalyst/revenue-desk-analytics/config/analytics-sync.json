@@ -104,6 +104,16 @@
     "result": "DarkNoOp"
   },
   "provider_contract": {
+    "model_contract": "config/analytics-model-contract.json",
+    "target_tables": {
+      "deployment": "RevenueDeskAnalyticsDeploymentFacts",
+      "call": "RevenueDeskAnalyticsCallFacts",
+      "daily_metric": "RevenueDeskAnalyticsDailyMetricFacts",
+      "final_test_result": "RevenueDeskAnalyticsFinalTestResultFacts",
+      "conversion_status": "RevenueDeskAnalyticsConversionStatusFacts"
+    },
+    "private_target_binding": "ANALYTICS_TARGETS_JSON supplies only the independently read-back unique view ID for each fixed public table name",
+    "pre_write_target_check": "Immediately before every import POST, use the read-only Connection and Get View Details to require the configured view ID, exact table name, Table type, workspace ID, and organization ID; do not cache the result or request write authorization on mismatch",
     "connection_references": {
       "read": "ANALYTICS_READ_CONNECTION_LINK_NAME",
       "write": "ANALYTICS_WRITE_CONNECTION_LINK_NAME",

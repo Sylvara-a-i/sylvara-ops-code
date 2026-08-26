@@ -338,12 +338,17 @@ function workerContext() {
 }
 
 function analyticsEnvironment() {
-  const targets = Object.fromEntries([
-    'deployment', 'call', 'daily_metric', 'final_test_result', 'conversion_status',
-  ].map((recordType, index) => [recordType, {
-    table: `Synthetic${recordType.replaceAll('_', '')}`,
-    view_id: String(700000 + index),
-  }]));
+  const tableNames = {
+    deployment: 'RevenueDeskAnalyticsDeploymentFacts',
+    call: 'RevenueDeskAnalyticsCallFacts',
+    daily_metric: 'RevenueDeskAnalyticsDailyMetricFacts',
+    final_test_result: 'RevenueDeskAnalyticsFinalTestResultFacts',
+    conversion_status: 'RevenueDeskAnalyticsConversionStatusFacts',
+  };
+  const targets = Object.fromEntries(Object.entries(tableNames)
+    .map(([recordType, table], index) => [recordType, {
+      table, view_id: String(700000 + index),
+    }]));
   return {
     DEPLOYMENT_ENVIRONMENT: 'development',
     X_ZOHO_CATALYST_ENVIRONMENT: 'Development',

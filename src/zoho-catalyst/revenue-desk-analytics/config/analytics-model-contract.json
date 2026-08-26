@@ -1,0 +1,306 @@
+{
+  "schema_version": 1,
+  "status": "repository-defined-live-creation-blocked",
+  "production_authorized": false,
+  "official_api_contract_reviewed_on": "2026-08-26",
+  "ownership": "Zoho Analytics owns only these derived, sanitized reporting assets. Catalyst remains authoritative for the source facts.",
+  "private_id_bindings": {
+    "workspace": "ANALYTICS_WORKSPACE_ID",
+    "target_tables": "ANALYTICS_TARGETS_JSON.<record_type>.view_id",
+    "query_views": "PRIVATE_ANALYTICS_QUERY_VIEW_IDS_JSON.<query_view_key> in the private operator packet only",
+    "reports": "PRIVATE_ANALYTICS_REPORT_VIEW_IDS_JSON.<report_key> in the private operator packet only",
+    "dashboards": "PRIVATE_ANALYTICS_DASHBOARD_VIEW_IDS_JSON.<dashboard_key> in the private operator packet only"
+  },
+  "create_table_contract": {
+    "api_operation": "createTable",
+    "payload_root": "tableDesign",
+    "connector_column_keys": ["COLUMNNAME", "DATATYPE"],
+    "repository_constraint_keys": ["MANDATORY", "PII"],
+    "allowed_data_types": ["PLAIN", "NUMBER", "DATE", "BOOLEAN"],
+    "create_only_if_absent": true,
+    "existing_name_behavior": "Stop and compare exact metadata; never overwrite, rename, truncate, or infer compatibility.",
+    "connector_constraint_boundary": "The current Sylvara Analytics Changes createTable contract accepts only COLUMNNAME and DATATYPE for each column. MANDATORY and PII are repository-side validation and classification requirements; they are never sent as unsupported connector fields or claimed as platform-enforced metadata.",
+    "post_create_readback": "Read the returned view ID privately, then independently verify exact table name, ordered columns, data types, zero unexpected columns, zero shares, and zero rows before first import. Enforce MANDATORY and PII in the source validator and private acceptance evidence; use the browser only if a separately verified native metadata control is required and available."
+  },
+  "common_columns": [
+    { "COLUMNNAME": "SCHEMA_VERSION", "DATATYPE": "NUMBER", "MANDATORY": true, "PII": false },
+    { "COLUMNNAME": "METRIC_VERSION", "DATATYPE": "PLAIN", "MANDATORY": true, "PII": false },
+    { "COLUMNNAME": "RECORD_KEY", "DATATYPE": "PLAIN", "MANDATORY": true, "PII": false },
+    { "COLUMNNAME": "CLIENT_KEY", "DATATYPE": "PLAIN", "MANDATORY": true, "PII": false },
+    { "COLUMNNAME": "DEPLOYMENT_KEY", "DATATYPE": "PLAIN", "MANDATORY": true, "PII": false },
+    { "COLUMNNAME": "CONFIGURATION_VERSION", "DATATYPE": "PLAIN", "MANDATORY": true, "PII": false },
+    { "COLUMNNAME": "ENGAGEMENT_TYPE", "DATATYPE": "PLAIN", "MANDATORY": true, "PII": false },
+    { "COLUMNNAME": "ENVIRONMENT", "DATATYPE": "PLAIN", "MANDATORY": true, "PII": false },
+    { "COLUMNNAME": "SOURCE_MODIFIED_AT", "DATATYPE": "DATE", "MANDATORY": true, "PII": false, "source_format": "UTC ISO-8601 timestamp" },
+    { "COLUMNNAME": "SOURCE_REVISION", "DATATYPE": "PLAIN", "MANDATORY": true, "PII": false },
+    { "COLUMNNAME": "PAYLOAD_HASH", "DATATYPE": "PLAIN", "MANDATORY": true, "PII": false }
+  ],
+  "record_type_columns": {
+    "deployment": [
+      { "COLUMNNAME": "CAPABILITY_PROFILE", "DATATYPE": "PLAIN", "MANDATORY": true, "PII": false },
+      { "COLUMNNAME": "PLAN_TIER", "DATATYPE": "PLAIN", "MANDATORY": true, "PII": false },
+      { "COLUMNNAME": "DEPLOYMENT_STATUS", "DATATYPE": "PLAIN", "MANDATORY": true, "PII": false },
+      { "COLUMNNAME": "GO_LIVE_APPROVAL_STATUS", "DATATYPE": "PLAIN", "MANDATORY": true, "PII": false },
+      { "COLUMNNAME": "LIMIT_POLICY", "DATATYPE": "PLAIN", "MANDATORY": true, "PII": false },
+      { "COLUMNNAME": "BILLING_MODE", "DATATYPE": "PLAIN", "MANDATORY": true, "PII": false },
+      { "COLUMNNAME": "COVERAGE_MODE", "DATATYPE": "PLAIN", "MANDATORY": false, "PII": false },
+      { "COLUMNNAME": "HANDLED_COUNT", "DATATYPE": "NUMBER", "MANDATORY": true, "PII": false },
+      { "COLUMNNAME": "CALL_LIMIT", "DATATYPE": "NUMBER", "MANDATORY": true, "PII": false },
+      { "COLUMNNAME": "ACTUAL_START_AT", "DATATYPE": "DATE", "MANDATORY": true, "PII": false, "source_format": "UTC ISO-8601 timestamp" },
+      { "COLUMNNAME": "EXPIRES_AT", "DATATYPE": "DATE", "MANDATORY": true, "PII": false, "source_format": "UTC ISO-8601 timestamp" },
+      { "COLUMNNAME": "STOPPED_AT", "DATATYPE": "DATE", "MANDATORY": false, "PII": false, "source_format": "UTC ISO-8601 timestamp" },
+      { "COLUMNNAME": "STOP_REASON", "DATATYPE": "PLAIN", "MANDATORY": false, "PII": false }
+    ],
+    "call": [
+      { "COLUMNNAME": "CALL_KEY", "DATATYPE": "PLAIN", "MANDATORY": true, "PII": false },
+      { "COLUMNNAME": "STARTED_AT", "DATATYPE": "DATE", "MANDATORY": true, "PII": false, "source_format": "UTC ISO-8601 timestamp" },
+      { "COLUMNNAME": "ENDED_AT", "DATATYPE": "DATE", "MANDATORY": false, "PII": false, "source_format": "UTC ISO-8601 timestamp" },
+      { "COLUMNNAME": "DURATION_SECONDS", "DATATYPE": "NUMBER", "MANDATORY": false, "PII": false },
+      { "COLUMNNAME": "CALL_STATUS", "DATATYPE": "PLAIN", "MANDATORY": true, "PII": false },
+      { "COLUMNNAME": "OUTCOME", "DATATYPE": "PLAIN", "MANDATORY": true, "PII": false },
+      { "COLUMNNAME": "URGENCY_CLASS", "DATATYPE": "PLAIN", "MANDATORY": false, "PII": false },
+      { "COLUMNNAME": "COVERAGE_MODE", "DATATYPE": "PLAIN", "MANDATORY": false, "PII": false },
+      { "COLUMNNAME": "HANDLED_RECORDED", "DATATYPE": "BOOLEAN", "MANDATORY": true, "PII": false },
+      { "COLUMNNAME": "BOOKABLE_OPPORTUNITY", "DATATYPE": "BOOLEAN", "MANDATORY": false, "PII": false },
+      { "COLUMNNAME": "OFFICE_FOLLOW_UP_REQUIRED", "DATATYPE": "BOOLEAN", "MANDATORY": false, "PII": false },
+      { "COLUMNNAME": "WORKFLOW_FAILURE_CODE", "DATATYPE": "PLAIN", "MANDATORY": false, "PII": false },
+      { "COLUMNNAME": "NOTIFICATION_STATE", "DATATYPE": "PLAIN", "MANDATORY": false, "PII": false },
+      { "COLUMNNAME": "VALUE_EVIDENCE_CLASS", "DATATYPE": "PLAIN", "MANDATORY": false, "PII": false },
+      { "COLUMNNAME": "VALUE_MINOR_UNITS", "DATATYPE": "NUMBER", "MANDATORY": false, "PII": false },
+      { "COLUMNNAME": "VALUE_CURRENCY", "DATATYPE": "PLAIN", "MANDATORY": false, "PII": false }
+    ],
+    "daily_metric": [
+      { "COLUMNNAME": "REPORTING_DATE_UTC", "DATATYPE": "DATE", "MANDATORY": true, "PII": false, "source_format": "YYYY-MM-DD" },
+      { "COLUMNNAME": "TOTAL_CALLS_HANDLED", "DATATYPE": "NUMBER", "MANDATORY": true, "PII": false },
+      { "COLUMNNAME": "QUALIFIED_OPPORTUNITIES", "DATATYPE": "NUMBER", "MANDATORY": true, "PII": false },
+      { "COLUMNNAME": "URGENT_REQUESTS", "DATATYPE": "NUMBER", "MANDATORY": true, "PII": false },
+      { "COLUMNNAME": "EXISTING_CUSTOMER_CALLS", "DATATYPE": "NUMBER", "MANDATORY": true, "PII": false },
+      { "COLUMNNAME": "WRONG_FIT_CALLS", "DATATYPE": "NUMBER", "MANDATORY": true, "PII": false },
+      { "COLUMNNAME": "SPAM_CALLS", "DATATYPE": "NUMBER", "MANDATORY": true, "PII": false },
+      { "COLUMNNAME": "UNRESOLVED_CALLS", "DATATYPE": "NUMBER", "MANDATORY": true, "PII": false },
+      { "COLUMNNAME": "BOOKABLE_OPPORTUNITIES", "DATATYPE": "NUMBER", "MANDATORY": false, "PII": false },
+      { "COLUMNNAME": "OFFICE_FOLLOW_UP_CALLS", "DATATYPE": "NUMBER", "MANDATORY": false, "PII": false }
+    ],
+    "final_test_result": [
+      { "COLUMNNAME": "TEST_STARTED_AT", "DATATYPE": "DATE", "MANDATORY": true, "PII": false, "source_format": "UTC ISO-8601 timestamp" },
+      { "COLUMNNAME": "TEST_ENDED_AT", "DATATYPE": "DATE", "MANDATORY": true, "PII": false, "source_format": "UTC ISO-8601 timestamp" },
+      { "COLUMNNAME": "TEST_END_REASON", "DATATYPE": "PLAIN", "MANDATORY": true, "PII": false },
+      { "COLUMNNAME": "CALLS_CAPTURED", "DATATYPE": "NUMBER", "MANDATORY": true, "PII": false },
+      { "COLUMNNAME": "CALL_LIMIT", "DATATYPE": "NUMBER", "MANDATORY": true, "PII": false },
+      { "COLUMNNAME": "QUALIFIED_OPPORTUNITIES", "DATATYPE": "NUMBER", "MANDATORY": true, "PII": false },
+      { "COLUMNNAME": "URGENT_REQUESTS", "DATATYPE": "NUMBER", "MANDATORY": true, "PII": false },
+      { "COLUMNNAME": "EXISTING_CUSTOMER_CALLS", "DATATYPE": "NUMBER", "MANDATORY": true, "PII": false },
+      { "COLUMNNAME": "WRONG_FIT_CALLS", "DATATYPE": "NUMBER", "MANDATORY": true, "PII": false },
+      { "COLUMNNAME": "BOOKABLE_OPPORTUNITIES", "DATATYPE": "NUMBER", "MANDATORY": false, "PII": false },
+      { "COLUMNNAME": "OFFICE_FOLLOW_UP_CALLS", "DATATYPE": "NUMBER", "MANDATORY": false, "PII": false },
+      { "COLUMNNAME": "DURATION_EVIDENCE_COMPLETE", "DATATYPE": "BOOLEAN", "MANDATORY": true, "PII": false },
+      { "COLUMNNAME": "ANALYSIS_EVIDENCE_COMPLETE", "DATATYPE": "BOOLEAN", "MANDATORY": true, "PII": false }
+    ],
+    "conversion_status": [
+      { "COLUMNNAME": "CRM_CONVERSION_STATUS", "DATATYPE": "PLAIN", "MANDATORY": true, "PII": false },
+      { "COLUMNNAME": "BILLING_CONVERSION_STATUS", "DATATYPE": "PLAIN", "MANDATORY": true, "PII": false },
+      { "COLUMNNAME": "RESULTS_REVIEW_STATUS", "DATATYPE": "PLAIN", "MANDATORY": true, "PII": false },
+      { "COLUMNNAME": "PAID_ACCEPTANCE_STATUS", "DATATYPE": "PLAIN", "MANDATORY": true, "PII": false },
+      { "COLUMNNAME": "TARGET_ENGAGEMENT_TYPE", "DATATYPE": "PLAIN", "MANDATORY": true, "PII": false }
+    ]
+  },
+  "target_tables": {
+    "deployment": {
+      "physical_table_name": "RevenueDeskAnalyticsDeploymentFacts",
+      "description": "Sanitized immutable-or-corrected Revenue Desk deployment facts.",
+      "private_view_id_binding": "ANALYTICS_TARGETS_JSON.deployment.view_id",
+      "matching_columns": ["RECORD_KEY", "CLIENT_KEY", "DEPLOYMENT_KEY", "ENVIRONMENT"]
+    },
+    "call": {
+      "physical_table_name": "RevenueDeskAnalyticsCallFacts",
+      "description": "Sanitized Revenue Desk call facts with opaque ownership and call keys.",
+      "private_view_id_binding": "ANALYTICS_TARGETS_JSON.call.view_id",
+      "matching_columns": ["RECORD_KEY", "CLIENT_KEY", "DEPLOYMENT_KEY", "ENVIRONMENT"]
+    },
+    "daily_metric": {
+      "physical_table_name": "RevenueDeskAnalyticsDailyMetricFacts",
+      "description": "Deterministic UTC daily Revenue Desk metric facts.",
+      "private_view_id_binding": "ANALYTICS_TARGETS_JSON.daily_metric.view_id",
+      "matching_columns": ["RECORD_KEY", "CLIENT_KEY", "DEPLOYMENT_KEY", "ENVIRONMENT"]
+    },
+    "final_test_result": {
+      "physical_table_name": "RevenueDeskAnalyticsFinalTestResultFacts",
+      "description": "Terminal reconciled Revenue Desk free-test results.",
+      "private_view_id_binding": "ANALYTICS_TARGETS_JSON.final_test_result.view_id",
+      "matching_columns": ["RECORD_KEY", "CLIENT_KEY", "DEPLOYMENT_KEY", "ENVIRONMENT"]
+    },
+    "conversion_status": {
+      "physical_table_name": "RevenueDeskAnalyticsConversionStatusFacts",
+      "description": "Readback-backed free-test to paid-service conversion status evidence.",
+      "private_view_id_binding": "ANALYTICS_TARGETS_JSON.conversion_status.view_id",
+      "matching_columns": ["RECORD_KEY", "CLIENT_KEY", "DEPLOYMENT_KEY", "ENVIRONMENT"]
+    }
+  },
+  "pre_render_gate": {
+    "gate_key": "catalyst-checkpoint-and-analytics-readback-v1",
+    "mode": "fail_closed",
+    "evidence_schema_version": 1,
+    "evaluator": "tools/evaluate-dashboard-pre-render-gate.js",
+    "required_environment": "development",
+    "required_engagement_type": "free_test",
+    "required_record_types": ["deployment", "call", "daily_metric", "final_test_result", "conversion_status"],
+    "required_checkpoint_status": "Healthy",
+    "maximum_evidence_age_seconds": 300,
+    "ready_verdict": "ready",
+    "blocked_verdict": "blocked",
+    "ready_label": "Reconciled",
+    "blocked_label": "Unavailable - reconciliation required",
+    "authoritative_source": "One current Catalyst AnalyticsSyncCheckpoints row per included scope and record type, plus a zero count of unresolved v2 AnalyticsSyncOutbox rows.",
+    "independent_readback": "For every included scope and record type, separately verify the Analytics target binding, partition isolation, positive row count, zero duplicate RECORD_KEY values, zero PAYLOAD_HASH mismatches, exact checkpoint/provider watermark, and one exact approved source revision shared by every checkpoint and Analytics readback.",
+    "scope_inventory": "The Catalyst and Analytics scope-inventory digests must both equal the separately approved digest of every included environment, engagement, client, and deployment scope; omission or duplication blocks operator acceptance.",
+    "timestamp_boundary": "SOURCE_MODIFIED_AT and provider watermarks are observations only. No timestamp, recency comparison, or report row can produce the ready verdict without the complete authoritative checkpoint, zero-unresolved-outbox, single-approved-source-revision, scope-inventory, and independent-readback evidence."
+  },
+  "derived_query_views": {
+    "deployment_remaining": {
+      "physical_view_name": "RevenueDeskAnalyticsDeploymentRemaining",
+      "private_view_id_binding": "PRIVATE_ANALYTICS_QUERY_VIEW_IDS_JSON.deployment_remaining",
+      "output_columns": ["ENVIRONMENT", "CLIENT_KEY", "DEPLOYMENT_KEY", "CONFIGURATION_VERSION", "ENGAGEMENT_TYPE", "RECORD_KEY", "DEPLOYMENT_STATUS", "HANDLED_COUNT", "CALL_LIMIT", "ACTUAL_START_AT", "EXPIRES_AT", "SOURCE_MODIFIED_AT", "CALLS_REMAINING"],
+      "sql": "SELECT \"ENVIRONMENT\", \"CLIENT_KEY\", \"DEPLOYMENT_KEY\", \"CONFIGURATION_VERSION\", \"ENGAGEMENT_TYPE\", \"RECORD_KEY\", \"DEPLOYMENT_STATUS\", \"HANDLED_COUNT\", \"CALL_LIMIT\", \"ACTUAL_START_AT\", \"EXPIRES_AT\", \"SOURCE_MODIFIED_AT\", CASE WHEN \"CALL_LIMIT\" > \"HANDLED_COUNT\" THEN \"CALL_LIMIT\" - \"HANDLED_COUNT\" ELSE 0 END AS \"CALLS_REMAINING\" FROM \"RevenueDeskAnalyticsDeploymentFacts\""
+    },
+    "value_evidence": {
+      "physical_view_name": "RevenueDeskAnalyticsValueEvidence",
+      "private_view_id_binding": "PRIVATE_ANALYTICS_QUERY_VIEW_IDS_JSON.value_evidence",
+      "output_columns": ["ENVIRONMENT", "CLIENT_KEY", "DEPLOYMENT_KEY", "CONFIGURATION_VERSION", "ENGAGEMENT_TYPE", "VALUE_EVIDENCE_CLASS", "VALUE_CURRENCY", "VALUE_MINOR_UNITS", "SOURCE_MODIFIED_AT"],
+      "sql": "SELECT \"ENVIRONMENT\", \"CLIENT_KEY\", \"DEPLOYMENT_KEY\", \"CONFIGURATION_VERSION\", \"ENGAGEMENT_TYPE\", \"VALUE_EVIDENCE_CLASS\", \"VALUE_CURRENCY\", \"VALUE_MINOR_UNITS\", \"SOURCE_MODIFIED_AT\" FROM \"RevenueDeskAnalyticsCallFacts\" WHERE \"VALUE_EVIDENCE_CLASS\" IS NOT NULL AND \"VALUE_CURRENCY\" IS NOT NULL AND \"VALUE_MINOR_UNITS\" IS NOT NULL"
+    },
+    "optional_evidence": {
+      "physical_view_name": "RevenueDeskAnalyticsOptionalEvidence",
+      "private_view_id_binding": "PRIVATE_ANALYTICS_QUERY_VIEW_IDS_JSON.optional_evidence",
+      "output_columns": ["ENVIRONMENT", "CLIENT_KEY", "DEPLOYMENT_KEY", "CONFIGURATION_VERSION", "ENGAGEMENT_TYPE", "RECORD_KEY", "BOOKABLE_OPPORTUNITIES", "BOOKABLE_EVIDENCE_STATE", "OFFICE_FOLLOW_UP_CALLS", "OFFICE_FOLLOW_UP_EVIDENCE_STATE", "SOURCE_MODIFIED_AT"],
+      "sql": "SELECT \"ENVIRONMENT\", \"CLIENT_KEY\", \"DEPLOYMENT_KEY\", \"CONFIGURATION_VERSION\", \"ENGAGEMENT_TYPE\", \"RECORD_KEY\", CASE WHEN \"ANALYSIS_EVIDENCE_COMPLETE\" = TRUE AND \"BOOKABLE_OPPORTUNITIES\" IS NOT NULL THEN \"BOOKABLE_OPPORTUNITIES\" ELSE NULL END AS \"BOOKABLE_OPPORTUNITIES\", CASE WHEN \"ANALYSIS_EVIDENCE_COMPLETE\" = TRUE AND \"BOOKABLE_OPPORTUNITIES\" IS NOT NULL THEN 'available' ELSE 'not_available' END AS \"BOOKABLE_EVIDENCE_STATE\", CASE WHEN \"ANALYSIS_EVIDENCE_COMPLETE\" = TRUE AND \"OFFICE_FOLLOW_UP_CALLS\" IS NOT NULL THEN \"OFFICE_FOLLOW_UP_CALLS\" ELSE NULL END AS \"OFFICE_FOLLOW_UP_CALLS\", CASE WHEN \"ANALYSIS_EVIDENCE_COMPLETE\" = TRUE AND \"OFFICE_FOLLOW_UP_CALLS\" IS NOT NULL THEN 'available' ELSE 'not_available' END AS \"OFFICE_FOLLOW_UP_EVIDENCE_STATE\", \"SOURCE_MODIFIED_AT\" FROM \"RevenueDeskAnalyticsFinalTestResultFacts\""
+    },
+    "freshness": {
+      "physical_view_name": "RevenueDeskAnalyticsFreshness",
+      "private_view_id_binding": "PRIVATE_ANALYTICS_QUERY_VIEW_IDS_JSON.freshness",
+      "output_columns": ["RECORD_TYPE", "ENVIRONMENT", "CLIENT_KEY", "DEPLOYMENT_KEY", "ENGAGEMENT_TYPE", "LATEST_SOURCE_MODIFIED_AT", "SOURCE_ROW_COUNT"],
+      "sql": "SELECT \"RECORD_TYPE\", \"ENVIRONMENT\", \"CLIENT_KEY\", \"DEPLOYMENT_KEY\", \"ENGAGEMENT_TYPE\", MAX(\"SOURCE_MODIFIED_AT\") AS \"LATEST_SOURCE_MODIFIED_AT\", COUNT(\"RECORD_KEY\") AS \"SOURCE_ROW_COUNT\" FROM (SELECT 'deployment' AS \"RECORD_TYPE\", \"ENVIRONMENT\", \"CLIENT_KEY\", \"DEPLOYMENT_KEY\", \"ENGAGEMENT_TYPE\", \"SOURCE_MODIFIED_AT\", \"RECORD_KEY\" FROM \"RevenueDeskAnalyticsDeploymentFacts\" UNION ALL SELECT 'call', \"ENVIRONMENT\", \"CLIENT_KEY\", \"DEPLOYMENT_KEY\", \"ENGAGEMENT_TYPE\", \"SOURCE_MODIFIED_AT\", \"RECORD_KEY\" FROM \"RevenueDeskAnalyticsCallFacts\" UNION ALL SELECT 'daily_metric', \"ENVIRONMENT\", \"CLIENT_KEY\", \"DEPLOYMENT_KEY\", \"ENGAGEMENT_TYPE\", \"SOURCE_MODIFIED_AT\", \"RECORD_KEY\" FROM \"RevenueDeskAnalyticsDailyMetricFacts\" UNION ALL SELECT 'final_test_result', \"ENVIRONMENT\", \"CLIENT_KEY\", \"DEPLOYMENT_KEY\", \"ENGAGEMENT_TYPE\", \"SOURCE_MODIFIED_AT\", \"RECORD_KEY\" FROM \"RevenueDeskAnalyticsFinalTestResultFacts\" UNION ALL SELECT 'conversion_status', \"ENVIRONMENT\", \"CLIENT_KEY\", \"DEPLOYMENT_KEY\", \"ENGAGEMENT_TYPE\", \"SOURCE_MODIFIED_AT\", \"RECORD_KEY\" FROM \"RevenueDeskAnalyticsConversionStatusFacts\") AS \"RevenueDeskFacts\" GROUP BY \"RECORD_TYPE\", \"ENVIRONMENT\", \"CLIENT_KEY\", \"DEPLOYMENT_KEY\", \"ENGAGEMENT_TYPE\""
+    }
+  },
+  "report_filter_profiles": {
+    "free_test": {
+      "filters": [
+        { "columnName": "ENVIRONMENT", "operation": "actual", "filterType": "individualValues", "values": ["development"], "exclude": "false" },
+        { "columnName": "ENGAGEMENT_TYPE", "operation": "actual", "filterType": "individualValues", "values": ["free_test"], "exclude": "false" }
+      ],
+      "userFilters": [
+        { "columnName": "CLIENT_KEY", "operation": "actual" },
+        { "columnName": "DEPLOYMENT_KEY", "operation": "actual" }
+      ]
+    }
+  },
+  "reports": {
+    "operations_active_free_tests": {
+      "dashboard": "operations", "widget_title": "Active Free Tests", "private_view_id_binding": "PRIVATE_ANALYTICS_REPORT_VIEW_IDS_JSON.operations_active_free_tests", "filter_profile": "free_test",
+      "create_config": { "baseTableName": "RevenueDeskAnalyticsDeploymentFacts", "title": "Operations - Active Free Tests", "reportType": "summary", "axisColumns": [{ "type": "summarize", "columnName": "DEPLOYMENT_KEY", "operation": "distinctCount" }], "extra_filters": [{ "columnName": "DEPLOYMENT_STATUS", "operation": "actual", "filterType": "individualValues", "values": ["live"], "exclude": "false" }] },
+      "null_behavior": "Exclude null deployment keys; an empty result renders zero and blocks any claim that a test is active."
+    },
+    "operations_connected_calls": {
+      "dashboard": "operations", "widget_title": "Connected Calls", "private_view_id_binding": "PRIVATE_ANALYTICS_REPORT_VIEW_IDS_JSON.operations_connected_calls", "filter_profile": "free_test",
+      "create_config": { "baseTableName": "RevenueDeskAnalyticsDailyMetricFacts", "title": "Operations - Connected Calls", "reportType": "summary", "axisColumns": [{ "type": "summarize", "columnName": "TOTAL_CALLS_HANDLED", "operation": "sum" }] },
+      "null_behavior": "TOTAL_CALLS_HANDLED is mandatory; any null is schema drift and blocks operator acceptance instead of becoming zero."
+    },
+    "operations_qualified_opportunities": {
+      "dashboard": "operations", "widget_title": "Qualified Opportunities", "private_view_id_binding": "PRIVATE_ANALYTICS_REPORT_VIEW_IDS_JSON.operations_qualified_opportunities", "filter_profile": "free_test",
+      "create_config": { "baseTableName": "RevenueDeskAnalyticsDailyMetricFacts", "title": "Operations - Qualified Opportunities", "reportType": "summary", "axisColumns": [{ "type": "summarize", "columnName": "QUALIFIED_OPPORTUNITIES", "operation": "sum" }] },
+      "null_behavior": "QUALIFIED_OPPORTUNITIES is mandatory; a null blocks operator acceptance and never implies a booking or revenue result."
+    },
+    "operations_calls_remaining": {
+      "dashboard": "operations", "widget_title": "Calls Remaining", "private_view_id_binding": "PRIVATE_ANALYTICS_REPORT_VIEW_IDS_JSON.operations_calls_remaining", "filter_profile": "free_test",
+      "create_config": { "baseTableName": "RevenueDeskAnalyticsDeploymentRemaining", "title": "Operations - Calls Remaining", "reportType": "summary", "axisColumns": [{ "type": "summarize", "columnName": "CALLS_REMAINING", "operation": "sum" }] },
+      "null_behavior": "The query view clamps each row at zero. Any missing CALL_LIMIT or HANDLED_COUNT prevents the source row from passing schema validation."
+    },
+    "operations_tests_ending_soon": {
+      "dashboard": "operations", "widget_title": "Tests Ending Soon", "private_view_id_binding": "PRIVATE_ANALYTICS_REPORT_VIEW_IDS_JSON.operations_tests_ending_soon", "filter_profile": "free_test",
+      "create_config": { "baseTableName": "RevenueDeskAnalyticsDeploymentFacts", "title": "Operations - Tests Ending Soon", "reportType": "summary", "axisColumns": [{ "type": "groupBy", "columnName": "DEPLOYMENT_KEY", "operation": "actual" }, { "type": "groupBy", "columnName": "DEPLOYMENT_STATUS", "operation": "actual" }, { "type": "groupBy", "columnName": "HANDLED_COUNT", "operation": "dimension" }, { "type": "groupBy", "columnName": "CALL_LIMIT", "operation": "dimension" }, { "type": "groupBy", "columnName": "ACTUAL_START_AT", "operation": "dateTime" }, { "type": "groupBy", "columnName": "EXPIRES_AT", "operation": "dateTime" }, { "type": "summarize", "columnName": "RECORD_KEY", "operation": "distinctCount" }], "extra_filters": [{ "columnName": "DEPLOYMENT_STATUS", "operation": "actual", "filterType": "individualValues", "values": ["live"], "exclude": "false" }], "extra_user_filters": [{ "columnName": "EXPIRES_AT", "operation": "relative" }] },
+      "null_behavior": "EXPIRES_AT is mandatory. Browser assembly must set the Expiry Window control to the next 48 hours; an unset window blocks dashboard acceptance."
+    },
+    "operations_daily_call_outcomes": {
+      "dashboard": "operations", "widget_title": "Daily Call Outcomes", "private_view_id_binding": "PRIVATE_ANALYTICS_REPORT_VIEW_IDS_JSON.operations_daily_call_outcomes", "filter_profile": "free_test",
+      "create_config": { "baseTableName": "RevenueDeskAnalyticsDailyMetricFacts", "title": "Operations - Daily Call Outcomes", "reportType": "chart", "chartType": "line with points", "axisColumns": [{ "type": "xAxis", "columnName": "REPORTING_DATE_UTC", "operation": "fullDate" }, { "type": "yAxis", "columnName": "TOTAL_CALLS_HANDLED", "operation": "sum" }, { "type": "yAxis", "columnName": "QUALIFIED_OPPORTUNITIES", "operation": "sum" }, { "type": "yAxis", "columnName": "URGENT_REQUESTS", "operation": "sum" }, { "type": "yAxis", "columnName": "UNRESOLVED_CALLS", "operation": "sum" }] },
+      "null_behavior": "All plotted measures are mandatory. Any null blocks operator acceptance for the affected partition rather than plotting zero."
+    },
+    "operations_exception_mix": {
+      "dashboard": "operations", "widget_title": "Exception Mix", "private_view_id_binding": "PRIVATE_ANALYTICS_REPORT_VIEW_IDS_JSON.operations_exception_mix", "filter_profile": "free_test",
+      "create_config": { "baseTableName": "RevenueDeskAnalyticsDailyMetricFacts", "title": "Operations - Exception Mix", "reportType": "chart", "chartType": "stacked bar", "axisColumns": [{ "type": "xAxis", "columnName": "REPORTING_DATE_UTC", "operation": "fullDate" }, { "type": "yAxis", "columnName": "WRONG_FIT_CALLS", "operation": "sum" }, { "type": "yAxis", "columnName": "SPAM_CALLS", "operation": "sum" }, { "type": "yAxis", "columnName": "UNRESOLVED_CALLS", "operation": "sum" }] },
+      "null_behavior": "Required exception counts never coalesce from null to zero; schema drift blocks publication authorization."
+    },
+    "operations_final_test_results": {
+      "dashboard": "operations", "widget_title": "Final Test Results", "private_view_id_binding": "PRIVATE_ANALYTICS_REPORT_VIEW_IDS_JSON.operations_final_test_results", "filter_profile": "free_test",
+      "create_config": { "baseTableName": "RevenueDeskAnalyticsFinalTestResultFacts", "title": "Operations - Final Test Results", "reportType": "summary", "axisColumns": [{ "type": "groupBy", "columnName": "DEPLOYMENT_KEY", "operation": "actual" }, { "type": "groupBy", "columnName": "TEST_STARTED_AT", "operation": "dateTime" }, { "type": "groupBy", "columnName": "TEST_ENDED_AT", "operation": "dateTime" }, { "type": "groupBy", "columnName": "TEST_END_REASON", "operation": "actual" }, { "type": "groupBy", "columnName": "CALLS_CAPTURED", "operation": "dimension" }, { "type": "groupBy", "columnName": "CALL_LIMIT", "operation": "dimension" }, { "type": "groupBy", "columnName": "DURATION_EVIDENCE_COMPLETE", "operation": "actual" }, { "type": "groupBy", "columnName": "ANALYSIS_EVIDENCE_COMPLETE", "operation": "actual" }, { "type": "summarize", "columnName": "RECORD_KEY", "operation": "distinctCount" }] },
+      "null_behavior": "Only terminal result facts exist in this table; missing mandatory evidence flags block operator acceptance for the row."
+    },
+    "operations_conversion_readiness": {
+      "dashboard": "operations", "widget_title": "Conversion Readiness", "private_view_id_binding": "PRIVATE_ANALYTICS_REPORT_VIEW_IDS_JSON.operations_conversion_readiness", "filter_profile": "free_test",
+      "create_config": { "baseTableName": "RevenueDeskAnalyticsConversionStatusFacts", "title": "Operations - Conversion Readiness", "reportType": "summary", "axisColumns": [{ "type": "groupBy", "columnName": "DEPLOYMENT_KEY", "operation": "actual" }, { "type": "groupBy", "columnName": "TARGET_ENGAGEMENT_TYPE", "operation": "actual" }, { "type": "groupBy", "columnName": "CRM_CONVERSION_STATUS", "operation": "actual" }, { "type": "groupBy", "columnName": "BILLING_CONVERSION_STATUS", "operation": "actual" }, { "type": "groupBy", "columnName": "RESULTS_REVIEW_STATUS", "operation": "actual" }, { "type": "groupBy", "columnName": "PAID_ACCEPTANCE_STATUS", "operation": "actual" }, { "type": "summarize", "columnName": "RECORD_KEY", "operation": "distinctCount" }], "extra_filters": [{ "columnName": "TARGET_ENGAGEMENT_TYPE", "operation": "actual", "filterType": "individualValues", "values": ["paid_service"], "exclude": "false" }] },
+      "null_behavior": "Every conversion classification is mandatory; incomplete authoritative readback produces no fact and no readiness row."
+    },
+    "operations_data_freshness": {
+      "dashboard": "operations", "widget_title": "Data Freshness", "private_view_id_binding": "PRIVATE_ANALYTICS_REPORT_VIEW_IDS_JSON.operations_data_freshness", "filter_profile": "free_test",
+      "create_config": { "baseTableName": "RevenueDeskAnalyticsFreshness", "title": "Operations - Data Freshness", "reportType": "summary", "axisColumns": [{ "type": "groupBy", "columnName": "RECORD_TYPE", "operation": "actual" }, { "type": "groupBy", "columnName": "LATEST_SOURCE_MODIFIED_AT", "operation": "dateTime" }, { "type": "summarize", "columnName": "SOURCE_ROW_COUNT", "operation": "sum" }] },
+      "null_behavior": "This report displays observed watermarks and row counts only; it never emits or implies Healthy. Publication authorization and the Reconciled label require a ready verdict from pre_render_gate plus independent access readback. Any missing checkpoint, unresolved v2 outbox row, stale checkpoint, scope mismatch, or Analytics readback mismatch blocks operator acceptance."
+    },
+    "customer_test_period": {
+      "dashboard": "customer", "widget_title": "Test Period", "private_view_id_binding": "PRIVATE_ANALYTICS_REPORT_VIEW_IDS_JSON.customer_test_period", "filter_profile": "free_test",
+      "create_config": { "baseTableName": "RevenueDeskAnalyticsFinalTestResultFacts", "title": "Customer Results - Test Period", "reportType": "summary", "axisColumns": [{ "type": "groupBy", "columnName": "TEST_STARTED_AT", "operation": "dateTime" }, { "type": "groupBy", "columnName": "TEST_ENDED_AT", "operation": "dateTime" }, { "type": "groupBy", "columnName": "TEST_END_REASON", "operation": "actual" }, { "type": "summarize", "columnName": "RECORD_KEY", "operation": "distinctCount" }] },
+      "null_behavior": "Exactly one terminal result must exist for the locked client/deployment render; zero or multiple rows block rendering."
+    },
+    "customer_connected_calls": {
+      "dashboard": "customer", "widget_title": "Connected Calls", "private_view_id_binding": "PRIVATE_ANALYTICS_REPORT_VIEW_IDS_JSON.customer_connected_calls", "filter_profile": "free_test",
+      "create_config": { "baseTableName": "RevenueDeskAnalyticsFinalTestResultFacts", "title": "Customer Results - Connected Calls", "reportType": "summary", "axisColumns": [{ "type": "summarize", "columnName": "CALLS_CAPTURED", "operation": "sum" }] },
+      "null_behavior": "CALLS_CAPTURED is mandatory; zero is valid only when the terminal fact explicitly contains zero."
+    },
+    "customer_qualified_opportunities": {
+      "dashboard": "customer", "widget_title": "Qualified Opportunities", "private_view_id_binding": "PRIVATE_ANALYTICS_REPORT_VIEW_IDS_JSON.customer_qualified_opportunities", "filter_profile": "free_test",
+      "create_config": { "baseTableName": "RevenueDeskAnalyticsFinalTestResultFacts", "title": "Customer Results - Qualified Opportunities", "reportType": "summary", "axisColumns": [{ "type": "summarize", "columnName": "QUALIFIED_OPPORTUNITIES", "operation": "sum" }] },
+      "null_behavior": "The mandatory classification count is not revenue, a booking, or a completed job; null blocks rendering."
+    },
+    "customer_urgent_requests": {
+      "dashboard": "customer", "widget_title": "Urgent Requests", "private_view_id_binding": "PRIVATE_ANALYTICS_REPORT_VIEW_IDS_JSON.customer_urgent_requests", "filter_profile": "free_test",
+      "create_config": { "baseTableName": "RevenueDeskAnalyticsFinalTestResultFacts", "title": "Customer Results - Urgent Requests", "reportType": "summary", "axisColumns": [{ "type": "summarize", "columnName": "URGENT_REQUESTS", "operation": "sum" }] },
+      "null_behavior": "URGENT_REQUESTS is mandatory; null blocks rendering."
+    },
+    "customer_daily_results": {
+      "dashboard": "customer", "widget_title": "Daily Results", "private_view_id_binding": "PRIVATE_ANALYTICS_REPORT_VIEW_IDS_JSON.customer_daily_results", "filter_profile": "free_test",
+      "create_config": { "baseTableName": "RevenueDeskAnalyticsDailyMetricFacts", "title": "Customer Results - Daily Results", "reportType": "chart", "chartType": "line with points", "axisColumns": [{ "type": "xAxis", "columnName": "REPORTING_DATE_UTC", "operation": "fullDate" }, { "type": "yAxis", "columnName": "TOTAL_CALLS_HANDLED", "operation": "sum" }, { "type": "yAxis", "columnName": "QUALIFIED_OPPORTUNITIES", "operation": "sum" }, { "type": "yAxis", "columnName": "URGENT_REQUESTS", "operation": "sum" }, { "type": "yAxis", "columnName": "EXISTING_CUSTOMER_CALLS", "operation": "sum" }] },
+      "null_behavior": "All plotted measures are mandatory; null blocks publication authorization rather than becoming zero."
+    },
+    "customer_call_mix": {
+      "dashboard": "customer", "widget_title": "Call Mix", "private_view_id_binding": "PRIVATE_ANALYTICS_REPORT_VIEW_IDS_JSON.customer_call_mix", "filter_profile": "free_test",
+      "create_config": { "baseTableName": "RevenueDeskAnalyticsDailyMetricFacts", "title": "Customer Results - Call Mix", "reportType": "chart", "chartType": "stacked bar", "axisColumns": [{ "type": "xAxis", "columnName": "REPORTING_DATE_UTC", "operation": "fullDate" }, { "type": "yAxis", "columnName": "QUALIFIED_OPPORTUNITIES", "operation": "sum" }, { "type": "yAxis", "columnName": "EXISTING_CUSTOMER_CALLS", "operation": "sum" }, { "type": "yAxis", "columnName": "WRONG_FIT_CALLS", "operation": "sum" }, { "type": "yAxis", "columnName": "SPAM_CALLS", "operation": "sum" }, { "type": "yAxis", "columnName": "UNRESOLVED_CALLS", "operation": "sum" }] },
+      "null_behavior": "Every plotted classification is mandatory and mutually reported; null blocks publication authorization."
+    },
+    "customer_bookable_evidence": {
+      "dashboard": "customer", "widget_title": "Bookable Evidence", "private_view_id_binding": "PRIVATE_ANALYTICS_REPORT_VIEW_IDS_JSON.customer_bookable_evidence", "filter_profile": "free_test",
+      "create_config": { "baseTableName": "RevenueDeskAnalyticsOptionalEvidence", "title": "Customer Results - Bookable Evidence", "reportType": "summary", "axisColumns": [{ "type": "groupBy", "columnName": "BOOKABLE_EVIDENCE_STATE", "operation": "actual" }, { "type": "summarize", "columnName": "BOOKABLE_OPPORTUNITIES", "operation": "sum" }] },
+      "null_behavior": "The derived state is available only when analysis evidence is complete and BOOKABLE_OPPORTUNITIES is present. Display available with numeric zero for a verified zero; display Not Available for not_available with a null measure. Never hide or filter out the state discriminator."
+    },
+    "customer_office_follow_up": {
+      "dashboard": "customer", "widget_title": "Office Follow-Up", "private_view_id_binding": "PRIVATE_ANALYTICS_REPORT_VIEW_IDS_JSON.customer_office_follow_up", "filter_profile": "free_test",
+      "create_config": { "baseTableName": "RevenueDeskAnalyticsOptionalEvidence", "title": "Customer Results - Office Follow-Up", "reportType": "summary", "axisColumns": [{ "type": "groupBy", "columnName": "OFFICE_FOLLOW_UP_EVIDENCE_STATE", "operation": "actual" }, { "type": "summarize", "columnName": "OFFICE_FOLLOW_UP_CALLS", "operation": "sum" }] },
+      "null_behavior": "The derived state is available only when analysis evidence is complete and OFFICE_FOLLOW_UP_CALLS is present. Display available with numeric zero for a verified zero; display Not Available for not_available with a null measure. Never hide or filter out the state discriminator."
+    },
+    "customer_value_evidence": {
+      "dashboard": "customer", "widget_title": "Value Evidence", "private_view_id_binding": "PRIVATE_ANALYTICS_REPORT_VIEW_IDS_JSON.customer_value_evidence", "filter_profile": "free_test",
+      "create_config": { "baseTableName": "RevenueDeskAnalyticsValueEvidence", "title": "Customer Results - Value Evidence", "reportType": "summary", "axisColumns": [{ "type": "groupBy", "columnName": "VALUE_EVIDENCE_CLASS", "operation": "actual" }, { "type": "groupBy", "columnName": "VALUE_CURRENCY", "operation": "actual" }, { "type": "summarize", "columnName": "VALUE_MINOR_UNITS", "operation": "sum" }] },
+      "null_behavior": "The query excludes incomplete value triples. Keep each evidence class and currency separate, display minor units using that currency's scale, and render Not Available when no complete triple exists."
+    },
+    "customer_data_freshness": {
+      "dashboard": "customer", "widget_title": "Data Freshness", "private_view_id_binding": "PRIVATE_ANALYTICS_REPORT_VIEW_IDS_JSON.customer_data_freshness", "filter_profile": "free_test",
+      "create_config": { "baseTableName": "RevenueDeskAnalyticsFreshness", "title": "Customer Results - Data Freshness", "reportType": "summary", "axisColumns": [{ "type": "groupBy", "columnName": "RECORD_TYPE", "operation": "actual" }, { "type": "groupBy", "columnName": "LATEST_SOURCE_MODIFIED_AT", "operation": "dateTime" }, { "type": "summarize", "columnName": "SOURCE_ROW_COUNT", "operation": "sum" }] },
+      "null_behavior": "This report displays observed watermarks and row counts only; it never emits or implies Healthy. Publication authorization for the fixed-client render and the Reconciled label require a ready verdict from pre_render_gate for the exact locked scope plus independent access readback. Any missing checkpoint, unresolved v2 outbox row, stale checkpoint, scope mismatch, or Analytics readback mismatch blocks operator acceptance."
+    }
+  },
+  "rendering_rules": {
+    "report_payload_composition": "For each report, copy create_config, append the selected filter profile filters plus extra_filters, append profile userFilters plus extra_user_filters, and add tableName equal to baseTableName on every filter/userFilter.",
+    "private_values": "Workspace and returned view IDs are parameters/readback evidence, never committed payload values.",
+    "no_overwrite": "A same-title table, query view, or report must be read and compared exactly. Stop on any mismatch; do not update in place during initial creation.",
+    "dashboard_assembly": "The createReport API creates reports only. Assemble dashboards and enforce required/locked controls in the signed-in Analytics console, then independently read back views, access, shares, exports, embeds, and public links.",
+    "pre_render_gate": "Run the repository evaluator against a fresh private evidence envelope before authorizing display of either dashboard or applying any Reconciled/healthy-style label. The evaluator is an operator acceptance gate and does not change Analytics visibility. A blocked verdict requires operators to keep the dashboard unshared, unpublished, and unavailable to non-administrators; timestamps alone are never a health signal.",
+    "optional_evidence": "Bookable Evidence and Office Follow-Up must preserve their *_EVIDENCE_STATE group as visible output. The available state with numeric zero is a true zero; not_available with a null measure is missing evidence."
+  }
+}

@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "test": "node --test test/*.test.js"
+    "check": "node --check lib/release-manifest.js && node --check scripts/build-release-manifest.js && node --check scripts/validate-private-route-packet.js && node --check scripts/verify-release-readback.js",
+    "test": "node --test test/*.test.js",
+    "ci": "npm run check && npm test"
   }
 }

@@ -53,6 +53,8 @@ test('Job, pool, empty params, dark Production, and provider contracts are exact
     write: 'ANALYTICS_WRITE_CONNECTION_LINK_NAME',
     must_be_distinct: true,
   });
+  assert.match(contract.provider_contract.pre_write_target_check,
+    /Immediately before every import POST.*read-only Connection.*view ID.*table name.*workspace ID.*organization ID.*do not cache.*write authorization/);
   assert.deepEqual(contract.provider_contract.matching_columns,
     ['RECORD_KEY', 'CLIENT_KEY', 'DEPLOYMENT_KEY', 'ENVIRONMENT']);
   assert.deepEqual(contract.provider_contract.provider_version_fence.identity_columns, [

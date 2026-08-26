@@ -13,6 +13,18 @@ TOOLS_README = ROOT / "tools" / "README.md"
 ROOT_README = ROOT / "README.md"
 WORKFLOW = ROOT / ".github" / "workflows" / "repo-checks.yml"
 DEPENDABOT = ROOT / ".github" / "dependabot.yml"
+NETWORK_DEPENDENT_ARTIFACT_TESTS = (
+    ROOT / "src" / "zoho-catalyst" / "billing-webhook-gateway"
+    / "test" / "artifact-builder.test.js",
+    ROOT / "src" / "zoho-catalyst" / "crm-billing-orchestrator" / "functions"
+    / "crm_billing_orchestrator" / "test" / "artifact-builder.test.js",
+    ROOT / "src" / "zoho-catalyst" / "revenue-desk-analytics" / "functions"
+    / "analytics_sync" / "test" / "artifact-builder.test.js",
+    ROOT / "src" / "zoho-catalyst" / "revenue-leak-test-request-form" / "functions"
+    / "revenue_leak_test_request_form" / "test" / "release-artifact-builder.test.js",
+    ROOT / "src" / "zoho-catalyst" / "revenue-leak-test-setup-form" / "functions"
+    / "revenue_leak_test_setup_form" / "test" / "release-artifact-builder.test.js",
+)
 
 
 class VerifyEntrypointTests(unittest.TestCase):
@@ -46,6 +58,12 @@ class VerifyEntrypointTests(unittest.TestCase):
 
     def test_quick_is_offline_and_all_or_bootstrap_enables_installs(self) -> None:
         self.assertIn('$useRegistry = $Bootstrap -or $Mode -eq "All"', self.script)
+        self.assertIn(
+            '$env:SYLVARA_ARTIFACT_INNER_VERIFY = "0"', self.script
+        )
+        recursion_reset = self.script.index(
+            '$env:SYLVARA_ARTIFACT_INNER_VERIFY = "0"'
+        )
         self.assertIn('if ($useRegistry) {', self.script)
         self.assertIn('"--require-hashes"', self.script)
         self.assertIn('"ci", "--ignore-scripts", "--no-audit", "--no-fund"', self.script)
@@ -62,8 +80,54 @@ class VerifyEntrypointTests(unittest.TestCase):
         )
         self.assertIn('$env:npm_config_offline = "true"', self.script)
         self.assertIn('$env:npm_config_update_notifier = "false"', self.script)
+        registry_start = self.script.index('if ($useRegistry) {')
+        self.assertLess(recursion_reset, registry_start)
+        quick_start = self.script.index('} else {', registry_start)
+        dependency_check_start = self.script.index(
+            'Assert-PythonDependencies', quick_start
+        )
+        registry_branch = self.script[registry_start:quick_start]
+        quick_branch = self.script[quick_start:dependency_check_start]
+        self.assertIn(
+            '$env:SYLVARA_OFFLINE_QUICK_VERIFY = "0"', registry_branch
+        )
+        self.assertNotIn(
+            '$env:SYLVARA_OFFLINE_QUICK_VERIFY = "1"', registry_branch
+        )
+        self.assertIn(
+            '$env:SYLVARA_OFFLINE_QUICK_VERIFY = "1"', quick_branch
+        )
+        self.assertNotIn(
+            '$env:SYLVARA_OFFLINE_QUICK_VERIFY = "0"', quick_branch
+        )
         for unsafe_downloader in ("Invoke-WebRequest", "curl.exe", "Start-BitsTransfer"):
             self.assertNotIn(unsafe_downloader, self.script)
+
+    def test_network_dependent_artifact_tests_skip_only_in_quick(self) -> None:
+        direct_guard = (
+            "const artifactTest = "
+            "process.env.SYLVARA_OFFLINE_QUICK_VERIFY === {quote}1{quote} "
+            "? test.skip : test;"
+        )
+        recursive_guard = (
+            'process.env.SYLVARA_ARTIFACT_INNER_VERIFY === "1" ||\n'
+            '  process.env.SYLVARA_OFFLINE_QUICK_VERIFY === "1";\n'
+            'const artifactTest = innerVerification ? test.skip : test;'
+        )
+
+        for test_file in NETWORK_DEPENDENT_ARTIFACT_TESTS:
+            with self.subTest(test_file=test_file.relative_to(ROOT).as_posix()):
+                self.assertTrue(test_file.is_file())
+                source = test_file.read_text(encoding="utf-8")
+                self.assertEqual(1, source.count("SYLVARA_OFFLINE_QUICK_VERIFY"))
+                self.assertIn("artifactTest(", source)
+                if "SYLVARA_ARTIFACT_INNER_VERIFY" in source:
+                    self.assertIn(recursive_guard, source)
+                else:
+                    self.assertTrue(
+                        direct_guard.format(quote='"') in source
+                        or direct_guard.format(quote="'") in source
+                    )
 
     def test_every_required_check_is_owned_by_the_entrypoint(self) -> None:
         for required_fragment in (

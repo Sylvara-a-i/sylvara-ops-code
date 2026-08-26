@@ -3,12 +3,13 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
+const publicApi = require('..');
 const {
   computeApprovedInputDigest,
   createMigrationPlan,
-  executeMigration,
   MigrationError,
-} = require('..');
+} = publicApi;
+const { executeMigration } = require('../lib/executor');
 
 const DIGEST_KEY = 'synthetic-only-digest-key-material-000000000000000000000000';
 
@@ -111,6 +112,19 @@ function createAdapter(privateInput = privateInputFixture(), options = {}) {
   };
   return { adapter, targets, quarantines, calls };
 }
+
+test('public API excludes the arbitrary-adapter executor and blocks package subpath bypass', () => {
+  assert.equal(Object.hasOwn(publicApi, 'executeMigration'), false);
+  assert.equal(Object.hasOwn(publicApi, 'createFixedTargetMigrationAdapter'), false);
+  assert.throws(
+    () => require('revenue-desk-canonical-table-migration/lib/executor'),
+    (error) => error?.code === 'ERR_PACKAGE_PATH_NOT_EXPORTED',
+  );
+  assert.throws(
+    () => require('revenue-desk-canonical-table-migration/lib/fixed-target-adapter'),
+    (error) => error?.code === 'ERR_PACKAGE_PATH_NOT_EXPORTED',
+  );
+});
 
 test('planner copies only allowlisted projections and quarantines every conflict', () => {
   const contract = contractFixture();

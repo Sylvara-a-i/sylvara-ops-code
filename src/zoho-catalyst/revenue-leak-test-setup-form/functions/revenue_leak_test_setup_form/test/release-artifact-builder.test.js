@@ -16,7 +16,8 @@ const target = "revenue_leak_test_setup_form";
 const sourceSentinel = "__SYLVARA_UNSTAMPED_SOURCE_REVISION__";
 const destinationSentinel = "__SYLVARA_UNSTAMPED_FORM_DESTINATION_SHA256__";
 const approvedDestination = "c".repeat(64);
-const innerVerification = process.env.SYLVARA_ARTIFACT_INNER_VERIFY === "1";
+const innerVerification = process.env.SYLVARA_ARTIFACT_INNER_VERIFY === "1" ||
+  process.env.SYLVARA_OFFLINE_QUICK_VERIFY === "1";
 const artifactTest = innerVerification ? test.skip : test;
 
 function copyTree(source, destination) {

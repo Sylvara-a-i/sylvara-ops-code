@@ -53,6 +53,9 @@ $RevenueDeskAnalyticsRoot = Join-PathSegments $RepoRoot @(
 $RevenueDeskReleaseRoot = Join-PathSegments $RepoRoot @(
     "src", "zoho-catalyst", "revenue-desk-release"
 )
+$CrmFreeRevenueLeakTestRoot = Join-PathSegments $RepoRoot @(
+    "src", "zoho-crm", "free-revenue-leak-test"
+)
 $RevenueDeskInventoryPath = Join-PathSegments $RepoRoot @(
     "src", "zoho-catalyst", "development-function-inventory.json"
 )
@@ -495,7 +498,13 @@ try {
         }
         $useRegistry = $Bootstrap -or $Mode -eq "All"
 
+        # The artifact builder sets this only for its recursive package test. A
+        # top-level verification run must not inherit it and silently skip the
+        # outer release-artifact suites.
+        $env:SYLVARA_ARTIFACT_INNER_VERIFY = "0"
+
         if ($useRegistry) {
+            $env:SYLVARA_OFFLINE_QUICK_VERIFY = "0"
             Write-Host "Registry access is enabled for hash-pinned dependency installation."
             Ensure-LocalPythonEnvironment -BasePython $python
             $python = (Resolve-Path -LiteralPath $VenvPython).Path
@@ -555,6 +564,7 @@ try {
         } else {
             $env:npm_config_offline = "true"
             $env:npm_config_update_notifier = "false"
+            $env:SYLVARA_OFFLINE_QUICK_VERIFY = "1"
             Write-Host "Quick mode disables npm registry access and uses existing local dependencies."
         }
 
@@ -594,6 +604,12 @@ try {
         Invoke-Native -Label "Python regression tests" -Executable $python `
             -Arguments @(
                 "-m", "unittest", "discover", "-s", "tools/safety/tests",
+                "-p", "test_*.py", "-v"
+            )
+        Invoke-Native -Label "CRM free Revenue Leak Test contract checks" -Executable $python `
+            -Arguments @(
+                "-m", "unittest", "discover", "-s",
+                (Join-Path $CrmFreeRevenueLeakTestRoot "tests"),
                 "-p", "test_*.py", "-v"
             )
 
@@ -651,7 +667,7 @@ try {
         Invoke-Native -Label "Revenue Desk Analytics checks and tests" -Executable $npm `
             -Arguments @("run", "ci", "--prefix", $RevenueDeskAnalyticsRoot)
         Invoke-Native -Label "Revenue Desk six-function release checks" -Executable $npm `
-            -Arguments @("test", "--prefix", $RevenueDeskReleaseRoot)
+            -Arguments @("run", "ci", "--prefix", $RevenueDeskReleaseRoot)
 
         Write-Host "Verification passed ($Mode mode)."
     } finally {

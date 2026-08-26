@@ -14,7 +14,8 @@ const repositoryRoot = path.resolve(controllerRoot, "../../..");
 const componentSubpath = "src/zoho-catalyst/revenue-leak-test-request-form";
 const target = "revenue_leak_test_request_form";
 const sentinel = "__SYLVARA_UNSTAMPED_SOURCE_REVISION__";
-const innerVerification = process.env.SYLVARA_ARTIFACT_INNER_VERIFY === "1";
+const innerVerification = process.env.SYLVARA_ARTIFACT_INNER_VERIFY === "1" ||
+  process.env.SYLVARA_OFFLINE_QUICK_VERIFY === "1";
 const artifactTest = innerVerification ? test.skip : test;
 
 function copyTree(source, destination) {

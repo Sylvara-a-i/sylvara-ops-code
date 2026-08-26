@@ -9,7 +9,7 @@
     "node": "24.x"
   },
   "scripts": {
-    "check": "node --check index.js && node --check lib/action-contract.js && node --check lib/analytics-outbox.js && node --check lib/billing-client.js && node --check lib/catalyst-adapter.js && node --check lib/commercial-terms.js && node --check lib/config.js && node --check lib/connection-boundary.js && node --check lib/crm-client.js && node --check lib/http.js && node --check lib/idempotency.js && node --check lib/lifecycle-handler.js && node --check lib/operation-timeout.js && node --check lib/report-summary.js && node --check lib/safe-log.js && node --check lib/source-revision.js && node --check ../../scripts/build-development-artifact.js",
+    "check": "node --check index.js && node --check lib/action-contract.js && node --check lib/analytics-outbox.js && node --check lib/billing-client.js && node --check lib/catalyst-adapter.js && node --check lib/commercial-terms.js && node --check lib/config.js && node --check lib/connection-boundary.js && node --check lib/crm-client.js && node --check lib/http.js && node --check lib/idempotency.js && node --check lib/lifecycle-handler.js && node --check lib/operation-timeout.js && node --check lib/report-summary.js && node --check lib/safe-log.js && node --check lib/source-revision.js && node --check ../../scripts/build-development-artifact.js && node --check ../../tools/validate-private-catalog-packet.js",
     "test": "node --test test/*.test.js",
     "ci": "npm run check && npm test",
     "artifact:build": "node ../../scripts/build-development-artifact.js",

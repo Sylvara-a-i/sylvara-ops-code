@@ -1,5 +1,6 @@
 {
   "schema_version": 3,
+  "contract_revision": "2026-08-26-provider-5-plus-3",
   "status": "desired_state_pending_synthetic_acceptance",
   "customer_facing_offer": "Free Revenue Leak Test",
   "legacy_internal_offer_value": "7-Day Revenue Leak Test",
@@ -90,11 +91,101 @@
     {
       "logical_name": "DEAL_INITIALIZATION",
       "module": "Deals",
-      "single_active_rule": "Deals Free Test Initialize Controls",
+      "provider_action_limit": 5,
+      "provider_rule_topology": "required_5_plus_3_split",
+      "provider_constraint_evidence": {
+        "observed_at_utc_date": "2026-08-25",
+        "method": "read-only workflow-configuration readback",
+        "maximum_associated_field_updates_per_condition": 5,
+        "private_identifiers_committed": false,
+        "write_performed": false
+      },
+      "connected_writer_payload_contract": "unverified_blocker",
       "criteria": [
         "Entry_Offer equals entry_offer_values.crm_display_value",
         "Setup_Form_Submission_ID is empty"
       ],
+      "provider_rules": [
+        {
+          "rule_name": "Deals Free Test Initialize Controls",
+          "trigger": "create_only",
+          "action_count": 5,
+          "field_updates": [
+            { "api_name": "Setup_Access_Status", "value": "Not Issued" },
+            { "api_name": "Free_Test_Authorization_Status", "value": "Not Sent" },
+            { "api_name": "Go_Live_Approval_Status", "value": "Not Ready" },
+            { "api_name": "Test_Status", "value": "Not Started" },
+            { "api_name": "Test_Duration_Days", "value": 7 }
+          ]
+        },
+        {
+          "rule_name": "Deals Free Test Initialize Limits",
+          "trigger": "create_only",
+          "action_count": 3,
+          "field_updates": [
+            { "api_name": "Test_Call_Limit", "value": 25 },
+            { "api_name": "Test_Scope_Version", "value": "free-test-scope-v1.0" },
+            { "api_name": "Type", "value": "Initial Sale" }
+          ]
+        }
+      ],
+      "post_create_reconciliation": {
+        "status": "required_desired_state_not_deployable",
+        "purpose": "Detect and repair exactly one missing initializer group without weakening the approved create-only 5+3 provider split.",
+        "deployable_source_in_repository": false,
+        "live_write_authorized": false,
+        "trigger": "After both create-only provider rules have had an opportunity to reach terminal provider state and before Form 2, go-live, or Billing activity.",
+        "eligibility": [
+          "the Deal is a clearly labeled disposable ZZZ SYNTHETIC record",
+          "the Deal still satisfies the exact DEAL_INITIALIZATION entry criteria",
+          "a fresh authoritative Deal read covers the eight initializer API names, with a missing value represented only by an absent key or null",
+          "the current provider-rule identities and field-update definitions independently match this contract",
+          "no downstream Form 2, go-live, paid acceptance, Billing, or terminal test state exists"
+        ],
+        "group_bindings": {
+          "controls": "Deals Free Test Initialize Controls",
+          "limits": "Deals Free Test Initialize Limits"
+        },
+        "group_classification": {
+          "exact": "Every field in the bound provider rule is present and strictly equals its contracted default.",
+          "repairable_missing": "At least one field is absent or null, and every present field strictly equals its contracted default. An empty string or any other non-default value is a conflict.",
+          "conflict": "Any present field differs from its contracted default, the authoritative read cannot classify all eight API names, the read is ambiguous, or eligibility is not proven."
+        },
+        "matrix_axes": { "rows": "controls", "columns": "limits" },
+        "decision_matrix": {
+          "exact": {
+            "exact": { "outcome": "no_write", "write_group": null },
+            "repairable_missing": { "outcome": "repair_missing_group", "write_group": "limits" },
+            "conflict": { "outcome": "block", "write_group": null }
+          },
+          "repairable_missing": {
+            "exact": { "outcome": "repair_missing_group", "write_group": "controls" },
+            "repairable_missing": { "outcome": "block", "write_group": null },
+            "conflict": { "outcome": "block", "write_group": null }
+          },
+          "conflict": {
+            "exact": { "outcome": "block", "write_group": null },
+            "repairable_missing": { "outcome": "block", "write_group": null },
+            "conflict": { "outcome": "block", "write_group": null }
+          }
+        },
+        "repair_write_contract": [
+          "derive the write only from the field_updates of the one bound missing provider rule",
+          "write the complete missing group and no field from the already exact group",
+          "fresh-read and reclassify both groups immediately before the one bounded write",
+          "do not retry an ambiguous or failed write automatically",
+          "independently read all eight fields back and require both groups to be exact before reporting convergence",
+          "block and preserve coarse reconciliation-required evidence on any conflict, drift, ambiguity, or readback mismatch"
+        ],
+        "prohibited_effects": [
+          "changing the create-only trigger or the approved 5+3 split",
+          "repairing both groups in one operation",
+          "overwriting a conflicting non-null value",
+          "mutating Stage, Form 2 state, go-live state, test timing, paid acceptance, Billing, Zoho Sign, SMS, or customer communication",
+          "running against a real customer or prospect"
+        ],
+        "implementation_gate": "A separately reviewed typed CRM writer contract, exact ZZZ SYNTHETIC canary, ambiguous-write containment, and independent readback are still required before deployment."
+      },
       "effects": [
         "initialize Setup Access Status",
         "initialize Free Test Authorization Status",
@@ -106,7 +197,12 @@
         "initialize Type as Initial Sale"
       ],
       "repeat": false,
-      "supersedes": ["Deals Free Test Initialize Limits"]
+      "split_invariants": [
+        "both provider rules use the same create-only entry criterion",
+        "neither provider rule exceeds five associated field updates",
+        "the eight updates are disjoint and collectively complete",
+        "Type equals Initial Sale must still be supplied before Deal creation because workflow updates cannot satisfy pre-save validation"
+      ]
     },
     {
       "logical_name": "FORM2_SUBMISSION",

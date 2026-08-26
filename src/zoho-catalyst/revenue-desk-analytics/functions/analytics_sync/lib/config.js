@@ -20,6 +20,13 @@ const ANALYTICS_HOSTS = new Set([
 const RECORD_TYPES = Object.freeze([
   'deployment', 'call', 'daily_metric', 'final_test_result', 'conversion_status',
 ]);
+const TARGET_TABLE_NAMES = Object.freeze({
+  deployment: 'RevenueDeskAnalyticsDeploymentFacts',
+  call: 'RevenueDeskAnalyticsCallFacts',
+  daily_metric: 'RevenueDeskAnalyticsDailyMetricFacts',
+  final_test_result: 'RevenueDeskAnalyticsFinalTestResultFacts',
+  conversion_status: 'RevenueDeskAnalyticsConversionStatusFacts',
+});
 
 function required(environment, name) {
   const value = environment[name];
@@ -84,10 +91,14 @@ function parseTargets(raw) {
     const target = value[recordType];
     invariant(target && typeof target === 'object' && !Array.isArray(target)
       && Object.keys(target).sort().join(',') === 'table,view_id'
-      && TABLE_PATTERN.test(target.table) && /^\d{3,30}$/.test(String(target.view_id)),
+      && TABLE_PATTERN.test(target.table) && target.table === TARGET_TABLE_NAMES[recordType]
+      && /^\d{3,30}$/.test(String(target.view_id)),
     'CONFIG_INVALID', 'Analytics target binding is invalid.');
     targets[recordType] = Object.freeze({ table: target.table, viewId: String(target.view_id) });
   }
+  invariant(new Set(Object.values(targets).map((target) => target.viewId)).size
+    === RECORD_TYPES.length, 'CONFIG_INVALID',
+  'Analytics target view IDs must be unique across the approved record types.');
   return Object.freeze(targets);
 }
 
@@ -182,4 +193,5 @@ module.exports = {
   RECORD_TYPES,
   REVISION_PATTERN,
   TABLE_PATTERN,
+  TARGET_TABLE_NAMES,
 };

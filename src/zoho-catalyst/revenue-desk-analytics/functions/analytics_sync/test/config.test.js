@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { loadConfig } = require('../lib/config');
+const { loadConfig, TARGET_TABLE_NAMES } = require('../lib/config');
 const REVISION = 'a'.repeat(40);
 
 function environment(overrides = {}) {
@@ -24,7 +24,7 @@ function activeEnvironment(overrides = {}) {
     ANALYTICS_TARGETS_JSON: JSON.stringify(Object.fromEntries([
       'deployment', 'call', 'daily_metric', 'final_test_result', 'conversion_status',
     ].map((recordType, index) => [recordType,
-      { table: `Synthetic${index}`, view_id: String(1000 + index) }]))),
+      { table: TARGET_TABLE_NAMES[recordType], view_id: String(1000 + index) }]))),
     ...overrides,
   });
 }
@@ -56,7 +56,7 @@ test('active Development configuration validates separate Connections, exact tar
     { read: config.provider.readConnection, write: config.provider.writeConnection },
     { read: 'analytics_read', write: 'analytics_write' },
   );
-  assert.equal(config.provider.targets.call.table, 'Synthetic1');
+  assert.equal(config.provider.targets.call.table, 'RevenueDeskAnalyticsCallFacts');
   assert.equal(config.provider.migrationEvidenceDigest, 'b'.repeat(64));
   assert.throws(() => loadConfig(activeEnvironment({
     ANALYTICS_WRITE_CONNECTION_LINK_NAME: 'analytics_read',
@@ -70,6 +70,16 @@ test('active Development configuration validates separate Connections, exact tar
   assert.throws(() => loadConfig(activeEnvironment({
     ANALYTICS_API_BASE_URL: 'https://analyticsapi.zoho.com:444',
   }), REVISION), /regional Zoho Analytics/);
+  const wrongTargets = JSON.parse(activeEnvironment().ANALYTICS_TARGETS_JSON);
+  wrongTargets.call.table = 'LegacyCallTable';
+  assert.throws(() => loadConfig(activeEnvironment({
+    ANALYTICS_TARGETS_JSON: JSON.stringify(wrongTargets),
+  }), REVISION), /target binding/);
+  const duplicateTargets = JSON.parse(activeEnvironment().ANALYTICS_TARGETS_JSON);
+  duplicateTargets.call.view_id = duplicateTargets.deployment.view_id;
+  assert.throws(() => loadConfig(activeEnvironment({
+    ANALYTICS_TARGETS_JSON: JSON.stringify(duplicateTargets),
+  }), REVISION), /view IDs must be unique/);
 });
 
 test('runtime revision must exactly match an immutable stamped artifact revision', () => {

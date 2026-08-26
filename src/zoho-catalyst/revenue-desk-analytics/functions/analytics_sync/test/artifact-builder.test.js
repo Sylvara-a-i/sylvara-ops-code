@@ -6,6 +6,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const test = require('node:test');
+const artifactTest = process.env.SYLVARA_OFFLINE_QUICK_VERIFY === '1' ? test.skip : test;
 
 const builderPath = path.resolve(__dirname, '../../../tools/build-release-artifact.js');
 const verifierPath = path.resolve(__dirname, '../verify-artifact.js');
@@ -77,7 +78,7 @@ function fixture(testContext) {
     script: path.join(component, 'tools', path.basename(builderPath)) };
 }
 
-test('release builder exports and stamps exact clean Git source without mutating checkout', (testContext) => {
+artifactTest('release builder exports and stamps exact clean Git source without mutating checkout', (testContext) => {
   const source = fixture(testContext);
   const result = spawnSync(process.execPath, [source.script], {
     cwd: source.repository, encoding: 'utf8', windowsHide: true,
@@ -126,7 +127,7 @@ test('release builder exports and stamps exact clean Git source without mutating
     '--untracked-files=all']), '');
 });
 
-test('release builder rejects a dirty checkout before creating a release', (testContext) => {
+artifactTest('release builder rejects a dirty checkout before creating a release', (testContext) => {
   const source = fixture(testContext);
   fs.appendFileSync(path.join(source.component, 'catalyst.json'), '\n');
   const before = fs.readdirSync(source.artifactParent);

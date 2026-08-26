@@ -7,6 +7,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
+const artifactTest = process.env.SYLVARA_OFFLINE_QUICK_VERIFY === "1" ? test.skip : test;
 
 const builderPath = path.resolve(__dirname, "../../../scripts/build-development-artifact.js");
 const {
@@ -106,7 +107,7 @@ function builderEnvironment(fixture) {
   };
 }
 
-test("builder accepts an 11-character ZAID, exports clean Git state, and never deploys by default", (testContext) => {
+artifactTest("builder accepts an 11-character ZAID, exports clean Git state, and never deploys by default", (testContext) => {
   assert.equal(SYNTHETIC_ZAID.length, 11);
   const fixture = syntheticRepository(testContext);
   const result = spawnSync(process.execPath, [fixture.script], {
@@ -162,7 +163,7 @@ test("builder accepts an 11-character ZAID, exports clean Git state, and never d
   assert.doesNotMatch(`${dirty.stdout}${dirty.stderr}`, new RegExp(SYNTHETIC_PROOF));
 });
 
-test("builder rejects empty, control-character, and oversized ZAIDs", (testContext) => {
+artifactTest("builder rejects empty, control-character, and oversized ZAIDs", (testContext) => {
   const fixture = syntheticRepository(testContext);
   const rootsBefore = fs.readdirSync(fixture.artifactParent).sort();
   const invalidZaids = ["", "synthetic\tzaid", "z".repeat(4097)];
@@ -185,7 +186,7 @@ test("builder rejects empty, control-character, and oversized ZAIDs", (testConte
   }
 });
 
-test("deploy arguments are hard-scoped to the one Development function", () => {
+artifactTest("deploy arguments are hard-scoped to the one Development function", () => {
   const args = catalystDeployArguments({
     CATALYST_PROJECT_ID: "100000000000001",
     CATALYST_ORG_ID: "100000000000002",
@@ -209,7 +210,7 @@ test("deploy arguments are hard-scoped to the one Development function", () => {
   }), /confirmation is missing/);
 });
 
-test("lockfile validation rejects local, linked, and escaping dependency sources", (testContext) => {
+artifactTest("lockfile validation rejects local, linked, and escaping dependency sources", (testContext) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "crm-billing-lock-test-"));
   testContext.after(() => fs.rmSync(root, { recursive: true, force: true }));
   writeJson(path.join(root, "package.json"), {
@@ -229,11 +230,11 @@ test("lockfile validation rejects local, linked, and escaping dependency sources
   assert.throws(() => validateLockfile(root), /dependency declaration|escaping or linked/);
 });
 
-test("the committed component lockfile stays inside the approved registry boundary", () => {
+artifactTest("the committed component lockfile stays inside the approved registry boundary", () => {
   validateLockfile(path.resolve(__dirname, ".."));
 });
 
-test("artifact validation rejects a symbolic-link escape", (testContext) => {
+artifactTest("artifact validation rejects a symbolic-link escape", (testContext) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "crm-billing-symlink-test-"));
   testContext.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const artifact = path.join(root, "artifact");
@@ -249,7 +250,7 @@ test("artifact validation rejects a symbolic-link escape", (testContext) => {
   assert.throws(() => validateArtifactTree(artifact), /symbolic link escapes/);
 });
 
-test("stamping rejects an already stamped or incomplete template", (testContext) => {
+artifactTest("stamping rejects an already stamped or incomplete template", (testContext) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "crm-billing-stamp-test-"));
   testContext.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const stamp = path.join(root, "functions", FUNCTION_TARGET, "lib", "source-revision.js");

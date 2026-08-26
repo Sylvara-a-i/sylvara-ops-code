@@ -6,6 +6,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
+const artifactTest = process.env.SYLVARA_OFFLINE_QUICK_VERIFY === "1" ? test.skip : test;
 const { spawnSync } = require("node:child_process");
 
 const {
@@ -95,7 +96,7 @@ function fileMap(root) {
   return result;
 }
 
-test("builder exports one deterministic Advanced I/O target and keeps private binding out of its manifest", (t) => {
+artifactTest("builder exports one deterministic Advanced I/O target and keeps private binding out of its manifest", (t) => {
   const parent = fs.mkdtempSync(path.join(os.tmpdir(), "billing-gateway-artifact-test-"));
   t.after(() => fs.rmSync(parent, { recursive: true, force: true }));
   const fixture = createFixture(parent);
@@ -182,7 +183,7 @@ test("builder exports one deterministic Advanced I/O target and keeps private bi
   }
 });
 
-test("builder refuses wrong or dirty Git state and unsafe output or private inputs", (t) => {
+artifactTest("builder refuses wrong or dirty Git state and unsafe output or private inputs", (t) => {
   const parent = fs.mkdtempSync(path.join(os.tmpdir(), "billing-gateway-refusal-test-"));
   t.after(() => fs.rmSync(parent, { recursive: true, force: true }));
   const fixture = createFixture(parent);
@@ -217,7 +218,7 @@ test("builder refuses wrong or dirty Git state and unsafe output or private inpu
   assert.match(dirty.stderr, /repository checkout is not clean/);
 });
 
-test("builder fails closed when committed target metadata or stamp templates drift", (t) => {
+artifactTest("builder fails closed when committed target metadata or stamp templates drift", (t) => {
   const parent = fs.mkdtempSync(path.join(os.tmpdir(), "billing-gateway-contract-test-"));
   t.after(() => fs.rmSync(parent, { recursive: true, force: true }));
   const fixture = createFixture(parent);
@@ -245,7 +246,7 @@ test("builder fails closed when committed target metadata or stamp templates dri
   assert.match(stampDrift.stderr, /source revision template is not the exact unstamped form/);
 });
 
-test("builder CLI rejects deploy flags and ambiguous output arguments", () => {
+artifactTest("builder CLI rejects deploy flags and ambiguous output arguments", () => {
   assert.deepEqual(parseArguments([]), { help: false, outputRoot: null });
   assert.deepEqual(parseArguments(["--output", "C:\\artifact"]), {
     help: false,

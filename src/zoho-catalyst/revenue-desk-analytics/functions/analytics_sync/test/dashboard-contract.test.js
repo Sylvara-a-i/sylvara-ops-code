@@ -24,6 +24,7 @@ test('declares the two exact fail-closed dashboard contracts', () => {
   ]);
 
   for (const dashboard of contract.dashboards) {
+    assert.equal(dashboard.pre_render_gate_key, contract.pre_render_gate.model_gate_key);
     assert.equal(dashboard.access.public_link, false);
     assert.equal(dashboard.access.embed, false);
     assert.equal(dashboard.access.scheduled_export, false);
@@ -32,6 +33,10 @@ test('declares the two exact fail-closed dashboard contracts', () => {
     assert.ok(dashboard.required_filters.some(({ column }) => column === 'ENVIRONMENT'));
     assert.ok(dashboard.required_filters.some(({ column, fixed_value: fixed }) =>
       column === 'ENGAGEMENT_TYPE' && fixed === 'free_test'));
+    assert.match(
+      dashboard.widgets.find(({ title }) => title === 'Data Freshness').definition,
+      /never emits or implies Healthy.*pre-render/i,
+    );
   }
 
   const customer = contract.dashboards[1];
@@ -46,6 +51,16 @@ test('declares the two exact fail-closed dashboard contracts', () => {
     customer.widgets.find(({ title }) => title === 'Value Evidence').definition,
     /separately by VALUE_EVIDENCE_CLASS and VALUE_CURRENCY/,
   );
+  for (const title of ['Bookable Evidence', 'Office Follow-Up']) {
+    const widget = customer.widgets.find((candidate) => candidate.title === title);
+    assert.equal(widget.source, 'optional_evidence');
+    assert.match(widget.definition, /available plus 0 is a verified zero/i);
+    assert.match(widget.definition, /not_available plus null displays Not Available/i);
+  }
+  assert.deepEqual(contract.pre_render_gate.required_before,
+    ['dashboard visibility', 'fixed-client rendering', 'Reconciled label']);
+  assert.match(contract.pre_render_gate.blocked_behavior,
+    /Do not substitute a recent timestamp.*for the ready verdict/i);
 });
 
 test('conversion producer preserves its free-test origin and passes the unchanged dashboard partition', () => {
