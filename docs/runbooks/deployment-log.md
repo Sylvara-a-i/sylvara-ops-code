@@ -8,7 +8,25 @@ A merged pull request is not a deployment. Record an entry only after an authori
 
 ## Current State
 
-The production configuration events recorded here are the 2026-08-14 Free-Test CRM workflow and Blueprint work; the 2026-08-05 Sylvara Zoho CRM schema/layout/address work; and the same-day Zoho Books chart deployment, Schedule C hierarchy amendment, and final tax-preparer description correction. The Free-Test CRM event configured intake and Deal automation but did not automate native Lead conversion or prove Zoho Forms settings. The Books events wrote chart metadata and active status only; no transaction record, journal, bank, clearing, tax-engine, or integration was written. Chart metadata can change historical report presentation even when transaction records remain unchanged.
+The Development event recorded here is the contained 2026-08-26 Revenue Desk datastore schema attempt. The production configuration events are the 2026-08-14 Free-Test CRM workflow and Blueprint work; the 2026-08-05 Sylvara Zoho CRM schema/layout/address work; and the same-day Zoho Books chart deployment, Schedule C hierarchy amendment, and final tax-preparer description correction. The Free-Test CRM event configured intake and Deal automation but did not automate native Lead conversion or prove Zoho Forms settings. The Books events wrote chart metadata and active status only; no transaction record, journal, bank, clearing, tax-engine, or integration was written. Chart metadata can change historical report presentation even when transaction records remain unchanged.
+
+## 2026-08-26 — Revenue Desk Development Packet A Partial Execution And Containment
+
+```text
+Date (UTC): 2026-08-26
+Environment class: development
+Change reference: pull request #49; approved source commit d68d589c455618756ae9ed812e3d27ce059eecb4
+Immutable artifact reference: src/zoho-catalyst/evidence/free-revenue-leak-test-development-packet-a-execution-2026-08-26.json
+Approval reference: explicit owner approval retained in the private Codex task
+Operator role: first-party Catalyst UI fallback for the untyped column-write gap, with independent Sylvara Catalyst Audit connector readback
+Pre-deployment state: verified; the configuration-version table was empty and lacked exactly seven approved columns, the Analytics outbox contained 307 legacy rows and lacked PROVIDER_VERSION_KEY, and both requested Job pools were absent
+Action: configuration change; create and read back the seven approved configuration-version columns, then attempt the approved nullable unique PROVIDER_VERSION_KEY addition before any Job-pool creation
+Smoke-test result: blocked; no function, route, Job, caller, migration, or runtime was bound or exercised
+Readback result: matched for the seven successful columns; the configuration table remained empty with 23 total columns, the outbox attempt created no column, the fully paginated outbox row count remained 307 with no row mutation attempted, permissions and scopes remained unchanged, and neither requested Job pool existed
+Rollback target: leave the successful additive columns unused in the empty table; no destructive rollback is authorized or required
+Outcome: contained partial success; the packet stopped on the outbox-column mismatch and did not invoke either typed Job-pool creation
+Follow-up: verify a provider-supported rollback-safe path for adding the nullable unique column to the nonempty table, capture fresh prestate, and obtain new scoped approval before any retry or remaining Packet A write
+```
 
 ## 2026-08-14 — Zoho CRM Free-Test Workflows And Deal Blueprint
 

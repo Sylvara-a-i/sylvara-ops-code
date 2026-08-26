@@ -32,7 +32,10 @@
       "RevenueDeskCalls",
       "RevenueDeskNotifications",
       "RevenueLeakTestRequestFormSessions"
-    ]
+    ],
+    "configuration_version_required_application_columns_exact": true,
+    "analytics_outbox_provider_version_key_present": false,
+    "packet_a_execution_evidence": "evidence/free-revenue-leak-test-development-packet-a-execution-2026-08-26.json"
   },
   "row_accounting": {
     "retained_in_place": 317,
@@ -40,8 +43,8 @@
     "discarded_without_evidence": 0
   },
   "disposition_counts": {
-    "retain_additive": 3,
-    "retain_bind_canonical": 10,
+    "retain_additive": 2,
+    "retain_bind_canonical": 11,
     "quarantine_then_delete": 14,
     "delete_after_dependency_absence": 8,
     "create_additive_canonical": 0,
@@ -118,17 +121,20 @@
       "observed_rows": 0,
       "row_count_observed_at": "2026-08-26",
       "row_count_method": "empty-page-readback",
+      "schema_observed_at": "2026-08-26",
+      "required_application_columns_exact": true,
+      "post_execution_evidence": "evidence/free-revenue-leak-test-development-packet-a-execution-2026-08-26.json",
       "owner": "revenue_desk_call_gateway-and-worker",
       "purpose": "Authoritative immutable call-runtime configuration versions.",
-      "generation": "canonical-call-runtime-incomplete-schema",
+      "generation": "canonical-call-runtime",
       "expected_readers": ["revenue_desk_call_gateway", "revenue_desk_call_worker"],
       "expected_writers": [],
       "active_bindings_verified": false,
-      "ownership_evidence": "fresh-schema-readback-additive-completion-and-private-binding-proof-required",
+      "ownership_evidence": "exact-schema-readback-complete-and-private-binding-proof-required",
       "semantic_successors": ["RevenueDeskConfigurationVersions"],
-      "action": "retain_additive",
+      "action": "retain_bind_canonical",
       "active_promotion_allowed": false,
-      "gate_profile": "retain_additive_empty",
+      "gate_profile": "retain_bind_empty",
       "rollback": "Disable both canonical call-runtime functions, leave additive columns unused, and retain the empty canonical table."
     },
     {
@@ -650,13 +656,6 @@
       "Read back exact schema, unique constraints, permissions, and App User denial.",
       "Bind only the exact canonical function and run isolated synthetic concurrency tests.",
       "Disable the function route or Job and retain rows for rollback."
-    ],
-    "retain_additive_empty": [
-      "Confirm the table remains empty immediately before every additive change.",
-      "Read back exact existing schema, constraints, permissions, and case-insensitive column noncollision.",
-      "Add only the reviewed missing columns one at a time and independently read back each result.",
-      "Bind no function, route, Job, Cron, or caller until the completed schema passes exact readback.",
-      "On any mismatch, stop and leave additive columns unused; do not delete or rebuild the table."
     ],
     "legacy_nonzero_quarantine": [
       "Disable and read back every writer, reader, route, Job, Cron, webhook, and caller.",

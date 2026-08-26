@@ -1,0 +1,189 @@
+{
+  "schema_version": 1,
+  "record_type": "sanitized_free_revenue_leak_test_development_packet_a_execution",
+  "execution_date_utc": "2026-08-26",
+  "environment": "Development",
+  "source_revision_at_execution": "d68d589c455618756ae9ed812e3d27ce059eecb4",
+  "pull_request": 49,
+  "outcome": "contained_partial_success",
+  "authorization": {
+    "approval_reference": "owner-approval-retained-in-private-task-record",
+    "approved_scope": [
+      "add seven exact columns to the empty RevenueDeskConfigurationVersions table",
+      "attempt one exact nullable unique PROVIDER_VERSION_KEY addition to AnalyticsSyncOutbox",
+      "create two exact unbound Function Job pools only if every preceding change and readback matched"
+    ],
+    "one_change_then_independent_readback_required": true,
+    "stop_on_any_mismatch": true,
+    "original_approval_exhausted_after_stop": true,
+    "retry_or_remaining_write_requires_fresh_approval": true
+  },
+  "execution_surfaces": {
+    "identity_prestate_and_readback": "Sylvara Catalyst Audit connector",
+    "column_write": "first-party authenticated Catalyst UI fallback",
+    "column_write_fallback_reason": "the advertised Catalyst Changes create-column body was an untyped array and did not provide a safe reviewed payload contract",
+    "job_pool_write": "typed Sylvara Catalyst Changes connector",
+    "direct_rest_or_shell_automation_used": false,
+    "different_connector_used_as_substitute": false
+  },
+  "prestate": {
+    "approved_target_identity_status": "verified-against-the-private-approved-target",
+    "configuration_version_table_rows": 0,
+    "configuration_version_total_columns": 16,
+    "approved_configuration_columns_absent": true,
+    "analytics_outbox_rows": 307,
+    "analytics_outbox_total_columns": 71,
+    "provider_version_key_absent": true,
+    "legacy_outbox_rows_with_null_outbox_key": 307,
+    "existing_nullable_unique_outbox_key_constraint_verified": true,
+    "requested_job_pools_absent": true,
+    "source_evidence": "free-revenue-leak-test-live-prestate-2026-08-26.json"
+  },
+  "configuration_version_columns": [
+    {
+      "api_name": "PLAN_TIER",
+      "type": "varchar",
+      "max_length": 64,
+      "mandatory": true,
+      "unique": false,
+      "search_indexed": false,
+      "audit_consent": false,
+      "result": "created_and_independently_read_back"
+    },
+    {
+      "api_name": "DEPLOYMENT_STATUS",
+      "type": "varchar",
+      "max_length": 32,
+      "mandatory": true,
+      "unique": false,
+      "search_indexed": false,
+      "audit_consent": false,
+      "result": "created_and_independently_read_back"
+    },
+    {
+      "api_name": "GO_LIVE_APPROVAL_STATUS",
+      "type": "varchar",
+      "max_length": 32,
+      "mandatory": true,
+      "unique": false,
+      "search_indexed": false,
+      "audit_consent": false,
+      "result": "created_and_independently_read_back"
+    },
+    {
+      "api_name": "LIMIT_POLICY",
+      "type": "varchar",
+      "max_length": 100,
+      "mandatory": true,
+      "unique": false,
+      "search_indexed": false,
+      "audit_consent": false,
+      "result": "created_and_independently_read_back"
+    },
+    {
+      "api_name": "BILLING_MODE",
+      "type": "varchar",
+      "max_length": 64,
+      "mandatory": true,
+      "unique": false,
+      "search_indexed": false,
+      "audit_consent": false,
+      "result": "created_and_independently_read_back"
+    },
+    {
+      "api_name": "NUMBER_OWNERSHIP",
+      "type": "varchar",
+      "max_length": 64,
+      "mandatory": true,
+      "unique": false,
+      "search_indexed": false,
+      "audit_consent": false,
+      "result": "created_and_independently_read_back"
+    },
+    {
+      "api_name": "ENVIRONMENT",
+      "type": "varchar",
+      "max_length": 16,
+      "mandatory": true,
+      "unique": false,
+      "search_indexed": false,
+      "audit_consent": false,
+      "result": "created_and_independently_read_back"
+    }
+  ],
+  "analytics_outbox_column": {
+    "api_name": "PROVIDER_VERSION_KEY",
+    "approved_contract": {
+      "type": "varchar",
+      "max_length": 64,
+      "mandatory": false,
+      "unique": true,
+      "search_indexed": false,
+      "audit_consent": true
+    },
+    "ui_attempt_count": 1,
+    "ui_result": "ambiguous_no_create",
+    "independent_connector_readback": "column_absent",
+    "retry_attempted": false,
+    "raw_provider_error_included": false
+  },
+  "job_pools": {
+    "approved_targets": [
+      {
+        "name": "RevenueDeskCallJobs",
+        "type": "Function",
+        "memory_mb": 512
+      },
+      {
+        "name": "RevenueDeskAnalyticsJobs",
+        "type": "Function",
+        "memory_mb": 512
+      }
+    ],
+    "create_calls_invoked": 0,
+    "result": "not_invoked_after_stop_on_mismatch",
+    "independent_readback": "both_targets_absent"
+  },
+  "poststate": {
+    "configuration_version_table_rows": 0,
+    "configuration_version_total_columns": 23,
+    "configuration_version_required_application_columns_exact": true,
+    "analytics_outbox_rows": 307,
+    "analytics_outbox_total_columns": 71,
+    "provider_version_key_present": false,
+    "analytics_outbox_full_pagination_complete": true,
+    "analytics_outbox_row_count_unchanged": true,
+    "analytics_outbox_row_mutation_attempted": false,
+    "requested_job_pools_present": false,
+    "app_user_permissions_empty_on_both_tables": true,
+    "administrator_permissions_exact_on_both_tables": [
+      "SELECT",
+      "UPDATE",
+      "INSERT",
+      "DELETE"
+    ],
+    "table_scope_on_both_tables": "GLOBAL"
+  },
+  "containment": {
+    "successful_additive_columns_left_unused": true,
+    "successful_additive_columns_deleted_or_rebuilt": false,
+    "function_or_job_binding_created": false,
+    "function_source_uploaded": false,
+    "route_or_gateway_changed": false,
+    "environment_variable_changed": false,
+    "crm_billing_or_analytics_record_changed": false,
+    "production_changed": false,
+    "activation_allowed": false,
+    "next_step": "verify a provider-supported rollback-safe nonempty-table unique-column path, capture fresh prestate, and obtain a new scoped approval before any retry or Job-pool creation"
+  },
+  "disclosure_controls": {
+    "platform_ids_included": false,
+    "organization_or_project_names_included": false,
+    "endpoints_or_private_urls_included": false,
+    "credentials_or_secret_values_included": false,
+    "operator_identity_included": false,
+    "row_values_or_keys_included": false,
+    "raw_provider_errors_or_logs_included": false,
+    "private_approval_artifact_included": false
+  }
+}

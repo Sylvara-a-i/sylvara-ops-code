@@ -67,13 +67,16 @@
     "observed_nonzero_table_count": 16,
     "observed_zero_row_table_count": 19,
     "configuration_version_table_row_count": 0,
+    "configuration_version_required_application_columns_exact": true,
     "analytics_outbox_row_count": 307,
     "analytics_outbox_legacy_v1_row_count": 307,
     "analytics_outbox_additive_v2_row_count": 0,
+    "analytics_outbox_provider_version_key_present": false,
     "provider_version_backfill_required_before_additive_column": false,
     "live_prestate_evidence": "evidence/free-revenue-leak-test-live-prestate-2026-08-26.json",
+    "packet_a_execution_evidence": "evidence/free-revenue-leak-test-development-packet-a-execution-2026-08-26.json",
     "legacy_source_capture_evidence": "evidence/legacy-retell-source-capture-2026-08-26.json",
-    "interpretation": "All thirteen canonical tables exist, but two require additive schema changes. Every noncanonical table remains retained pending exact classification, mapping, migration, reconciliation, rollback, and later scoped cleanup approval."
+    "interpretation": "All thirteen canonical tables exist. RevenueDeskConfigurationVersions now has its exact required application schema and remains empty and unbound. AnalyticsSyncOutbox still requires the nullable unique provider-version fence; its fully paginated row count remains 307 and no row mutation was attempted. Both canonical Job pools remain absent after the approved packet stopped on the outbox-column mismatch. Every noncanonical table remains retained pending exact classification, mapping, migration, reconciliation, rollback, and later scoped cleanup approval."
   },
   "topology_decision": {
     "canonical_project_count": 1,
