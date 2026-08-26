@@ -472,7 +472,7 @@ function createFixture(testContext, scenario) {
   };
 }
 
-function assertCheckoutUnchanged(fixture) {
+function assertCheckoutUnchanged(fixture, { expectStartupProbes = true } = {}) {
   assert.deepEqual(fixture.after, fixture.before);
   assert.equal(fixture.status, "");
   assert.equal(fs.readFileSync(fixture.canaryPath, "utf8"), "ignored checkout canary\n");
@@ -491,8 +491,14 @@ function assertCheckoutUnchanged(fixture) {
     false,
   );
   assert.doesNotMatch(`${fixture.result.stdout}${fixture.result.stderr}`, new RegExp(syntheticToken));
-  assert.match(fixture.evidence, /^startup-clean=dirname$/m);
-  assert.match(fixture.evidence, /^startup-clean=uname$/m);
+  if (expectStartupProbes) {
+    assert.match(fixture.evidence, /^startup-clean=dirname$/m);
+    assert.match(fixture.evidence, /^startup-clean=uname$/m);
+  } else {
+    // A rejected project binding must fail before command discovery reaches
+    // either probe; executing them would weaken the credential-isolation gate.
+    assert.doesNotMatch(fixture.evidence, /^startup-clean=(?:dirname|uname)$/m);
+  }
   assert.doesNotMatch(fixture.evidence, /^startup-file-executed$/m);
 }
 
@@ -552,8 +558,9 @@ test("the isolated Development deploy rejects a project outside the separately r
   const fixture = createFixture(testContext, "wrong-project");
   assert.notEqual(fixture.result.status, 0);
   assert.match(fixture.result.stderr, /does not match the separately approved Catalyst project digest/);
+  assert.equal(fixture.evidence, "");
   assert.doesNotMatch(fixture.evidence, /^deploy-called$/m);
-  assertCheckoutUnchanged(fixture);
+  assertCheckoutUnchanged(fixture, { expectStartupProbes: false });
 });
 
 test("the isolated Development deploy rejects a mutated destination template", {
