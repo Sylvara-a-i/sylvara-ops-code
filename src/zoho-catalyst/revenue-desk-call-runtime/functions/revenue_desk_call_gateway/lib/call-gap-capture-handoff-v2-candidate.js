@@ -40,6 +40,9 @@ const ROUTE_VERIFICATION_CALL_FIELDS = Object.freeze([
   'journey_fingerprint',
   'deployment_fingerprint',
   'configuration_fingerprint',
+  'control_fence_fingerprint',
+  'provider_fingerprint',
+  'instruction_evidence_fingerprint',
   'number_fingerprint',
   'route_fingerprint',
   'qa_caller_fingerprint',
@@ -53,6 +56,9 @@ const ROUTE_VERIFICATION_WINDOW_FIELDS = Object.freeze([
   'journey_fingerprint',
   'deployment_fingerprint',
   'configuration_fingerprint',
+  'control_fence_fingerprint',
+  'provider_fingerprint',
+  'instruction_evidence_fingerprint',
   'number_fingerprint',
   'route_fingerprint',
   'approved_qa_caller_fingerprint',
@@ -69,6 +75,9 @@ const ROUTE_VERIFICATION_RECEIPT_FIELDS = Object.freeze([
   'journey_fingerprint',
   'deployment_fingerprint',
   'configuration_fingerprint',
+  'control_fence_fingerprint',
+  'provider_fingerprint',
+  'instruction_evidence_fingerprint',
   'number_fingerprint',
   'route_fingerprint',
   'approved_qa_caller_fingerprint',
@@ -81,6 +90,7 @@ const ROUTE_VERIFICATION_STORE_REQUEST_FIELDS = Object.freeze([
   'window_key',
   'current_time',
   'authoritative_call',
+  'required_current_control_fence_fingerprint',
   'required_window_ttl_ms',
   'maximum_observation_skew_ms',
 ]);
@@ -284,14 +294,30 @@ function assertV2CandidateContracts(manifest, candidateContract, adapterContract
   'V2_CONTRACT_INVALID', 'Gateway candidate containment is invalid.');
   invariant(manifest.route_verification?.authoritative_window_store === 'server_issued_only'
     && manifest.route_verification?.window_issuer === 'revenue_leak_test_setup_form'
-    && manifest.route_verification?.window_issuer_operation === 'issueWindowAtomically'
+    && manifest.route_verification?.window_issuer_operation
+      === 'issueWindowWithControlFenceAtomically'
+    && manifest.route_verification?.authoritative_control_fence_validator
+      === 'injected_atomic_verification_store'
+    && manifest.route_verification?.control_fence_validation_inside_atomic_consume === true
+    && manifest.route_verification?.control_fence_validation_scope
+      === 'same_serializable_transaction_as_window_consume_and_receipt_create'
+    && exactArray(manifest.route_verification?.atomic_success_order, [
+      'read_authoritative_current_control_fence',
+      'compare_call_window_and_current_control_fence',
+      'consume_open_window',
+      'create_bound_receipt',
+    ])
+    && manifest.route_verification?.stop_commit_fences_later_consumption === true
+    && manifest.route_verification?.control_fence_mismatch_outcome === 'stale_control_fence'
+    && manifest.route_verification?.control_fence_mismatch_preserves_valid_open_window === true
     && exactArray(manifest.route_verification?.window_fields,
       ROUTE_VERIFICATION_WINDOW_FIELDS)
-    && manifest.route_verification?.atomic_store_operation === 'consumeOpenWindow'
+    && manifest.route_verification?.atomic_store_operation
+      === 'consumeOpenWindowAtCurrentControlFence'
     && exactArray(manifest.route_verification?.atomic_store_request_fields,
       ROUTE_VERIFICATION_STORE_REQUEST_FIELDS)
     && exactArray(manifest.route_verification?.atomic_store_outcomes,
-      ['consumed', 'expired', 'rejected'])
+      ['consumed', 'expired', 'rejected', 'stale_control_fence'])
     && manifest.route_verification?.required_initial_window_status === 'Open'
     && manifest.route_verification?.success_window_status === 'Consumed'
     && manifest.route_verification?.expired_window_status === 'Expired'
@@ -816,6 +842,12 @@ function assertVerificationFingerprint(value, name) {
     'V2_ROUTE_VERIFICATION_INVALID', `${name} is invalid.`);
 }
 
+function rawControlFenceFingerprint(value) {
+  invariant(/^control_fence_[a-f0-9]{64}$/.test(value ?? ''),
+    'V2_ROUTE_VERIFICATION_INVALID', 'control_fence_fingerprint is invalid.');
+  return value.slice('control_fence_'.length);
+}
+
 function assertAuthoritativeCall(call) {
   invariant(isPlainObject(call)
     && exactArray(Object.keys(call).sort(), [...ROUTE_VERIFICATION_CALL_FIELDS].sort()),
@@ -854,7 +886,8 @@ function assertConsumedWindow(window, request, now, policy) {
   const call = request.authoritative_call;
   for (const field of [
     'environment_fingerprint', 'client_fingerprint', 'journey_fingerprint',
-    'deployment_fingerprint', 'configuration_fingerprint', 'number_fingerprint',
+    'deployment_fingerprint', 'configuration_fingerprint', 'control_fence_fingerprint',
+    'provider_fingerprint', 'instruction_evidence_fingerprint', 'number_fingerprint',
     'route_fingerprint',
   ]) {
     invariant(window[field] === call[field], 'V2_ROUTE_VERIFICATION_BINDING_MISMATCH',
@@ -918,7 +951,8 @@ function assertVerificationReceipt(receipt, window, request, now) {
   'V2_ROUTE_VERIFICATION_STORE_INVALID', 'Route-verification receipt binding is invalid.');
   for (const field of [
     'environment_fingerprint', 'client_fingerprint', 'journey_fingerprint',
-    'deployment_fingerprint', 'configuration_fingerprint', 'number_fingerprint',
+    'deployment_fingerprint', 'configuration_fingerprint', 'control_fence_fingerprint',
+    'provider_fingerprint', 'instruction_evidence_fingerprint', 'number_fingerprint',
     'route_fingerprint',
   ]) {
     invariant(receipt[field] === call[field], 'V2_ROUTE_VERIFICATION_STORE_INVALID',
@@ -942,12 +976,19 @@ async function interceptRouteVerification(routeVerification, verificationStore, 
   );
   const maximumObservationSkewMs = policy.manifest.route_verification
     .maximum_observation_skew_seconds * 1000;
-  invariant(verificationStore && typeof verificationStore.consumeOpenWindow === 'function',
-    'V2_ROUTE_VERIFICATION_STORE_INVALID', 'Route-verification store is unavailable.');
-  const consumed = await verificationStore.consumeOpenWindow({
+  invariant(verificationStore
+    && typeof verificationStore.consumeOpenWindowAtCurrentControlFence === 'function',
+  'V2_ROUTE_VERIFICATION_STORE_INVALID',
+  'Atomic current-control-fence route-verification store is unavailable.');
+  const consumed = await verificationStore.consumeOpenWindowAtCurrentControlFence({
     window_key: routeVerification.window_key,
     current_time: now,
     authoritative_call: routeVerification.authoritative_call,
+    // current_control persists the raw digest; windows and call evidence carry
+    // the typed public form. Normalize once at the gateway/store boundary.
+    required_current_control_fence_fingerprint: rawControlFenceFingerprint(
+      routeVerification.authoritative_call.control_fence_fingerprint,
+    ),
     required_window_ttl_ms: policy.manifest.route_verification.window_ttl_ms,
     maximum_observation_skew_ms: maximumObservationSkewMs,
   });
@@ -968,6 +1009,13 @@ async function interceptRouteVerification(routeVerification, verificationStore, 
       'V2_ROUTE_VERIFICATION_CALL_STALE', 'Authoritative call observation is stale.');
     invariant(false, 'V2_ROUTE_VERIFICATION_CONSUME_REJECTED',
       'Server-issued route-verification window was not atomically consumed.');
+  }
+  if (consumed.outcome === 'stale_control_fence') {
+    invariant(exactArray(Object.keys(consumed), ['outcome']),
+      'V2_ROUTE_VERIFICATION_STORE_INVALID',
+      'Stale control-fence rejection is invalid.');
+    invariant(false, 'V2_ROUTE_VERIFICATION_CONTROL_FENCE_STALE',
+      'Committed setup control state fenced this route-verification window.');
   }
   invariant(consumed.outcome === 'consumed'
     && exactArray(Object.keys(consumed).sort(), ['outcome', 'receipt', 'window']),

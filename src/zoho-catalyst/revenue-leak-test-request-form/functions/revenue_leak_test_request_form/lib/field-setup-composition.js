@@ -1,7 +1,8 @@
 "use strict";
 
 const { FieldSetupDispatchError, createFieldSetupDispatcher } = require("./field-setup-dispatcher");
-const { createFieldSetupLaunchService } = require("./field-setup-launch");
+const { createFieldSetupConversionService } = require("./field-setup-conversion");
+const { createFieldSetupLaunchService, resumeBindingDigest } = require("./field-setup-launch");
 const {
   createDefaultDeniedFieldSetupStoreComposition,
   createInjectedFieldSetupStoreComposition,
@@ -29,6 +30,8 @@ function createDefaultDeniedFieldSetupComposition() {
 
 function createInjectedFieldSetupComposition({
   authenticatedOperatorResolver,
+  controlledConversionDefaults,
+  conversionCrm,
   conversionStore,
   dispatcherConfig,
   launchConfig,
@@ -36,7 +39,14 @@ function createInjectedFieldSetupComposition({
   now,
   randomBytes,
   randomUUID,
+  serverPrerequisiteResolver,
 } = {}) {
+  if (launchStore !== conversionStore) {
+    throw new FieldSetupDispatchError(
+      "Field-setup launch and conversion must use one authoritative journey store",
+      { publicCode: "configuration_invalid" },
+    );
+  }
   const stores = createInjectedFieldSetupStoreComposition({ launchStore, conversionStore });
   const launchService = createFieldSetupLaunchService({
     config: launchConfig,
@@ -44,10 +54,22 @@ function createInjectedFieldSetupComposition({
     now,
     randomBytes,
     randomUUID,
+    serverPrerequisiteResolver,
+  });
+  const conversionService = createFieldSetupConversionService({
+    crm: conversionCrm,
+    store: stores.conversionStore,
   });
   const dispatcher = createFieldSetupDispatcher({
     authenticatedOperatorResolver,
     config: dispatcherConfig,
+    controlledConversionDefaults,
+    conversionService,
+    dealResumeBindingDigest: ({ dealId, environment }) => resumeBindingDigest({
+      environment,
+      moduleApiName: "Deals",
+      recordId: dealId,
+    }, launchConfig.digestPepper),
     launchService,
   });
   return Object.freeze({

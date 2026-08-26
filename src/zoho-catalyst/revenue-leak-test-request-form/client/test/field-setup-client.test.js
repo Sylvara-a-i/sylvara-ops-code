@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
+const vm = require("node:vm");
 
 const CLIENT_ROOT = path.resolve(__dirname, "..");
 const ROUTE_ROOT = path.join(CLIENT_ROOT, "field-setup");
@@ -65,6 +66,151 @@ function memoryStorage() {
       return [...values.values()];
     }
   };
+}
+
+const CSRF_TOKEN = "c".repeat(43);
+const LAUNCH_NONCE = "n".repeat(43);
+const FORM_DESTINATIONS = Object.freeze({
+  form1: "https://forms.zohopublic.com/synthetic/free-test-request",
+  form2: "https://forms.zohopublic.com/synthetic/free-test-authorization"
+});
+
+function authenticatedRuntime(overrides = {}) {
+  const routes = {
+    conversionConfirmPath: "/field-setup-api/conversion/confirm",
+    conversionPreviewPath: "/field-setup-api/conversion/preview",
+    decisionPath: "/field-setup-api/intent",
+    exchangePath: "/field-setup-api/exchange",
+    forwardingInstructionsPath: "/field-setup-operations/forwarding/instructions",
+    numberClaimPath: "/field-setup-operations/number/claim",
+    numberStatusPath: "/field-setup-operations/number/status",
+    routeVerificationWindowPath: "/field-setup-operations/route-verification/window",
+    setupControlPath: "/field-setup-operations/control",
+    statusPath: "/field-setup-api/status"
+  };
+  return {
+    mode: apiContract.AUTHENTICATED_MODE,
+    csrfHeaderName: "x-sylvara-field-setup-csrf",
+    routes: { ...routes, ...(overrides.routes || {}) },
+    formNavigationDestinations: { ...FORM_DESTINATIONS },
+    ...overrides,
+    routes: { ...routes, ...(overrides.routes || {}) }
+  };
+}
+
+function publicJourney(state, revision) {
+  const progress = stateModel.getStateIndex(state) + 1;
+  return {
+    state,
+    progress,
+    totalSteps: stateModel.FIELD_SETUP_STATES.length,
+    revision
+  };
+}
+
+function jsonResponse(payload, status = 200) {
+  const responsePayload = payload?.ok === true
+    ? {
+      ...payload,
+      protocolId: stateModel.PROTOCOL_ID,
+      schemaVersion: stateModel.PROTOCOL_SCHEMA_VERSION
+    }
+    : payload;
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    async json() { return responsePayload; }
+  };
+}
+
+function conversionPreview() {
+  return {
+    account: {
+      action: "create_from_conversion_mapping",
+      displayName: "ZZZ SYNTHETIC Plumbing"
+    },
+    contact: {
+      action: "create_from_conversion_mapping",
+      displayName: "ZZZ SYNTHETIC Contact"
+    },
+    deal: {
+      closingDate: "2026-09-01",
+      dealName: "ZZZ SYNTHETIC Plumbing — 7-Day Free Test",
+      mandatoryDealFields: [
+        "Deal_Name",
+        "Closing_Date",
+        "Pipeline",
+        "Stage",
+        "Type",
+        "Free_Test_Setup_Status"
+      ],
+      pipeline: "Standard (Standard)",
+      stage: "Free Test Scheduled",
+      type: "New Business"
+    },
+    noEmailOrRoutingEffect: true
+  };
+}
+
+function createDomHarness(api) {
+  class Element {
+    constructor() {
+      this.children = [];
+      this.disabled = false;
+      this.hidden = false;
+      this.style = {};
+      this.textContent = "";
+    }
+    addEventListener() {}
+    append(...children) { this.children.push(...children); }
+    focus() { this.focused = true; }
+    querySelector() { return null; }
+    querySelectorAll() { return []; }
+    replaceChildren(...children) { this.children = children; }
+    setAttribute(name, value) { this[name] = value; }
+  }
+  const ids = [
+    "progress-copy",
+    "progress-track",
+    "progress-fill",
+    "source-badge",
+    "audience-badge",
+    "step-status",
+    "step-kicker",
+    "step-title",
+    "step-description",
+    "step-notice",
+    "step-details",
+    "qualification-panel",
+    "error-message",
+    "primary-action",
+    "decision-actions",
+    "stop-action",
+    "live-announcer"
+  ];
+  const elements = Object.fromEntries(ids.map((id) => [id, new Element()]));
+  const documentLike = {
+    createElement() { return new Element(); },
+    getElementById(id) { return elements[id]; }
+  };
+  const windowLike = {
+    FieldSetupApi: {
+      AUTHENTICATED_MODE: apiContract.AUTHENTICATED_MODE,
+      createApi() { return api; },
+      createSyntheticApi() { return api; }
+    },
+    FieldSetupLaunch: { consumeLaunchNonce() { return null; } },
+    FieldSetupRuntimeConfig: Object.freeze({}),
+    FieldSetupStateModel: stateModel,
+    location: { assign() {}, search: "" },
+    sessionStorage: memoryStorage()
+  };
+  vm.runInNewContext(read(path.join(ROUTE_ROOT, "main.js")), {
+    URLSearchParams,
+    document: documentLike,
+    window: windowLike
+  });
+  return { elements };
 }
 
 test("the state inventory contains the exact 22 required screens in order", () => {
@@ -213,6 +359,7 @@ test("the synthetic adapter autosaves safe state only and exposes no activation 
   assert.deepEqual(Object.keys(api).sort(), [
     "completeStep",
     "loadJourney",
+    "loadStepData",
     "mode",
     "requestStop",
     "submitOperatorDecision"
@@ -225,6 +372,889 @@ test("a launch nonce cannot be exchanged by the source-preview adapter", async (
 
   assert.equal(outcome.authoritative, false);
   assert.equal(outcome.nextState, "recoverable_blocked");
+});
+
+test("default API selection remains synthetic and never invokes an available transport", async () => {
+  let networkAttempts = 0;
+  const api = apiContract.createApi({
+    stateModel,
+    storage: memoryStorage(),
+    async fetchImpl() {
+      networkAttempts += 1;
+      throw new Error("default wiring must not call fetch");
+    }
+  });
+
+  assert.equal(api.mode, apiContract.SYNTHETIC_MODE);
+  const outcome = await api.loadJourney({ previewState: "company_progress_summary" });
+  assert.equal(outcome.authoritative, false);
+  assert.equal(outcome.nextState, "company_progress_summary");
+  assert.equal(networkAttempts, 0);
+});
+
+test("authenticated adapter exchanges once, persists only CSRF, autosaves intent, and resumes status", async () => {
+  const calls = [];
+  const storage = memoryStorage();
+  const responses = [
+    jsonResponse({
+      ok: true,
+      csrfToken: CSRF_TOKEN,
+      journey: publicJourney("company_progress_summary", 2)
+    }),
+    jsonResponse({
+      ok: true,
+      journey: publicJourney("handoff_to_client_form1", 3),
+      navigationIntent: null
+    }),
+    jsonResponse({
+      ok: true,
+      journey: publicJourney("handoff_to_client_form1", 3)
+    })
+  ];
+  const fetchImpl = async (pathName, options) => {
+    calls.push({ pathName, options });
+    return responses.shift();
+  };
+  const api = apiContract.createApi({
+    fetchImpl,
+    runtime: authenticatedRuntime(),
+    stateModel,
+    storage
+  });
+
+  const exchanged = await api.loadJourney({ launchNonce: LAUNCH_NONCE });
+  assert.equal(exchanged.authoritative, true);
+  assert.equal(exchanged.nextState, "company_progress_summary");
+  assert.deepEqual(JSON.parse(calls[0].options.body), { nonce: LAUNCH_NONCE });
+  assert.equal(calls[0].options.credentials, "same-origin");
+  assert.equal(calls[0].options.mode, "same-origin");
+  assert.equal(calls[0].options.redirect, "error");
+  assert.equal(calls[0].options.referrerPolicy, "no-referrer");
+  assert.equal(
+    calls[0].options.headers["x-sylvara-field-setup-protocol-id"],
+    stateModel.PROTOCOL_ID
+  );
+  assert.equal(
+    calls[0].options.headers["x-sylvara-field-setup-protocol-version"],
+    String(stateModel.PROTOCOL_SCHEMA_VERSION)
+  );
+  assert.equal(Object.hasOwn(calls[0].options.headers, "x-sylvara-field-setup-csrf"), false);
+  assert.deepEqual(storage.readValues(), [CSRF_TOKEN]);
+  assert.equal(storage.readValues().includes(LAUNCH_NONCE), false);
+
+  const saved = await api.completeStep({
+    stateId: "company_progress_summary",
+    actionId: "acknowledge_company_summary"
+  });
+  assert.equal(saved.authoritative, true);
+  assert.equal(saved.nextState, "handoff_to_client_form1");
+  assert.deepEqual(JSON.parse(calls[1].options.body), {
+    action: "acknowledge_company_summary",
+    qualification: null,
+    revision: 2
+  });
+  assert.equal(calls[1].options.headers["x-sylvara-field-setup-csrf"], CSRF_TOKEN);
+
+  const resumedApi = apiContract.createApi({
+    fetchImpl,
+    runtime: authenticatedRuntime(),
+    stateModel,
+    storage
+  });
+  const resumed = await resumedApi.loadJourney();
+  assert.equal(resumed.nextState, "handoff_to_client_form1");
+  assert.equal(calls[2].options.method, "GET");
+  assert.equal(calls[2].options.headers["x-sylvara-field-setup-csrf"], CSRF_TOKEN);
+});
+
+test("an incompatible exchange response is rejected before CSRF or journey state is retained", async () => {
+  const storage = memoryStorage();
+  const api = apiContract.createAuthenticatedApi({
+    async fetchImpl() {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            ok: true,
+            csrfToken: CSRF_TOKEN,
+            journey: publicJourney("company_progress_summary", 2),
+            protocolId: stateModel.PROTOCOL_ID,
+            schemaVersion: stateModel.PROTOCOL_SCHEMA_VERSION + 1
+          };
+        }
+      };
+    },
+    runtime: authenticatedRuntime(),
+    stateModel,
+    storage
+  });
+
+  await assert.rejects(
+    () => api.loadJourney({ launchNonce: LAUNCH_NONCE }),
+    /protocol is incompatible/
+  );
+  assert.deepEqual(storage.readValues(), []);
+});
+
+test("authenticated runtime wiring accepts only relative same-origin routes and exact form bases", () => {
+  const invalid = [
+    authenticatedRuntime({
+      routes: {
+        exchangePath: "https://attacker.example.invalid/exchange",
+        statusPath: "/field-setup-api/status",
+        decisionPath: "/field-setup-api/intent"
+      }
+    }),
+    authenticatedRuntime({
+      routes: {
+        exchangePath: "/field-setup-api/shared",
+        statusPath: "/field-setup-api/shared",
+        decisionPath: "/field-setup-api/intent"
+      }
+    }),
+    authenticatedRuntime({
+      formNavigationDestinations: {
+        form1: "http://forms.zohopublic.com/synthetic/free-test-request",
+        form2: FORM_DESTINATIONS.form2
+      }
+    }),
+    authenticatedRuntime({
+      formNavigationDestinations: {
+        form1: "https://forms.attacker.example/synthetic/free-test-request",
+        form2: FORM_DESTINATIONS.form2
+      }
+    }),
+    { ...authenticatedRuntime(), unexpected: true }
+  ];
+  for (const runtime of invalid) {
+    assert.throws(() => apiContract.createAuthenticatedApi({
+      fetchImpl: async () => jsonResponse({}),
+      runtime,
+      stateModel
+    }));
+  }
+});
+
+test("Form actions accept only an authoritative allowlisted top-level navigation intent", async () => {
+  const storage = memoryStorage();
+  storage.setItem(apiContract.CSRF_STORAGE_KEY, CSRF_TOKEN);
+  const calls = [];
+  const responses = [
+    jsonResponse({ ok: true, journey: publicJourney("form1_open_or_resume", 4) }),
+    jsonResponse({
+      ok: true,
+      journey: publicJourney("form1_completion_confirmation", 5),
+      navigationIntent: {
+        mode: "top_level",
+        target: "form1",
+        url: `${FORM_DESTINATIONS.form1}?token=${LAUNCH_NONCE}`
+      }
+    }),
+    jsonResponse({
+      ok: true,
+      journey: publicJourney("form1_completion_confirmation", 6),
+      navigationIntent: {
+        mode: "top_level",
+        target: "form1",
+        url: `${FORM_DESTINATIONS.form1}?token=${LAUNCH_NONCE}`
+      }
+    })
+  ];
+  const api = apiContract.createAuthenticatedApi({
+    async fetchImpl(pathName, options) {
+      calls.push({ pathName, options });
+      return responses.shift();
+    },
+    runtime: authenticatedRuntime(),
+    stateModel,
+    storage
+  });
+  await api.loadJourney();
+  const outcome = await api.completeStep({ stateId: "form1_open_or_resume", actionId: "open_form1" });
+  assert.deepEqual(outcome.navigationIntent, {
+    mode: "top_level",
+    target: "form1",
+    url: `${FORM_DESTINATIONS.form1}?token=${LAUNCH_NONCE}`
+  });
+  assert.deepEqual(JSON.parse(calls[1].options.body), {
+    action: "open_form1",
+    qualification: null,
+    revision: 4
+  });
+  const reopened = await api.completeStep({
+    stateId: "form1_completion_confirmation",
+    actionId: "resume_form1"
+  });
+  assert.equal(reopened.nextState, "form1_completion_confirmation");
+  assert.deepEqual(reopened.navigationIntent, outcome.navigationIntent);
+  assert.deepEqual(JSON.parse(calls[2].options.body), {
+    action: "resume_form1",
+    qualification: null,
+    revision: 5
+  });
+
+  const blockedResponses = [
+    jsonResponse({ ok: true, journey: publicJourney("form1_open_or_resume", 4) }),
+    jsonResponse({
+      ok: true,
+      journey: publicJourney("form1_completion_confirmation", 5),
+      navigationIntent: {
+        mode: "top_level",
+        target: "form1",
+        url: `https://attacker.example.invalid/free-test-request?token=${LAUNCH_NONCE}`
+      }
+    })
+  ];
+  const blocked = apiContract.createAuthenticatedApi({
+    fetchImpl: async () => blockedResponses.shift(),
+    runtime: authenticatedRuntime(),
+    stateModel,
+    storage
+  });
+  await blocked.loadJourney();
+  await assert.rejects(
+    () => blocked.completeStep({ stateId: "form1_open_or_resume", actionId: "open_form1" }),
+    /outside the approved destination/
+  );
+});
+
+test("a lost Form navigation response replays the exact decision and preserves its URL", async () => {
+  const storage = memoryStorage();
+  storage.setItem(apiContract.CSRF_STORAGE_KEY, CSRF_TOKEN);
+  const runtime = authenticatedRuntime();
+  const calls = [];
+  const navigationIntent = {
+    mode: "top_level",
+    target: "form1",
+    url: `${FORM_DESTINATIONS.form1}?token=${LAUNCH_NONCE}`
+  };
+  let decisionAttempts = 0;
+  const api = apiContract.createAuthenticatedApi({
+    async fetchImpl(pathName, options) {
+      calls.push({ pathName, options });
+      if (pathName === runtime.routes.statusPath) {
+        return jsonResponse({ ok: true, journey: publicJourney("form1_open_or_resume", 4) });
+      }
+      if (pathName === runtime.routes.decisionPath) {
+        decisionAttempts += 1;
+        if (decisionAttempts === 1) throw new Error("Synthetic committed response loss");
+        return jsonResponse({
+          ok: true,
+          journey: publicJourney("form1_completion_confirmation", 5),
+          navigationIntent
+        });
+      }
+      throw new Error("Unexpected synthetic request");
+    },
+    runtime,
+    stateModel,
+    storage
+  });
+
+  await api.loadJourney();
+  const outcome = await api.completeStep({
+    stateId: "form1_open_or_resume",
+    actionId: "open_form1"
+  });
+  assert.equal(outcome.actionId, "open_form1");
+  assert.equal(outcome.nextState, "form1_completion_confirmation");
+  assert.deepEqual(outcome.navigationIntent, navigationIntent);
+  assert.deepEqual(calls.map(({ pathName }) => pathName), [
+    runtime.routes.statusPath,
+    runtime.routes.decisionPath,
+    runtime.routes.decisionPath
+  ]);
+  assert.deepEqual(calls[1].options, calls[2].options);
+});
+
+test("authenticated qualification sends exact six-factor intent and trusts only server state", async () => {
+  const storage = memoryStorage();
+  storage.setItem(apiContract.CSRF_STORAGE_KEY, CSRF_TOKEN);
+  const calls = [];
+  const responses = [
+    jsonResponse({ ok: true, journey: publicJourney("operator_qualification_review", 7) }),
+    jsonResponse({
+      ok: true,
+      journey: publicJourney("lead_conversion_preview", 8),
+      navigationIntent: null
+    })
+  ];
+  const api = apiContract.createAuthenticatedApi({
+    async fetchImpl(pathName, options) {
+      calls.push({ pathName, options });
+      return responses.shift();
+    },
+    runtime: authenticatedRuntime(),
+    stateModel,
+    storage
+  });
+  await api.loadJourney();
+  const qualification = {
+    ...Object.fromEntries(stateModel.QUALIFICATION_FACTORS.map((factor) => [factor.id, true])),
+    decision: "qualified_continue_setup"
+  };
+  const outcome = await api.submitOperatorDecision({
+    stateId: "operator_qualification_review",
+    actionId: "qualification_qualified",
+    qualification
+  });
+  assert.equal(outcome.nextState, "lead_conversion_preview");
+  assert.deepEqual(JSON.parse(calls[1].options.body), {
+    action: "qualification_qualified",
+    qualification,
+    revision: 7
+  });
+  await assert.rejects(() => api.submitOperatorDecision({
+    stateId: "operator_qualification_review",
+    actionId: "qualification_qualified",
+    qualification
+  }), /stale/);
+  assert.equal(calls.length, 2);
+});
+
+test("conversion confirmation stays locked until the exact sanitized preview is loaded for display", async () => {
+  const storage = memoryStorage();
+  storage.setItem(apiContract.CSRF_STORAGE_KEY, CSRF_TOKEN);
+  const calls = [];
+  const preview = conversionPreview();
+  const responses = [
+    jsonResponse({ ok: true, journey: publicJourney("lead_conversion_preview", 8) }),
+    jsonResponse({
+      ok: true,
+      journey: publicJourney("lead_conversion_confirmation", 9),
+      preview
+    }),
+    jsonResponse({
+      ok: true,
+      journey: publicJourney("lead_conversion_confirmation", 9),
+      preview
+    }),
+    jsonResponse({
+      ok: true,
+      journey: publicJourney("handoff_to_client_form2", 11),
+      replayed: false
+    })
+  ];
+  const runtime = authenticatedRuntime();
+  const api = apiContract.createAuthenticatedApi({
+    async fetchImpl(pathName, options) {
+      calls.push({ pathName, options });
+      return responses.shift();
+    },
+    runtime,
+    stateModel,
+    storage
+  });
+
+  await api.loadJourney();
+  const built = await api.completeStep({
+    stateId: "lead_conversion_preview",
+    actionId: "accept_conversion_preview"
+  });
+  assert.equal(built.nextState, "lead_conversion_confirmation");
+  assert.equal(calls[1].pathName, runtime.routes.conversionPreviewPath);
+  assert.deepEqual(JSON.parse(calls[1].options.body), { revision: 8 });
+
+  await assert.rejects(
+    () => api.completeStep({
+      stateId: "lead_conversion_confirmation",
+      actionId: "confirm_conversion_intent"
+    }),
+    /has not been displayed/
+  );
+  assert.equal(calls.length, 2);
+
+  const display = await api.loadStepData({ stateId: "lead_conversion_confirmation" });
+  assert.deepEqual(display.details, [
+    "Account: ZZZ SYNTHETIC Plumbing — create from Lead conversion",
+    "Contact: ZZZ SYNTHETIC Contact — create from Lead conversion",
+    "Deal: ZZZ SYNTHETIC Plumbing — 7-Day Free Test",
+    "Stage / Pipeline / Type: Free Test Scheduled / Standard (Standard) / New Business",
+    "Closing date: 2026-09-01",
+    "Mandatory fields: Deal_Name, Closing_Date, Pipeline, Stage, Type, Free_Test_Setup_Status",
+    "Email and routing effects: none"
+  ]);
+  assert.equal(display.ready, true);
+  assert.equal(calls[2].pathName, runtime.routes.conversionPreviewPath);
+
+  const confirmed = await api.completeStep({
+    stateId: "lead_conversion_confirmation",
+    actionId: "confirm_conversion_intent"
+  });
+  assert.equal(confirmed.nextState, "handoff_to_client_form2");
+  assert.equal(calls[3].pathName, runtime.routes.conversionConfirmPath);
+  assert.deepEqual(JSON.parse(calls[3].options.body), { confirm: true, revision: 9 });
+});
+
+test("a lost conversion-preview response replays the exact request without rebuilding the preview", async () => {
+  const storage = memoryStorage();
+  storage.setItem(apiContract.CSRF_STORAGE_KEY, CSRF_TOKEN);
+  const calls = [];
+  const preview = conversionPreview();
+  const runtime = authenticatedRuntime();
+  let serverJourney = publicJourney("lead_conversion_preview", 8);
+  let previewBuilds = 0;
+  const api = apiContract.createAuthenticatedApi({
+    async fetchImpl(pathName, options) {
+      calls.push({ pathName, options });
+      if (pathName === runtime.routes.statusPath) {
+        return jsonResponse({ ok: true, journey: serverJourney });
+      }
+      if (pathName === runtime.routes.conversionPreviewPath && previewBuilds === 0) {
+        previewBuilds += 1;
+        serverJourney = publicJourney("lead_conversion_confirmation", 9);
+        throw new Error("Synthetic committed response loss");
+      }
+      if (pathName === runtime.routes.conversionPreviewPath) {
+        return jsonResponse({ ok: true, journey: serverJourney, preview });
+      }
+      throw new Error("Unexpected synthetic request");
+    },
+    runtime,
+    stateModel,
+    storage
+  });
+
+  await api.loadJourney();
+  const reconciled = await api.completeStep({
+    stateId: "lead_conversion_preview",
+    actionId: "accept_conversion_preview"
+  });
+  assert.equal(reconciled.actionId, "accept_conversion_preview");
+  assert.equal(reconciled.nextState, "lead_conversion_confirmation");
+  assert.equal(reconciled.revision, 9);
+  assert.equal(previewBuilds, 1);
+  assert.deepEqual(calls.map(({ pathName }) => pathName), [
+    runtime.routes.statusPath,
+    runtime.routes.conversionPreviewPath,
+    runtime.routes.conversionPreviewPath
+  ]);
+  assert.deepEqual(calls[1].options, calls[2].options);
+
+  await assert.rejects(
+    () => api.completeStep({
+      stateId: "lead_conversion_confirmation",
+      actionId: "confirm_conversion_intent"
+    }),
+    /has not been displayed/
+  );
+  const displayed = await api.loadStepData({ stateId: "lead_conversion_confirmation" });
+  assert.equal(displayed.ready, true);
+});
+
+test("a lost completed conversion response replays the exact confirmation without a second CRM write", async () => {
+  const storage = memoryStorage();
+  storage.setItem(apiContract.CSRF_STORAGE_KEY, CSRF_TOKEN);
+  const runtime = authenticatedRuntime();
+  const calls = [];
+  const preview = conversionPreview();
+  let serverJourney = publicJourney("lead_conversion_confirmation", 9);
+  let confirmAttempts = 0;
+  let simulatedCrmConversions = 0;
+  const api = apiContract.createAuthenticatedApi({
+    async fetchImpl(pathName, options) {
+      calls.push({ pathName, options });
+      if (pathName === runtime.routes.statusPath) {
+        return jsonResponse({ ok: true, journey: serverJourney });
+      }
+      if (pathName === runtime.routes.conversionPreviewPath) {
+        return jsonResponse({ ok: true, journey: serverJourney, preview });
+      }
+      if (pathName === runtime.routes.conversionConfirmPath) {
+        confirmAttempts += 1;
+        if (confirmAttempts === 1) {
+          simulatedCrmConversions += 1;
+          serverJourney = publicJourney("handoff_to_client_form2", 11);
+          throw new Error("Synthetic completed conversion response loss");
+        }
+        return jsonResponse({ ok: true, journey: serverJourney, replayed: true });
+      }
+      throw new Error("Unexpected synthetic request");
+    },
+    runtime,
+    stateModel,
+    storage
+  });
+
+  await api.loadJourney();
+  await api.loadStepData({ stateId: "lead_conversion_confirmation" });
+  const converted = await api.completeStep({
+    stateId: "lead_conversion_confirmation",
+    actionId: "confirm_conversion_intent"
+  });
+  assert.equal(converted.actionId, "confirm_conversion_intent");
+  assert.equal(converted.nextState, "handoff_to_client_form2");
+  assert.equal(simulatedCrmConversions, 1);
+  assert.deepEqual(calls.map(({ pathName }) => pathName), [
+    runtime.routes.statusPath,
+    runtime.routes.conversionPreviewPath,
+    runtime.routes.conversionConfirmPath,
+    runtime.routes.conversionConfirmPath
+  ]);
+  assert.deepEqual(calls[2].options, calls[3].options);
+});
+
+test("an ambiguous conversion retry stops for reconciliation without a second CRM write", async () => {
+  const storage = memoryStorage();
+  storage.setItem(apiContract.CSRF_STORAGE_KEY, CSRF_TOKEN);
+  const runtime = authenticatedRuntime();
+  const calls = [];
+  const journey = publicJourney("lead_conversion_confirmation", 9);
+  let confirmAttempts = 0;
+  let simulatedCrmConversions = 0;
+  const api = apiContract.createAuthenticatedApi({
+    async fetchImpl(pathName, options) {
+      calls.push({ pathName, options });
+      if (pathName === runtime.routes.statusPath) {
+        return jsonResponse({ ok: true, journey });
+      }
+      if (pathName === runtime.routes.conversionPreviewPath) {
+        return jsonResponse({ ok: true, journey, preview: conversionPreview() });
+      }
+      if (pathName === runtime.routes.conversionConfirmPath) {
+        confirmAttempts += 1;
+        if (confirmAttempts === 1) {
+          simulatedCrmConversions += 1;
+          throw new Error("Synthetic write-started response loss");
+        }
+        return jsonResponse({ ok: false, code: "reconciliation_required" }, 503);
+      }
+      throw new Error("Unexpected synthetic request");
+    },
+    runtime,
+    stateModel,
+    storage
+  });
+
+  await api.loadJourney();
+  await api.loadStepData({ stateId: "lead_conversion_confirmation" });
+  await assert.rejects(
+    () => api.completeStep({
+      stateId: "lead_conversion_confirmation",
+      actionId: "confirm_conversion_intent"
+    }),
+    (error) => (
+      error.operatorStop === true &&
+      error.code === "reconciliation_required" &&
+      error.operatorMessage === "Conversion outcome requires controlled reconciliation. Do not retry conversion."
+    )
+  );
+  assert.equal(simulatedCrmConversions, 1);
+  assert.deepEqual(calls.map(({ pathName }) => pathName), [
+    runtime.routes.statusPath,
+    runtime.routes.conversionPreviewPath,
+    runtime.routes.conversionConfirmPath,
+    runtime.routes.conversionConfirmPath
+  ]);
+  assert.deepEqual(calls[2].options, calls[3].options);
+});
+
+test("a lost generic decision response replays only the exact action-bound request", async () => {
+  const storage = memoryStorage();
+  storage.setItem(apiContract.CSRF_STORAGE_KEY, CSRF_TOKEN);
+  const runtime = authenticatedRuntime();
+  const calls = [];
+  let serverJourney = publicJourney("company_progress_summary", 2);
+  let decisionAttempts = 0;
+  const api = apiContract.createAuthenticatedApi({
+    async fetchImpl(pathName, options) {
+      calls.push({ pathName, options });
+      if (pathName === runtime.routes.statusPath) {
+        return jsonResponse({ ok: true, journey: serverJourney });
+      }
+      if (pathName === runtime.routes.decisionPath) {
+        decisionAttempts += 1;
+        if (decisionAttempts === 1) {
+          serverJourney = publicJourney("handoff_to_client_form1", 3);
+          throw new Error("Synthetic committed response loss");
+        }
+        return jsonResponse({ ok: true, journey: serverJourney, navigationIntent: null });
+      }
+      throw new Error("Unexpected synthetic request");
+    },
+    runtime,
+    stateModel,
+    storage
+  });
+
+  await api.loadJourney();
+  const reconciled = await api.completeStep({
+    stateId: "company_progress_summary",
+    actionId: "acknowledge_company_summary"
+  });
+  assert.equal(reconciled.actionId, "acknowledge_company_summary");
+  assert.equal(reconciled.nextState, "handoff_to_client_form1");
+  assert.equal(reconciled.revision, 3);
+  assert.deepEqual(calls.map(({ pathName }) => pathName), [
+    runtime.routes.statusPath,
+    runtime.routes.decisionPath,
+    runtime.routes.decisionPath
+  ]);
+  assert.deepEqual(calls[1].options, calls[2].options);
+
+  const unchangedStorage = memoryStorage();
+  unchangedStorage.setItem(apiContract.CSRF_STORAGE_KEY, CSRF_TOKEN);
+  const unchangedJourney = publicJourney("company_progress_summary", 2);
+  const unchangedCalls = [];
+  const unchangedApi = apiContract.createAuthenticatedApi({
+    async fetchImpl(pathName) {
+      unchangedCalls.push(pathName);
+      if (pathName === runtime.routes.statusPath) {
+        return jsonResponse({ ok: true, journey: unchangedJourney });
+      }
+      throw new Error("Synthetic precommit failure");
+    },
+    runtime,
+    stateModel,
+    storage: unchangedStorage
+  });
+  await unchangedApi.loadJourney();
+  await assert.rejects(
+    () => unchangedApi.completeStep({
+      stateId: "company_progress_summary",
+      actionId: "acknowledge_company_summary"
+    }),
+    /Synthetic precommit failure/
+  );
+  assert.deepEqual(unchangedCalls, [
+    runtime.routes.statusPath,
+    runtime.routes.decisionPath,
+    runtime.routes.decisionPath
+  ]);
+});
+
+test("reviewed forwarding instructions load before acknowledgement and journey reconciliation", async () => {
+  const storage = memoryStorage();
+  storage.setItem(apiContract.CSRF_STORAGE_KEY, CSRF_TOKEN);
+  const calls = [];
+  const runtime = authenticatedRuntime();
+  const responses = [
+    jsonResponse({ ok: true, journey: publicJourney("forwarding_instructions", 15) }),
+    jsonResponse({
+      ok: true,
+      color: "Blue",
+      status: "Reviewed Instructions Available",
+      steps: [
+        "Open the reviewed provider control.",
+        "Apply only the documented forwarding destination."
+      ],
+      view: "enable"
+    }),
+    jsonResponse({ ok: false, code: "context_conflict" }, 409),
+    jsonResponse({ ok: false, code: "context_conflict" }, 409),
+    jsonResponse({ ok: true, journey: publicJourney("forwarding_instructions", 15) }),
+    jsonResponse({
+      ok: true,
+      setupStatus: "in_progress",
+      forwardingState: "Customer Reported Enabled",
+      rollbackReady: false,
+      controlRevision: 2,
+      journeyRevision: 15,
+      replayed: false,
+      activatesDeployment: false,
+      mutatesLiveRoute: false,
+      requiresSeparateOperatorApproval: true
+    }),
+    jsonResponse({
+      ok: true,
+      journey: publicJourney("rollback_instructions", 16),
+      navigationIntent: null
+    })
+  ];
+  const api = apiContract.createAuthenticatedApi({
+    async fetchImpl(pathName, options) {
+      calls.push({ pathName, options });
+      return responses.shift();
+    },
+    runtime,
+    stateModel,
+    storage
+  });
+
+  await api.loadJourney();
+  const display = await api.loadStepData({ stateId: "forwarding_instructions" });
+  assert.deepEqual(display.details, [
+    "Open the reviewed provider control.",
+    "Apply only the documented forwarding destination."
+  ]);
+  assert.equal(calls[1].pathName, runtime.routes.forwardingInstructionsPath);
+  assert.deepEqual(JSON.parse(calls[1].options.body), {
+    journeyRevision: 15,
+    view: "enable"
+  });
+
+  const acknowledged = await api.completeStep({
+    stateId: "forwarding_instructions",
+    actionId: "view_forwarding_instructions"
+  });
+  assert.equal(acknowledged.nextState, "rollback_instructions");
+  assert.deepEqual(calls.slice(2).map(({ pathName }) => pathName), [
+    runtime.routes.decisionPath,
+    runtime.routes.decisionPath,
+    runtime.routes.statusPath,
+    runtime.routes.setupControlPath,
+    runtime.routes.decisionPath
+  ]);
+  assert.deepEqual(JSON.parse(calls[5].options.body), {
+    action: "confirm_forwarding_enabled",
+    journeyRevision: 15
+  });
+});
+
+test("requestStop completes its controlled setup operation before the exact global decision", async () => {
+  const storage = memoryStorage();
+  storage.setItem(apiContract.CSRF_STORAGE_KEY, CSRF_TOKEN);
+  const runtime = authenticatedRuntime();
+  const calls = [];
+  const responses = [
+    jsonResponse({ ok: true, journey: publicJourney("forwarding_instructions", 15) }),
+    jsonResponse({ ok: false, code: "context_conflict" }, 409),
+    jsonResponse({ ok: false, code: "context_conflict" }, 409),
+    jsonResponse({ ok: true, journey: publicJourney("forwarding_instructions", 15) }),
+    jsonResponse({
+      ok: true,
+      setupStatus: "stopped",
+      mutatesLiveRoute: false,
+      activatesDeployment: false
+    }),
+    jsonResponse({
+      ok: true,
+      journey: publicJourney("stop_rollback_status", 16),
+      navigationIntent: null
+    })
+  ];
+  const api = apiContract.createAuthenticatedApi({
+    async fetchImpl(pathName, options) {
+      calls.push({ pathName, options });
+      return responses.shift();
+    },
+    runtime,
+    stateModel,
+    storage
+  });
+
+  await api.loadJourney();
+  const stopped = await api.requestStop();
+  assert.equal(stopped.actionId, "stop_setup");
+  assert.equal(stopped.nextState, "stop_rollback_status");
+  assert.deepEqual(calls.map(({ pathName }) => pathName), [
+    runtime.routes.statusPath,
+    runtime.routes.decisionPath,
+    runtime.routes.decisionPath,
+    runtime.routes.statusPath,
+    runtime.routes.setupControlPath,
+    runtime.routes.decisionPath
+  ]);
+  assert.deepEqual(JSON.parse(calls[1].options.body), {
+    action: "stop_setup",
+    qualification: null,
+    revision: 15
+  });
+  assert.deepEqual(calls[1].options, calls[2].options);
+  assert.deepEqual(JSON.parse(calls[4].options.body), {
+    action: "stop",
+    journeyRevision: 15
+  });
+});
+
+test("bounded setup stops preserve only approved operator messages", async () => {
+  const cases = [
+    {
+      state: "number_reservation_status",
+      payload: {
+        ok: false,
+        code: "test_number_required",
+        message: "Test Number Required — Sylvara Must Assign A Number Before Continuing",
+        protocolId: stateModel.PROTOCOL_ID,
+        schemaVersion: stateModel.PROTOCOL_SCHEMA_VERSION
+      },
+      expected: "Test Number Required — Sylvara Must Assign A Number Before Continuing"
+    },
+    {
+      state: "forwarding_instructions",
+      payload: {
+        ok: false,
+        code: "technical_setup_required",
+        status: "Technical Setup Required",
+        color: "Gray",
+        view: "enable",
+        steps: [],
+        protocolId: stateModel.PROTOCOL_ID,
+        schemaVersion: stateModel.PROTOCOL_SCHEMA_VERSION
+      },
+      expected: "Technical Setup Required"
+    }
+  ];
+
+  for (const selected of cases) {
+    const storage = memoryStorage();
+    storage.setItem(apiContract.CSRF_STORAGE_KEY, CSRF_TOKEN);
+    const responses = [
+      jsonResponse({ ok: true, journey: publicJourney(selected.state, 14) }),
+      {
+        ok: false,
+        status: 409,
+        async json() { return selected.payload; }
+      }
+    ];
+    const api = apiContract.createAuthenticatedApi({
+      fetchImpl: async () => responses.shift(),
+      runtime: authenticatedRuntime(),
+      stateModel,
+      storage
+    });
+    await api.loadJourney();
+    await assert.rejects(
+      () => api.loadStepData({ stateId: selected.state }),
+      (error) => (
+        error.operatorStop === true &&
+        error.operatorMessage === selected.expected
+      )
+    );
+  }
+});
+
+test("operator-stop messages render as text and leave journey actions disabled", async () => {
+  for (const selected of [
+    {
+      state: "number_reservation_status",
+      message: "Test Number Required — Sylvara Must Assign A Number Before Continuing"
+    },
+    { state: "forwarding_instructions", message: "Technical Setup Required" }
+  ]) {
+    const operatorStop = new Error("redacted");
+    operatorStop.operatorStop = true;
+    operatorStop.operatorMessage = selected.message;
+    const api = Object.freeze({
+      mode: apiContract.AUTHENTICATED_MODE,
+      async loadJourney() {
+        return Object.freeze({ nextState: selected.state });
+      },
+      async loadStepData() { throw operatorStop; }
+    });
+    const { elements } = createDomHarness(api);
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(elements["error-message"].textContent, selected.message);
+    assert.equal(elements["error-message"].hidden, false);
+    assert.equal(elements["primary-action"].disabled, true);
+    assert.equal(elements["live-announcer"].textContent, selected.message);
+  }
+});
+
+test("an unconfirmed step outcome never claims that the server could not have committed it", () => {
+  const source = read(path.join(ROUTE_ROOT, "main.js"));
+  assert.match(
+    source,
+    /The step outcome could not be confirmed\. Retry the same action or stop setup safely\./
+  );
+  assert.doesNotMatch(source, /No authoritative action was assumed complete/);
+  assert.match(
+    source,
+    /The stop outcome could not be confirmed\. Retry Stop Setup to reconcile authoritative state; use controlled rollback only if instructed\./
+  );
+  assert.doesNotMatch(source, /The stop request was not saved/);
 });
 
 test("the qualification UI submits exactly six booleans plus the matching decision", async () => {
@@ -264,10 +1294,9 @@ test("the qualification UI submits exactly six booleans plus the matching decisi
   assert.match(css, /\.qualification-option\s*\{[^}]*min-height:\s*44px;/s);
 });
 
-test("the browser bundle has no network primitive, secret-shaped value, PII, or durable identifier", () => {
+test("the browser bundle has no committed runtime mapping, secret-shaped value, PII, or durable identifier", () => {
   const bundle = browserBundle();
   const forbiddenPatterns = [
-    /\bfetch\s*\(/i,
     /XMLHttpRequest/i,
     /sendBeacon/i,
     /WebSocket/i,
@@ -284,6 +1313,9 @@ test("the browser bundle has no network primitive, secret-shaped value, PII, or 
   for (const pattern of forbiddenPatterns) {
     assert.doesNotMatch(bundle, pattern, pattern.toString());
   }
+  const html = read(path.join(ROUTE_ROOT, "index.html"));
+  assert.doesNotMatch(html, /FieldSetupRuntimeConfig/);
+  assert.doesNotMatch(html, /runtime-config\.js/);
 });
 
 test("the bundle has no iframe or unsafe HTML injection path", () => {
@@ -361,10 +1393,11 @@ test("the Catalyst source descriptor keeps the client unregistered and deploymen
   assert.equal(fs.existsSync(path.join(CLIENT_ROOT, "index.html")), true);
 });
 
-test("the content security policy blocks frames, forms, and network access", () => {
+test("the content security policy permits only same-origin API calls and blocks frames and forms", () => {
   const html = read(path.join(ROUTE_ROOT, "index.html"));
   assert.match(html, /form-action 'none'/);
   assert.match(html, /frame-src 'none'/);
   assert.match(html, /object-src 'none'/);
-  assert.match(html, /connect-src 'none'/);
+  assert.match(html, /connect-src 'self'/);
+  assert.doesNotMatch(html, /connect-src[^;]*(?:https?:|\*)/);
 });

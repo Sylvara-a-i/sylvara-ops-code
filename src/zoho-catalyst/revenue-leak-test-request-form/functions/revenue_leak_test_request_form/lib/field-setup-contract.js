@@ -1,6 +1,10 @@
 "use strict";
 
 const rawProtocol = require("./field-setup-protocol");
+const {
+  APPROVED_FORMS_PUBLIC_HOSTS,
+  isApprovedFormsPublicHostname,
+} = require("./destinations");
 
 const CRM_MODULES = new Set(["Leads", "Deals"]);
 const RECORD_ID_PATTERN = /^[0-9]{1,30}$/;
@@ -14,6 +18,7 @@ const FINGERPRINT_FIELDS = Object.freeze([
   "conversionSideEffectFingerprint",
   "conversionOutcomeFingerprint",
   "configVersionFingerprint",
+  "dealResumeBindingDigest",
 ]);
 const SERVER_RECEIPT_FIELDS = Object.freeze([
   "actionId",
@@ -22,6 +27,7 @@ const SERVER_RECEIPT_FIELDS = Object.freeze([
   "fingerprintPatch",
   "journeyKey",
   "moduleApiName",
+  "navigationIntent",
   "operatorUserId",
   "receiptType",
   "recordId",
@@ -30,6 +36,18 @@ const SERVER_RECEIPT_FIELDS = Object.freeze([
   "state",
   "statusPatch",
 ]);
+const FORM_NAVIGATION_TARGET_BY_ACTION = Object.freeze({
+  open_form1: "form1",
+  open_form2: "form2",
+  resume_form1: "form1",
+  resume_form2: "form2",
+});
+const FORM_NAVIGATION_TARGETS = Object.freeze([
+  ...new Set(Object.values(FORM_NAVIGATION_TARGET_BY_ACTION)),
+]);
+const FORM_QUERY_KEY_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
+const FORM_QUERY_VALUE_PATTERN = /^(?=.*[A-Za-z_-])[A-Za-z0-9_-]{16,256}$/;
+const PROHIBITED_FORM_QUERY_KEY_PATTERN = /(?:redirect|return|next|url|email|phone|crm|record|lead|deal|account|contact|user)/i;
 
 class FieldSetupContractError extends Error {
   constructor(message, publicCode = "field_setup_invalid") {
@@ -55,6 +73,10 @@ function requireExactKeys(value, keys, label) {
   }
 }
 
+function isFormNavigationAction(actionId) {
+  return Object.hasOwn(FORM_NAVIGATION_TARGET_BY_ACTION, actionId);
+}
+
 function deepFreeze(value) {
   if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
   for (const child of Object.values(value)) deepFreeze(child);
@@ -65,6 +87,12 @@ function validateProtocol(protocol) {
   if (
     protocol?.schemaVersion !== 1 ||
     protocol.protocolId !== "free_revenue_leak_test_field_setup_v1" ||
+    !protocol.formNavigation ||
+    !Array.isArray(protocol.formNavigation.approvedPublicHosts) ||
+    protocol.formNavigation.approvedPublicHosts.length !== APPROVED_FORMS_PUBLIC_HOSTS.length ||
+    protocol.formNavigation.approvedPublicHosts.some(
+      (hostname, index) => hostname !== APPROVED_FORMS_PUBLIC_HOSTS[index],
+    ) ||
     !Array.isArray(protocol.states) ||
     protocol.states.length !== 22
   ) {
@@ -93,7 +121,8 @@ function validateProtocol(protocol) {
       if (
         actionIds.has(action.id) ||
         !stateIds.has(action.nextState) ||
-        action.browserIntentAllowed !== true
+        action.browserIntentAllowed !== true ||
+        (action.serverCoordinator !== undefined && action.serverCoordinator !== "conversion")
       ) {
         throw new Error("Canonical field-setup transition definition is invalid");
       }
@@ -101,7 +130,12 @@ function validateProtocol(protocol) {
     }
   }
   for (const action of protocol.globalActions ?? []) {
-    if (actionIds.has(action.id) || !stateIds.has(action.nextState)) {
+    if (
+      actionIds.has(action.id) ||
+      !stateIds.has(action.nextState) ||
+      action.browserIntentAllowed !== true ||
+      action.authoritativeSideEffect !== true
+    ) {
       throw new Error("Canonical global field-setup transition is invalid");
     }
     actionIds.add(action.id);
@@ -117,6 +151,7 @@ function validateProtocol(protocol) {
   const mandatoryFields = protocol.persistence?.mandatoryFields ?? [];
   const statusValues = protocol.persistence?.statusValues;
   const prerequisites = protocol.serverPrerequisites;
+  const globalPrerequisites = protocol.globalServerPrerequisites;
   const stateStatusRequirements = protocol.persistence?.stateStatusRequirements;
   if (
     rowFields.length === 0 ||
@@ -129,6 +164,9 @@ function validateProtocol(protocol) {
     !prerequisites ||
     typeof prerequisites !== "object" ||
     Array.isArray(prerequisites) ||
+    !globalPrerequisites ||
+    typeof globalPrerequisites !== "object" ||
+    Array.isArray(globalPrerequisites) ||
     !stateStatusRequirements ||
     typeof stateStatusRequirements !== "object" ||
     Array.isArray(stateStatusRequirements)
@@ -136,6 +174,33 @@ function validateProtocol(protocol) {
     throw new Error("Canonical field-setup persistence contract is invalid");
   }
   const statusFields = Object.keys(statusValues);
+  function validatePrerequisite(prerequisite) {
+    const fields = prerequisite && typeof prerequisite === "object" && !Array.isArray(prerequisite)
+      ? Object.keys(prerequisite).sort()
+      : [];
+    if (
+      fields.length !== 3 ||
+      fields[0] !== "receiptType" ||
+      fields[1] !== "requiredFingerprintFields" ||
+      fields[2] !== "statusPatch" ||
+      !RECEIPT_TYPE_PATTERN.test(prerequisite.receiptType ?? "") ||
+      !prerequisite.statusPatch ||
+      typeof prerequisite.statusPatch !== "object" ||
+      Array.isArray(prerequisite.statusPatch) ||
+      Object.keys(prerequisite.statusPatch).length === 0 ||
+      !Array.isArray(prerequisite.requiredFingerprintFields) ||
+      new Set(prerequisite.requiredFingerprintFields).size
+        !== prerequisite.requiredFingerprintFields.length ||
+      prerequisite.requiredFingerprintFields.some((field) => !FINGERPRINT_FIELDS.includes(field))
+    ) {
+      throw new Error("Canonical server prerequisite definition is invalid");
+    }
+    for (const [field, value] of Object.entries(prerequisite.statusPatch)) {
+      if (!statusFields.includes(field) || !statusValues[field].includes(value)) {
+        throw new Error("Canonical server prerequisite status is invalid");
+      }
+    }
+  }
   const prerequisiteStates = new Set(Object.keys(prerequisites));
   for (const state of protocol.states) {
     const actionIdsForState = [state.primaryAction, ...state.secondaryActions]
@@ -156,35 +221,21 @@ function validateProtocol(protocol) {
       throw new Error("Canonical server prerequisite is attached to a browser-only state");
     }
     for (const prerequisite of Object.values(statePrerequisites ?? {})) {
-      const fields = prerequisite && typeof prerequisite === "object" && !Array.isArray(prerequisite)
-        ? Object.keys(prerequisite).sort()
-        : [];
-      if (
-        fields.length !== 3 ||
-        fields[0] !== "receiptType" ||
-        fields[1] !== "requiredFingerprintFields" ||
-        fields[2] !== "statusPatch" ||
-        !RECEIPT_TYPE_PATTERN.test(prerequisite.receiptType ?? "") ||
-        !prerequisite.statusPatch ||
-        typeof prerequisite.statusPatch !== "object" ||
-        Array.isArray(prerequisite.statusPatch) ||
-        Object.keys(prerequisite.statusPatch).length === 0 ||
-        !Array.isArray(prerequisite.requiredFingerprintFields) ||
-        new Set(prerequisite.requiredFingerprintFields).size
-          !== prerequisite.requiredFingerprintFields.length ||
-        prerequisite.requiredFingerprintFields.some((field) => !FINGERPRINT_FIELDS.includes(field))
-      ) {
-        throw new Error("Canonical server prerequisite definition is invalid");
-      }
-      for (const [field, value] of Object.entries(prerequisite.statusPatch)) {
-        if (!statusFields.includes(field) || !statusValues[field].includes(value)) {
-          throw new Error("Canonical server prerequisite status is invalid");
-        }
-      }
+      validatePrerequisite(prerequisite);
     }
   }
   if (prerequisiteStates.size !== 0) {
     throw new Error("Canonical server prerequisite references an unknown state");
+  }
+  const globalActions = protocol.globalActions ?? [];
+  if (
+    Object.keys(globalPrerequisites).length !== globalActions.length ||
+    globalActions.some((action) => !Object.hasOwn(globalPrerequisites, action.id))
+  ) {
+    throw new Error("Canonical global server prerequisite coverage is invalid");
+  }
+  for (const prerequisite of Object.values(globalPrerequisites)) {
+    validatePrerequisite(prerequisite);
   }
   if (
     Object.keys(stateStatusRequirements).length !== stateIds.size ||
@@ -227,6 +278,11 @@ const BROWSER_ACTIONS = Object.freeze([
   ...FIELD_SETUP_PROTOCOL.states.flatMap((state) => [state.primaryAction, ...state.secondaryActions]),
   ...FIELD_SETUP_PROTOCOL.globalActions,
 ].filter((action) => action.browserIntentAllowed).map((action) => action.id));
+const COORDINATED_BROWSER_ACTIONS = Object.freeze(
+  FIELD_SETUP_PROTOCOL.states.flatMap((state) => [state.primaryAction, ...state.secondaryActions])
+    .filter((action) => action.serverCoordinator === "conversion")
+    .map((action) => action.id),
+);
 const PROHIBITED_BROWSER_ACTIONS = Object.freeze(
   [...FIELD_SETUP_PROTOCOL.browserAuthority.prohibitedOperations],
 );
@@ -337,8 +393,25 @@ function getServerPrerequisite(stateId, actionId) {
     const globalAction = FIELD_SETUP_PROTOCOL.globalActions.find(
       (action) => action.id === actionId,
     );
-    if (globalAction?.authoritativeSideEffect === false) return null;
+    if (globalAction?.authoritativeSideEffect === true) {
+      const prerequisite = FIELD_SETUP_PROTOCOL.globalServerPrerequisites[actionId];
+      if (!prerequisite) {
+        throw new FieldSetupContractError(
+          "Global server prerequisite is unavailable",
+          "configuration_invalid",
+        );
+      }
+      return prerequisite;
+    }
     throw new FieldSetupContractError("State transition is invalid");
+  }
+  const transition = [state.primaryAction, ...state.secondaryActions]
+    .find((action) => action.id === actionId);
+  if (transition?.serverCoordinator === "conversion") {
+    throw new FieldSetupContractError(
+      "Conversion action requires the conversion coordinator",
+      "server_outcome_required",
+    );
   }
   if (state.serverOutcomeRequired !== true) return null;
   const prerequisite = FIELD_SETUP_PROTOCOL.serverPrerequisites[stateId]?.[actionId];
@@ -351,7 +424,88 @@ function getServerPrerequisite(stateId, actionId) {
   return prerequisite;
 }
 
-function validateServerPrerequisiteReceipt(value, binding, prerequisite) {
+function normalizeFormNavigationDestinations(value) {
+  try {
+    requireExactKeys(value, FORM_NAVIGATION_TARGETS, "Form navigation destinations");
+  } catch {
+    throw new FieldSetupContractError(
+      "Form navigation destinations are invalid",
+      "configuration_invalid",
+    );
+  }
+  return Object.freeze(Object.fromEntries(FORM_NAVIGATION_TARGETS.map((target) => {
+    let destination;
+    try {
+      destination = new URL(value[target]);
+    } catch {
+      throw new FieldSetupContractError("Form navigation destination is invalid", "configuration_invalid");
+    }
+    if (
+      destination.protocol !== "https:" ||
+      destination.username ||
+      destination.password ||
+      destination.port ||
+      destination.search ||
+      destination.hash ||
+      destination.pathname === "/" ||
+      !isApprovedFormsPublicHostname(destination.hostname) ||
+      destination.href.length > 2048
+    ) {
+      throw new FieldSetupContractError("Form navigation destination is invalid", "configuration_invalid");
+    }
+    return [target, destination.href];
+  })));
+}
+
+function validateFormNavigationIntent(value, binding, destinations) {
+  const expectedTarget = FORM_NAVIGATION_TARGET_BY_ACTION[binding.actionId] ?? null;
+  if (expectedTarget === null) {
+    if (value !== null) {
+      throw new FieldSetupContractError("Form navigation intent is not permitted for this transition");
+    }
+    return null;
+  }
+  requireExactKeys(value, ["mode", "target", "url"], "Form navigation intent");
+  if (value.mode !== "top_level" || value.target !== expectedTarget) {
+    throw new FieldSetupContractError("Form navigation intent does not match the transition");
+  }
+  let intended;
+  let destination;
+  try {
+    intended = new URL(value.url);
+    destination = new URL(destinations[expectedTarget]);
+  } catch {
+    throw new FieldSetupContractError("Form navigation intent is invalid");
+  }
+  const queryEntries = [...intended.searchParams.entries()];
+  if (
+    intended.protocol !== "https:" ||
+    intended.username ||
+    intended.password ||
+    intended.port ||
+    intended.hash ||
+    !isApprovedFormsPublicHostname(intended.hostname) ||
+    intended.origin !== destination.origin ||
+    intended.pathname !== destination.pathname ||
+    intended.href.length > 2048 ||
+    queryEntries.length > 4 ||
+    new Set(queryEntries.map(([key]) => key)).size !== queryEntries.length ||
+    queryEntries.some(([key, queryValue]) => (
+      !FORM_QUERY_KEY_PATTERN.test(key) ||
+      PROHIBITED_FORM_QUERY_KEY_PATTERN.test(key) ||
+      !FORM_QUERY_VALUE_PATTERN.test(queryValue)
+    ))
+  ) {
+    throw new FieldSetupContractError("Form navigation intent is outside the approved destination");
+  }
+  return Object.freeze({
+    mode: "top_level",
+    target: expectedTarget,
+    url: intended.href,
+  });
+}
+
+function validateServerPrerequisiteReceipt(value, binding, prerequisite, navigationDestinations) {
   requireExactKeys(value, SERVER_RECEIPT_FIELDS, "Server prerequisite receipt");
   requireExactKeys(
     binding,
@@ -383,6 +537,11 @@ function validateServerPrerequisiteReceipt(value, binding, prerequisite) {
   ) {
     throw new FieldSetupContractError("Server prerequisite receipt is not bound to this transition");
   }
+  const navigationIntent = validateFormNavigationIntent(
+    value.navigationIntent,
+    binding,
+    navigationDestinations,
+  );
   requireExactKeys(
     value.statusPatch,
     Object.keys(prerequisite.statusPatch),
@@ -405,6 +564,7 @@ function validateServerPrerequisiteReceipt(value, binding, prerequisite) {
   }
   return Object.freeze({
     fingerprintPatch: Object.freeze({ ...value.fingerprintPatch }),
+    navigationIntent,
     receiptType: value.receiptType,
     statusPatch: Object.freeze({ ...value.statusPatch }),
   });
@@ -465,8 +625,13 @@ function validateStoredJourney(value) {
     !SHA256_PATTERN.test(value.launchDigest ?? "") ||
     !(value.sessionDigest === null || SHA256_PATTERN.test(value.sessionDigest ?? "")) ||
     !FIELD_SETUP_STATES.includes(value.state) ||
-    !CRM_MODULES.has(value.moduleApiName) ||
+    // The persisted authority always remains the source Lead. A Deal button can
+    // resume only through the independently read-back keyed Deal mapping; it
+    // cannot create or transform a journey into a Deal-owned row.
+    value.moduleApiName !== "Leads" ||
     !RECORD_ID_PATTERN.test(value.recordId ?? "") ||
+    !SHA256_PATTERN.test(value.leadResumeBindingDigest ?? "") ||
+    !(value.dealResumeBindingDigest === null || SHA256_PATTERN.test(value.dealResumeBindingDigest ?? "")) ||
     !USER_ID_PATTERN.test(value.operatorUserId ?? "") ||
     value.environment !== "development" ||
     !Number.isSafeInteger(value.revision) ||
@@ -505,6 +670,8 @@ function validateStoredJourney(value) {
       && value.conversionSideEffectFingerprint === null) ||
     (value.conversionStatus === "completed"
       && conversionFingerprints.some((item) => item === null)) ||
+    (value.conversionStatus !== "completed" && value.dealResumeBindingDigest !== null) ||
+    (value.conversionStatus === "completed" && value.dealResumeBindingDigest === null) ||
     (["assigned", "live", "cooldown", "retired"].includes(value.numberStatus)
       && value.configVersionFingerprint === null)
   ) {
@@ -534,6 +701,7 @@ function validateStoredJourney(value) {
 
 module.exports = {
   BROWSER_ACTIONS,
+  COORDINATED_BROWSER_ACTIONS,
   FIELD_SETUP_PROTOCOL,
   FIELD_SETUP_STATES,
   FieldSetupContractError,
@@ -544,7 +712,9 @@ module.exports = {
   assertOperatorBound,
   authorizeQualification,
   getServerPrerequisite,
+  isFormNavigationAction,
   normalizeAuthenticatedOperator,
+  normalizeFormNavigationDestinations,
   normalizeQualificationBody,
   normalizeQualificationForAction,
   normalizeTrustedLaunchContext,

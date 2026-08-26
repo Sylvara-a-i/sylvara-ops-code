@@ -20,12 +20,44 @@ CRM = ROOT / "src" / "zoho-crm" / "free-revenue-leak-test"
 FORMS = ROOT / "src" / "zoho-forms" / "free-revenue-leak-test" / "forms-manifest.json"
 
 
+def js_string_array(source, constant_name):
+    match = re.search(
+        rf"const {re.escape(constant_name)} = (?:Object\.freeze\(|new Set\()\[(.*?)\]\);",
+        source,
+        re.S,
+    )
+    if match is None:
+        raise AssertionError(f"JavaScript array {constant_name} was not found")
+    return re.findall(r'"([^"]+)"', match.group(1))
+
+
+def protocol_from_source():
+    source = (
+        REQUEST
+        / "functions"
+        / "revenue_leak_test_request_form"
+        / "lib"
+        / "field-setup-protocol.js"
+    ).read_text(encoding="utf-8")
+    return json.loads(source.split("module.exports = ", 1)[1].rsplit(";", 1)[0])
+
+
 class FreeTestFieldSetupContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.release = json.loads(RELEASE.read_text(encoding="utf-8"))
         cls.field_setup = cls.release["field_setup_candidate"]
         cls.v2 = cls.release["retell_v2_candidate"]
+        cls.schema = json.loads(
+            (REQUEST / "config" / "field-setup-datastore-schema.proposed.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        cls.setup_manifest = json.loads(
+            (SETUP / "config" / "field-setup-operations.proposed.json").read_text(
+                encoding="utf-8"
+            )
+        )
 
     def test_release_keeps_field_setup_and_live_install_blocked(self):
         self.assertEqual("NOT_READY", self.field_setup["status"])
@@ -44,24 +76,131 @@ class FreeTestFieldSetupContractTests(unittest.TestCase):
         self.assertNotIn("form 3", forms_text)
         self.assertNotIn("form3", forms_text)
 
-    def test_one_narrow_journey_table_is_justified_and_disabled(self):
-        schema = json.loads(
-            (REQUEST / "config" / "field-setup-datastore-schema.proposed.json").read_text(
-                encoding="utf-8"
-            )
-        )
+    def test_one_narrow_shared_table_is_provisionable_and_executable_exact(self):
+        schema = self.schema
         self.assertEqual(1, schema["existing_store_reuse_decision"]["new_table_count"])
         self.assertEqual(
             "RevenueLeakTestFieldSetupJourneys", schema["table"]["api_name"]
         )
         self.assertEqual("none", schema["table"]["client_access"])
         self.assertFalse(schema["table"]["delete_permission"])
+        self.assertEqual("physical_union_columns", schema["table"]["provisioning_source"])
+
+        protocol = protocol_from_source()["persistence"]
+        journey_columns = schema["table"]["columns"]
+        source_map = schema["source_property_map"]
+        self.assertEqual(
+            [column["api_name"] for column in journey_columns], list(source_map)
+        )
+        self.assertEqual(protocol["rowFields"], list(source_map.values()))
+
+        shared = schema["shared_table_record_contract"]
+        families = shared["record_families"]
+        self.assertEqual(shared["strict_record_types"], list(families))
+        journey = families["journey"]
+        self.assertEqual(
+            ["recordType", "rowKey", *protocol["rowFields"]],
+            journey["required_fields"],
+        )
+        self.assertEqual(
+            set(protocol["rowFields"]) - set(protocol["mandatoryFields"]),
+            set(journey["nullable_fields"]),
+        )
+        self.assertFalse(journey["additional_canonical_properties_allowed"])
+
+        union_columns = schema["table"]["physical_union_columns"]
+        self.assertEqual(
+            len(union_columns), len({column["api_name"] for column in union_columns})
+        )
+        source_fields = {
+            field
+            for column in union_columns
+            for field in column["source_fields"]
+        }
+        self.assertEqual("RECORD_TYPE", union_columns[0]["api_name"])
+        self.assertEqual("ROW_KEY", union_columns[1]["api_name"])
+        self.assertTrue(all(not column["nullable"] for column in union_columns[:2]))
+        self.assertTrue(all(column["nullable"] for column in union_columns[2:]))
+        for record_type, family in families.items():
+            self.assertTrue(
+                set(family["required_fields"]).issubset(source_fields), record_type
+            )
+            self.assertTrue(
+                set(family.get("nullable_fields", [])).issubset(
+                    family["required_fields"]
+                ),
+                record_type,
+            )
+
+        physical_by_name = {
+            column["api_name"]: column for column in union_columns
+        }
+        self.assertFalse(physical_by_name["BINDING_FINGERPRINT"]["unique"])
+        self.assertFalse(physical_by_name["CONTROL_FENCE_FINGERPRINT"]["unique"])
+        latest_control = physical_by_name["LATEST_CONTROL_OPERATION_FINGERPRINT"]
+        self.assertTrue(latest_control["nullable"])
+        self.assertFalse(latest_control["unique"])
+        self.assertEqual(64, latest_control["max_length"])
+        # The gateway permits a 32-character namespace, one separator, and a
+        # 64-character digest. Both persisted receipt fields must preserve that
+        # exact maximum rather than accepting source-valid values that truncate.
+        self.assertEqual(
+            physical_by_name["VERIFICATION_CLAIM_KEY"]["max_length"], 97
+        )
+        self.assertEqual(
+            physical_by_name["ACTUAL_CALL_FINGERPRINT"]["max_length"], 97
+        )
+        current_control = families["current_control"]
+        self.assertIn(
+            "latestControlOperationFingerprint", current_control["required_fields"]
+        )
+        self.assertIn(
+            "latestControlOperationFingerprint", current_control["nullable_fields"]
+        )
+        self.assertIn(
+            "latestControlOperationFingerprint", current_control["cas_fields"]
+        )
+        self.assertIn("numberFingerprint", current_control["cas_fields"])
+        self.assertIn("numberState", current_control["cas_fields"])
+        self.assertIn("approvedQaCallerFingerprint", current_control["cas_fields"])
+        self.assertIn("updatedAt", current_control["cas_fields"])
+        self.assertEqual(
+            78, physical_by_name["CONTROL_FENCE_FINGERPRINT"]["max_length"]
+        )
+        fence_representation = shared["control_fence_representation_contract"]
+        self.assertEqual(
+            "raw lowercase sha256 digest of exactly 64 characters",
+            fence_representation["current_control.controlFenceFingerprint"],
+        )
+        self.assertIn("'control_fence_' + current_control.controlFenceFingerprint",
+                      fence_representation["atomic_equality"])
+        claim_contract = shared["atomic_contracts"]["claim_number"]
+        for field in ["bindingFingerprint", "numberFingerprint", "numberState",
+                      "controlFenceFingerprint", "updatedAt"]:
+            self.assertIn(field, claim_contract)
+        validation = shared["record_validation"]
+        self.assertIn("exactly", validation["required_key_rule"])
+        self.assertIn("must be null", validation["forbidden_field_rule"])
+        indexes = schema["table"]["index_contracts"]
+        self.assertIn(
+            {"fields": ["RECORD_TYPE", "ROW_KEY"], "unique": True}, indexes
+        )
+        self.assertIn(
+            {"fields": ["RECORD_TYPE", "CONTROL_FENCE_FINGERPRINT"], "unique": False},
+            indexes,
+        )
+        self.assertIn(
+            {"fields": ["RECORD_TYPE", "BINDING_FINGERPRINT"], "unique": False},
+            indexes,
+        )
         prohibited = " ".join(schema["data_policy"]["prohibited"]).lower()
         self.assertIn("raw nonce", prohibited)
         self.assertIn("secret", prohibited)
 
     def test_launch_contract_is_fragment_only_digest_only_and_sixty_seconds(self):
         launch = self.field_setup["launch_protocol"]
+        self.assertEqual(1, launch["schema_version"])
+        self.assertEqual("free_revenue_leak_test_field_setup_v1", launch["protocol_id"])
         self.assertEqual(256, launch["nonce_entropy_bits"])
         self.assertEqual("keyed digest only", launch["nonce_storage"])
         self.assertEqual(60, launch["maximum_ttl_seconds"])
@@ -76,6 +215,42 @@ class FreeTestFieldSetupContractTests(unittest.TestCase):
             ],
             launch["session_cookie"],
         )
+        self.assertEqual("Leads", launch["new_journey_module"])
+        self.assertEqual(["Leads", "Deals"], launch["resume_modules"])
+        self.assertIn("record digest", launch["resume_binding"])
+        self.assertEqual(
+            [
+                "x-sylvara-field-setup-protocol-id",
+                "x-sylvara-field-setup-protocol-version",
+            ],
+            launch["runtime_protocol_headers_required"],
+        )
+        self.assertTrue(launch["successful_responses_echo_protocol_identity"])
+        self.assertEqual(
+            ["forms.zohopublic.com"],
+            launch["form_navigation"]["approved_public_hosts"],
+        )
+
+    def test_source_wiring_is_explicit_injection_only_and_default_denied(self):
+        request = self.field_setup["source_wiring"]["request_form"]
+        self.assertEqual(0, request["default_route_claim_count"])
+        self.assertEqual("synthetic_zero_network_preview", request["default_client_mode"])
+        self.assertEqual(6, request["injected_route_count"])
+        self.assertEqual("NOT_READY_INJECTED_ONLY", request["catalyst_header_mapping"])
+        self.assertEqual("NOT_READY_INJECTED_ONLY", request["catalyst_identity_mapping"])
+        self.assertEqual("NOT_READY_INJECTED_ONLY", request["catalyst_store_mapping"])
+        self.assertFalse(request["deployment_authorized"])
+
+        setup = self.field_setup["source_wiring"]["setup_form"]
+        self.assertEqual(0, setup["default_operation_route_claim_count"])
+        self.assertEqual(6, setup["existing_form2_route_count_preserved"])
+        self.assertEqual(5, setup["injected_operation_route_count"])
+        self.assertFalse(setup["provider_client_injected"])
+        self.assertFalse(setup["number_purchase_adapter_injected"])
+        self.assertFalse(setup["activation_adapter_injected"])
+        self.assertFalse(setup["live_route_mutation_adapter_injected"])
+        self.assertFalse(setup["verification_consumption_adapter_injected"])
+        self.assertFalse(setup["deployment_authorized"])
 
     def test_field_setup_routes_are_proposed_disabled_and_do_not_activate(self):
         manifest = json.loads(
@@ -83,9 +258,88 @@ class FreeTestFieldSetupContractTests(unittest.TestCase):
                 encoding="utf-8"
             )
         )
-        self.assertEqual("source-only-disabled-not-wired", manifest["status"])
-        self.assertEqual(4, len(manifest["routes"]))
+        self.assertEqual(
+            "source-only-disabled-explicit-injection-required", manifest["status"]
+        )
+        self.assertEqual(6, len(manifest["routes"]))
         self.assertTrue(all(route["enabled"] is False for route in manifest["routes"]))
+        dispatcher_source = (
+            REQUEST
+            / "functions"
+            / "revenue_leak_test_request_form"
+            / "lib"
+            / "field-setup-dispatcher.js"
+        ).read_text(encoding="utf-8")
+        executable_routes = js_string_array(dispatcher_source, "ROUTE_KEYS")
+        self.assertEqual(
+            [
+                "launchPath",
+                "exchangePath",
+                "statusPath",
+                "decisionPath",
+                "conversionPreviewPath",
+                "conversionConfirmPath",
+            ],
+            executable_routes,
+        )
+        self.assertEqual(
+            [
+                "FIELD_SETUP_LAUNCH",
+                "FIELD_SETUP_EXCHANGE",
+                "FIELD_SETUP_STATUS",
+                "FIELD_SETUP_OPERATOR_DECISION",
+                "FIELD_SETUP_CONVERSION_PREVIEW",
+                "FIELD_SETUP_CONVERSION_CONFIRM",
+            ],
+            [route["id"] for route in manifest["routes"]],
+        )
+        self.assertEqual(
+            [
+                "launch",
+                "exchange",
+                "status",
+                "operator_decision",
+                "conversion_preview",
+                "conversion_confirm",
+            ],
+            self.field_setup["source_wiring"]["request_form"]["injected_routes"],
+        )
+        preview_route = next(
+            route
+            for route in manifest["routes"]
+            if route["id"] == "FIELD_SETUP_CONVERSION_PREVIEW"
+        )
+        self.assertTrue(
+            any("atomically replaces" in behavior for behavior in preview_route["behavior"])
+        )
+        conversion_source = (
+            REQUEST
+            / "functions"
+            / "revenue_leak_test_request_form"
+            / "lib"
+            / "field-setup-conversion.js"
+        ).read_text(encoding="utf-8")
+        for expected in [
+            'expectedConversionStatus: "preview_ready"',
+            'expectedPreviewFingerprint: journey.conversionPreviewFingerprint',
+            'expectedState: CONFIRMATION_STATE',
+            'nextState: CONFIRMATION_STATE',
+        ]:
+            self.assertIn(expected, conversion_source)
+        self.assertIn(
+            "expected preview fingerprint",
+            self.schema["conversion_persistence_contract"]["preview_refresh"],
+        )
+        self.assertIn(
+            "atomically replaces only the exact current preview receipt",
+            self.field_setup["source_wiring"]["request_form"][
+                "conversion_preview_refresh"
+            ],
+        )
+        composition = manifest["source_composition"]
+        self.assertEqual("claims no field-setup routes", composition["default_dispatcher"])
+        self.assertFalse(composition["deployment_authorized"])
+        self.assertIn("CAS-backed", composition["injected_dispatcher"])
         rendered = json.dumps(manifest).lower()
         self.assertIn("browser_cannot_authorize", rendered)
         self.assertIn("activation", rendered)
@@ -120,7 +374,7 @@ class FreeTestFieldSetupContractTests(unittest.TestCase):
         self.assertRegex(styles, r"button\s*\{[^}]*min-width:\s*44px;[^}]*min-height:\s*(?:44|4[5-9]|[5-9][0-9])px;", re.S)
         self.assertIn(":focus-visible", styles)
 
-    def test_client_removes_fragment_and_contains_no_iframe_or_activation_adapter(self):
+    def test_client_removes_fragment_and_keeps_authenticated_wiring_injected(self):
         client = REQUEST / "client" / "field-setup"
         fragment = (client / "launch-fragment.js").read_text(encoding="utf-8")
         self.assertIn("historyLike.replaceState", fragment)
@@ -134,6 +388,282 @@ class FreeTestFieldSetupContractTests(unittest.TestCase):
         self.assertNotIn("fetch(", adapter)
         self.assertNotIn("xmlhttprequest", adapter)
         self.assertIn("synthetic", adapter)
+        self.assertIn("createauthenticatedapi", adapter)
+        self.assertIn("credentials: \"same-origin\"", adapter)
+        self.assertIn("redirect: \"error\"", adapter)
+        html = (client / "index.html").read_text(encoding="utf-8")
+        self.assertNotIn("FieldSetupRuntimeConfig", html)
+        self.assertIn("connect-src 'self'", html)
+
+    def test_client_and_setup_route_shapes_match_the_executable_sources(self):
+        client_source = (
+            REQUEST / "client" / "field-setup" / "api-adapter.js"
+        ).read_text(encoding="utf-8")
+        client_paths = js_string_array(client_source, "ROUTE_KEYS")
+        web_client = self.field_setup["source_wiring"]["web_client"]
+        self.assertEqual(10, web_client["injected_distinct_path_count"])
+        self.assertEqual(client_paths, web_client["injected_distinct_paths"])
+        self.assertEqual(len(client_paths), len(set(client_paths)))
+
+        setup_source = (
+            SETUP
+            / "functions"
+            / "revenue_leak_test_setup_form"
+            / "lib"
+            / "field-setup-operations-dispatcher.js"
+        ).read_text(encoding="utf-8")
+        setup_paths = js_string_array(setup_source, "ROUTE_KEYS")
+        self.assertEqual(
+            [
+                "numberStatusPath",
+                "numberClaimPath",
+                "forwardingInstructionsPath",
+                "routeVerificationWindowPath",
+                "setupControlPath",
+            ],
+            setup_paths,
+        )
+        routes = self.setup_manifest["source_routes"]
+        self.assertEqual(5, len(routes))
+        self.assertTrue(all(route["enabled"] is False for route in routes))
+        self.assertEqual(
+            [
+                "FIELD_SETUP_NUMBER_STATUS",
+                "FIELD_SETUP_NUMBER_CLAIM",
+                "FIELD_SETUP_FORWARDING_INSTRUCTIONS",
+                "FIELD_SETUP_ROUTE_VERIFICATION_WINDOW",
+                "FIELD_SETUP_CONTROL",
+            ],
+            [route["id"] for route in routes],
+        )
+        self.assertEqual(
+            ["GET", "POST", "POST", "POST", "POST"],
+            [route["method"] for route in routes],
+        )
+        self.assertEqual(
+            ["journeyRevision", "view"], routes[2]["body"]
+        )
+        self.assertEqual(["enable", "rollback"], routes[2]["allowed_views"])
+        self.assertIn(
+            'readPostBody(request, ["journeyRevision", "view"])', setup_source
+        )
+        forwarding = web_client["forwarding_instruction_request"]
+        self.assertEqual("POST", forwarding["method"])
+        self.assertEqual(routes[2]["body"], forwarding["body"])
+        self.assertEqual(routes[2]["allowed_views"], forwarding["allowed_views"])
+
+        context_keys = js_string_array(setup_source, "CONTEXT_KEYS")
+        control_record_keys = js_string_array(setup_source, "CONTROL_RECORD_KEYS")
+        reservation_receipt_keys = js_string_array(
+            setup_source, "RESERVATION_RECEIPT_KEYS"
+        )
+        self.assertEqual(
+            context_keys,
+            self.setup_manifest["source_route_authentication"]["authoritative_context"],
+        )
+        self.assertEqual(
+            control_record_keys,
+            self.setup_manifest["browser_setup_control"]["control_record_fields"],
+        )
+        self.assertEqual(
+            reservation_receipt_keys,
+            self.setup_manifest["number_inventory"]["receipt_fields"],
+        )
+        claim_function = re.search(
+            r"function numberClaimOperationFingerprint\(context\) \{(.*?)\n\}",
+            setup_source,
+            re.S,
+        )
+        self.assertIsNotNone(claim_function)
+        claim_parts_block = re.search(
+            r"const parts = \[(.*?)\n  \];", claim_function.group(1), re.S
+        )
+        self.assertIsNotNone(claim_parts_block)
+        self.assertEqual(
+            [
+                ("route", '"FIELD_SETUP_NUMBER_CLAIM"'),
+                ("client", "context.clientFingerprint"),
+                ("environment", "context.environmentFingerprint"),
+                ("journey", "context.journeyFingerprint"),
+                ("deployment", "context.deploymentFingerprint"),
+                ("configuration", "context.configurationFingerprint"),
+            ],
+            re.findall(
+                r'\["([^"]+)",\s*("[^"]+"|context\.[A-Za-z0-9_]+)\]',
+                claim_parts_block.group(1),
+            ),
+        )
+        self.assertEqual(
+            [
+                "client_fingerprint",
+                "environment_fingerprint",
+                "journey_fingerprint",
+                "deployment_fingerprint",
+                "configuration_fingerprint",
+            ],
+            self.setup_manifest["number_inventory"]["binding"],
+        )
+        self.assertEqual(
+            [
+                "session fingerprint",
+                "journey revision",
+                "number fingerprint",
+                "control scope",
+                "control fence",
+            ],
+            self.setup_manifest["number_inventory"]["operation_fingerprint_excludes"],
+        )
+        self.assertIn("previousControlFenceFingerprint", reservation_receipt_keys)
+        self.assertIn("controlFenceFingerprint", reservation_receipt_keys)
+        families = self.schema["shared_table_record_contract"]["record_families"]
+        self.assertEqual(
+            [
+                "recordType",
+                "rowKey",
+                *context_keys,
+                "controlScopeFingerprint",
+                "bindingFingerprint",
+                "controlFenceFingerprint",
+                "updatedAt",
+            ],
+            families["current_control"]["required_fields"],
+        )
+        self.assertEqual(
+            ["recordType", "rowKey", *control_record_keys],
+            families["control_operation"]["required_fields"],
+        )
+        self.assertEqual(
+            ["recordType", "rowKey", *reservation_receipt_keys],
+            families["reservation_receipt"]["required_fields"],
+        )
+        self.assertEqual(
+            [
+                "confirm_forwarding_enabled",
+                "confirm_rollback_ready",
+                "stop",
+                "resume",
+            ],
+            self.setup_manifest["browser_setup_control"]["allowed_actions"],
+        )
+        self.assertEqual(
+            "issue_forwarding_instructions",
+            self.setup_manifest["browser_setup_control"]["server_internal_action"],
+        )
+        self.assertEqual(
+            "latestControlOperationFingerprint",
+            self.setup_manifest["browser_setup_control"][
+                "latest_control_operation_pointer_field"
+            ],
+        )
+        self.assertEqual(
+            "readControlOperationByOperationFingerprint",
+            self.setup_manifest["browser_setup_control"][
+                "control_receipt_readback_adapter"
+            ],
+        )
+
+    def test_state_coordinator_and_window_contracts_match_executable_shapes(self):
+        composition_source = (
+            SETUP
+            / "functions"
+            / "revenue_leak_test_setup_form"
+            / "lib"
+            / "field-setup-operations-composition.js"
+        ).read_text(encoding="utf-8")
+        coordinator_block = re.search(
+            r"const exactStateCoordinator = Object\.freeze\(\{(.*?)\n  \}\);",
+            composition_source,
+            re.S,
+        )
+        self.assertIsNotNone(coordinator_block)
+        coordinator_methods = re.findall(
+            r"^    ([A-Za-z0-9_]+): bindMethod\(",
+            coordinator_block.group(1),
+            re.M,
+        )
+        manifest_coordinator = self.setup_manifest["source_composition"][
+            "state_coordinator"
+        ]
+        self.assertEqual(7, len(coordinator_methods))
+        self.assertEqual(coordinator_methods, manifest_coordinator["required_methods"])
+        self.assertEqual(coordinator_methods, self.schema["state_coordinator_interface"])
+        self.assertEqual(
+            coordinator_methods,
+            self.field_setup["source_wiring"]["setup_form"][
+                "authoritative_state_coordinator_methods"
+            ],
+        )
+        self.assertEqual(
+            ["consumeOpenWindowAtCurrentControlFence"],
+            self.schema["gateway_shared_interface"],
+        )
+        self.assertEqual(
+            self.schema["gateway_shared_interface"][0],
+            manifest_coordinator["gateway_shared_method"],
+        )
+
+        operations_source = (
+            SETUP
+            / "functions"
+            / "revenue_leak_test_setup_form"
+            / "lib"
+            / "field-setup-operations.js"
+        ).read_text(encoding="utf-8")
+        verification = self.setup_manifest["route_verification"]
+        self.assertEqual(
+            js_string_array(operations_source, "ROUTE_VERIFICATION_WINDOW_FIELDS"),
+            verification["window_fields"],
+        )
+        self.assertEqual(
+            js_string_array(operations_source, "ROUTE_WINDOW_ISSUE_COMMAND_FIELDS"),
+            verification["issue_command_fields"],
+        )
+        issue_request = re.search(
+            r"const issueRequest = deepFreeze\(\{(.*?)\n  \}\);",
+            operations_source,
+            re.S,
+        )
+        self.assertIsNotNone(issue_request)
+        self.assertEqual(
+            re.findall(r"^    ([a-z_]+):", issue_request.group(1), re.M),
+            verification["issue_store_request_fields"],
+        )
+        self.assertEqual(
+            "readLatestWindowByOperationScopeFingerprint",
+            verification["latest_readback_operation"],
+        )
+        self.assertEqual(
+            ["operation_scope_fingerprint"],
+            verification["latest_readback_request_fields"],
+        )
+        self.assertEqual(
+            ["attempt_epoch", "window"],
+            verification["latest_readback_result_fields"],
+        )
+        self.assertIn("never browser supplied", verification["attempt_epoch_authority"])
+        window_family = self.schema["shared_table_record_contract"][
+            "record_families"
+        ]["verification_window"]
+        self.assertEqual(verification["window_fields"], window_family["window_projection_fields"])
+        self.assertEqual(
+            verification["receipt_fields"], window_family["receipt_projection_fields"]
+        )
+        self.assertEqual(
+            [
+                "recordType",
+                "rowKey",
+                "operation_scope_fingerprint",
+                "attempt_epoch",
+                "request_binding_key",
+                "control_scope_fingerprint",
+                "expected_control_fence_fingerprint",
+                *verification["window_fields"],
+                "verification_claim_key",
+                "actual_call_fingerprint",
+                "consumed_at",
+            ],
+            window_family["required_fields"],
+        )
 
     def test_client_is_not_a_deploy_target(self):
         catalyst = json.loads((REQUEST / "catalyst.json").read_text(encoding="utf-8"))
@@ -245,6 +775,41 @@ class FreeTestFieldSetupContractTests(unittest.TestCase):
             gateway["authoritative_call_binding_fields"],
         )
         self.assertEqual(verification["receipt_fields"], gateway["receipt_fields"])
+        for key in [
+            "current_control_fence_representation",
+            "window_call_receipt_fence_representation",
+            "atomic_fence_equality",
+            "required_current_control_fence_fingerprint_representation",
+        ]:
+            self.assertEqual(verification[key], gateway[key])
+        self.assertEqual(
+            self.field_setup["route_verification_control_fence_representation"][
+                "atomic_equality"
+            ],
+            gateway["atomic_fence_equality"],
+        )
+        gateway_source = (
+            GATEWAY / "lib" / "call-gap-capture-handoff-v2-candidate.js"
+        ).read_text(encoding="utf-8")
+        self.assertIn("/^control_fence_[a-f0-9]{64}$/", gateway_source)
+        self.assertIn("rawControlFenceFingerprint(", gateway_source)
+        setup_source = (
+            SETUP
+            / "functions"
+            / "revenue_leak_test_setup_form"
+            / "lib"
+            / "field-setup-operations.js"
+        ).read_text(encoding="utf-8")
+        binding_match = re.search(
+            r"function setupControlBindingFingerprint\(.*?\n\}", setup_source, re.S
+        )
+        self.assertIsNotNone(binding_match)
+        self.assertIn('["number_state", command.numberState ?? "none"]',
+                      binding_match.group(0))
+        self.assertIn(
+            '["approved_qa_caller", command.approvedQaCallerFingerprint ?? "none"]',
+            binding_match.group(0),
+        )
         disposition = verification["verified_qa_runtime_disposition"]
         self.assertFalse(disposition["collect_agent_intake"])
         self.assertFalse(disposition["start_agent"])
@@ -258,10 +823,27 @@ class FreeTestFieldSetupContractTests(unittest.TestCase):
         self.assertFalse(self.v2["enabled"])
         self.assertEqual([], self.v2["traffic_environments"])
         self.assertEqual("call_gap_monitor_v1", self.v2["v1_profile_preserved"])
-        self.assertFalse(self.v2["provider_event_parser_implemented"])
+        self.assertTrue(self.v2["provider_event_parser_implemented"])
+        self.assertFalse(self.v2["provider_neutral_state_machine_only"])
         self.assertEqual(17, self.v2["analysis_field_count"])
         self.assertFalse(self.v2["routine_transfer_allowed"])
         self.assertFalse(self.v2["retell_email_allowed"])
+        self.assertFalse(self.v2["provider_import_or_publication_authorized"])
+        candidate = self.v2["private_connected_candidate"]
+        self.assertEqual(15, candidate["node_count"])
+        self.assertEqual(15, candidate["reachable_node_count"])
+        self.assertFalse(candidate["ordinary_directed_cycle_present"])
+        self.assertEqual(1, candidate["reachable_warm_transfer_node_count"])
+        self.assertTrue(candidate["transfer_requires_policy_gate"])
+        self.assertTrue(candidate["transfer_requires_explicit_caller_acceptance"])
+        self.assertEqual("Transfer failed", candidate["transfer_failure_edge_text"])
+        self.assertEqual(6, candidate["webhook_event_count"])
+        self.assertEqual(0, candidate["network_interaction_count"])
+        self.assertEqual(0, candidate["provider_interaction_count"])
+        self.assertTrue(candidate["ignored_private_artifact"])
+        self.assertFalse(candidate["published"])
+        self.assertFalse(candidate["bound_to_traffic"])
+        self.assertFalse(candidate["publicly_importable"])
 
     def test_runbook_and_adr_record_required_separations_and_rollback(self):
         runbook = (

@@ -1,7 +1,8 @@
 "use strict";
 
 const LAUNCH_STORE_METHODS = Object.freeze([
-  "issueLaunch",
+  "issueOrResumeLaunch",
+  "readByLaunchDigest",
   "consumeLaunch",
   "readBySessionDigest",
   "compareAndSetJourney",

@@ -84,6 +84,23 @@ function responseStub() {
   };
 }
 
+function fieldSetupOperationsComposition(overrides = {}) {
+  return {
+    status: "NOT_READY",
+    catalystHeaderMapping: "NOT_READY_INJECTED_ONLY",
+    catalystIdentityMapping: "NOT_READY_INJECTED_ONLY",
+    catalystStoreMapping: "NOT_READY_INJECTED_ONLY",
+    deploymentAuthorized: false,
+    runtimeAuthority: false,
+    assertNoRouteCollision() {},
+    claimsRequest() { return false; },
+    async dispatch() {
+      throw new Error("must not dispatch");
+    },
+    ...overrides,
+  };
+}
+
 test("requires one injected Development header matching the SDK and configuration", () => {
   const request = { headers: { "x-zc-environment": "Development" } };
   assert.equal(readCatalystEnvironmentHeader(request), "development");
@@ -178,6 +195,107 @@ test("listener logs stage and outcome for controller successes and handled error
   }
 });
 
+test("listener explicitly dispatches an injected setup-operation route without entering Form 2", async () => {
+  let handled = false;
+  let dispatched = false;
+  let collisionPaths;
+  let dispatchContext;
+  const listener = createRequestListener({
+    catalystSdk: catalystSdkStub(),
+    environment: listenerEnvironment(),
+    artifactSourceRevision: listenerEnvironment().SOURCE_REVISION,
+    artifactFormDestinationSha256: FORM2_DESTINATION_SHA256,
+    logger: { info() {}, error() {} },
+    randomUUID: () => "10000000-0000-4000-8000-000000000001",
+    now: () => 100,
+    requestHandler: async () => {
+      handled = true;
+      throw new Error("must not enter Form 2");
+    },
+    fieldSetupOperationsComposition: fieldSetupOperationsComposition({
+      assertNoRouteCollision(paths) { collisionPaths = paths; },
+      claimsRequest(request) {
+        return request.url === "/field-setup/operations/number/status";
+      },
+      async dispatch(_request, context) {
+        dispatched = true;
+        dispatchContext = context;
+        return {
+          status: 200,
+          body: {
+            ok: true,
+            state: "Available",
+            color: "Gray",
+            protocolId: "free_revenue_leak_test_field_setup_v1",
+            schemaVersion: 1,
+          },
+          stage: "field_setup_operations",
+          outcome: "number_status_read",
+        };
+      },
+    }),
+  });
+  const output = responseStub();
+
+  await listener({
+    method: "GET",
+    url: "/field-setup/operations/number/status",
+    headers: { "x-zc-environment": "Development" },
+  }, output);
+
+  assert.equal(dispatched, true);
+  assert.equal(handled, false);
+  assert.equal(typeof dispatchContext.app.datastore, "function");
+  assert.deepEqual(collisionPaths, [
+    "/form2/session/issue",
+    "/form2/session/access",
+    "/form2/session/otp/request",
+    "/form2/session/otp/verify",
+    "/form2/session/prefill",
+    "/form2/session/submit",
+  ]);
+  assert.deepEqual(JSON.parse(output.payload), {
+    ok: true,
+    state: "Available",
+    color: "Gray",
+    protocolId: "free_revenue_leak_test_field_setup_v1",
+    schemaVersion: 1,
+  });
+});
+
+test("default setup-operation composition preserves the existing Form 2 handler path", async () => {
+  let handled = false;
+  const listener = createRequestListener({
+    catalystSdk: catalystSdkStub(),
+    environment: listenerEnvironment(),
+    artifactSourceRevision: listenerEnvironment().SOURCE_REVISION,
+    artifactFormDestinationSha256: FORM2_DESTINATION_SHA256,
+    logger: { info() {}, error() {} },
+    randomUUID: () => "10000000-0000-4000-8000-000000000001",
+    now: () => 100,
+    requestHandler: async () => {
+      handled = true;
+      return {
+        status: 404,
+        body: { ok: false, code: "route_not_found" },
+        stage: "request",
+        outcome: "route_not_found",
+      };
+    },
+  });
+  const output = responseStub();
+
+  await listener({
+    method: "GET",
+    url: "/field-setup/operations/number/status",
+    headers: { "x-zc-environment": "Development" },
+  }, output);
+
+  assert.equal(handled, true);
+  assert.equal(output.statusCode, 404);
+  assert.equal(JSON.parse(output.payload).code, "route_not_found");
+});
+
 test("listener fails before SDK initialization when runtime and artifact revisions differ", async () => {
   let initialized = false;
   const sdk = catalystSdkStub();
@@ -237,6 +355,7 @@ test("listener fails before SDK initialization when the artifact destination dif
 test("dark Production rejects before SDK, route, store, mail, CRM, or secret access", async () => {
   let initialized = false;
   let handled = false;
+  let compositionUsed = false;
   const environment = {
     DEPLOYMENT_ENVIRONMENT: "production",
     DEPLOYMENT_MODE: "dark",
@@ -251,6 +370,11 @@ test("dark Production rejects before SDK, route, store, mail, CRM, or secret acc
     randomUUID: () => "10000000-0000-4000-8000-000000000001",
     now: () => 100,
     requestHandler: async () => { handled = true; throw new Error("must not handle"); },
+    fieldSetupOperationsComposition: fieldSetupOperationsComposition({
+      assertNoRouteCollision() { compositionUsed = true; },
+      claimsRequest() { compositionUsed = true; return true; },
+      async dispatch() { compositionUsed = true; throw new Error("must not dispatch"); },
+    }),
   });
   const output = responseStub();
 
@@ -258,6 +382,7 @@ test("dark Production rejects before SDK, route, store, mail, CRM, or secret acc
 
   assert.equal(initialized, false);
   assert.equal(handled, false);
+  assert.equal(compositionUsed, false);
   assert.equal(output.statusCode, 503);
   assert.deepEqual(JSON.parse(output.payload), {
     ok: false,

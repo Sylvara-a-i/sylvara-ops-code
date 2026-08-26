@@ -24,6 +24,42 @@ One Node.js 24 Advanced I/O function accepts six exact paths:
 5. **Prefill (`POST`):** Zoho Forms supplies the bearer token. The controller consumes one exact verified proof, verifies CRM relationships and versions, marks setup access verified, creates an immutable prefill revision, and returns only allowlisted fields plus an opaque `prefillId`.
 6. **Submission (`POST`):** Zoho Forms supplies the token, `prefillId`, server-generated Unique ID, and allowlisted fields. The controller claims one durable receipt, rejects a stale revision, consumes the prefill once, and sends one ordered rollback-enabled CRM Composite request: Contact, Account, then Deal. Success requires independent CRM readback and a durable succeeded receipt.
 
+The same Advanced I/O entrypoint now contains an explicit, source-only five-route
+field-setup operations composition for number-status read, control-fenced atomic
+existing-number claim, reviewed forwarding instructions, exact control-fenced
+300-second route-window issuance, and setup-control intents. Forwarding instructions
+use exact `POST {journeyRevision, view}` input with `view` limited to `enable` or
+`rollback`. Browser control is limited to `confirm_forwarding_enabled`,
+`confirm_rollback_ready`, `stop`, and `resume`; instruction issuance is an internal
+server action. The committed default composition claims none of those paths. The
+injected candidate accepts only the existing field-setup session cookie, same-origin
+request, session-derived CSRF token, and a server-resolved operator/journey binding.
+Every mutation requires atomic adapter output plus independent authoritative
+readback.
+
+One authoritative `stateCoordinator` must expose `readNumberReservationStatus`,
+`claimExistingAvailableNumberWithControlFenceAtomically`,
+`readNumberReservationReceiptByOperationFingerprint`,
+`issueWindowWithControlFenceAtomically`,
+`readLatestWindowByOperationScopeFingerprint`,
+`applyControlIntentAtomically`, and `readControlOperationByOperationFingerprint`. The nullable
+`latestControlOperationFingerprint` on the authenticated current-control aggregate identifies
+the exact immutable receipt for no-op or lost-response replay; bindings are not receipt keys.
+Number-claim idempotency is stable across session, revision, and fence rotation: its operation
+fingerprint binds only the claim route and exact client/environment/journey/deployment/configuration
+reservation binding. The immutable receipt records the accepted pre-claim fence and recomputed
+post-claim aggregate fence, and an exact replay cannot create a second inventory transition.
+Its one-table strict-record-family topology is currently unprovisioned and must prove one serializable
+cross-record transaction domain for control-fence checks, global number claim, immutable
+claim/control receipts, coordinator-owned monotone route-window attempt allocation,
+stale-window expiry, and gateway consumption. Window, authoritative-call, and receipt evidence bind
+the current control fence, provider, and exact displayed instruction evidence. Stop
+changes authoritative setup status/fence only; it never claims that the physical route
+was rolled back. No provider client, number-purchase method, route mutation, activation,
+setup-side verification-consumption method, live route, or Production authority is
+composed. Exact private paths and Catalyst identity/store mappings remain unconfigured
+and `NOT_READY`; the six reviewed Form 2 routes above are unchanged.
+
 Possession of the opaque invitation token alone cannot set setup access to Verified. A fresh email OTP must be delivered to the current CRM-bound Contact email, verified within the configured lifetime and attempt ceiling, and durably consumed for the exact session and CRM binding. Destination changes, replay, provider ambiguity, and state conflicts fail closed or enter reconciliation. Native Forms Email OTP and CAPTCHA are not trusted proof for this controller. Do not configure an SMS provider or SMS OTP.
 
 The Deal subrequest is last so the active Form 2 workflow evaluates only after the related Contact and Account changes succeed. CRM's documented rollback behavior defers automation until all subrequests succeed; a rollback does not trigger the automation.

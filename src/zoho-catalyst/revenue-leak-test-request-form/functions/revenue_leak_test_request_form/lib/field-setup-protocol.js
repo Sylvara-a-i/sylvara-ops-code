@@ -4,6 +4,11 @@
 module.exports = {
   "schemaVersion": 1,
   "protocolId": "free_revenue_leak_test_field_setup_v1",
+  "formNavigation": {
+    "approvedPublicHosts": [
+      "forms.zohopublic.com"
+    ]
+  },
   "initialState": "loading_session_validation",
   "blockedState": "recoverable_blocked",
   "states": [
@@ -65,7 +70,14 @@ module.exports = {
         "nextState": "return_to_operator_after_form1",
         "browserIntentAllowed": true
       },
-      "secondaryActions": []
+      "secondaryActions": [
+        {
+          "id": "resume_form1",
+          "label": "Reopen Form 1",
+          "nextState": "form1_completion_confirmation",
+          "browserIntentAllowed": true
+        }
+      ]
     },
     {
       "id": "return_to_operator_after_form1",
@@ -113,9 +125,10 @@ module.exports = {
       "serverOutcomeRequired": true,
       "primaryAction": {
         "id": "accept_conversion_preview",
-        "label": "Preview is correct",
+        "label": "Build current conversion preview",
         "nextState": "lead_conversion_confirmation",
-        "browserIntentAllowed": true
+        "browserIntentAllowed": true,
+        "serverCoordinator": "conversion"
       },
       "secondaryActions": []
     },
@@ -127,7 +140,8 @@ module.exports = {
         "id": "confirm_conversion_intent",
         "label": "Confirm conversion",
         "nextState": "handoff_to_client_form2",
-        "browserIntentAllowed": true
+        "browserIntentAllowed": true,
+        "serverCoordinator": "conversion"
       },
       "secondaryActions": []
     },
@@ -177,7 +191,14 @@ module.exports = {
         "nextState": "return_to_operator_after_form2",
         "browserIntentAllowed": true
       },
-      "secondaryActions": []
+      "secondaryActions": [
+        {
+          "id": "resume_form2",
+          "label": "Reopen Form 2",
+          "nextState": "form2_completion_confirmation",
+          "browserIntentAllowed": true
+        }
+      ]
     },
     {
       "id": "return_to_operator_after_form2",
@@ -294,9 +315,18 @@ module.exports = {
       "label": "Stop Setup",
       "nextState": "stop_rollback_status",
       "browserIntentAllowed": true,
-      "authoritativeSideEffect": false
+      "authoritativeSideEffect": true
     }
   ],
+  "globalServerPrerequisites": {
+    "stop_setup": {
+      "receiptType": "setup_stop_reconciled",
+      "statusPatch": {
+        "rollbackStatus": "requested"
+      },
+      "requiredFingerprintFields": []
+    }
+  },
   "qualification": {
     "factors": [
       {
@@ -362,6 +392,13 @@ module.exports = {
           "form1Status": "reconciled"
         },
         "requiredFingerprintFields": []
+      },
+      "resume_form1": {
+        "receiptType": "form1_opened_or_resumed",
+        "statusPatch": {
+          "form1Status": "in_progress"
+        },
+        "requiredFingerprintFields": []
       }
     },
     "operator_qualification_review": {
@@ -407,7 +444,8 @@ module.exports = {
         "requiredFingerprintFields": [
           "conversionPreviewFingerprint",
           "conversionSideEffectFingerprint",
-          "conversionOutcomeFingerprint"
+          "conversionOutcomeFingerprint",
+          "dealResumeBindingDigest"
         ]
       }
     },
@@ -434,6 +472,13 @@ module.exports = {
         "receiptType": "form2_reconciled",
         "statusPatch": {
           "form2Status": "reconciled"
+        },
+        "requiredFingerprintFields": []
+      },
+      "resume_form2": {
+        "receiptType": "form2_opened_or_resumed",
+        "statusPatch": {
+          "form2Status": "in_progress"
         },
         "requiredFingerprintFields": []
       }
@@ -494,6 +539,7 @@ module.exports = {
           "conversionPreviewFingerprint",
           "conversionSideEffectFingerprint",
           "conversionOutcomeFingerprint",
+          "dealResumeBindingDigest",
           "configVersionFingerprint"
         ]
       }
@@ -515,6 +561,7 @@ module.exports = {
           "conversionPreviewFingerprint",
           "conversionSideEffectFingerprint",
           "conversionOutcomeFingerprint",
+          "dealResumeBindingDigest",
           "configVersionFingerprint"
         ]
       }
@@ -554,6 +601,8 @@ module.exports = {
       "sessionDigest",
       "moduleApiName",
       "recordId",
+      "leadResumeBindingDigest",
+      "dealResumeBindingDigest",
       "operatorUserId",
       "environment",
       "state",
@@ -583,6 +632,7 @@ module.exports = {
       "launchDigest",
       "moduleApiName",
       "recordId",
+      "leadResumeBindingDigest",
       "operatorUserId",
       "environment",
       "state",

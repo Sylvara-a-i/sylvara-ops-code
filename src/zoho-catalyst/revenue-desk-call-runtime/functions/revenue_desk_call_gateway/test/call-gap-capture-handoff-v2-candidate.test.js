@@ -13,6 +13,9 @@ const manifest = require('../contracts/call-gap-capture-handoff-v2.proposed.json
 const candidateContract = require('../../../../../retell/agents/7-day-free-test/v2/contracts/candidate-contract.json');
 const adapterContract = require('../../../../../retell/agents/7-day-free-test/v2/contracts/transfer-adapter-contract.json');
 const {
+  setupControlFenceFingerprint,
+} = require('../../../../revenue-leak-test-setup-form/functions/revenue_leak_test_setup_form/lib/field-setup-operations');
+const {
   EXPECTED_NOTIFICATION_FIELDS,
   assertV2CandidateContracts,
   createV2CandidateService,
@@ -282,21 +285,75 @@ class MemoryHandoffEventLedger {
   }
 }
 
+function controlFenceBindingKey(value) {
+  return [
+    value.environment_fingerprint,
+    value.client_fingerprint,
+    value.journey_fingerprint,
+  ].join('\0');
+}
+
 class MemoryVerificationStore {
-  constructor(windows = []) {
+  constructor(windows = [], { beforeAtomicValidation = null } = {}) {
     this.windows = new Map(windows.map((window) => [window.window_key,
       structuredClone(window)]));
+    this.currentControls = new Map(windows.map((window) => [
+      controlFenceBindingKey(window), {
+        recordType: 'current_control',
+        controlFenceFingerprint: window.control_fence_fingerprint.slice(
+          'control_fence_'.length,
+        ),
+      },
+    ]));
     this.receipts = new Map();
     this.callCount = 0;
+    this.beforeAtomicValidation = beforeAtomicValidation;
   }
 
-  async consumeOpenWindow(request) {
+  commitControlFence(bindingValue, controlFenceFingerprint) {
+    assert.match(controlFenceFingerprint, /^[a-f0-9]{64}$/);
+    this.currentControls.set(controlFenceBindingKey(bindingValue), {
+      recordType: 'current_control',
+      controlFenceFingerprint,
+    });
+  }
+
+  async consumeOpenWindowAtCurrentControlFence(request) {
     this.callCount += 1;
+    assert.deepEqual(Object.keys(request), [
+      'window_key',
+      'current_time',
+      'authoritative_call',
+      'required_current_control_fence_fingerprint',
+      'required_window_ttl_ms',
+      'maximum_observation_skew_ms',
+    ]);
+    // A real adapter enters its serializable transaction after this boundary. Tests can
+    // commit Stop here to prove there is no separate preflight fence check or TOCTOU gap.
+    if (this.beforeAtomicValidation !== null) await this.beforeAtomicValidation(request);
     const window = this.windows.get(request.window_key);
     if (!window || window.status !== 'Open') return { outcome: 'rejected' };
     assert.equal(request.required_window_ttl_ms, 300_000);
     assert.equal(request.maximum_observation_skew_ms, 30_000);
     const call = request.authoritative_call;
+    assert.match(request.required_current_control_fence_fingerprint, /^[a-f0-9]{64}$/);
+    assert.equal(`control_fence_${request.required_current_control_fence_fingerprint}`,
+      call.control_fence_fingerprint);
+    const currentControl = this.currentControls.get(controlFenceBindingKey(window));
+    if (!currentControl
+      || Object.keys(currentControl).length !== 2
+      || !Object.hasOwn(currentControl, 'recordType')
+      || !Object.hasOwn(currentControl, 'controlFenceFingerprint')
+      || currentControl.recordType !== 'current_control'
+      || !/^[a-f0-9]{64}$/.test(currentControl.controlFenceFingerprint)
+      || currentControl.controlFenceFingerprint
+        !== request.required_current_control_fence_fingerprint
+      || window.control_fence_fingerprint
+        !== `control_fence_${currentControl.controlFenceFingerprint}`
+      || call.control_fence_fingerprint
+        !== `control_fence_${currentControl.controlFenceFingerprint}`) {
+      return { outcome: 'stale_control_fence' };
+    }
     const nowMs = Date.parse(request.current_time);
     const observedMs = Date.parse(call.observed_at);
     const issuedMs = Date.parse(window.issued_at);
@@ -315,7 +372,8 @@ class MemoryVerificationStore {
     }
     const matches = [
       'environment_fingerprint', 'client_fingerprint', 'journey_fingerprint',
-      'deployment_fingerprint', 'configuration_fingerprint', 'number_fingerprint',
+      'deployment_fingerprint', 'configuration_fingerprint', 'control_fence_fingerprint',
+      'provider_fingerprint', 'instruction_evidence_fingerprint', 'number_fingerprint',
       'route_fingerprint',
     ].every((field) => window[field] === call[field])
       && window.approved_qa_caller_fingerprint === call.qa_caller_fingerprint;
@@ -339,6 +397,9 @@ class MemoryVerificationStore {
       journey_fingerprint: call.journey_fingerprint,
       deployment_fingerprint: call.deployment_fingerprint,
       configuration_fingerprint: call.configuration_fingerprint,
+      control_fence_fingerprint: call.control_fence_fingerprint,
+      provider_fingerprint: call.provider_fingerprint,
+      instruction_evidence_fingerprint: call.instruction_evidence_fingerprint,
       number_fingerprint: call.number_fingerprint,
       route_fingerprint: call.route_fingerprint,
       approved_qa_caller_fingerprint: call.qa_caller_fingerprint,
@@ -388,6 +449,9 @@ function verificationWindow(overrides = {}) {
     journey_fingerprint: digest('journey', 'alpha'),
     deployment_fingerprint: digest('deployment', 'alpha'),
     configuration_fingerprint: digest('configuration', 'alpha'),
+    control_fence_fingerprint: digest('control_fence', 'alpha'),
+    provider_fingerprint: digest('provider', 'alpha'),
+    instruction_evidence_fingerprint: digest('instruction_evidence', 'alpha'),
     number_fingerprint: digest('number', 'alpha'),
     route_fingerprint: digest('route', 'alpha'),
     approved_qa_caller_fingerprint: digest('qa_caller', 'authorized'),
@@ -406,6 +470,9 @@ function authoritativeVerificationCall(window, overrides = {}) {
     journey_fingerprint: window.journey_fingerprint,
     deployment_fingerprint: window.deployment_fingerprint,
     configuration_fingerprint: window.configuration_fingerprint,
+    control_fence_fingerprint: window.control_fence_fingerprint,
+    provider_fingerprint: window.provider_fingerprint,
+    instruction_evidence_fingerprint: window.instruction_evidence_fingerprint,
     number_fingerprint: window.number_fingerprint,
     route_fingerprint: window.route_fingerprint,
     qa_caller_fingerprint: window.approved_qa_caller_fingerprint,
@@ -451,9 +518,54 @@ test('v2 candidate reuses the public Retell contracts but remains disabled and u
   assert.equal(candidateContract.retell_source_status, 'NOT_READY');
   assert.deepEqual(candidateContract.notification_policy.allowed_fields,
     EXPECTED_NOTIFICATION_FIELDS);
-  assert.equal(manifest.route_verification.atomic_store_operation, 'consumeOpenWindow');
+  assert.equal(manifest.route_verification.atomic_store_operation,
+    'consumeOpenWindowAtCurrentControlFence');
+  assert.equal(manifest.route_verification.authoritative_control_fence_validator,
+    'injected_atomic_verification_store');
+  assert.equal(manifest.route_verification.control_fence_validation_inside_atomic_consume,
+    true);
+  assert.equal(manifest.route_verification.control_fence_validation_scope,
+    'same_serializable_transaction_as_window_consume_and_receipt_create');
+  assert.deepEqual(manifest.route_verification.atomic_success_order, [
+    'read_authoritative_current_control_fence',
+    'compare_call_window_and_current_control_fence',
+    'consume_open_window',
+    'create_bound_receipt',
+  ]);
+  assert.equal(manifest.route_verification.stop_commit_fences_later_consumption, true);
+  assert.equal(manifest.route_verification.control_fence_mismatch_outcome,
+    'stale_control_fence');
+  assert.deepEqual(manifest.route_verification.atomic_store_request_fields, [
+    'window_key', 'current_time', 'authoritative_call',
+    'required_current_control_fence_fingerprint', 'required_window_ttl_ms',
+    'maximum_observation_skew_ms',
+  ]);
+  assert.deepEqual(manifest.route_verification.atomic_store_outcomes,
+    ['consumed', 'expired', 'rejected', 'stale_control_fence']);
   assert.equal(manifest.route_verification.consumed_replay_behavior, 'reject');
   assert.equal(manifest.route_verification.current_time_source, 'injected_server_clock');
+  assert.deepEqual(manifest.route_verification.window_fields, [
+    'window_key', 'status', 'environment_fingerprint', 'client_fingerprint',
+    'journey_fingerprint', 'deployment_fingerprint', 'configuration_fingerprint',
+    'control_fence_fingerprint', 'provider_fingerprint',
+    'instruction_evidence_fingerprint', 'number_fingerprint', 'route_fingerprint',
+    'approved_qa_caller_fingerprint', 'issued_at', 'expires_at', 'closed_at',
+  ]);
+  assert.deepEqual(manifest.route_verification.authoritative_call_binding_fields, [
+    'actual_call_fingerprint', 'environment_fingerprint', 'client_fingerprint',
+    'journey_fingerprint', 'deployment_fingerprint', 'configuration_fingerprint',
+    'control_fence_fingerprint', 'provider_fingerprint',
+    'instruction_evidence_fingerprint', 'number_fingerprint', 'route_fingerprint',
+    'qa_caller_fingerprint', 'observed_at',
+  ]);
+  assert.deepEqual(manifest.route_verification.receipt_fields, [
+    'verification_claim_key', 'window_key', 'actual_call_fingerprint',
+    'environment_fingerprint', 'client_fingerprint', 'journey_fingerprint',
+    'deployment_fingerprint', 'configuration_fingerprint', 'control_fence_fingerprint',
+    'provider_fingerprint', 'instruction_evidence_fingerprint', 'number_fingerprint',
+    'route_fingerprint', 'approved_qa_caller_fingerprint', 'issued_at', 'expires_at',
+    'consumed_at',
+  ]);
   assert.equal(manifest.handoff_evidence.destination_fingerprint_only, true);
   assert.deepEqual(manifest.notification_intent_store.notification_disposition_precedence,
     ['SensitiveSuppressed', 'NonactionableSuppressed', 'ActionableIntent']);
@@ -1290,10 +1402,122 @@ test('route verification atomically consumes and closes one authoritative open w
     { code: 'V2_ROUTE_VERIFICATION_CONSUME_REJECTED' });
 });
 
+test('safety-binding rotation recomputes the one scoped raw fence and stales an old window',
+  async () => {
+    const raw = (value) => value.slice(-64);
+    const baseWindow = verificationWindow();
+    const baseContext = {
+      approvedQaCallerFingerprint: raw(baseWindow.approved_qa_caller_fingerprint),
+      clientFingerprint: raw(baseWindow.client_fingerprint),
+      configurationFingerprint: raw(baseWindow.configuration_fingerprint),
+      controlRevision: 3,
+      deploymentFingerprint: raw(baseWindow.deployment_fingerprint),
+      environmentFingerprint: raw(baseWindow.environment_fingerprint),
+      forwardingState: 'Customer Reported Enabled',
+      instructionEvidenceFingerprint: raw(baseWindow.instruction_evidence_fingerprint),
+      journeyFingerprint: raw(baseWindow.journey_fingerprint),
+      numberFingerprint: raw(baseWindow.number_fingerprint),
+      numberState: 'Assigned',
+      providerFingerprint: raw(baseWindow.provider_fingerprint),
+      rollbackReady: true,
+      routeFingerprint: raw(baseWindow.route_fingerprint),
+      setupStatus: 'in_progress',
+    };
+    const issuedRawFence = setupControlFenceFingerprint(baseContext);
+    const issuedWindow = {
+      ...baseWindow,
+      control_fence_fingerprint: `control_fence_${issuedRawFence}`,
+    };
+
+    for (const rotation of [
+      { numberState: 'Cooldown' },
+      { approvedQaCallerFingerprint: crypto.createHash('sha256')
+        .update('rotated-approved-qa-caller', 'utf8').digest('hex') },
+      { configurationFingerprint: crypto.createHash('sha256')
+        .update('rotated-configuration', 'utf8').digest('hex') },
+      { deploymentFingerprint: crypto.createHash('sha256')
+        .update('rotated-deployment', 'utf8').digest('hex') },
+    ]) {
+      const store = new MemoryVerificationStore([issuedWindow]);
+      const rotatedRawFence = setupControlFenceFingerprint({ ...baseContext, ...rotation });
+      assert.notEqual(rotatedRawFence, issuedRawFence);
+      store.commitControlFence(issuedWindow, rotatedRawFence);
+      await assert.rejects(
+        () => service({ verificationStore: store }).processSyntheticNormalizedCall(
+          verificationInput(issuedWindow),
+        ),
+        { code: 'V2_ROUTE_VERIFICATION_CONTROL_FENCE_STALE' },
+      );
+      assert.equal(store.windows.get(issuedWindow.window_key).status, 'Open');
+      assert.equal(store.receipts.size, 0);
+    }
+  });
+
+test('route verification rejects wrong typed fence prefixes before the atomic store', async () => {
+  const window = verificationWindow();
+  const store = new MemoryVerificationStore([window]);
+  const call = authoritativeVerificationCall(window, {
+    control_fence_fingerprint: `wrong_${window.control_fence_fingerprint.slice(
+      'control_fence_'.length,
+    )}`,
+  });
+  await assert.rejects(
+    () => service({ verificationStore: store }).processSyntheticNormalizedCall(
+      verificationInput(window, call),
+    ),
+    { code: 'V2_ROUTE_VERIFICATION_INVALID' },
+  );
+  assert.equal(store.callCount, 0);
+});
+
+test('missing or non-raw current-control fence evidence fails closed without consumption', async () => {
+  for (const currentControl of [
+    null,
+    { recordType: 'current_control', controlFenceFingerprint: 'invalid' },
+    { recordType: 'current_control', controlFenceFingerprint: digest('control_fence', 'typed') },
+  ]) {
+    const window = verificationWindow();
+    const store = new MemoryVerificationStore([window]);
+    if (currentControl === null) {
+      store.currentControls.delete(controlFenceBindingKey(window));
+    } else {
+      store.currentControls.set(controlFenceBindingKey(window), currentControl);
+    }
+    await assert.rejects(
+      () => service({ verificationStore: store }).processSyntheticNormalizedCall(
+        verificationInput(window),
+      ),
+      { code: 'V2_ROUTE_VERIFICATION_CONTROL_FENCE_STALE' },
+    );
+    assert.equal(store.windows.get(window.window_key).status, 'Open');
+    assert.equal(store.receipts.size, 0);
+  }
+});
+
+test('route verification preserves maximum-length source-valid call and claim fingerprints', async () => {
+  const window = verificationWindow();
+  const verificationStore = new MemoryVerificationStore([window]);
+  const consume = verificationStore.consumeOpenWindowAtCurrentControlFence.bind(verificationStore);
+  verificationStore.consumeOpenWindowAtCurrentControlFence = async (request) => {
+    const result = await consume(request);
+    result.receipt.verification_claim_key = `${'v'.repeat(32)}_${'a'.repeat(64)}`;
+    return result;
+  };
+  const actualCallFingerprint = `${'c'.repeat(32)}_${'b'.repeat(64)}`;
+  assert.equal(actualCallFingerprint.length, 97);
+  const result = await service({ verificationStore }).processSyntheticNormalizedCall(
+    verificationInput(window, authoritativeVerificationCall(window, {
+      actual_call_fingerprint: actualCallFingerprint,
+    })),
+  );
+  assert.equal(result.receipt_recorded, true);
+});
+
 test('route verification rejects every actual-call and server-window binding mismatch', async () => {
   const mismatchFields = [
     'environment_fingerprint', 'client_fingerprint', 'journey_fingerprint',
-    'deployment_fingerprint', 'configuration_fingerprint', 'number_fingerprint',
+    'deployment_fingerprint', 'configuration_fingerprint', 'control_fence_fingerprint',
+    'provider_fingerprint', 'instruction_evidence_fingerprint', 'number_fingerprint',
     'route_fingerprint', 'qa_caller_fingerprint',
   ];
   for (const field of mismatchFields) {
@@ -1304,7 +1528,9 @@ test('route verification rejects every actual-call and server-window binding mis
     });
     await assert.rejects(() => service({ verificationStore: store })
       .processSyntheticNormalizedCall(verificationInput(window, call)),
-    { code: 'V2_ROUTE_VERIFICATION_CONSUME_REJECTED' }, field);
+    { code: field === 'control_fence_fingerprint'
+      ? 'V2_ROUTE_VERIFICATION_CONTROL_FENCE_STALE'
+      : 'V2_ROUTE_VERIFICATION_CONSUME_REJECTED' }, field);
     assert.equal(store.windows.get(window.window_key).status, 'Open', field);
     assert.equal(store.receipts.size, 0, field);
   }
@@ -1314,6 +1540,114 @@ test('route verification rejects every actual-call and server-window binding mis
     verificationInput(missingWindow),
   ), { code: 'V2_ROUTE_VERIFICATION_CONSUME_REJECTED' });
 });
+
+test('route verification revalidates control, provider, and instruction bindings from the store',
+  async () => {
+    for (const field of [
+      'control_fence_fingerprint', 'provider_fingerprint',
+      'instruction_evidence_fingerprint',
+    ]) {
+      for (const [target, expectedCode] of [
+        ['window', 'V2_ROUTE_VERIFICATION_BINDING_MISMATCH'],
+        ['receipt', 'V2_ROUTE_VERIFICATION_STORE_INVALID'],
+      ]) {
+        const window = verificationWindow();
+        const backingStore = new MemoryVerificationStore([window]);
+        const verificationStore = {
+          async consumeOpenWindowAtCurrentControlFence(request) {
+            const consumed = await backingStore
+              .consumeOpenWindowAtCurrentControlFence(request);
+            consumed[target][field] = digest(
+              field.replace(/_fingerprint$/, ''), `hostile-store-${target}-${field}`,
+            );
+            return consumed;
+          },
+        };
+        await assert.rejects(() => service({ verificationStore })
+          .processSyntheticNormalizedCall(verificationInput(window)),
+        { code: expectedCode }, `${target}.${field}`);
+      }
+    }
+  });
+
+test('route verification requires the current-control-fence atomic consume API', async () => {
+  const window = verificationWindow();
+  let legacyCalls = 0;
+  const legacyVerificationStore = {
+    async consumeOpenWindow() {
+      legacyCalls += 1;
+      return { outcome: 'rejected' };
+    },
+  };
+  await assert.rejects(() => service({ verificationStore: legacyVerificationStore })
+    .processSyntheticNormalizedCall(verificationInput(window)),
+  { code: 'V2_ROUTE_VERIFICATION_STORE_INVALID' });
+  assert.equal(legacyCalls, 0);
+});
+
+test('a committed Stop control fence rejects a previously issued open window', async () => {
+  const window = verificationWindow();
+  const verificationStore = new MemoryVerificationStore([window]);
+  verificationStore.commitControlFence(
+    window, digest('control_fence', 'committed-stop-after-window-issue')
+      .slice('control_fence_'.length),
+  );
+
+  await assert.rejects(() => service({ verificationStore })
+    .processSyntheticNormalizedCall(verificationInput(window)),
+  { code: 'V2_ROUTE_VERIFICATION_CONTROL_FENCE_STALE' });
+  assert.equal(verificationStore.callCount, 1);
+  assert.equal(verificationStore.windows.get(window.window_key).status, 'Open');
+  assert.equal(verificationStore.receipts.size, 0);
+});
+
+test('atomic control-fence validation linearizes Stop before or after window consumption',
+  async () => {
+    let signalValidationEntered;
+    let releaseValidation;
+    const validationEntered = new Promise((resolve) => {
+      signalValidationEntered = resolve;
+    });
+    const validationRelease = new Promise((resolve) => {
+      releaseValidation = resolve;
+    });
+    const stopFirstWindow = verificationWindow({
+      window_key: digest('window', 'stop-first-ordering'),
+    });
+    const stopFirstStore = new MemoryVerificationStore([stopFirstWindow], {
+      beforeAtomicValidation: async () => {
+        signalValidationEntered();
+        await validationRelease;
+      },
+    });
+    const pendingConsume = service({ verificationStore: stopFirstStore })
+      .processSyntheticNormalizedCall(verificationInput(stopFirstWindow));
+    await validationEntered;
+    stopFirstStore.commitControlFence(
+      stopFirstWindow, digest('control_fence', 'stop-linearized-first')
+        .slice('control_fence_'.length),
+    );
+    releaseValidation();
+    await assert.rejects(pendingConsume,
+      { code: 'V2_ROUTE_VERIFICATION_CONTROL_FENCE_STALE' });
+    assert.equal(stopFirstStore.windows.get(stopFirstWindow.window_key).status, 'Open');
+    assert.equal(stopFirstStore.receipts.size, 0);
+
+    const consumeFirstWindow = verificationWindow({
+      window_key: digest('window', 'consume-first-ordering'),
+    });
+    const consumeFirstStore = new MemoryVerificationStore([consumeFirstWindow]);
+    const consumed = await service({ verificationStore: consumeFirstStore })
+      .processSyntheticNormalizedCall(verificationInput(consumeFirstWindow));
+    consumeFirstStore.commitControlFence(
+      consumeFirstWindow, digest('control_fence', 'stop-linearized-after-consume')
+        .slice('control_fence_'.length),
+    );
+    assert.equal(consumed.window_consumed, true);
+    assert.equal(consumeFirstStore.windows.get(consumeFirstWindow.window_key).status,
+      'Consumed');
+    assert.equal(consumeFirstStore.receipts.size, 1);
+  });
 
 test('route verification requires canonical current time, fresh call evidence, and open bounds', async () => {
   const window = verificationWindow();

@@ -14,6 +14,8 @@ const LEAD = "100000000000001";
 const ACCOUNT = "100000000000002";
 const CONTACT = "100000000000003";
 const DEAL = "100000000000004";
+const SESSION_DIGEST = "a".repeat(64);
+const DEAL_RESUME_BINDING_DIGEST = "b".repeat(64);
 
 function operator(overrides = {}) {
   return {
@@ -27,12 +29,17 @@ function operator(overrides = {}) {
 
 function journey(overrides = {}) {
   return {
+    conversionPreviewFingerprint: null,
+    conversionStatus: "not_started",
     environment: "development",
     journeyKey: JOURNEY,
     moduleApiName: "Leads",
     operatorUserId: "100000000000005",
     qualificationStatus: "qualified",
     recordId: LEAD,
+    revision: 7,
+    sessionDigest: SESSION_DIGEST,
+    state: "lead_conversion_preview",
     ...overrides,
   };
 }
@@ -130,14 +137,48 @@ class Store {
     this.failWriteBoundary = failWriteBoundary;
     this.preview = null;
     this.reconciliation = [];
-    this.status = "empty";
+    this.status = "not_started";
   }
 
   async createPreview(value) {
     this.audit.push({ method: "createPreview", value });
-    this.preview = { ...value, revision: 1 };
+    const createsInitialPreview =
+      this.preview === null &&
+      this.status === "not_started" &&
+      value.expectedConversionStatus === "not_started" &&
+      value.expectedPreviewFingerprint === null;
+    const refreshesCurrentPreview =
+      this.preview !== null &&
+      this.status === "preview_ready" &&
+      value.expectedConversionStatus === this.status &&
+      value.expectedPreviewFingerprint === this.preview.previewFingerprint &&
+      value.expectedRevision === this.preview.revision &&
+      value.expectedState === this.preview.state &&
+      value.environment === this.preview.environment &&
+      value.journeyKey === this.preview.journeyKey &&
+      value.leadId === this.preview.leadId &&
+      value.operatorUserId === this.preview.operatorUserId &&
+      value.sessionDigest === this.preview.sessionDigest;
+    if (!createsInitialPreview && !refreshesCurrentPreview) {
+      return {
+        previewFingerprint: this.preview?.previewFingerprint ?? null,
+        revision: this.preview?.revision ?? value.expectedRevision,
+        state: this.preview?.state ?? value.expectedState,
+        status: this.status,
+      };
+    }
+    this.preview = {
+      ...value,
+      revision: value.expectedRevision + 1,
+      state: value.nextState,
+    };
     this.status = "preview_ready";
-    return { previewFingerprint: value.previewFingerprint, revision: 1 };
+    return {
+      previewFingerprint: value.previewFingerprint,
+      revision: this.preview.revision,
+      state: this.preview.state,
+      status: this.status,
+    };
   }
 
   async claimConversion(value) {
@@ -147,15 +188,21 @@ class Store {
       previewFingerprint: this.preview.previewFingerprint,
       revision: this.preview.revision,
     };
-    if (this.status === "completed") return { ...receipt, status: "completed" };
+    if (
+      value.environment !== this.preview.environment ||
+      value.expectedState !== this.preview.state ||
+      value.journeyKey !== this.preview.journeyKey ||
+      value.previewFingerprint !== this.preview.previewFingerprint ||
+      value.revision !== this.preview.revision ||
+      value.operatorUserId !== this.preview.operatorUserId ||
+      value.sessionDigest !== this.preview.sessionDigest
+    ) return { status: "reconciliation_required" };
+    if (this.status === "completed") {
+      return { ...receipt, revision: this.completed.revision, status: "completed" };
+    }
     if (["write_started", "reconciliation_required"].includes(this.status)) {
       return { ...receipt, status: this.status };
     }
-    if (
-      value.previewFingerprint !== this.preview.previewFingerprint ||
-      value.revision !== this.preview.revision ||
-      value.operatorUserId !== this.preview.operatorUserId
-    ) return { status: "reconciliation_required" };
     return { ...receipt, status: "claimed" };
   }
 
@@ -175,6 +222,7 @@ class Store {
     this.status = "write_started";
     if (this.failWriteBoundary) throw new Error("synthetic ambiguous write-boundary persistence");
     return {
+      revision: value.revision + 1,
       sideEffectFingerprint: value.sideEffectFingerprint,
       startedNow: true,
       status: "write_started",
@@ -192,17 +240,27 @@ class Store {
     this.audit.push({ method: "completeConversion", outcome, receipt });
     if (this.failCompletion) throw new Error("synthetic completion failure");
     this.status = "completed";
-    return {
+    this.completed = {
+      dealResumeBindingDigest: outcome.dealResumeBindingDigest,
+      outcomeFingerprint: outcome.outcomeFingerprint,
       previewFingerprint: receipt.previewFingerprint,
-      revision: receipt.revision,
+      revision: receipt.revision + 1,
+      sideEffectFingerprint: receipt.sideEffectFingerprint,
+      state: outcome.nextState,
       status: "completed",
     };
+    return this.completed;
   }
 }
 
 function crm(overrides = {}) {
   return {
-    getLead: async () => ({ id: LEAD, company: "ZZZ SYNTHETIC Plumbing", locked: false }),
+    getLead: async () => ({
+      id: LEAD,
+      company: "ZZZ SYNTHETIC Plumbing",
+      contactDisplayName: "ZZZ SYNTHETIC Contact",
+      locked: false,
+    }),
     getConversionOptions: async () => ({
       ambiguous: false,
       nativeV8: true,
@@ -235,6 +293,21 @@ function confirmation(result) {
   return { confirm: true, previewFingerprint: result.previewFingerprint, revision: result.revision };
 }
 
+function confirmationJourney(result, overrides = {}) {
+  return journey({
+    conversionPreviewFingerprint: result.previewFingerprint,
+    conversionStatus: "preview_ready",
+    revision: result.revision,
+    state: "lead_conversion_confirmation",
+    ...overrides,
+  });
+}
+
+function dealResumeBindingDigest(value) {
+  assert.deepEqual(value, { dealId: DEAL, environment: "development" });
+  return DEAL_RESUME_BINDING_DIGEST;
+}
+
 test("proposed storage has digest-only conversion evidence and the one-way write state", () => {
   const schema = JSON.parse(fs.readFileSync(
     path.resolve(__dirname, "../../../config/field-setup-datastore-schema.proposed.json"),
@@ -258,14 +331,23 @@ test("proposed storage has digest-only conversion evidence and the one-way write
   assert.ok(schema.data_policy.prohibited.includes("private conversion plan"));
   assert.ok(!columns.has("CONVERSION_PRIVATE_PLAN"));
   assert.ok(!columns.has("DEAL_NAME"));
+  assert.deepEqual(
+    {
+      maxLength: columns.get("DEAL_RESUME_BINDING_DIGEST")?.max_length,
+      private: columns.get("DEAL_RESUME_BINDING_DIGEST")?.private,
+      unique: columns.get("DEAL_RESUME_BINDING_DIGEST")?.unique,
+    },
+    { maxLength: 64, private: true, unique: true },
+  );
 });
 
 async function confirm(service, result, operatorInput = operator()) {
   return service.confirmConversion(
     confirmation(result),
-    journey(),
+    confirmationJourney(result),
     operatorInput,
     defaults(),
+    dealResumeBindingDigest,
   );
 }
 
@@ -280,14 +362,133 @@ test("preview requires current record-bound mandatory Deal fields and validation
   ]);
   const service = createFieldSetupConversionService({ crm: crm(), store: new Store() });
   const result = await preview(service);
-  assert.deepEqual(result.sanitizedPreview.mandatoryDealFields, MANDATORY_DEAL_FIELDS);
-  assert.equal(true, result.sanitizedPreview.noEmailOrRoutingEffect);
+  assert.deepEqual(result.sanitizedPreview, {
+    account: {
+      action: "create_from_conversion_mapping",
+      displayName: "ZZZ SYNTHETIC Plumbing",
+    },
+    contact: {
+      action: "create_from_conversion_mapping",
+      displayName: "ZZZ SYNTHETIC Contact",
+    },
+    deal: {
+      closingDate: "2026-09-01",
+      dealName: "ZZZ SYNTHETIC Plumbing — Free Revenue Leak Test",
+      mandatoryDealFields: MANDATORY_DEAL_FIELDS,
+      pipeline: "Revenue Desk Sales",
+      stage: "Setup and Authorization",
+      type: "Initial Sale",
+    },
+    noEmailOrRoutingEffect: true,
+  });
+  assert.equal(8, result.revision);
 
   const missingType = createFieldSetupConversionService({
     crm: crm({ getDealFieldMetadata: async () => metadata({ Type: { writable: false } }) }),
     store: new Store(),
   });
   await assert.rejects(() => preview(missingType), /Mandatory Deal field Type/);
+});
+
+test("preview atomically binds the confirmation state to the current journey revision and session", async () => {
+  const store = new Store();
+  const service = createFieldSetupConversionService({ crm: crm(), store });
+  const result = await preview(service);
+  assert.deepEqual(store.audit[0], {
+    method: "createPreview",
+    value: {
+      environment: "development",
+      expectedConversionStatus: "not_started",
+      expectedPreviewFingerprint: null,
+      expectedRevision: 7,
+      expectedState: "lead_conversion_preview",
+      journeyKey: JOURNEY,
+      leadId: LEAD,
+      nextState: "lead_conversion_confirmation",
+      operatorUserId: "100000000000005",
+      previewFingerprint: result.previewFingerprint,
+      sessionDigest: SESSION_DIGEST,
+    },
+  });
+  await assert.rejects(
+    () => service.buildPreview(
+      { journeyKey: JOURNEY, leadId: LEAD },
+      journey({ sessionDigest: "invalid" }),
+      operator(),
+      defaults(),
+    ),
+    /state is unavailable or stale/,
+  );
+});
+
+test("readPreview re-reads mutable CRM evidence and controlled defaults before display", async () => {
+  const calls = { candidates: 0, lead: 0, metadata: 0, options: 0 };
+  const source = crm({
+    findConversionCandidates: async () => { calls.candidates += 1; return candidates(); },
+    getConversionOptions: async () => {
+      calls.options += 1;
+      return {
+        ambiguous: false,
+        nativeV8: true,
+        permissions: permissions(),
+        permitted: true,
+        sourceLeadId: LEAD,
+      };
+    },
+    getDealFieldMetadata: async () => {
+      calls.metadata += 1;
+      return metadata({
+        Stage: { allowedValues: ["Setup and Authorization", "Qualified"] },
+      });
+    },
+    getLead: async () => {
+      calls.lead += 1;
+      return {
+        company: "ZZZ SYNTHETIC Plumbing",
+        contactDisplayName: "ZZZ SYNTHETIC Contact",
+        id: LEAD,
+        locked: false,
+      };
+    },
+  });
+  const store = new Store();
+  const service = createFieldSetupConversionService({ crm: source, store });
+  const result = await preview(service);
+  const readback = await service.readPreview(
+    { journeyKey: JOURNEY, leadId: LEAD },
+    confirmationJourney(result),
+    operator(),
+    defaults(),
+  );
+  assert.deepEqual(readback, result);
+  assert.deepEqual(calls, { candidates: 2, lead: 2, metadata: 2, options: 2 });
+
+  const refreshed = await service.readPreview(
+    { journeyKey: JOURNEY, leadId: LEAD },
+    confirmationJourney(result),
+    operator(),
+    { ...defaults(), stage: "Qualified" },
+  );
+  assert.notEqual(refreshed.previewFingerprint, result.previewFingerprint);
+  assert.equal(refreshed.revision, result.revision + 1);
+  assert.equal(refreshed.sanitizedPreview.deal.stage, "Qualified");
+  assert.deepEqual(store.audit.at(-1), {
+    method: "createPreview",
+    value: {
+      environment: "development",
+      expectedConversionStatus: "preview_ready",
+      expectedPreviewFingerprint: result.previewFingerprint,
+      expectedRevision: result.revision,
+      expectedState: "lead_conversion_confirmation",
+      journeyKey: JOURNEY,
+      leadId: LEAD,
+      nextState: "lead_conversion_confirmation",
+      operatorUserId: "100000000000005",
+      previewFingerprint: refreshed.previewFingerprint,
+      sessionDigest: SESSION_DIGEST,
+    },
+  });
+  assert.deepEqual(calls, { candidates: 3, lead: 3, metadata: 3, options: 3 });
 });
 
 test("preview fails closed on unavailable permission, lock, ambiguous matches, or an existing Deal", async () => {
@@ -300,8 +501,15 @@ test("preview fails closed on unavailable permission, lock, ambiguous matches, o
       sourceLeadId: LEAD,
     }) },
     { getLead: async () => ({ id: LEAD, company: "ZZZ SYNTHETIC", locked: true }) },
-    { findConversionCandidates: async () => candidates({ accounts: [{ id: ACCOUNT }, { id: "100000000000009" }] }) },
-    { findConversionCandidates: async () => candidates({ deals: [{ id: DEAL }] }) },
+    { findConversionCandidates: async () => candidates({
+      accounts: [
+        { displayName: "ZZZ SYNTHETIC Plumbing", id: ACCOUNT },
+        { displayName: "ZZZ SYNTHETIC Plumbing 2", id: "100000000000009" },
+      ],
+    }) },
+    { findConversionCandidates: async () => candidates({
+      deals: [{ displayName: "ZZZ SYNTHETIC Existing Deal", id: DEAL }],
+    }) },
   ];
   for (const override of cases) {
     const service = createFieldSetupConversionService({ crm: crm(override), store: new Store() });
@@ -314,15 +522,21 @@ test("one Account and Contact match are sanitized in preview and no private plan
   const service = createFieldSetupConversionService({
     crm: crm({
       findConversionCandidates: async () => candidates({
-        accounts: [{ id: ACCOUNT }],
-        contacts: [{ id: CONTACT }],
+        accounts: [{ displayName: "ZZZ SYNTHETIC Plumbing", id: ACCOUNT }],
+        contacts: [{ displayName: "ZZZ SYNTHETIC Contact", id: CONTACT }],
       }),
     }),
     store,
   });
   const result = await preview(service);
-  assert.equal("associate_one_verified_match", result.sanitizedPreview.accountAction);
-  assert.equal("associate_one_verified_match", result.sanitizedPreview.contactAction);
+  assert.deepEqual(result.sanitizedPreview.account, {
+    action: "associate_one_verified_match",
+    displayName: "ZZZ SYNTHETIC Plumbing",
+  });
+  assert.deepEqual(result.sanitizedPreview.contact, {
+    action: "associate_one_verified_match",
+    displayName: "ZZZ SYNTHETIC Contact",
+  });
   assert.ok(!JSON.stringify(result.sanitizedPreview).includes(ACCOUNT));
   assert.ok(!JSON.stringify(result.sanitizedPreview).includes(CONTACT));
   const stored = JSON.stringify(store.audit);
@@ -344,9 +558,10 @@ test("confirmation requires the bound operator and explicit preview receipt", as
   await assert.rejects(
     () => service.confirmConversion(
       { ...confirmation(result), confirm: false },
-      journey(),
+      confirmationJourney(result),
       operator(),
       defaults(),
+      dealResumeBindingDigest,
     ),
     /confirmation is invalid/,
   );
@@ -357,7 +572,16 @@ test("confirmation re-reads authoritative evidence, verifies full readback, and 
   const calls = { candidates: 0, lead: 0, metadata: 0, options: 0, readbackLead: null, writes: 0 };
   const source = crm({
     findConversionCandidates: async (leadId) => { assert.equal(LEAD, leadId); calls.candidates += 1; return candidates(); },
-    getLead: async (leadId) => { assert.equal(LEAD, leadId); calls.lead += 1; return { id: LEAD, company: "ZZZ SYNTHETIC Plumbing", locked: false }; },
+    getLead: async (leadId) => {
+      assert.equal(LEAD, leadId);
+      calls.lead += 1;
+      return {
+        id: LEAD,
+        company: "ZZZ SYNTHETIC Plumbing",
+        contactDisplayName: "ZZZ SYNTHETIC Contact",
+        locked: false,
+      };
+    },
     getDealFieldMetadata: async (leadId) => { assert.equal(LEAD, leadId); calls.metadata += 1; return metadata(); },
     getConversionOptions: async (leadId) => { assert.equal(LEAD, leadId); calls.options += 1; return {
       ambiguous: false, nativeV8: true, permissions: permissions(), permitted: true, sourceLeadId: LEAD,
@@ -369,11 +593,11 @@ test("confirmation re-reads authoritative evidence, verifies full readback, and 
   const result = await preview(service);
   assert.deepEqual(
     await confirm(service, result),
-    { ok: true, replay: false, status: "conversion_readback_confirmed" },
+    { ok: true, replay: false, revision: 10, status: "conversion_readback_confirmed" },
   );
   assert.deepEqual(
     await confirm(service, result),
-    { ok: true, replay: true, status: "conversion_readback_confirmed" },
+    { ok: true, replay: true, revision: 10, status: "conversion_readback_confirmed" },
   );
   assert.deepEqual(
     { candidates: calls.candidates, lead: calls.lead, metadata: calls.metadata, options: calls.options },
@@ -382,34 +606,72 @@ test("confirmation re-reads authoritative evidence, verifies full readback, and 
   assert.equal(LEAD, calls.readbackLead);
   assert.equal(1, calls.writes);
   const completion = store.audit.find((entry) => entry.method === "completeConversion");
-  assert.deepEqual(Object.keys(completion.outcome), ["outcomeFingerprint"]);
+  assert.deepEqual(Object.keys(completion.outcome), [
+    "dealResumeBindingDigest",
+    "nextState",
+    "outcomeFingerprint",
+  ]);
+  assert.equal(DEAL_RESUME_BINDING_DIGEST, completion.outcome.dealResumeBindingDigest);
+  assert.equal("handoff_to_client_form2", completion.outcome.nextState);
   assert.match(completion.outcome.outcomeFingerprint, /^[a-f0-9]{64}$/);
+  assert.equal(DEAL_RESUME_BINDING_DIGEST, store.completed.dealResumeBindingDigest);
+  assert.equal("handoff_to_client_form2", store.completed.state);
 });
 
-test("a stale preview caused by an authoritative Lead change never reaches convertLead", async () => {
+test("a stale Lead preview blocks its confirmation, refreshes atomically, and converts once from the new receipt", async () => {
   let changed = false;
   let writes = 0;
+  const store = new Store();
   const service = createFieldSetupConversionService({
     crm: crm({
       getLead: async () => ({
         id: LEAD,
         company: changed ? "ZZZ SYNTHETIC Changed" : "ZZZ SYNTHETIC Plumbing",
+        contactDisplayName: "ZZZ SYNTHETIC Contact",
         locked: false,
       }),
-      convertLead: async () => { writes += 1; throw new Error("must not run"); },
+      convertLead: async () => {
+        writes += 1;
+        return { accountId: ACCOUNT, contactId: CONTACT, dealId: DEAL };
+      },
+      readConversionResult: async () => {
+        const readback = authoritativeReadback();
+        readback.deal.fields.Deal_Name = "ZZZ SYNTHETIC Changed — Free Revenue Leak Test";
+        return readback;
+      },
     }),
-    store: new Store(),
+    store,
   });
   const result = await preview(service);
   changed = true;
   await assert.rejects(() => confirm(service, result), /preview is stale/);
   assert.equal(0, writes);
+
+  const refreshed = await service.readPreview(
+    { journeyKey: JOURNEY, leadId: LEAD },
+    confirmationJourney(result),
+    operator(),
+    defaults(),
+  );
+  assert.notEqual(refreshed.previewFingerprint, result.previewFingerprint);
+  assert.equal(refreshed.revision, result.revision + 1);
+  assert.equal(
+    refreshed.sanitizedPreview.deal.dealName,
+    "ZZZ SYNTHETIC Changed — Free Revenue Leak Test",
+  );
+  assert.deepEqual(
+    await confirm(service, refreshed),
+    { ok: true, replay: false, revision: refreshed.revision + 2, status: "conversion_readback_confirmed" },
+  );
+  assert.equal(1, writes);
 });
 
 test("changed duplicate, picklist, or permission evidence blocks stale confirmation before the write boundary", async () => {
   const cases = [
     {
-      changedCandidates: candidates({ deals: [{ id: DEAL }] }),
+      changedCandidates: candidates({
+        deals: [{ displayName: "ZZZ SYNTHETIC Existing Deal", id: DEAL }],
+      }),
       pattern: /existing matching Deal/,
     },
     {
@@ -531,8 +793,8 @@ test("association, mandatory-field, and mapping readback mismatches are containe
     const service = createFieldSetupConversionService({
       crm: crm({
         findConversionCandidates: async () => candidates({
-          accounts: [{ id: ACCOUNT }],
-          contacts: [{ id: CONTACT }],
+          accounts: [{ displayName: "ZZZ SYNTHETIC Plumbing", id: ACCOUNT }],
+          contacts: [{ displayName: "ZZZ SYNTHETIC Contact", id: CONTACT }],
         }),
         convertLead: async () => { writes += 1; return { accountId: ACCOUNT, contactId: CONTACT, dealId: DEAL }; },
         readConversionResult: async () => mismatch(),

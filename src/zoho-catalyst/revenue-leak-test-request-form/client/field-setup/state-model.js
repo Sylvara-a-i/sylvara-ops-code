@@ -16,7 +16,14 @@
 })(typeof globalThis === "object" ? globalThis : undefined, function createFieldSetupStateModel(protocol) {
   "use strict";
 
-  if (!protocol || protocol.schemaVersion !== 1 || !Array.isArray(protocol.states)) {
+  if (
+    !protocol ||
+    protocol.schemaVersion !== 1 ||
+    !Array.isArray(protocol.states) ||
+    !Array.isArray(protocol.formNavigation?.approvedPublicHosts) ||
+    protocol.formNavigation.approvedPublicHosts.length !== 1 ||
+    protocol.formNavigation.approvedPublicHosts[0] !== "forms.zohopublic.com"
+  ) {
     throw new Error("Canonical field-setup protocol is unavailable.");
   }
 
@@ -30,6 +37,7 @@
     label: factor.label
   })));
   const QUALIFICATION_CRITERIA = Object.freeze(QUALIFICATION_FACTORS.map((factor) => factor.label));
+  const APPROVED_FORM_HOSTS = Object.freeze([...protocol.formNavigation.approvedPublicHosts]);
 
   const PRESENTATION_STATES = Object.freeze([
     defineState({
@@ -136,7 +144,7 @@
       kicker: "CRM confirmation",
       status: "Confirmation required",
       description: "Confirm the exact sanitized conversion plan once, then wait for authoritative reconciliation.",
-      notice: "This source preview performs no CRM write. An ambiguous future write must never be repeated automatically.",
+      notice: "Only the authenticated candidate may perform the bounded CRM conversion after this explicit confirmation. An ambiguous write is never repeated automatically.",
       details: ["No email is sent from conversion.", "No number is reserved.", "No call route is activated."],
       primaryAction: action("confirm-conversion", "Confirm conversion", "handoff-to-client-setup"),
       serverOutcomeRequired: true
@@ -206,7 +214,7 @@
       kicker: "Number isolation",
       status: "Awaiting reservation",
       description: "Reserve only one already-approved available test number for the exact client deployment.",
-      notice: "This browser cannot reserve or activate a live number. Source preview uses no telephone value.",
+      notice: "The browser sends intent only. The server may reserve an approved inventory row, but cannot purchase, activate, or expose a telephone value.",
       details: ["Reservation must be concurrency-safe.", "An active number cannot be reused.", "Cross-client reuse must fail closed."],
       primaryAction: action("refresh-number-reservation", "Check reservation status", "forwarding-instructions"),
       serverOutcomeRequired: true
@@ -385,6 +393,7 @@
 
   return Object.freeze({
     FIELD_SETUP_STATES,
+    APPROVED_FORM_HOSTS,
     QUALIFICATION_CRITERIA,
     QUALIFICATION_FACTORS,
     PROTOCOL_ID: protocol.protocolId,

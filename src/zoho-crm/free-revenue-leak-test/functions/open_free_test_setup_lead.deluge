@@ -18,7 +18,10 @@ string button.Open_Free_Test_Setup_Lead(string lead_id)
 		return "Setup is unavailable: launch configuration is incomplete.";
 	}
 	payload = Map();
-	payload.put("schemaVersion","field-setup-launch-v1");
+	// Catalyst requires the exact protocol ID and numeric schemaVersion. A
+	// textual label in schemaVersion is rejected before a nonce is issued.
+	payload.put("protocolId","free_revenue_leak_test_field_setup_v1");
+	payload.put("schemaVersion",1);
 	payload.put("moduleApiName","Leads");
 	payload.put("recordId",lead_id);
 	launch_response = invokeurl
@@ -29,7 +32,7 @@ string button.Open_Free_Test_Setup_Lead(string lead_id)
 		content-type:"application/json"
 		connection:"<PRIVATE_FIELD_SETUP_CONNECTION_LINK_NAME>"
 	];
-	if(launch_response == null || launch_response.get("ok") != true || launch_response.get("launchUrl") == null)
+	if(launch_response == null || launch_response.get("ok") != true || launch_response.get("protocolId") != "free_revenue_leak_test_field_setup_v1" || launch_response.get("schemaVersion") != 1 || launch_response.get("launchUrl") == null)
 	{
 		return "Setup could not be opened: launch was not verified.";
 	}

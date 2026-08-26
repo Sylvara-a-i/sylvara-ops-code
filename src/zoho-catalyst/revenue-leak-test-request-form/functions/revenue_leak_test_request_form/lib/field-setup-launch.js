@@ -9,7 +9,9 @@ const {
   assertOperatorBound,
   authorizeQualification,
   getServerPrerequisite,
+  isFormNavigationAction,
   normalizeAuthenticatedOperator,
+  normalizeFormNavigationDestinations,
   normalizeQualificationForAction,
   normalizeTrustedLaunchContext,
   resolveTransition,
@@ -22,7 +24,8 @@ const JOURNEY_TABLE = "RevenueLeakTestFieldSetupJourneys";
 
 function requireStore(store) {
   for (const method of [
-    "issueLaunch",
+    "issueOrResumeLaunch",
+    "readByLaunchDigest",
     "consumeLaunch",
     "readBySessionDigest",
     "compareAndSetJourney",
@@ -82,7 +85,13 @@ function normalizeConfig(config) {
   ) {
     throw new FieldSetupContractError("Web-client origin is invalid", "configuration_invalid");
   }
-  return Object.freeze({ ...config, webClientOrigin: origin.origin });
+  return Object.freeze({
+    ...config,
+    formNavigationDestinations: normalizeFormNavigationDestinations(
+      config.formNavigationDestinations,
+    ),
+    webClientOrigin: origin.origin,
+  });
 }
 
 function milliseconds(now) {
@@ -131,6 +140,24 @@ function digestToken(token, pepper) {
   return crypto.createHmac("sha256", pepper).update(token, "utf8").digest("hex");
 }
 
+function resumeBindingDigest({ environment, moduleApiName, recordId }, pepper) {
+  if (
+    environment !== "development" ||
+    !new Set(["Leads", "Deals"]).has(moduleApiName) ||
+    typeof recordId !== "string" ||
+    !/^[0-9]{1,30}$/.test(recordId)
+  ) {
+    throw new FieldSetupContractError("Resume binding is invalid", "configuration_invalid");
+  }
+  return crypto
+    .createHmac("sha256", pepper)
+    .update(
+      `sylvara.field-setup.resume-binding.v1\0${environment}\0${moduleApiName}\0${recordId}`,
+      "utf8",
+    )
+    .digest("hex");
+}
+
 function makeJourneyKey(randomUUID) {
   const key = randomUUID();
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(key)) {
@@ -156,6 +183,12 @@ function sessionCookie(token, maxAge) {
 }
 
 function schemaCompleteLaunchRow(context, launchDigest, journeyKey, issuedAtMs, config) {
+  if (context.moduleApiName !== "Leads") {
+    throw new FieldSetupContractError(
+      "A new field-setup journey must begin from a Lead",
+      "field_setup_not_found",
+    );
+  }
   const issuedAt = new Date(issuedAtMs).toISOString();
   const row = Object.fromEntries(
     FIELD_SETUP_PROTOCOL.persistence.rowFields.map((field) => [field, null]),
@@ -167,6 +200,8 @@ function schemaCompleteLaunchRow(context, launchDigest, journeyKey, issuedAtMs, 
     environment: context.environment,
     issuedAt,
     journeyKey,
+    leadResumeBindingDigest: resumeBindingDigest(context, config.digestPepper),
+    dealResumeBindingDigest: null,
     launchDigest,
     launchExpiresAt: new Date(issuedAtMs + config.launchTtlSeconds * 1000).toISOString(),
     moduleApiName: context.moduleApiName,
@@ -204,6 +239,7 @@ function createFieldSetupLaunchService({
     if (prerequisite === null) {
       return Object.freeze({
         fingerprintPatch: Object.freeze({}),
+        navigationIntent: null,
         receiptType: null,
         statusPatch: Object.freeze({}),
       });
@@ -239,7 +275,12 @@ function createFieldSetupLaunchService({
         "server_outcome_required",
       );
     }
-    const validated = validateServerPrerequisiteReceipt(receipt, binding, prerequisite);
+    const validated = validateServerPrerequisiteReceipt(
+      receipt,
+      binding,
+      prerequisite,
+      config.formNavigationDestinations,
+    );
     for (const [field, fingerprint] of Object.entries(validated.fingerprintPatch)) {
       if (journey[field] !== null && journey[field] !== fingerprint) {
         throw new FieldSetupContractError(
@@ -250,23 +291,178 @@ function createFieldSetupLaunchService({
     return validated;
   }
 
+  function staleReplay() {
+    throw new FieldSetupContractError("Session revision is stale", "stale_revision");
+  }
+
+  function resolveReplayTransition(journey, actionId) {
+    const localSources = FIELD_SETUP_PROTOCOL.states.flatMap((state) => (
+      [state.primaryAction, ...state.secondaryActions]
+        .filter((action) => action.id === actionId && action.nextState === journey.state)
+        .map((action) => Object.freeze({ priorState: state.id, transition: action }))
+    ));
+    const globalSources = FIELD_SETUP_PROTOCOL.globalActions
+      .filter((action) => action.id === actionId && action.nextState === journey.state)
+      .map((action) => Object.freeze({
+        // A global action is state-independent. The action-bound outcome and exact
+        // one-revision advance prove its transition; current state is sufficient to
+        // validate its durable non-navigation prerequisite evidence without inventing history.
+        priorState: journey.state,
+        transition: action,
+      }));
+    const sources = [...localSources, ...globalSources];
+    if (sources.length !== 1) staleReplay();
+    return sources[0];
+  }
+
+  async function replayCommittedTransition(journey, input, operator) {
+    if (journey.revision !== input.expectedRevision + 1) staleReplay();
+
+    const { priorState, transition } = resolveReplayTransition(journey, input.actionId);
+    if (transition.nextState !== journey.state) staleReplay();
+
+    const replayJourney = Object.freeze({
+      ...journey,
+      revision: input.expectedRevision,
+      state: priorState,
+    });
+    let qualificationStatus = journey.qualificationStatus;
+    if (transition.qualificationDecision) {
+      const qualification = normalizeQualificationForAction(input.actionId, input.qualification);
+      const authorized = authorizeQualification(replayJourney, qualification, operator);
+      if (
+        authorized.nextState !== transition.nextState ||
+        authorized.storedStatus !== journey.qualificationStatus
+      ) {
+        staleReplay();
+      }
+      qualificationStatus = authorized.storedStatus;
+    } else if (input.qualification !== null) {
+      throw new FieldSetupContractError("Qualification payload is not permitted for this transition");
+    }
+
+    const prerequisite = getServerPrerequisite(priorState, input.actionId);
+    const expectedLastOutcome = prerequisite === null
+      ? `transition:${input.actionId}`
+      : `server_outcome:${prerequisite.receiptType}:${input.actionId}`;
+    if (journey.lastOutcome !== expectedLastOutcome) staleReplay();
+
+    const statusPatch = prerequisite?.statusPatch ?? Object.freeze({});
+    const requiredFingerprintFields = prerequisite?.requiredFingerprintFields ?? Object.freeze([]);
+    if (
+      Object.hasOwn(statusPatch, "qualificationStatus") &&
+      statusPatch.qualificationStatus !== qualificationStatus
+    ) {
+      staleReplay();
+    }
+    for (const [field, expectedValue] of Object.entries(statusPatch)) {
+      if (journey[field] !== expectedValue) staleReplay();
+    }
+    for (const field of requiredFingerprintFields) {
+      // validateStoredJourney has already enforced the exact SHA-256 representation;
+      // replay additionally proves that every fingerprint required by this action is present.
+      if (journey[field] === null) staleReplay();
+    }
+
+    let navigationIntent = null;
+    if (isFormNavigationAction(input.actionId)) {
+      // Navigation capability is intentionally not persisted in the journey row. Re-read
+      // the authoritative receipt to reconstruct it, then bind its persisted evidence back
+      // to the committed row. Other guarded actions replay from the durable row so an
+      // external read that rotated after commit cannot invalidate an already-saved decision.
+      const serverPrerequisite = await resolveServerPrerequisite(replayJourney, input.actionId);
+      if (serverPrerequisite.navigationIntent === null) staleReplay();
+      for (const [field, expectedValue] of Object.entries({
+        ...serverPrerequisite.statusPatch,
+        ...serverPrerequisite.fingerprintPatch,
+      })) {
+        if (journey[field] !== expectedValue) staleReplay();
+      }
+      navigationIntent = serverPrerequisite.navigationIntent;
+    }
+    return Object.freeze({
+      authoritative: true,
+      conversionAuthorized: false,
+      navigationIntent,
+      qualificationStatus,
+      revision: journey.revision,
+      state: journey.state,
+    });
+  }
+
   async function issueLaunch(input) {
     const context = normalizeTrustedLaunchContext(input);
     const issuedAtMs = milliseconds(now);
     const nonce = makeToken(randomBytes);
-    const row = schemaCompleteLaunchRow(
-      context,
-      digestToken(nonce, config.digestPepper),
-      makeJourneyKey(randomUUID),
-      issuedAtMs,
-      config,
-    );
-    const stored = validateStoredJourney(await store.issueLaunch(row));
-    assertExactRowReadback(row, stored, "Launch issuance readback was inconsistent");
+    const launchDigest = digestToken(nonce, config.digestPepper);
+    const bindingDigest = resumeBindingDigest(context, config.digestPepper);
+    const issuedAt = new Date(issuedAtMs).toISOString();
+    const launchExpiresAt = new Date(issuedAtMs + config.launchTtlSeconds * 1000).toISOString();
+    const absoluteExpiresAt = new Date(
+      issuedAtMs + config.sessionAbsoluteTtlSeconds * 1000,
+    ).toISOString();
+    const createRow = context.moduleApiName === "Leads"
+      ? schemaCompleteLaunchRow(
+        context,
+        launchDigest,
+        makeJourneyKey(randomUUID),
+        issuedAtMs,
+        config,
+      )
+      : null;
+    const result = await store.issueOrResumeLaunch({
+      absoluteExpiresAt,
+      bindingDigest,
+      createRow,
+      environment: context.environment,
+      issuedAt,
+      launchDigest,
+      launchExpiresAt,
+      moduleApiName: context.moduleApiName,
+      operatorUserId: context.operatorUserId,
+      updatedAt: issuedAt,
+    });
+    requireExactInput(result, ["after", "before", "created"], "Launch issuance result");
+    const stored = validateStoredJourney(result.after);
+    if (result.created === true) {
+      if (result.before !== null || createRow === null) {
+        throw new FieldSetupContractError("Launch creation readback was inconsistent", "service_unavailable");
+      }
+      assertExactRowReadback(createRow, stored, "Launch creation readback was inconsistent");
+    } else if (result.created === false) {
+      const before = validateStoredJourney(result.before);
+      const requestedBinding = context.moduleApiName === "Leads"
+        ? before.leadResumeBindingDigest
+        : before.dealResumeBindingDigest;
+      if (
+        requestedBinding !== bindingDigest ||
+        before.environment !== context.environment ||
+        before.operatorUserId !== context.operatorUserId ||
+        stored.revision !== before.revision + 1
+      ) {
+        throw new FieldSetupContractError("Launch resume binding was inconsistent", "service_unavailable");
+      }
+      const expected = validateStoredJourney({
+        ...before,
+        absoluteExpiresAt,
+        idleExpiresAt: null,
+        issuedAt,
+        launchConsumedAt: null,
+        launchDigest,
+        launchExpiresAt,
+        lastOutcome: "launch_reissued",
+        revision: before.revision + 1,
+        sessionDigest: null,
+        updatedAt: issuedAt,
+      });
+      assertExactRowReadback(expected, stored, "Launch resume readback was inconsistent");
+    } else {
+      throw new FieldSetupContractError("Launch issuance result was inconsistent", "service_unavailable");
+    }
     return Object.freeze({
       ok: true,
       launchUrl: launchUrl(config.webClientOrigin, nonce),
-      expiresAt: row.launchExpiresAt,
+      expiresAt: stored.launchExpiresAt,
     });
   }
 
@@ -278,22 +474,44 @@ function createFieldSetupLaunchService({
     const sessionToken = makeToken(randomBytes);
     const launchDigest = digestToken(input.nonce, config.digestPepper);
     const sessionDigest = digestToken(sessionToken, config.digestPepper);
-    const idleExpiresAt = new Date(
+    const pending = validateStoredJourney(await store.readByLaunchDigest(launchDigest));
+    const absoluteExpiresAtMs = canonicalTimestampMilliseconds(pending.absoluteExpiresAt);
+    if (
+      pending.launchDigest !== launchDigest ||
+      pending.operatorUserId !== operator.operatorUserId ||
+      pending.environment !== operator.environment ||
+      pending.sessionDigest !== null ||
+      pending.launchConsumedAt !== null ||
+      absoluteExpiresAtMs === null ||
+      absoluteExpiresAtMs <= exchangedAtMs ||
+      canonicalTimestampMilliseconds(pending.launchExpiresAt) <= exchangedAtMs
+    ) {
+      throw new FieldSetupContractError("Field-setup token was not found", "field_setup_not_found");
+    }
+    const idleExpiresAt = new Date(Math.min(
       exchangedAtMs + config.sessionIdleTtlSeconds * 1000,
-    ).toISOString();
+      absoluteExpiresAtMs,
+    )).toISOString();
+    const remainingAbsoluteLifetimeSeconds = Math.floor(
+      (absoluteExpiresAtMs - exchangedAtMs) / 1000,
+    );
     const exchange = FIELD_SETUP_PROTOCOL.persistence.launchExchange;
+    const nextState = pending.state === exchange.expectedState
+      ? exchange.nextState
+      : pending.state;
+    const nextRevision = pending.revision + 1;
     const consumed = validateStoredJourney(await store.consumeLaunch({
       environment: operator.environment,
       expectedLaunchConsumedAt: null,
-      expectedRevision: exchange.expectedRevision,
+      expectedRevision: pending.revision,
       expectedSessionDigest: null,
-      expectedState: exchange.expectedState,
+      expectedState: pending.state,
       idleExpiresAt,
       launchConsumedAt: exchangedAt,
       launchDigest,
       lastOutcome: "launch_exchanged",
-      nextRevision: exchange.nextRevision,
-      nextState: exchange.nextState,
+      nextRevision,
+      nextState,
       operatorUserId: operator.operatorUserId,
       sessionDigest,
       updatedAt: exchangedAt,
@@ -303,8 +521,8 @@ function createFieldSetupLaunchService({
       consumed.sessionDigest !== sessionDigest ||
       consumed.operatorUserId !== operator.operatorUserId ||
       consumed.environment !== operator.environment ||
-      consumed.state !== exchange.nextState ||
-      consumed.revision !== exchange.nextRevision ||
+      consumed.state !== nextState ||
+      consumed.revision !== nextRevision ||
       consumed.launchConsumedAt !== exchangedAt ||
       consumed.idleExpiresAt !== idleExpiresAt ||
       consumed.updatedAt !== exchangedAt ||
@@ -312,14 +530,20 @@ function createFieldSetupLaunchService({
     ) {
       throw new FieldSetupContractError("Launch exchange readback was inconsistent", "service_unavailable");
     }
-    for (const [field, initial] of Object.entries(FIELD_SETUP_PROTOCOL.persistence.initialValues)) {
-      if (!["state", "revision", "lastOutcome"].includes(field) && consumed[field] !== initial) {
-        throw new FieldSetupContractError("Launch exchange readback was inconsistent", "service_unavailable");
-      }
-    }
+    const expectedConsumed = validateStoredJourney({
+      ...pending,
+      idleExpiresAt,
+      launchConsumedAt: exchangedAt,
+      lastOutcome: "launch_exchanged",
+      revision: nextRevision,
+      sessionDigest,
+      state: nextState,
+      updatedAt: exchangedAt,
+    });
+    assertExactRowReadback(expectedConsumed, consumed, "Launch exchange readback was inconsistent");
     return Object.freeze({
       ok: true,
-      setCookie: sessionCookie(sessionToken, config.sessionAbsoluteTtlSeconds),
+      setCookie: sessionCookie(sessionToken, remainingAbsoluteLifetimeSeconds),
       publicJourney: Object.freeze({
         state: consumed.state,
         revision: consumed.revision,
@@ -365,7 +589,7 @@ function createFieldSetupLaunchService({
     const journey = await authenticateSession(input.sessionToken, operator);
     assertOperatorBound(journey, operator);
     if (journey.revision !== input.expectedRevision) {
-      throw new FieldSetupContractError("Session revision is stale", "stale_revision");
+      return replayCommittedTransition(journey, input, operator);
     }
     const transition = resolveTransition(journey.state, input.actionId);
     let qualificationStatus = journey.qualificationStatus;
@@ -397,7 +621,7 @@ function createFieldSetupLaunchService({
     const nextRevision = journey.revision + 1;
     const lastOutcome = serverPrerequisite.receiptType === null
       ? `transition:${input.actionId}`
-      : `server_outcome:${serverPrerequisite.receiptType}`;
+      : `server_outcome:${serverPrerequisite.receiptType}:${input.actionId}`;
     const expected = validateStoredJourney({
       ...journey,
       ...serverPrerequisite.statusPatch,
@@ -429,6 +653,7 @@ function createFieldSetupLaunchService({
     return Object.freeze({
       authoritative: true,
       conversionAuthorized: false,
+      navigationIntent: serverPrerequisite.navigationIntent,
       qualificationStatus: stored.qualificationStatus,
       revision: stored.revision,
       state: stored.state,
@@ -449,6 +674,7 @@ module.exports = {
   createFieldSetupLaunchService,
   digestToken,
   launchUrl,
+  resumeBindingDigest,
   schemaCompleteLaunchRow,
   sessionCookie,
 };

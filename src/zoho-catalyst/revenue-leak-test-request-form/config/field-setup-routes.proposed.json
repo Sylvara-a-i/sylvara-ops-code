@@ -1,6 +1,7 @@
 {
   "schema_version": 1,
-  "status": "source-only-disabled-not-wired",
+  "protocol_id": "free_revenue_leak_test_field_setup_v1",
+  "status": "source-only-disabled-explicit-injection-required",
   "environment": "Development",
   "function": "revenue_leak_test_request_form",
   "default_action": "reject",
@@ -8,20 +9,24 @@
   "source_composition": {
     "runtime_status": "NOT_READY",
     "default_dispatcher": "claims no field-setup routes",
+    "injected_dispatcher": "launch, exchange, status, operator-decision, conversion-preview, and conversion-confirm routes with CAS-backed authoritative journey and one-way conversion persistence",
     "catalyst_header_mapping": "NOT_READY_INJECTED_ONLY",
     "catalyst_identity_mapping": "NOT_READY_INJECTED_ONLY",
     "catalyst_store_mapping": "NOT_READY_INJECTED_ONLY",
     "deployment_authorized": false,
     "route_paths": "injected; no live path is committed",
-    "browser_origin": "injected exact HTTPS origin",
+    "browser_origin": "injected exact HTTPS origin; browser GET may omit Origin only when Sec-Fetch-Site is same-origin and the bound CSRF/session/operator checks pass",
+    "form_navigation": "top-level only; exact Form 1 and Form 2 HTTPS bases are injected privately and must use the sole canonical public hostname forms.zohopublic.com; server and client recheck the exact base before navigation",
+    "record_resume": "a Lead launch atomically creates or resumes one keyed Lead-bound journey; only an independently confirmed converted Deal mapping may resume that same row by its keyed Deal binding; access rotates without resetting authoritative state",
     "browser_controls": [
       "exact Origin",
       "Sec-Fetch-Site same-origin",
+      "exact protocol ID and numeric version headers on exchange, status, and intent before identity or store work",
       "Secure HttpOnly SameSite=Strict bound session",
-      "session-derived CSRF token in an injected exact header",
+      "session-derived CSRF token in an injected exact header for status and intent",
       "authenticated operator resolver independent of request body"
     ],
-    "response_policy": "allowlisted journey state, progress, revision, expiry, launch URL, and CSRF bootstrap only",
+    "response_policy": "allowlisted journey state, progress, revision, expiry, launch URL, CSRF bootstrap, and exact protocol ID/version echo only",
     "activation_path": false
   },
   "routes": [
@@ -30,32 +35,53 @@
       "method": "POST",
       "caller": "administrator-restricted CRM button through a named Connection",
       "authentication": ["Catalyst authenticated server context", "Gabriel operator role", "named Connection"],
-      "body": ["schemaVersion", "moduleApiName", "recordId"],
-      "response": ["single-use fragment-only launch URL", "expiry"],
+      "body": ["protocolId", "schemaVersion", "moduleApiName", "recordId"],
+      "response": ["single-use fragment-only launch URL", "expiry", "protocolId", "schemaVersion"],
       "enabled": false
     },
     {
       "id": "FIELD_SETUP_EXCHANGE",
       "method": "POST",
       "caller": "same-origin Catalyst-hosted field-setup client",
-      "authentication": ["Gabriel authenticated Catalyst user context", "single-use launch nonce"],
-      "response": ["Secure HttpOnly SameSite session cookie", "sanitized journey summary"],
+      "authentication": ["exact protocol ID and version headers", "Gabriel authenticated Catalyst user context", "single-use launch nonce"],
+      "response": ["Secure HttpOnly SameSite session cookie", "ephemeral CSRF bootstrap", "sanitized authoritative current journey summary", "protocolId", "schemaVersion"],
       "enabled": false
     },
     {
       "id": "FIELD_SETUP_STATUS",
       "method": "GET",
       "caller": "same-origin Catalyst-hosted field-setup client",
-      "authentication": ["Gabriel authenticated Catalyst user context", "bound session cookie"],
-      "response": ["sanitized current state only"],
+      "authentication": ["exact protocol ID and version headers", "Gabriel authenticated Catalyst user context", "bound session cookie"],
+      "response": ["sanitized current state only", "protocolId", "schemaVersion"],
       "enabled": false
     },
     {
       "id": "FIELD_SETUP_OPERATOR_DECISION",
       "method": "POST",
       "caller": "same-origin Catalyst-hosted field-setup client after return to Gabriel",
-      "authentication": ["Gabriel authenticated Catalyst user context", "bound session cookie", "current journey revision"],
+      "authentication": ["exact protocol ID and version headers", "Gabriel authenticated Catalyst user context", "bound session cookie", "current journey revision"],
+      "behavior": ["browser submits intent only", "server CAS persists protocol transition", "after a lost mutation response the browser retries the exact same body once", "server replay accepts only the action-bound immediately prior committed transition without another CAS", "older, different-action, or conflicting evidence fails closed and status-only readback cannot claim success", "guarded steps require an exact bound authoritative receipt", "Form navigation replay returns only the original independently validated receipt"],
       "browser_cannot_authorize": ["Lead conversion without server-side qualification receipt", "number reservation", "route verification", "activation"],
+      "enabled": false
+    },
+    {
+      "id": "FIELD_SETUP_CONVERSION_PREVIEW",
+      "method": "POST",
+      "caller": "same-origin Catalyst-hosted field-setup client after qualification reconciliation",
+      "authentication": ["exact protocol ID and version headers", "Gabriel authenticated Catalyst user context", "bound session cookie", "session-derived CSRF token", "current journey revision"],
+      "body": ["revision"],
+      "behavior": ["server independently reloads the authoritative Lead, conversion options, duplicate candidates, Deal metadata, and controlled defaults", "server persists and reads back the exact preview fingerprint before confirmation is available", "an immediately prior revision may only reread the already committed confirmation preview so response loss cannot rebuild it", "if authoritative evidence changed after initial display, the server atomically replaces only the exact current preview receipt at lead_conversion_confirmation, increments revision, and returns the refreshed bounded preview", "browser receives only the bounded display preview"],
+      "browser_cannot_authorize": ["native Lead conversion", "duplicate selection outside the server-produced plan", "email or task side effect", "activation"],
+      "enabled": false
+    },
+    {
+      "id": "FIELD_SETUP_CONVERSION_CONFIRM",
+      "method": "POST",
+      "caller": "same-origin Catalyst-hosted field-setup client only after the exact preview is loaded for display",
+      "authentication": ["exact protocol ID and version headers", "Gabriel authenticated Catalyst user context", "bound session cookie", "session-derived CSRF token", "current journey revision", "stored preview fingerprint"],
+      "body": ["confirm", "revision"],
+      "behavior": ["confirm must be exactly true", "server revalidates the authoritative Lead, conversion options, duplicate candidates, Deal metadata, controlled defaults, and preview fingerprint", "one compare-and-set crosses preview_ready to write_started before exactly one native conversion attempt", "ambiguous write or readback becomes reconciliation_required and is never blindly retried", "completion requires independent Account, Contact, Deal, relationship, field, and no-side-effect readback"],
+      "browser_cannot_authorize": ["conversion retry after write_started", "email or task side effect", "number reservation", "route verification", "activation"],
       "enabled": false
     }
   ],

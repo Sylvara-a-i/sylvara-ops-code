@@ -24,6 +24,7 @@ const PUBLIC_CODES = new Set([
   "content_type_not_allowed",
   "context_conflict",
   "method_not_allowed",
+  "reconciliation_required",
   "request_invalid",
   "route_not_found",
   "service_unavailable",

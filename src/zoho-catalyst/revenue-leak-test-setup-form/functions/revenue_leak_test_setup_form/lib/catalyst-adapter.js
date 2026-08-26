@@ -6,6 +6,9 @@ const { createCatalystMailAdapter } = require("./catalyst-mail");
 const { createConnectionAuthorizationProvider } = require("./connection-boundary");
 const { ConfigurationError, loadConfig } = require("./config");
 const { createCrmClient } = require("./crm-client");
+const {
+  createDefaultDeniedFieldSetupOperationsComposition,
+} = require("./field-setup-operations-composition");
 const { handleForm2Request } = require("./handler");
 const { safeLog } = require("./safe-log");
 const { createCatalystSessionStore } = require("./session-store");
@@ -24,6 +27,7 @@ const PUBLIC_CODES = new Set([
   "connection_unavailable",
   "content_length_invalid",
   "content_type_not_allowed",
+  "context_conflict",
   "context_invalid",
   "context_mismatch",
   "form_invalid",
@@ -35,7 +39,10 @@ const PUBLIC_CODES = new Set([
   "record_stale",
   "reconciliation_required",
   "relationship_mismatch",
+  "request_invalid",
   "route_not_found",
+  "service_unavailable",
+  "session_not_found",
   "setup_not_found",
   "submission_conflict",
   "submission_unresolved",
@@ -53,6 +60,7 @@ function statusForError(error) {
     body_too_large: 413,
     configuration_invalid: 503,
     connection_unavailable: 503,
+    context_conflict: 409,
     context_invalid: 409,
     context_mismatch: 409,
     identity_mismatch: 409,
@@ -61,6 +69,7 @@ function statusForError(error) {
     prefill_stale: 409,
     reconciliation_required: 503,
     relationship_mismatch: 409,
+    session_not_found: 404,
     setup_not_found: 404,
     submission_conflict: 409,
     submission_unresolved: 409,
@@ -91,7 +100,13 @@ function sendJson(response, status, body) {
 
 function sendControllerResult(response, result, requestId) {
   if (typeof result?.body !== "string") {
-    sendJson(response, result.status, { ...result.body, requestId });
+    // Field-setup operation bodies are an exact cross-function protocol shared
+    // with the request-form web client. Do not append the legacy requestId field
+    // to this lane; all other setup-form controller responses retain it.
+    const body = result.stage === "field_setup_operations"
+      ? result.body
+      : { ...result.body, requestId };
+    sendJson(response, result.status, body);
     return;
   }
   if (typeof response.status === "function") response.status(result.status);
@@ -149,7 +164,22 @@ function createRequestListener({
   now = Date.now,
   fetchImpl = globalThis.fetch,
   requestHandler = handleForm2Request,
+  fieldSetupOperationsComposition = createDefaultDeniedFieldSetupOperationsComposition(),
 } = {}) {
+  if (
+    !fieldSetupOperationsComposition ||
+    fieldSetupOperationsComposition.status !== "NOT_READY" ||
+    fieldSetupOperationsComposition.catalystHeaderMapping !== "NOT_READY_INJECTED_ONLY" ||
+    fieldSetupOperationsComposition.catalystIdentityMapping !== "NOT_READY_INJECTED_ONLY" ||
+    fieldSetupOperationsComposition.catalystStoreMapping !== "NOT_READY_INJECTED_ONLY" ||
+    fieldSetupOperationsComposition.deploymentAuthorized !== false ||
+    fieldSetupOperationsComposition.runtimeAuthority !== false ||
+    typeof fieldSetupOperationsComposition.claimsRequest !== "function" ||
+    typeof fieldSetupOperationsComposition.dispatch !== "function" ||
+    typeof fieldSetupOperationsComposition.assertNoRouteCollision !== "function"
+  ) {
+    throw new ConfigurationError("Field-setup operations composition is invalid");
+  }
   // Keep the SDK load at the runtime boundary so pure policy tests can run
   // without installing deployment dependencies. Catalyst installs this exact
   // pinned package from package-lock.json for the deployed function.
@@ -179,49 +209,69 @@ function createRequestListener({
       const runtimeSdk = catalystSdk ?? require("zcatalyst-sdk-node");
       const app = runtimeSdk.initialize(request);
       assertCatalystEnvironment(request, app, config.deploymentEnvironment);
-      const dataStoreAdapter = createCatalystDataStoreAdapter(app, config);
-      const sessionStore = createCatalystSessionStore(dataStoreAdapter, config, { now });
-      const workflowStore = createWorkflowStore(dataStoreAdapter, config, { now, randomUUID });
-      const verificationProofStore = createVerificationProofStore(
-        dataStoreAdapter,
-        config,
-        { now },
-      );
-      const crmClient = createCrmClient(config, {
-        readAuthorizationProvider: createConnectionAuthorizationProvider(
-          app,
-          config.crmReadConnectionLinkName,
-          config.platformOperationTimeoutMs,
-        ),
-        writeAuthorizationProvider: createConnectionAuthorizationProvider(
-          app,
-          config.crmWriteConnectionLinkName,
-          config.platformOperationTimeoutMs,
-        ),
-        fetchImpl,
-      });
-      if (typeof requestHandler !== "function") {
-        throw new ConfigurationError("Controller request handler is unavailable");
+      fieldSetupOperationsComposition.assertNoRouteCollision([
+        config.issuePath,
+        config.accessPath,
+        config.otpRequestPath,
+        config.otpVerifyPath,
+        config.prefillPath,
+        config.submissionPath,
+      ]);
+      const operationsClaimed = fieldSetupOperationsComposition.claimsRequest(request);
+      if (typeof operationsClaimed !== "boolean") {
+        throw new ConfigurationError("Field-setup operation route claim is invalid");
       }
-      const verificationService = createVerificationService({
-        config,
-        crmClient,
-        mailAdapter: createCatalystMailAdapter(app, config),
-        proofStore: verificationProofStore,
-        sessionStore,
-        now,
-        randomInt: crypto.randomInt,
-        randomBytes: crypto.randomBytes,
-      });
-      const result = await requestHandler(request, {
-        config,
-        crmClient,
-        now,
-        randomBytes: crypto.randomBytes,
-        sessionStore,
-        verificationService,
-        workflowStore,
-      });
+      let result;
+      if (operationsClaimed) {
+        result = await fieldSetupOperationsComposition.dispatch(request, { app });
+      } else {
+        // The committed default composition claims no operation routes, preserving
+        // the six existing Form 2 paths until exact Development auth and stores are
+        // separately injected and read back.
+        const dataStoreAdapter = createCatalystDataStoreAdapter(app, config);
+        const sessionStore = createCatalystSessionStore(dataStoreAdapter, config, { now });
+        const workflowStore = createWorkflowStore(dataStoreAdapter, config, { now, randomUUID });
+        const verificationProofStore = createVerificationProofStore(
+          dataStoreAdapter,
+          config,
+          { now },
+        );
+        const crmClient = createCrmClient(config, {
+          readAuthorizationProvider: createConnectionAuthorizationProvider(
+            app,
+            config.crmReadConnectionLinkName,
+            config.platformOperationTimeoutMs,
+          ),
+          writeAuthorizationProvider: createConnectionAuthorizationProvider(
+            app,
+            config.crmWriteConnectionLinkName,
+            config.platformOperationTimeoutMs,
+          ),
+          fetchImpl,
+        });
+        if (typeof requestHandler !== "function") {
+          throw new ConfigurationError("Controller request handler is unavailable");
+        }
+        const verificationService = createVerificationService({
+          config,
+          crmClient,
+          mailAdapter: createCatalystMailAdapter(app, config),
+          proofStore: verificationProofStore,
+          sessionStore,
+          now,
+          randomInt: crypto.randomInt,
+          randomBytes: crypto.randomBytes,
+        });
+        result = await requestHandler(request, {
+          config,
+          crmClient,
+          now,
+          randomBytes: crypto.randomBytes,
+          sessionStore,
+          verificationService,
+          workflowStore,
+        });
+      }
       safeLog(logger, result.status >= 500 ? "error" : "info", {
         requestId,
         sourceRevision,

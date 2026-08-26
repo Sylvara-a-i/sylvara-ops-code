@@ -23,6 +23,9 @@ const POST_WRITE_STATUSES = new Set([
   "reconciliation_required",
   "completion_pending",
 ]);
+const PREVIEW_STATE = "lead_conversion_preview";
+const CONFIRMATION_STATE = "lead_conversion_confirmation";
+const COMPLETED_STATE = "handoff_to_client_form2";
 
 class ConversionError extends FieldSetupContractError {
   constructor(message, publicCode = "conversion_blocked", { ambiguous = false } = {}) {
@@ -79,6 +82,19 @@ function safeValue(value, field) {
   return value;
 }
 
+function safeDisplay(value, label, maximumLength = 200) {
+  if (
+    typeof value !== "string" ||
+    value.trim() !== value ||
+    value.length < 1 ||
+    value.length > maximumLength ||
+    /[\u0000-\u001f\u007f]/.test(value)
+  ) {
+    throw new ConversionError(`${label} display value is invalid`);
+  }
+  return value;
+}
+
 function normalizeMetadata(value, leadId) {
   if (
     !value ||
@@ -115,7 +131,12 @@ function oneOrNone(value, label) {
   if (!Array.isArray(value) || value.length > 1) {
     throw new ConversionError(`${label} candidates are ambiguous`);
   }
-  if (value.length === 1) return recordId(value[0]?.id, `${label} candidate`);
+  if (value.length === 1) {
+    return Object.freeze({
+      id: recordId(value[0]?.id, `${label} candidate`),
+      displayName: safeDisplay(value[0]?.displayName, `${label} candidate`, 200),
+    });
+  }
   return null;
 }
 
@@ -165,6 +186,19 @@ function assertBoundEvidence(value, leadId, label) {
   return value;
 }
 
+function assertJourneyRevision(journey, expectedState) {
+  if (
+    journey?.state !== expectedState ||
+    !Number.isSafeInteger(journey.revision) ||
+    journey.revision < 1 ||
+    typeof journey.sessionDigest !== "string" ||
+    !SHA256_PATTERN.test(journey.sessionDigest) ||
+    journey.environment !== "development"
+  ) {
+    throw new ConversionError("Journey conversion state is unavailable or stale");
+  }
+}
+
 function assertPermission(options, permission) {
   if (options.permissions?.[permission] !== true) {
     throw new ConversionError(`Current ${permission} permission is unavailable`);
@@ -195,32 +229,73 @@ async function loadAuthoritativePlan(crm, request, defaults) {
   assertPicklistValue(fields, "Type", defaults.type);
 
   const candidates = assertBoundEvidence(candidatesInput, request.leadId, "Duplicate candidates");
-  const accountId = oneOrNone(candidates.accounts, "Account");
-  const contactId = oneOrNone(candidates.contacts, "Contact");
-  const dealId = oneOrNone(candidates.deals, "Deal");
-  if (dealId) {
+  const account = oneOrNone(candidates.accounts, "Account");
+  const contact = oneOrNone(candidates.contacts, "Contact");
+  const deal = oneOrNone(candidates.deals, "Deal");
+  if (deal) {
     throw new ConversionError("An existing matching Deal requires operator reconciliation");
   }
-  assertPermission(options, accountId ? "associateAccount" : "createAccount");
-  assertPermission(options, contactId ? "associateContact" : "createContact");
+  assertPermission(options, account ? "associateAccount" : "createAccount");
+  assertPermission(options, contact ? "associateContact" : "createContact");
 
   if (typeof lead.company !== "string" || !lead.company.trim() || lead.company.length > 200) {
     throw new ConversionError("Lead company is missing or invalid");
   }
+  const companyDisplayName = safeDisplay(lead.company.trim(), "Lead company", 200);
+  const contactDisplayName = contact
+    ? contact.displayName
+    : safeDisplay(lead.contactDisplayName, "Lead contact", 200);
   const dealName = `${lead.company.trim()} — Free Revenue Leak Test`;
   const nameLimit = fields.get("Deal_Name")?.maxLength;
   if (Number.isSafeInteger(nameLimit) && dealName.length > nameLimit) {
     throw new ConversionError("Generated Deal name exceeds current Deal metadata");
   }
   return Object.freeze({
-    accountId,
+    accountDisplayName: account ? account.displayName : companyDisplayName,
+    accountId: account?.id ?? null,
     closingDate: defaults.closingDate,
-    contactId,
+    contactDisplayName,
+    contactId: contact?.id ?? null,
     dealName,
     leadId: request.leadId,
     pipeline: defaults.pipeline,
     stage: defaults.stage,
     type: defaults.type,
+  });
+}
+
+function sanitizedPreview(plan) {
+  return Object.freeze({
+    account: Object.freeze({
+      action: plan.accountId ? "associate_one_verified_match" : "create_from_conversion_mapping",
+      displayName: plan.accountDisplayName,
+    }),
+    contact: Object.freeze({
+      action: plan.contactId ? "associate_one_verified_match" : "create_from_conversion_mapping",
+      displayName: plan.contactDisplayName,
+    }),
+    deal: Object.freeze({
+      closingDate: plan.closingDate,
+      dealName: plan.dealName,
+      mandatoryDealFields: MANDATORY_DEAL_FIELDS,
+      pipeline: plan.pipeline,
+      stage: plan.stage,
+      type: plan.type,
+    }),
+    noEmailOrRoutingEffect: true,
+  });
+}
+
+function conversionWritePlan(plan) {
+  return Object.freeze({
+    accountId: plan.accountId,
+    closingDate: plan.closingDate,
+    contactId: plan.contactId,
+    dealName: plan.dealName,
+    leadId: plan.leadId,
+    pipeline: plan.pipeline,
+    stage: plan.stage,
+    type: plan.type,
   });
 }
 
@@ -336,11 +411,14 @@ function createFieldSetupConversionService({ crm, store } = {}) {
   async function buildPreview(input, journey, operator, controlledDefaultsInput) {
     const request = normalizePreviewRequest(input);
     assertOperatorBound(journey, operator);
+    assertJourneyRevision(journey, PREVIEW_STATE);
     if (
       journey.journeyKey !== request.journeyKey ||
       journey.recordId !== request.leadId ||
       journey.moduleApiName !== "Leads" ||
-      journey.qualificationStatus !== "qualified"
+      journey.qualificationStatus !== "qualified" ||
+      journey.conversionStatus !== "not_started" ||
+      journey.conversionPreviewFingerprint !== null
     ) {
       throw new ConversionError("Journey is not eligible for conversion");
     }
@@ -348,51 +426,133 @@ function createFieldSetupConversionService({ crm, store } = {}) {
     const plan = await loadAuthoritativePlan(crm, request, defaults);
     const previewFingerprint = fingerprint(plan);
     const stored = await store.createPreview({
+      environment: journey.environment,
+      expectedConversionStatus: "not_started",
+      expectedPreviewFingerprint: null,
+      expectedRevision: journey.revision,
+      expectedState: PREVIEW_STATE,
       journeyKey: request.journeyKey,
       leadId: request.leadId,
+      nextState: CONFIRMATION_STATE,
       operatorUserId: journey.operatorUserId,
       previewFingerprint,
+      sessionDigest: journey.sessionDigest,
     });
     if (
       stored?.previewFingerprint !== previewFingerprint ||
       !Number.isSafeInteger(stored?.revision) ||
-      stored.revision < 1
+      stored.revision !== journey.revision + 1 ||
+      stored.state !== CONFIRMATION_STATE ||
+      stored.status !== "preview_ready"
     ) {
       throw reconciliationError("Conversion preview readback is inconsistent");
     }
     return Object.freeze({
       previewFingerprint,
       revision: stored.revision,
-      sanitizedPreview: Object.freeze({
-        accountAction: plan.accountId ? "associate_one_verified_match" : "create_from_conversion_mapping",
-        contactAction: plan.contactId ? "associate_one_verified_match" : "create_from_conversion_mapping",
-        dealAction: "create_free_revenue_leak_test_deal",
-        mandatoryDealFields: MANDATORY_DEAL_FIELDS,
-        noEmailOrRoutingEffect: true,
-      }),
+      sanitizedPreview: sanitizedPreview(plan),
     });
   }
 
-  async function confirmConversion(input, journey, operator, controlledDefaultsInput) {
+  async function readPreview(input, journey, operator, controlledDefaultsInput) {
+    const request = normalizePreviewRequest(input);
+    assertOperatorBound(journey, operator);
+    assertJourneyRevision(journey, CONFIRMATION_STATE);
+    if (
+      journey.journeyKey !== request.journeyKey ||
+      journey.recordId !== request.leadId ||
+      journey.moduleApiName !== "Leads" ||
+      journey.qualificationStatus !== "qualified" ||
+      journey.conversionStatus !== "preview_ready" ||
+      !SHA256_PATTERN.test(journey.conversionPreviewFingerprint ?? "")
+    ) {
+      throw new ConversionError("Journey conversion preview is unavailable");
+    }
+    const defaults = normalizeControlledDefaults(controlledDefaultsInput);
+    const plan = await loadAuthoritativePlan(crm, request, defaults);
+    const previewFingerprint = fingerprint(plan);
+    if (previewFingerprint === journey.conversionPreviewFingerprint) {
+      return Object.freeze({
+        previewFingerprint,
+        revision: journey.revision,
+        sanitizedPreview: sanitizedPreview(plan),
+      });
+    }
+
+    // A mutable CRM record can legitimately change after preview. Replace only
+    // the exact still-current preview receipt so the operator can review the new
+    // evidence without weakening the confirmation CAS or reusing a stale revision.
+    const stored = await store.createPreview({
+      environment: journey.environment,
+      expectedConversionStatus: "preview_ready",
+      expectedPreviewFingerprint: journey.conversionPreviewFingerprint,
+      expectedRevision: journey.revision,
+      expectedState: CONFIRMATION_STATE,
+      journeyKey: request.journeyKey,
+      leadId: request.leadId,
+      nextState: CONFIRMATION_STATE,
+      operatorUserId: journey.operatorUserId,
+      previewFingerprint,
+      sessionDigest: journey.sessionDigest,
+    });
+    if (
+      stored?.previewFingerprint !== previewFingerprint ||
+      !Number.isSafeInteger(stored?.revision) ||
+      stored.revision !== journey.revision + 1 ||
+      stored.state !== CONFIRMATION_STATE ||
+      stored.status !== "preview_ready"
+    ) {
+      throw reconciliationError("Conversion preview refresh readback is inconsistent");
+    }
+    return Object.freeze({
+      previewFingerprint,
+      revision: stored.revision,
+      sanitizedPreview: sanitizedPreview(plan),
+    });
+  }
+
+  async function confirmConversion(
+    input,
+    journey,
+    operator,
+    controlledDefaultsInput,
+    dealResumeBindingDigest,
+  ) {
     const confirmation = normalizeConfirmation(input);
     assertOperatorBound(journey, operator);
-    if (journey.moduleApiName !== "Leads" || journey.qualificationStatus !== "qualified") {
+    assertJourneyRevision(journey, CONFIRMATION_STATE);
+    if (
+      journey.moduleApiName !== "Leads" ||
+      journey.qualificationStatus !== "qualified" ||
+      journey.conversionStatus !== "preview_ready" ||
+      journey.conversionPreviewFingerprint !== confirmation.previewFingerprint ||
+      confirmation.revision !== journey.revision ||
+      typeof dealResumeBindingDigest !== "function"
+    ) {
       throw new ConversionError("Journey is not eligible for conversion");
     }
     const defaults = normalizeControlledDefaults(controlledDefaultsInput);
     const claimRequest = {
       journeyKey: journey.journeyKey,
+      environment: journey.environment,
+      expectedState: CONFIRMATION_STATE,
       operatorUserId: journey.operatorUserId,
       previewFingerprint: confirmation.previewFingerprint,
       revision: confirmation.revision,
+      sessionDigest: journey.sessionDigest,
     };
     const claim = await store.claimConversion(claimRequest);
     if (
       claim?.status === "completed" &&
       claim.previewFingerprint === confirmation.previewFingerprint &&
-      claim.revision === confirmation.revision
+      Number.isSafeInteger(claim.revision)
     ) {
-      return Object.freeze({ ok: true, replay: true, status: "conversion_readback_confirmed" });
+      return Object.freeze({
+        ok: true,
+        replay: true,
+        status: "conversion_readback_confirmed",
+        revision: claim.revision,
+      });
     }
     if (POST_WRITE_STATUSES.has(claim?.status)) {
       throw reconciliationError();
@@ -436,31 +596,50 @@ function createFieldSetupConversionService({ crm, store } = {}) {
     if (
       started?.status !== "write_started" ||
       started.startedNow !== true ||
-      started.sideEffectFingerprint !== currentFingerprint
+      started.sideEffectFingerprint !== currentFingerprint ||
+      !Number.isSafeInteger(started.revision) ||
+      started.revision !== journey.revision + 1
     ) {
       throw reconciliationError();
     }
     // Keep the post-boundary receipt digest-only. It is safe to persist and safe to pass to the store.
     const writeReceipt = Object.freeze({
+      environment: claimRequest.environment,
+      expectedState: claimRequest.expectedState,
       journeyKey: claimRequest.journeyKey,
       operatorUserId: claimRequest.operatorUserId,
       previewFingerprint: claimRequest.previewFingerprint,
-      revision: claimRequest.revision,
+      revision: started.revision,
+      sessionDigest: claimRequest.sessionDigest,
       sideEffectFingerprint: currentFingerprint,
     });
 
     try {
-      const response = normalizeResponseIds(await crm.convertLead(plan));
+      const response = normalizeResponseIds(await crm.convertLead(conversionWritePlan(plan)));
       // This lookup is intentionally keyed by the source Lead, not by trusting response IDs.
       const readback = await crm.readConversionResult(plan.leadId);
       assertConversionReadback(readback, response, plan);
+      const outcomeFingerprint = fingerprint(readback);
+      const dealBindingDigest = dealResumeBindingDigest(Object.freeze({
+        dealId: response.dealId,
+        environment: journey.environment,
+      }));
+      if (!SHA256_PATTERN.test(dealBindingDigest ?? "")) {
+        throw new Error("conversion_deal_binding_invalid");
+      }
       const completed = await store.completeConversion(writeReceipt, {
-        outcomeFingerprint: fingerprint(readback),
+        dealResumeBindingDigest: dealBindingDigest,
+        nextState: COMPLETED_STATE,
+        outcomeFingerprint,
       });
       if (
         completed?.status !== "completed" ||
         completed.previewFingerprint !== confirmation.previewFingerprint ||
-        completed.revision !== confirmation.revision
+        completed.state !== COMPLETED_STATE ||
+        completed.revision !== started.revision + 1 ||
+        completed.sideEffectFingerprint !== currentFingerprint ||
+        completed.outcomeFingerprint !== outcomeFingerprint ||
+        completed.dealResumeBindingDigest !== dealBindingDigest
       ) {
         throw new Error("conversion_completion_not_durable");
       }
@@ -472,10 +651,15 @@ function createFieldSetupConversionService({ crm, store } = {}) {
       }
       throw reconciliationError();
     }
-    return Object.freeze({ ok: true, replay: false, status: "conversion_readback_confirmed" });
+    return Object.freeze({
+      ok: true,
+      replay: false,
+      status: "conversion_readback_confirmed",
+      revision: started.revision + 1,
+    });
   }
 
-  return Object.freeze({ buildPreview, confirmConversion });
+  return Object.freeze({ buildPreview, confirmConversion, readPreview });
 }
 
 module.exports = {

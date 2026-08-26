@@ -6,12 +6,23 @@
   }
 
   const model = root.FieldSetupStateModel;
-  const api = root.FieldSetupApi.createSyntheticApi({
-    stateModel: model,
-    storage: safeSessionStorage(root)
-  });
+  const storage = safeSessionStorage(root);
+  let apiConfigurationError = false;
+  let api;
+  try {
+    api = root.FieldSetupApi.createApi({
+      fetchImpl: typeof root.fetch === "function" ? root.fetch.bind(root) : undefined,
+      runtime: root.FieldSetupRuntimeConfig,
+      stateModel: model,
+      storage
+    });
+  } catch (_error) {
+    apiConfigurationError = true;
+    api = root.FieldSetupApi.createSyntheticApi({ stateModel: model, storage });
+  }
   const elements = readElements(documentLike);
   let currentState = model.getState("loading_session_validation");
+  let currentStepReady = true;
   let busy = false;
 
   render(currentState, false);
@@ -31,6 +42,7 @@
       progressCopy: doc.getElementById("progress-copy"),
       progressTrack: doc.getElementById("progress-track"),
       progressFill: doc.getElementById("progress-fill"),
+      sourceBadge: doc.getElementById("source-badge"),
       audienceBadge: doc.getElementById("audience-badge"),
       stepStatus: doc.getElementById("step-status"),
       stepKicker: doc.getElementById("step-kicker"),
@@ -54,17 +66,29 @@
   }
 
   async function loadInitialState() {
-    setBusy(true, "Checking source preview");
+    if (apiConfigurationError) {
+      render(model.getState("recoverable_blocked"), false);
+      showRecoverableError("Authenticated source wiring is invalid. No journey request was sent.");
+      return;
+    }
+    setBusy(true, api.mode === root.FieldSetupApi.AUTHENTICATED_MODE
+      ? "Checking secure setup session"
+      : "Checking source preview");
     const launchNonce = root.FieldSetupLaunch.consumeLaunchNonce();
 
     try {
-      const outcome = await api.loadJourney({
-        launchNonce,
-        previewState: previewStateFromQuery(root.location)
-      });
-      render(model.getState(outcome.nextState), false);
-    } catch (_error) {
-      showRecoverableError("The source preview could not initialize. Retry validation or stop setup safely.");
+      const outcome = api.mode === root.FieldSetupApi.AUTHENTICATED_MODE
+        ? await api.loadJourney({ launchNonce })
+        : await api.loadJourney({
+          launchNonce,
+          previewState: previewStateFromQuery(root.location)
+        });
+      await renderOutcome(outcome, false);
+    } catch (error) {
+      showRequestError(
+        error,
+        "The source preview could not initialize. Retry validation or stop setup safely."
+      );
     } finally {
       setBusy(false);
     }
@@ -92,9 +116,13 @@
           qualification: collectQualificationPayload(action)
         })
         : await api.completeStep({ stateId: currentState.id, actionId: action.id });
-      render(model.getState(outcome.nextState), true);
-    } catch (_error) {
-      showRecoverableError("The step was not saved. No authoritative action was assumed complete.");
+      await renderOutcome(outcome, true);
+      followNavigationIntent(outcome.navigationIntent);
+    } catch (error) {
+      showRequestError(
+        error,
+        "The step outcome could not be confirmed. Retry the same action or stop setup safely."
+      );
     } finally {
       setBusy(false);
     }
@@ -110,9 +138,12 @@
 
     try {
       const outcome = await api.requestStop();
-      render(model.getState(outcome.nextState), true);
-    } catch (_error) {
-      showRecoverableError("The stop request was not saved. Use the separate controlled rollback path.");
+      await renderOutcome(outcome, true);
+    } catch (error) {
+      showRequestError(
+        error,
+        "The stop outcome could not be confirmed. Retry Stop Setup to reconcile authoritative state; use controlled rollback only if instructed."
+      );
     } finally {
       setBusy(false);
     }
@@ -127,6 +158,9 @@
     elements.progressTrack.setAttribute("aria-valuenow", String(stepNumber));
     elements.progressFill.style.width = `${percent.toFixed(2)}%`;
     elements.audienceBadge.textContent = state.audience;
+    elements.sourceBadge.textContent = api.mode === root.FieldSetupApi.AUTHENTICATED_MODE
+      ? "Authenticated candidate"
+      : "Source preview";
     elements.stepStatus.textContent = state.status;
     elements.stepKicker.textContent = state.kicker;
     elements.title.textContent = state.name;
@@ -143,6 +177,39 @@
     if (moveFocus) {
       elements.title.focus();
     }
+  }
+
+  async function renderOutcome(outcome, moveFocus) {
+    const state = model.getState(outcome.nextState);
+    currentStepReady = false;
+    render(state, moveFocus);
+    const stepData = await api.loadStepData({ stateId: state.id });
+    if (stepData !== null) {
+      if (
+        typeof stepData !== "object" ||
+        stepData.ready !== true ||
+        !Array.isArray(stepData.details) ||
+        typeof stepData.status !== "string"
+      ) {
+        throw new Error("Authoritative step data is invalid.");
+      }
+      replaceListItems(elements.details, stepData.details);
+      elements.stepStatus.textContent = stepData.status;
+    }
+    currentStepReady = true;
+  }
+
+  function followNavigationIntent(intent) {
+    if (!intent) return;
+    if (
+      intent.mode !== "top_level" ||
+      typeof intent.url !== "string" ||
+      !root.location ||
+      typeof root.location.assign !== "function"
+    ) {
+      throw new Error("Approved top-level navigation is unavailable.");
+    }
+    root.location.assign(intent.url);
   }
 
   function replaceListItems(listElement, values) {
@@ -221,13 +288,14 @@
 
   function setBusy(nextBusy, statusText) {
     busy = nextBusy;
-    elements.primary.disabled = nextBusy;
+    elements.primary.disabled = nextBusy || !currentStepReady;
     elements.stop.disabled = nextBusy;
     for (const button of elements.decisions.querySelectorAll("button")) {
-      button.disabled = nextBusy;
+      button.disabled = nextBusy || !currentStepReady;
     }
     if (!nextBusy) {
       syncQualificationPrimary();
+      if (!currentStepReady) elements.primary.disabled = true;
     }
     if (statusText) {
       elements.announcer.textContent = statusText;
@@ -244,5 +312,23 @@
     elements.error.hidden = false;
     elements.error.focus?.();
     elements.announcer.textContent = message;
+  }
+
+  function showRequestError(error, fallbackMessage) {
+    if (
+      error &&
+      error.operatorStop === true &&
+      typeof error.operatorMessage === "string" &&
+      error.operatorMessage.length > 0
+    ) {
+      currentStepReady = false;
+      showRecoverableError(error.operatorMessage);
+      elements.primary.disabled = true;
+      for (const button of elements.decisions.querySelectorAll("button")) {
+        button.disabled = true;
+      }
+      return;
+    }
+    showRecoverableError(fallbackMessage);
   }
 })(typeof window === "object" ? window : undefined, typeof document === "object" ? document : undefined);
