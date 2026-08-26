@@ -5,15 +5,19 @@
   "authorization": "read-only audit only",
   "contains_live_identifiers": false,
   "contains_private_values": false,
-  "source_revision_at_observation": "b1bcad9cda70d90e5af0184bdaa77bce08257154",
+  "source_revision_at_observation": "36d4f8fd45649a599e64b1d7145c75320cf954fe",
   "connections": {
     "catalyst_audit": "available",
-    "catalyst_changes": "available-not-invoked",
+    "catalyst_changes": "available-contract-incomplete-not-invoked",
     "crm_audit": "available",
+    "crm_changes_v2": "available-contract-incomplete-not-invoked",
+    "crm_blueprint_changes": "available-contract-incomplete-not-invoked",
+    "crm_configuration_changes": "unavailable",
     "billing_audit": "available",
     "billing_changes": "available-not-invoked",
     "analytics_audit": "available",
-    "analytics_changes": "available-not-invoked",
+    "analytics_changes": "available-partial-contract-not-invoked",
+    "retell_meta_tools": "available-readback-only",
     "zoho_forms_connector": "unavailable-browser-readback-used"
   },
   "catalyst": {
@@ -105,8 +109,8 @@
           "missing_columns": [
             "PROVIDER_VERSION_KEY"
           ],
-          "row_count": 308,
-          "legacy_v1_rows": 308,
+          "row_count": 307,
+          "legacy_v1_rows": 307,
           "additive_v2_rows": 0,
           "provider_version_backfill_required_before_v2_activation": false,
           "readback_note": "All retained rows use the legacy Status-only shape. No row contains any additive-v2 field, so the nullable unique provider-version column can be added without rewriting retained rows."
@@ -139,7 +143,15 @@
         "ZZZ_Quarantined_Form2SessionsV3_TypeProbe"
       ],
       "legacy_row_presence_method": "bounded one-row readback; row contents were not emitted",
-      "legacy_and_duplicate_resource_cleanup": "blocked-until-source-parity-migration-e2e-and-rollback-proof"
+      "legacy_and_duplicate_resource_cleanup": "blocked-until-source-parity-migration-e2e-and-rollback-proof",
+      "connector_write_contract": {
+        "additive_column_create": "blocked-untyped-array-body",
+        "private_column_flag": "blocked-not-exposed-by-audit-or-update-contract",
+        "canonical_function_create_or_source_deploy": "blocked-no-callable-tool",
+        "function_environment_readback": "blocked-no-matching-function-scoped-audit-contract",
+        "api_gateway_route": "blocked-target-path-contract-mismatch-and-gateway-disabled",
+        "typed_job_pool_create": "available-but-intentionally-deferred-until-functions-can-be-deployed"
+      }
     }
   },
   "zoho_billing": {
@@ -154,7 +166,8 @@
       "approved_launch_growth_or_scale_plan_count": 0,
       "addon_count": 0,
       "release_ready": false,
-      "required_action": "create-and-read-back-the-approved-three-monthly-plans-and-one-common-connected-minute-addon-before-enabling-paid-preparation"
+      "required_action": "create-and-read-back-the-approved-three-monthly-plans-and-one-common-connected-minute-addon-before-enabling-paid-preparation",
+      "catalog_create_tool_contract": "unavailable"
     },
     "live_hidden_catalog": {
       "active_product_count": 1,
@@ -211,6 +224,11 @@
       "Customer Results Dashboard"
     ],
     "public_link_embed_scheduled_export_and_non_admin_access": "not-yet-verified",
+    "typed_creation_surface": {
+      "tables_query_tables_and_reports": "available-not-invoked",
+      "dashboard_create": "unavailable",
+      "exact_report_design_and_access_readback": "incomplete"
+    },
     "mutation_status": "none"
   },
   "zoho_forms": {
@@ -264,7 +282,39 @@
     },
     "deal_free_test_button": "not-present",
     "function_source_linkage": "not-exposed-by-the-audit-connector-or-button-list-view",
-    "free_test_workflows_and_draft_blueprint": "present-read-only"
+    "free_test_workflows_and_draft_blueprint": "present-read-only",
+    "initializer_rules": {
+      "controls_field_update_count": 5,
+      "limits_field_update_count": 3,
+      "provider_limit_per_condition_action_type": 5,
+      "live_trigger": "create_or_edit",
+      "required_trigger": "create_only",
+      "status": "drift-blocks-form-2"
+    },
+    "form_2_controller_rules": {
+      "stale_rule": "active",
+      "replacement_candidate": "inactive-and-locked"
+    },
+    "draft_blueprint": {
+      "approval_and_activation": "combined-in-one-legacy-transition",
+      "completion_metrics": "legacy-contract",
+      "status": "drift-blocks-activation"
+    },
+    "connector_write_contract": {
+      "custom_button_metadata_and_association": "unavailable",
+      "workflow_rule_structure": "blocked-untyped-array-body",
+      "blueprint_structure": "blocked-untyped-array-body",
+      "same_organization_and_sandbox_binding": "unverified"
+    }
+  },
+  "retell": {
+    "agent_name_resolution": "exact-single-match",
+    "published_version_count": 1,
+    "draft_version_count": 0,
+    "latest_equals_latest_published": true,
+    "bound_conversation_flow_readback": "succeeded",
+    "conversation_changes_in_scope": false,
+    "mutation_status": "none"
   },
   "mutation_status": "none"
 }
