@@ -28,6 +28,12 @@ One layer never proves another. A catalog entry, UI label, example payload, prio
 
 ## Live Evidence And Authority
 
-For tenant-specific work, start with the least-sensitive identity and metadata reads. Before a high-risk write, require the exact target, typed operation contract, fresh prestate, approved proposed state, duplicate control, rollback or containment, and independent readback. Fail closed on unknown organization, environment, permission, field semantics, workflow triggers, subform behavior, verification, or response completeness.
+For tenant-specific work, start with the least-sensitive identity and metadata reads. Before a high-risk write, require the exact target, a typed integration or reviewed first-party UI contract, fresh prestate, approved proposed state, duplicate control, rollback or containment, and independent readback. Fail closed on unknown organization, environment, permission, field semantics, workflow triggers, subform behavior, verification, or response completeness.
 
 Editing documentation, passing tests, or merging a pull request does not authorize a live Zoho read or write. Report the evidence layer reached, unresolved unknowns, manual setup, and the separate approval required for any external action.
+
+## Connector-First Browser Fallback
+
+Use the correct Sylvara integration first. If discovery proves it unavailable, inaccessible, failed, or incomplete, the authenticated in-app browser is allowed under the [Connector Access Standard](../security/connector-access-standard.md).
+
+Re-establish the exact organization, environment, prestate, proposed action, scoped approval, rollback or containment, and independent readback for the UI action. Preserve only sanitized evidence. Browser fallback changes transport, not authority or business semantics; stop on unknown triggers, unsafe rollback, obscured state, or an ambiguous result. Do not substitute another tenant connector, direct REST, or shell automation.

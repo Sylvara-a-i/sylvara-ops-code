@@ -15,6 +15,12 @@ Lead with the recommendation. Make a reasonable assumption and proceed unless an
 - Repository permission never authorizes a live tenant write, payment, customer communication, call route, deployment, purchase, publication outside the reviewed repository artifact, or production configuration change. Those actions require approval for the exact target and operation.
 - Stop when a required live contract, authoritative source, private input, rollback, or high-risk decision is unknown. State what evidence or approval would unblock the work.
 
+## External-System Tool Selection
+
+- Use the matching Sylvara integration first. If discovery proves it unavailable, inaccessible, failed, or capability-incomplete, record the gap and use the authenticated in-app browser under the [Connector Access Standard](docs/security/connector-access-standard.md).
+- Browser fallback does not expand authority. Preserve identity, prestate, scoped approval, rollback or containment, sanitized evidence, and independent readback. Stop on unknown semantics, unsafe rollback, or ambiguity.
+- A runbook may prohibit browser fallback for a technical reason; connector-only is not the default.
+
 ## Required Reading Router
 
 Read only the material triggered by the task, plus any nearer `AGENTS.md` file. The nearer file adds scope-specific rules and wins if instructions conflict.

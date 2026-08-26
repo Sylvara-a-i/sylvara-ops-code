@@ -57,8 +57,15 @@ readback.
 These arguments are a repository-side request contract, not proof that the
 advertised Catalyst Changes connector accepts the exact body keys, target enum,
 headers, or path-variable shape. Before the first route mutation, preserve a
-sanitized copy of the currently advertised connector schema, prove the exact
-request with one harmless Development acceptance call, and independently read it
-back through Catalyst Audit. If the connector contract or acceptance/readback is
-unavailable or differs, stop; do not substitute browser automation, direct REST,
-or another connector for route creation.
+sanitized copy of the currently advertised connector schema and prefer one
+harmless Development acceptance call with independent Catalyst Audit readback.
+If current discovery proves that connector unavailable, inaccessible, failed for
+the operation, or contract-incomplete, record the gap and use only the governed
+authenticated-browser fallback in [Zoho instructions](../../../docs/zoho/AGENTS.md). The browser
+action must reproduce the exact approved route contract, remain inside the same
+single-use approval window, and receive immediate authoritative readback separate
+from the save response. Use Catalyst Audit for independent verification when
+available; a fresh provider-UI route read does not satisfy any separately required
+independent-credential gate. Stop
+on any target, schema, validation, save, or readback ambiguity. Direct REST,
+shell automation, and a different connector remain prohibited for route creation.

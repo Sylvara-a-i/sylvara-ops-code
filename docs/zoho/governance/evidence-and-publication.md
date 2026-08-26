@@ -35,10 +35,10 @@ Before using a documented capability:
 
 1. refresh the official source when the behavior or limit may have changed;
 2. verify the exact Sylvara product, tenant, environment, identity, role, and feature state;
-3. inspect the authorized tool contract and its complete response behavior;
+3. inspect the typed integration contract or exact reviewed first-party UI controls and their complete response or save behavior;
 4. propose exact current and intended state with rollback;
 5. obtain approval scoped to the specific live action;
 6. apply one bounded change; and
 7. read authoritative state back independently.
 
-Stop on ambiguity, stale state, missing prerequisites, untyped writes, incomplete responses, unsafe rollback, or a target mismatch.
+Stop on ambiguity, stale state, missing prerequisites, an untyped integration or unreviewed UI action, incomplete responses, unsafe rollback, or a target mismatch.

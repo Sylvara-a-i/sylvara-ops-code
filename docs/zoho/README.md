@@ -23,7 +23,7 @@ Implementation-specific READMEs remain beside the code or artifact they govern s
 4. Read the relevant document under [`standards/`](standards/).
 5. Use the matching product handbook under [`reference/`](reference/) for platform vocabulary, API families, and official-source links.
 6. For MCP work, read the [MCP index](mcp/README.md) and keep its six evidence layers separate.
-7. Before a live change, verify the exact Sylvara organization, environment, role, metadata, permissions, and current state through the authorized tool.
+7. Before a live change, verify the exact Sylvara organization, environment, role, metadata, permissions, and current state through the preferred integration or the governed browser fallback in [`AGENTS.md`](AGENTS.md).
 
 ## Standards Index
 
@@ -137,4 +137,4 @@ Billing, Books, Catalyst, Creator, CRM, Mail, Payments, and WorkDrive were obser
 
 ## Live Change Boundary
 
-Repository review is not live-system approval. Before any production Zoho write, show the exact current state, proposed state, authorized server/tool and parameters, rollback, and readback plan; obtain approval scoped to that action. Stop on missing capability, ambiguous identity, stale evidence, incomplete responses, or unsafe rollback.
+Repository review is not live-system approval. Before any production Zoho write, show the exact current state, proposed state, authorized integration or governed browser action, constrained parameters, rollback, and readback plan; obtain approval scoped to that action. Prefer the correct plugin, MCP server, or connector. If current discovery proves it unavailable, inaccessible, failed for the operation, or capability-incomplete, the authenticated in-app browser may be used under the connector-first fallback in [`AGENTS.md`](AGENTS.md). Stop when neither surface can prove exact identity, semantics, outcome, and safe rollback, or when evidence is stale, incomplete, or ambiguous.
