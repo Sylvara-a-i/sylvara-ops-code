@@ -21,8 +21,24 @@
   },
   "provider_boundary": {
     "retell_source_status": "NOT_READY",
-    "provider_parser_implemented": false,
-    "provider_field_mapping": {},
+    "provider_parser_implemented": true,
+    "provider_parser_runtime_wired": false,
+    "provider_parser_importable": false,
+    "provider_parser_source": "lib/retell-handoff-v2-parser.js",
+    "provider_field_mapping": {
+      "event_type": "raw_event.event",
+      "event_claim_key": "private_keyed_domain_separated_hmac_sha256",
+      "observed_order": "raw_event.call.start_timestamp",
+      "target_fingerprint": "private_keyed_domain_separated_destination_hmac_sha256",
+      "transfer_configuration_fingerprint": "verified_binding_value_emitted_on_every_normalized_event_after_keyed_webhook_validation",
+      "ownership_scope": "verified_provider_binding_only"
+    },
+    "fingerprint_hmac_key_exact_bytes": 32,
+    "fingerprint_hmac_key_generation_requirement": "cryptographically_random_256_bit_install_time",
+    "fingerprint_hmac_key_retained": false,
+    "fingerprint_hmac_key_verification_tag_required": true,
+    "authorized_transfer_configuration_fingerprint_required": true,
+    "transfer_configuration_fingerprint_required_on_every_normalized_event": true,
     "normalized_events_only": true,
     "raw_provider_payload_allowed": false
   },
@@ -132,6 +148,7 @@
       "client_scope_key",
       "deployment_scope_key",
       "configuration_version_key",
+      "transfer_configuration_fingerprint",
       "authorized_target_fingerprint"
     ],
     "nullable_immutable_binding_fields": [

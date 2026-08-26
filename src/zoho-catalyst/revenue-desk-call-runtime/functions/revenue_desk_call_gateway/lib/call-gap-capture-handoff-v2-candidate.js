@@ -5,6 +5,7 @@ const { invariant } = require('./errors');
 const {
   canonicalizeHandoffEvents,
   convergeHandoffEvidence,
+  REQUIRED_EVENT_FIELDS,
   STRUCTURED_STATE_PRECEDENCE,
 } = require('./handoff-v2-convergence');
 
@@ -88,6 +89,7 @@ const HANDOFF_EVENT_BINDING_FIELDS = Object.freeze([
   'client_scope_key',
   'deployment_scope_key',
   'configuration_version_key',
+  'transfer_configuration_fingerprint',
 ]);
 const HANDOFF_EVENT_LEDGER_BINDING_FIELDS = Object.freeze([
   ...HANDOFF_EVENT_BINDING_FIELDS,
@@ -209,11 +211,39 @@ function assertV2CandidateContracts(manifest, candidateContract, adapterContract
   invariant(adapterContract.retell_source_status === 'NOT_READY'
     && adapterContract.runtime_authority === false
     && adapterContract.deployment_authorized === false
-    && adapterContract.provider_parser?.implemented === false
+    && adapterContract.provider_parser?.implemented === true
+    && adapterContract.provider_parser?.runtime_wired === false
     && adapterContract.provider_parser?.importable === false
     && isPlainObject(adapterContract.provider_parser?.field_mapping)
-    && Object.keys(adapterContract.provider_parser.field_mapping).length === 0,
-  'V2_PROVIDER_PARSER_FORBIDDEN', 'Provider parser must remain absent and NOT_READY.');
+    && Object.keys(adapterContract.provider_parser.field_mapping).length > 0
+    && adapterContract.provider_parser?.source_path
+      === 'src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/retell-handoff-v2-parser.js'
+    && adapterContract.provider_parser?.exported_function === 'normalizeRetellTransferEvent',
+  'V2_PROVIDER_PARSER_CONTAINMENT_INVALID',
+  'Provider parser must remain implemented but unwired, non-importable, and runtime-inactive.');
+  invariant(adapterContract.provider_parser?.fingerprint_hmac_key_contract
+    ?.generation_requirement === 'cryptographically_random_256_bit_install_time'
+    && adapterContract.provider_parser?.unknown_transfer_option_fields
+      === 'reject_until_exact_sanitized_live_fixtures_and_reviewed_contract_update'
+    && exactArray(adapterContract.normalized_event_envelope?.required_symbolic_fields,
+      REQUIRED_EVENT_FIELDS)
+    && adapterContract.cumulative_claim_ledger_contract
+      ?.transfer_configuration_fingerprint_is_immutable === true,
+  'V2_CONTRACT_INVALID',
+  'Retell configuration binding and exact webhook allowlist contract are invalid.');
+  invariant(candidateContract.provider_boundary?.provider_parser_implemented === true
+    && candidateContract.provider_boundary?.provider_parser_runtime_wired === false
+    && candidateContract.provider_boundary?.importable_provider_configuration === false
+    && isPlainObject(candidateContract.provider_boundary?.provider_field_mapping)
+    && Object.keys(candidateContract.provider_boundary.provider_field_mapping).length > 0
+    && candidateContract.provider_boundary
+      ?.transfer_configuration_fingerprint_required_on_every_normalized_event === true
+    && candidateContract.provider_boundary
+      ?.transfer_configuration_fingerprint_immutable_per_call === true
+    && candidateContract.provider_boundary?.reason
+      === adapterContract.provider_parser.blocker,
+  'V2_PROVIDER_PARSER_CONTAINMENT_INVALID',
+  'Retell candidate parser declaration is inconsistent or importable.');
   invariant(exactArray(candidateContract.canonical_handoff_states,
     adapterContract.canonical_states),
   'V2_CONTRACT_INVALID', 'Retell handoff state contracts are inconsistent.');
@@ -238,7 +268,15 @@ function assertV2CandidateContracts(manifest, candidateContract, adapterContract
     && candidateContract.conversation_boundary?.sms_allowed === false
     && candidateContract.conversation_boundary?.direct_retell_email_allowed === false,
   'V2_CONTRACT_INVALID', 'Routine transfer and provider messaging must remain prohibited.');
-  invariant(manifest.provider_boundary?.provider_parser_implemented === false
+  invariant(manifest.provider_boundary?.provider_parser_implemented === true
+    && manifest.provider_boundary?.provider_parser_runtime_wired === false
+    && manifest.provider_boundary?.provider_parser_importable === false
+    && isPlainObject(manifest.provider_boundary?.provider_field_mapping)
+    && Object.keys(manifest.provider_boundary.provider_field_mapping).length > 0
+    && manifest.provider_boundary?.fingerprint_hmac_key_generation_requirement
+      === 'cryptographically_random_256_bit_install_time'
+    && manifest.provider_boundary
+      ?.transfer_configuration_fingerprint_required_on_every_normalized_event === true
     && manifest.provider_boundary?.raw_provider_payload_allowed === false
     && manifest.local_execution?.required_mode === 'synthetic_local_candidate'
     && manifest.local_execution?.network_allowed === false

@@ -38,6 +38,20 @@ function browserBundle() {
   return BROWSER_FILES.map(read).join("\n");
 }
 
+function contrastRatio(foreground, background) {
+  const luminance = (hex) => {
+    const channels = hex.match(/[a-f\d]{2}/gi).map((channel) => parseInt(channel, 16) / 255);
+    const [red, green, blue] = channels.map((channel) => (
+      channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4
+    ));
+    return (0.2126 * red) + (0.7152 * green) + (0.0722 * blue);
+  };
+  const foregroundLuminance = luminance(foreground);
+  const backgroundLuminance = luminance(background);
+  return (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) /
+    (Math.min(foregroundLuminance, backgroundLuminance) + 0.05);
+}
+
 function memoryStorage() {
   const values = new Map();
   return {
@@ -286,6 +300,21 @@ test("touch controls meet the minimum target and actions are not hover-only", ()
   assert.match(css, /\.button:focus-visible/);
   assert.match(css, /\.button-primary\s*\{[^}]*background:/s);
   assert.match(css, /\.button-secondary\s*\{[^}]*border-color:/s);
+});
+
+test("the canonical Sylvara cyan uses accessible foregrounds", () => {
+  const html = read(path.join(ROUTE_ROOT, "index.html"));
+  const css = read(path.join(ROUTE_ROOT, "styles.css"));
+
+  assert.match(html, /<meta name="theme-color" content="#00A6C1">/);
+  assert.match(css, /--brand:\s*#00A6C1;/);
+  assert.match(css, /--brand-strong:\s*#005B6A;/);
+  assert.match(css, /--brand-ink:\s*#0B3138;/);
+  assert.match(css, /\.progress-panel\s*\{[^}]*color:\s*var\(--brand-ink\);[^}]*background:\s*var\(--brand\);/s);
+  assert.match(css, /\.button-primary\s*\{[^}]*color:\s*var\(--brand-ink\);[^}]*background:\s*var\(--brand\);/s);
+  assert.ok(contrastRatio("0B3138", "00A6C1") >= 4.5);
+  assert.ok(contrastRatio("FFFFFF", "005B6A") >= 4.5);
+  assert.doesNotMatch(`${html}\n${css}`, /#173f35|#0d3028|#dce9e3/i);
 });
 
 test("the two required iPad viewport contracts are explicit", () => {

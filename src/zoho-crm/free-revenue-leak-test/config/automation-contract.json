@@ -40,8 +40,8 @@
   "field_setup_read_only_evidence_2026_08_25": {
     "organization_verified": true,
     "legacy_button_function_active": true,
-    "legacy_button_function_uses_named_connection": false,
-    "legacy_button_function_hardcoded_credential_literals": 2,
+    "legacy_button_credential_handling_blocked": true,
+    "legacy_button_private_binding_and_rotation_required": true,
     "credential_values_or_private_endpoint_committed": false,
     "custom_button_metadata_available": false,
     "lead_relevant_fields_observed": 13,

@@ -19,6 +19,18 @@ V2_ROOT = (
 )
 TOOLS_ROOT = V2_ROOT / "tools"
 VALIDATOR_PATH = TOOLS_ROOT / "validate_candidate.py"
+CALL_GATEWAY_ROOT = (
+    REPOSITORY_ROOT
+    / "src"
+    / "zoho-catalyst"
+    / "revenue-desk-call-runtime"
+    / "functions"
+    / "revenue_desk_call_gateway"
+)
+PARSER_PATH = CALL_GATEWAY_ROOT / "lib" / "retell-handoff-v2-parser.js"
+GATEWAY_MANIFEST_PATH = (
+    CALL_GATEWAY_ROOT / "contracts" / "call-gap-capture-handoff-v2.proposed.json"
+)
 V1_CONVERSATION_PATH = (
     REPOSITORY_ROOT
     / "src"
@@ -87,14 +99,17 @@ class RetellV2HandoffCandidateTests(unittest.TestCase):
             boundary["guarded_node_surfaces"],
         )
 
-    def test_candidate_is_draft_disabled_unbound_and_not_ready(self) -> None:
+    def test_candidate_source_remains_not_ready_disabled_and_unbound(self) -> None:
         profile = self.contract["capability_profile"]
         self.assertEqual("call_gap_capture_handoff_v2", profile["name"])
         self.assertEqual("draft", profile["status"])
         self.assertIs(profile["enabled"], False)
         self.assertEqual([], profile["traffic_environments"])
         self.assertEqual("none", profile["billing_mode"])
-        self.assertEqual("NOT_READY", self.contract["retell_source_status"])
+        self.assertEqual(
+            "NOT_READY",
+            self.contract["retell_source_status"],
+        )
         self.assertIs(self.contract["runtime_authority"], False)
         self.assertIs(self.contract["deployment_authorized"], False)
         self.assertEqual(
@@ -111,24 +126,122 @@ class RetellV2HandoffCandidateTests(unittest.TestCase):
         self.assertIs(v1["capability_restrictions"]["arbitrary_transfers"], False)
         self.assertNotIn("call_gap_capture_handoff_v2", json.dumps(v1, sort_keys=True))
 
-    def test_provider_adapter_is_explicitly_blocked_without_fabricated_schema(self) -> None:
+    def test_provider_parser_is_implemented_but_unwired_and_non_importable(self) -> None:
         parser = self.adapter["provider_parser"]
-        self.assertIs(parser["implemented"], False)
+        self.assertIs(parser["implemented"], True)
+        self.assertIs(parser["runtime_wired"], False)
         self.assertIs(parser["importable"], False)
-        self.assertEqual({}, parser["field_mapping"])
-        self.assertEqual("NOT_READY", self.adapter["retell_source_status"])
+        self.assertEqual(
+            self.validator.EXPECTED_ADAPTER_FIELD_MAPPING,
+            parser["field_mapping"],
+        )
+        self.assertEqual(
+            self.validator.EXPECTED_PROVIDER_EVENT_TYPES,
+            parser["supported_provider_event_types"],
+        )
+        self.assertEqual(
+            self.validator.EXPECTED_PROVIDER_BINDING_FIELDS,
+            parser["verified_provider_binding_fields"],
+        )
+        self.assertIs(parser["verified_provider_binding_immutable"], True)
+        self.assertEqual(
+            self.validator.EXPECTED_HMAC_KEY_CONTRACT,
+            parser["fingerprint_hmac_key_contract"],
+        )
+        self.assertEqual(
+            self.validator.EXPECTED_WARM_TRANSFER_OPTION_FIELDS,
+            parser["known_warm_transfer_option_fields"],
+        )
+        self.assertEqual(
+            self.validator.EXPECTED_FORBIDDEN_WEBHOOK_OPTION_ALIASES,
+            parser["forbidden_draft_security_aliases_in_webhook_option"],
+        )
+        self.assertEqual(
+            "reject_until_exact_sanitized_live_fixtures_and_reviewed_contract_update",
+            parser["unknown_transfer_option_fields"],
+        )
+        self.assertEqual(
+            self.validator.EXPECTED_NORMALIZED_EVENT_REQUIRED_FIELDS,
+            self.adapter["normalized_event_envelope"]["required_symbolic_fields"],
+        )
+        self.assertEqual(
+            self.validator.EXPECTED_CUMULATIVE_CLAIM_LEDGER_CONTRACT,
+            self.adapter["cumulative_claim_ledger_contract"],
+        )
+        self.assertIs(parser["raw_provider_payload_retained"], False)
+        self.assertIs(parser["raw_target_retained"], False)
+        self.assertIs(parser["failure_event_inference_allowed"], False)
+        self.assertEqual(
+            "NOT_READY",
+            self.adapter["retell_source_status"],
+        )
         self.assertEqual(
             parser["blocker"],
             self.contract["provider_boundary"]["reason"],
         )
-        for required_evidence_boundary in (
-            "public_transfer_configuration_families_and_canonical_event_names_are_confirmed",
-            "exact_draft_serialization",
-            "complete_payload_variations",
-            "failure_casing",
-            "runtime_behavior_remain_unverified",
+        self.assertEqual(self.validator.EXPECTED_PROVIDER_BLOCKER, parser["blocker"])
+        self.assertEqual(
+            self.validator.EXPECTED_TRANSFER_CONFIGURATION_SCHEMA,
+            self.adapter["retell_draft_transfer_configuration_schema"],
+        )
+        self.assertEqual(
+            self.validator.EXPECTED_WEBHOOK_TRANSFER_PAYLOAD_SCHEMA,
+            self.adapter["retell_webhook_transfer_payload_schema"],
+        )
+
+        gateway_manifest = json.loads(GATEWAY_MANIFEST_PATH.read_text(encoding="utf-8"))
+        provider_boundary = gateway_manifest["provider_boundary"]
+        self.assertIs(provider_boundary["provider_parser_implemented"], True)
+        self.assertIs(provider_boundary["provider_parser_runtime_wired"], False)
+        self.assertIs(provider_boundary["provider_parser_importable"], False)
+        self.assertEqual(
+            "cryptographically_random_256_bit_install_time",
+            provider_boundary["fingerprint_hmac_key_generation_requirement"],
+        )
+        self.assertIs(
+            provider_boundary[
+                "transfer_configuration_fingerprint_required_on_every_normalized_event"
+            ],
+            True,
+        )
+        self.assertIs(
+            self.contract["provider_boundary"][
+                "transfer_configuration_fingerprint_required_on_every_normalized_event"
+            ],
+            True,
+        )
+        self.assertIs(
+            self.contract["provider_boundary"][
+                "transfer_configuration_fingerprint_immutable_per_call"
+            ],
+            True,
+        )
+        self.assertEqual(
+            [
+                "call_binding_key",
+                "client_scope_key",
+                "deployment_scope_key",
+                "configuration_version_key",
+                "transfer_configuration_fingerprint",
+                "authorized_target_fingerprint",
+            ],
+            gateway_manifest["handoff_event_ledger"]["immutable_binding_fields"],
+        )
+        self.assertTrue(PARSER_PATH.is_file())
+        self.assertIn(
+            "function normalizeRetellTransferEvent(input)",
+            PARSER_PATH.read_text(encoding="utf-8"),
+        )
+        for active_relative in (
+            "index.js",
+            "lib/runtime-boundary.js",
+            "lib/runtime-service.js",
+            "lib/job-handler.js",
         ):
-            self.assertIn(required_evidence_boundary, parser["blocker"])
+            self.assertNotIn(
+                "retell-handoff-v2-parser",
+                (CALL_GATEWAY_ROOT / active_relative).read_text(encoding="utf-8"),
+            )
         handoff = self.contract["handoff_policy"]
         self.assertEqual("Warm Transfer", handoff["transfer_type"])
         self.assertEqual(1, handoff["warm_transfer_node_count"])

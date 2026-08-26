@@ -127,10 +127,10 @@ MAX_APPROVED_BINARY_BYTES = 5 * 1024 * 1024
 # evidence; their dimensions and source-only status are enforced separately.
 APPROVED_BINARY_SHA256: dict[str, str] = {
     "docs/runbooks/assets/free-revenue-leak-test-field-setup/field-setup-768x1024.jpg": (
-        "3a92c9930c72a6b254830a66c9275ff30df060f658619cd0c60a54b576d7b28c"
+        "a16a0af4a4603e17958c6e47d5b8ee6c62718ac13b99a05cec38f5608148f811"
     ),
     "docs/runbooks/assets/free-revenue-leak-test-field-setup/field-setup-1024x1366.jpg": (
-        "9520566935b606e3789be75be6773836a990ec131a1ca86358d54a43e5b75292"
+        "81e042978a4160300da72b95502932dbd25dccd1c0bd878ab6b02b5171a6548b"
     ),
 }
 

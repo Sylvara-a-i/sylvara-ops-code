@@ -21,10 +21,21 @@
     "v1_rollback_profile": "call_gap_monitor_v1"
   },
   "provider_boundary": {
-    "provider_parser_implemented": false,
-    "provider_field_mapping": {},
+    "provider_parser_implemented": true,
+    "provider_parser_runtime_wired": false,
+    "provider_field_mapping": {
+      "event_type": "raw_event.event",
+      "event_claim_key": "private_keyed_domain_separated_hmac_sha256_of_event_call_start_target_and_configuration",
+      "observed_order": "raw_event.call.start_timestamp",
+      "target_fingerprint": "private_keyed_domain_separated_hmac_sha256_of_e164_destination_and_optional_extension",
+      "transfer_configuration_fingerprint": "verified_binding_value_emitted_on_every_normalized_event_after_keyed_webhook_validation",
+      "ownership_scope": "verified_provider_binding_only",
+      "private_hmac_key_retained": false
+    },
+    "transfer_configuration_fingerprint_required_on_every_normalized_event": true,
+    "transfer_configuration_fingerprint_immutable_per_call": true,
     "importable_provider_configuration": false,
-    "reason": "public_transfer_configuration_families_and_canonical_event_names_are_confirmed_but_exact_draft_serialization_complete_payload_variations_failure_casing_and_runtime_behavior_remain_unverified",
+    "reason": "keyed_minimizing_parser_is_source_complete_but_exact_sanitized_live_raw_event_fixtures_provider_readback_draft_import_and_behavioral_acceptance_are_absent",
     "live_readback_required": true,
     "draft_import_review_required": true
   },

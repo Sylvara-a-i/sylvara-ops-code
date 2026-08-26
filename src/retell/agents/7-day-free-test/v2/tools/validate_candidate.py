@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the disabled provider-neutral Retell v2 candidate offline."""
+"""Validate the disabled Retell v2 source candidate offline."""
 
 from __future__ import annotations
 
@@ -72,6 +72,152 @@ EXPECTED_STRUCTURED_STATE_PRECEDENCE = [
     "Cancelled",
     "Started",
 ]
+EXPECTED_PROVIDER_EVENT_TYPES = [
+    "transfer_started",
+    "transfer_bridged",
+    "transfer_cancelled",
+    "transfer_ended",
+]
+EXPECTED_PROVIDER_BINDING_FIELDS = [
+    "provider_call_id",
+    "provider_agent_id",
+    "call_binding_key",
+    "client_scope_key",
+    "deployment_scope_key",
+    "configuration_version_key",
+    "authorized_target_fingerprint",
+    "authorized_transfer_configuration_fingerprint",
+    "fingerprint_hmac_key_verification_tag",
+]
+EXPECTED_WARM_TRANSFER_OPTION_FIELDS = [
+    "type",
+    "showTransfereeAsCaller",
+    "publicHandoffOption",
+    "agentDetectionTimeoutMs",
+    "onHoldMusic",
+    "enableBridgeAudioCue",
+]
+EXPECTED_FORBIDDEN_WEBHOOK_OPTION_ALIASES = [
+    "show_transferee_as_caller",
+    "public_handoff_option",
+    "agent_detection_timeout_ms",
+    "on_hold_music",
+    "enable_bridge_audio_cue",
+    "opt_out_human_detection",
+    "optOutHumanDetection",
+]
+EXPECTED_CANDIDATE_PROVIDER_FIELD_MAPPING = {
+    "event_type": "raw_event.event",
+    "event_claim_key": "private_keyed_domain_separated_hmac_sha256_of_event_call_start_target_and_configuration",
+    "observed_order": "raw_event.call.start_timestamp",
+    "target_fingerprint": "private_keyed_domain_separated_hmac_sha256_of_e164_destination_and_optional_extension",
+    "transfer_configuration_fingerprint": "verified_binding_value_emitted_on_every_normalized_event_after_keyed_webhook_validation",
+    "ownership_scope": "verified_provider_binding_only",
+    "private_hmac_key_retained": False,
+}
+EXPECTED_ADAPTER_FIELD_MAPPING = {
+    "event_type": "raw_event.event",
+    "event_claim_key": "retell_prefixed_private_keyed_domain_separated_hmac_sha256",
+    "observed_order": "raw_event.call.start_timestamp",
+    "target_fingerprint": "target_prefixed_private_keyed_domain_separated_hmac_sha256",
+    "transfer_configuration_fingerprint": "verified_provider_binding.authorized_transfer_configuration_fingerprint_after_keyed_webhook_validation",
+    "call_binding_key": "verified_provider_binding.call_binding_key",
+    "client_scope_key": "verified_provider_binding.client_scope_key",
+    "deployment_scope_key": "verified_provider_binding.deployment_scope_key",
+    "configuration_version_key": "verified_provider_binding.configuration_version_key",
+}
+EXPECTED_TRANSFER_CONFIGURATION_SCHEMA = {
+    "transfer_node_required_fields": [
+        "type",
+        "transfer_destination",
+        "transfer_option",
+        "edge",
+    ],
+    "transfer_node_type": "transfer_call",
+    "static_destination_shape": {
+        "type": "predefined",
+        "required_fields": ["type", "number"],
+        "number_format": "e164",
+    },
+    "warm_transfer_option_type": "warm_transfer",
+    "configuration_field_case": "snake_case",
+    "confirmed_warm_transfer_configuration_fields": [
+        "type",
+        "show_transferee_as_caller",
+        "public_handoff_option",
+        "agent_detection_timeout_ms",
+        "on_hold_music",
+        "enable_bridge_audio_cue",
+        "opt_out_human_detection",
+    ],
+    "transfer_failure_edge_transition_prompt": "Transfer failed",
+}
+EXPECTED_WEBHOOK_TRANSFER_PAYLOAD_SCHEMA = {
+    "field_case": "camelCase",
+    "target_event_top_level_fields": [
+        "event",
+        "call",
+        "transfer_destination",
+        "transfer_option",
+    ],
+    "ended_event_top_level_fields": ["event", "call"],
+    "full_call_object_fields_variable": True,
+    "consumed_call_fields": ["call_id", "agent_id", "start_timestamp"],
+    "transfer_destination_fields": {
+        "required": ["number"],
+        "optional": ["extension"],
+    },
+    "warm_transfer_option_type": "warm_transfer",
+    "known_camelcase_option_fields": EXPECTED_WARM_TRANSFER_OPTION_FIELDS,
+    "draft_and_security_configuration_aliases_rejected": True,
+    "unknown_transfer_option_fields": (
+        "reject_until_exact_sanitized_live_fixtures_and_reviewed_contract_update"
+    ),
+    "full_call_unknown_fields_bounded_and_discarded": True,
+}
+EXPECTED_HMAC_KEY_CONTRACT = {
+    "algorithm": "HMAC-SHA256",
+    "input_type": "node_buffer",
+    "exact_byte_length": 32,
+    "generation_requirement": "cryptographically_random_256_bit_install_time",
+    "minimum_entropy_bits": 256,
+    "public_or_deterministic_derivation_allowed": False,
+    "injected_private_runtime_value": True,
+    "retained": False,
+    "output": False,
+    "logged": False,
+    "domains": {
+        "target": "sylvara.retell.handoff-v2.target.v1",
+        "transfer_configuration": "sylvara.retell.handoff-v2.configuration.v1",
+        "event_claim": "sylvara.retell.handoff-v2.event-claim.v1",
+        "key_verification": "sylvara.retell.handoff-v2.key-verification.v1",
+    },
+}
+EXPECTED_NORMALIZED_EVENT_REQUIRED_FIELDS = [
+    "event_type",
+    "event_claim_key",
+    "call_binding_key",
+    "client_scope_key",
+    "deployment_scope_key",
+    "configuration_version_key",
+    "transfer_configuration_fingerprint",
+    "observed_order",
+]
+EXPECTED_CUMULATIVE_CLAIM_LEDGER_CONTRACT = {
+    "injected_durable_store_required": True,
+    "atomic_operation": "reconcileCallEvents",
+    "maximum_unique_claims_per_call": 64,
+    "authorized_target_fingerprint_is_immutable": True,
+    "transfer_configuration_fingerprint_is_immutable": True,
+    "binding_conflict_rejected_without_mutation": True,
+    "duplicate_identical_claim_is_noop": True,
+    "conflicting_claim_rejected_without_mutation": True,
+    "complete_cumulative_snapshot_returned": True,
+}
+EXPECTED_PROVIDER_BLOCKER = (
+    "keyed_minimizing_parser_is_source_complete_but_exact_sanitized_live_raw_event_"
+    "fixtures_provider_readback_draft_import_and_behavioral_acceptance_are_absent"
+)
 EXPECTED_HANDOFF_EVIDENCE = {
     "caller_intent_authority": "structured_call_classification",
     "service_eligibility_authority": "immutable_client_configuration",
@@ -445,7 +591,7 @@ def _contract_problems(contract: Mapping[str, Any], adapter: Mapping[str, Any]) 
     if contract.get("runtime_authority") is not False or contract.get("deployment_authorized") is not False:
         problems.append("candidate-contract: runtime authority must remain false")
     if contract.get("retell_source_status") != "NOT_READY":
-        problems.append("candidate-contract: status must remain NOT_READY")
+        problems.append("candidate-contract: source must remain NOT_READY")
     profile = contract.get("capability_profile", {})
     if not isinstance(profile, Mapping) or profile != {
         "name": "call_gap_capture_handoff_v2",
@@ -459,11 +605,24 @@ def _contract_problems(contract: Mapping[str, Any], adapter: Mapping[str, Any]) 
     }:
         problems.append("candidate-contract: exact disabled capability profile mismatch")
     provider = contract.get("provider_boundary", {})
-    if not isinstance(provider, Mapping) or any(
-        provider.get(key) is not False
-        for key in ("provider_parser_implemented", "importable_provider_configuration")
-    ) or provider.get("provider_field_mapping") != {}:
-        problems.append("candidate-contract: provider schema must remain unimplemented")
+    if (
+        not isinstance(provider, Mapping)
+        or provider.get("provider_parser_implemented") is not True
+        or provider.get("provider_parser_runtime_wired") is not False
+        or provider.get("importable_provider_configuration") is not False
+        or provider.get("provider_field_mapping")
+        != EXPECTED_CANDIDATE_PROVIDER_FIELD_MAPPING
+        or provider.get(
+            "transfer_configuration_fingerprint_required_on_every_normalized_event"
+        )
+        is not True
+        or provider.get("transfer_configuration_fingerprint_immutable_per_call")
+        is not True
+        or provider.get("reason") != EXPECTED_PROVIDER_BLOCKER
+        or provider.get("live_readback_required") is not True
+        or provider.get("draft_import_review_required") is not True
+    ):
+        problems.append("candidate-contract: implemented provider parser containment mismatch")
     gate = contract.get("configuration_gate", {})
     if not isinstance(gate, Mapping):
         problems.append("candidate-contract: configuration gate invalid")
@@ -582,10 +741,69 @@ def _contract_problems(contract: Mapping[str, Any], adapter: Mapping[str, Any]) 
     if adapter.get("runtime_authority") is not False or adapter.get("deployment_authorized") is not False:
         problems.append("transfer-adapter: runtime authority must remain false")
     if adapter.get("retell_source_status") != "NOT_READY":
-        problems.append("transfer-adapter: status must remain NOT_READY")
+        problems.append("transfer-adapter: source must remain NOT_READY")
     parser = adapter.get("provider_parser", {})
-    if not isinstance(parser, Mapping) or parser.get("implemented") is not False or parser.get("importable") is not False or parser.get("field_mapping") != {}:
-        problems.append("transfer-adapter: fabricated provider parser is prohibited")
+    expected_parser = {
+        "implemented": True,
+        "runtime_wired": False,
+        "importable": False,
+        "source_path": "src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/retell-handoff-v2-parser.js",
+        "exported_function": "normalizeRetellTransferEvent",
+        "maximum_raw_event_bytes": 262144,
+        "supported_provider_event_types": EXPECTED_PROVIDER_EVENT_TYPES,
+        "required_input_fields": [
+            "raw_event",
+            "verified_provider_binding",
+            "fingerprint_hmac_key",
+        ],
+        "verified_provider_binding_fields": EXPECTED_PROVIDER_BINDING_FIELDS,
+        "verified_provider_binding_immutable": True,
+        "fingerprint_hmac_key_contract": EXPECTED_HMAC_KEY_CONTRACT,
+        "target_event_envelope_fields": [
+            "event",
+            "call",
+            "transfer_destination",
+            "transfer_option",
+        ],
+        "ended_event_envelope_fields": ["event", "call"],
+        "required_call_identity_fields": ["call_id", "agent_id", "start_timestamp"],
+        "destination_fields": {
+            "required": ["number"],
+            "optional": ["extension"],
+            "number_format": "e164",
+            "extension_pattern": "digits_star_or_hash_1_to_32",
+        },
+        "known_warm_transfer_option_fields": EXPECTED_WARM_TRANSFER_OPTION_FIELDS,
+        "forbidden_draft_security_aliases_in_webhook_option": (
+            EXPECTED_FORBIDDEN_WEBHOOK_OPTION_ALIASES
+        ),
+        "unknown_transfer_option_fields": (
+            "reject_until_exact_sanitized_live_fixtures_and_reviewed_contract_update"
+        ),
+        "field_mapping": EXPECTED_ADAPTER_FIELD_MAPPING,
+        "raw_provider_payload_retained": False,
+        "raw_target_retained": False,
+        "failure_event_inference_allowed": False,
+        "blocker": EXPECTED_PROVIDER_BLOCKER,
+    }
+    if not isinstance(parser, Mapping) or parser != expected_parser:
+        problems.append("transfer-adapter: provider parser containment mismatch")
+    if adapter.get("retell_draft_transfer_configuration_schema") != EXPECTED_TRANSFER_CONFIGURATION_SCHEMA:
+        problems.append("transfer-adapter: exact Retell transfer configuration schema mismatch")
+    if adapter.get("retell_webhook_transfer_payload_schema") != EXPECTED_WEBHOOK_TRANSFER_PAYLOAD_SCHEMA:
+        problems.append("transfer-adapter: exact Retell webhook payload schema mismatch")
+    normalized_envelope = adapter.get("normalized_event_envelope", {})
+    if (
+        not isinstance(normalized_envelope, Mapping)
+        or normalized_envelope.get("required_symbolic_fields")
+        != EXPECTED_NORMALIZED_EVENT_REQUIRED_FIELDS
+    ):
+        problems.append("transfer-adapter: durable configuration event binding mismatch")
+    if (
+        adapter.get("cumulative_claim_ledger_contract")
+        != EXPECTED_CUMULATIVE_CLAIM_LEDGER_CONTRACT
+    ):
+        problems.append("transfer-adapter: cumulative claim ledger contract mismatch")
     if adapter.get("canonical_states") != EXPECTED_HANDOFF_STATES:
         problems.append("transfer-adapter: state set mismatch")
     if adapter.get("structured_event_state_precedence") != EXPECTED_STRUCTURED_STATE_PRECEDENCE:
@@ -660,7 +878,8 @@ def main() -> int:
         "critical_mutations_total": mutation["total"],
         "critical_mutation_kill_rate": mutation["critical_kill_rate"],
         "overall_mutation_kill_rate": mutation["overall_kill_rate"],
-        "provider_parser_implemented": False,
+        "provider_parser_implemented": True,
+        "provider_parser_runtime_wired": False,
         "problem_count": len(problems),
     }
     print(json.dumps(report, sort_keys=True))

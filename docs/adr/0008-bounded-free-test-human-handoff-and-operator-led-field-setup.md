@@ -13,7 +13,7 @@ The Free Revenue Leak Test already has two bounded forms, one shared internal Re
 
 The current published/historical voice contract is `call_gap_monitor_v1`. It does not support human transfer. Broadening that profile in place would erase the rollback boundary and make historical tests ambiguous. At the same time, routine messages should reach the office without making every caller wait through a transfer attempt. Urgent transfer can be useful only when the exact client, destination, coverage window, consent, route, configuration version, and failure behavior are bounded.
 
-Fresh read-only CRM evidence on 2026-08-25 also confirmed that the legacy Form 1 button function embeds two credential literals and does not use a named Connection. The live function was not changed. The replacement must remove that pattern before any cutover.
+Fresh read-only CRM evidence on 2026-08-25 confirmed that a private pre-cutover security-remediation gate remains open for the existing Form 1 launch path. Exact evidence remains in ignored private audit material. The live function was not changed, and the approved remediation gate must pass before any cutover.
 
 ## Decision
 

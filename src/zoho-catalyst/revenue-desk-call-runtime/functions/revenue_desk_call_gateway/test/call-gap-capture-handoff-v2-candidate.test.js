@@ -25,13 +25,15 @@ function digest(prefix, value) {
   return `${prefix}_${crypto.createHash('sha256').update(value, 'utf8').digest('hex')}`;
 }
 
-function binding(client = 'alpha') {
+function binding(client = 'alpha', overrides = {}) {
   return {
     call_binding_key: `call_${client}`,
     client_scope_key: `client_${client}`,
     deployment_scope_key: `deployment_${client}`,
     configuration_version_key: `configuration_${client}`,
+    transfer_configuration_fingerprint: digest('transfer_config', `transfer-${client}`),
     recipient_fingerprint: digest('recipient', `recipient-${client}`),
+    ...overrides,
   };
 }
 
@@ -43,6 +45,7 @@ function event(bound, eventType, claim, order, overrides = {}) {
     client_scope_key: bound.client_scope_key,
     deployment_scope_key: bound.deployment_scope_key,
     configuration_version_key: bound.configuration_version_key,
+    transfer_configuration_fingerprint: bound.transfer_configuration_fingerprint,
     observed_order: order,
     ...overrides,
   };
@@ -428,10 +431,23 @@ test('v2 candidate reuses the public Retell contracts but remains disabled and u
   ));
   assert.equal(manifest.profile.enabled, false);
   assert.deepEqual(manifest.profile.traffic_environments, []);
-  assert.equal(manifest.provider_boundary.provider_parser_implemented, false);
-  assert.equal(adapterContract.provider_parser.implemented, false);
+  assert.equal(manifest.provider_boundary.provider_parser_implemented, true);
+  assert.equal(manifest.provider_boundary.provider_parser_runtime_wired, false);
+  assert.equal(manifest.provider_boundary.provider_parser_importable, false);
+  assert.equal(adapterContract.provider_parser.implemented, true);
+  assert.equal(adapterContract.provider_parser.runtime_wired, false);
   assert.equal(adapterContract.provider_parser.importable, false);
-  assert.deepEqual(adapterContract.provider_parser.field_mapping, {});
+  assert.deepEqual(Object.keys(adapterContract.provider_parser.field_mapping), [
+    'event_type',
+    'event_claim_key',
+    'observed_order',
+    'target_fingerprint',
+    'transfer_configuration_fingerprint',
+    'call_binding_key',
+    'client_scope_key',
+    'deployment_scope_key',
+    'configuration_version_key',
+  ]);
   assert.equal(candidateContract.retell_source_status, 'NOT_READY');
   assert.deepEqual(candidateContract.notification_policy.allowed_fields,
     EXPECTED_NOTIFICATION_FIELDS);
@@ -444,6 +460,14 @@ test('v2 candidate reuses the public Retell contracts but remains disabled and u
   assert.equal(manifest.notification_intent_store.durable_suppression_tombstone_required, true);
   assert.deepEqual(manifest.handoff_event_ledger.nullable_immutable_binding_fields,
     ['authorized_target_fingerprint']);
+  assert.deepEqual(manifest.handoff_event_ledger.immutable_binding_fields, [
+    'call_binding_key',
+    'client_scope_key',
+    'deployment_scope_key',
+    'configuration_version_key',
+    'transfer_configuration_fingerprint',
+    'authorized_target_fingerprint',
+  ]);
   assert.equal(manifest.handoff_event_ledger.immutable_binding_conflict_behavior,
     'reject_without_mutation');
   assert.equal(manifest.sensitive_terminal.notification_allowed, false);
@@ -452,7 +476,7 @@ test('v2 candidate reuses the public Retell contracts but remains disabled and u
   for (const relative of ['index.js', path.join('lib', 'runtime-boundary.js'),
     path.join('lib', 'runtime-service.js'), path.join('lib', 'job-handler.js')]) {
     assert.doesNotMatch(fs.readFileSync(path.join(gatewayRoot, relative), 'utf8'),
-      /call-gap-capture-handoff-v2-candidate|handoff-v2-convergence/);
+      /call-gap-capture-handoff-v2-candidate|handoff-v2-convergence|retell-handoff-v2-parser/);
   }
   const activeRegistry = require('../contracts/capability-profiles.json');
   assert.deepEqual(activeRegistry.profiles.find(({ id }) => id === 'call_gap_monitor_v1'), {
@@ -476,6 +500,7 @@ test('handoff convergence is replay-safe, reorder-safe, scoped, and never downgr
     client_scope_key: bound.client_scope_key,
     deployment_scope_key: bound.deployment_scope_key,
     configuration_version_key: bound.configuration_version_key,
+    transfer_configuration_fingerprint: bound.transfer_configuration_fingerprint,
   };
   const target = digest('target', 'approved-direct-human');
   const started = event(bound, 'transfer_started', 'event_started', 1,
@@ -522,6 +547,13 @@ test('handoff convergence is replay-safe, reorder-safe, scoped, and never downgr
   }, adapterContract, candidateContract), { code: 'V2_EVENT_SCOPE_MISMATCH' });
   assert.throws(() => convergeHandoffEvidence({
     ...base,
+    normalized_events: [{
+      ...started,
+      transfer_configuration_fingerprint: digest('transfer_config', 'hostile-rebind'),
+    }],
+  }, adapterContract, candidateContract), { code: 'V2_EVENT_SCOPE_MISMATCH' });
+  assert.throws(() => convergeHandoffEvidence({
+    ...base,
     normalized_events: [{ ...started, destination_number: '+15555550199' }],
   }, adapterContract, candidateContract), { code: 'V2_EVENT_INVALID' });
 });
@@ -533,6 +565,7 @@ test('structured evidence outranks authoritative summaries and model signals can
     client_scope_key: bound.client_scope_key,
     deployment_scope_key: bound.deployment_scope_key,
     configuration_version_key: bound.configuration_version_key,
+    transfer_configuration_fingerprint: bound.transfer_configuration_fingerprint,
   };
   const failed = event(bound, 'transfer_failed', 'event_failed', 2,
     { failure_reason: 'no_answer', target_fingerprint: digest('target', 'approved') });
@@ -560,6 +593,7 @@ test('incremental durable lifecycle states use the same precedence for every eve
     client_scope_key: bound.client_scope_key,
     deployment_scope_key: bound.deployment_scope_key,
     configuration_version_key: bound.configuration_version_key,
+    transfer_configuration_fingerprint: bound.transfer_configuration_fingerprint,
   };
   const target = digest('target', 'incremental-destination');
   const definitions = [
@@ -838,6 +872,58 @@ test('durable event ledger rejects target rebinding before mutation and preserve
   assert.equal(ledgerCall.claims.size, 1);
   assert.equal(notificationStore.rows.size, 1);
 });
+
+test('durable event ledger rejects same-call transfer configuration rebinding without mutation',
+  async () => {
+    const target = digest('target', 'configuration-ledger-destination');
+    const configurationA = digest('transfer_config', 'configuration-ledger-a');
+    const configurationB = digest('transfer_config', 'configuration-ledger-b');
+    const boundA = binding('configuration-ledger', {
+      transfer_configuration_fingerprint: configurationA,
+    });
+    const boundB = {
+      ...boundA,
+      transfer_configuration_fingerprint: configurationB,
+    };
+    const notificationStore = new MemoryNotificationStore();
+    const handoffEventLedger = new MemoryHandoffEventLedger();
+    const runtime = service({ notificationStore, handoffEventLedger });
+    const inputFor = (bound, normalizedEvents) => routineInput({
+      binding: bound,
+      recipient_fingerprint: bound.recipient_fingerprint,
+      handoff_facts: eligibleUrgentHandoffFacts(target),
+      analysis: analysis({
+        outcome: 'urgent_potential_job',
+        urgency: 'urgent',
+        handoff_reason: 'urgent',
+        handoff_disposition: 'attempted',
+      }),
+      normalized_events: normalizedEvents,
+    });
+
+    const startedA = event(boundA, 'transfer_started', 'configuration_a_started', 1, {
+      target_fingerprint: target,
+    });
+    assert.equal((await runtime.processSyntheticNormalizedCall(
+      inputFor(boundA, [startedA]),
+    )).handoff_state, 'Started');
+
+    const [ledgerCall] = handoffEventLedger.calls.values();
+    const claimsBefore = structuredClone([...ledgerCall.claims.entries()]);
+    const notificationsBefore = structuredClone([...notificationStore.rows.entries()]);
+    const notificationCallsBefore = notificationStore.callCount;
+    const endedB = event(boundB, 'transfer_ended', 'configuration_b_ended', 2);
+
+    await assert.rejects(() => runtime.processSyntheticNormalizedCall(
+      inputFor(boundB, [endedB]),
+    ), { code: 'V2_EVENT_LEDGER_BINDING_CONFLICT' });
+
+    assert.equal(ledgerCall.binding.transfer_configuration_fingerprint, configurationA);
+    assert.equal(ledgerCall.claims.has('configuration_b_ended'), false);
+    assert.deepEqual([...ledgerCall.claims.entries()], claimsBefore);
+    assert.deepEqual([...notificationStore.rows.entries()], notificationsBefore);
+    assert.equal(notificationStore.callCount, notificationCallsBefore);
+  });
 
 test('event ledger is mandatory and rejects a 65th unique claim without partial durability', async () => {
   const notificationStore = new MemoryNotificationStore();

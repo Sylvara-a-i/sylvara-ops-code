@@ -5,10 +5,161 @@
   "deployment_authorized": false,
   "retell_source_status": "NOT_READY",
   "provider_parser": {
-    "implemented": false,
+    "implemented": true,
+    "runtime_wired": false,
     "importable": false,
-    "field_mapping": {},
-    "blocker": "public_transfer_configuration_families_and_canonical_event_names_are_confirmed_but_exact_draft_serialization_complete_payload_variations_failure_casing_and_runtime_behavior_remain_unverified"
+    "source_path": "src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/retell-handoff-v2-parser.js",
+    "exported_function": "normalizeRetellTransferEvent",
+    "maximum_raw_event_bytes": 262144,
+    "supported_provider_event_types": [
+      "transfer_started",
+      "transfer_bridged",
+      "transfer_cancelled",
+      "transfer_ended"
+    ],
+    "required_input_fields": [
+      "raw_event",
+      "verified_provider_binding",
+      "fingerprint_hmac_key"
+    ],
+    "verified_provider_binding_fields": [
+      "provider_call_id",
+      "provider_agent_id",
+      "call_binding_key",
+      "client_scope_key",
+      "deployment_scope_key",
+      "configuration_version_key",
+      "authorized_target_fingerprint",
+      "authorized_transfer_configuration_fingerprint",
+      "fingerprint_hmac_key_verification_tag"
+    ],
+    "verified_provider_binding_immutable": true,
+    "fingerprint_hmac_key_contract": {
+      "algorithm": "HMAC-SHA256",
+      "input_type": "node_buffer",
+      "exact_byte_length": 32,
+      "generation_requirement": "cryptographically_random_256_bit_install_time",
+      "minimum_entropy_bits": 256,
+      "public_or_deterministic_derivation_allowed": false,
+      "injected_private_runtime_value": true,
+      "retained": false,
+      "output": false,
+      "logged": false,
+      "domains": {
+        "target": "sylvara.retell.handoff-v2.target.v1",
+        "transfer_configuration": "sylvara.retell.handoff-v2.configuration.v1",
+        "event_claim": "sylvara.retell.handoff-v2.event-claim.v1",
+        "key_verification": "sylvara.retell.handoff-v2.key-verification.v1"
+      }
+    },
+    "target_event_envelope_fields": [
+      "event",
+      "call",
+      "transfer_destination",
+      "transfer_option"
+    ],
+    "ended_event_envelope_fields": [
+      "event",
+      "call"
+    ],
+    "required_call_identity_fields": [
+      "call_id",
+      "agent_id",
+      "start_timestamp"
+    ],
+    "destination_fields": {
+      "required": ["number"],
+      "optional": ["extension"],
+      "number_format": "e164",
+      "extension_pattern": "digits_star_or_hash_1_to_32"
+    },
+    "known_warm_transfer_option_fields": [
+      "type",
+      "showTransfereeAsCaller",
+      "publicHandoffOption",
+      "agentDetectionTimeoutMs",
+      "onHoldMusic",
+      "enableBridgeAudioCue"
+    ],
+    "forbidden_draft_security_aliases_in_webhook_option": [
+      "show_transferee_as_caller",
+      "public_handoff_option",
+      "agent_detection_timeout_ms",
+      "on_hold_music",
+      "enable_bridge_audio_cue",
+      "opt_out_human_detection",
+      "optOutHumanDetection"
+    ],
+    "unknown_transfer_option_fields": "reject_until_exact_sanitized_live_fixtures_and_reviewed_contract_update",
+    "field_mapping": {
+      "event_type": "raw_event.event",
+      "event_claim_key": "retell_prefixed_private_keyed_domain_separated_hmac_sha256",
+      "observed_order": "raw_event.call.start_timestamp",
+      "target_fingerprint": "target_prefixed_private_keyed_domain_separated_hmac_sha256",
+      "transfer_configuration_fingerprint": "verified_provider_binding.authorized_transfer_configuration_fingerprint_after_keyed_webhook_validation",
+      "call_binding_key": "verified_provider_binding.call_binding_key",
+      "client_scope_key": "verified_provider_binding.client_scope_key",
+      "deployment_scope_key": "verified_provider_binding.deployment_scope_key",
+      "configuration_version_key": "verified_provider_binding.configuration_version_key"
+    },
+    "raw_provider_payload_retained": false,
+    "raw_target_retained": false,
+    "failure_event_inference_allowed": false,
+    "blocker": "keyed_minimizing_parser_is_source_complete_but_exact_sanitized_live_raw_event_fixtures_provider_readback_draft_import_and_behavioral_acceptance_are_absent"
+  },
+  "retell_draft_transfer_configuration_schema": {
+    "transfer_node_required_fields": [
+      "type",
+      "transfer_destination",
+      "transfer_option",
+      "edge"
+    ],
+    "transfer_node_type": "transfer_call",
+    "static_destination_shape": {
+      "type": "predefined",
+      "required_fields": ["type", "number"],
+      "number_format": "e164"
+    },
+    "warm_transfer_option_type": "warm_transfer",
+    "configuration_field_case": "snake_case",
+    "confirmed_warm_transfer_configuration_fields": [
+      "type",
+      "show_transferee_as_caller",
+      "public_handoff_option",
+      "agent_detection_timeout_ms",
+      "on_hold_music",
+      "enable_bridge_audio_cue",
+      "opt_out_human_detection"
+    ],
+    "transfer_failure_edge_transition_prompt": "Transfer failed"
+  },
+  "retell_webhook_transfer_payload_schema": {
+    "field_case": "camelCase",
+    "target_event_top_level_fields": [
+      "event",
+      "call",
+      "transfer_destination",
+      "transfer_option"
+    ],
+    "ended_event_top_level_fields": ["event", "call"],
+    "full_call_object_fields_variable": true,
+    "consumed_call_fields": ["call_id", "agent_id", "start_timestamp"],
+    "transfer_destination_fields": {
+      "required": ["number"],
+      "optional": ["extension"]
+    },
+    "warm_transfer_option_type": "warm_transfer",
+    "known_camelcase_option_fields": [
+      "type",
+      "showTransfereeAsCaller",
+      "publicHandoffOption",
+      "agentDetectionTimeoutMs",
+      "onHoldMusic",
+      "enableBridgeAudioCue"
+    ],
+    "draft_and_security_configuration_aliases_rejected": true,
+    "unknown_transfer_option_fields": "reject_until_exact_sanitized_live_fixtures_and_reviewed_contract_update",
+    "full_call_unknown_fields_bounded_and_discarded": true
   },
   "normalized_event_types": [
     "transfer_started",
@@ -27,6 +178,7 @@
       "client_scope_key",
       "deployment_scope_key",
       "configuration_version_key",
+      "transfer_configuration_fingerprint",
       "observed_order"
     ],
     "optional_symbolic_fields": [
@@ -91,6 +243,7 @@
     "atomic_operation": "reconcileCallEvents",
     "maximum_unique_claims_per_call": 64,
     "authorized_target_fingerprint_is_immutable": true,
+    "transfer_configuration_fingerprint_is_immutable": true,
     "binding_conflict_rejected_without_mutation": true,
     "duplicate_identical_claim_is_noop": true,
     "conflicting_claim_rejected_without_mutation": true,
@@ -109,5 +262,5 @@
     "model_signal_never_claims_human_connection": true,
     "notification_side_effects_per_call": 1
   },
-  "implementation_note": "This interface accepts only already-normalized synthetic events. It intentionally does not parse, name, or infer provider payload fields."
+  "implementation_note": "The source-only parser minimizes four verified Retell transfer events into this envelope, but no active runtime imports it. Synthetic normalized events remain the only candidate execution input until Draft import, readback, and acceptance evidence authorize wiring."
 }

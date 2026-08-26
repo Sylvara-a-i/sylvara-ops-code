@@ -4,6 +4,7 @@ const { invariant } = require('./errors');
 
 const SAFE_BINDING_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
 const TARGET_FINGERPRINT_PATTERN = /^target_[a-f0-9]{64}$/;
+const TRANSFER_CONFIGURATION_FINGERPRINT_PATTERN = /^transfer_config_[a-f0-9]{64}$/;
 const REQUIRED_EVENT_FIELDS = Object.freeze([
   'event_type',
   'event_claim_key',
@@ -11,6 +12,7 @@ const REQUIRED_EVENT_FIELDS = Object.freeze([
   'client_scope_key',
   'deployment_scope_key',
   'configuration_version_key',
+  'transfer_configuration_fingerprint',
   'observed_order',
 ]);
 const OPTIONAL_EVENT_FIELDS = Object.freeze([
@@ -60,11 +62,16 @@ function assertBinding(binding) {
     'client_scope_key',
     'deployment_scope_key',
     'configuration_version_key',
+    'transfer_configuration_fingerprint',
   ];
   invariant(Object.keys(binding).length === expected.length
     && expected.every((field) => Object.hasOwn(binding, field)),
   'V2_BINDING_INVALID', 'Call binding fields are invalid.');
   for (const field of expected) assertSafeBindingValue(binding[field], field);
+  invariant(TRANSFER_CONFIGURATION_FINGERPRINT_PATTERN
+    .test(binding.transfer_configuration_fingerprint),
+  'V2_TRANSFER_CONFIGURATION_FINGERPRINT_INVALID',
+  'Transfer configuration fingerprint is invalid.');
 }
 
 function canonicalEvent(event, allowedEventTypes, failureReasons, binding) {
@@ -82,6 +89,7 @@ function canonicalEvent(event, allowedEventTypes, failureReasons, binding) {
     'client_scope_key',
     'deployment_scope_key',
     'configuration_version_key',
+    'transfer_configuration_fingerprint',
   ]) {
     assertSafeBindingValue(event[field], field);
     invariant(event[field] === binding[field], 'V2_EVENT_SCOPE_MISMATCH',
@@ -154,11 +162,13 @@ function convergeHandoffEvidence(input, adapterContract, candidateContract) {
     'Handoff convergence input is invalid.');
   invariant(isPlainObject(adapterContract) && isPlainObject(candidateContract),
     'V2_CONTRACT_INVALID', 'Injected v2 contracts are invalid.');
-  invariant(adapterContract.provider_parser?.implemented === false
+  invariant(adapterContract.provider_parser?.implemented === true
+    && adapterContract.provider_parser?.runtime_wired === false
     && adapterContract.provider_parser?.importable === false
     && isPlainObject(adapterContract.provider_parser?.field_mapping)
-    && Object.keys(adapterContract.provider_parser.field_mapping).length === 0,
-  'V2_PROVIDER_PARSER_FORBIDDEN', 'Provider parser must remain absent.');
+    && Object.keys(adapterContract.provider_parser.field_mapping).length > 0,
+  'V2_PROVIDER_PARSER_CONTAINMENT_INVALID',
+  'Provider parser must remain implemented but unwired and non-importable.');
   const canonicalStates = new Set(adapterContract.canonical_states || []);
   invariant(canonicalStates.size === 10
     && candidateContract.canonical_handoff_states?.length === canonicalStates.size
@@ -227,5 +237,6 @@ module.exports = Object.freeze({
   REQUIRED_EVENT_FIELDS,
   OPTIONAL_EVENT_FIELDS,
   TARGET_FINGERPRINT_PATTERN,
+  TRANSFER_CONFIGURATION_FINGERPRINT_PATTERN,
   STRUCTURED_STATE_PRECEDENCE,
 });
