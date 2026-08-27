@@ -11,7 +11,9 @@ const {
   CONTRACT,
   REPOSITORY_ROOT,
   ROUTE_CONTRACT_SHA256,
+  advancedIoFormBinding,
   assertPrivatePacketPath,
+  buildAdvancedIoTargetRemediation,
   buildRouteRequests,
   digestExistingRoutePrefix,
   digestRouteContract,
@@ -225,6 +227,69 @@ test("builds exact project-bound Advanced I/O requests only after function IDs a
   assert.deepEqual(
     requests.filter(({ body }) => body.authentication.includes("APIKey")).map(({ body }) => body.name),
     ["FORM2_ISSUE", "FORM2_PREFILL", "FORM2_SUBMISSION", "CRM_BILLING"],
+  );
+});
+
+test("maps Advanced I/O requests to the Catalyst form without a duplicate path separator", () => {
+  const value = packet("bound");
+  const requests = buildRouteRequests(value, approval(value), NOW_MS);
+
+  requests.forEach(({ body }) => {
+    const binding = advancedIoFormBinding(body);
+    assert.equal(binding.pathInput.startsWith("/"), false);
+    assert.equal(
+      `/server/${binding.functionName}/${binding.pathInput}`,
+      body.target_endpoint,
+    );
+    assert.equal(Object.isFrozen(binding), true);
+  });
+
+  const duplicateSlash = structuredClone(requests[0].body);
+  duplicateSlash.target_endpoint = duplicateSlash.target_endpoint.replace("/synthetic/", "//synthetic/");
+  assert.throws(
+    () => advancedIoFormBinding(duplicateSlash),
+    /target endpoint is invalid/,
+  );
+  assert.throws(
+    () => advancedIoFormBinding({ ...requests[0].body, target: "Basic IO Function" }),
+    /request target is invalid/,
+  );
+});
+
+test("builds only the exact duplicate-separator target remediation", () => {
+  const value = packet("bound");
+  const request = buildRouteRequests(value, approval(value), NOW_MS)[1].body;
+  const expected = continuationPacket(2).existingRoutePrefix[1];
+  const rawReadback = {
+    ...structuredClone(expected),
+    target_endpoint: expected.target_endpoint.replace("/synthetic/", "//synthetic/"),
+    api_id: "808",
+    created_by: { email_id: "must-not-enter-the-packet@example.invalid" },
+  };
+  delete rawReadback.authentication;
+
+  const remediation = buildAdvancedIoTargetRemediation(
+    rawReadback,
+    expected.authentication,
+    request,
+    1,
+  );
+  assert.deepEqual(remediation.changedFields, ["target_endpoint"]);
+  assert.deepEqual(remediation.proposed, expected);
+  assert.equal(remediation.formBinding.pathInput.startsWith("/"), false);
+  assert.equal(Object.isFrozen(remediation), true);
+  assert.equal(Object.hasOwn(remediation.current, "created_by"), false);
+
+  rawReadback.method = "GET";
+  assert.throws(
+    () => buildAdvancedIoTargetRemediation(rawReadback, expected.authentication, request, 1),
+    /must change only target_endpoint/,
+  );
+  rawReadback.method = expected.method;
+  rawReadback.target_endpoint = expected.target_endpoint.replace("/server/", "/server//");
+  assert.throws(
+    () => buildAdvancedIoTargetRemediation(rawReadback, expected.authentication, request, 1),
+    /not the exact duplicate-separator defect/,
   );
 });
 

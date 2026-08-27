@@ -185,11 +185,34 @@ function routeRequestBody(packet, index) {
   };
 }
 
-function expectedRouteReadback(packet, index) {
-  const request = routeRequestBody(packet, index);
+function advancedIoFormBinding(request) {
+  if (!plainObject(request)) fail("Advanced I/O form request must be an object");
+  if (request.target !== "Advanced IO Function") {
+    fail("Advanced I/O form request target is invalid");
+  }
+  numericId(request.target_id, "Advanced I/O form request target_id");
+  if (typeof request.target_endpoint !== "string") {
+    fail("Advanced I/O form target endpoint is invalid");
+  }
+  const match = request.target_endpoint.match(
+    /^\/server\/([a-z][a-z0-9_]{2,63})(\/[A-Za-z0-9][A-Za-z0-9/_-]{0,198}[A-Za-z0-9_-])$/,
+  );
+  if (!match) fail("Advanced I/O form target endpoint is invalid");
+  runtimePath(match[2], "Advanced I/O form runtime path");
+
+  // Catalyst renders the separator after the selected function. Supplying the
+  // runtime path's leading slash in the suffix field creates a noncanonical
+  // double slash in the persisted target endpoint.
+  return Object.freeze({
+    functionName: match[1],
+    pathInput: match[2].slice(1),
+  });
+}
+
+function expectedRouteReadbackFromRequest(request) {
   const duration = { days: 0, hours: 0, minutes: 1, seconds: 0 };
   return {
-    authentication: request.authentication,
+    authentication: Array.isArray(request.authentication) ? [...request.authentication] : request.authentication,
     method: request.method,
     name: request.name,
     source_endpoint: request.source_endpoint,
@@ -201,6 +224,10 @@ function expectedRouteReadback(packet, index) {
       overall: { duration: { ...duration }, limit: request.throttling.overall.limit },
     },
   };
+}
+
+function expectedRouteReadback(packet, index) {
+  return expectedRouteReadbackFromRequest(routeRequestBody(packet, index));
 }
 
 function validateGatewayPrestate(packet, expectedRouteCount) {
@@ -317,6 +344,29 @@ function normalizeRouteListReadback(route, authentication, index = 0) {
   validateExistingRouteReadback(normalized, index);
   numericId(normalized.target_id, `routeListReadback[${index}].target_id`);
   return normalized;
+}
+
+function buildAdvancedIoTargetRemediation(route, authentication, request, index = 0) {
+  const current = normalizeRouteListReadback(route, authentication, index);
+  const proposed = expectedRouteReadbackFromRequest(request);
+  validateExistingRouteReadback(proposed, index);
+  const binding = advancedIoFormBinding(request);
+  const changedFields = Object.keys(proposed).filter(
+    (key) => JSON.stringify(stableValue(current[key])) !== JSON.stringify(stableValue(proposed[key])),
+  );
+  if (JSON.stringify(changedFields) !== JSON.stringify(["target_endpoint"])) {
+    fail("Advanced I/O remediation must change only target_endpoint");
+  }
+  const exactDoubleSlash = `/server/${binding.functionName}//${binding.pathInput}`;
+  if (current.target_endpoint !== exactDoubleSlash) {
+    fail("Advanced I/O remediation prestate is not the exact duplicate-separator defect");
+  }
+  return deepFreeze({
+    changedFields,
+    current,
+    formBinding: binding,
+    proposed,
+  });
 }
 
 function initialBoundPacketFromContinuation(packet) {
@@ -616,7 +666,9 @@ if (require.main === module) {
 module.exports = {
   CONTRACT,
   REPOSITORY_ROOT,
+  advancedIoFormBinding,
   assertPrivatePacketPath,
+  buildAdvancedIoTargetRemediation,
   buildRouteRequests,
   digestExistingRoutePrefix,
   digestRouteContract,

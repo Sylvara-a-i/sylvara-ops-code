@@ -111,6 +111,13 @@ digest and never authorizes gateway activation. Global gateway activation remain
 a separate live action requiring fresh prestate, scoped approval, and independent
 readback.
 
+For the Catalyst browser form, derive the function selection and suffix input
+with `advancedIoFormBinding`. The console contributes the separator after the
+selected function, so `pathInput` intentionally omits the runtime path's leading
+slash. Supplying that slash creates a persisted double-slash target that fails
+canonical readback and requires a separately approved repair; never normalize it
+silently or continue creating later routes.
+
 These arguments are a repository-side request contract, not proof that the
 advertised Catalyst Changes connector accepts the exact body keys, target enum,
 headers, or path-variable shape. Before the first route mutation, preserve a
