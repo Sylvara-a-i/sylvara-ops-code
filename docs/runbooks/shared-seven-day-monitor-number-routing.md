@@ -8,7 +8,7 @@
 - Retell contract: [`conversation-contract.json`](../../src/retell/agents/7-day-free-test/contracts/conversation-contract.json)
 - Sanitized audit: [Development reconciliation](free-test-development-reconciliation-2026-08-22.md)
 - Offline/synthetic Development testing: permitted by this repository workflow; verify the current suite before relying on it
-- Catalyst Development deployment: **Superseded evidence only**; the canonical six-function final-main deployment and parity readback are incomplete
+- Catalyst Development deployment: **Canonical definitions installed with no operator invocation performed and exact-upload archive parity**; revision `7fb101d60e4480a2aaa88de70d82d6b1ddc9e989` has exact six-function source-stamp/runtime-metadata readback and 6/6 Catalyst-pullback byte parity to the uploaded archives, but callable-surface inertness, configuration-registry parity, twelve-route API Gateway parity, bindings, invocation acceptance, synthetic E2E, and final-main proof remain incomplete
 - Retell agent testing: **Not ready**; calls and native simulations remain prohibited until the consolidated release gate passes
 - Controlled prospect test: approval unresolved; not authorized by this runbook
 - Production authorization: **Not granted**

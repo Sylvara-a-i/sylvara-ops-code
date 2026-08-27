@@ -21,6 +21,13 @@ PACKET_A_RESOLUTION_PATH = (
     / "evidence"
     / "free-revenue-leak-test-development-packet-a-resolution-2026-08-26.json"
 )
+SIX_FUNCTION_DEPLOYMENT_PATH = (
+    ROOT
+    / "src"
+    / "zoho-catalyst"
+    / "evidence"
+    / "free-revenue-leak-test-development-six-function-deployment-2026-08-27.json"
+)
 ANALYTICS_OUTBOX_FENCE_ADR_PATH = (
     ROOT / "docs" / "adr" / "0008-single-key-analytics-outbox-fence.md"
 )
@@ -118,6 +125,9 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         )
         cls.packet_a_resolution = json.loads(
             PACKET_A_RESOLUTION_PATH.read_text(encoding="utf-8")
+        )
+        cls.six_function_deployment = json.loads(
+            SIX_FUNCTION_DEPLOYMENT_PATH.read_text(encoding="utf-8")
         )
         cls.analytics_outbox_fence_adr = ANALYTICS_OUTBOX_FENCE_ADR_PATH.read_text(
             encoding="utf-8"
@@ -1576,6 +1586,379 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, serialized)
 
+    def test_six_function_development_deployment_is_exact_uninvoked_and_sanitized(self):
+        evidence = self.six_function_deployment
+        revision = "7fb101d60e4480a2aaa88de70d82d6b1ddc9e989"
+        self.assertEqual(evidence["schema_version"], 1)
+        self.assertEqual(
+            evidence["record_type"],
+            "sanitized_free_revenue_leak_test_development_six_function_deployment",
+        )
+        self.assertEqual(evidence["execution_date_utc"], "2026-08-27")
+        self.assertEqual(evidence["environment"], "Development")
+        self.assertEqual(evidence["source_revision"], revision)
+        self.assertEqual(
+            evidence["outcome"],
+            "canonical_definitions_deployed_no_invocation_performed_runtime_acceptance_pending",
+        )
+
+        authorization = evidence["authorization"]
+        self.assertTrue(authorization["approval_exhausted_after_verified_poststate"])
+        self.assertFalse(authorization["approval_reusable"])
+        self.assertFalse(authorization["future_live_action_authorized_by_this_record"])
+        self.assertTrue(
+            authorization["future_live_action_requires_fresh_scoped_approval"]
+        )
+        self.assertFalse(
+            authorization["retell_agent_development_or_testing_authorized"]
+        )
+        self.assertFalse(authorization["production_or_customer_activity_authorized"])
+
+        execution_surfaces = evidence["execution_surfaces"]
+        self.assertEqual(
+            execution_surfaces["connector_first_discovery_and_independent_readback"],
+            "Sylvara Catalyst connector",
+        )
+        self.assertFalse(
+            execution_surfaces["connector_source_or_archive_download_available"]
+        )
+        self.assertEqual(
+            execution_surfaces["archive_pullback"],
+            "authenticated first-party Catalyst UI Download fallback",
+        )
+        self.assertFalse(execution_surfaces["direct_rest_or_shell_automation_used"])
+
+        deployment = evidence["deployment_readback"]
+        expected_functions = [
+            ("revenue_leak_test_request_form", "Advanced I/O", 0),
+            ("revenue_leak_test_setup_form", "Advanced I/O", 0),
+            ("revenue_desk_call_gateway", "Advanced I/O", 0),
+            ("revenue_desk_call_worker", "Job", 0),
+            ("crm_billing_orchestrator", "Advanced I/O", 45),
+            ("analytics_sync", "Job", 54),
+        ]
+        self.assertEqual(deployment["canonical_function_count"], 6)
+        self.assertEqual(
+            [
+                (item["api_name"], item["type"], item["environment_variable_count"])
+                for item in deployment["functions"]
+            ],
+            expected_functions,
+        )
+        self.assertTrue(all(
+            item["runtime"] == "node24"
+            and item["memory_mb"] == 256
+            and item["source_revision_stamp_exact"]
+            for item in deployment["functions"]
+        ))
+        self.assertTrue(deployment["all_source_revision_stamps_exact"])
+        self.assertEqual(deployment["deployed_archive_pullback_count"], 6)
+        self.assertEqual(deployment["uploaded_archive_byte_parity_count"], 6)
+        self.assertTrue(deployment["uploaded_archive_byte_parity_exact"])
+        self.assertTrue(
+            deployment["private_release_manifest_artifact_verification_passed"]
+        )
+        self.assertFalse(deployment["final_main_parity_proven"])
+        self.assertIn(
+            "does not prove final-main parity",
+            deployment["parity_limitation"],
+        )
+
+        safe_config = evidence["safe_configuration_readback"]
+        self.assertFalse(
+            safe_config["crm_billing_orchestrator"]
+            ["paid_subscription_preparation_enabled"]
+        )
+        self.assertFalse(
+            safe_config["crm_billing_orchestrator"]
+            ["development_compatibility_probe_enabled"]
+        )
+        self.assertEqual(safe_config["crm_billing_orchestrator"], {
+            "live_environment_variable_count": 45,
+            "public_registry_variable_name_count": 42,
+            "configuration_registry_parity_proven": False,
+            "extra_live_variable_names": "privately_unclassified_and_omitted",
+            "paid_subscription_preparation_enabled": False,
+            "development_compatibility_probe_enabled": False,
+            "sync_report_summary_disabled_by_paid_or_probe_gates": False,
+        })
+        self.assertEqual(safe_config["analytics_sync"], {
+            "live_environment_variable_count": 54,
+            "public_registry_variable_name_count": 26,
+            "configuration_registry_parity_proven": False,
+            "extra_live_variable_names": "privately_unclassified_and_omitted",
+            "runtime_mode_configuration_readback": "disabled",
+            "disabled_no_op_runtime_proven": False,
+            "other_live_values": "preserved_and_omitted",
+        })
+
+        ingress = evidence["ingress_containment"]
+        self.assertFalse(ingress["api_gateway_enabled"])
+        self.assertEqual(
+            [rule["function"] for rule in ingress["advanced_io_security_rules"]],
+            [
+                "revenue_leak_test_request_form",
+                "revenue_leak_test_setup_form",
+                "revenue_desk_call_gateway",
+                "crm_billing_orchestrator",
+            ],
+        )
+        self.assertTrue(all(
+            rule["method"] == "POST"
+            and rule["authentication"] == "required"
+            and rule["independent_readback_exact"]
+            for rule in ingress["advanced_io_security_rules"]
+        ))
+        self.assertTrue(ingress["direct_function_url_rule_posture_read_back"])
+        self.assertFalse(ingress["route_count_readback_available"])
+        self.assertFalse(ingress["twelve_route_api_gateway_parity_proven"])
+        self.assertFalse(ingress["negative_direct_caller_inventory_proven"])
+        self.assertFalse(ingress["callable_surface_inertness_proven"])
+        self.assertTrue(
+            ingress["no_invocation_performed_does_not_prove_noncallability"]
+        )
+        self.assertIn("Future Form 2 GET", ingress["route_limitation"])
+
+        jobs = evidence["job_infrastructure"]
+        self.assertEqual(jobs["pools"], [
+            {
+                "name": "RevenueDeskCallJobs",
+                "type": "Function",
+                "memory_mb": 512,
+                "independent_readback_exact": True,
+            },
+            {
+                "name": "RevenueDeskAnalyticsJobs",
+                "type": "Function",
+                "memory_mb": 512,
+                "independent_readback_exact": True,
+            },
+        ])
+        self.assertFalse(jobs["job_target_or_cron_binding_proven"])
+        self.assertFalse(jobs["scheduler_and_legacy_caller_bindings_reconciled"])
+        self.assertEqual(jobs["retry_cron"], {
+            "name": "RevenueDeskRetry1m",
+            "present": False,
+        })
+
+        runtime = evidence["runtime_acceptance"]
+        self.assertEqual(runtime["operator_function_invocations"], 0)
+        self.assertEqual(runtime["operator_job_invocations"], 0)
+        self.assertFalse(runtime["negative_runtime_invocation_inventory_proven"])
+        self.assertFalse(runtime["consumer_first_deployment_order_proven"])
+        self.assertFalse(runtime["compatibility_probe_invoked"])
+        self.assertEqual(
+            runtime["compatibility_probe_noninvocation_reason"],
+            "no_verified_private_advanced_io_invocation_channel",
+        )
+        self.assertFalse(runtime["live_report_v1_compatibility_proven"])
+        self.assertFalse(runtime["live_report_v2_compatibility_proven"])
+        self.assertFalse(runtime["synthetic_development_e2e_proven"])
+        self.assertFalse(runtime["inertness_proven"])
+        self.assertTrue(all(
+            value is False for value in evidence["retell_boundary"].values()
+        ))
+        self.assertEqual(evidence["production_boundary"], {
+            "production_change_performed": False,
+            "production_deployment_performed": False,
+            "customer_traffic_enablement_performed": False,
+            "negative_production_state_inventory_proven": False,
+            "negative_customer_traffic_inventory_proven": False,
+        })
+        self.assertEqual(evidence["rollback_readiness"], {
+            "preexisting_definition_count": 2,
+            "updated_existing_definition_count": 2,
+            "new_definition_count": 4,
+            "crm_predecessor_revision_metadata_captured_privately": True,
+            "analytics_predecessor_source_captured_privately": True,
+            "exact_predecessor_deployed_archives_preserved": False,
+            "exact_predecessor_restore_rehearsed": False,
+            "source_rollback_for_both_updated_definitions_proven": False,
+            "containment_posture_is_executable_source_rollback": False,
+            "limitation": (
+                "CRM and Analytics predecessor metadata or source evidence exists "
+                "privately, but exact predecessor deployed archives were not preserved "
+                "and no predecessor restore was rehearsed. Keeping ingress and triggers "
+                "dark is containment, not executable source rollback."
+            ),
+        })
+        self.assertTrue(all(
+            value is False for value in evidence["disclosure_controls"].values()
+        ))
+
+        inventory_readback = self.inventory[
+            "development_six_function_deployment_readback_2026_08_27"
+        ]
+        self.assertEqual(self.inventory["schema_version"], 7)
+        self.assertEqual(
+            self.inventory["status"],
+            "canonical_six_function_development_definitions_deployed_no_invocation_performed_runtime_acceptance_pending",
+        )
+        self.assertEqual(
+            inventory_readback["outcome"],
+            "canonical_definitions_deployed_no_invocation_performed_runtime_acceptance_pending",
+        )
+        self.assertEqual(inventory_readback["source_revision"], revision)
+        self.assertEqual(inventory_readback["canonical_function_count"], 6)
+        self.assertEqual(inventory_readback["runtime"], "node24")
+        self.assertEqual(inventory_readback["memory_mb_per_function"], 256)
+        self.assertEqual(
+            inventory_readback["environment_variable_counts"],
+            {name: count for name, _function_type, count in expected_functions},
+        )
+        self.assertTrue(inventory_readback["source_revision_stamp_exact_for_all"])
+        self.assertEqual(inventory_readback["deployed_archive_pullback_count"], 6)
+        self.assertEqual(
+            inventory_readback["uploaded_archive_byte_parity_count"], 6
+        )
+        self.assertTrue(inventory_readback["uploaded_archive_byte_parity_exact"])
+        self.assertTrue(
+            inventory_readback
+            ["private_release_manifest_artifact_verification_passed"]
+        )
+        self.assertFalse(inventory_readback["final_main_parity_proven"])
+        self.assertFalse(
+            inventory_readback["crm_paid_subscription_preparation_enabled"]
+        )
+        self.assertFalse(
+            inventory_readback["crm_development_compatibility_probe_enabled"]
+        )
+        self.assertEqual(
+            inventory_readback["crm_public_registry_variable_name_count"], 42
+        )
+        self.assertFalse(
+            inventory_readback["crm_configuration_registry_parity_proven"]
+        )
+        self.assertEqual(
+            inventory_readback["analytics_public_registry_variable_name_count"], 26
+        )
+        self.assertFalse(
+            inventory_readback["analytics_configuration_registry_parity_proven"]
+        )
+        self.assertEqual(
+            inventory_readback["extra_live_variable_names"],
+            "privately_unclassified_and_omitted",
+        )
+        self.assertEqual(
+            inventory_readback["analytics_runtime_mode_configuration_readback"],
+            "disabled",
+        )
+        self.assertFalse(
+            inventory_readback["analytics_disabled_no_op_runtime_proven"]
+        )
+        self.assertEqual(inventory_readback["advanced_io_security_rule_count"], 4)
+        self.assertEqual(
+            inventory_readback["advanced_io_security_rule_method"], "POST"
+        )
+        self.assertEqual(
+            inventory_readback["advanced_io_security_rule_authentication"],
+            "required",
+        )
+        self.assertTrue(
+            inventory_readback["direct_function_url_rule_posture_read_back"]
+        )
+        self.assertFalse(inventory_readback["route_count_readback_available"])
+        self.assertFalse(
+            inventory_readback["negative_direct_caller_inventory_proven"]
+        )
+        self.assertFalse(inventory_readback["callable_surface_inertness_proven"])
+        self.assertTrue(
+            inventory_readback["no_invocation_performed_does_not_prove_noncallability"]
+        )
+        self.assertFalse(inventory_readback["api_gateway_enabled"])
+        self.assertFalse(
+            inventory_readback["twelve_route_api_gateway_parity_proven"]
+        )
+        self.assertEqual(inventory_readback["canonical_job_pools"], [
+            {
+                "name": "RevenueDeskCallJobs",
+                "type": "Function",
+                "memory_mb": 512,
+            },
+            {
+                "name": "RevenueDeskAnalyticsJobs",
+                "type": "Function",
+                "memory_mb": 512,
+            },
+        ])
+        self.assertFalse(inventory_readback["job_target_or_cron_binding_proven"])
+        self.assertFalse(
+            inventory_readback["scheduler_and_legacy_caller_bindings_reconciled"]
+        )
+        self.assertFalse(inventory_readback["revenue_desk_retry_1m_cron_present"])
+        self.assertFalse(
+            inventory_readback["operator_function_or_job_invocation_performed"]
+        )
+        self.assertFalse(
+            inventory_readback["negative_runtime_invocation_inventory_proven"]
+        )
+        self.assertFalse(
+            inventory_readback["consumer_first_deployment_order_proven"]
+        )
+        self.assertFalse(inventory_readback["inertness_proven"])
+        self.assertFalse(inventory_readback["compatibility_probe_invoked"])
+        self.assertFalse(
+            inventory_readback["retell_agent_changed_tested_simulated_or_called"]
+        )
+        self.assertFalse(
+            inventory_readback["production_or_customer_activity_performed"]
+        )
+        self.assertEqual(inventory_readback["preexisting_definition_count"], 2)
+        self.assertEqual(inventory_readback["updated_existing_definition_count"], 2)
+        self.assertEqual(inventory_readback["new_definition_count"], 4)
+        self.assertFalse(
+            inventory_readback["exact_predecessor_deployed_archives_preserved"]
+        )
+        self.assertFalse(inventory_readback["exact_predecessor_restore_rehearsed"])
+        self.assertFalse(
+            inventory_readback
+            ["source_rollback_for_both_updated_definitions_proven"]
+        )
+        self.assertFalse(
+            inventory_readback["containment_posture_is_executable_source_rollback"]
+        )
+        self.assertEqual(
+            inventory_readback["evidence"],
+            "evidence/free-revenue-leak-test-development-six-function-deployment-2026-08-27.json",
+        )
+
+        deployment_log_entry = self.deployment_log.split(
+            "## 2026-08-27 — Revenue Desk Canonical Development Definitions Deployed Without Invocation",
+            maxsplit=1,
+        )[1].split(
+            "## 2026-08-26 — Revenue Desk Development Packet A Superseding Resolution",
+            maxsplit=1,
+        )[0]
+        for phrase in (
+            revision,
+            "environment-variable counts were 0/0/0/0/45/54",
+            "API Gateway remained disabled",
+            "RevenueDeskRetry1m remained absent",
+            "the operator performed no function, Job, compatibility probe, Retell call, Retell simulation",
+            "all six Catalyst-pulled archives matched their exact uploaded archives byte for byte",
+            "exact six-archive upload parity does not prove final-main or configuration-registry parity",
+            "canonical_definitions_deployed_no_invocation_performed_runtime_acceptance_pending",
+        ):
+            self.assertIn(phrase, deployment_log_entry)
+        self.assertIn(
+            "The six canonical function definitions are now present in Catalyst Development",
+            self.reconciliation_runbook,
+        )
+        self.assertIn(
+            "No operator function or Job invocation was performed",
+            self.reconciliation_runbook,
+        )
+
+        serialized = json.dumps(evidence, sort_keys=True).lower()
+        for forbidden in (
+            "client_secret", "refresh_token", "access_token", "invoke_url",
+            "project_id", "organization_id", "environment_id", "function_id",
+            "agent_id", "version_id", "number_id", "zaid", "private_host",
+            "private_path", "archive_sha256", "download_path", "upload_path",
+            "http://", "https://",
+        ):
+            self.assertNotIn(forbidden, serialized)
+
     def test_packet_a_public_runbooks_match_sanitized_execution_and_revision(self):
         superseding_entry = self.deployment_log.split(
             "## 2026-08-26 — Revenue Desk Development Packet A Superseding Resolution",
@@ -1598,11 +1981,11 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         self.assertNotIn("the table count remained 35", superseding_entry)
         self.assertNotIn("no record state was created or changed", superseding_entry)
         self.assertIn(
-            "- **Revision date:** 2026-08-26",
+            "- **Revision date:** 2026-08-27",
             self.reconciliation_runbook,
         )
         self.assertNotIn(
-            "- **Revision date:** 2026-08-25",
+            "- **Revision date:** 2026-08-26",
             self.reconciliation_runbook,
         )
 
@@ -1675,7 +2058,7 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         for term in ("classified", "mapped", "counts", "digests", "exact key set", "rollback", "absent"):
             self.assertIn(term, table_gates)
 
-        self.assertEqual(self.inventory["schema_version"], 6)
+        self.assertEqual(self.inventory["schema_version"], 7)
         snapshot = self.inventory["development_data_store_readback_2026_08_24"]
         self.assertEqual(snapshot["readback_page_size"], 300)
         self.assertTrue(snapshot["pagination_completed_for_counts"])
