@@ -257,8 +257,8 @@ test("maps Advanced I/O requests to the Catalyst form without a duplicate path s
 });
 
 test("builds only the exact duplicate-separator target remediation", () => {
-  const value = packet("bound");
-  const request = buildRouteRequests(value, approval(value), NOW_MS)[1].body;
+  const original = packet("bound");
+  const value = continuationPacket(1);
   const expected = continuationPacket(2).existingRoutePrefix[1];
   const rawReadback = {
     ...structuredClone(expected),
@@ -268,28 +268,68 @@ test("builds only the exact duplicate-separator target remediation", () => {
   };
   delete rawReadback.authentication;
 
-  const remediation = buildAdvancedIoTargetRemediation(
-    rawReadback,
-    expected.authentication,
-    request,
-    1,
-  );
+  const input = {
+    authentication: expected.authentication,
+    index: 1,
+    originalBoundPacket: original,
+    packet: value,
+    packetSha256: digestRoutePacket(value),
+    route: rawReadback,
+  };
+  const remediation = buildAdvancedIoTargetRemediation(input);
+  assert.equal(remediation.canonicalIndex, 1);
   assert.deepEqual(remediation.changedFields, ["target_endpoint"]);
   assert.deepEqual(remediation.proposed, expected);
   assert.equal(remediation.formBinding.pathInput.startsWith("/"), false);
+  assert.equal(remediation.packetSha256, digestRoutePacket(value));
+  assert.deepEqual(remediation.target, {
+    environment: value.environment,
+    organizationId: value.organizationId,
+    projectId: value.projectId,
+  });
   assert.equal(Object.isFrozen(remediation), true);
   assert.equal(Object.hasOwn(remediation.current, "created_by"), false);
 
   rawReadback.method = "GET";
   assert.throws(
-    () => buildAdvancedIoTargetRemediation(rawReadback, expected.authentication, request, 1),
+    () => buildAdvancedIoTargetRemediation(input),
     /must change only target_endpoint/,
   );
   rawReadback.method = expected.method;
   rawReadback.target_endpoint = expected.target_endpoint.replace("/server/", "/server//");
   assert.throws(
-    () => buildAdvancedIoTargetRemediation(rawReadback, expected.authentication, request, 1),
+    () => buildAdvancedIoTargetRemediation(input),
     /not the exact duplicate-separator defect/,
+  );
+
+  rawReadback.target_endpoint = expected.target_endpoint.replace("/synthetic/", "//synthetic/");
+  assert.throws(
+    () => buildAdvancedIoTargetRemediation({ ...input, packetSha256: "f".repeat(64) }),
+    /provenance does not match/,
+  );
+  assert.throws(
+    () => buildAdvancedIoTargetRemediation({ ...input, index: 0 }),
+    /outside the authorized canonical suffix/,
+  );
+
+  const wrongFunctionBinding = structuredClone(value);
+  wrongFunctionBinding.routes[1].targetId = "999";
+  wrongFunctionBinding.remainingRoutes[0].targetId = "999";
+  assert.throws(
+    () => buildAdvancedIoTargetRemediation({
+      ...input,
+      packet: wrongFunctionBinding,
+      packetSha256: digestRoutePacket(wrongFunctionBinding),
+    }),
+    /conflicting target IDs/,
+  );
+
+  assert.throws(
+    () => buildAdvancedIoTargetRemediation({
+      ...input,
+      authentication: ["caller-data@example.invalid"],
+    }),
+    /must change only target_endpoint/,
   );
 });
 

@@ -346,10 +346,31 @@ function normalizeRouteListReadback(route, authentication, index = 0) {
   return normalized;
 }
 
-function buildAdvancedIoTargetRemediation(route, authentication, request, index = 0) {
+function buildAdvancedIoTargetRemediation(input) {
+  exactKeys(input, [
+    "authentication", "index", "originalBoundPacket", "packet", "packetSha256", "route",
+  ], "Advanced I/O remediation input");
+  const {
+    authentication, index, originalBoundPacket, packet, packetSha256, route,
+  } = input;
+  const packetResult = validateRoutePacket(packet, originalBoundPacket);
+  if (!new Set(["bound", "continuation"]).has(packetResult.phase)) {
+    fail("Advanced I/O remediation requires a bound or continuation packet");
+  }
+  if (!digestMatches(packetSha256, packetResult.digest)) {
+    fail("Advanced I/O remediation packet provenance does not match the canonical packet");
+  }
+  if (
+    !Number.isInteger(index) ||
+    index < packetResult.existingRouteCount ||
+    index >= CONTRACT.routes.length
+  ) {
+    fail("Advanced I/O remediation index is outside the authorized canonical suffix");
+  }
+
   const current = normalizeRouteListReadback(route, authentication, index);
-  const proposed = expectedRouteReadbackFromRequest(request);
-  validateExistingRouteReadback(proposed, index);
+  const request = routeRequestBody(packet, index);
+  const proposed = expectedRouteReadback(packet, index);
   const binding = advancedIoFormBinding(request);
   const changedFields = Object.keys(proposed).filter(
     (key) => JSON.stringify(stableValue(current[key])) !== JSON.stringify(stableValue(proposed[key])),
@@ -361,11 +382,21 @@ function buildAdvancedIoTargetRemediation(route, authentication, request, index 
   if (current.target_endpoint !== exactDoubleSlash) {
     fail("Advanced I/O remediation prestate is not the exact duplicate-separator defect");
   }
+  if (proposed.target_endpoint !== `/server/${binding.functionName}/${binding.pathInput}`) {
+    fail("Advanced I/O remediation proposal is not the canonical single-separator target");
+  }
   return deepFreeze({
+    canonicalIndex: index,
     changedFields,
     current,
     formBinding: binding,
+    packetSha256: packetResult.digest,
     proposed,
+    target: {
+      environment: packet.environment,
+      organizationId: packet.organizationId,
+      projectId: packet.projectId,
+    },
   });
 }
 

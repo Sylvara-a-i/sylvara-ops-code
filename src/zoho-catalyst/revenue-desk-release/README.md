@@ -118,6 +118,28 @@ slash. Supplying that slash creates a persisted double-slash target that fails
 canonical readback and requires a separately approved repair; never normalize it
 silently or continue creating later routes.
 
+Construct that repair candidate only with `buildAdvancedIoTargetRemediation`.
+Its trusted inputs are the preserved canonical bound or continuation packet, the
+SHA-256 copied from that packet's already-consumed approval record, the separately
+preserved original bound packet when the source is a continuation, the canonical
+route index, the API-route-list readback, and an independent UI authentication
+readback. The helper treats the prior digest as provenance only, derives the
+proposal from the immutable route contract, and permits exactly the duplicate
+separator in `target_endpoint`; it does not authorize a write or reactivate the
+consumed route-creation approval.
+
+Keep the helper's output private. Never log or commit its `current`, `proposed`,
+`formBinding`, or target identity. Before a repair, independently prove the
+Development Gateway is disabled and build a fresh remediation packet whose
+short-lived, single-use approval binds the canonical packet SHA-256 and index,
+the normalized defective prestate, the canonical proposed endpoint, exact
+Development organization/project/environment, fresh disabled-gateway evidence,
+rollback, and exclusions. Temporarily enable only inside that approval, update
+only `target_endpoint`, read back the full canonical route and authentication
+independently, restore the Gateway to disabled even on failure, and discard the
+approval. Any additional drift, ambiguous save, or failed readback remains
+contained and requires another fresh packet; it is never repaired in place.
+
 These arguments are a repository-side request contract, not proof that the
 advertised Catalyst Changes connector accepts the exact body keys, target enum,
 headers, or path-variable shape. Before the first route mutation, preserve a
