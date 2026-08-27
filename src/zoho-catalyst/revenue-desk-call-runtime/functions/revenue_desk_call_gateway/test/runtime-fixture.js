@@ -275,8 +275,8 @@ class RuntimeMemoryStore {
   }
 }
 
-function payloadInbound(letter, timestamp = NOW) {
-  return { event: 'call_inbound', event_timestamp: timestamp, call_inbound: {
+function payloadInbound(letter, timestamp) {
+  return { event: 'call_inbound', ...(timestamp === undefined ? {} : { event_timestamp: timestamp }), call_inbound: {
     agent_id: 'agent_shared_free_test', agent_version: 7,
     from_number: letter === 'A' ? '+15551110001' : '+15551110002',
     to_number: letter === 'A' ? '+15550000001' : '+15550000002',
@@ -291,13 +291,17 @@ function eventPayload(event, callId, metadata, letter = 'A', data = {}) {
     start_timestamp: NOW, end_timestamp: NOW + 60_000, duration_ms: 60_000, metadata,
   };
   if (event === 'call_analyzed') call.call_analysis = { custom_analysis_data: {
-    caller_name: `Caller ${letter}`, callback_number: letter === 'A' ? '+15551110001' : '+15551110002',
-    customer_type: 'new', caller_intent: 'request_service',
+    // Keep the default fixture identical to the sanitized 11-field live readback.
+    // Tests for the expanded runtime contract add those fields explicitly in `data`.
+    outcome: 'potential_job',
+    coverage_trigger: letter === 'A' ? 'AfterHours' : 'NoAnswerOverflow',
+    caller_name: `Caller ${letter}`,
+    callback_number: letter === 'A' ? '+15551110001' : '+15551110002',
+    customer_type: 'new', caller_intent: 'service_request',
     issue_summary: letter === 'A' ? 'Leaking water heater' : 'Blocked drain',
     city_or_zip: letter === 'A' ? 'Lenexa' : 'Liberty', urgency: 'routine',
-    specific_person_requested: null, outcome: 'potential_job',
-    coverage_trigger: letter === 'A' ? 'AfterHours' : 'NoAnswerOverflow',
-    value_evidence_class: 'unknown', ...data,
+    specific_person_requested: null, sensitive_data_detected: false,
+    ...data,
   } };
   return { event, call };
 }

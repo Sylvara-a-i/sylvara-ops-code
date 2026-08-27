@@ -5,8 +5,8 @@ const { invariant } = require('./errors');
 const { MAX_CATALYST_TEXT_BYTES } = require('./catalyst-store');
 
 const REPORT_SUMMARY_ACTION = 'sync_report_summary';
-const REPORT_SUMMARY_SCHEMA_VERSION = 1;
-const REPORT_SUMMARY_DOMAIN = 'sylvara.crm-report-summary.v1';
+const REPORT_SUMMARY_SCHEMA_VERSION = 2;
+const REPORT_SUMMARY_DOMAIN = 'sylvara.crm-report-summary.v2';
 const CRM_RECORD_ID = /^[1-9][0-9]{7,29}$/;
 const HASH = /^[a-f0-9]{64}$/;
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$/;
@@ -39,6 +39,12 @@ function canonicalSummary(summary) {
 
 function nullableNumber(value, name) {
   invariant(value === null || (typeof value === 'number' && Number.isFinite(value) && value >= 0),
+    'REPORT_DATA_INVALID', `${name} is invalid.`);
+  return value;
+}
+
+function nullableCount(value, name) {
+  invariant(value === null || (Number.isSafeInteger(value) && value >= 0),
     'REPORT_DATA_INVALID', `${name} is invalid.`);
   return value;
 }
@@ -100,7 +106,9 @@ function buildCrmReportSummary(config, deployment, report) {
     urgentRequests: report.urgentRequests,
     bookableOpportunities: nullableNumber(report.bookableOpportunities, 'bookableOpportunities'),
     officeFollowUpCalls: nullableNumber(report.officeFollowUpCalls, 'officeFollowUpCalls'),
-    observedWorkflowFailures: report.observedWorkflowFailures,
+    observedWorkflowFailures: nullableCount(
+      report.observedWorkflowFailures, 'observedWorkflowFailures',
+    ),
     recommendedPaidCoverage: report.recommendedPaidCoverage,
     expectedMonthlyConnectedMinutesMin: minutesMin,
     expectedMonthlyConnectedMinutesMax: minutesMax,

@@ -24,6 +24,13 @@ PACKET_A_RESOLUTION_PATH = (
 ANALYTICS_OUTBOX_FENCE_ADR_PATH = (
     ROOT / "docs" / "adr" / "0008-single-key-analytics-outbox-fence.md"
 )
+DEPLOYMENT_LOG_PATH = ROOT / "docs" / "runbooks" / "deployment-log.md"
+RECONCILIATION_RUNBOOK_PATH = (
+    ROOT
+    / "docs"
+    / "runbooks"
+    / "free-revenue-leak-test-e2e-reconciliation-2026-08-24.md"
+)
 FORMS_MANIFEST_PATH = ROOT / "src" / "zoho-forms" / "free-revenue-leak-test" / "forms-manifest.json"
 FORM2_ROUTES_PATH = ROOT / "src" / "zoho-catalyst" / "revenue-leak-test-setup-form" / "config" / "routes.json"
 CALL_PROFILES_PATH = (
@@ -113,6 +120,10 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             PACKET_A_RESOLUTION_PATH.read_text(encoding="utf-8")
         )
         cls.analytics_outbox_fence_adr = ANALYTICS_OUTBOX_FENCE_ADR_PATH.read_text(
+            encoding="utf-8"
+        )
+        cls.deployment_log = DEPLOYMENT_LOG_PATH.read_text(encoding="utf-8")
+        cls.reconciliation_runbook = RECONCILIATION_RUNBOOK_PATH.read_text(
             encoding="utf-8"
         )
         cls.forms_manifest = json.loads(FORMS_MANIFEST_PATH.read_text(encoding="utf-8"))
@@ -937,6 +948,18 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
                 },
             ],
         )
+        interpretation = resource_readback["interpretation"]
+        self.assertIn(
+            "Two bounded disposable proof tables and their synthetic rows were "
+            "created and deleted",
+            interpretation,
+        )
+        self.assertIn("the table count returned from 36 to 35", interpretation)
+        self.assertIn(
+            "No retained or canonical business record, function, route, Retell "
+            "agent, or Production state changed",
+            interpretation,
+        )
 
         catalyst_root = ROOT / "src" / "zoho-catalyst"
         request_schema = json.loads((
@@ -1418,11 +1441,15 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         self.assertTrue(authorization["packet_a_resolution_scope_authorized"])
         self.assertTrue(authorization["approval_exhausted_after_verified_poststate"])
         self.assertFalse(authorization["future_live_action_authorized_by_this_record"])
+        self.assertTrue(
+            authorization["future_live_action_requires_fresh_scoped_approval"]
+        )
         self.assertFalse(
             authorization["retell_agent_development_or_testing_authorized"]
         )
         self.assertFalse(authorization["production_or_customer_activity_authorized"])
         self.assertTrue(authorization["one_change_then_independent_readback_required"])
+        self.assertTrue(authorization["stop_on_mismatch_required"])
 
         prestate = evidence["verified_prestate"]
         self.assertEqual(prestate["configuration_version_table_rows"], 0)
@@ -1548,6 +1575,36 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             "project_id", "organization_id", "http://", "https://",
         ):
             self.assertNotIn(forbidden, serialized)
+
+    def test_packet_a_public_runbooks_match_sanitized_execution_and_revision(self):
+        superseding_entry = self.deployment_log.split(
+            "## 2026-08-26 — Revenue Desk Development Packet A Superseding Resolution",
+            maxsplit=1,
+        )[1].split(
+            "## 2026-08-26 — Revenue Desk Development Packet A Partial Execution And Containment",
+            maxsplit=1,
+        )[0]
+
+        self.assertIn("the table count returned from 36 to 35", superseding_entry)
+        self.assertIn(
+            "temporary disposable tables and synthetic proof rows were created and deleted",
+            superseding_entry,
+        )
+        self.assertIn(
+            "no retained or canonical business record, function, route, Retell agent, "
+            "or Production state was changed",
+            superseding_entry,
+        )
+        self.assertNotIn("the table count remained 35", superseding_entry)
+        self.assertNotIn("no record state was created or changed", superseding_entry)
+        self.assertIn(
+            "- **Revision date:** 2026-08-26",
+            self.reconciliation_runbook,
+        )
+        self.assertNotIn(
+            "- **Revision date:** 2026-08-25",
+            self.reconciliation_runbook,
+        )
 
     def test_dark_production_and_staged_cleanup_are_fail_closed(self):
         production = self.contract["production_scope"]
@@ -1791,7 +1848,12 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
     def test_terminal_report_handoff_is_automatic_revision_safe_and_human_reviewed(self):
         handoff = self.contract["terminal_report_handoff"]
         self.assertEqual(handoff["durable_operation_action"], "sync_report_summary")
-        self.assertEqual(handoff["identity_domain"], "sylvara.crm-report-summary.v1")
+        self.assertEqual(handoff["schema_version"], 2)
+        self.assertEqual(handoff["identity_domain"], "sylvara.crm-report-summary.v2")
+        self.assertIn("v1", handoff["legacy_read_compatibility"])
+        self.assertIn("non-null", handoff["legacy_read_compatibility"])
+        self.assertIn("crm_billing_orchestrator", handoff["deployment_order"])
+        self.assertIn("keep call ingress dark", handoff["deployment_order"])
         self.assertEqual(handoff["automatic_dispatch_owner"],
                          "revenue_desk_call_worker retry_scan in RevenueDeskCallJobs")
         self.assertEqual(handoff["dispatch_limit_per_scan"], 5)

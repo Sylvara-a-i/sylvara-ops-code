@@ -135,6 +135,13 @@ function structuredReportFields(call) {
     'REPORT_DATA_INVALID', 'Canonical sensitive-data state is invalid.');
   invariant(call.sensitiveDataMinimized === (call.outcome === 'sensitive_data_ended'),
     'REPORT_DATA_INVALID', 'Canonical sensitive-data outcome and minimization state conflict.');
+  const configuredAnalysisComplete = call.configuredAnalysisComplete === true;
+  const workflowFailureEvidenceComplete = call.workflowFailureEvidenceComplete === true;
+  invariant((call.configuredAnalysisComplete === undefined
+      || typeof call.configuredAnalysisComplete === 'boolean')
+    && (call.workflowFailureEvidenceComplete === undefined
+      || typeof call.workflowFailureEvidenceComplete === 'boolean'),
+  'REPORT_DATA_INVALID', 'Canonical analysis completeness evidence is invalid.');
   const valueEvidence = persistedValueEvidence(call.value);
   if (call.sensitiveDataMinimized) invariant(call.outcome === 'sensitive_data_ended'
     && call.callerName === null && call.callbackNumber === null && call.callerIntent === null
@@ -146,8 +153,13 @@ function structuredReportFields(call) {
   'REPORT_DATA_INVALID', 'Canonical minimized call retains unsupported analysis detail.');
   return Object.freeze({
     bookableOpportunity, officeFollowUpRequired, workflowFailureCode, workflowFailureText,
-    analysisEvidenceComplete: typeof bookableOpportunity === 'boolean'
-      && typeof officeFollowUpRequired === 'boolean',
+    analysisEvidenceComplete: !call.sensitiveDataMinimized
+      && configuredAnalysisComplete
+      && typeof bookableOpportunity === 'boolean'
+      && typeof officeFollowUpRequired === 'boolean'
+      && workflowFailureEvidenceComplete,
+    configuredAnalysisComplete,
+    workflowFailureEvidenceComplete,
     valueEvidence,
   });
 }
@@ -190,6 +202,8 @@ async function queryClientReport(store, config, clientId, deploymentId, asOfMs =
   let legacySchemaCallsWithheld = 0;
   let bookableEvidenceComplete = true;
   let officeFollowUpEvidenceComplete = true;
+  let structuredAnalysisEvidenceComplete = true;
+  let workflowFailureEvidenceComplete = true;
   const calls = callRows.map((row) => {
     invariant(!callsByKey.has(row.CALL_KEY), 'REPORT_RECONCILIATION_REQUIRED',
       'Report contains duplicate call ownership.');
@@ -218,6 +232,12 @@ async function queryClientReport(store, config, clientId, deploymentId, asOfMs =
       else if (structured.bookableOpportunity) reportCounts.bookableOpportunities += 1;
       if (structured.officeFollowUpRequired === null) officeFollowUpEvidenceComplete = false;
       else if (structured.officeFollowUpRequired) reportCounts.officeFollowUpCalls += 1;
+      if (!structured.analysisEvidenceComplete) structuredAnalysisEvidenceComplete = false;
+      // The persisted provider-field-presence bit distinguishes an explicit
+      // null (no observed failure) from a legacy call that lacks the fields.
+      if (!structured.workflowFailureEvidenceComplete) {
+        workflowFailureEvidenceComplete = false;
+      }
       if (structured.workflowFailureCode) reportCounts.observedWorkflowFailures += 1;
     }
     return Object.freeze({
@@ -234,6 +254,7 @@ async function queryClientReport(store, config, clientId, deploymentId, asOfMs =
       officeFollowUpRequired: structured.officeFollowUpRequired,
       workflowFailureCode: structured.workflowFailureCode,
       analysisEvidenceComplete: structured.analysisEvidenceComplete,
+      workflowFailureEvidenceComplete: structured.workflowFailureEvidenceComplete,
       evidenceWithheldReason: legacySchema ? 'legacy_schema_v1'
         : structured.analysisEvidenceComplete ? null : 'structured_analysis_incomplete',
       notificationState: row.NOTIFICATION_STATE,
@@ -270,13 +291,17 @@ async function queryClientReport(store, config, clientId, deploymentId, asOfMs =
   const observedCalendarDays = (observationEnd - start) / DAY_MS;
   const durationEvidenceComplete = metrics.totalCallsHandled > 0
     && handledDurationCallCount === metrics.totalCallsHandled;
+  workflowFailureEvidenceComplete = metrics.totalCallsHandled > 0
+    && workflowFailureEvidenceComplete;
   const structuredAnalysisComplete = metrics.totalCallsHandled > 0
-    && bookableEvidenceComplete && officeFollowUpEvidenceComplete;
+    && structuredAnalysisEvidenceComplete;
   const durationWithheldCalls = metrics.totalCallsHandled - handledDurationCallCount;
   const bookableOpportunities = bookableEvidenceComplete
     ? reportCounts.bookableOpportunities : null;
   const officeFollowUpCalls = officeFollowUpEvidenceComplete
     ? reportCounts.officeFollowUpCalls : null;
+  const observedWorkflowFailures = workflowFailureEvidenceComplete
+    ? reportCounts.observedWorkflowFailures : null;
   const observedConnectedMinutes = handledDurationSeconds / 60;
   const projectionAvailable = durationEvidenceComplete && observedCalendarDays > 0;
   const expectedMonthlyConnectedMinutesMin = projectionAvailable
@@ -327,9 +352,11 @@ async function queryClientReport(store, config, clientId, deploymentId, asOfMs =
     recommendedPaidCoverage
       ? 'Recommended coverage reflects the approved coverage mode tested and requires observed qualified, existing-customer, or office-follow-up evidence.'
       : 'Recommended coverage is withheld because the report has insufficient opportunity or follow-up evidence.',
-    structuredAnalysisComplete
-      ? 'Bookable-opportunity and office-follow-up evidence is complete for every handled call.'
-      : 'Bookable-opportunity and office-follow-up totals are withheld where required because at least one handled call lacks explicit Boolean evidence.',
+    `${structuredAnalysisComplete
+      ? 'The expanded structured-analysis cohort is complete for every handled call.'
+      : 'At least one handled call lacks the complete expanded structured-analysis cohort.'} ${workflowFailureEvidenceComplete
+      ? 'Workflow-failure field-presence evidence is complete for every handled call.'
+      : 'The workflow-failure total is withheld because at least one handled call lacks explicit workflow-failure field-presence evidence.'}`,
     legacySchemaCallsWithheld > 0
       ? `${legacySchemaCallsWithheld} handled legacy schema-v1 calls are preserved but marked withheld for unsupported duration or new structured evidence.`
       : 'All handled calls use the current canonical schema.',
@@ -360,8 +387,10 @@ async function queryClientReport(store, config, clientId, deploymentId, asOfMs =
     ...reportCounts,
     bookableOpportunities,
     officeFollowUpCalls,
+    observedWorkflowFailures,
     durationEvidenceComplete,
     structuredAnalysisComplete,
+    workflowFailureEvidenceComplete,
     legacySchemaCallsWithheld,
     durationWithheldCalls,
     recommendedPaidCoverage,
@@ -403,7 +432,8 @@ function reportToCsv(report) {
     'callsCaptured', 'actualAverageCallDurationSeconds', 'qualifiedOpportunities',
     'existingCustomerCalls', 'outOfAreaOrWrongFitCalls', 'urgentRequests',
     'bookableOpportunities', 'officeFollowUpCalls', 'observedWorkflowFailures',
-    'durationEvidenceComplete', 'structuredAnalysisComplete', 'legacySchemaCallsWithheld',
+    'durationEvidenceComplete', 'structuredAnalysisComplete', 'workflowFailureEvidenceComplete',
+    'legacySchemaCallsWithheld',
     'durationWithheldCalls',
     'recommendedPaidCoverage', 'expectedMonthlyConnectedMinutesMin',
     'expectedMonthlyConnectedMinutesMax', 'expectedMonthlyConnectedMinutesMethodology',
@@ -440,6 +470,7 @@ function reportToCsv(report) {
     observedWorkflowFailures: report.observedWorkflowFailures,
     durationEvidenceComplete: report.durationEvidenceComplete,
     structuredAnalysisComplete: report.structuredAnalysisComplete,
+    workflowFailureEvidenceComplete: report.workflowFailureEvidenceComplete,
     legacySchemaCallsWithheld: report.legacySchemaCallsWithheld,
     durationWithheldCalls: report.durationWithheldCalls,
     recommendedPaidCoverage: report.recommendedPaidCoverage,

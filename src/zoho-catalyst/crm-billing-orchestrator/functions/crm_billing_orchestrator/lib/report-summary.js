@@ -3,8 +3,12 @@
 const crypto = require("node:crypto");
 
 const REPORT_SUMMARY_ACTION = "sync_report_summary";
-const REPORT_SUMMARY_DOMAIN = "sylvara.crm-report-summary.v1";
-const REPORT_SUMMARY_SCHEMA_VERSION = 1;
+const REPORT_SUMMARY_DOMAIN = "sylvara.crm-report-summary.v2";
+const REPORT_SUMMARY_SCHEMA_VERSION = 2;
+const REPORT_SUMMARY_DOMAINS = Object.freeze({
+  1: "sylvara.crm-report-summary.v1",
+  2: REPORT_SUMMARY_DOMAIN,
+});
 const HASH = /^[a-f0-9]{64}$/;
 const RECORD_ID = /^[1-9][0-9]{7,29}$/;
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$/;
@@ -38,9 +42,11 @@ function fail(message, options) {
   throw new ReportSummaryError(message, options);
 }
 
-function hmac(secret, purpose, material) {
+function hmac(secret, purpose, material, schemaVersion) {
+  const domain = REPORT_SUMMARY_DOMAINS[schemaVersion];
+  if (!domain) fail("CRM report summary schema is unsupported");
   return crypto.createHmac("sha256", secret)
-    .update(`${REPORT_SUMMARY_DOMAIN}\0${purpose}\0${material}`)
+    .update(`${domain}\0${purpose}\0${material}`)
     .digest("hex");
 }
 
@@ -74,7 +80,8 @@ function parseReportSummary(value) {
     fail("CRM report summary payload is invalid");
   }
   canonicalSummary(summary);
-  if (summary.schemaVersion !== REPORT_SUMMARY_SCHEMA_VERSION
+  if (!Number.isSafeInteger(summary.schemaVersion)
+    || !Object.hasOwn(REPORT_SUMMARY_DOMAINS, summary.schemaVersion)
     || summary.reportSchemaVersion !== 2
     || !RECORD_ID.test(summary.dealId)
     || !IDENTIFIER.test(summary.deploymentId)
@@ -92,8 +99,12 @@ function parseReportSummary(value) {
     ["existingCustomerCalls", summary.existingCustomerCalls],
     ["outOfAreaOrWrongFitCalls", summary.outOfAreaOrWrongFitCalls],
     ["urgentRequests", summary.urgentRequests],
-    ["observedWorkflowFailures", summary.observedWorkflowFailures],
   ]) count(candidate, name);
+  if (summary.schemaVersion === 1) {
+    count(summary.observedWorkflowFailures, "observedWorkflowFailures");
+  } else if (summary.observedWorkflowFailures !== null) {
+    count(summary.observedWorkflowFailures, "observedWorkflowFailures");
+  }
   for (const [name, candidate] of [
     ["actualAverageCallDurationSeconds", summary.actualAverageCallDurationSeconds],
     ["bookableOpportunities", summary.bookableOpportunities],
@@ -122,16 +133,19 @@ function parseReportSummary(value) {
 function reportSummaryOperationKey(config, summary) {
   const revisionDigest = hmac(
     config.analyticsPartitionSecret, "report-revision", canonicalSummary(summary),
+    summary.schemaVersion,
   );
   const stable = [config.deploymentEnvironment, summary.dealId, summary.deploymentId,
     summary.configurationVersion, summary.reportSchemaVersion, summary.callSetDigest,
     revisionDigest, REPORT_SUMMARY_ACTION].join("\0");
-  return hmac(config.analyticsPartitionSecret, "operation", stable);
+  return hmac(config.analyticsPartitionSecret, "operation", stable, summary.schemaVersion);
 }
 
 function reportSummaryIdentity(config, summary) {
   const canonical = canonicalSummary(summary);
-  const revisionDigest = hmac(config.analyticsPartitionSecret, "report-revision", canonical);
+  const revisionDigest = hmac(
+    config.analyticsPartitionSecret, "report-revision", canonical, summary.schemaVersion,
+  );
   const stable = [config.deploymentEnvironment, summary.dealId, summary.deploymentId,
     summary.configurationVersion, summary.reportSchemaVersion, summary.callSetDigest,
     revisionDigest, REPORT_SUMMARY_ACTION].join("\0");
@@ -142,6 +156,7 @@ function reportSummaryIdentity(config, summary) {
       config.analyticsPartitionSecret,
       "fingerprint",
       `${stable}\0${canonical}`,
+      summary.schemaVersion,
     ),
   });
 }
@@ -201,8 +216,11 @@ function reportSummaryPatch(config, summary) {
     Test_Urgent_Requests: boundedInteger(summary.urgentRequests),
     Test_Bookable_Opportunities: boundedInteger(summary.bookableOpportunities),
     Test_Office_Follow_Up_Calls: boundedInteger(summary.officeFollowUpCalls),
-    Test_Observed_Workflow_Failures:
-      `Observed workflow failure count: ${boundedInteger(summary.observedWorkflowFailures)}.`,
+    // Null means the provider did not supply complete workflow-failure evidence;
+    // clearing the field prevents CRM from turning unavailable evidence into zero.
+    Test_Observed_Workflow_Failures: summary.observedWorkflowFailures === null
+      ? null
+      : `Observed workflow failure count: ${boundedInteger(summary.observedWorkflowFailures)}.`,
     Recommended_Paid_Coverage: summary.recommendedPaidCoverage,
     Expected_Monthly_Connected_Minutes_Min: normalizedMinutesMin,
     Expected_Monthly_Connected_Minutes_Max: normalizedMinutesMax,
@@ -213,6 +231,7 @@ function reportSummaryPatch(config, summary) {
 module.exports = {
   REPORT_SUMMARY_ACTION,
   REPORT_SUMMARY_DOMAIN,
+  REPORT_SUMMARY_DOMAINS,
   REPORT_SUMMARY_SCHEMA_VERSION,
   SUMMARY_FIELDS,
   ReportSummaryError,

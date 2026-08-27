@@ -12,6 +12,7 @@ const { CatalystMailAdapter } = require('../lib/catalyst-mail');
 const { OUTBOX_IMMUTABLE, canonicalJson, sha256 } = require('../lib/analytics-outbox');
 const { queryClientReport, reportToCsv } = require('../lib/reporting');
 const { callLookupKey } = require('../lib/security');
+const { RETELL_CONVERSATION_VARIABLE_FIELDS } = require('../lib/contracts');
 const { parseOutboxRow } = require('../../../../revenue-desk-analytics/functions/analytics_sync/lib/facts');
 const {
   SOURCE_REVISION, environment, payloadInbound, eventPayload,
@@ -214,11 +215,33 @@ test('integration: Advanced I/O resolver isolates two clients and rejects unknow
   assert.equal(resolvedB.body.call_inbound.dynamic_variables.company_name, 'Synthetic Plumbing B');
   assert.equal(resolvedA.body.call_inbound.metadata.client_id, 'client_A');
   assert.equal(resolvedB.body.call_inbound.metadata.client_id, 'client_B');
+  assert.deepEqual(Object.keys(resolvedA.body.call_inbound.dynamic_variables).sort(),
+    [...RETELL_CONVERSATION_VARIABLE_FIELDS].sort());
+  for (const internalField of [
+    'configuration_version_id', 'number_binding_id', 'number_binding_version',
+    'correlation_id', 'resolved_at', 'ownership_token',
+  ]) {
+    assert.equal(Object.hasOwn(resolvedA.body.call_inbound.dynamic_variables, internalField), false);
+    assert.equal(Object.hasOwn(resolvedA.body.call_inbound.metadata, internalField), true);
+  }
   const unknown = payloadInbound('A');
   unknown.call_inbound.to_number = '+15559999999';
   const rejected = await invoke(fixture.listener, { url: '/retell/inbound', payload: unknown, env: fixture.env });
   assert.deepEqual(rejected.body, { call_inbound: { reject: true } });
   assert.doesNotMatch(JSON.stringify(rejected.body), /client_[AB]|Synthetic Plumbing/);
+});
+
+test('integration: a mismatched legacy body timestamp fails closed under the current signed contract', async () => {
+  const fixture = runtimeFixture();
+  const payload = payloadInbound('A', fixture.clock.value
+    + fixture.config.maxSignatureAgeMs + 1);
+  const rejected = await invoke(fixture.listener, {
+    url: '/retell/inbound', payload, env: fixture.env,
+    signatureTimestamp: fixture.clock.value,
+  });
+  assert.equal(rejected.status, 200);
+  assert.deepEqual(rejected.body, { call_inbound: { reject: true } });
+  assert.equal(fixture.store.rows.get('RevenueDeskCalls').length, 0);
 });
 
 test('integration: resolver fails closed on an oversized encrypted configuration snapshot', async () => {
@@ -1411,6 +1434,7 @@ test('integration: only a terminal authoritative report emits one immutable sani
       inbound.body.call_inbound.metadata, 'A', {
         outcome: 'potential_job', bookable_opportunity: true,
         office_follow_up_required: true,
+        workflow_failure_code: null, workflow_failure_text: null,
       }),
     env: fixture.env,
   });
@@ -1478,7 +1502,7 @@ test('integration: report classifications distinguish existing-customer and wron
   assert.equal(report.bookableOpportunities, null);
   assert.equal(report.officeFollowUpCalls, null);
   assert.equal(report.structuredAnalysisComplete, false);
-  assert.equal(report.observedWorkflowFailures, 0);
+  assert.equal(report.observedWorkflowFailures, null);
   assert.equal(report.recommendedPaidCoverage, 'After Hours Only');
   assert.equal(report.actualAverageCallDurationSeconds, 60);
   assert.equal(report.expectedMonthlyConnectedMinutesMin, 42);

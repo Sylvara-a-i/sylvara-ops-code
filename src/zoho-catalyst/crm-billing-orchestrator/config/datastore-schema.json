@@ -11,7 +11,7 @@
       "mandatory": true,
       "unique": true,
       "private": true,
-      "semantics": "Paid/customer rows use the stable sylvara.crm-billing.idempotency.v1 HMAC domain. sync_report_summary rows use sylvara.crm-report-summary.v1 and bind environment, Deal, deployment, configuration, report schema, canonical call-set digest, full canonical report-revision digest, and action so a changed terminal report creates a new immutable operation."
+      "semantics": "Paid/customer rows use the stable sylvara.crm-billing.idempotency.v1 HMAC domain. New sync_report_summary rows use sylvara.crm-report-summary.v2; retained v1 rows remain readable only under the strict legacy contract. Each version binds environment, Deal, deployment, configuration, report schema, canonical call-set digest, full canonical report-revision digest, and action so a changed terminal report creates a new immutable operation."
     },
     {
       "name": "OPERATION_FINGERPRINT",
@@ -20,7 +20,7 @@
       "mandatory": true,
       "unique": false,
       "private": true,
-      "semantics": "Paid/customer rows use sylvara.crm-billing.idempotency.v1 to bind accepted commercial evidence. sync_report_summary rows use sylvara.crm-report-summary.v1 to bind the full canonical sanitized payload and its revision-specific operation identity."
+      "semantics": "Paid/customer rows use sylvara.crm-billing.idempotency.v1 to bind accepted commercial evidence. New sync_report_summary rows use sylvara.crm-report-summary.v2 to bind the full canonical sanitized payload and its revision-specific operation identity; retained v1 rows validate against the original domain."
     },
     { "name": "ACTION", "type": "Var Char", "max_length": 40, "mandatory": true, "unique": false, "private": false },
     {

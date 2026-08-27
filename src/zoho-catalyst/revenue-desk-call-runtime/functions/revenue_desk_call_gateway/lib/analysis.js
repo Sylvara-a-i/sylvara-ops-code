@@ -3,6 +3,7 @@
 const {
   COVERAGE_TRIGGERS, COVERAGE_TRIGGER_COMPATIBILITY, UNKNOWN_COVERAGE_TRIGGER_POLICY,
   VALUE_EVIDENCE_CLASSES, MVP_REPORT_VALUE_EVIDENCE_CLASSES,
+  RETELL_REQUIRED_RUNTIME_ANALYSIS_FIELDS, CUSTOMER_TYPES, URGENCIES,
 } = require('./contracts');
 const { invariant } = require('./errors');
 const { optionalString, integer, boolean, e164, validateOutcome } = require('./validation');
@@ -80,7 +81,27 @@ function extractAnalysis(call, documentedMethods = new Set()) {
   const analysis = call?.call_analysis && typeof call.call_analysis === 'object' ? call.call_analysis : {};
   const data = analysis.custom_analysis_data && typeof analysis.custom_analysis_data === 'object'
     ? analysis.custom_analysis_data : {};
-  const sensitive = data.sensitive_data_detected === true || data.outcome === 'sensitive_data_ended'
+  const configuredAnalysisComplete = [...RETELL_REQUIRED_RUNTIME_ANALYSIS_FIELDS]
+    .every((field) => Object.hasOwn(data, field));
+  // Missing required fields are normalized to conservative fallbacks, but the
+  // completeness bit remains false so reporting cannot present inferred values
+  // as complete provider evidence. Present values must use exact canonical tokens.
+  const outcome = Object.hasOwn(data, 'outcome')
+    ? validateOutcome(data.outcome) : 'unresolved';
+  const coverageTrigger = Object.hasOwn(data, 'coverage_trigger')
+    ? data.coverage_trigger : 'Unknown';
+  invariant(COVERAGE_TRIGGERS.has(coverageTrigger), 'INVALID_ANALYSIS', 'Coverage trigger is invalid.');
+  const customerType = Object.hasOwn(data, 'customer_type')
+    ? data.customer_type : 'unknown';
+  invariant(CUSTOMER_TYPES.has(customerType),
+    'INVALID_ANALYSIS', 'Customer type is invalid.');
+  const urgency = Object.hasOwn(data, 'urgency') ? data.urgency : 'unknown';
+  invariant(URGENCIES.has(urgency), 'INVALID_ANALYSIS', 'Urgency is invalid.');
+  const sensitiveDataDetected = Object.hasOwn(data, 'sensitive_data_detected')
+    ? boolean(data.sensitive_data_detected, 'sensitive_data_detected') : false;
+  const workflowFailureEvidenceComplete = Object.hasOwn(data, 'workflow_failure_code')
+    && Object.hasOwn(data, 'workflow_failure_text');
+  const sensitive = sensitiveDataDetected || outcome === 'sensitive_data_ended'
     || isHighConfidencePaymentCard(data.callback_number) || containsObviousSensitiveData([
       data.caller_name, data.caller_intent, data.issue_summary, data.city_or_zip,
       data.specific_person_requested, data.workflow_failure_text,
@@ -90,23 +111,18 @@ function extractAnalysis(call, documentedMethods = new Set()) {
     coverageTrigger: COVERAGE_TRIGGERS.has(data.coverage_trigger) ? data.coverage_trigger : 'Unknown',
     callerName: null, callbackNumber: null, customerType: 'unknown', callerIntent: null,
     issueSummary: null, cityOrZip: null, urgency: 'unknown', specificPersonRequested: null,
-    bookableOpportunity: false, officeFollowUpRequired: false,
+    // Privacy minimization deliberately withholds these provider assertions.
+    // Null prevents downstream reporting from turning erased true values into
+    // a confident zero.
+    bookableOpportunity: null, officeFollowUpRequired: null,
     workflowFailureCode: null, workflowFailureText: null,
     value: Object.freeze({ evidenceClass: 'unknown', valueMinorUnits: null, currency: null,
       methodId: null, methodVersion: null, source: 'retell' }),
-    sensitiveDataMinimized: true,
+    sensitiveDataMinimized: true, configuredAnalysisComplete,
+    workflowFailureEvidenceComplete: false,
   });
-  const outcome = validateOutcome(data.outcome || 'unresolved');
-  const coverageTrigger = data.coverage_trigger || 'Unknown';
-  invariant(COVERAGE_TRIGGERS.has(coverageTrigger), 'INVALID_ANALYSIS', 'Coverage trigger is invalid.');
   const callbackNumber = data.callback_number === undefined || data.callback_number === null
     || data.callback_number === '' ? null : e164(data.callback_number, 'callback_number');
-  const customerType = data.customer_type || 'unknown';
-  invariant(new Set(['new', 'existing', 'unknown']).has(customerType),
-    'INVALID_ANALYSIS', 'Customer type is invalid.');
-  const urgency = data.urgency || 'unknown';
-  invariant(new Set(['routine', 'urgent', 'immediate_danger', 'unknown']).has(urgency),
-    'INVALID_ANALYSIS', 'Urgency is invalid.');
   const bookableOpportunity = data.bookable_opportunity === undefined
     || data.bookable_opportunity === null ? null
     : boolean(data.bookable_opportunity, 'bookable_opportunity');
@@ -130,6 +146,7 @@ function extractAnalysis(call, documentedMethods = new Set()) {
     specificPersonRequested: text(data.specific_person_requested, 'specific_person_requested', 120),
     bookableOpportunity, officeFollowUpRequired, workflowFailureCode, workflowFailureText,
     value: validateValueEvidence(data, documentedMethods), sensitiveDataMinimized: false,
+    configuredAnalysisComplete, workflowFailureEvidenceComplete,
   });
 }
 

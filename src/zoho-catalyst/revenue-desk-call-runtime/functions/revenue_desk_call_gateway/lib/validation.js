@@ -166,7 +166,8 @@ function validateInboundPayload(input) {
   }
   return Object.freeze({
     event: 'call_inbound',
-    eventTimestamp: unixMillis(value.event_timestamp, 'inbound webhook.event_timestamp'),
+    eventTimestamp: value.event_timestamp === undefined
+      ? null : unixMillis(value.event_timestamp, 'inbound webhook.event_timestamp'),
     agentId: value.call_inbound.agent_id === undefined ? null : identifier(value.call_inbound.agent_id, 'inbound webhook.call_inbound.agent_id'),
     agentVersion: value.call_inbound.agent_version === undefined ? null : integer(value.call_inbound.agent_version, 'inbound webhook.call_inbound.agent_version', 0, 1_000_000),
     fromNumber: e164(value.call_inbound.from_number, 'inbound webhook.call_inbound.from_number'),

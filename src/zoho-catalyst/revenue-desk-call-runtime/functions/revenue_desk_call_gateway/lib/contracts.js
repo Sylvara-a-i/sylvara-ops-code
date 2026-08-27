@@ -40,6 +40,17 @@ const VALUE_EVIDENCE_CLASSES = freezeSet(contract.value_evidence_classes);
 const MVP_REPORT_VALUE_EVIDENCE_CLASSES = freezeSet(contract.mvp_report_value_evidence_classes);
 const MVP_REPORT_VALUE_EVIDENCE_SOURCES = freezeSet(contract.mvp_report_value_evidence_sources);
 const RETELL_CUSTOM_ANALYSIS_FIELDS = freezeSet(contract.retell_custom_analysis_fields);
+const RETELL_LIVE_SHARED_AGENT_ANALYSIS_FIELDS = freezeSet(
+  contract.retell_live_shared_agent_analysis_fields,
+);
+const RETELL_REQUIRED_RUNTIME_ANALYSIS_FIELDS = freezeSet(
+  contract.retell_required_runtime_analysis_fields,
+);
+const RETELL_CONVERSATION_VARIABLE_FIELDS = freezeSet(
+  contract.retell_conversation_variable_fields,
+);
+const CUSTOMER_TYPES = freezeSet(contract.customer_types);
+const URGENCIES = freezeSet(contract.urgencies);
 const OPTIONAL_VALUE_EVIDENCE_FIELDS = freezeSet(contract.optional_value_evidence_fields);
 const RETELL_EVENTS = freezeSet(contract.retell_events);
 const NOTIFICATION_STATES = freezeSet(contract.notification_states);
@@ -113,6 +124,25 @@ function assertContract() {
     || contract.retell_custom_analysis_readback.status !== 'pending_retell_agent_qa') {
     throw new Error('Unexpected Retell analysis readback status.');
   }
+  if (RETELL_LIVE_SHARED_AGENT_ANALYSIS_FIELDS.size !== 11
+    || [...RETELL_LIVE_SHARED_AGENT_ANALYSIS_FIELDS]
+      .some((field) => !RETELL_CUSTOM_ANALYSIS_FIELDS.has(field))
+    || RETELL_REQUIRED_RUNTIME_ANALYSIS_FIELDS.size !== 5
+    || [...RETELL_REQUIRED_RUNTIME_ANALYSIS_FIELDS]
+      .some((field) => !RETELL_LIVE_SHARED_AGENT_ANALYSIS_FIELDS.has(field))) {
+    throw new Error('Unexpected live or required Retell analysis field contract.');
+  }
+  if (RETELL_CONVERSATION_VARIABLE_FIELDS.size !== 15
+    || !RETELL_CONVERSATION_VARIABLE_FIELDS.has('configuration_version')
+    || !RETELL_CONVERSATION_VARIABLE_FIELDS.has('services_handled_json')
+    || RETELL_CONVERSATION_VARIABLE_FIELDS.has('configuration_version_id')
+    || RETELL_CONVERSATION_VARIABLE_FIELDS.has('ownership_token')) {
+    throw new Error('Unexpected Retell conversation-variable allowlist.');
+  }
+  if (CUSTOMER_TYPES.size !== 3 || !CUSTOMER_TYPES.has('unknown')
+    || URGENCIES.size !== 4 || !URGENCIES.has('immediate_danger')) {
+    throw new Error('Unexpected Retell customer or urgency enum contract.');
+  }
   if (OPTIONAL_VALUE_EVIDENCE_FIELDS.size !== 5
     || !OPTIONAL_VALUE_EVIDENCE_FIELDS.has('value_evidence_class')) {
     throw new Error('Unexpected optional value-evidence surface.');
@@ -183,6 +213,11 @@ module.exports = Object.freeze({
   MVP_REPORT_VALUE_EVIDENCE_CLASSES,
   MVP_REPORT_VALUE_EVIDENCE_SOURCES,
   RETELL_CUSTOM_ANALYSIS_FIELDS,
+  RETELL_LIVE_SHARED_AGENT_ANALYSIS_FIELDS,
+  RETELL_REQUIRED_RUNTIME_ANALYSIS_FIELDS,
+  RETELL_CONVERSATION_VARIABLE_FIELDS,
+  CUSTOMER_TYPES,
+  URGENCIES,
   OPTIONAL_VALUE_EVIDENCE_FIELDS,
   RETELL_EVENTS,
   NOTIFICATION_STATES,

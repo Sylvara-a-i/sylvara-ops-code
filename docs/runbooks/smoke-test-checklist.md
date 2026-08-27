@@ -43,7 +43,7 @@ This scope exercises source locally or in a separately authorized isolated Devel
 - [ ] Two synthetic Catalyst clients use different client/deployment/configuration-version/company/service-area/recipient/number values and the same reviewed shared agent version.
 - [ ] Each synthetic number value resolves only its own versioned deployment/configuration; this backend isolation proof does not require buying a second live Retell number.
 - [ ] All seven exact gate values and every ownership/approval/status/expiry/count invariant pass before normal intake.
-- [ ] Every known authenticated invalid, unknown, ambiguous, mismatched, inactive, expired, or exhausted resolution returns HTTP 200 with `{ "call_inbound": { "reject": true } }`, starts no agent, and creates no resolver-side write.
+- [ ] Every known authenticated invalid, unknown, ambiguous, mismatched, inactive, expired, or exhausted resolution returns HTTP 200 with `{ "call_inbound": { "reject": true } }`, starts no agent, creates no call, notification, Analytics fact, or failure row, and retains exactly one minimized replay-safe `inbound_resolution` receipt.
 - [ ] Transport/authentication/timeout/503/unavailable, malformed-response, and invalid-override cases may fall back only to the number-bound shared agent; its exact Configuration Unavailable gate collects no caller data.
 - [ ] A resolver request fails at a durable handled count of 25; processing the 25th unique handled call completes the deployment; any already-in-flight overshoot is counted and reported honestly.
 - [ ] Duplicate, delayed, reordered, malformed, and retried events preserve one immutable call binding and one canonical outcome.

@@ -92,7 +92,7 @@ function paidIdentity(config, current) {
 
 function terminalSummary(overrides = {}) {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     dealId: "100000000000001",
     deploymentId: "deployment_A",
     configurationVersion: "cfg_A_v1",

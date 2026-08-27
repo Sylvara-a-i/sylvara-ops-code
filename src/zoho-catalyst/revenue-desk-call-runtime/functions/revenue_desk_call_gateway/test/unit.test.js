@@ -382,10 +382,27 @@ test('unit: approved gate taxonomies, engagement types, and capability profiles 
     'specific_person_requested', 'sensitive_data_detected', 'bookable_opportunity',
     'office_follow_up_required', 'workflow_failure_code', 'workflow_failure_text',
   ]);
+  assert.deepEqual([...contracts.RETELL_LIVE_SHARED_AGENT_ANALYSIS_FIELDS], [
+    'outcome', 'coverage_trigger', 'caller_name', 'callback_number', 'customer_type',
+    'caller_intent', 'issue_summary', 'city_or_zip', 'urgency',
+    'specific_person_requested', 'sensitive_data_detected',
+  ]);
+  assert.deepEqual([...contracts.RETELL_REQUIRED_RUNTIME_ANALYSIS_FIELDS], [
+    'outcome', 'coverage_trigger', 'customer_type', 'urgency', 'sensitive_data_detected',
+  ]);
+  assert.deepEqual([...contracts.RETELL_CONVERSATION_VARIABLE_FIELDS], [
+    'configuration_version', 'company_description', 'callback_expectation', 'client_id',
+    'unsupported_services_json', 'business_hours', 'coverage_mode', 'capability_profile',
+    'service_area_json', 'company_name', 'resolver_status', 'deployment_id',
+    'engagement_type', 'urgent_conditions_json', 'services_handled_json',
+  ]);
+  assert.deepEqual([...contracts.CUSTOMER_TYPES], ['new', 'existing', 'unknown']);
+  assert.deepEqual([...contracts.URGENCIES], ['routine', 'urgent', 'immediate_danger', 'unknown']);
   assert.deepEqual(contracts.CONTRACT.retell_custom_analysis_readback, {
     runtime_supported_field_count: 15,
     live_shared_agent_field_count: 11,
     status: 'pending_retell_agent_qa',
+    caller_intent_value_contract: 'bounded text only; read-only metadata exposed the field but not an authoritative complete enum, so no closed value set is inferred',
     missing_evidence_behavior: 'preserve null and withhold affected aggregates',
   });
   assert.deepEqual([...contracts.OPTIONAL_VALUE_EVIDENCE_FIELDS], [
@@ -691,7 +708,14 @@ test('unit: optional bounded SIP headers are accepted then discarded', () => {
       from_number: '+15551110001', to_number: '+15550000001',
       custom_sip_headers: { 'X-Synthetic-Trace': 'discard-me' } } });
   assert.equal(normalized.toNumber, '+15550000001');
+  assert.equal(normalized.eventTimestamp, 1_800_000_000_000);
   assert.equal(Object.hasOwn(normalized, 'customSipHeaders'), false);
+
+  const currentContract = validateInboundPayload({ event: 'call_inbound',
+    call_inbound: { from_number: '+15551110001', to_number: '+15550000001' } });
+  assert.equal(currentContract.eventTimestamp, null);
+  assert.equal(currentContract.agentId, null);
+  assert.equal(currentContract.agentVersion, null);
 });
 
 test('unit: Retell post-call duration is required, integral, and bounded', () => {
@@ -702,6 +726,35 @@ test('unit: Retell post-call duration is required, integral, and bounded', () =>
     payload.call.duration_ms = duration;
     assert.throws(() => validateEventEnvelope(payload), { code: 'INVALID_SCHEMA' });
   }
+});
+
+test('unit: live field fixture and canonical required enum tokens stay exact', () => {
+  const custom = eventPayload('call_analyzed', 'analysis_contract_unit', {}, 'A')
+    .call.call_analysis.custom_analysis_data;
+  assert.deepEqual(Object.keys(custom), [...contracts.RETELL_LIVE_SHARED_AGENT_ANALYSIS_FIELDS]);
+  assert.equal(custom.caller_intent, 'service_request');
+  assert.equal(custom.sensitive_data_detected, false);
+  const complete = extractAnalysis({ call_analysis: { custom_analysis_data: custom } });
+  assert.equal(complete.configuredAnalysisComplete, true);
+  assert.equal(complete.workflowFailureEvidenceComplete, false);
+
+  for (const [field, value] of [
+    ['outcome', 'Potential Job'],
+    ['coverage_trigger', 'afterhours'],
+    ['customer_type', 'New'],
+    ['urgency', 'Routine'],
+    ['sensitive_data_detected', 'false'],
+  ]) {
+    assert.throws(() => extractAnalysis({ call_analysis: { custom_analysis_data: {
+      ...custom, [field]: value,
+    } } }));
+  }
+
+  const missingRequired = { ...custom };
+  delete missingRequired.sensitive_data_detected;
+  assert.equal(extractAnalysis({ call_analysis: {
+    custom_analysis_data: missingRequired,
+  } }).configuredAnalysisComplete, false);
 });
 
 test('unit: sensitive-data signals minimize every caller field before value validation', () => {
@@ -720,10 +773,11 @@ test('unit: sensitive-data signals minimize every caller field before value vali
     assert.equal(result.callerName, null);
     assert.equal(result.callbackNumber, null);
     assert.equal(result.issueSummary, null);
-    assert.equal(result.bookableOpportunity, false);
-    assert.equal(result.officeFollowUpRequired, false);
+    assert.equal(result.bookableOpportunity, null);
+    assert.equal(result.officeFollowUpRequired, null);
     assert.equal(result.workflowFailureCode, null);
     assert.equal(result.workflowFailureText, null);
+    assert.equal(result.workflowFailureEvidenceComplete, false);
     assert.equal(result.value.evidenceClass, 'unknown');
   }
 });

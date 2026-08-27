@@ -133,10 +133,59 @@
     "workflow_failure_code",
     "workflow_failure_text"
   ],
+  "retell_live_shared_agent_analysis_fields": [
+    "outcome",
+    "coverage_trigger",
+    "caller_name",
+    "callback_number",
+    "customer_type",
+    "caller_intent",
+    "issue_summary",
+    "city_or_zip",
+    "urgency",
+    "specific_person_requested",
+    "sensitive_data_detected"
+  ],
+  "retell_required_runtime_analysis_fields": [
+    "outcome",
+    "coverage_trigger",
+    "customer_type",
+    "urgency",
+    "sensitive_data_detected"
+  ],
+  "retell_conversation_variable_fields": [
+    "configuration_version",
+    "company_description",
+    "callback_expectation",
+    "client_id",
+    "unsupported_services_json",
+    "business_hours",
+    "coverage_mode",
+    "capability_profile",
+    "service_area_json",
+    "company_name",
+    "resolver_status",
+    "deployment_id",
+    "engagement_type",
+    "urgent_conditions_json",
+    "services_handled_json"
+  ],
+  "customer_types": [
+    "new",
+    "existing",
+    "unknown"
+  ],
+  "urgencies": [
+    "routine",
+    "urgent",
+    "immediate_danger",
+    "unknown"
+  ],
   "retell_custom_analysis_readback": {
     "runtime_supported_field_count": 15,
     "live_shared_agent_field_count": 11,
     "status": "pending_retell_agent_qa",
+    "caller_intent_value_contract": "bounded text only; read-only metadata exposed the field but not an authoritative complete enum, so no closed value set is inferred",
     "missing_evidence_behavior": "preserve null and withhold affected aggregates"
   },
   "optional_value_evidence_fields": [

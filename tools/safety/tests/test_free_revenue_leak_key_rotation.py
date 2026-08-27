@@ -185,6 +185,7 @@ class SecretRotationContractTests(unittest.TestCase):
             "sylvara.crm-billing.test-customer.v1",
             "revenue-desk-analytics-conversion-v2",
             "sylvara.crm-report-summary.v1",
+            "sylvara.crm-report-summary.v2",
         ]:
             self.assertIn(domain, crm_source)
         for domain in [
@@ -202,7 +203,7 @@ class SecretRotationContractTests(unittest.TestCase):
             "revenue-desk-number-v1",
             "revenue-desk-analytics-client-v1",
             "revenue-desk-analytics-deployment-v1",
-            "sylvara.crm-report-summary.v1",
+            "sylvara.crm-report-summary.v2",
         ]:
             self.assertIn(domain, runtime_source)
 
@@ -220,6 +221,7 @@ class SecretRotationContractTests(unittest.TestCase):
         ):
             self.assertIn(required, serialized_outputs)
         self.assertIn("sylvara.crm-report-summary.v1", analytics_partition["domains"])
+        self.assertIn("sylvara.crm-report-summary.v2", analytics_partition["domains"])
         self.assertNotIn(
             "ANALYTICS_CONNECTION_LINK_NAME",
             json.dumps(self.contract),

@@ -148,7 +148,8 @@
         "revenue-desk-analytics-client-v1",
         "revenue-desk-analytics-deployment-v1",
         "revenue-desk-analytics-conversion-v2",
-        "sylvara.crm-report-summary.v1"
+        "sylvara.crm-report-summary.v1",
+        "sylvara.crm-report-summary.v2"
       ],
       "durable_outputs": [
         "AnalyticsSyncOutbox.RECORD_KEY for CRM conversion v2 facts with free_test origin and paid_service target",

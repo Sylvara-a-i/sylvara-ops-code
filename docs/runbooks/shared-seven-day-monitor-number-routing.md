@@ -114,9 +114,13 @@ coverage_mode = AfterHoursOnly | NoAnswerOverflowOnly | AfterHoursAndOverflow
 
 The same consistent read must prove a unique current `to_number` binding, matching client/deployment/version, active deployment, an exact approval receipt, a later chained activation receipt produced only after authoritative route readback, `now < expires_at`, durable `handled_call_count < 25`, and complete typed configuration. Status strings alone never prove authorization.
 
-For a known authenticated invalid, unknown, ambiguous, mismatched, unapproved, inactive, expired, or exhausted resolution, Catalyst returns HTTP 200 with `{ "call_inbound": { "reject": true } }`, creates no resolver-side call or failure row, and Retell does not start the agent. If transport or authentication fails, the request times out, the endpoint returns 503/is unavailable, JSON is malformed, or the agent override is invalid, Retell may fall back to the number-bound shared agent; its first node accepts normal intake only with every exact ownership variable and otherwise enters a direct neutral Configuration Unavailable termination. Neither path may greet as a client, collect details, use cached variables, guess ownership, select another deployment, or perform degraded intake.
+The Retell-facing `dynamic_variables` object is an exact allowlist of 15 reviewed fields: `configuration_version`, `company_description`, `callback_expectation`, `client_id`, `unsupported_services_json`, `business_hours`, `coverage_mode`, `capability_profile`, `service_area_json`, `company_name`, `resolver_status`, `deployment_id`, `engagement_type`, `urgent_conditions_json`, and `services_handled_json`. Internal proof fields such as the configuration-version ID, binding ID/version, correlation ID, resolution timestamp, and ownership token remain only in `call_inbound.metadata`; never spread the metadata object into conversation variables.
+
+For a known authenticated invalid, unknown, ambiguous, mismatched, unapproved, inactive, expired, or exhausted resolution, Catalyst returns HTTP 200 with `{ "call_inbound": { "reject": true } }`, creates no resolver-side call or failure row, and Retell does not start the agent. Retell's current inbound-webhook contract requires that explicit field to decline the call; omitting `reject` may continue with the number-bound agent. The authenticated `X-Retell-Signature` timestamp is authoritative; Retell documents `event_timestamp` among body fields that might be provided, and the runtime cross-checks it whenever present. Both Retell ingress routes enforce an eight-second end-to-end response budget, preserving two seconds of margin under the current ten-second provider timeout; exhaustion returns a sanitized retryable 503. If transport or authentication fails, the request times out, the endpoint returns 503/is unavailable, JSON is malformed, or the agent override is invalid, Retell may fall back to the number-bound shared agent; its first node accepts normal intake only with every exact ownership variable and otherwise enters a direct neutral Configuration Unavailable termination. Neither path may greet as a client, collect details, use cached variables, guess ownership, select another deployment, or perform degraded intake. Official contracts were reverified on 2026-08-27: [Inbound webhook](https://docs.retellai.com/features/inbound-call-webhook) and [Secure the webhook](https://docs.retellai.com/features/secure-webhook).
 
 Configuration Unavailable is a direct neutral termination; it is not a second intake path.
+
+An inbound resolution that commits after Catalyst has already returned the response-deadline 503 is ambiguous, not a successful admission. The durable `Resolved` receipt remains an unmatched terminal-settlement gate and keeps the deployment at `AwaitingSettlement`; the runtime must not age it into a no-call conclusion or emit final CRM/Analytics artifacts. Retell's inbound request has no call identifier, and its current webhook documentation defines up to three retries without an authoritative retry-spacing or no-call receipt. Live ingress stays dark until the separate Retell task verifies a provider-readback procedure that can bind the receipt to a created call or prove that no call was created across the retry series. Timer-based alerting may escalate the ambiguity but cannot settle it.
 
 ## Seven-Day And Practical 25-Call Stop
 
@@ -168,6 +172,8 @@ For backend isolation, the two fictional E.164 values remain distinct without pu
 
 Record sanitized pass/fail evidence. Never print signatures, keys, raw payloads, phone numbers, email addresses, or call content.
 
+The sanitized Development readback exposes 11 post-call field names: `outcome`, `coverage_trigger`, `caller_name`, `callback_number`, `customer_type`, `caller_intent`, `issue_summary`, `city_or_zip`, `urgency`, `specific_person_requested`, and `sensitive_data_detected`. It did not expose an authoritative complete `caller_intent` value catalog, so the runtime retains that field as bounded text rather than inventing a closed enum. The runtime can validate four later expanded-reporting fields, but their absence is incomplete evidence: preserve null and withhold affected aggregates, including `observed_workflow_failures`, instead of inferring zero. This field-name readback does not prove the provider's per-field required flags or authorize Retell agent testing.
+
 ## Caller Experience Proof
 
 The shared agent must:
@@ -208,6 +214,8 @@ Resolve ownership in this strict order:
 The shared `agent_id` identifies the product, never the tenant. Quarantine or fail closed on zero, multiple, or conflicting matches. Derive an opaque HMAC lookup key from the provider call identifier, bind it once to the client/deployment/configuration, and omit the raw provider identifier from reports and ordinary logs.
 
 For an authenticated event, claim the minimized event durably, normalize exactly one canonical outcome, create/update the call once, increment the eligible handled count once, and create one notification row. Duplicate, delayed, reordered, malformed, or retried events must not duplicate any of those effects.
+
+Function Job dispatch is fenced in the receipt before external submission. A timed-out original request cannot submit after a concurrent retry has already claimed dispatch. An ambiguous submit remains `Queued` with no confirmed job reference; HTTP replay acknowledges that durable state without another submit, and the worker's `retry_scan` processes the queued receipt directly. The retry trigger must therefore be deployed, read back, and kept operator-disabled until the full Development package is ready; gateway/event ingress cannot activate while queued-receipt recovery is absent.
 
 ## Catalyst Mail Email-Only Notification
 
@@ -365,6 +373,8 @@ Do not delete evidence, switch to a client-specific free-test clone, leave `send
 ## Remaining External Actions
 
 Catalyst functions, canonical tables, Jobs, migrations, external bindings, cleanup, rotation, final-main parity, and dark-Production proof remain incomplete. A phone call is not the next action. Contractor forwarding and every prospect/customer action remain outside this runbook.
+
+Deployment is consumer-first: deploy and read back `crm_billing_orchestrator` before the call gateway or worker. The consumer must accept current report-summary schema/domain v2 with a null workflow-failure total and retain v1 compatibility only for a non-null legacy count. Prove this with isolated synthetic Development evidence that does not touch a real Deal or Retell. Keep call ingress and the retry trigger dark until the exact consumer revision and both compatibility cases are read back.
 
 ## Readiness Rule
 

@@ -3,6 +3,7 @@
 const crypto = require('node:crypto');
 const {
   CONTRACT, COVERAGE_MODES, NOTIFICATION_STATES, CRM_TEST_STATUSES,
+  RETELL_CONVERSATION_VARIABLE_FIELDS,
 } = require('./contracts');
 const { validateConfigurationVersionRow } = require('./configuration-version');
 const { RevenueDeskError, invariant } = require('./errors');
@@ -51,6 +52,11 @@ const TERMINAL_RECONCILIATION_STATES = Object.freeze([
 const REPORT_DISPATCH_STATES = Object.freeze([
   'processing', 'reconciliation_required', 'pending',
 ]);
+
+function holdsEventDispatchLease(row, expectedLease) {
+  const currentLease = row.LEASE_TOKEN;
+  return row.STATUS === 'Queued' && currentLease === expectedLease;
+}
 const CONTAINED_EVENT_STATES = new Set([
   'Completed', 'RetryRequired', 'TerminalFailure', 'ReconciliationRequired',
 ]);
@@ -569,23 +575,37 @@ function unavailable(config, reasonCode) {
   return Object.freeze({
     status: CONTRACT.configuration_unavailable_status,
     reasonCode,
+    // Retell requires an explicit documented rejection. Omitting `reject`
+    // allows the call to continue with the number-bound agent.
     response: Object.freeze({ call_inbound: Object.freeze({ reject: true }) }),
   });
 }
 
-function conversationVariables(deployment, metadata) {
+function conversationVariables(deployment) {
   const item = deployment.configuration;
-  return Object.freeze({
-    ...metadata,
-    company_name: item.companyName,
+  // This object crosses into the Retell conversation. Build the reviewed 15-field
+  // surface explicitly; never spread internal ownership metadata into prompt-visible
+  // dynamic variables. The complete signed ownership proof stays in `metadata`.
+  const variables = {
+    configuration_version: deployment.configurationVersion,
     company_description: item.companyDescription || '',
-    business_hours: item.businessHours,
-    services_handled_json: JSON.stringify(item.servicesHandled),
-    unsupported_services_json: JSON.stringify(item.unsupportedServices),
-    service_area_json: JSON.stringify(item.serviceArea),
-    urgent_conditions_json: JSON.stringify(item.urgentConditions),
     callback_expectation: item.callbackExpectation,
-  });
+    client_id: deployment.clientId,
+    unsupported_services_json: JSON.stringify(item.unsupportedServices),
+    business_hours: item.businessHours,
+    coverage_mode: deployment.coverageMode,
+    capability_profile: deployment.capabilityProfile,
+    service_area_json: JSON.stringify(item.serviceArea),
+    company_name: item.companyName,
+    resolver_status: CONTRACT.resolved_status,
+    deployment_id: deployment.deploymentId,
+    engagement_type: deployment.engagementType,
+    urgent_conditions_json: JSON.stringify(item.urgentConditions),
+    services_handled_json: JSON.stringify(item.servicesHandled),
+  };
+  exactFields(variables, RETELL_CONVERSATION_VARIABLE_FIELDS,
+    'Retell conversation variables');
+  return Object.freeze(variables);
 }
 
 function parseOwnershipMetadata(metadata, config) {
@@ -660,6 +680,8 @@ function canonicalCallObject(envelope, deployment, callKey, correlationId, analy
     officeFollowUpRequired: existing.officeFollowUpRequired ?? null,
     workflowFailureCode: existing.workflowFailureCode ?? null,
     workflowFailureText: existing.workflowFailureText ?? null,
+    configuredAnalysisComplete: existing.configuredAnalysisComplete === true,
+    workflowFailureEvidenceComplete: existing.workflowFailureEvidenceComplete === true,
     value: existing.value || { evidenceClass: 'unknown', valueMinorUnits: null, currency: null,
       methodId: null, methodVersion: null, source: 'retell' },
     sensitiveDataMinimized: existing.sensitiveDataMinimized === true,
@@ -905,8 +927,13 @@ function createRuntimeService({
       const inbound = validateInboundPayload(payload);
       invariant(Number.isSafeInteger(context.signatureTimestamp),
         'EVENT_TIMESTAMP_MISMATCH', 'Verified signature timestamp is unavailable.');
-      invariant(Math.abs(context.signatureTimestamp - inbound.eventTimestamp) <= config.maxSignatureAgeMs,
-        'EVENT_TIMESTAMP_MISMATCH', 'Signed and body timestamps are inconsistent.');
+      // Retell documents event_timestamp among fields that might be provided.
+      // The verified signature timestamp is the authenticated clock; cross-check
+      // the body timestamp whenever Retell supplies it.
+      if (inbound.eventTimestamp !== null) {
+        invariant(Math.abs(context.signatureTimestamp - inbound.eventTimestamp) <= config.maxSignatureAgeMs,
+          'EVENT_TIMESTAMP_MISMATCH', 'Signed and body timestamps are inconsistent.');
+      }
       invariant((inbound.agentId === null || inbound.agentId === config.sharedAgentId)
         && (inbound.agentVersion === null || inbound.agentVersion === config.sharedAgentVersion),
       'CONFIGURATION_UNAVAILABLE', 'Inbound shared-agent binding is invalid.');
@@ -923,7 +950,7 @@ function createRuntimeService({
         call_inbound: Object.freeze({
           override_agent_id: config.sharedAgentId,
           override_agent_version: config.sharedAgentVersion,
-          dynamic_variables: conversationVariables(deployment, metadata),
+          dynamic_variables: conversationVariables(deployment),
           metadata,
         }),
       }) });
@@ -1525,29 +1552,66 @@ function createRuntimeService({
     invariant(jobAdapter && typeof jobAdapter.enqueueProcessEvent === 'function',
       'INVALID_RUNTIME_CONFIGURATION', 'Function Job adapter is unavailable.',
       { httpStatus: 503 });
+    // Claim dispatch durably before the external submit. A provider retry can
+    // observe the same receipt while the original request continues after its
+    // response deadline; only the request holding this token may submit a job.
+    // Queued rows remain directly recoverable by retryDueEvents if the holder dies.
+    const dispatchToken = crypto.randomBytes(16).toString('hex');
+    const claimed = await store.mutate(
+      receiptTable,
+      'EVENT_KEY',
+      receiptKey,
+      'RECEIPT_VERSION',
+      (row) => {
+        const pending = row.STATUS === 'Pending';
+        if (!pending) return null;
+        return {
+          STATUS: 'Queued',
+          LEASE_TOKEN: dispatchToken,
+          LEASE_EXPIRES_AT: null,
+          JOB_REFERENCE: null,
+          ENQUEUED_AT: null,
+          NEXT_ATTEMPT_AT: null,
+          LAST_ERROR_CODE: null,
+        };
+      },
+    );
+    if (claimed.STATUS !== 'Queued' || claimed.LEASE_TOKEN !== dispatchToken) {
+      return {
+        status: claimed.STATUS,
+        duplicate,
+        correlationId: claimed.CORRELATION_ID || null,
+      };
+    }
     let submission;
     try {
       submission = await jobAdapter.enqueueProcessEvent(receiptKey);
     } catch (error) {
-      const retryAt = new Date(now() + EVENT_RETRY_DELAYS_MS[0]).toISOString();
+      const errorCode = durableErrorCode(error);
       const current = await store.mutate(
         receiptTable,
         'EVENT_KEY',
         receiptKey,
         'RECEIPT_VERSION',
-        (row) => new Set(['Pending', 'Queued', 'RetryRequired']).has(row.STATUS) ? {
-          STATUS: 'RetryRequired',
-          NEXT_ATTEMPT_AT: retryAt,
-          LAST_ERROR_CODE: durableErrorCode(error),
+        (row) => holdsEventDispatchLease(row, dispatchToken) ? {
+          LEASE_TOKEN: null, LEASE_EXPIRES_AT: null,
+          JOB_REFERENCE: null, ENQUEUED_AT: null, NEXT_ATTEMPT_AT: null,
+          LAST_ERROR_CODE: errorCode,
         } : null,
       );
-      if (!new Set(['Pending', 'Queued', 'RetryRequired']).has(current.STATUS)) {
+      if (current.STATUS !== 'Queued'
+        || current.LEASE_TOKEN !== null
+        || current.JOB_REFERENCE !== null
+        || current.LAST_ERROR_CODE !== errorCode) {
         return {
           status: current.STATUS,
           duplicate,
           correlationId: current.CORRELATION_ID || null,
         };
       }
+      // Job submission and readback failures are ambiguous. Keep the durable
+      // receipt Queued for direct retry-scan processing; never re-submit the
+      // external job merely because its provider outcome is unknown.
       throw error;
     }
     const enqueuedAt = new Date(now()).toISOString();
@@ -1556,11 +1620,11 @@ function createRuntimeService({
       'EVENT_KEY',
       receiptKey,
       'RECEIPT_VERSION',
-      (row) => new Set(['Pending', 'RetryRequired']).has(row.STATUS) ? {
-        STATUS: 'Queued',
+      (row) => holdsEventDispatchLease(row, dispatchToken) ? {
+        LEASE_TOKEN: null,
+        LEASE_EXPIRES_AT: null,
         JOB_REFERENCE: submission.jobId,
         ENQUEUED_AT: enqueuedAt,
-        NEXT_ATTEMPT_AT: null,
         LAST_ERROR_CODE: null,
       } : null,
     );
@@ -1618,17 +1682,8 @@ function createRuntimeService({
     const claimed = await store.insertUnique(receiptTable, 'EVENT_KEY', receipt, RECEIPT_IMMUTABLE);
     if (claimed.inserted) return enqueueReceipt(receiptKey, false);
     if (claimed.row.STATUS === 'Pending') return enqueueReceipt(receiptKey, true);
-    if (claimed.row.STATUS === 'RetryRequired'
-      && Date.parse(claimed.row.NEXT_ATTEMPT_AT || '') <= now()) {
-      return enqueueReceipt(receiptKey, true);
-    }
-    if (claimed.row.STATUS === 'RetryRequired') {
-      throw new RevenueDeskError(
-        'EVENT_ENQUEUE_PENDING',
-        'Event is durably retained and awaiting a bounded retry.',
-        { httpStatus: 503, retryable: true },
-      );
-    }
+    // Once the receipt is durable, processing retries belong exclusively to
+    // retry_scan. HTTP replay must never create another external Function Job.
     return {
       status: claimed.row.STATUS,
       duplicate: true,

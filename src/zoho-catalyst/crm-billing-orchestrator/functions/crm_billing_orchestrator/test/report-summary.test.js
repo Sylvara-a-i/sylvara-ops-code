@@ -16,7 +16,7 @@ const { REVISION, baseEnvironment } = require("./helpers");
 
 function summary(overrides = {}) {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     dealId: "100000000000001",
     deploymentId: "deployment_A",
     configurationVersion: "cfg_A_v1",
@@ -77,6 +77,33 @@ test("report revision identity changes when classification changes within the sa
     reportSummaryIdentity(config, first).operationKey,
     reportSummaryIdentity(config, revised).operationKey,
   );
+});
+
+test("incomplete workflow-failure evidence remains null in the CRM patch", () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const parsed = parseReportSummary(summary({ observedWorkflowFailures: null }));
+  assert.equal(reportSummaryPatch(config, parsed).Test_Observed_Workflow_Failures, null);
+  assert.throws(() => parseReportSummary(summary({ observedWorkflowFailures: 0.5 })));
+});
+
+test("legacy schema v1 remains readable but cannot represent missing workflow evidence", () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const legacy = parseReportSummary(summary({ schemaVersion: 1 }));
+  const current = parseReportSummary(summary());
+  assert.equal(legacy.schemaVersion, 1);
+  assert.throws(() => parseReportSummary(summary({
+    schemaVersion: 1,
+    observedWorkflowFailures: null,
+  })));
+  assert.notEqual(
+    reportSummaryIdentity(config, legacy).operationKey,
+    reportSummaryIdentity(config, current).operationKey,
+  );
+  assert.throws(() => parseReportSummary(summary({
+    schemaVersion: "1",
+    observedWorkflowFailures: null,
+  })));
+  assert.throws(() => parseReportSummary(summary({ schemaVersion: "2" })));
 });
 
 test("report-summary identifiers, confidence text, and paired range bounds fail closed at CRM limits", () => {

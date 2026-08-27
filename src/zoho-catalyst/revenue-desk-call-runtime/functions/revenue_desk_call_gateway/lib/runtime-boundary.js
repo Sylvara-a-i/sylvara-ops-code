@@ -2,7 +2,7 @@
 
 const crypto = require('node:crypto');
 const { loadConfig } = require('./config');
-const { invariant } = require('./errors');
+const { RevenueDeskError, invariant } = require('./errors');
 const { readRawBody, parseJson, json } = require('./http');
 const { verifyRetellSignature, payloadFingerprint } = require('./security');
 const { createCatalystStore } = require('./catalyst-store');
@@ -11,6 +11,36 @@ const { createRuntimeService } = require('./runtime-service');
 
 const RETELL_SIGNATURE_HEADER = 'x-retell-signature';
 const READINESS_TOKEN_HEADER = 'x-revenue-desk-readiness-token';
+// Retell currently allows ten seconds for a webhook response. Reserve two seconds
+// for platform scheduling and response delivery instead of letting a slow SDK
+// call run through the provider's retry boundary.
+const RETELL_RESPONSE_BUDGET_MS = 8_000;
+
+function remainingResponseBudget(deadlineAt, monotonicNow) {
+  const remaining = Math.floor(deadlineAt - monotonicNow());
+  invariant(Number.isSafeInteger(remaining) && remaining > 0,
+    'RETELL_RESPONSE_DEADLINE_EXCEEDED', 'Retell response deadline was exceeded.',
+    { httpStatus: 503, retryable: true, ambiguous: true });
+  return remaining;
+}
+
+function withResponseDeadline(operation, deadlineAt, monotonicNow) {
+  const remaining = remainingResponseBudget(deadlineAt, monotonicNow);
+  let timer;
+  // Catalyst SDK operations are not cancellable. This race bounds the provider
+  // response only; delayed completions and provider retries must still converge
+  // through the service's durable receipt, idempotency, and readback controls.
+  return Promise.race([
+    Promise.resolve().then(operation),
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new RevenueDeskError(
+        'RETELL_RESPONSE_DEADLINE_EXCEEDED',
+        'Retell response deadline was exceeded.',
+        { httpStatus: 503, retryable: true, ambiguous: true },
+      )), remaining);
+    }),
+  ]).finally(() => clearTimeout(timer));
+}
 
 function headerValues(request, name) {
   const normalized = name.toLowerCase();
@@ -88,7 +118,8 @@ function safeError(error) {
     'CATALYST_UPDATE_FAILED', 'CATALYST_CONCURRENCY_CONFLICT',
     'DURABLE_IDEMPOTENCY_CONFLICT', 'CATALYST_READINESS_FAILED',
     'CATALYST_JOB_SUBMIT_TIMEOUT', 'CATALYST_JOB_SUBMIT_FAILED',
-    'CATALYST_JOB_READBACK_FAILED', 'EVENT_ENQUEUE_PENDING',
+    'CATALYST_JOB_READBACK_FAILED',
+    'RETELL_RESPONSE_DEADLINE_EXCEEDED',
     'UNSTAMPED_ARTIFACT', 'SOURCE_REVISION_MISMATCH',
     'METHOD_NOT_ALLOWED', 'ROUTE_NOT_FOUND', 'CONTENT_TYPE_NOT_ALLOWED',
   ]);
@@ -107,12 +138,24 @@ function createRequestListener(options = {}) {
     storeFactory = createCatalystStore,
     jobFactory = (app, config) => new CatalystJobAdapter({ app, config }),
     artifactSourceRevision,
+    monotonicNow = () => performance.now(),
+    retellResponseBudgetMs = RETELL_RESPONSE_BUDGET_MS,
   } = options;
   invariant(catalystSdk && typeof catalystSdk.initialize === 'function',
     'INVALID_RUNTIME_CONFIGURATION', 'Catalyst SDK is unavailable.', { httpStatus: 503 });
+  invariant(typeof monotonicNow === 'function'
+    && Number.isSafeInteger(retellResponseBudgetMs)
+    && retellResponseBudgetMs >= 10
+    && retellResponseBudgetMs <= RETELL_RESPONSE_BUDGET_MS,
+  'INVALID_RUNTIME_CONFIGURATION', 'Retell response budget is invalid.', { httpStatus: 503 });
   return async function requestListener(request, response) {
     let route = 'unknown';
     try {
+      const requestStartedAt = monotonicNow();
+      invariant(Number.isFinite(requestStartedAt),
+        'INVALID_RUNTIME_CONFIGURATION', 'Monotonic runtime clock is invalid.',
+        { httpStatus: 503 });
+      const responseDeadlineAt = requestStartedAt + retellResponseBudgetMs;
       const config = loadConfig(environment, { artifactSourceRevision });
       invariant(config.deploymentMode === 'active' && config.environment === 'development',
         'PRODUCTION_DARK', 'Revenue Desk Production runtime is dark.', { httpStatus: 503 });
@@ -167,7 +210,10 @@ function createRequestListener(options = {}) {
         'Content type must be application/json.', { httpStatus: 415 });
       const rawBody = await readRawBody(request, {
         maximumBytes: config.maxRequestBodyBytes,
-        timeoutMs: config.inboundBodyTimeoutMs,
+        timeoutMs: Math.min(
+          config.inboundBodyTimeoutMs,
+          remainingResponseBudget(responseDeadlineAt, monotonicNow),
+        ),
       });
       const signature = verifyRetellSignature({
         rawBody,
@@ -186,10 +232,10 @@ function createRequestListener(options = {}) {
           now,
           logger,
         });
-        const result = await service.resolveInbound(payload, {
+        const result = await withResponseDeadline(() => service.resolveInbound(payload, {
           signatureTimestamp: signature.timestamp,
           requestFingerprint: payloadFingerprint(config.eventSecret, rawBody),
-        });
+        }), responseDeadlineAt, monotonicNow);
         json(response, 200, result.response);
         return;
       }
@@ -201,7 +247,11 @@ function createRequestListener(options = {}) {
         now,
         logger,
       });
-      const result = await service.acceptEvent(payload, rawBody);
+      const result = await withResponseDeadline(
+        () => service.acceptEvent(payload, rawBody),
+        responseDeadlineAt,
+        monotonicNow,
+      );
       json(response, 200, {
         ok: true,
         status: result.status,
