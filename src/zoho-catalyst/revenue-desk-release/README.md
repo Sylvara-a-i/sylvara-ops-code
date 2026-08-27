@@ -68,6 +68,14 @@ readback. `remainingRoutes` must exactly equal the untouched suffix of the
 original full `routes` array. Gaps, reordered routes, extra metadata, readback
 drift, zero-route continuations, and already-complete continuations fail closed.
 
+Build that allowlist from the API-route list response using
+`normalizeRouteListReadback`. The provider's enhanced route-detail response may
+substitute the function display name for `target_id`; it is not authoritative
+for the packet's numeric target binding and must fail normalization. Supply
+authentication separately from the independent UI readback. Never merge raw
+provider metadata into the normalized route or compare the enhanced display
+value with the approved numeric target ID.
+
 `buildRouteRequests` accepts only a bound packet plus a separate approval envelope
 whose `packetSha256` binds the complete packet. The envelope must contain canonical
 UTC `capturedAt` and `expiresAt` timestamps no more than 15 minutes apart and

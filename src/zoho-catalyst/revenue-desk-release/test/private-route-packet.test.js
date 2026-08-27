@@ -17,6 +17,7 @@ const {
   digestRouteContract,
   digestRoutePacket,
   digestRuntimePathBindings,
+  normalizeRouteListReadback,
   validateRouteApproval,
   validateRoutePacket,
 } = require("../scripts/validate-private-route-packet");
@@ -143,6 +144,35 @@ test("validates one exact 12-route definition without authorizing activation", (
   assert.equal(result.routeCount, 12);
   assert.match(result.digest, /^[a-f0-9]{64}$/);
   assert.equal(digestRoutePacket(Object.fromEntries(Object.entries(value).reverse())), result.digest);
+});
+
+test("normalizes only canonical route-list fields and rejects enhanced detail target names", () => {
+  const expected = continuationPacket(1).existingRoutePrefix[0];
+  const routeListReadback = {
+    ...structuredClone(expected),
+    api_id: "808",
+    created_by: { email_id: "must-not-enter-the-packet@example.invalid" },
+    created_time: "2026-08-27T00:00:00.000Z",
+  };
+  delete routeListReadback.authentication;
+
+  const normalized = normalizeRouteListReadback(
+    routeListReadback,
+    expected.authentication,
+  );
+  assert.deepEqual(normalized, expected);
+  assert.equal(Object.hasOwn(normalized, "api_id"), false);
+  assert.equal(Object.hasOwn(normalized, "created_by"), false);
+
+  routeListReadback.target_id = "revenue_desk_call_gateway";
+  assert.throws(
+    () => normalizeRouteListReadback(routeListReadback, expected.authentication),
+    /routeListReadback\[0\]\.target_id is invalid/,
+  );
+  assert.throws(
+    () => normalizeRouteListReadback(routeListReadback, null),
+    /authentication must come from an independent UI readback/,
+  );
 });
 
 test("approval binds one deeply immutable route contract and rejects contract-file drift", () => {

@@ -275,6 +275,50 @@ function validateExistingRouteReadback(route, index) {
   }
 }
 
+function normalizeRouteListReadback(route, authentication, index = 0) {
+  if (!plainObject(route)) fail(`routeListReadback[${index}] must be an object`);
+  if (!Array.isArray(authentication)) {
+    fail(`routeListReadback[${index}].authentication must come from an independent UI readback`);
+  }
+
+  // The enhanced route-detail response substitutes a function display name for
+  // target_id. Only the API-route list preserves the canonical numeric binding.
+  // Rebuild the public allowlist explicitly so actor data and provider metadata
+  // can never enter the continuation packet or its digest.
+  const normalized = {
+    authentication: [...authentication],
+    method: route.method,
+    name: route.name,
+    source_endpoint: route.source_endpoint,
+    target: route.target,
+    target_endpoint: route.target_endpoint,
+    target_id: route.target_id,
+    throttling: {
+      ip: {
+        duration: {
+          days: route.throttling?.ip?.duration?.days,
+          hours: route.throttling?.ip?.duration?.hours,
+          minutes: route.throttling?.ip?.duration?.minutes,
+          seconds: route.throttling?.ip?.duration?.seconds,
+        },
+        limit: route.throttling?.ip?.limit,
+      },
+      overall: {
+        duration: {
+          days: route.throttling?.overall?.duration?.days,
+          hours: route.throttling?.overall?.duration?.hours,
+          minutes: route.throttling?.overall?.duration?.minutes,
+          seconds: route.throttling?.overall?.duration?.seconds,
+        },
+        limit: route.throttling?.overall?.limit,
+      },
+    },
+  };
+  validateExistingRouteReadback(normalized, index);
+  numericId(normalized.target_id, `routeListReadback[${index}].target_id`);
+  return normalized;
+}
+
 function initialBoundPacketFromContinuation(packet) {
   return {
     approvedSourceRevision: packet.approvedSourceRevision,
@@ -578,6 +622,7 @@ module.exports = {
   digestRouteContract,
   digestRoutePacket,
   digestRuntimePathBindings,
+  normalizeRouteListReadback,
   ROUTE_CONTRACT_SHA256,
   validateRouteApproval,
   validateRoutePacket,
