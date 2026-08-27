@@ -13,6 +13,7 @@ const {
   ROUTE_CONTRACT_SHA256,
   assertPrivatePacketPath,
   buildRouteRequests,
+  digestExistingRoutePrefix,
   digestRouteContract,
   digestRoutePacket,
   digestRuntimePathBindings,
@@ -83,7 +84,7 @@ function packet(phase = "definition") {
 }
 
 function approval(value, overrides = {}) {
-  return {
+  const envelope = {
     approvedSourceRevision: value.approvedSourceRevision,
     capturedAt: "2026-08-26T18:00:00.000Z",
     expiresAt: "2026-08-26T18:15:00.000Z",
@@ -91,9 +92,47 @@ function approval(value, overrides = {}) {
     prestateEvidenceSha256: value.prestateEvidenceSha256,
     routeContractSha256: value.routeContractSha256,
     routeCreationAuthorized: true,
-    schemaVersion: 1,
+    schemaVersion: value.schemaVersion,
     singleUse: true,
-    ...overrides,
+  };
+  if (value.schemaVersion === 2) {
+    Object.assign(envelope, {
+      continuationAuthorized: true,
+      existingRoutePrefixSha256: value.existingRoutePrefixSha256,
+      initialBoundPacketSha256: value.initialBoundPacketSha256,
+    });
+  }
+  return { ...envelope, ...overrides };
+}
+
+function continuationPacket(existingCount = 1) {
+  const initial = packet("bound");
+  const initialRequests = buildRouteRequests(initial, approval(initial), NOW_MS);
+  const existingRoutePrefix = initialRequests.slice(0, existingCount).map(({ body }) => ({
+    ...structuredClone(body),
+    target: "advancedio",
+    throttling: {
+      ip: {
+        duration: { days: 0, hours: 0, minutes: 1, seconds: 0 },
+        limit: body.throttling.ip.limit,
+      },
+      overall: {
+        duration: { days: 0, hours: 0, minutes: 1, seconds: 0 },
+        limit: body.throttling.overall.limit,
+      },
+    },
+  }));
+  return {
+    ...structuredClone(initial),
+    existingRoutePrefix,
+    existingRoutePrefixSha256: digestExistingRoutePrefix(existingRoutePrefix),
+    gatewayPrestate: { enabled: false, routeCount: existingCount },
+    initialBoundPacketSha256: digestRoutePacket(initial),
+    initialPrestateEvidenceSha256: initial.prestateEvidenceSha256,
+    phase: "continuation",
+    prestateEvidenceSha256: "c".repeat(64),
+    remainingRoutes: structuredClone(initial.routes.slice(existingCount)),
+    schemaVersion: 2,
   };
 }
 
@@ -274,6 +313,220 @@ test("rejects Production, activation, route drift, endpoint reuse, and target am
       route.targetId = "902";
     });
   assert.throws(() => validateRoutePacket(ambiguous), /share a target ID/);
+});
+
+test("schema-v2 continuation emits only the untouched canonical suffix", () => {
+  const value = continuationPacket(1);
+  const original = packet("bound");
+  assert.throws(
+    () => validateRoutePacket(value),
+    /separately preserved original schema-v1 bound packet/,
+  );
+  const result = validateRoutePacket(value, original);
+  assert.equal(result.schemaVersion, 2);
+  assert.equal(result.phase, "continuation");
+  assert.equal(result.routeCount, 12);
+  assert.equal(result.existingRouteCount, 1);
+  assert.equal(result.requestRouteCount, 11);
+  assert.equal(result.existingRoutePrefixSha256, value.existingRoutePrefixSha256);
+
+  const requests = buildRouteRequests(value, approval(value), NOW_MS, original);
+  assert.equal(requests.length, 11);
+  assert.equal(requests[0].body.name, "RETELL_EVENTS");
+  assert.equal(requests.at(-1).body.name, "CRM_BILLING");
+  assert.equal(requests.some(({ body }) => body.name === "RETELL_INBOUND"), false);
+});
+
+test("schema-v2 continuation preserves the exact initially approved full binding", () => {
+  const original = packet("bound");
+  const changedTargets = continuationPacket(1);
+  const callRouteIndexes = [0, 1, 2];
+  callRouteIndexes.forEach((index) => {
+    changedTargets.routes[index].targetId = "999";
+    if (index === 0) changedTargets.existingRoutePrefix[0].target_id = "999";
+    else changedTargets.remainingRoutes[index - 1].targetId = "999";
+  });
+  changedTargets.existingRoutePrefixSha256 = digestExistingRoutePrefix(
+    changedTargets.existingRoutePrefix,
+  );
+  assert.throws(
+    () => validateRoutePacket(changedTargets, original),
+    /exact initially approved bound packet/,
+  );
+
+  const changedInitialEvidence = continuationPacket(1);
+  changedInitialEvidence.initialPrestateEvidenceSha256 = "d".repeat(64);
+  assert.throws(
+    () => validateRoutePacket(changedInitialEvidence, original),
+    /exact initially approved bound packet/,
+  );
+
+  const changedInitialDigest = continuationPacket(1);
+  changedInitialDigest.initialBoundPacketSha256 = "e".repeat(64);
+  assert.throws(
+    () => validateRoutePacket(changedInitialDigest, original),
+    /externally supplied original bound packet/,
+  );
+
+  const reusedPrestateEvidence = continuationPacket(1);
+  reusedPrestateEvidence.prestateEvidenceSha256 = reusedPrestateEvidence.initialPrestateEvidenceSha256;
+  assert.throws(
+    () => validateRoutePacket(reusedPrestateEvidence, original),
+    /fresh current disabled-prestate evidence/,
+  );
+});
+
+test("schema-v2 continuation cannot replace remaining targets or bindings by recomputing self-digests", () => {
+  const original = packet("bound");
+  const changed = continuationPacket(1);
+  const forgedOriginal = structuredClone(original);
+  const form1Indexes = [3, 4];
+  form1Indexes.forEach((index) => {
+    changed.routes[index].targetId = "999";
+    changed.remainingRoutes[index - 1].targetId = "999";
+    changed.runtimePathBindings[index].runtimePath += "-changed";
+    forgedOriginal.routes[index].targetId = "999";
+    forgedOriginal.runtimePathBindings[index].runtimePath += "-changed";
+  });
+  changed.runtimePathBindingsSha256 = digestRuntimePathBindings(changed.runtimePathBindings);
+  changed.existingRoutePrefixSha256 = digestExistingRoutePrefix(changed.existingRoutePrefix);
+  forgedOriginal.runtimePathBindingsSha256 = digestRuntimePathBindings(
+    forgedOriginal.runtimePathBindings,
+  );
+  changed.initialBoundPacketSha256 = digestRoutePacket(forgedOriginal);
+  const freshApprovalForChangedPacket = approval(changed);
+
+  assert.throws(
+    () => buildRouteRequests(
+      changed,
+      freshApprovalForChangedPacket,
+      NOW_MS,
+      original,
+    ),
+    /externally supplied original bound packet/,
+  );
+});
+
+test("schema-v2 continuation rejects gaps, reordered prefixes, and non-suffix remaining routes", () => {
+  const original = packet("bound");
+  const gap = continuationPacket(1);
+  gap.existingRoutePrefix[0] = structuredClone(continuationPacket(2).existingRoutePrefix[1]);
+  gap.existingRoutePrefixSha256 = digestExistingRoutePrefix(gap.existingRoutePrefix);
+  assert.throws(() => validateRoutePacket(gap, original), /canonical prefix/);
+
+  const reorderedPrefix = continuationPacket(2);
+  [reorderedPrefix.existingRoutePrefix[0], reorderedPrefix.existingRoutePrefix[1]] = [
+    reorderedPrefix.existingRoutePrefix[1],
+    reorderedPrefix.existingRoutePrefix[0],
+  ];
+  reorderedPrefix.existingRoutePrefixSha256 = digestExistingRoutePrefix(
+    reorderedPrefix.existingRoutePrefix,
+  );
+  assert.throws(() => validateRoutePacket(reorderedPrefix, original), /canonical prefix/);
+
+  const countDrift = continuationPacket(1);
+  countDrift.gatewayPrestate.routeCount = 2;
+  assert.throws(() => validateRoutePacket(countDrift, original), /readback count/);
+
+  const reorderedSuffix = continuationPacket(1);
+  [reorderedSuffix.remainingRoutes[0], reorderedSuffix.remainingRoutes[1]] = [
+    reorderedSuffix.remainingRoutes[1],
+    reorderedSuffix.remainingRoutes[0],
+  ];
+  assert.throws(() => validateRoutePacket(reorderedSuffix, original), /exact canonical suffix/);
+
+  const recreateExisting = continuationPacket(1);
+  recreateExisting.remainingRoutes[0] = structuredClone(recreateExisting.routes[0]);
+  assert.throws(() => validateRoutePacket(recreateExisting, original), /exact canonical suffix/);
+
+  assert.throws(() => validateRoutePacket(continuationPacket(0), original), /non-empty incomplete/);
+  assert.throws(() => validateRoutePacket(continuationPacket(12), original), /non-empty incomplete/);
+});
+
+test("schema-v2 continuation rejects existing-route attribute and evidence drift", async (t) => {
+  const original = packet("bound");
+  const drifts = [
+    ["method", (route) => { route.method = "DELETE"; }],
+    ["source endpoint", (route) => { route.source_endpoint = `/changed/${"z".repeat(32)}`; }],
+    ["target type", (route) => { route.target = "basicio"; }],
+    ["target endpoint", (route) => { route.target_endpoint += "-changed"; }],
+    ["target id", (route) => { route.target_id = "999"; }],
+    ["authentication", (route) => { route.authentication = ["APIKey"]; }],
+    ["overall throttle", (route) => { route.throttling.overall.limit += 1; }],
+    ["IP duration", (route) => { route.throttling.ip.duration.seconds = 1; }],
+  ];
+  for (const [label, mutate] of drifts) {
+    await t.test(label, () => {
+      const value = continuationPacket(1);
+      mutate(value.existingRoutePrefix[0]);
+      value.existingRoutePrefixSha256 = digestExistingRoutePrefix(value.existingRoutePrefix);
+      assert.throws(() => validateRoutePacket(value, original), /attributes drifted/);
+    });
+  }
+
+  const unsafeProviderMetadata = continuationPacket(1);
+  unsafeProviderMetadata.existingRoutePrefix[0].actor_id = "synthetic-actor";
+  unsafeProviderMetadata.existingRoutePrefixSha256 = digestExistingRoutePrefix(
+    unsafeProviderMetadata.existingRoutePrefix,
+  );
+  assert.throws(() => validateRoutePacket(unsafeProviderMetadata, original), /fields are not exact/);
+
+  const staleDigest = continuationPacket(1);
+  staleDigest.existingRoutePrefixSha256 = "f".repeat(64);
+  assert.throws(() => validateRoutePacket(staleDigest, original), /allowlisted readback digest/);
+});
+
+test("schema-v2 continuation requires fresh exact single-use continuation approval", () => {
+  const value = continuationPacket(1);
+  const original = packet("bound");
+  assert.equal(buildRouteRequests(value, approval(value), NOW_MS, original).length, 11);
+  assert.throws(
+    () => buildRouteRequests(
+      value,
+      approval(value, { continuationAuthorized: false }),
+      NOW_MS,
+      original,
+    ),
+    /not explicitly authorized/,
+  );
+  assert.throws(
+    () => buildRouteRequests(value, approval(value, { schemaVersion: 1 }), NOW_MS, original),
+    /must match the packet schemaVersion/,
+  );
+  assert.throws(
+    () => buildRouteRequests(value, approval(value, {
+      expiresAt: "2026-08-26T18:05:00.000Z",
+    }), NOW_MS, original),
+    /expired/,
+  );
+  assert.throws(
+    () => buildRouteRequests(value, approval(value, {
+      expiresAt: "2026-08-26T18:15:00.001Z",
+    }), NOW_MS, original),
+    /no longer than 15 minutes/,
+  );
+  assert.throws(
+    () => buildRouteRequests(value, approval(value, { singleUse: false }), NOW_MS, original),
+    /single-use/,
+  );
+
+  const changedEvidence = structuredClone(value);
+  changedEvidence.prestateEvidenceSha256 = "d".repeat(64);
+  assert.throws(
+    () => buildRouteRequests(changedEvidence, approval(value), NOW_MS, original),
+    /private route approval/,
+  );
+});
+
+test("schema-v2 continuation still rejects Production and gateway activation", () => {
+  const original = packet("bound");
+  const production = continuationPacket(1);
+  production.environment = "Production";
+  assert.throws(() => validateRoutePacket(production, original), /Development/);
+
+  const activation = continuationPacket(1);
+  activation.gatewayActivationAuthorized = true;
+  assert.throws(() => validateRoutePacket(activation, original), /activation/);
 });
 
 test("private packet path cannot be placed in or resolve into the public repository", (t) => {

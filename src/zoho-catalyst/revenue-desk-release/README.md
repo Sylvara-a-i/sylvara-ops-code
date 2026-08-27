@@ -22,6 +22,7 @@ validate it before and after binding the four Advanced I/O function IDs:
 ```text
 node scripts/validate-private-route-packet.js <absolute-private-packet-path>
 node scripts/validate-private-route-packet.js <absolute-private-bound-packet-path> <absolute-private-approval-path>
+node scripts/validate-private-route-packet.js <absolute-private-continuation-packet-path> <absolute-private-continuation-approval-path> <absolute-private-original-bound-packet-path>
 ```
 
 The validator fixes the 12 physical routes, authentication modes, one-minute
@@ -34,6 +35,39 @@ Never add those populated path values to Git or logs. Packet and approval paths
 are rejected when they resolve beneath any checkout registered to the same Git
 repository, not only the checkout running the validator.
 
+Schema v1 remains the initial-execution contract and accepts only a disabled
+gateway with zero routes. It must not be edited into a retry packet after a
+partial or ambiguous execution. Once authoritative readback confirms that one
+or more routes exist, keep the gateway disabled and create a schema-v2
+`continuation` packet outside every worktree. Schema v2 is accepted only when the
+existing routes are a non-empty, incomplete, exact ordered prefix of the same
+12-route contract. It carries all 12 original endpoint and target bindings, all
+12 runtime-path bindings, the original zero-route prestate evidence digest, and
+the exact initial bound-packet digest. The separately preserved original
+schema-v1 bound packet is a required validation input. The validator validates
+that packet independently, requires its digest to match, reconstructs the
+schema-v1 packet from the continuation, and then compares both complete packets.
+The continuation therefore cannot silently replace an endpoint, target ID,
+runtime path, project, organization, source revision, rollback rule, or
+route-contract digest by recomputing its own hashes. Never reconstruct or
+replace the preserved original file from continuation-controlled fields. Its
+path is subject to the same outside-every-worktree guard as the continuation and
+approval files.
+
+The schema-v2 `gatewayPrestate` must record `enabled: false` and the current exact
+route count. `existingRoutePrefix` contains only this normalized allowlist from
+independent provider readback for each existing route, in canonical order:
+`name`, `source_endpoint`, `target_endpoint`, `target` (`advancedio`), `method`,
+`target_id`, `authentication`, and `throttling`. Both throttle scopes must carry
+an exact `limit` and a `duration` with only `days`, `hours`, `minutes`, and
+`seconds`. Authentication comes from the independent UI readback when it is not
+present in the audit listing. Exclude provider route IDs, actor identity,
+timestamps, and all other metadata. `existingRoutePrefixSha256` binds that full
+allowlisted prefix; `prestateEvidenceSha256` binds the fresh disabled-state
+readback. `remainingRoutes` must exactly equal the untouched suffix of the
+original full `routes` array. Gaps, reordered routes, extra metadata, readback
+drift, zero-route continuations, and already-complete continuations fail closed.
+
 `buildRouteRequests` accepts only a bound packet plus a separate approval envelope
 whose `packetSha256` binds the complete packet. The envelope must contain canonical
 UTC `capturedAt` and `expiresAt` timestamps no more than 15 minutes apart and
@@ -43,6 +77,21 @@ database. Use the envelope for exactly one route-creation execution, discard it,
 and independently read back all 12 routes immediately. Never reuse it for a retry.
 After a partial, timed-out, or ambiguous result, read back first and obtain a new
 packet/evidence/approval for any still-required write.
+
+A schema-v2 approval is also schema version 2 and must explicitly set
+`continuationAuthorized: true`; it repeats the exact
+`initialBoundPacketSha256` and `existingRoutePrefixSha256`. It is a new
+single-use approval for that exact continuation packet, not a reuse or extension
+of the initial approval. `buildRouteRequests` returns only the canonical suffix
+after the verified prefix, making recreation of an existing route impossible
+through this contract. If the readback is not an exact prefix, do not construct a
+continuation packet and do not guess which write succeeded.
+
+For the authenticated-browser fallback, the Catalyst console may open the custom
+route form directly after the first custom route instead of showing the initial
+creation-mode chooser. Treat that only as a navigation-state change. Populate
+the next request returned by `buildRouteRequests`; never replay the first item
+from the original 12-request list.
 
 Each Advanced I/O target is derived as
 `/server/<canonical-function><approved-runtime-path>`; a caller cannot supply or

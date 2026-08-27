@@ -11,6 +11,19 @@ const CONTRACT = deepFreeze(JSON.parse(
   fs.readFileSync(path.join(RELEASE_ROOT, "private-route-packet-contract.json"), "utf8"),
 ));
 const MAX_APPROVAL_WINDOW_MS = 15 * 60 * 1000;
+const CONTINUATION_PACKET_SCHEMA_VERSION = 2;
+
+const BASE_PACKET_FIELDS = [
+  "approvedSourceRevision", "environment", "gatewayActivationAuthorized", "gatewayPrestate",
+  "organizationId", "phase", "prestateEvidenceSha256", "projectId", "rollback", "routes",
+  "routeContractSha256", "runtimePathBindings", "runtimePathBindingsSha256", "schemaVersion",
+];
+
+const CONTINUATION_PACKET_FIELDS = [
+  ...BASE_PACKET_FIELDS,
+  "existingRoutePrefix", "existingRoutePrefixSha256", "initialBoundPacketSha256",
+  "initialPrestateEvidenceSha256", "remainingRoutes",
+];
 
 function fail(message) {
   throw new Error(`Catalyst route packet rejected: ${message}`);
@@ -83,6 +96,10 @@ function digestRuntimePathBindings(bindings) {
   return crypto.createHash("sha256").update(JSON.stringify(stableValue(bindings)), "utf8").digest("hex");
 }
 
+function digestExistingRoutePrefix(routes) {
+  return crypto.createHash("sha256").update(JSON.stringify(stableValue(routes)), "utf8").digest("hex");
+}
+
 function digestMatches(actual, expected) {
   return typeof actual === "string" && /^[a-f0-9]{64}$/.test(actual)
     && crypto.timingSafeEqual(Buffer.from(actual, "hex"), Buffer.from(expected, "hex"));
@@ -149,28 +166,54 @@ function validateRuntimePathBindings(packet) {
   return digest;
 }
 
-function validateRoutePacket(packet) {
-  exactKeys(packet, [
-    "approvedSourceRevision", "environment", "gatewayActivationAuthorized", "gatewayPrestate",
-    "organizationId", "phase", "prestateEvidenceSha256", "projectId", "rollback", "routes",
-    "routeContractSha256", "runtimePathBindings", "runtimePathBindingsSha256", "schemaVersion",
-  ], "packet");
-  if (packet.schemaVersion !== CONTRACT.schema_version) fail("schemaVersion drifted");
-  if (!new Set(["definition", "bound"]).has(packet.phase)) fail("phase is invalid");
-  if (packet.environment !== "Development") fail("environment must be Development");
-  if (!/^[a-f0-9]{40}$/.test(packet.approvedSourceRevision)) fail("approvedSourceRevision is invalid");
-  if (!/^[a-f0-9]{64}$/.test(packet.prestateEvidenceSha256)) fail("prestateEvidenceSha256 is invalid");
-  if (!digestMatches(packet.routeContractSha256, ROUTE_CONTRACT_SHA256)) {
-    fail("routeContractSha256 does not match the immutable route contract");
-  }
-  numericHeaderId(packet.organizationId, "organizationId");
-  numericId(packet.projectId, "projectId");
-  if (packet.gatewayActivationAuthorized !== false) fail("gateway activation is not authorized by this packet");
+function routeRequestBody(packet, index) {
+  const route = CONTRACT.routes[index];
+  const runtimeBinding = packet.runtimePathBindings[index];
+  return {
+    authentication: [...route.authentication],
+    method: route.method,
+    name: route.id,
+    source_endpoint: packet.routes[index].sourceEndpoint,
+    target: "Advanced IO Function",
+    // Advanced I/O targets use the deployed function name plus that function's exact runtime path.
+    target_endpoint: `/server/${route.function}${runtimeBinding.runtimePath}`,
+    target_id: packet.routes[index].targetId,
+    throttling: {
+      ip: { duration: { minutes: 1 }, limit: route.per_ip_per_minute },
+      overall: { duration: { minutes: 1 }, limit: route.overall_per_minute },
+    },
+  };
+}
 
+function expectedRouteReadback(packet, index) {
+  const request = routeRequestBody(packet, index);
+  const duration = { days: 0, hours: 0, minutes: 1, seconds: 0 };
+  return {
+    authentication: request.authentication,
+    method: request.method,
+    name: request.name,
+    source_endpoint: request.source_endpoint,
+    target: "advancedio",
+    target_endpoint: request.target_endpoint,
+    target_id: request.target_id,
+    throttling: {
+      ip: { duration: { ...duration }, limit: request.throttling.ip.limit },
+      overall: { duration: { ...duration }, limit: request.throttling.overall.limit },
+    },
+  };
+}
+
+function validateGatewayPrestate(packet, expectedRouteCount) {
   exactKeys(packet.gatewayPrestate, ["enabled", "routeCount"], "gatewayPrestate");
-  if (packet.gatewayPrestate.enabled !== false || packet.gatewayPrestate.routeCount !== 0) {
-    fail("gateway prestate must be disabled with zero routes");
+  if (
+    packet.gatewayPrestate.enabled !== false ||
+    packet.gatewayPrestate.routeCount !== expectedRouteCount
+  ) {
+    fail(`gateway prestate must be disabled with exactly ${expectedRouteCount} routes`);
   }
+}
+
+function validateRollback(packet) {
   exactKeys(packet.rollback, [
     "preserveLegacyResources", "restoreCallersBeforeRoutes", "restoreGlobalGatewayState",
   ], "rollback");
@@ -179,9 +222,9 @@ function validateRoutePacket(packet) {
     packet.rollback.restoreGlobalGatewayState !== "disabled" ||
     packet.rollback.preserveLegacyResources !== true
   ) fail("rollback contract drifted");
+}
 
-  const runtimePathBindingsSha256 = validateRuntimePathBindings(packet);
-
+function validateRouteBindings(packet, requireBoundTargets) {
   if (!Array.isArray(packet.routes) || packet.routes.length !== CONTRACT.routes.length) {
     fail("physical route count is not exact");
   }
@@ -194,7 +237,7 @@ function validateRoutePacket(packet) {
     privateEndpoint(route.sourceEndpoint, `routes[${index}].sourceEndpoint`);
     if (endpoints.has(route.sourceEndpoint)) fail("source endpoints must be unique");
     endpoints.add(route.sourceEndpoint);
-    if (packet.phase === "definition") {
+    if (!requireBoundTargets) {
       if (route.targetId !== null) fail("definition phase cannot preclaim function IDs");
       return;
     }
@@ -203,14 +246,167 @@ function validateRoutePacket(packet) {
     if (prior && prior !== route.targetId) fail(`function ${expected.function} has conflicting target IDs`);
     targetIdsByFunction.set(expected.function, route.targetId);
   });
-  if (packet.phase === "bound") {
+  if (requireBoundTargets) {
     const ids = [...targetIdsByFunction.values()];
     if (new Set(ids).size !== targetIdsByFunction.size) fail("different functions share a target ID");
+  }
+}
+
+function validateExistingRouteReadback(route, index) {
+  exactKeys(route, [
+    "authentication", "method", "name", "source_endpoint", "target", "target_endpoint",
+    "target_id", "throttling",
+  ], `existingRoutePrefix[${index}]`);
+  if (!Array.isArray(route.authentication)) {
+    fail(`existingRoutePrefix[${index}].authentication must be an array`);
+  }
+  exactKeys(route.throttling, ["ip", "overall"], `existingRoutePrefix[${index}].throttling`);
+  for (const scope of ["ip", "overall"]) {
+    exactKeys(
+      route.throttling[scope],
+      ["duration", "limit"],
+      `existingRoutePrefix[${index}].throttling.${scope}`,
+    );
+    exactKeys(
+      route.throttling[scope].duration,
+      ["days", "hours", "minutes", "seconds"],
+      `existingRoutePrefix[${index}].throttling.${scope}.duration`,
+    );
+  }
+}
+
+function initialBoundPacketFromContinuation(packet) {
+  return {
+    approvedSourceRevision: packet.approvedSourceRevision,
+    environment: packet.environment,
+    gatewayActivationAuthorized: packet.gatewayActivationAuthorized,
+    gatewayPrestate: { enabled: false, routeCount: 0 },
+    organizationId: packet.organizationId,
+    phase: "bound",
+    prestateEvidenceSha256: packet.initialPrestateEvidenceSha256,
+    projectId: packet.projectId,
+    rollback: packet.rollback,
+    routes: packet.routes,
+    routeContractSha256: packet.routeContractSha256,
+    runtimePathBindings: packet.runtimePathBindings,
+    runtimePathBindingsSha256: packet.runtimePathBindingsSha256,
+    schemaVersion: CONTRACT.schema_version,
+  };
+}
+
+function validateContinuationState(packet, originalBoundPacket) {
+  if (!/^[a-f0-9]{64}$/.test(packet.initialPrestateEvidenceSha256)) {
+    fail("initialPrestateEvidenceSha256 is invalid");
+  }
+  if (packet.prestateEvidenceSha256 === packet.initialPrestateEvidenceSha256) {
+    fail("continuation requires fresh current disabled-prestate evidence");
+  }
+  if (!/^[a-f0-9]{64}$/.test(packet.initialBoundPacketSha256)) {
+    fail("initialBoundPacketSha256 is invalid");
+  }
+  if (!plainObject(originalBoundPacket)) {
+    fail("continuation requires the separately preserved original schema-v1 bound packet");
+  }
+  const originalResult = validateRoutePacket(originalBoundPacket);
+  if (
+    originalResult.schemaVersion !== CONTRACT.schema_version ||
+    originalResult.phase !== "bound"
+  ) {
+    fail("continuation original packet must be a valid schema-v1 bound packet");
+  }
+  if (!digestMatches(packet.initialBoundPacketSha256, originalResult.digest)) {
+    fail("continuation does not reference the externally supplied original bound packet");
+  }
+  const reconstructedInitialPacket = initialBoundPacketFromContinuation(packet);
+  if (
+    JSON.stringify(stableValue(reconstructedInitialPacket)) !==
+    JSON.stringify(stableValue(originalBoundPacket))
+  ) {
+    fail("continuation does not preserve the exact initially approved bound packet");
+  }
+
+  if (!Number.isInteger(packet.gatewayPrestate.routeCount)) {
+    fail("continuation gateway route count must be an integer");
+  }
+  const existingCount = packet.gatewayPrestate.routeCount;
+  if (existingCount <= 0 || existingCount >= CONTRACT.routes.length) {
+    fail("continuation requires a non-empty incomplete canonical route prefix");
+  }
+  validateGatewayPrestate(packet, existingCount);
+
+  if (!Array.isArray(packet.existingRoutePrefix) || packet.existingRoutePrefix.length !== existingCount) {
+    fail("existing route readback count must equal the disabled gateway prestate route count");
+  }
+  packet.existingRoutePrefix.forEach((route, index) => {
+    validateExistingRouteReadback(route, index);
+    if (JSON.stringify(stableValue(route)) !== JSON.stringify(stableValue(expectedRouteReadback(packet, index)))) {
+      fail(`existingRoutePrefix[${index}] attributes drifted from the canonical prefix`);
+    }
+  });
+  const existingRoutePrefixSha256 = digestExistingRoutePrefix(packet.existingRoutePrefix);
+  if (!digestMatches(packet.existingRoutePrefixSha256, existingRoutePrefixSha256)) {
+    fail("existing route prefix does not match its allowlisted readback digest");
+  }
+
+  const remainingCount = CONTRACT.routes.length - existingCount;
+  if (!Array.isArray(packet.remainingRoutes) || packet.remainingRoutes.length !== remainingCount) {
+    fail("remaining route count is not the exact canonical suffix");
+  }
+  packet.remainingRoutes.forEach((route, offset) => {
+    const index = existingCount + offset;
+    exactKeys(route, ["id", "sourceEndpoint", "targetId"], `remainingRoutes[${offset}]`);
+    if (JSON.stringify(stableValue(route)) !== JSON.stringify(stableValue(packet.routes[index]))) {
+      fail(`remainingRoutes[${offset}] is not the exact canonical suffix`);
+    }
+  });
+
+  return Object.freeze({ existingCount, existingRoutePrefixSha256, remainingCount });
+}
+
+function validateRoutePacket(packet, originalBoundPacket) {
+  if (!plainObject(packet)) fail("packet must be an object");
+  if (packet.schemaVersion === CONTRACT.schema_version) {
+    exactKeys(packet, BASE_PACKET_FIELDS, "packet");
+    if (!new Set(["definition", "bound"]).has(packet.phase)) fail("phase is invalid");
+  } else if (packet.schemaVersion === CONTINUATION_PACKET_SCHEMA_VERSION) {
+    exactKeys(packet, CONTINUATION_PACKET_FIELDS, "packet");
+    if (packet.phase !== "continuation") fail("schema-v2 phase must be continuation");
+  } else {
+    fail("schemaVersion drifted");
+  }
+  if (packet.environment !== "Development") fail("environment must be Development");
+  if (!/^[a-f0-9]{40}$/.test(packet.approvedSourceRevision)) fail("approvedSourceRevision is invalid");
+  if (!/^[a-f0-9]{64}$/.test(packet.prestateEvidenceSha256)) fail("prestateEvidenceSha256 is invalid");
+  if (!digestMatches(packet.routeContractSha256, ROUTE_CONTRACT_SHA256)) {
+    fail("routeContractSha256 does not match the immutable route contract");
+  }
+  numericHeaderId(packet.organizationId, "organizationId");
+  numericId(packet.projectId, "projectId");
+  if (packet.gatewayActivationAuthorized !== false) fail("gateway activation is not authorized by this packet");
+
+  validateRollback(packet);
+
+  const runtimePathBindingsSha256 = validateRuntimePathBindings(packet);
+  validateRouteBindings(packet, packet.phase !== "definition");
+
+  let existingRouteCount = 0;
+  let requestRouteCount = CONTRACT.routes.length;
+  let existingRoutePrefixSha256 = null;
+  if (packet.schemaVersion === CONTRACT.schema_version) {
+    validateGatewayPrestate(packet, 0);
+  } else {
+    const continuation = validateContinuationState(packet, originalBoundPacket);
+    existingRouteCount = continuation.existingCount;
+    requestRouteCount = continuation.remainingCount;
+    existingRoutePrefixSha256 = continuation.existingRoutePrefixSha256;
   }
 
   return Object.freeze({
     digest: digestRoutePacket(packet),
+    existingRouteCount,
+    existingRoutePrefixSha256,
     phase: packet.phase,
+    requestRouteCount,
     routeContractSha256: ROUTE_CONTRACT_SHA256,
     routeCount: packet.routes.length,
     runtimePathBindingsSha256,
@@ -224,13 +420,28 @@ function validateRouteApproval(
   packetDigest = digestRoutePacket(packet),
   nowMs = Date.now(),
 ) {
+  const continuationApprovalFields = [
+    "continuationAuthorized", "existingRoutePrefixSha256", "initialBoundPacketSha256",
+  ];
   exactKeys(approval, [
     "approvedSourceRevision", "capturedAt", "expiresAt", "packetSha256",
     "prestateEvidenceSha256", "routeContractSha256", "routeCreationAuthorized", "schemaVersion",
     "singleUse",
+    ...(packet.schemaVersion === CONTINUATION_PACKET_SCHEMA_VERSION ? continuationApprovalFields : []),
   ], "approval");
-  if (approval.schemaVersion !== 1) fail("approval.schemaVersion must be 1");
+  if (approval.schemaVersion !== packet.schemaVersion) {
+    fail("approval.schemaVersion must match the packet schemaVersion");
+  }
   if (approval.routeCreationAuthorized !== true) fail("route creation is not authorized");
+  if (packet.schemaVersion === CONTINUATION_PACKET_SCHEMA_VERSION) {
+    if (approval.continuationAuthorized !== true) fail("continuation is not explicitly authorized");
+    if (
+      approval.existingRoutePrefixSha256 !== packet.existingRoutePrefixSha256 ||
+      approval.initialBoundPacketSha256 !== packet.initialBoundPacketSha256
+    ) fail("continuation approval does not match the initial packet and existing-route evidence");
+  } else if (packet.schemaVersion !== CONTRACT.schema_version) {
+    fail("approval packet schemaVersion is unsupported");
+  }
   validateApprovalWindow(approval, nowMs);
   if (
     approval.approvedSourceRevision !== packet.approvedSourceRevision ||
@@ -242,27 +453,16 @@ function validateRouteApproval(
   return approval;
 }
 
-function buildRouteRequests(packet, approval, nowMs = Date.now()) {
-  const result = validateRoutePacket(packet);
-  if (result.phase !== "bound") fail("route requests require a bound packet");
+function buildRouteRequests(packet, approval, nowMs = Date.now(), originalBoundPacket) {
+  const result = validateRoutePacket(packet, originalBoundPacket);
+  if (!new Set(["bound", "continuation"]).has(result.phase)) {
+    fail("route requests require a bound packet or schema-v2 continuation packet");
+  }
   validateRouteApproval(approval, packet, result.digest, nowMs);
-  return CONTRACT.routes.map((route, index) => {
-    const runtimeBinding = packet.runtimePathBindings[index];
+  return CONTRACT.routes.slice(result.existingRouteCount).map((_, offset) => {
+    const index = result.existingRouteCount + offset;
     return {
-      body: {
-        authentication: [...route.authentication],
-        method: route.method,
-        name: route.id,
-        source_endpoint: packet.routes[index].sourceEndpoint,
-        target: "Advanced IO Function",
-        // Advanced I/O targets use the deployed function name plus that function's exact runtime path.
-        target_endpoint: `/server/${route.function}${runtimeBinding.runtimePath}`,
-        target_id: packet.routes[index].targetId,
-        throttling: {
-          ip: { duration: { minutes: 1 }, limit: route.per_ip_per_minute },
-          overall: { duration: { minutes: 1 }, limit: route.overall_per_minute },
-        },
-      },
+      body: routeRequestBody(packet, index),
       headers: {
         "Catalyst-org": packet.organizationId,
         Environment: packet.environment,
@@ -321,14 +521,30 @@ function assertPrivatePacketPath(packetPath) {
 }
 
 function run(argv, nowMs = Date.now()) {
-  if (argv.length < 1 || argv.length > 2) {
-    fail("usage: node validate-private-route-packet.js <absolute-private-packet-path> [absolute-private-approval-path]");
+  if (argv.length < 1 || argv.length > 3) {
+    fail(
+      "usage: node validate-private-route-packet.js <absolute-private-packet-path> " +
+      "[absolute-private-approval-path] [absolute-private-original-bound-packet-path]",
+    );
   }
   const packetPath = assertPrivatePacketPath(argv[0]);
   const packet = JSON.parse(fs.readFileSync(packetPath, "utf8"));
-  const result = validateRoutePacket(packet);
-  if (result.phase === "bound") {
-    if (argv.length !== 2) fail("a bound packet requires a separate private approval envelope");
+  let originalBoundPacket;
+  if (packet.schemaVersion === CONTINUATION_PACKET_SCHEMA_VERSION) {
+    if (argv.length !== 3) {
+      fail("a continuation packet requires its approval and the preserved original bound packet");
+    }
+    const originalPacketPath = assertPrivatePacketPath(argv[2]);
+    originalBoundPacket = JSON.parse(fs.readFileSync(originalPacketPath, "utf8"));
+  } else if (argv.length > 2) {
+    fail("only a continuation packet accepts an original bound packet");
+  }
+  const result = validateRoutePacket(packet, originalBoundPacket);
+  if (new Set(["bound", "continuation"]).has(result.phase)) {
+    const expectedArgumentCount = result.phase === "continuation" ? 3 : 2;
+    if (argv.length !== expectedArgumentCount) {
+      fail("a bound or continuation packet requires a separate private approval envelope");
+    }
     const approvalPath = assertPrivatePacketPath(argv[1]);
     const approval = JSON.parse(fs.readFileSync(approvalPath, "utf8"));
     validateRouteApproval(approval, packet, result.digest, nowMs);
@@ -337,7 +553,8 @@ function run(argv, nowMs = Date.now()) {
   }
   process.stdout.write(
     `Catalyst route packet valid: schema=${result.schemaVersion} phase=${result.phase} ` +
-    `routes=${result.routeCount} routeContractSha256=${result.routeContractSha256} ` +
+    `routes=${result.routeCount} requests=${result.requestRouteCount} ` +
+    `routeContractSha256=${result.routeContractSha256} ` +
     `runtimeBindingsSha256=${result.runtimePathBindingsSha256} ` +
     `sha256=${result.digest}\n`,
   );
@@ -357,6 +574,7 @@ module.exports = {
   REPOSITORY_ROOT,
   assertPrivatePacketPath,
   buildRouteRequests,
+  digestExistingRoutePrefix,
   digestRouteContract,
   digestRoutePacket,
   digestRuntimePathBindings,
