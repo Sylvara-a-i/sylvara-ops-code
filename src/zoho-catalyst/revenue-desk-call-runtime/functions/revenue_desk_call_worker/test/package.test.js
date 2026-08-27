@@ -10,7 +10,7 @@ const functionRoot = path.join(__dirname, '..');
 test('job target is independently deployable and imports a materialized reviewed core package', () => {
   const config = JSON.parse(fs.readFileSync(path.join(functionRoot, 'catalyst-config.json'), 'utf8'));
   assert.deepEqual(config.deployment, {
-    name: 'revenue_desk_call_worker', stack: 'node18', type: 'job',
+    name: 'revenue_desk_call_worker', stack: 'node24', type: 'job',
   });
   assert.equal(Object.hasOwn(config.deployment, 'env_variables'), false);
   assert.equal(config.execution.main, 'index.js');
@@ -25,6 +25,9 @@ test('job target is independently deployable and imports a materialized reviewed
   assert.equal(retryConfig.environment, 'Development');
   assert.equal(retryConfig.current_status,
     'unverified_requires_development_provisioning_and_readback');
+  assert.deepEqual(retryConfig.function_target, {
+    name: 'revenue_desk_call_worker', stack: 'node24', type: 'job', memory_mb: 256,
+  });
   assert.equal(retryConfig.function_target.memory_mb, 256);
   assert.equal(retryConfig.job_pool.memory_mb, 512);
   assert.equal(retryConfig.sdk_submission.target_name, 'revenue_desk_call_worker');
@@ -44,7 +47,11 @@ test('job target is independently deployable and imports a materialized reviewed
     'process_event', 'retry_scan', 'rebuild_report', 'reconcile_deployment',
   ]);
 
-  assert.equal(require('../package.json').name, config.deployment.name);
+  const functionPackage = require('../package.json');
+  const functionLock = require('../package-lock.json');
+  assert.equal(functionPackage.name, config.deployment.name);
+  assert.equal(functionPackage.engines.node, '24.x');
+  assert.equal(functionLock.packages[''].engines.node, '24.x');
   assert.match(fs.readFileSync(path.join(functionRoot, 'index.js'), 'utf8'),
     /createSafeConsoleLogger\(console\)/);
   const corePackagePath = require.resolve('revenue_desk_call_gateway/package.json');

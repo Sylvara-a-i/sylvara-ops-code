@@ -84,8 +84,8 @@ FUNCTION_PACKAGE_SPECS = (
         (
             ("revenue_desk_call_gateway", "Advanced I/O", "advancedio", "node24",
              "revenue_desk_call_gateway", ">=18 <25"),
-            ("revenue_desk_call_worker", "Job", "job", "node18",
-             "revenue_desk_call_worker", "18.x"),
+            ("revenue_desk_call_worker", "Job", "job", "node24",
+             "revenue_desk_call_worker", "24.x"),
         ),
     ),
     (
@@ -95,7 +95,7 @@ FUNCTION_PACKAGE_SPECS = (
     ),
     (
         "revenue-desk-analytics",
-        (("analytics_sync", "Job", "job", "node18", "analytics_sync", "18.x"),),
+        (("analytics_sync", "Job", "job", "node24", "analytics_sync", "24.x"),),
     ),
 )
 

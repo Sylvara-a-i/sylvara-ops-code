@@ -20,7 +20,14 @@ function runOk(command, args, cwd) {
   return result.stdout.trim();
 }
 
-function createCleanFixture(parent) {
+function updateJson(root, relative, update) {
+  const filePath = path.join(root, ...relative.split('/'));
+  const value = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  update(value);
+  fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+}
+
+function createCleanFixture(parent, mutate = () => {}) {
   const repository = path.join(parent, 'repository');
   const component = path.join(repository, componentPath);
   fs.mkdirSync(path.dirname(component), { recursive: true });
@@ -31,6 +38,7 @@ function createCleanFixture(parent) {
       return !relative.split(path.sep).includes('node_modules');
     },
   });
+  mutate(component);
   runOk('git', ['init'], repository);
   runOk('git', ['config', 'user.name', 'Revenue Desk Release Test'], repository);
   runOk('git', ['config', 'user.email', 'release-test@example.invalid'], repository);
@@ -122,4 +130,97 @@ test('release builder exports only a clean exact Git revision and stamps only it
     fixture.component);
   assert.notEqual(dirty.status, 0);
   assert.match(dirty.stderr, /must be clean/);
+});
+
+test('release builder rejects target runtime and package-engine drift', () => {
+  const cases = [
+    {
+      name: 'gateway descriptor stack',
+      mutate(component) {
+        updateJson(component, 'functions/revenue_desk_call_gateway/catalyst-config.json',
+          (value) => { value.deployment.stack = 'node18'; });
+      },
+      expected: /gateway descriptor must declare .*node24\/advancedio/,
+    },
+    {
+      name: 'worker descriptor type',
+      mutate(component) {
+        updateJson(component, 'functions/revenue_desk_call_worker/catalyst-config.json',
+          (value) => { value.deployment.type = 'advancedio'; });
+      },
+      expected: /worker descriptor must declare .*node24\/job/,
+    },
+    {
+      name: 'gateway descriptor missing execution',
+      mutate(component) {
+        updateJson(component, 'functions/revenue_desk_call_gateway/catalyst-config.json',
+          (value) => { delete value.execution; });
+      },
+      expected: /gateway descriptor must declare exact execution main index\.js/,
+    },
+    {
+      name: 'gateway descriptor changed execution main',
+      mutate(component) {
+        updateJson(component, 'functions/revenue_desk_call_gateway/catalyst-config.json',
+          (value) => { value.execution.main = 'server.js'; });
+      },
+      expected: /gateway descriptor must declare exact execution main index\.js/,
+    },
+    {
+      name: 'worker descriptor missing execution main',
+      mutate(component) {
+        updateJson(component, 'functions/revenue_desk_call_worker/catalyst-config.json',
+          (value) => { delete value.execution.main; });
+      },
+      expected: /worker descriptor must declare exact execution main index\.js/,
+    },
+    {
+      name: 'worker descriptor changed execution main',
+      mutate(component) {
+        updateJson(component, 'functions/revenue_desk_call_worker/catalyst-config.json',
+          (value) => { value.execution.main = 'worker.js'; });
+      },
+      expected: /worker descriptor must declare exact execution main index\.js/,
+    },
+    {
+      name: 'gateway package engine',
+      mutate(component) {
+        updateJson(component, 'functions/revenue_desk_call_gateway/package.json',
+          (value) => { value.engines.node = '>=18 <24'; });
+      },
+      expected: /gateway package and lockfile must declare Node engine >=18 <25/,
+    },
+    {
+      name: 'worker package engine',
+      mutate(component) {
+        updateJson(component, 'functions/revenue_desk_call_worker/package.json',
+          (value) => { value.engines.node = '18.x'; });
+      },
+      expected: /worker package and lockfile must declare Node engine 24\.x/,
+    },
+    {
+      name: 'worker lockfile engine',
+      mutate(component) {
+        updateJson(component, 'functions/revenue_desk_call_worker/package-lock.json',
+          (value) => { value.packages[''].engines.node = '18.x'; });
+      },
+      expected: /worker package and lockfile must declare Node engine 24\.x/,
+    },
+  ];
+
+  for (const fixtureCase of cases) {
+    const parent = fs.mkdtempSync(path.join(os.tmpdir(), 'revenue-desk-release-invalid-'));
+    try {
+      const fixture = createCleanFixture(parent, fixtureCase.mutate);
+      const output = path.join(parent, 'artifact');
+      const result = run(process.execPath,
+        [fixture.builder, '--revision', fixture.revision, '--output', output],
+        fixture.component);
+      assert.notEqual(result.status, 0, fixtureCase.name);
+      assert.match(result.stderr, fixtureCase.expected, fixtureCase.name);
+      assert.equal(fs.existsSync(output), false, fixtureCase.name);
+    } finally {
+      fs.rmSync(parent, { recursive: true, force: true });
+    }
+  }
 });

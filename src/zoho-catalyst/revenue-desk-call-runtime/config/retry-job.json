@@ -5,7 +5,7 @@
   "environment": "Development",
   "function_target": {
     "name": "revenue_desk_call_worker",
-    "stack": "node18",
+    "stack": "node24",
     "type": "job",
     "memory_mb": 256
   },

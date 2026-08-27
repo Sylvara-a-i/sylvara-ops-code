@@ -9,6 +9,20 @@ const SOURCE_REVISION_PATTERN = /^[a-f0-9]{40}$/;
 const SENTINEL = '__REVENUE_DESK_SOURCE_REVISION__';
 const COMPONENT_PATH = 'src/zoho-catalyst/revenue-desk-call-runtime';
 const SOURCE_STAMP_PATH = 'functions/revenue_desk_call_gateway/lib/source-revision.js';
+const TARGET_CONTRACTS = Object.freeze({
+  gateway: Object.freeze({
+    name: 'revenue_desk_call_gateway',
+    stack: 'node24',
+    type: 'advancedio',
+    nodeEngine: '>=18 <25',
+  }),
+  worker: Object.freeze({
+    name: 'revenue_desk_call_worker',
+    stack: 'node24',
+    type: 'job',
+    nodeEngine: '24.x',
+  }),
+});
 const REQUIRED_FILES = new Set([
   'catalyst.json',
   'functions/revenue_desk_call_gateway/catalyst-config.json',
@@ -104,6 +118,38 @@ function parseJsonFile(root, relative) {
   return JSON.parse(fs.readFileSync(path.join(root, ...relative.split('/')), 'utf8'));
 }
 
+function validateTargetContract(root, directory, label, expected) {
+  const prefix = `functions/${directory}`;
+  const descriptor = parseJsonFile(root, `${prefix}/catalyst-config.json`);
+  const functionPackage = parseJsonFile(root, `${prefix}/package.json`);
+  const functionLock = parseJsonFile(root, `${prefix}/package-lock.json`);
+  const deployment = descriptor?.deployment;
+  if (deployment?.name !== expected.name
+    || deployment?.stack !== expected.stack
+    || deployment?.type !== expected.type) {
+    throw new Error(`Release ${label} descriptor must declare ${expected.name} as `
+      + `${expected.stack}/${expected.type}.`);
+  }
+  const execution = descriptor?.execution;
+  if (!execution
+    || typeof execution !== 'object'
+    || Array.isArray(execution)
+    || Object.keys(execution).length !== 1
+    || execution.main !== 'index.js') {
+    throw new Error(`Release ${label} descriptor must declare exact execution main index.js.`);
+  }
+
+  const lockRoot = functionLock?.packages?.[''];
+  if (functionPackage?.name !== expected.name
+    || lockRoot?.name !== expected.name
+    || functionPackage?.engines?.node !== expected.nodeEngine
+    || lockRoot?.engines?.node !== expected.nodeEngine) {
+    throw new Error(`Release ${label} package and lockfile must declare Node engine `
+      + `${expected.nodeEngine}.`);
+  }
+  return { functionLock, functionPackage };
+}
+
 function validateArtifact(root) {
   const catalyst = parseJsonFile(root, 'catalyst.json');
   const targets = catalyst?.functions?.targets;
@@ -114,14 +160,12 @@ function validateArtifact(root) {
     throw new Error('Release artifact must contain exactly the gateway and worker targets.');
   }
 
-  const gatewayPackage = parseJsonFile(root,
-    'functions/revenue_desk_call_gateway/package.json');
-  const gatewayLock = parseJsonFile(root,
-    'functions/revenue_desk_call_gateway/package-lock.json');
-  const workerPackage = parseJsonFile(root,
-    'functions/revenue_desk_call_worker/package.json');
-  const workerLock = parseJsonFile(root,
-    'functions/revenue_desk_call_worker/package-lock.json');
+  const { functionLock: gatewayLock, functionPackage: gatewayPackage }
+    = validateTargetContract(root, 'revenue_desk_call_gateway', 'gateway',
+      TARGET_CONTRACTS.gateway);
+  const { functionLock: workerLock, functionPackage: workerPackage }
+    = validateTargetContract(root, 'revenue_desk_call_worker', 'worker',
+      TARGET_CONTRACTS.worker);
   const dependency = 'file:../revenue_desk_call_gateway';
   if (gatewayLock?.packages?.['']?.name !== gatewayPackage.name
     || workerLock?.packages?.['']?.name !== workerPackage.name

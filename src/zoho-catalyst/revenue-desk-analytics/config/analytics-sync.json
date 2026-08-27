@@ -8,7 +8,7 @@
   "function": {
     "target_name": "analytics_sync",
     "type": "Job",
-    "stack": "node18",
+    "stack": "node24",
     "public_http_endpoint": false
   },
   "job_pool": {

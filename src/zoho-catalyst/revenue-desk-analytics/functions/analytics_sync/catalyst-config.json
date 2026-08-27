@@ -1,7 +1,7 @@
 {
   "deployment": {
     "name": "analytics_sync",
-    "stack": "node18",
+    "stack": "node24",
     "type": "job"
   },
   "execution": {

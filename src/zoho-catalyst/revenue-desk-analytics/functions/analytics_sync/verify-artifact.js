@@ -8,10 +8,11 @@ const FUNCTION_TARGET = 'analytics_sync';
 const REVISION_PATTERN = /^[a-f0-9]{40}$/;
 const EXPECTED_DEPLOYMENT = Object.freeze({
   name: FUNCTION_TARGET,
-  stack: 'node18',
+  stack: 'node24',
   type: 'job',
 });
 const EXPECTED_EXECUTION = Object.freeze({ main: 'index.js' });
+const EXPECTED_ENGINES = Object.freeze({ node: '24.x' });
 const MAX_DEPENDENCY_DEPTH = 128;
 const MAX_DEPENDENCY_ENTRIES = 200000;
 const REQUIRED_ROOT_FILES = Object.freeze([
@@ -113,6 +114,10 @@ function verifyPackageBinding(functionRoot) {
     || lock?.lockfileVersion !== 3 || rootLock?.name !== FUNCTION_TARGET
     || !sameJson(packageJson.dependencies, rootLock.dependencies)) {
     fail('artifact package and lockfile are not bound');
+  }
+  if (!sameScalarRecord(packageJson.engines, EXPECTED_ENGINES)
+    || !sameScalarRecord(rootLock.engines, EXPECTED_ENGINES)) {
+    fail('artifact package and lockfile Node engine requirements are not exact');
   }
   return Object.keys(packageJson.dependencies || {}).length;
 }

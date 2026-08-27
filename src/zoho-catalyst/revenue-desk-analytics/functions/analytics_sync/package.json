@@ -11,7 +11,7 @@
     "lib/**/*.js"
   ],
   "engines": {
-    "node": "18.x"
+    "node": "24.x"
   },
   "scripts": {
     "check": "node --check index.js && node --check verify-artifact.js && node --check lib/analytics-client.js && node --check lib/catalyst-store.js && node --check lib/config.js && node --check lib/connection-boundary.js && node --check lib/daily-rollup.js && node --check lib/errors.js && node --check lib/facts.js && node --check lib/job-handler.js && node --check lib/logging.js && node --check lib/service.js && node --check lib/source-revision.js && node --check ../../tools/build-release-artifact.js && node --check ../../tools/evaluate-dashboard-pre-render-gate.js && node --check ../../tools/render-analytics-model-contract.js",

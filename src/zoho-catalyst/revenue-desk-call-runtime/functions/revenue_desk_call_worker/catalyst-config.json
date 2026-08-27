@@ -1,7 +1,7 @@
 {
   "deployment": {
     "name": "revenue_desk_call_worker",
-    "stack": "node18",
+    "stack": "node24",
     "type": "job"
   },
   "execution": {

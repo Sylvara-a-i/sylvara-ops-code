@@ -22,10 +22,13 @@ test('package is exactly one private analytics_sync Job target with no HTTP rout
   const deployment = JSON.parse(fs.readFileSync(
     path.join(functionRoot, 'catalyst-config.json'), 'utf8'));
   assert.deepEqual(deployment.deployment,
-    { name: 'analytics_sync', stack: 'node18', type: 'job' });
+    { name: 'analytics_sync', stack: 'node24', type: 'job' });
   assert.equal(deployment.execution.main, 'index.js');
   const packageJson = require('../package.json');
   assert.equal(packageJson.name, 'analytics_sync');
+  assert.deepEqual(packageJson.engines, { node: '24.x' });
+  const lock = require('../package-lock.json');
+  assert.deepEqual(lock.packages[''].engines, { node: '24.x' });
   assert.equal(packageJson.scripts['artifact:verify'],
     'node verify-artifact.js && npm ls --omit=dev --all --ignore-scripts');
   assert.equal(typeof require('../index'), 'function');
@@ -34,6 +37,7 @@ test('package is exactly one private analytics_sync Job target with no HTTP rout
 test('Job, pool, empty params, dark Production, and provider contracts are exact', () => {
   const contract = json(path.join('config', 'analytics-sync.json'));
   assert.equal(contract.function.target_name, 'analytics_sync');
+  assert.equal(contract.function.stack, 'node24');
   assert.equal(contract.function.public_http_endpoint, false);
   assert.deepEqual(contract.job_pool, {
     name: 'RevenueDeskAnalyticsJobs', type: 'Function', memory_mb: 512,

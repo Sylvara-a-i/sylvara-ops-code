@@ -29,15 +29,17 @@ function artifactFixture(testContext) {
     functions: { source: 'functions', targets: [TARGET] },
   });
   writeJson(path.join(functionRoot, 'catalyst-config.json'), {
-    deployment: { name: TARGET, stack: 'node18', type: 'job' },
+    deployment: { name: TARGET, stack: 'node24', type: 'job' },
     execution: { main: 'index.js' },
   });
   writeJson(path.join(functionRoot, 'package.json'), {
     name: TARGET, version: '1.0.0', private: true, main: 'index.js', dependencies: {},
+    engines: { node: '24.x' },
   });
   writeJson(path.join(functionRoot, 'package-lock.json'), {
     name: TARGET, version: '1.0.0', lockfileVersion: 3, requires: true,
-    packages: { '': { name: TARGET, version: '1.0.0', dependencies: {} } },
+    packages: { '': { name: TARGET, version: '1.0.0', dependencies: {},
+      engines: { node: '24.x' } } },
   });
   fs.writeFileSync(path.join(functionRoot, 'index.js'),
     "'use strict';\nmodule.exports = () => undefined;\n", 'utf8');
@@ -130,6 +132,27 @@ test('artifact verifier rejects mutated Catalyst deployment and execution descri
     });
     assert.throws(() => verifyFixture(fixture), /Catalyst target descriptor is not exact/);
   });
+
+test('artifact verifier rejects package and lockfile root Node engine drift', (testContext) => {
+  const fixture = artifactFixture(testContext);
+  const packagePath = path.join(fixture.functionRoot, 'package.json');
+  const lockPath = path.join(fixture.functionRoot, 'package-lock.json');
+  const packageJson = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
+  const lock = JSON.parse(fs.readFileSync(lockPath, 'utf8'));
+
+  writeJson(packagePath, { ...packageJson, engines: { node: '18.x' } });
+  assert.throws(() => verifyFixture(fixture), /Node engine requirements are not exact/);
+
+  writeJson(packagePath, packageJson);
+  writeJson(lockPath, {
+    ...lock,
+    packages: {
+      ...lock.packages,
+      '': { ...lock.packages[''], engines: { node: '18.x' } },
+    },
+  });
+  assert.throws(() => verifyFixture(fixture), /Node engine requirements are not exact/);
+});
 
 test('artifact verifier rejects a non-file catalyst.json boundary', (testContext) => {
   const fixture = artifactFixture(testContext);

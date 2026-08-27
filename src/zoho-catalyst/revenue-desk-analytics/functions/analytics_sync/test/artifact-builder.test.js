@@ -34,7 +34,12 @@ function writeJson(file, value) {
   fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
 }
 
-function fixture(testContext) {
+function fixture(testContext, {
+  stack = 'node24',
+  type = 'job',
+  packageEngine = '24.x',
+  lockEngine = '24.x',
+} = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'analytics-artifact-test-'));
   testContext.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const repository = path.join(root, 'repository');
@@ -51,16 +56,18 @@ function fixture(testContext) {
     functions: { source: 'functions', targets: [TARGET], ignore: ['test/**', '.env*'] },
   });
   writeJson(path.join(functionRoot, 'catalyst-config.json'), {
-    deployment: { name: TARGET, stack: 'node18', type: 'job' },
+    deployment: { name: TARGET, stack, type },
     execution: { main: 'index.js' },
   });
   writeJson(path.join(functionRoot, 'package.json'), {
     name: TARGET, version: '1.0.0', private: true, main: 'index.js', dependencies: {},
+    engines: { node: packageEngine },
     scripts: { 'artifact:verify': ARTIFACT_VERIFY_SCRIPT },
   });
   writeJson(path.join(functionRoot, 'package-lock.json'), {
     name: TARGET, version: '1.0.0', lockfileVersion: 3, requires: true,
-    packages: { '': { name: TARGET, version: '1.0.0', dependencies: {} } },
+    packages: { '': { name: TARGET, version: '1.0.0', dependencies: {},
+      engines: { node: lockEngine } } },
   });
   fs.writeFileSync(path.join(functionRoot, 'index.js'), "'use strict';\nmodule.exports = () => undefined;\n");
   fs.writeFileSync(path.join(functionRoot, 'lib', 'source-revision.js'),
@@ -78,13 +85,17 @@ function fixture(testContext) {
     script: path.join(component, 'tools', path.basename(builderPath)) };
 }
 
-artifactTest('release builder exports and stamps exact clean Git source without mutating checkout', (testContext) => {
-  const source = fixture(testContext);
-  const result = spawnSync(process.execPath, [source.script], {
+function buildFixture(source) {
+  return spawnSync(process.execPath, [source.script], {
     cwd: source.repository, encoding: 'utf8', windowsHide: true,
     env: { ...process.env, APPROVED_SOURCE_REVISION: source.revision,
       TEMP: source.artifactParent, TMP: source.artifactParent, TMPDIR: source.artifactParent },
   });
+}
+
+artifactTest('release builder exports and stamps exact clean Git source without mutating checkout', (testContext) => {
+  const source = fixture(testContext);
+  const result = buildFixture(source);
   assert.equal(result.status, 0, result.stderr);
   const output = JSON.parse(result.stdout);
   assert.equal(output.sourceRevision, source.revision);
@@ -127,15 +138,43 @@ artifactTest('release builder exports and stamps exact clean Git source without 
     '--untracked-files=all']), '');
 });
 
+artifactTest('release builder rejects a Node 20 Catalyst target descriptor', (testContext) => {
+  const source = fixture(testContext, { stack: 'node20' });
+  const result = buildFixture(source);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Catalyst target descriptor is not exact/);
+  assert.deepEqual(fs.readdirSync(source.artifactParent), []);
+});
+
+artifactTest('release builder rejects a non-Job Catalyst target descriptor', (testContext) => {
+  const source = fixture(testContext, { type: 'basic' });
+  const result = buildFixture(source);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Catalyst target descriptor is not exact/);
+  assert.deepEqual(fs.readdirSync(source.artifactParent), []);
+});
+
+artifactTest('release builder rejects a package Node engine mismatch', (testContext) => {
+  const source = fixture(testContext, { packageEngine: '18.x' });
+  const result = buildFixture(source);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Node engine requirements are not exact/);
+  assert.deepEqual(fs.readdirSync(source.artifactParent), []);
+});
+
+artifactTest('release builder rejects a lockfile root Node engine mismatch', (testContext) => {
+  const source = fixture(testContext, { lockEngine: '18.x' });
+  const result = buildFixture(source);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Node engine requirements are not exact/);
+  assert.deepEqual(fs.readdirSync(source.artifactParent), []);
+});
+
 artifactTest('release builder rejects a dirty checkout before creating a release', (testContext) => {
   const source = fixture(testContext);
   fs.appendFileSync(path.join(source.component, 'catalyst.json'), '\n');
   const before = fs.readdirSync(source.artifactParent);
-  const result = spawnSync(process.execPath, [source.script], {
-    cwd: source.repository, encoding: 'utf8', windowsHide: true,
-    env: { ...process.env, APPROVED_SOURCE_REVISION: source.revision,
-      TEMP: source.artifactParent, TMP: source.artifactParent, TMPDIR: source.artifactParent },
-  });
+  const result = buildFixture(source);
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /checkout is not clean/);
   assert.deepEqual(fs.readdirSync(source.artifactParent), before);

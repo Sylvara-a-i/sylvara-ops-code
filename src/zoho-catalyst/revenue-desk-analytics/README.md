@@ -51,7 +51,7 @@ The exact public registry is [`config/variables.json`](config/variables.json). P
 - [`config/analytics-model-contract.json`](config/analytics-model-contract.json) is the mutation-ready, public-safe Analytics model: five fixed physical target-table names, complete typed schemas, four derived query views, and the exact create-report payload source for all 20 dashboard widgets. Workspace and returned view IDs remain private bindings. Its fail-closed pre-render gate requires fresh authoritative Catalyst checkpoint/outbox evidence plus exact independent Analytics readback; timestamps alone cannot label either dashboard healthy or reconciled.
 - [`config/dashboard-contract.json`](config/dashboard-contract.json) defines the exact internal operations and fixed-client result dashboards, their metric semantics, privacy boundary, creation order, and rollback gates.
 - [`config/datastore-schema.json`](config/datastore-schema.json) is the additive v2 row contract, not a destructive provisioning script.
-- [`functions/analytics_sync/catalyst-config.json`](functions/analytics_sync/catalyst-config.json) declares one Node 18 Job.
+- [`functions/analytics_sync/catalyst-config.json`](functions/analytics_sync/catalyst-config.json) declares one Node 24 Job.
 - [`RUNBOOK.md`](RUNBOOK.md) contains migration, activation, containment, readback, and rollback gates.
 - [`tools/build-release-artifact.js`](tools/build-release-artifact.js) exports only the deployable project/function files from a clean exact Git revision into an isolated temporary release directory, stamps that export, verifies it, and never deploys or modifies the checkout. The export includes a self-contained `verify-artifact.js`, but excludes source tests and tools.
 

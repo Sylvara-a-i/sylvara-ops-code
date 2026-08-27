@@ -13,6 +13,13 @@ const REVISION_PATTERN = /^[a-f0-9]{40}$/;
 const MAX_ARTIFACT_BYTES = 24 * 1024 * 1024;
 const ARTIFACT_VERIFY_SCRIPT =
   'node verify-artifact.js && npm ls --omit=dev --all --ignore-scripts';
+const EXPECTED_DEPLOYMENT = Object.freeze({
+  name: FUNCTION_TARGET,
+  stack: 'node24',
+  type: 'job',
+});
+const EXPECTED_EXECUTION = Object.freeze({ main: 'index.js' });
+const EXPECTED_ENGINES = Object.freeze({ node: '24.x' });
 
 class ArtifactBuildError extends Error {}
 
@@ -150,6 +157,18 @@ function readJson(file, label) {
   }
 }
 
+function sameJson(left, right) {
+  return JSON.stringify(left || {}) === JSON.stringify(right || {});
+}
+
+function sameScalarRecord(left, right) {
+  if (!left || typeof left !== 'object' || Array.isArray(left)) return false;
+  const leftKeys = Object.keys(left).sort();
+  const rightKeys = Object.keys(right).sort();
+  return sameJson(leftKeys, rightKeys)
+    && rightKeys.every((key) => left[key] === right[key]);
+}
+
 function validateRelease(projectRoot) {
   const catalyst = readJson(path.join(projectRoot, 'catalyst.json'), 'catalyst.json');
   if (catalyst?.functions?.source !== 'functions'
@@ -157,14 +176,25 @@ function validateRelease(projectRoot) {
     fail('Catalyst release is not scoped to analytics_sync');
   }
   const functionRoot = path.join(projectRoot, 'functions', FUNCTION_TARGET);
+  const target = readJson(path.join(functionRoot, 'catalyst-config.json'),
+    'catalyst-config.json');
+  if (!sameScalarRecord(target?.deployment, EXPECTED_DEPLOYMENT)
+    || !sameScalarRecord(target?.execution, EXPECTED_EXECUTION)) {
+    fail('Analytics Catalyst target descriptor is not exact');
+  }
   const packageJson = readJson(path.join(functionRoot, 'package.json'), 'package.json');
   const lock = readJson(path.join(functionRoot, 'package-lock.json'), 'package-lock.json');
+  const rootLock = lock?.packages?.[''];
   if (packageJson?.name !== FUNCTION_TARGET || lock?.name !== FUNCTION_TARGET
-    || lock?.lockfileVersion !== 3 || lock?.packages?.['']?.name !== FUNCTION_TARGET
+    || lock?.lockfileVersion !== 3 || rootLock?.name !== FUNCTION_TARGET
     || packageJson?.scripts?.['artifact:verify'] !== ARTIFACT_VERIFY_SCRIPT
     || JSON.stringify(packageJson.dependencies || {})
-      !== JSON.stringify(lock.packages[''].dependencies || {})) {
+      !== JSON.stringify(rootLock?.dependencies || {})) {
     fail('Analytics package lock does not bind the release package');
+  }
+  if (!sameScalarRecord(packageJson.engines, EXPECTED_ENGINES)
+    || !sameScalarRecord(rootLock.engines, EXPECTED_ENGINES)) {
+    fail('Analytics package and lockfile Node engine requirements are not exact');
   }
 }
 
