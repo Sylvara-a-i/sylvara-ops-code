@@ -14,6 +14,16 @@ PACKET_A_EXECUTION_PATH = (
     / "evidence"
     / "free-revenue-leak-test-development-packet-a-execution-2026-08-26.json"
 )
+PACKET_A_RESOLUTION_PATH = (
+    ROOT
+    / "src"
+    / "zoho-catalyst"
+    / "evidence"
+    / "free-revenue-leak-test-development-packet-a-resolution-2026-08-26.json"
+)
+ANALYTICS_OUTBOX_FENCE_ADR_PATH = (
+    ROOT / "docs" / "adr" / "0008-single-key-analytics-outbox-fence.md"
+)
 FORMS_MANIFEST_PATH = ROOT / "src" / "zoho-forms" / "free-revenue-leak-test" / "forms-manifest.json"
 FORM2_ROUTES_PATH = ROOT / "src" / "zoho-catalyst" / "revenue-leak-test-setup-form" / "config" / "routes.json"
 CALL_PROFILES_PATH = (
@@ -98,6 +108,12 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         cls.table_disposition = json.loads(TABLE_DISPOSITION_PATH.read_text(encoding="utf-8"))
         cls.packet_a_execution = json.loads(
             PACKET_A_EXECUTION_PATH.read_text(encoding="utf-8")
+        )
+        cls.packet_a_resolution = json.loads(
+            PACKET_A_RESOLUTION_PATH.read_text(encoding="utf-8")
+        )
+        cls.analytics_outbox_fence_adr = ANALYTICS_OUTBOX_FENCE_ADR_PATH.read_text(
+            encoding="utf-8"
         )
         cls.forms_manifest = json.loads(FORMS_MANIFEST_PATH.read_text(encoding="utf-8"))
         cls.form2_routes = json.loads(FORM2_ROUTES_PATH.read_text(encoding="utf-8"))
@@ -561,6 +577,13 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         self.assertEqual(inventory_analytics_pool["job_params"], {})
         self.assertFalse(inventory_analytics_pool["caller_controlled_job_params_allowed"])
         self.assertNotIn("allowed_modes", inventory_analytics_pool)
+        for pool in self.inventory["function_job_pools"]:
+            readback = pool["development_readback"]
+            self.assertTrue(readback["exists"])
+            self.assertEqual(readback["type"], "Function")
+            self.assertEqual(readback["memory_mb"], 512)
+            self.assertFalse(readback["function_bound"])
+            self.assertFalse(readback["cron_reference_present"])
 
         source_analytics_pool = self.analytics_contract["job_pool"]
         self.assertEqual(source_analytics_pool["name"], "RevenueDeskAnalyticsJobs")
@@ -855,13 +878,64 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         self.assertEqual(self.inventory["canonical_tables"]["form2"], data["required_form2_v3_tables"])
         self.assertEqual(self.inventory["canonical_tables"]["supporting"], data["supporting_tables"])
         resource_readback = self.inventory["development_resource_readback_2026_08_26"]
+        inventory_authorization = self.inventory["authorization"]
+        self.assertFalse(inventory_authorization["manifest_is_live_state_evidence"])
+        self.assertFalse(
+            inventory_authorization["manifest_is_development_change_authority"]
+        )
+        self.assertFalse(
+            inventory_authorization["retell_agent_development_or_testing_authorized"]
+        )
+        self.assertFalse(inventory_authorization["packet_a_resolution_approval_reusable"])
+        self.assertTrue(
+            inventory_authorization
+            ["live_changes_require_scoped_approval_and_independent_readback"]
+        )
         self.assertTrue(
             resource_readback["configuration_version_required_application_columns_exact"]
         )
-        self.assertFalse(resource_readback["analytics_outbox_provider_version_key_present"])
+        self.assertEqual(resource_readback["analytics_checkpoints_row_count"], 10)
+        self.assertEqual(resource_readback["analytics_checkpoints_legacy_row_count"], 10)
+        self.assertEqual(
+            resource_readback["analytics_checkpoints_additive_v2_row_count"], 0
+        )
+        self.assertTrue(
+            resource_readback["analytics_checkpoints_required_application_columns_exact"]
+        )
+        self.assertEqual(resource_readback["analytics_outbox_row_count"], 307)
+        self.assertEqual(resource_readback["analytics_outbox_legacy_row_count"], 307)
+        self.assertEqual(resource_readback["analytics_outbox_additive_v2_row_count"], 0)
+        self.assertEqual(
+            resource_readback["analytics_outbox_nonnull_outbox_key_row_count"], 0
+        )
+        self.assertTrue(resource_readback["analytics_outbox_single_key_contract_exact"])
+        self.assertTrue(resource_readback["analytics_legacy_rows_excluded_from_v2_lane"])
         self.assertEqual(
             resource_readback["packet_a_execution_evidence"],
             "evidence/free-revenue-leak-test-development-packet-a-execution-2026-08-26.json",
+        )
+        self.assertEqual(
+            resource_readback["packet_a_resolution_evidence"],
+            "evidence/free-revenue-leak-test-development-packet-a-resolution-2026-08-26.json",
+        )
+        self.assertEqual(
+            resource_readback["canonical_job_pools"],
+            [
+                {
+                    "name": "RevenueDeskCallJobs",
+                    "type": "Function",
+                    "memory_mb": 512,
+                    "function_bound": False,
+                    "cron_reference_present": False,
+                },
+                {
+                    "name": "RevenueDeskAnalyticsJobs",
+                    "type": "Function",
+                    "memory_mb": 512,
+                    "function_bound": False,
+                    "cron_reference_present": False,
+                },
+            ],
         )
 
         catalyst_root = ROOT / "src" / "zoho-catalyst"
@@ -934,7 +1008,10 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         plan = self.table_disposition
         self.assertEqual(plan["schema_version"], 1)
         self.assertEqual(plan["environment"], "Development")
-        self.assertIn("planning-only", plan["status"])
+        self.assertEqual(
+            plan["status"],
+            "current-sanitized-disposition-live-bindings-private-archive-and-scoped-deletion-approval-required",
+        )
         self.assertFalse(plan["authorization"]["manifest_authorizes_migration"])
         self.assertFalse(plan["authorization"]["manifest_authorizes_deletion"])
         self.assertTrue(plan["authorization"]["scoped_destructive_approval_required"])
@@ -956,7 +1033,7 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         current_presence = plan["current_table_presence"]
         self.assertEqual(current_presence["observed_at"], "2026-08-26")
         self.assertEqual(current_presence["method"], (
-            "metadata-inventory-and-bounded-one-row-readback"
+            "metadata-inventory-empty-page-readback-and-full-analytics-pagination"
         ))
         self.assertEqual(current_presence["table_count"], 35)
         self.assertEqual(current_presence["nonzero_table_count"], 16)
@@ -965,10 +1042,33 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         self.assertTrue(
             current_presence["configuration_version_required_application_columns_exact"]
         )
-        self.assertFalse(current_presence["analytics_outbox_provider_version_key_present"])
+        self.assertEqual(current_presence["analytics_outbox_row_count"], 307)
+        self.assertEqual(
+            current_presence["analytics_outbox_count_method"],
+            "full-pagination-and-row-schema-version-classification",
+        )
+        self.assertTrue(current_presence["analytics_outbox_pagination_complete"])
+        self.assertEqual(current_presence["analytics_outbox_legacy_row_count"], 307)
+        self.assertEqual(current_presence["analytics_outbox_v2_row_count"], 0)
+        self.assertEqual(current_presence["analytics_outbox_nonnull_outbox_key_count"], 0)
+        self.assertTrue(current_presence["analytics_outbox_single_key_contract_exact"])
+        self.assertEqual(current_presence["analytics_checkpoints_row_count"], 10)
+        self.assertEqual(
+            current_presence["analytics_checkpoints_count_method"],
+            "full-pagination-and-row-schema-version-classification",
+        )
+        self.assertTrue(current_presence["analytics_checkpoints_pagination_complete"])
+        self.assertEqual(current_presence["analytics_checkpoints_v2_row_count"], 0)
+        self.assertTrue(
+            current_presence["analytics_checkpoints_required_application_columns_exact"]
+        )
         self.assertEqual(
             current_presence["packet_a_execution_evidence"],
             "evidence/free-revenue-leak-test-development-packet-a-execution-2026-08-26.json",
+        )
+        self.assertEqual(
+            current_presence["packet_a_resolution_evidence"],
+            "evidence/free-revenue-leak-test-development-packet-a-resolution-2026-08-26.json",
         )
         self.assertEqual(plan["row_accounting"], {
             "retained_in_place": 317,
@@ -994,13 +1094,13 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             self.assertIn(entry["gate_profile"], plan["gate_profiles"])
             self.assertTrue(plan["gate_profiles"][entry["gate_profile"]])
 
-        self.assertEqual(len(by_action["retain_additive"]), 2)
-        self.assertEqual(len(by_action["retain_bind_canonical"]), 11)
+        self.assertEqual(len(by_action.get("retain_additive", [])), 0)
+        self.assertEqual(len(by_action["retain_bind_canonical"]), 13)
         self.assertEqual(len(by_action["quarantine_then_delete"]), 14)
         self.assertEqual(len(by_action["delete_after_dependency_absence"]), 8)
         self.assertEqual(plan["disposition_counts"], {
-            "retain_additive": 2,
-            "retain_bind_canonical": 11,
+            "retain_additive": 0,
+            "retain_bind_canonical": 13,
             "quarantine_then_delete": 14,
             "delete_after_dependency_absence": 8,
             "create_additive_canonical": 0,
@@ -1072,8 +1172,21 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
 
         analytics = {entry["api_name"]: entry for entry in observed}
         for name in ("AnalyticsSyncCheckpoints", "AnalyticsSyncOutbox"):
-            self.assertEqual(analytics[name]["action"], "retain_additive")
-            self.assertEqual(analytics[name]["gate_profile"], "retain_additive_nonempty")
+            self.assertEqual(analytics[name]["action"], "retain_bind_canonical")
+            self.assertEqual(
+                analytics[name]["gate_profile"],
+                "retain_bind_nonempty_legacy_excluded",
+            )
+            self.assertEqual(analytics[name]["row_schema_version_2_rows"], 0)
+            self.assertTrue(analytics[name]["legacy_rows_excluded_from_canonical_v2_lane"])
+        self.assertEqual(analytics["AnalyticsSyncCheckpoints"]["legacy_rows"], 10)
+        self.assertTrue(
+            analytics["AnalyticsSyncCheckpoints"]
+            ["required_application_columns_exact"]
+        )
+        self.assertEqual(analytics["AnalyticsSyncOutbox"]["legacy_rows"], 307)
+        self.assertEqual(analytics["AnalyticsSyncOutbox"]["nonnull_outbox_key_rows"], 0)
+        self.assertTrue(analytics["AnalyticsSyncOutbox"]["single_key_contract_exact"])
         self.assertEqual(
             analytics["RevenueDeskConfigurationVersions"]["action"],
             "retain_bind_canonical",
@@ -1239,6 +1352,196 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             value is False for value in evidence["disclosure_controls"].values()
         ))
 
+        serialized = json.dumps(evidence, sort_keys=True).lower()
+        for forbidden in (
+            "client_secret", "refresh_token", "access_token", "invoke_url",
+            "project_id", "organization_id", "http://", "https://",
+        ):
+            self.assertNotIn(forbidden, serialized)
+
+    def test_single_key_analytics_outbox_decision_is_coherent_and_retell_excluded(self):
+        adr = self.analytics_outbox_fence_adr
+        self.assertIn("Status: Accepted for the Development candidate", adr)
+        self.assertIn("Retell agent scope: Excluded", adr)
+        self.assertIn("analytics-provider-version-v1", adr)
+        self.assertIn("normalized SOURCE_MODIFIED_AT", adr)
+        self.assertIn("exactly 307 retained legacy outbox rows", adr)
+        self.assertIn("zero `ROW_SCHEMA_VERSION=2` rows", adr)
+        self.assertIn("Production deployment", adr)
+
+        active_files = (
+            ROOT / "src" / "zoho-catalyst" / "revenue-desk-analytics"
+            / "config" / "datastore-schema.json",
+            ROOT / "src" / "zoho-catalyst" / "revenue-desk-analytics"
+            / "config" / "analytics-sync.json",
+            ROOT / "src" / "zoho-catalyst" / "revenue-desk-analytics"
+            / "functions" / "analytics_sync" / "lib" / "facts.js",
+            ROOT / "src" / "zoho-catalyst" / "revenue-desk-analytics"
+            / "functions" / "analytics_sync" / "lib" / "catalyst-store.js",
+            ROOT / "src" / "zoho-catalyst" / "revenue-desk-call-runtime"
+            / "config" / "datastore-schema.json",
+            ROOT / "src" / "zoho-catalyst" / "revenue-desk-call-runtime"
+            / "functions" / "revenue_desk_call_gateway" / "lib" / "analytics-outbox.js",
+            ROOT / "src" / "zoho-catalyst" / "crm-billing-orchestrator"
+            / "config" / "datastore-schema.json",
+            ROOT / "src" / "zoho-catalyst" / "crm-billing-orchestrator"
+            / "functions" / "crm_billing_orchestrator" / "lib" / "analytics-outbox.js",
+        )
+        retired_column = "_".join(("PROVIDER", "VERSION", "KEY"))
+        for path in active_files:
+            self.assertNotIn(retired_column, path.read_text(encoding="utf-8"), path)
+
+    def test_development_packet_a_resolution_is_exact_contained_and_sanitized(self):
+        evidence = self.packet_a_resolution
+        self.assertEqual(evidence["schema_version"], 1)
+        self.assertEqual(evidence["environment"], "Development")
+        self.assertEqual(
+            evidence["outcome"],
+            "completed_with_single_key_analytics_outbox_fence",
+        )
+        self.assertEqual(
+            evidence["historical_execution_evidence"],
+            "free-revenue-leak-test-development-packet-a-execution-2026-08-26.json",
+        )
+        self.assertEqual(
+            evidence["architecture_decision"],
+            "../../../docs/adr/0008-single-key-analytics-outbox-fence.md",
+        )
+
+        authorization = evidence["authorization"]
+        self.assertEqual(authorization["approved_scope"], [
+            "perform the exact retained-outbox full-contract and split-sequence attempts without changing any retained row",
+            "create, exercise, independently read back, and delete two bounded disposable Development proof tables",
+            "adopt the single-key Analytics outbox architecture in the repository candidate",
+            "create and independently read back exactly two unbound Function Job pools at 512 MB",
+        ])
+        self.assertTrue(authorization["packet_a_resolution_scope_authorized"])
+        self.assertTrue(authorization["approval_exhausted_after_verified_poststate"])
+        self.assertFalse(authorization["future_live_action_authorized_by_this_record"])
+        self.assertFalse(
+            authorization["retell_agent_development_or_testing_authorized"]
+        )
+        self.assertFalse(authorization["production_or_customer_activity_authorized"])
+        self.assertTrue(authorization["one_change_then_independent_readback_required"])
+
+        prestate = evidence["verified_prestate"]
+        self.assertEqual(prestate["configuration_version_table_rows"], 0)
+        self.assertEqual(prestate["configuration_version_total_columns"], 23)
+        self.assertTrue(
+            prestate["configuration_version_required_application_columns_exact"]
+        )
+        self.assertEqual(prestate["analytics_outbox_rows"], 307)
+        self.assertEqual(prestate["analytics_outbox_v2_rows"], 0)
+        self.assertEqual(prestate["analytics_outbox_nonnull_outbox_key_rows"], 0)
+        self.assertEqual(prestate["analytics_outbox_outbox_key_contract"], {
+            "type": "varchar",
+            "max_length": 64,
+            "mandatory": False,
+            "unique": True,
+            "audit_consent": True,
+        })
+        self.assertEqual(prestate["analytics_checkpoints_rows"], 10)
+        self.assertEqual(prestate["analytics_checkpoints_v2_rows"], 0)
+        self.assertTrue(
+            prestate["analytics_checkpoints_required_application_columns_exact"]
+        )
+        self.assertTrue(prestate["analytics_checkpoints_checkpoint_key_unique"])
+        self.assertTrue(
+            prestate["app_user_permissions_empty_on_both_analytics_tables"]
+        )
+        self.assertTrue(prestate["canonical_job_pools_absent"])
+
+        attempts = evidence["retained_outbox_target_attempts"]
+        self.assertEqual(attempts["full_nullable_unique_column_attempt"], "no_create")
+        self.assertEqual(
+            attempts["provider_supported_split_sequence_attempt"], "no_create"
+        )
+        self.assertFalse(attempts["column_created"])
+        self.assertTrue(attempts["row_count_unchanged"])
+        self.assertFalse(attempts["row_mutation_attempted"])
+        self.assertFalse(attempts["further_target_mutation_attempted"])
+
+        capability = evidence["disposable_nonempty_table_capability_proof"]
+        self.assertEqual(capability["initial_rows"], 2)
+        self.assertTrue(capability["nullable_unique_column_created_and_read_back"])
+        self.assertTrue(capability["multiple_preexisting_nulls_preserved"])
+        self.assertFalse(capability["target_retained_table_used"])
+        self.assertTrue(all(capability["cleanup"].values()))
+
+        contract = evidence["selected_outbox_contract"]
+        self.assertEqual(contract["physical_unique_key"], "OUTBOX_KEY")
+        self.assertEqual(contract["key_domain"], "analytics-provider-version-v1")
+        self.assertEqual(contract["key_inputs"], [
+            "RECORD_TYPE",
+            "ENVIRONMENT",
+            "CLIENT_KEY",
+            "DEPLOYMENT_KEY",
+            "RECORD_KEY",
+            "normalized_SOURCE_MODIFIED_AT",
+        ])
+        self.assertFalse(contract["provider_version_key_column_required"])
+        self.assertFalse(contract["legacy_row_rewrite_required"])
+
+        concurrency = evidence["provider_concurrency_proof"]
+        self.assertTrue(concurrency["disposable_table_only"])
+        self.assertEqual(concurrency["null_key_rows_inserted_and_preserved"], 2)
+        self.assertEqual(
+            concurrency["simultaneous_same_key_different_payload_attempts"], 2
+        )
+        self.assertEqual(concurrency["successful_simultaneous_attempts"], 1)
+        self.assertEqual(concurrency["failed_simultaneous_attempts"], 1)
+        self.assertEqual(concurrency["keyed_rows_after_simultaneous_attempts"], 1)
+        self.assertTrue(concurrency["exact_replay_rejected_by_provider"])
+        self.assertTrue(concurrency["row_and_payload_unchanged_after_replay"])
+        self.assertEqual(concurrency["cleanup"]["table_count_before_probe"], 35)
+        self.assertEqual(concurrency["cleanup"]["table_count_during_probe"], 36)
+        self.assertEqual(concurrency["cleanup"]["table_count_after_cleanup"], 35)
+        self.assertTrue(concurrency["cleanup"]["table_deleted"])
+        self.assertTrue(concurrency["cleanup"]["exact_name_absent_after_delete"])
+
+        pools = evidence["job_pools"]
+        self.assertEqual(pools["initial_total_pool_count"], 2)
+        self.assertEqual(pools["final_total_pool_count"], 4)
+        self.assertEqual(
+            [pool["name"] for pool in pools["created_targets"]],
+            ["RevenueDeskCallJobs", "RevenueDeskAnalyticsJobs"],
+        )
+        for pool in pools["created_targets"]:
+            self.assertEqual(pool["type"], "Function")
+            self.assertEqual(pool["memory_mb"], 512)
+            self.assertTrue(pool["independent_readback_exact"])
+            self.assertFalse(pool["function_bound"])
+            self.assertFalse(pool["cron_reference_present"])
+            self.assertEqual(pool["jobs_submitted"], 0)
+
+        poststate = evidence["verified_poststate"]
+        self.assertEqual(poststate["table_count"], 35)
+        self.assertEqual(poststate["analytics_outbox_rows"], 307)
+        self.assertEqual(poststate["analytics_outbox_v2_rows"], 0)
+        self.assertEqual(poststate["analytics_outbox_nonnull_outbox_key_rows"], 0)
+        self.assertEqual(poststate["analytics_checkpoints_rows"], 10)
+        self.assertEqual(poststate["analytics_checkpoints_v2_rows"], 0)
+        self.assertEqual(poststate["function_count"], 8)
+        self.assertEqual(poststate["canonical_target_functions_already_present"], [
+            "crm_billing_orchestrator",
+            "analytics_sync",
+        ])
+        for field in (
+            "new_function_created",
+            "function_source_uploaded",
+            "function_or_job_binding_created",
+            "route_or_gateway_changed",
+            "environment_variable_changed",
+            "retained_or_canonical_business_record_changed",
+            "production_changed",
+            "retell_agent_or_flow_changed_or_tested",
+            "activation_allowed",
+        ):
+            self.assertFalse(poststate[field])
+
+        self.assertTrue(all(
+            value is False for value in evidence["disclosure_controls"].values()
+        ))
         serialized = json.dumps(evidence, sort_keys=True).lower()
         for forbidden in (
             "client_secret", "refresh_token", "access_token", "invoke_url",

@@ -1,0 +1,187 @@
+{
+  "schema_version": 1,
+  "record_type": "sanitized_free_revenue_leak_test_development_packet_a_resolution",
+  "execution_date_utc": "2026-08-26",
+  "environment": "Development",
+  "outcome": "completed_with_single_key_analytics_outbox_fence",
+  "historical_execution_evidence": "free-revenue-leak-test-development-packet-a-execution-2026-08-26.json",
+  "architecture_decision": "../../../docs/adr/0008-single-key-analytics-outbox-fence.md",
+  "authorization": {
+    "approval_reference": "owner-approval-retained-in-private-task-record",
+    "approved_scope": [
+      "perform the exact retained-outbox full-contract and split-sequence attempts without changing any retained row",
+      "create, exercise, independently read back, and delete two bounded disposable Development proof tables",
+      "adopt the single-key Analytics outbox architecture in the repository candidate",
+      "create and independently read back exactly two unbound Function Job pools at 512 MB"
+    ],
+    "packet_a_resolution_scope_authorized": true,
+    "approval_exhausted_after_verified_poststate": true,
+    "future_live_action_authorized_by_this_record": false,
+    "retell_agent_development_or_testing_authorized": false,
+    "production_or_customer_activity_authorized": false,
+    "one_change_then_independent_readback_required": true,
+    "stop_on_mismatch_required": true
+  },
+  "execution_surfaces": {
+    "identity_metadata_and_independent_readback": "Sylvara Catalyst Audit connector",
+    "job_pool_write": "typed Sylvara Catalyst Changes connector",
+    "disposable_column_and_concurrency_proof": "first-party authenticated Catalyst UI fallback plus typed connector readback",
+    "fallback_reason": "the connector did not expose a safely typed table-column create contract or disposable row-insert concurrency operation",
+    "direct_rest_or_shell_automation_used": false,
+    "different_connector_used_as_substitute": false
+  },
+  "verified_prestate": {
+    "configuration_version_table_rows": 0,
+    "configuration_version_total_columns": 23,
+    "configuration_version_required_application_columns_exact": true,
+    "analytics_outbox_rows": 307,
+    "analytics_outbox_total_columns": 71,
+    "analytics_outbox_legacy_rows": 307,
+    "analytics_outbox_v2_rows": 0,
+    "analytics_outbox_nonnull_outbox_key_rows": 0,
+    "analytics_outbox_outbox_key_contract": {
+      "type": "varchar",
+      "max_length": 64,
+      "mandatory": false,
+      "unique": true,
+      "audit_consent": true
+    },
+    "analytics_checkpoints_rows": 10,
+    "analytics_checkpoints_v2_rows": 0,
+    "analytics_checkpoints_required_application_columns_exact": true,
+    "analytics_checkpoints_checkpoint_key_unique": true,
+    "app_user_permissions_empty_on_both_analytics_tables": true,
+    "table_scope_on_both_analytics_tables": "GLOBAL",
+    "canonical_job_pools_absent": true
+  },
+  "retained_outbox_target_attempts": {
+    "full_nullable_unique_column_attempt": "no_create",
+    "provider_supported_split_sequence_attempt": "no_create",
+    "column_created": false,
+    "row_count_unchanged": true,
+    "row_mutation_attempted": false,
+    "further_target_mutation_attempted": false,
+    "raw_provider_error_included": false
+  },
+  "disposable_nonempty_table_capability_proof": {
+    "purpose": "separate general provider capability from the retained-table-specific failure",
+    "initial_rows": 2,
+    "nullable_unique_column_created_and_read_back": true,
+    "multiple_preexisting_nulls_preserved": true,
+    "target_retained_table_used": false,
+    "cleanup": {
+      "table_deleted": true,
+      "exact_name_absent_after_delete": true,
+      "former_table_reference_not_found_after_delete": true,
+      "unrelated_table_count_unchanged": true
+    }
+  },
+  "selected_outbox_contract": {
+    "physical_unique_key": "OUTBOX_KEY",
+    "key_domain": "analytics-provider-version-v1",
+    "key_inputs": [
+      "RECORD_TYPE",
+      "ENVIRONMENT",
+      "CLIENT_KEY",
+      "DEPLOYMENT_KEY",
+      "RECORD_KEY",
+      "normalized_SOURCE_MODIFIED_AT"
+    ],
+    "key_encoding": "NUL-delimited UTF-8 followed by SHA-256",
+    "payload_binding": "PAYLOAD_HASH is SHA-256 over canonical PAYLOAD_JSON",
+    "timestamp_normalization": "accepted timestamps are normalized with Date.toISOString before payload or key construction",
+    "exact_replay_behavior": "converge_only_after_exact_immutable_readback",
+    "same_watermark_changed_payload_behavior": "same_key_and_fail_closed",
+    "later_authoritative_correction_behavior": "new_normalized_watermark_and_new_key",
+    "provider_version_key_column_required": false,
+    "legacy_row_rewrite_required": false
+  },
+  "provider_concurrency_proof": {
+    "disposable_table_only": true,
+    "null_key_rows_inserted_and_preserved": 2,
+    "simultaneous_same_key_different_payload_attempts": 2,
+    "successful_simultaneous_attempts": 1,
+    "failed_simultaneous_attempts": 1,
+    "keyed_rows_after_simultaneous_attempts": 1,
+    "exact_replay_rejected_by_provider": true,
+    "row_and_payload_unchanged_after_replay": true,
+    "provider_unique_constraint_is_atomic_boundary": true,
+    "cleanup": {
+      "table_deleted": true,
+      "exact_name_absent_after_delete": true,
+      "former_table_reference_not_found_after_delete": true,
+      "table_count_before_probe": 35,
+      "table_count_during_probe": 36,
+      "table_count_after_cleanup": 35
+    }
+  },
+  "job_pools": {
+    "initial_total_pool_count": 2,
+    "final_total_pool_count": 4,
+    "created_targets": [
+      {
+        "name": "RevenueDeskCallJobs",
+        "type": "Function",
+        "memory_mb": 512,
+        "independent_readback_exact": true,
+        "function_bound": false,
+        "cron_reference_present": false,
+        "jobs_submitted": 0
+      },
+      {
+        "name": "RevenueDeskAnalyticsJobs",
+        "type": "Function",
+        "memory_mb": 512,
+        "independent_readback_exact": true,
+        "function_bound": false,
+        "cron_reference_present": false,
+        "jobs_submitted": 0
+      }
+    ]
+  },
+  "verified_poststate": {
+    "table_count": 35,
+    "configuration_version_table_rows": 0,
+    "configuration_version_total_columns": 23,
+    "configuration_version_required_application_columns_exact": true,
+    "analytics_outbox_rows": 307,
+    "analytics_outbox_total_columns": 71,
+    "analytics_outbox_v2_rows": 0,
+    "analytics_outbox_nonnull_outbox_key_rows": 0,
+    "analytics_checkpoints_rows": 10,
+    "analytics_checkpoints_v2_rows": 0,
+    "analytics_checkpoints_required_application_columns_exact": true,
+    "function_count": 8,
+    "canonical_target_functions_already_present": [
+      "crm_billing_orchestrator",
+      "analytics_sync"
+    ],
+    "new_function_created": false,
+    "function_source_uploaded": false,
+    "function_or_job_binding_created": false,
+    "route_or_gateway_changed": false,
+    "environment_variable_changed": false,
+    "retained_or_canonical_business_record_changed": false,
+    "production_changed": false,
+    "retell_agent_or_flow_changed_or_tested": false,
+    "activation_allowed": false
+  },
+  "remaining_gates": [
+    "commit and verify the coherent single-key producer and consumer packages",
+    "migrate both Job artifacts from the retired Node 18 target to Node 24 and verify package contracts",
+    "build immutable clean-revision artifacts and a release manifest",
+    "prove private variable and Connection prerequisites without publishing values",
+    "deploy new functions inertly and independently verify source and runtime identity",
+    "complete synthetic Development reconciliation around but not through the Retell agent boundary"
+  ],
+  "disclosure_controls": {
+    "platform_ids_included": false,
+    "organization_or_project_names_included": false,
+    "endpoints_or_private_urls_included": false,
+    "credentials_or_secret_values_included": false,
+    "operator_identity_included": false,
+    "row_values_or_keys_included": false,
+    "raw_provider_errors_or_logs_included": false,
+    "private_approval_artifact_included": false
+  }
+}

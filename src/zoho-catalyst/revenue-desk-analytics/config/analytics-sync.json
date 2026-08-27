@@ -58,7 +58,7 @@
       "conversion_status_target_field": "TARGET_ENGAGEMENT_TYPE",
       "conversion_status_target": "paid_service"
     },
-    "rule": "Package-local producers create immutable minimized source outbox facts with the exact v2/provider-version contract and deterministic readback; analytics_sync owns bounded deterministic daily-metric derivation plus Analytics outbox/checkpoint processing",
+    "rule": "Package-local producers create immutable minimized source outbox facts with the exact v2 single-key provider-version fence and deterministic readback; analytics_sync owns bounded deterministic daily-metric derivation plus Analytics outbox/checkpoint processing",
     "daily_rollup": {
       "owner": "analytics_sync",
       "grain": "one UTC date, client key, deployment key, configuration version, engagement type, and environment",
@@ -128,8 +128,8 @@
       "DEPLOYMENT_KEY",
       "ENVIRONMENT"
     ],
-    "provider_version_fence": {
-      "column": "PROVIDER_VERSION_KEY",
+    "outbox_version_fence": {
+      "column": "OUTBOX_KEY",
       "domain": "analytics-provider-version-v1",
       "identity_columns": [
         "RECORD_TYPE",
@@ -139,8 +139,11 @@
         "RECORD_KEY",
         "SOURCE_MODIFIED_AT"
       ],
+      "timestamp_normalization": "new Date(value).toISOString()",
+      "payload_binding_column": "PAYLOAD_HASH",
       "provider_unique_constraint_required": true,
-      "same_key_different_payload": "DURABLE_IDEMPOTENCY_CONFLICT"
+      "same_key_different_payload": "DURABLE_IDEMPOTENCY_CONFLICT",
+      "duplicate_or_ownership_conflict": "ANALYTICS_OUTBOX_OWNERSHIP_CONFLICT"
     },
     "completion_rule": "import completion plus exact key/hash/environment readback",
     "unknown_outcome": "ReconciliationRequired"

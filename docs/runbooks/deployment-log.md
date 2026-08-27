@@ -8,7 +8,27 @@ A merged pull request is not a deployment. Record an entry only after an authori
 
 ## Current State
 
-The Development event recorded here is the contained 2026-08-26 Revenue Desk datastore schema attempt. The production configuration events are the 2026-08-14 Free-Test CRM workflow and Blueprint work; the 2026-08-05 Sylvara Zoho CRM schema/layout/address work; and the same-day Zoho Books chart deployment, Schedule C hierarchy amendment, and final tax-preparer description correction. The Free-Test CRM event configured intake and Deal automation but did not automate native Lead conversion or prove Zoho Forms settings. The Books events wrote chart metadata and active status only; no transaction record, journal, bank, clearing, tax-engine, or integration was written. Chart metadata can change historical report presentation even when transaction records remain unchanged.
+The Development events recorded here are the contained 2026-08-26 Revenue Desk datastore schema attempt and its superseding bounded Packet A resolution. The production configuration events are the 2026-08-14 Free-Test CRM workflow and Blueprint work; the 2026-08-05 Sylvara Zoho CRM schema/layout/address work; and the same-day Zoho Books chart deployment, Schedule C hierarchy amendment, and final tax-preparer description correction. The Free-Test CRM event configured intake and Deal automation but did not automate native Lead conversion or prove Zoho Forms settings. The Books events wrote chart metadata and active status only; no transaction record, journal, bank, clearing, tax-engine, or integration was written. Chart metadata can change historical report presentation even when transaction records remain unchanged.
+
+## 2026-08-26 — Revenue Desk Development Packet A Superseding Resolution
+
+This entry supersedes only the unresolved architecture and Job-pool status conclusions in the partial-execution entry below. That earlier entry remains verbatim historical evidence.
+
+```text
+Date (UTC): 2026-08-26
+Environment class: development
+Change reference: docs/adr/0008-single-key-analytics-outbox-fence.md
+Evidence reference: sanitized path src/zoho-catalyst/evidence/free-revenue-leak-test-development-packet-a-resolution-2026-08-26.json
+Approval reference: explicit owner approval retained in the private task record
+Operator role: scoped typed Job-pool change role and bounded first-party Console fallback, each with independent connector readback
+Pre-deployment state: verified; the current table count was 35, the outbox held 307 legacy rows with zero version-2 rows and zero nonnull OUTBOX_KEY rows under the exact single-key contract, the checkpoint table held 10 legacy rows with zero version-2 rows and its exact schema, and both canonical Job pools were absent
+Action: configuration change and disposable proof; confirm that the retained outbox rejected both bounded second-key sequences without changing a retained row, prove nullable-unique behavior and same-key concurrency on two disposable tables, delete both proof tables with absence readback, retain the existing unique OUTBOX_KEY as the sole provider-version fence, and create exactly the two canonical Function Job pools at 512 MB
+Smoke-test result: bounded proof passed; simultaneous same-key/different-payload writes produced exactly one durable owner, exact replay was rejected without changing that owner, no function was deployed or bound, no Job was submitted, no Cron was created or referenced, and no Retell or Production behavior was exercised
+Readback result: matched; the table count returned from 36 to 35 with both disposable table names absent, both retained Analytics row counts and zero version-2/non-null-key counts were unchanged, the checkpoint schema remained exact, and both canonical pools existed as Function/512 while remaining unbound with no Cron reference
+Rollback target: leave both empty, unbound pools inert; deletion or any other destructive rollback requires separate scoped approval and independent absence readback
+Outcome: succeeded for the bounded Packet A resolution; temporary disposable tables and synthetic proof rows were created and deleted, while no retained or canonical business record, function, route, Retell agent, or Production state was changed
+Follow-up: commit and verify the coherent single-key packages, build immutable supported-runtime artifacts, prove private variables and Connections, deploy functions inertly, read back exact source/runtime identity, and complete synthetic Development reconciliation before any binding or activation
+```
 
 ## 2026-08-26 — Revenue Desk Development Packet A Partial Execution And Containment
 

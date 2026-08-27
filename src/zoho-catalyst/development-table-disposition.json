@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "record_type": "sanitized_development_table_disposition_plan",
-  "status": "planning-only-live-bindings-private-archive-and-scoped-deletion-approval-required",
+  "status": "current-sanitized-disposition-live-bindings-private-archive-and-scoped-deletion-approval-required",
   "environment": "Development",
   "observed_at": "2026-08-24",
   "authorization": {
@@ -20,7 +20,7 @@
   },
   "current_table_presence": {
     "observed_at": "2026-08-26",
-    "method": "metadata-inventory-and-bounded-one-row-readback",
+    "method": "metadata-inventory-empty-page-readback-and-full-analytics-pagination",
     "table_count": 35,
     "nonzero_table_count": 16,
     "zero_row_table_count": 19,
@@ -34,8 +34,20 @@
       "RevenueLeakTestRequestFormSessions"
     ],
     "configuration_version_required_application_columns_exact": true,
-    "analytics_outbox_provider_version_key_present": false,
-    "packet_a_execution_evidence": "evidence/free-revenue-leak-test-development-packet-a-execution-2026-08-26.json"
+    "analytics_outbox_row_count": 307,
+    "analytics_outbox_count_method": "full-pagination-and-row-schema-version-classification",
+    "analytics_outbox_pagination_complete": true,
+    "analytics_outbox_legacy_row_count": 307,
+    "analytics_outbox_v2_row_count": 0,
+    "analytics_outbox_nonnull_outbox_key_count": 0,
+    "analytics_outbox_single_key_contract_exact": true,
+    "analytics_checkpoints_row_count": 10,
+    "analytics_checkpoints_count_method": "full-pagination-and-row-schema-version-classification",
+    "analytics_checkpoints_pagination_complete": true,
+    "analytics_checkpoints_v2_row_count": 0,
+    "analytics_checkpoints_required_application_columns_exact": true,
+    "packet_a_execution_evidence": "evidence/free-revenue-leak-test-development-packet-a-execution-2026-08-26.json",
+    "packet_a_resolution_evidence": "evidence/free-revenue-leak-test-development-packet-a-resolution-2026-08-26.json"
   },
   "row_accounting": {
     "retained_in_place": 317,
@@ -43,8 +55,8 @@
     "discarded_without_evidence": 0
   },
   "disposition_counts": {
-    "retain_additive": 2,
-    "retain_bind_canonical": 11,
+    "retain_additive": 0,
+    "retain_bind_canonical": 13,
     "quarantine_then_delete": 14,
     "delete_after_dependency_absence": 8,
     "create_additive_canonical": 0,
@@ -69,33 +81,42 @@
     {
       "api_name": "AnalyticsSyncCheckpoints",
       "observed_rows": 10,
+      "legacy_rows": 10,
+      "row_schema_version_2_rows": 0,
+      "required_application_columns_exact": true,
+      "legacy_rows_excluded_from_canonical_v2_lane": true,
       "owner": "analytics_sync",
       "purpose": "Analytics partition checkpoint and reconciliation state.",
       "generation": "canonical-additive-v2-over-legacy-rows",
       "expected_readers": ["analytics_sync"],
       "expected_writers": ["analytics_sync"],
       "active_bindings_verified": false,
-      "ownership_evidence": "repository-candidate-and-private-live-source-diff-required",
+      "ownership_evidence": "exact-schema-and-version-count-readback-complete-private-binding-proof-required",
       "semantic_successors": ["AnalyticsSyncCheckpoints"],
-      "action": "retain_additive",
+      "action": "retain_bind_canonical",
       "active_promotion_allowed": false,
-      "gate_profile": "retain_additive_nonempty",
+      "gate_profile": "retain_bind_nonempty_legacy_excluded",
       "rollback": "Disable the canonical Analytics Job and leave all legacy rows untouched."
     },
     {
       "api_name": "AnalyticsSyncOutbox",
       "observed_rows": 307,
+      "legacy_rows": 307,
+      "row_schema_version_2_rows": 0,
+      "nonnull_outbox_key_rows": 0,
+      "single_key_contract_exact": true,
+      "legacy_rows_excluded_from_canonical_v2_lane": true,
       "owner": "analytics_sync-with-canonical-producers",
       "purpose": "Durable Analytics facts, leases, retries, and provider reconciliation.",
       "generation": "canonical-additive-v2-over-legacy-rows",
       "expected_readers": ["analytics_sync"],
       "expected_writers": ["analytics_sync", "revenue_desk_call_gateway", "revenue_desk_call_worker", "crm_billing_orchestrator"],
       "active_bindings_verified": false,
-      "ownership_evidence": "repository-candidate-and-private-live-producer-proof-required",
+      "ownership_evidence": "exact-single-key-schema-and-version-count-readback-complete-private-binding-proof-required",
       "semantic_successors": ["AnalyticsSyncOutbox"],
-      "action": "retain_additive",
+      "action": "retain_bind_canonical",
       "active_promotion_allowed": false,
-      "gate_profile": "retain_additive_nonempty",
+      "gate_profile": "retain_bind_nonempty_legacy_excluded",
       "rollback": "Disable canonical producers and the Analytics Job; retain every legacy and version-2 row."
     },
     {
@@ -644,12 +665,12 @@
   ],
   "canonical_tables_to_create": [],
   "gate_profiles": {
-    "retain_additive_nonempty": [
-      "Read back exact existing schema, constraints, permissions, row count, and active bindings.",
-      "Add only reviewed nullable columns and prove case-insensitive noncollision.",
-      "Prove nullable unique-column behavior before activation.",
+    "retain_bind_nonempty_legacy_excluded": [
+      "Preserve the exact read-back schema, constraints, permissions, row count, and single-key contract.",
       "Exclude every legacy row from the version-2 claim lane.",
-      "Capture private canonical key-set and row digests before and after the additive change."
+      "Prove one canonical version-2 write and exact readback before binding an active producer or consumer.",
+      "Capture private canonical key-set and row digests before and after any approved migration.",
+      "Disable every canonical producer and consumer while retaining all rows for rollback."
     ],
     "retain_bind_empty": [
       "Confirm the table remains empty immediately before binding.",

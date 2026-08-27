@@ -4,13 +4,30 @@ const crypto = require('node:crypto');
 const { invariant } = require('./errors');
 const { keyedDigest } = require('./security');
 
+const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/;
+const ROW_ID = /^\d{1,30}$/;
 const OUTBOX_IMMUTABLE = Object.freeze([
-  'OUTBOX_KEY', 'PROVIDER_VERSION_KEY', 'ROW_SCHEMA_VERSION', 'RECORD_TYPE',
+  'OUTBOX_KEY', 'ROW_SCHEMA_VERSION', 'RECORD_TYPE',
   'RECORD_KEY', 'CLIENT_KEY',
   'DEPLOYMENT_KEY', 'CONFIGURATION_VERSION', 'ENGAGEMENT_TYPE', 'ENVIRONMENT',
   'SOURCE_DATE_UTC', 'PAYLOAD_JSON', 'PAYLOAD_HASH', 'METRIC_VERSION',
   'SOURCE_MODIFIED_AT', 'SOURCE_REVISION',
 ]);
+
+const FACT_TIMESTAMP_FIELDS = Object.freeze({
+  call: Object.freeze({
+    required: Object.freeze(['SOURCE_MODIFIED_AT', 'STARTED_AT']),
+    optional: Object.freeze(['ENDED_AT']),
+  }),
+  deployment: Object.freeze({
+    required: Object.freeze(['SOURCE_MODIFIED_AT', 'ACTUAL_START_AT', 'EXPIRES_AT']),
+    optional: Object.freeze(['STOPPED_AT']),
+  }),
+  final_test_result: Object.freeze({
+    required: Object.freeze(['SOURCE_MODIFIED_AT', 'TEST_STARTED_AT', 'TEST_ENDED_AT']),
+    optional: Object.freeze([]),
+  }),
+});
 
 function sha256(value) {
   return crypto.createHash('sha256').update(value, 'utf8').digest('hex');
@@ -22,13 +39,45 @@ function canonicalJson(value) {
   return JSON.stringify(ordered);
 }
 
-function providerVersionKey(recordType, fact) {
-  invariant(['call', 'deployment', 'final_test_result'].includes(recordType),
-    'ANALYTICS_FACT_INVALID', 'Runtime outbox record type is invalid.');
+function utcTimestamp(value, field) {
+  const parsed = typeof value === 'string' ? Date.parse(value) : Number.NaN;
+  invariant(typeof value === 'string' && ISO_UTC.test(value) && Number.isFinite(parsed),
+    'ANALYTICS_FACT_INVALID',
+    `Analytics fact ${field} is not an authoritative timestamp.`);
+  const normalized = new Date(parsed).toISOString();
+  const canonicalInput = value.includes('.') ? value : `${value.slice(0, -1)}.000Z`;
+  invariant(normalized === canonicalInput, 'ANALYTICS_FACT_INVALID',
+    `Analytics fact ${field} is not an authoritative timestamp.`);
+  return normalized;
+}
+
+function normalizeFactTimestamps(recordType, fact) {
+  const fields = FACT_TIMESTAMP_FIELDS[recordType];
+  invariant(fields && fact && typeof fact === 'object' && !Array.isArray(fact),
+    'ANALYTICS_FACT_INVALID', 'Runtime outbox fact is invalid.');
+  const normalized = { ...fact };
+  for (const field of fields.required) {
+    invariant(Object.hasOwn(fact, field), 'ANALYTICS_FACT_INVALID',
+      `Analytics fact ${field} is required.`);
+    normalized[field] = utcTimestamp(fact[field], field);
+  }
+  for (const field of fields.optional) {
+    if (fact[field] !== null && fact[field] !== undefined) {
+      normalized[field] = utcTimestamp(fact[field], field);
+    }
+  }
+  return Object.freeze(normalized);
+}
+
+function outboxKeyFromNormalized(recordType, fact) {
   return sha256([
     'analytics-provider-version-v1', recordType, fact.ENVIRONMENT,
     fact.CLIENT_KEY, fact.DEPLOYMENT_KEY, fact.RECORD_KEY, fact.SOURCE_MODIFIED_AT,
   ].join('\0'));
+}
+
+function outboxKey(recordType, fact) {
+  return outboxKeyFromNormalized(recordType, normalizeFactTimestamps(recordType, fact));
 }
 
 function safeEnum(value) {
@@ -171,50 +220,94 @@ function finalTestResultFact(config, deployment, row, report) {
 }
 
 function createOutboxRow(recordType, fact, createdAt) {
-  invariant(['call', 'deployment', 'final_test_result'].includes(recordType),
-    'ANALYTICS_FACT_INVALID', 'Runtime outbox record type is invalid.');
-  const payloadJson = canonicalJson(fact);
+  const normalizedFact = normalizeFactTimestamps(recordType, fact);
+  const normalizedCreatedAt = utcTimestamp(createdAt, 'CREATED_AT');
+  const payloadJson = canonicalJson(normalizedFact);
   invariant(Buffer.byteLength(payloadJson, 'utf8') <= 9000,
     'ANALYTICS_FACT_INVALID', 'Runtime outbox fact exceeds the bounded size.');
-  const sourceDate = (recordType === 'call' ? fact.STARTED_AT : fact.SOURCE_MODIFIED_AT)
+  const sourceDate = (recordType === 'call'
+    ? normalizedFact.STARTED_AT : normalizedFact.SOURCE_MODIFIED_AT)
     .slice(0, 10);
   return Object.freeze({
-    OUTBOX_KEY: sha256(`analytics-outbox-v2\0${recordType}\0${payloadJson}`),
-    PROVIDER_VERSION_KEY: providerVersionKey(recordType, fact),
-    ROW_SCHEMA_VERSION: 2, RECORD_TYPE: recordType, RECORD_KEY: fact.RECORD_KEY,
-    CLIENT_KEY: fact.CLIENT_KEY, DEPLOYMENT_KEY: fact.DEPLOYMENT_KEY,
-    CONFIGURATION_VERSION: fact.CONFIGURATION_VERSION,
-    ENGAGEMENT_TYPE: fact.ENGAGEMENT_TYPE, ENVIRONMENT: fact.ENVIRONMENT,
-    SOURCE_DATE_UTC: sourceDate,
+    OUTBOX_KEY: outboxKeyFromNormalized(recordType, normalizedFact),
+    ROW_SCHEMA_VERSION: 2, RECORD_TYPE: recordType, RECORD_KEY: normalizedFact.RECORD_KEY,
+    CLIENT_KEY: normalizedFact.CLIENT_KEY, DEPLOYMENT_KEY: normalizedFact.DEPLOYMENT_KEY,
+    CONFIGURATION_VERSION: normalizedFact.CONFIGURATION_VERSION,
+    ENGAGEMENT_TYPE: normalizedFact.ENGAGEMENT_TYPE, ENVIRONMENT: normalizedFact.ENVIRONMENT,
     PAYLOAD_JSON: payloadJson, PAYLOAD_HASH: sha256(payloadJson),
-    METRIC_VERSION: fact.METRIC_VERSION, SOURCE_MODIFIED_AT: fact.SOURCE_MODIFIED_AT,
+    METRIC_VERSION: normalizedFact.METRIC_VERSION,
+    SOURCE_MODIFIED_AT: normalizedFact.SOURCE_MODIFIED_AT,
+    SOURCE_DATE_UTC: sourceDate,
     SYNC_STATUS: 'Pending', BATCH_KEY: null, ATTEMPT_COUNT: 0, CLAIM_COUNT: 0, POLL_COUNT: 0,
-    NEXT_ATTEMPT_AT: createdAt, LEASE_OWNER: null, LEASE_TOKEN: null,
+    NEXT_ATTEMPT_AT: normalizedCreatedAt, LEASE_OWNER: null, LEASE_TOKEN: null,
     LEASE_EXPIRES_AT: null, FENCE_VERSION: 0, PROVIDER_JOB_ID: null, PROVIDER_STATE: null,
     EXPECTED_ROW_COUNT: null, ACCEPTED_ROW_COUNT: null, REJECTED_ROW_COUNT: null,
     READBACK_JOB_ID: null, READBACK_ROW_COUNT: null, READBACK_WATERMARK: null,
     LAST_ERROR_CODE: null, LAST_ATTEMPT_AT: null, SUBMITTED_AT: null, RECONCILED_AT: null,
-    CREATED_AT: createdAt, UPDATED_AT: createdAt, SOURCE_REVISION: fact.SOURCE_REVISION,
+    CREATED_AT: normalizedCreatedAt, UPDATED_AT: normalizedCreatedAt,
+    SOURCE_REVISION: normalizedFact.SOURCE_REVISION,
   });
+}
+
+function sameImmutable(actual, expected) {
+  return OUTBOX_IMMUTABLE.every((column) => (
+    String(actual?.[column]) === String(expected[column])
+  ));
+}
+
+function sameRowId(left, right) {
+  return ROW_ID.test(String(left?.ROWID))
+    && ROW_ID.test(String(right?.ROWID))
+    && String(left.ROWID) === String(right.ROWID);
+}
+
+async function readOutboxOwnership(store, table, expected) {
+  let exactOwner = await store.unique(table, 'OUTBOX_KEY', expected.OUTBOX_KEY);
+  let identityOwner = await store.uniqueOutboxProviderIdentity(table, expected);
+  // One bounded reread tolerates a concurrent unique-key winner landing between
+  // the exact-key and provider-identity reads without weakening either binding.
+  if (Boolean(exactOwner) !== Boolean(identityOwner)) {
+    if (!exactOwner) exactOwner = await store.unique(table, 'OUTBOX_KEY', expected.OUTBOX_KEY);
+    if (!identityOwner) identityOwner = await store.uniqueOutboxProviderIdentity(table, expected);
+  }
+  for (const owner of [exactOwner, identityOwner].filter(Boolean)) {
+    invariant(sameImmutable(owner, expected), 'DURABLE_IDEMPOTENCY_CONFLICT',
+      'Analytics outbox durable binding conflicts.', { httpStatus: 409 });
+  }
+  if (!exactOwner && !identityOwner) return null;
+  invariant(exactOwner && identityOwner && sameRowId(exactOwner, identityOwner),
+    'DURABLE_IDEMPOTENCY_CONFLICT',
+    'Analytics outbox identities resolve to different durable rows.', { httpStatus: 409 });
+  return exactOwner;
 }
 
 async function ensureOutboxRow(store, config, recordType, fact, createdAt) {
   const expected = createOutboxRow(recordType, fact, createdAt);
-  const result = await store.insertUnique(
-    config.tables.ANALYTICS_OUTBOX_TABLE,
-    'PROVIDER_VERSION_KEY',
-    expected,
-    OUTBOX_IMMUTABLE,
-  );
-  for (const column of OUTBOX_IMMUTABLE) invariant(
-    String(result.row[column]) === String(expected[column]),
-    'DURABLE_IDEMPOTENCY_CONFLICT', 'Analytics outbox durable binding conflicts.',
-  );
-  return Object.freeze({ row: result.row, inserted: result.inserted });
+  const table = config.tables.ANALYTICS_OUTBOX_TABLE;
+  const existing = await readOutboxOwnership(store, table, expected);
+  if (existing) return Object.freeze({ row: existing, inserted: false });
+
+  let insertResult = null;
+  let insertError = null;
+  try {
+    insertResult = await store.insertUnique(table, 'OUTBOX_KEY', expected, OUTBOX_IMMUTABLE);
+  } catch (error) {
+    insertError = error;
+  }
+  const readback = await readOutboxOwnership(store, table, expected);
+  if (!readback) {
+    if (insertError) throw insertError;
+    invariant(false, 'DURABLE_IDEMPOTENCY_CONFLICT',
+      'Analytics outbox insert could not be read back.', { httpStatus: 503 });
+  }
+  return Object.freeze({
+    row: readback,
+    inserted: insertError === null && insertResult?.inserted === true,
+  });
 }
 
 module.exports = Object.freeze({
   OUTBOX_IMMUTABLE, canonicalJson, createOutboxRow, callFact, deploymentFact,
   finalTestResultFact,
-  ensureOutboxRow, providerVersionKey, sha256,
+  ensureOutboxRow, normalizeFactTimestamps, outboxKey, sha256,
 });

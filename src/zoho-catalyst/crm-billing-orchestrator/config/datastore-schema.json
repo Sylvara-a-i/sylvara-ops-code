@@ -73,7 +73,8 @@
       "role": "producer-only sanitized conversion_status v2 facts after authoritative CRM/Billing and operation completion readback",
       "schema_owner": "../revenue-desk-analytics/config/datastore-schema.json",
       "row_schema_version": 2,
-      "required_unique_columns": ["OUTBOX_KEY", "PROVIDER_VERSION_KEY"],
+      "required_unique_columns": ["OUTBOX_KEY"],
+      "outbox_key_contract": "SHA-256 of the NUL-delimited analytics-provider-version-v1 domain, conversion_status record type, environment, client key, deployment key, record key, and SOURCE_MODIFIED_AT normalized through Date.toISOString(). Exact replay converges on this key; a different immutable payload at the same key requires reconciliation.",
       "state_column": "SYNC_STATUS",
       "legacy_rows_mutated": false
     }

@@ -55,7 +55,9 @@ test("blank environment and reviewed variable registry have the same names", () 
   assert.equal(schema.runtime_variable, "OPERATION_TABLE");
   assert.deepEqual(schema.shared_tables.map(({ table }) => table), ["AnalyticsSyncOutbox"]);
   assert.deepEqual(schema.shared_tables[0].required_unique_columns,
-    ["OUTBOX_KEY", "PROVIDER_VERSION_KEY"]);
+    ["OUTBOX_KEY"]);
+  assert.match(schema.shared_tables[0].outbox_key_contract,
+    /analytics-provider-version-v1.*Date\.toISOString\(\).*Exact replay/s);
   assert.equal(schema.shared_tables[0].state_column, "SYNC_STATUS");
 });
 

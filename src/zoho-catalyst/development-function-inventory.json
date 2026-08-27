@@ -16,8 +16,11 @@
   },
   "authorization": {
     "manifest_is_live_state_evidence": false,
+    "manifest_is_development_change_authority": false,
     "manifest_is_deletion_authority": false,
     "manifest_is_production_traffic_authority": false,
+    "retell_agent_development_or_testing_authorized": false,
+    "packet_a_resolution_approval_reusable": false,
     "live_changes_require_scoped_approval_and_independent_readback": true
   },
   "development_data_store_readback_2026_08_24": {
@@ -68,15 +71,37 @@
     "observed_zero_row_table_count": 19,
     "configuration_version_table_row_count": 0,
     "configuration_version_required_application_columns_exact": true,
+    "analytics_checkpoints_row_count": 10,
+    "analytics_checkpoints_legacy_row_count": 10,
+    "analytics_checkpoints_additive_v2_row_count": 0,
+    "analytics_checkpoints_required_application_columns_exact": true,
     "analytics_outbox_row_count": 307,
-    "analytics_outbox_legacy_v1_row_count": 307,
+    "analytics_outbox_legacy_row_count": 307,
     "analytics_outbox_additive_v2_row_count": 0,
-    "analytics_outbox_provider_version_key_present": false,
-    "provider_version_backfill_required_before_additive_column": false,
+    "analytics_outbox_nonnull_outbox_key_row_count": 0,
+    "analytics_outbox_single_key_contract_exact": true,
+    "analytics_legacy_rows_excluded_from_v2_lane": true,
+    "canonical_job_pools": [
+      {
+        "name": "RevenueDeskCallJobs",
+        "type": "Function",
+        "memory_mb": 512,
+        "function_bound": false,
+        "cron_reference_present": false
+      },
+      {
+        "name": "RevenueDeskAnalyticsJobs",
+        "type": "Function",
+        "memory_mb": 512,
+        "function_bound": false,
+        "cron_reference_present": false
+      }
+    ],
     "live_prestate_evidence": "evidence/free-revenue-leak-test-live-prestate-2026-08-26.json",
     "packet_a_execution_evidence": "evidence/free-revenue-leak-test-development-packet-a-execution-2026-08-26.json",
+    "packet_a_resolution_evidence": "evidence/free-revenue-leak-test-development-packet-a-resolution-2026-08-26.json",
     "legacy_source_capture_evidence": "evidence/legacy-retell-source-capture-2026-08-26.json",
-    "interpretation": "All thirteen canonical tables exist. RevenueDeskConfigurationVersions now has its exact required application schema and remains empty and unbound. AnalyticsSyncOutbox still requires the nullable unique provider-version fence; its fully paginated row count remains 307 and no row mutation was attempted. Both canonical Job pools remain absent after the approved packet stopped on the outbox-column mismatch. Every noncanonical table remains retained pending exact classification, mapping, migration, reconciliation, rollback, and later scoped cleanup approval."
+    "interpretation": "All thirteen canonical tables exist. RevenueDeskConfigurationVersions has its exact required application schema and remains empty and unbound. AnalyticsSyncOutbox has 307 legacy rows, zero version-2 rows, zero nonnull OUTBOX_KEY rows, and the exact single-key contract. AnalyticsSyncCheckpoints has 10 legacy rows, zero version-2 rows, and its exact required application schema. Both canonical Function Job pools exist at 512 MB and remain unbound with no Cron reference. Two bounded disposable proof tables and their synthetic rows were created and deleted; the table count returned from 36 to 35 with both proof names absent. No retained or canonical business record, function, route, Retell agent, or Production state changed. Every noncanonical retained table remains pending exact classification, mapping, migration, reconciliation, rollback, and later scoped cleanup approval."
   },
   "topology_decision": {
     "canonical_project_count": 1,
@@ -96,13 +121,27 @@
     {
       "name": "RevenueDeskCallJobs",
       "target": "revenue_desk_call_worker",
-      "allowed_modes": ["process_event", "retry_scan", "rebuild_report", "reconcile_deployment"]
+      "allowed_modes": ["process_event", "retry_scan", "rebuild_report", "reconcile_deployment"],
+      "development_readback": {
+        "exists": true,
+        "type": "Function",
+        "memory_mb": 512,
+        "function_bound": false,
+        "cron_reference_present": false
+      }
     },
     {
       "name": "RevenueDeskAnalyticsJobs",
       "target": "analytics_sync",
       "job_params": {},
       "caller_controlled_job_params_allowed": false,
+      "development_readback": {
+        "exists": true,
+        "type": "Function",
+        "memory_mb": 512,
+        "function_bound": false,
+        "cron_reference_present": false
+      },
       "runtime_modes": {
         "Development": ["disabled", "readiness", "active"],
         "Production": ["disabled", "readiness"]

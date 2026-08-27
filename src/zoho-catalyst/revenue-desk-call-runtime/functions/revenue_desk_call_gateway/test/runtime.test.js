@@ -9,7 +9,7 @@ const { createRequestListener } = require('../lib/runtime-boundary');
 const { createRuntimeService } = require('../lib/runtime-service');
 const { createWorkerJobHandler: createRuntimeWorkerJobHandler } = require('../lib/job-handler');
 const { CatalystMailAdapter } = require('../lib/catalyst-mail');
-const { OUTBOX_IMMUTABLE } = require('../lib/analytics-outbox');
+const { OUTBOX_IMMUTABLE, canonicalJson, sha256 } = require('../lib/analytics-outbox');
 const { queryClientReport, reportToCsv } = require('../lib/reporting');
 const { callLookupKey } = require('../lib/security');
 const { parseOutboxRow } = require('../../../../revenue-desk-analytics/functions/analytics_sync/lib/facts');
@@ -55,6 +55,32 @@ function downgradeCanonicalCallToV1(call) {
   call.CANONICAL_CALL_JSON = JSON.stringify(legacy);
 }
 
+async function reconciledTerminalAnalyticsFixture() {
+  const fixture = runtimeFixture();
+  fixture.store.rows.set('RevenueDeskDeployments', fixture.store.rows.get('RevenueDeskDeployments')
+    .filter((row) => row.DEPLOYMENT_ID === 'deployment_A'));
+  fixture.store.rows.set('RevenueDeskConfigurationVersions',
+    fixture.store.rows.get('RevenueDeskConfigurationVersions')
+      .filter((row) => row.DEPLOYMENT_ID === 'deployment_A'));
+  fixture.clock.value = Date.parse('2026-08-27T12:00:00.000Z');
+  const service = createRuntimeService({
+    store: fixture.store, mailAdapter: {}, config: fixture.config,
+    now: () => fixture.clock.value,
+  });
+  const first = await service.reconcileDueDeployments(25);
+  assert.equal(first.results[0].status, 'AwaitingCrmReportReadback');
+  const operation = fixture.store.rows.get('CRMBillingOperations')[0];
+  await fixture.store.mutate('CRMBillingOperations', 'OPERATION_KEY', operation.OPERATION_KEY,
+    'OPERATION_VERSION', () => ({
+      STATUS: 'completed', LAST_OUTCOME: 'report_summary_readback_confirmed',
+    }));
+  await service.reconcileDeployment('deployment_A');
+  const finalRow = fixture.store.rows.get('AnalyticsSyncOutbox')
+    .find((row) => row.RECORD_TYPE === 'final_test_result');
+  assert.ok(finalRow);
+  return { fixture, service, finalRow };
+}
+
 test('integration: Catalyst adapter uses allowlisted ZCQL and unique insert readback', async () => {
   const config = loadConfig(environment());
   const statements = [];
@@ -68,6 +94,7 @@ test('integration: Catalyst adapter uses allowlisted ZCQL and unique insert read
     zcql() { return { async executeZCQLQuery(statement) {
       statements.push(statement);
       if (statement.includes(' ORDER BY ')) return [];
+      if (statement.includes(' WHERE ROW_SCHEMA_VERSION = 2 AND RECORD_TYPE = ')) return [];
       const match = /WHERE ([A-Z_]+) = (?:'([^']+)'|([0-9]+))$/.exec(statement);
       const expected = match[2] ?? match[3];
       return rows.filter((row) => String(row[match[1]]) === expected)
@@ -89,6 +116,13 @@ test('integration: Catalyst adapter uses allowlisted ZCQL and unique insert read
   await store.queryBounded('RevenueDeskEventReceipts', 'STATUS', 'RetryRequired',
     'NEXT_ATTEMPT_AT', 25, { RECEIPT_KIND: 'provider_event' });
   assert.equal(statements.at(-1), "SELECT * FROM RevenueDeskEventReceipts WHERE STATUS = 'RetryRequired' AND RECEIPT_KIND = 'provider_event' ORDER BY NEXT_ATTEMPT_AT ASC, ROWID ASC LIMIT 25");
+  const identity = {
+    RECORD_TYPE: 'final_test_result', ENVIRONMENT: 'development',
+    CLIENT_KEY: 'a'.repeat(64), DEPLOYMENT_KEY: 'b'.repeat(64),
+    RECORD_KEY: 'b'.repeat(64), SOURCE_MODIFIED_AT: '2026-08-27T12:00:00.000Z',
+  };
+  assert.equal(await store.uniqueOutboxProviderIdentity('AnalyticsSyncOutbox', identity), null);
+  assert.equal(statements.at(-1), "SELECT * FROM AnalyticsSyncOutbox WHERE ROW_SCHEMA_VERSION = 2 AND RECORD_TYPE = 'final_test_result' AND ENVIRONMENT = 'development' AND CLIENT_KEY = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' AND DEPLOYMENT_KEY = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' AND RECORD_KEY = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' AND SOURCE_MODIFIED_AT = '2026-08-27T12:00:00.000Z' LIMIT 2");
   await assert.rejects(store.queryBounded(
     'CRMBillingOperations', 'STATUS', 'pending', 'NOT_ALLOWED_AT', 25,
   ), { code: 'INVALID_DATASTORE_QUERY' });
@@ -565,7 +599,7 @@ test('integration: a pre-expiry in-flight call reopens terminal evidence and cre
   const finalRows = fixture.store.rows.get('AnalyticsSyncOutbox')
     .filter((row) => row.RECORD_TYPE === 'final_test_result');
   assert.equal(finalRows.length, 2);
-  const secondFinal = finalRows.find((row) => row.PROVIDER_VERSION_KEY !== firstFinal.PROVIDER_VERSION_KEY);
+  const secondFinal = finalRows.find((row) => row.OUTBOX_KEY !== firstFinal.OUTBOX_KEY);
   assert.ok(Date.parse(secondFinal.SOURCE_MODIFIED_AT) > Date.parse(firstFinal.SOURCE_MODIFIED_AT));
   const lateCall = fixture.store.rows.get('RevenueDeskCalls')
     .find((row) => row.CALL_KEY === callLookupKey(fixture.config.eventSecret, lateCallId));
@@ -727,36 +761,95 @@ test('integration: readiness tracks CRM states and retry_scan repairs missing or
   });
   await handler(retryJobRequest(fixture.env), retryJobContext());
   let repaired = fixture.store.rows.get('AnalyticsSyncOutbox')
-    .find((row) => row.PROVIDER_VERSION_KEY === expectedFinal.PROVIDER_VERSION_KEY);
+    .find((row) => row.OUTBOX_KEY === expectedFinal.OUTBOX_KEY);
   assert.ok(repaired, 'retry_scan restores a missing final artifact');
   for (const column of OUTBOX_IMMUTABLE) assert.equal(repaired[column], expectedFinal[column]);
 
   const fenceBeforeCorruption = Number(repaired.FENCE_VERSION);
-  Object.assign(repaired, { PAYLOAD_HASH: '0'.repeat(64), SYNC_STATUS: 'Succeeded' });
-  await handler(retryJobRequest(fixture.env), retryJobContext());
-  repaired = fixture.store.rows.get('AnalyticsSyncOutbox')
-    .find((row) => row.PROVIDER_VERSION_KEY === expectedFinal.PROVIDER_VERSION_KEY);
-  for (const column of OUTBOX_IMMUTABLE) assert.equal(repaired[column], expectedFinal[column]);
-  assert.equal(repaired.SYNC_STATUS, 'Pending');
-  assert.equal(Number(repaired.FENCE_VERSION), fenceBeforeCorruption + 1,
-    'repair fences any pre-existing Analytics owner before retry');
-  assert.equal(fixture.store.rows.get('AnalyticsSyncOutbox')
-    .filter((row) => row.PROVIDER_VERSION_KEY === expectedFinal.PROVIDER_VERSION_KEY).length, 1);
-
-  const fenceBeforeKeyRepair = Number(repaired.FENCE_VERSION);
-  repaired.PROVIDER_VERSION_KEY = 'f'.repeat(64);
+  Object.assign(repaired, {
+    PAYLOAD_HASH: '0'.repeat(64), SYNC_STATUS: 'Succeeded',
+    LEASE_OWNER: 'synthetic_worker', LEASE_TOKEN: 's'.repeat(32),
+    LEASE_EXPIRES_AT: '2026-08-27T12:05:00.000Z',
+    PROVIDER_JOB_ID: 'synthetic_job', PROVIDER_STATE: 'submitted',
+  });
   await handler(retryJobRequest(fixture.env), retryJobContext());
   repaired = fixture.store.rows.get('AnalyticsSyncOutbox')
     .find((row) => row.OUTBOX_KEY === expectedFinal.OUTBOX_KEY);
-  assert.equal(repaired.PROVIDER_VERSION_KEY, expectedFinal.PROVIDER_VERSION_KEY,
-    'the second deterministic identity repairs a corrupt provider-version key');
+  for (const column of OUTBOX_IMMUTABLE) assert.equal(repaired[column], expectedFinal[column]);
+  assert.equal(repaired.SYNC_STATUS, 'Pending');
+  for (const column of [
+    'LEASE_OWNER', 'LEASE_TOKEN', 'LEASE_EXPIRES_AT', 'PROVIDER_JOB_ID', 'PROVIDER_STATE',
+  ]) assert.equal(repaired[column], null, column);
+  assert.equal(Number(repaired.FENCE_VERSION), fenceBeforeCorruption + 1,
+    'repair fences any pre-existing Analytics owner before retry');
+  assert.equal(fixture.store.rows.get('AnalyticsSyncOutbox')
+    .filter((row) => row.OUTBOX_KEY === expectedFinal.OUTBOX_KEY).length, 1);
+
+  const fenceBeforeKeyRepair = Number(repaired.FENCE_VERSION);
+  repaired.OUTBOX_KEY = 'f'.repeat(64);
+  await handler(retryJobRequest(fixture.env), retryJobContext());
+  repaired = fixture.store.rows.get('AnalyticsSyncOutbox')
+    .find((row) => row.OUTBOX_KEY === expectedFinal.OUTBOX_KEY);
+  assert.ok(repaired, 'the bounded provider identity lookup repairs a corrupt outbox key');
   assert.equal(Number(repaired.FENCE_VERSION), fenceBeforeKeyRepair + 1);
   await handler(retryJobRequest(fixture.env), retryJobContext());
   assert.equal(fixture.store.rows.get('AnalyticsSyncOutbox')
-    .filter((row) => row.PROVIDER_VERSION_KEY === expectedFinal.PROVIDER_VERSION_KEY).length, 1);
+    .filter((row) => row.OUTBOX_KEY === expectedFinal.OUTBOX_KEY).length, 1);
   assert.equal(fixture.store.rows.get('RevenueDeskDeployments')[0]
     .REPORT_RECONCILIATION_STATUS, 'Completed');
   assert.equal((await service.readiness()).terminalReconciliationPendingCount, 0);
+});
+
+test('integration: final artifact reconciliation never overwrites a divergent payload', async () => {
+  const { fixture, service, finalRow } = await reconciledTerminalAnalyticsFixture();
+  const divergent = JSON.parse(finalRow.PAYLOAD_JSON);
+  divergent.QUALIFIED_OPPORTUNITIES += 1;
+  finalRow.PAYLOAD_JSON = canonicalJson(divergent);
+  finalRow.PAYLOAD_HASH = sha256(finalRow.PAYLOAD_JSON);
+  finalRow.SYNC_STATUS = 'Succeeded';
+  const before = structuredClone(finalRow);
+
+  await assert.rejects(service.reconcileDeployment('deployment_A'), {
+    code: 'DURABLE_IDEMPOTENCY_CONFLICT',
+  });
+  const after = fixture.store.rows.get('AnalyticsSyncOutbox')
+    .find((row) => row.ROWID === before.ROWID);
+  assert.deepEqual(after, before, 'conflicting payload remains untouched for operator review');
+});
+
+test('integration: final artifact reconciliation fails closed on ambiguous identity fallback', async () => {
+  const { fixture, service, finalRow } = await reconciledTerminalAnalyticsFixture();
+  finalRow.OUTBOX_KEY = 'd'.repeat(64);
+  const duplicate = {
+    ...structuredClone(finalRow), OUTBOX_KEY: 'e'.repeat(64), ROWID: '999999',
+  };
+  fixture.store.rows.get('AnalyticsSyncOutbox').push(duplicate);
+  const before = structuredClone(fixture.store.rows.get('AnalyticsSyncOutbox')
+    .filter((row) => row.RECORD_TYPE === 'final_test_result'));
+
+  await assert.rejects(service.reconcileDeployment('deployment_A'), {
+    code: 'AMBIGUOUS_DURABLE_OWNERSHIP',
+  });
+  assert.deepEqual(fixture.store.rows.get('AnalyticsSyncOutbox')
+    .filter((row) => row.RECORD_TYPE === 'final_test_result'), before,
+  'ambiguous candidates remain untouched for operator review');
+});
+
+test('integration: exact final key cannot hide a corrupt-key duplicate identity', async () => {
+  const { fixture, service, finalRow } = await reconciledTerminalAnalyticsFixture();
+  const duplicate = {
+    ...structuredClone(finalRow), OUTBOX_KEY: 'e'.repeat(64), ROWID: '999999',
+  };
+  fixture.store.rows.get('AnalyticsSyncOutbox').push(duplicate);
+  const before = structuredClone(fixture.store.rows.get('AnalyticsSyncOutbox')
+    .filter((row) => row.RECORD_TYPE === 'final_test_result'));
+
+  await assert.rejects(service.reconcileDeployment('deployment_A'), {
+    code: 'AMBIGUOUS_DURABLE_OWNERSHIP',
+  });
+  assert.deepEqual(fixture.store.rows.get('AnalyticsSyncOutbox')
+    .filter((row) => row.RECORD_TYPE === 'final_test_result'), before,
+  'the exact row and corrupt-key duplicate remain untouched for operator review');
 });
 
 test('integration: retry_scan recovers an AwaitingSettlement row after a lost terminal wakeup', async () => {

@@ -57,13 +57,16 @@ test('Job, pool, empty params, dark Production, and provider contracts are exact
     /Immediately before every import POST.*read-only Connection.*view ID.*table name.*workspace ID.*organization ID.*do not cache.*write authorization/);
   assert.deepEqual(contract.provider_contract.matching_columns,
     ['RECORD_KEY', 'CLIENT_KEY', 'DEPLOYMENT_KEY', 'ENVIRONMENT']);
-  assert.deepEqual(contract.provider_contract.provider_version_fence.identity_columns, [
+  assert.deepEqual(contract.provider_contract.outbox_version_fence.identity_columns, [
     'RECORD_TYPE', 'ENVIRONMENT', 'CLIENT_KEY', 'DEPLOYMENT_KEY', 'RECORD_KEY',
     'SOURCE_MODIFIED_AT',
   ]);
-  assert.equal(contract.provider_contract.provider_version_fence.column,
-    'PROVIDER_VERSION_KEY');
-  assert.equal(contract.provider_contract.provider_version_fence.provider_unique_constraint_required,
+  assert.equal(contract.provider_contract.outbox_version_fence.column, 'OUTBOX_KEY');
+  assert.equal(contract.provider_contract.outbox_version_fence.payload_binding_column,
+    'PAYLOAD_HASH');
+  assert.equal(contract.provider_contract.outbox_version_fence.timestamp_normalization,
+    'new Date(value).toISOString()');
+  assert.equal(contract.provider_contract.outbox_version_fence.provider_unique_constraint_required,
     true);
   assert.equal(contract.compatibility.legacy_rows_automatically_claimed, false);
   assert.equal(contract.compatibility.additive_columns_physical_mandatory, false);
@@ -83,7 +86,7 @@ test('additive v2 schemas preserve live rows and include fencing, retry, readbac
     ['AnalyticsSyncCheckpoints', 'AnalyticsSyncOutbox']);
   for (const table of schema.tables) {
     assert.deepEqual(table.required_unique_columns, table.api_name === 'AnalyticsSyncOutbox'
-      ? ['OUTBOX_KEY', 'PROVIDER_VERSION_KEY'] : ['CHECKPOINT_KEY']);
+      ? ['OUTBOX_KEY'] : ['CHECKPOINT_KEY']);
     assert.equal(table.columns.every((column) => column.mandatory === false), true,
       `${table.api_name} additive columns must be physically nullable`);
     for (const uniqueName of table.required_unique_columns) {
@@ -104,7 +107,7 @@ test('additive v2 schemas preserve live rows and include fencing, retry, readbac
       'SOURCE_REVISION', 'METRIC_VERSION',
     ],
     AnalyticsSyncOutbox: [
-      'OUTBOX_KEY', 'PROVIDER_VERSION_KEY', 'ROW_SCHEMA_VERSION', 'RECORD_TYPE',
+      'OUTBOX_KEY', 'ROW_SCHEMA_VERSION', 'RECORD_TYPE',
       'RECORD_KEY', 'CLIENT_KEY', 'DEPLOYMENT_KEY', 'CONFIGURATION_VERSION',
       'ENGAGEMENT_TYPE', 'ENVIRONMENT', 'PAYLOAD_JSON', 'PAYLOAD_HASH', 'METRIC_VERSION',
       'SOURCE_MODIFIED_AT', 'SOURCE_DATE_UTC', 'SYNC_STATUS', 'ATTEMPT_COUNT',
@@ -127,16 +130,15 @@ test('additive v2 schemas preserve live rows and include fencing, retry, readbac
   const outbox = schema.tables.find((table) => table.api_name === 'AnalyticsSyncOutbox');
   const names = new Set(outbox.columns.map((column) => column.api_name));
   for (const required of [
-    'PROVIDER_VERSION_KEY', 'PAYLOAD_HASH', 'SYNC_STATUS', 'BATCH_KEY', 'ATTEMPT_COUNT',
+    'OUTBOX_KEY', 'PAYLOAD_HASH', 'SYNC_STATUS', 'BATCH_KEY', 'ATTEMPT_COUNT',
     'CLAIM_COUNT', 'POLL_COUNT',
     'LEASE_TOKEN', 'FENCE_VERSION', 'PROVIDER_JOB_ID', 'READBACK_JOB_ID',
     'READBACK_ROW_COUNT', 'READBACK_WATERMARK',
   ]) assert.equal(names.has(required), true, required);
-  const providerVersion = outbox.columns.find(
-    (column) => column.api_name === 'PROVIDER_VERSION_KEY',
-  );
-  assert.equal(providerVersion.unique, true);
-  assert.equal(providerVersion.required_for_v2_rows, true);
+  const outboxKey = outbox.columns.find((column) => column.api_name === 'OUTBOX_KEY');
+  assert.equal(outboxKey.unique, true);
+  assert.equal(outboxKey.required_for_v2_rows, true);
+  assert.match(outboxKey.purpose, /provider identity.*source-watermark fence/i);
   assert.equal(names.has('STATUS'), false);
   const checkpoint = schema.tables.find((table) =>
     table.api_name === 'AnalyticsSyncCheckpoints');
@@ -145,6 +147,25 @@ test('additive v2 schemas preserve live rows and include fencing, retry, readbac
   assert.equal(names.has('SOURCE_DATE_UTC'), true);
   assert.deepEqual(schema.data_policy.app_user_permissions, []);
   assert.equal(schema.data_policy.raw_transcripts, false);
+});
+
+test('active Analytics package has no retired physical fence column or key-inequality loophole', () => {
+  const retiredColumn = ['PROVIDER', 'VERSION', 'KEY'].join('_');
+  const activeFiles = [
+    path.join('config', 'analytics-sync.json'),
+    path.join('config', 'datastore-schema.json'),
+    'README.md',
+    'RUNBOOK.md',
+    path.join('functions', 'analytics_sync', 'lib', 'facts.js'),
+    path.join('functions', 'analytics_sync', 'lib', 'catalyst-store.js'),
+    path.join('functions', 'analytics_sync', 'lib', 'service.js'),
+  ];
+  for (const relativePath of activeFiles) {
+    const contents = fs.readFileSync(path.join(projectRoot, relativePath), 'utf8');
+    assert.equal(contents.includes(retiredColumn), false, relativePath);
+  }
+  const store = fs.readFileSync(path.join(functionRoot, 'lib', 'catalyst-store.js'), 'utf8');
+  assert.doesNotMatch(store, /OUTBOX_KEY\s*!=/);
 });
 
 test('variable registry and example contain names/placeholders only and no known private project ID', () => {

@@ -7,7 +7,7 @@ const { RECORD_TYPES, REVISION_PATTERN } = require('./config');
 const HASH_PATTERN = /^[a-f0-9]{64}$/;
 const SAFE_IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const SAFE_ENUM = /^[a-z][a-z0-9_]{0,63}$/;
-const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/;
+const ISO_UTC = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(\.\d{3})?Z$/;
 const DATE_UTC = /^\d{4}-\d{2}-\d{2}$/;
 const FORBIDDEN_KEY = /(phone|email|name|address|transcript|recording|audio|secret|token|prompt|summary|payload|url)/i;
 const LEASE_PROOF_COLUMN = 'LEASE_' + 'TOKEN';
@@ -91,8 +91,14 @@ function validateValue(kind, value, field) {
     'FACT_INVALID', 'Fact environment is invalid.');
   else if (base === 'revision') invariant(typeof value === 'string' && REVISION_PATTERN.test(value),
     'FACT_INVALID', 'Fact source revision is invalid.');
-  else if (base === 'time') invariant(typeof value === 'string' && ISO_UTC.test(value)
-    && Number.isFinite(Date.parse(value)), 'FACT_INVALID', `${field} is not a UTC timestamp.`);
+  else if (base === 'time') {
+    const match = typeof value === 'string' ? ISO_UTC.exec(value) : null;
+    const parsed = match ? new Date(value) : null;
+    const expected = match ? `${match[1]}${match[2] || '.000'}Z` : null;
+    invariant(parsed && Number.isFinite(parsed.getTime()) && parsed.toISOString() === expected,
+      'FACT_INVALID', `${field} is not a UTC timestamp.`);
+    return expected;
+  }
   else if (base === 'date') invariant(typeof value === 'string' && DATE_UTC.test(value),
     'FACT_INVALID', `${field} is not a UTC date.`);
   else if (base === 'boolean') invariant(typeof value === 'boolean',
@@ -128,7 +134,7 @@ function minimizeFact(recordType, candidate) {
     'Conversion status must preserve the free-test origin and identify paid service as the target.',
   );
   invariant(result.SOURCE_MODIFIED_AT >= (result.STARTED_AT || result.ACTUAL_START_AT
-    || result.TEST_STARTED_AT || `${result.REPORTING_DATE_UTC || '0000-00-00'}T00:00:00Z`),
+    || result.TEST_STARTED_AT || `${result.REPORTING_DATE_UTC || '0000-00-00'}T00:00:00.000Z`),
   'FACT_INVALID', 'Fact source watermark precedes its source record.');
   const encoded = canonicalJson(result);
   invariant(Buffer.byteLength(encoded, 'utf8') <= 9000,
@@ -136,20 +142,15 @@ function minimizeFact(recordType, candidate) {
   return Object.freeze(result);
 }
 
-function outboxKey(recordType, fact) {
-  const minimized = minimizeFact(recordType, fact);
-  return sha256(`analytics-outbox-v2\0${recordType}\0${canonicalJson(minimized)}`);
-}
-
-function providerVersionKeyFromMinimized(recordType, fact) {
+function outboxKeyFromMinimized(recordType, fact) {
   return sha256([
     'analytics-provider-version-v1', recordType, fact.ENVIRONMENT,
     fact.CLIENT_KEY, fact.DEPLOYMENT_KEY, fact.RECORD_KEY, fact.SOURCE_MODIFIED_AT,
   ].join('\0'));
 }
 
-function providerVersionKey(recordType, fact) {
-  return providerVersionKeyFromMinimized(recordType, minimizeFact(recordType, fact));
+function outboxKey(recordType, fact) {
+  return outboxKeyFromMinimized(recordType, minimizeFact(recordType, fact));
 }
 
 function sourceDateUtc(recordType, fact) {
@@ -160,11 +161,10 @@ function sourceDateUtc(recordType, fact) {
 
 function createOutboxRow(recordType, fact, createdAt) {
   const minimized = minimizeFact(recordType, fact);
-  validateValue('time', createdAt, 'CREATED_AT');
+  const normalizedCreatedAt = validateValue('time', createdAt, 'CREATED_AT');
   const payloadJson = canonicalJson(minimized);
   return Object.freeze({
-    OUTBOX_KEY: sha256(`analytics-outbox-v2\0${recordType}\0${payloadJson}`),
-    PROVIDER_VERSION_KEY: providerVersionKeyFromMinimized(recordType, minimized),
+    OUTBOX_KEY: outboxKeyFromMinimized(recordType, minimized),
     ROW_SCHEMA_VERSION: 2,
     RECORD_TYPE: recordType,
     RECORD_KEY: minimized.RECORD_KEY,
@@ -183,7 +183,7 @@ function createOutboxRow(recordType, fact, createdAt) {
     ATTEMPT_COUNT: 0,
     CLAIM_COUNT: 0,
     POLL_COUNT: 0,
-    NEXT_ATTEMPT_AT: createdAt,
+    NEXT_ATTEMPT_AT: normalizedCreatedAt,
     LEASE_OWNER: null,
     [LEASE_PROOF_COLUMN]: null,
     LEASE_EXPIRES_AT: null,
@@ -200,8 +200,8 @@ function createOutboxRow(recordType, fact, createdAt) {
     LAST_ATTEMPT_AT: null,
     SUBMITTED_AT: null,
     RECONCILED_AT: null,
-    CREATED_AT: createdAt,
-    UPDATED_AT: createdAt,
+    CREATED_AT: normalizedCreatedAt,
+    UPDATED_AT: normalizedCreatedAt,
     SOURCE_REVISION: minimized.SOURCE_REVISION,
   });
 }
@@ -226,11 +226,8 @@ function parseOutboxRow(row, environment) {
   const fact = minimizeFact(row.RECORD_TYPE, candidate);
   const payloadJson = canonicalJson(fact);
   invariant(row.PAYLOAD_JSON === payloadJson && row.PAYLOAD_HASH === sha256(payloadJson)
-    && row.OUTBOX_KEY === sha256(`analytics-outbox-v2\0${row.RECORD_TYPE}\0${payloadJson}`),
+    && row.OUTBOX_KEY === outboxKeyFromMinimized(row.RECORD_TYPE, fact),
   'DURABLE_IDEMPOTENCY_CONFLICT', 'Analytics outbox payload binding conflicts.');
-  invariant(row.PROVIDER_VERSION_KEY
-    === providerVersionKeyFromMinimized(row.RECORD_TYPE, fact),
-  'DURABLE_IDEMPOTENCY_CONFLICT', 'Analytics provider-version binding conflicts.');
   for (const [column, field] of [
     ['RECORD_KEY', 'RECORD_KEY'], ['CLIENT_KEY', 'CLIENT_KEY'],
     ['DEPLOYMENT_KEY', 'DEPLOYMENT_KEY'], ['CONFIGURATION_VERSION', 'CONFIGURATION_VERSION'],
@@ -319,6 +316,6 @@ function compareWatermark(left, right) {
 
 module.exports = {
   canonicalJson, checkpointKey, checkpointRow, compareWatermark, createOutboxRow,
-  makeBatchKey, minimizeFact, outboxKey, parseOutboxRow, providerVersionKey,
+  makeBatchKey, minimizeFact, outboxKey, parseOutboxRow,
   sha256, sourceDateUtc, targetRow,
 };

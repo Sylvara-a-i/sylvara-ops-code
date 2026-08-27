@@ -138,13 +138,16 @@ test('provider corrections sharing one match identity are serialized', async () 
   assert.equal((await h.service.run()).state, 'Submitted');
   assert.equal(submitted.length, 1);
   assert.equal(submitted[0].length, 1);
+  assert.notEqual(original.OUTBOX_KEY, correction.OUTBOX_KEY);
   assert.equal(h.store.rows[0].SYNC_STATUS, 'Submitted');
   assert.equal(h.store.rows[1].SYNC_STATUS, 'Pending');
 });
 
-test('same-watermark provider conflicts are quarantined before any provider write', async () => {
+test('same-watermark payload conflicts share one key and are quarantined before provider write', async () => {
   const original = outboxRow({}, '1');
   const conflict = outboxRow({ OUTCOME: 'spam' }, '2');
+  assert.equal(original.OUTBOX_KEY, conflict.OUTBOX_KEY);
+  assert.notEqual(original.PAYLOAD_HASH, conflict.PAYLOAD_HASH);
   let submissions = 0;
   const h = harness([original, conflict], {
     submitBatch: async () => { submissions += 1; return { jobId: '1009' }; },
@@ -156,13 +159,28 @@ test('same-watermark provider conflicts are quarantined before any provider writ
   assert.equal((await h.service.run()).state, 'ReconciliationRequired');
   assert.equal(submissions, 0);
   assert.equal(h.store.rows[1].SYNC_STATUS, 'ReconciliationRequired');
-  assert.equal(h.store.rows[0].LAST_ERROR_CODE, 'ANALYTICS_PROVIDER_VERSION_CONFLICT');
-  assert.equal(h.store.rows[1].LAST_ERROR_CODE, 'ANALYTICS_PROVIDER_VERSION_CONFLICT');
+  assert.equal(h.store.rows[0].LAST_ERROR_CODE, 'ANALYTICS_OUTBOX_OWNERSHIP_CONFLICT');
+  assert.equal(h.store.rows[1].LAST_ERROR_CODE, 'ANALYTICS_OUTBOX_OWNERSHIP_CONFLICT');
 });
 
-test('a concurrent same-watermark insert in the final submit window is rejected atomically', async () => {
+test('concurrent exact replays converge on one durable outbox row', async () => {
+  const store = new MemoryStore();
+  const { ROWID: _syntheticRowId, ...candidate } = outboxRow();
+  const [first, second] = await Promise.all([
+    store.ensureOutbox({ ...candidate }),
+    store.ensureOutbox({ ...candidate }),
+  ]);
+  assert.equal(store.rows.length, 1);
+  assert.equal(first.ROWID, second.ROWID);
+  assert.equal(first.OUTBOX_KEY, candidate.OUTBOX_KEY);
+  assert.equal(first.PAYLOAD_HASH, candidate.PAYLOAD_HASH);
+});
+
+test('a concurrent same-watermark conflicting payload loses before provider submission', async () => {
   const original = outboxRow({}, '1');
   const { ROWID: _syntheticRowId, ...conflict } = outboxRow({ OUTCOME: 'spam' }, '2');
+  assert.equal(original.OUTBOX_KEY, conflict.OUTBOX_KEY);
+  assert.notEqual(original.PAYLOAD_HASH, conflict.PAYLOAD_HASH);
   let providerWrites = 0;
   let h;
   h = harness([original], {
@@ -177,7 +195,20 @@ test('a concurrent same-watermark insert in the final submit window is rejected 
   assert.equal(providerWrites, 1);
   assert.equal(h.store.rows.length, 1);
   assert.equal(h.store.rows[0].OUTBOX_KEY, original.OUTBOX_KEY);
-  assert.equal(h.store.rows[0].PROVIDER_VERSION_KEY, original.PROVIDER_VERSION_KEY);
+  assert.equal(h.store.rows[0].PAYLOAD_HASH, original.PAYLOAD_HASH);
+});
+
+test('duplicate identical outbox keys block processing before provider submission', async () => {
+  const first = outboxRow({}, '1');
+  const duplicate = outboxRow({}, '2');
+  let providerWrites = 0;
+  const h = harness([first, duplicate], {
+    submitBatch: async () => { providerWrites += 1; return { jobId: '1012' }; },
+  });
+  assert.equal((await h.service.run()).state, 'ReconciliationRequired');
+  assert.equal(providerWrites, 0);
+  assert.equal(h.store.rows[0].LAST_ERROR_CODE, 'ANALYTICS_OUTBOX_OWNERSHIP_CONFLICT');
+  assert.equal(h.store.rows[1].SYNC_STATUS, 'Pending');
 });
 
 test('candidate selection stops at the first interleaved rollup grain', async () => {

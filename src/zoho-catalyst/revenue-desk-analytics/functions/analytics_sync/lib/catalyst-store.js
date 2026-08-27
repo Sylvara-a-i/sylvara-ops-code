@@ -11,7 +11,7 @@ const MAX_TEXT_BYTES = 10000;
 const TERMINAL_STATUSES = new Set(['Succeeded', 'TerminalFailure']);
 const LEASE_PROOF_COLUMN = 'LEASE_' + 'TOKEN';
 const OUTBOX_COLUMNS = Object.freeze([
-  'OUTBOX_KEY', 'PROVIDER_VERSION_KEY', 'ROW_SCHEMA_VERSION', 'RECORD_TYPE',
+  'OUTBOX_KEY', 'ROW_SCHEMA_VERSION', 'RECORD_TYPE',
   'RECORD_KEY', 'CLIENT_KEY',
   'DEPLOYMENT_KEY', 'CONFIGURATION_VERSION', 'ENGAGEMENT_TYPE', 'ENVIRONMENT',
   'PAYLOAD_JSON', 'PAYLOAD_HASH', 'METRIC_VERSION', 'SOURCE_MODIFIED_AT', 'SOURCE_DATE_UTC',
@@ -24,7 +24,7 @@ const OUTBOX_COLUMNS = Object.freeze([
   'SOURCE_REVISION',
 ]);
 const OUTBOX_IMMUTABLE = Object.freeze([
-  'OUTBOX_KEY', 'PROVIDER_VERSION_KEY', 'ROW_SCHEMA_VERSION', 'RECORD_TYPE',
+  'OUTBOX_KEY', 'ROW_SCHEMA_VERSION', 'RECORD_TYPE',
   'RECORD_KEY', 'CLIENT_KEY', 'DEPLOYMENT_KEY', 'CONFIGURATION_VERSION',
   'ENGAGEMENT_TYPE', 'ENVIRONMENT', 'PAYLOAD_JSON', 'PAYLOAD_HASH', 'METRIC_VERSION',
   'SOURCE_MODIFIED_AT', 'SOURCE_DATE_UTC', 'SOURCE_REVISION',
@@ -84,6 +84,12 @@ function same(actual, expected) {
   if (typeof expected === 'boolean') return actual === expected
     || String(actual).toLowerCase() === String(expected);
   return actual === expected;
+}
+
+function sameRowId(left, right) {
+  return ROW_ID_PATTERN.test(String(left?.ROWID))
+    && ROW_ID_PATTERN.test(String(right?.ROWID))
+    && String(left.ROWID) === String(right.ROWID);
 }
 
 function createCatalystStore(app, config) {
@@ -193,26 +199,56 @@ function createCatalystStore(app, config) {
     return rows;
   }
 
+  async function providerIdentityRows(row) {
+    return query(outbox, `SELECT * FROM ${outbox}`
+      + ` WHERE ROW_SCHEMA_VERSION = 2 AND RECORD_TYPE = ${sqlValue(row.RECORD_TYPE)}`
+      + ` AND ENVIRONMENT = ${sqlValue(row.ENVIRONMENT)}`
+      + ` AND CLIENT_KEY = ${sqlValue(row.CLIENT_KEY)}`
+      + ` AND DEPLOYMENT_KEY = ${sqlValue(row.DEPLOYMENT_KEY)}`
+      + ` AND RECORD_KEY = ${sqlValue(row.RECORD_KEY)}`
+      + ` AND SOURCE_MODIFIED_AT = ${sqlValue(row.SOURCE_MODIFIED_AT)} LIMIT 2`);
+  }
+
+  async function hasOutboxOwnershipConflict(row) {
+    const keyedRows = await query(outbox, `SELECT * FROM ${outbox}`
+      + ` WHERE OUTBOX_KEY = ${sqlValue(row.OUTBOX_KEY)} LIMIT 2`);
+    if (keyedRows.length !== 1
+      || !sameRowId(keyedRows[0], row)
+      || !OUTBOX_IMMUTABLE.every((column) => same(keyedRows[0][column], row[column]))) return true;
+    const identityRows = await providerIdentityRows(row);
+    return identityRows.length !== 1
+      || !sameRowId(identityRows[0], row)
+      || !OUTBOX_IMMUTABLE.every((column) => same(identityRows[0][column], row[column]));
+  }
+
   async function ensureOutbox(candidate) {
-    let current = await unique(outbox, 'PROVIDER_VERSION_KEY', candidate.PROVIDER_VERSION_KEY);
+    let current = await unique(outbox, 'OUTBOX_KEY', candidate.OUTBOX_KEY);
     if (!current) {
-      const normalized = validatePatch(candidate, OUTBOX_COLUMNS);
-      try {
-        await withTimeout(() => app.datastore().table(outbox).insertRow(normalized),
-          config.platformTimeoutMs,
-          { code: 'DATASTORE_TIMEOUT', retryable: true, ambiguous: true });
-      } catch (error) {
-        if (!(error instanceof AnalyticsSyncError)) {
-          // Duplicate and ambiguous insert outcomes are resolved by exact readback below.
+      const owners = await providerIdentityRows(candidate);
+      invariant(owners.length <= 1, 'DURABLE_OWNERSHIP_AMBIGUOUS',
+        'Analytics provider identity returned multiple rows.');
+      current = owners[0] || null;
+      if (!current) {
+        const normalized = validatePatch(candidate, OUTBOX_COLUMNS);
+        try {
+          await withTimeout(() => app.datastore().table(outbox).insertRow(normalized),
+            config.platformTimeoutMs,
+            { code: 'DATASTORE_TIMEOUT', retryable: true, ambiguous: true });
+        } catch (error) {
+          if (!(error instanceof AnalyticsSyncError)) {
+            // Duplicate and ambiguous insert outcomes are resolved by exact readback below.
+          }
         }
+        current = await unique(outbox, 'OUTBOX_KEY', candidate.OUTBOX_KEY);
       }
-      current = await unique(outbox, 'PROVIDER_VERSION_KEY', candidate.PROVIDER_VERSION_KEY);
     }
     invariant(current, 'OUTBOX_WRITE_AMBIGUOUS',
       'Analytics outbox insert could not be read back.', { ambiguous: true });
     parseOutboxRow(current, config.environment);
     invariant(OUTBOX_IMMUTABLE.every((column) => same(current[column], candidate[column])),
       'DURABLE_IDEMPOTENCY_CONFLICT', 'Analytics outbox insert readback conflicts.');
+    invariant(!(await hasOutboxOwnershipConflict(current)), 'DURABLE_OWNERSHIP_AMBIGUOUS',
+      'Analytics outbox ownership is ambiguous.');
     return current;
   }
 
@@ -276,19 +312,6 @@ function createCatalystStore(app, config) {
       + ` AND DEPLOYMENT_KEY = ${sqlValue(first.DEPLOYMENT_KEY)}`
       + ` AND (${status}) AND ${earlier}`
       + ` AND (BATCH_KEY IS NULL OR BATCH_KEY != ${sqlValue(batchKey)}) LIMIT 1`);
-    return rows.length > 0;
-  }
-
-  async function hasProviderVersionConflict(row) {
-    const rows = await query(outbox, `SELECT OUTBOX_KEY FROM ${outbox}`
-      + ` WHERE ROW_SCHEMA_VERSION = 2 AND RECORD_TYPE = ${sqlValue(row.RECORD_TYPE)}`
-      + ` AND ENVIRONMENT = ${sqlValue(row.ENVIRONMENT)}`
-      + ` AND CLIENT_KEY = ${sqlValue(row.CLIENT_KEY)}`
-      + ` AND DEPLOYMENT_KEY = ${sqlValue(row.DEPLOYMENT_KEY)}`
-      + ` AND RECORD_KEY = ${sqlValue(row.RECORD_KEY)}`
-      + ` AND SOURCE_MODIFIED_AT = ${sqlValue(row.SOURCE_MODIFIED_AT)}`
-      + ` AND PAYLOAD_HASH != ${sqlValue(row.PAYLOAD_HASH)}`
-      + ` AND OUTBOX_KEY != ${sqlValue(row.OUTBOX_KEY)} LIMIT 1`);
     return rows.length > 0;
   }
 
@@ -358,7 +381,7 @@ function createCatalystStore(app, config) {
 
   return Object.freeze({
     listDue, listBatch, listRollupCalls, ensureOutbox, claim, patchClaim,
-    hasOlderUnresolved, hasProviderVersionConflict, upsertCheckpoint, readiness,
+    hasOlderUnresolved, hasOutboxOwnershipConflict, upsertCheckpoint, readiness,
   });
 }
 

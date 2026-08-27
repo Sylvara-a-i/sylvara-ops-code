@@ -969,11 +969,10 @@
       "api_name": "AnalyticsSyncOutbox",
       "purpose": "Shared additive-v2 delivery infrastructure for immutable minimized deployment and call facts; it is not transactional runtime or reporting authority.",
       "documented_v1_casefold_reserved_columns": ["Status"],
-      "required_unique_columns": ["OUTBOX_KEY", "PROVIDER_VERSION_KEY"],
+      "required_unique_columns": ["OUTBOX_KEY"],
       "required_pii_ephi_columns": ["PAYLOAD_JSON"],
       "columns": [
-        { "api_name": "OUTBOX_KEY", "type": "varchar", "max_length": 64, "mandatory": false, "unique": true, "private": true, "required_for_v2_rows": true },
-        { "api_name": "PROVIDER_VERSION_KEY", "type": "varchar", "max_length": 64, "mandatory": false, "unique": true, "private": true, "required_for_v2_rows": true, "purpose": "Atomic provider identity plus source-watermark fence for one immutable payload." },
+        { "api_name": "OUTBOX_KEY", "type": "varchar", "max_length": 64, "mandatory": false, "unique": true, "private": true, "required_for_v2_rows": true, "purpose": "SHA-256 of the provider identity tuple and normalized source watermark; the sole atomic fence binding one immutable payload." },
         { "api_name": "ROW_SCHEMA_VERSION", "type": "bigint", "mandatory": false, "unique": false, "required_for_v2_rows": true },
         { "api_name": "RECORD_TYPE", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false, "required_for_v2_rows": true },
         { "api_name": "RECORD_KEY", "type": "varchar", "max_length": 80, "mandatory": false, "unique": false, "private": true, "required_for_v2_rows": true },
@@ -1033,10 +1032,10 @@
   ],
   "migration_gates": [
     "Do not delete, rename, or write through the existing legacy tables.",
-    "Freshly read back the five existing canonical operational tables plus shared AnalyticsSyncOutbox in Development. Complete only reviewed additive columns, then independently read back exact columns, types, uniqueness, encrypted-column consent, and empty App User permissions before binding any runtime. Every additive outbox column is physically nullable so existing rows remain untouched; required_for_v2_rows is enforced by runtime validation. The OUTBOX_KEY and PROVIDER_VERSION_KEY unique nullable constraints are both activation gates and must be proven to permit multiple legacy nulls.",
+    "Freshly read back the five existing canonical operational tables plus shared AnalyticsSyncOutbox in Development. Complete only reviewed additive columns, then independently read back exact columns, types, uniqueness, encrypted-column consent, and empty App User permissions before binding any runtime. Every additive outbox column is physically nullable so existing rows remain untouched; required_for_v2_rows is enforced by runtime validation. The OUTBOX_KEY unique nullable constraint is an activation gate and must be proven to permit multiple legacy nulls.",
     "Freshly read back REPORT_RECONCILIATION_STATUS and REPORT_RECONCILIATION_VERSION as nullable columns on the empty RevenueDeskDeployments table. Reconfirm the empty state and exact constraints before binding this runtime; every runtime-created row must carry an independently reconciled NotRequired, Pending, AwaitingSettlement, or Completed state, and a null or invented Completed marker fails closed.",
     "Build a one-way, sanitized migration utility only after an immutable field map is approved. Preserve source keys, engagement and environment ownership, configuration-version identity, receipt idempotency, notification state, and handled-call convergence.",
-    "Before cutover, compare private source and destination counts plus per-partition keyed digests; independently read back samples and all conflict rows. Backfill and verify PROVIDER_VERSION_KEY for every retained v2 row before enabling either producer or consumer; a duplicate provider-version key with different OUTBOX_KEY or PAYLOAD_HASH blocks activation.",
+    "Before cutover, compare private source and destination counts plus per-partition keyed digests; independently read back samples and all conflict rows. Verify every retained v2 OUTBOX_KEY from the canonical provider identity tuple with normalized SOURCE_MODIFIED_AT and verify PAYLOAD_HASH from canonical PAYLOAD_JSON; any duplicate key bound to different immutable data blocks activation.",
     "Keep the old route stopped but recoverable until the rollback window and reconciliation evidence are approved. Repository changes do not authorize migration or route activation."
   ]
 }

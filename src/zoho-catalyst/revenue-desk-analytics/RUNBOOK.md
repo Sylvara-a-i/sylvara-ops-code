@@ -23,8 +23,8 @@ If the live source cannot be exported or a behavior cannot be classified, stop w
 1. Read the exact Development project and environment identity through the least-sensitive path.
 2. Read both Analytics table schemas, constraints, encrypted-text audit consent, permissions, counts, and current producer/consumer references.
 3. Record source counts by environment and a deterministic normalized-key digest. The private evidence must state the normalization algorithm and stable key set.
-4. Add only compatible physically nullable columns required by [`config/datastore-schema.json`](config/datastore-schema.json). Never recreate, truncate, rename, or delete a nonempty table. Use `SYNC_STATUS` for v2 outbox state; do not add `STATUS`, which collides case-insensitively with live v1 `Status`. Add provider-enforced nullable unique constraints on `CHECKPOINT_KEY`, `OUTBOX_KEY`, and `PROVIDER_VERSION_KEY`; application-side preflight queries are not a concurrency boundary.
-5. Prove Catalyst permits those unique nullable columns while preserving multiple legacy nulls. Backfill `PROVIDER_VERSION_KEY` for every retained v2 row using the reviewed domain and provider identity columns. Read every added column and constraint back, compare key counts/digests, and block activation on any duplicate key with a different outbox key or payload hash. Confirm legacy rows retain a null or non-v2 `ROW_SCHEMA_VERSION` and that the Job query selects only version 2.
+4. Add only compatible physically nullable columns required by [`config/datastore-schema.json`](config/datastore-schema.json). Never recreate, truncate, rename, or delete a nonempty table. Use `SYNC_STATUS` for v2 outbox state; do not add `STATUS`, which collides case-insensitively with live v1 `Status`. Add provider-enforced nullable unique constraints on `CHECKPOINT_KEY` and `OUTBOX_KEY`; application-side preflight queries are not a concurrency boundary.
+5. Prove Catalyst permits those unique nullable columns while preserving multiple legacy nulls. For every retained v2 row, normalize all accepted UTC timestamps with `new Date(value).toISOString()`, recompute the reviewed single-key `OUTBOX_KEY` and `PAYLOAD_HASH`, and compare counts/digests before activation. Block on more than one row for an `OUTBOX_KEY`, one provider identity mapped to a different key, or one key and identity bound to a different payload hash or immutable ownership. Confirm legacy rows retain a null or non-v2 `ROW_SCHEMA_VERSION` and that the Job query selects only version 2.
 6. Write a bounded synthetic v2 fixture through the approved worker path. Read its immutable payload hash and ownership columns back before invoking this Job.
 7. Reconcile source count, normalized-key count/digest, immutable fact hashes, Analytics accepted/rejected counts, exact target readback rows, and watermarks.
 8. Rehearse containment and rollback while the old source and rows remain recoverable.
@@ -64,7 +64,7 @@ Browser assembly and visual inspection do not prove the data model. Preserve scr
 
 Acceptance must cover:
 
-- concurrent exact duplicate outbox creation converges on one provider-version key, while a changed payload at the same provider identity and source watermark is rejected before provider submission;
+- concurrent exact duplicate outbox creation converges on one provider-version-fenced `OUTBOX_KEY`, while a changed payload at the same provider identity and normalized source watermark is rejected before provider submission;
 - a duplicate or swapped private target view ID, wrong table name/type, wrong workspace, wrong organization, or incomplete Get View Details response is rejected before write authorization or an import POST;
 - raw names, phone/email fields, transcripts, audio/recording references, URLs, tokens, secrets, arbitrary nested JSON, and unknown fields are rejected;
 - no cross-environment, cross-client, cross-deployment, or mixed-record-type batch;

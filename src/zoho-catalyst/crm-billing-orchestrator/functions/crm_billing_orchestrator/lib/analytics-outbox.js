@@ -8,11 +8,14 @@ const HASH = /^[a-f0-9]{64}$/;
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const SAFE_ENUM = /^[a-z][a-z0-9_]{0,63}$/;
 const REVISION = /^[a-f0-9]{40}$/;
+const TABLE_NAME = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
+const ROW_ID = /^\d{1,30}$/;
+const EXPLICIT_ZONE_ISO = /^(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,9})?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/;
 const OUTBOX_IMMUTABLE = Object.freeze([
-  "OUTBOX_KEY", "PROVIDER_VERSION_KEY", "ROW_SCHEMA_VERSION", "RECORD_TYPE",
-  "RECORD_KEY", "CLIENT_KEY", "DEPLOYMENT_KEY", "CONFIGURATION_VERSION",
-  "ENGAGEMENT_TYPE", "ENVIRONMENT", "SOURCE_DATE_UTC", "PAYLOAD_JSON",
-  "PAYLOAD_HASH", "METRIC_VERSION", "SOURCE_MODIFIED_AT", "SOURCE_REVISION",
+  "OUTBOX_KEY", "ROW_SCHEMA_VERSION", "RECORD_TYPE", "RECORD_KEY", "CLIENT_KEY",
+  "DEPLOYMENT_KEY", "CONFIGURATION_VERSION", "ENGAGEMENT_TYPE", "ENVIRONMENT",
+  "SOURCE_DATE_UTC", "PAYLOAD_JSON", "PAYLOAD_HASH", "METRIC_VERSION",
+  "SOURCE_MODIFIED_AT", "SOURCE_REVISION",
 ]);
 const FACT_FIELDS = Object.freeze([
   "SCHEMA_VERSION", "METRIC_VERSION", "RECORD_KEY", "CLIENT_KEY", "DEPLOYMENT_KEY",
@@ -62,8 +65,20 @@ function safeEnum(value, field) {
 }
 
 function utcTimestamp(value, field) {
+  const match = typeof value === "string" ? EXPLICIT_ZONE_ISO.exec(value) : null;
+  if (!match) {
+    fail(`${field} is not an authoritative timestamp`);
+  }
+  const calendar = new Date(0);
+  calendar.setUTCHours(0, 0, 0, 0);
+  calendar.setUTCFullYear(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  if (calendar.getUTCFullYear() !== Number(match[1])
+    || calendar.getUTCMonth() !== Number(match[2]) - 1
+    || calendar.getUTCDate() !== Number(match[3])) {
+    fail(`${field} is not an authoritative timestamp`);
+  }
   const parsed = new Date(value);
-  if (typeof value !== "string" || !Number.isFinite(parsed.getTime())) {
+  if (!Number.isFinite(parsed.getTime())) {
     fail(`${field} is not an authoritative timestamp`);
   }
   return parsed.toISOString();
@@ -120,35 +135,47 @@ function conversionStatusFact(config, evidence) {
   return Object.freeze(fact);
 }
 
-function providerVersionKey(fact) {
+function outboxKey(fact) {
+  const sourceModifiedAt = utcTimestamp(
+    fact?.SOURCE_MODIFIED_AT, "Analytics source modified time",
+  );
   return sha256([
     "analytics-provider-version-v1", RECORD_TYPE, fact.ENVIRONMENT,
-    fact.CLIENT_KEY, fact.DEPLOYMENT_KEY, fact.RECORD_KEY, fact.SOURCE_MODIFIED_AT,
+    fact.CLIENT_KEY, fact.DEPLOYMENT_KEY, fact.RECORD_KEY, sourceModifiedAt,
   ].join("\0"));
 }
 
 function createOutboxRow(fact, createdAt) {
   const created = utcTimestamp(createdAt, "Analytics outbox creation time");
-  const payloadJson = canonicalJson(fact);
+  const normalizedFact = Object.freeze({
+    ...fact,
+    SOURCE_MODIFIED_AT: utcTimestamp(
+      fact?.SOURCE_MODIFIED_AT, "Analytics source modified time",
+    ),
+  });
+  if (Object.keys(normalizedFact).length !== FACT_FIELDS.length
+    || !FACT_FIELDS.every((field) => Object.hasOwn(normalizedFact, field))) {
+    fail("Conversion fact is outside the Analytics v2 contract");
+  }
+  const payloadJson = canonicalJson(normalizedFact);
   if (Buffer.byteLength(payloadJson, "utf8") > 9000) {
     fail("Conversion fact exceeds the bounded Analytics payload");
   }
   return Object.freeze({
-    OUTBOX_KEY: sha256(`analytics-outbox-v2\0${RECORD_TYPE}\0${payloadJson}`),
-    PROVIDER_VERSION_KEY: providerVersionKey(fact),
+    OUTBOX_KEY: outboxKey(normalizedFact),
     ROW_SCHEMA_VERSION: 2,
     RECORD_TYPE,
-    RECORD_KEY: fact.RECORD_KEY,
-    CLIENT_KEY: fact.CLIENT_KEY,
-    DEPLOYMENT_KEY: fact.DEPLOYMENT_KEY,
-    CONFIGURATION_VERSION: fact.CONFIGURATION_VERSION,
-    ENGAGEMENT_TYPE: fact.ENGAGEMENT_TYPE,
-    ENVIRONMENT: fact.ENVIRONMENT,
-    SOURCE_DATE_UTC: fact.SOURCE_MODIFIED_AT.slice(0, 10),
+    RECORD_KEY: normalizedFact.RECORD_KEY,
+    CLIENT_KEY: normalizedFact.CLIENT_KEY,
+    DEPLOYMENT_KEY: normalizedFact.DEPLOYMENT_KEY,
+    CONFIGURATION_VERSION: normalizedFact.CONFIGURATION_VERSION,
+    ENGAGEMENT_TYPE: normalizedFact.ENGAGEMENT_TYPE,
+    ENVIRONMENT: normalizedFact.ENVIRONMENT,
+    SOURCE_DATE_UTC: normalizedFact.SOURCE_MODIFIED_AT.slice(0, 10),
     PAYLOAD_JSON: payloadJson,
     PAYLOAD_HASH: sha256(payloadJson),
-    METRIC_VERSION: fact.METRIC_VERSION,
-    SOURCE_MODIFIED_AT: fact.SOURCE_MODIFIED_AT,
+    METRIC_VERSION: normalizedFact.METRIC_VERSION,
+    SOURCE_MODIFIED_AT: normalizedFact.SOURCE_MODIFIED_AT,
     SYNC_STATUS: "Pending",
     BATCH_KEY: null,
     ATTEMPT_COUNT: 0,
@@ -173,7 +200,7 @@ function createOutboxRow(fact, createdAt) {
     RECONCILED_AT: null,
     CREATED_AT: created,
     UPDATED_AT: created,
-    SOURCE_REVISION: fact.SOURCE_REVISION,
+    SOURCE_REVISION: normalizedFact.SOURCE_REVISION,
   });
 }
 
@@ -188,34 +215,94 @@ function samePrimitive(actual, expected) {
   return actual === expected;
 }
 
+function sqlString(value) {
+  if (typeof value !== "string" || Buffer.byteLength(value, "utf8") > 256) {
+    fail("Analytics outbox query value is invalid");
+  }
+  return `'${value.replaceAll("'", "''")}'`;
+}
+
+function sameRowId(left, right) {
+  return ROW_ID.test(String(left?.ROWID))
+    && ROW_ID.test(String(right?.ROWID))
+    && String(left.ROWID) === String(right.ROWID);
+}
+
 function createAnalyticsOutboxStore(app, config) {
   if (typeof app?.datastore !== "function" || typeof app?.zcql !== "function") {
     fail("Catalyst Analytics outbox interfaces are unavailable", "configuration_invalid");
   }
-  const table = app.datastore().table(config.analyticsOutboxTable);
+  const tableName = config.analyticsOutboxTable;
+  if (!TABLE_NAME.test(String(tableName ?? ""))) {
+    fail("Catalyst Analytics outbox table is invalid", "configuration_invalid");
+  }
+  const table = app.datastore().table(tableName);
 
-  async function readByProviderVersionKey(key) {
-    if (!HASH.test(key)) fail("Analytics provider-version key is invalid");
+  async function queryRows(statement, cardinalityMessage) {
     let result;
     try {
       result = await withOperationTimeout(
-        () => app.zcql().executeZCQLQuery(
-          `SELECT * FROM ${config.analyticsOutboxTable} WHERE PROVIDER_VERSION_KEY = '${key}'`,
-        ),
+        () => app.zcql().executeZCQLQuery(statement),
         config.platformOperationTimeoutMs,
       );
     } catch {
       fail("Analytics outbox readback failed");
     }
-    if (!Array.isArray(result) || result.length > 1) {
-      fail("Analytics provider version is not unique");
+    if (!Array.isArray(result) || result.length > 1) fail(cardinalityMessage);
+    const rows = result.map((entry) => unwrap(entry, tableName));
+    if (rows.some((row) => !row)) fail("Analytics outbox readback is invalid");
+    return rows;
+  }
+
+  async function readByOutboxKey(key) {
+    if (!HASH.test(key)) fail("Analytics outbox key is invalid");
+    const rows = await queryRows(
+      `SELECT * FROM ${tableName} WHERE OUTBOX_KEY = ${sqlString(key)} LIMIT 2`,
+      "Analytics outbox key is not unique",
+    );
+    return rows[0] ?? null;
+  }
+
+  async function readByProviderIdentity(expected) {
+    const rows = await queryRows(
+      `SELECT * FROM ${tableName} WHERE ROW_SCHEMA_VERSION = 2`
+        + ` AND RECORD_TYPE = ${sqlString(expected.RECORD_TYPE)}`
+        + ` AND ENVIRONMENT = ${sqlString(expected.ENVIRONMENT)}`
+        + ` AND CLIENT_KEY = ${sqlString(expected.CLIENT_KEY)}`
+        + ` AND DEPLOYMENT_KEY = ${sqlString(expected.DEPLOYMENT_KEY)}`
+        + ` AND RECORD_KEY = ${sqlString(expected.RECORD_KEY)}`
+        + ` AND SOURCE_MODIFIED_AT = ${sqlString(expected.SOURCE_MODIFIED_AT)} LIMIT 2`,
+      "Analytics provider identity is not unique",
+    );
+    return rows[0] ?? null;
+  }
+
+  function immutableMatch(row, expected) {
+    return OUTBOX_IMMUTABLE.every((column) => samePrimitive(row[column], expected[column]));
+  }
+
+  async function readOwnership(expected) {
+    let keyRow = await readByOutboxKey(expected.OUTBOX_KEY);
+    let identityRow = await readByProviderIdentity(expected);
+    // The unique OUTBOX_KEY arbitrates concurrency. The identity lookup is a bounded
+    // integrity check, with one reread to tolerate a concurrent winner between reads.
+    if (Boolean(keyRow) !== Boolean(identityRow)) {
+      if (!keyRow) keyRow = await readByOutboxKey(expected.OUTBOX_KEY);
+      if (!identityRow) identityRow = await readByProviderIdentity(expected);
     }
-    return result.length ? unwrap(result[0], config.analyticsOutboxTable) : null;
+    if (!keyRow && !identityRow) return null;
+    if (!keyRow || !identityRow || !sameRowId(keyRow, identityRow)
+      || !immutableMatch(keyRow, expected) || !immutableMatch(identityRow, expected)) {
+      fail("Analytics outbox ownership conflicts with the canonical provider identity");
+    }
+    return keyRow;
   }
 
   async function ensureConversionStatus(evidence, createdAt) {
     const fact = conversionStatusFact(config, evidence);
     const expected = createOutboxRow(fact, createdAt);
+    const existing = await readOwnership(expected);
+    if (existing) return Object.freeze({ row: existing, inserted: false });
     let insertError = null;
     try {
       await withOperationTimeout(
@@ -224,17 +311,14 @@ function createAnalyticsOutboxStore(app, config) {
     } catch (error) {
       insertError = error;
     }
-    const row = await readByProviderVersionKey(expected.PROVIDER_VERSION_KEY);
+    const row = await readOwnership(expected);
     if (!row) {
       fail(insertError ? "Analytics outbox insert outcome is unknown" : "Analytics outbox readback is missing");
-    }
-    if (!OUTBOX_IMMUTABLE.every((column) => samePrimitive(row[column], expected[column]))) {
-      fail("Analytics provider version is bound to a conflicting payload");
     }
     return Object.freeze({ row, inserted: insertError === null });
   }
 
-  return Object.freeze({ ensureConversionStatus, readByProviderVersionKey });
+  return Object.freeze({ ensureConversionStatus, readByOutboxKey });
 }
 
 module.exports = Object.freeze({
@@ -244,6 +328,6 @@ module.exports = Object.freeze({
   conversionStatusFact,
   createAnalyticsOutboxStore,
   createOutboxRow,
-  providerVersionKey,
+  outboxKey,
   sha256,
 });

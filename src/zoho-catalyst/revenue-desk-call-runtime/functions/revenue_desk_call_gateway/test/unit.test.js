@@ -20,8 +20,11 @@ const { timingSafeToken } = require('../lib/runtime-boundary');
 const { boundedPendingDeployments } = require('../lib/runtime-service');
 const { createSafeConsoleLogger } = require('../lib/logging');
 const {
-  createOutboxRow, deploymentFact, ensureOutboxRow, providerVersionKey,
+  createOutboxRow, deploymentFact, ensureOutboxRow, normalizeFactTimestamps, outboxKey,
 } = require('../lib/analytics-outbox');
+const {
+  createOutboxRow: createCanonicalOutboxRow,
+} = require('../../../../revenue-desk-analytics/functions/analytics_sync/lib/facts');
 const { SOURCE_REVISION, environment, eventPayload } = require('./runtime-fixture');
 
 const loadConfig = (env) => loadRuntimeConfig(env, { artifactSourceRevision: SOURCE_REVISION });
@@ -55,49 +58,94 @@ test('unit: bounded terminal batches advance to row 26 after the first batch con
   );
 });
 
+const OUTBOX_PROVIDER_IDENTITY_COLUMNS = Object.freeze([
+  'RECORD_TYPE', 'ENVIRONMENT', 'CLIENT_KEY', 'DEPLOYMENT_KEY',
+  'RECORD_KEY', 'SOURCE_MODIFIED_AT',
+]);
+
+function ownershipError(code) {
+  return Object.assign(new Error('Synthetic Analytics ownership failure.'), { code });
+}
+
+function outboxTestStore(initialRows = []) {
+  const rows = initialRows.map((row, index) => ({
+    ROWID: row.ROWID || String(index + 1), ...row,
+  }));
+  let nextRowId = rows.length + 1;
+  return {
+    rows,
+    insertCalls: 0,
+    async unique(table, column, value) {
+      assert.equal(table, 'AnalyticsSyncOutbox');
+      const matches = rows.filter((row) => String(row[column]) === String(value));
+      if (matches.length > 1) throw ownershipError('AMBIGUOUS_DURABLE_OWNERSHIP');
+      return matches.length === 1 ? { ...matches[0] } : null;
+    },
+    async uniqueOutboxProviderIdentity(table, identity) {
+      assert.equal(table, 'AnalyticsSyncOutbox');
+      const matches = rows.filter((row) => Number(row.ROW_SCHEMA_VERSION) === 2
+        && OUTBOX_PROVIDER_IDENTITY_COLUMNS.every((column) => (
+          String(row[column]) === String(identity[column])
+        )));
+      if (matches.length > 1) throw ownershipError('AMBIGUOUS_DURABLE_OWNERSHIP');
+      return matches.length === 1 ? { ...matches[0] } : null;
+    },
+    async insertUnique(table, keyColumn, candidate) {
+      assert.equal(table, 'AnalyticsSyncOutbox');
+      assert.equal(keyColumn, 'OUTBOX_KEY');
+      this.insertCalls += 1;
+      const current = rows.find((row) => row[keyColumn] === candidate[keyColumn]);
+      if (current) return { row: { ...current }, inserted: false };
+      const inserted = { ...candidate, ROWID: String(nextRowId++) };
+      rows.push(inserted);
+      return { row: { ...inserted }, inserted: true };
+    },
+  };
+}
+
 function concurrentUniqueStore() {
+  const base = outboxTestStore();
   const rows = new Map();
   let arrivals = 0;
   let release;
   const gate = new Promise((resolve) => { release = resolve; });
   return {
+    ...base,
     rows,
     async insertUnique(table, keyColumn, candidate) {
       assert.equal(table, 'AnalyticsSyncOutbox');
-      assert.equal(keyColumn, 'PROVIDER_VERSION_KEY');
+      assert.equal(keyColumn, 'OUTBOX_KEY');
+      base.insertCalls += 1;
       arrivals += 1;
       if (arrivals === 2) release();
       await gate;
       const current = rows.get(candidate[keyColumn]);
       if (current) return { row: { ...current }, inserted: false };
-      rows.set(candidate[keyColumn], { ...candidate });
-      return { row: { ...candidate }, inserted: true };
+      const inserted = { ...candidate, ROWID: String(rows.size + 1) };
+      rows.set(candidate[keyColumn], inserted);
+      base.rows.push(inserted);
+      return { row: { ...inserted }, inserted: true };
     },
   };
 }
 
-test('unit: Analytics producer rejects conflicting facts at one provider source watermark', async () => {
+test('unit: Analytics producer rejects conflicting facts at one source watermark', async () => {
   const baseFact = analyticsCallFact();
-  const existing = createOutboxRow('call', baseFact, '2026-08-24T12:06:00.000Z');
-  let insertAttempted = false;
-  const store = {
-    insertUnique: async (_table, keyColumn) => {
-      assert.equal(keyColumn, 'PROVIDER_VERSION_KEY');
-      insertAttempted = true;
-      return { row: existing, inserted: false };
-    },
+  const existing = {
+    ...createOutboxRow('call', baseFact, '2026-08-24T12:06:00.000Z'), ROWID: '1',
   };
+  const store = outboxTestStore([existing]);
   await assert.rejects(() => ensureOutboxRow(store, {
     tables: { ANALYTICS_OUTBOX_TABLE: 'AnalyticsSyncOutbox' },
   }, 'call', { ...baseFact, OUTCOME: 'spam' }, '2026-08-24T12:06:01.000Z'),
   (error) => error.code === 'DURABLE_IDEMPOTENCY_CONFLICT');
-  assert.equal(insertAttempted, true);
-  assert.equal(existing.PROVIDER_VERSION_KEY, providerVersionKey('call', baseFact));
+  assert.equal(store.insertCalls, 0);
+  assert.equal(existing.OUTBOX_KEY, outboxKey('call', baseFact));
   assert.equal(existing.SYNC_STATUS, 'Pending');
   assert.equal(Object.hasOwn(existing, 'STATUS'), false);
 });
 
-test('unit: concurrent conflicting Analytics facts cannot both own one provider version', async () => {
+test('unit: concurrent conflicting Analytics facts cannot both own one source version', async () => {
   const store = concurrentUniqueStore();
   const config = { tables: { ANALYTICS_OUTBOX_TABLE: 'AnalyticsSyncOutbox' } };
   const results = await Promise.allSettled([
@@ -111,7 +159,7 @@ test('unit: concurrent conflicting Analytics facts cannot both own one provider 
   assert.equal(store.rows.size, 1);
 });
 
-test('unit: concurrent exact Analytics replays converge on one provider version', async () => {
+test('unit: concurrent exact Analytics replays converge on one source version', async () => {
   const store = concurrentUniqueStore();
   const config = { tables: { ANALYTICS_OUTBOX_TABLE: 'AnalyticsSyncOutbox' } };
   const results = await Promise.all([
@@ -121,7 +169,150 @@ test('unit: concurrent exact Analytics replays converge on one provider version'
   assert.equal(store.rows.size, 1);
   assert.deepEqual(results.map(({ inserted }) => inserted).sort(), [false, true]);
   assert.equal(results[0].row.OUTBOX_KEY, results[1].row.OUTBOX_KEY);
-  assert.equal(results[0].row.PROVIDER_VERSION_KEY, results[1].row.PROVIDER_VERSION_KEY);
+});
+
+test('unit: Analytics producer rejects wrong-key, duplicate, and disagreeing durable owners', async () => {
+  const config = { tables: { ANALYTICS_OUTBOX_TABLE: 'AnalyticsSyncOutbox' } };
+  const fact = analyticsCallFact();
+  const expected = createOutboxRow('call', fact, '2026-08-24T12:06:00.000Z');
+
+  const wrongKeyStore = outboxTestStore([{
+    ...expected, OUTBOX_KEY: 'f'.repeat(64), ROWID: '1',
+  }]);
+  await assert.rejects(
+    () => ensureOutboxRow(
+      wrongKeyStore, config, 'call', fact, '2026-08-24T12:06:00.000Z',
+    ),
+    { code: 'DURABLE_IDEMPOTENCY_CONFLICT' },
+  );
+  assert.equal(wrongKeyStore.insertCalls, 0);
+
+  const duplicateIdentityStore = outboxTestStore([
+    { ...expected, OUTBOX_KEY: 'e'.repeat(64), ROWID: '1' },
+    { ...expected, OUTBOX_KEY: 'f'.repeat(64), ROWID: '2' },
+  ]);
+  await assert.rejects(
+    () => ensureOutboxRow(
+      duplicateIdentityStore, config, 'call', fact, '2026-08-24T12:06:00.000Z',
+    ),
+    { code: 'AMBIGUOUS_DURABLE_OWNERSHIP' },
+  );
+  assert.equal(duplicateIdentityStore.insertCalls, 0);
+
+  const disagreeingStore = {
+    async unique() { return { ...expected, ROWID: '1' }; },
+    async uniqueOutboxProviderIdentity() { return { ...expected, ROWID: '2' }; },
+    async insertUnique() { assert.fail('ownership conflict must fail before insert'); },
+  };
+  await assert.rejects(
+    () => ensureOutboxRow(
+      disagreeingStore, config, 'call', fact, '2026-08-24T12:06:00.000Z',
+    ),
+    { code: 'DURABLE_IDEMPOTENCY_CONFLICT' },
+  );
+});
+
+test('unit: ambiguous Analytics insert converges only through both ownership readbacks', async () => {
+  const base = outboxTestStore();
+  const store = {
+    ...base,
+    async insertUnique(...args) {
+      await base.insertUnique(...args);
+      throw ownershipError('CATALYST_INSERT_FAILED');
+    },
+  };
+  const result = await ensureOutboxRow(store, {
+    tables: { ANALYTICS_OUTBOX_TABLE: 'AnalyticsSyncOutbox' },
+  }, 'call', analyticsCallFact(), '2026-08-24T12:06:00.000Z');
+  assert.equal(base.rows.length, 1);
+  assert.equal(result.row.ROWID, base.rows[0].ROWID);
+  assert.equal(result.inserted, false);
+});
+
+test('unit: every runtime Analytics timestamp converges from whole-second to millisecond UTC', () => {
+  const common = {
+    SCHEMA_VERSION: 1, RECORD_KEY: 'a'.repeat(64), CLIENT_KEY: 'b'.repeat(64),
+    DEPLOYMENT_KEY: 'c'.repeat(64), CONFIGURATION_VERSION: 'config-v1',
+    ENGAGEMENT_TYPE: 'free_test', ENVIRONMENT: 'development', SOURCE_REVISION,
+  };
+  const cases = [
+    ['call', {
+      ...common, METRIC_VERSION: 'revenue_desk_runtime_v1',
+      SOURCE_MODIFIED_AT: '2026-08-24T12:05:00Z',
+      STARTED_AT: '2026-08-24T12:00:00Z', ENDED_AT: '2026-08-24T12:04:00Z',
+      CALL_KEY: 'a'.repeat(64), CALL_STATUS: 'ended', OUTCOME: 'potential_job',
+      HANDLED_RECORDED: true,
+    }, ['SOURCE_MODIFIED_AT', 'STARTED_AT', 'ENDED_AT']],
+    ['deployment', {
+      ...common, RECORD_KEY: 'c'.repeat(64), METRIC_VERSION: 'revenue_desk_runtime_v1',
+      SOURCE_MODIFIED_AT: '2026-08-27T12:00:00Z',
+      ACTUAL_START_AT: '2026-08-20T12:00:00Z',
+      EXPIRES_AT: '2026-08-27T12:00:00Z', STOPPED_AT: '2026-08-27T12:00:00Z',
+      CAPABILITY_PROFILE: 'call_gap_monitor_v1', PLAN_TIER: 'free_test',
+      DEPLOYMENT_STATUS: 'completed', GO_LIVE_APPROVAL_STATUS: 'approved',
+      LIMIT_POLICY: 'seven_days_or_25_calls', BILLING_MODE: 'free_test',
+      COVERAGE_MODE: 'after_hours_only', HANDLED_COUNT: 1, CALL_LIMIT: 25,
+    }, ['SOURCE_MODIFIED_AT', 'ACTUAL_START_AT', 'EXPIRES_AT', 'STOPPED_AT']],
+    ['final_test_result', {
+      ...common, RECORD_KEY: 'c'.repeat(64), METRIC_VERSION: 'revenue_desk_final_test_v1',
+      SOURCE_MODIFIED_AT: '2026-08-27T12:00:00Z',
+      TEST_STARTED_AT: '2026-08-20T12:00:00Z',
+      TEST_ENDED_AT: '2026-08-27T12:00:00Z',
+      TEST_END_REASON: 'seven_day_limit_reached', CALLS_CAPTURED: 1, CALL_LIMIT: 25,
+      QUALIFIED_OPPORTUNITIES: 1, URGENT_REQUESTS: 0, EXISTING_CUSTOMER_CALLS: 0,
+      WRONG_FIT_CALLS: 0, DURATION_EVIDENCE_COMPLETE: true,
+      ANALYSIS_EVIDENCE_COMPLETE: true,
+    }, ['SOURCE_MODIFIED_AT', 'TEST_STARTED_AT', 'TEST_ENDED_AT']],
+  ];
+  for (const [recordType, wholeSecondFact, timestampFields] of cases) {
+    const normalizedFact = normalizeFactTimestamps(recordType, wholeSecondFact);
+    const wholeSecondRow = createOutboxRow(
+      recordType, wholeSecondFact, '2026-08-27T12:01:00Z',
+    );
+    const utcRow = createOutboxRow(
+      recordType, normalizedFact, '2026-08-27T12:01:00.000Z',
+    );
+    assert.deepEqual(wholeSecondRow, utcRow);
+    const payload = JSON.parse(wholeSecondRow.PAYLOAD_JSON);
+    for (const field of timestampFields) {
+      assert.equal(payload[field], new Date(wholeSecondFact[field]).toISOString(), field);
+    }
+  }
+  for (const invalid of ['2026-08-24T07:00:00-05:00', '2026-08-24']) {
+    assert.throws(() => createOutboxRow(
+      'call', analyticsCallFact({ STARTED_AT: invalid }), '2026-08-24T12:06:00.000Z',
+    ), { code: 'ANALYTICS_FACT_INVALID' });
+  }
+
+  const leapDay = createOutboxRow('call', analyticsCallFact({
+    SOURCE_MODIFIED_AT: '2028-02-29T12:05:00Z',
+    STARTED_AT: '2028-02-29T12:00:00Z',
+  }), '2028-02-29T12:06:00Z');
+  assert.equal(leapDay.SOURCE_MODIFIED_AT, '2028-02-29T12:05:00.000Z');
+  assert.equal(JSON.parse(leapDay.PAYLOAD_JSON).STARTED_AT, '2028-02-29T12:00:00.000Z');
+  assert.equal(leapDay.CREATED_AT, '2028-02-29T12:06:00.000Z');
+
+  for (const impossible of [
+    '2026-02-29T12:00:00Z',
+    '2026-02-30T12:00:00.000Z',
+    '2026-04-31T12:00:00Z',
+  ]) {
+    assert.throws(() => createOutboxRow(
+      'call', analyticsCallFact({ STARTED_AT: impossible }), '2026-08-24T12:06:00.000Z',
+    ), { code: 'ANALYTICS_FACT_INVALID' });
+  }
+  assert.throws(() => createOutboxRow(
+    'call', analyticsCallFact(), '2026-02-30T12:06:00Z',
+  ), { code: 'ANALYTICS_FACT_INVALID' });
+});
+
+test('unit: runtime Analytics row is byte-for-byte compatible with the canonical package', () => {
+  const fact = analyticsCallFact({ ENDED_AT: '2026-08-24T12:04:00Z' });
+  const createdAt = '2026-08-24T12:06:00Z';
+  assert.equal(
+    JSON.stringify(createOutboxRow('call', fact, createdAt)),
+    JSON.stringify(createCanonicalOutboxRow('call', fact, createdAt)),
+  );
 });
 
 test('unit: final-test facts reject a changed payload at the same terminal watermark', async () => {
@@ -139,11 +330,12 @@ test('unit: final-test facts reject a changed payload at the same terminal water
   const existing = createOutboxRow(
     'final_test_result', fact, '2026-08-27T12:00:00.000Z',
   );
-  await assert.rejects(() => ensureOutboxRow({
-    async insertUnique() { return { row: existing, inserted: false }; },
-  }, { tables: { ANALYTICS_OUTBOX_TABLE: 'AnalyticsSyncOutbox' } },
+  const store = outboxTestStore([{ ...existing, ROWID: '1' }]);
+  await assert.rejects(() => ensureOutboxRow(store,
+  { tables: { ANALYTICS_OUTBOX_TABLE: 'AnalyticsSyncOutbox' } },
   'final_test_result', { ...fact, QUALIFIED_OPPORTUNITIES: 2 },
   '2026-08-27T12:01:00.000Z'), { code: 'DURABLE_IDEMPOTENCY_CONFLICT' });
+  assert.equal(store.insertCalls, 0);
 });
 
 test('unit: deployment analytics reads historical policy from the immutable version snapshot', () => {
@@ -445,24 +637,28 @@ test('unit: Data Store schema contains five canonical tables plus Analytics deli
   assert.equal(JSON.stringify(schema).includes('ADMISSION_SLOT'), false);
   assert.equal(JSON.stringify(schema).includes('REPORTING_OUTBOX'), false);
   const outbox = schema.tables.find(({ api_name: name }) => name === 'AnalyticsSyncOutbox');
-  assert.deepEqual(outbox.required_unique_columns, ['OUTBOX_KEY', 'PROVIDER_VERSION_KEY']);
+  assert.deepEqual(outbox.required_unique_columns, ['OUTBOX_KEY']);
   assert.equal(outbox.columns.every((column) => column.mandatory === false), true);
   const requiredV2 = new Set(outbox.columns.filter(
     ({ required_for_v2_rows: required }) => required === true,
   ).map(({ api_name: name }) => name));
   for (const name of [
-    'OUTBOX_KEY', 'PROVIDER_VERSION_KEY', 'ROW_SCHEMA_VERSION', 'RECORD_TYPE',
+    'OUTBOX_KEY', 'ROW_SCHEMA_VERSION', 'RECORD_TYPE',
     'RECORD_KEY', 'CLIENT_KEY', 'DEPLOYMENT_KEY', 'CONFIGURATION_VERSION',
     'ENGAGEMENT_TYPE', 'ENVIRONMENT', 'SOURCE_DATE_UTC', 'PAYLOAD_JSON', 'PAYLOAD_HASH',
     'METRIC_VERSION', 'SOURCE_MODIFIED_AT', 'SYNC_STATUS', 'ATTEMPT_COUNT', 'CLAIM_COUNT',
     'POLL_COUNT', 'NEXT_ATTEMPT_AT', 'FENCE_VERSION', 'CREATED_AT', 'UPDATED_AT',
     'SOURCE_REVISION',
   ]) assert.equal(requiredV2.has(name), true, name);
-  const providerVersionColumn = outbox.columns.find(
-    ({ api_name: name }) => name === 'PROVIDER_VERSION_KEY',
-  );
-  assert.equal(providerVersionColumn.unique, true);
-  assert.equal(providerVersionColumn.required_for_v2_rows, true);
+  const removedProviderColumn = ['PROVIDER', 'VERSION', 'KEY'].join('_');
+  assert.equal(outbox.columns.some(({ api_name: name }) => name === removedProviderColumn), false);
+  for (const relativePath of [
+    '../lib/analytics-outbox.js', '../lib/catalyst-store.js', '../lib/runtime-service.js',
+    '../../../config/datastore-schema.json', '../../../README.md',
+  ]) {
+    assert.equal(fs.readFileSync(path.resolve(__dirname, relativePath), 'utf8')
+      .includes(removedProviderColumn), false, relativePath);
+  }
   assert.equal(outbox.columns.some(({ api_name: name }) => name === 'SOURCE_DATE_UTC'), true);
   assert.equal(outbox.columns.some(({ api_name: name }) => name === 'SYNC_STATUS'), true);
   assert.equal(outbox.columns.some(({ api_name: name }) => name === 'STATUS'), false);

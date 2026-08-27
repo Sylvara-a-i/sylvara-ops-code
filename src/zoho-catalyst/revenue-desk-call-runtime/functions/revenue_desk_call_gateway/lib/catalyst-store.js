@@ -14,9 +14,12 @@ const MAX_CATALYST_TEXT_BYTES = 10_000;
 const QUERY_COLUMNS = new Set([
   'DEPLOYMENT_KEY', 'DEPLOYMENT_ID', 'CONFIGURATION_VERSION_ID',
   'NUMBER_LOOKUP_HASH', 'EVENT_KEY', 'CALL_KEY', 'RECORD_KEY', 'OUTBOX_KEY',
-  'PROVIDER_VERSION_KEY',
   'NOTIFICATION_KEY', 'OPERATION_KEY', 'RECEIPT_KIND', 'ACTION', 'STATUS', 'TEST_STATUS',
   'REPORT_RECONCILIATION_STATUS', 'SOURCE_REVISION', 'ROWID',
+]);
+const OUTBOX_PROVIDER_IDENTITY_COLUMNS = Object.freeze([
+  'RECORD_TYPE', 'ENVIRONMENT', 'CLIENT_KEY', 'DEPLOYMENT_KEY',
+  'RECORD_KEY', 'SOURCE_MODIFIED_AT',
 ]);
 const ORDER_COLUMNS = new Set([
   'CREATED_AT', 'UPDATED_AT', 'RECEIVED_AT', 'NEXT_ATTEMPT_AT',
@@ -162,6 +165,35 @@ function createCatalystStore(app, config) {
     return rows[0] || null;
   }
 
+  async function uniqueOutboxProviderIdentity(table, identity) {
+    tableName(table);
+    invariant(table === config.tables.ANALYTICS_OUTBOX_TABLE && plain(identity),
+      'INVALID_DATASTORE_QUERY', 'Analytics outbox identity query is invalid.',
+      { httpStatus: 503 });
+    const predicates = [
+      'ROW_SCHEMA_VERSION = 2',
+      ...OUTBOX_PROVIDER_IDENTITY_COLUMNS.map((column) => (
+        `${column} = ${sqlValue(identity[column])}`
+      )),
+    ].join(' AND ');
+    const statement = `SELECT * FROM ${table} WHERE ${predicates} LIMIT 2`;
+    invariant(Buffer.byteLength(statement, 'utf8') <= MAX_STATEMENT_BYTES,
+      'INVALID_DATASTORE_QUERY', 'Catalyst query is too large.', { httpStatus: 503 });
+    try {
+      const result = await withTimeout(
+        () => app.zcql().executeZCQLQuery(statement), config.platformTimeoutMs,
+      );
+      const rows = unwrapRows(result, table);
+      invariant(rows.length <= 1, 'AMBIGUOUS_DURABLE_OWNERSHIP',
+        'Analytics provider identity returned multiple rows.', { httpStatus: 503 });
+      return rows[0] || null;
+    } catch (error) {
+      if (error instanceof RevenueDeskError) throw error;
+      throw new RevenueDeskError('CATALYST_QUERY_FAILED', 'Catalyst query failed.',
+        { cause: error, httpStatus: 503, retryable: true });
+    }
+  }
+
   async function insert(table, row) {
     invariant(!readOnly, 'PRODUCTION_DARK',
       'Production Data Store writes are disabled.', { httpStatus: 503 });
@@ -268,7 +300,8 @@ function createCatalystStore(app, config) {
   }
 
   return Object.freeze({
-    query, queryBounded, unique, insert, insertUnique, conditionalUpdate, mutate, readiness,
+    query, queryBounded, unique, uniqueOutboxProviderIdentity,
+    insert, insertUnique, conditionalUpdate, mutate, readiness,
   });
 }
 

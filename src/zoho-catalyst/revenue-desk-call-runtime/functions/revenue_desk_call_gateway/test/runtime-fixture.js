@@ -221,6 +221,21 @@ class RuntimeMemoryStore {
     if (rows.length > 1) throw new RevenueDeskError('AMBIGUOUS_DURABLE_OWNERSHIP', 'ambiguous');
     return rows[0] || null;
   }
+  async uniqueOutboxProviderIdentity(table, identity) {
+    const columns = [
+      'RECORD_TYPE', 'ENVIRONMENT', 'CLIENT_KEY', 'DEPLOYMENT_KEY',
+      'RECORD_KEY', 'SOURCE_MODIFIED_AT',
+    ];
+    const matches = this.rows.get(table)
+      .filter((row) => Number(row.ROW_SCHEMA_VERSION) === 2)
+      .filter((row) => columns.every(
+        (column) => String(row[column]) === String(identity[column]),
+      ));
+    if (matches.length > 1) {
+      throw new RevenueDeskError('AMBIGUOUS_DURABLE_OWNERSHIP', 'ambiguous');
+    }
+    return matches.length === 1 ? this.clone(matches[0]) : null;
+  }
   async insertUnique(table, keyColumn, row, immutable) {
     const rows = this.rows.get(table);
     const existing = rows.find((candidate) => candidate[keyColumn] === row[keyColumn]);

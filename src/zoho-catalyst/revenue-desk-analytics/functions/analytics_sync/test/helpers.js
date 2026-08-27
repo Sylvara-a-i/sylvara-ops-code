@@ -3,11 +3,24 @@
 const { compareWatermark, createOutboxRow } = require('../lib/facts');
 const LEASE_PROOF_COLUMN = 'LEASE_' + 'TOKEN';
 const OUTBOX_IMMUTABLE = Object.freeze([
-  'OUTBOX_KEY', 'PROVIDER_VERSION_KEY', 'ROW_SCHEMA_VERSION', 'RECORD_TYPE',
+  'OUTBOX_KEY', 'ROW_SCHEMA_VERSION', 'RECORD_TYPE',
   'RECORD_KEY', 'CLIENT_KEY', 'DEPLOYMENT_KEY', 'CONFIGURATION_VERSION',
   'ENGAGEMENT_TYPE', 'ENVIRONMENT', 'PAYLOAD_JSON', 'PAYLOAD_HASH', 'METRIC_VERSION',
   'SOURCE_MODIFIED_AT', 'SOURCE_DATE_UTC', 'SOURCE_REVISION',
 ]);
+
+function sameImmutable(left, right) {
+  return OUTBOX_IMMUTABLE.every((column) => String(left[column]) === String(right[column]));
+}
+
+function sameProviderIdentity(left, right) {
+  return left.RECORD_TYPE === right.RECORD_TYPE
+    && left.ENVIRONMENT === right.ENVIRONMENT
+    && left.CLIENT_KEY === right.CLIENT_KEY
+    && left.DEPLOYMENT_KEY === right.DEPLOYMENT_KEY
+    && left.RECORD_KEY === right.RECORD_KEY
+    && left.SOURCE_MODIFIED_AT === right.SOURCE_MODIFIED_AT;
+}
 
 function key(character) {
   return character.repeat(64);
@@ -92,17 +105,28 @@ class MemoryStore {
   }
 
   async ensureOutbox(candidate) {
-    const current = this.rows.find((row) =>
-      row.PROVIDER_VERSION_KEY === candidate.PROVIDER_VERSION_KEY);
+    const keyedRows = this.rows.filter((row) => row.OUTBOX_KEY === candidate.OUTBOX_KEY);
+    if (keyedRows.length > 1) throw new Error('Synthetic durable ownership is ambiguous.');
+    let current = keyedRows[0] || null;
+    if (!current) {
+      const ownerRows = this.rows.filter((row) => sameProviderIdentity(row, candidate));
+      if (ownerRows.length > 1) throw new Error('Synthetic durable ownership is ambiguous.');
+      current = ownerRows[0] || null;
+    }
     if (current) {
-      if (!OUTBOX_IMMUTABLE.every((column) =>
-        String(current[column]) === String(candidate[column]))) {
+      if (!sameImmutable(current, candidate)) {
         throw new Error('Synthetic durable idempotency conflict.');
+      }
+      if (await this.hasOutboxOwnershipConflict(current)) {
+        throw new Error('Synthetic durable ownership is ambiguous.');
       }
       return { ...current };
     }
     const inserted = { ...candidate, ROWID: String(this.rows.length + 1) };
     this.rows.push(inserted);
+    if (await this.hasOutboxOwnershipConflict(inserted)) {
+      throw new Error('Synthetic durable ownership is ambiguous.');
+    }
     return { ...inserted };
   }
 
@@ -139,16 +163,13 @@ class MemoryStore {
       && compareWatermark(row, first) < 0);
   }
 
-  async hasProviderVersionConflict(candidate) {
-    return this.rows.some((row) => Number(row.ROW_SCHEMA_VERSION) === 2
-      && row.RECORD_TYPE === candidate.RECORD_TYPE
-      && row.ENVIRONMENT === candidate.ENVIRONMENT
-      && row.CLIENT_KEY === candidate.CLIENT_KEY
-      && row.DEPLOYMENT_KEY === candidate.DEPLOYMENT_KEY
-      && row.RECORD_KEY === candidate.RECORD_KEY
-      && row.SOURCE_MODIFIED_AT === candidate.SOURCE_MODIFIED_AT
-      && row.OUTBOX_KEY !== candidate.OUTBOX_KEY
-      && row.PAYLOAD_HASH !== candidate.PAYLOAD_HASH);
+  async hasOutboxOwnershipConflict(candidate) {
+    const keyedRows = this.rows.filter((row) => Number(row.ROW_SCHEMA_VERSION) === 2
+      && row.OUTBOX_KEY === candidate.OUTBOX_KEY);
+    const ownerRows = this.rows.filter((row) => Number(row.ROW_SCHEMA_VERSION) === 2
+      && sameProviderIdentity(row, candidate));
+    return keyedRows.length !== 1 || ownerRows.length !== 1
+      || !sameImmutable(keyedRows[0], candidate) || !sameImmutable(ownerRows[0], candidate);
   }
 
   async upsertCheckpoint(candidate) {

@@ -36,7 +36,7 @@
       "source row counts by table and environment",
       "normalized-key count and digest with the normalization algorithm recorded",
       "immutable minimized-fact hashes",
-      "provider-version key count and digest with duplicate and payload-conflict reports",
+      "provider-version-fenced OUTBOX_KEY count and digest with duplicate and payload-conflict reports",
       "Zoho Analytics import and independent readback counts and watermarks",
       "legacy-row disposition and rollback or containment"
     ]
@@ -78,11 +78,10 @@
       "runtime_variable": "ANALYTICS_OUTBOX_TABLE",
       "api_name": "AnalyticsSyncOutbox",
       "purpose": "Immutable minimized Analytics facts with durable claim, retry, import-job, readback, reconciliation, and completion state.",
-      "required_unique_columns": ["OUTBOX_KEY", "PROVIDER_VERSION_KEY"],
+      "required_unique_columns": ["OUTBOX_KEY"],
       "required_pii_ephi_columns": ["PAYLOAD_JSON"],
       "columns": [
-        { "api_name": "OUTBOX_KEY", "type": "varchar", "max_length": 64, "mandatory": false, "unique": true, "private": true, "required_for_v2_rows": true },
-        { "api_name": "PROVIDER_VERSION_KEY", "type": "varchar", "max_length": 64, "mandatory": false, "unique": true, "private": true, "required_for_v2_rows": true, "purpose": "Atomic provider identity plus source-watermark fence for one immutable payload." },
+        { "api_name": "OUTBOX_KEY", "type": "varchar", "max_length": 64, "mandatory": false, "unique": true, "private": true, "required_for_v2_rows": true, "purpose": "Atomic provider identity plus normalized source-watermark fence; PAYLOAD_HASH independently binds the immutable canonical payload." },
         { "api_name": "ROW_SCHEMA_VERSION", "type": "bigint", "mandatory": false, "unique": false, "required_for_v2_rows": true },
         { "api_name": "RECORD_TYPE", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false, "required_for_v2_rows": true },
         { "api_name": "RECORD_KEY", "type": "varchar", "max_length": 80, "mandatory": false, "unique": false, "private": true, "required_for_v2_rows": true },
@@ -128,8 +127,8 @@
     "Preserve the existing nonempty AnalyticsSyncCheckpoints and AnalyticsSyncOutbox tables and every other observed Analytics-supporting table until lineage is reconciled.",
     "Read back every current API name, type, maximum length, mandatory flag, uniqueness constraint, encrypted-text audit consent, App User permission, row count, and producer/consumer before proposing additive columns.",
     "Add only compatible physically nullable columns needed for ROW_SCHEMA_VERSION=2, then independently read them back; do not recreate, truncate, rename, or delete either table. Every logical v2 requirement is enforced by required_for_v2_rows plus runtime validation, not by rewriting nonempty legacy rows.",
-    "Confirm Catalyst permits unique nullable CHECKPOINT_KEY, OUTBOX_KEY, and PROVIDER_VERSION_KEY columns while preserving multiple legacy nulls. If that provider behavior is not independently proven, activation remains blocked.",
-    "Backfill and verify PROVIDER_VERSION_KEY for retained v2 rows, then compare its count and digest. Any duplicate key with a different OUTBOX_KEY or PAYLOAD_HASH blocks activation.",
+    "Confirm Catalyst permits unique nullable CHECKPOINT_KEY and OUTBOX_KEY columns while preserving multiple legacy nulls. If that provider behavior is not independently proven, activation remains blocked.",
+    "For every retained v2 row, normalize accepted UTC timestamps with new Date(value).toISOString(), recompute and verify OUTBOX_KEY and PAYLOAD_HASH, then compare counts and digests. Any duplicate OUTBOX_KEY, provider identity mapped to a different key, or same key and identity with different immutable ownership or payload blocks activation.",
     "Do not bind analytics_sync until source/runtime parity and synthetic claim, retry, ambiguity, reconciliation, and environment-isolation tests pass.",
     "Production is dark: the function returns DarkNoOp before SDK initialization or any Data Store or Analytics operation."
   ]

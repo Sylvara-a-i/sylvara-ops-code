@@ -39,6 +39,9 @@ const NOTIFICATION_IMMUTABLE = Object.freeze([
   'CONFIGURATION_VERSION_ID', 'CONFIGURATION_VERSION', 'ENGAGEMENT_TYPE', 'CAPABILITY_PROFILE',
   'RECIPIENT_FINGERPRINT', 'TEMPLATE_VERSION', 'PAYLOAD_JSON',
 ]);
+const OUTBOX_AUTHORITATIVE_IMMUTABLE = Object.freeze(OUTBOX_IMMUTABLE.filter(
+  (column) => column !== 'OUTBOX_KEY' && column !== 'PAYLOAD_HASH',
+));
 const EVENT_RETRY_DELAYS_MS = Object.freeze([1000, 5000]);
 const NOTIFICATION_RETRY_DELAYS_MS = Object.freeze([1000, 5000]);
 const READINESS_DEPLOYMENT_LIMIT = 100;
@@ -96,7 +99,7 @@ function nextMutationTimestamp(previous, candidate) {
   const candidateMs = Date.parse(candidate);
   invariant(Number.isFinite(previousMs) && Number.isFinite(candidateMs),
     'CONFIGURATION_UNAVAILABLE', 'Deployment mutation timestamp is invalid.');
-  // Catalyst mutations can share a millisecond. The Analytics provider-version fence uses this
+  // Catalyst mutations can share a millisecond. The Analytics outbox identity fence uses this
   // watermark, so advance it monotonically whenever the deployment fact changes.
   return new Date(Math.max(candidateMs, previousMs + 1)).toISOString();
 }
@@ -761,24 +764,28 @@ function createRuntimeService({
       deploymentFact(config, deployment, row), createdAt);
   }
 
+  async function finalTestOutboxOwner(expected) {
+    const exactOwner = await store.unique(
+      config.tables.ANALYTICS_OUTBOX_TABLE, 'OUTBOX_KEY', expected.OUTBOX_KEY,
+    );
+    const identityOwner = await store.uniqueOutboxProviderIdentity(
+      config.tables.ANALYTICS_OUTBOX_TABLE,
+      expected,
+    );
+    invariant(!exactOwner || !identityOwner
+      || String(exactOwner.ROWID) === String(identityOwner.ROWID),
+    'DURABLE_IDEMPOTENCY_CONFLICT',
+    'Final Analytics artifact identities resolve to different durable rows.',
+    { httpStatus: 409 });
+    return exactOwner || identityOwner;
+  }
+
   async function materializeFinalTestOutbox(deployment, row, report, createdAt) {
     if (deployment.engagementType !== 'free_test'
       || report.testEnd === null || report.testEndReason === null) return null;
     const fact = finalTestResultFact(config, deployment, row, report);
     const expected = createOutboxRow('final_test_result', fact, createdAt);
-    const providerKeyOwner = await store.unique(
-      config.tables.ANALYTICS_OUTBOX_TABLE,
-      'PROVIDER_VERSION_KEY',
-      expected.PROVIDER_VERSION_KEY,
-    );
-    const outboxKeyOwner = await store.unique(
-      config.tables.ANALYTICS_OUTBOX_TABLE, 'OUTBOX_KEY', expected.OUTBOX_KEY,
-    );
-    invariant(!providerKeyOwner || !outboxKeyOwner
-      || String(providerKeyOwner.ROWID) === String(outboxKeyOwner.ROWID),
-    'DURABLE_IDEMPOTENCY_CONFLICT',
-    'Final Analytics artifact identities resolve to different durable rows.');
-    const existing = providerKeyOwner || outboxKeyOwner;
+    const existing = await finalTestOutboxOwner(expected);
     if (!existing) {
       return ensureOutboxRow(store, config, 'final_test_result', fact, createdAt);
     }
@@ -786,44 +793,55 @@ function createRuntimeService({
       String(existing[column]) === String(expected[column])
     ))) return Object.freeze({ row: existing, inserted: false, repaired: false });
 
-    const repairKeyColumn = providerKeyOwner ? 'PROVIDER_VERSION_KEY' : 'OUTBOX_KEY';
-    const repairKeyValue = providerKeyOwner
-      ? expected.PROVIDER_VERSION_KEY : expected.OUTBOX_KEY;
-    const repaired = await store.mutate(
+    invariant(OUTBOX_AUTHORITATIVE_IMMUTABLE.every((column) => (
+      String(existing[column]) === String(expected[column])
+    )), 'DURABLE_IDEMPOTENCY_CONFLICT',
+    'Final Analytics artifact payload or authoritative ownership conflicts.',
+    { httpStatus: 409 });
+    const priorFence = Number(existing.FENCE_VERSION);
+    invariant(Number.isSafeInteger(priorFence) && priorFence >= 0,
+      'REPORT_RECONCILIATION_REQUIRED', 'Final Analytics artifact fence is invalid.');
+    await store.mutate(
       config.tables.ANALYTICS_OUTBOX_TABLE,
-      repairKeyColumn,
-      repairKeyValue,
+      'ROWID',
+      String(existing.ROWID),
       'FENCE_VERSION',
       (current) => {
         if (OUTBOX_IMMUTABLE.every((column) => (
           String(current[column]) === String(expected[column])
         ))) return null;
-        const immutablePatch = Object.fromEntries(OUTBOX_IMMUTABLE.map((column) => (
-          [column, expected[column]]
-        )));
-        // The provider-version identity is deterministic authoritative evidence. Advancing
-        // FENCE_VERSION invalidates any old Analytics lease before the repaired row is retried.
+        invariant(OUTBOX_AUTHORITATIVE_IMMUTABLE.every((column) => (
+          String(current[column]) === String(expected[column])
+        )), 'DURABLE_IDEMPOTENCY_CONFLICT',
+        'Final Analytics artifact payload or authoritative ownership conflicts.',
+        { httpStatus: 409 });
+        // Only the deterministic key/hash may be repaired. Advancing FENCE_VERSION and
+        // clearing delivery state invalidates any old Analytics lease or provider job.
         return {
-          ...immutablePatch,
+          OUTBOX_KEY: expected.OUTBOX_KEY,
+          PAYLOAD_HASH: expected.PAYLOAD_HASH,
           SYNC_STATUS: 'Pending', BATCH_KEY: null,
           ATTEMPT_COUNT: 0, CLAIM_COUNT: 0, POLL_COUNT: 0,
-          NEXT_ATTEMPT_AT: createdAt, LEASE_OWNER: null, LEASE_TOKEN: null,
+          NEXT_ATTEMPT_AT: expected.CREATED_AT, LEASE_OWNER: null, LEASE_TOKEN: null,
           LEASE_EXPIRES_AT: null, PROVIDER_JOB_ID: null, PROVIDER_STATE: null,
           EXPECTED_ROW_COUNT: null, ACCEPTED_ROW_COUNT: null, REJECTED_ROW_COUNT: null,
           READBACK_JOB_ID: null, READBACK_ROW_COUNT: null, READBACK_WATERMARK: null,
           LAST_ERROR_CODE: null, LAST_ATTEMPT_AT: null, SUBMITTED_AT: null,
           RECONCILED_AT: null,
-          CREATED_AT: Number.isFinite(Date.parse(current.CREATED_AT))
-            ? current.CREATED_AT : createdAt,
-          UPDATED_AT: createdAt,
+          UPDATED_AT: expected.UPDATED_AT,
         };
       },
     );
-    invariant(OUTBOX_IMMUTABLE.every((column) => (
-      String(repaired[column]) === String(expected[column])
-    )), 'REPORT_RECONCILIATION_REQUIRED',
+    const readback = await store.unique(
+      config.tables.ANALYTICS_OUTBOX_TABLE, 'OUTBOX_KEY', expected.OUTBOX_KEY,
+    );
+    invariant(readback && String(readback.ROWID) === String(existing.ROWID)
+      && Number(readback.FENCE_VERSION) > priorFence
+      && OUTBOX_IMMUTABLE.every((column) => (
+        String(readback[column]) === String(expected[column])
+      )), 'REPORT_RECONCILIATION_REQUIRED',
     'Final Analytics artifact repair failed exact readback.');
-    return Object.freeze({ row: repaired, inserted: false, repaired: true });
+    return Object.freeze({ row: readback, inserted: false, repaired: true });
   }
 
   async function materializeCallOutbox(callRow, createdAt) {
@@ -1897,11 +1915,7 @@ function createRuntimeService({
         || operation.LAST_OUTCOME !== 'report_summary_readback_confirmed'))) return false;
     const fact = finalTestResultFact(config, deployment, row, report);
     const expected = createOutboxRow('final_test_result', fact, report.testEnd);
-    const analytics = await store.unique(
-      config.tables.ANALYTICS_OUTBOX_TABLE,
-      'PROVIDER_VERSION_KEY',
-      expected.PROVIDER_VERSION_KEY,
-    );
+    const analytics = await finalTestOutboxOwner(expected);
     return Boolean(analytics && OUTBOX_IMMUTABLE.every((column) => (
       String(analytics[column]) === String(expected[column])
     )));

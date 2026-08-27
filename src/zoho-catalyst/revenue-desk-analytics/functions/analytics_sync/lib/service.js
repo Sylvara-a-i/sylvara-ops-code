@@ -403,7 +403,7 @@ function createAnalyticsSyncService(options) {
     const first = parsedDue[0];
     let candidates;
     let batchKey = first.BATCH_KEY;
-    let providerVersionConflict = false;
+    let outboxOwnershipConflict = false;
     if (batchKey) {
       candidates = (await store.listBatch(config.environment, batchKey))
         .map((row) => parseOutboxRow(row, config.environment));
@@ -414,11 +414,11 @@ function createAnalyticsSyncService(options) {
       candidates = contiguousEligibleCandidates(parsedDue, first, config.maxBatchSize);
       const conflicts = [];
       for (const row of candidates) {
-        if (await store.hasProviderVersionConflict(row)) conflicts.push(row);
+        if (await store.hasOutboxOwnershipConflict(row)) conflicts.push(row);
       }
       if (conflicts.length > 0) {
         candidates = conflicts;
-        providerVersionConflict = true;
+        outboxOwnershipConflict = true;
       }
       batchKey = makeBatchKey(candidates);
     }
@@ -456,16 +456,16 @@ function createAnalyticsSyncService(options) {
       await quarantine(claimed, 'ANALYTICS_SUBMISSION_OUTCOME_UNKNOWN', nowMs);
       return result('ReconciliationRequired', { claimed: claimed.length, failed: claimed.length });
     }
-    if (!providerVersionConflict) {
+    if (!outboxOwnershipConflict) {
       for (const row of claimed) {
-        if (await store.hasProviderVersionConflict(row)) {
-          providerVersionConflict = true;
+        if (await store.hasOutboxOwnershipConflict(row)) {
+          outboxOwnershipConflict = true;
           break;
         }
       }
     }
-    if (providerVersionConflict) {
-      await quarantine(claimed, 'ANALYTICS_PROVIDER_VERSION_CONFLICT', nowMs);
+    if (outboxOwnershipConflict) {
+      await quarantine(claimed, 'ANALYTICS_OUTBOX_OWNERSHIP_CONFLICT', nowMs);
       return result('ReconciliationRequired', { claimed: claimed.length, failed: claimed.length });
     }
     let outcome;

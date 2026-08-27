@@ -2,12 +2,13 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
 const {
-  createOutboxRow, minimizeFact, outboxKey, parseOutboxRow, providerVersionKey, targetRow,
+  createOutboxRow, minimizeFact, outboxKey, parseOutboxRow, targetRow,
 } = require('../lib/facts');
 const { callFact, key } = require('./helpers');
 
-test('minimized call facts create deterministic v2 outbox rows and changed facts create new keys', () => {
+test('one provider-version-fenced outbox key supports replay, correction, and conflict detection', () => {
   const createdAt = '2026-08-24T12:06:00.000Z';
   const first = createOutboxRow('call', callFact(), createdAt);
   const duplicate = createOutboxRow('call', { ...callFact() }, createdAt);
@@ -21,15 +22,54 @@ test('minimized call facts create deterministic v2 outbox rows and changed facts
   assert.equal(Object.hasOwn(first, 'STATUS'), false);
   assert.equal(first.SOURCE_DATE_UTC, '2026-08-24');
   assert.equal(first.OUTBOX_KEY, outboxKey('call', callFact()));
-  assert.equal(first.PROVIDER_VERSION_KEY, providerVersionKey('call', callFact()));
+  assert.equal(first.OUTBOX_KEY, crypto.createHash('sha256').update([
+    'analytics-provider-version-v1', 'call', first.ENVIRONMENT, first.CLIENT_KEY,
+    first.DEPLOYMENT_KEY, first.RECORD_KEY, first.SOURCE_MODIFIED_AT,
+  ].join('\0'), 'utf8').digest('hex'));
   assert.notEqual(first.OUTBOX_KEY, corrected.OUTBOX_KEY);
-  assert.notEqual(first.PROVIDER_VERSION_KEY, corrected.PROVIDER_VERSION_KEY);
-  assert.notEqual(first.OUTBOX_KEY, sameWatermarkConflict.OUTBOX_KEY);
-  assert.equal(first.PROVIDER_VERSION_KEY, sameWatermarkConflict.PROVIDER_VERSION_KEY);
+  assert.notEqual(first.PAYLOAD_HASH, corrected.PAYLOAD_HASH);
+  assert.equal(first.OUTBOX_KEY, sameWatermarkConflict.OUTBOX_KEY);
+  assert.notEqual(first.PAYLOAD_HASH, sameWatermarkConflict.PAYLOAD_HASH);
   assert.match(first.OUTBOX_KEY, /^[a-f0-9]{64}$/);
-  assert.match(first.PROVIDER_VERSION_KEY, /^[a-f0-9]{64}$/);
+  assert.equal(Object.hasOwn(first, ['PROVIDER', 'VERSION', 'KEY'].join('_')), false);
   const parsed = parseOutboxRow(first, 'development');
   assert.deepEqual(targetRow(parsed), { ...callFact(), PAYLOAD_HASH: first.PAYLOAD_HASH });
+});
+
+test('valid leap-day whole-second and millisecond UTC spellings converge before key construction', () => {
+  const wholeSecond = callFact({
+    SOURCE_MODIFIED_AT: '2024-02-29T12:05:00Z',
+    STARTED_AT: '2024-02-29T12:00:00Z',
+    ENDED_AT: '2024-02-29T12:03:00Z',
+  });
+  const millisecond = callFact({
+    SOURCE_MODIFIED_AT: '2024-02-29T12:05:00.000Z',
+    STARTED_AT: '2024-02-29T12:00:00.000Z',
+    ENDED_AT: '2024-02-29T12:03:00.000Z',
+  });
+  const first = createOutboxRow('call', wholeSecond, '2024-02-29T12:06:00Z');
+  const second = createOutboxRow('call', millisecond, '2024-02-29T12:06:00.000Z');
+  assert.deepEqual(first, second);
+  assert.equal(first.SOURCE_MODIFIED_AT, '2024-02-29T12:05:00.000Z');
+  assert.equal(first.CREATED_AT, '2024-02-29T12:06:00.000Z');
+  const parsed = parseOutboxRow(first, 'development');
+  assert.equal(parsed.fact.STARTED_AT, '2024-02-29T12:00:00.000Z');
+  assert.equal(parsed.fact.ENDED_AT, '2024-02-29T12:03:00.000Z');
+});
+
+test('impossible UTC calendar timestamps fail closed before payload or key construction', () => {
+  for (const invalid of [
+    '2026-02-29T12:05:00Z',
+    '2024-02-30T12:05:00.000Z',
+    '2026-04-31T12:05:00Z',
+  ]) {
+    assert.throws(() => minimizeFact('call', callFact({ SOURCE_MODIFIED_AT: invalid })),
+      /not a UTC timestamp/);
+    assert.throws(() => minimizeFact('call', callFact({ STARTED_AT: invalid })),
+      /not a UTC timestamp/);
+    assert.throws(() => createOutboxRow('call', callFact(), invalid),
+      /not a UTC timestamp/);
+  }
 });
 
 test('fact allowlists reject PII, transcripts, URLs, raw summaries, nested data, and unknown fields', () => {
@@ -56,8 +96,8 @@ test('opaque ownership, call identity, environment, and payload hash conflicts f
   assert.throws(() => parseOutboxRow(row, 'production'), /crosses environment/);
   assert.throws(() => parseOutboxRow({ ...row, PAYLOAD_HASH: key('f') }, 'development'),
     /binding conflicts/);
-  assert.throws(() => parseOutboxRow({ ...row, PROVIDER_VERSION_KEY: key('f') }, 'development'),
-    /provider-version binding conflicts/);
+  assert.throws(() => parseOutboxRow({ ...row, OUTBOX_KEY: key('f') }, 'development'),
+    /payload binding conflicts/);
   assert.throws(() => parseOutboxRow({ ...row, SYNC_STATUS: undefined }, 'development'),
     /sync status is invalid/);
   assert.throws(() => parseOutboxRow({ ...row, ROW_SCHEMA_VERSION: 1 }, 'development'),
@@ -73,25 +113,33 @@ test('all five bounded record types accept only their exact flat contracts', () 
     ENGAGEMENT_TYPE: 'free_test', ENVIRONMENT: 'development',
     SOURCE_MODIFIED_AT: '2026-08-24T12:05:00.000Z', SOURCE_REVISION: '4'.repeat(40),
   };
-  assert.equal(minimizeFact('deployment', {
+  const deployment = minimizeFact('deployment', {
     ...common, CAPABILITY_PROFILE: 'free_test_v1', PLAN_TIER: 'none',
     DEPLOYMENT_STATUS: 'active', GO_LIVE_APPROVAL_STATUS: 'approved',
     LIMIT_POLICY: 'seven_days_or_25_calls', BILLING_MODE: 'none', HANDLED_COUNT: 1,
-    CALL_LIMIT: 25, ACTUAL_START_AT: '2026-08-24T12:00:00.000Z',
-    EXPIRES_AT: '2026-08-31T12:00:00.000Z',
-  }).CALL_LIMIT, 25);
+    CALL_LIMIT: 25, ACTUAL_START_AT: '2026-08-24T12:00:00Z',
+    EXPIRES_AT: '2026-08-31T12:00:00Z', STOPPED_AT: '2026-08-24T12:04:00Z',
+    STOP_REASON: 'operator_stop',
+  });
+  assert.equal(deployment.CALL_LIMIT, 25);
+  assert.equal(deployment.ACTUAL_START_AT, '2026-08-24T12:00:00.000Z');
+  assert.equal(deployment.EXPIRES_AT, '2026-08-31T12:00:00.000Z');
+  assert.equal(deployment.STOPPED_AT, '2026-08-24T12:04:00.000Z');
   assert.equal(minimizeFact('daily_metric', {
     ...common, REPORTING_DATE_UTC: '2026-08-24', TOTAL_CALLS_HANDLED: 1,
     QUALIFIED_OPPORTUNITIES: 1, URGENT_REQUESTS: 0, EXISTING_CUSTOMER_CALLS: 0,
     WRONG_FIT_CALLS: 0, SPAM_CALLS: 0, UNRESOLVED_CALLS: 0,
   }).REPORTING_DATE_UTC, '2026-08-24');
-  assert.equal(minimizeFact('final_test_result', {
-    ...common, TEST_STARTED_AT: '2026-08-24T12:00:00.000Z',
-    TEST_ENDED_AT: '2026-08-31T12:00:00.000Z', TEST_END_REASON: 'seven_day_limit_reached',
+  const finalResult = minimizeFact('final_test_result', {
+    ...common, TEST_STARTED_AT: '2026-08-24T12:00:00Z',
+    TEST_ENDED_AT: '2026-08-31T12:00:00Z', TEST_END_REASON: 'seven_day_limit_reached',
     CALLS_CAPTURED: 1, CALL_LIMIT: 25, QUALIFIED_OPPORTUNITIES: 1,
     URGENT_REQUESTS: 0, EXISTING_CUSTOMER_CALLS: 0, WRONG_FIT_CALLS: 0,
     DURATION_EVIDENCE_COMPLETE: true, ANALYSIS_EVIDENCE_COMPLETE: true,
-  }).CALLS_CAPTURED, 1);
+  });
+  assert.equal(finalResult.CALLS_CAPTURED, 1);
+  assert.equal(finalResult.TEST_STARTED_AT, '2026-08-24T12:00:00.000Z');
+  assert.equal(finalResult.TEST_ENDED_AT, '2026-08-31T12:00:00.000Z');
   assert.equal(minimizeFact('conversion_status', {
     ...common, CRM_CONVERSION_STATUS: 'results_review',
     BILLING_CONVERSION_STATUS: 'not_started', RESULTS_REVIEW_STATUS: 'scheduled',
