@@ -1658,6 +1658,21 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         self.assertTrue(
             deployment["private_release_manifest_artifact_verification_passed"]
         )
+        self.assertTrue(deployment["complete_function_inventory_read_back"])
+        self.assertEqual(deployment["observed_function_count"], 12)
+        self.assertEqual(deployment["canonical_function_count_in_inventory"], 6)
+        self.assertEqual(deployment["legacy_function_count_in_inventory"], 6)
+        self.assertEqual(deployment["other_function_count_in_inventory"], 0)
+        self.assertTrue(deployment["all_canonical_functions_present_exactly_once"])
+        self.assertTrue(
+            deployment[
+                "provider_is_deployed_flag_false_for_all_canonical_functions"
+            ]
+        )
+        self.assertIn(
+            "without treating it as a source-installation failure",
+            deployment["provider_is_deployed_flag_interpretation"],
+        )
         self.assertFalse(deployment["final_main_parity_proven"])
         self.assertIn(
             "does not prove final-main parity",
@@ -1734,6 +1749,17 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
                 "independent_readback_exact": True,
             },
         ])
+        self.assertTrue(jobs["job_pool_inventory_readback_complete"])
+        self.assertEqual(jobs["observed_job_pool_count"], 4)
+        self.assertEqual(jobs["canonical_job_pool_count"], 2)
+        self.assertEqual(jobs["noncanonical_job_pool_count"], 2)
+        self.assertTrue(jobs["cron_inventory_readback_complete"])
+        self.assertEqual(jobs["observed_cron_count"], 1)
+        self.assertEqual(jobs["active_cron_count"], 0)
+        self.assertEqual(jobs["inactive_cron_count"], 1)
+        self.assertEqual(jobs["inactive_legacy_target_cron_count"], 1)
+        self.assertEqual(jobs["canonical_pool_cron_reference_count"], 0)
+        self.assertEqual(jobs["noncanonical_pool_cron_reference_count"], 1)
         self.assertFalse(jobs["job_target_or_cron_binding_proven"])
         self.assertFalse(jobs["scheduler_and_legacy_caller_bindings_reconciled"])
         self.assertEqual(jobs["retry_cron"], {
@@ -1755,9 +1781,51 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         self.assertFalse(runtime["live_report_v2_compatibility_proven"])
         self.assertFalse(runtime["synthetic_development_e2e_proven"])
         self.assertFalse(runtime["inertness_proven"])
-        self.assertTrue(all(
-            value is False for value in evidence["retell_boundary"].values()
-        ))
+
+        provider_logs = evidence["provider_log_readback"]
+        self.assertEqual(provider_logs, {
+            "official_contract_verified_on": "2026-08-27",
+            "development_retention_days": 7,
+            "post_update_window_minutes": 1440,
+            "all_six_definition_updates_within_post_update_window": True,
+            "post_update_access_record_count": 0,
+            "post_update_application_record_count": 0,
+            "negative_post_update_log_inventory_proven": True,
+            "retention_window_access_record_count": 24,
+            "retention_window_application_record_count": 0,
+            "retention_access_records_all_predate_post_update_window": True,
+            "retention_access_records_only_on_updated_preexisting_definitions": True,
+            "negative_direct_caller_inventory_proven": False,
+            "callable_surface_inertness_proven": False,
+            "limitation": (
+                "The provider log contract and zero post-update result support a "
+                "bounded no-execution conclusion after the six latest definition "
+                "updates. Older access-layer records on the two preexisting "
+                "definitions prove historical reachability and keep caller inventory "
+                "and inertness unproven."
+            ),
+        })
+
+        retell = evidence["retell_boundary"]
+        self.assertEqual(retell, {
+            "agent_changed": False,
+            "agent_tested": False,
+            "agent_simulated": False,
+            "call_performed": False,
+            "read_only_configuration_reconciliation_performed": True,
+            "published_phone_bound_version_resolved_privately": True,
+            "provider_neutral_dynamic_variable_contract_parity": True,
+            "provider_neutral_post_call_analysis_contract_parity": True,
+            "provider_neutral_webhook_event_contract_parity": True,
+            "webhook_timeout_contract_parity": True,
+            "canonical_catalyst_gateway_bound": False,
+            "legacy_catalyst_boundary_bound": True,
+            "required_no_retained_content_posture_proven": False,
+            "carrier_one_way_media_gate_proven": False,
+            "dtmf_assent_before_speech_recognition_proven": False,
+            "static_notice_before_ai_proven": False,
+            "private_agent_prompt_identifier_phone_url_or_runtime_value_included": False,
+        })
         self.assertEqual(evidence["production_boundary"], {
             "production_change_performed": False,
             "production_deployment_performed": False,
@@ -1782,9 +1850,17 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
                 "dark is containment, not executable source rollback."
             ),
         })
-        self.assertTrue(all(
-            value is False for value in evidence["disclosure_controls"].values()
-        ))
+        self.assertEqual(evidence["disclosure_controls"], {
+            "platform_identifier_values_included": False,
+            "private_runtime_locator_values_included": False,
+            "credential_or_secret_values_included": False,
+            "operator_identity_included": False,
+            "environment_variable_values_included_beyond_safe_gates": False,
+            "retell_identifier_values_included": False,
+            "retell_prompt_flow_topology_phone_or_runtime_values_included": False,
+            "customer_or_caller_data_included": False,
+            "raw_provider_payloads_errors_or_logs_included": False,
+        })
 
         inventory_readback = self.inventory[
             "development_six_function_deployment_readback_2026_08_27"
@@ -1816,6 +1892,17 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             inventory_readback
             ["private_release_manifest_artifact_verification_passed"]
         )
+        for field in (
+            "complete_function_inventory_read_back",
+            "observed_function_count",
+            "canonical_function_count_in_inventory",
+            "legacy_function_count_in_inventory",
+            "other_function_count_in_inventory",
+            "all_canonical_functions_present_exactly_once",
+            "provider_is_deployed_flag_false_for_all_canonical_functions",
+            "provider_is_deployed_flag_interpretation",
+        ):
+            self.assertEqual(inventory_readback[field], deployment[field])
         self.assertFalse(inventory_readback["final_main_parity_proven"])
         self.assertFalse(
             inventory_readback["crm_paid_subscription_preparation_enabled"]
@@ -1881,6 +1968,23 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
                 "memory_mb": 512,
             },
         ])
+        self.assertTrue(inventory_readback["job_pool_inventory_readback_complete"])
+        self.assertEqual(inventory_readback["observed_job_pool_count"], 4)
+        self.assertEqual(inventory_readback["canonical_job_pool_count"], 2)
+        self.assertEqual(inventory_readback["noncanonical_job_pool_count"], 2)
+        self.assertTrue(inventory_readback["cron_inventory_readback_complete"])
+        self.assertEqual(inventory_readback["observed_cron_count"], 1)
+        self.assertEqual(inventory_readback["active_cron_count"], 0)
+        self.assertEqual(inventory_readback["inactive_cron_count"], 1)
+        self.assertEqual(
+            inventory_readback["inactive_legacy_target_cron_count"], 1
+        )
+        self.assertEqual(
+            inventory_readback["canonical_pool_cron_reference_count"], 0
+        )
+        self.assertEqual(
+            inventory_readback["noncanonical_pool_cron_reference_count"], 1
+        )
         self.assertFalse(inventory_readback["job_target_or_cron_binding_proven"])
         self.assertFalse(
             inventory_readback["scheduler_and_legacy_caller_bindings_reconciled"]
@@ -1892,6 +1996,21 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         self.assertFalse(
             inventory_readback["negative_runtime_invocation_inventory_proven"]
         )
+        for field in (
+            "negative_post_update_log_inventory_proven",
+            "all_six_definition_updates_within_post_update_window",
+            "post_update_access_record_count",
+            "post_update_application_record_count",
+            "retention_window_access_record_count",
+            "retention_window_application_record_count",
+            "retention_access_records_all_predate_post_update_window",
+            "retention_access_records_only_on_updated_preexisting_definitions",
+        ):
+            self.assertEqual(inventory_readback[field], provider_logs[field])
+        self.assertEqual(
+            inventory_readback["post_update_log_window_minutes"],
+            provider_logs["post_update_window_minutes"],
+        )
         self.assertFalse(
             inventory_readback["consumer_first_deployment_order_proven"]
         )
@@ -1900,6 +2019,54 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         self.assertFalse(
             inventory_readback["retell_agent_changed_tested_simulated_or_called"]
         )
+        retell_inventory_to_evidence_fields = {
+            "retell_read_only_configuration_reconciliation_performed": (
+                "read_only_configuration_reconciliation_performed"
+            ),
+            "retell_published_phone_bound_version_resolved_privately": (
+                "published_phone_bound_version_resolved_privately"
+            ),
+            "retell_provider_neutral_dynamic_variable_contract_parity": (
+                "provider_neutral_dynamic_variable_contract_parity"
+            ),
+            "retell_provider_neutral_post_call_analysis_contract_parity": (
+                "provider_neutral_post_call_analysis_contract_parity"
+            ),
+            "retell_provider_neutral_webhook_event_contract_parity": (
+                "provider_neutral_webhook_event_contract_parity"
+            ),
+            "retell_webhook_timeout_contract_parity": (
+                "webhook_timeout_contract_parity"
+            ),
+            "retell_canonical_catalyst_gateway_bound": (
+                "canonical_catalyst_gateway_bound"
+            ),
+            "retell_legacy_catalyst_boundary_bound": (
+                "legacy_catalyst_boundary_bound"
+            ),
+            "retell_no_retained_content_posture_proven": (
+                "required_no_retained_content_posture_proven"
+            ),
+            "retell_carrier_one_way_media_gate_proven": (
+                "carrier_one_way_media_gate_proven"
+            ),
+            "retell_dtmf_assent_before_speech_recognition_proven": (
+                "dtmf_assent_before_speech_recognition_proven"
+            ),
+            "retell_static_notice_before_ai_proven": (
+                "static_notice_before_ai_proven"
+            ),
+            "retell_private_agent_prompt_identifier_phone_url_or_runtime_value_included": (
+                "private_agent_prompt_identifier_phone_url_or_runtime_value_included"
+            ),
+        }
+        for inventory_field, evidence_field in (
+            retell_inventory_to_evidence_fields.items()
+        ):
+            self.assertEqual(
+                inventory_readback[inventory_field],
+                retell[evidence_field],
+            )
         self.assertFalse(
             inventory_readback["production_or_customer_activity_performed"]
         )
@@ -1936,8 +2103,13 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             "RevenueDeskRetry1m remained absent",
             "the operator performed no function, Job, compatibility probe, Retell call, Retell simulation",
             "all six Catalyst-pulled archives matched their exact uploaded archives byte for byte",
+            "the complete function inventory contained the six canonical and six known legacy definitions and no other functions",
+            "provider logs contained zero access or application records in the 24-hour post-update window",
+            "24 older access records on only the two preexisting definitions",
+            "Read-only Retell reconciliation proved the provider-neutral variable, post-call analysis, webhook-event, and timeout contracts",
+            "the phone webhook remained on the legacy Catalyst boundary",
             "exact six-archive upload parity does not prove final-main or configuration-registry parity",
-            "canonical_definitions_deployed_no_invocation_performed_runtime_acceptance_pending",
+            "canonical_definitions_deployed_exact_upload_and_bounded_no_post_update_log_activity_runtime_acceptance_pending",
         ):
             self.assertIn(phrase, deployment_log_entry)
         self.assertIn(
@@ -1948,8 +2120,20 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             "No operator function or Job invocation was performed",
             self.reconciliation_runbook,
         )
+        self.assertIn(
+            "The complete function inventory contains exactly six canonical and six known legacy definitions",
+            self.reconciliation_runbook,
+        )
+        self.assertIn(
+            "Read-only Retell reconciliation proves the provider-neutral variable, post-call analysis, webhook-event, and timeout contracts",
+            self.reconciliation_runbook,
+        )
 
-        serialized = json.dumps(evidence, sort_keys=True).lower()
+        public_release_slice = {
+            "evidence": evidence,
+            "inventory_readback": inventory_readback,
+        }
+        serialized = json.dumps(public_release_slice, sort_keys=True).lower()
         for forbidden in (
             "client_secret", "refresh_token", "access_token", "invoke_url",
             "project_id", "organization_id", "environment_id", "function_id",
@@ -1958,6 +2142,59 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             "http://", "https://",
         ):
             self.assertNotIn(forbidden, serialized)
+
+        public_keys = set()
+        pending_values = [public_release_slice]
+        while pending_values:
+            value = pending_values.pop()
+            if isinstance(value, dict):
+                public_keys.update(value)
+                pending_values.extend(value.values())
+            elif isinstance(value, list):
+                pending_values.extend(value)
+
+        for raw_retell_key in (
+            "agent",
+            "agent_name",
+            "agent_version",
+            "llm_id",
+            "llm_name",
+            "voice_id",
+            "voice_name",
+            "call_id",
+            "phone_number",
+            "phone_number_id",
+            "from_number",
+            "to_number",
+            "webhook",
+            "webhook_url",
+            "webhook_endpoint",
+            "webhook_headers",
+            "webhook_payload",
+            "prompt",
+            "general_prompt",
+            "system_prompt",
+            "begin_message",
+            "first_message",
+            "flow",
+            "flow_id",
+            "nodes",
+            "edges",
+            "transitions",
+            "tools",
+        ):
+            self.assertNotIn(raw_retell_key, public_keys)
+
+        self.assertNotRegex(
+            serialized,
+            r"\b(?:agent|llm|voice|call|flow|phone_number)_[a-z0-9]{16,}\b",
+        )
+        self.assertNotRegex(serialized, r"\+[1-9]\d{7,14}\b")
+        self.assertNotRegex(
+            serialized,
+            r"\b\(?\d{3}\)?[-. ]\d{3}[-. ]\d{4}\b",
+        )
+        self.assertNotRegex(serialized, r"/(?:retell|webhooks?)(?:/|\?|\")")
 
     def test_packet_a_public_runbooks_match_sanitized_execution_and_revision(self):
         superseding_entry = self.deployment_log.split(
