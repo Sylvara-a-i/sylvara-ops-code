@@ -86,25 +86,27 @@
         "name": "RevenueDeskCallJobs",
         "type": "Function",
         "memory_mb": 512,
-        "function_bound": false,
-        "cron_reference_present": false
+        "function_binding_attribute_applicable": false,
+        "job_target_binding_proven": false,
+        "complete_cron_reference_inventory_proven_at_packet_a": false
       },
       {
         "name": "RevenueDeskAnalyticsJobs",
         "type": "Function",
         "memory_mb": 512,
-        "function_bound": false,
-        "cron_reference_present": false
+        "function_binding_attribute_applicable": false,
+        "job_target_binding_proven": false,
+        "complete_cron_reference_inventory_proven_at_packet_a": false
       }
     ],
     "live_prestate_evidence": "evidence/free-revenue-leak-test-live-prestate-2026-08-26.json",
     "packet_a_execution_evidence": "evidence/free-revenue-leak-test-development-packet-a-execution-2026-08-26.json",
     "packet_a_resolution_evidence": "evidence/free-revenue-leak-test-development-packet-a-resolution-2026-08-26.json",
     "legacy_source_capture_evidence": "evidence/legacy-retell-source-capture-2026-08-26.json",
-    "interpretation": "All thirteen canonical tables exist. RevenueDeskConfigurationVersions has its exact required application schema and remains empty and unbound. AnalyticsSyncOutbox has 307 legacy rows, zero version-2 rows, zero nonnull OUTBOX_KEY rows, and the exact single-key contract. AnalyticsSyncCheckpoints has 10 legacy rows, zero version-2 rows, and its exact required application schema. Both canonical Function Job pools exist at 512 MB and remain unbound with no Cron reference. Two bounded disposable proof tables and their synthetic rows were created and deleted; the table count returned from 36 to 35 with both proof names absent. No retained or canonical business record, function, route, Retell agent, or Production state changed. Every noncanonical retained table remains pending exact classification, mapping, migration, reconciliation, rollback, and later scoped cleanup approval."
+    "interpretation": "All thirteen canonical tables exist. RevenueDeskConfigurationVersions has its exact required application schema and remains empty and unbound. AnalyticsSyncOutbox has 307 legacy rows, zero version-2 rows, zero nonnull OUTBOX_KEY rows, and the exact single-key contract. AnalyticsSyncCheckpoints has 10 legacy rows, zero version-2 rows, and its exact required application schema. Both canonical Function Job pools exist at 512 MB. Function-pool metadata does not bind a function target, and Packet A did not prove a Job target or complete Cron/caller inventory; the later 2026-08-27 complete Cron inventory separately found zero canonical-pool Cron references. Two bounded disposable proof tables and their synthetic rows were created and deleted; the table count returned from 36 to 35 with both proof names absent. No retained or canonical business record, function, route, Retell agent, or Production state changed. Every noncanonical retained table remains pending exact classification, mapping, migration, reconciliation, rollback, and later scoped cleanup approval."
   },
   "development_six_function_deployment_readback_2026_08_27": {
-    "evidence_scope": "sanitized Development function metadata, safe configuration gates, Security Rule posture, complete function/pool/Cron inventory, bounded provider-log counts, source-revision stamp readback, archive-pullback parity booleans, and provider-neutral Retell boundary status",
+    "evidence_scope": "sanitized Development function metadata, safe configuration gates, Security Rule posture, complete function/pool/Cron inventory, bounded provider-log counts, source-revision stamp readback, six archive pullbacks and uploaded-archive SHA-256/length comparison results without digest values, and provider-neutral Retell boundary status",
     "source_revision": "7fb101d60e4480a2aaa88de70d82d6b1ddc9e989",
     "outcome": "canonical_definitions_deployed_no_invocation_performed_runtime_acceptance_pending",
     "canonical_function_count": 6,
@@ -240,8 +242,10 @@
         "exists": true,
         "type": "Function",
         "memory_mb": 512,
-        "function_bound": false,
-        "cron_reference_present": false
+        "function_binding_attribute_applicable": false,
+        "job_target_binding_proven": false,
+        "cron_inventory_readback_complete": true,
+        "cron_reference_count": 0
       }
     },
     {
@@ -253,8 +257,10 @@
         "exists": true,
         "type": "Function",
         "memory_mb": 512,
-        "function_bound": false,
-        "cron_reference_present": false
+        "function_binding_attribute_applicable": false,
+        "job_target_binding_proven": false,
+        "cron_inventory_readback_complete": true,
+        "cron_reference_count": 0
       },
       "runtime_modes": {
         "Development": ["disabled", "readiness", "active"],

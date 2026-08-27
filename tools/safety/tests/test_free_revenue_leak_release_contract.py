@@ -603,8 +603,10 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             self.assertTrue(readback["exists"])
             self.assertEqual(readback["type"], "Function")
             self.assertEqual(readback["memory_mb"], 512)
-            self.assertFalse(readback["function_bound"])
-            self.assertFalse(readback["cron_reference_present"])
+            self.assertFalse(readback["function_binding_attribute_applicable"])
+            self.assertFalse(readback["job_target_binding_proven"])
+            self.assertTrue(readback["cron_inventory_readback_complete"])
+            self.assertEqual(readback["cron_reference_count"], 0)
 
         source_analytics_pool = self.analytics_contract["job_pool"]
         self.assertEqual(source_analytics_pool["name"], "RevenueDeskAnalyticsJobs")
@@ -946,15 +948,17 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
                     "name": "RevenueDeskCallJobs",
                     "type": "Function",
                     "memory_mb": 512,
-                    "function_bound": False,
-                    "cron_reference_present": False,
+                    "function_binding_attribute_applicable": False,
+                    "job_target_binding_proven": False,
+                    "complete_cron_reference_inventory_proven_at_packet_a": False,
                 },
                 {
                     "name": "RevenueDeskAnalyticsJobs",
                     "type": "Function",
                     "memory_mb": 512,
-                    "function_bound": False,
-                    "cron_reference_present": False,
+                    "function_binding_attribute_applicable": False,
+                    "job_target_binding_proven": False,
+                    "complete_cron_reference_inventory_proven_at_packet_a": False,
                 },
             ],
         )
@@ -1446,8 +1450,9 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             "perform the exact retained-outbox full-contract and split-sequence attempts without changing any retained row",
             "create, exercise, independently read back, and delete two bounded disposable Development proof tables",
             "adopt the single-key Analytics outbox architecture in the repository candidate",
-            "create and independently read back exactly two unbound Function Job pools at 512 MB",
+            "create and independently read back exactly two generic Function Job pools at 512 MB without submitting a Job",
         ])
+        self.assertNotIn("surrounding_development_journey_authorized", authorization)
         self.assertTrue(authorization["packet_a_resolution_scope_authorized"])
         self.assertTrue(authorization["approval_exhausted_after_verified_poststate"])
         self.assertFalse(authorization["future_live_action_authorized_by_this_record"])
@@ -1547,9 +1552,14 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             self.assertEqual(pool["type"], "Function")
             self.assertEqual(pool["memory_mb"], 512)
             self.assertTrue(pool["independent_readback_exact"])
-            self.assertFalse(pool["function_bound"])
-            self.assertFalse(pool["cron_reference_present"])
+            self.assertFalse(pool["function_binding_attribute_applicable"])
+            self.assertFalse(pool["job_target_binding_proven"])
+            self.assertFalse(pool["complete_cron_reference_inventory_proven"])
             self.assertEqual(pool["jobs_submitted"], 0)
+        self.assertFalse(pools["pool_metadata_binds_a_function_target"])
+        self.assertFalse(
+            pools["complete_scheduler_or_caller_inventory_proven_by_packet_a"]
+        )
 
         poststate = evidence["verified_poststate"]
         self.assertEqual(poststate["table_count"], 35)
@@ -1566,7 +1576,6 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         for field in (
             "new_function_created",
             "function_source_uploaded",
-            "function_or_job_binding_created",
             "route_or_gateway_changed",
             "environment_variable_changed",
             "retained_or_canonical_business_record_changed",
@@ -1575,6 +1584,10 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             "activation_allowed",
         ):
             self.assertFalse(poststate[field])
+        self.assertFalse(poststate["job_target_or_cron_binding_created_by_packet"])
+        self.assertFalse(
+            poststate["complete_scheduler_or_caller_inventory_proven"]
+        )
 
         self.assertTrue(all(
             value is False for value in evidence["disclosure_controls"].values()

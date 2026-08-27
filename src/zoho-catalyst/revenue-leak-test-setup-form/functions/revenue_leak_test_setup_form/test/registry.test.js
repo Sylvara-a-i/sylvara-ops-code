@@ -69,6 +69,44 @@ test("the public variable registry and placeholder environment file stay in lock
       FORM2_PROOF_TABLE_NAME: "Form2VerificationProofsV3",
     },
   );
+  const byName = Object.fromEntries(registry.variables.map((entry) => [entry.name, entry]));
+  for (const name of [
+    "SESSION_TABLE_NAME",
+    "PREFILL_TABLE_NAME",
+    "SUBMISSION_TABLE_NAME",
+    "FORM2_PROOF_TABLE_NAME",
+  ]) {
+    assert.equal(byName[name].required, false);
+  }
+  assert.deepEqual(
+    {
+      required: byName.CRM_API_BASE_URL.required,
+      safeDefault: byName.CRM_API_BASE_URL.safe_default,
+    },
+    {
+      required: false,
+      safeDefault: "https://www.zohoapis.com/crm/v8",
+    },
+  );
+  assert.deepEqual(
+    {
+      required: byName.FORM2_PROOF_TEMPLATE_VERSION.required,
+      safeDefault: byName.FORM2_PROOF_TEMPLATE_VERSION.safe_default,
+    },
+    { required: false, safeDefault: "email-otp-v1" },
+  );
+  assert.deepEqual(
+    {
+      required: byName.FORM2_PROOF_ALLOWED_RECIPIENT_DIGESTS.required,
+      requiredWhen: byName.FORM2_PROOF_ALLOWED_RECIPIENT_DIGESTS.required_when,
+      safeDefault: byName.FORM2_PROOF_ALLOWED_RECIPIENT_DIGESTS.safe_default,
+    },
+    {
+      required: false,
+      requiredWhen: "FORM2_PROOF_MODE=send_development",
+      safeDefault: "[]",
+    },
+  );
 
   const exampleNames = fs.readFileSync(path.join(functionRoot, ".env.example"), "utf8")
     .split(/\r?\n/)

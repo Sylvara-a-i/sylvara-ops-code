@@ -12,7 +12,7 @@
       "perform the exact retained-outbox full-contract and split-sequence attempts without changing any retained row",
       "create, exercise, independently read back, and delete two bounded disposable Development proof tables",
       "adopt the single-key Analytics outbox architecture in the repository candidate",
-      "create and independently read back exactly two unbound Function Job pools at 512 MB"
+      "create and independently read back exactly two generic Function Job pools at 512 MB without submitting a Job"
     ],
     "packet_a_resolution_scope_authorized": true,
     "approval_exhausted_after_verified_poststate": true,
@@ -125,8 +125,9 @@
         "type": "Function",
         "memory_mb": 512,
         "independent_readback_exact": true,
-        "function_bound": false,
-        "cron_reference_present": false,
+        "function_binding_attribute_applicable": false,
+        "job_target_binding_proven": false,
+        "complete_cron_reference_inventory_proven": false,
         "jobs_submitted": 0
       },
       {
@@ -134,11 +135,14 @@
         "type": "Function",
         "memory_mb": 512,
         "independent_readback_exact": true,
-        "function_bound": false,
-        "cron_reference_present": false,
+        "function_binding_attribute_applicable": false,
+        "job_target_binding_proven": false,
+        "complete_cron_reference_inventory_proven": false,
         "jobs_submitted": 0
       }
-    ]
+    ],
+    "pool_metadata_binds_a_function_target": false,
+    "complete_scheduler_or_caller_inventory_proven_by_packet_a": false
   },
   "verified_poststate": {
     "table_count": 35,
@@ -159,7 +163,8 @@
     ],
     "new_function_created": false,
     "function_source_uploaded": false,
-    "function_or_job_binding_created": false,
+    "job_target_or_cron_binding_created_by_packet": false,
+    "complete_scheduler_or_caller_inventory_proven": false,
     "route_or_gateway_changed": false,
     "environment_variable_changed": false,
     "retained_or_canonical_business_record_changed": false,

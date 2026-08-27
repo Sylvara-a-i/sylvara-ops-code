@@ -11,7 +11,7 @@ const { ARTIFACT_FORM_DESTINATION_SHA256 } = require("./form-destination");
 const { ARTIFACT_SOURCE_REVISION } = require("./source-revision");
 
 const PRIVATE_CHOICE_LIMITS = Object.freeze({
-  // Covers the reviewed 207-choice provider catalog plus bounded growth. Any
+  // Covers the reviewed 208-choice provider catalog plus bounded growth. Any
   // increase beyond 256 requires a source change and contract review.
   phoneSystemProviders: 256,
   fieldTeamSizeBands: 20,
@@ -37,6 +37,8 @@ const FORM2_SESSION_TABLE_NAME = "Form2SessionsV3Runtime";
 const FORM2_PREFILL_TABLE_NAME = "Form2PrefillsV3";
 const FORM2_SUBMISSION_TABLE_NAME = "Form2SubmissionsV3";
 const FORM2_PROOF_TABLE_NAME = "Form2VerificationProofsV3";
+const CRM_API_BASE_URL = "https://www.zohoapis.com/crm/v8";
+const FORM2_PROOF_TEMPLATE_VERSION = "email-otp-v1";
 const MAX_PROOF_ALLOWED_RECIPIENT_DIGESTS = 16;
 
 const NUMERIC_LIMITS = Object.freeze({
@@ -96,6 +98,11 @@ function readRequired(environment, name) {
     throw new ConfigurationError(`${name} may not contain surrounding whitespace`);
   }
   return raw;
+}
+
+function readReviewedDefault(environment, name, fallback) {
+  if (environment[name] === undefined) return fallback;
+  return readRequired(environment, name);
 }
 
 function parseBoundedInteger(environment, name) {
@@ -250,6 +257,11 @@ function validateTemplateVersion(value) {
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(value)) {
     throw new ConfigurationError("FORM2_PROOF_TEMPLATE_VERSION has an invalid format");
   }
+  if (value !== FORM2_PROOF_TEMPLATE_VERSION) {
+    throw new ConfigurationError(
+      `FORM2_PROOF_TEMPLATE_VERSION must equal ${FORM2_PROOF_TEMPLATE_VERSION}`,
+    );
+  }
   return value;
 }
 
@@ -348,7 +360,9 @@ function parseProofRecipientDigestAllowlist(environment) {
   const name = "FORM2_PROOF_ALLOWED_RECIPIENT_DIGESTS";
   let parsed;
   try {
-    parsed = JSON.parse(readRequired(environment, name));
+    // Stub mode is the Development containment default. Send mode still fails
+    // closed below unless an explicit non-empty digest allowlist is configured.
+    parsed = JSON.parse(readReviewedDefault(environment, name, "[]"));
   } catch (error) {
     if (error instanceof ConfigurationError) throw error;
     throw new ConfigurationError(`${name} must be a JSON array`);
@@ -415,20 +429,20 @@ function loadConfig(
   }
 
   const sessionTableName = validateSessionV3Table(
-    readRequired(environment, "SESSION_TABLE_NAME"),
+    readReviewedDefault(environment, "SESSION_TABLE_NAME", FORM2_SESSION_TABLE_NAME),
   );
   const prefillTableName = validateReviewedTable(
-    readRequired(environment, "PREFILL_TABLE_NAME"),
+    readReviewedDefault(environment, "PREFILL_TABLE_NAME", FORM2_PREFILL_TABLE_NAME),
     "PREFILL_TABLE_NAME",
     FORM2_PREFILL_TABLE_NAME,
   );
   const submissionTableName = validateReviewedTable(
-    readRequired(environment, "SUBMISSION_TABLE_NAME"),
+    readReviewedDefault(environment, "SUBMISSION_TABLE_NAME", FORM2_SUBMISSION_TABLE_NAME),
     "SUBMISSION_TABLE_NAME",
     FORM2_SUBMISSION_TABLE_NAME,
   );
   const proofTableName = validateReviewedTable(
-    readRequired(environment, "FORM2_PROOF_TABLE_NAME"),
+    readReviewedDefault(environment, "FORM2_PROOF_TABLE_NAME", FORM2_PROOF_TABLE_NAME),
     "FORM2_PROOF_TABLE_NAME",
     FORM2_PROOF_TABLE_NAME,
   );
@@ -605,7 +619,11 @@ function loadConfig(
       "FORM2_MAIL_FROM",
     ),
     form2ProofTemplateVersion: validateTemplateVersion(
-      readRequired(environment, "FORM2_PROOF_TEMPLATE_VERSION"),
+      readReviewedDefault(
+        environment,
+        "FORM2_PROOF_TEMPLATE_VERSION",
+        FORM2_PROOF_TEMPLATE_VERSION,
+      ),
     ),
     form2PublicUrl: validatePublicFormUrl(
       readRequired(environment, "FORM2_PUBLIC_URL"),
@@ -635,7 +653,9 @@ function loadConfig(
       PRIVATE_CHOICE_LIMITS.fieldTeamSizeBands,
     ),
     form2AccessStatuses,
-    crmApiBaseUrl: validateCrmApiBaseUrl(readRequired(environment, "CRM_API_BASE_URL")),
+    crmApiBaseUrl: validateCrmApiBaseUrl(
+      readReviewedDefault(environment, "CRM_API_BASE_URL", CRM_API_BASE_URL),
+    ),
     crmReadConnectionLinkName,
     crmWriteConnectionLinkName,
     sessionTtlSeconds: parseBoundedInteger(environment, "SESSION_TTL_SECONDS"),

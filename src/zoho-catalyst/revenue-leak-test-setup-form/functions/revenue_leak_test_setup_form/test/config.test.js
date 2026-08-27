@@ -140,6 +140,35 @@ test("loads an immutable active Development configuration with bounded defaults"
   assert.ok(Object.isFrozen(config));
 });
 
+test("uses reviewed public defaults when Catalyst map limits require omission", () => {
+  const environment = baseEnvironment();
+  for (const name of [
+    "SESSION_TABLE_NAME",
+    "PREFILL_TABLE_NAME",
+    "SUBMISSION_TABLE_NAME",
+    "FORM2_PROOF_TABLE_NAME",
+    "FORM2_PROOF_ALLOWED_RECIPIENT_DIGESTS",
+    "FORM2_PROOF_TEMPLATE_VERSION",
+    "CRM_API_BASE_URL",
+  ]) {
+    delete environment[name];
+  }
+
+  const config = load(environment);
+  assert.equal(config.sessionTableName, FORM2_SESSION_TABLE_NAME);
+  assert.equal(config.prefillTableName, FORM2_PREFILL_TABLE_NAME);
+  assert.equal(config.submissionTableName, FORM2_SUBMISSION_TABLE_NAME);
+  assert.equal(config.proofTableName, FORM2_PROOF_TABLE_NAME);
+  assert.deepEqual(config.form2ProofAllowedRecipientDigests, []);
+  assert.equal(config.form2ProofTemplateVersion, "email-otp-v1");
+  assert.equal(config.crmApiBaseUrl, "https://www.zohoapis.com/crm/v8");
+
+  assert.throws(() => load({
+    ...environment,
+    FORM2_PROOF_TEMPLATE_VERSION: "email-otp-v2",
+  }), ConfigurationError);
+});
+
 test("Development proof delivery requires a bounded private recipient digest allowlist", () => {
   const approvedDigest = "a".repeat(64);
   const config = load(baseEnvironment({
@@ -147,6 +176,13 @@ test("Development proof delivery requires a bounded private recipient digest all
     FORM2_PROOF_ALLOWED_RECIPIENT_DIGESTS: JSON.stringify([approvedDigest]),
   }));
   assert.deepEqual(config.form2ProofAllowedRecipientDigests, [approvedDigest]);
+
+  const missingAllowlist = baseEnvironment({
+    FORM2_PROOF_MODE: "send_development",
+  });
+  delete missingAllowlist.FORM2_PROOF_ALLOWED_RECIPIENT_DIGESTS;
+  assert.throws(() => load(missingAllowlist), ConfigurationError);
+
   for (const value of [
     "[]",
     '["not-a-digest"]',
@@ -170,8 +206,8 @@ test("requires one private lowercase digest for the reviewed Catalyst project", 
   }
 });
 
-test("accepts the 207-provider catalog and rejects growth above the reviewed bound", () => {
-  const providers = providerChoices(207);
+test("accepts the 208-provider catalog and rejects growth above the reviewed bound", () => {
+  const providers = providerChoices(208);
   const config = load(baseEnvironment({
     FORM2_PHONE_SYSTEM_PROVIDERS: compressedChoices(providers),
   }));

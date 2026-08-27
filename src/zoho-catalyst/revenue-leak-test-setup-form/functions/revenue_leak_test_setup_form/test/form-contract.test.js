@@ -323,8 +323,8 @@ test("phone-system providers require the private allowlist and 120-character cei
   assert.equal(updates.accountUpdate.Phone_System_Provider, "Different Synthetic PBX");
 });
 
-test("phone-system contract accepts 207 providers and rejects a list above its bound", () => {
-  const providers = providerChoices(207);
+test("phone-system contract accepts 208 providers and rejects a list above its bound", () => {
+  const providers = providerChoices(208);
   const selectedProvider = providers.at(-1);
   const records = existingRecords();
   records.account.Phone_System_Provider = selectedProvider;
