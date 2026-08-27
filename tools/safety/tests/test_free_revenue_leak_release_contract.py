@@ -910,6 +910,14 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             inventory_authorization["retell_agent_development_or_testing_authorized"]
         )
         self.assertFalse(inventory_authorization["packet_a_resolution_approval_reusable"])
+        self.assertTrue(inventory_authorization["development_change_approval_scope_finite"])
+        self.assertTrue(
+            inventory_authorization
+            ["development_change_approval_exhausted_after_verified_poststate"]
+        )
+        self.assertFalse(
+            inventory_authorization["development_change_approval_reusable"]
+        )
         self.assertTrue(
             inventory_authorization
             ["live_changes_require_scoped_approval_and_independent_readback"]
@@ -1051,6 +1059,9 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         )
         self.assertFalse(plan["authorization"]["manifest_authorizes_migration"])
         self.assertFalse(plan["authorization"]["manifest_authorizes_deletion"])
+        self.assertFalse(
+            plan["authorization"]["manifest_is_development_change_authority"]
+        )
         self.assertTrue(plan["authorization"]["scoped_destructive_approval_required"])
         self.assertTrue(plan["authorization"]["independent_readback_required"])
 
@@ -1060,6 +1071,11 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         self.assertEqual(sum(entry["observed_rows"] for entry in observed), 466)
         self.assertEqual(sum(entry["observed_rows"] > 0 for entry in observed), 16)
         self.assertEqual(sum(entry["observed_rows"] == 0 for entry in observed), 19)
+        for entry in observed:
+            self.assertEqual(entry["row_count_observed_at"], "2026-08-27")
+            self.assertEqual(
+                entry["row_count_method"], "complete-cursor-pagination"
+            )
         self.assertEqual(plan["observed_at"], "2026-08-24")
         self.assertEqual(plan["exact_row_count_snapshot"], {
             "table_count": 29,
@@ -1068,14 +1084,28 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             "zero_row_table_count": 13,
         })
         current_presence = plan["current_table_presence"]
-        self.assertEqual(current_presence["observed_at"], "2026-08-26")
+        self.assertEqual(current_presence["observed_at"], "2026-08-27")
         self.assertEqual(current_presence["method"], (
-            "metadata-inventory-empty-page-readback-and-full-analytics-pagination"
+            "complete-cursor-pagination-for-all-tables-with-per-table-row-count-and-"
+            "zero-nonzero-classification"
         ))
+        self.assertEqual(current_presence["default_readback_page_size"], 200)
+        self.assertEqual(current_presence["readback_page_count"], 36)
+        self.assertTrue(current_presence["pagination_complete_for_all_tables"])
+        self.assertTrue(current_presence["per_table_row_count_complete"])
+        self.assertTrue(
+            current_presence["per_table_zero_nonzero_classification_complete"]
+        )
+        self.assertEqual(current_presence["classified_table_count"], 35)
         self.assertEqual(current_presence["table_count"], 35)
+        self.assertEqual(current_presence["aggregate_row_count"], 466)
         self.assertEqual(current_presence["nonzero_table_count"], 16)
         self.assertEqual(current_presence["zero_row_table_count"], 19)
-        self.assertFalse(current_presence["exact_aggregate_row_count_refreshed"])
+        self.assertTrue(current_presence["exact_aggregate_row_count_refreshed"])
+        self.assertEqual(
+            current_presence["aggregate_row_count"],
+            sum(entry["observed_rows"] for entry in observed),
+        )
         self.assertTrue(
             current_presence["configuration_version_required_application_columns_exact"]
         )
@@ -1277,8 +1307,10 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         }
         for name, (readers, writers) in expected_runtime_io.items():
             self.assertEqual(analytics[name]["observed_rows"], 0)
-            self.assertEqual(analytics[name]["row_count_observed_at"], "2026-08-26")
-            self.assertEqual(analytics[name]["row_count_method"], "empty-page-readback")
+            self.assertEqual(analytics[name]["row_count_observed_at"], "2026-08-27")
+            self.assertEqual(
+                analytics[name]["row_count_method"], "complete-cursor-pagination"
+            )
             self.assertEqual(analytics[name]["expected_readers"], readers)
             self.assertEqual(analytics[name]["expected_writers"], writers)
         probes = {
@@ -1454,7 +1486,9 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         ])
         self.assertNotIn("surrounding_development_journey_authorized", authorization)
         self.assertTrue(authorization["packet_a_resolution_scope_authorized"])
+        self.assertTrue(authorization["approval_scope_finite"])
         self.assertTrue(authorization["approval_exhausted_after_verified_poststate"])
+        self.assertFalse(authorization["approval_reusable"])
         self.assertFalse(authorization["future_live_action_authorized_by_this_record"])
         self.assertTrue(
             authorization["future_live_action_requires_fresh_scoped_approval"]
@@ -1601,7 +1635,7 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
 
     def test_six_function_development_deployment_is_exact_uninvoked_and_sanitized(self):
         evidence = self.six_function_deployment
-        revision = "7fb101d60e4480a2aaa88de70d82d6b1ddc9e989"
+        revision = "aab7c18c27f4ff5e1468da51eae433ede9b852f6"
         self.assertEqual(evidence["schema_version"], 1)
         self.assertEqual(
             evidence["record_type"],
@@ -1612,12 +1646,16 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         self.assertEqual(evidence["source_revision"], revision)
         self.assertEqual(
             evidence["outcome"],
-            "canonical_definitions_deployed_no_invocation_performed_runtime_acceptance_pending",
+            "canonical_revision_and_sanitized_configuration_readback_exact_"
+            "one_route_created_ingress_disabled_runtime_acceptance_pending",
         )
 
         authorization = evidence["authorization"]
+        self.assertTrue(authorization["approval_scope_finite"])
         self.assertTrue(authorization["approval_exhausted_after_verified_poststate"])
         self.assertFalse(authorization["approval_reusable"])
+        self.assertTrue(authorization["route_packet_approval_exhausted_after_partial_stop"])
+        self.assertFalse(authorization["route_packet_approval_reusable"])
         self.assertFalse(authorization["future_live_action_authorized_by_this_record"])
         self.assertTrue(
             authorization["future_live_action_requires_fresh_scoped_approval"]
@@ -1643,12 +1681,12 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
 
         deployment = evidence["deployment_readback"]
         expected_functions = [
-            ("revenue_leak_test_request_form", "Advanced I/O", 0),
-            ("revenue_leak_test_setup_form", "Advanced I/O", 0),
-            ("revenue_desk_call_gateway", "Advanced I/O", 0),
+            ("revenue_leak_test_request_form", "Advanced I/O", 30),
+            ("revenue_leak_test_setup_form", "Advanced I/O", 34),
+            ("revenue_desk_call_gateway", "Advanced I/O", 31),
             ("revenue_desk_call_worker", "Job", 0),
-            ("crm_billing_orchestrator", "Advanced I/O", 45),
-            ("analytics_sync", "Job", 54),
+            ("crm_billing_orchestrator", "Advanced I/O", 30),
+            ("analytics_sync", "Job", 7),
         ]
         self.assertEqual(deployment["canonical_function_count"], 6)
         self.assertEqual(
@@ -1693,6 +1731,43 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         )
 
         safe_config = evidence["safe_configuration_readback"]
+        expected_config_counts = {
+            name: count for name, _function_type, count in expected_functions
+        }
+        self.assertEqual(
+            {
+                name: details["live_environment_variable_count"]
+                for name, details in safe_config.items()
+            },
+            expected_config_counts,
+        )
+        for name in (
+            "revenue_leak_test_request_form",
+            "revenue_leak_test_setup_form",
+            "revenue_desk_call_gateway",
+            "crm_billing_orchestrator",
+            "analytics_sync",
+        ):
+            self.assertTrue(safe_config[name]["approved_private_runtime_binding_exact"])
+            self.assertTrue(safe_config[name]["source_revision_binding_exact"])
+            self.assertFalse(safe_config[name]["private_values_included"])
+        self.assertEqual(
+            safe_config["revenue_leak_test_setup_form"]
+            ["proof_mode_configuration_readback"],
+            "stub",
+        )
+        self.assertFalse(
+            safe_config["revenue_leak_test_setup_form"]["provider_send_invoked"]
+        )
+        self.assertEqual(
+            safe_config["revenue_desk_call_gateway"]
+            ["runtime_mode_configuration_readback"],
+            "dry_run",
+        )
+        worker = safe_config["revenue_desk_call_worker"]
+        self.assertFalse(worker["required_runtime_binding_present"])
+        self.assertTrue(worker["static_configuration_contract_fails_closed"])
+        self.assertFalse(worker["runtime_fail_closed_invocation_proven"])
         self.assertFalse(
             safe_config["crm_billing_orchestrator"]
             ["paid_subscription_preparation_enabled"]
@@ -1701,27 +1776,52 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             safe_config["crm_billing_orchestrator"]
             ["development_compatibility_probe_enabled"]
         )
-        self.assertEqual(safe_config["crm_billing_orchestrator"], {
-            "live_environment_variable_count": 45,
-            "public_registry_variable_name_count": 42,
-            "configuration_registry_parity_proven": False,
-            "extra_live_variable_names": "privately_unclassified_and_omitted",
-            "paid_subscription_preparation_enabled": False,
-            "development_compatibility_probe_enabled": False,
-            "sync_report_summary_disabled_by_paid_or_probe_gates": False,
-        })
-        self.assertEqual(safe_config["analytics_sync"], {
-            "live_environment_variable_count": 54,
-            "public_registry_variable_name_count": 26,
-            "configuration_registry_parity_proven": False,
-            "extra_live_variable_names": "privately_unclassified_and_omitted",
-            "runtime_mode_configuration_readback": "disabled",
-            "disabled_no_op_runtime_proven": False,
-            "other_live_values": "preserved_and_omitted",
-        })
+        self.assertTrue(
+            safe_config["crm_billing_orchestrator"]
+            ["artifact_bound_runtime_proof_rotated_and_read_back_exact"]
+        )
+        self.assertEqual(
+            safe_config["analytics_sync"]["runtime_mode_configuration_readback"],
+            "disabled",
+        )
+        self.assertFalse(
+            safe_config["analytics_sync"]["disabled_no_op_runtime_proven"]
+        )
 
         ingress = evidence["ingress_containment"]
-        self.assertFalse(ingress["api_gateway_enabled"])
+        self.assertFalse(ingress["api_gateway_initially_enabled"])
+        self.assertTrue(
+            ingress[
+                "api_gateway_temporarily_enabled_for_inventory_and_approved_route_execution"
+            ]
+        )
+        self.assertEqual(
+            ingress["temporary_enablement_scope"],
+            "route_inventory_and_exact_approved_route_packet_execution",
+        )
+        self.assertTrue(ingress["initial_route_inventory_readback_complete"])
+        self.assertEqual(ingress["initial_observed_route_count"], 0)
+        self.assertEqual(ingress["route_create_attempt_count"], 1)
+        self.assertEqual(ingress["created_routes"], [{
+            "id": "RETELL_INBOUND",
+            "approved_method_target_authentication_and_throttles_exact": True,
+            "independent_readback_exact": True,
+        }])
+        self.assertTrue(ingress["post_write_route_inventory_readback_complete"])
+        self.assertEqual(ingress["post_write_observed_route_count"], 1)
+        self.assertFalse(ingress["second_route_save_attempted"])
+        self.assertEqual(
+            ingress["partial_stop_reason"],
+            "provider_modal_flow_changed_before_the_second_save",
+        )
+        self.assertFalse(ingress["operator_route_update_or_delete_performed"])
+        self.assertFalse(ingress["operator_route_invocation_performed"])
+        self.assertFalse(ingress["negative_route_invocation_inventory_proven"])
+        self.assertTrue(ingress["api_gateway_disabled_rollback_performed"])
+        self.assertFalse(ingress["api_gateway_finally_enabled"])
+        self.assertTrue(
+            ingress["api_gateway_final_disabled_state_independently_read_back"]
+        )
         self.assertEqual(
             [rule["function"] for rule in ingress["advanced_io_security_rules"]],
             [
@@ -1738,14 +1838,15 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             for rule in ingress["advanced_io_security_rules"]
         ))
         self.assertTrue(ingress["direct_function_url_rule_posture_read_back"])
-        self.assertFalse(ingress["route_count_readback_available"])
+        self.assertTrue(ingress["route_count_readback_available"])
         self.assertFalse(ingress["twelve_route_api_gateway_parity_proven"])
         self.assertFalse(ingress["negative_direct_caller_inventory_proven"])
         self.assertFalse(ingress["callable_surface_inertness_proven"])
         self.assertTrue(
             ingress["no_invocation_performed_does_not_prove_noncallability"]
         )
-        self.assertIn("Future Form 2 GET", ingress["route_limitation"])
+        self.assertIn("Exactly RETELL_INBOUND", ingress["route_limitation"])
+        self.assertIn("Eleven required routes", ingress["route_limitation"])
 
         jobs = evidence["job_infrastructure"]
         self.assertEqual(jobs["pools"], [
@@ -1783,6 +1884,7 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         runtime = evidence["runtime_acceptance"]
         self.assertEqual(runtime["operator_function_invocations"], 0)
         self.assertEqual(runtime["operator_job_invocations"], 0)
+        self.assertEqual(runtime["operator_route_invocations"], 0)
         self.assertFalse(runtime["negative_runtime_invocation_inventory_proven"])
         self.assertFalse(runtime["consumer_first_deployment_order_proven"])
         self.assertFalse(runtime["compatibility_probe_invoked"])
@@ -1796,28 +1898,15 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         self.assertFalse(runtime["inertness_proven"])
 
         provider_logs = evidence["provider_log_readback"]
-        self.assertEqual(provider_logs, {
-            "official_contract_verified_on": "2026-08-27",
-            "development_retention_days": 7,
-            "post_update_window_minutes": 1440,
-            "all_six_definition_updates_within_post_update_window": True,
-            "post_update_access_record_count": 0,
-            "post_update_application_record_count": 0,
-            "negative_post_update_log_inventory_proven": True,
-            "retention_window_access_record_count": 24,
-            "retention_window_application_record_count": 0,
-            "retention_access_records_all_predate_post_update_window": True,
-            "retention_access_records_only_on_updated_preexisting_definitions": True,
-            "negative_direct_caller_inventory_proven": False,
-            "callable_surface_inertness_proven": False,
-            "limitation": (
-                "The provider log contract and zero post-update result support a "
-                "bounded no-execution conclusion after the six latest definition "
-                "updates. Older access-layer records on the two preexisting "
-                "definitions prove historical reachability and keep caller inventory "
-                "and inertness unproven."
-            ),
-        })
+        self.assertEqual(provider_logs["official_contract_verified_on"], "2026-08-27")
+        self.assertFalse(provider_logs["readback_applies_to_current_source_revision"])
+        self.assertFalse(
+            provider_logs["all_six_definition_updates_within_post_update_window"]
+        )
+        self.assertFalse(provider_logs["negative_post_update_log_inventory_proven"])
+        self.assertFalse(provider_logs["negative_direct_caller_inventory_proven"])
+        self.assertFalse(provider_logs["callable_surface_inertness_proven"])
+        self.assertIn("prior bounded log snapshot", provider_logs["limitation"])
 
         retell = evidence["retell_boundary"]
         self.assertEqual(retell, {
@@ -1881,11 +1970,14 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         self.assertEqual(self.inventory["schema_version"], 7)
         self.assertEqual(
             self.inventory["status"],
-            "canonical_six_function_development_definitions_deployed_no_invocation_performed_runtime_acceptance_pending",
+            "canonical_six_function_revision_and_sanitized_configuration_"
+            "readback_exact_one_route_created_ingress_disabled_runtime_"
+            "acceptance_pending",
         )
         self.assertEqual(
             inventory_readback["outcome"],
-            "canonical_definitions_deployed_no_invocation_performed_runtime_acceptance_pending",
+            "canonical_revision_and_sanitized_configuration_readback_exact_"
+            "one_route_created_ingress_disabled_runtime_acceptance_pending",
         )
         self.assertEqual(inventory_readback["source_revision"], revision)
         self.assertEqual(inventory_readback["canonical_function_count"], 6)
@@ -1926,18 +2018,28 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         self.assertEqual(
             inventory_readback["crm_public_registry_variable_name_count"], 42
         )
+        self.assertTrue(
+            inventory_readback["crm_approved_private_runtime_binding_exact"]
+        )
+        self.assertTrue(inventory_readback["crm_source_revision_binding_exact"])
         self.assertFalse(
-            inventory_readback["crm_configuration_registry_parity_proven"]
+            inventory_readback["crm_legacy_extra_live_variable_names_present"]
+        )
+        self.assertTrue(
+            inventory_readback
+            ["crm_artifact_bound_runtime_proof_rotated_and_read_back_exact"]
         )
         self.assertEqual(
             inventory_readback["analytics_public_registry_variable_name_count"], 26
         )
-        self.assertFalse(
-            inventory_readback["analytics_configuration_registry_parity_proven"]
+        self.assertTrue(
+            inventory_readback["analytics_approved_private_runtime_binding_exact"]
         )
-        self.assertEqual(
-            inventory_readback["extra_live_variable_names"],
-            "privately_unclassified_and_omitted",
+        self.assertTrue(
+            inventory_readback["analytics_source_revision_binding_exact"]
+        )
+        self.assertFalse(
+            inventory_readback["analytics_legacy_extra_live_variable_names_present"]
         )
         self.assertEqual(
             inventory_readback["analytics_runtime_mode_configuration_readback"],
@@ -1945,6 +2047,30 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         )
         self.assertFalse(
             inventory_readback["analytics_disabled_no_op_runtime_proven"]
+        )
+        self.assertTrue(
+            inventory_readback["request_form_approved_private_runtime_binding_exact"]
+        )
+        self.assertTrue(
+            inventory_readback["setup_form_approved_private_runtime_binding_exact"]
+        )
+        self.assertEqual(
+            inventory_readback["setup_form_proof_mode_configuration_readback"],
+            "stub",
+        )
+        self.assertTrue(
+            inventory_readback["gateway_approved_private_runtime_binding_exact"]
+        )
+        self.assertEqual(
+            inventory_readback["gateway_runtime_mode_configuration_readback"],
+            "dry_run",
+        )
+        self.assertFalse(inventory_readback["worker_required_runtime_binding_present"])
+        self.assertTrue(
+            inventory_readback["worker_static_configuration_contract_fails_closed"]
+        )
+        self.assertFalse(
+            inventory_readback["worker_runtime_fail_closed_invocation_proven"]
         )
         self.assertEqual(inventory_readback["advanced_io_security_rule_count"], 4)
         self.assertEqual(
@@ -1957,7 +2083,42 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         self.assertTrue(
             inventory_readback["direct_function_url_rule_posture_read_back"]
         )
-        self.assertFalse(inventory_readback["route_count_readback_available"])
+        self.assertTrue(inventory_readback["route_count_readback_available"])
+        self.assertTrue(
+            inventory_readback["initial_route_inventory_readback_complete"]
+        )
+        self.assertEqual(inventory_readback["initial_observed_route_count"], 0)
+        self.assertEqual(inventory_readback["route_create_attempt_count"], 1)
+        self.assertEqual(inventory_readback["created_route_ids"], ["RETELL_INBOUND"])
+        self.assertTrue(inventory_readback["created_route_approved_contract_exact"])
+        self.assertTrue(
+            inventory_readback["post_write_route_inventory_readback_complete"]
+        )
+        self.assertEqual(inventory_readback["post_write_observed_route_count"], 1)
+        self.assertFalse(inventory_readback["second_route_save_attempted"])
+        self.assertEqual(
+            inventory_readback["partial_route_stop_reason"],
+            "provider_modal_flow_changed_before_the_second_save",
+        )
+        self.assertTrue(
+            inventory_readback[
+                "api_gateway_temporarily_enabled_for_inventory_and_approved_route_execution"
+            ]
+        )
+        self.assertFalse(
+            inventory_readback["operator_api_gateway_route_update_or_delete_performed"]
+        )
+        self.assertFalse(inventory_readback["operator_api_gateway_route_invocation_performed"])
+        self.assertFalse(
+            inventory_readback[
+                "negative_api_gateway_route_invocation_inventory_proven"
+            ]
+        )
+        self.assertTrue(inventory_readback["api_gateway_disabled_rollback_performed"])
+        self.assertTrue(
+            inventory_readback
+            ["api_gateway_final_disabled_state_independently_read_back"]
+        )
         self.assertFalse(
             inventory_readback["negative_direct_caller_inventory_proven"]
         )
@@ -2008,6 +2169,9 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         )
         self.assertFalse(
             inventory_readback["negative_runtime_invocation_inventory_proven"]
+        )
+        self.assertFalse(
+            inventory_readback["provider_log_readback_applies_to_current_source_revision"]
         )
         for field in (
             "negative_post_update_log_inventory_proven",
@@ -2081,7 +2245,7 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
                 retell[evidence_field],
             )
         self.assertFalse(
-            inventory_readback["production_or_customer_activity_performed"]
+            inventory_readback["operator_production_or_customer_activity_performed"]
         )
         self.assertEqual(inventory_readback["preexisting_definition_count"], 2)
         self.assertEqual(inventory_readback["updated_existing_definition_count"], 2)
@@ -2111,34 +2275,33 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         )[0]
         for phrase in (
             revision,
-            "environment-variable counts were 0/0/0/0/45/54",
-            "API Gateway remained disabled",
-            "RevenueDeskRetry1m remained absent",
+            "Environment-variable counts were 30/34/31/0/30/7",
+            "API Gateway initially contained zero routes",
+            "Exactly `RETELL_INBOUND` was created",
+            "No second save was attempted after the modal-flow change",
+            "Gateway was immediately restored to disabled with independent readback",
+            "rotated artifact-bound runtime proof read back exactly",
+            "The worker remained unconfigured and therefore fail-closed by static contract",
             "the operator performed no function, Job, compatibility probe, Retell call, Retell simulation",
             "all six Catalyst-pulled archives matched their exact uploaded archives byte for byte",
-            "the complete function inventory contained the six canonical and six known legacy definitions and no other functions",
-            "provider logs contained zero access or application records in the 24-hour post-update window",
-            "24 older access records on only the two preexisting definitions",
-            "Read-only Retell reconciliation proved the provider-neutral variable, post-call analysis, webhook-event, and timeout contracts",
-            "the phone webhook remained on the legacy Catalyst boundary",
-            "exact six-archive upload parity does not prove final-main or configuration-registry parity",
-            "canonical_definitions_deployed_exact_upload_and_bounded_no_post_update_log_activity_runtime_acceptance_pending",
+            "The earlier bounded provider-log snapshot does not cover the later aab7c18 convergence",
+            "canonical_revision_and_sanitized_configuration_readback_exact_one_route_created_ingress_disabled_runtime_acceptance_pending",
         ):
             self.assertIn(phrase, deployment_log_entry)
         self.assertIn(
-            "The six canonical function definitions are now present in Catalyst Development",
+            "The six canonical function definitions are now converged in Catalyst Development",
             self.reconciliation_runbook,
         )
         self.assertIn(
-            "No operator function or Job invocation was performed",
+            "The operator performed no route, function, Job, Retell, customer, or Production invocation",
             self.reconciliation_runbook,
         )
         self.assertIn(
-            "The complete function inventory contains exactly six canonical and six known legacy definitions",
+            "30/34/31/0/30/7 environment variables in canonical function order",
             self.reconciliation_runbook,
         )
         self.assertIn(
-            "Read-only Retell reconciliation proves the provider-neutral variable, post-call analysis, webhook-event, and timeout contracts",
+            "Exactly `RETELL_INBOUND` was created and independently read back",
             self.reconciliation_runbook,
         )
 

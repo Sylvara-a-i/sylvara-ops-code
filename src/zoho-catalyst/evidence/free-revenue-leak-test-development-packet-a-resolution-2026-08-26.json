@@ -15,7 +15,9 @@
       "create and independently read back exactly two generic Function Job pools at 512 MB without submitting a Job"
     ],
     "packet_a_resolution_scope_authorized": true,
+    "approval_scope_finite": true,
     "approval_exhausted_after_verified_poststate": true,
+    "approval_reusable": false,
     "future_live_action_authorized_by_this_record": false,
     "future_live_action_requires_fresh_scoped_approval": true,
     "retell_agent_development_or_testing_authorized": false,
