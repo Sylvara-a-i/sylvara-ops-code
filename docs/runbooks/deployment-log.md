@@ -8,7 +8,49 @@ A merged pull request is not a deployment. Record an entry only after an authori
 
 ## Current State
 
-The Development events recorded here are the 2026-08-27 six-function Revenue Desk definition convergence, bounded private configuration readback, temporary API Gateway execution that created and read back only the approved `RETELL_INBOUND` route before an immediate disabled rollback, and separate read-only Retell boundary reconciliation with no invocation performed; the contained 2026-08-26 datastore schema attempt; and its superseding bounded Packet A resolution. The production configuration events are the 2026-08-14 Free-Test CRM workflow and Blueprint work; the 2026-08-05 Sylvara Zoho CRM schema/layout/address work; and the same-day Zoho Books chart deployment, Schedule C hierarchy amendment, and final tax-preparer description correction. The Free-Test CRM event configured intake and Deal automation but did not automate native Lead conversion or prove Zoho Forms settings. The Books events wrote chart metadata and active status only; no transaction record, journal, bank, clearing, tax-engine, or integration was written. Chart metadata can change historical report presentation even when transaction records remain unchanged.
+The Development events recorded here are the 2026-08-27 six-function Revenue Desk definition convergence and bounded private configuration readback; the separately contained creation and remediation of the second route; the later contained API Gateway continuation that preserved or created all twelve canonical routes, read them back exactly, retrieved the Development `ZCFKEY` privately, and ended with Gateway disabled; and separate read-only Retell boundary reconciliation with no invocation performed. They also include the contained 2026-08-26 datastore schema attempt and its superseding bounded Packet A resolution. The production configuration events are the 2026-08-14 Free-Test CRM workflow and Blueprint work; the 2026-08-05 Sylvara Zoho CRM schema/layout/address work; and the same-day Zoho Books chart deployment, Schedule C hierarchy amendment, and final tax-preparer description correction. The Free-Test CRM event configured intake and Deal automation but did not automate native Lead conversion or prove Zoho Forms settings. The Books events wrote chart metadata and active status only; no transaction record, journal, bank, clearing, tax-engine, or integration was written. Chart metadata can change historical report presentation even when transaction records remain unchanged.
+
+## 2026-08-27 — Revenue Desk Development Gateway Continuation Completed And Contained
+
+This entry supersedes only the route-count, gateway-key, and immediate route-follow-up conclusions in the earlier 2026-08-27 six-function entry. That earlier entry remains historical evidence of its bounded execution.
+
+```text
+Date (UTC): 2026-08-27
+Environment class: development
+Change reference: pull request #49; canonical source revision aab7c18c27f4ff5e1468da51eae433ede9b852f6
+Evidence reference: exact private execution/readback record plus the sanitized current-state reconciliation; secrets, private paths, digests, identifiers, endpoints, and raw provider responses remain outside Git
+Approval reference: exact single-use owner approval retained in the private task record; consumed and not reusable
+Operator role: scoped first-party Catalyst Gateway configuration with connector-first prestate and exact poststate readback; browser control was used only for the Gateway UI operations the connector did not expose
+Pre-deployment state: Gateway was disabled; the two canonical routes established by the one-route deployment and the separate RETELL_EVENTS creation/remediation recorded below were preserved; the worker had exact zero-variable UI readback and was unconfigured; no call ingress was authorized
+Action: temporarily enable Development Gateway, preserve the two existing canonical routes, create the remaining ten canonical routes serially, read back the complete route inventory, retrieve and validate the Development ZCFKEY privately, then restore Gateway to disabled; do not invoke a route, function, Job, Cron, Retell workflow, customer workflow, or Production workflow
+Smoke-test result: not invoked; route configuration actions occurred, but the operator performed no route, function, Job, or Cron invocation and no Retell-agent test, call, simulation, customer action, or Production action as part of this execution
+Readback result: exactly twelve unique canonical Development routes matched their approved full route tuples. The Development ZCFKEY was retrieved and format-validated only in private runtime handling; no value or related private metadata was printed or committed. Gateway ended disabled, its UI state independently showed disabled, and connector access failed closed without returning route data. Bounded prior-24-hour access-log and application-log reads queried after final disabled-Gateway readback returned zero records for each of the six canonical functions; exact UTC window bounds were not retained. Both canonical Function Job pools remained exact at 512 MB. Their provider metadata exposed no function-target binding attribute. The complete current Cron inventory contained one Cron and zero references to a canonical function or canonical pool. The first-party All Time Jobs view showed fifteen rows across all statuses, no pagination controls, and zero canonical-pool references. All nine required Connections were connected with their exact approved scopes. The worker UI independently showed exactly zero variables.
+Evidence limitation: exact route parity proves configuration only; it does not prove route, function, Job, caller, webhook, or end-to-end runtime acceptance. The negative function-log evidence is limited to that provider-relative prior-24-hour window and is not exactly reproducible without retained UTC bounds. The complete visible All Time Jobs UI result has zero canonical-pool references, but provider-complete all-history Job inventory, Job-pool function targeting, and direct caller/webhook inventory remain unproven. The worker remains zero-variable, unconfigured, statically fail-closed, and was not invoked as part of this execution.
+Rollback target: already contained; keep Development Gateway disabled, the worker unconfigured, canonical Cron references absent, Retell and customer traffic dark, and Production untouched. Any worker configuration, target binding, invocation, Retell action, customer action, or Production action requires its own verified prerequisites and scoped authority.
+Outcome: twelve_canonical_routes_exact_gateway_disabled_private_key_contained_no_runtime_acceptance; no Retell-agent, customer-workflow, or Production change occurred
+Follow-up: establish a provider-verifiable Job-target and direct caller/webhook inventory contract before any worker write or Job submission; keep live ingress dark; complete synthetic Development acceptance, migration, cleanup, rollback, final-main, and dark-Production proof without treating route installation as runtime acceptance; resume Retell work only in its separate task
+```
+
+## 2026-08-27 — RETELL_EVENTS Development Route Created, Contained, And Remediated
+
+This entry bridges the one-route state in the six-function entry below to the two-route prestate used by the later ten-route continuation above.
+
+```text
+Date (UTC): 2026-08-27
+Environment class: development
+Change reference: pull request #49; approved canonical route contract at the recorded source revision
+Evidence reference: exact private prestate, creation, containment, remediation, and full-tuple readback record; private identifiers, endpoints, approval material, and raw provider responses remain outside Git
+Approval reference: the initial route packet and the fresh post-containment remediation packet were separately approved, single-use, consumed, and exhausted; neither is reusable
+Operator role: bounded first-party Catalyst route configuration with independent connector readback
+Pre-deployment state: exactly the previously approved RETELL_INBOUND route existed and Gateway was disabled
+Action: temporarily enable Development Gateway, preserve the existing route, create RETELL_EVENTS under the initial single-use packet, contain the resulting duplicate-separator target defect, then use the separately approved fresh remediation packet to correct only that defect without deleting or recreating either route; restore Gateway to disabled after each bounded execution
+Smoke-test result: not invoked; route configuration actions occurred, but the operator performed no route, function, Job, or Cron invocation and no Retell-provider, customer, or Production workflow action as part of this execution
+Readback result: the first execution ended contained after exact readback identified the target defect. The remediation preserved the route identity, method, source, authentication, throttles, and target binding while correcting only the approved duplicate separator. Independent full-tuple readback then proved both canonical routes exact, and Gateway ended disabled with connector access failing closed.
+Evidence limitation: two-route configuration parity did not prove runtime acceptance, worker binding, caller/webhook absence, or end-to-end behavior
+Rollback target: already contained; keep Gateway disabled, preserve both exact canonical routes without invocation, and keep Retell, customer, and Production traffic dark
+Outcome: second_route_created_defect_contained_exactly_remediated_two_routes_exact_gateway_disabled_no_invocation
+Follow-up: proceed only through a fresh, exact, single-use continuation packet for any additional route configuration
+```
 
 ## 2026-08-27 — Revenue Desk Canonical Development Definitions Deployed Without Invocation
 

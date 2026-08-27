@@ -1,3 +1,4 @@
+import hashlib
 import json
 import unittest
 from pathlib import Path
@@ -28,6 +29,27 @@ SIX_FUNCTION_DEPLOYMENT_PATH = (
     / "evidence"
     / "free-revenue-leak-test-development-six-function-deployment-2026-08-27.json"
 )
+ROUTE_CONTINUATION_PATH = (
+    ROOT
+    / "src"
+    / "zoho-catalyst"
+    / "evidence"
+    / "free-revenue-leak-test-development-route-continuation-2026-08-27.json"
+)
+PRIVATE_ROUTE_CONTRACT_PATH = (
+    ROOT
+    / "src"
+    / "zoho-catalyst"
+    / "revenue-desk-release"
+    / "private-route-packet-contract.json"
+)
+ROUTE_CONTRACT_SOURCE_REVISION = "aab7c18c27f4ff5e1468da51eae433ede9b852f6"
+ROUTE_CONTRACT_SHA256_AT_SOURCE_REVISION = (
+    "bdb06e56ab1658aecc885b9cd78b3acc51fbdb1fea137a75a548a75b7d63690f"
+)
+ROUTE_CONTRACT_GIT_BLOB_SHA1_AT_SOURCE_REVISION = (
+    "14d688c23f542ef1374e19a8bfbdcfdd8db999f3"
+)
 ANALYTICS_OUTBOX_FENCE_ADR_PATH = (
     ROOT / "docs" / "adr" / "0008-single-key-analytics-outbox-fence.md"
 )
@@ -37,6 +59,26 @@ RECONCILIATION_RUNBOOK_PATH = (
     / "docs"
     / "runbooks"
     / "free-revenue-leak-test-e2e-reconciliation-2026-08-24.md"
+)
+SHARED_MONITOR_RUNBOOK_PATH = (
+    ROOT / "docs" / "runbooks" / "shared-seven-day-monitor-number-routing.md"
+)
+ZOHO_README_PATH = ROOT / "docs" / "zoho" / "README.md"
+CALL_RUNTIME_README_PATH = (
+    ROOT / "src" / "zoho-catalyst" / "revenue-desk-call-runtime" / "README.md"
+)
+REQUEST_FORM_README_PATH = (
+    ROOT / "src" / "zoho-catalyst" / "revenue-leak-test-request-form" / "README.md"
+)
+SETUP_FORM_README_PATH = (
+    ROOT / "src" / "zoho-catalyst" / "revenue-leak-test-setup-form" / "README.md"
+)
+ROUTE_CONTINUATION_PUBLIC_MIRROR_PATHS = (
+    SHARED_MONITOR_RUNBOOK_PATH,
+    ZOHO_README_PATH,
+    CALL_RUNTIME_README_PATH,
+    REQUEST_FORM_README_PATH,
+    SETUP_FORM_README_PATH,
 )
 FORMS_MANIFEST_PATH = ROOT / "src" / "zoho-forms" / "free-revenue-leak-test" / "forms-manifest.json"
 FORM2_ROUTES_PATH = ROOT / "src" / "zoho-catalyst" / "revenue-leak-test-setup-form" / "config" / "routes.json"
@@ -129,6 +171,12 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         cls.six_function_deployment = json.loads(
             SIX_FUNCTION_DEPLOYMENT_PATH.read_text(encoding="utf-8")
         )
+        cls.route_continuation = json.loads(
+            ROUTE_CONTINUATION_PATH.read_text(encoding="utf-8")
+        )
+        cls.private_route_contract = json.loads(
+            PRIVATE_ROUTE_CONTRACT_PATH.read_text(encoding="utf-8")
+        )
         cls.analytics_outbox_fence_adr = ANALYTICS_OUTBOX_FENCE_ADR_PATH.read_text(
             encoding="utf-8"
         )
@@ -136,6 +184,10 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         cls.reconciliation_runbook = RECONCILIATION_RUNBOOK_PATH.read_text(
             encoding="utf-8"
         )
+        cls.route_continuation_public_mirrors = {
+            path: path.read_text(encoding="utf-8")
+            for path in ROUTE_CONTINUATION_PUBLIC_MIRROR_PATHS
+        }
         cls.forms_manifest = json.loads(FORMS_MANIFEST_PATH.read_text(encoding="utf-8"))
         cls.form2_routes = json.loads(FORM2_ROUTES_PATH.read_text(encoding="utf-8"))
         cls.call_profiles = json.loads(CALL_PROFILES_PATH.read_text(encoding="utf-8"))
@@ -1967,12 +2019,12 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         inventory_readback = self.inventory[
             "development_six_function_deployment_readback_2026_08_27"
         ]
-        self.assertEqual(self.inventory["schema_version"], 7)
+        self.assertEqual(self.inventory["schema_version"], 8)
         self.assertEqual(
             self.inventory["status"],
             "canonical_six_function_revision_and_sanitized_configuration_"
-            "readback_exact_one_route_created_ingress_disabled_runtime_"
-            "acceptance_pending",
+            "readback_exact_twelve_routes_gateway_disabled_worker_"
+            "unconfigured_runtime_acceptance_pending",
         )
         self.assertEqual(
             inventory_readback["outcome"],
@@ -2289,11 +2341,11 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         ):
             self.assertIn(phrase, deployment_log_entry)
         self.assertIn(
-            "The six canonical function definitions are now converged in Catalyst Development",
+            "The six canonical function definitions are converged in Catalyst Development",
             self.reconciliation_runbook,
         )
         self.assertIn(
-            "The operator performed no route, function, Job, Retell, customer, or Production invocation",
+            "Route configuration actions occurred, but the operator performed no route, function, Job, or Cron invocation and no Retell-provider, customer, or Production action as part of this execution",
             self.reconciliation_runbook,
         )
         self.assertIn(
@@ -2301,7 +2353,7 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             self.reconciliation_runbook,
         )
         self.assertIn(
-            "Exactly `RETELL_INBOUND` was created and independently read back",
+            "All twelve canonical Development API Gateway routes were preserved or created and read back",
             self.reconciliation_runbook,
         )
 
@@ -2371,6 +2423,468 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             r"\b\(?\d{3}\)?[-. ]\d{3}[-. ]\d{4}\b",
         )
         self.assertNotRegex(serialized, r"/(?:retell|webhooks?)(?:/|\?|\")")
+
+    def test_route_continuation_proves_exact_routes_and_preserves_dark_runtime(self):
+        evidence = self.route_continuation
+        self.assertEqual(evidence["schema_version"], 1)
+        self.assertEqual(
+            evidence["record_type"],
+            "sanitized_free_revenue_leak_test_development_route_continuation",
+        )
+        self.assertEqual(evidence["execution_date_utc"], "2026-08-27")
+        self.assertEqual(evidence["environment"], "Development")
+        self.assertEqual(
+            evidence["source_revision"],
+            ROUTE_CONTRACT_SOURCE_REVISION,
+        )
+        self.assertEqual(
+            evidence["outcome"],
+            "twelve_route_contract_exact_gateway_disabled_runtime_acceptance_pending",
+        )
+
+        route_contract = self.private_route_contract
+        route_contract_bytes = PRIVATE_ROUTE_CONTRACT_PATH.read_bytes()
+        route_contract_hash = hashlib.sha256(route_contract_bytes).hexdigest()
+        route_contract_git_blob_sha1 = hashlib.sha1(
+            b"blob "
+            + str(len(route_contract_bytes)).encode("ascii")
+            + b"\0"
+            + route_contract_bytes
+        ).hexdigest()
+        public_contract = evidence["public_route_contract"]
+        self.assertEqual(route_contract_hash, ROUTE_CONTRACT_SHA256_AT_SOURCE_REVISION)
+        self.assertEqual(
+            route_contract_git_blob_sha1,
+            ROUTE_CONTRACT_GIT_BLOB_SHA1_AT_SOURCE_REVISION,
+        )
+        self.assertEqual(route_contract["schema_version"], 1)
+        self.assertEqual(route_contract["environment"], "Development")
+        self.assertEqual(route_contract["physical_route_count"], 12)
+        self.assertEqual(
+            public_contract["path"],
+            "../revenue-desk-release/private-route-packet-contract.json",
+        )
+        self.assertEqual(public_contract["schema_version"], route_contract["schema_version"])
+        self.assertEqual(
+            public_contract["bound_source_revision"], evidence["source_revision"]
+        )
+        self.assertEqual(public_contract["sha256"], route_contract_hash)
+        self.assertEqual(
+            public_contract["git_blob_sha1_at_bound_source_revision"],
+            ROUTE_CONTRACT_GIT_BLOB_SHA1_AT_SOURCE_REVISION,
+        )
+
+        authorization = evidence["authorization"]
+        self.assertTrue(authorization["approval_scope_finite"])
+        self.assertTrue(authorization["approval_exhausted_after_verified_poststate"])
+        self.assertFalse(authorization["approval_reusable"])
+        self.assertFalse(authorization["future_live_action_authorized_by_this_record"])
+        self.assertTrue(authorization["future_live_action_requires_fresh_scoped_approval"])
+        self.assertFalse(authorization["worker_configuration_write_authorized"])
+        self.assertFalse(authorization["retell_agent_development_or_testing_authorized"])
+        self.assertFalse(authorization["production_or_customer_activity_authorized"])
+        self.assertFalse(authorization["private_approval_packet_digests_included"])
+
+        expected_routes = [item["id"] for item in route_contract["routes"]]
+        expected_api_key_routes = [
+            item["id"]
+            for item in route_contract["routes"]
+            if item["authentication"] == ["APIKey"]
+        ]
+        remediation = evidence["pre_continuation_retell_events_remediation"]
+        self.assertEqual(remediation["initial_route_count"], 1)
+        self.assertEqual(remediation["initial_route"], expected_routes[0])
+        for field in (
+            "initial_gateway_disabled",
+            "initial_route_inventory_readback_complete",
+            "initial_route_exact",
+            "creation_packet_separately_approved_single_use",
+            "creation_packet_consumed_exhausted_and_nonreusable",
+            "retell_events_route_created",
+            "duplicate_separator_target_defect_detected_by_exact_readback",
+            "gateway_restored_disabled_after_defect",
+            "fresh_remediation_packet_separately_approved_single_use",
+            "fresh_remediation_packet_consumed_exhausted_and_nonreusable",
+            "remediation_changed_only_the_approved_duplicate_separator_defect",
+            "independent_two_route_full_tuple_readback_exact",
+            "gateway_final_disabled_state_independently_read_back",
+        ):
+            self.assertTrue(remediation[field])
+        for field in (
+            "route_deleted_or_recreated_during_remediation",
+            "operator_route_function_job_or_cron_invocation_performed",
+            "retell_agent_test_simulation_call_or_publish_performed",
+            "customer_or_production_action_performed",
+        ):
+            self.assertFalse(remediation[field])
+
+        route = evidence["route_continuation"]
+        self.assertTrue(route["gateway_prestate_disabled"])
+        self.assertTrue(route["prestate_route_inventory_readback_complete"])
+        self.assertEqual(route["prestate_route_count"], 2)
+        self.assertEqual(route["prestate_routes"], expected_routes[:2])
+        self.assertTrue(route["prestate_routes_exact"])
+        self.assertFalse(
+            route[
+                "existing_route_update_delete_or_recreation_performed_in_ten_route_continuation"
+            ]
+        )
+        self.assertTrue(route["gateway_temporarily_enabled"])
+        self.assertEqual(route["continuation_create_attempt_count"], 10)
+        self.assertEqual(route["created_routes"], expected_routes[2:])
+        self.assertEqual(route["final_route_count"], 12)
+        self.assertEqual(route["final_routes"], expected_routes)
+        for field in (
+            "each_route_saved_serially_after_exact_form_validation",
+            "each_route_independently_read_back_after_save",
+            "independent_ui_authentication_readback_exact_for_each_route",
+            "final_route_inventory_readback_complete",
+            "final_route_names_unique",
+            "final_source_endpoints_unique",
+            "methods_targets_source_endpoints_authentication_and_throttles_exact",
+            "numeric_target_bindings_exact",
+            "twelve_route_api_gateway_parity_proven",
+            "gateway_disabled_rollback_performed",
+            "gateway_final_disabled_state_independently_read_back",
+            "disabled_connector_probe_failed_closed_without_route_payload",
+        ):
+            self.assertTrue(route[field])
+        self.assertEqual(
+            route["api_key_route_names"],
+            expected_api_key_routes,
+        )
+        self.assertFalse(route["operator_route_invocation_performed"])
+        self.assertFalse(route["api_gateway_finally_enabled"])
+        self.assertFalse(
+            route[
+                "route_identifiers_source_endpoints_target_identifiers_or_private_hosts_included"
+            ]
+        )
+
+        key_handling = evidence["development_api_gateway_key_handling"]
+        for field in (
+            "retrieved_only_after_twelve_route_parity",
+            "retrieved_privately_from_authenticated_first_party_ui",
+            "format_validated_privately",
+            "stored_only_in_private_runtime_artifact_outside_repository",
+            "cleared_from_browser_runtime_memory",
+        ):
+            self.assertTrue(key_handling[field])
+        self.assertFalse(key_handling["value_path_or_digest_included"])
+        self.assertFalse(key_handling["key_is_runtime_authorization_by_itself"])
+        self.assertFalse(key_handling["worker_binding_or_invocation_authorized_by_retrieval"])
+
+        containment = evidence["bounded_containment_readback"]
+        self.assertEqual(containment["observed_function_count"], 12)
+        self.assertEqual(containment["canonical_function_count"], 6)
+        self.assertEqual(containment["legacy_function_count"], 6)
+        for field in (
+            "complete_function_inventory_read_back",
+            "all_canonical_functions_present_exactly_once",
+            "canonical_source_runtime_memory_and_safe_gate_readback_exact",
+            "worker_environment_variable_ui_readback_complete",
+            "job_pool_inventory_readback_complete",
+            "canonical_job_pools_exact_function_type_and_512_mb",
+            "cron_inventory_readback_complete",
+            "required_connections_read_back_complete",
+            "required_connections_connected_with_exact_approved_scopes",
+            "first_party_all_time_jobs_visible_result_readback_complete",
+        ):
+            self.assertTrue(containment[field])
+        self.assertEqual(containment["worker_environment_variable_count"], 0)
+        self.assertFalse(containment["worker_required_runtime_binding_present"])
+        self.assertTrue(containment["worker_static_configuration_contract_fails_closed"])
+        self.assertFalse(containment["worker_runtime_fail_closed_invocation_proven"])
+        self.assertEqual(containment["observed_job_pool_count"], 4)
+        self.assertEqual(containment["canonical_job_pool_count"], 2)
+        self.assertEqual(containment["noncanonical_job_pool_count"], 2)
+        self.assertFalse(containment["job_pool_function_target_binding_attribute_available"])
+        self.assertFalse(containment["job_target_binding_proven"])
+        self.assertEqual(containment["observed_cron_count"], 1)
+        self.assertEqual(containment["canonical_function_or_pool_cron_reference_count"], 0)
+        self.assertFalse(containment["canonical_cron_active"])
+        self.assertEqual(containment["bounded_log_window_hours"], 24)
+        self.assertEqual(
+            containment["bounded_log_window_definition"], "prior_24_hours_at_readback"
+        )
+        self.assertTrue(
+            containment["bounded_log_query_executed_after_final_disabled_gateway_readback"]
+        )
+        self.assertFalse(
+            containment["bounded_log_exact_start_and_end_timestamps_publicly_available"]
+        )
+        self.assertFalse(
+            containment["bounded_log_exact_start_and_end_reconstruction_proven"]
+        )
+        self.assertEqual(containment["canonical_function_access_log_record_count"], 0)
+        self.assertEqual(containment["canonical_function_application_log_record_count"], 0)
+        self.assertTrue(containment["bounded_log_queries_read_back_complete"])
+        self.assertEqual(containment["required_connection_count"], 9)
+        self.assertEqual(containment["first_party_all_time_jobs_view_filter"], "all_statuses")
+        self.assertEqual(containment["first_party_all_time_jobs_visible_row_count"], 15)
+        self.assertFalse(
+            containment["first_party_all_time_jobs_pagination_controls_present"]
+        )
+        self.assertEqual(
+            containment["canonical_job_pool_reference_count_in_all_time_jobs_ui"], 0
+        )
+        for field in (
+            "provider_complete_all_history_invocation_inventory_proven",
+            "provider_complete_job_inventory_proven",
+            "provider_complete_direct_caller_inventory_proven",
+            "provider_complete_webhook_inventory_proven",
+            "connector_list_jobs_operation_available",
+            "connector_direct_caller_or_webhook_inventory_operation_available",
+            "callable_surface_inertness_proven",
+        ):
+            self.assertFalse(containment[field])
+
+        runtime = evidence["runtime_acceptance"]
+        self.assertEqual(runtime["operator_function_invocations"], 0)
+        self.assertEqual(runtime["operator_job_invocations"], 0)
+        self.assertEqual(runtime["operator_route_invocations"], 0)
+        self.assertEqual(runtime["operator_cron_submissions"], 0)
+        self.assertFalse(runtime["synthetic_development_e2e_proven"])
+        self.assertFalse(runtime["worker_binding_proven"])
+        self.assertFalse(runtime["inertness_proven"])
+        self.assertTrue(runtime["route_parity_does_not_prove_runtime_acceptance"])
+        retell = evidence["retell_boundary"]
+        self.assertTrue(retell["separate_retell_task_required"])
+        self.assertTrue(all(
+            retell[field] is False
+            for field in (
+                "agent_changed",
+                "agent_tested",
+                "agent_simulated",
+                "call_performed",
+                "agent_or_phone_route_published",
+                "canonical_catalyst_gateway_bound_to_retell",
+                "live_ingress_authorized",
+            )
+        ))
+        self.assertTrue(all(
+            value is False for value in evidence["production_boundary"].values()
+        ))
+        self.assertTrue(all(
+            value is False for value in evidence["disclosure_controls"].values()
+        ))
+
+        inventory = self.inventory["development_route_continuation_readback_2026_08_27"]
+        self.assertEqual(inventory["outcome"], evidence["outcome"])
+        self.assertEqual(inventory["source_revision"], evidence["source_revision"])
+        self.assertEqual(
+            inventory["public_route_contract"],
+            "revenue-desk-release/private-route-packet-contract.json",
+        )
+        self.assertEqual(
+            inventory["public_route_contract_schema_version"], route_contract["schema_version"]
+        )
+        self.assertEqual(inventory["public_route_contract_sha256"], route_contract_hash)
+        self.assertEqual(
+            inventory["public_route_contract_git_blob_sha1_at_source_revision"],
+            ROUTE_CONTRACT_GIT_BLOB_SHA1_AT_SOURCE_REVISION,
+        )
+        self.assertEqual(inventory["pre_continuation_initial_route_count"], 1)
+        for field in (
+            "retell_events_creation_packet_separately_approved_consumed_and_exhausted",
+            "retell_events_duplicate_separator_defect_contained",
+            "retell_events_fresh_remediation_packet_separately_approved_consumed_and_exhausted",
+            "retell_events_remediation_changed_only_approved_defect",
+            "pre_continuation_two_route_full_tuple_readback_exact",
+        ):
+            self.assertTrue(inventory[field])
+        self.assertFalse(
+            inventory["retell_events_route_deleted_or_recreated_during_remediation"]
+        )
+        self.assertEqual(inventory["prestate_route_count"], 2)
+        self.assertEqual(inventory["continuation_created_route_count"], 10)
+        self.assertFalse(
+            inventory[
+                "existing_route_update_delete_or_recreation_performed_in_ten_route_continuation"
+            ]
+        )
+        self.assertEqual(inventory["final_route_count"], 12)
+        self.assertTrue(inventory["twelve_route_api_gateway_parity_proven"])
+        self.assertTrue(inventory["api_gateway_key_retrieved_and_format_validated_privately"])
+        self.assertFalse(inventory["api_gateway_key_value_path_or_digest_included"])
+        self.assertFalse(inventory["worker_required_runtime_binding_present"])
+        self.assertEqual(inventory["worker_environment_variable_count"], 0)
+        self.assertTrue(inventory["worker_environment_variable_ui_readback_complete"])
+        self.assertEqual(
+            inventory["canonical_function_access_log_record_count_in_bounded_prior_24h"],
+            0,
+        )
+        self.assertEqual(
+            inventory[
+                "canonical_function_application_log_record_count_in_bounded_prior_24h"
+            ],
+            0,
+        )
+        self.assertFalse(inventory["job_pool_function_target_binding_attribute_available"])
+        self.assertFalse(inventory["job_target_binding_proven"])
+        self.assertEqual(
+            inventory["canonical_job_pool_count"],
+            containment["canonical_job_pool_count"],
+        )
+        self.assertEqual(inventory["canonical_job_pool_count"], 2)
+        self.assertEqual(
+            inventory["canonical_job_pools_exact_function_type_and_512_mb"],
+            containment["canonical_job_pools_exact_function_type_and_512_mb"],
+        )
+        self.assertTrue(inventory["canonical_job_pools_exact_function_type_and_512_mb"])
+        self.assertEqual(inventory["canonical_function_or_pool_cron_reference_count"], 0)
+        self.assertEqual(
+            inventory["bounded_log_window_definition"],
+            containment["bounded_log_window_definition"],
+        )
+        self.assertEqual(
+            inventory["bounded_log_query_executed_after_final_disabled_gateway_readback"],
+            containment[
+                "bounded_log_query_executed_after_final_disabled_gateway_readback"
+            ],
+        )
+        self.assertTrue(
+            inventory["bounded_log_query_executed_after_final_disabled_gateway_readback"]
+        )
+        for field in (
+            "bounded_log_exact_start_and_end_timestamps_publicly_available",
+            "bounded_log_exact_start_and_end_reconstruction_proven",
+        ):
+            self.assertEqual(inventory[field], containment[field])
+            self.assertFalse(inventory[field])
+        self.assertEqual(inventory["required_connection_count"], 9)
+        self.assertTrue(inventory["required_connections_read_back_complete"])
+        self.assertTrue(
+            inventory["required_connections_connected_with_exact_approved_scopes"]
+        )
+        self.assertTrue(
+            inventory["first_party_all_time_jobs_visible_result_readback_complete"]
+        )
+        self.assertEqual(inventory["first_party_all_time_jobs_visible_row_count"], 15)
+        self.assertFalse(
+            inventory["first_party_all_time_jobs_pagination_controls_present"]
+        )
+        self.assertEqual(
+            inventory["canonical_job_pool_reference_count_in_all_time_jobs_ui"], 0
+        )
+        for field in (
+            "provider_complete_all_history_invocation_inventory_proven",
+            "provider_complete_job_inventory_proven",
+            "provider_complete_direct_caller_inventory_proven",
+            "provider_complete_webhook_inventory_proven",
+        ):
+            self.assertEqual(inventory[field], containment[field])
+            self.assertFalse(inventory[field])
+        self.assertFalse(inventory["callable_surface_inertness_proven"])
+        self.assertFalse(inventory["future_live_action_authorized_by_this_record"])
+        self.assertTrue(inventory["fresh_single_use_worker_binding_approval_required"])
+        self.assertEqual(
+            inventory["evidence"],
+            "evidence/free-revenue-leak-test-development-route-continuation-2026-08-27.json",
+        )
+
+        continuation_entry = self.deployment_log.split(
+            "## 2026-08-27 — Revenue Desk Development Gateway Continuation Completed And Contained",
+            maxsplit=1,
+        )[1].split(
+            "## 2026-08-27 — RETELL_EVENTS Development Route Created, Contained, And Remediated",
+            maxsplit=1,
+        )[0]
+        for phrase in (
+            evidence["source_revision"],
+            "exactly twelve unique canonical Development routes matched their approved full route tuples",
+            "The first-party All Time Jobs view showed fifteen rows across all statuses, no pagination controls, and zero canonical-pool references",
+            "All nine required Connections were connected with their exact approved scopes",
+            "The worker UI independently showed exactly zero variables",
+            "the operator performed no route, function, Job, or Cron invocation",
+        ):
+            self.assertIn(phrase, continuation_entry)
+
+        remediation_entry = self.deployment_log.split(
+            "## 2026-08-27 — RETELL_EVENTS Development Route Created, Contained, And Remediated",
+            maxsplit=1,
+        )[1].split(
+            "## 2026-08-27 — Revenue Desk Canonical Development Definitions Deployed Without Invocation",
+            maxsplit=1,
+        )[0]
+        for phrase in (
+            "exactly the previously approved RETELL_INBOUND route existed",
+            "duplicate-separator target defect",
+            "separately approved, single-use, consumed, and exhausted",
+            "correcting only the approved duplicate separator",
+            "without deleting or recreating either route",
+            "the operator performed no route, function, Job, or Cron invocation and no Retell-provider, customer, or Production workflow action as part of this execution",
+        ):
+            self.assertIn(phrase, remediation_entry)
+
+        public_mirrors = self.route_continuation_public_mirrors
+        for path, text in public_mirrors.items():
+            with self.subTest(public_mirror=path.name):
+                lowered = text.lower()
+                self.assertNotIn("six canonical function job pools", lowered)
+                self.assertNotIn("six canonical 512 mb pool definitions", lowered)
+                self.assertNotIn("complete all time jobs ui inventory", lowered)
+                self.assertNotIn(
+                    "provider-complete all-history job inventory remains proven", lowered
+                )
+
+        exact_public_mirror_clauses = {
+            SHARED_MONITOR_RUNBOOK_PATH: (
+                "both canonical function pools are exact at 512 mb",
+                "provider-complete all-history job inventory remains unproven",
+                "provider-relative prior-24-hour access and application logs queried after final disabled-gateway readback",
+                "exact utc bounds were not retained",
+                "the operator did not invoke it",
+            ),
+            ZOHO_README_PATH: (
+                "both canonical function job pools matched exact at 512 mb",
+                "provider-complete all-history job inventory remains unproven",
+                "a relative prior-24-hour access and application log query ran after the final disabled-gateway readback",
+                "exact utc bounds were not retained",
+                "during this execution, the operator invoked no route, function, job, or cron",
+            ),
+            CALL_RUNTIME_README_PATH: (
+                "both canonical function job pools matched exact at 512 mb",
+                "provider-complete all-history job inventory remains unproven",
+                "a relative prior-24-hour access and application log query ran after the final disabled-gateway readback",
+                "exact utc bounds were not retained",
+                "during this execution, the operator invoked no route, function, job, or cron",
+            ),
+            REQUEST_FORM_README_PATH: (
+                "both canonical function job pools match exact at 512 mb",
+                "provider-complete all-history job inventory and direct caller and webhook bindings remain unproven",
+                "during this execution, the operator invoked no route, function, job, or cron",
+            ),
+            SETUP_FORM_README_PATH: (
+                "both canonical function job pools match exact at 512 mb",
+                "provider-complete all-history job inventory and direct caller and webhook bindings remain unproven",
+                "during this execution, the operator invoked no route, function, job, or cron",
+            ),
+        }
+        for path, required_clauses in exact_public_mirror_clauses.items():
+            lowered = public_mirrors[path].lower()
+            for clause in required_clauses:
+                with self.subTest(public_mirror=path.name, required_clause=clause):
+                    self.assertIn(clause, lowered)
+
+        for path in (REQUEST_FORM_README_PATH, SETUP_FORM_README_PATH):
+            self.assertNotIn("prior-24-hour", public_mirrors[path].lower())
+
+        for path in (ZOHO_README_PATH, CALL_RUNTIME_README_PATH):
+            text = public_mirrors[path]
+            self.assertIn("RETELL_EVENTS", text)
+            self.assertIn("duplicate", text)
+            self.assertIn("separator", text)
+            self.assertIn("consumed", text)
+
+        serialized = json.dumps(evidence, sort_keys=True).lower()
+        for forbidden in (
+            "client_secret", "refresh_token", "access_token", "invoke_url",
+            "project_id", "organization_id", "environment_id", "function_id",
+            "agent_id", "version_id", "number_id", "zaid", "archive_sha256",
+            "download_path", "upload_path", "http://", "https://",
+        ):
+            self.assertNotIn(forbidden, serialized)
 
     def test_packet_a_public_runbooks_match_sanitized_execution_and_revision(self):
         superseding_entry = self.deployment_log.split(
@@ -2471,7 +2985,7 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         for term in ("classified", "mapped", "counts", "digests", "exact key set", "rollback", "absent"):
             self.assertIn(term, table_gates)
 
-        self.assertEqual(self.inventory["schema_version"], 7)
+        self.assertEqual(self.inventory["schema_version"], 8)
         snapshot = self.inventory["development_data_store_readback_2026_08_24"]
         self.assertEqual(snapshot["readback_page_size"], 300)
         self.assertTrue(snapshot["pagination_completed_for_counts"])
