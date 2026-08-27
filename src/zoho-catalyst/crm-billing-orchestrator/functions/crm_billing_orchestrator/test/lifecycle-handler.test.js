@@ -1065,32 +1065,63 @@ test("invalid commercial terms and dates fail before the operation claim", async
   }
 });
 
-test("the paid mutation kill switch preserves non-creating Billing reconciliation", async () => {
-  const config = loadConfig(baseEnvironment({
-    ENABLE_PAID_SUBSCRIPTION_PREPARATION: "false",
-  }), { artifactRevision: REVISION });
-  const disabled = harness(config, context(config));
-  await assert.rejects(disabled.lifecycle.handle({
-    action: "prepare_paid_subscription",
-    dealId: "100000000000001",
-  }), /preparation is disabled/);
-  assert.equal(disabled.calls.some(([kind]) => kind === "claim"), false);
+test("the paid gate blocks preparation and reconciliation before any dependency read", async () => {
+  const enabledConfig = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const environment = baseEnvironment({ ENABLE_PAID_SUBSCRIPTION_PREPARATION: "false" });
+  for (const name of [
+    "PAID_COMMERCIAL_TERMS_JSON",
+    "PAID_PLAN_CODE_MAP",
+    "PAID_USAGE_ADDON_CODE",
+    "PAID_USAGE_ADDON_UNIT",
+    "PAID_USAGE_ADDON_PRODUCT_ID",
+    "PAID_SUBSCRIPTION_STATUS_MAP",
+    "PAID_ACCEPTANCE_VALUE",
+    "CLOSED_WON_STAGE_VALUE",
+  ]) delete environment[name];
+  const config = loadConfig(environment, { artifactRevision: REVISION });
 
-  const reconciled = harness(config, context(config, {
-    Billing_Customer_ID: "200000000000001",
-    Billing_Subscription_ID: "300000000000001",
-    Subscription_Status: "Active",
-    Billing_Automation_Status: "Paid Verified",
-    Billing_Last_Sync_At: "2026-08-21T15:01:00.000Z",
-    Billing_Automation_Error: null,
-  }));
-  const result = await reconciled.lifecycle.handle({
-    action: "reconcile",
-    dealId: "100000000000001",
+  for (const action of ["prepare_paid_subscription", "reconcile"]) {
+    const disabled = harness(config, context(enabledConfig));
+    await assert.rejects(disabled.lifecycle.handle({
+      action,
+      dealId: "100000000000001",
+    }), /paid lifecycle actions are disabled/i);
+    assert.deepEqual(disabled.calls, []);
+  }
+});
+
+test("report summary sync remains available with paid catalog configuration absent", async () => {
+  const enabledConfig = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const environment = baseEnvironment({ ENABLE_PAID_SUBSCRIPTION_PREPARATION: "false" });
+  for (const name of [
+    "PAID_COMMERCIAL_TERMS_JSON",
+    "PAID_PLAN_CODE_MAP",
+    "PAID_USAGE_ADDON_CODE",
+    "PAID_USAGE_ADDON_UNIT",
+    "PAID_USAGE_ADDON_PRODUCT_ID",
+    "PAID_SUBSCRIPTION_STATUS_MAP",
+    "PAID_ACCEPTANCE_VALUE",
+    "CLOSED_WON_STAGE_VALUE",
+  ]) delete environment[name];
+  const config = loadConfig(environment, { artifactRevision: REVISION });
+  const selectedSummary = terminalSummary();
+  const operation = reportOperation(config, selectedSummary);
+  const selected = harness(config, context(enabledConfig, unreviewedReportDeal({
+    Stage: "Test Live",
+    Test_Status: "Live",
+  })), {
+    readOperation: async () => operation,
   });
-  assert.equal(result.outcome, "authoritative_readback_confirmed");
-  assert.equal(reconciled.calls.some(([kind]) => kind === "paid"), false);
-  assert.equal(reconciled.calls.some(([kind]) => kind === "crm_update"), false);
+
+  const result = await selected.lifecycle.handle({
+    action: "sync_report_summary",
+    dealId: selectedSummary.dealId,
+    operationKey: operation.OPERATION_KEY,
+  });
+  assert.equal(result.outcome, "report_summary_readback_confirmed");
+  assert.equal(selected.calls.some(([kind]) => [
+    "customer", "paid", "find_customer", "find_paid",
+  ].includes(kind)), false);
 });
 
 test("customer provisioning never updates CRM before paid subscription readback", async () => {

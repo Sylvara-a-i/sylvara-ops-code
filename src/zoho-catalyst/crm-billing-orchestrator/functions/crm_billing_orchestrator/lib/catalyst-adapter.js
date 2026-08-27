@@ -1,7 +1,11 @@
 "use strict";
 
 const crypto = require("node:crypto");
-const { parseActionRequest } = require("./action-contract");
+const {
+  DEVELOPMENT_COMPATIBILITY_PROBE_ACTION,
+  RequestContractError,
+  parseActionRequest,
+} = require("./action-contract");
 const { createBillingClient } = require("./billing-client");
 const { createConnectionAuthorizationProvider } = require("./connection-boundary");
 const { ConfigurationError, loadConfig } = require("./config");
@@ -9,9 +13,13 @@ const { createCrmClient } = require("./crm-client");
 const { createOperationStore } = require("./idempotency");
 const { createAnalyticsOutboxStore } = require("./analytics-outbox");
 const { createLifecycleHandler } = require("./lifecycle-handler");
+const {
+  runDevelopmentCompatibilityProbe,
+} = require("./development-compatibility-probe");
 const { safeLog } = require("./safe-log");
 
 const SHA256_HEX = /^[a-f0-9]{64}$/;
+const PAID_LIFECYCLE_ACTIONS = new Set(["prepare_paid_subscription", "reconcile"]);
 
 function validatedHeaderValue(values, maximumLength = 253) {
   if (values.length !== 1 || typeof values[0] !== "string") {
@@ -210,6 +218,42 @@ function createRequestListener({
       const preSdkDevelopmentZaid = assertCatalystRequestBinding(request, config);
       const payload = await parseActionRequest(request, config);
       action = payload.action;
+      if (PAID_LIFECYCLE_ACTIONS.has(action) && !config.enablePaidSubscriptionPreparation) {
+        throw new RequestContractError(
+          "Paid lifecycle actions are disabled",
+          409,
+          "operation_invalid",
+        );
+      }
+      if (action === DEVELOPMENT_COMPATIBILITY_PROBE_ACTION) {
+        if (!config.enableDevelopmentCompatibilityProbe) {
+          throw new RequestContractError(
+            "Development compatibility probe is disabled",
+            409,
+            "operation_invalid",
+          );
+        }
+        const result = runDevelopmentCompatibilityProbe(config, payload.case);
+        stage = "readback";
+        safeLog(logger, "info", {
+          requestId,
+          sourceRevision,
+          stage,
+          action,
+          outcome: result.outcome,
+          elapsedMs: now() - startedAt,
+        });
+        sendJson(response, 200, {
+          ok: true,
+          action,
+          outcome: result.outcome,
+          compatibility_case: result.compatibilityCase,
+          report_summary_schema_version: result.reportSummarySchemaVersion,
+          workflow_failure_mapping: result.workflowFailureMapping,
+          request_id: requestId,
+        });
+        return;
+      }
       const sdk = catalystSdk ?? require("zcatalyst-sdk-node");
       const app = sdk.initialize(request);
       assertCatalystSdkBinding(app, preSdkDevelopmentZaid, config);

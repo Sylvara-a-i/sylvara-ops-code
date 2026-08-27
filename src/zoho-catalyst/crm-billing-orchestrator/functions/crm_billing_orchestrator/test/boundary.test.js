@@ -47,6 +47,12 @@ test("blank environment and reviewed variable registry have the same names", () 
     registry.variables.find((entry) => entry.name === "OPERATION_TABLE")?.safe_default,
     "CRMBillingOperations",
   );
+  assert.equal(
+    registry.variables.find(
+      (entry) => entry.name === "ENABLE_DEVELOPMENT_COMPATIBILITY_PROBE",
+    )?.safe_default,
+    "false",
+  );
   const schema = JSON.parse(fs.readFileSync(
     path.join(packageRoot, "config", "datastore-schema.json"),
     "utf8",

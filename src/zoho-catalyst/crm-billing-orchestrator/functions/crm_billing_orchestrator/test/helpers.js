@@ -51,6 +51,7 @@ function baseEnvironment(overrides = {}) {
     IDEMPOTENCY_PEPPER: "p".repeat(32),
     ANALYTICS_PARTITION_HMAC_SECRET: "q".repeat(32),
     ENABLE_PAID_SUBSCRIPTION_PREPARATION: "true",
+    ENABLE_DEVELOPMENT_COMPATIBILITY_PROBE: "false",
     PAID_PLAN_CODE_MAP: JSON.stringify({
       "Launch::Monthly": "launch_monthly",
       "Growth::Monthly": "growth_monthly",

@@ -217,6 +217,28 @@ function paidSubscriptionStatusMap(environment) {
   return Object.freeze(Object.fromEntries(entries));
 }
 
+function paidConfiguration(environment) {
+  let paidCommercialTerms;
+  try {
+    paidCommercialTerms = parsePaidCommercialTerms(required(
+      environment,
+      "PAID_COMMERCIAL_TERMS_JSON",
+    ));
+  } catch {
+    throw new ConfigurationError("PAID_COMMERCIAL_TERMS_JSON is invalid");
+  }
+  return Object.freeze({
+    paidCommercialTerms,
+    paidPlanCodeMap: paidPlanMap(environment),
+    paidUsageAddonCode: planCode(environment, "PAID_USAGE_ADDON_CODE"),
+    paidUsageAddonUnit: boundedText(environment, "PAID_USAGE_ADDON_UNIT", 100),
+    paidUsageAddonProductId: billingRecordId(environment, "PAID_USAGE_ADDON_PRODUCT_ID"),
+    paidSubscriptionStatusMap: paidSubscriptionStatusMap(environment),
+    paidAcceptanceValue: boundedText(environment, "PAID_ACCEPTANCE_VALUE"),
+    closedWonStageValue: boundedText(environment, "CLOSED_WON_STAGE_VALUE"),
+  });
+}
+
 function loadConfig(environment = process.env, {
   artifactRevision = ARTIFACT_SOURCE_REVISION,
   artifactDevelopmentZaidHmacSha256 = ARTIFACT_DEVELOPMENT_ZAID_HMAC_SHA256,
@@ -260,6 +282,10 @@ function loadConfig(environment = process.env, {
     environment,
     "ENABLE_PAID_SUBSCRIPTION_PREPARATION",
   );
+  const enableDevelopmentCompatibilityProbe = requiredBoolean(
+    environment,
+    "ENABLE_DEVELOPMENT_COMPATIBILITY_PROBE",
+  );
   const selectedCustomerProvisioningMode = customerProvisioningMode(environment);
   const enableTestDirectCustomerProvisioning = requiredBoolean(
     environment,
@@ -269,15 +295,6 @@ function loadConfig(environment = process.env, {
     throw new ConfigurationError(
       "Paid conversion requires the exact Development TEST customer gate",
     );
-  }
-  let paidCommercialTerms;
-  try {
-    paidCommercialTerms = parsePaidCommercialTerms(required(
-      environment,
-      "PAID_COMMERCIAL_TERMS_JSON",
-    ));
-  } catch {
-    throw new ConfigurationError("PAID_COMMERCIAL_TERMS_JSON is invalid");
   }
   const idempotencyPepper = secret(environment, "IDEMPOTENCY_PEPPER");
   const analyticsPartitionSecret = secret(environment, "ANALYTICS_PARTITION_HMAC_SECRET");
@@ -316,18 +333,12 @@ function loadConfig(environment = process.env, {
     idempotencyPepper,
     analyticsPartitionSecret,
     enablePaidSubscriptionPreparation,
-    paidCommercialTerms,
-    paidPlanCodeMap: paidPlanMap(environment),
-    paidUsageAddonCode: planCode(environment, "PAID_USAGE_ADDON_CODE"),
-    paidUsageAddonUnit: boundedText(environment, "PAID_USAGE_ADDON_UNIT", 100),
-    paidUsageAddonProductId: billingRecordId(environment, "PAID_USAGE_ADDON_PRODUCT_ID"),
-    paidSubscriptionStatusMap: paidSubscriptionStatusMap(environment),
-    paidAcceptanceValue: boundedText(environment, "PAID_ACCEPTANCE_VALUE"),
+    enableDevelopmentCompatibilityProbe,
+    ...(enablePaidSubscriptionPreparation ? paidConfiguration(environment) : {}),
     revenueDeskPipelineValue: boundedText(environment, "REVENUE_DESK_PIPELINE_VALUE"),
     freeTestEntryOfferValue: boundedText(environment, "FREE_TEST_ENTRY_OFFER_VALUE"),
     initialSaleTypeValue: boundedText(environment, "INITIAL_SALE_TYPE_VALUE"),
     subscriptionProposedStageValue: boundedText(environment, "SUBSCRIPTION_PROPOSED_STAGE_VALUE"),
-    closedWonStageValue: boundedText(environment, "CLOSED_WON_STAGE_VALUE"),
     testCompletedStatusValue: boundedText(environment, "TEST_COMPLETED_STATUS_VALUE"),
     maxBodyBytes: integer(environment, "MAX_BODY_BYTES", 2048, 256, 8192),
     outboundTimeoutMs: integer(environment, "OUTBOUND_TIMEOUT_MS", 5000, 250, 10000),

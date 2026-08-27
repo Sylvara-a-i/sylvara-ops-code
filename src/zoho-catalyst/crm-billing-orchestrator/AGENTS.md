@@ -4,7 +4,7 @@ These rules apply to the proposed Development-only CRM-to-Billing orchestrator.
 
 - Production is code-blocked. Source review, tests, a merge, or a Development deployment never authorizes Production.
 - CRM owns relationship and Deal state. Billing owns customers and subscriptions. Books must never be called or mutated by this package.
-- Accept only the exact lifecycle route and the three-field request contract. Re-read the Deal and Account before every business decision, and reject either record unless its authoritative name is inside the exact `ZZZ SYNTHETIC` prefix boundary.
+- Accept only the exact lifecycle route and action-specific request contracts. The temporary Development compatibility probe must use only its two built-in synthetic cases and return before SDK initialization. Re-read the Deal and Account before every business decision, and reject either record unless its authoritative name is inside the exact `ZZZ SYNTHETIC` prefix boundary.
 - Claim a deterministic operation key durably before a side effect. Conflicting or unresolved duplicates require reconciliation.
 - Keep the paid operation key and Billing reference stable by Deal/action; bind acceptance, commercial, start-date, meter, Account, and organization state to the immutable fingerprint. A fingerprint change must conflict with the same key and can never produce a second subscription reference.
 - Never blindly retry an ambiguous customer, subscription, or CRM write. After any possible external side effect, persist `reconciliation_required`; resolve it only through authoritative readback.

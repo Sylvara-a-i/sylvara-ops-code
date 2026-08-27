@@ -22,13 +22,19 @@ For report synchronization the exact body is `{"schemaVersion":"crm-billing-life
 
 The report caller uses the API Gateway `ZCFKEY` plus `SHARED_HEADER_NAME: REPORT_SUMMARY_HEADER_VALUE`. That secret is distinct from `SHARED_HEADER_VALUE`: report credentials cannot authorize `prepare_paid_subscription` or `reconcile`, and the paid caller credential cannot authorize `sync_report_summary`. Pending and crashed `report_claim_*` pre-write rows are claimed or reclaimed with an `OPERATION_VERSION` fence. Exact `report_write_started_*` readback is required before CRM PUT; after that boundary, only exact Deal readback may complete the row and the write is never repeated. Completion and containment use a report-specific compare-and-set over the observed row, status, outcome, and version, so a stale completion cannot erase newer containment and stale containment cannot reverse completion. After observing the operation cursor, every transition to completed and every already-completed replay fresh-reads the authoritative Deal account, deployment/configuration binding, and exact patch. Mismatch or unavailable readback CAS-keeps or demotes that cursor in `reconciliation_required`; if a stale containment attempt instead observes that completion won, it fresh-reads the Deal and performs at most one bounded repair CAS when the conflict remains. An exact fresh match remains a no-write replay. Only an unreviewed `Live` test may receive a differing terminal patch; `Completed` is exact-replay-only, while `Failed`, `Rolled Back`, reviewed, or accepted evidence is contained for reconciliation. `Results_Review_At` remains human-only, and the human-controlled **Complete Free Test** Blueprint transition occurs only after report readback.
 
+The temporary `validate_report_summary_contract` action exists only for immutable Development deployment evidence. It accepts exactly one of two built-in synthetic cases: legacy schema v1 with a non-null workflow-failure count, or schema v2 with unavailable workflow-failure evidence represented as null. It requires the report-only credential, the exact artifact-bound Development host/project, and `ENABLE_DEVELOPMENT_COMPATIBILITY_PROBE=true`; it parses and maps the built-in summary, returns only safe schema/mapping enums, and exits before Catalyst SDK, CRM, Billing, Connection, or Data Store initialization. Set the flag back to `false` immediately after both cases and verify the action rejects. It is unavailable in dark Production and is never an authorization path for report synchronization or paid actions.
+
 ## Approved Commercial Contract
 
 Exact paid amounts are not duplicated in this component. Catalyst Development must provide
 `PAID_COMMERCIAL_TERMS_JSON` as a private secret containing exactly one currency, a one-month
 interval, one common usage rate in minor units, and recurring/setup minor units for exactly
-`Launch::Monthly`, `Growth::Monthly`, and `Scale::Monthly`. Unknown, missing, extra, fractional,
-zero, or malformed values fail configuration before any CRM, Data Store, or Billing operation.
+`Launch::Monthly`, `Growth::Monthly`, and `Scale::Monthly`. When
+`ENABLE_PAID_SUBSCRIPTION_PREPARATION=true`, unknown, missing, extra, fractional, zero, or
+malformed values fail configuration before any CRM, Data Store, or Billing operation. When the
+gate is `false`, the paid catalog, paid acceptance value, and Closed Won mapping may be absent;
+both paid preparation and reconciliation reject before any dependency read while report-summary
+synchronization remains available.
 The runtime separately maps those three keys to private Billing plan codes plus one private
 metered add-on code, exact unit, and product ID. Annual plans and Enterprise are outside this runtime.
 
@@ -62,7 +68,7 @@ Missing or unfamiliar plan, add-on, or subscription evidence fails closed. The B
 - Stored `SOURCE_REVISION` remains immutable audit evidence but is not an equality gate during reconciliation; a later reviewed deployment can reconcile an older operation with the same exact identity and Development environment.
 - `ANALYTICS_PARTITION_HMAC_SECRET` is a dedicated cross-producer partition key and must match the call runtime's private value while remaining distinct from `IDEMPOTENCY_PEPPER`. The outbox fact contains only opaque hashes, safe status enums, approved configuration identity, environment, revision, and timestamps—never raw CRM/Billing IDs, names, commercial amounts, PII, or secrets.
 - Subscription lookup paginates `reference_contains` results and exact-filters `reference_id`.
-- Any unresolved state after a possible customer, subscription, or CRM side effect is marked `reconciliation_required`, never ordinary failed. Exact `processing` rows are also eligible for non-creating reconciliation after an uncertain completion mark. `reconcile` performs authoritative Billing readback, can complete an unresolved TEST-customer claim after exact readback, and may repair only non-conflicting CRM integration fields.
+- Any unresolved state after a possible customer, subscription, or CRM side effect is marked `reconciliation_required`, never ordinary failed. Exact `processing` rows are also eligible for non-creating reconciliation after an uncertain completion mark. With the paid gate enabled, `reconcile` performs authoritative Billing readback, can complete an unresolved TEST-customer claim after exact readback, and may repair only non-conflicting CRM integration fields.
 - Read-only CRM and Billing requests retry at most once for a transient connection, network, timeout, rate-limit, or provider response; writes never auto-retry. Fallible customer and organization reads occur before the private customer mutation claim, so exhausted pre-write reads leave no durable wedge and a later request can retry safely.
 - `prepare_paid_subscription` never resumes a `processing` or `reconciliation_required` row. This intentionally avoids a second mutation owner when the original invocation or claim-insert response is uncertain. Only `reconcile` may inspect those rows, and it never creates a customer or subscription. If either authoritative resource is absent, reconciliation fails closed and leaves the operation untouched for operator containment.
 - CRM Stage, acceptance, plan, price, and free-test state are never mutated here.
@@ -74,8 +80,8 @@ Missing or unfamiliar plan, add-on, or subscription evidence fails closed. The B
 
 1. Use the existing Catalyst Development project, dedicated `CRMBillingOperations` table, and shared additive-v2 `AnalyticsSyncOutbox` contract. Keep Production untouched.
 2. Point only to the isolated Zoho Billing TEST organization. For TEST customer creation use `CUSTOMER_PROVISIONING_MODE=test_direct_customer` with its explicit gate enabled.
-3. Configure all blank `.env.example` variables through private Catalyst configuration. `ENABLE_PAID_SUBSCRIPTION_PREPARATION=false` is the new-Billing-mutation kill switch; the catalog remains configured so reconciliation can read Billing and repair only verified CRM integration fields.
-4. Configure the strict private `PAID_COMMERCIAL_TERMS_JSON`, exactly three monthly plan-code mappings, the common usage add-on code, exact add-on unit, exact associated product ID, and the exact `future`/`live` CRM status map. Never copy the populated terms JSON into Git, logs, or test output.
+3. Configure every report-sync-required variable through private Catalyst configuration. Keep `ENABLE_PAID_SUBSCRIPTION_PREPARATION=false` until the paid catalog and commercial contract are separately approved; in this mode neither paid preparation nor reconciliation can read CRM, Data Store, or Billing.
+4. Before enabling the paid gate, configure the strict private `PAID_COMMERCIAL_TERMS_JSON`, exactly three monthly plan-code mappings, the common usage add-on code, exact add-on unit, exact associated product ID, exact `future`/`live` CRM status map, paid acceptance value, and Closed Won mapping. The enabled configuration rejects any missing or invalid value. Never copy populated commercial configuration into Git, logs, or test output.
 5. Stamp the artifact source revision and Development ZAID binding during immutable packaging.
 6. Before enabling paid preparation, independently read the TEST product, all three plans, common usage add-on, route, Connections, and function artifact. Then run one ZZZ SYNTHETIC Growth conversion, duplicate replay, negative acceptance cases, and reconciliation.
 7. Keep the populated catalog packet outside the public repository. Validate its definition phase before one TEST-product creation execution, independently read back and bind that exact TEST product ID, then validate the bound phase before one execution that creates only the three TEST plans and common TEST usage add-on:
@@ -96,7 +102,7 @@ The function never collects payment and never advances the Deal to Closed Won. T
 
 ## Containment
 
-Set `ENABLE_PAID_SUBSCRIPTION_PREPARATION=false` to stop new paid mutations while preserving reconciliation. Disable the API Gateway route for complete containment, then revoke the Billing write Connection if needed. Preserve operation rows and independently reconcile CRM and Billing; do not delete evidence or retry unresolved rows blindly.
+Set `ENABLE_PAID_SUBSCRIPTION_PREPARATION=false` to stop both new paid mutations and runtime reconciliation while preserving report-summary synchronization. Disable the API Gateway route for complete containment, then revoke the Billing write Connection if needed. Preserve operation rows and reconcile CRM and Billing only after the paid catalog is approved, fully configured, independently read back, and the gate is deliberately re-enabled; do not delete evidence or retry unresolved rows blindly.
 
 An insert timeout can leave an exact operation row in `processing` even though the caller did not receive the claim result. There is deliberately no public reset or reclaim action. For an operator-contained Development reset:
 

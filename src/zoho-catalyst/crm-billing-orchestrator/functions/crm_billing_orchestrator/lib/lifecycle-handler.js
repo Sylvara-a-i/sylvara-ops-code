@@ -20,6 +20,7 @@ const {
 const { CANONICAL_PLAN_BY_CRM_API_VALUE } = require("./crm-client");
 
 const PAID_ACTION = "prepare_paid_subscription";
+const PAID_LIFECYCLE_ACTIONS = new Set([PAID_ACTION, "reconcile"]);
 const AUTOMATION_STATUS = "Paid Verified";
 const SOURCE_REVISION = /^[a-f0-9]{40}$/;
 const RECONCILABLE_OPERATION_STATES = new Set([
@@ -122,8 +123,8 @@ function validateCommon(context, config) {
 }
 
 function validatePaidAction(state, config, currentTimestamp, { reconciliation = false } = {}) {
-  if (!reconciliation && !config.enablePaidSubscriptionPreparation) {
-    fail("Paid subscription preparation is disabled", {
+  if (!config.enablePaidSubscriptionPreparation) {
+    fail("Paid lifecycle actions are disabled", {
       publicCode: "operation_invalid",
       status: 409,
     });
@@ -718,6 +719,12 @@ function createLifecycleHandler(
   }
 
   async function handle(payload) {
+    if (
+      PAID_LIFECYCLE_ACTIONS.has(payload.action) && !config.enablePaidSubscriptionPreparation
+    ) fail("Paid lifecycle actions are disabled", {
+      publicCode: "operation_invalid",
+      status: 409,
+    });
     const context = await crmClient.getContext(payload.dealId);
     const state = validateCommon(context, config);
     if (payload.action === REPORT_SUMMARY_ACTION) {

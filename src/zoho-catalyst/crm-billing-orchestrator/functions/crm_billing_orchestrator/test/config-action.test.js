@@ -2,7 +2,12 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { parseActionRequest, validatePayload } = require("../lib/action-contract");
+const {
+  DEVELOPMENT_COMPATIBILITY_PROBE_ACTION,
+  DEVELOPMENT_COMPATIBILITY_PROBE_CASES,
+  parseActionRequest,
+  validatePayload,
+} = require("../lib/action-contract");
 const {
   ANALYTICS_OUTBOX_TABLE_NAME, OPERATION_TABLE_NAME, loadConfig,
 } = require("../lib/config");
@@ -14,6 +19,26 @@ const {
   baseEnvironment,
 } = require("./helpers");
 
+const CONDITIONAL_PAID_VARIABLES = Object.freeze([
+  PAID_TERMS_VARIABLE,
+  "PAID_PLAN_CODE_MAP",
+  "PAID_USAGE_ADDON_CODE",
+  "PAID_USAGE_ADDON_UNIT",
+  "PAID_USAGE_ADDON_PRODUCT_ID",
+  "PAID_SUBSCRIPTION_STATUS_MAP",
+  "PAID_ACCEPTANCE_VALUE",
+  "CLOSED_WON_STAGE_VALUE",
+]);
+
+function withoutConditionalPaidVariables(overrides = {}) {
+  const environment = baseEnvironment({
+    ENABLE_PAID_SUBSCRIPTION_PREPARATION: "false",
+    ...overrides,
+  });
+  for (const name of CONDITIONAL_PAID_VARIABLES) delete environment[name];
+  return environment;
+}
+
 test("configuration is immutable active Development or dependency-free dark Production", () => {
   const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
   assert.equal(config.deploymentEnvironment, "development");
@@ -22,6 +47,7 @@ test("configuration is immutable active Development or dependency-free dark Prod
   assert.equal(config.developmentFunctionHost, "synthetic.development.catalystserverless.com");
   assert.equal(config.developmentRuntimeProof.length, 64);
   assert.equal(config.enablePaidSubscriptionPreparation, true);
+  assert.equal(config.enableDevelopmentCompatibilityProbe, false);
   assert.notEqual(config.reportSummaryHeaderValue, config.sharedHeaderValue);
   assert.equal(config.operationTable, OPERATION_TABLE_NAME);
   assert.equal(config.analyticsOutboxTable, ANALYTICS_OUTBOX_TABLE_NAME);
@@ -67,6 +93,14 @@ test("configuration is immutable active Development or dependency-free dark Prod
     }),
     /production\/dark/,
   );
+  assert.equal(loadConfig(baseEnvironment({
+    ENABLE_DEVELOPMENT_COMPATIBILITY_PROBE: "true",
+  }), { artifactRevision: REVISION }).enableDevelopmentCompatibilityProbe, true);
+  for (const invalid of ["", "TRUE", "1", "yes"]) {
+    assert.throws(() => loadConfig(baseEnvironment({
+      ENABLE_DEVELOPMENT_COMPATIBILITY_PROBE: invalid,
+    }), { artifactRevision: REVISION }), /ENABLE_DEVELOPMENT_COMPATIBILITY_PROBE/);
+  }
   const disabled = loadConfig(baseEnvironment({
     ENABLE_PAID_SUBSCRIPTION_PREPARATION: "false",
   }), { artifactRevision: REVISION });
@@ -203,7 +237,72 @@ test("configuration is immutable active Development or dependency-free dark Prod
   }
 });
 
-test("action payload is exact and only report sync accepts an operation key", () => {
+test("disabled paid mode accepts no paid catalog while report configuration stays mandatory", () => {
+  const config = loadConfig(withoutConditionalPaidVariables(), { artifactRevision: REVISION });
+  assert.equal(config.enablePaidSubscriptionPreparation, false);
+  for (const property of [
+    "paidCommercialTerms",
+    "paidPlanCodeMap",
+    "paidUsageAddonCode",
+    "paidUsageAddonUnit",
+    "paidUsageAddonProductId",
+    "paidSubscriptionStatusMap",
+    "paidAcceptanceValue",
+    "closedWonStageValue",
+  ]) assert.equal(Object.hasOwn(config, property), false);
+
+  for (const requiredName of [
+    "REPORT_SUMMARY_HEADER_VALUE",
+    "CRM_API_BASE_URL",
+    "CRM_READ_CONNECTION_LINK_NAME",
+    "CRM_WRITE_CONNECTION_LINK_NAME",
+    "OPERATION_TABLE",
+    "ANALYTICS_OUTBOX_TABLE",
+    "DATASTORE_DUPLICATE_ERROR_CODES",
+    "ANALYTICS_PARTITION_HMAC_SECRET",
+    "REVENUE_DESK_PIPELINE_VALUE",
+    "FREE_TEST_ENTRY_OFFER_VALUE",
+    "INITIAL_SALE_TYPE_VALUE",
+    "SUBSCRIPTION_PROPOSED_STAGE_VALUE",
+    "TEST_COMPLETED_STATUS_VALUE",
+  ]) {
+    const environment = withoutConditionalPaidVariables();
+    delete environment[requiredName];
+    assert.throws(
+      () => loadConfig(environment, { artifactRevision: REVISION }),
+      new RegExp(requiredName),
+    );
+  }
+});
+
+test("enabled paid mode requires and validates every conditional paid value", () => {
+  const invalidValues = Object.freeze({
+    [PAID_TERMS_VARIABLE]: "{}",
+    PAID_PLAN_CODE_MAP: "{}",
+    PAID_USAGE_ADDON_CODE: "invalid code",
+    PAID_USAGE_ADDON_UNIT: "Connected\nAI minute",
+    PAID_USAGE_ADDON_PRODUCT_ID: "not-an-id",
+    PAID_SUBSCRIPTION_STATUS_MAP: "{}",
+    PAID_ACCEPTANCE_VALUE: "Accepted\nUnsafe",
+    CLOSED_WON_STAGE_VALUE: "Closed\nWon",
+  });
+  for (const name of CONDITIONAL_PAID_VARIABLES) {
+    const missing = baseEnvironment();
+    delete missing[name];
+    assert.throws(
+      () => loadConfig(missing, { artifactRevision: REVISION }),
+      new RegExp(name),
+    );
+    assert.throws(
+      () => loadConfig(baseEnvironment({ [name]: invalidValues[name] }), {
+        artifactRevision: REVISION,
+      }),
+      new RegExp(name),
+    );
+  }
+});
+
+test("action payloads are exact and only report sync accepts an operation key", () => {
   assert.deepEqual(validatePayload({
     schemaVersion: "crm-billing-lifecycle-v2",
     action: "prepare_paid_subscription",
@@ -249,6 +348,29 @@ test("action payload is exact and only report sync accepts an operation key", ()
     dealId: "100000000000001",
     operationKey,
   }), /fields do not match/);
+  const selectedCase = DEVELOPMENT_COMPATIBILITY_PROBE_CASES[0];
+  assert.deepEqual(validatePayload({
+    schemaVersion: "crm-billing-lifecycle-v2",
+    action: DEVELOPMENT_COMPATIBILITY_PROBE_ACTION,
+    case: selectedCase,
+  }), {
+    schemaVersion: "crm-billing-lifecycle-v2",
+    action: DEVELOPMENT_COMPATIBILITY_PROBE_ACTION,
+    case: selectedCase,
+  });
+  for (const payload of [
+    {
+      schemaVersion: "crm-billing-lifecycle-v2",
+      action: DEVELOPMENT_COMPATIBILITY_PROBE_ACTION,
+      case: "unreviewed_case",
+    },
+    {
+      schemaVersion: "crm-billing-lifecycle-v2",
+      action: DEVELOPMENT_COMPATIBILITY_PROBE_ACTION,
+      case: selectedCase,
+      dealId: "100000000000001",
+    },
+  ]) assert.throws(() => validatePayload(payload), /fields do not match|case is invalid/);
 });
 
 test("request boundary authenticates before accepting the exact JSON body", async () => {
@@ -296,6 +418,11 @@ test("paid and report caller credentials cannot authorize each other's actions",
     action: "prepare_paid_subscription",
     dealId: "100000000000001",
   });
+  const probeBody = JSON.stringify({
+    schemaVersion: "crm-billing-lifecycle-v2",
+    action: DEVELOPMENT_COMPATIBILITY_PROBE_ACTION,
+    case: DEVELOPMENT_COMPATIBILITY_PROBE_CASES[1],
+  });
   assert.equal((await parseActionRequest(
     makeRequest(reportBody, config.reportSummaryHeaderValue), config,
   )).action, "sync_report_summary");
@@ -305,6 +432,13 @@ test("paid and report caller credentials cannot authorize each other's actions",
   );
   await assert.rejects(
     parseActionRequest(makeRequest(paidBody, config.reportSummaryHeaderValue), config),
+    /not authorized/,
+  );
+  assert.equal((await parseActionRequest(
+    makeRequest(probeBody, config.reportSummaryHeaderValue), config,
+  )).action, DEVELOPMENT_COMPATIBILITY_PROBE_ACTION);
+  await assert.rejects(
+    parseActionRequest(makeRequest(probeBody, config.sharedHeaderValue), config),
     /not authorized/,
   );
 });
