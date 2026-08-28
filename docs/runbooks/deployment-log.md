@@ -8,7 +8,26 @@ A merged pull request is not a deployment. Record an entry only after an authori
 
 ## Current State
 
-The Development events recorded here are the 2026-08-27 six-function Revenue Desk definition convergence and bounded private configuration readback; the separately contained creation and remediation of the second route; the later contained API Gateway continuation that preserved or created all twelve canonical routes, read them back exactly, retrieved the Development `ZCFKEY` privately, and ended with Gateway disabled; the consumed but non-persisted worker-binding attempt recorded below; and separate read-only Retell boundary reconciliation with no invocation performed. They also include the contained 2026-08-26 datastore schema attempt and its superseding bounded Packet A resolution. The production configuration events are the 2026-08-14 Free-Test CRM workflow and Blueprint work; the 2026-08-05 Sylvara Zoho CRM schema/layout/address work; and the same-day Zoho Books chart deployment, Schedule C hierarchy amendment, and final tax-preparer description correction. The Free-Test CRM event configured intake and Deal automation but did not automate native Lead conversion or prove Zoho Forms settings. The Books events wrote chart metadata and active status only; no transaction record, journal, bank, clearing, tax-engine, or integration was written. Chart metadata can change historical report presentation even when transaction records remain unchanged.
+The Development events recorded here are the 2026-08-27 six-function Revenue Desk definition convergence and bounded private configuration readback; the separately contained creation and remediation of the second route; the later contained API Gateway continuation that preserved or created all twelve canonical routes, read them back exactly, retrieved the Development `ZCFKEY` privately, and ended with Gateway disabled; the consumed but non-persisted connector worker-binding attempt; the later consumed first-party UI worker packet and exact one-variable rollback recorded below; and separate read-only Retell boundary reconciliation with no invocation performed. They also include the contained 2026-08-26 datastore schema attempt and its superseding bounded Packet A resolution. The production configuration events are the 2026-08-14 Free-Test CRM workflow and Blueprint work; the 2026-08-05 Sylvara Zoho CRM schema/layout/address work; and the same-day Zoho Books chart deployment, Schedule C hierarchy amendment, and final tax-preparer description correction. The Free-Test CRM event configured intake and Deal automation but did not automate native Lead conversion or prove Zoho Forms settings. The Books events wrote chart metadata and active status only; no transaction record, journal, bank, clearing, tax-engine, or integration was written. Chart metadata can change historical report presentation even when transaction records remain unchanged.
+
+## 2026-08-28 — Revenue Desk Development Worker UI Packet Consumed And Exactly Rolled Back
+
+```text
+Date (UTC): 2026-08-28
+Environment class: development
+Change reference: pull request #49; installed source revision remained aab7c18c27f4ff5e1468da51eae433ede9b852f6
+Evidence reference: sanitized UI rollback record; private packet material, variable names and values, identifiers, endpoints, paths, and raw provider responses remain outside Git
+Approval reference: exact single-use owner approval retained in the private task record; consumed by the first successful variable save, exhausted, and not reusable
+Operator role: bounded first-party Catalyst Development configuration fallback with preauthorized exact rollback and independent Audit readback; no runtime invocation
+Pre-deployment state: revenue_desk_call_worker was a Node 24 Job function at 256 MB with exactly zero environment variables; Gateway was disabled and there were zero canonical Cron references
+Action: create the exact approved 28-variable Development map serially, stop on the first provider-flow mismatch, and remove only variables created by the packet in reverse order; do not perform the page-level configuration save, invoke any runtime surface, mutate Gateway, touch Retell, or perform a customer or Production action
+Execution result: the first variable save succeeded and consumed the approval. The next Create control was unavailable, so execution stopped immediately without another save or retry.
+Rollback result: the operator opened the exact created row action, removed only that one variable, confirmed the row absent, and confirmed the normal Create control returned. No other variable or configuration was changed.
+Readback result: independent Catalyst Audit readback proved exactly zero worker variables, memory unchanged at 256 MB, Gateway disabled and fail-closed without a route payload, and zero canonical Cron references.
+Smoke-test result: not invoked; the operator performed no route, function, Job, or Cron invocation and no Retell-agent development, test, simulation, call, publish, customer action, or Production action.
+Outcome: single_variable_created_then_exactly_rolled_back
+Follow-up: do not retry under the consumed approval. Finish the immutable PR-head release first, then use a fresh exact packet to bind the complete map once to the exact read-back artifact because SOURCE_REVISION is artifact-bound.
+```
 
 ## 2026-08-27 — Revenue Desk Development Worker Binding Attempt Consumed And Contained
 

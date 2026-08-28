@@ -43,6 +43,13 @@ WORKER_BINDING_CONTAINMENT_PATH = (
     / "evidence"
     / "free-revenue-leak-test-development-worker-binding-containment-2026-08-27.json"
 )
+WORKER_UI_ROLLBACK_PATH = (
+    ROOT
+    / "src"
+    / "zoho-catalyst"
+    / "evidence"
+    / "free-revenue-leak-test-development-worker-ui-rollback-2026-08-28.json"
+)
 DARK_PRODUCTION_PRESTATE_PATH = (
     ROOT
     / "src"
@@ -222,6 +229,9 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         )
         cls.worker_binding_containment = json.loads(
             WORKER_BINDING_CONTAINMENT_PATH.read_text(encoding="utf-8")
+        )
+        cls.worker_ui_rollback = json.loads(
+            WORKER_UI_ROLLBACK_PATH.read_text(encoding="utf-8")
         )
         cls.dark_production_prestate = json.loads(
             DARK_PRODUCTION_PRESTATE_PATH.read_text(encoding="utf-8")
@@ -3154,9 +3164,9 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             self.assertIn(phrase, deployment_entry)
 
         for phrase in (
-            "A later exact single-use attempt to install the approved 28-variable worker map was consumed but did not persist",
+            "An exact single-use connector attempt to install the approved 28-variable worker map was consumed but did not persist",
             "no retry occurred",
-            "a transient active binding or invocation cannot be excluded",
+            "a transient active binding or invocation during the earlier ambiguous connector attempt cannot be excluded",
             "fresh post-attempt connector readback captured at `2026-08-28T00:02:44.582Z` confirmed API Gateway disabled",
         ):
             self.assertIn(phrase, self.reconciliation_runbook)
@@ -3167,6 +3177,109 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             "project_id", "organization_id", "environment_id", "function_id",
             "agent_id", "version_id", "number_id", "zaid", "archive_sha256",
             "download_path", "upload_path", "http://", "https://",
+        ):
+            self.assertNotIn(forbidden, serialized)
+
+    def test_worker_ui_packet_is_consumed_exactly_rolled_back_and_non_reusable(self):
+        evidence = self.worker_ui_rollback
+        self.assertEqual(evidence["schema_version"], 1)
+        self.assertEqual(
+            evidence["record_type"],
+            "sanitized_free_revenue_leak_test_development_worker_ui_rollback",
+        )
+        self.assertEqual(evidence["environment"], "Development")
+        self.assertEqual(
+            evidence["outcome"], "single_variable_created_then_exactly_rolled_back"
+        )
+
+        authorization = evidence["authorization"]
+        self.assertTrue(authorization["approval_consumed_by_first_successful_save"])
+        self.assertTrue(authorization["approval_exhausted"])
+        self.assertFalse(authorization["approval_reusable"])
+        self.assertFalse(authorization["retry_authorized_by_consumed_approval"])
+        self.assertFalse(authorization["future_live_action_authorized_by_this_record"])
+        self.assertFalse(authorization["retell_agent_development_or_testing_authorized"])
+        self.assertFalse(authorization["production_or_customer_activity_authorized"])
+
+        prestate = evidence["verified_prestate"]
+        self.assertEqual(prestate["function_name"], "revenue_desk_call_worker")
+        self.assertEqual(prestate["runtime"], "node24")
+        self.assertEqual(prestate["memory_mb"], 256)
+        self.assertEqual(prestate["environment_variable_count"], 0)
+        self.assertTrue(prestate["gateway_disabled"])
+        self.assertEqual(prestate["canonical_cron_reference_count"], 0)
+
+        attempt = evidence["attempt"]
+        self.assertEqual(attempt["requested_environment_variable_count"], 28)
+        self.assertTrue(attempt["first_variable_save_succeeded"])
+        self.assertTrue(attempt["approval_consumed_after_first_save"])
+        self.assertTrue(attempt["next_create_control_unavailable"])
+        self.assertTrue(attempt["automation_stopped_immediately"])
+        self.assertFalse(attempt["retry_performed"])
+        self.assertFalse(attempt["additional_variable_save_attempted"])
+        self.assertEqual(attempt["successfully_created_variable_count"], 1)
+        self.assertFalse(attempt["global_configuration_save_performed"])
+
+        rollback = evidence["rollback"]
+        self.assertEqual(rollback["variables_removed"], 1)
+        self.assertTrue(rollback["only_packet_created_variable_removed"])
+        self.assertTrue(rollback["removal_confirmed_in_ui"])
+        self.assertTrue(rollback["normal_create_control_restored_in_ui"])
+        self.assertFalse(rollback["additional_configuration_changed"])
+
+        readback = evidence["independent_post_rollback_readback"]
+        self.assertTrue(readback["function_readback_complete"])
+        self.assertEqual(readback["environment_variable_count"], 0)
+        self.assertFalse(readback["partial_environment_map_present"])
+        self.assertTrue(readback["exact_empty_prestate_restored"])
+        self.assertEqual(readback["memory_mb"], 256)
+        self.assertTrue(readback["gateway_disabled"])
+        self.assertTrue(readback["gateway_readback_failed_closed_without_route_payload"])
+        self.assertEqual(readback["canonical_cron_reference_count"], 0)
+
+        inventory = self.inventory["development_worker_ui_rollback_2026_08_28"]
+        self.assertEqual(inventory["outcome"], evidence["outcome"])
+        self.assertEqual(inventory["successfully_created_variable_count"], 1)
+        self.assertEqual(inventory["rollback_variables_removed"], 1)
+        self.assertEqual(inventory["worker_environment_variable_count"], 0)
+        self.assertTrue(inventory["exact_empty_prestate_restored"])
+        self.assertTrue(inventory["gateway_disabled_after_rollback"])
+        self.assertEqual(inventory["canonical_cron_reference_count"], 0)
+        self.assertTrue(inventory["single_use_approval_consumed_and_exhausted"])
+        self.assertFalse(inventory["consumed_approval_reusable"])
+        self.assertFalse(inventory["future_live_action_authorized_by_this_record"])
+        self.assertTrue(inventory["pr_head_artifact_readback_required_before_final_worker_binding"])
+
+        deployment_entry = self.deployment_log.split(
+            "## 2026-08-28 — Revenue Desk Development Worker UI Packet Consumed And Exactly Rolled Back",
+            maxsplit=1,
+        )[1].split(
+            "## 2026-08-27 — Revenue Desk Development Worker Binding Attempt Consumed And Contained",
+            maxsplit=1,
+        )[0]
+        for phrase in (
+            "consumed by the first successful variable save, exhausted, and not reusable",
+            "The next Create control was unavailable",
+            "removed only that one variable",
+            "proved exactly zero worker variables",
+            "zero canonical Cron references",
+            "Finish the immutable PR-head release first",
+        ):
+            self.assertIn(phrase, deployment_entry)
+
+        for phrase in (
+            "A later separately approved first-party UI packet saved one Development variable",
+            "removed only that one variable through its preauthorized rollback",
+            "Both worker approvals are consumed, exhausted, non-reusable",
+            "The next worker binding must occur only after exact PR-head Development artifact readback",
+        ):
+            self.assertIn(phrase, self.reconciliation_runbook)
+
+        serialized = json.dumps(evidence, sort_keys=True).lower()
+        for forbidden in (
+            "client_secret", "refresh_token", "access_token", "invoke_url",
+            "project_id", "organization_id", "environment_id", "function_id",
+            "agent_id", "version_id", "number_id", "zaid", "http://", "https://",
         ):
             self.assertNotIn(forbidden, serialized)
 
