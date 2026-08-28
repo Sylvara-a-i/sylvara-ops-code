@@ -1,7 +1,7 @@
 {
   "schema_version": 3,
-  "contract_revision": "2026-08-28-blueprint-topology-v3",
-  "status": "desired_state_pending_synthetic_acceptance",
+  "contract_revision": "2026-08-28-blueprint-topology-v4",
+  "status": "desired_state_not_deployable",
   "customer_facing_offer": "Free Revenue Leak Test",
   "legacy_internal_offer_value": "7-Day Revenue Leak Test",
   "entry_offer_values": {
@@ -60,11 +60,13 @@
   "deal_fields_existing_semantics": "Desired field declarations associated with the sanitized count-only 2026-08-24 audit; they are not standalone field/type/picklist/layout authority and do not extend the checked-in 2026-08-14 snapshots.",
   "deal_fields_to_add": [],
   "deal_field_metadata_evidence": {
-    "verified_at_utc_date": "2026-08-24",
-    "method": "read-only live Deals field-metadata audit",
-    "result": "all 17 API names exist with the expected writable field families",
-    "field_by_field_public_evidence_available": false,
-    "authority_limit": "This count-only summary does not extend the authoritative 2026-08-14 field, type, picklist, or active-layout snapshot and cannot make an unlisted transition field deployable.",
+    "verified_at_utc_date": "2026-08-28",
+    "method": "connector-first read-only live Deals field-metadata, picklist, and active-layout audit",
+    "result": "all 25 fields in the immutable 2026-08-14 snapshot-derived active-layout gap are currently present, visible, writable, API-create/update enabled, active-layout associated, and compatible with the exact topology field contract",
+    "field_by_field_public_evidence_available": true,
+    "evidence_path": "src/zoho-crm/free-revenue-leak-test/evidence/live-topology-layout-preflight-2026-08-28.json",
+    "historical_count_only_evidence_path": "src/zoho-crm/free-revenue-leak-test/evidence/live-metadata-preflight-2026-08-28.json",
+    "authority_limit": "The fresh field-by-field evidence closes the current metadata and layout gap only. It does not prove Blueprint topology, provider save/readback, workflow parity, caller binding, external-evidence validators, or synthetic runtime acceptance, and it must be repeated immediately before deployment.",
     "private_identifiers_committed": false,
     "write_performed": false
   },
@@ -257,15 +259,18 @@
       "provider_save_readback_proven": false,
       "runtime_acceptance_proven": false,
       "external_evidence_validator_in_repository": false,
-      "metadata_and_layout_gate_satisfied": false,
+      "metadata_and_layout_gate_satisfied": true,
+      "metadata_and_layout_evidence": "src/zoho-crm/free-revenue-leak-test/evidence/live-topology-layout-preflight-2026-08-28.json",
+      "live_pipeline_binding_matches_contract": "not_proven",
       "execution_policy": "manual transitions only; criteria, required inputs, invariants, and closed after-action allowlists must all pass",
       "after_action_policy": "closed allowlist; every action not listed on the selected transition is prohibited",
       "preexisting_evidence_policy": "required_preexisting_fields and conditional_preexisting_fields must be independently read back before the transition and are not editable during it; membership requires authoritative readback, not a nonempty value, and an is_empty criterion is an explicit successful empty-state requirement",
       "operator_input_policy": "only operator_input_fields and applicable conditional_operator_input_fields may be collected during the manual transition, and every collected field must satisfy its machine-readable operator_input_constraints entry",
       "blocking_gates": [
-        "fresh authoritative Deals field metadata, data type, picklist API value, and active-layout transition-availability readback for every field in either the metadata gap or the snapshot-derived active-layout gap",
+        "the inactive live Blueprint candidate must be proven bound to the exact Revenue Desk Sales pipeline and reconstructed to the exact 13-transition topology; the current pipeline binding is unproven, the readback is missing Record Internal Approval and Activate Test Route, and the combined legacy Approve Go Live transition remains",
         "an executable validator for every referenced external_evidence_contract",
-        "provider payload, save, independent readback, and ZZZ SYNTHETIC runtime acceptance"
+        "provider payload, save, independent readback, and ZZZ SYNTHETIC runtime acceptance",
+        "repeat the complete metadata, immutable picklist API-value, and active-layout transition-availability readback immediately before deployment because the current preflight can become stale"
       ]
     },
     "transition_field_metadata_gate": {
@@ -274,7 +279,16 @@
       "authoritative_public_layout_snapshot": "src/zoho-crm/reference/snapshots/2026-08-14/crm-layout-field-order.csv",
       "self_authored_release_lists_are_metadata_authority": false,
       "fresh_readback_required_before_deployment": true,
-      "snapshot_derived_active_layout_gap_satisfied": false,
+      "snapshot_derived_active_layout_gap_satisfied": true,
+      "latest_live_readback": {
+        "observed_at": "2026-08-28",
+        "evidence_path": "src/zoho-crm/free-revenue-leak-test/evidence/live-topology-layout-preflight-2026-08-28.json",
+        "resolved_field_count": 25,
+        "resolved_api_names_equal_snapshot_derived_gap": true,
+        "all_required_types_json_types_write_flags_layout_associations_and_picklist_api_values_compatible": true,
+        "current_preflight_satisfied": true,
+        "deployment_freshness_recheck_required": true
+      },
       "active_layout_gap_derivation": {
         "authoritative_source_only": "src/zoho-crm/reference/snapshots/2026-08-14/crm-layout-field-order.csv",
         "topology_field_sources": [
@@ -317,30 +331,7 @@
         "Test_Out_Of_Area_Or_Wrong_Fit_Calls",
         "Test_Urgent_Requests"
       ],
-      "unverified_api_names": [
-        "Approved_Configuration_Version",
-        "Approved_Deployment_Record_ID",
-        "Billing_Automation_Error",
-        "Billing_Automation_Status",
-        "Billing_Frequency",
-        "Billing_Last_Sync_At",
-        "Call_Totals_Reconciled",
-        "Configuration_Version",
-        "Deployment_Record_ID",
-        "Expected_Monthly_Connected_Minutes_Max",
-        "Expected_Monthly_Connected_Minutes_Min",
-        "Recommended_Paid_Coverage",
-        "Subscription_Acceptance_Status",
-        "Subscription_Acceptance_Version",
-        "Subscription_Accepted_At",
-        "Test_Actual_Avg_Call_Duration_Seconds",
-        "Test_Bookable_Opportunities",
-        "Test_Data_Confidence_Notes",
-        "Test_Observed_Workflow_Failures",
-        "Test_Office_Follow_Up_Calls",
-        "Test_Out_Of_Area_Or_Wrong_Fit_Calls",
-        "Test_Urgent_Requests"
-      ],
+      "unverified_api_names": [],
       "required_readback_attributes": [
         "exact API name",
         "data type and JSON type",
@@ -352,9 +343,12 @@
         "api_name": "Subscription_Start_Date",
         "field_metadata_status": "verified_live_read_only",
         "verified_data_type": "date",
-        "active_standard_layout_status": "not_present",
+        "historical_snapshot_active_standard_layout_status": "not_present",
+        "latest_live_active_standard_layout_status": "present",
+        "latest_live_transition_field_available": true,
         "semantic_owner": "operator-requested commercial start date",
         "billing_owned": false,
+        "metadata_and_layout_eligible": true,
         "operator_input_deployable": false,
         "fresh_metadata_and_active_layout_readback_required": true,
         "authoritative_billing_start_date_is_external_readback": true,

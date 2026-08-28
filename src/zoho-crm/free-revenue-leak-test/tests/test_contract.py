@@ -31,6 +31,9 @@ FORM2_PRODUCER_PATH = (
     / "form-contract.js"
 )
 RELEASE_CONTRACT_PATH = ROOT / "docs" / "product" / "free-revenue-leak-test-release-contract.json"
+LIVE_TOPOLOGY_PREFLIGHT_PATH = (
+    PACKAGE / "evidence" / "live-topology-layout-preflight-2026-08-28.json"
+)
 
 
 def _verified_deal_metadata() -> dict[str, dict[str, str]]:
@@ -136,6 +139,9 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.automation = json.loads(AUTOMATION_PATH.read_text(encoding="utf-8"))
         cls.callers = json.loads(CALLER_MANIFEST_PATH.read_text(encoding="utf-8"))
+        cls.live_topology = json.loads(
+            LIVE_TOPOLOGY_PREFLIGHT_PATH.read_text(encoding="utf-8")
+        )
 
     def test_initializer_is_the_exact_provider_safe_five_plus_three_split(self) -> None:
         initializer = _initializer(self.automation)
@@ -354,7 +360,15 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         self.assertFalse(boundary["provider_save_readback_proven"])
         self.assertFalse(boundary["runtime_acceptance_proven"])
         self.assertFalse(boundary["external_evidence_validator_in_repository"])
-        self.assertFalse(boundary["metadata_and_layout_gate_satisfied"])
+        self.assertTrue(boundary["metadata_and_layout_gate_satisfied"])
+        self.assertEqual(
+            boundary["live_pipeline_binding_matches_contract"], "not_proven"
+        )
+        self.assertEqual(
+            boundary["metadata_and_layout_evidence"],
+            "src/zoho-crm/free-revenue-leak-test/evidence/"
+            "live-topology-layout-preflight-2026-08-28.json",
+        )
         self.assertIn("closed allowlist", boundary["after_action_policy"])
         self.assertIn(
             "membership requires authoritative readback, not a nonempty value",
@@ -584,12 +598,18 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         metadata_gate = blueprint["transition_field_metadata_gate"]
         self.assertFalse(metadata_gate["self_authored_release_lists_are_metadata_authority"])
         self.assertTrue(metadata_gate["fresh_readback_required_before_deployment"])
-        self.assertFalse(metadata_gate["snapshot_derived_active_layout_gap_satisfied"])
+        self.assertTrue(metadata_gate["snapshot_derived_active_layout_gap_satisfied"])
         # Self-authored release lists are desired-state requirements, not an
         # authoritative substitute for checked-in field/type/layout metadata.
-        self.assertEqual(
-            used_api_names - verified_names,
-            set(metadata_gate["unverified_api_names"]),
+        fresh_metadata = self.live_topology["metadata_and_layout_readback"]
+        fresh_names = set(fresh_metadata["resolved_api_names"])
+        self.assertTrue(used_api_names.issubset(verified_names | fresh_names))
+        self.assertEqual(metadata_gate["unverified_api_names"], [])
+        self.assertEqual(metadata_gate["latest_live_readback"]["resolved_field_count"], 25)
+        self.assertTrue(
+            metadata_gate["latest_live_readback"][
+                "resolved_api_names_equal_snapshot_derived_gap"
+            ]
         )
         layout_derivation = metadata_gate["active_layout_gap_derivation"]
         self.assertEqual(
@@ -618,6 +638,7 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
             set(metadata_gate["snapshot_derived_active_layout_unavailable_api_names"]),
         )
         self.assertEqual(len(snapshot_derived_layout_gap), 25)
+        self.assertEqual(snapshot_derived_layout_gap, fresh_names)
         self.assertTrue(
             {
                 "Billing_Subscription_ID",
@@ -677,9 +698,18 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         start_date_gate = metadata_gate["subscription_start_date"]
         self.assertEqual(start_date_gate["semantic_owner"], "operator-requested commercial start date")
         self.assertFalse(start_date_gate["billing_owned"])
+        self.assertTrue(start_date_gate["metadata_and_layout_eligible"])
         self.assertFalse(start_date_gate["operator_input_deployable"])
         self.assertTrue(start_date_gate["fresh_metadata_and_active_layout_readback_required"])
         self.assertNotIn("Subscription_Start_Date", _verified_active_deal_layout_api_names())
+        self.assertEqual(
+            start_date_gate["historical_snapshot_active_standard_layout_status"],
+            "not_present",
+        )
+        self.assertEqual(
+            start_date_gate["latest_live_active_standard_layout_status"], "present"
+        )
+        self.assertTrue(start_date_gate["latest_live_transition_field_available"])
         self.assertEqual(
             input_constraints["Subscription_Start_Date"]["metadata_gate"],
             "fresh_active_layout_readback_required",
@@ -1172,6 +1202,152 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         self.assertEqual(repair["status"], "required_desired_state_not_deployable")
         self.assertFalse(repair["deployable_source_in_repository"])
         self.assertFalse(repair["live_write_authorized"])
+
+    def test_live_topology_preflight_closes_only_the_metadata_layout_gate(self) -> None:
+        evidence = self.live_topology
+        self.assertEqual(evidence["schema_version"], 1)
+        self.assertEqual(evidence["observed_at"], "2026-08-28")
+        self.assertEqual(
+            evidence["repository_head_at_observation"],
+            "0af87a26e2103ddaf4178bf03ebfa67b972cea24",
+        )
+        self.assertEqual(
+            evidence["automation_contract_revision"],
+            self.automation["contract_revision"],
+        )
+        self.assertEqual(self.automation["status"], "desired_state_not_deployable")
+        self.assertEqual(
+            evidence["status"],
+            "metadata_and_layout_preflight_satisfied_blueprint_workflow_and_runtime_blocking",
+        )
+
+        metadata = evidence["metadata_and_layout_readback"]
+        historical_gap = set(
+            self.automation["blueprint"]["transition_field_metadata_gate"][
+                "snapshot_derived_active_layout_unavailable_api_names"
+            ]
+        )
+        resolved = set(metadata["resolved_api_names"])
+        matching = {
+            item["api_name"] for item in metadata["fields_matching_predeclared_types"]
+        }
+        newly_explicit = {
+            item["api_name"] for item in metadata["newly_explicit_type_contracts"]
+        }
+        self.assertEqual((len(historical_gap), len(resolved)), (25, 25))
+        self.assertEqual(resolved, historical_gap)
+        self.assertEqual((len(matching), len(newly_explicit)), (21, 4))
+        self.assertTrue(matching.isdisjoint(newly_explicit))
+        self.assertEqual(matching | newly_explicit, resolved)
+        self.assertEqual(
+            {
+                item["api_name"]: (item["data_type"], item["json_type"])
+                for item in metadata["newly_explicit_type_contracts"]
+            },
+            {
+                "Billing_Automation_Error": ("textarea", "string"),
+                "Billing_Automation_Status": ("picklist", "string"),
+                "Billing_Last_Sync_At": ("datetime", "string"),
+                "Call_Totals_Reconciled": ("boolean", "boolean"),
+            },
+        )
+        for flag in (
+            "all_resolved_exactly_once",
+            "all_visible",
+            "all_read_only_false",
+            "all_api_create_enabled",
+            "all_api_update_enabled",
+            "all_active_layout_associated",
+            "all_transition_field_available",
+            "all_required_picklist_api_values_present",
+            "metadata_and_layout_gate_currently_satisfied",
+            "fresh_readback_still_required_immediately_before_deployment",
+        ):
+            with self.subTest(metadata_flag=flag):
+                self.assertTrue(metadata[flag])
+        self.assertEqual(
+            metadata["required_picklist_api_values"],
+            {
+                "Billing_Automation_Status": ["Paid Verified"],
+                "Billing_Frequency": ["Monthly"],
+                "Recommended_Paid_Coverage": [
+                    "After Hours Only",
+                    "No Answer / Overflow Only",
+                    "After Hours + Overflow",
+                ],
+                "Subscription_Acceptance_Status": ["Pending", "Accepted"],
+                "Subscription_Status": ["Active"],
+            },
+        )
+
+        blueprint = evidence["blueprint_readback"]
+        self.assertEqual(blueprint["status"], "Inactive")
+        self.assertEqual(
+            blueprint["pipeline_binding_matches_revenue_desk_sales"], "not_proven"
+        )
+        self.assertEqual(
+            (blueprint["observed_state_count"], blueprint["observed_transition_count"]),
+            (8, 12),
+        )
+        self.assertFalse(blueprint["topology_matches_contract"])
+        self.assertEqual(
+            blueprint["missing_expected_transitions"],
+            ["Record Internal Approval", "Activate Test Route"],
+        )
+        self.assertEqual(blueprint["unexpected_transitions"], ["Approve Go Live"])
+        self.assertFalse(blueprint["provider_save_or_activation_readback_proven"])
+        self.assertFalse(blueprint["runtime_acceptance_proven"])
+
+        workflow = evidence["workflow_readback"]
+        workflow_by_name = {
+            item["name"]: item for item in workflow["journey_rules"]
+        }
+        self.assertEqual(
+            workflow_by_name["Leads Free Test Intake Review"]["scheduled_actions"],
+            {"tasks": 1},
+        )
+        self.assertFalse(
+            workflow_by_name["Deals Form 2 Controller Proof Candidate"]["active"]
+        )
+        self.assertTrue(workflow_by_name["Deals Free Test Form 2 Submitted"]["active"])
+        self.assertFalse(workflow["execution_markers_are_runtime_acceptance"])
+        self.assertFalse(workflow["desired_create_only_trigger_parity_proven"])
+        self.assertTrue(workflow["form1_uncontracted_scheduled_follow_up_task_present"])
+        self.assertFalse(workflow["single_active_form2_rule_parity_proven"])
+        self.assertEqual(
+            evidence["release_classification"],
+            {
+                "crm_metadata_and_active_layout_preflight": "currently_satisfied",
+                "crm_workflow_parity": "not_proven",
+                "crm_blueprint_topology": "not_converged",
+                "crm_blueprint_deployability": "blocked",
+                "crm_synthetic_runtime_acceptance": "not_proven",
+                "retell_agent_testing_readiness": "not_ready",
+            },
+        )
+        self.assertFalse(evidence["future_live_change_authorized_by_this_record"])
+        for flag in (
+            "records_or_record_photos_read",
+            "customer_prospect_or_employee_pii_read",
+            "writes_or_runtime_invocations_performed",
+            "retell_action_performed",
+            "customer_communication_billing_or_production_traffic_action_performed",
+        ):
+            with self.subTest(boundary_flag=flag):
+                self.assertFalse(evidence["evidence_boundary"][flag])
+        self.assertTrue(
+            all(value is False for value in evidence["disclosure_controls"].values())
+        )
+        serialized = json.dumps(evidence, sort_keys=True).lower()
+        self.assertNotIn("http://", serialized)
+        self.assertNotIn("https://", serialized)
+        self.assertNotIn("@sylvara", serialized)
+        self.assertIsNone(
+            re.search(
+                r'"(?:organization|layout|blueprint|workflow|field|record)_id"\s*:',
+                serialized,
+            )
+        )
 
     def test_caller_manifest_is_development_only_and_not_deployment_authority(self) -> None:
         manifest = self.callers

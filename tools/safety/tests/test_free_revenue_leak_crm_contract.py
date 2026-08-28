@@ -22,16 +22,28 @@ CRM_LAYOUT_PATH = (
     / "2026-08-14"
     / "crm-layout-field-order.csv"
 )
+LIVE_TOPOLOGY_PREFLIGHT_PATH = (
+    ROOT
+    / "src"
+    / "zoho-crm"
+    / "free-revenue-leak-test"
+    / "evidence"
+    / "live-topology-layout-preflight-2026-08-28.json"
+)
 
 
 class FreeRevenueLeakCrmContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+        cls.live_topology = json.loads(
+            LIVE_TOPOLOGY_PREFLIGHT_PATH.read_text(encoding="utf-8")
+        )
 
     def test_crm_contract_is_synthetic_only_and_contains_no_active_sign_or_sms_path(self):
         contract = self.contract
         self.assertEqual(contract["schema_version"], 3)
+        self.assertEqual(contract["status"], "desired_state_not_deployable")
         self.assertEqual(contract["identifier_migration"]["from_schema_version"], 2)
         self.assertEqual(
             contract["identifier_migration"]["controller_aliases"]["form2_controller"],
@@ -67,9 +79,17 @@ class FreeRevenueLeakCrmContractTests(unittest.TestCase):
         self.assertIn("do not extend", self.contract["deal_fields_existing_semantics"])
         self.assertEqual(self.contract["deal_fields_to_add"], [])
         evidence = self.contract["deal_field_metadata_evidence"]
-        self.assertEqual(evidence["method"], "read-only live Deals field-metadata audit")
-        self.assertFalse(evidence["field_by_field_public_evidence_available"])
-        self.assertIn("does not extend", evidence["authority_limit"])
+        self.assertEqual(
+            evidence["method"],
+            "connector-first read-only live Deals field-metadata, picklist, and active-layout audit",
+        )
+        self.assertTrue(evidence["field_by_field_public_evidence_available"])
+        self.assertEqual(
+            evidence["evidence_path"],
+            "src/zoho-crm/free-revenue-leak-test/evidence/"
+            "live-topology-layout-preflight-2026-08-28.json",
+        )
+        self.assertIn("closes the current metadata and layout gap only", evidence["authority_limit"])
         self.assertFalse(evidence["private_identifiers_committed"])
         self.assertFalse(evidence["write_performed"])
 
@@ -157,11 +177,15 @@ class FreeRevenueLeakCrmContractTests(unittest.TestCase):
         self.assertFalse(boundary["provider_save_readback_proven"])
         self.assertFalse(boundary["runtime_acceptance_proven"])
         self.assertFalse(boundary["external_evidence_validator_in_repository"])
-        self.assertFalse(boundary["metadata_and_layout_gate_satisfied"])
+        self.assertTrue(boundary["metadata_and_layout_gate_satisfied"])
+        self.assertEqual(
+            boundary["live_pipeline_binding_matches_contract"], "not_proven"
+        )
         metadata_gate = blueprint["transition_field_metadata_gate"]
         self.assertFalse(metadata_gate["self_authored_release_lists_are_metadata_authority"])
         self.assertTrue(metadata_gate["fresh_readback_required_before_deployment"])
-        self.assertFalse(metadata_gate["snapshot_derived_active_layout_gap_satisfied"])
+        self.assertTrue(metadata_gate["snapshot_derived_active_layout_gap_satisfied"])
+        self.assertEqual(metadata_gate["unverified_api_names"], [])
 
         topology = blueprint["transition_topology"]
         self.assertEqual(len(topology), 13)
@@ -206,6 +230,14 @@ class FreeRevenueLeakCrmContractTests(unittest.TestCase):
             set(metadata_gate["snapshot_derived_active_layout_unavailable_api_names"]),
         )
         self.assertEqual(len(snapshot_layout_gap), 25)
+        self.assertEqual(
+            snapshot_layout_gap,
+            set(
+                self.live_topology["metadata_and_layout_readback"][
+                    "resolved_api_names"
+                ]
+            ),
+        )
         self.assertTrue({
             "Billing_Subscription_ID",
             "Subscription_Status",
@@ -453,6 +485,91 @@ class FreeRevenueLeakCrmContractTests(unittest.TestCase):
         ):
             with self.subTest(prohibited=marker):
                 self.assertIn(marker, prohibited)
+
+    def test_fresh_metadata_evidence_is_exact_sanitized_and_non_authorizing(self):
+        evidence = self.live_topology
+        self.assertEqual(
+            evidence["repository_head_at_observation"],
+            "0af87a26e2103ddaf4178bf03ebfa67b972cea24",
+        )
+        self.assertEqual(
+            evidence["automation_contract_revision"],
+            self.contract["contract_revision"],
+        )
+        metadata = evidence["metadata_and_layout_readback"]
+        matching = metadata["fields_matching_predeclared_types"]
+        newly_explicit = metadata["newly_explicit_type_contracts"]
+        matching_names = {item["api_name"] for item in matching}
+        new_names = {item["api_name"] for item in newly_explicit}
+        resolved = set(metadata["resolved_api_names"])
+        self.assertEqual((len(matching), len(newly_explicit), len(resolved)), (21, 4, 25))
+        self.assertTrue(matching_names.isdisjoint(new_names))
+        self.assertEqual(matching_names | new_names, resolved)
+        self.assertEqual(
+            {
+                item["api_name"]: (item["data_type"], item["json_type"])
+                for item in newly_explicit
+            },
+            {
+                "Billing_Automation_Error": ("textarea", "string"),
+                "Billing_Automation_Status": ("picklist", "string"),
+                "Billing_Last_Sync_At": ("datetime", "string"),
+                "Call_Totals_Reconciled": ("boolean", "boolean"),
+            },
+        )
+        self.assertEqual(
+            metadata["required_picklist_api_values"]["Subscription_Acceptance_Status"],
+            ["Pending", "Accepted"],
+        )
+        self.assertEqual(
+            metadata["required_picklist_api_values"]["Subscription_Status"],
+            ["Active"],
+        )
+        for flag in (
+            "all_resolved_exactly_once",
+            "all_visible",
+            "all_read_only_false",
+            "all_api_create_enabled",
+            "all_api_update_enabled",
+            "all_active_layout_associated",
+            "all_transition_field_available",
+            "all_required_picklist_api_values_present",
+            "metadata_and_layout_gate_currently_satisfied",
+            "fresh_readback_still_required_immediately_before_deployment",
+        ):
+            with self.subTest(flag=flag):
+                self.assertTrue(metadata[flag])
+        blueprint = evidence["blueprint_readback"]
+        self.assertFalse(blueprint["topology_matches_contract"])
+        self.assertEqual(
+            blueprint["pipeline_binding_matches_revenue_desk_sales"], "not_proven"
+        )
+        self.assertEqual(
+            blueprint["missing_expected_transitions"],
+            ["Record Internal Approval", "Activate Test Route"],
+        )
+        self.assertEqual(blueprint["unexpected_transitions"], ["Approve Go Live"])
+        workflow = evidence["workflow_readback"]
+        self.assertFalse(workflow["execution_markers_are_runtime_acceptance"])
+        self.assertFalse(workflow["desired_create_only_trigger_parity_proven"])
+        self.assertTrue(workflow["form1_uncontracted_scheduled_follow_up_task_present"])
+        self.assertFalse(workflow["single_active_form2_rule_parity_proven"])
+        self.assertFalse(evidence["future_live_change_authorized_by_this_record"])
+        self.assertTrue(
+            all(value is False for value in evidence["disclosure_controls"].values())
+        )
+        rendered = json.dumps(evidence, sort_keys=True).lower()
+        for forbidden in (
+            "http://",
+            "https://",
+            "@sylvara",
+            '"organization_id":',
+            '"layout_id":',
+            '"blueprint_id":',
+            '"workflow_id":',
+        ):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, rendered)
 
     def test_synthetic_acceptance_requires_idempotent_record_and_task_counts(self):
         expected = self.contract["synthetic_acceptance"]["expected_records"]

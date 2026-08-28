@@ -80,6 +80,21 @@ CRM_LIVE_PREFLIGHT_PATH = (
     / "evidence"
     / "live-metadata-preflight-2026-08-28.json"
 )
+CRM_TOPOLOGY_PREFLIGHT_PATH = (
+    ROOT
+    / "src"
+    / "zoho-crm"
+    / "free-revenue-leak-test"
+    / "evidence"
+    / "live-topology-layout-preflight-2026-08-28.json"
+)
+CATALYST_EXECUTION_SURFACE_PREFLIGHT_PATH = (
+    ROOT
+    / "src"
+    / "zoho-catalyst"
+    / "evidence"
+    / "free-revenue-leak-test-development-execution-surface-preflight-2026-08-28.json"
+)
 BILLING_TEST_CATALOG_PREFLIGHT_PATH = (
     ROOT
     / "src"
@@ -96,6 +111,7 @@ PRIVATE_ROUTE_CONTRACT_PATH = (
     / "private-route-packet-contract.json"
 )
 ROUTE_CONTRACT_SOURCE_REVISION = "aab7c18c27f4ff5e1468da51eae433ede9b852f6"
+DEVELOPMENT_RELEASE_SOURCE_REVISION = "288a93c7773acaf82fab277702e6b4e3d7354564"
 ROUTE_CONTRACT_SHA256_AT_SOURCE_REVISION = (
     "bdb06e56ab1658aecc885b9cd78b3acc51fbdb1fea137a75a548a75b7d63690f"
 )
@@ -272,6 +288,12 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         )
         cls.crm_live_preflight = json.loads(
             CRM_LIVE_PREFLIGHT_PATH.read_text(encoding="utf-8")
+        )
+        cls.crm_topology_preflight = json.loads(
+            CRM_TOPOLOGY_PREFLIGHT_PATH.read_text(encoding="utf-8")
+        )
+        cls.catalyst_execution_surface_preflight = json.loads(
+            CATALYST_EXECUTION_SURFACE_PREFLIGHT_PATH.read_text(encoding="utf-8")
         )
         cls.billing_test_catalog_preflight = json.loads(
             BILLING_TEST_CATALOG_PREFLIGHT_PATH.read_text(encoding="utf-8")
@@ -4071,7 +4093,7 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         for phrase in (
             "no installed Sylvara Forms Audit or Changes connector",
             "one product, one active monthly plan, and zero add-ons",
-            "matched all 17 required Deal fields and the exact eight-stage pipeline",
+            "resolved exactly the immutable snapshot-derived 25-field active-layout gap",
             "found 30 views and six folders",
             "zero matches for the five canonical target tables",
         ):
@@ -4094,6 +4116,260 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             self.assertNotIn(f'"{forbidden_key}"', combined)
         for forbidden_value in ("http://", "https://"):
             self.assertNotIn(forbidden_value, combined)
+
+    def test_successor_crm_and_catalyst_preflights_close_only_proven_gates(self):
+        crm = self.crm_topology_preflight
+        self.assertEqual(crm["observed_at"], "2026-08-28")
+        self.assertEqual(
+            crm["repository_head_at_observation"],
+            "0af87a26e2103ddaf4178bf03ebfa67b972cea24",
+        )
+        self.assertEqual(
+            crm["automation_contract_revision"],
+            "2026-08-28-blueprint-topology-v4",
+        )
+        self.assertTrue(
+            crm["historical_evidence"]["count_only_record_preserved_without_rewrite"]
+        )
+        self.assertEqual(
+            crm["historical_evidence"]["record"],
+            "src/zoho-crm/free-revenue-leak-test/evidence/"
+            "live-metadata-preflight-2026-08-28.json",
+        )
+        metadata = crm["metadata_and_layout_readback"]
+        matching = {
+            item["api_name"] for item in metadata["fields_matching_predeclared_types"]
+        }
+        newly_explicit = {
+            item["api_name"] for item in metadata["newly_explicit_type_contracts"]
+        }
+        resolved = set(metadata["resolved_api_names"])
+        self.assertEqual((len(matching), len(newly_explicit), len(resolved)), (21, 4, 25))
+        self.assertTrue(matching.isdisjoint(newly_explicit))
+        self.assertEqual(matching | newly_explicit, resolved)
+        for flag in (
+            "all_resolved_exactly_once",
+            "all_visible",
+            "all_read_only_false",
+            "all_api_create_enabled",
+            "all_api_update_enabled",
+            "all_active_layout_associated",
+            "all_transition_field_available",
+            "all_required_picklist_api_values_present",
+            "metadata_and_layout_gate_currently_satisfied",
+            "fresh_readback_still_required_immediately_before_deployment",
+        ):
+            with self.subTest(crm_metadata_flag=flag):
+                self.assertTrue(metadata[flag])
+        self.assertFalse(crm["blueprint_readback"]["topology_matches_contract"])
+        self.assertEqual(
+            crm["blueprint_readback"][
+                "pipeline_binding_matches_revenue_desk_sales"
+            ],
+            "not_proven",
+        )
+        self.assertEqual(
+            crm["blueprint_readback"]["missing_expected_transitions"],
+            ["Record Internal Approval", "Activate Test Route"],
+        )
+        self.assertEqual(
+            crm["blueprint_readback"]["unexpected_transitions"],
+            ["Approve Go Live"],
+        )
+        self.assertFalse(
+            crm["blueprint_readback"]["provider_save_or_activation_readback_proven"]
+        )
+        self.assertFalse(crm["blueprint_readback"]["runtime_acceptance_proven"])
+        workflow = crm["workflow_readback"]
+        self.assertFalse(workflow["execution_markers_are_runtime_acceptance"])
+        self.assertFalse(workflow["desired_create_only_trigger_parity_proven"])
+        self.assertTrue(workflow["form1_uncontracted_scheduled_follow_up_task_present"])
+        self.assertFalse(workflow["single_active_form2_rule_parity_proven"])
+        self.assertFalse(crm["future_live_change_authorized_by_this_record"])
+        self.assertTrue(all(value is False for value in crm["disclosure_controls"].values()))
+
+        catalyst = self.catalyst_execution_surface_preflight
+        self.assertEqual(
+            catalyst["repository_head_at_observation"],
+            "0af87a26e2103ddaf4178bf03ebfa67b972cea24",
+        )
+        self.assertEqual(
+            catalyst["source_revision"], DEVELOPMENT_RELEASE_SOURCE_REVISION
+        )
+        self.assertTrue(
+            catalyst["historical_evidence"][
+                "release_head_convergence_record_preserved_without_rewrite"
+            ]
+        )
+        self.assertEqual(
+            catalyst["historical_evidence"]["record"],
+            "src/zoho-catalyst/evidence/"
+            "free-revenue-leak-test-development-pr-head-convergence-2026-08-28-288a93c.json",
+        )
+        surfaces = catalyst["function_gateway_cron_and_pool_readback"]
+        self.assertEqual(
+            surfaces["canonical_functions"],
+            [
+                "crm_billing_orchestrator",
+                "revenue_leak_test_request_form",
+                "revenue_leak_test_setup_form",
+                "revenue_desk_call_gateway",
+                "revenue_desk_call_worker",
+                "analytics_sync",
+            ],
+        )
+        self.assertEqual(
+            set(surfaces["canonical_job_pools"]),
+            {"RevenueDeskCallJobs", "RevenueDeskAnalyticsJobs"},
+        )
+        self.assertTrue(surfaces["all_canonical_functions_present_exactly_once"])
+        self.assertFalse(surfaces["api_gateway_enabled"])
+        self.assertTrue(surfaces["api_gateway_disabled_positive_signal"])
+        self.assertFalse(surfaces["route_payload_returned_while_disabled"])
+        self.assertFalse(surfaces["current_route_count_claimed"])
+        self.assertEqual(surfaces["observed_cron_count"], 1)
+        self.assertTrue(surfaces["observed_cron_disabled"])
+        self.assertTrue(surfaces["cron_detail_readback_succeeded"])
+        self.assertFalse(surfaces["provider_complete_cron_history_proven"])
+        self.assertEqual(
+            surfaces["canonical_cron_name_pool_or_function_reference_count"], 0
+        )
+        self.assertTrue(surfaces["all_canonical_job_pools_present_exactly_once"])
+        self.assertEqual(surfaces["canonical_job_pool_detail_readbacks_succeeded"], 2)
+        self.assertFalse(surfaces["expected_function_targets_exposed_by_pool_details"])
+        for flag in (
+            "job_pool_function_target_binding_proven",
+            "all_jobs_or_execution_inventory_available",
+            "job_to_execution_correlation_proven",
+            "direct_caller_inventory_available",
+            "webhook_inventory_available",
+        ):
+            with self.subTest(catalyst_surface_flag=flag):
+                self.assertFalse(surfaces[flag])
+
+        schema = catalyst["table_schema_readback"]
+        exact_tables = set(schema["tables_with_no_noncontract_application_columns"])
+        legacy_tables = set(schema["additive_legacy_columns_retained"])
+        self.assertEqual((len(exact_tables), len(legacy_tables)), (11, 2))
+        self.assertTrue(exact_tables.isdisjoint(legacy_tables))
+        self.assertEqual(
+            exact_tables | legacy_tables,
+            {
+                "RevenueDeskDeployments",
+                "RevenueDeskConfigurationVersions",
+                "RevenueDeskEventReceipts",
+                "RevenueDeskCalls",
+                "RevenueDeskNotifications",
+                "RevenueLeakTestRequestFormSessions",
+                "Form2SessionsV3Runtime",
+                "Form2PrefillsV3",
+                "Form2SubmissionsV3",
+                "Form2VerificationProofsV3",
+                "CRMBillingOperations",
+                "AnalyticsSyncCheckpoints",
+                "AnalyticsSyncOutbox",
+            },
+        )
+        self.assertTrue(schema["repository_required_application_schema_projection_match"])
+        self.assertEqual(schema["unexpected_application_schema_mismatch_count"], 0)
+        self.assertTrue(schema["all_canonical_tables_present_exactly_once"])
+        self.assertTrue(schema["all_canonical_column_readbacks_succeeded"])
+        self.assertTrue(
+            schema["required_name_type_mandatory_unique_and_max_length_subsets_exact"]
+        )
+        for mismatch in (
+            "missing_required_columns",
+            "type_mismatches",
+            "mandatory_mismatches",
+            "unique_mismatches",
+            "max_length_mismatches",
+        ):
+            with self.subTest(schema_mismatch=mismatch):
+                self.assertEqual(schema[mismatch], 0)
+        self.assertFalse(schema["row_emptiness_revalidated"])
+        self.assertFalse(schema["row_content_or_pagination_token_retrieved"])
+        access = catalyst["table_access_readback"]
+        self.assertEqual(access["permission_readbacks_succeeded"], 13)
+        self.assertEqual(access["scope_readbacks_succeeded"], 13)
+        self.assertFalse(access["explicit_public_or_anonymous_marker_observed"])
+        self.assertFalse(
+            access["public_or_anonymous_access_proven_absent"]
+        )
+        self.assertEqual(
+            catalyst["release_classification"]["provider_complete_execution_absence"],
+            "not_proven",
+        )
+        self.assertFalse(
+            catalyst["release_classification"]["callable_surface_inertness_proven"]
+        )
+        self.assertFalse(catalyst["future_live_change_authorized_by_this_record"])
+        for flag in (
+            "writes_or_runtime_invocations_performed",
+            "table_rows_read",
+            "customer_caller_financial_or_production_data_read",
+            "retell_provider_or_agent_action_performed",
+        ):
+            with self.subTest(catalyst_boundary_flag=flag):
+                self.assertFalse(catalyst["evidence_boundary"][flag])
+        runtime = catalyst["runtime_and_external_action_boundary"]
+        for field in (
+            "operator_function_invocations",
+            "operator_job_invocations",
+            "operator_route_invocations",
+            "operator_cron_submissions",
+        ):
+            with self.subTest(runtime_count=field):
+                self.assertEqual(runtime[field], 0)
+        for field in (
+            "synthetic_development_lifecycle_executed",
+            "retell_agent_changed",
+            "retell_agent_tested",
+            "retell_agent_simulated",
+            "customer_record_action_performed",
+            "billing_payment_or_charge_action_performed",
+            "production_change_or_invocation_performed",
+        ):
+            with self.subTest(runtime_boundary=field):
+                self.assertFalse(runtime[field])
+        self.assertTrue(
+            all(value is False for value in catalyst["disclosure_controls"].values())
+        )
+
+        combined = json.dumps({"crm": crm, "catalyst": catalyst}, sort_keys=True).lower()
+        for forbidden_key in (
+            "project_id",
+            "organization_id",
+            "environment_id",
+            "function_id",
+            "table_id",
+            "jobpool_id",
+            "route_id",
+            "blueprint_id",
+            "workflow_id",
+            "client_secret",
+            "refresh_token",
+            "access_token",
+            "zcfkey",
+        ):
+            self.assertNotIn(f'"{forbidden_key}"', combined)
+        for forbidden_value in ("http://", "https://", "@sylvara"):
+            self.assertNotIn(forbidden_value, combined)
+        self.assertIsNone(
+            re.search(r'"[a-z0-9_]*(?:_id|_ids)"\s*:', combined)
+        )
+        self.assertIsNone(
+            re.search(
+                r"[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}",
+                combined,
+            )
+        )
+        self.assertIsNone(re.search(r"(?<![0-9a-f])[0-9a-f]{64}(?![0-9a-f])", combined))
+        self.assertIsNone(re.search(r"(?:[a-z]:\\|/(?:users|home)/)", combined))
+
+        self.assertIn(
+            "free-revenue-leak-test-development-execution-surface-preflight-2026-08-28.json",
+            self.reconciliation_runbook,
+        )
 
     def test_packet_a_public_runbooks_match_sanitized_execution_and_revision(self):
         superseding_entry = self.deployment_log.split(
@@ -4418,7 +4694,15 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         self.assertEqual(start_date["crm_semantic"], "operator-requested commercial start date")
         self.assertFalse(start_date["billing_owned"])
         self.assertFalse(start_date["operator_input_deployable"])
-        self.assertEqual(start_date["active_standard_layout_status"], "not_present")
+        self.assertTrue(start_date["metadata_and_layout_eligible"])
+        self.assertEqual(
+            start_date["historical_snapshot_active_standard_layout_status"],
+            "not_present",
+        )
+        self.assertEqual(
+            start_date["latest_live_active_standard_layout_status"], "present"
+        )
+        self.assertTrue(start_date["latest_live_transition_field_available"])
         self.assertTrue(start_date["authoritative_billing_start_date_is_external_readback"])
         self.assertNotIn(
             "Subscription_Start_Date",
@@ -4426,6 +4710,19 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         )
         blueprint_gate = self.contract["crm"]["blueprint_release_gate"]
         self.assertEqual(blueprint_gate["status"], "not_deployable")
+        self.assertTrue(blueprint_gate["metadata_and_layout_preflight_satisfied"])
+        self.assertEqual(blueprint_gate["live_target_status"], "Inactive")
+        self.assertEqual(
+            blueprint_gate["live_pipeline_binding_matches_contract"], "not_proven"
+        )
+        self.assertFalse(blueprint_gate["live_topology_matches_contract"])
+        self.assertEqual(
+            blueprint_gate["missing_live_transitions"],
+            ["Record Internal Approval", "Activate Test Route"],
+        )
+        self.assertEqual(
+            blueprint_gate["unexpected_live_transitions"], ["Approve Go Live"]
+        )
         self.assertFalse(blueprint_gate["external_evidence_validator_in_repository"])
         self.assertEqual(
             blueprint_gate["required_external_evidence_contracts"],
@@ -4460,8 +4757,13 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         self.assertEqual(closed_won["blueprint_validator_status"], "not_implemented")
         self.assertIn("immutable API value", billing["plan_api_value_binding"])
         metadata = self.contract["crm"]["deal_field_metadata_evidence"]
-        self.assertFalse(metadata["field_by_field_public_evidence_available"])
-        self.assertIn("cannot extend", metadata["authority_limit"])
+        self.assertTrue(metadata["field_by_field_public_evidence_available"])
+        self.assertEqual(
+            metadata["evidence_path"],
+            "src/zoho-crm/free-revenue-leak-test/evidence/"
+            "live-topology-layout-preflight-2026-08-28.json",
+        )
+        self.assertIn("closes only the current metadata and layout gap", metadata["authority_limit"])
         required_deal_fields = self.contract["crm"]["required_deal_fields_existing"]
         self.assertIn("Monthly_Recurring_Revenue", required_deal_fields)
         self.assertNotIn("plans", billing)
