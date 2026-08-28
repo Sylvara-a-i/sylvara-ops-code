@@ -711,6 +711,24 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
                 )
             },
         )
+        proof_evidence = release_form2["proof"]["controller_owned_acceptance_evidence"]
+        self.assertEqual(proof_evidence["owner"], "revenue_leak_test_setup_form")
+        self.assertEqual(
+            proof_evidence["requires"],
+            [
+                "consumed one-time proof",
+                "exact controller receipt",
+                "exact CRM readback of the persisted submission evidence",
+            ],
+        )
+        self.assertFalse(proof_evidence["standalone_crm_boolean_exists"])
+        self.assertFalse(proof_evidence["is_signature"])
+        self.assertFalse(proof_evidence["is_go_live_approval"])
+        self.assertNotIn("proof_accepted", release_form2["crm_field_mapping"])
+        self.assertEqual(
+            release_form2["crm_field_mapping"]["authority_confirmed_at"],
+            "Authority_Confirmed_At",
+        )
 
     def test_exact_six_function_and_two_pool_topology(self):
         expected_functions = [
@@ -4021,6 +4039,7 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             "Scale::Monthly",
         ])
         self.assertEqual(billing["commercial_terms_fields"], [
+            "acceptanceVersion",
             "currency",
             "interval",
             "intervalUnit",
@@ -4028,6 +4047,94 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             "plans.<exact-key>.recurringMinor",
             "plans.<exact-key>.setupMinor",
         ])
+        capture_fields = [
+            "Plan",
+            "Billing_Frequency",
+            "Monthly_Recurring_Revenue",
+            "Setup_Fee",
+            "Subscription_Start_Date",
+            "Subscription_Acceptance_Status",
+            "Subscription_Acceptance_Version",
+        ]
+        self.assertEqual(billing["crm_commercial_terms_capture_fields"], capture_fields)
+        self.assertEqual(
+            self.contract["crm"]["commercial_terms_capture_fields"], capture_fields
+        )
+        self.assertIn(
+            "Subscription_Acceptance_Version",
+            billing["accepted_terms_version_binding"],
+        )
+        self.assertEqual(
+            billing["acceptance_version_format"],
+            "terms-v1:<64 lowercase hex>",
+        )
+        self.assertEqual(len(billing["acceptance_version_content_address_fields"]), 10)
+        self.assertIn("commonUsageRateMinor", billing["accepted_terms_version_binding"])
+        self.assertIn(
+            "Subscription_Acceptance_Version",
+            self.contract["crm"]["usage_rate_binding"],
+        )
+        self.assertEqual(
+            self.contract["crm"]["billing_success_readback"],
+            {
+                "Billing_Automation_Status": "equals Paid Verified",
+                "Billing_Automation_Error": "is empty",
+                "Billing_Last_Sync_At": "is not empty",
+                "Billing_Customer_ID": "is not empty",
+                "Billing_Subscription_ID": "is not empty",
+                "Subscription_Status": "equals Active",
+            },
+        )
+        start_date = self.contract["crm"]["subscription_start_date_ownership"]
+        self.assertEqual(start_date["crm_semantic"], "operator-requested commercial start date")
+        self.assertFalse(start_date["billing_owned"])
+        self.assertFalse(start_date["operator_input_deployable"])
+        self.assertEqual(start_date["active_standard_layout_status"], "not_present")
+        self.assertTrue(start_date["authoritative_billing_start_date_is_external_readback"])
+        self.assertNotIn(
+            "Subscription_Start_Date",
+            self.contract["crm"]["billing_owned_fields"],
+        )
+        blueprint_gate = self.contract["crm"]["blueprint_release_gate"]
+        self.assertEqual(blueprint_gate["status"], "not_deployable")
+        self.assertFalse(blueprint_gate["external_evidence_validator_in_repository"])
+        self.assertEqual(
+            blueprint_gate["required_external_evidence_contracts"],
+            [
+                "internal-approval-receipt-v1",
+                "route-activation-readback-v1",
+                "terminal-report-summary-readback-v2",
+                "route-inactive-readback-v1",
+                "billing-closed-won-reconciliation-v1",
+            ],
+        )
+        self.assertTrue(
+            blueprint_gate[
+                "record_internal_approval_requires_signed_version_bound_receipt"
+            ]
+        )
+        self.assertTrue(
+            blueprint_gate[
+                "activate_test_route_requires_chained_active_route_readback"
+            ]
+        )
+        self.assertFalse(
+            blueprint_gate["approval_and_activation_receipt_validators_implemented"]
+        )
+        self.assertTrue(blueprint_gate["closed_lost_requires_route_inactive_readback"])
+        self.assertTrue(blueprint_gate["closed_won_requires_fresh_non_creating_reconciliation"])
+        closed_won = billing["closed_won_reconciliation_gate"]
+        self.assertEqual(closed_won["action"], "reconcile")
+        self.assertTrue(closed_won["non_creating"])
+        self.assertTrue(closed_won["fresh_after_last_material_change"])
+        self.assertTrue(closed_won["recompute_operation_fingerprint_from_current_crm"])
+        self.assertEqual(closed_won["blueprint_validator_status"], "not_implemented")
+        self.assertIn("immutable API value", billing["plan_api_value_binding"])
+        metadata = self.contract["crm"]["deal_field_metadata_evidence"]
+        self.assertFalse(metadata["field_by_field_public_evidence_available"])
+        self.assertIn("cannot extend", metadata["authority_limit"])
+        required_deal_fields = self.contract["crm"]["required_deal_fields_existing"]
+        self.assertIn("Monthly_Recurring_Revenue", required_deal_fields)
         self.assertNotIn("plans", billing)
         self.assertEqual(billing["positive_acceptance_plan"], "Growth Monthly")
         self.assertFalse(billing["real_charge"])

@@ -28,8 +28,15 @@ The temporary `validate_report_summary_contract` action exists only for immutabl
 
 Exact paid amounts are not duplicated in this component. Catalyst Development must provide
 `PAID_COMMERCIAL_TERMS_JSON` as a private secret containing exactly one currency, a one-month
-interval, one common usage rate in minor units, and recurring/setup minor units for exactly
-`Launch::Monthly`, `Growth::Monthly`, and `Scale::Monthly`. When
+interval, one content-addressed acceptance version, one common usage rate in minor units, and
+recurring/setup minor units for exactly `Launch::Monthly`, `Growth::Monthly`, and
+`Scale::Monthly`. The acceptance version is exactly `terms-v1:<64 lowercase hex>`: its SHA-256
+digest is derived from a deterministic fixed-order serialization of the currency, interval,
+interval unit, common usage rate, and every recurring/setup pair. Reordering JSON properties does
+not change it; changing any commercial term requires a new digest. A reused or caller-chosen label
+is rejected. The Deal's `Subscription_Acceptance_Version` must exactly match that derived private
+contract version, which binds the accepted terms to the private common usage rate without
+depending on a nonexistent CRM rate field. When
 `ENABLE_PAID_SUBSCRIPTION_PREPARATION=true`, unknown, missing, extra, fractional, zero, or
 malformed values fail configuration before any CRM, Data Store, or Billing operation. When the
 gate is `false`, the paid catalog, paid acceptance value, and Closed Won mapping may be absent;
@@ -38,20 +45,22 @@ synchronization remains available.
 The runtime separately maps those three keys to private Billing plan codes plus one private
 metered add-on code, exact unit, and product ID. Annual plans and Enterprise are outside this runtime.
 
-CRM currently returns the Plan picklist's API values rather than its display labels. The CRM boundary maps only `Option 1` to Launch, `Option 2` to Growth, and `Pro` to Scale. Any other API value fails closed before Billing access.
+CRM currently returns the Plan picklist's API values rather than its display labels. The paid
+boundary maps only `Option 1` to Launch, `Option 2` to Growth, and `Pro` to Scale. Display labels,
+including `Launch`, `Growth`, and `Scale`, and every other value fail closed before Billing access.
 
 ## Ordering And Readback
 
 The handler:
 
-1. Re-reads the Deal and Account, requires both authoritative names to remain inside the `ZZZ SYNTHETIC` boundary, and validates pipeline, offer, type, stage, completed test, results review, acceptance status/timestamp/version, monthly plan, MRR, setup fee, connected-minute rate, and start date.
+1. Re-reads the Deal and Account, requires both authoritative names to remain inside the `ZZZ SYNTHETIC` boundary, and validates pipeline, offer, type, stage, completed test, results review, exact configured acceptance version, monthly plan, `Monthly_Recurring_Revenue`, `Setup_Fee`, and start date. The connected-minute rate comes only from the version-bound private contract and is independently verified against the Billing add-on.
 2. Claims a durable Deal/action operation whose fingerprint binds the Account, approved deployment/configuration version, Billing organization, acceptance evidence, selected plan code, add-on code/unit/product, recurring/setup/usage minor units, currency, interval, and start date.
 3. Creates or verifies the TEST customer without updating CRM.
 4. Re-reads CRM and revalidates every accepted input.
 5. Reads the Billing TEST organization, plan, and metered add-on before subscription creation. The plan and add-on must share the configured product ID, and the add-on unit must match exactly.
 6. Creates or reconciles one deterministic subscription with `auto_collect=false`, no payment method, the selected plan, and the common usage add-on.
 7. Reads the full subscription and the catalog again. The customer, reference, product association, plan, recurring price, setup fee, monthly interval, add-on identity/unit/product, metered rate, original start date, collection mode, payment boundary, and `future` or `live` status must all match. A returned `current_term_starts_at` may advance on renewal but can never precede or substitute for the separately verified original start.
-8. Makes one CRM integration update with the verified customer ID, subscription ID, mapped subscription status, `Paid Verified`, sync timestamp, and cleared safe error.
+8. Makes one CRM integration update with the verified customer ID, subscription ID, mapped subscription status, `Paid Verified`, sync timestamp, and cleared safe error. Readback must contain `Billing_Automation_Error` as its own property with the exact value `null`; an omitted field is unresolved, not proof that CRM cleared it.
 9. Marks the operation complete only after CRM readback succeeds.
 10. Only after that completion readback, deterministically inserts or confirms one sanitized `conversion_status` v2 fact in `AnalyticsSyncOutbox`. The fact preserves `ENGAGEMENT_TYPE=free_test` as the originating evidence partition and records `TARGET_ENGAGEMENT_TYPE=paid_service` separately, so paid acceptance remains visible in free-test operations reporting. Its only unique identity is `OUTBOX_KEY`, derived as SHA-256 over the NUL-delimited `analytics-provider-version-v1` domain, record type, environment, client key, deployment key, record key, and `SOURCE_MODIFIED_AT` after `Date.toISOString()` normalization. Exact replay converges; the same key with a different immutable payload fails closed for reconciliation.
 
@@ -81,7 +90,7 @@ Missing or unfamiliar plan, add-on, or subscription evidence fails closed. The B
 1. Use the existing Catalyst Development project, dedicated `CRMBillingOperations` table, and shared additive-v2 `AnalyticsSyncOutbox` contract. Keep Production untouched.
 2. Point only to the isolated Zoho Billing TEST organization. For TEST customer creation use `CUSTOMER_PROVISIONING_MODE=test_direct_customer` with its explicit gate enabled.
 3. Configure every report-sync-required variable through private Catalyst configuration. Keep `ENABLE_PAID_SUBSCRIPTION_PREPARATION=false` until the paid catalog and commercial contract are separately approved; in this mode neither paid preparation nor reconciliation can read CRM, Data Store, or Billing.
-4. Before enabling the paid gate, configure the strict private `PAID_COMMERCIAL_TERMS_JSON`, exactly three monthly plan-code mappings, the common usage add-on code, exact add-on unit, exact associated product ID, exact `future`/`live` CRM status map, paid acceptance value, and Closed Won mapping. The enabled configuration rejects any missing or invalid value. Never copy populated commercial configuration into Git, logs, or test output.
+4. Before enabling the paid gate, derive and configure the strict private `PAID_COMMERCIAL_TERMS_JSON` with its exact content-addressed acceptance version, exactly three monthly plan-code mappings, the common usage add-on code, exact add-on unit, exact associated product ID, exact `future`/`live` CRM status map, paid acceptance value, and Closed Won mapping. The enabled configuration rejects a missing, malformed, stale, reused, or mismatched version. Never copy populated commercial configuration into Git, logs, or test output.
 5. Stamp the artifact source revision and Development ZAID binding during immutable packaging.
 6. Before enabling paid preparation, independently read the TEST product, all three plans, common usage add-on, route, Connections, and function artifact. Then run one ZZZ SYNTHETIC Growth conversion, duplicate replay, negative acceptance cases, and reconciliation.
 7. Keep the populated catalog packet outside the public repository. Validate its definition phase before one TEST-product creation execution, independently read back and bind that exact TEST product ID, then validate the bound phase before one execution that creates only the three TEST plans and common TEST usage add-on:

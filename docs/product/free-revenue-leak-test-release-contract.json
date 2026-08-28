@@ -57,7 +57,7 @@
     {
       "state": "FORM2_VERIFIED_SUBMITTED",
       "required_evidence": ["server-verified one-time email proof", "Contact/Account/Deal/request/destination binding", "authority confirmation", "scope acceptance", "idempotent submission"],
-      "effects": ["Setup Access Status=Submitted", "Free Test Authorization Status=Signed", "Test Status=Setup Pending", "Deal Stage may become Test Authorized", "Go-Live Approval remains Not Ready or Pending Internal Approval"]
+      "effects": ["Setup Access Status=Submitted", "authority and scope booleans plus their controller timestamps are persisted", "consumed one-time proof plus the exact controller receipt and exact CRM readback establish controller-owned proof evidence", "no standalone CRM proof Boolean exists and the proof is neither a signature nor go-live approval", "Deal Stage may become Test Authorized only through the manual Confirm Authorization transition", "Test Status becomes Setup Pending only through that transition's allowlisted CRM status action", "Go-Live Approval remains Not Ready or Pending Internal Approval"]
     },
     {
       "state": "SETUP_QA",
@@ -236,6 +236,13 @@
       "expiry_seconds": 600,
       "maximum_attempts": 5,
       "one_time_consumption": true,
+      "controller_owned_acceptance_evidence": {
+        "owner": "revenue_leak_test_setup_form",
+        "requires": ["consumed one-time proof", "exact controller receipt", "exact CRM readback of the persisted submission evidence"],
+        "standalone_crm_boolean_exists": false,
+        "is_signature": false,
+        "is_go_live_approval": false
+      },
       "bindings": ["session", "Contact", "Account", "Deal", "issuance request", "destination"],
       "mail_modes": ["stub", "send_development"],
       "sms_allowed": false
@@ -272,8 +279,8 @@
       "submitted_at": "Setup_Form_Submitted_At",
       "form_version": "Setup_Form_Version",
       "scope_version": "Test_Scope_Version",
-      "proof_accepted": "Form_2_Trusted_Proof_Accepted",
       "authority_confirmed": "Authorized_Representative_Confirmed",
+      "authority_confirmed_at": "Authority_Confirmed_At",
       "scope_accepted": "Test_Scope_Accepted",
       "scope_accepted_at": "Test_Scope_Accepted_At",
       "setup_access_status": "Setup_Access_Status",
@@ -454,16 +461,53 @@
   "crm": {
     "lead_unique_key": "Intake_Submission_ID",
     "deal_pipeline": "Revenue Desk Sales",
-    "required_deal_fields_existing": ["Entry_Offer", "Setup_Access_Status", "Free_Test_Authorization_Status", "Go_Live_Approval_Status", "Go_Live_Approved_At", "Test_Status", "Test_Start_At", "Test_End_At", "Test_End_Reason", "Deployment_Record_ID", "Configuration_Version", "Call_Totals_Reconciled", "Results_Review_At", "Plan", "Billing_Frequency", "Setup_Fee", "Subscription_Acceptance_Status", "Billing_Automation_Status", "Billing_Customer_ID", "Billing_Subscription_ID", "Subscription_Status", "Approved_Deployment_Record_ID", "Approved_Configuration_Version", "Subscription_Accepted_At", "Subscription_Acceptance_Version", "Test_Calls_Reaching_Route", "Test_Qualified_Opportunities", "Test_Existing_Customer_Calls", "Test_Actual_Avg_Call_Duration_Seconds", "Test_Out_Of_Area_Or_Wrong_Fit_Calls", "Test_Urgent_Requests", "Test_Bookable_Opportunities", "Test_Office_Follow_Up_Calls", "Test_Observed_Workflow_Failures", "Recommended_Paid_Coverage", "Expected_Monthly_Connected_Minutes_Min", "Expected_Monthly_Connected_Minutes_Max", "Test_Data_Confidence_Notes"],
+    "required_deal_fields_existing": ["Entry_Offer", "Setup_Access_Status", "Free_Test_Authorization_Status", "Go_Live_Approval_Status", "Go_Live_Approved_At", "Test_Status", "Test_Start_At", "Test_End_At", "Test_End_Reason", "Deployment_Record_ID", "Configuration_Version", "Call_Totals_Reconciled", "Results_Review_At", "Plan", "Billing_Frequency", "Monthly_Recurring_Revenue", "Setup_Fee", "Subscription_Acceptance_Status", "Billing_Automation_Status", "Billing_Customer_ID", "Billing_Subscription_ID", "Subscription_Status", "Approved_Deployment_Record_ID", "Approved_Configuration_Version", "Subscription_Accepted_At", "Subscription_Acceptance_Version", "Test_Calls_Reaching_Route", "Test_Qualified_Opportunities", "Test_Existing_Customer_Calls", "Test_Actual_Avg_Call_Duration_Seconds", "Test_Out_Of_Area_Or_Wrong_Fit_Calls", "Test_Urgent_Requests", "Test_Bookable_Opportunities", "Test_Office_Follow_Up_Calls", "Test_Observed_Workflow_Failures", "Recommended_Paid_Coverage", "Expected_Monthly_Connected_Minutes_Min", "Expected_Monthly_Connected_Minutes_Max", "Test_Data_Confidence_Notes"],
     "required_deal_fields_to_add": [],
+    "required_deal_fields_existing_semantics": "Desired journey field names, not standalone field/type/picklist/layout evidence. Self-authored release lists never extend the authoritative CRM metadata snapshot.",
     "deal_field_metadata_evidence": {
       "verified_at_utc_date": "2026-08-24",
       "method": "read-only live Deals field-metadata audit",
       "result": "all 17 report/control API names already exist with the expected writable field families",
+      "field_by_field_public_evidence_available": false,
+      "authority_limit": "The count-only summary cannot extend the authoritative 2026-08-14 field, type, picklist, or active-layout snapshots; unlisted or unplaced transition fields require fresh authoritative readback before Blueprint deployment.",
       "private_identifiers_committed": false,
       "write_performed": false
     },
-    "billing_owned_fields": ["Billing_Automation_Status", "Billing_Automation_Error", "Billing_Last_Sync_At", "Billing_Customer_ID", "Billing_Subscription_ID", "Subscription_Status", "Subscription_Start_Date"],
+    "billing_owned_fields": ["Billing_Automation_Status", "Billing_Automation_Error", "Billing_Last_Sync_At", "Billing_Customer_ID", "Billing_Subscription_ID", "Subscription_Status"],
+    "billing_success_readback": {
+      "Billing_Automation_Status": "equals Paid Verified",
+      "Billing_Automation_Error": "is empty",
+      "Billing_Last_Sync_At": "is not empty",
+      "Billing_Customer_ID": "is not empty",
+      "Billing_Subscription_ID": "is not empty",
+      "Subscription_Status": "equals Active"
+    },
+    "commercial_terms_capture_fields": ["Plan", "Billing_Frequency", "Monthly_Recurring_Revenue", "Setup_Fee", "Subscription_Start_Date", "Subscription_Acceptance_Status", "Subscription_Acceptance_Version"],
+    "subscription_start_date_ownership": {
+      "crm_semantic": "operator-requested commercial start date",
+      "billing_owned": false,
+      "authoritative_billing_start_date_is_external_readback": true,
+      "authoritative_billing_value_location": "fresh external Billing subscription readback",
+      "closed_won_binding": "authoritative Billing start date exactly equals the current requested CRM Subscription_Start_Date",
+      "authoritative_field_metadata_status": "verified_live_read_only date",
+      "active_standard_layout_status": "not_present",
+      "operator_input_deployable": false,
+      "required_gate": "fresh field metadata and active-layout readback before the paid proposal transition is deployable",
+      "invent_replacement_field": false
+    },
+    "blueprint_release_gate": {
+      "topology_contract": "src/zoho-crm/free-revenue-leak-test/config/automation-contract.json",
+      "status": "not_deployable",
+      "external_evidence_validator_in_repository": false,
+      "required_external_evidence_contracts": ["internal-approval-receipt-v1", "route-activation-readback-v1", "terminal-report-summary-readback-v2", "route-inactive-readback-v1", "billing-closed-won-reconciliation-v1"],
+      "record_internal_approval_requires_signed_version_bound_receipt": true,
+      "activate_test_route_requires_chained_active_route_readback": true,
+      "approval_and_activation_receipt_validators_implemented": false,
+      "closed_lost_requires_route_inactive_readback": true,
+      "closed_won_requires_fresh_non_creating_reconciliation": true,
+      "fresh_metadata_type_picklist_and_layout_readback_required": true
+    },
+    "usage_rate_binding": "Subscription_Acceptance_Version is an exact terms-v1 content address of the accepted private PAID_COMMERCIAL_TERMS_JSON revision, including commonUsageRateMinor and all three monthly recurring/setup pairs; no standalone CRM connected-minute-rate field is assumed.",
     "raw_call_data_allowed": false
   },
   "billing_test": {
@@ -471,7 +515,11 @@
     "product": "Revenue Desk",
     "commercial_terms_source": "private Catalyst Development PAID_COMMERCIAL_TERMS_JSON",
     "required_plan_frequency_keys": ["Launch::Monthly", "Growth::Monthly", "Scale::Monthly"],
-    "commercial_terms_fields": ["currency", "interval", "intervalUnit", "commonUsageRateMinor", "plans.<exact-key>.recurringMinor", "plans.<exact-key>.setupMinor"],
+    "commercial_terms_fields": ["acceptanceVersion", "currency", "interval", "intervalUnit", "commonUsageRateMinor", "plans.<exact-key>.recurringMinor", "plans.<exact-key>.setupMinor"],
+    "crm_commercial_terms_capture_fields": ["Plan", "Billing_Frequency", "Monthly_Recurring_Revenue", "Setup_Fee", "Subscription_Start_Date", "Subscription_Acceptance_Status", "Subscription_Acceptance_Version"],
+    "acceptance_version_format": "terms-v1:<64 lowercase hex>",
+    "acceptance_version_content_address_fields": ["currency", "interval", "intervalUnit", "commonUsageRateMinor", "plans.Launch::Monthly.recurringMinor", "plans.Launch::Monthly.setupMinor", "plans.Growth::Monthly.recurringMinor", "plans.Growth::Monthly.setupMinor", "plans.Scale::Monthly.recurringMinor", "plans.Scale::Monthly.setupMinor"],
+    "accepted_terms_version_binding": "Subscription_Acceptance_Version equals the exact terms-v1 content address of the private commercial-terms revision, including commonUsageRateMinor and all three monthly recurring/setup pairs; no standalone CRM usage-rate field is part of the contract.",
     "public_fixture_policy": "Tests use deliberately non-commercial synthetic minor-unit values; exact paid amounts remain outside this release contract and executable source.",
     "positive_acceptance_plan": "Growth Monthly",
     "public_checkout": false,
@@ -482,6 +530,18 @@
     "subscription_idempotency_key": "HMAC(development_environment + deal_id + paid_action)",
     "subscription_external_reference": "syl-paid- + first_32_hex(subscription_idempotency_key)",
     "subscription_operation_fingerprint": "HMAC(development_environment + deal_id + paid_action + canonical(account_id + billing_test_org + acceptance_version + accepted_at + results_review_at + plan + billing_frequency + plan_code + recurring_price + setup_fee + currency + interval + interval_unit + subscription_start_date + usage_addon_code + usage_unit + usage_product_id + usage_rate))",
+    "plan_api_value_binding": "Fresh CRM Plan immutable API value must be one of Option 1, Option 2, or Pro, must map respectively to Launch, Growth, or Scale, and that canonical plan plus the exact mapped plan code is included in the durable operation fingerprint.",
+    "closed_won_reconciliation_gate": {
+      "action": "reconcile",
+      "non_creating": true,
+      "fresh_after_last_material_change": true,
+      "required_durable_operation_status": "completed",
+      "required_durable_operation_outcome": "paid_subscription_readback_confirmed",
+      "recompute_operation_fingerprint_from_current_crm": true,
+      "current_crm_bindings": ["Plan immutable API value and canonical mapping", "Billing_Frequency", "Monthly_Recurring_Revenue", "Setup_Fee", "Subscription_Start_Date", "Subscription_Acceptance_Version", "Deployment_Record_ID", "Configuration_Version"],
+      "exact_billing_and_crm_readback_required": true,
+      "blueprint_validator_status": "not_implemented"
+    },
     "crm_update_gate": "authoritative Billing customer, subscription, plan, price, setup fee, usage rate, status, and metadata readback"
   },
   "idempotency_keys": {

@@ -3,6 +3,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const { loadConfig } = require("../lib/config");
+const { CANONICAL_PLAN_BY_CRM_API_VALUE } = require("../lib/crm-client");
 const {
   TEST_CUSTOMER_PROVISIONING_ACTION,
   deriveOperationIdentity,
@@ -25,15 +26,14 @@ function context(config, overrides = {}) {
       Stage: config.subscriptionProposedStageValue,
       Account_Name: { id: "100000000000002", name: "Synthetic Account" },
       Test_Status: config.testCompletedStatusValue,
-      Plan: "Growth",
+      Plan: "Option 2",
       Billing_Frequency: "Monthly",
-      MRR: defaultTerms.recurringMinor / 100,
+      Monthly_Recurring_Revenue: defaultTerms.recurringMinor / 100,
       Setup_Fee: defaultTerms.setupMinor / 100,
-      Connected_AI_Minute_Rate: config.paidCommercialTerms.commonUsageRateMinor / 100,
       Subscription_Start_Date: "2026-09-01",
       Subscription_Acceptance_Status: config.paidAcceptanceValue,
       Subscription_Accepted_At: "2026-08-21T10:00:00-05:00",
-      Subscription_Acceptance_Version: "paid-acceptance-v1",
+      Subscription_Acceptance_Version: config.paidCommercialTerms.acceptanceVersion,
       Results_Review_At: "2026-08-21T09:00:00-05:00",
       Deployment_Record_ID: "deployment_A",
       Configuration_Version: "cfg_A_v1",
@@ -56,8 +56,9 @@ function context(config, overrides = {}) {
 }
 
 function paidIdentity(config, current) {
+  const plan = CANONICAL_PLAN_BY_CRM_API_VALUE[current.deal.Plan];
   const terms = config.paidCommercialTerms.plans[
-    `${current.deal.Plan}::${current.deal.Billing_Frequency}`
+    `${plan}::${current.deal.Billing_Frequency}`
   ];
   return deriveOperationIdentity(
     config,
@@ -70,9 +71,9 @@ function paidIdentity(config, current) {
       currency: config.paidCommercialTerms.currency,
       interval: config.paidCommercialTerms.interval,
       intervalUnit: config.paidCommercialTerms.intervalUnit,
-      plan: current.deal.Plan,
+      plan,
       planCode: config.paidPlanCodeMap[
-        `${current.deal.Plan}::${current.deal.Billing_Frequency}`
+        `${plan}::${current.deal.Billing_Frequency}`
       ],
       recurringMinor: terms.recurringMinor,
       resultsReviewAt: current.deal.Results_Review_At,
@@ -505,6 +506,40 @@ test("write-started report operation never writes again and only exact CRM readb
   assert.equal(reconciled.calls.some(([kind]) => kind === "report_transition"), true);
 });
 
+test("report completion requires an explicit null nullable field", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const selectedSummary = terminalSummary({ observedWorkflowFailures: null });
+  const operation = reportOperation(config, selectedSummary, "processing");
+  const exactPatch = reportSummaryPatch(config, selectedSummary);
+  assert.equal(exactPatch.Test_Observed_Workflow_Failures, null);
+
+  const omittedContext = context(config, unreviewedReportDeal(exactPatch));
+  delete omittedContext.deal.Test_Observed_Workflow_Failures;
+  const omitted = harness(config, omittedContext, {
+    readOperation: async () => operation,
+  });
+  await assert.rejects(omitted.lifecycle.handle({
+    action: "sync_report_summary",
+    dealId: selectedSummary.dealId,
+    operationKey: operation.OPERATION_KEY,
+  }), (error) => error?.publicCode === "reconciliation_required");
+  assert.equal(omitted.calls.some(([kind]) => kind === "crm_report_update"), false);
+  assert.equal(omitted.calls.some(([kind, , status]) => (
+    kind === "report_transition" && status === "reconciliation_required"
+  )), true);
+
+  const present = harness(config, context(config, unreviewedReportDeal(exactPatch)), {
+    readOperation: async () => operation,
+  });
+  const result = await present.lifecycle.handle({
+    action: "sync_report_summary",
+    dealId: selectedSummary.dealId,
+    operationKey: operation.OPERATION_KEY,
+  });
+  assert.deepEqual(result, { outcome: "report_summary_readback_confirmed", duplicate: true });
+  assert.equal(present.calls.some(([kind]) => kind === "crm_report_update"), false);
+});
+
 test("reviewed Deal permits exact report replay but rejects a differing report revision", async () => {
   const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
   const selectedSummary = terminalSummary();
@@ -888,11 +923,12 @@ test("concurrent report-summary requests permit only the owned claim to issue a 
 
 test("all approved monthly plans bind exact terms and update CRM once after Billing readback", async () => {
   const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const apiValueByPlan = Object.freeze({ Launch: "Option 1", Growth: "Option 2", Scale: "Pro" });
   for (const terms of Object.values(config.paidCommercialTerms.plans)) {
     const plan = terms.plan;
     const selected = harness(config, context(config, {
-      Plan: plan,
-      MRR: terms.recurringMinor / 100,
+      Plan: apiValueByPlan[plan],
+      Monthly_Recurring_Revenue: terms.recurringMinor / 100,
       Setup_Fee: terms.setupMinor / 100,
     }));
     const result = await selected.lifecycle.handle({
@@ -980,6 +1016,7 @@ test("acceptance evidence, chronology, and ZZZ SYNTHETIC ownership fail closed b
     { Subscription_Acceptance_Version: null },
     { Results_Review_At: null },
     { Subscription_Acceptance_Version: "unsafe version" },
+    { Subscription_Acceptance_Version: `terms-v1:${"0".repeat(64)}` },
     { Results_Review_At: "2026-08-21T10:01:00-05:00" },
     { Subscription_Accepted_At: "2026-08-21T10:03:00-05:00" },
     { Deal_Name: "Acme Plumbing Paid Subscription" },
@@ -1025,7 +1062,10 @@ test("acceptance version is bound to the claimed paid operation", async () => {
     onGetContext: (current, readNumber) => readNumber === 2
       ? {
         ...current,
-        deal: { ...current.deal, Subscription_Acceptance_Version: "paid-acceptance-v2" },
+        deal: {
+          ...current.deal,
+          Subscription_Acceptance_Version: `terms-v1:${"0".repeat(64)}`,
+        },
       }
       : current,
   });
@@ -1046,10 +1086,12 @@ test("invalid commercial terms and dates fail before the operation claim", async
   for (const overrides of [
     { Plan: "Enterprise" },
     { Billing_Frequency: "Annual" },
-    { MRR: (growth.recurringMinor - 1) / 100 },
+    { Monthly_Recurring_Revenue: (growth.recurringMinor - 1) / 100 },
+    {
+      Monthly_Recurring_Revenue: undefined,
+      MRR: growth.recurringMinor / 100,
+    },
     { Setup_Fee: (growth.setupMinor - 1) / 100 },
-    { Connected_AI_Minute_Rate:
-      (config.paidCommercialTerms.commonUsageRateMinor + 1) / 100 },
     { Subscription_Start_Date: "2026-02-31" },
     { Subscription_Start_Date: "2026-08-20" },
     { Subscription_Start_Date: "2027-08-23" },
@@ -1059,6 +1101,20 @@ test("invalid commercial terms and dates fail before the operation claim", async
       action: "prepare_paid_subscription",
       dealId: "100000000000001",
     }), /catalog|Subscription_Start_Date/);
+    assert.equal(rejected.calls.some(([kind]) => kind === "claim"), false);
+    assert.equal(rejected.calls.some(([kind]) => kind === "customer"), false);
+    assert.equal(rejected.calls.some(([kind]) => kind === "paid"), false);
+  }
+});
+
+test("paid conversion rejects CRM Plan display labels before the operation claim", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  for (const displayLabel of ["Launch", "Growth", "Scale"]) {
+    const rejected = harness(config, context(config, { Plan: displayLabel }));
+    await assert.rejects(rejected.lifecycle.handle({
+      action: "prepare_paid_subscription",
+      dealId: "100000000000001",
+    }), /approved monthly catalog/);
     assert.equal(rejected.calls.some(([kind]) => kind === "claim"), false);
     assert.equal(rejected.calls.some(([kind]) => kind === "customer"), false);
     assert.equal(rejected.calls.some(([kind]) => kind === "paid"), false);
@@ -1241,7 +1297,10 @@ test("authoritative CRM state is revalidated after customer provisioning", async
   const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
   for (const mutation of [
     (current) => ({ ...current, deal: { ...current.deal, Stage: "Results Review" } }),
-    (current) => ({ ...current, deal: { ...current.deal, MRR: 750 } }),
+    (current) => ({
+      ...current,
+      deal: { ...current.deal, Monthly_Recurring_Revenue: 750 },
+    }),
     (current) => ({
       deal: {
         ...current.deal,
@@ -1317,6 +1376,36 @@ test("completed replay performs paid-only authoritative reconciliation without a
   assert.equal(replay.calls.some(([kind]) => kind === "paid"), false);
   assert.equal(replay.calls.filter(([kind]) => kind === "find_paid").length, 1);
   assert.equal(replay.calls.some(([kind]) => kind === "crm_update"), false);
+});
+
+test("paid reconciliation cannot treat an omitted cleared error as exact", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const exactIntegration = {
+    Billing_Customer_ID: "200000000000001",
+    Billing_Subscription_ID: "300000000000001",
+    Subscription_Status: "Active",
+    Billing_Automation_Status: "Paid Verified",
+    Billing_Last_Sync_At: "2026-08-21T15:01:00.000Z",
+    Billing_Automation_Error: null,
+  };
+  const omittedContext = context(config, exactIntegration);
+  delete omittedContext.deal.Billing_Automation_Error;
+  const omitted = harness(config, omittedContext);
+  assert.equal((await omitted.lifecycle.handle({
+    action: "reconcile",
+    dealId: omittedContext.deal.id,
+  })).outcome, "authoritative_readback_confirmed");
+  const updates = omitted.calls.filter(([kind]) => kind === "crm_update");
+  assert.equal(updates.length, 1);
+  assert.equal(Object.hasOwn(updates[0][1], "Billing_Automation_Error"), true);
+  assert.equal(updates[0][1].Billing_Automation_Error, null);
+
+  const present = harness(config, context(config, exactIntegration));
+  assert.equal((await present.lifecycle.handle({
+    action: "reconcile",
+    dealId: "100000000000001",
+  })).outcome, "authoritative_readback_confirmed");
+  assert.equal(present.calls.some(([kind]) => kind === "crm_update"), false);
 });
 
 test("reconciliation repairs CRM only after authoritative paid readback", async () => {

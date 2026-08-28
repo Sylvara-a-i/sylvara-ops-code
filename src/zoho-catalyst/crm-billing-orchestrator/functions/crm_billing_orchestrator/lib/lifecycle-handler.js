@@ -9,6 +9,7 @@ const {
   isReportSummaryPreWrite,
 } = require("./idempotency");
 const {
+  ACCEPTANCE_VERSION,
   moneyMinor,
   selectCommercialTerms,
 } = require("./commercial-terms");
@@ -67,7 +68,7 @@ function timestamp(value, name) {
 function acceptanceVersion(value) {
   if (
     typeof value !== "string" ||
-    !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/.test(value)
+    !ACCEPTANCE_VERSION.test(value)
   ) fail("Subscription_Acceptance_Version is invalid");
   return value;
 }
@@ -146,6 +147,9 @@ function validatePaidAction(state, config, currentTimestamp, { reconciliation = 
   const subscriptionAcceptanceVersion = acceptanceVersion(
     state.deal.Subscription_Acceptance_Version,
   );
+  if (subscriptionAcceptanceVersion !== config.paidCommercialTerms.acceptanceVersion) {
+    fail("Subscription_Acceptance_Version is invalid for the approved commercial terms");
+  }
   const deploymentId = deploymentIdentifier(
     state.deal.Deployment_Record_ID, "Deployment_Record_ID",
   );
@@ -164,9 +168,7 @@ function validatePaidAction(state, config, currentTimestamp, { reconciliation = 
   }
 
   const selectedPlanValue = String(state.deal.Plan ?? "");
-  const plan = CANONICAL_PLAN_BY_CRM_API_VALUE[selectedPlanValue]
-    ?? (new Set(Object.values(CANONICAL_PLAN_BY_CRM_API_VALUE)).has(selectedPlanValue)
-      ? selectedPlanValue : "");
+  const plan = CANONICAL_PLAN_BY_CRM_API_VALUE[selectedPlanValue] ?? "";
   const billingFrequency = String(state.deal.Billing_Frequency ?? "");
   const commercialTerms = selectCommercialTerms(
     config.paidCommercialTerms,
@@ -178,10 +180,8 @@ function validatePaidAction(state, config, currentTimestamp, { reconciliation = 
     fail("Deal Plan and Billing Frequency are outside the approved monthly catalog");
   }
   if (
-    moneyMinor(state.deal.MRR) !== commercialTerms.recurringMinor ||
-    moneyMinor(state.deal.Setup_Fee) !== commercialTerms.setupMinor ||
-    moneyMinor(state.deal.Connected_AI_Minute_Rate) !==
-      config.paidCommercialTerms.commonUsageRateMinor
+    moneyMinor(state.deal.Monthly_Recurring_Revenue) !== commercialTerms.recurringMinor ||
+    moneyMinor(state.deal.Setup_Fee) !== commercialTerms.setupMinor
   ) fail("Deal commercial terms do not match the approved catalog");
 
   const subscriptionStartDate = state.deal.Subscription_Start_Date;
@@ -412,7 +412,8 @@ function createLifecycleHandler(
     });
     const patch = reportSummaryPatch(config, summary);
     const patchMatches = (deal) => Object.entries(patch).every(([field, expected]) => (
-      expected === null ? deal[field] == null
+      expected === null
+        ? Object.hasOwn(deal, field) && deal[field] === null
         : new Set(["Test_Start_At", "Test_End_At"]).has(field)
           ? Number.isFinite(Date.parse(deal[field]))
             && Date.parse(deal[field]) === Date.parse(expected)
@@ -700,7 +701,9 @@ function createLifecycleHandler(
     const expectedPatch = successPatch(customerId, subscriptionId, subscriptionStatus);
     const integrationMatches = Object.entries(expectedPatch).every(([field, expected]) => (
       field === "Billing_Last_Sync_At" ||
-      (expected === null ? state.deal[field] == null : state.deal[field] === expected)
+      (expected === null
+        ? Object.hasOwn(state.deal, field) && state.deal[field] === null
+        : state.deal[field] === expected)
     ));
     const authoritativeDeal = integrationMatches
       ? state.deal

@@ -1,11 +1,21 @@
 "use strict";
 
+const crypto = require("node:crypto");
+
 const PLAN_FREQUENCY_KEYS = Object.freeze([
   "Launch::Monthly",
   "Growth::Monthly",
   "Scale::Monthly",
 ]);
 const TOP_LEVEL_KEYS = Object.freeze([
+  "acceptanceVersion",
+  "commonUsageRateMinor",
+  "currency",
+  "interval",
+  "intervalUnit",
+  "plans",
+]);
+const COMMERCIAL_TERM_KEYS = Object.freeze([
   "commonUsageRateMinor",
   "currency",
   "interval",
@@ -13,6 +23,7 @@ const TOP_LEVEL_KEYS = Object.freeze([
   "plans",
 ]);
 const PLAN_TERM_KEYS = Object.freeze(["recurringMinor", "setupMinor"]);
+const ACCEPTANCE_VERSION = /^terms-v1:[a-f0-9]{64}$/;
 
 function sameKeys(value, expected) {
   return value && typeof value === "object" && !Array.isArray(value) &&
@@ -21,6 +32,46 @@ function sameKeys(value, expected) {
 
 function positiveMinorUnit(value) {
   return Number.isSafeInteger(value) && value > 0 && value <= 1_000_000_000;
+}
+
+function validateCommercialTermsShape(value) {
+  if (
+    !sameKeys(value, COMMERCIAL_TERM_KEYS) ||
+    typeof value.currency !== "string" || !/^[A-Z]{3}$/.test(value.currency) ||
+    value.interval !== 1 || value.intervalUnit !== "months" ||
+    !positiveMinorUnit(value.commonUsageRateMinor) ||
+    !sameKeys(value.plans, PLAN_FREQUENCY_KEYS)
+  ) throw new TypeError("paid commercial terms are invalid");
+
+  for (const key of PLAN_FREQUENCY_KEYS) {
+    const plan = value.plans[key];
+    if (
+      !sameKeys(plan, PLAN_TERM_KEYS) ||
+      !positiveMinorUnit(plan.recurringMinor) ||
+      !positiveMinorUnit(plan.setupMinor)
+    ) throw new TypeError("paid commercial terms are invalid");
+  }
+  return value;
+}
+
+/**
+ * Derive the CRM-safe acceptance identifier from every price-bearing term.
+ * A fixed tuple order makes the digest independent of JSON property ordering.
+ */
+function derivePaidCommercialTermsAcceptanceVersion(value) {
+  const contract = validateCommercialTermsShape(value);
+  const canonical = JSON.stringify([
+    ["currency", contract.currency],
+    ["interval", contract.interval],
+    ["intervalUnit", contract.intervalUnit],
+    ["commonUsageRateMinor", contract.commonUsageRateMinor],
+    ["plans", PLAN_FREQUENCY_KEYS.map((key) => [
+      key,
+      contract.plans[key].recurringMinor,
+      contract.plans[key].setupMinor,
+    ])],
+  ]);
+  return `terms-v1:${crypto.createHash("sha256").update(canonical, "utf8").digest("hex")}`;
 }
 
 /**
@@ -38,22 +89,23 @@ function parsePaidCommercialTerms(raw) {
   } catch {
     throw new TypeError("paid commercial terms are invalid");
   }
-  if (
-    !sameKeys(parsed, TOP_LEVEL_KEYS) ||
-    typeof parsed.currency !== "string" || !/^[A-Z]{3}$/.test(parsed.currency) ||
-    parsed.interval !== 1 || parsed.intervalUnit !== "months" ||
-    !positiveMinorUnit(parsed.commonUsageRateMinor) ||
-    !sameKeys(parsed.plans, PLAN_FREQUENCY_KEYS)
-  ) throw new TypeError("paid commercial terms are invalid");
+  if (!sameKeys(parsed, TOP_LEVEL_KEYS) || !ACCEPTANCE_VERSION.test(parsed.acceptanceVersion)) {
+    throw new TypeError("paid commercial terms are invalid");
+  }
+  const commercialTerms = validateCommercialTermsShape({
+    currency: parsed.currency,
+    interval: parsed.interval,
+    intervalUnit: parsed.intervalUnit,
+    commonUsageRateMinor: parsed.commonUsageRateMinor,
+    plans: parsed.plans,
+  });
+  if (parsed.acceptanceVersion !== derivePaidCommercialTermsAcceptanceVersion(commercialTerms)) {
+    throw new TypeError("paid commercial terms are invalid");
+  }
 
   const plans = Object.create(null);
   for (const key of PLAN_FREQUENCY_KEYS) {
-    const values = parsed.plans[key];
-    if (
-      !sameKeys(values, PLAN_TERM_KEYS) ||
-      !positiveMinorUnit(values.recurringMinor) ||
-      !positiveMinorUnit(values.setupMinor)
-    ) throw new TypeError("paid commercial terms are invalid");
+    const values = commercialTerms.plans[key];
     const [plan, billingFrequency] = key.split("::");
     plans[key] = Object.freeze({
       plan,
@@ -63,6 +115,7 @@ function parsePaidCommercialTerms(raw) {
     });
   }
   return Object.freeze({
+    acceptanceVersion: parsed.acceptanceVersion,
     currency: parsed.currency,
     interval: parsed.interval,
     intervalUnit: parsed.intervalUnit,
@@ -99,8 +152,10 @@ function moneyMinor(value) {
 }
 
 module.exports = {
+  ACCEPTANCE_VERSION,
   PLAN_FREQUENCY_KEYS,
   containsCommercialTerms,
+  derivePaidCommercialTermsAcceptanceVersion,
   moneyMinor,
   parsePaidCommercialTerms,
   selectCommercialTerms,

@@ -51,6 +51,10 @@ test("configuration is immutable active Development or dependency-free dark Prod
   assert.notEqual(config.reportSummaryHeaderValue, config.sharedHeaderValue);
   assert.equal(config.operationTable, OPERATION_TABLE_NAME);
   assert.equal(config.analyticsOutboxTable, ANALYTICS_OUTBOX_TABLE_NAME);
+  assert.equal(
+    config.paidCommercialTerms.acceptanceVersion,
+    SYNTHETIC_COMMERCIAL_TERMS.acceptanceVersion,
+  );
   assert.equal(config.paidCommercialTerms.currency, "USD");
   assert.equal(config.paidCommercialTerms.interval, 1);
   assert.equal(config.paidCommercialTerms.intervalUnit, "months");
@@ -126,10 +130,18 @@ test("configuration is immutable active Development or dependency-free dark Prod
       /PAID_PLAN_CODE_MAP/,
     );
   }
+  const { acceptanceVersion: _omittedAcceptanceVersion, ...termsWithoutAcceptanceVersion } =
+    SYNTHETIC_COMMERCIAL_TERMS;
   for (const invalidTerms of [
     "",
     "not-json",
+    JSON.stringify(termsWithoutAcceptanceVersion),
     JSON.stringify({ ...SYNTHETIC_COMMERCIAL_TERMS, extra: true }),
+    JSON.stringify({ ...SYNTHETIC_COMMERCIAL_TERMS, acceptanceVersion: "unsafe version" }),
+    JSON.stringify({
+      ...SYNTHETIC_COMMERCIAL_TERMS,
+      acceptanceVersion: `terms-v1:${"0".repeat(64)}`,
+    }),
     JSON.stringify({ ...SYNTHETIC_COMMERCIAL_TERMS, currency: "usd" }),
     JSON.stringify({ ...SYNTHETIC_COMMERCIAL_TERMS, interval: 2 }),
     JSON.stringify({ ...SYNTHETIC_COMMERCIAL_TERMS, intervalUnit: "years" }),

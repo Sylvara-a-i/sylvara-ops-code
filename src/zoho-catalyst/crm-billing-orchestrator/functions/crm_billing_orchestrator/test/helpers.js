@@ -1,6 +1,9 @@
 "use strict";
 
 const crypto = require("node:crypto");
+const {
+  derivePaidCommercialTermsAcceptanceVersion,
+} = require("../lib/commercial-terms");
 
 const REVISION = "a".repeat(40);
 const DEVELOPMENT_RUNTIME_PROOF = "r".repeat(64);
@@ -13,7 +16,7 @@ const PAID_TERMS_VARIABLE = ["PAID", "COMMERCIAL", "TERMS", "JSON"].join("_");
 
 // Deliberately non-commercial fixture values prove exact matching without
 // publishing the privately configured paid terms.
-const SYNTHETIC_COMMERCIAL_TERMS = Object.freeze({
+const SYNTHETIC_COMMERCIAL_TERMS_CORE = Object.freeze({
   currency: "USD",
   interval: 1,
   intervalUnit: "months",
@@ -23,6 +26,12 @@ const SYNTHETIC_COMMERCIAL_TERMS = Object.freeze({
     "Growth::Monthly": Object.freeze({ recurringMinor: 34567, setupMinor: 45678 }),
     "Scale::Monthly": Object.freeze({ recurringMinor: 56789, setupMinor: 67890 }),
   }),
+});
+const SYNTHETIC_COMMERCIAL_TERMS = Object.freeze({
+  acceptanceVersion: derivePaidCommercialTermsAcceptanceVersion(
+    SYNTHETIC_COMMERCIAL_TERMS_CORE,
+  ),
+  ...SYNTHETIC_COMMERCIAL_TERMS_CORE,
 });
 
 function baseEnvironment(overrides = {}) {

@@ -1,3 +1,4 @@
+import csv
 import json
 import unittest
 from pathlib import Path
@@ -11,6 +12,15 @@ CONTRACT_PATH = (
     / "free-revenue-leak-test"
     / "config"
     / "automation-contract.json"
+)
+CRM_LAYOUT_PATH = (
+    ROOT
+    / "src"
+    / "zoho-crm"
+    / "reference"
+    / "snapshots"
+    / "2026-08-14"
+    / "crm-layout-field-order.csv"
 )
 
 
@@ -40,7 +50,7 @@ class FreeRevenueLeakCrmContractTests(unittest.TestCase):
         self.assertNotIn("send sms", rendered)
         self.assertNotIn("create sign", rendered)
 
-    def test_crm_contract_records_each_verified_existing_field_once(self):
+    def test_crm_contract_records_each_declared_desired_field_once(self):
         fields = self.contract["deal_fields_existing"]
         names = [field["api_name"] for field in fields]
         self.assertEqual(len(names), 17)
@@ -53,9 +63,13 @@ class FreeRevenueLeakCrmContractTests(unittest.TestCase):
         self.assertIn("Test_Qualified_Opportunities", names)
         self.assertIn("Test_Existing_Customer_Calls", names)
         self.assertNotIn("Test_New_Service_Inquiries", names)
+        self.assertIn("not standalone", self.contract["deal_fields_existing_semantics"])
+        self.assertIn("do not extend", self.contract["deal_fields_existing_semantics"])
         self.assertEqual(self.contract["deal_fields_to_add"], [])
         evidence = self.contract["deal_field_metadata_evidence"]
         self.assertEqual(evidence["method"], "read-only live Deals field-metadata audit")
+        self.assertFalse(evidence["field_by_field_public_evidence_available"])
+        self.assertIn("does not extend", evidence["authority_limit"])
         self.assertFalse(evidence["private_identifiers_committed"])
         self.assertFalse(evidence["write_performed"])
 
@@ -133,6 +147,312 @@ class FreeRevenueLeakCrmContractTests(unittest.TestCase):
         self.assertIn("Subscription Acceptance Status equals Accepted", paid)
         self.assertIn("Billing Automation Status equals Paid Verified", paid)
         self.assertIn("no Billing subscription exists", transitions["Propose Subscription"])
+
+    def test_blueprint_topology_cannot_auto_activate_bill_message_or_close_won(self):
+        blueprint = self.contract["blueprint"]
+        boundary = blueprint["deployment_boundary"]
+        self.assertEqual(boundary["status"], "desired_state_not_deployable")
+        self.assertFalse(boundary["live_write_authorized"])
+        self.assertFalse(boundary["writer_or_provider_payload_contract_in_repository"])
+        self.assertFalse(boundary["provider_save_readback_proven"])
+        self.assertFalse(boundary["runtime_acceptance_proven"])
+        self.assertFalse(boundary["external_evidence_validator_in_repository"])
+        self.assertFalse(boundary["metadata_and_layout_gate_satisfied"])
+        metadata_gate = blueprint["transition_field_metadata_gate"]
+        self.assertFalse(metadata_gate["self_authored_release_lists_are_metadata_authority"])
+        self.assertTrue(metadata_gate["fresh_readback_required_before_deployment"])
+        self.assertFalse(metadata_gate["snapshot_derived_active_layout_gap_satisfied"])
+
+        topology = blueprint["transition_topology"]
+        self.assertEqual(len(topology), 13)
+        self.assertEqual(len({item["name"] for item in topology}), 13)
+        self.assertTrue(all(item["execution"] == "manual_only" for item in topology))
+        self.assertTrue(
+            all(
+                item["from_state"] in blueprint["states"]
+                and item["to_state"] in blueprint["states"]
+                for item in topology
+            )
+        )
+        by_name = {item["name"]: item for item in topology}
+        topology_field_surface = set()
+        for transition in topology:
+            topology_field_surface.update(
+                value
+                for criterion in transition["criteria"]
+                for key in ("api_name", "left_api_name", "right_api_name")
+                if (value := criterion.get(key)) is not None
+            )
+            topology_field_surface.update(transition["required_preexisting_fields"])
+            topology_field_surface.update(transition["operator_input_fields"])
+            for field_group in (
+                "conditional_preexisting_fields",
+                "conditional_operator_input_fields",
+            ):
+                topology_field_surface.update(
+                    field["api_name"] for field in transition[field_group]
+                )
+        with CRM_LAYOUT_PATH.open(encoding="utf-8", newline="") as stream:
+            active_layout_api_names = {
+                row["field_api_name"]
+                for row in csv.DictReader(stream)
+                if row["module_api_name"] == "Deals"
+                and row["layout_status"] == "active"
+                and row["metadata_verification_status"] == "verified_live_read_only"
+            }
+        snapshot_layout_gap = topology_field_surface - active_layout_api_names
+        self.assertEqual(
+            snapshot_layout_gap,
+            set(metadata_gate["snapshot_derived_active_layout_unavailable_api_names"]),
+        )
+        self.assertEqual(len(snapshot_layout_gap), 25)
+        self.assertTrue({
+            "Billing_Subscription_ID",
+            "Subscription_Status",
+            "Subscription_Start_Date",
+        }.issubset(snapshot_layout_gap))
+        layout_derivation = metadata_gate["active_layout_gap_derivation"]
+        self.assertFalse(layout_derivation["self_authored_release_field_union_allowed"])
+        self.assertTrue(layout_derivation["fresh_readback_required_for_every_gap"])
+        proof = blueprint["form2_controller_proof_evidence"]
+        self.assertFalse(proof["standalone_crm_boolean_exists"])
+        self.assertFalse(proof["is_signature"])
+        self.assertFalse(proof["is_go_live_approval"])
+        confirm_fields = {
+            criterion["api_name"]
+            for criterion in by_name["Confirm Authorization"]["criteria"]
+        }
+        self.assertEqual(confirm_fields, {
+            "Setup_Access_Status",
+            "Setup_Form_Submission_ID",
+            "Setup_Form_Submitted_At",
+            "Authorized_Representative_Confirmed",
+            "Test_Scope_Accepted",
+            "Authority_Confirmed_At",
+            "Test_Scope_Accepted_At",
+            "Go_Live_Approval_Status",
+        })
+        self.assertIn(
+            {
+                "api_name": "Go_Live_Approval_Status",
+                "operator": "not_equals",
+                "value": "Approved",
+            },
+            by_name["Confirm Authorization"]["criteria"],
+        )
+        self.assertEqual(
+            (
+                by_name["Record Internal Approval"]["from_state"],
+                by_name["Record Internal Approval"]["to_state"],
+            ),
+            ("Setup and QA", "Setup and QA"),
+        )
+        self.assertEqual(
+            (
+                by_name["Activate Test Route"]["from_state"],
+                by_name["Activate Test Route"]["to_state"],
+            ),
+            ("Setup and QA", "Test Live"),
+        )
+        self.assertEqual(
+            by_name["Record Internal Approval"]["external_evidence_requirements"],
+            [{
+                "contract_id": "internal-approval-receipt-v1",
+                "required": True,
+                "fresh": True,
+                "must_complete_before_transition": True,
+            }],
+        )
+        self.assertEqual(
+            by_name["Activate Test Route"]["external_evidence_requirements"],
+            [{
+                "contract_id": "route-activation-readback-v1",
+                "required": True,
+                "fresh": True,
+                "must_complete_before_transition": True,
+            }],
+        )
+        approval_contract = blueprint["external_evidence_contracts"][
+            "internal-approval-receipt-v1"
+        ]
+        activation_contract = blueprint["external_evidence_contracts"][
+            "route-activation-readback-v1"
+        ]
+        for evidence in (approval_contract, activation_contract):
+            self.assertEqual(evidence["validator_status"], "not_implemented")
+            self.assertFalse(evidence["mutation_allowed"])
+            self.assertEqual(evidence["max_age_at_transition_seconds"], 300)
+            self.assertIn("Raw Deal", evidence["private_identifier_policy"])
+            self.assertTrue(evidence["one_time_consumption"]["required"])
+            self.assertEqual(
+                evidence["one_time_consumption"]["replay_behavior"], "reject"
+            )
+            crypto = evidence["cryptographic_boundary"]
+            self.assertEqual(crypto["intent_signature_algorithm"], "HMAC-SHA-256")
+            self.assertEqual(crypto["evidence_receipt_algorithm"], "HMAC-SHA-256")
+            self.assertFalse(crypto["intent_signature_is_legal_signature"])
+            claim_paths = {claim["path"] for claim in evidence["required_claims"]}
+            self.assertEqual(
+                set(crypto["canonical_binding_fields"]),
+                claim_paths - {"evidence_receipt"},
+            )
+            self.assertTrue({
+                "deal_id",
+                "deployment_record_id",
+                "configuration_version",
+                "route_fingerprint",
+                "approval_event_key",
+                "activation_event_key",
+                "source_revision",
+            }.isdisjoint(claim_paths))
+        activation_claims = activation_contract["required_claims"]
+        self.assertIn({
+            "path": "route_registry_state",
+            "operator": "equals",
+            "value": "active",
+        }, activation_claims)
+        self.assertIn({
+            "path": "provider_route_state",
+            "operator": "equals",
+            "value": "active",
+        }, activation_claims)
+        self.assertIn({
+            "path": "approval_chain_valid",
+            "operator": "equals",
+            "value": True,
+        }, activation_claims)
+        self.assertEqual(
+            [item["name"] for item in topology if item["to_state"] == "Closed Won"],
+            ["Activate Subscription"],
+        )
+        self.assertIn(
+            {"api_name": "Subscription_Status", "operator": "equals", "value": "Active"},
+            by_name["Activate Subscription"]["criteria"],
+        )
+        self.assertEqual(
+            by_name["Activate Subscription"]["operator_input_fields"], []
+        )
+        paid_requirement = by_name["Activate Subscription"][
+            "external_evidence_requirements"
+        ]
+        self.assertEqual(
+            paid_requirement[0]["contract_id"],
+            "billing-closed-won-reconciliation-v1",
+        )
+        paid_contract = blueprint["external_evidence_contracts"][
+            "billing-closed-won-reconciliation-v1"
+        ]
+        self.assertEqual(paid_contract["request_action"], "reconcile")
+        self.assertTrue(paid_contract["non_creating"])
+        self.assertEqual(paid_contract["created_resource_count"], 0)
+        self.assertEqual(paid_contract["validator_status"], "not_implemented")
+
+        loss_transitions = [item for item in topology if item["to_state"] == "Closed Lost"]
+        self.assertEqual(len(loss_transitions), 6)
+        for transition in loss_transitions:
+            with self.subTest(route_inactive=transition["name"]):
+                self.assertIn(
+                    "Rollback_Completed_At",
+                    transition["required_preexisting_fields"],
+                )
+                self.assertIn(
+                    {"api_name": "Rollback_Completed_At", "operator": "is_not_empty"},
+                    transition["criteria"],
+                )
+                self.assertEqual(
+                    transition["external_evidence_requirements"][0]["contract_id"],
+                    "route-inactive-readback-v1",
+                )
+        route_contract = blueprint["external_evidence_contracts"][
+            "route-inactive-readback-v1"
+        ]
+        self.assertEqual(route_contract["max_age_at_transition_seconds"], 300)
+        self.assertEqual(route_contract["keyed_binding"]["algorithm"], "HMAC-SHA-256")
+        self.assertTrue(route_contract["one_time_consumption"]["required"])
+        self.assertEqual(
+            route_contract["one_time_consumption"]["replay_behavior"], "reject"
+        )
+        claims = route_contract["required_claims"]
+        self.assertIn({
+            "path": "route_registry_state",
+            "operator": "equals",
+            "value": "inactive",
+        }, claims)
+        self.assertIn({
+            "path": "provider_route_state",
+            "operator": "equals",
+            "value": "inactive",
+        }, claims)
+        claims_by_path = {}
+        for claim in claims:
+            claims_by_path.setdefault(claim["path"], []).append(claim)
+        self.assertEqual(
+            claims_by_path["deal_binding_digest"][0]["operator"],
+            "equals_domain_separated_keyed_hmac_of_current_crm_deal_id",
+        )
+        self.assertEqual(
+            claims_by_path["route_fingerprint_digest"][0]["operator"],
+            "equals_domain_separated_keyed_hmac_of_authoritative_route_fingerprint",
+        )
+        observed_rules = {
+            claim["operator"]: claim for claim in claims_by_path["observed_at"]
+        }
+        self.assertEqual(
+            observed_rules["greater_than_or_equal_to_max"]["sources"],
+            ["evidence.last_route_mutation_at", "crm.Rollback_Completed_At"],
+        )
+        self.assertEqual(
+            observed_rules["age_at_transition_at_most_seconds"]["value"], 300
+        )
+        self.assertEqual(
+            claims_by_path["evidence_receipt"][0]["operator"],
+            "equals_keyed_hmac_of_canonical_binding",
+        )
+
+        allowed_action_fields = {
+            action["api_name"]
+            for item in topology
+            for action in item["allowed_after_actions"]
+        }
+        allowed_action_types = {
+            action["type"]
+            for item in topology
+            for action in item["allowed_after_actions"]
+        }
+        self.assertEqual(allowed_action_fields, {"Test_Status"})
+        self.assertEqual(allowed_action_types, {"field_update"})
+        self.assertEqual(
+            by_name["Close Live Test"]["allowed_after_actions"],
+            [
+                {
+                    "type": "field_update",
+                    "api_name": "Test_Status",
+                    "value": "Rolled Back",
+                }
+            ],
+        )
+        for name in ("Close After Results Review", "Decline Subscription"):
+            with self.subTest(completed_loss_path=name):
+                self.assertIn(
+                    {"api_name": "Test_Status", "operator": "equals", "value": "Completed"},
+                    by_name[name]["criteria"],
+                )
+                self.assertEqual(by_name[name]["allowed_after_actions"], [])
+                self.assertEqual(
+                    by_name[name]["operator_input_fields"], ["Reason_For_Loss__s"]
+                )
+
+        prohibited = " ".join(blueprint["automatic_actions_prohibited"]).lower()
+        for marker in (
+            "automatic go-live",
+            "billing customer",
+            "automatic paid acceptance",
+            "premature closed won",
+            "zoho sign",
+            "sms",
+        ):
+            with self.subTest(prohibited=marker):
+                self.assertIn(marker, prohibited)
 
     def test_synthetic_acceptance_requires_idempotent_record_and_task_counts(self):
         expected = self.contract["synthetic_acceptance"]["expected_records"]

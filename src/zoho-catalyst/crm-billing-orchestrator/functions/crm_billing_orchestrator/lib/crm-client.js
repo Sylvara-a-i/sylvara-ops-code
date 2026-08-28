@@ -129,9 +129,8 @@ function createCrmClient(config, {
     "Test_Status",
     "Plan",
     "Billing_Frequency",
-    "MRR",
+    "Monthly_Recurring_Revenue",
     "Setup_Fee",
-    "Connected_AI_Minute_Rate",
     "Subscription_Start_Date",
     "Subscription_Acceptance_Status",
     "Subscription_Accepted_At",
@@ -279,7 +278,9 @@ function createCrmClient(config, {
       });
     }
     for (const [field, expected] of entries) {
-      const matches = expected === null ? readback[field] == null : readback[field] === expected;
+      const matches = expected === null
+        ? Object.hasOwn(readback, field) && readback[field] === null
+        : readback[field] === expected;
       if (!matches) fail("CRM Deal readback does not match", {
         ambiguous: true,
         publicCode: "reconciliation_required",
@@ -338,7 +339,8 @@ function createCrmClient(config, {
       });
     }
     for (const [field, expected] of entries) {
-      const matches = expected === null ? readback[field] == null
+      const matches = expected === null
+        ? Object.hasOwn(readback, field) && readback[field] === null
         : new Set(["Test_Start_At", "Test_End_At"]).has(field)
           ? Number.isFinite(Date.parse(readback[field]))
             && Date.parse(readback[field]) === Date.parse(expected)

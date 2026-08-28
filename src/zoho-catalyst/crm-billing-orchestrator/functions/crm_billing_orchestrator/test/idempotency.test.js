@@ -321,7 +321,7 @@ test("paid references stay stable while accepted commercial changes conflict", a
       billingFrequency: "Monthly",
       plan: "Growth",
       recurringMinor: growth.recurringMinor,
-      subscriptionAcceptanceVersion: "paid-acceptance-v1",
+      subscriptionAcceptanceVersion: config.paidCommercialTerms.acceptanceVersion,
       subscriptionStartDate: "2026-09-01",
     },
   );
@@ -335,7 +335,7 @@ test("paid references stay stable while accepted commercial changes conflict", a
       billingFrequency: "Monthly",
       plan: "Scale",
       recurringMinor: scale.recurringMinor,
-      subscriptionAcceptanceVersion: "paid-acceptance-v1",
+      subscriptionAcceptanceVersion: config.paidCommercialTerms.acceptanceVersion,
       subscriptionStartDate: "2026-10-01",
     },
   );
@@ -349,7 +349,7 @@ test("paid references stay stable while accepted commercial changes conflict", a
       billingFrequency: "Monthly",
       plan: "Growth",
       recurringMinor: growth.recurringMinor,
-      subscriptionAcceptanceVersion: "paid-acceptance-v2",
+      subscriptionAcceptanceVersion: `terms-v1:${"0".repeat(64)}`,
       subscriptionStartDate: "2026-09-01",
     },
   );
