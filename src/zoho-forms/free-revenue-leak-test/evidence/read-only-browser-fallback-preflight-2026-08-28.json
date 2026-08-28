@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "record_type": "sanitized_free_revenue_leak_test_zoho_forms_read_only_browser_fallback_preflight",
+  "observed_at": "2026-08-28",
+  "repository_head_at_observation": "7229d06f66858fb170f50a986441a3e463eb6339",
+  "release_contract_at_observation": {
+    "contract_id": "sylvara-free-revenue-leak-test-e2e-v4",
+    "schema_version": 4
+  },
+  "status": "tenant_unbound_builder_observations_only",
+  "evidence_boundary": {
+    "sylvara_forms_audit_connector_available": false,
+    "sylvara_forms_changes_connector_available": false,
+    "zoho_creator_form_metadata_substituted": false,
+    "fallback_reason": "No purpose-built Sylvara Zoho Forms connector was advertised for the required builder and integration metadata.",
+    "source": "authenticated read-only Zoho Forms builder and integration settings",
+    "authenticated_account_identity_observed_privately": true,
+    "expected_sylvara_forms_tenant_binding_proven": false,
+    "private_account_tenant_or_user_identity_included": false,
+    "canonical_active_form_count": 2,
+    "bounded_observed_builder_state_refreshed": true,
+    "unobserved_builder_or_tenant_state_inferred": false,
+    "private_form_ids_urls_aliases_destinations_headers_or_values_included": false,
+    "customer_or_submission_records_read": false,
+    "writes_saves_submissions_webhook_tests_or_runtime_invocations_performed": false,
+    "retell_customer_billing_or_production_action_performed": false
+  },
+  "form1": {
+    "public_submission_identity": {
+      "field_present": true,
+      "respondent_visible": false,
+      "generation_owner": "Zoho Forms",
+      "generation_mechanism": "provider-generated alphanumeric identifier",
+      "configured_length": 10,
+      "restrict_id_repetition": true,
+      "mechanism_observed": true,
+      "generated_before_native_crm_upsert_proven": false,
+      "stable_across_provider_retry_or_repush_proven": false,
+      "duplicate_lead_prevention_proven": false
+    },
+    "field_alias_configuration": {
+      "configured_alias_count": 0,
+      "assisted_token_alias_present": false
+    },
+    "assisted_token": {
+      "field_present": true,
+      "mandatory": false,
+      "personal": false,
+      "encrypted": false,
+      "prefill_webhook_field_present": false
+    },
+    "complete_privacy_and_read_only_dictionary_proven": false
+  },
+  "form2": {
+    "prefill_webhook_field_present": false,
+    "controller_fields": {
+      "setupToken": {
+        "field_present": true,
+        "mandatory": false,
+        "personal": false,
+        "encrypted": false,
+        "read_only": "unresolved"
+      },
+      "prefillId": {
+        "field_present": true,
+        "mandatory": false,
+        "personal": true,
+        "encrypted": true,
+        "read_only": "unresolved"
+      }
+    },
+    "alert_recipient_email": {
+      "field_present": true,
+      "mandatory": false,
+      "personal": true,
+      "encrypted": true
+    },
+    "prohibited_respondent_fields_present": [
+      "testPhoneNumber",
+      "alertRecipientMobile"
+    ],
+    "submission_webhook": {
+      "active": true,
+      "payload_mode": "JSON",
+      "connection_section_present": true,
+      "required_parameter_count": 36,
+      "required_parameters_present": true,
+      "observed_parameter_count": 38,
+      "prohibited_extra_parameters": [
+        "testPhoneNumber",
+        "alertRecipientMobile"
+      ],
+      "method_revalidated_by_this_observation": false,
+      "private_destination_or_header_revalidated_by_this_observation": false
+    }
+  },
+  "containment": {
+    "builder_change_authorized_by_this_record": false,
+    "webhook_change_authorized_by_this_record": false,
+    "gateway_activation_authorized_by_this_record": false,
+    "synthetic_submission_authorized_by_this_record": false,
+    "future_live_change_authorized_by_this_record": false
+  }
+}
