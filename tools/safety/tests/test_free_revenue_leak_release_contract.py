@@ -37,6 +37,13 @@ PR_HEAD_CONVERGENCE_PATH = (
     / "evidence"
     / "free-revenue-leak-test-development-pr-head-convergence-2026-08-28.json"
 )
+RELEASE_HEAD_CONVERGENCE_PATH = (
+    ROOT
+    / "src"
+    / "zoho-catalyst"
+    / "evidence"
+    / "free-revenue-leak-test-development-pr-head-convergence-2026-08-28-288a93c.json"
+)
 ROUTE_CONTINUATION_PATH = (
     ROOT
     / "src"
@@ -117,6 +124,19 @@ REQUEST_FORM_README_PATH = (
 )
 SETUP_FORM_README_PATH = (
     ROOT / "src" / "zoho-catalyst" / "revenue-leak-test-setup-form" / "README.md"
+)
+ANALYTICS_README_PATH = (
+    ROOT / "src" / "zoho-catalyst" / "revenue-desk-analytics" / "README.md"
+)
+CURRENT_CONVERGENCE_PUBLIC_MIRROR_PATHS = (
+    DEPLOYMENT_LOG_PATH,
+    RECONCILIATION_RUNBOOK_PATH,
+    SHARED_MONITOR_RUNBOOK_PATH,
+    ZOHO_README_PATH,
+    CALL_RUNTIME_README_PATH,
+    REQUEST_FORM_README_PATH,
+    SETUP_FORM_README_PATH,
+    ANALYTICS_README_PATH,
 )
 ROUTE_CONTINUATION_PUBLIC_MIRROR_PATHS = (
     SHARED_MONITOR_RUNBOOK_PATH,
@@ -235,6 +255,9 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         cls.pr_head_convergence = json.loads(
             PR_HEAD_CONVERGENCE_PATH.read_text(encoding="utf-8")
         )
+        cls.release_head_convergence = json.loads(
+            RELEASE_HEAD_CONVERGENCE_PATH.read_text(encoding="utf-8")
+        )
         cls.route_continuation = json.loads(
             ROUTE_CONTINUATION_PATH.read_text(encoding="utf-8")
         )
@@ -266,6 +289,10 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         cls.route_continuation_public_mirrors = {
             path: path.read_text(encoding="utf-8")
             for path in ROUTE_CONTINUATION_PUBLIC_MIRROR_PATHS
+        }
+        cls.current_convergence_public_mirrors = {
+            path: path.read_text(encoding="utf-8")
+            for path in CURRENT_CONVERGENCE_PUBLIC_MIRROR_PATHS
         }
         cls.forms_manifest = json.loads(FORMS_MANIFEST_PATH.read_text(encoding="utf-8"))
         cls.form2_routes = json.loads(FORM2_ROUTES_PATH.read_text(encoding="utf-8"))
@@ -2804,6 +2831,308 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             )
         )
         self.assertIsNone(re.search(r"[a-z]:[\\/]", serialized))
+
+    def test_development_release_head_convergence_is_exact_uninvoked_and_sanitized(self):
+        evidence = self.release_head_convergence
+        revision = "288a93c7773acaf82fab277702e6b4e3d7354564"
+        predecessor = "e1da1bc3457e506faf64c71db38869c8b26c1bbc"
+        evidence_name = (
+            "free-revenue-leak-test-development-pr-head-"
+            "convergence-2026-08-28-288a93c.json"
+        )
+
+        self.assertEqual(evidence["schema_version"], 1)
+        self.assertEqual(
+            evidence["record_type"],
+            "sanitized_free_revenue_leak_test_development_pr_head_convergence",
+        )
+        self.assertEqual(evidence["execution_date_utc"], "2026-08-28")
+        self.assertEqual(evidence["environment"], "Development")
+        self.assertEqual(evidence["source_revision"], revision)
+        self.assertEqual(evidence["deployed_pr_head_revision"], revision)
+        self.assertEqual(evidence["predecessor_revision"], predecessor)
+        self.assertEqual(
+            evidence["outcome"],
+            "six_function_release_head_source_and_configuration_convergence_"
+            "exact_ingress_disabled_no_runtime_invocation",
+        )
+        self.assertEqual(
+            evidence["release_classification"]["development_definition_convergence"],
+            "proven_at_recorded_release_revision",
+        )
+        self.assertTrue(
+            evidence["historical_evidence"]["records_preserved_without_rewrite"]
+        )
+        self.assertEqual(
+            evidence["historical_evidence"]["immediate_predecessor_record"],
+            "src/zoho-catalyst/evidence/"
+            "free-revenue-leak-test-development-pr-head-convergence-2026-08-28.json",
+        )
+
+        deployment = evidence["deployment_readback"]
+        expected_functions = [
+            ("crm_billing_orchestrator", "Advanced I/O", "node24", 256, 30, 220),
+            (
+                "revenue_leak_test_request_form",
+                "Advanced I/O",
+                "node24",
+                256,
+                30,
+                218,
+            ),
+            (
+                "revenue_leak_test_setup_form",
+                "Advanced I/O",
+                "node24",
+                256,
+                34,
+                227,
+            ),
+            ("revenue_desk_call_gateway", "Advanced I/O", "node24", 256, 31, 27),
+            ("revenue_desk_call_worker", "Job", "node24", 256, 28, 4),
+            ("analytics_sync", "Job", "node24", 256, 7, 16),
+        ]
+        self.assertEqual(deployment["canonical_function_count"], 6)
+        self.assertEqual(
+            [
+                (
+                    item["api_name"],
+                    item["type"],
+                    item["runtime"],
+                    item["memory_mb"],
+                    item["environment_variable_count"],
+                    item["archive_file_count"],
+                )
+                for item in deployment["functions"]
+            ],
+            expected_functions,
+        )
+        self.assertEqual(deployment["configuration_delta"], "SOURCE_REVISION_only")
+        self.assertTrue(
+            deployment["all_non_revision_configuration_keys_and_values_preserved"]
+        )
+        self.assertTrue(
+            all(
+                item["configuration_source_revision_exact"]
+                and item["archive_path_set_and_file_content_exact"]
+                for item in deployment["functions"]
+            )
+        )
+        functions_by_name = {
+            item["api_name"]: item for item in deployment["functions"]
+        }
+        for name, item in functions_by_name.items():
+            if name != "revenue_desk_call_worker":
+                self.assertTrue(item["embedded_source_revision_exact"])
+        self.assertEqual(
+            functions_by_name["revenue_desk_call_worker"]
+            ["embedded_source_revision_binding"],
+            "shared_gateway_stamp_by_design",
+        )
+        for field in (
+            "all_runtime_and_memory_readbacks_exact",
+            "all_six_configuration_maps_exact",
+            "all_six_archive_path_sets_exact",
+            "all_six_archive_file_contents_exact",
+            "final_fresh_six_function_readback_exact",
+            "consumer_first_upload_order_proven",
+        ):
+            self.assertTrue(deployment[field])
+        self.assertEqual(
+            deployment["consumer_first_upload_order"],
+            [item[0] for item in expected_functions],
+        )
+        self.assertFalse(deployment["final_main_parity_proven"])
+        self.assertFalse(
+            deployment["private_values_digests_identifiers_and_paths_included"]
+        )
+
+        authorization = evidence["authorization"]
+        for field in (
+            "approval_scope_finite",
+            "approval_consumed_by_first_successful_crm_bundle_update",
+            "approval_consumed",
+            "approval_exhausted",
+            "future_live_action_requires_fresh_scoped_approval",
+        ):
+            self.assertTrue(authorization[field])
+        for field in (
+            "approval_reusable",
+            "future_live_action_authorized_by_this_record",
+            "retell_agent_development_testing_simulation_or_invocation_authorized",
+            "production_or_customer_activity_authorized",
+        ):
+            self.assertFalse(authorization[field])
+
+        surfaces = evidence["execution_surfaces"]
+        self.assertFalse(surfaces["connector_source_bundle_upload_or_archive_download_available"])
+        self.assertTrue(surfaces["browser_fallback_used_only_for_missing_connector_capability"])
+        self.assertFalse(surfaces["direct_rest_shell_or_browser_runtime_invocation_used"])
+
+        boundary = evidence["runtime_and_external_action_boundary"]
+        for field in (
+            "operator_function_invocations",
+            "operator_job_invocations",
+            "operator_route_invocations",
+            "operator_cron_submissions",
+        ):
+            self.assertEqual(boundary[field], 0)
+        for field in (
+            "synthetic_development_lifecycle_executed",
+            "retell_agent_changed",
+            "retell_agent_tested",
+            "retell_agent_simulated",
+            "retell_provider_invoked",
+            "customer_record_action_performed",
+            "billing_payment_or_charge_action_performed",
+            "production_change_or_invocation_performed",
+        ):
+            self.assertFalse(boundary[field])
+
+        safe = evidence["safe_configuration_readback"]
+        self.assertEqual(safe["revenue_leak_test_setup_form"]["proof_mode"], "stub")
+        self.assertFalse(safe["revenue_leak_test_setup_form"]["provider_send_invoked"])
+        self.assertEqual(safe["revenue_desk_call_gateway"]["deployment_mode"], "active")
+        self.assertFalse(safe["revenue_desk_call_gateway"]["api_gateway_ingress_enabled"])
+        self.assertFalse(safe["revenue_desk_call_gateway"]["route_or_function_invoked"])
+        self.assertEqual(
+            safe["revenue_desk_call_worker"]["deployment_environment"],
+            "development",
+        )
+        self.assertEqual(
+            safe["revenue_desk_call_worker"]["notification_mode"], "dry_run"
+        )
+        self.assertTrue(
+            safe["revenue_desk_call_worker"]["all_required_private_values_nonempty"]
+        )
+        self.assertFalse(safe["revenue_desk_call_worker"]["job_invoked"])
+        self.assertFalse(
+            safe["crm_billing_orchestrator"]["paid_subscription_preparation_enabled"]
+        )
+        self.assertFalse(
+            safe["crm_billing_orchestrator"]
+            ["development_compatibility_probe_enabled"]
+        )
+        self.assertEqual(safe["analytics_sync"]["runtime_mode"], "disabled")
+        self.assertFalse(safe["analytics_sync"]["job_invoked"])
+        self.assertFalse(
+            safe["environment_variable_values_included_beyond_safe_gates"]
+        )
+
+        infrastructure = evidence["infrastructure_readback"]
+        self.assertTrue(infrastructure["project_and_environment_binding_exact"])
+        self.assertFalse(infrastructure["api_gateway_enabled"])
+        self.assertTrue(
+            infrastructure["api_gateway_connector_returned_positive_disabled_signal"]
+        )
+        self.assertFalse(
+            infrastructure["current_route_inventory_returned_while_disabled"]
+        )
+        self.assertFalse(infrastructure["current_route_count_claimed"])
+        self.assertEqual(infrastructure["observed_cron_count"], 1)
+        self.assertEqual(
+            infrastructure["canonical_cron_name_pool_or_function_reference_count"],
+            0,
+        )
+        self.assertEqual(infrastructure["observed_table_count"], 35)
+        self.assertEqual(infrastructure["canonical_table_count"], 13)
+        self.assertTrue(
+            infrastructure["all_canonical_tables_present_exactly_once"]
+        )
+        self.assertFalse(infrastructure["table_schema_or_row_reconciliation_performed"])
+        self.assertEqual(infrastructure["observed_job_pool_count"], 4)
+        self.assertEqual(infrastructure["canonical_job_pool_count"], 2)
+        self.assertTrue(
+            infrastructure["all_canonical_job_pools_present_exactly_once"]
+        )
+        self.assertFalse(infrastructure["job_pool_function_target_binding_proven"])
+
+        rollback = evidence["rollback_readiness"]
+        self.assertTrue(rollback["exact_predecessor_archives_preserved_privately"])
+        self.assertTrue(
+            rollback["exact_predecessor_configuration_maps_preserved_privately"]
+        )
+        self.assertFalse(rollback["source_or_configuration_rollback_invoked"])
+        self.assertFalse(rollback["source_or_configuration_rollback_rehearsed"])
+
+        self.assertEqual(
+            {item["surface"] for item in evidence["contained_ui_events"]},
+            {
+                "stale_function_row_action",
+                "hidden_source_file_input",
+                "code_editor_file_upload_path",
+                "function_update_validation",
+            },
+        )
+        self.assertFalse(
+            next(
+                item
+                for item in evidence["contained_ui_events"]
+                if item["surface"] == "stale_function_row_action"
+            )["confirm_clicked"]
+        )
+
+        classification = evidence["release_classification"]
+        self.assertEqual(classification["development_runtime_acceptance"], "not_proven")
+        self.assertEqual(classification["final_main_parity"], "not_proven")
+        self.assertEqual(classification["dark_production_readiness"], "not_proven")
+        self.assertEqual(classification["retell_agent_testing_readiness"], "not_ready")
+        self.assertEqual(classification["production_traffic_status"], "dark")
+        self.assertEqual(
+            evidence["disclosure_controls"],
+            {
+                "platform_identifier_values_included": False,
+                "private_runtime_locator_or_endpoint_values_included": False,
+                "credential_key_token_or_secret_values_included": False,
+                "operator_identity_included": False,
+                "environment_variable_names_or_values_included_beyond_safe_gates": False,
+                "private_packet_identifier_or_digest_included": False,
+                "private_artifact_path_or_digest_included": False,
+                "retell_identifier_prompt_phone_or_runtime_values_included": False,
+                "customer_caller_or_financial_data_included": False,
+                "raw_provider_payloads_errors_logs_or_responses_included": False,
+            },
+        )
+
+        serialized = json.dumps(evidence, sort_keys=True).lower()
+        for forbidden in (
+            "client_secret",
+            "refresh_token",
+            "access_token",
+            "invoke_url",
+            "project_id",
+            "organization_id",
+            "environment_id",
+            "function_id",
+            "agent_id",
+            "version_id",
+            "number_id",
+            "zaid",
+            "zcfkey",
+            "http://",
+            "https://",
+        ):
+            self.assertNotIn(forbidden, serialized)
+        self.assertIsNone(re.search(r"\b[0-9a-f]{64}\b", serialized))
+        self.assertIsNone(
+            re.search(
+                r"\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-"
+                r"[89ab][0-9a-f]{3}-[0-9a-f]{12}\b",
+                serialized,
+            )
+        )
+        self.assertIsNone(re.search(r"[a-z]:[\\/]", serialized))
+
+        for path, public_text in self.current_convergence_public_mirrors.items():
+            with self.subTest(path=path):
+                self.assertIn("288a93c", public_text)
+                self.assertIn(evidence_name, public_text)
+        self.assertEqual(self.pr_head_convergence["source_revision"], predecessor)
+        self.assertIn(predecessor, self.deployment_log)
+        self.assertIn(
+            "free-revenue-leak-test-development-pr-head-convergence-2026-08-28.json",
+            self.deployment_log,
+        )
 
     def test_route_continuation_proves_exact_routes_and_preserves_dark_runtime(self):
         evidence = self.route_continuation

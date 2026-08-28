@@ -1,0 +1,274 @@
+{
+  "schema_version": 1,
+  "record_type": "sanitized_free_revenue_leak_test_development_pr_head_convergence",
+  "execution_date_utc": "2026-08-28",
+  "environment": "Development",
+  "source_revision": "288a93c7773acaf82fab277702e6b4e3d7354564",
+  "deployed_pr_head_revision": "288a93c7773acaf82fab277702e6b4e3d7354564",
+  "predecessor_revision": "e1da1bc3457e506faf64c71db38869c8b26c1bbc",
+  "outcome": "six_function_release_head_source_and_configuration_convergence_exact_ingress_disabled_no_runtime_invocation",
+  "historical_evidence": {
+    "records_preserved_without_rewrite": true,
+    "immediate_predecessor_record": "src/zoho-catalyst/evidence/free-revenue-leak-test-development-pr-head-convergence-2026-08-28.json",
+    "earlier_records_remain_authoritative_within_their_recorded_limits": true
+  },
+  "authorization": {
+    "approval_reference": "exact_owner_approved_development_release_packet_retained_in_private_task_record",
+    "approved_scope": "converge exactly six Development function bundles and their exact retained configuration maps to the approved source revision, independently read back each result, preserve ingress and runtime containment, and perform no Retell, customer, billing, payment, or Production action",
+    "approval_scope_finite": true,
+    "approval_consumed_by_first_successful_crm_bundle_update": true,
+    "approval_consumed": true,
+    "approval_exhausted": true,
+    "approval_reusable": false,
+    "future_live_action_authorized_by_this_record": false,
+    "future_live_action_requires_fresh_scoped_approval": true,
+    "retell_agent_development_testing_simulation_or_invocation_authorized": false,
+    "production_or_customer_activity_authorized": false
+  },
+  "execution_surfaces": {
+    "connector_first_identity_prestate_configuration_write_and_readback": "Sylvara Catalyst connectors",
+    "connector_source_bundle_upload_or_archive_download_available": false,
+    "source_bundle_upload_and_archive_pullback": "authenticated first_party Catalyst Development console fallback",
+    "fallback_reason": "the installed Catalyst connectors exposed no function source bundle upload or archive download operation",
+    "browser_fallback_used_only_for_missing_connector_capability": true,
+    "direct_rest_shell_or_browser_runtime_invocation_used": false
+  },
+  "preflight": {
+    "exact_single_use_packet_verified": true,
+    "clean_approved_source_revision_verified": true,
+    "six_function_prestates_matched": true,
+    "exact_predecessor_archives_preserved_privately": true,
+    "exact_predecessor_configuration_maps_preserved_privately": true,
+    "private_release_manifest_built": true,
+    "private_release_manifest_source_revision_and_six_function_membership_exact": true,
+    "all_upload_bundles_below_console_size_limit": true,
+    "upload_bundle_roots_matched_predecessor_path_sets": true,
+    "repository_test_and_environment_files_excluded_from_upload_bundles": true,
+    "api_gateway_disabled_before_write": true,
+    "canonical_cron_reference_count_before_write": 0
+  },
+  "deployment_readback": {
+    "consumer_first_upload_order": [
+      "crm_billing_orchestrator",
+      "revenue_leak_test_request_form",
+      "revenue_leak_test_setup_form",
+      "revenue_desk_call_gateway",
+      "revenue_desk_call_worker",
+      "analytics_sync"
+    ],
+    "canonical_function_count": 6,
+    "configuration_delta": "SOURCE_REVISION_only",
+    "all_non_revision_configuration_keys_and_values_preserved": true,
+    "functions": [
+      {
+        "api_name": "crm_billing_orchestrator",
+        "type": "Advanced I/O",
+        "runtime": "node24",
+        "memory_mb": 256,
+        "environment_variable_count": 30,
+        "configuration_source_revision_exact": true,
+        "embedded_source_revision_exact": true,
+        "archive_file_count": 220,
+        "archive_path_set_and_file_content_exact": true
+      },
+      {
+        "api_name": "revenue_leak_test_request_form",
+        "type": "Advanced I/O",
+        "runtime": "node24",
+        "memory_mb": 256,
+        "environment_variable_count": 30,
+        "configuration_source_revision_exact": true,
+        "embedded_source_revision_exact": true,
+        "archive_file_count": 218,
+        "archive_path_set_and_file_content_exact": true
+      },
+      {
+        "api_name": "revenue_leak_test_setup_form",
+        "type": "Advanced I/O",
+        "runtime": "node24",
+        "memory_mb": 256,
+        "environment_variable_count": 34,
+        "configuration_source_revision_exact": true,
+        "embedded_source_revision_exact": true,
+        "archive_file_count": 227,
+        "archive_path_set_and_file_content_exact": true
+      },
+      {
+        "api_name": "revenue_desk_call_gateway",
+        "type": "Advanced I/O",
+        "runtime": "node24",
+        "memory_mb": 256,
+        "environment_variable_count": 31,
+        "configuration_source_revision_exact": true,
+        "embedded_source_revision_exact": true,
+        "archive_file_count": 27,
+        "archive_path_set_and_file_content_exact": true
+      },
+      {
+        "api_name": "revenue_desk_call_worker",
+        "type": "Job",
+        "runtime": "node24",
+        "memory_mb": 256,
+        "environment_variable_count": 28,
+        "configuration_source_revision_exact": true,
+        "embedded_source_revision_binding": "shared_gateway_stamp_by_design",
+        "archive_file_count": 4,
+        "archive_path_set_and_file_content_exact": true
+      },
+      {
+        "api_name": "analytics_sync",
+        "type": "Job",
+        "runtime": "node24",
+        "memory_mb": 256,
+        "environment_variable_count": 7,
+        "configuration_source_revision_exact": true,
+        "embedded_source_revision_exact": true,
+        "archive_file_count": 16,
+        "archive_path_set_and_file_content_exact": true
+      }
+    ],
+    "all_runtime_and_memory_readbacks_exact": true,
+    "all_six_configuration_maps_exact": true,
+    "all_six_archive_path_sets_exact": true,
+    "all_six_archive_file_contents_exact": true,
+    "final_fresh_six_function_readback_exact": true,
+    "consumer_first_upload_order_proven": true,
+    "private_values_digests_identifiers_and_paths_included": false,
+    "final_main_parity_proven": false,
+    "parity_limitation": "This proves the six exact Development bundles and private maps at the recorded immutable release revision. It does not prove runtime acceptance, final main parity, Retell readiness, or Production readiness."
+  },
+  "safe_configuration_readback": {
+    "revenue_leak_test_setup_form": {
+      "proof_mode": "stub",
+      "provider_send_invoked": false
+    },
+    "revenue_desk_call_gateway": {
+      "deployment_mode": "active",
+      "api_gateway_ingress_enabled": false,
+      "route_or_function_invoked": false
+    },
+    "revenue_desk_call_worker": {
+      "deployment_environment": "development",
+      "notification_mode": "dry_run",
+      "all_required_private_values_nonempty": true,
+      "job_invoked": false
+    },
+    "crm_billing_orchestrator": {
+      "paid_subscription_preparation_enabled": false,
+      "development_compatibility_probe_enabled": false,
+      "runtime_invoked": false
+    },
+    "analytics_sync": {
+      "runtime_mode": "disabled",
+      "job_invoked": false
+    },
+    "environment_variable_values_included_beyond_safe_gates": false
+  },
+  "infrastructure_readback": {
+    "project_and_environment_binding_exact": true,
+    "api_gateway_enabled": false,
+    "api_gateway_connector_returned_positive_disabled_signal": true,
+    "current_route_inventory_returned_while_disabled": false,
+    "current_route_count_claimed": false,
+    "separate_historical_twelve_route_evidence_revalidated_by_this_packet": false,
+    "observed_cron_count": 1,
+    "canonical_cron_name_pool_or_function_reference_count": 0,
+    "observed_table_count": 35,
+    "canonical_table_count": 13,
+    "all_canonical_tables_present_exactly_once": true,
+    "table_schema_or_row_reconciliation_performed": false,
+    "observed_job_pool_count": 4,
+    "canonical_job_pool_count": 2,
+    "all_canonical_job_pools_present_exactly_once": true,
+    "job_pool_function_target_binding_proven": false
+  },
+  "runtime_and_external_action_boundary": {
+    "operator_function_invocations": 0,
+    "operator_job_invocations": 0,
+    "operator_route_invocations": 0,
+    "operator_cron_submissions": 0,
+    "synthetic_development_lifecycle_executed": false,
+    "retell_agent_changed": false,
+    "retell_agent_tested": false,
+    "retell_agent_simulated": false,
+    "retell_provider_invoked": false,
+    "customer_record_action_performed": false,
+    "billing_payment_or_charge_action_performed": false,
+    "production_change_or_invocation_performed": false
+  },
+  "rollback_readiness": {
+    "exact_predecessor_archives_preserved_privately": true,
+    "exact_predecessor_configuration_maps_preserved_privately": true,
+    "source_or_configuration_rollback_invoked": false,
+    "source_or_configuration_rollback_rehearsed": false,
+    "containment_posture": "keep Development API Gateway disabled, canonical Cron references absent, provider sends stubbed or disabled, paid preparation and compatibility probing false, notification delivery dry run, Retell untouched, and Production dark"
+  },
+  "contained_ui_events": [
+    {
+      "surface": "stale_function_row_action",
+      "event": "a delete confirmation opened while navigating function rows",
+      "destructive_confirmation_text_entered": false,
+      "confirm_clicked": false,
+      "containment": "Cancel was clicked and the dialog was verified closed",
+      "function_deleted_or_changed": false
+    },
+    {
+      "surface": "hidden_source_file_input",
+      "event": "the hidden input did not open a file chooser and the browser control session reset",
+      "file_selected": false,
+      "write_occurred": false,
+      "containment": "the authenticated session was re-established before further action"
+    },
+    {
+      "surface": "code_editor_file_upload_path",
+      "event": "a bundle was selected through the editor file-upload action before the documented function Update action was identified",
+      "readback": "the immediate archive pullback matched the exact predecessor path set and file contents",
+      "configuration_write_started": false,
+      "durable_bundle_delta_observed": false,
+      "containment": "execution stopped, the official function Update dialog was used, and the successful result was independently pulled back"
+    },
+    {
+      "surface": "function_update_validation",
+      "event": "an update Save attempt did not close the dialog and required fields no longer showed selected values",
+      "success_claimed_for_attempt": false,
+      "configuration_write_started": false,
+      "containment": "the dialog was reopened, Node 24 and 256 MB were freshly verified before upload, and only the later exact pullback is treated as success"
+    }
+  ],
+  "release_classification": {
+    "development_definition_convergence": "proven_at_recorded_release_revision",
+    "development_runtime_acceptance": "not_proven",
+    "final_main_parity": "not_proven",
+    "dark_production_readiness": "not_proven",
+    "retell_agent_testing_readiness": "not_ready",
+    "production_traffic_status": "dark"
+  },
+  "remaining_gates": [
+    "define and separately approve the smallest non Retell synthetic Development lifecycle packet without treating a provider fixture as Retell runtime acceptance",
+    "prove a typed direct invocation channel before any Advanced I/O payload exercise and do not enable API Gateway merely to compensate for an inadequate connector",
+    "prove Job pool function targeting and disabled first scheduling before any Job submission",
+    "complete Forms, CRM, Billing TEST, Analytics, migration, reconciliation, replay, isolation, and rollback acceptance",
+    "establish final main artifact parity through a separately scoped immutable release step",
+    "initialize and verify dark Production only through a fresh exact packet while keeping zero traffic and Retell unbound",
+    "perform Retell agent development or testing only in the separately authorized Retell task"
+  ],
+  "evidence_limitations": [
+    "Publishing this sanitized record creates a later repository commit. The recorded revision remains the deployed release candidate and is not final main.",
+    "The disabled API Gateway connector returned no route payload, so this packet does not claim a current route count or revalidate the separate historical twelve route record.",
+    "Zero operator invocations do not prove provider complete caller, webhook, Job, route, function, or Cron absence.",
+    "Definition and configuration convergence do not prove runtime acceptance, synthetic lifecycle acceptance, rollback, Retell readiness, final main parity, or dark Production readiness.",
+    "Canonical table and Job pool presence do not prove schemas, row reconciliation, function targeting, or caller binding."
+  ],
+  "disclosure_controls": {
+    "platform_identifier_values_included": false,
+    "private_runtime_locator_or_endpoint_values_included": false,
+    "credential_key_token_or_secret_values_included": false,
+    "operator_identity_included": false,
+    "environment_variable_names_or_values_included_beyond_safe_gates": false,
+    "private_packet_identifier_or_digest_included": false,
+    "private_artifact_path_or_digest_included": false,
+    "retell_identifier_prompt_phone_or_runtime_values_included": false,
+    "customer_caller_or_financial_data_included": false,
+    "raw_provider_payloads_errors_logs_or_responses_included": false
+  }
+}
