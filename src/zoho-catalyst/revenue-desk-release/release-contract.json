@@ -69,6 +69,8 @@
   "production_invariants": {
     "traffic_enabled": false,
     "routes_active": false,
-    "schedules_active": false
+    "schedules_active": false,
+    "retell_bindings_active": false,
+    "legacy_retell_assets_callable": false
   }
 }

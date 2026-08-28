@@ -10,6 +10,9 @@ const repositoryRoot = path.resolve(catalystRoot, '..', '..');
 const fromCatalyst = (...parts) => path.join(catalystRoot, ...parts);
 
 const contract = require('../release-contract.json');
+const productContract = require(path.join(
+  repositoryRoot, 'docs', 'product', 'free-revenue-leak-test-release-contract.json',
+));
 const {
   buildManifest, createArtifactProvenance, verifyReadback,
 } = require('../lib/release-manifest');
@@ -591,7 +594,24 @@ test('Production remains dark and the release preserves the no-transfer boundary
     traffic_enabled: false,
     routes_active: false,
     schedules_active: false,
+    retell_bindings_active: false,
+    legacy_retell_assets_callable: false,
   });
+  assert.equal(
+    productContract.staged_cleanup
+      .dark_production_may_precede_retell_bound_development_cleanup,
+    true,
+  );
+  assert.equal(
+    productContract.staged_cleanup
+      .delete_retell_bound_legacy_assets_before_retell_testing_or_traffic,
+    true,
+  );
+  assert.equal(
+    productContract.production_scope
+      .retell_bound_development_assets_may_remain_quarantined,
+    true,
+  );
   assert.equal(shadowQaContract.capability_boundary.transfer, false);
   assert.equal(nonurgentContract.capability_boundary.transfers, false);
   assert.equal(shadowQaContract.post_call_definitions.find(

@@ -87,13 +87,15 @@ Form-specific stores remain separate:
 
 Supporting stores are limited to `CRMBillingOperations`, `AnalyticsSyncCheckpoints`, and `AnalyticsSyncOutbox` unless a separately justified sync-health or report-run store is proven necessary.
 
-Legacy FreeTest stores, Form 2 v2 stores, duplicate sessions, and probe tables remain only through migration reconciliation and rollback rehearsal. Before any migration or deletion, every observed table must be classified by owner, purpose, generation, active readers/writers, and final disposition; source keys must be mapped to a canonical destination or approved quarantine; and fresh counts and deterministic sanitized digests must be captured. Zero rows alone never establish obsolescence. Superseded stores must be removed before the first Production deployment only after additive destination readback, source/runtime parity, Development E2E, and rollback evidence pass.
+Legacy FreeTest stores, Form 2 v2 stores, duplicate sessions, and probe tables remain only through migration reconciliation and rollback rehearsal. Before any migration or deletion, every observed table must be classified by owner, purpose, generation, active readers/writers, and final disposition; source keys must be mapped to a canonical destination or approved quarantine; and fresh counts and deterministic sanitized digests must be captured. Zero rows alone never establish obsolescence. Non-Retell duplicate and probe stores must be removed before the first Production deployment after additive destination readback, source/runtime parity, Development E2E, and rollback evidence pass. Retell-bound predecessor stores may remain temporarily in Development through a dark-Production installation only when every known route, Job, schedule, webhook, credential, and internal caller is disabled or access-restricted, Production has independent credentials and no path to them, and the retained evidence remains recoverable. They must be reconciled and removed before any Retell test, binding, route, traffic, or `READY FOR RETELL AGENT TESTING ONLY` classification.
 
 ## Environment and traffic boundary
 
 Development receives the complete synthetic E2E proof. Production receives the independently configured final-main artifact only as a dark deployment: independent credentials, no Retell number or webhook binding, no enabled recurring trigger, no real data, and no public or customer traffic. Dark-Production verification uses synthetic isolated inputs and must prove that every external call path remains fail-closed or explicitly disabled.
 
 Production deployment is in scope. Production traffic activation is not.
+
+Dark Production may therefore precede Retell-bound Development cleanup, but it may not weaken that cleanup gate. The retained assets are quarantine evidence, not callable fallback runtime, and dark Production must independently prove that it cannot reach them.
 
 ## Analytics release boundary
 
@@ -104,6 +106,8 @@ Both dashboards remain internal. Public links, embeds, scheduled exports, and di
 ## Staged cleanup gate
 
 No legacy runtime function, table, route, Job, or exclusive credential is deleted until its source and dependency review is preserved, every live route/Job/schedule/webhook/internal-caller binding is independently proven, and the exact pull-request head passes direct tests, Development E2E, migration reconciliation, rollback rehearsal, and a separately scoped destructive-action approval. Legacy status and approval rows are historical or quarantine evidence; they never authorize a canonical route.
+
+Retell-bound legacy assets may remain stopped, access-restricted, and recoverable in Development during the isolated dark-Production installation. This exception authorizes neither use nor deletion: all known callers and credentials must remain disabled, Production must have no route to the assets, and the normal deletion gates still apply before any Retell test or traffic.
 
 After those gates:
 

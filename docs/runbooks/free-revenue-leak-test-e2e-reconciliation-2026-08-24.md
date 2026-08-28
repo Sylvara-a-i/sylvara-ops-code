@@ -176,13 +176,14 @@ The historical `analytics_sync` implementation is not a deletion target by name.
 
 The 2026-08-24 aggregate count snapshot is evidence for planning only and does not authorize a write. First classify and map all 29 observed tables, including the 13 zero-row tables. Capture fresh counts and deterministic sanitized digests immediately before migration. Then create the canonical generation additively, without renaming, truncating, rewriting, or deleting a source table. Migrate and reconcile by environment, client, engagement, deployment, configuration version, event key, call key, exact key set, count, and row digest. Preserve ambiguous source evidence outside active readers. Prove destination readback, source/runtime parity, Development E2E, and rollback before requesting approval to delete the old generation.
 
-After those gates pass and removal receives scoped approval, but before first Production deployment, remove:
+After those gates pass and removal receives scoped approval, remove the non-Retell duplicate and probe assets before first Production deployment:
 
-- superseded `FreeTest*` call tables;
 - duplicate Form 2 session stores;
 - v2 stores after their retained/quarantined rows receive an approved disposition;
 - all zero-row runtime and column probes; and
 - any copied legacy-project table not used by a canonical function.
+
+Retell-bound `FreeTest*` call tables and predecessor runtime assets may remain temporarily in Development through the dark-Production installation only as stopped, access-restricted, recoverable quarantine evidence. Every known route, Job, schedule, webhook, credential, and internal caller must remain disabled; dark Production must use independent credentials and prove no path to them. Their migration, reconciliation, and deletion remain mandatory before any Retell test, binding, route, traffic, or `READY FOR RETELL AGENT TESTING ONLY` classification.
 
 ### Project and credential cleanup
 
@@ -193,6 +194,8 @@ Rotate retained Development credentials after every consumer is final. Revoke cr
 ## Dark-Production boundary
 
 Dark Production is a required deployment target, not a live launch. It must use final `main`, independent credentials, inactive deployment records, disabled recurring triggers, no Retell number or webhook binding, no real records, and no externally reachable customer workflow.
+
+Dark Production may be initialized before Retell-bound Development cleanup only under the quarantine boundary above. The exception does not authorize a retained caller, route, credential, fallback path, or Retell action, and dark-Production readback must prove isolation from every retained legacy asset.
 
 The synthetic dark-Production E2E must prove function identity, source revision, table binding, environment isolation, disabled paid profiles, fail-closed routing, Analytics isolation, rollback, and zero traffic. It must not place a call, run a Retell simulation, send SMS, create a live subscription, invoice, charge, payment, or activate Production traffic.
 

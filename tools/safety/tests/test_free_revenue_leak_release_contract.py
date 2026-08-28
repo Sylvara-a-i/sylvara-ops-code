@@ -3471,11 +3471,36 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             "final-main Development deployment and parity",
             cleanup["standalone_form_project_deletion_allowed_only_after"],
         )
-        self.assertTrue(cleanup["delete_superseded_call_tables_before_first_production_deployment"])
+        self.assertTrue(
+            cleanup["dark_production_may_precede_retell_bound_development_cleanup"]
+        )
+        self.assertFalse(
+            cleanup["delete_superseded_call_tables_before_first_production_deployment"]
+        )
+        self.assertTrue(
+            cleanup["delete_retell_bound_legacy_assets_before_retell_testing_or_traffic"]
+        )
+        quarantine = " ".join(
+            cleanup["retell_bound_legacy_assets_may_remain_only_for_dark_production_if"]
+        )
+        for term in (
+            "Development",
+            "route",
+            "credential",
+            "independent credentials",
+            "recoverable",
+        ):
+            self.assertIn(term, quarantine)
         self.assertTrue(cleanup["delete_duplicate_and_probe_form_tables_before_first_production_deployment"])
         self.assertTrue(cleanup["rotate_retained_development_credentials"])
         self.assertTrue(cleanup["revoke_deleted_function_credentials"])
         self.assertTrue(cleanup["production_credentials_independent"])
+        self.assertTrue(
+            production["retell_bound_development_assets_may_remain_quarantined"]
+        )
+        self.assertTrue(
+            production["retell_bound_cleanup_required_before_retell_testing_or_traffic"]
+        )
         self.assertEqual(
             cleanup["client_portal_gateway_action"],
             "required_hardening_pending",
