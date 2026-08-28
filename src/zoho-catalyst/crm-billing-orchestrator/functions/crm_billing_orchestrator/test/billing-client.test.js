@@ -87,7 +87,8 @@ function usageAddon(config, overrides = {}) {
   return {
     addon_code: config.paidUsageAddonCode,
     status: "active",
-    type: "usage",
+    type: "recurring",
+    is_usage_supported: true,
     pricing_scheme: "unit",
     currency_code: config.paidCommercialTerms.currency,
     interval: config.paidCommercialTerms.interval,
@@ -121,6 +122,7 @@ function subscription(config, selectedPlan = "Growth", overrides = {}) {
       addon_code: config.paidUsageAddonCode,
       quantity: 1,
       price: moneyString(config.paidCommercialTerms.commonUsageRateMinor),
+      unit: config.paidUsageAddonUnit,
     }],
     currency_code: config.paidCommercialTerms.currency,
     auto_collect: false,
@@ -332,7 +334,9 @@ test("paid plan or metered add-on drift fails before subscription creation", asy
 
   for (const addonOverride of [
     { status: "inactive" },
-    { type: "recurring" },
+    { type: "one_time" },
+    { is_usage_supported: false },
+    { is_usage_supported: undefined },
     { pricing_scheme: "volume" },
     { currency_code: "CAD" },
     { interval: 2 },
@@ -417,6 +421,13 @@ test("paid subscription readback rejects unsafe payment, catalog, meter, and sta
       addon_code: config.paidUsageAddonCode,
       quantity: 1,
       price: moneyString(config.paidCommercialTerms.commonUsageRateMinor + 1),
+      unit: config.paidUsageAddonUnit,
+    }] },
+    { addons: [{
+      addon_code: config.paidUsageAddonCode,
+      quantity: 1,
+      price: moneyString(config.paidCommercialTerms.commonUsageRateMinor),
+      unit: "connected_minute",
     }] },
   ]) {
     const calls = [];

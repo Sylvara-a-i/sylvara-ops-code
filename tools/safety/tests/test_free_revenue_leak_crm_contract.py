@@ -176,7 +176,27 @@ class FreeRevenueLeakCrmContractTests(unittest.TestCase):
         self.assertFalse(boundary["writer_or_provider_payload_contract_in_repository"])
         self.assertFalse(boundary["provider_save_readback_proven"])
         self.assertFalse(boundary["runtime_acceptance_proven"])
-        self.assertFalse(boundary["external_evidence_validator_in_repository"])
+        self.assertTrue(boundary["external_evidence_validator_in_repository"])
+        validator = boundary["external_evidence_validator"]
+        self.assertFalse(validator["runtime_side_effects"])
+        self.assertFalse(validator["live_blueprint_caller_wired"])
+        self.assertFalse(validator["durable_consumption_cas_writer_in_repository"])
+        self.assertFalse(validator["runtime_replay_enforcement_proven"])
+        self.assertTrue(
+            validator["approval_activation_current_poststate_version_bound"]
+        )
+        self.assertTrue(
+            validator["activation_route_and_prestate_observation_exactly_equal"]
+        )
+        self.assertTrue(
+            validator["terminal_current_deployment_configuration_readback_required"]
+        )
+        self.assertTrue(
+            validator["contract_specific_private_identifier_grammars_enforced"]
+        )
+        self.assertTrue(
+            validator["route_inactive_nullable_bindings_use_tagged_encoding"]
+        )
         self.assertTrue(boundary["metadata_and_layout_gate_satisfied"])
         self.assertEqual(
             boundary["live_pipeline_binding_matches_contract"], "not_proven"
@@ -310,12 +330,27 @@ class FreeRevenueLeakCrmContractTests(unittest.TestCase):
         activation_contract = blueprint["external_evidence_contracts"][
             "route-activation-readback-v1"
         ]
+        self.assertEqual(
+            approval_contract["maximum_prestate_age_at_decision_seconds"], 900
+        )
         for evidence in (approval_contract, activation_contract):
-            self.assertEqual(evidence["validator_status"], "not_implemented")
+            self.assertEqual(
+                evidence["validator_status"], "implemented_repository_only"
+            )
             self.assertFalse(evidence["mutation_allowed"])
             self.assertEqual(evidence["max_age_at_transition_seconds"], 300)
             self.assertIn("Raw Deal", evidence["private_identifier_policy"])
             self.assertTrue(evidence["one_time_consumption"]["required"])
+            self.assertFalse(
+                evidence["one_time_consumption"][
+                    "durable_compare_and_set_writer_in_repository"
+                ]
+            )
+            self.assertFalse(
+                evidence["one_time_consumption"][
+                    "runtime_replay_enforcement_in_repository"
+                ]
+            )
             self.assertEqual(
                 evidence["one_time_consumption"]["replay_behavior"], "reject"
             )
@@ -338,6 +373,19 @@ class FreeRevenueLeakCrmContractTests(unittest.TestCase):
                 "source_revision",
             }.isdisjoint(claim_paths))
         activation_claims = activation_contract["required_claims"]
+        self.assertIn(
+            "current_deployment_version_digest",
+            approval_contract["cryptographic_boundary"]["canonical_binding_fields"],
+        )
+        self.assertIn(
+            "activation_current_deployment_version_digest",
+            activation_contract["cryptographic_boundary"]["canonical_binding_fields"],
+        )
+        self.assertIn({
+            "path": "activation_prestate_observed_at",
+            "operator": "equals",
+            "source": "evidence.route_observed_at",
+        }, activation_claims)
         self.assertIn({
             "path": "route_registry_state",
             "operator": "equals",
@@ -377,7 +425,72 @@ class FreeRevenueLeakCrmContractTests(unittest.TestCase):
         self.assertEqual(paid_contract["request_action"], "reconcile")
         self.assertTrue(paid_contract["non_creating"])
         self.assertEqual(paid_contract["created_resource_count"], 0)
-        self.assertEqual(paid_contract["validator_status"], "not_implemented")
+        self.assertEqual(
+            paid_contract["validator_status"], "implemented_repository_only"
+        )
+        self.assertFalse(paid_contract["mutation_allowed"])
+        self.assertEqual(
+            paid_contract["maximum_provider_readback_age_at_evidence_seconds"], 300
+        )
+        self.assertEqual(paid_contract["required_currency"], "USD")
+        self.assertEqual(paid_contract["required_usage_addon_unit"], "minute")
+        self.assertEqual(
+            paid_contract["immutable_subscription_status_map"],
+            {"future": "Scheduled", "live": "Active"},
+        )
+        self.assertEqual(
+            paid_contract["closed_won_required_provider_subscription_status"],
+            "live",
+        )
+        self.assertEqual(
+            paid_contract["closed_won_required_crm_subscription_status"],
+            "Active",
+        )
+        organization_binding = paid_contract["billing_organization_binding"]
+        self.assertEqual(
+            organization_binding["billing_readback_field"],
+            "billing_organization_id",
+        )
+        self.assertEqual(
+            organization_binding["context_catalog_field"],
+            "billing_organization_id",
+        )
+        self.assertTrue(organization_binding["exact_match_required"])
+        self.assertTrue(
+            organization_binding["included_in_keyed_reconciliation_binding"]
+        )
+        self.assertFalse(organization_binding["raw_value_publication_allowed"])
+        self.assertIn(
+            "billing_organization_id",
+            paid_contract["exact_billing_readback_fields"],
+        )
+        self.assertIn("currency", paid_contract["exact_billing_readback_fields"])
+        self.assertIn("usage_addon_unit", paid_contract["exact_billing_readback_fields"])
+        self.assertIn(
+            "provider_subscription_status",
+            paid_contract["exact_billing_readback_fields"],
+        )
+        self.assertEqual(
+            paid_contract["private_identifier_constraints"]["Deployment_Record_ID"],
+            "^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$",
+        )
+        keyed_receipt = paid_contract["keyed_reconciliation_binding"]
+        self.assertEqual(keyed_receipt["algorithm"], "HMAC-SHA-256")
+        self.assertIn("request_action", keyed_receipt["canonical_binding_fields"])
+        self.assertIn("created_resource_count", keyed_receipt["canonical_binding_fields"])
+
+        terminal_contract = blueprint["external_evidence_contracts"][
+            "terminal-report-summary-readback-v2"
+        ]
+        terminal_binding = terminal_contract[
+            "current_deployment_configuration_binding"
+        ]
+        self.assertTrue(terminal_binding["exact_match_required"])
+        self.assertTrue(
+            {"Deployment_Record_ID", "Configuration_Version"}.issubset(
+                terminal_contract["crm_exact_readback_fields"]
+            )
+        )
 
         loss_transitions = [item for item in topology if item["to_state"] == "Closed Lost"]
         self.assertEqual(len(loss_transitions), 6)
@@ -401,6 +514,16 @@ class FreeRevenueLeakCrmContractTests(unittest.TestCase):
         self.assertEqual(route_contract["max_age_at_transition_seconds"], 300)
         self.assertEqual(route_contract["keyed_binding"]["algorithm"], "HMAC-SHA-256")
         self.assertTrue(route_contract["one_time_consumption"]["required"])
+        self.assertFalse(
+            route_contract["one_time_consumption"][
+                "durable_compare_and_set_writer_in_repository"
+            ]
+        )
+        self.assertFalse(
+            route_contract["one_time_consumption"][
+                "runtime_replay_enforcement_in_repository"
+            ]
+        )
         self.assertEqual(
             route_contract["one_time_consumption"]["replay_behavior"], "reject"
         )

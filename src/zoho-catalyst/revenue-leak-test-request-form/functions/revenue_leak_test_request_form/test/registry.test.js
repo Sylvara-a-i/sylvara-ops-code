@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
+const { FIELD_CONTRACT } = require("../lib/form-contract");
 
 const functionRoot = path.resolve(__dirname, "..");
 const controllerRoot = path.resolve(functionRoot, "../..");
@@ -78,6 +79,10 @@ test("the concrete Forms desired state keeps RevenueLeakTestRequestForm idempote
     repositoryRoot,
     "src/zoho-forms/free-revenue-leak-test/forms-manifest.json",
   ));
+  const releaseContract = readJson(path.join(
+    repositoryRoot,
+    "docs/product/free-revenue-leak-test-release-contract.json",
+  ));
   assert.equal(manifest.schema_version, 2);
   assert.deepEqual(manifest.identifier_migration.logical_name_aliases, {
     FORM1_FREE_REVENUE_LEAK_REQUEST: "REVENUE_LEAK_TEST_REQUEST_FORM",
@@ -116,10 +121,16 @@ test("the concrete Forms desired state keeps RevenueLeakTestRequestForm idempote
   assert.match(form1.confirmation_copy, /does not change call routing/i);
   assert.match(form1.confirmation_copy, /start paid service/i);
   assert.deepEqual(form1.field_contract.assisted_path_hidden_audit_fields, ["Source_Page"]);
-  assert.deepEqual(
-    form1.field_contract.source_required_without_verified_live_field_or_crm_destination,
-    [],
-  );
+  const requiredDestinations = Object.values(releaseContract.form1.crm_field_mapping);
+  assert.equal(requiredDestinations.length, 29);
+  assert.equal(new Set(requiredDestinations).size, requiredDestinations.length);
+  assert.deepEqual(form1.field_contract.canonical_required_crm_destinations, requiredDestinations);
+  for (const { crm } of FIELD_CONTRACT) {
+    assert.equal(requiredDestinations.includes(crm), true, crm);
+  }
+  assert.equal(form1.field_contract.live_crm_mapping_display_label_count_observed, 6);
+  assert.equal(form1.field_contract.live_crm_mapping_api_name_crosswalk_proven, false);
+  assert.equal(form1.field_contract.exact_missing_crm_api_destination_set_proven, false);
   const identity = form1.live_configuration_prerequisites.public_intake_submission_identity;
   assert.equal(identity.status, "generation_mechanism_observed_retry_behavior_unproven");
   assert.equal(identity.live_generation_owner, "Zoho Forms");
@@ -128,8 +139,14 @@ test("the concrete Forms desired state keeps RevenueLeakTestRequestForm idempote
   assert.equal(identity.live_change_blocked, true);
   assert.match(identity.required_invariants.join(" "), /non-respondent source/i);
   const privacy = form1.live_configuration_prerequisites.privacy_dictionary;
-  assert.equal(privacy.status, "unresolved");
+  assert.equal(
+    privacy.status,
+    "observed_noncompliant_incomplete_field_by_field_and_runtime_editability_dictionary",
+  );
   assert.equal(privacy.live_change_blocked, true);
+  assert.equal(privacy.live_readback.observed_deployed_field_count, 26);
+  assert.equal(privacy.live_readback.configured_alias_count, 0);
+  assert.equal(privacy.live_readback.complete_private_alias_and_read_only_dictionary_proven, false);
   assert.ok(privacy.minimum_named_field_scope.includes("Intake_Submission_ID"));
   assert.ok(privacy.minimum_named_field_scope.includes("assisted prefill token field"));
   assert.match(privacy.rule, /Do not infer/);

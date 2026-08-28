@@ -37,7 +37,7 @@ function positiveMinorUnit(value) {
 function validateCommercialTermsShape(value) {
   if (
     !sameKeys(value, COMMERCIAL_TERM_KEYS) ||
-    typeof value.currency !== "string" || !/^[A-Z]{3}$/.test(value.currency) ||
+    value.currency !== "USD" ||
     value.interval !== 1 || value.intervalUnit !== "months" ||
     !positiveMinorUnit(value.commonUsageRateMinor) ||
     !sameKeys(value.plans, PLAN_FREQUENCY_KEYS)

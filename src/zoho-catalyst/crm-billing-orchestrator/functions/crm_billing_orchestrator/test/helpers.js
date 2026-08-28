@@ -67,7 +67,7 @@ function baseEnvironment(overrides = {}) {
       "Scale::Monthly": "scale_monthly",
     }),
     PAID_USAGE_ADDON_CODE: "connected_minute_usage",
-    PAID_USAGE_ADDON_UNIT: "Connected AI minute",
+    PAID_USAGE_ADDON_UNIT: "minute",
     PAID_USAGE_ADDON_PRODUCT_ID: "400000000000001",
     PAID_SUBSCRIPTION_STATUS_MAP: JSON.stringify({ future: "Scheduled", live: "Active" }),
     PAID_ACCEPTANCE_VALUE: "Accepted",

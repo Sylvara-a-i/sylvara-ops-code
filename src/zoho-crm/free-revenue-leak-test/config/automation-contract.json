@@ -66,7 +66,7 @@
     "field_by_field_public_evidence_available": true,
     "evidence_path": "src/zoho-crm/free-revenue-leak-test/evidence/live-topology-layout-preflight-2026-08-28.json",
     "historical_count_only_evidence_path": "src/zoho-crm/free-revenue-leak-test/evidence/live-metadata-preflight-2026-08-28.json",
-    "authority_limit": "The fresh field-by-field evidence closes the current metadata and layout gap only. It does not prove Blueprint topology, provider save/readback, workflow parity, caller binding, external-evidence validators, or synthetic runtime acceptance, and it must be repeated immediately before deployment.",
+    "authority_limit": "The fresh field-by-field evidence closes the current metadata and layout gap only. It does not prove Blueprint topology, provider save/readback, workflow parity, validator caller binding or durable-CAS execution, or synthetic runtime acceptance, and it must be repeated immediately before deployment.",
     "private_identifiers_committed": false,
     "write_performed": false
   },
@@ -258,7 +258,22 @@
       "writer_or_provider_payload_contract_in_repository": false,
       "provider_save_readback_proven": false,
       "runtime_acceptance_proven": false,
-      "external_evidence_validator_in_repository": false,
+      "external_evidence_validator_in_repository": true,
+      "external_evidence_validator": {
+        "path": "src/zoho-crm/free-revenue-leak-test/validators/external_evidence.py",
+        "entrypoint": "validate_external_evidence",
+        "runtime_side_effects": false,
+        "live_blueprint_caller_wired": false,
+        "durable_consumption_cas_writer_in_repository": false,
+        "runtime_replay_enforcement_proven": false,
+        "integer_boundary": "every integer claim must be a non-Boolean JavaScript-safe integer",
+        "approval_activation_current_poststate_version_bound": true,
+        "activation_route_and_prestate_observation_exactly_equal": true,
+        "terminal_current_deployment_configuration_readback_required": true,
+        "contract_specific_private_identifier_grammars_enforced": true,
+        "route_inactive_nullable_bindings_use_tagged_encoding": true,
+        "synthetic_tests": "src/zoho-crm/free-revenue-leak-test/tests/test_external_evidence_validator.py"
+      },
       "metadata_and_layout_gate_satisfied": true,
       "metadata_and_layout_evidence": "src/zoho-crm/free-revenue-leak-test/evidence/live-topology-layout-preflight-2026-08-28.json",
       "live_pipeline_binding_matches_contract": "not_proven",
@@ -268,8 +283,7 @@
       "operator_input_policy": "only operator_input_fields and applicable conditional_operator_input_fields may be collected during the manual transition, and every collected field must satisfy its machine-readable operator_input_constraints entry",
       "blocking_gates": [
         "the inactive live Blueprint candidate must be proven bound to the exact Revenue Desk Sales pipeline and reconstructed to the exact 13-transition topology; the current pipeline binding is unproven, the readback is missing Record Internal Approval and Activate Test Route, and the combined legacy Approve Go Live transition remains",
-        "an executable validator for every referenced external_evidence_contract",
-        "provider payload, save, independent readback, and ZZZ SYNTHETIC runtime acceptance",
+        "a typed Blueprint/Catalyst caller for the repository validator, durable one-time-consumption compare-and-set production/readback, provider payload, save, independent readback, and ZZZ SYNTHETIC runtime acceptance",
         "repeat the complete metadata, immutable picklist API-value, and active-layout transition-availability readback immediately before deployment because the current preflight can become stale"
       ]
     },
@@ -445,18 +459,43 @@
     },
     "external_evidence_contracts": {
       "internal-approval-receipt-v1": {
-        "validator_status": "not_implemented",
+        "validator_status": "implemented_repository_only",
+        "validator_entrypoint": "validate_external_evidence",
         "mutation_allowed": false,
         "freshness": "after the last Deal, deployment, configuration, route-fingerprint, source-revision, or approval-intent change and immediately before the manual Record Internal Approval transition",
         "max_age_at_transition_seconds": 300,
+        "maximum_prestate_age_at_decision_seconds": 900,
+        "maximum_intent_age_at_decision_seconds": 300,
         "private_identifier_policy": "Raw Deal, deployment, configuration, route, event, receipt, operator, source-revision, and row-version values are prohibited; only domain-separated keyed digests and the allowlisted state/timestamp claims may cross this evidence boundary.",
         "cryptographic_boundary": {
           "intent_signature_algorithm": "HMAC-SHA-256",
           "intent_signature_source": "private runtime approval intent verified against the private operator-verification key",
           "intent_signature_is_legal_signature": false,
+          "intent_signature_domain": "revenue-desk-approval-intent-v1",
+          "intent_schema": {
+            "schema_version": 1,
+            "canonicalization": "UTF-8 compact JSON object in the exact canonical_fields order",
+            "canonical_fields": [
+              "schema_version",
+              "event_id",
+              "action",
+              "deal_id",
+              "deployment_id",
+              "configuration_version_id",
+              "route_fingerprint",
+              "evidence_revision",
+              "evidence_observed_at",
+              "requested_at",
+              "operator_id_hash",
+              "expected_deployment_version"
+            ],
+            "deal_id_pattern": "^[1-9][0-9]{7,29}$",
+            "deal_id_binding": "exact signed deal_id must equal the current private CRM context deal_id"
+          },
           "evidence_receipt_algorithm": "HMAC-SHA-256",
           "evidence_secret_source": "private CRM Blueprint approval-evidence secret independent from the runtime operator-verification key",
-          "canonicalization": "ordered JSON tuple with exact field names, lowercase-hex digests, and normalized UTC millisecond timestamps",
+          "canonicalization": "UTF-8 compact JSON array of ordered [field, value] pairs with exact field names, lowercase-hex digests, and normalized UTC millisecond timestamps",
+          "private_binding_canonicalization": "HMAC-SHA-256(secret, UTF-8(domain + NUL + compact JSON scalar or ordered composite value))",
           "receipt_domain": "sylvara.crm.internal-approval-receipt.v1",
           "receipt_path": "evidence_receipt",
           "canonical_binding_fields": [
@@ -469,6 +508,7 @@
             "route_fingerprint_digest",
             "source_revision_digest",
             "expected_deployment_version_digest",
+            "current_deployment_version_digest",
             "approval_event_binding_digest",
             "approval_intent_signature_digest",
             "approval_intent_signature_valid",
@@ -496,6 +536,9 @@
           ],
           "claim": "compare-and-set unconsumed to consumed for the exact evidence receipt before the manual transition",
           "exact_consumption_readback_required": true,
+          "repository_validator_scope": "validate the supplied exact durable consumption readback only; the repository validator neither performs nor persists the compare-and-set",
+          "durable_compare_and_set_writer_in_repository": false,
+          "runtime_replay_enforcement_in_repository": false,
           "replay_behavior": "reject"
         },
         "required_claims": [
@@ -507,7 +550,8 @@
           { "path": "configuration_binding_digest", "operator": "equals_domain_separated_keyed_hmac_of_current_crm_field", "domain": "sylvara.crm.internal-approval-receipt.v1.configuration", "api_name": "Configuration_Version", "pattern": "^[a-f0-9]{64}$" },
           { "path": "route_fingerprint_digest", "operator": "equals_domain_separated_keyed_hmac_of_authoritative_current_route_fingerprint", "domain": "sylvara.crm.internal-approval-receipt.v1.route", "pattern": "^[a-f0-9]{64}$" },
           { "path": "source_revision_digest", "operator": "equals_domain_separated_keyed_hmac_of_authoritative_current_source_revision", "domain": "sylvara.crm.internal-approval-receipt.v1.source", "pattern": "^[a-f0-9]{64}$" },
-          { "path": "expected_deployment_version_digest", "operator": "equals_domain_separated_keyed_hmac_of_signed_intent_and_authoritative_approval_prestate_version", "domain": "sylvara.crm.internal-approval-receipt.v1.deployment-version", "pattern": "^[a-f0-9]{64}$" },
+          { "path": "expected_deployment_version_digest", "operator": "equals_domain_separated_keyed_hmac_of_signed_intent_approval_prestate_version", "domain": "sylvara.crm.internal-approval-receipt.v1.deployment-version", "pattern": "^[a-f0-9]{64}$" },
+          { "path": "current_deployment_version_digest", "operator": "equals_domain_separated_keyed_hmac_of_authoritative_current_poststate_version_equal_to_signed_expected_plus_one", "domain": "sylvara.crm.internal-approval-receipt.v1.current-deployment-version", "pattern": "^[a-f0-9]{64}$" },
           { "path": "approval_event_binding_digest", "operator": "equals_domain_separated_keyed_hmac_of_authoritative_approval_event_key", "domain": "sylvara.crm.internal-approval-receipt.v1.approval-event", "pattern": "^[a-f0-9]{64}$" },
           { "path": "approval_intent_signature_digest", "operator": "equals_domain_separated_keyed_hmac_of_verified_runtime_intent_signature", "domain": "sylvara.crm.internal-approval-receipt.v1.intent-signature", "pattern": "^[a-f0-9]{64}$" },
           { "path": "approval_intent_signature_valid", "operator": "equals", "value": true },
@@ -519,9 +563,11 @@
           { "path": "intent_requested_at", "operator": "equals_verified_runtime_intent_field", "field": "requested_at" },
           { "path": "intent_requested_at", "operator": "matches_utc_millisecond_timestamp", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$" },
           { "path": "intent_requested_at", "operator": "greater_than_or_equal_to", "source": "evidence.approval_prestate_observed_at" },
+          { "path": "approval_prestate_observed_at", "operator": "age_at_approval_decision_at_most_seconds", "source": "evidence.approval_decided_at", "value": 900 },
           { "path": "approval_decided_at", "operator": "matches_utc_millisecond_timestamp", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$" },
           { "path": "approval_decided_at", "operator": "equals_normalized_crm_datetime_operator_input", "api_name": "Go_Live_Approved_At" },
           { "path": "approval_decided_at", "operator": "greater_than_or_equal_to", "source": "evidence.intent_requested_at" },
+          { "path": "intent_requested_at", "operator": "age_at_approval_decision_at_most_seconds", "source": "evidence.approval_decided_at", "value": 300 },
           { "path": "approval_receipt_readback_at", "operator": "matches_utc_millisecond_timestamp", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$" },
           { "path": "approval_receipt_readback_at", "operator": "greater_than_or_equal_to", "source": "evidence.approval_decided_at" },
           { "path": "observed_at", "operator": "matches_utc_millisecond_timestamp", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$" },
@@ -535,19 +581,56 @@
         ]
       },
       "route-activation-readback-v1": {
-        "validator_status": "not_implemented",
+        "validator_status": "implemented_repository_only",
+        "validator_entrypoint": "validate_external_evidence",
         "mutation_allowed": false,
         "freshness": "after the latest provider-route mutation and activation receipt readback and immediately before the manual Activate Test Route transition",
         "max_age_at_transition_seconds": 300,
         "maximum_route_readback_age_at_activation_seconds": 900,
+        "maximum_prestate_age_at_activation_seconds": 900,
+        "maximum_intent_age_at_decision_seconds": 300,
         "private_identifier_policy": "Raw Deal, deployment, configuration, route, event, receipt, operator, provider, source-revision, and row-version values are prohibited; only domain-separated keyed digests and the allowlisted state/timestamp claims may cross this evidence boundary.",
         "cryptographic_boundary": {
           "intent_signature_algorithm": "HMAC-SHA-256",
           "intent_signature_source": "private runtime activation intent verified against the private operator-verification key",
+          "intent_signature_secret_input": "operator_verification_secret",
           "intent_signature_is_legal_signature": false,
+          "intent_signature_domain": "revenue-desk-activation-intent-v1",
+          "intent_schema": {
+            "schema_version": 1,
+            "canonicalization": "UTF-8 compact JSON object in the exact canonical_fields order",
+            "canonical_fields": [
+              "schema_version",
+              "event_id",
+              "action",
+              "deal_id",
+              "deployment_id",
+              "configuration_version_id",
+              "approval_event_key",
+              "route_fingerprint",
+              "route_readback_fingerprint",
+              "route_observed_at",
+              "evidence_revision",
+              "evidence_observed_at",
+              "requested_at",
+              "operator_id_hash",
+              "expected_deployment_version"
+            ],
+            "deal_id_pattern": "^[1-9][0-9]{7,29}$",
+            "deal_id_binding": "exact signed deal_id must equal the current private CRM context deal_id"
+          },
           "evidence_receipt_algorithm": "HMAC-SHA-256",
-          "evidence_secret_source": "private CRM Blueprint activation-evidence secret independent from the runtime operator-verification key",
-          "canonicalization": "ordered JSON tuple with exact field names, lowercase-hex digests, and normalized UTC millisecond timestamps",
+          "evidence_receipt_secret_input": "evidence_secret",
+          "evidence_secret_source": "private CRM Blueprint activation-evidence secret used only for the activation receipt and activation binding digests",
+          "runtime_secret_inputs": [
+            "evidence_secret",
+            "approval_evidence_secret",
+            "operator_verification_secret"
+          ],
+          "runtime_secret_minimum_bytes": 32,
+          "runtime_secrets_pairwise_distinct_required": true,
+          "canonicalization": "UTF-8 compact JSON array of ordered [field, value] pairs with exact field names, lowercase-hex digests, and normalized UTC millisecond timestamps",
+          "private_binding_canonicalization": "HMAC-SHA-256(secret, UTF-8(domain + NUL + compact JSON scalar or ordered composite value))",
           "receipt_domain": "sylvara.crm.route-activation-readback.v1",
           "receipt_path": "evidence_receipt",
           "canonical_binding_fields": [
@@ -560,6 +643,7 @@
             "route_fingerprint_digest",
             "source_revision_digest",
             "activation_expected_deployment_version_digest",
+            "activation_current_deployment_version_digest",
             "approval_evidence_receipt_digest",
             "approval_event_binding_digest",
             "approval_receipt_hash_digest",
@@ -584,6 +668,30 @@
             "evidence_nonce_digest"
           ]
         },
+        "referenced_internal_approval_consumption": {
+          "contract_id": "internal-approval-receipt-v1",
+          "scope_digest_secret_input": "approval_evidence_secret",
+          "scope_digest_secret_source": "the private internal-approval evidence secret; never the activation receipt secret",
+          "required_status": "consumed",
+          "required_unique_scope_fields": [
+            "environment",
+            "deal_binding_digest",
+            "approval_event_binding_digest",
+            "evidence_nonce_digest"
+          ],
+          "same_deal_binding": {
+            "operator": "equals_domain_separated_keyed_hmac_of_same_validated_current_crm_deal_id",
+            "domain": "sylvara.crm.internal-approval-receipt.v1.deal",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "same_approval_event_binding": {
+            "operator": "equals_domain_separated_keyed_hmac_of_activation_intent_approval_event_key",
+            "domain": "sylvara.crm.internal-approval-receipt.v1.approval-event",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "evidence_nonce_pattern": "^[a-f0-9]{64}$",
+          "exact_consumption_readback_required": true
+        },
         "one_time_consumption": {
           "required": true,
           "durable_unique_scope": [
@@ -594,6 +702,9 @@
           ],
           "claim": "compare-and-set unconsumed to consumed for the exact evidence receipt before the manual transition",
           "exact_consumption_readback_required": true,
+          "repository_validator_scope": "validate the supplied exact durable consumption readback only; the repository validator neither performs nor persists the compare-and-set",
+          "durable_compare_and_set_writer_in_repository": false,
+          "runtime_replay_enforcement_in_repository": false,
           "replay_behavior": "reject"
         },
         "required_claims": [
@@ -605,7 +716,8 @@
           { "path": "configuration_binding_digest", "operator": "equals_domain_separated_keyed_hmac_of_current_crm_field", "domain": "sylvara.crm.route-activation-readback.v1.configuration", "api_name": "Configuration_Version", "pattern": "^[a-f0-9]{64}$" },
           { "path": "route_fingerprint_digest", "operator": "equals_domain_separated_keyed_hmac_of_authoritative_current_route_fingerprint", "domain": "sylvara.crm.route-activation-readback.v1.route", "pattern": "^[a-f0-9]{64}$" },
           { "path": "source_revision_digest", "operator": "equals_domain_separated_keyed_hmac_of_authoritative_current_source_revision", "domain": "sylvara.crm.route-activation-readback.v1.source", "pattern": "^[a-f0-9]{64}$" },
-          { "path": "activation_expected_deployment_version_digest", "operator": "equals_domain_separated_keyed_hmac_of_signed_intent_and_authoritative_activation_prestate_version", "domain": "sylvara.crm.route-activation-readback.v1.deployment-version", "pattern": "^[a-f0-9]{64}$" },
+          { "path": "activation_expected_deployment_version_digest", "operator": "equals_domain_separated_keyed_hmac_of_signed_intent_activation_prestate_version", "domain": "sylvara.crm.route-activation-readback.v1.deployment-version", "pattern": "^[a-f0-9]{64}$" },
+          { "path": "activation_current_deployment_version_digest", "operator": "equals_domain_separated_keyed_hmac_of_authoritative_current_poststate_version_equal_to_signed_expected_plus_one", "domain": "sylvara.crm.route-activation-readback.v1.current-deployment-version", "pattern": "^[a-f0-9]{64}$" },
           { "path": "approval_evidence_receipt_digest", "operator": "equals_domain_separated_keyed_hmac_of_consumed_internal_approval_evidence_receipt", "domain": "sylvara.crm.route-activation-readback.v1.approval-evidence", "pattern": "^[a-f0-9]{64}$" },
           { "path": "approval_event_binding_digest", "operator": "equals_domain_separated_keyed_hmac_of_activation_related_approval_event_key", "domain": "sylvara.crm.route-activation-readback.v1.approval-event", "pattern": "^[a-f0-9]{64}$" },
           { "path": "approval_receipt_hash_digest", "operator": "equals_domain_separated_keyed_hmac_of_approval_receipt_hash_and_activation_previous_event_hash", "domain": "sylvara.crm.route-activation-readback.v1.approval-hash", "pattern": "^[a-f0-9]{64}$" },
@@ -620,6 +732,7 @@
           { "path": "route_observed_at", "operator": "matches_utc_millisecond_timestamp", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$" },
           { "path": "route_observed_at", "operator": "greater_than_or_equal_to", "source": "evidence.approval_decided_at" },
           { "path": "activation_prestate_observed_at", "operator": "equals_verified_runtime_intent_field", "field": "evidence_observed_at" },
+          { "path": "activation_prestate_observed_at", "operator": "equals", "source": "evidence.route_observed_at" },
           { "path": "activation_prestate_observed_at", "operator": "matches_utc_millisecond_timestamp", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$" },
           { "path": "activation_prestate_observed_at", "operator": "greater_than_or_equal_to", "source": "evidence.approval_decided_at" },
           { "path": "activation_intent_requested_at", "operator": "equals_verified_runtime_intent_field", "field": "requested_at" },
@@ -628,6 +741,8 @@
           { "path": "activation_decided_at", "operator": "matches_utc_millisecond_timestamp", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$" },
           { "path": "activation_decided_at", "operator": "greater_than_or_equal_to", "source": "evidence.activation_intent_requested_at" },
           { "path": "route_observed_at", "operator": "age_at_activation_decision_at_most_seconds", "value": 900 },
+          { "path": "activation_prestate_observed_at", "operator": "age_at_activation_decision_at_most_seconds", "value": 900 },
+          { "path": "activation_intent_requested_at", "operator": "age_at_activation_decision_at_most_seconds", "value": 300 },
           { "path": "actual_start_at", "operator": "equals", "source": "evidence.activation_decided_at" },
           { "path": "actual_start_at", "operator": "equals_normalized_crm_datetime_field", "api_name": "Test_Start_At" },
           { "path": "expires_at", "operator": "equals_timestamp_plus_milliseconds", "source": "evidence.actual_start_at", "value": 604800000 },
@@ -643,15 +758,50 @@
         ]
       },
       "terminal-report-summary-readback-v2": {
-        "validator_status": "blueprint_validator_not_implemented",
+        "validator_status": "implemented_repository_only",
+        "validator_entrypoint": "validate_external_evidence",
         "mutation_allowed": false,
+        "freshness": "after the exact durable operation and complete CRM readback and immediately before the manual Complete Free Test transition",
+        "max_age_at_transition_seconds": 300,
         "durable_operation": {
           "table": "CRMBillingOperations",
           "action": "sync_report_summary",
           "status": "completed",
-          "last_outcome": "report_summary_readback_confirmed"
+          "last_outcome": "report_summary_readback_confirmed",
+          "required_fields": [
+            "OPERATION_KEY",
+            "OPERATION_FINGERPRINT",
+            "ACTION",
+            "CRM_DEAL_ID",
+            "STATUS",
+            "SOURCE_REVISION",
+            "SOURCE_ENVIRONMENT",
+            "LAST_OUTCOME",
+            "OPERATION_PAYLOAD_JSON",
+            "OPERATION_VERSION",
+            "CREATED_AT",
+            "UPDATED_AT"
+          ]
+        },
+        "canonical_summary_identity_input": {
+          "source": "exact canonical summary bytes derived by the authoritative JavaScript canonicalizer from the independently read-back durable OPERATION_PAYLOAD_JSON",
+          "format": "UTF-8 compact JSON array of ordered [field, value] pairs",
+          "semantic_cross_check_required": true,
+          "python_reserialization_allowed_for_identity": false
+        },
+        "current_deployment_configuration_binding": {
+          "source": "fresh current Deal readback immediately before the manual transition",
+          "deployment_api_name": "Deployment_Record_ID",
+          "deployment_summary_field": "deploymentId",
+          "deployment_pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$",
+          "configuration_api_name": "Configuration_Version",
+          "configuration_summary_field": "configurationVersion",
+          "configuration_pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$",
+          "exact_match_required": true
         },
         "crm_exact_readback_fields": [
+          "Deployment_Record_ID",
+          "Configuration_Version",
           "Test_Status",
           "Test_Start_At",
           "Test_End_At",
@@ -682,17 +832,24 @@
         ]
       },
       "route-inactive-readback-v1": {
-        "validator_status": "not_implemented",
+        "validator_status": "implemented_repository_only",
+        "validator_entrypoint": "validate_external_evidence",
         "mutation_allowed": false,
         "freshness": "after the last route or rollback action and immediately before the manual Closed Lost transition",
         "max_age_at_transition_seconds": 300,
+        "context_deal_id_pattern": "^[1-9][0-9]{7,29}$",
         "private_identifier_policy": "raw Deal, deployment, configuration, route, receipt, and provider identifiers are prohibited; only domain-separated keyed digests may cross this evidence boundary",
         "keyed_binding": {
           "algorithm": "HMAC-SHA-256",
           "secret_source": "private route-containment evidence secret",
-          "canonicalization": "ordered JSON tuple with exact field names and normalized UTC millisecond timestamps",
+          "canonicalization": "UTF-8 compact JSON array of ordered [field, value] pairs with exact field names and normalized UTC millisecond timestamps",
+          "private_binding_canonicalization": "HMAC-SHA-256(secret, UTF-8(domain + NUL + compact JSON tagged-array value))",
           "receipt_domain": "sylvara.crm.route-inactive-readback.v1",
           "receipt_path": "evidence_receipt",
+          "nullable_binding_encoding": {
+            "null": ["null"],
+            "non_null": ["value", "<exact private field value>"]
+          },
           "canonical_binding_fields": [
             "schema_version",
             "evidence_type",
@@ -714,6 +871,9 @@
           "durable_unique_scope": ["environment", "deal_binding_digest", "evidence_nonce_digest"],
           "claim": "compare-and-set unconsumed to consumed for the exact evidence receipt before the manual transition",
           "exact_consumption_readback_required": true,
+          "repository_validator_scope": "validate the supplied exact durable consumption readback only; the repository validator neither performs nor persists the compare-and-set",
+          "durable_compare_and_set_writer_in_repository": false,
+          "runtime_replay_enforcement_in_repository": false,
           "replay_behavior": "reject"
         },
         "required_claims": [
@@ -721,10 +881,10 @@
           { "path": "evidence_type", "operator": "equals", "value": "route_inactive_readback" },
           { "path": "environment", "operator": "equals", "value": "Development" },
           { "path": "deal_binding_digest", "operator": "equals_domain_separated_keyed_hmac_of_current_crm_deal_id", "domain": "sylvara.crm.route-inactive-readback.v1.deal", "pattern": "^[a-f0-9]{64}$" },
-          { "path": "deployment_binding_digest", "operator": "equals_domain_separated_keyed_hmac_of_crm_field_or_exact_null_sentinel", "domain": "sylvara.crm.route-inactive-readback.v1.deployment", "api_name": "Deployment_Record_ID", "pattern": "^[a-f0-9]{64}$" },
-          { "path": "configuration_binding_digest", "operator": "equals_domain_separated_keyed_hmac_of_crm_field_or_exact_null_sentinel", "domain": "sylvara.crm.route-inactive-readback.v1.configuration", "api_name": "Configuration_Version", "pattern": "^[a-f0-9]{64}$" },
+          { "path": "deployment_binding_digest", "operator": "equals_domain_separated_keyed_hmac_of_tagged_crm_null_or_value", "domain": "sylvara.crm.route-inactive-readback.v1.deployment", "api_name": "Deployment_Record_ID", "pattern": "^[a-f0-9]{64}$" },
+          { "path": "configuration_binding_digest", "operator": "equals_domain_separated_keyed_hmac_of_tagged_crm_null_or_value", "domain": "sylvara.crm.route-inactive-readback.v1.configuration", "api_name": "Configuration_Version", "pattern": "^[a-f0-9]{64}$" },
           { "path": "route_fingerprint_digest", "operator": "equals_domain_separated_keyed_hmac_of_authoritative_route_fingerprint", "domain": "sylvara.crm.route-inactive-readback.v1.route", "pattern": "^[a-f0-9]{64}$" },
-          { "path": "rollback_completed_at", "operator": "equals_crm_field", "api_name": "Rollback_Completed_At" },
+          { "path": "rollback_completed_at", "operator": "equals_normalized_crm_datetime_field", "api_name": "Rollback_Completed_At" },
           { "path": "last_route_mutation_at", "operator": "equals_authoritative_route_registry_last_mutation_at" },
           { "path": "observed_at", "operator": "matches_utc_millisecond_timestamp", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$" },
           { "path": "observed_at", "operator": "greater_than_or_equal_to_max", "sources": ["evidence.last_route_mutation_at", "crm.Rollback_Completed_At"] },
@@ -736,11 +896,33 @@
         ]
       },
       "billing-closed-won-reconciliation-v1": {
-        "validator_status": "not_implemented",
+        "validator_status": "implemented_repository_only",
+        "validator_entrypoint": "validate_external_evidence",
+        "mutation_allowed": false,
         "freshness": "after the last commercial, acceptance, deployment, configuration, Billing, or CRM integration change and immediately before the manual Closed Won transition",
+        "max_age_at_transition_seconds": 300,
+        "maximum_provider_readback_age_at_evidence_seconds": 300,
         "request_action": "reconcile",
         "non_creating": true,
         "created_resource_count": 0,
+        "keyed_reconciliation_binding": {
+          "algorithm": "HMAC-SHA-256",
+          "secret_source": "private reconciliation-evidence secret independent from the CRM-Billing idempotency pepper",
+          "receipt_domain": "sylvara.crm.billing-closed-won-reconciliation.v1",
+          "receipt_path": "reconciliation_receipt",
+          "canonicalization": "UTF-8 compact JSON array of ordered [field, value] pairs; nested operation, CRM, and Billing objects use their exact contract field order, with the CRM Account lookup projected to its exact record ID, CRM Results Review At normalized to UTC milliseconds, and CRM recurring and setup money normalized to integer minor units",
+          "canonical_binding_fields": [
+            "schema_version",
+            "evidence_type",
+            "environment",
+            "request_action",
+            "created_resource_count",
+            "operation",
+            "crm_readback",
+            "billing_readback",
+            "observed_at"
+          ]
+        },
         "durable_operation": {
           "table": "CRMBillingOperations",
           "action": "prepare_paid_subscription",
@@ -749,6 +931,8 @@
           "required_fields": ["OPERATION_KEY", "OPERATION_FINGERPRINT", "ACTION", "CRM_DEAL_ID", "STATUS", "SOURCE_REVISION", "SOURCE_ENVIRONMENT", "LAST_OUTCOME", "OPERATION_VERSION", "CREATED_AT", "UPDATED_AT"]
         },
         "fingerprint_fresh_crm_bindings": [
+          { "api_name": "Account_Name", "binding": "current Deal Account lookup normalized to its exact CRM record ID, equal to private context.account_id, and included as accountId in OPERATION_FINGERPRINT" },
+          { "api_name": "Results_Review_At", "binding": "current CRM datetime is validated and equal by instant to private context.results_review_at; the exact raw current CRM string is included as resultsReviewAt in OPERATION_FINGERPRINT to match the JavaScript producer" },
           { "api_name": "Plan", "binding": "exact immutable API value maps to the canonical plan included in OPERATION_FINGERPRINT" },
           { "api_name": "Billing_Frequency", "binding": "exact current value" },
           { "api_name": "Monthly_Recurring_Revenue", "binding": "exact current minor units" },
@@ -758,17 +942,63 @@
           { "api_name": "Deployment_Record_ID", "binding": "exact current value" },
           { "api_name": "Configuration_Version", "binding": "exact current value" }
         ],
+        "private_identifier_constraints": {
+          "Account_Name": "^[1-9][0-9]{7,29}$",
+          "Deployment_Record_ID": "^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$",
+          "Approved_Deployment_Record_ID": "^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$",
+          "Configuration_Version": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$",
+          "Approved_Configuration_Version": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$"
+        },
+        "required_currency": "USD",
+        "required_usage_addon_unit": "minute",
+        "immutable_subscription_status_map": {
+          "future": "Scheduled",
+          "live": "Active"
+        },
+        "closed_won_required_provider_subscription_status": "live",
+        "closed_won_required_crm_subscription_status": "Active",
+        "billing_organization_binding": {
+          "billing_readback_field": "billing_organization_id",
+          "context_catalog_field": "billing_organization_id",
+          "exact_match_required": true,
+          "included_in_keyed_reconciliation_binding": true,
+          "raw_value_publication_allowed": false
+        },
+        "exact_billing_readback_fields": [
+          "customer_id",
+          "customer_crm_reference",
+          "subscription_id",
+          "subscription_reference",
+          "plan_code",
+          "billing_organization_id",
+          "currency",
+          "recurring_minor",
+          "setup_minor",
+          "usage_addon_product_id",
+          "usage_addon_code",
+          "usage_addon_unit",
+          "usage_rate_minor",
+          "subscription_start_date",
+          "provider_subscription_status",
+          "crm_subscription_status",
+          "observed_at"
+        ],
         "authoritative_billing_readback": [
           "existing customer exact CRM reference",
           "existing subscription exact deterministic reference",
           "exact plan code",
+          "exact Billing TEST organization equal to the immutable catalog organization binding",
+          "exact USD currency",
           "exact recurring amount",
           "exact setup amount",
-          "exact usage add-on product, code, unit, and rate",
+          "exact usage add-on product, code, minute unit, and rate",
           "exact subscription start date equal to current CRM Subscription_Start_Date",
-          "supported active subscription status"
+          "raw provider subscription status exactly live",
+          "mapped CRM subscription status exactly Active"
         ],
         "exact_crm_readback_fields": [
+          "Account_Name",
+          "Results_Review_At",
           "Plan",
           "Billing_Frequency",
           "Monthly_Recurring_Revenue",
@@ -1002,6 +1232,7 @@
         ],
         "invariants": [
           "CRMBillingOperations exact report revision has STATUS completed and LAST_OUTCOME report_summary_readback_confirmed",
+          "the fresh current Deployment Record ID and Configuration Version readback exactly match the completed operation summary before the manual transition",
           "Test Status equals Completed; Test Start At, Test End At, and Test End Reason match the terminal summary",
           "Call Totals Reconciled equals true",
           "Test Calls Reaching Route, Test Qualified Opportunities, and Test Existing Customer Calls match the authoritative report counts",
@@ -1010,6 +1241,8 @@
           "a human operator invokes the valid Complete Free Test Blueprint transition only after summary readback; normal Deal update does not mutate Stage"
         ],
         "required_preexisting_fields": [
+          "Deployment_Record_ID",
+          "Configuration_Version",
           "Test_Status",
           "Test_Start_At",
           "Test_End_At",
@@ -1104,10 +1337,11 @@
           "Billing customer and subscription IDs present",
           "authoritative Billing sync timestamp present",
           "Subscription Status equals Active",
-          "fresh non-creating reconciliation recomputes the exact durable operation fingerprint from current commercial, acceptance, deployment, and configuration state and confirms exact Billing and CRM readback"
+          "fresh non-creating reconciliation recomputes the exact durable operation fingerprint from the current Deal Account lookup, Results Review timestamp, commercial, acceptance, deployment, and configuration state and confirms exact Billing and CRM readback"
         ],
         "required_preexisting_fields": [
           "Test_Status",
+          "Account_Name",
           "Results_Review_At",
           "Plan",
           "Billing_Frequency",
@@ -1350,6 +1584,7 @@
       ],
       "Complete Free Test": [
         "CRMBillingOperations exact report revision has STATUS completed and LAST_OUTCOME report_summary_readback_confirmed",
+        "the fresh current Deployment Record ID and Configuration Version readback exactly match the completed operation summary before the manual transition",
         "Test Status equals Completed; Test Start At, Test End At, and Test End Reason match the terminal summary",
         "Call Totals Reconciled equals true",
         "Test Calls Reaching Route, Test Qualified Opportunities, and Test Existing Customer Calls match the authoritative report counts",
@@ -1372,7 +1607,7 @@
         "Billing customer and subscription IDs present",
         "authoritative Billing sync timestamp present",
         "Subscription Status equals Active",
-        "fresh non-creating reconciliation recomputes the exact durable operation fingerprint from current commercial, acceptance, deployment, and configuration state and confirms exact Billing and CRM readback"
+        "fresh non-creating reconciliation recomputes the exact durable operation fingerprint from the current Deal Account lookup, Results Review timestamp, commercial, acceptance, deployment, and configuration state and confirms exact Billing and CRM readback"
       ]
     },
     "automatic_actions_prohibited": [

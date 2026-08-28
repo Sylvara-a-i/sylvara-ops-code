@@ -12,9 +12,39 @@ const TIERS = Object.freeze({
   Scale: Object.freeze({ name: "Scale — Monthly" }),
 });
 const MAX_APPROVAL_WINDOW_MS = 15 * 60 * 1000;
+const MAX_METERED_ATTESTATION_AGE_MS = 15 * 60 * 1000;
+const METERED_ATTESTATION_DIGEST_DOMAIN = "sylvara.billing.metered-attestation.v1";
+
+class CatalogPacketValidationError extends Error {
+  constructor(message) {
+    super(`Billing catalog packet rejected: ${message}`);
+    this.name = "CatalogPacketValidationError";
+  }
+}
 
 function fail(message) {
-  throw new Error(`Billing catalog packet rejected: ${message}`);
+  throw new CatalogPacketValidationError(message);
+}
+
+function safeCliErrorMessage(error) {
+  return error instanceof CatalogPacketValidationError
+    ? error.message
+    : "Billing catalog packet rejected: unexpected validation failure";
+}
+
+function readPrivateJson(filePath, label) {
+  let raw;
+  try {
+    raw = fs.readFileSync(filePath, "utf8");
+  } catch {
+    fail(`${label} could not be read`);
+  }
+  try {
+    return JSON.parse(raw);
+  } catch {
+    // JSON parser diagnostics can quote private packet excerpts. Emit only a fixed label.
+    fail(`${label} is not valid JSON`);
+  }
 }
 
 function plainObject(value) {
@@ -81,12 +111,13 @@ function validatePlan(value, tier) {
 function validateUsageAddon(value, phase, product) {
   exactKeys(value, [
     "associatedPlanTiers", "code", "currency", "interval", "intervalUnit", "liveProductId",
-    "name", "priceBrackets", "pricingScheme", "testProductId", "type", "unit",
+    "isUsageSupported", "name", "priceBrackets", "pricingScheme", "testProductId", "type", "unit",
   ], "usageAddon");
   code(value.code, "usageAddon.code");
   if (
     value.name !== "Connected AI Minutes — Usage" ||
-    value.type !== "usage" ||
+    value.type !== "recurring" ||
+    value.isUsageSupported !== true ||
     value.pricingScheme !== "unit" ||
     value.unit !== "minute" ||
     value.currency !== "USD" ||
@@ -126,6 +157,13 @@ function digestCatalogPacket(packet) {
   return crypto.createHash("sha256").update(JSON.stringify(stableValue(packet)), "utf8").digest("hex");
 }
 
+function digestMeteredBillingAttestation(attestation) {
+  return crypto.createHash("sha256")
+    .update(`${METERED_ATTESTATION_DIGEST_DOMAIN}\0`, "utf8")
+    .update(JSON.stringify(stableValue(attestation)), "utf8")
+    .digest("hex");
+}
+
 function digestCommercialTerms(packet) {
   const terms = {
     plans: Object.fromEntries(Object.keys(TIERS).map((tier) => [tier, {
@@ -142,6 +180,7 @@ function digestCommercialTerms(packet) {
       currency: packet.usageAddon?.currency,
       interval: packet.usageAddon?.interval,
       intervalUnit: packet.usageAddon?.intervalUnit,
+      isUsageSupported: packet.usageAddon?.isUsageSupported,
       name: packet.usageAddon?.name,
       priceBrackets: packet.usageAddon?.priceBrackets,
       pricingScheme: packet.usageAddon?.pricingScheme,
@@ -177,14 +216,61 @@ function validateApprovalWindow(approval, nowMs = Date.now()) {
   if (nowMs >= expiresAtMs) fail("approval has expired");
 }
 
+function validateMeteredBillingAttestation(attestation, testOrganization, approval, nowMs) {
+  exactKeys(attestation, [
+    "capturedAt", "environment", "meteredBillingEnabled", "organizationId",
+    "privateEvidenceSha256", "schemaVersion", "source",
+  ], "meteredBillingAttestation");
+  if (attestation.schemaVersion !== 1) {
+    fail("meteredBillingAttestation.schemaVersion must be 1");
+  }
+  if (
+    attestation.environment !== "TEST" ||
+    attestation.source !== "authenticated_billing_settings_ui" ||
+    attestation.meteredBillingEnabled !== true
+  ) fail("Metered Billing UI attestation is not an enabled TEST-settings readback");
+  if (
+    identifier(attestation.organizationId, "meteredBillingAttestation.organizationId") !==
+    testOrganization.id
+  ) fail("Metered Billing UI attestation target differs from the TEST organization");
+  if (!/^[a-f0-9]{64}$/.test(attestation.privateEvidenceSha256)) {
+    fail("meteredBillingAttestation.privateEvidenceSha256 is invalid");
+  }
+  const capturedAtMs = canonicalUtcTimestampMs(
+    attestation.capturedAt,
+    "meteredBillingAttestation.capturedAt",
+  );
+  const approvalCapturedAtMs = canonicalUtcTimestampMs(approval.capturedAt, "approval.capturedAt");
+  if (capturedAtMs > approvalCapturedAtMs) {
+    fail("Metered Billing UI attestation was captured after approval");
+  }
+  if (capturedAtMs > nowMs || nowMs - capturedAtMs > MAX_METERED_ATTESTATION_AGE_MS) {
+    fail("Metered Billing UI attestation is stale");
+  }
+  if (
+    !/^[a-f0-9]{64}$/.test(approval.meteredBillingAttestationSha256) ||
+    !crypto.timingSafeEqual(
+      Buffer.from(approval.meteredBillingAttestationSha256, "hex"),
+      Buffer.from(digestMeteredBillingAttestation(attestation), "hex"),
+    )
+  ) fail("approval does not bind the exact Metered Billing UI attestation");
+}
+
 function validateApprovalEnvelope(approval, packet, nowMs = Date.now()) {
   exactKeys(approval, [
     "approvedSourceRevision", "authorizedOperations", "capturedAt", "catalogMutationAuthorized",
-    "catalogPacketSha256", "commercialTermsSha256", "expiresAt", "readbackEvidenceSha256",
-    "schemaVersion", "singleUse", "targetOrganizationId",
+    "catalogPacketSha256", "commercialTermsSha256", "expiresAt",
+    "meteredBillingAttestationSha256", "readbackEvidenceSha256", "schemaVersion", "singleUse",
+    "targetOrganizationId",
   ], "approval");
-  if (approval.schemaVersion !== 1) fail("approval.schemaVersion must be 1");
+  if (approval.schemaVersion !== 2) fail("approval.schemaVersion must be 2");
   validateApprovalWindow(approval, nowMs);
+  validateMeteredBillingAttestation(
+    packet.meteredBillingAttestation,
+    packet.testOrganization,
+    approval,
+    nowMs,
+  );
   const expectedOperations = packet.phase === "definition"
     ? ["create_test_product"]
     : ["create_test_plans", "create_test_usage_addon"];
@@ -210,10 +296,11 @@ function validateApprovalEnvelope(approval, packet, nowMs = Date.now()) {
 
 function validateCatalogPacket(packet, approval, nowMs = Date.now()) {
   exactKeys(packet, [
-    "approvedSourceRevision", "environment", "liveOrganization", "phase", "plans", "product",
-    "readbackEvidenceSha256", "schemaVersion", "testOrganization", "usageAddon",
+    "approvedSourceRevision", "environment", "liveOrganization", "meteredBillingAttestation",
+    "phase", "plans", "product", "readbackEvidenceSha256", "schemaVersion", "testOrganization",
+    "usageAddon",
   ], "packet");
-  if (packet.schemaVersion !== 1) fail("schemaVersion must be 1");
+  if (packet.schemaVersion !== 2) fail("schemaVersion must be 2");
   if (!new Set(["definition", "bound"]).has(packet.phase)) fail("phase is invalid");
   if (packet.environment !== "Development") fail("environment must be Development");
   if (!/^[a-f0-9]{40}$/.test(packet.approvedSourceRevision)) fail("approvedSourceRevision is invalid");
@@ -308,8 +395,8 @@ function run(argv, nowMs = Date.now()) {
   }
   const packetPath = assertPrivatePacketPath(argv[0]);
   const approvalPath = assertPrivatePacketPath(argv[1]);
-  const packet = JSON.parse(fs.readFileSync(packetPath, "utf8"));
-  const approval = JSON.parse(fs.readFileSync(approvalPath, "utf8"));
+  const packet = readPrivateJson(packetPath, "private catalog packet");
+  const approval = readPrivateJson(approvalPath, "private catalog approval");
   const result = validateCatalogPacket(packet, approval, nowMs);
   process.stdout.write(
     `Billing catalog packet valid: schema=${result.schemaVersion} phase=${result.phase} ` +
@@ -321,7 +408,7 @@ if (require.main === module) {
   try {
     run(process.argv.slice(2));
   } catch (error) {
-    process.stderr.write(`${error.message}\n`);
+    process.stderr.write(`${safeCliErrorMessage(error)}\n`);
     process.exitCode = 1;
   }
 }
@@ -332,6 +419,7 @@ module.exports = {
   assertPrivatePacketPath,
   digestCatalogPacket,
   digestCommercialTerms,
+  digestMeteredBillingAttestation,
   run,
   validateCatalogPacket,
 };

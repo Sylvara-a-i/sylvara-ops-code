@@ -5,7 +5,9 @@
   "real_form_ids_or_urls_in_git": false,
   "evidence_boundary": {
     "live_readback_date": "2026-08-28",
-    "live_readback_mode": "authenticated read-only Zoho Forms builder and integration settings",
+    "live_readback_mode": "authenticated read-only Zoho Forms builder and integration settings, external read-only runtime observation, and sanitized comparison to current read-only Catalyst binding metadata",
+    "public_runtime_source": "external read-only runtime observation with exploit-level details withheld",
+    "catalyst_binding_compared_without_runtime_invocation": true,
     "sanitized": true,
     "live_ids_urls_aliases_and_private_destinations_in_git": false,
     "latest_sanitized_evidence": "evidence/read-only-browser-fallback-preflight-2026-08-28.json",
@@ -57,7 +59,33 @@
         "lead_status": "Free Test Requested",
         "entry_offer": "Free 7-Day Missed-Call",
         "entry_offer_crm_display_value": "7-Day Revenue Leak Test",
-        "entry_offer_customer_label": "Free Revenue Leak Test"
+        "entry_offer_customer_label": "Free Revenue Leak Test",
+        "live_readback": {
+          "configured": true,
+          "expected_organization_matched_privately": true,
+          "module": "Leads",
+          "layout": "Standard",
+          "observed_mapping_count": 6,
+          "observed_mappings": [
+            {"crm_field": "Lead Status", "form_field": "Lead Status"},
+            {"crm_field": "Lead Source", "form_field": "Lead Source"},
+            {"crm_field": "Company", "form_field": "Company"},
+            {"crm_field": "Contact Email", "form_field": "Email"},
+            {"crm_field": "First Name", "form_field": "Name - First Name"},
+            {"crm_field": "Last Name", "form_field": "Name - Last Name"}
+          ],
+          "observed_mappings_are_display_labels": true,
+          "observed_mapping_api_name_crosswalk_proven": false,
+          "exact_missing_api_name_count_proven": false,
+          "required_full_mapping_present": false,
+          "upsert_enabled": true,
+          "upsert_preference_order": ["Intake Submission ID", "Contact Email"],
+          "blank_overwrite": false,
+          "crm_automation_and_process_management_enabled": true,
+          "attachments_signatures_approval_gclid_assignment_and_tags_enabled": false,
+          "integration_write_or_test_performed": false,
+          "status": "observed_noncompliant_incomplete_mapping"
+        }
       },
       "fixed_metadata": {
         "intake_form_version": "revenue-leak-test-request-v1",
@@ -82,7 +110,7 @@
           "live_change_blocked": true
         },
         "privacy_dictionary": {
-          "status": "unresolved",
+          "status": "observed_noncompliant_incomplete_field_by_field_and_runtime_editability_dictionary",
           "field_scope": "every Form 1 field, including all audit, attribution, consent, and assisted-prefill inputs",
           "minimum_named_field_scope": [
             "Entry_Offer",
@@ -112,6 +140,24 @@
             "retention and downstream mapping"
           ],
           "rule": "Do not infer one field's privacy settings from another field or apply a bulk default. Capture and approve the exact live dictionary privately before a browser or connector change.",
+          "live_readback": {
+            "observed_deployed_field_count": 26,
+            "mandatory_true_count": 10,
+            "personal_true_count": 7,
+            "encrypted_true_count": 0,
+            "default_show_count": 14,
+            "default_hide_count": 11,
+            "provider_generated_or_no_visibility_control_count": 1,
+            "configured_alias_count": 0,
+            "missing_optional_attribution_fields": [
+              "utm_source",
+              "utm_medium",
+              "utm_campaign",
+              "utm_content",
+              "utm_term"
+            ],
+            "complete_private_alias_and_read_only_dictionary_proven": false
+          },
           "live_change_blocked": true
         }
       },
@@ -137,6 +183,37 @@
           "UTM_Term"
         ],
         "respondent_editable": false,
+        "canonical_required_crm_destinations": [
+          "First_Name",
+          "Last_Name",
+          "Company",
+          "Decision_Maker_Role",
+          "Designation",
+          "Email",
+          "Mobile",
+          "Lead_Source",
+          "Main_Business_Phone",
+          "Current_Call_Handling",
+          "Requested_Test_Route",
+          "Phone_System_Provider",
+          "Primary_Service_Area",
+          "Field_Team_Size_Band",
+          "Entry_Offer",
+          "Submission_Channel",
+          "Intake_Submission_ID",
+          "Free_Test_Contact_Consent",
+          "Free_Test_Contact_Consent_Version",
+          "Free_Test_Contact_Consent_At",
+          "Free_Test_Request_Submitted_At",
+          "Intake_Form_Version",
+          "Lead_Status",
+          "Source_Page",
+          "UTM_Source",
+          "UTM_Medium",
+          "UTM_Campaign",
+          "UTM_Content",
+          "UTM_Term"
+        ],
         "live_builder_presence_observed": [
           "Entry_Offer",
           "Lead_Source",
@@ -147,30 +224,12 @@
           "Source_Page",
           "Intake_Form_Version"
         ],
-        "live_crm_mapping_presence_observed": [
-          "Entry_Offer",
-          "Submission_Channel",
-          "Free_Test_Contact_Consent_At",
-          "Free_Test_Contact_Consent_Version",
-          "Free_Test_Request_Submitted_At",
-          "Intake_Form_Version",
-          "Intake_Submission_ID",
-          "Lead_Status",
-          "Lead_Source",
-          "Source_Page",
-          "UTM_Source",
-          "UTM_Medium",
-          "UTM_Campaign",
-          "UTM_Content",
-          "UTM_Term"
-        ],
-        "source_required_without_verified_live_field_or_crm_destination": [],
+        "live_crm_mapping_display_label_count_observed": 6,
+        "live_crm_mapping_api_name_crosswalk_proven": false,
+        "exact_missing_crm_api_destination_set_proven": false,
         "unresolved_live_properties": [
-          "field aliases",
-          "mandatory flags",
-          "personal flags",
-          "encryption flags",
-          "read-only flags"
+          "runtime read-only or respondent-editability semantics",
+          "CRM display-label-to-API-name crosswalk and exact missing-destination set"
         ]
       },
       "contact_consent": {
@@ -217,7 +276,9 @@
         "workflow_trigger": true,
         "task_owner": "one CRM workflow action",
         "live_order_observed": ["Intake_Submission_ID", "Email"],
-        "live_status": "observed_exact"
+        "primary_generated_before_upsert_proven": false,
+        "retry_duplicate_prevention_proven": false,
+        "live_status": "upsert_order_observed_primary_generation_and_retry_safety_unproven"
       },
       "assisted_prefill": {
         "enabled": true,
@@ -258,14 +319,49 @@
         "sms_otp": false,
         "sms_delivery": false
       },
+      "live_release_gate": {
+        "status": "blocked_pending_private_containment_and_reconfiguration",
+        "complete_required_field_policy_proven": false,
+        "required_prefill_boundary_proven": false,
+        "required_controller_field_policy_proven": false,
+        "required_respondent_field_policy_proven": false,
+        "required_controller_gate_proven": false,
+        "required_submission_webhook_contract_proven": false,
+        "required_submission_destination_binding_proven": false,
+        "required_submission_authentication_proven": false,
+        "read_only_public_runtime_observation_performed": true,
+        "private_exploit_details_included": false,
+        "field_value_entered": false,
+        "save_next_or_submit_clicked": false,
+        "webhook_test_performed": false
+      },
+      "live_runtime_security_boundary": {
+        "read_only_observation_performed": true,
+        "required_controller_gate_proven": false,
+        "required_field_exposure_policy_proven": false,
+        "private_exploit_details_published": false,
+        "field_value_entered": false,
+        "save_next_or_submit_clicked": false,
+        "status": "blocked_pending_private_containment_and_reconfiguration"
+      },
       "controller_hidden_fields": ["setupToken", "prefillId"],
+      "live_field_inventory": {
+        "complete_required_field_policy_proven": false,
+        "complete_private_runtime_dictionary_retained_outside_github": false,
+        "private_exploit_details_published": false,
+        "status": "blocked_private_revalidation_required"
+      },
+      "live_field_rules": {
+        "required_controller_gate_rule_proven": false,
+        "private_rule_inventory_published": false,
+        "status": "blocked_private_revalidation_required"
+      },
       "controller_field_policy": [
         {
           "key": "setupToken",
           "field_kind": "prefill_webhook_input",
           "alias_reference": "FORM2_TOKEN_FIELD_ALIAS",
-          "live_alias": null,
-          "live_alias_status": "unresolved_private",
+          "live_alias_status": "private_noncompliant_details_withheld",
           "source_policy": {
             "mandatory": true,
             "personal": true,
@@ -273,12 +369,8 @@
             "respondent_editable": false
           },
           "live_readback": {
-            "field_present": true,
-            "mandatory": false,
-            "personal": false,
-            "encrypted": false,
-            "read_only": "unresolved",
-            "dynamic_prefill_webhook_field_configured": false
+            "required_policy_proven": false,
+            "private_details_published": false
           },
           "status": "observed_noncompliant"
         },
@@ -286,8 +378,7 @@
           "key": "prefillId",
           "field_kind": "controller_prefill_revision",
           "alias_reference": null,
-          "live_alias": null,
-          "live_alias_status": "unresolved_private",
+          "live_alias_status": "private_noncompliant_details_withheld",
           "source_policy": {
             "mandatory": true,
             "personal": true,
@@ -295,11 +386,8 @@
             "respondent_editable": false
           },
           "live_readback": {
-            "field_present": true,
-            "mandatory": false,
-            "personal": true,
-            "encrypted": true,
-            "read_only": "unresolved"
+            "required_policy_proven": false,
+            "private_details_published": false
           },
           "status": "observed_noncompliant"
         }
@@ -315,11 +403,8 @@
           "respondent_editable": false
         },
         "live_readback": {
-          "field_present": true,
-          "mapped_to_controller_key": true,
-          "personal": false,
-          "encrypted": false,
-          "read_only": "system_generated"
+          "required_policy_proven": true,
+          "private_details_published": false
         },
         "status": "observed_compliant"
       },
@@ -389,16 +474,13 @@
           "testScopeAccepted"
         ],
         "required_parameter_count": 36,
-        "live_active": true,
-        "live_payload_mode": "JSON",
-        "live_connection_authentication_observed": true,
-        "live_required_parameters_missing": [],
-        "live_prohibited_extra_parameters": [
-          "testPhoneNumber",
-          "alertRecipientMobile"
-        ],
-        "live_private_destination_omitted": true,
-        "status": "observed_noncompliant"
+        "live_contract_proven": false,
+        "live_destination_binding_proven": false,
+        "live_authentication_proven": false,
+        "live_prohibited_fields_absent_proven": false,
+        "live_private_details_published": false,
+        "webhook_test_performed": false,
+        "status": "blocked_pending_private_containment_and_reconfiguration"
       },
       "field_contract": {
         "runtime_authority": "../../zoho-catalyst/revenue-leak-test-setup-form/functions/revenue_leak_test_setup_form/lib/form-contract.js",
@@ -461,7 +543,7 @@
           "requestedTestRoute",
           "approvedTestRoute"
         ],
-        "live_read_only_flags": "unresolved",
+        "live_read_only_flags": "observed_noncompliant_private_details_withheld",
         "prohibited_client_fields": [
           "testPhoneNumber",
           "alertRecipientMobile",
@@ -520,11 +602,10 @@
             "default": false
           },
           "live_readback": {
-            "mandatory": true,
-            "personal": true,
-            "encrypted": false
+            "required_policy_proven": true,
+            "private_details_published": false
           },
-          "status": "observed_compliant"
+          "status": "observed_compliant_private_details_withheld"
         },
         {
           "key": "testScopeAccepted",
@@ -536,11 +617,10 @@
             "default": false
           },
           "live_readback": {
-            "mandatory": true,
-            "personal": true,
-            "encrypted": false
+            "required_policy_proven": true,
+            "private_details_published": false
           },
-          "status": "observed_compliant"
+          "status": "observed_compliant_private_details_withheld"
         },
         {
           "key": "alertRecipientEmail",
@@ -551,9 +631,8 @@
             "respondent_editable": true
           },
           "live_readback": {
-            "mandatory": false,
-            "personal": true,
-            "encrypted": true
+            "required_policy_proven": false,
+            "private_details_published": false
           },
           "status": "observed_noncompliant"
         }
@@ -564,12 +643,9 @@
         "native_sms_notifications_allowed": false,
         "native_approvals_allowed": false,
         "zoho_sign_allowed": false,
-        "live_native_email_notification_configured": false,
-        "live_sms_gateway_configured": false,
-        "live_native_approval_configured": false,
-        "live_zoho_sign_connection_or_action_observed": false,
-        "live_sms_instruction_or_mobile_field_present": true,
-        "status": "observed_noncompliant_due_to_sms_field_and_copy"
+        "complete_required_native_action_policy_proven": false,
+        "private_runtime_details_published": false,
+        "status": "blocked_private_revalidation_required"
       },
       "required_copy": [
         "The representative authorizes the bounded Free Revenue Leak Test.",

@@ -75,7 +75,7 @@ test("configuration is immutable active Development or dependency-free dark Prod
     "Scale::Monthly",
   ]);
   assert.equal(config.paidUsageAddonCode, "connected_minute_usage");
-  assert.equal(config.paidUsageAddonUnit, "Connected AI minute");
+  assert.equal(config.paidUsageAddonUnit, "minute");
   assert.equal(config.paidUsageAddonProductId, "400000000000001");
   assert.deepEqual(config.paidSubscriptionStatusMap, { future: "Scheduled", live: "Active" });
   const dark = loadConfig(baseEnvironment({
@@ -143,6 +143,7 @@ test("configuration is immutable active Development or dependency-free dark Prod
       acceptanceVersion: `terms-v1:${"0".repeat(64)}`,
     }),
     JSON.stringify({ ...SYNTHETIC_COMMERCIAL_TERMS, currency: "usd" }),
+    JSON.stringify({ ...SYNTHETIC_COMMERCIAL_TERMS, currency: "CAD" }),
     JSON.stringify({ ...SYNTHETIC_COMMERCIAL_TERMS, interval: 2 }),
     JSON.stringify({ ...SYNTHETIC_COMMERCIAL_TERMS, intervalUnit: "years" }),
     JSON.stringify({ ...SYNTHETIC_COMMERCIAL_TERMS, commonUsageRateMinor: 0 }),
@@ -175,6 +176,8 @@ test("configuration is immutable active Development or dependency-free dark Prod
     {},
     { future: "Scheduled" },
     { future: "Ready", live: "Ready" },
+    { future: "Active", live: "Scheduled" },
+    { future: "Pending", live: "Active" },
     { future: "Scheduled", trial: "Trial" },
   ]) {
     assert.throws(
@@ -239,6 +242,8 @@ test("configuration is immutable active Development or dependency-free dark Prod
   }
   for (const unsafe of [
     { PAID_USAGE_ADDON_UNIT: "" },
+    { PAID_USAGE_ADDON_UNIT: "connected_minute" },
+    { PAID_USAGE_ADDON_UNIT: "Connected AI minute" },
     { PAID_USAGE_ADDON_UNIT: "Connected\nAI minute" },
     { PAID_USAGE_ADDON_PRODUCT_ID: "not-an-id" },
   ]) {

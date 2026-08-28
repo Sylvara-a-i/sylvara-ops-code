@@ -75,6 +75,15 @@ function createFixture(testContext, mutateBeforeCommit) {
     path.join(repositoryRoot, "src/zoho-forms/free-revenue-leak-test/forms-manifest.json"),
     formsManifest,
   );
+  const releaseContract = path.join(
+    repository,
+    "docs/product/free-revenue-leak-test-release-contract.json",
+  );
+  fs.mkdirSync(path.dirname(releaseContract), { recursive: true });
+  fs.copyFileSync(
+    path.join(repositoryRoot, "docs/product/free-revenue-leak-test-release-contract.json"),
+    releaseContract,
+  );
   mutateBeforeCommit?.({ copiedController, repository });
 
   runGit(repository, ["init", "-q", "--object-format=sha1", "--template="]);

@@ -1,7 +1,7 @@
 "use strict";
 
 const assert = require("node:assert/strict");
-const { execFileSync } = require("node:child_process");
+const { execFileSync, spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -12,6 +12,7 @@ const {
   assertPrivatePacketPath,
   digestCatalogPacket,
   digestCommercialTerms,
+  digestMeteredBillingAttestation,
   validateCatalogPacket,
 } = require("../../../tools/validate-private-catalog-packet");
 
@@ -56,11 +57,20 @@ function packet(overrides = {}) {
     liveOrganization: {
       currency: "USD", id: "202", mode: "live", orgType: "live", subscriptionsOnly: true,
     },
+    meteredBillingAttestation: {
+      capturedAt: "2026-08-26T17:59:00.000Z",
+      environment: "TEST",
+      meteredBillingEnabled: true,
+      organizationId: "101",
+      privateEvidenceSha256: "c".repeat(64),
+      schemaVersion: 1,
+      source: "authenticated_billing_settings_ui",
+    },
     phase: "definition",
     plans,
     product: { liveProductId: "303", name: "Revenue Desk", testProductId: null },
     readbackEvidenceSha256: "b".repeat(64),
-    schemaVersion: 1,
+    schemaVersion: 2,
     testOrganization: {
       currency: "USD", id: "101", mode: "test", orgType: "test", subscriptionsOnly: true,
     },
@@ -70,12 +80,13 @@ function packet(overrides = {}) {
       currency: "USD",
       interval: 1,
       intervalUnit: "months",
+      isUsageSupported: true,
       liveProductId: "303",
       name: "Connected AI Minutes — Usage",
       priceBrackets: [{ priceMinor: 707, startQuantity: 1 }],
       pricingScheme: "unit",
       testProductId: null,
-      type: "usage",
+      type: "recurring",
       unit: "minute",
     },
     ...overrides,
@@ -93,8 +104,11 @@ function approval(value, overrides = {}) {
     catalogPacketSha256: digestCatalogPacket(value),
     commercialTermsSha256: digestCommercialTerms(value),
     expiresAt: "2026-08-26T18:15:00.000Z",
+    meteredBillingAttestationSha256: digestMeteredBillingAttestation(
+      value.meteredBillingAttestation,
+    ),
     readbackEvidenceSha256: value.readbackEvidenceSha256,
-    schemaVersion: 1,
+    schemaVersion: 2,
     singleUse: true,
     targetOrganizationId: value.testOrganization.id,
     ...overrides,
@@ -119,6 +133,92 @@ test("bound phase requires one exact TEST product binding", () => {
   assert.equal(validateCatalogPacket(value, approval(value), NOW_MS).phase, "bound");
   value.usageAddon.testProductId = "405";
   assert.throws(() => validateCatalogPacket(value, approval(value), NOW_MS), /TEST product binding differs/);
+});
+
+test("requires schema v2 and the recurring usage-tracking provider contract", () => {
+  const oldSchema = packet();
+  oldSchema.schemaVersion = 1;
+  assert.throws(
+    () => validateCatalogPacket(oldSchema, approval(oldSchema), NOW_MS),
+    /schemaVersion must be 2/,
+  );
+  const currentSchema = packet();
+  assert.throws(
+    () => validateCatalogPacket(currentSchema, approval(currentSchema, { schemaVersion: 1 }), NOW_MS),
+    /approval\.schemaVersion must be 2/,
+  );
+
+  const usageProofAbsent = packet();
+  delete usageProofAbsent.usageAddon.isUsageSupported;
+  assert.throws(
+    () => validateCatalogPacket(usageProofAbsent, approval(usageProofAbsent), NOW_MS),
+    /usageAddon fields are not exact/,
+  );
+
+  for (const usageOverride of [
+    { type: "one_time" },
+    { isUsageSupported: false },
+    { interval: 2 },
+    { intervalUnit: "years" },
+    { pricingScheme: "volume" },
+  ]) {
+    const value = packet();
+    Object.assign(value.usageAddon, usageOverride);
+    assert.throws(
+      () => validateCatalogPacket(value, approval(value), NOW_MS),
+      /usageAddon contract drifted/,
+    );
+  }
+});
+
+test("requires a fresh enabled TEST UI attestation bound to the exact organization and approval", () => {
+  const disabled = packet();
+  disabled.meteredBillingAttestation.meteredBillingEnabled = false;
+  assert.throws(
+    () => validateCatalogPacket(disabled, approval(disabled), NOW_MS),
+    /not an enabled TEST-settings readback/,
+  );
+
+  for (const attestationOverride of [
+    { environment: "LIVE" },
+    { source: "organization_connector" },
+    { organizationId: "202" },
+    { privateEvidenceSha256: "not-a-digest" },
+    { capturedAt: "2026-08-26T17:49:59.999Z" },
+  ]) {
+    const value = packet();
+    Object.assign(value.meteredBillingAttestation, attestationOverride);
+    assert.throws(() => validateCatalogPacket(value, approval(value), NOW_MS), /attestation|Attestation/);
+  }
+
+  const afterApproval = packet();
+  afterApproval.meteredBillingAttestation.capturedAt = "2026-08-26T18:00:00.001Z";
+  assert.throws(
+    () => validateCatalogPacket(afterApproval, approval(afterApproval), NOW_MS),
+    /captured after approval/,
+  );
+
+  const unbound = packet();
+  assert.throws(() => validateCatalogPacket(unbound, approval(unbound, {
+    meteredBillingAttestationSha256: "0".repeat(64),
+  }), NOW_MS), /does not bind the exact Metered Billing UI attestation/);
+});
+
+test("digests bind usage support and the exact TEST Metered Billing attestation", () => {
+  const baseline = packet();
+  const usageDrift = structuredClone(baseline);
+  usageDrift.usageAddon.isUsageSupported = false;
+  assert.notEqual(digestCommercialTerms(usageDrift), digestCommercialTerms(baseline));
+  assert.notEqual(digestCatalogPacket(usageDrift), digestCatalogPacket(baseline));
+
+  const meteringDrift = structuredClone(baseline);
+  meteringDrift.meteredBillingAttestation.privateEvidenceSha256 = "d".repeat(64);
+  assert.equal(digestCommercialTerms(meteringDrift), digestCommercialTerms(baseline));
+  assert.notEqual(digestCatalogPacket(meteringDrift), digestCatalogPacket(baseline));
+  assert.notEqual(
+    digestMeteredBillingAttestation(meteringDrift.meteredBillingAttestation),
+    digestMeteredBillingAttestation(baseline.meteredBillingAttestation),
+  );
 });
 
 test("rejects commercial drift, code collisions, unknown fields, and Production", () => {
@@ -149,9 +249,10 @@ test("approval binds organizations, product IDs, codes, phase, and all commercia
 
   const redirectedOrganization = structuredClone(approved);
   redirectedOrganization.testOrganization.id = "909";
+  redirectedOrganization.meteredBillingAttestation.organizationId = "909";
   assert.throws(
     () => validateCatalogPacket(redirectedOrganization, envelope, NOW_MS),
-    /private catalog approval/,
+    /does not bind the exact Metered Billing UI attestation/,
   );
 
   const redirectedProduct = structuredClone(approved);
@@ -241,5 +342,44 @@ test("private packet path must remain outside and not resolve into the public re
     assert.throws(() => assertPrivatePacketPath(linked), /outside the public repository/);
   } finally {
     fs.rmSync(external, { force: true });
+  }
+});
+
+test("CLI never echoes malformed private JSON or its path", (t) => {
+  const directory = fs.mkdtempSync(
+    path.join(os.tmpdir(), `sylvara-private-catalog-json-${process.pid}-`),
+  );
+  t.after(() => fs.rmSync(directory, { force: true, recursive: true }));
+  const packetPath = path.join(directory, "packet.json");
+  const approvalPath = path.join(directory, "approval.json");
+  const cliPath = path.resolve(
+    __dirname,
+    "../../../tools/validate-private-catalog-packet.js",
+  );
+  const canary = "PRIVATE-CATALOG-PARSE-CANARY";
+  const cases = [
+    {
+      packet: `{\"private\":\"${canary}\",`,
+      approval: "{}",
+      expected: "Billing catalog packet rejected: private catalog packet is not valid JSON\n",
+    },
+    {
+      packet: "{}",
+      approval: `{\"private\":\"${canary}\",`,
+      expected: "Billing catalog packet rejected: private catalog approval is not valid JSON\n",
+    },
+  ];
+  for (const value of cases) {
+    fs.writeFileSync(packetPath, value.packet, "utf8");
+    fs.writeFileSync(approvalPath, value.approval, "utf8");
+    const result = spawnSync(process.execPath, [cliPath, packetPath, approvalPath], {
+      encoding: "utf8",
+      windowsHide: true,
+    });
+    assert.equal(result.status, 1);
+    assert.equal(result.stdout, "");
+    assert.equal(result.stderr, value.expected);
+    assert.doesNotMatch(result.stderr, new RegExp(canary));
+    assert.doesNotMatch(result.stderr, new RegExp(directory.replaceAll("\\", "\\\\")));
   }
 });

@@ -359,7 +359,16 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         self.assertFalse(boundary["writer_or_provider_payload_contract_in_repository"])
         self.assertFalse(boundary["provider_save_readback_proven"])
         self.assertFalse(boundary["runtime_acceptance_proven"])
-        self.assertFalse(boundary["external_evidence_validator_in_repository"])
+        self.assertTrue(boundary["external_evidence_validator_in_repository"])
+        validator = boundary["external_evidence_validator"]
+        self.assertEqual(
+            validator["path"],
+            "src/zoho-crm/free-revenue-leak-test/validators/external_evidence.py",
+        )
+        self.assertFalse(validator["runtime_side_effects"])
+        self.assertFalse(validator["live_blueprint_caller_wired"])
+        self.assertFalse(validator["durable_consumption_cas_writer_in_repository"])
+        self.assertFalse(validator["runtime_replay_enforcement_proven"])
         self.assertTrue(boundary["metadata_and_layout_gate_satisfied"])
         self.assertEqual(
             boundary["live_pipeline_binding_matches_contract"], "not_proven"
@@ -837,14 +846,50 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         approval_contract = blueprint["external_evidence_contracts"][
             "internal-approval-receipt-v1"
         ]
-        self.assertEqual(approval_contract["validator_status"], "not_implemented")
+        self.assertEqual(
+            approval_contract["validator_status"], "implemented_repository_only"
+        )
         self.assertFalse(approval_contract["mutation_allowed"])
         self.assertEqual(approval_contract["max_age_at_transition_seconds"], 300)
+        self.assertEqual(
+            approval_contract["maximum_prestate_age_at_decision_seconds"], 900
+        )
+        self.assertEqual(approval_contract["maximum_intent_age_at_decision_seconds"], 300)
         self.assertIn("Raw Deal", approval_contract["private_identifier_policy"])
         approval_crypto = approval_contract["cryptographic_boundary"]
         self.assertEqual(approval_crypto["intent_signature_algorithm"], "HMAC-SHA-256")
+        self.assertEqual(
+            approval_crypto["intent_signature_domain"],
+            "revenue-desk-approval-intent-v1",
+        )
         self.assertEqual(approval_crypto["evidence_receipt_algorithm"], "HMAC-SHA-256")
         self.assertFalse(approval_crypto["intent_signature_is_legal_signature"])
+        approval_intent_schema = approval_crypto["intent_schema"]
+        self.assertEqual(approval_intent_schema["schema_version"], 1)
+        self.assertEqual(
+            approval_intent_schema["canonical_fields"],
+            [
+                "schema_version",
+                "event_id",
+                "action",
+                "deal_id",
+                "deployment_id",
+                "configuration_version_id",
+                "route_fingerprint",
+                "evidence_revision",
+                "evidence_observed_at",
+                "requested_at",
+                "operator_id_hash",
+                "expected_deployment_version",
+            ],
+        )
+        self.assertEqual(
+            approval_intent_schema["deal_id_pattern"], "^[1-9][0-9]{7,29}$"
+        )
+        self.assertIn(
+            "current private CRM context deal_id",
+            approval_intent_schema["deal_id_binding"],
+        )
         self.assertEqual(
             approval_crypto["receipt_domain"],
             "sylvara.crm.internal-approval-receipt.v1",
@@ -852,6 +897,8 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         approval_one_time = approval_contract["one_time_consumption"]
         self.assertTrue(approval_one_time["required"])
         self.assertTrue(approval_one_time["exact_consumption_readback_required"])
+        self.assertFalse(approval_one_time["durable_compare_and_set_writer_in_repository"])
+        self.assertFalse(approval_one_time["runtime_replay_enforcement_in_repository"])
         self.assertEqual(approval_one_time["replay_behavior"], "reject")
         approval_claims = {}
         for claim in approval_contract["required_claims"]:
@@ -877,6 +924,10 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
             "Go_Live_Approved_At",
         )
         self.assertEqual(
+            approval_claims["current_deployment_version_digest"][0]["operator"],
+            "equals_domain_separated_keyed_hmac_of_authoritative_current_poststate_version_equal_to_signed_expected_plus_one",
+        )
+        self.assertEqual(
             approval_claims["evidence_receipt"][0]["operator"],
             "equals_keyed_hmac_of_canonical_binding",
         )
@@ -888,18 +939,78 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         activation_contract = blueprint["external_evidence_contracts"][
             "route-activation-readback-v1"
         ]
-        self.assertEqual(activation_contract["validator_status"], "not_implemented")
+        self.assertEqual(
+            activation_contract["validator_status"], "implemented_repository_only"
+        )
         self.assertFalse(activation_contract["mutation_allowed"])
         self.assertEqual(activation_contract["max_age_at_transition_seconds"], 300)
         self.assertEqual(
             activation_contract["maximum_route_readback_age_at_activation_seconds"],
             900,
         )
+        self.assertEqual(
+            activation_contract["maximum_prestate_age_at_activation_seconds"], 900
+        )
+        self.assertEqual(
+            activation_contract["maximum_intent_age_at_decision_seconds"], 300
+        )
         self.assertIn("Raw Deal", activation_contract["private_identifier_policy"])
         activation_crypto = activation_contract["cryptographic_boundary"]
         self.assertEqual(activation_crypto["intent_signature_algorithm"], "HMAC-SHA-256")
+        self.assertEqual(
+            activation_crypto["intent_signature_domain"],
+            "revenue-desk-activation-intent-v1",
+        )
+        self.assertEqual(
+            activation_crypto["intent_signature_secret_input"],
+            "operator_verification_secret",
+        )
         self.assertEqual(activation_crypto["evidence_receipt_algorithm"], "HMAC-SHA-256")
+        self.assertEqual(
+            activation_crypto["evidence_receipt_secret_input"], "evidence_secret"
+        )
+        self.assertEqual(
+            activation_crypto["runtime_secret_inputs"],
+            [
+                "evidence_secret",
+                "approval_evidence_secret",
+                "operator_verification_secret",
+            ],
+        )
+        self.assertEqual(activation_crypto["runtime_secret_minimum_bytes"], 32)
+        self.assertTrue(
+            activation_crypto["runtime_secrets_pairwise_distinct_required"]
+        )
         self.assertFalse(activation_crypto["intent_signature_is_legal_signature"])
+        activation_intent_schema = activation_crypto["intent_schema"]
+        self.assertEqual(activation_intent_schema["schema_version"], 1)
+        self.assertEqual(
+            activation_intent_schema["canonical_fields"],
+            [
+                "schema_version",
+                "event_id",
+                "action",
+                "deal_id",
+                "deployment_id",
+                "configuration_version_id",
+                "approval_event_key",
+                "route_fingerprint",
+                "route_readback_fingerprint",
+                "route_observed_at",
+                "evidence_revision",
+                "evidence_observed_at",
+                "requested_at",
+                "operator_id_hash",
+                "expected_deployment_version",
+            ],
+        )
+        self.assertEqual(
+            activation_intent_schema["deal_id_pattern"], "^[1-9][0-9]{7,29}$"
+        )
+        self.assertIn(
+            "current private CRM context deal_id",
+            activation_intent_schema["deal_id_binding"],
+        )
         self.assertEqual(
             activation_crypto["receipt_domain"],
             "sylvara.crm.route-activation-readback.v1",
@@ -907,7 +1018,35 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         activation_one_time = activation_contract["one_time_consumption"]
         self.assertTrue(activation_one_time["required"])
         self.assertTrue(activation_one_time["exact_consumption_readback_required"])
+        self.assertFalse(activation_one_time["durable_compare_and_set_writer_in_repository"])
+        self.assertFalse(activation_one_time["runtime_replay_enforcement_in_repository"])
         self.assertEqual(activation_one_time["replay_behavior"], "reject")
+        referenced_approval = activation_contract[
+            "referenced_internal_approval_consumption"
+        ]
+        self.assertEqual(
+            referenced_approval["contract_id"], "internal-approval-receipt-v1"
+        )
+        self.assertEqual(
+            referenced_approval["scope_digest_secret_input"],
+            "approval_evidence_secret",
+        )
+        self.assertEqual(referenced_approval["required_status"], "consumed")
+        self.assertEqual(
+            referenced_approval["required_unique_scope_fields"],
+            approval_one_time["durable_unique_scope"],
+        )
+        self.assertEqual(
+            referenced_approval["same_deal_binding"]["domain"],
+            "sylvara.crm.internal-approval-receipt.v1.deal",
+        )
+        self.assertEqual(
+            referenced_approval["same_approval_event_binding"]["domain"],
+            "sylvara.crm.internal-approval-receipt.v1.approval-event",
+        )
+        self.assertTrue(
+            referenced_approval["exact_consumption_readback_required"]
+        )
         activation_claims = {}
         for claim in activation_contract["required_claims"]:
             activation_claims.setdefault(claim["path"], []).append(claim)
@@ -944,6 +1083,20 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
             activation_claims["actual_start_at"][1]["api_name"], "Test_Start_At"
         )
         self.assertEqual(
+            activation_claims["activation_current_deployment_version_digest"][0][
+                "operator"
+            ],
+            "equals_domain_separated_keyed_hmac_of_authoritative_current_poststate_version_equal_to_signed_expected_plus_one",
+        )
+        self.assertIn(
+            {
+                "path": "activation_prestate_observed_at",
+                "operator": "equals",
+                "source": "evidence.route_observed_at",
+            },
+            activation_contract["required_claims"],
+        )
+        self.assertEqual(
             activation_claims["evidence_receipt"][0]["operator"],
             "equals_keyed_hmac_of_canonical_binding",
         )
@@ -971,8 +1124,31 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
             "terminal-report-summary-readback-v2"
         ]
         self.assertEqual(
+            terminal_contract["validator_status"], "implemented_repository_only"
+        )
+        self.assertEqual(
             set(complete["required_preexisting_fields"]),
             set(terminal_contract["crm_exact_readback_fields"]),
+        )
+        self.assertTrue(
+            {"Deployment_Record_ID", "Configuration_Version"}.issubset(
+                terminal_contract["crm_exact_readback_fields"]
+            )
+        )
+        canonical_summary = terminal_contract["canonical_summary_identity_input"]
+        self.assertTrue(canonical_summary["semantic_cross_check_required"])
+        self.assertFalse(canonical_summary["python_reserialization_allowed_for_identity"])
+        current_binding = terminal_contract[
+            "current_deployment_configuration_binding"
+        ]
+        self.assertTrue(current_binding["exact_match_required"])
+        self.assertEqual(
+            current_binding["deployment_pattern"],
+            "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$",
+        )
+        self.assertEqual(
+            current_binding["configuration_pattern"],
+            "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$",
         )
         self.assertEqual(
             complete["external_evidence_requirements"],
@@ -1017,9 +1193,14 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         route_contract = blueprint["external_evidence_contracts"][
             "route-inactive-readback-v1"
         ]
-        self.assertEqual(route_contract["validator_status"], "not_implemented")
+        self.assertEqual(
+            route_contract["validator_status"], "implemented_repository_only"
+        )
         self.assertFalse(route_contract["mutation_allowed"])
         self.assertEqual(route_contract["max_age_at_transition_seconds"], 300)
+        self.assertEqual(
+            route_contract["context_deal_id_pattern"], "^[1-9][0-9]{7,29}$"
+        )
         self.assertIn("raw Deal", route_contract["private_identifier_policy"])
         keyed_binding = route_contract["keyed_binding"]
         self.assertEqual(keyed_binding["algorithm"], "HMAC-SHA-256")
@@ -1028,6 +1209,13 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
             "sylvara.crm.route-inactive-readback.v1",
         )
         self.assertEqual(keyed_binding["receipt_path"], "evidence_receipt")
+        self.assertEqual(
+            keyed_binding["nullable_binding_encoding"],
+            {
+                "null": ["null"],
+                "non_null": ["value", "<exact private field value>"],
+            },
+        )
         self.assertEqual(
             set(keyed_binding["canonical_binding_fields"]),
             {
@@ -1049,6 +1237,8 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         one_time = route_contract["one_time_consumption"]
         self.assertTrue(one_time["required"])
         self.assertTrue(one_time["exact_consumption_readback_required"])
+        self.assertFalse(one_time["durable_compare_and_set_writer_in_repository"])
+        self.assertFalse(one_time["runtime_replay_enforcement_in_repository"])
         self.assertEqual(one_time["replay_behavior"], "reject")
         claims = route_contract["required_claims"]
         claims_by_path = {}
@@ -1149,17 +1339,91 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         paid_evidence = blueprint["external_evidence_contracts"][
             "billing-closed-won-reconciliation-v1"
         ]
-        self.assertEqual(paid_evidence["validator_status"], "not_implemented")
+        self.assertEqual(
+            paid_evidence["validator_status"], "implemented_repository_only"
+        )
+        self.assertFalse(paid_evidence["mutation_allowed"])
         self.assertEqual(paid_evidence["request_action"], "reconcile")
         self.assertTrue(paid_evidence["non_creating"])
         self.assertEqual(paid_evidence["created_resource_count"], 0)
         self.assertEqual(
+            paid_evidence["maximum_provider_readback_age_at_evidence_seconds"],
+            300,
+        )
+        self.assertEqual(paid_evidence["required_currency"], "USD")
+        self.assertEqual(paid_evidence["required_usage_addon_unit"], "minute")
+        self.assertEqual(
+            paid_evidence["immutable_subscription_status_map"],
+            {"future": "Scheduled", "live": "Active"},
+        )
+        self.assertEqual(
+            paid_evidence["closed_won_required_provider_subscription_status"],
+            "live",
+        )
+        self.assertEqual(
+            paid_evidence["closed_won_required_crm_subscription_status"],
+            "Active",
+        )
+        self.assertEqual(
+            paid_evidence["billing_organization_binding"],
+            {
+                "billing_readback_field": "billing_organization_id",
+                "context_catalog_field": "billing_organization_id",
+                "exact_match_required": True,
+                "included_in_keyed_reconciliation_binding": True,
+                "raw_value_publication_allowed": False,
+            },
+        )
+        self.assertEqual(
+            paid_evidence["exact_billing_readback_fields"],
+            [
+                "customer_id",
+                "customer_crm_reference",
+                "subscription_id",
+                "subscription_reference",
+                "plan_code",
+                "billing_organization_id",
+                "currency",
+                "recurring_minor",
+                "setup_minor",
+                "usage_addon_product_id",
+                "usage_addon_code",
+                "usage_addon_unit",
+                "usage_rate_minor",
+                "subscription_start_date",
+                "provider_subscription_status",
+                "crm_subscription_status",
+                "observed_at",
+            ],
+        )
+        self.assertEqual(
+            paid_evidence["private_identifier_constraints"],
+            {
+                "Account_Name": "^[1-9][0-9]{7,29}$",
+                "Deployment_Record_ID": "^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$",
+                "Approved_Deployment_Record_ID": "^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$",
+                "Configuration_Version": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$",
+                "Approved_Configuration_Version": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$",
+            },
+        )
+        self.assertEqual(
             paid_evidence["durable_operation"]["last_outcome"],
             "paid_subscription_readback_confirmed",
         )
+        billing_receipt = paid_evidence["keyed_reconciliation_binding"]
+        self.assertEqual(billing_receipt["algorithm"], "HMAC-SHA-256")
+        self.assertEqual(
+            billing_receipt["receipt_domain"],
+            "sylvara.crm.billing-closed-won-reconciliation.v1",
+        )
+        self.assertEqual(billing_receipt["receipt_path"], "reconciliation_receipt")
+        self.assertIn("request_action", billing_receipt["canonical_binding_fields"])
+        self.assertIn("created_resource_count", billing_receipt["canonical_binding_fields"])
         self.assertEqual(
             {item["api_name"] for item in paid_evidence["fingerprint_fresh_crm_bindings"]},
             {
+                "Account_Name",
+                "Results_Review_At",
                 "Plan",
                 "Billing_Frequency",
                 "Monthly_Recurring_Revenue",
@@ -1169,6 +1433,11 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
                 "Deployment_Record_ID",
                 "Configuration_Version",
             },
+        )
+        self.assertTrue(
+            {"Account_Name", "Results_Review_At"}.issubset(
+                paid_evidence["exact_crm_readback_fields"]
+            )
         )
         self.assertTrue(
             set(paid_evidence["exact_crm_readback_fields"]).issubset(

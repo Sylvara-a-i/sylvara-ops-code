@@ -51,8 +51,18 @@ test("commercial acceptance version is the canonical digest of every private ter
 });
 
 test("a reused or mismatched acceptance label cannot authorize changed terms", () => {
+  const wrongCurrency = core();
+  wrongCurrency.currency = "CAD";
+  assert.throws(
+    () => derivePaidCommercialTermsAcceptanceVersion(wrongCurrency),
+    /paid commercial terms are invalid/,
+  );
+  assert.throws(() => parsePaidCommercialTerms(JSON.stringify({
+    acceptanceVersion: SYNTHETIC_COMMERCIAL_TERMS.acceptanceVersion,
+    ...wrongCurrency,
+  })), /paid commercial terms are invalid/);
+
   const mutations = [
-    (terms) => { terms.currency = "CAD"; },
     (terms) => { terms.commonUsageRateMinor += 1; },
     (terms) => { terms.plans["Launch::Monthly"].recurringMinor += 1; },
     (terms) => { terms.plans["Launch::Monthly"].setupMinor += 1; },

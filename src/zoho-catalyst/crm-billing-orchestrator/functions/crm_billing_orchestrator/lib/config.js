@@ -15,6 +15,11 @@ const PLAN_CODE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
 const CUSTOMER_PROVISIONING_MODES = new Set(["test_direct_customer"]);
 const OPERATION_TABLE_NAME = "CRMBillingOperations";
 const ANALYTICS_OUTBOX_TABLE_NAME = "AnalyticsSyncOutbox";
+const PAID_USAGE_ADDON_UNIT = "minute";
+const PAID_SUBSCRIPTION_STATUS_MAP = Object.freeze({
+  future: "Scheduled",
+  live: "Active",
+});
 
 class ConfigurationError extends Error {
   constructor(message) {
@@ -205,16 +210,19 @@ function paidSubscriptionStatusMap(environment) {
     throw new ConfigurationError("PAID_SUBSCRIPTION_STATUS_MAP must be an object");
   }
   const entries = Object.entries(parsed);
-  const expectedKeys = ["future", "live"];
+  const expectedKeys = Object.keys(PAID_SUBSCRIPTION_STATUS_MAP);
   if (
     JSON.stringify(entries.map(([key]) => key).sort()) !== JSON.stringify(expectedKeys) ||
-    entries.some(([, value]) => (
-      typeof value !== "string" || !value || value.length > 120 ||
-      /[\u0000-\u001f\u007f]/.test(value)
-    )) ||
-    new Set(entries.map(([, value]) => value)).size !== entries.length
+    entries.some(([key, value]) => value !== PAID_SUBSCRIPTION_STATUS_MAP[key])
   ) throw new ConfigurationError("PAID_SUBSCRIPTION_STATUS_MAP is invalid");
-  return Object.freeze(Object.fromEntries(entries));
+  return PAID_SUBSCRIPTION_STATUS_MAP;
+}
+
+function paidUsageAddonUnit(environment) {
+  if (required(environment, "PAID_USAGE_ADDON_UNIT") !== PAID_USAGE_ADDON_UNIT) {
+    throw new ConfigurationError("PAID_USAGE_ADDON_UNIT must be minute");
+  }
+  return PAID_USAGE_ADDON_UNIT;
 }
 
 function paidConfiguration(environment) {
@@ -231,7 +239,7 @@ function paidConfiguration(environment) {
     paidCommercialTerms,
     paidPlanCodeMap: paidPlanMap(environment),
     paidUsageAddonCode: planCode(environment, "PAID_USAGE_ADDON_CODE"),
-    paidUsageAddonUnit: boundedText(environment, "PAID_USAGE_ADDON_UNIT", 100),
+    paidUsageAddonUnit: paidUsageAddonUnit(environment),
     paidUsageAddonProductId: billingRecordId(environment, "PAID_USAGE_ADDON_PRODUCT_ID"),
     paidSubscriptionStatusMap: paidSubscriptionStatusMap(environment),
     paidAcceptanceValue: boundedText(environment, "PAID_ACCEPTANCE_VALUE"),

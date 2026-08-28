@@ -478,7 +478,8 @@ function createBillingClient(config, {
       !plainObject(addon) ||
       addon.addon_code !== selectedAddonCode ||
       addon.status !== "active" ||
-      addon.type !== "usage" ||
+      addon.type !== "recurring" ||
+      addon.is_usage_supported !== true ||
       addon.pricing_scheme !== "unit" ||
       addon.currency_code !== config.paidCommercialTerms.currency ||
       Number(addon.interval) !== config.paidCommercialTerms.interval ||
@@ -622,6 +623,7 @@ function createBillingClient(config, {
       subscription.auto_collect !== false ||
       !plainObject(usageAddon) || usageAddon.addon_code !== config.paidUsageAddonCode ||
       Number(usageAddon.quantity) !== 1 ||
+      usageAddon.unit !== config.paidUsageAddonUnit ||
       subscription.card_id || subscription.payment_method_id || subscription.payment_source_id ||
       subscription.bank_account_id || hasNestedCard || hasNestedBankAccount ||
       hasCoupon || hasDiscount ||
