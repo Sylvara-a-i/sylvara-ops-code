@@ -50,6 +50,22 @@ DARK_PRODUCTION_PRESTATE_PATH = (
     / "evidence"
     / "free-revenue-leak-test-dark-production-prestate-2026-08-28.json"
 )
+CRM_LIVE_PREFLIGHT_PATH = (
+    ROOT
+    / "src"
+    / "zoho-crm"
+    / "free-revenue-leak-test"
+    / "evidence"
+    / "live-metadata-preflight-2026-08-28.json"
+)
+BILLING_TEST_CATALOG_PREFLIGHT_PATH = (
+    ROOT
+    / "src"
+    / "zoho-catalyst"
+    / "crm-billing-orchestrator"
+    / "config"
+    / "billing-test-catalog-preflight-2026-08-28.json"
+)
 PRIVATE_ROUTE_CONTRACT_PATH = (
     ROOT
     / "src"
@@ -127,6 +143,14 @@ ANALYTICS_DASHBOARD_CONTRACT_PATH = (
     / "config"
     / "dashboard-contract.json"
 )
+ANALYTICS_LIVE_SOURCE_PARITY_PATH = (
+    ROOT
+    / "src"
+    / "zoho-catalyst"
+    / "revenue-desk-analytics"
+    / "config"
+    / "live-source-parity.json"
+)
 KEY_ROTATION_CONTRACT_PATH = (
     ROOT / "docs" / "product" / "free-revenue-leak-test-key-rotation-contract.json"
 )
@@ -194,6 +218,12 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         cls.dark_production_prestate = json.loads(
             DARK_PRODUCTION_PRESTATE_PATH.read_text(encoding="utf-8")
         )
+        cls.crm_live_preflight = json.loads(
+            CRM_LIVE_PREFLIGHT_PATH.read_text(encoding="utf-8")
+        )
+        cls.billing_test_catalog_preflight = json.loads(
+            BILLING_TEST_CATALOG_PREFLIGHT_PATH.read_text(encoding="utf-8")
+        )
         cls.private_route_contract = json.loads(
             PRIVATE_ROUTE_CONTRACT_PATH.read_text(encoding="utf-8")
         )
@@ -220,6 +250,9 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         cls.analytics_contract = json.loads(ANALYTICS_CONTRACT_PATH.read_text(encoding="utf-8"))
         cls.analytics_dashboard_contract = json.loads(
             ANALYTICS_DASHBOARD_CONTRACT_PATH.read_text(encoding="utf-8")
+        )
+        cls.analytics_live_source_parity = json.loads(
+            ANALYTICS_LIVE_SOURCE_PARITY_PATH.read_text(encoding="utf-8")
         )
         cls.key_rotation_contract = json.loads(
             KEY_ROTATION_CONTRACT_PATH.read_text(encoding="utf-8")
@@ -3162,6 +3195,145 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             "http://", "https://",
         ):
             self.assertNotIn(forbidden, serialized)
+
+    def test_non_retell_provider_preflights_are_sanitized_and_blocking(self):
+        crm = self.crm_live_preflight
+        self.assertEqual(crm["observed_at"], "2026-08-28")
+        self.assertEqual(crm["matching_metadata"]["required_deal_field_count"], 17)
+        self.assertEqual(crm["matching_metadata"]["revenue_desk_sales_stage_count"], 8)
+        self.assertTrue(crm["matching_metadata"]["revenue_desk_sales_stage_order_exact"])
+        self.assertEqual(
+            crm["blocking_gaps"]["journey_workflow_rules_with_non_null_execution_markers"],
+            4,
+        )
+        self.assertEqual(crm["blocking_gaps"]["blueprint_candidate_status"], "Draft")
+        self.assertEqual(crm["blocking_gaps"]["active_blueprint_count"], 0)
+        self.assertFalse(
+            crm["blocking_gaps"]["blueprint_pipeline_binding_matches_revenue_desk_sales"]
+        )
+        self.assertFalse(
+            crm["blocking_gaps"]["record_internal_approval_transition_present"]
+        )
+        self.assertFalse(crm["blocking_gaps"]["activate_test_route_transition_present"])
+        self.assertEqual(crm["blocking_gaps"]["associated_automation_function_count"], 7)
+        self.assertFalse(crm["blocking_gaps"]["webhook_inventory_complete"])
+        self.assertFalse(crm["blocking_gaps"]["connection_inventory_complete"])
+        self.assertFalse(crm["blocking_gaps"]["runtime_acceptance_proven"])
+        for field in (
+            "records_or_record_photos_read",
+            "customer_prospect_or_employee_pii_read",
+            "browser_fallback_used",
+            "writes_or_runtime_invocations_performed",
+            "retell_action_performed",
+            "customer_communication_or_production_traffic_action_performed",
+        ):
+            self.assertFalse(crm["evidence_boundary"][field])
+        self.assertFalse(crm["future_live_change_authorized_by_this_record"])
+
+        billing = self.billing_test_catalog_preflight
+        boundary = billing["evidence_boundary"]
+        self.assertEqual(billing["observed_at"], "2026-08-28")
+        self.assertEqual(boundary["accessible_test_organization_count"], 1)
+        self.assertTrue(boundary["isolated_active_test_organization"])
+        self.assertEqual(boundary["currency"], "USD")
+        catalog = billing["complete_paginated_catalog_readback"]
+        self.assertEqual(catalog["page_count"], 1)
+        self.assertFalse(catalog["has_more"])
+        self.assertEqual((catalog["product_count"], catalog["plan_count"], catalog["addon_count"]), (1, 1, 0))
+        self.assertEqual(
+            catalog["existing_product_or_plan_matches_private_target_contract"],
+            "unproven",
+        )
+        target = billing["required_target_contract"]
+        self.assertEqual(
+            target["monthly_plan_keys"],
+            ["Launch::Monthly", "Growth::Monthly", "Scale::Monthly"],
+        )
+        self.assertEqual(target["monthly_plan_count"], 3)
+        self.assertEqual(target["current_minimum_missing_plan_slots"], 2)
+        self.assertFalse(target["connected_minute_usage_addon_present"])
+        for field in (
+            "enable_paid_subscription_preparation",
+            "catalog_creation_authorized",
+            "subscription_creation_authorized",
+            "payment_charge_invoice_or_auto_collect_authorized",
+        ):
+            self.assertFalse(billing["containment"][field])
+        self.assertFalse(
+            boundary["customer_subscription_invoice_payment_event_or_report_records_read"]
+        )
+        self.assertFalse(boundary["writes_or_runtime_invocations_performed"])
+        self.assertFalse(billing["future_live_change_authorized_by_this_record"])
+
+        forms = self.forms_manifest["connector_preflight_2026_08_28"]
+        for field in (
+            "sylvara_forms_audit_connector_available",
+            "sylvara_forms_changes_connector_available",
+            "zoho_creator_form_metadata_is_a_forms_connector",
+            "creator_connector_substituted",
+            "browser_fallback_used",
+            "current_live_state_refreshed",
+            "writes_or_runtime_submissions_performed",
+            "retell_customer_or_production_action_performed",
+            "future_live_change_authorized_by_this_record",
+        ):
+            self.assertFalse(forms[field])
+        self.assertTrue(forms["known_form1_blockers_remain"])
+        self.assertTrue(forms["known_form2_blockers_remain"])
+
+        analytics = self.analytics_live_source_parity["connector_preflight_2026_08_28"]
+        self.assertEqual(analytics["accessible_analytics_organization_count"], 1)
+        self.assertEqual(analytics["accessible_workspace_count"], 2)
+        self.assertEqual(analytics["development_workspace_view_count"], 30)
+        self.assertEqual(analytics["development_workspace_folder_count"], 6)
+        self.assertEqual(analytics["legacy_source_table_matches"], 3)
+        for field in (
+            "canonical_target_table_matches",
+            "canonical_query_view_matches",
+            "canonical_report_title_matches",
+            "canonical_dashboard_title_matches",
+        ):
+            self.assertEqual(analytics[field], 0)
+        function = analytics["analytics_function"]
+        self.assertEqual(function["runtime"], "node24")
+        self.assertEqual(function["memory_mb"], 256)
+        self.assertEqual(function["environment_variable_count"], 7)
+        self.assertEqual(function["source_revision"], ROUTE_CONTRACT_SOURCE_REVISION)
+        self.assertEqual(function["analytics_sync_mode"], "disabled")
+        self.assertFalse(function["provider_bindings_present"])
+        self.assertFalse(analytics["analytics_rows_or_exports_read"])
+        self.assertFalse(
+            analytics["writes_imports_runtime_invocations_or_dashboard_actions_performed"]
+        )
+        self.assertFalse(analytics["retell_customer_or_production_action_performed"])
+        self.assertFalse(analytics["future_live_change_authorized_by_this_record"])
+
+        for phrase in (
+            "no installed Sylvara Forms Audit or Changes connector",
+            "one product, one active monthly plan, and zero add-ons",
+            "matched all 17 required Deal fields and the exact eight-stage pipeline",
+            "found 30 views and six folders",
+            "zero matches for the five canonical target tables",
+        ):
+            self.assertIn(phrase, self.reconciliation_runbook)
+
+        combined = json.dumps(
+            {
+                "crm": crm,
+                "billing": billing,
+                "forms": forms,
+                "analytics": analytics,
+            },
+            sort_keys=True,
+        ).lower()
+        for forbidden_key in (
+            "project_id", "organization_id", "environment_id", "function_id",
+            "workspace_id", "product_id", "plan_id", "addon_id", "record_id",
+            "client_secret", "refresh_token", "access_token", "zcfkey",
+        ):
+            self.assertNotIn(f'"{forbidden_key}"', combined)
+        for forbidden_value in ("http://", "https://"):
+            self.assertNotIn(forbidden_value, combined)
 
     def test_packet_a_public_runbooks_match_sanitized_execution_and_revision(self):
         superseding_entry = self.deployment_log.split(

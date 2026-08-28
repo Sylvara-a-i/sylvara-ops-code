@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "record_type": "sanitized_free_revenue_leak_test_crm_read_only_preflight",
+  "observed_at": "2026-08-28",
+  "status": "metadata_parity_partial_workflow_blueprint_and_caller_gates_blocking",
+  "evidence_boundary": {
+    "source": "Sylvara CRM Audit connector",
+    "organization_identity_verified_privately": true,
+    "organization_type": "production",
+    "records_or_record_photos_read": false,
+    "customer_prospect_or_employee_pii_read": false,
+    "private_identifiers_urls_payloads_or_raw_responses_in_repository": false,
+    "browser_fallback_used": false,
+    "writes_or_runtime_invocations_performed": false,
+    "retell_action_performed": false,
+    "customer_communication_or_production_traffic_action_performed": false
+  },
+  "matching_metadata": {
+    "required_modules_present_and_api_enabled": ["Leads", "Contacts", "Accounts", "Deals"],
+    "required_deal_field_count": 17,
+    "required_deal_fields_exact_types_lengths_picklists_and_layout_placement": true,
+    "submission_identifiers_case_insensitive_unique": true,
+    "revenue_desk_sales_stage_count": 8,
+    "revenue_desk_sales_stage_order_exact": true,
+    "active_deal_type_pre_save_guard_present": true,
+    "initializer_field_update_partition": "5+3-disjoint-exact",
+    "blueprint_candidate_entry_criterion_exact": true,
+    "blueprint_candidate_control_field_exact": true,
+    "blueprint_candidate_state_count": 8,
+    "blueprint_candidate_enrolled_record_count": 0
+  },
+  "blocking_gaps": {
+    "journey_workflow_rules_with_non_null_execution_markers": 4,
+    "execution_markers_are_runtime_acceptance": false,
+    "form1_uncontracted_scheduled_follow_up_task_present": true,
+    "initializer_trigger_semantics": "connector-reports-create-or-edit-provider-encoding-or-drift-unresolved",
+    "desired_renamed_form2_rule_present": false,
+    "existing_form2_candidate_active": false,
+    "superseded_legacy_form2_rule_active": true,
+    "superseded_legacy_form2_rule_has_executed": true,
+    "blueprint_candidate_status": "Draft",
+    "active_blueprint_count": 0,
+    "blueprint_pipeline_binding_matches_revenue_desk_sales": false,
+    "record_internal_approval_transition_present": false,
+    "activate_test_route_transition_present": false,
+    "legacy_approval_transition_collapses_activation_to_live": true,
+    "associated_automation_function_count": 7,
+    "reviewed_caller_function_source_or_button_binding_proven": false,
+    "webhook_inventory_complete": false,
+    "connection_inventory_complete": false,
+    "runtime_acceptance_proven": false
+  },
+  "required_next_packets": [
+    "CRM-W1 inactive candidate rename-in-place preparation and exact inactive readback",
+    "CRM-W2 workflow parity and single-active-Form-2-rule cutover",
+    "CRM-W3 Blueprint reconstruction while Draft with separate approval and activation transitions",
+    "CRM-W4 caller-specific Connections, functions, webhooks, and button association after complete inventory",
+    "CRM-A1 ZZZ SYNTHETIC lifecycle acceptance without Retell, real records, communication, Billing activation, or Production traffic"
+  ],
+  "future_live_change_authorized_by_this_record": false
+}

@@ -69,6 +69,34 @@
     "writes_performed": false,
     "decision": "Preserve the existing workspace and tables as migration evidence. Do not overwrite, rename, or delete them before target-schema readback, v2 import proof, dashboard construction, reconciliation, and rollback approval."
   },
+  "connector_preflight_2026_08_28": {
+    "source": "Sylvara Analytics Audit and Sylvara Catalyst Audit connectors",
+    "analytics_organization_identity_verified_privately": true,
+    "accessible_analytics_organization_count": 1,
+    "accessible_workspace_count": 2,
+    "development_workspace_uniquely_resolved_by_private_environment_marking": true,
+    "development_workspace_view_count": 30,
+    "development_workspace_folder_count": 6,
+    "legacy_source_table_matches": 3,
+    "canonical_target_table_matches": 0,
+    "canonical_query_view_matches": 0,
+    "canonical_report_title_matches": 0,
+    "canonical_dashboard_title_matches": 0,
+    "analytics_function": {
+      "name": "analytics_sync",
+      "runtime": "node24",
+      "memory_mb": 256,
+      "environment_variable_count": 7,
+      "source_revision": "aab7c18c27f4ff5e1468da51eae433ede9b852f6",
+      "analytics_sync_mode": "disabled",
+      "provider_bindings_present": false
+    },
+    "private_identifiers_names_urls_queries_rows_payloads_or_raw_responses_in_repository": false,
+    "analytics_rows_or_exports_read": false,
+    "writes_imports_runtime_invocations_or_dashboard_actions_performed": false,
+    "retell_customer_or_production_action_performed": false,
+    "future_live_change_authorized_by_this_record": false
+  },
   "live_modules": [
     {
       "name": "index.js",

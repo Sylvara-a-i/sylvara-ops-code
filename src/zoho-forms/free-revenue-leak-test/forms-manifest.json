@@ -10,6 +10,21 @@
     "live_ids_urls_aliases_and_private_destinations_in_git": false,
     "rule": "Source-required policy and sanitized live observations are separate. An observed field or integration never proves unobserved aliases, privacy flags, read-only flags, destinations, or runtime behavior."
   },
+  "connector_preflight_2026_08_28": {
+    "sylvara_forms_audit_connector_available": false,
+    "sylvara_forms_changes_connector_available": false,
+    "zoho_creator_form_metadata_is_a_forms_connector": false,
+    "creator_connector_substituted": false,
+    "browser_fallback_used": false,
+    "latest_live_builder_evidence_date": "2026-08-26",
+    "latest_live_builder_evidence_remains_authoritative_within_its_recorded_limits": true,
+    "current_live_state_refreshed": false,
+    "known_form1_blockers_remain": true,
+    "known_form2_blockers_remain": true,
+    "writes_or_runtime_submissions_performed": false,
+    "retell_customer_or_production_action_performed": false,
+    "future_live_change_authorized_by_this_record": false
+  },
   "identifier_migration": {
     "from_schema_version": 1,
     "logical_name_aliases": {

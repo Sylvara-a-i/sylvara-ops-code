@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "record_type": "sanitized_free_revenue_leak_test_billing_test_catalog_preflight",
+  "observed_at": "2026-08-28",
+  "status": "isolated_test_identity_exact_catalog_incomplete",
+  "evidence_boundary": {
+    "source": "Sylvara Billing Audit connector",
+    "organization_identity_verified_privately": true,
+    "accessible_test_organization_count": 1,
+    "isolated_active_test_organization": true,
+    "currency": "USD",
+    "billing_joined": true,
+    "customer_subscription_invoice_payment_event_or_report_records_read": false,
+    "private_identifiers_codes_prices_urls_payloads_or_raw_responses_in_repository": false,
+    "writes_or_runtime_invocations_performed": false,
+    "retell_action_performed": false,
+    "customer_or_production_traffic_action_performed": false
+  },
+  "complete_paginated_catalog_readback": {
+    "page_count": 1,
+    "has_more": false,
+    "product_count": 1,
+    "plan_count": 1,
+    "addon_count": 0,
+    "observed_plan_active": true,
+    "observed_plan_frequency": "monthly",
+    "observed_plan_has_listed_product_association": true,
+    "existing_product_or_plan_matches_private_target_contract": "unproven"
+  },
+  "required_target_contract": {
+    "bound_product_count": 1,
+    "monthly_plan_keys": ["Launch::Monthly", "Growth::Monthly", "Scale::Monthly"],
+    "monthly_plan_count": 3,
+    "connected_minute_usage_addon_count": 1,
+    "current_minimum_missing_plan_slots": 2,
+    "connected_minute_usage_addon_present": false
+  },
+  "containment": {
+    "enable_paid_subscription_preparation": false,
+    "catalog_creation_authorized": false,
+    "subscription_creation_authorized": false,
+    "payment_charge_invoice_or_auto_collect_authorized": false,
+    "blind_duplicate_creation_allowed": false,
+    "ambiguous_write_retry_allowed": false
+  },
+  "required_next_packets": [
+    "short-lived private catalog reconciliation packet that binds exact target codes and current product-plan identity",
+    "definition-phase packet for the exact TEST product only if absent",
+    "bound-phase packet for only the missing exact plans and usage-minute add-on after product readback",
+    "separate Catalyst Billing configuration packet with paid preparation still false",
+    "separate ZZZ SYNTHETIC subscription packet with no payment or charge"
+  ],
+  "future_live_change_authorized_by_this_record": false
+}
