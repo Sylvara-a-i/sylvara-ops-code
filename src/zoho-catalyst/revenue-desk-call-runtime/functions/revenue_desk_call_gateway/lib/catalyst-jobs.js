@@ -16,28 +16,60 @@ function withTimeout(operation, timeoutMs) {
   ]).finally(() => clearTimeout(timer));
 }
 
+const ACCEPTED_SUBMISSION_STATUSES = new Set([
+  'SUBMITTED', 'PENDING', 'RUNNING', 'SUCCESS', 'SUCCESSFUL',
+]);
+
+function plainObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    && Object.getPrototypeOf(value) === Object.prototype;
+}
+
+function exactPlainObject(value, expected) {
+  if (!plainObject(value) || !plainObject(expected)) return false;
+  const expectedKeys = Object.keys(expected);
+  return Object.keys(value).length === expectedKeys.length
+    && expectedKeys.every((key) => Object.hasOwn(value, key) && value[key] === expected[key]);
+}
+
 function assertJobReadback(result, expected) {
-  invariant(result && (typeof result.job_id === 'string' || typeof result.job_id === 'number')
-    && String(result.job_id).length > 0,
+  // The pinned SDK returns the provider payload unchanged. Require the nested
+  // identity shape and a decimal string ID so partial or lossy evidence can
+  // never be persisted as a verified dispatch.
+  invariant(result && typeof result.job_id === 'string'
+    && /^[1-9][0-9]{0,127}$/.test(result.job_id),
   'CATALYST_JOB_READBACK_FAILED', 'Catalyst Function Job did not return a job ID.',
   { httpStatus: 503, retryable: true, ambiguous: true });
-  invariant(typeof result.job_status === 'string' && result.job_status.length > 0,
-    'CATALYST_JOB_READBACK_FAILED', 'Catalyst Function Job did not return a status.',
-    { httpStatus: 503, retryable: true, ambiguous: true });
+  invariant(typeof result.job_status === 'string'
+    && result.job_status === result.job_status.trim()
+    && ACCEPTED_SUBMISSION_STATUSES.has(result.job_status.toUpperCase()),
+  'CATALYST_JOB_READBACK_FAILED', 'Catalyst Function Job did not return an accepted status.',
+  { httpStatus: 503, retryable: true, ambiguous: true });
   const meta = result.job_meta_details;
-  if (meta !== null && meta !== undefined) {
-    invariant(meta.target_type === expected.target_type
-      && meta.target_name === expected.target_name
-      && String(meta.jobpool_name || expected.jobpool_name) === expected.jobpool_name
-      && meta.params?.mode === expected.params.mode
-      && meta.params?.event_key === expected.params.event_key,
-    'CATALYST_JOB_READBACK_FAILED', 'Catalyst Function Job readback conflicts with the request.',
-    { httpStatus: 503, retryable: true, ambiguous: true });
-  }
-  return Object.freeze({
-    jobId: String(result.job_id),
-    status: result.job_status,
-  });
+  const target = meta?.target_details;
+  const pool = meta?.jobpool_details;
+  const params = meta?.params;
+  const jobConfig = meta?.job_config;
+  invariant(plainObject(meta)
+    && meta.job_name === expected.job_name
+    && meta.source_type === 'API'
+    && meta.target_type === expected.target_type
+    && (meta.target_name === undefined || meta.target_name === expected.target_name)
+    && typeof meta.jobpool_id === 'string' && meta.jobpool_id.length > 0
+    && (meta.jobpool_name === undefined || meta.jobpool_name === expected.jobpool_name)
+    && plainObject(target)
+    && typeof target.id === 'string' && target.id.length > 0
+    && target.target_name === expected.target_name
+    && plainObject(pool)
+    && pool.id === meta.jobpool_id
+    && pool.name === expected.jobpool_name
+    && pool.type === 'Function'
+    && exactPlainObject(params, expected.params)
+    && exactPlainObject(expected.job_config, { number_of_retries: 0, retry_interval: 0 })
+    && exactPlainObject(jobConfig, expected.job_config),
+  'CATALYST_JOB_READBACK_FAILED', 'Catalyst Function Job readback conflicts with the request.',
+  { httpStatus: 503, retryable: true, ambiguous: true });
+  return Object.freeze({ jobId: result.job_id, status: result.job_status });
 }
 
 class CatalystJobAdapter {

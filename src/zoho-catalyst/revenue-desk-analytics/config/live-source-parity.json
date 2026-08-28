@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "status": "private-source-captured-behavior-map-complete-live-binding-and-fixture-parity-blocking",
+  "status": "private-source-captured-behavior-map-complete-bounded-schema-proof-recorded-live-binding-and-fixture-parity-blocking",
   "observed_at": "2026-08-25",
   "evidence_boundary": "All live Development source modules were captured and reviewed privately from the Catalyst console. Raw source, credentials, identifiers, endpoints, payloads, and customer data were not emitted into GitHub.",
   "deployment_replacement_authorized": false,
@@ -44,10 +44,28 @@
     },
     "blocking_evidence": [
       "Private source fixtures have not been executed against the candidate for a record-by-record differential result.",
-      "The additive Development columns and nullable unique semantics have not been read back from Catalyst.",
+      "At this observation date, the additive Development columns and nullable unique semantics had not yet been read back from Catalyst; the superseding 2026-08-26 Packet A resolution below proves the checkpoint application columns, outbox column count, and nullable-unique OUTBOX_KEY contract, but not the full outbox application schema or current activation readiness.",
       "The private Connection, organization, workspace, and target-view bindings have not been proven against the candidate.",
       "Legacy outbox and checkpoint rows have not been reconciled to immutable v2 facts and watermarks."
     ]
+  },
+  "superseding_packet_a_resolution_2026_08_26": {
+    "evidence": "../../evidence/free-revenue-leak-test-development-packet-a-resolution-2026-08-26.json",
+    "analytics_outbox_total_columns": 71,
+    "analytics_outbox_full_application_schema_readback_exact": false,
+    "analytics_outbox_outbox_key_contract": {
+      "type": "varchar",
+      "max_length": 64,
+      "mandatory": false,
+      "unique": true,
+      "audit_consent": true
+    },
+    "analytics_checkpoints_required_application_columns_exact": true,
+    "outbox_key_nullable_unique_contract_readback_exact": true,
+    "legacy_outbox_rows_rewritten": false,
+    "legacy_checkpoint_rows_rewritten": false,
+    "fresh_pre_activation_schema_readback_still_required": true,
+    "live_binding_fixture_parity_and_reconciliation_proven": false
   },
   "live_analytics_ui_audit_2026_08_25": {
     "access_method": "read-only signed-in Zoho Analytics browser after the audit connector returned an authentication failure",

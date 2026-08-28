@@ -13,7 +13,7 @@ const { verifyRetellSignature } = require('../lib/security');
 const { validateInboundPayload, validateEventEnvelope, MAX_RETELL_CALL_DURATION_MS } = require('../lib/validation');
 const { extractAnalysis, validateValueEvidence } = require('../lib/analysis');
 const { CatalystMailAdapter, messageContent } = require('../lib/catalyst-mail');
-const { CatalystJobAdapter } = require('../lib/catalyst-jobs');
+const { CatalystJobAdapter, assertJobReadback } = require('../lib/catalyst-jobs');
 const { readRawBody } = require('../lib/http');
 const { csvCell } = require('../lib/reporting');
 const { timingSafeToken } = require('../lib/runtime-boundary');
@@ -515,21 +515,32 @@ test('unit: pinned Catalyst SDK and adapter use the reviewed Function Job contra
     async submitJob(request) {
       requests.push(request);
       return {
-        job_id: 'synthetic_job_reference',
-        job_status: 'Submitted',
+        job_id: '900001',
+        job_status: 'PENDING',
         job_meta_details: {
+          job_name: request.job_name,
+          source_type: 'API',
           target_type: 'Function',
-          target_name: 'revenue_desk_call_worker',
-          jobpool_name: 'RevenueDeskCallJobs',
+          target_details: {
+            id: '900002',
+            target_name: 'revenue_desk_call_worker',
+          },
+          jobpool_id: '900003',
+          jobpool_details: {
+            id: '900003',
+            name: 'RevenueDeskCallJobs',
+            type: 'Function',
+          },
           params: { mode: 'process_event', event_key: eventKey },
+          job_config: { number_of_retries: 0, retry_interval: 0 },
         },
       };
     },
   } }; } };
   const adapter = new CatalystJobAdapter({ app, config: loadConfig(environment()) });
   assert.deepEqual(await adapter.enqueueProcessEvent(eventKey), {
-    jobId: 'synthetic_job_reference',
-    status: 'Submitted',
+    jobId: '900001',
+    status: 'PENDING',
   });
   assert.deepEqual(requests, [{
     job_name: `RevenueDeskEvent_${'a'.repeat(24)}`,
@@ -539,6 +550,76 @@ test('unit: pinned Catalyst SDK and adapter use the reviewed Function Job contra
     params: { mode: 'process_event', event_key: eventKey },
     job_config: { number_of_retries: 0, retry_interval: 0 },
   }]);
+});
+
+test('unit: Function Job readback rejects partial, conflicting, failed, and lossy responses', () => {
+  const eventKey = `evt_${'a'.repeat(64)}`;
+  const expected = {
+    job_name: `RevenueDeskEvent_${'a'.repeat(24)}`,
+    jobpool_name: 'RevenueDeskCallJobs',
+    target_type: 'Function',
+    target_name: 'revenue_desk_call_worker',
+    params: { mode: 'process_event', event_key: eventKey },
+    job_config: { number_of_retries: 0, retry_interval: 0 },
+  };
+  const valid = {
+    job_id: '900001',
+    job_status: 'Pending',
+    job_meta_details: {
+      job_name: expected.job_name,
+      source_type: 'API',
+      target_type: 'Function',
+      target_details: { id: '900002', target_name: expected.target_name },
+      jobpool_id: '900003',
+      jobpool_details: {
+        id: '900003',
+        name: expected.jobpool_name,
+        type: 'Function',
+      },
+      params: { ...expected.params },
+      job_config: { ...expected.job_config },
+    },
+  };
+  const rejects = [
+    { ...valid, job_id: Number.MAX_SAFE_INTEGER + 2 },
+    { ...valid, job_id: '0' },
+    { ...valid, job_status: 'Failure' },
+    { ...valid, job_status: 'Unknown' },
+    { ...valid, job_meta_details: undefined },
+    { ...valid, job_meta_details: { ...valid.job_meta_details, jobpool_details: undefined } },
+    { ...valid, job_meta_details: {
+      ...valid.job_meta_details,
+      jobpool_details: { ...valid.job_meta_details.jobpool_details, id: '900004' },
+    } },
+    { ...valid, job_meta_details: {
+      ...valid.job_meta_details,
+      target_details: { ...valid.job_meta_details.target_details, target_name: 'other_worker' },
+    } },
+    { ...valid, job_meta_details: {
+      ...valid.job_meta_details,
+      params: { ...expected.params, unexpected: 'value' },
+    } },
+    { ...valid, job_meta_details: {
+      ...valid.job_meta_details,
+      job_config: { number_of_retries: 1, retry_interval: 0 },
+    } },
+    { ...valid, job_meta_details: {
+      ...valid.job_meta_details,
+      job_config: { number_of_retries: 0, retry_interval: '0' },
+    } },
+    { ...valid, job_meta_details: {
+      ...valid.job_meta_details,
+      job_config: { number_of_retries: 0 },
+    } },
+  ];
+  for (const candidate of rejects) {
+    assert.throws(() => assertJobReadback(candidate, expected), {
+      code: 'CATALYST_JOB_READBACK_FAILED', ambiguous: true,
+    });
+  }
+  for (const status of ['Submitted', 'PENDING', 'Running', 'SUCCESS', 'Successful']) {
+    assert.equal(assertJobReadback({ ...valid, job_status: status }, expected).status, status);
+  }
 });
 
 test('unit: default console logger emits only allowlisted opaque operational fields', () => {
