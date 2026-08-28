@@ -1742,6 +1742,24 @@ test("runs claim, one-time consume, atomic CRM composite, receipt, then session 
   assert.equal(selected.records.deal.Setup_Access_Status, "Synthetic Submitted");
 });
 
+test("accepts an exact submission with no requested start date", async () => {
+  const selected = fixture();
+  selected.records.deal.Target_Start_Date = "2026-08-19";
+  await issue(selected);
+  const prefillResult = await prefill(selected);
+  selected.events.length = 0;
+
+  const result = await submit(
+    selected,
+    validSubmission(prefillResult.body, { requestedStartDate: null }),
+  );
+
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.body, { ok: true, accepted: true, duplicate: false });
+  assert.equal(selected.records.deal.Target_Start_Date, null);
+  assert.equal(selected.events.includes("crm.composite"), true);
+});
+
 test("a crash after succeeded receipt preserves submitting ownership and repairs on exact retry", async () => {
   const selected = fixture();
   await issue(selected);

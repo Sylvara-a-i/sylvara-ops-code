@@ -145,6 +145,76 @@ test('renders exact createQueryTable payload keys without private identifiers', 
   }
 });
 
+test('renders three root folder payloads and assigns every canonical view exactly once', () => {
+  const rendered = renderContract(model, dashboard);
+  assert.deepEqual(Object.keys(rendered.folder_payloads),
+    ['data_model', 'operations', 'customer_results']);
+  assert.deepEqual(rendered.folder_payloads, {
+    data_model: {
+      folderName: 'Revenue Desk - Data Model',
+      folderDesc: 'Canonical Revenue Desk Analytics tables and derived query views.',
+      makeDefaultFolder: false,
+    },
+    operations: {
+      folderName: 'Revenue Desk - Operations',
+      folderDesc: 'Internal free-test operations reports and dashboard.',
+      makeDefaultFolder: false,
+    },
+    customer_results: {
+      folderName: 'Revenue Desk - Customer Results',
+      folderDesc: 'Internal fixed-client results reports and dashboard.',
+      makeDefaultFolder: false,
+    },
+  });
+  assert.equal(JSON.stringify(rendered.folder_payloads).includes('parentFolderId'), false);
+
+  const expectedReferences = new Set([
+    ...Object.keys(model.target_tables).map((key) => `table:${key}`),
+    ...Object.keys(model.derived_query_views).map((key) => `query_view:${key}`),
+    ...Object.keys(model.reports).map((key) => `report:${key}`),
+    ...dashboard.dashboards.map(({ key }) => `dashboard:${key}`),
+  ]);
+  const observedReferences = Object.values(rendered.folder_placements)
+    .flatMap(({ viewReferences }) => viewReferences)
+    .map(({ assetKind, assetKey }) => `${assetKind}:${assetKey}`);
+  assert.equal(observedReferences.length, 31);
+  assert.equal(new Set(observedReferences).size, 31);
+  assert.deepEqual(new Set(observedReferences), expectedReferences);
+  assert.deepEqual(Object.fromEntries(Object.entries(rendered.folder_placements)
+    .map(([key, value]) => [key, value.viewReferences.length])), {
+    data_model: 9,
+    operations: 11,
+    customer_results: 11,
+  });
+
+  for (const [folderKey, placement] of Object.entries(rendered.folder_placements)) {
+    assert.match(placement.privateFolderIdBinding,
+      new RegExp(`PRIVATE_ANALYTICS_FOLDER_IDS_JSON\\.${folderKey}`));
+    for (const reference of placement.viewReferences) {
+      assert.equal(typeof reference.viewName, 'string');
+      assert.ok(reference.viewName.length > 0);
+      assert.match(reference.privateViewIdBinding, /view_id|VIEW_IDS_JSON/);
+    }
+  }
+  assert.equal(/TBD_PRIVATE|workspaceId|folderId|viewId/.test(JSON.stringify({
+    payloads: rendered.folder_payloads,
+    placements: rendered.folder_placements,
+  })), false);
+});
+
+test('rejects duplicate or incomplete canonical folder placement', () => {
+  const duplicate = structuredClone(model);
+  duplicate.folder_contract.folders.operations.asset_references.push(
+    { asset_kind: 'table', asset_key: 'deployment' },
+  );
+  assert.throws(() => renderContract(duplicate, dashboard), /duplicate asset reference/);
+
+  const incomplete = structuredClone(model);
+  incomplete.folder_contract.folders.customer_results.asset_references.pop();
+  assert.throws(() => renderContract(incomplete, dashboard),
+    /assign every table, query view, report, and dashboard exactly once/);
+});
+
 test('optional customer evidence preserves an explicit missing-versus-zero discriminator', () => {
   const rendered = renderContract(model);
   const view = model.derived_query_views.optional_evidence;
@@ -220,6 +290,7 @@ test('report axes and filters resolve to declared table or query-view columns', 
 test('dashboard assembly locks environment and fixed-client boundaries before render', () => {
   const operations = dashboard.dashboards[0];
   const customer = dashboard.dashboards[1];
+  assert.deepEqual(dashboard.dashboards.map(({ key }) => key), ['operations', 'customer']);
   for (const item of [operations, customer]) {
     const controls = Object.fromEntries(item.user_filter_controls
       .map((control) => [control.column, control]));

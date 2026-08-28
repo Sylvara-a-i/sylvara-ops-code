@@ -247,7 +247,6 @@ function loadConfig(environment = process.env, artifactRevision) {
   }
   return Object.freeze({
     assistedConstants: Object.freeze({
-      assistedBy: readBoundedText(environment, "FORM1_ASSISTED_BY_VALUE", 100),
       entryOffer: readBoundedText(environment, "FORM1_ENTRY_OFFER_VALUE", 100),
       intakeFormVersion: readBoundedText(environment, "FORM1_INTAKE_FORM_VERSION", 30),
       leadStatus: readBoundedText(environment, "FORM1_LEAD_STATUS_VALUE", 100),

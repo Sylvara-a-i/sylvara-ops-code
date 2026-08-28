@@ -29,7 +29,6 @@ const PREFILL_OUTPUT_KEYS = Object.freeze([
   "intake_submission_id",
   "source_page",
   "intake_form_version",
-  "assisted_by",
 ]);
 
 class FormContractError extends Error {
@@ -62,7 +61,6 @@ function buildPrefillPayload(lead, session, constants) {
     throw new FormContractError("Lead intake identity no longer matches the assisted session");
   }
   const requiredConstants = [
-    "assistedBy",
     "entryOffer",
     "intakeFormVersion",
     "leadStatus",
@@ -85,7 +83,6 @@ function buildPrefillPayload(lead, session, constants) {
     payload[field.output] = normalizeCrmText(lead[field.crm], field.maximum, field.crm);
   }
   Object.assign(payload, {
-    assisted_by: constants.assistedBy,
     entry_offer: constants.entryOffer,
     intake_form_version: constants.intakeFormVersion,
     intake_submission_id: intakeSubmissionId,

@@ -20,7 +20,6 @@
     { "name": "TOKEN_PEPPER", "classification": "stable-secret", "required": true },
     { "name": "FORM1_PUBLIC_URL", "classification": "private-endpoint", "required": true },
     { "name": "FORM1_TOKEN_FIELD_ALIAS", "classification": "private-form-contract", "required": true },
-    { "name": "FORM1_ASSISTED_BY_VALUE", "classification": "private-form-contract", "required": true },
     { "name": "FORM1_ENTRY_OFFER_VALUE", "classification": "private-form-contract", "required": true },
     { "name": "FORM1_INTAKE_FORM_VERSION", "classification": "private-form-contract", "required": true },
     { "name": "FORM1_LEAD_STATUS_VALUE", "classification": "private-crm-contract", "required": true },

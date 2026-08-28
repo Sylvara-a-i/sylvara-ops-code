@@ -26,6 +26,7 @@ test("configuration binds active Development and dark Production to the stamped 
   );
   assert.equal(config.sessionTableName, FORM1_SESSION_TABLE_NAME);
   assert.equal(config.sourceRevision, REVISION);
+  assert.equal(Object.hasOwn(config.assistedConstants, "assistedBy"), false);
 
   const dark = loadConfig(environment({
     DEPLOYMENT_ENVIRONMENT: "production",

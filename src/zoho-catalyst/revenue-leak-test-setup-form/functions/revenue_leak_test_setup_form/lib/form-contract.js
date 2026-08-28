@@ -259,8 +259,9 @@ function normalizeChoices(object, key, choices, { required = false } = {}) {
   return values;
 }
 
-function normalizeIsoDate(object, key) {
-  const value = normalizeText(object, key, { required: true, maximum: 10 });
+function normalizeIsoDate(object, key, { required = false } = {}) {
+  const value = normalizeText(object, key, { required, maximum: 10 });
+  if (value === null) return null;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) fail(key, "Date must use YYYY-MM-DD");
   const [year, month, day] = value.split("-").map(Number);
   const parsed = new Date(Date.UTC(year, month - 1, day));
@@ -579,6 +580,8 @@ function validateForm2Payload(payload, options = {}) {
   assertReadOnlyMatch(requestedTestRoute, existing.deal.Requested_Test_Route, "requestedTestRoute");
   assertReadOnlyMatch(approvedTestRoute, existing.deal.Approved_Test_Route, "approvedTestRoute");
 
+  // The exact Forms webhook includes this key, but the requested date itself
+  // remains optional. Blank or null values must not become fake dates.
   const requestedStartDate = normalizeIsoDate(payload, "requestedStartDate");
   const noAnswerDelay = normalizeChoice(payload, "noAnswerDelay", CHOICES.noAnswerDelay);
   if (NO_ANSWER_ROUTES.has(approvedTestRoute) && noAnswerDelay === null) {

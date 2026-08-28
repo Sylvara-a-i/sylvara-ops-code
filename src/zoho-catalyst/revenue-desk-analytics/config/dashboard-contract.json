@@ -49,6 +49,7 @@
   },
   "dashboards": [
     {
+      "key": "operations",
       "title": "Free-Test Operations Dashboard",
       "audience": "internal-revenue-desk-operators-only",
       "pre_render_gate_key": "catalyst-checkpoint-and-analytics-readback-v1",
@@ -86,6 +87,7 @@
       }
     },
     {
+      "key": "customer",
       "title": "Customer Results Dashboard",
       "audience": "internal-results-review-and-approved-fixed-client-render",
       "pre_render_gate_key": "catalyst-checkpoint-and-analytics-readback-v1",
@@ -127,8 +129,11 @@
     "Read back the exact Analytics organization, workspace, tables, columns, keys, row counts, views, permissions, and current shares.",
     "Reconcile existing Dim_Client, Fact_Calls, Fact_Client_Daily, templates, and dashboards to the v2 record-type contract without overwrite or deletion.",
     "Prove the five target tables with synthetic Development imports, provider jobs, exact row/hash/watermark readback, and one-client isolation.",
+    "Create or uniquely verify the three exact root folders from the model contract with makeDefaultFolder=false; stop on duplicate exact names, non-root placement, access ambiguity, or unexpected existing membership.",
     "Create the reports required by each widget with exact filters and null behavior, preserving both optional-evidence state discriminators as visible output.",
+    "Resolve folder and view IDs through fresh private readback, then place the nine model views, ten operations reports, and ten customer reports exactly as assigned by the model contract; do not move a legacy view.",
     "Assemble both exact dashboard titles in the native Analytics console because the approved Changes connector exposes report creation but not dashboard creation.",
+    "After each dashboard ID is independently read back, place it in its assigned canonical folder through the Changes connector and verify exact membership.",
     "Build a fresh private checkpoint/outbox plus Analytics readback evidence envelope and run the fail-closed operator acceptance evaluator; timestamp-only, unresolved, stale, scope-mismatched, or readback-mismatched evidence must block publication authorization for both dashboards.",
     "Test stale-data acceptance blocking, cross-client isolation, verified-zero versus missing optional evidence, export restrictions, and non-admin access.",
     "Record screenshots and live IDs only in the approved private evidence package; commit only sanitized readback results.",
@@ -138,6 +143,7 @@
     "Disable analytics_sync active mode and stop new import Jobs.",
     "Preserve unresolved imports, existing views, and imported rows for reconciliation.",
     "Hide newly created reports and dashboards from every non-admin audience.",
+    "Reverse only an exact canonical-asset folder move whose prior folder ID was captured in the approved private prestate; the Changes connector has no folder-delete operation, so preserve a partial empty folder for separately approved cleanup.",
     "Delete only synthetic views or rows whose exact ownership and zero-dependency readback are proven and separately approved.",
     "Re-read target row counts, watermarks, permissions, shares, and existing dashboard availability."
   ]

@@ -144,7 +144,6 @@ function jsonPost(url, headerName, headerValue, body) {
 function form1Config() {
   return {
     assistedConstants: {
-      assistedBy: 'Synthetic assisted flow',
       entryOffer: 'Synthetic test offer',
       intakeFormVersion: 'synthetic-form1-v1',
       leadStatus: 'Synthetic requested',

@@ -25,6 +25,7 @@ test("the variable registry and placeholder environment stay in lockstep", () =>
     registry.variables.find((entry) => entry.name === "SESSION_TABLE_NAME")?.safe_default,
     "RevenueLeakTestRequestFormSessions",
   );
+  assert.equal(names.includes("FORM1_ASSISTED_BY_VALUE"), false);
 
   const schema = readJson(path.join(controllerRoot, "config/datastore-schema.json"));
   assert.equal(schema.schema_version, 2);
@@ -114,6 +115,23 @@ test("the concrete Forms desired state keeps RevenueLeakTestRequestForm idempote
   assert.equal(form1.native_otp, false);
   assert.match(form1.confirmation_copy, /does not change call routing/i);
   assert.match(form1.confirmation_copy, /start paid service/i);
+  assert.deepEqual(form1.field_contract.assisted_path_hidden_audit_fields, ["Source_Page"]);
+  assert.deepEqual(
+    form1.field_contract.source_required_without_verified_live_field_or_crm_destination,
+    [],
+  );
+  const identity = form1.live_configuration_prerequisites.public_intake_submission_identity;
+  assert.equal(identity.status, "unresolved");
+  assert.equal(identity.live_generation_owner, null);
+  assert.equal(identity.live_generation_mechanism, null);
+  assert.equal(identity.live_change_blocked, true);
+  assert.match(identity.required_invariants.join(" "), /non-respondent source/i);
+  const privacy = form1.live_configuration_prerequisites.privacy_dictionary;
+  assert.equal(privacy.status, "unresolved");
+  assert.equal(privacy.live_change_blocked, true);
+  assert.ok(privacy.minimum_named_field_scope.includes("Intake_Submission_ID"));
+  assert.ok(privacy.minimum_named_field_scope.includes("assisted prefill token field"));
+  assert.match(privacy.rule, /Do not infer/);
   assert.equal(form2.notification.proof_channel, "email");
   assert.equal(form2.notification.sms, false);
   assert.equal(form2.notification.caller_supplied_destination, false);

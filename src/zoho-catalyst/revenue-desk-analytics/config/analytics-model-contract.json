@@ -6,10 +6,78 @@
   "ownership": "Zoho Analytics owns only these derived, sanitized reporting assets. Catalyst remains authoritative for the source facts.",
   "private_id_bindings": {
     "workspace": "ANALYTICS_WORKSPACE_ID",
+    "folders": "PRIVATE_ANALYTICS_FOLDER_IDS_JSON.<folder_key> in the private operator packet only",
     "target_tables": "ANALYTICS_TARGETS_JSON.<record_type>.view_id",
     "query_views": "PRIVATE_ANALYTICS_QUERY_VIEW_IDS_JSON.<query_view_key> in the private operator packet only",
     "reports": "PRIVATE_ANALYTICS_REPORT_VIEW_IDS_JSON.<report_key> in the private operator packet only",
     "dashboards": "PRIVATE_ANALYTICS_DASHBOARD_VIEW_IDS_JSON.<dashboard_key> in the private operator packet only"
+  },
+  "folder_contract": {
+    "api_operations": {
+      "create": "createFolder",
+      "place_assets": "moveViewsToFolder"
+    },
+    "create_only_if_absent": true,
+    "root_level_only": true,
+    "make_default_folder": false,
+    "private_folder_id_binding": "PRIVATE_ANALYTICS_FOLDER_IDS_JSON.<folder_key> in the private operator packet only",
+    "existing_name_behavior": "Stop on more than one exact-name folder. Reuse one exact-name root folder only after private parent, access, description, and membership readback; otherwise create the exact absent folder. Never rename or repurpose an unrelated folder.",
+    "placement_boundary": "The renderer emits exact public asset names and private ID binding references, not move payload IDs. Resolve every folder and view ID from fresh independent readback in the private operator packet, then move only the exact assigned assets. Dashboard placement occurs only after native-console creation and independent dashboard-ID readback.",
+    "post_move_readback": "Independently verify each exact view is assigned to exactly one canonical folder, every unassigned or duplicate canonical asset blocks acceptance, and no legacy view moved.",
+    "folders": {
+      "data_model": {
+        "folder_name": "Revenue Desk - Data Model",
+        "description": "Canonical Revenue Desk Analytics tables and derived query views.",
+        "parent_folder_key": null,
+        "asset_references": [
+          { "asset_kind": "table", "asset_key": "deployment" },
+          { "asset_kind": "table", "asset_key": "call" },
+          { "asset_kind": "table", "asset_key": "daily_metric" },
+          { "asset_kind": "table", "asset_key": "final_test_result" },
+          { "asset_kind": "table", "asset_key": "conversion_status" },
+          { "asset_kind": "query_view", "asset_key": "deployment_remaining" },
+          { "asset_kind": "query_view", "asset_key": "value_evidence" },
+          { "asset_kind": "query_view", "asset_key": "optional_evidence" },
+          { "asset_kind": "query_view", "asset_key": "freshness" }
+        ]
+      },
+      "operations": {
+        "folder_name": "Revenue Desk - Operations",
+        "description": "Internal free-test operations reports and dashboard.",
+        "parent_folder_key": null,
+        "asset_references": [
+          { "asset_kind": "report", "asset_key": "operations_active_free_tests" },
+          { "asset_kind": "report", "asset_key": "operations_connected_calls" },
+          { "asset_kind": "report", "asset_key": "operations_qualified_opportunities" },
+          { "asset_kind": "report", "asset_key": "operations_calls_remaining" },
+          { "asset_kind": "report", "asset_key": "operations_tests_ending_soon" },
+          { "asset_kind": "report", "asset_key": "operations_daily_call_outcomes" },
+          { "asset_kind": "report", "asset_key": "operations_exception_mix" },
+          { "asset_kind": "report", "asset_key": "operations_final_test_results" },
+          { "asset_kind": "report", "asset_key": "operations_conversion_readiness" },
+          { "asset_kind": "report", "asset_key": "operations_data_freshness" },
+          { "asset_kind": "dashboard", "asset_key": "operations" }
+        ]
+      },
+      "customer_results": {
+        "folder_name": "Revenue Desk - Customer Results",
+        "description": "Internal fixed-client results reports and dashboard.",
+        "parent_folder_key": null,
+        "asset_references": [
+          { "asset_kind": "report", "asset_key": "customer_test_period" },
+          { "asset_kind": "report", "asset_key": "customer_connected_calls" },
+          { "asset_kind": "report", "asset_key": "customer_qualified_opportunities" },
+          { "asset_kind": "report", "asset_key": "customer_urgent_requests" },
+          { "asset_kind": "report", "asset_key": "customer_daily_results" },
+          { "asset_kind": "report", "asset_key": "customer_call_mix" },
+          { "asset_kind": "report", "asset_key": "customer_bookable_evidence" },
+          { "asset_kind": "report", "asset_key": "customer_office_follow_up" },
+          { "asset_kind": "report", "asset_key": "customer_value_evidence" },
+          { "asset_kind": "report", "asset_key": "customer_data_freshness" },
+          { "asset_kind": "dashboard", "asset_key": "customer" }
+        ]
+      }
+    }
   },
   "create_table_contract": {
     "api_operation": "createTable",
@@ -297,6 +365,7 @@
   },
   "rendering_rules": {
     "report_payload_composition": "For each report, copy create_config, append the selected filter profile filters plus extra_filters, append profile userFilters plus extra_user_filters, and add tableName equal to baseTableName on every filter/userFilter.",
+    "folder_payload_composition": "Emit one root-level createFolder CONFIG for each canonical folder with makeDefaultFolder=false. Emit public asset names and private ID binding references for placement, but construct moveViewsToFolder payloads only inside the fresh private operator packet after every folder and view ID is independently read back.",
     "private_values": "Workspace and returned view IDs are parameters/readback evidence, never committed payload values.",
     "no_overwrite": "A same-title table, query view, or report must be read and compared exactly. Stop on any mismatch; do not update in place during initial creation.",
     "dashboard_assembly": "The createReport API creates reports only. Assemble dashboards and enforce required/locked controls in the signed-in Analytics console, then independently read back views, access, shares, exports, embeds, and public links.",

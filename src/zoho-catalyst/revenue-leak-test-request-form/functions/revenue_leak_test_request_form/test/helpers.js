@@ -27,7 +27,6 @@ function environment(overrides = {}) {
     FORM1_PUBLIC_URL:
       "https://forms.zohopublic.com/sylvara/form/FreeTest/formperma/example",
     FORM1_TOKEN_FIELD_ALIAS: "assisted_token",
-    FORM1_ASSISTED_BY_VALUE: "Synthetic assisted flow",
     FORM1_ENTRY_OFFER_VALUE: "Synthetic test offer",
     FORM1_INTAKE_FORM_VERSION: "test-version",
     FORM1_LEAD_STATUS_VALUE: "Synthetic requested status",

@@ -175,6 +175,37 @@ test("normalizes the approved Form 2 payload into three bounded CRM updates", ()
   assert.equal(Object.isFrozen(updates), true);
 });
 
+test("keeps requested start date optional while validating any supplied value", () => {
+  for (const optionalValue of [null, "", undefined]) {
+    const payload = { ...validPayload(), requestedStartDate: optionalValue };
+    const updates = validateForm2Payload(payload, {
+      existing: existingRecords(),
+      ...SERVER_OPTIONS,
+    });
+    assert.equal(updates.dealUpdate.Target_Start_Date, null);
+  }
+
+  const missing = validPayload();
+  delete missing.requestedStartDate;
+  assert.equal(
+    validateForm2Payload(missing, {
+      existing: existingRecords(),
+      ...SERVER_OPTIONS,
+    }).dealUpdate.Target_Start_Date,
+    null,
+  );
+
+  for (const invalidValue of ["08/20/2026", "2026-02-30"]) {
+    assert.throws(
+      () => validateForm2Payload(
+        { ...validPayload(), requestedStartDate: invalidValue },
+        { existing: existingRecords(), ...SERVER_OPTIONS },
+      ),
+      (error) => error instanceof FormContractError && error.field === "requestedStartDate",
+    );
+  }
+});
+
 test("locks verified email and requires separate reverification for a mobile change", () => {
   const changedEmail = validPayload();
   changedEmail.businessEmail = "different@example.invalid";
