@@ -309,8 +309,10 @@ function validateCatalogPacket(packet, approval, nowMs = Date.now()) {
   exactOrganization(packet.testOrganization, {
     mode: "test", orgType: "test", subscriptionsOnly: true,
   }, "testOrganization");
+  // The live organization is a read-only catalog reference. Its provider shape is
+  // Books-integrated, so claiming it is subscriptions-only would falsify prestate.
   exactOrganization(packet.liveOrganization, {
-    mode: "live", orgType: "live", subscriptionsOnly: true,
+    mode: "live", orgType: "live", subscriptionsOnly: false,
   }, "liveOrganization");
   if (packet.testOrganization.id === packet.liveOrganization.id) {
     fail("TEST and live organizations must be distinct");

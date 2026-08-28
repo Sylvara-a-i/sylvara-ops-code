@@ -170,6 +170,14 @@ FORMS_BROWSER_PREFLIGHT_PATH = (
     / "evidence"
     / "read-only-browser-fallback-preflight-2026-08-28.json"
 )
+FORM2_CONTAINMENT_PATH = (
+    ROOT
+    / "src"
+    / "zoho-forms"
+    / "free-revenue-leak-test"
+    / "evidence"
+    / "form2-containment-2026-08-28.json"
+)
 FORM2_ROUTES_PATH = ROOT / "src" / "zoho-catalyst" / "revenue-leak-test-setup-form" / "config" / "routes.json"
 CALL_PROFILES_PATH = (
     ROOT
@@ -328,6 +336,9 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         cls.forms_browser_preflight = json.loads(
             FORMS_BROWSER_PREFLIGHT_PATH.read_text(encoding="utf-8")
         )
+        cls.form2_containment = json.loads(
+            FORM2_CONTAINMENT_PATH.read_text(encoding="utf-8")
+        )
         cls.form2_routes = json.loads(FORM2_ROUTES_PATH.read_text(encoding="utf-8"))
         cls.call_profiles = json.loads(CALL_PROFILES_PATH.read_text(encoding="utf-8"))
         cls.call_runtime_schema = json.loads(
@@ -436,7 +447,7 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         evidence = self.forms_manifest["evidence_boundary"]
         self.assertEqual("2026-08-28", evidence["live_readback_date"])
         self.assertEqual(
-            "authenticated read-only Zoho Forms builder and integration settings, external read-only runtime observation, and sanitized comparison to current read-only Catalyst binding metadata",
+            "historical authenticated read-only Zoho Forms preflight followed by separately approved bounded Form 2 containment and independent readback",
             evidence["live_readback_mode"],
         )
         self.assertEqual(
@@ -445,10 +456,15 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         )
         self.assertTrue(evidence["catalyst_binding_compared_without_runtime_invocation"])
         self.assertEqual(
-            "evidence/read-only-browser-fallback-preflight-2026-08-28.json",
+            "evidence/form2-containment-2026-08-28.json",
             evidence["latest_sanitized_evidence"],
         )
         self.assertTrue(evidence["latest_sanitized_evidence_tenant_bound"])
+        self.assertEqual(
+            "evidence/read-only-browser-fallback-preflight-2026-08-28.json",
+            evidence["historical_read_only_preflight"],
+        )
+        self.assertTrue(evidence["historical_read_only_preflight_preserved"])
         self.assertTrue(evidence["sanitized"])
         self.assertFalse(
             evidence["live_ids_urls_aliases_and_private_destinations_in_git"]
@@ -712,8 +728,17 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         )
         self.assertFalse(form2["submission_webhook"]["live_private_details_published"])
         self.assertFalse(form2["submission_webhook"]["webhook_test_performed"])
+        self.assertEqual("disabled", form2["submission_webhook"]["live_status"])
+        self.assertTrue(
+            form2["submission_webhook"][
+                "live_status_persisted_after_native_confirmation"
+            ]
+        )
+        self.assertTrue(
+            form2["submission_webhook"]["live_configuration_shape_unchanged"]
+        )
         self.assertEqual(
-            "blocked_pending_private_containment_and_reconfiguration",
+            "live_disabled_contract_reconfiguration_and_acceptance_blocked",
             form2["submission_webhook"]["status"],
         )
         self.assertTrue(
@@ -4599,7 +4624,17 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             manifest_form1_inventory["configured_alias_count"],
         )
         manifest_form2 = manifest_forms["REVENUE_LEAK_TEST_SETUP_FORM"]
-        self.assertEqual(form2_preflight, manifest_form2["live_release_gate"])
+        manifest_form2_gate = manifest_form2["live_release_gate"]
+        for field in set(form2_preflight) - {"status"}:
+            self.assertEqual(form2_preflight[field], manifest_form2_gate[field], field)
+        self.assertEqual(
+            "blocked_pending_private_containment_and_reconfiguration",
+            form2_preflight["status"],
+        )
+        self.assertEqual(
+            "blocked_after_surface_containment_pending_reconfiguration_and_acceptance",
+            manifest_form2_gate["status"],
+        )
         self.assertEqual(
             manifest_form2["live_field_inventory"],
             {
@@ -4626,7 +4661,7 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
                 "private_exploit_details_published": False,
                 "field_value_entered": False,
                 "save_next_or_submit_clicked": False,
-                "status": "blocked_pending_private_containment_and_reconfiguration",
+                "status": "anonymous_surface_contained_required_controller_and_field_policies_unproven",
             },
         )
         for entry in manifest_form2["controller_field_policy"]:
@@ -4718,6 +4753,7 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
                 "billing": billing,
                 "forms": forms,
                 "forms_evidence": forms_preflight,
+                "form2_containment": self.form2_containment,
                 "analytics": analytics,
             },
             sort_keys=True,
@@ -4739,6 +4775,7 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
                     "billing": billing,
                     "forms": forms,
                     "forms_evidence": forms_preflight,
+                    "form2_containment": self.form2_containment,
                     "analytics": analytics,
                 }
             )
@@ -4761,6 +4798,259 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
                 r"(?<![a-z0-9])(?:\+?1[ .-]?)?(?:\(\d{3}\)|\d{3})[ .-]\d{3}[ .-]\d{4}(?![a-z0-9])",
                 combined,
             )
+        )
+
+    def test_form2_containment_is_bounded_sanitized_and_keeps_acceptance_blocked(self):
+        evidence = self.form2_containment
+        self.assertEqual(
+            set(evidence),
+            {
+                "schema_version",
+                "record_type",
+                "observed_at",
+                "repository_head_at_attempt",
+                "release_contract_at_attempt",
+                "status",
+                "target_binding",
+                "authorization_history",
+                "final_confirmation_attempt",
+                "independent_readback",
+                "containment",
+                "disclosure_controls",
+            },
+        )
+        self.assertEqual(evidence["schema_version"], 1)
+        self.assertEqual(
+            evidence["record_type"],
+            "sanitized_free_revenue_leak_test_form2_containment",
+        )
+        self.assertEqual(evidence["observed_at"], "2026-08-28")
+        self.assertEqual(
+            evidence["repository_head_at_attempt"],
+            "605208993873ab1c53723ade1c5c87216fa67fc8",
+        )
+        self.assertEqual(
+            evidence["release_contract_at_attempt"],
+            {
+                "contract_id": "sylvara-free-revenue-leak-test-e2e-v4",
+                "schema_version": 4,
+            },
+        )
+        self.assertEqual(
+            evidence["status"],
+            "bounded_live_surface_contained_reconfiguration_and_acceptance_blocked",
+        )
+        self.assertEqual(
+            evidence["target_binding"],
+            {
+                "expected_private_target_matched": True,
+                "private_target_values_included": False,
+            },
+        )
+        self.assertEqual(
+            evidence["authorization_history"],
+            {
+                "preceding_attempt_count": 2,
+                "toggle_only_attempt_consumed": True,
+                "toggle_only_attempt_persisted": False,
+                "toggle_and_save_attempt_consumed": True,
+                "toggle_and_save_attempt_persisted": False,
+                "preceding_approvals_reused": False,
+                "final_confirmation_packet_separately_approved": True,
+                "final_confirmation_packet_consumed": True,
+                "final_confirmation_packet_reusable": False,
+                "retry_under_consumed_approval_performed": False,
+                "future_live_action_authorized_by_this_record": False,
+            },
+        )
+        self.assertEqual(
+            evidence["final_confirmation_attempt"],
+            {
+                "native_confirmation_yes_selected": True,
+                "save_control_used": False,
+                "owner_email_sent": False,
+                "submission_delivery_disable_persisted": True,
+            },
+        )
+        readback = evidence["independent_readback"]
+        self.assertEqual(
+            set(readback),
+            {
+                "dashboard_status",
+                "dashboard_status_persisted",
+                "anonymous_runtime_checked",
+                "anonymous_disabled_message_matched_private_expected_copy",
+                "expected_disabled_message_copy_included",
+                "anonymous_visible_field_count",
+                "anonymous_visible_submit_control_count",
+                "submission_delivery_status",
+                "submission_delivery_status_persisted",
+                "private_configuration_shape",
+            },
+        )
+        self.assertEqual(readback["dashboard_status"], "disabled")
+        self.assertTrue(readback["dashboard_status_persisted"])
+        self.assertTrue(readback["anonymous_runtime_checked"])
+        self.assertTrue(
+            readback["anonymous_disabled_message_matched_private_expected_copy"]
+        )
+        self.assertFalse(readback["expected_disabled_message_copy_included"])
+        self.assertEqual(readback["anonymous_visible_field_count"], 0)
+        self.assertEqual(readback["anonymous_visible_submit_control_count"], 0)
+        self.assertEqual(readback["submission_delivery_status"], "disabled")
+        self.assertTrue(readback["submission_delivery_status_persisted"])
+        self.assertEqual(
+            readback["private_configuration_shape"],
+            {
+                "destination_binding_unchanged": True,
+                "content_encoding_unchanged": True,
+                "authentication_mode_unchanged": True,
+                "connection_binding_unchanged": True,
+                "payload_mapping_count": 38,
+                "payload_mapping_set_unchanged": True,
+                "custom_parameter_counts_unchanged": True,
+                "complete_private_configuration_digest_equal": True,
+                "raw_private_configuration_or_digest_included": False,
+            },
+        )
+        self.assertEqual(
+            evidence["containment"],
+            {
+                "live_surface_containment_proven_within_observed_scope": True,
+                "complete_required_field_policy_proven": False,
+                "required_prefill_boundary_proven": False,
+                "required_controller_field_policy_proven": False,
+                "required_respondent_field_policy_proven": False,
+                "required_controller_gate_proven": False,
+                "required_submission_contract_proven": False,
+                "required_submission_destination_binding_proven": False,
+                "required_submission_authentication_proven": False,
+                "value_entered": False,
+                "submission_performed": False,
+                "submission_delivery_test_performed": False,
+                "runtime_function_or_route_invocation_performed": False,
+                "crm_billing_analytics_or_catalyst_action_performed": False,
+                "retell_agent_changed_tested_simulated_called_or_published": False,
+                "customer_or_production_action_performed": False,
+            },
+        )
+        self.assertTrue(
+            all(value is False for value in evidence["disclosure_controls"].values())
+        )
+
+        manifest_form2 = next(
+            item
+            for item in self.forms_manifest["forms"]
+            if item["logical_name"] == "REVENUE_LEAK_TEST_SETUP_FORM"
+        )
+        latest = manifest_form2["latest_containment"]
+        self.assertEqual(
+            latest["evidence"],
+            "evidence/form2-containment-2026-08-28.json",
+        )
+        self.assertEqual(
+            latest["repository_head_at_attempt"],
+            evidence["repository_head_at_attempt"],
+        )
+        self.assertEqual(
+            latest["expected_private_target_matched"],
+            evidence["target_binding"]["expected_private_target_matched"],
+        )
+        self.assertEqual(
+            latest["dashboard_status"], readback["dashboard_status"]
+        )
+        self.assertEqual(
+            latest["submission_delivery_status"],
+            readback["submission_delivery_status"],
+        )
+        self.assertEqual(
+            latest["complete_private_configuration_digest_equal"],
+            readback["private_configuration_shape"][
+                "complete_private_configuration_digest_equal"
+            ],
+        )
+        self.assertFalse(latest["raw_private_configuration_or_digest_published"])
+        self.assertFalse(latest["preceding_attempts_persisted"])
+        self.assertFalse(latest["preceding_approvals_reused"])
+        self.assertFalse(latest["final_confirmation_packet_reusable"])
+        self.assertTrue(
+            latest["contract_authentication_and_destination_gates_remain_blocked"]
+        )
+        self.assertEqual(latest["status"], evidence["status"])
+        self.assertEqual(
+            self.forms_manifest["evidence_boundary"]["historical_read_only_preflight"],
+            "evidence/read-only-browser-fallback-preflight-2026-08-28.json",
+        )
+        self.assertTrue(
+            self.forms_manifest["evidence_boundary"][
+                "historical_read_only_preflight_preserved"
+            ]
+        )
+        self.assertEqual(
+            self.forms_browser_preflight["form2"]["status"],
+            "blocked_pending_private_containment_and_reconfiguration",
+        )
+
+        serialized = json.dumps(evidence, sort_keys=True).lower()
+        evidence_keys = set()
+
+        def collect_evidence_keys(value):
+            if isinstance(value, dict):
+                for key, nested in value.items():
+                    evidence_keys.add(str(key).lower())
+                    collect_evidence_keys(nested)
+            elif isinstance(value, list):
+                for nested in value:
+                    collect_evidence_keys(nested)
+
+        collect_evidence_keys(evidence)
+        for forbidden_key in (
+            "form_id",
+            "organization_id",
+            "tenant_id",
+            "user_id",
+            "account_id",
+            "owner_email",
+            "url",
+            "endpoint",
+            "webhook_url",
+            "header",
+            "connection_name",
+            "configuration_digest",
+            "private_digest",
+            "raw_digest",
+        ):
+            self.assertNotIn(forbidden_key, evidence_keys)
+        for forbidden_value in ("http://", "https://", "zohopublic"):
+            self.assertNotIn(forbidden_value, serialized)
+        self.assertIsNone(
+            re.search(r"[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}", serialized)
+        )
+        self.assertIsNone(re.search(r"\b[a-f0-9]{64}\b", serialized))
+        self.assertIsNone(
+            re.search(
+                r"(?<![a-z0-9])(?:\+?1[ .-]?)?(?:\(\d{3}\)|\d{3})[ .-]\d{3}[ .-]\d{4}(?![a-z0-9])",
+                serialized,
+            )
+        )
+
+        self.assertIn(
+            "bounded_live_surface_contained_reconfiguration_and_acceptance_blocked",
+            self.deployment_log,
+        )
+        self.assertIn("zero visible fields", self.deployment_log)
+        self.assertIn("38-mapping", self.deployment_log)
+        self.assertIn(
+            "every Form 2 contract, authentication, destination",
+            self.deployment_log,
+        )
+        self.assertIn("zero fields and zero submit controls", self.reconciliation_runbook)
+        setup_form_readme = SETUP_FORM_README_PATH.read_text(encoding="utf-8")
+        self.assertIn("zero visible fields", setup_form_readme)
+        self.assertIn("zero submit controls", setup_form_readme)
+        self.assertIn(
+            "every Form 2 reconfiguration and acceptance gate remains blocked",
+            setup_form_readme,
         )
 
     def test_successor_crm_and_catalyst_preflights_close_only_proven_gates(self):

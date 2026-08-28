@@ -55,7 +55,7 @@ function packet(overrides = {}) {
     approvedSourceRevision: "a".repeat(40),
     environment: "Development",
     liveOrganization: {
-      currency: "USD", id: "202", mode: "live", orgType: "live", subscriptionsOnly: true,
+      currency: "USD", id: "202", mode: "live", orgType: "live", subscriptionsOnly: false,
     },
     meteredBillingAttestation: {
       capturedAt: "2026-08-26T17:59:00.000Z",
@@ -266,6 +266,25 @@ test("approval binds organizations, product IDs, codes, phase, and all commercia
   const changedCode = structuredClone(approved);
   changedCode.plans.Launch.code = "synthetic_launch_changed";
   assert.throws(() => validateCatalogPacket(changedCode, envelope, NOW_MS), /private catalog approval/);
+});
+
+test("requires a Billing-only TEST target and the Books-integrated live catalog reference", () => {
+  const value = packet();
+  assert.equal(validateCatalogPacket(value, approval(value), NOW_MS).phase, "definition");
+
+  const joinedTest = structuredClone(value);
+  joinedTest.testOrganization.subscriptionsOnly = false;
+  assert.throws(
+    () => validateCatalogPacket(joinedTest, approval(joinedTest), NOW_MS),
+    /testOrganization ownership is not exact/,
+  );
+
+  const falselyIsolatedLive = structuredClone(value);
+  falselyIsolatedLive.liveOrganization.subscriptionsOnly = true;
+  assert.throws(
+    () => validateCatalogPacket(falselyIsolatedLive, approval(falselyIsolatedLive), NOW_MS),
+    /liveOrganization ownership is not exact/,
+  );
 });
 
 test("approval authorizes only the exact phase-specific TEST catalog mutations", () => {

@@ -5,13 +5,15 @@
   "real_form_ids_or_urls_in_git": false,
   "evidence_boundary": {
     "live_readback_date": "2026-08-28",
-    "live_readback_mode": "authenticated read-only Zoho Forms builder and integration settings, external read-only runtime observation, and sanitized comparison to current read-only Catalyst binding metadata",
+    "live_readback_mode": "historical authenticated read-only Zoho Forms preflight followed by separately approved bounded Form 2 containment and independent readback",
     "public_runtime_source": "external read-only runtime observation with exploit-level details withheld",
     "catalyst_binding_compared_without_runtime_invocation": true,
     "sanitized": true,
     "live_ids_urls_aliases_and_private_destinations_in_git": false,
-    "latest_sanitized_evidence": "evidence/read-only-browser-fallback-preflight-2026-08-28.json",
+    "latest_sanitized_evidence": "evidence/form2-containment-2026-08-28.json",
     "latest_sanitized_evidence_tenant_bound": true,
+    "historical_read_only_preflight": "evidence/read-only-browser-fallback-preflight-2026-08-28.json",
+    "historical_read_only_preflight_preserved": true,
     "rule": "Source-required policy and sanitized live observations are separate. An observed field or integration never proves unobserved aliases, privacy flags, read-only flags, destinations, or runtime behavior."
   },
   "connector_preflight_2026_08_28": {
@@ -320,7 +322,7 @@
         "sms_delivery": false
       },
       "live_release_gate": {
-        "status": "blocked_pending_private_containment_and_reconfiguration",
+        "status": "blocked_after_surface_containment_pending_reconfiguration_and_acceptance",
         "complete_required_field_policy_proven": false,
         "required_prefill_boundary_proven": false,
         "required_controller_field_policy_proven": false,
@@ -335,6 +337,31 @@
         "save_next_or_submit_clicked": false,
         "webhook_test_performed": false
       },
+      "latest_containment": {
+        "evidence": "evidence/form2-containment-2026-08-28.json",
+        "repository_head_at_attempt": "605208993873ab1c53723ade1c5c87216fa67fc8",
+        "expected_private_target_matched": true,
+        "dashboard_status": "disabled",
+        "dashboard_status_persisted": true,
+        "anonymous_disabled_message_matched_private_expected_copy": true,
+        "anonymous_visible_field_count": 0,
+        "anonymous_visible_submit_control_count": 0,
+        "owner_email_sent": false,
+        "submission_delivery_status": "disabled",
+        "submission_delivery_status_persisted": true,
+        "native_confirmation_yes_selected": true,
+        "final_attempt_save_control_used": false,
+        "complete_private_configuration_digest_equal": true,
+        "raw_private_configuration_or_digest_published": false,
+        "preceding_attempt_count": 2,
+        "preceding_attempts_persisted": false,
+        "preceding_approvals_reused": false,
+        "final_confirmation_packet_reusable": false,
+        "submission_or_delivery_test_performed": false,
+        "runtime_invocation_performed": false,
+        "contract_authentication_and_destination_gates_remain_blocked": true,
+        "status": "bounded_live_surface_contained_reconfiguration_and_acceptance_blocked"
+      },
       "live_runtime_security_boundary": {
         "read_only_observation_performed": true,
         "required_controller_gate_proven": false,
@@ -342,7 +369,7 @@
         "private_exploit_details_published": false,
         "field_value_entered": false,
         "save_next_or_submit_clicked": false,
-        "status": "blocked_pending_private_containment_and_reconfiguration"
+        "status": "anonymous_surface_contained_required_controller_and_field_policies_unproven"
       },
       "controller_hidden_fields": ["setupToken", "prefillId"],
       "live_field_inventory": {
@@ -480,7 +507,10 @@
         "live_prohibited_fields_absent_proven": false,
         "live_private_details_published": false,
         "webhook_test_performed": false,
-        "status": "blocked_pending_private_containment_and_reconfiguration"
+        "live_status": "disabled",
+        "live_status_persisted_after_native_confirmation": true,
+        "live_configuration_shape_unchanged": true,
+        "status": "live_disabled_contract_reconfiguration_and_acceptance_blocked"
       },
       "field_contract": {
         "runtime_authority": "../../zoho-catalyst/revenue-leak-test-setup-form/functions/revenue_leak_test_setup_form/lib/form-contract.js",
