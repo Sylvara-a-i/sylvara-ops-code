@@ -2,12 +2,20 @@
   "schema_version": 1,
   "record_type": "sanitized_free_revenue_leak_test_zoho_forms_read_only_browser_fallback_preflight",
   "observed_at": "2026-08-28",
-  "repository_head_at_observation": "7229d06f66858fb170f50a986441a3e463eb6339",
+  "repository_head_at_builder_observation": "7229d06f66858fb170f50a986441a3e463eb6339",
+  "repository_head_at_tenant_binding_readback": "f3824048a9eba693921d387f2013e0c045b4870d",
   "release_contract_at_observation": {
     "contract_id": "sylvara-free-revenue-leak-test-e2e-v4",
     "schema_version": 4
   },
-  "status": "tenant_unbound_builder_observations_only",
+  "status": "expected_tenant_bound_current_builder_blockers_confirmed",
+  "tenant_binding": {
+    "verified_privately": true,
+    "authenticated_business_account_match": true,
+    "tenant_namespace_match": true,
+    "canonical_form_title_match": true,
+    "private_account_tenant_namespace_or_user_value_included": false
+  },
   "evidence_boundary": {
     "sylvara_forms_audit_connector_available": false,
     "sylvara_forms_changes_connector_available": false,
@@ -15,7 +23,7 @@
     "fallback_reason": "No purpose-built Sylvara Zoho Forms connector was advertised for the required builder and integration metadata.",
     "source": "authenticated read-only Zoho Forms builder and integration settings",
     "authenticated_account_identity_observed_privately": true,
-    "expected_sylvara_forms_tenant_binding_proven": false,
+    "expected_sylvara_forms_tenant_binding_proven": true,
     "private_account_tenant_or_user_identity_included": false,
     "canonical_active_form_count": 2,
     "bounded_observed_builder_state_refreshed": true,

@@ -121,13 +121,10 @@ test("the concrete Forms desired state keeps RevenueLeakTestRequestForm idempote
     [],
   );
   const identity = form1.live_configuration_prerequisites.public_intake_submission_identity;
-  assert.equal(identity.status, "unresolved");
-  assert.equal(identity.live_generation_owner, null);
-  assert.equal(identity.live_generation_mechanism, null);
-  assert.equal(identity.latest_unbound_observation.generation_owner, "Zoho Forms");
-  assert.match(identity.latest_unbound_observation.generation_mechanism, /length 10/);
-  assert.match(identity.latest_unbound_observation.generation_mechanism, /repetition restriction enabled/);
-  assert.equal(identity.latest_unbound_observation.expected_tenant_binding_proven, false);
+  assert.equal(identity.status, "generation_mechanism_observed_retry_behavior_unproven");
+  assert.equal(identity.live_generation_owner, "Zoho Forms");
+  assert.match(identity.live_generation_mechanism, /length 10/);
+  assert.match(identity.live_generation_mechanism, /repetition restriction enabled/);
   assert.equal(identity.live_change_blocked, true);
   assert.match(identity.required_invariants.join(" "), /non-respondent source/i);
   const privacy = form1.live_configuration_prerequisites.privacy_dictionary;
