@@ -8,7 +8,29 @@ A merged pull request is not a deployment. Record an entry only after an authori
 
 ## Current State
 
-The Development events recorded here are the 2026-08-27 six-function Revenue Desk definition convergence and bounded private configuration readback; the separately contained creation and remediation of the second route; the later contained API Gateway continuation that preserved or created all twelve canonical routes, read them back exactly, retrieved the Development `ZCFKEY` privately, and ended with Gateway disabled; and separate read-only Retell boundary reconciliation with no invocation performed. They also include the contained 2026-08-26 datastore schema attempt and its superseding bounded Packet A resolution. The production configuration events are the 2026-08-14 Free-Test CRM workflow and Blueprint work; the 2026-08-05 Sylvara Zoho CRM schema/layout/address work; and the same-day Zoho Books chart deployment, Schedule C hierarchy amendment, and final tax-preparer description correction. The Free-Test CRM event configured intake and Deal automation but did not automate native Lead conversion or prove Zoho Forms settings. The Books events wrote chart metadata and active status only; no transaction record, journal, bank, clearing, tax-engine, or integration was written. Chart metadata can change historical report presentation even when transaction records remain unchanged.
+The Development events recorded here are the 2026-08-27 six-function Revenue Desk definition convergence and bounded private configuration readback; the separately contained creation and remediation of the second route; the later contained API Gateway continuation that preserved or created all twelve canonical routes, read them back exactly, retrieved the Development `ZCFKEY` privately, and ended with Gateway disabled; the consumed but non-persisted worker-binding attempt recorded below; and separate read-only Retell boundary reconciliation with no invocation performed. They also include the contained 2026-08-26 datastore schema attempt and its superseding bounded Packet A resolution. The production configuration events are the 2026-08-14 Free-Test CRM workflow and Blueprint work; the 2026-08-05 Sylvara Zoho CRM schema/layout/address work; and the same-day Zoho Books chart deployment, Schedule C hierarchy amendment, and final tax-preparer description correction. The Free-Test CRM event configured intake and Deal automation but did not automate native Lead conversion or prove Zoho Forms settings. The Books events wrote chart metadata and active status only; no transaction record, journal, bank, clearing, tax-engine, or integration was written. Chart metadata can change historical report presentation even when transaction records remain unchanged.
+
+## 2026-08-27 — Revenue Desk Development Worker Binding Attempt Consumed And Contained
+
+This entry supersedes the earlier route-continuation record only on the status of its then-future worker-binding approval. The route observations in that record remain historical evidence. A later fresh connector readback independently confirmed that Gateway remained disabled and failed closed without returning a route payload.
+
+```text
+Date (UTC): 2026-08-27
+Environment class: development
+Change reference: pull request #49; canonical source revision aab7c18c27f4ff5e1468da51eae433ede9b852f6
+Evidence reference: sanitized worker-binding containment record; private packet material, environment names and values, identifiers, endpoints, paths, and raw provider responses remain outside Git
+Approval reference: exact single-use owner approval retained in the private task record; consumed by the one attempt, exhausted, and not reusable
+Operator role: bounded Development worker environment-map replacement with independent definition readback; no runtime invocation
+Pre-deployment state: revenue_desk_call_worker was a Node 24 Job function at 256 MB with exactly zero environment variables
+Action: attempt once to replace only the exact zero-variable Development worker map with the approved 28-variable private map and independently read back the definition; do not retry, invoke any runtime surface, mutate Gateway, touch Retell, or perform a customer or Production action
+Execution result: the operator-visible orchestration result was truncated before a deterministic provider-write or conditional in-packet rollback result was available, and the expected private in-packet execution-status record was unavailable for reconciliation. Neither sequence is claimed.
+Readback result: independent worker-definition readback showed revenue_desk_call_worker remained a Node 24 Job function at 256 MB with exactly zero environment variables. The approved map did not persist, no partial map was present, and the exact empty prestate was preserved or restored.
+Smoke-test result: not invoked by the operator; provider-complete post-attempt Job and direct-caller inventory remains unavailable, so a transient active binding or invocation cannot be excluded. The operator performed no route, function, Job, or Cron invocation and no Retell-agent development, test, simulation, call, publish, customer action, or Production action.
+Gateway evidence: the worker attempt performed no Gateway mutation. A later independent Catalyst Audit readback captured at `2026-08-28T00:02:44.582Z` confirmed API Gateway disabled and fail-closed without returning a route payload.
+Rollback target: already contained at the exact empty worker map; no additional rollback write was needed during reconciliation
+Outcome: single_use_worker_binding_attempt_consumed_non_persisted_and_contained
+Follow-up: do not retry under the consumed approval. Before any later worker write, obtain a fresh exact single-use packet bound to a fresh zero-variable prestate and independently revalidate the disabled-Gateway state; keep Retell and runtime invocation out of scope.
+```
 
 ## 2026-08-27 — Revenue Desk Development Gateway Continuation Completed And Contained
 

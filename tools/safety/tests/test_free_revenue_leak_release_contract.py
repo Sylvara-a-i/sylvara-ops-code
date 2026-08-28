@@ -36,6 +36,20 @@ ROUTE_CONTINUATION_PATH = (
     / "evidence"
     / "free-revenue-leak-test-development-route-continuation-2026-08-27.json"
 )
+WORKER_BINDING_CONTAINMENT_PATH = (
+    ROOT
+    / "src"
+    / "zoho-catalyst"
+    / "evidence"
+    / "free-revenue-leak-test-development-worker-binding-containment-2026-08-27.json"
+)
+DARK_PRODUCTION_PRESTATE_PATH = (
+    ROOT
+    / "src"
+    / "zoho-catalyst"
+    / "evidence"
+    / "free-revenue-leak-test-dark-production-prestate-2026-08-28.json"
+)
 PRIVATE_ROUTE_CONTRACT_PATH = (
     ROOT
     / "src"
@@ -173,6 +187,12 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         )
         cls.route_continuation = json.loads(
             ROUTE_CONTINUATION_PATH.read_text(encoding="utf-8")
+        )
+        cls.worker_binding_containment = json.loads(
+            WORKER_BINDING_CONTAINMENT_PATH.read_text(encoding="utf-8")
+        )
+        cls.dark_production_prestate = json.loads(
+            DARK_PRODUCTION_PRESTATE_PATH.read_text(encoding="utf-8")
         )
         cls.private_route_contract = json.loads(
             PRIVATE_ROUTE_CONTRACT_PATH.read_text(encoding="utf-8")
@@ -2886,6 +2906,263 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, serialized)
 
+    def test_development_worker_binding_attempt_is_consumed_non_persistent_and_contained(self):
+        evidence = self.worker_binding_containment
+        self.assertEqual(evidence["schema_version"], 1)
+        self.assertEqual(
+            evidence["record_type"],
+            "sanitized_free_revenue_leak_test_development_worker_binding_containment",
+        )
+        self.assertEqual(evidence["environment"], "Development")
+        self.assertEqual(evidence["source_revision"], ROUTE_CONTRACT_SOURCE_REVISION)
+        self.assertEqual(
+            evidence["outcome"],
+            "single_use_worker_binding_attempt_consumed_non_persisted_and_contained",
+        )
+
+        authorization = evidence["authorization"]
+        for field in (
+            "approval_scope_finite",
+            "approval_consumed_by_single_attempt",
+            "approval_exhausted",
+        ):
+            self.assertTrue(authorization[field])
+        for field in (
+            "approval_reusable",
+            "retry_authorized_by_consumed_approval",
+            "future_live_action_authorized_by_this_record",
+            "retell_agent_development_or_testing_authorized",
+            "production_or_customer_activity_authorized",
+            "private_packet_or_variable_map_digests_included",
+        ):
+            self.assertFalse(authorization[field])
+
+        attempt = evidence["attempt"]
+        self.assertEqual(attempt["requested_environment_variable_count"], 28)
+        self.assertFalse(attempt["requested_environment_variable_names_or_values_included"])
+        self.assertFalse(attempt["operator_visible_orchestration_result_complete"])
+        self.assertEqual(
+            attempt["operator_visible_orchestration_result_status"],
+            "truncated_before_a_deterministic_write_or_in_packet_rollback_result_was_available",
+        )
+        self.assertFalse(
+            attempt["private_in_packet_execution_status_record_available_for_reconciliation"]
+        )
+        self.assertFalse(attempt["provider_write_or_in_packet_rollback_sequence_proven"])
+        self.assertFalse(attempt["write_persistence_proven"])
+        self.assertFalse(attempt["retry_performed"])
+        self.assertFalse(attempt["additional_rollback_write_performed_during_reconciliation"])
+
+        readback = evidence["independent_post_attempt_readback"]
+        self.assertTrue(readback["function_readback_complete"])
+        self.assertEqual(readback["function_name"], "revenue_desk_call_worker")
+        self.assertEqual(readback["function_type"], "job")
+        self.assertEqual(readback["runtime"], "node24")
+        self.assertEqual(readback["memory_mb"], 256)
+        self.assertEqual(readback["environment_variable_count"], 0)
+        self.assertFalse(readback["approved_environment_map_persisted"])
+        self.assertFalse(readback["partial_environment_map_present"])
+        self.assertTrue(readback["exact_empty_prestate_preserved_or_restored"])
+        self.assertFalse(readback["worker_required_runtime_binding_present"])
+        self.assertTrue(readback["worker_static_configuration_contract_fails_closed"])
+        self.assertFalse(readback["worker_runtime_fail_closed_invocation_proven"])
+        self.assertFalse(
+            readback[
+                "provider_complete_post_attempt_job_or_direct_caller_invocation_absence_proven"
+            ]
+        )
+        self.assertFalse(readback["transient_active_binding_or_invocation_excluded"])
+
+        containment = evidence["containment"]
+        self.assertTrue(containment["current_empty_map_requires_no_additional_rollback_write"])
+        for field in (
+            "operator_route_invocations",
+            "operator_function_invocations",
+            "operator_job_invocations",
+            "operator_cron_submissions",
+        ):
+            self.assertEqual(containment[field], 0)
+        self.assertFalse(containment["retell_agent_changed_tested_simulated_called_or_published"])
+        self.assertFalse(containment["customer_or_production_action_performed"])
+        self.assertFalse(containment["gateway_mutation_performed"])
+        self.assertTrue(containment["gateway_state_reverified_after_worker_attempt"])
+        self.assertEqual(
+            containment["post_attempt_gateway_readback_captured_at_utc"],
+            "2026-08-28T00:02:44.582Z",
+        )
+        self.assertTrue(containment["gateway_disabled_readback_after_worker_attempt"])
+        self.assertTrue(containment["gateway_readback_failed_closed_without_route_payload"])
+        self.assertFalse(containment["runtime_acceptance_proven"])
+
+        inventory = self.inventory[
+            "development_worker_binding_attempt_containment_2026_08_27"
+        ]
+        self.assertEqual(inventory["outcome"], evidence["outcome"])
+        self.assertEqual(inventory["source_revision"], evidence["source_revision"])
+        self.assertEqual(inventory["requested_environment_variable_count"], 28)
+        self.assertFalse(inventory["operator_visible_orchestration_result_complete"])
+        self.assertFalse(
+            inventory[
+                "private_in_packet_execution_status_record_available_for_reconciliation"
+            ]
+        )
+        self.assertFalse(inventory["provider_write_or_in_packet_rollback_sequence_proven"])
+        self.assertTrue(inventory["independent_worker_readback_complete"])
+        self.assertEqual(inventory["worker_function_type"], "job")
+        self.assertEqual(inventory["worker_runtime"], "node24")
+        self.assertEqual(inventory["worker_memory_mb"], 256)
+        self.assertEqual(inventory["worker_environment_variable_count"], 0)
+        self.assertFalse(inventory["approved_environment_map_persisted"])
+        self.assertFalse(inventory["partial_environment_map_present"])
+        self.assertTrue(inventory["exact_empty_prestate_preserved_or_restored"])
+        self.assertFalse(
+            inventory[
+                "provider_complete_post_attempt_job_or_direct_caller_invocation_absence_proven"
+            ]
+        )
+        self.assertFalse(inventory["transient_active_binding_or_invocation_excluded"])
+        self.assertFalse(inventory["retry_performed"])
+        self.assertTrue(inventory["single_use_approval_consumed_and_exhausted"])
+        self.assertFalse(inventory["consumed_approval_reusable"])
+        self.assertTrue(inventory["fresh_exact_single_use_packet_required_before_any_retry"])
+        self.assertFalse(inventory["operator_route_function_job_or_cron_invocation_performed"])
+        self.assertFalse(inventory["retell_agent_changed_tested_simulated_called_or_published"])
+        self.assertFalse(inventory["operator_production_or_customer_activity_performed"])
+        self.assertTrue(inventory["gateway_state_reverified_after_worker_attempt"])
+        self.assertEqual(
+            inventory["post_attempt_gateway_readback_captured_at_utc"],
+            containment["post_attempt_gateway_readback_captured_at_utc"],
+        )
+        self.assertTrue(inventory["gateway_disabled_readback_after_worker_attempt"])
+        self.assertTrue(inventory["gateway_readback_failed_closed_without_route_payload"])
+        self.assertFalse(inventory["future_live_action_authorized_by_this_record"])
+        self.assertEqual(
+            inventory["evidence"],
+            "evidence/free-revenue-leak-test-development-worker-binding-containment-2026-08-27.json",
+        )
+
+        deployment_entry = self.deployment_log.split(
+            "## 2026-08-27 — Revenue Desk Development Worker Binding Attempt Consumed And Contained",
+            maxsplit=1,
+        )[1].split(
+            "## 2026-08-27 — Revenue Desk Development Gateway Continuation Completed And Contained",
+            maxsplit=1,
+        )[0]
+        for phrase in (
+            "consumed by the one attempt, exhausted, and not reusable",
+            "the expected private in-packet execution-status record was unavailable for reconciliation",
+            "remained a Node 24 Job function at 256 MB with exactly zero environment variables",
+            "The approved map did not persist, no partial map was present",
+            "performed no route, function, Job, or Cron invocation",
+            "a transient active binding or invocation cannot be excluded",
+            "captured at `2026-08-28T00:02:44.582Z`",
+            "confirmed API Gateway disabled and fail-closed without returning a route payload",
+            "do not retry under the consumed approval",
+        ):
+            self.assertIn(phrase, deployment_entry)
+
+        for phrase in (
+            "A later exact single-use attempt to install the approved 28-variable worker map was consumed but did not persist",
+            "no retry occurred",
+            "a transient active binding or invocation cannot be excluded",
+            "fresh post-attempt connector readback captured at `2026-08-28T00:02:44.582Z` confirmed API Gateway disabled",
+        ):
+            self.assertIn(phrase, self.reconciliation_runbook)
+
+        serialized = json.dumps(evidence, sort_keys=True).lower()
+        for forbidden in (
+            "client_secret", "refresh_token", "access_token", "invoke_url",
+            "project_id", "organization_id", "environment_id", "function_id",
+            "agent_id", "version_id", "number_id", "zaid", "archive_sha256",
+            "download_path", "upload_path", "http://", "https://",
+        ):
+            self.assertNotIn(forbidden, serialized)
+
+    def test_dark_production_preflight_proves_not_initialized_without_claiming_empty_inventory(self):
+        evidence = self.dark_production_prestate
+        self.assertEqual(evidence["schema_version"], 1)
+        self.assertEqual(
+            evidence["record_type"],
+            "sanitized_free_revenue_leak_test_dark_production_prestate",
+        )
+        self.assertEqual(evidence["target_environment"], "Production")
+        self.assertEqual(evidence["source_revision"], ROUTE_CONTRACT_SOURCE_REVISION)
+
+        connector = evidence["connector_first_readback"]
+        self.assertTrue(connector["development_project_metadata_readback_succeeded"])
+        self.assertEqual(connector["observed_environment_count"], 1)
+        self.assertEqual(connector["observed_environment_names"], ["Development"])
+        self.assertEqual(connector["observed_development_environment_status"], "Active")
+        for field in (
+            "production_project_readback_succeeded",
+            "production_function_inventory_readback_succeeded",
+            "production_table_inventory_readback_succeeded",
+            "production_job_pool_inventory_readback_succeeded",
+            "production_cron_inventory_readback_succeeded",
+            "production_route_inventory_readback_succeeded",
+            "production_zero_resource_state_proven",
+        ):
+            self.assertFalse(connector[field])
+        self.assertEqual(connector["shared_failure_class"], "invalid_environment_name")
+
+        browser = evidence["governed_browser_fallback"]
+        self.assertTrue(browser["authenticated_project_console_readback_succeeded"])
+        self.assertTrue(browser["deploy_to_production_control_visible"])
+        self.assertFalse(browser["deploy_to_production_control_clicked"])
+        self.assertFalse(browser["production_initialization_or_deployment_performed"])
+        self.assertFalse(browser["production_configuration_or_traffic_mutated"])
+
+        conclusion = evidence["conclusion"]
+        self.assertFalse(conclusion["production_environment_initialized"])
+        self.assertFalse(conclusion["dark_production_deployment_exists"])
+        self.assertFalse(conclusion["dark_production_deployment_absence_proven_by_inventory"])
+        self.assertFalse(conclusion["future_production_write_authorized_by_this_record"])
+
+        containment = evidence["containment"]
+        self.assertTrue(containment["connector_calls_were_read_only"])
+        self.assertTrue(containment["browser_actions_were_navigation_and_readback_only"])
+        for field in (
+            "gateway_or_route_mutation_performed",
+            "function_table_job_pool_or_cron_mutation_performed",
+            "route_function_job_or_cron_invocation_performed",
+            "retell_agent_development_test_simulation_call_publish_or_provider_route_change_performed",
+            "customer_or_production_traffic_action_performed",
+        ):
+            self.assertFalse(containment[field])
+
+        inventory = self.inventory["dark_production_prestate_2026_08_28"]
+        self.assertEqual(
+            inventory["outcome"],
+            "dark_production_prestate_not_initialized_read_only_contained",
+        )
+        self.assertFalse(inventory["production_inventory_readback_succeeded"])
+        self.assertFalse(inventory["production_zero_resource_state_proven"])
+        self.assertFalse(inventory["production_environment_initialized"])
+        self.assertTrue(inventory["governed_browser_fallback_required"])
+        self.assertTrue(inventory["deploy_to_production_control_visible"])
+        self.assertFalse(inventory["deploy_to_production_control_clicked"])
+        self.assertFalse(inventory["future_production_write_authorized_by_this_record"])
+
+        self.assertNotIn(
+            "Revenue Desk Dark-Production Preflight Contained Before Initialization",
+            self.deployment_log,
+        )
+
+        self.assertIn("- **Revision date:** 2026-08-28", self.reconciliation_runbook)
+        self.assertIn(
+            "Production is not initialized, no zero-resource Production inventory is claimed",
+            self.reconciliation_runbook,
+        )
+
+        serialized = json.dumps(evidence, sort_keys=True).lower()
+        for forbidden in (
+            "project_id", "organization_id", "environment_id", "function_id",
+            "table_id", "jobpool_id", "route_id", "agent_id", "number_id",
+            "client_secret", "refresh_token", "access_token", "zcfkey",
+            "http://", "https://",
+        ):
+            self.assertNotIn(forbidden, serialized)
+
     def test_packet_a_public_runbooks_match_sanitized_execution_and_revision(self):
         superseding_entry = self.deployment_log.split(
             "## 2026-08-26 — Revenue Desk Development Packet A Superseding Resolution",
@@ -2908,7 +3185,7 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         self.assertNotIn("the table count remained 35", superseding_entry)
         self.assertNotIn("no record state was created or changed", superseding_entry)
         self.assertIn(
-            "- **Revision date:** 2026-08-27",
+            "- **Revision date:** 2026-08-28",
             self.reconciliation_runbook,
         )
         self.assertNotIn(

@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "record_type": "sanitized_free_revenue_leak_test_development_worker_binding_containment",
+  "execution_date_utc": "2026-08-27",
+  "environment": "Development",
+  "source_revision": "aab7c18c27f4ff5e1468da51eae433ede9b852f6",
+  "outcome": "single_use_worker_binding_attempt_consumed_non_persisted_and_contained",
+  "authorization": {
+    "approval_reference": "owner-approval-retained-in-private-task-record",
+    "approved_scope": "replace only the Development revenue_desk_call_worker environment map from the exact zero-variable prestate with the exact approved 28-variable private map, independently read back the worker definition, and restore the exact empty map if the proposed poststate was not exact; no invocation, Gateway mutation, Retell action, customer action, or Production action",
+    "approval_scope_finite": true,
+    "approval_consumed_by_single_attempt": true,
+    "approval_exhausted": true,
+    "approval_reusable": false,
+    "retry_authorized_by_consumed_approval": false,
+    "future_live_action_authorized_by_this_record": false,
+    "retell_agent_development_or_testing_authorized": false,
+    "production_or_customer_activity_authorized": false,
+    "private_packet_or_variable_map_digests_included": false
+  },
+  "attempt": {
+    "requested_environment_variable_count": 28,
+    "requested_environment_variable_names_or_values_included": false,
+    "operator_visible_orchestration_result_complete": false,
+    "operator_visible_orchestration_result_status": "truncated_before_a_deterministic_write_or_in_packet_rollback_result_was_available",
+    "private_in_packet_execution_status_record_available_for_reconciliation": false,
+    "provider_write_or_in_packet_rollback_sequence_proven": false,
+    "write_persistence_proven": false,
+    "retry_performed": false,
+    "additional_rollback_write_performed_during_reconciliation": false
+  },
+  "independent_post_attempt_readback": {
+    "function_readback_complete": true,
+    "function_name": "revenue_desk_call_worker",
+    "function_type": "job",
+    "runtime": "node24",
+    "memory_mb": 256,
+    "environment_variable_count": 0,
+    "approved_environment_map_persisted": false,
+    "partial_environment_map_present": false,
+    "exact_empty_prestate_preserved_or_restored": true,
+    "worker_required_runtime_binding_present": false,
+    "worker_static_configuration_contract_fails_closed": true,
+    "worker_runtime_fail_closed_invocation_proven": false,
+    "provider_complete_post_attempt_job_or_direct_caller_invocation_absence_proven": false,
+    "transient_active_binding_or_invocation_excluded": false
+  },
+  "containment": {
+    "current_empty_map_requires_no_additional_rollback_write": true,
+    "operator_route_invocations": 0,
+    "operator_function_invocations": 0,
+    "operator_job_invocations": 0,
+    "operator_cron_submissions": 0,
+    "retell_agent_changed_tested_simulated_called_or_published": false,
+    "customer_or_production_action_performed": false,
+    "gateway_mutation_performed": false,
+    "gateway_state_reverified_after_worker_attempt": true,
+    "post_attempt_gateway_readback_captured_at_utc": "2026-08-28T00:02:44.582Z",
+    "gateway_disabled_readback_after_worker_attempt": true,
+    "gateway_readback_failed_closed_without_route_payload": true,
+    "runtime_acceptance_proven": false
+  },
+  "remaining_gates": [
+    "independently revalidate the exact zero-variable worker prestate immediately before any further worker configuration write",
+    "use a fresh exact single-use packet for any retry; the consumed packet cannot authorize another write",
+    "establish provider-complete Job and direct-caller inventory or preserve the remaining inability to exclude a transient active binding or invocation",
+    "preserve the no-Retell boundary and perform no route, function, Job, or Cron invocation under this containment record",
+    "retain separate scoped evidence and authority for any customer or dark-Production action"
+  ],
+  "disclosure_controls": {
+    "platform_identifier_values_included": false,
+    "private_runtime_locator_values_included": false,
+    "credential_key_or_secret_values_included": false,
+    "environment_variable_names_or_values_included": false,
+    "private_packet_or_variable_map_digests_included": false,
+    "operator_identity_included": false,
+    "retell_identifier_values_included": false,
+    "customer_or_caller_data_included": false,
+    "raw_provider_payloads_errors_or_logs_included": false
+  }
+}
