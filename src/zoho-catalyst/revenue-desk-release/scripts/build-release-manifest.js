@@ -7,7 +7,10 @@ const { buildManifest, hashBytes, inspectArtifact } = require('../lib/release-ma
 
 const componentRoot = path.resolve(__dirname, '..');
 const repositoryRoot = path.resolve(componentRoot, '..', '..', '..');
-const contract = JSON.parse(fs.readFileSync(path.join(componentRoot, 'release-contract.json'), 'utf8'));
+const profileContracts = Object.freeze({
+  'canonical-six': 'release-contract.json',
+  'setup-journey': 'setup-journey-release-contract.json',
+});
 
 function values(name) {
   const found = [];
@@ -81,6 +84,12 @@ function trackedFileDigest(revision, relativePath) {
 }
 
 function main() {
+  const selectedProfiles = values('--profile');
+  if (selectedProfiles.length > 1) throw new Error('--profile must not be repeated.');
+  const profile = selectedProfiles[0] || 'canonical-six';
+  const contractFile = profileContracts[profile];
+  if (!contractFile) throw new Error('--profile must be canonical-six or setup-journey.');
+  const contract = JSON.parse(fs.readFileSync(path.join(componentRoot, contractFile), 'utf8'));
   const revision = value('--source-revision');
   const environment = value('--environment');
   const outputValue = value('--output');

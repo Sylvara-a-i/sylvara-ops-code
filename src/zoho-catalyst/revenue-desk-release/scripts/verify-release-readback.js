@@ -9,14 +9,30 @@ function value(name) {
   return index === -1 ? null : process.argv[index + 1];
 }
 
+function values(name) {
+  return process.argv.slice(2).reduce((found, item, index, all) => (
+    item === name ? [...found, all[index + 1]] : found
+  ), []);
+}
+
 function loadJson(name) {
   const candidate = value(name);
   if (!candidate) throw new Error(`${name} is required.`);
   return JSON.parse(fs.readFileSync(path.resolve(process.cwd(), candidate), 'utf8'));
 }
 
+const profileContracts = Object.freeze({
+  'canonical-six': 'release-contract.json',
+  'setup-journey': 'setup-journey-release-contract.json',
+});
+
 try {
-  const contract = JSON.parse(fs.readFileSync(path.resolve(__dirname, '..', 'release-contract.json'), 'utf8'));
+  const selectedProfiles = values('--profile');
+  if (selectedProfiles.length > 1) throw new Error('--profile must not be repeated.');
+  const profile = selectedProfiles[0] || 'canonical-six';
+  const contractFile = profileContracts[profile];
+  if (!contractFile) throw new Error('--profile must be canonical-six or setup-journey.');
+  const contract = JSON.parse(fs.readFileSync(path.resolve(__dirname, '..', contractFile), 'utf8'));
   verifyReadback(loadJson('--manifest'), loadJson('--readback'), contract);
   process.stdout.write('release-readback-ok\n');
 } catch (error) {

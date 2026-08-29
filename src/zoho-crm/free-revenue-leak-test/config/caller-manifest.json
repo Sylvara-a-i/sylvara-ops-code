@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "form1_local_containment_deployed_form2_template_not_deployed",
+  "status": "form1_local_containment_deployed_form2_repository_candidate_not_deployed",
   "environment": "Development only",
   "owning_product": "Zoho CRM",
   "runtime_owner": "Zoho Catalyst",
@@ -74,9 +74,10 @@
         },
         {
           "name": "issue_request_id",
-          "source": "trusted immutable UUID-v4 minter with retry-stable private handoff",
+          "source": "current Deal Setup_Access_Issue_Request_ID merge field initialized by the dedicated create-only workflow",
           "validation": "canonical lowercase UUID v4",
-          "provider_binding_status": "unverified_blocker"
+          "security_classification": "non-secret idempotency identifier; never an access token",
+          "provider_binding_status": "repository_bound_live_function_workflow_button_and_readback_required"
         }
       ],
       "request": {
@@ -106,14 +107,14 @@
         "open_target": "new window"
       },
       "failure_policy": "Fail closed without opening a URL. Emit only a coarse non-sensitive outcome. Never log or automatically retry an ambiguous response.",
-      "deployment_status": "blocked_until_uuid_minter_private_render_connection_and_route_readback"
+      "deployment_status": "blocked_until_initializer_private_render_connection_button_and_route_readback"
     }
   ],
   "activation_gates": [
     "Keep the retained Form 1 button bound only to the exact local fail-closed function. Keep its remote route caller unbound until an authoritative provider contract proves a server-side or genuinely one-time handoff that never places an access capability in a URL, browser-visible field, form entry, browser storage, referrer, or log.",
     "Independently verify the exact CRM organization, Development route, function revision, and disabled Production state.",
     "Prove each private Connection injects only its caller's required authentication headers and cannot authorize the other caller.",
-    "Prove the Form 2 caller receives a cryptographically strong canonical UUID v4 that remains stable for an exact retry and is never exposed to Forms.",
+    "Prove the dedicated create-only initializer persists one canonical UUID-v4-shaped non-secret identifier in Setup_Access_Issue_Request_ID, the field remains hidden from ordinary profiles and Forms, and the button maps that exact persisted value for every retry. Catalyst HMAC derivation, not identifier secrecy or randomness, protects the access capability.",
     "Render placeholders only in a private deployment workspace and inspect the saved Deluge source without exporting it to Git or logs.",
     "Run one ZZZ SYNTHETIC issue/readback canary per caller before widening access.",
     "Keep prior callers and routes available for rollback until synthetic replay and destination checks pass."
@@ -121,6 +122,7 @@
   "rollback": [
     "Preserve the retained Form 1 button on the exact local fail-closed function; if its binding drifts, restore that exact contained binding or disable it under a separately approved packet.",
     "Disable the Form 2 CRM button association if its caller is activated and rollback is required.",
+    "Deactivate the dedicated Setup Access issue-identity workflow without clearing or rewriting any persisted identifier.",
     "Revoke only caller-specific Connections proven exclusive to an activated remote caller.",
     "Disable the two canonical issue routes only after restoring the prior caller targets.",
     "Preserve Catalyst session rows and CRM readback evidence for reconciliation."

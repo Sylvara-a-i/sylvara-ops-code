@@ -105,17 +105,18 @@ class FreeRevenueLeakCrmContractTests(unittest.TestCase):
             self.contract["legacy_internal_offer_value"],
             values["crm_display_value"],
         )
-        workflow_criteria = [
-            criterion
+        workflows_with_offer_criterion = [
+            rule["logical_name"]
             for rule in self.contract["workflow_set"]
-            for criterion in rule.get("criteria", [])
-            if criterion.startswith("Entry_Offer equals ")
+            if "Entry_Offer equals entry_offer_values.crm_display_value"
+            in rule.get("criteria", [])
         ]
         self.assertEqual(
-            workflow_criteria,
+            workflows_with_offer_criterion,
             [
-                "Entry_Offer equals entry_offer_values.crm_display_value",
-                "Entry_Offer equals entry_offer_values.crm_display_value",
+                "FORM1_INTAKE_REVIEW",
+                "DEAL_INITIALIZATION",
+                "SETUP_ACCESS_ISSUE_IDENTITY",
             ],
         )
         self.assertEqual(

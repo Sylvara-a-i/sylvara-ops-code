@@ -263,6 +263,77 @@
       ]
     },
     {
+      "logical_name": "SETUP_ACCESS_ISSUE_IDENTITY",
+      "module": "Deals",
+      "single_active_rule": "Deals Free Test Initialize Setup Issue Identity",
+      "trigger": "create_only",
+      "repeat": false,
+      "criteria": [
+        "Entry_Offer equals entry_offer_values.crm_display_value",
+        "Setup_Form_Submission_ID is empty"
+      ],
+      "function": {
+        "display_name": "Initialize Setup Access Issue Request ID",
+        "api_name": "initialize_setup_access_issue_request_id",
+        "category": "Automation",
+        "runtime": "Deluge 1.0",
+        "source": "../functions/initialize_setup_access_issue_request_id.deluge",
+        "arguments": [
+          {
+            "name": "deal_id",
+            "type": "merge_field",
+            "source": "current Deals record ID selected from provider metadata"
+          }
+        ]
+      },
+      "field": {
+        "api_name": "Setup_Access_Issue_Request_ID",
+        "purpose": "retry-stable non-secret Form 2 issuance idempotency identity",
+        "required_data_type": "text",
+        "required_length": 36,
+        "required_provider_permissions": ["api_update", "read_write"],
+        "required_layout": "active Deals layout",
+        "provider_uniqueness_required": false,
+        "immutable_after_initialization": true,
+        "ordinary_user_editing_allowed": false
+      },
+      "identity_contract": {
+        "grammar": "canonical lowercase UUID v4",
+        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+        "security_classification": "non-secret idempotency identifier",
+        "cryptographic_randomness_claimed": false,
+        "authentication_owner": "Catalyst derives the browser access token with a private HMAC key",
+        "sole_writer": "initialize_setup_access_issue_request_id",
+        "maximum_writes_per_execution": 1,
+        "automatic_write_retry": false,
+        "existing_canonical_value_behavior": "no_write",
+        "existing_nonblank_malformed_value_behavior": "fail_closed_no_overwrite",
+        "derivation": "domain-separated SHA-256 of the canonical Deal ID, rendered as a UUID-v4-shaped lowercase value with fixed version and variant bits",
+        "concurrency_behavior": "all concurrent executions for one Deal derive the same candidate; an identical prewrite value is accepted without another write",
+        "blank_value_behavior": "derive_then_fresh_exact-field_read_then_one_write_then_independent_exact-field_readback",
+        "missing_field_in_read_response_behavior": "fail_closed_no_write",
+        "ambiguous_or_mismatched_readback_behavior": "reconciliation_required_no_retry",
+        "crm_automation_retriggered_by_write": false,
+        "log_policy": "coarse outcome only; no record ID, identifier, response, payload, or error"
+      },
+      "deployment_prerequisites": [
+        "fresh authoritative field metadata confirms exact API name, text type, length 36, write permission, hidden non-admin profile policy, and active-layout association",
+        "the saved Deluge function compiles and exact source readback matches the immutable release",
+        "the workflow action maps only the current Deal record ID",
+        "the saved workflow is create-only, non-repeating, has exactly one function action, and matches the entry criteria",
+        "one new ZZZ SYNTHETIC Deal receives one canonical value before the Form 2 button can be used"
+      ],
+      "effects": [
+        "initialize one retry-stable Form 2 issue request ID on a newly created eligible Deal"
+      ],
+      "prohibited_effects": [
+        "overwriting any nonblank value",
+        "creating or changing a Lead, Account, Contact, deployment, number assignment, route, approval, activation, Billing state, communication, or Form submission",
+        "running against a real customer or prospect"
+      ],
+      "deployment_status": "repository_source_complete_live_install_and_synthetic_readback_required"
+    },
+    {
       "logical_name": "FORM2_SUBMISSION",
       "module": "Deals",
       "single_active_rule": "Deals Revenue Leak Test Setup Form Proof Candidate",

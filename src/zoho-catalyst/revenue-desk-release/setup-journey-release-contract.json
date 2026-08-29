@@ -1,0 +1,133 @@
+{
+  "schema_version": 1,
+  "manifest_schema_version": 2,
+  "release_kind": "revenue_desk_setup_journey_release",
+  "status": "development-only-source-preflight-boundary",
+  "functions": [
+    {
+      "name": "revenue_leak_test_request_form",
+      "source_root": "src/zoho-catalyst/revenue-leak-test-request-form/functions/revenue_leak_test_request_form",
+      "revision_stamp_target": "revenue_leak_test_request_form"
+    },
+    {
+      "name": "revenue_leak_test_setup_form",
+      "source_root": "src/zoho-catalyst/revenue-leak-test-setup-form/functions/revenue_leak_test_setup_form",
+      "revision_stamp_target": "revenue_leak_test_setup_form"
+    },
+    {
+      "name": "revenue_desk_call_gateway",
+      "source_root": "src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_gateway",
+      "revision_stamp_target": "revenue_desk_call_gateway"
+    },
+    {
+      "name": "revenue_desk_call_worker",
+      "source_root": "src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_worker",
+      "revision_stamp_target": "revenue_desk_call_gateway"
+    }
+  ],
+  "job_pools": [
+    "RevenueDeskCallJobs"
+  ],
+  "tables": [
+    "RevenueDeskDeployments",
+    "RevenueDeskConfigurationVersions",
+    "RevenueDeskEventReceipts",
+    "RevenueDeskCalls",
+    "RevenueDeskNotifications",
+    "Form2SessionsV3Runtime",
+    "Form2PrefillsV3",
+    "Form2SubmissionsV3",
+    "Form2VerificationProofsV3",
+    "CRMBillingOperations",
+    "AnalyticsSyncOutbox"
+  ],
+  "contract_files": [
+    "src/zoho-catalyst/revenue-desk-release/setup-journey-release-contract.json",
+    "docs/product/free-revenue-leak-test-release-contract.json",
+    "src/zoho-catalyst/development-function-inventory.json",
+    "src/zoho-catalyst/revenue-desk-call-runtime/config/datastore-schema.json",
+    "src/zoho-catalyst/revenue-leak-test-request-form/config/datastore-schema.json",
+    "src/zoho-catalyst/revenue-leak-test-setup-form/config/datastore-schema.json",
+    "src/zoho-forms/free-revenue-leak-test/forms-manifest.json",
+    "src/zoho-crm/free-revenue-leak-test/config/automation-contract.json",
+    "src/zoho-crm/free-revenue-leak-test/config/caller-manifest.json",
+    "src/zoho-crm/free-revenue-leak-test/functions/start_free_revenue_leak_test_request.deluge",
+    "src/zoho-crm/free-revenue-leak-test/functions/initialize_setup_access_issue_request_id.deluge",
+    "src/zoho-crm/free-revenue-leak-test/functions/issue_revenue_leak_test_setup.deluge",
+    "src/retell/agents/7-day-free-test/manifest.json",
+    "src/retell/agents/7-day-free-test/contracts/conversation-contract.json",
+    "src/retell/agents/7-day-free-test/contracts/nonurgent-classification-contract.json",
+    "src/retell/agents/7-day-free-test/contracts/shadow-qa-contract.json",
+    "src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_gateway/contracts/revenue-desk-call-contract.json",
+    "src/zoho-catalyst/revenue-desk-release/private-route-packet-contract.json"
+  ],
+  "environment_modes": {
+    "Development": "contained-setup-journey"
+  },
+  "installation_scope": {
+    "crm": {
+      "modules": ["Leads", "Deals"],
+      "functions": [
+        "start_free_revenue_leak_test_request",
+        "initialize_setup_access_issue_request_id",
+        "issue_revenue_leak_test_setup"
+      ],
+      "controls": [
+        "Start Free-Test Request",
+        "Issue Revenue Leak Test Setup",
+        "Record Internal Approval",
+        "Activate Test Route",
+        "Close Live Test"
+      ],
+      "workflow_rules": [
+        "Leads Free Test Intake Review",
+        "Deals Free Test Initialize Controls",
+        "Deals Free Test Initialize Limits",
+        "Deals Free Test Initialize Setup Issue Identity",
+        "Deals Revenue Leak Test Setup Form Proof Candidate"
+      ]
+    },
+    "forms": {
+      "exact_form_count": 2,
+      "logical_names": [
+        "REVENUE_LEAK_TEST_REQUEST_FORM",
+        "REVENUE_LEAK_TEST_SETUP_FORM"
+      ]
+    },
+    "catalyst": {
+      "environment": "Development",
+      "functions": [
+        "revenue_leak_test_request_form",
+        "revenue_leak_test_setup_form",
+        "revenue_desk_call_gateway",
+        "revenue_desk_call_worker"
+      ],
+      "job_pools": ["RevenueDeskCallJobs"],
+      "route_ids": [
+        "RETELL_INBOUND",
+        "RETELL_EVENTS",
+        "RETELL_READINESS",
+        "FORM1_ISSUE",
+        "FORM1_PREFILL",
+        "FORM2_ISSUE",
+        "FORM2_ACCESS",
+        "FORM2_OTP_REQUEST",
+        "FORM2_OTP_VERIFY",
+        "FORM2_PREFILL",
+        "FORM2_SUBMISSION"
+      ],
+      "deferred_route_ids": ["CRM_BILLING"],
+      "gateway_activation_authorized": false
+    },
+    "retell": {
+      "local_agent_key": "agent_7_day_free_test",
+      "mode": "development-or-draft-only",
+      "publish_authorized": false,
+      "real_traffic_authorized": false,
+      "number_binding": "synthetic-or-provider-test-resource-only"
+    },
+    "billing_test": {
+      "involved": false
+    }
+  }
+}

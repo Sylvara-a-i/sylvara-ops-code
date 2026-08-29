@@ -1,12 +1,20 @@
 # Revenue Desk Release Boundary
 
-This package creates and verifies one immutable release manifest for the six canonical Catalyst functions. It binds every function artifact, its tracked source tree, the thirteen canonical tables, both Function Job pools, and the governing contracts to one Git commit and one environment mode. The builder does not trust the caller's `function=path` label: it inspects the artifact's Catalyst target, package and lock identity, and immutable source-revision stamp, then produces a provenance digest that also binds the artifact hash to the exact Git-derived source-tree digest.
+This package creates and verifies immutable release manifests for two closed profiles. The default `canonical-six` profile preserves the six canonical Catalyst functions, thirteen tables, and both Function Job pools. The Development-only `setup-journey` profile binds the four setup-critical functions, eleven runtime dependencies, CRM and Forms contracts, Retell's provider-neutral contract, and the intended source installation scope to one Git commit. The scope is desired-state provenance, not provider-observed state or installation authorization. The builder does not trust the caller's `function=path` label: it inspects the artifact's Catalyst target, package and lock identity, and immutable source-revision stamp, then produces a provenance digest that also binds the artifact hash to the exact Git-derived source-tree digest.
 
-The manifest is evidence, not a deployer. It contains no project, organization, route, Connection, credential, or production record identifier. Build the six function artifacts with their owning package builders, then run:
+The manifest is evidence, not a deployer. It contains no project, organization, route value, Connection, credential, or production record identifier. Build the six function artifacts with their owning package builders, then run the default profile:
 
 ```text
 node scripts/build-release-manifest.js --source-revision <exact-head-sha> --environment Development --artifact revenue_leak_test_request_form=<path> --artifact revenue_leak_test_setup_form=<path> --artifact revenue_desk_call_gateway=<path> --artifact revenue_desk_call_worker=<path> --artifact crm_billing_orchestrator=<path> --artifact analytics_sync=<path> --output <outside-repository-path>
 ```
+
+For the bounded setup journey, build only the four selected artifacts and use the closed profile:
+
+```text
+node scripts/build-release-manifest.js --profile setup-journey --source-revision <exact-head-sha> --environment Development --artifact revenue_leak_test_request_form=<path> --artifact revenue_leak_test_setup_form=<path> --artifact revenue_desk_call_gateway=<path> --artifact revenue_desk_call_worker=<path> --output <outside-repository-path>
+```
+
+The setup profile selects the first eleven canonical API Gateway route IDs and explicitly defers `CRM_BILLING`; it never authorizes gateway activation. It is therefore a containment/preflight manifest, not an executable Phase 2 installation manifest. Form 2 issuance and Retell webhook ingress remain unavailable until a separate private all-route activation boundary has fresh provider prestate, exact target bindings, rollback, scoped authorization, and authoritative post-write readback. Verify only the four Catalyst artifacts and resource inventory with `verify-release-readback.js --profile setup-journey`; CRM, Forms, Retell, route activation, and traffic state require separate provider-observed evidence. Unknown profiles, arbitrary contract paths, and Production setup-journey manifests fail closed.
 
 Each artifact path must be its Catalyst project root and contain `catalyst.json` plus `functions/<canonical-name>/package.json` and its lockfile. The checkout must be clean and the output must be outside Git. After deployment, create an allowlisted sanitized readback containing only the fields accepted by `verify-release-readback.js`. Exact function, source, artifact, table, Job-pool, contract, and environment parity is mandatory. Production additionally fails unless traffic, routes, and schedules are all dark.
 

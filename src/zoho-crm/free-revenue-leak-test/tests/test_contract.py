@@ -1622,7 +1622,7 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         manifest = self.callers
         self.assertEqual(
             manifest["status"],
-            "form1_local_containment_deployed_form2_template_not_deployed",
+            "form1_local_containment_deployed_form2_repository_candidate_not_deployed",
         )
         self.assertEqual(manifest["environment"], "Development only")
         self.assertFalse(manifest["render_policy"]["commit_rendered_source"])
@@ -1685,7 +1685,10 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         uuid_input = next(
             item for item in form2["function_arguments"] if item["name"] == "issue_request_id"
         )
-        self.assertEqual(uuid_input["provider_binding_status"], "unverified_blocker")
+        self.assertEqual(
+            uuid_input["provider_binding_status"],
+            "repository_bound_live_function_workflow_button_and_readback_required",
+        )
         rendered = json.dumps(manifest)
         self.assertNotRegex(rendered, r"https?://")
         self.assertNotRegex(rendered, r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+")

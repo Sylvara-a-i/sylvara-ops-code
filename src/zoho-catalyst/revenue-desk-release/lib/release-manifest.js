@@ -8,6 +8,7 @@ const SHA_PATTERN = /^[a-f0-9]{40}$/;
 const DIGEST_PATTERN = /^[a-f0-9]{64}$/;
 const SAFE_NAME_PATTERN = /^[A-Za-z0-9._-]+$/;
 const ARTIFACT_PROVENANCE_SCHEMA = 'revenue-desk-artifact-provenance-v1';
+const DEFAULT_RELEASE_KIND = 'revenue_desk_six_function_release';
 const MAX_FILE_BYTES = 32 * 1024 * 1024;
 const MAX_ARTIFACT_BYTES = 128 * 1024 * 1024;
 
@@ -27,6 +28,33 @@ function compareExactSet(actual, expected, label) {
 
 function hashBytes(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
+}
+
+function canonicalJson(value) {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') {
+    return JSON.stringify(value);
+  }
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) throw new Error('Canonical JSON contains an invalid number.');
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  assertPlainObject(value, 'Canonical JSON value');
+  return `{${Object.keys(value).sort().map((key) => (
+    `${JSON.stringify(key)}:${canonicalJson(value[key])}`
+  )).join(',')}}`;
+}
+
+function releaseKind(contract) {
+  const value = contract.release_kind || DEFAULT_RELEASE_KIND;
+  if (!SAFE_NAME_PATTERN.test(value)) throw new Error('Release kind is invalid.');
+  return value;
+}
+
+function manifestSchemaVersion(contract) {
+  const value = contract.manifest_schema_version || 2;
+  if (value !== 2) throw new Error('Manifest schema version is unsupported.');
+  return value;
 }
 
 function readJson(file, label) {
@@ -260,9 +288,17 @@ function buildManifest({ contract, sourceRevision, environment, artifacts,
     if (!DIGEST_PATTERN.test(value || '')) throw new Error('Contract digest is invalid.');
   }
 
+  let installationScope = null;
+  let installationScopeSha256 = null;
+  if (contract.installation_scope !== undefined) {
+    assertPlainObject(contract.installation_scope, 'Installation scope');
+    installationScope = JSON.parse(JSON.stringify(contract.installation_scope));
+    installationScopeSha256 = hashBytes(Buffer.from(canonicalJson(installationScope), 'utf8'));
+  }
+
   return {
-    schema_version: 2,
-    release_kind: 'revenue_desk_six_function_release',
+    schema_version: manifestSchemaVersion(contract),
+    release_kind: releaseKind(contract),
     source_revision: sourceRevision,
     environment,
     mode,
@@ -275,6 +311,10 @@ function buildManifest({ contract, sourceRevision, environment, artifacts,
     production_invariants: environment === 'Production'
       ? { ...contract.production_invariants }
       : null,
+    ...(installationScope ? {
+      installation_scope: installationScope,
+      installation_scope_sha256: installationScopeSha256,
+    } : {}),
   };
 }
 
@@ -282,10 +322,14 @@ function verifyReadback(manifest, readback, contract) {
   assertPlainObject(manifest, 'Release manifest');
   assertPlainObject(readback, 'Deployment readback');
   assertPlainObject(contract, 'Release contract');
-  if (manifest.schema_version !== 2
-    || manifest.release_kind !== 'revenue_desk_six_function_release'
+  if (manifest.schema_version !== manifestSchemaVersion(contract)
+    || manifest.release_kind !== releaseKind(contract)
     || !Array.isArray(manifest.functions)) {
     throw new Error('Release manifest provenance schema is invalid.');
+  }
+  const expectedMode = contract.environment_modes?.[manifest.environment];
+  if (!expectedMode || expectedMode !== manifest.mode) {
+    throw new Error('Release manifest environment is not allowed by the contract.');
   }
   const contractByName = new Map(contract.functions.map((entry) => [entry.name, entry]));
   compareExactSet(manifest.functions.map(({ name }) => name), [...contractByName.keys()],
@@ -311,6 +355,23 @@ function verifyReadback(manifest, readback, contract) {
     || manifest.environment !== readback.environment
     || manifest.mode !== readback.mode) {
     throw new Error('Deployment readback does not match the release identity.');
+  }
+  if (contract.installation_scope !== undefined) {
+    assertPlainObject(manifest.installation_scope, 'Manifest installation scope');
+    const expectedScope = canonicalJson(contract.installation_scope);
+    const manifestScope = canonicalJson(manifest.installation_scope);
+    const expectedDigest = hashBytes(Buffer.from(expectedScope, 'utf8'));
+    if (manifestScope !== expectedScope
+      || manifest.installation_scope_sha256 !== expectedDigest) {
+      throw new Error('Installation source-scope parity failed.');
+    }
+    if (readback.installation_scope !== undefined) {
+      throw new Error('Desired installation scope is not provider readback.');
+    }
+  } else if (manifest.installation_scope !== undefined
+    || manifest.installation_scope_sha256 !== undefined
+    || readback.installation_scope !== undefined) {
+    throw new Error('Unexpected installation scope is not allowed.');
   }
   if (!Array.isArray(readback.functions)) throw new Error('Deployment readback functions are required.');
   const expectedNames = [...contractByName.keys()];
@@ -349,6 +410,7 @@ function verifyReadback(manifest, readback, contract) {
 module.exports = {
   ARTIFACT_PROVENANCE_SCHEMA,
   buildManifest,
+  canonicalJson,
   compareExactSet,
   createArtifactProvenance,
   hashArtifact,
