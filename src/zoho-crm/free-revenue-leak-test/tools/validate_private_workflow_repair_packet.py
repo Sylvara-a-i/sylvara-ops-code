@@ -25,6 +25,7 @@ WorkflowRepairPacketValidationError = (
     _VALIDATOR_MODULE.WorkflowRepairPacketValidationError
 )
 WorkflowRepairValidationResult = _VALIDATOR_MODULE.WorkflowRepairValidationResult
+CLAIM_NAMESPACE = _VALIDATOR_MODULE.CLAIM_NAMESPACE
 assert_package_source_clean = _VALIDATOR_MODULE.assert_package_source_clean
 assert_private_packet_path = _VALIDATOR_MODULE.assert_private_packet_path
 validate_workflow_repair_packet = (

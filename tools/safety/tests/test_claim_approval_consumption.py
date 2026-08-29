@@ -197,6 +197,35 @@ class ApprovalConsumptionTests(unittest.TestCase):
             self.assertEqual("error\n", result.stderr)
         self.assertEqual([], list(self.ledger.iterdir()))
 
+    def test_only_the_v2_crm_trigger_repair_namespace_is_supported(self) -> None:
+        self.assertEqual(
+            "crm-workflow-trigger-repair-v2",
+            ledger_tool.CRM_WORKFLOW_TRIGGER_REPAIR_VALIDATOR,
+        )
+        self.assertEqual(
+            ledger_tool.CRM_WORKFLOW_TRIGGER_REPAIR_VALIDATOR,
+            ledger_tool.CRM_WORKFLOW_REPAIR_VALIDATOR,
+        )
+        self.assertIn(
+            ledger_tool.CRM_WORKFLOW_TRIGGER_REPAIR_VALIDATOR,
+            ledger_tool.SUPPORTED_VALIDATORS,
+        )
+        self.assertNotIn(
+            "crm-workflow-repair-v1", ledger_tool.SUPPORTED_VALIDATORS
+        )
+
+    def test_crm_validator_namespace_mismatch_fails_before_validation(self) -> None:
+        mismatched = mock.Mock()
+        mismatched.CLAIM_NAMESPACE = "crm-workflow-repair-v1"
+        with mock.patch.object(
+            ledger_tool, "_load_crm_validator_module", return_value=mismatched
+        ), self.assertRaises(ledger_tool.InvalidClaimInput):
+            ledger_tool._validate_crm_workflow_repair(
+                self.root / "private-packet.json",
+                self.root / "private-approval.json",
+            )
+        mismatched.validate_private_workflow_repair_paths.assert_not_called()
+
     def test_exact_wrapper_claims_only_the_fixed_validator_result(self) -> None:
         with mock.patch.object(
             ledger_tool, "_assert_execution_boundary_source_clean"

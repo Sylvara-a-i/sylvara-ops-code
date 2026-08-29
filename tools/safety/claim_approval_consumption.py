@@ -30,10 +30,13 @@ APPLICATION_ID = 0x53594C56
 USER_VERSION = 2
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
-CRM_WORKFLOW_REPAIR_VALIDATOR = "crm-workflow-repair-v1"
+CRM_WORKFLOW_TRIGGER_REPAIR_VALIDATOR = "crm-workflow-trigger-repair-v2"
+# Keep the internal symbol stable for existing safety-test fixtures; its value
+# is the successor namespace, so the consumed v1 identifier is not accepted.
+CRM_WORKFLOW_REPAIR_VALIDATOR = CRM_WORKFLOW_TRIGGER_REPAIR_VALIDATOR
 ANALYTICS_MUTATION_VALIDATOR = "analytics-mutation-v3"
 SUPPORTED_VALIDATORS = frozenset(
-    (CRM_WORKFLOW_REPAIR_VALIDATOR, ANALYTICS_MUTATION_VALIDATOR)
+    (CRM_WORKFLOW_TRIGGER_REPAIR_VALIDATOR, ANALYTICS_MUTATION_VALIDATOR)
 )
 LEDGER_DIRECTORY_ENV = "SYLVARA_APPROVAL_LEDGER_DIRECTORY"
 NODE_EXECUTABLE_ENV = "SYLVARA_APPROVAL_NODE_EXECUTABLE"
@@ -1189,6 +1192,11 @@ def _validate_crm_workflow_repair(
 ) -> tuple[str, str]:
     try:
         module = _load_crm_validator_module()
+        if (
+            getattr(module, "CLAIM_NAMESPACE", None)
+            != CRM_WORKFLOW_TRIGGER_REPAIR_VALIDATOR
+        ):
+            _fail(InvalidClaimInput)
         result = module.validate_private_workflow_repair_paths(
             packet_path, approval_path
         )
@@ -1290,7 +1298,7 @@ def _validated_pair(
     packet_path: str | os.PathLike[str],
     approval_path: str | os.PathLike[str],
 ) -> tuple[str, str]:
-    if validator == CRM_WORKFLOW_REPAIR_VALIDATOR:
+    if validator == CRM_WORKFLOW_TRIGGER_REPAIR_VALIDATOR:
         return _validate_crm_workflow_repair(packet_path, approval_path)
     elif validator == ANALYTICS_MUTATION_VALIDATOR:
         return _validate_analytics_mutation(packet_path, approval_path)

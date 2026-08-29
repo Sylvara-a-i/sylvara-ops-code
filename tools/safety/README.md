@@ -47,7 +47,7 @@ preload and module-path environment overrides are removed from the child.
 Supported invocation shapes after that private executor configuration:
 
 ```text
-python tools/safety/claim_approval_consumption.py crm-workflow-repair-v1 <private-packet-json> <private-approval-json>
+python tools/safety/claim_approval_consumption.py crm-workflow-trigger-repair-v2 <private-packet-json> <private-approval-json>
 python tools/safety/claim_approval_consumption.py analytics-mutation-v3 <private-packet-json> <private-approval-json>
 ```
 

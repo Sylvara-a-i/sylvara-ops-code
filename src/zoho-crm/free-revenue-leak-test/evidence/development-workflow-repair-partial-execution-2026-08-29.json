@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "record_type": "sanitized_free_revenue_leak_test_development_crm_workflow_repair_partial_execution",
+  "execution_date_utc": "2026-08-29",
+  "environment": "Development",
+  "source_revision_at_execution": "0f661bf1ef68f585c9a131f0ffd1d342543227f5",
+  "pull_request": 49,
+  "outcome": "contained_partial_success",
+  "authorization": {
+    "approval_reference": "owner-approval-retained-in-private-task-record",
+    "single_use_authority_consumed_before_first_write": true,
+    "original_approval_exhausted_after_stop": true,
+    "retry_or_remaining_write_requires_fresh_packet_and_approval": true,
+    "packet_digest_included": false,
+    "operation_authorization_id_included": false
+  },
+  "execution": [
+    {
+      "ordinal": 1,
+      "operation": "exact_pre_mutation_rule_and_criteria_readback_gate",
+      "result": "passed",
+      "provider_mutation_invoked": false
+    },
+    {
+      "ordinal": 2,
+      "operation": "deactivate_superseded_form2_rule_status_only",
+      "result": "provider_success",
+      "provider_mutation_invoked": true,
+      "candidate_rule_mutated": false,
+      "criteria_or_actions_mutated": false
+    },
+    {
+      "ordinal": 3,
+      "operation": "both_form2_rules_inactive_exact_readback_gate",
+      "result": "passed",
+      "provider_mutation_invoked": false
+    },
+    {
+      "ordinal": 4,
+      "operation": "lead_trigger_and_scheduled_follow_up_repair",
+      "result": "rejected_by_connector_clamp_before_provider",
+      "connector_error_class": "INVALID_ARGUMENT_INVALID_PARAMETERS",
+      "connector_rejection_reasons": [
+        "condition_sequence_number_required",
+        "scheduled_period_token_b_days_not_supported_by_connector_enum"
+      ],
+      "provider_request_sent": false,
+      "provider_mutation_invoked": false,
+      "retry_attempted": false,
+      "raw_error_or_payload_included": false
+    },
+    {
+      "ordinals": [
+        5,
+        6,
+        7
+      ],
+      "operation": "remaining_trigger_repairs_and_final_gate",
+      "result": "not_executed_after_stop",
+      "provider_mutation_invoked": false
+    }
+  ],
+  "failure_containment": {
+    "post_rejection_readback_performed": true,
+    "candidate_form2_rule_inactive": true,
+    "superseded_form2_rule_inactive": true,
+    "form2_rule_reactivation_attempted": false,
+    "candidate_form2_rule_mutation_attempted": false,
+    "superseded_deactivation_retry_attempted": false,
+    "containment_target_met": true
+  },
+  "sanitized_poststate": {
+    "lead_intake": {
+      "active": true,
+      "trigger": "create_or_edit",
+      "instant_action_count": 1,
+      "scheduled_action_count": 1
+    },
+    "deal_controls": {
+      "active": true,
+      "trigger": "create_or_edit",
+      "instant_action_count": 5,
+      "scheduled_action_count": 0
+    },
+    "deal_limits": {
+      "active": true,
+      "trigger": "create_or_edit",
+      "instant_action_count": 3,
+      "scheduled_action_count": 0
+    },
+    "form2_candidate": {
+      "active": false
+    },
+    "form2_superseded": {
+      "active": false
+    }
+  },
+  "containment": {
+    "crm_record_mutation_performed": false,
+    "form_submission_or_enablement_performed": false,
+    "production_changed": false,
+    "billing_analytics_catalyst_or_call_routing_changed": false,
+    "customer_communication_performed": false,
+    "retell_developed_invoked_tested_or_simulated": false,
+    "next_step": "Create a distinct fresh contained-state packet and approval. Never retry or reactivate either Form 2 rule. Keep scheduled-action deletion deferred until the installed connector input contract is represented exactly and validated before any provider call."
+  },
+  "disclosure_controls": {
+    "live_organization_rule_condition_or_action_ids_included": false,
+    "live_rule_names_included": false,
+    "private_paths_or_endpoints_included": false,
+    "packet_or_capability_digests_included": false,
+    "private_payloads_included": false,
+    "raw_provider_or_connector_errors_included": false,
+    "credentials_secrets_or_personal_data_included": false
+  }
+}

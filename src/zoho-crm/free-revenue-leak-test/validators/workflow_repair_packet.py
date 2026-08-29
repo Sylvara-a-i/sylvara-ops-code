@@ -5,7 +5,7 @@ whose values stay outside every Git worktree, and returns only a sanitized
 summary.  The packet digest is exactly::
 
     SHA-256(
-        UTF-8("sylvara.crm.workflow-repair-packet.v1")
+        UTF-8("sylvara.crm.workflow-trigger-repair-packet.v2")
         || 0x00
         || UTF-8(canonical_json(packet))
     )
@@ -33,10 +33,16 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 MAX_START_WINDOW_SECONDS = 15 * 60
 MAX_PRIVATE_FILE_BYTES = 1024 * 1024
+SCHEMA_VERSION = 2
+CLAIM_NAMESPACE = "crm-workflow-trigger-repair-v2"
 
-PACKET_DIGEST_DOMAIN = "sylvara.crm.workflow-repair-packet.v1"
-CAPABILITY_DIGEST_DOMAIN = "sylvara.crm.workflow-repair-capability.v1"
-TOOL_CONTRACT_DIGEST_DOMAIN = "sylvara.crm.workflow-repair-tool-contract.v1"
+PACKET_DIGEST_DOMAIN = "sylvara.crm.workflow-trigger-repair-packet.v2"
+CAPABILITY_DIGEST_DOMAIN = (
+    "sylvara.crm.workflow-trigger-repair-capability.v2"
+)
+TOOL_CONTRACT_DIGEST_DOMAIN = (
+    "sylvara.crm.workflow-trigger-repair-tool-contract.v2"
+)
 
 WRITE_TOOL = (
     "mcp__codex_apps__sylvara_crm_changes_v2_"
@@ -151,7 +157,7 @@ RULE_SPECS = {
     "form2Superseded": {
         "module": "Deals",
         "name": SUPERSEDED_FORM2_RULE_NAME,
-        "active": True,
+        "active": False,
         "triggerType": "create_or_edit",
         "lastExecutionMarkerPresent": True,
         "instant": (
@@ -179,14 +185,11 @@ FORBIDDEN_ACTIONS = (
 )
 
 TOOL_CONTRACT = {
-    "schemaVersion": 1,
+    "schemaVersion": SCHEMA_VERSION,
     "officialApiVersion": "v8",
     "officialUpdateContract": OFFICIAL_UPDATE_CONTRACT,
     "oneWorkflowRulePerUpdateRequest": True,
     "partialUpdateSupported": True,
-    "actionDeleteMarker": {"_delete": None},
-    "statusUpdateSupported": True,
-    "deactivationRetainsScheduledExecutionsWhenFalse": True,
     "writeTool": WRITE_TOOL,
     "readByIdTool": READ_BY_ID_TOOL,
     "inventoryTool": INVENTORY_TOOL,
@@ -201,12 +204,16 @@ EXECUTION_POLICY = {
     "stopOnAmbiguousResponse": True,
     "responseMustMatchBeforeNextOperation": True,
     "preMutationExactRuleReadbackRequired": True,
+    "postMutationIndependentReadbackRequired": True,
+    "failureReconciliationAllRulesRequired": True,
+    "partialTriggerProgressionAccepted": "monotonic_prefix_only",
     "criterionDriftAccepted": False,
     "finalCriteriaReadbackRequired": True,
     "form2CriterionAuthority": "blocked_observed_not_authoritative",
     "form2CandidateMutationAuthorized": False,
     "form2ActivationAuthorized": False,
-    "onlyForm2Mutation": "deactivate_superseded_rule_status_false",
+    "form2MutationAuthorized": False,
+    "scheduledActionMutationOrDeletionAuthorized": False,
     "form2MustRemainDisabled": True,
     "form2SubmissionsMustRemainZero": True,
 }
@@ -221,6 +228,19 @@ _UTC_TIMESTAMP = re.compile(
     r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$"
 )
 _CRITERION_API_NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,99}$")
+_SCHEDULE_PERIODS = frozenset(
+    {
+        "business_hours",
+        "hours",
+        "business_days",
+        "days",
+        "minutes",
+        "weeks",
+        "months",
+        "years",
+    }
+)
+_MAX_PROVIDER_INTEGER = 2_147_483_647
 
 
 class WorkflowRepairPacketValidationError(ValueError):
@@ -239,10 +259,10 @@ class WorkflowRepairValidationResult:
     consumption_digest: str
     authority_id: str
     environment: str = "Development"
-    main_operation_count: int = 7
-    main_mutation_call_count: int = 4
+    main_operation_count: int = 8
+    main_mutation_call_count: int = 3
     conditional_containment_operation_count: int = 1
-    maximum_mutation_call_count: int = 4
+    maximum_mutation_call_count: int = 3
     mutation_performed: bool = False
     single_use_runtime_enforced: bool = False
 
@@ -271,6 +291,16 @@ def _exact_mapping(
 
 def _identifier(value: Any, code: str) -> str:
     _require(isinstance(value, str) and bool(_IDENTIFIER.fullmatch(value)), code)
+    return value
+
+
+def _positive_provider_integer(value: Any, code: str) -> int:
+    _require(
+        isinstance(value, int)
+        and not isinstance(value, bool)
+        and 1 <= value <= _MAX_PROVIDER_INTEGER,
+        code,
+    )
     return value
 
 
@@ -683,13 +713,47 @@ def _validate_bindings(value: Any) -> Mapping[str, Any]:
     for key in RULE_ORDER:
         rule = _exact_mapping(
             rules[key],
-            ["ruleId", "conditionId", "actionIds"],
+            [
+                "ruleId",
+                "conditionId",
+                "conditionSequenceNumber",
+                "actionIds",
+                "scheduledActionTiming",
+            ],
             "binding_rule_shape_invalid",
         )
         rule_ids.append(_identifier(rule["ruleId"], "binding_identifier_invalid"))
         condition_ids.append(
             _identifier(rule["conditionId"], "binding_identifier_invalid")
         )
+        _require(
+            _positive_provider_integer(
+                rule["conditionSequenceNumber"],
+                "binding_condition_sequence_invalid",
+            )
+            == 1,
+            "binding_condition_sequence_invalid",
+        )
+        scheduled_roles = [role for role, _ in RULE_SPECS[key]["scheduled"]]
+        scheduled_timing = _exact_mapping(
+            rule["scheduledActionTiming"],
+            scheduled_roles,
+            "binding_scheduled_timing_shape_invalid",
+        )
+        for role in scheduled_roles:
+            timing = _exact_mapping(
+                scheduled_timing[role],
+                ["period", "unit"],
+                "binding_scheduled_timing_shape_invalid",
+            )
+            _require(
+                isinstance(timing["period"], str)
+                and timing["period"] in _SCHEDULE_PERIODS,
+                "binding_scheduled_period_invalid",
+            )
+            _positive_provider_integer(
+                timing["unit"], "binding_scheduled_unit_invalid"
+            )
         expected_roles = [
             role
             for role, _ in (
@@ -730,6 +794,23 @@ def _action_rows(
     ]
 
 
+def _scheduled_action_rows(
+    rule_binding: Mapping[str, Any], specs: Sequence[tuple[str, str]]
+) -> list[dict[str, Any]]:
+    return [
+        {
+            "role": role,
+            "type": action_type,
+            "id": rule_binding["actionIds"][role],
+            "executeAfter": {
+                "period": rule_binding["scheduledActionTiming"][role]["period"],
+                "unit": rule_binding["scheduledActionTiming"][role]["unit"],
+            },
+        }
+        for role, action_type in specs
+    ]
+
+
 def expected_prestate_rules(
     bindings: Mapping[str, Any],
     observed_form2_criteria: Mapping[str, Any],
@@ -751,6 +832,7 @@ def expected_prestate_rules(
                 "name": spec["name"],
                 "ruleId": rule["ruleId"],
                 "conditionId": rule["conditionId"],
+                "conditionSequenceNumber": rule["conditionSequenceNumber"],
                 "active": spec["active"],
                 "triggerType": spec["triggerType"],
                 "repeat": False,
@@ -768,7 +850,9 @@ def expected_prestate_rules(
                     "lastExecutionMarkerPresent"
                 ],
                 "instantActions": _action_rows(rule, spec["instant"]),
-                "scheduledActions": _action_rows(rule, spec["scheduled"]),
+                "scheduledActions": _scheduled_action_rows(
+                    rule, spec["scheduled"]
+                ),
             }
         )
     return rendered
@@ -828,17 +912,11 @@ def _pre_mutation_exact_rule_readback(
 def _readback_rule(
     prestate_rule: Mapping[str, Any],
     *,
-    active: bool | None = None,
     trigger_type: str | None = None,
-    clear_scheduled: bool = False,
 ) -> dict[str, Any]:
     selected = json.loads(_canonical_json(prestate_rule))
-    if active is not None:
-        selected["active"] = active
     if trigger_type is not None:
         selected["triggerType"] = trigger_type
-    if clear_scheduled:
-        selected["scheduledActions"] = []
     return selected
 
 
@@ -889,7 +967,7 @@ def expected_operations(
     bindings: Mapping[str, Any],
     observed_form2_criteria: Mapping[str, Any],
 ) -> list[dict[str, Any]]:
-    """Render containment first, then the three desired-criteria repairs."""
+    """Render the three trigger-only repairs from the contained Form2 state."""
 
     rules = bindings["rules"]
     prestate_by_key = {
@@ -899,37 +977,23 @@ def expected_operations(
     lead = rules["leadIntake"]
     controls = rules["controls"]
     limits = rules["limits"]
-    candidate = rules["form2Candidate"]
-    superseded = rules["form2Superseded"]
-
-    after_deactivation = json.loads(
-        _canonical_json([prestate_by_key[key] for key in RULE_ORDER])
+    lead_poststate = _readback_rule(
+        prestate_by_key["leadIntake"], trigger_type="create"
     )
-    after_deactivation[4]["active"] = False
-    after_deactivation_by_key = {
-        row["key"]: row for row in after_deactivation
-    }
-
+    controls_poststate = _readback_rule(
+        prestate_by_key["controls"], trigger_type="create"
+    )
+    limits_poststate = _readback_rule(
+        prestate_by_key["limits"], trigger_type="create"
+    )
     final_rules = [
-        _readback_rule(
-            after_deactivation_by_key["leadIntake"],
-            trigger_type="create",
-            clear_scheduled=True,
-        ),
-        _readback_rule(
-            after_deactivation_by_key["controls"], trigger_type="create"
-        ),
-        _readback_rule(
-            after_deactivation_by_key["limits"], trigger_type="create"
-        ),
-        after_deactivation_by_key["form2Candidate"],
-        after_deactivation_by_key["form2Superseded"],
+        lead_poststate,
+        controls_poststate,
+        limits_poststate,
+        prestate_by_key["form2Candidate"],
+        prestate_by_key["form2Superseded"],
     ]
     all_rule_reads = [_read_call(rules[key]["ruleId"]) for key in RULE_ORDER]
-    form2_reads = [
-        _read_call(candidate["ruleId"]),
-        _read_call(superseded["ruleId"]),
-    ]
     inventory_call = {
         "tool": INVENTORY_TOOL,
         "args": {
@@ -953,82 +1017,43 @@ def expected_operations(
                 "rules": [prestate_by_key[key] for key in RULE_ORDER],
                 "allCriteriaExactlyMatchPacketBoundAst": True,
                 "candidateInactive": True,
-                "supersededActive": True,
+                "supersededInactive": True,
+                "bothForm2RulesInactive": True,
                 "criteriaAuthority": _criterion_authority_state(),
                 "missingTruncatedOrAdditionalDataAccepted": False,
             },
         ),
         _operation(
             2,
-            "deactivate_superseded_form2_rule_for_containment",
-            "mutation",
-            [
-                _write_call(
-                    {
-                        "id": superseded["ruleId"],
-                        "status": {
-                            "active": False,
-                            "delete_schedule_action": False,
-                        },
-                    }
-                )
-            ],
-            _success_acceptance(superseded["ruleId"]),
-            pre_mutation_rule=prestate_by_key["form2Superseded"],
-        ),
-        _operation(
-            3,
-            "both_form2_rules_inactive_exact_readback_gate",
-            "readback_gate",
-            form2_reads,
-            {
-                "type": "exact_rule_set",
-                "rules": [after_deactivation[3], after_deactivation[4]],
-                "bothForm2RulesInactive": True,
-                "allCriteriaExactlyMatchPacketBoundAst": True,
-                "criteriaAuthority": _criterion_authority_state(),
-                "missingTruncatedOrAdditionalDataAccepted": False,
-            },
-        ),
-        _operation(
-            4,
-            "make_lead_intake_create_only_and_delete_follow_up",
+            "make_lead_intake_create_only_preserving_scheduled_actions",
             "mutation",
             [
                 _write_call(
                     {
                         "id": lead["ruleId"],
                         "execute_when": {"type": "create"},
-                        "conditions": [
-                            {
-                                "id": lead["conditionId"],
-                                "scheduled_actions": [
-                                    {
-                                        "execute_after": {
-                                            "period": "b_days",
-                                            "unit": 1,
-                                        },
-                                        "actions": [
-                                            {
-                                                "id": lead["actionIds"][
-                                                    "followUpTask"
-                                                ],
-                                                "type": "tasks",
-                                                "_delete": None,
-                                            }
-                                        ],
-                                    }
-                                ],
-                            }
-                        ],
                     }
                 )
             ],
             _success_acceptance(lead["ruleId"]),
-            pre_mutation_rule=after_deactivation_by_key["leadIntake"],
+            pre_mutation_rule=prestate_by_key["leadIntake"],
         ),
         _operation(
-            5,
+            3,
+            "lead_intake_exact_post_write_readback_gate",
+            "readback_gate",
+            [_read_call(lead["ruleId"])],
+            {
+                "type": "exact_rule_set",
+                "rules": [lead_poststate],
+                "allCriteriaExactlyMatchPacketBoundAst": True,
+                "scheduledActionsExactlyMatchPacketBoundPrestate": True,
+                "criteriaAuthority": _criterion_authority_state(),
+                "missingTruncatedOrAdditionalDataAccepted": False,
+            },
+        ),
+        _operation(
+            4,
             "make_controls_create_only",
             "mutation",
             [
@@ -1040,7 +1065,21 @@ def expected_operations(
                 )
             ],
             _success_acceptance(controls["ruleId"]),
-            pre_mutation_rule=after_deactivation_by_key["controls"],
+            pre_mutation_rule=prestate_by_key["controls"],
+        ),
+        _operation(
+            5,
+            "controls_exact_post_write_readback_gate",
+            "readback_gate",
+            [_read_call(controls["ruleId"])],
+            {
+                "type": "exact_rule_set",
+                "rules": [controls_poststate],
+                "allCriteriaExactlyMatchPacketBoundAst": True,
+                "scheduledActionsExactlyMatchPacketBoundPrestate": True,
+                "criteriaAuthority": _criterion_authority_state(),
+                "missingTruncatedOrAdditionalDataAccepted": False,
+            },
         ),
         _operation(
             6,
@@ -1055,10 +1094,24 @@ def expected_operations(
                 )
             ],
             _success_acceptance(limits["ruleId"]),
-            pre_mutation_rule=after_deactivation_by_key["limits"],
+            pre_mutation_rule=prestate_by_key["limits"],
         ),
         _operation(
             7,
+            "limits_exact_post_write_readback_gate",
+            "readback_gate",
+            [_read_call(limits["ruleId"])],
+            {
+                "type": "exact_rule_set",
+                "rules": [limits_poststate],
+                "allCriteriaExactlyMatchPacketBoundAst": True,
+                "scheduledActionsExactlyMatchPacketBoundPrestate": True,
+                "criteriaAuthority": _criterion_authority_state(),
+                "missingTruncatedOrAdditionalDataAccepted": False,
+            },
+        ),
+        _operation(
+            8,
             "final_exact_rule_set_and_both_form2_inactive_readback_gate",
             "readback_gate",
             [*all_rule_reads, inventory_call],
@@ -1069,7 +1122,8 @@ def expected_operations(
                 "allCriteriaExactlyMatchPacketBoundAst": True,
                 "criteriaAuthority": _criterion_authority_state(),
                 "candidateMutationPerformed": False,
-                "supersededMutationScope": "status_false_only",
+                "supersededMutationPerformed": False,
+                "scheduledActionMutationOrDeletionPerformed": False,
                 "inventory": {
                     "paginationComplete": True,
                     "candidateObservedNameMatchCount": 1,
@@ -1089,34 +1143,43 @@ def expected_failure_containment(
     bindings: Mapping[str, Any],
     observed_form2_criteria: Mapping[str, Any],
 ) -> dict[str, Any]:
-    """Render the read-only stop path after the only Form2 mutation."""
+    """Render read-only reconciliation for every bounded trigger prefix."""
 
-    candidate = bindings["rules"]["form2Candidate"]
-    superseded = bindings["rules"]["form2Superseded"]
+    rules = bindings["rules"]
     prestate_by_key = {
         row["key"]: row
         for row in expected_prestate_rules(bindings, observed_form2_criteria)
     }
-    inactive_candidate = prestate_by_key["form2Candidate"]
-    inactive_superseded = _readback_rule(
-        prestate_by_key["form2Superseded"], active=False
-    )
+    unchanged = [prestate_by_key[key] for key in RULE_ORDER]
+    lead_only = json.loads(_canonical_json(unchanged))
+    lead_only[0]["triggerType"] = "create"
+    lead_and_controls = json.loads(_canonical_json(lead_only))
+    lead_and_controls[1]["triggerType"] = "create"
+    all_three = json.loads(_canonical_json(lead_and_controls))
+    all_three[2]["triggerType"] = "create"
+    allowed_states = [
+        {"name": "no_trigger_write_observed", "rules": unchanged},
+        {"name": "lead_only_observed", "rules": lead_only},
+        {"name": "lead_and_controls_observed", "rules": lead_and_controls},
+        {"name": "all_three_observed", "rules": all_three},
+    ]
     return {
-        "trigger": "failure_at_or_after_superseded_deactivation",
+        "trigger": "failure_after_packet_start",
         "operations": [
             _operation(
                 1,
-                "confirm_both_form2_rules_inactive_without_retry",
+                "read_all_rules_and_classify_bounded_trigger_prefix_without_retry",
                 "conditional_readback_gate",
-                [
-                    _read_call(candidate["ruleId"]),
-                    _read_call(superseded["ruleId"]),
-                ],
+                [_read_call(rules[key]["ruleId"]) for key in RULE_ORDER],
                 {
-                    "type": "exact_rule_set",
-                    "rules": [inactive_candidate, inactive_superseded],
+                    "type": "one_of_exact_packet_bound_rule_sets",
+                    "allowedStates": allowed_states,
+                    "allowedStateCount": 4,
+                    "monotonicTriggerPrefixRequired": True,
+                    "allFiveRulesReadByIdRequired": True,
                     "bothForm2RulesInactive": True,
                     "allCriteriaExactlyMatchPacketBoundAst": True,
+                    "scheduledActionsExactlyMatchPacketBoundPrestate": True,
                     "criteriaAuthority": _criterion_authority_state(),
                     "missingTruncatedOrAdditionalDataAccepted": False,
                 },
@@ -1125,14 +1188,17 @@ def expected_failure_containment(
         "terminalState": {
             "canonicalCandidateActive": False,
             "supersededRuleActive": False,
+            "triggerRepairState": "one_of_four_exact_monotonic_prefix_states",
+            "scheduledActionsUnchanged": True,
         },
         "neverReactivateSupersededRule": True,
         "neverActivateEitherForm2Rule": True,
         "candidateMutationAuthorized": False,
         "retrySupersededDeactivationAuthorized": False,
+        "retryAnyMutationAuthorized": False,
         "onAmbiguousContainment": (
-            "stop_and_require_manual_independent_readback_without_"
-            "activating_either_form2_rule_or_retrying_mutation"
+            "stop_and_require_manual_all_rule_readback_without_"
+            "changing_scheduled_actions_form2_or_retrying_any_mutation"
         ),
     }
 
@@ -1156,7 +1222,10 @@ def _validate_capability(
         ],
         "capability_shape_invalid",
     )
-    _require(capability["schemaVersion"] == 1, "capability_schema_invalid")
+    _require(
+        capability["schemaVersion"] == SCHEMA_VERSION,
+        "capability_schema_invalid",
+    )
     _require(
         capability["environment"] == "Development"
         and capability["organizationId"] == target_organization_id
@@ -1198,7 +1267,10 @@ def _validate_prestate(
         ],
         "prestate_shape_invalid",
     )
-    _require(prestate["schemaVersion"] == 1, "prestate_schema_invalid")
+    _require(
+        prestate["schemaVersion"] == SCHEMA_VERSION,
+        "prestate_schema_invalid",
+    )
     _require(
         prestate["organizationId"] == target_organization_id
         and prestate["organizationMatchCount"] == 1
@@ -1315,7 +1387,10 @@ def _validate_approval(
         ],
         "approval_shape_invalid",
     )
-    _require(approval["schemaVersion"] == 1, "approval_schema_invalid")
+    _require(
+        approval["schemaVersion"] == SCHEMA_VERSION,
+        "approval_schema_invalid",
+    )
     approval_window = _validate_window(approval, "approval", now_ms)
     _require(
         approval_window[0] >= prestate_window[0]
@@ -1342,9 +1417,9 @@ def _validate_approval(
     _require(
         approval["workflowMutationAuthorized"] is True
         and approval["containmentAuthorized"] is True
-        and approval["authorizedMainOperationCount"] == 7
+        and approval["authorizedMainOperationCount"] == 8
         and approval["authorizedConditionalContainmentOperationCount"] == 1
-        and approval["maximumAuthorizedMutationCallCount"] == 4
+        and approval["maximumAuthorizedMutationCallCount"] == 3
         and approval["singleUse"] is True
         and approval["durableConsumptionRequired"] is True
         and approval["retryAuthorized"] is False
@@ -1387,7 +1462,10 @@ def validate_workflow_repair_packet(
         ],
         "packet_shape_invalid",
     )
-    _require(packet["schemaVersion"] == 1, "packet_schema_invalid")
+    _require(
+        packet["schemaVersion"] == SCHEMA_VERSION,
+        "packet_schema_invalid",
+    )
     _require(
         packet["environment"] == "Development"
         and packet["productionAuthorized"] is False,
@@ -1465,6 +1543,7 @@ def validate_workflow_repair_packet(
 
 __all__ = [
     "CAPABILITY_DIGEST_DOMAIN",
+    "CLAIM_NAMESPACE",
     "EMPTY_CRITERION_VALUE",
     "ENTRY_OFFER_VALUE",
     "EXECUTION_POLICY",
@@ -1479,8 +1558,10 @@ __all__ = [
     "REPOSITORY_ROOT",
     "RULE_ORDER",
     "RULE_SPECS",
+    "SCHEMA_VERSION",
     "SUPERSEDED_FORM2_RULE_NAME",
     "TOOL_CONTRACT",
+    "TOOL_CONTRACT_DIGEST_DOMAIN",
     "WRITE_TOOL",
     "WorkflowRepairPacketValidationError",
     "WorkflowRepairValidationResult",

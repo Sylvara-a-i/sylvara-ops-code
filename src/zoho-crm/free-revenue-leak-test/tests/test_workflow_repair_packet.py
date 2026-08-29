@@ -16,11 +16,16 @@ CRM_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(CRM_ROOT))
 
 from validators.workflow_repair_packet import (  # noqa: E402
+    CAPABILITY_DIGEST_DOMAIN,
+    CLAIM_NAMESPACE,
     EXECUTION_POLICY,
     FORBIDDEN_ACTIONS,
+    PACKET_DIGEST_DOMAIN,
     REPOSITORY_ROOT,
     RULE_ORDER,
     RULE_SPECS,
+    SCHEMA_VERSION,
+    TOOL_CONTRACT_DIGEST_DOMAIN,
     WorkflowRepairPacketValidationError,
     _git_subprocess_environment,
     assert_package_source_clean,
@@ -57,6 +62,9 @@ def _bindings() -> dict:
 
     rules = {}
     for key in RULE_ORDER:
+        scheduled_roles = [
+            role for role, _ in RULE_SPECS[key]["scheduled"]
+        ]
         roles = [
             role
             for role, _ in (
@@ -66,7 +74,12 @@ def _bindings() -> dict:
         rules[key] = {
             "ruleId": identifier(),
             "conditionId": identifier(),
+            "conditionSequenceNumber": 1,
             "actionIds": {role: identifier() for role in roles},
+            "scheduledActionTiming": {
+                role: {"period": "business_days", "unit": 1}
+                for role in scheduled_roles
+            },
         }
     return {"rules": rules}
 
@@ -76,7 +89,7 @@ def _packet(**overrides) -> dict:
     observed_form2_criteria = _observed_form2_criteria()
     organization_id = "9" + "0" * 17 + "1"
     capability = {
-        "schemaVersion": 1,
+        "schemaVersion": SCHEMA_VERSION,
         "capturedAt": "2026-08-28T17:55:00.000Z",
         "expiresAt": "2026-08-28T18:10:00.000Z",
         "environment": "Development",
@@ -90,7 +103,7 @@ def _packet(**overrides) -> dict:
         "toolContractSha256": expected_tool_contract_digest(),
     }
     prestate = {
-        "schemaVersion": 1,
+        "schemaVersion": SCHEMA_VERSION,
         "capturedAt": "2026-08-28T17:56:00.000Z",
         "expiresAt": "2026-08-28T18:10:00.000Z",
         "organizationId": organization_id,
@@ -108,7 +121,7 @@ def _packet(**overrides) -> dict:
         ),
     }
     value = {
-        "schemaVersion": 1,
+        "schemaVersion": SCHEMA_VERSION,
         "environment": "Development",
         "productionAuthorized": False,
         "approvedSourceRevision": repository_source_revision(),
@@ -130,7 +143,7 @@ def _packet(**overrides) -> dict:
 
 def _approval(packet: dict, **overrides) -> dict:
     value = {
-        "schemaVersion": 1,
+        "schemaVersion": SCHEMA_VERSION,
         "capturedAt": "2026-08-28T18:00:00.000Z",
         "expiresAt": "2026-08-28T18:09:00.000Z",
         "approvedSourceRevision": packet["approvedSourceRevision"],
@@ -145,9 +158,9 @@ def _approval(packet: dict, **overrides) -> dict:
         "operationAuthorizationId": packet["operationAuthorizationId"],
         "workflowMutationAuthorized": True,
         "containmentAuthorized": True,
-        "authorizedMainOperationCount": 7,
+        "authorizedMainOperationCount": 8,
         "authorizedConditionalContainmentOperationCount": 1,
-        "maximumAuthorizedMutationCallCount": 4,
+        "maximumAuthorizedMutationCallCount": 3,
         "singleUse": True,
         "durableConsumptionRequired": True,
         "retryAuthorized": False,
@@ -354,12 +367,40 @@ class WorkflowRepairPacketTests(unittest.TestCase):
         self.assertEqual(
             result.authority_id, packet["operationAuthorizationId"]
         )
-        self.assertEqual(result.main_operation_count, 7)
-        self.assertEqual(result.main_mutation_call_count, 4)
+        self.assertEqual(result.main_operation_count, 8)
+        self.assertEqual(result.main_mutation_call_count, 3)
         self.assertEqual(result.conditional_containment_operation_count, 1)
-        self.assertEqual(result.maximum_mutation_call_count, 4)
+        self.assertEqual(result.maximum_mutation_call_count, 3)
         self.assertFalse(result.mutation_performed)
         self.assertFalse(result.single_use_runtime_enforced)
+
+    def test_uses_explicit_successor_schema_digest_and_claim_namespace(self) -> None:
+        self.assertEqual(SCHEMA_VERSION, 2)
+        self.assertEqual(CLAIM_NAMESPACE, "crm-workflow-trigger-repair-v2")
+        self.assertEqual(
+            PACKET_DIGEST_DOMAIN,
+            "sylvara.crm.workflow-trigger-repair-packet.v2",
+        )
+        self.assertEqual(
+            CAPABILITY_DIGEST_DOMAIN,
+            "sylvara.crm.workflow-trigger-repair-capability.v2",
+        )
+        self.assertEqual(
+            TOOL_CONTRACT_DIGEST_DOMAIN,
+            "sylvara.crm.workflow-trigger-repair-tool-contract.v2",
+        )
+
+        legacy = _packet()
+        legacy["schemaVersion"] = 1
+        with self.assertRaisesRegex(
+            WorkflowRepairPacketValidationError, "packet_schema_invalid"
+        ):
+            validate_workflow_repair_packet(
+                legacy,
+                _approval(legacy),
+                NOW_MS,
+                legacy["approvedSourceRevision"],
+            )
 
     def test_public_contract_and_validator_share_the_exact_normalized_trees(self) -> None:
         contract = json.loads(
@@ -439,9 +480,8 @@ class WorkflowRepairPacketTests(unittest.TestCase):
             row["key"]: row for row in packet["prestate"]["workflowRules"]
         }
         operation_keys = {
-            1: "form2Superseded",
-            3: "leadIntake",
-            4: "controls",
+            1: "leadIntake",
+            3: "controls",
             5: "limits",
         }
         for index, key in operation_keys.items():
@@ -466,7 +506,7 @@ class WorkflowRepairPacketTests(unittest.TestCase):
                     ]
                 )
 
-        for index in (0, 2, 6):
+        for index in (0, 2, 4, 6, 7):
             acceptance = packet["operations"][index]["acceptance"]
             self.assertTrue(
                 acceptance["allCriteriaExactlyMatchPacketBoundAst"]
@@ -476,7 +516,7 @@ class WorkflowRepairPacketTests(unittest.TestCase):
                     rule["criteria"], prestate_by_key[rule["key"]]["criteria"]
                 )
 
-        final = packet["operations"][6]["acceptance"]
+        final = packet["operations"][7]["acceptance"]
         self.assertEqual(final["inventory"]["logicalForm2ActiveCount"], 0)
         self.assertFalse(
             final["inventory"]["form2DesiredCriteriaAuthorityPresent"]
@@ -486,6 +526,8 @@ class WorkflowRepairPacketTests(unittest.TestCase):
             "blocked_observed_not_authoritative",
         )
         self.assertFalse(final["candidateMutationPerformed"])
+        self.assertFalse(final["supersededMutationPerformed"])
+        self.assertFalse(final["scheduledActionMutationOrDeletionPerformed"])
 
         mutation_rules = [
             operation["calls"][0]["args"]["body"]["workflow_rules"][0]
@@ -493,10 +535,16 @@ class WorkflowRepairPacketTests(unittest.TestCase):
             if operation["kind"] == "mutation"
         ]
         candidate = packet["bindings"]["rules"]["form2Candidate"]
-        self.assertNotIn(candidate["ruleId"], [row["id"] for row in mutation_rules])
+        superseded = packet["bindings"]["rules"]["form2Superseded"]
+        mutation_rule_ids = [row["id"] for row in mutation_rules]
+        self.assertNotIn(candidate["ruleId"], mutation_rule_ids)
+        self.assertNotIn(superseded["ruleId"], mutation_rule_ids)
         rendered_writes = json.dumps(mutation_rules, sort_keys=True)
         self.assertNotIn('"active": true', rendered_writes.lower())
         self.assertNotIn('"name"', rendered_writes)
+        self.assertNotIn('"scheduled_actions"', rendered_writes)
+        self.assertNotIn('"_delete"', rendered_writes)
+        self.assertNotIn("b_days", rendered_writes)
         for action_id in candidate["actionIds"].values():
             self.assertNotIn(action_id, rendered_writes)
 
@@ -564,12 +612,12 @@ class WorkflowRepairPacketTests(unittest.TestCase):
                 "Entry_Offer",
             ).update({"value": "Changed Offer"}),
             lambda value: _condition(
-                value["operations"][2]["acceptance"]["rules"][0]
+                value["operations"][0]["acceptance"]["rules"][0]
                 ["criteria"],
                 "Entry_Offer",
             ).update({"value": "Changed Offer"}),
             lambda value: _condition(
-                value["operations"][6]["acceptance"]["rules"][0]
+                value["operations"][7]["acceptance"]["rules"][0]
                 ["criteria"],
                 "Entry_Offer",
             ).update({"value": "Changed Offer"}),
@@ -592,10 +640,10 @@ class WorkflowRepairPacketTests(unittest.TestCase):
         self,
     ) -> None:
         cases = (
-            lambda value: value["operations"][3][
+            lambda value: value["operations"][1][
                 "preMutationExactRuleReadback"
             ]["acceptance"]["rule"].update({"active": False}),
-            lambda value: value["operations"][4][
+            lambda value: value["operations"][3][
                 "preMutationExactRuleReadback"
             ]["acceptance"]["rule"].update({"name": "Unexpected Name"}),
             lambda value: value["operations"][5][
@@ -683,45 +731,36 @@ class WorkflowRepairPacketTests(unittest.TestCase):
             ):
                 assert_package_source_clean()
 
-    def test_exact_order_and_payloads_delete_only_the_approved_actions(self) -> None:
+    def test_exact_order_and_payloads_preserve_all_scheduled_actions(self) -> None:
         packet = _packet()
         operations = packet["operations"]
-        self.assertEqual([row["ordinal"] for row in operations], list(range(1, 8)))
-
-        deactivation = operations[1]["calls"][0]["args"]["body"][
-            "workflow_rules"
-        ][0]
+        self.assertEqual([row["ordinal"] for row in operations], list(range(1, 9)))
         self.assertEqual(
-            deactivation,
-            {
-                "id": packet["bindings"]["rules"]["form2Superseded"][
-                    "ruleId"
-                ],
-                "status": {
-                    "active": False,
-                    "delete_schedule_action": False,
-                },
-            },
-        )
-
-        lead_rule = operations[3]["calls"][0]["args"]["body"][
-            "workflow_rules"
-        ][0]
-        self.assertEqual(lead_rule["execute_when"], {"type": "create"})
-        lead_delete = lead_rule["conditions"][0]["scheduled_actions"][0][
-            "actions"
-        ]
-        self.assertEqual(len(lead_delete), 1)
-        self.assertIsNone(lead_delete[0]["_delete"])
-        self.assertEqual(lead_delete[0]["type"], "tasks")
-        self.assertEqual(
-            lead_delete[0]["id"],
-            packet["bindings"]["rules"]["leadIntake"]["actionIds"][
-                "followUpTask"
+            [row["name"] for row in operations],
+            [
+                "pre_mutation_exact_rule_and_criteria_readback_gate",
+                "make_lead_intake_create_only_preserving_scheduled_actions",
+                "lead_intake_exact_post_write_readback_gate",
+                "make_controls_create_only",
+                "controls_exact_post_write_readback_gate",
+                "make_limits_create_only",
+                "limits_exact_post_write_readback_gate",
+                "final_exact_rule_set_and_both_form2_inactive_readback_gate",
             ],
         )
 
-        controls_rule = operations[4]["calls"][0]["args"]["body"][
+        lead_rule = operations[1]["calls"][0]["args"]["body"][
+            "workflow_rules"
+        ][0]
+        self.assertEqual(
+            lead_rule,
+            {
+                "id": packet["bindings"]["rules"]["leadIntake"]["ruleId"],
+                "execute_when": {"type": "create"},
+            },
+        )
+
+        controls_rule = operations[3]["calls"][0]["args"]["body"][
             "workflow_rules"
         ]
         limits_rule = operations[5]["calls"][0]["args"]["body"][
@@ -736,6 +775,23 @@ class WorkflowRepairPacketTests(unittest.TestCase):
                 }
             ],
         )
+
+        mutation_bodies = [
+            operation["calls"][0]["args"]["body"]
+            for operation in operations
+            if operation["kind"] == "mutation"
+        ]
+        rendered_mutations = json.dumps(mutation_bodies, sort_keys=True)
+        self.assertNotIn('"conditions"', rendered_mutations)
+        self.assertNotIn('"scheduled_actions"', rendered_mutations)
+        self.assertNotIn('"_delete"', rendered_mutations)
+        self.assertNotIn("b_days", rendered_mutations)
+
+        lead_prestate = packet["prestate"]["workflowRules"][0]
+        lead_final = operations[7]["acceptance"]["rules"][0]
+        self.assertEqual(
+            lead_final["scheduledActions"], lead_prestate["scheduledActions"]
+        )
         self.assertEqual(
             limits_rule,
             [
@@ -746,13 +802,187 @@ class WorkflowRepairPacketTests(unittest.TestCase):
             ],
         )
 
+    def test_every_exact_lead_state_binds_condition_order_and_schedule_timing(
+        self,
+    ) -> None:
+        packet = _packet()
+        operations = packet["operations"]
+        expected_scheduled = [
+            {
+                "role": "followUpTask",
+                "type": "tasks",
+                "id": packet["bindings"]["rules"]["leadIntake"]["actionIds"][
+                    "followUpTask"
+                ],
+                "executeAfter": {"period": "business_days", "unit": 1},
+            }
+        ]
+        lead_states = [
+            packet["prestate"]["workflowRules"][0],
+            operations[0]["acceptance"]["rules"][0],
+            operations[1]["preMutationExactRuleReadback"]["acceptance"]["rule"],
+            operations[2]["acceptance"]["rules"][0],
+            operations[7]["acceptance"]["rules"][0],
+            *[
+                state["rules"][0]
+                for state in packet["failureContainment"]["operations"][0][
+                    "acceptance"
+                ]["allowedStates"]
+            ],
+        ]
+        for state in lead_states:
+            self.assertEqual(state["conditionSequenceNumber"], 1)
+            self.assertEqual(state["scheduledActions"], expected_scheduled)
+
+        for rule in packet["prestate"]["workflowRules"][1:]:
+            self.assertEqual(rule["conditionSequenceNumber"], 1)
+            self.assertEqual(rule["scheduledActions"], [])
+
+    def test_rejects_unsafe_condition_and_schedule_binding_scalars(self) -> None:
+        cases = (
+            (
+                lambda value: value["bindings"]["rules"]["leadIntake"].update(
+                    {"conditionSequenceNumber": True}
+                ),
+                "binding_condition_sequence_invalid",
+            ),
+            (
+                lambda value: value["bindings"]["rules"]["leadIntake"].update(
+                    {"conditionSequenceNumber": 2}
+                ),
+                "binding_condition_sequence_invalid",
+            ),
+            (
+                lambda value: value["bindings"]["rules"]["leadIntake"][
+                    "scheduledActionTiming"
+                ]["followUpTask"].update({"period": "b_days"}),
+                "binding_scheduled_period_invalid",
+            ),
+            (
+                lambda value: value["bindings"]["rules"]["leadIntake"][
+                    "scheduledActionTiming"
+                ]["followUpTask"].update({"period": 1}),
+                "binding_scheduled_period_invalid",
+            ),
+            (
+                lambda value: value["bindings"]["rules"]["leadIntake"][
+                    "scheduledActionTiming"
+                ]["followUpTask"].update({"unit": True}),
+                "binding_scheduled_unit_invalid",
+            ),
+            (
+                lambda value: value["bindings"]["rules"]["leadIntake"][
+                    "scheduledActionTiming"
+                ]["followUpTask"].update({"unit": 0}),
+                "binding_scheduled_unit_invalid",
+            ),
+        )
+        for mutate, error_code in cases:
+            packet = _packet()
+            mutate(packet)
+            with self.subTest(error_code=error_code):
+                with self.assertRaisesRegex(
+                    WorkflowRepairPacketValidationError, error_code
+                ):
+                    validate_workflow_repair_packet(
+                        packet,
+                        _approval(packet),
+                        NOW_MS,
+                        packet["approvedSourceRevision"],
+                    )
+
+    def test_rejects_condition_sequence_period_and_unit_readback_drift(
+        self,
+    ) -> None:
+        cases = (
+            (
+                lambda value: value["prestate"]["workflowRules"][0].update(
+                    {"conditionSequenceNumber": 2}
+                ),
+                "prestate_workflow_drift",
+            ),
+            (
+                lambda value: value["operations"][2]["acceptance"]["rules"][0][
+                    "scheduledActions"
+                ][0]["executeAfter"].update({"period": "days"}),
+                "packet_operations_drift",
+            ),
+            (
+                lambda value: value["operations"][7]["acceptance"]["rules"][0][
+                    "scheduledActions"
+                ][0]["executeAfter"].update({"unit": 2}),
+                "packet_operations_drift",
+            ),
+            (
+                lambda value: value["failureContainment"]["operations"][0][
+                    "acceptance"
+                ]["allowedStates"][1]["rules"][0].update(
+                    {"conditionSequenceNumber": 2}
+                ),
+                "packet_containment_drift",
+            ),
+            (
+                lambda value: value["failureContainment"]["operations"][0][
+                    "acceptance"
+                ]["allowedStates"][2]["rules"][0]["scheduledActions"][0][
+                    "executeAfter"
+                ].update({"period": "days", "unit": 2}),
+                "packet_containment_drift",
+            ),
+        )
+        for mutate, error_code in cases:
+            packet = _packet()
+            mutate(packet)
+            with self.subTest(error_code=error_code):
+                with self.assertRaisesRegex(
+                    WorkflowRepairPacketValidationError, error_code
+                ):
+                    validate_workflow_repair_packet(
+                        packet,
+                        _approval(packet),
+                        NOW_MS,
+                        packet["approvedSourceRevision"],
+                    )
+
     def test_readback_gates_prove_both_form2_rules_stay_inactive(self) -> None:
         packet = _packet()
         operations = packet["operations"]
         self.assertEqual(operations[0]["kind"], "readback_gate")
-        self.assertEqual(operations[2]["kind"], "readback_gate")
-        self.assertTrue(operations[2]["acceptance"]["bothForm2RulesInactive"])
-        final = operations[6]["acceptance"]
+        self.assertTrue(operations[0]["acceptance"]["bothForm2RulesInactive"])
+        for mutation_index, readback_index, key in (
+            (1, 2, "leadIntake"),
+            (3, 4, "controls"),
+            (5, 6, "limits"),
+        ):
+            self.assertEqual(operations[mutation_index]["kind"], "mutation")
+            self.assertEqual(operations[readback_index]["kind"], "readback_gate")
+            self.assertEqual(
+                operations[readback_index]["calls"],
+                [
+                    {
+                        "tool": operations[0]["calls"][0]["tool"],
+                        "args": {
+                            "path_variables": {
+                                "id": packet["bindings"]["rules"][key][
+                                    "ruleId"
+                                ]
+                            }
+                        },
+                    }
+                ],
+            )
+            self.assertEqual(
+                operations[readback_index]["acceptance"]["rules"][0][
+                    "triggerType"
+                ],
+                "create",
+            )
+            self.assertTrue(
+                operations[readback_index]["acceptance"][
+                    "scheduledActionsExactlyMatchPacketBoundPrestate"
+                ]
+            )
+        final = operations[7]["acceptance"]
         self.assertTrue(final["bothForm2RulesInactive"])
         self.assertEqual(final["inventory"]["candidateActiveCount"], 0)
         self.assertEqual(final["inventory"]["supersededActiveCount"], 0)
@@ -765,11 +995,7 @@ class WorkflowRepairPacketTests(unittest.TestCase):
         candidate_prestate = packet["prestate"]["workflowRules"][3]
         candidate_final = final["rules"][3]
         self.assertEqual(candidate_final, candidate_prestate)
-        superseded_expected = deepcopy(
-            packet["prestate"]["workflowRules"][4]
-        )
-        superseded_expected["active"] = False
-        self.assertEqual(final["rules"][4], superseded_expected)
+        self.assertEqual(final["rules"][4], packet["prestate"]["workflowRules"][4])
 
     def test_allows_the_same_associative_action_definition_in_both_form2_rules(self) -> None:
         packet = _packet()
@@ -800,7 +1026,7 @@ class WorkflowRepairPacketTests(unittest.TestCase):
             NOW_MS,
             packet["approvedSourceRevision"],
         )
-        self.assertEqual(result.main_operation_count, 7)
+        self.assertEqual(result.main_operation_count, 8)
 
     def test_containment_is_read_only_and_never_activates_form2(self) -> None:
         packet = _packet()
@@ -809,22 +1035,74 @@ class WorkflowRepairPacketTests(unittest.TestCase):
         self.assertTrue(containment["neverActivateEitherForm2Rule"])
         self.assertFalse(containment["candidateMutationAuthorized"])
         self.assertFalse(containment["retrySupersededDeactivationAuthorized"])
+        self.assertFalse(containment["retryAnyMutationAuthorized"])
         self.assertEqual(
             containment["terminalState"],
             {
                 "canonicalCandidateActive": False,
                 "supersededRuleActive": False,
+                "triggerRepairState": (
+                    "one_of_four_exact_monotonic_prefix_states"
+                ),
+                "scheduledActionsUnchanged": True,
             },
         )
         self.assertEqual(len(containment["operations"]), 1)
         operation = containment["operations"][0]
         self.assertEqual(operation["kind"], "conditional_readback_gate")
+        self.assertEqual(len(operation["calls"]), len(RULE_ORDER))
         self.assertTrue(
             all(
                 call["tool"].endswith("zohocrm_getworkflowrulebyid")
                 for call in operation["calls"]
             )
         )
+        self.assertEqual(
+            [call["args"]["path_variables"]["id"] for call in operation["calls"]],
+            [packet["bindings"]["rules"][key]["ruleId"] for key in RULE_ORDER],
+        )
+        acceptance = operation["acceptance"]
+        self.assertEqual(acceptance["type"], "one_of_exact_packet_bound_rule_sets")
+        self.assertEqual(acceptance["allowedStateCount"], 4)
+        self.assertTrue(acceptance["monotonicTriggerPrefixRequired"])
+        self.assertTrue(acceptance["allFiveRulesReadByIdRequired"])
+        self.assertTrue(
+            acceptance["scheduledActionsExactlyMatchPacketBoundPrestate"]
+        )
+        self.assertEqual(
+            [state["name"] for state in acceptance["allowedStates"]],
+            [
+                "no_trigger_write_observed",
+                "lead_only_observed",
+                "lead_and_controls_observed",
+                "all_three_observed",
+            ],
+        )
+        expected_trigger_prefixes = (
+            ("create_or_edit", "create_or_edit", "create_or_edit"),
+            ("create", "create_or_edit", "create_or_edit"),
+            ("create", "create", "create_or_edit"),
+            ("create", "create", "create"),
+        )
+        prestate = packet["prestate"]["workflowRules"]
+        for state, trigger_prefix in zip(
+            acceptance["allowedStates"], expected_trigger_prefixes
+        ):
+            self.assertEqual(len(state["rules"]), len(RULE_ORDER))
+            expected_rules = deepcopy(prestate)
+            for index, trigger_type in enumerate(trigger_prefix):
+                expected_rules[index]["triggerType"] = trigger_type
+            self.assertEqual(state["rules"], expected_rules)
+            self.assertEqual(
+                tuple(rule["triggerType"] for rule in state["rules"][:3]),
+                trigger_prefix,
+            )
+            self.assertFalse(state["rules"][3]["active"])
+            self.assertFalse(state["rules"][4]["active"])
+            self.assertEqual(
+                [rule["scheduledActions"] for rule in state["rules"]],
+                [rule["scheduledActions"] for rule in prestate],
+            )
         tampered = json.loads(json.dumps(packet))
         tampered["failureContainment"]["neverReactivateSupersededRule"] = False
         with self.assertRaisesRegex(
@@ -879,7 +1157,9 @@ class WorkflowRepairPacketTests(unittest.TestCase):
                 packet["approvedSourceRevision"],
             )
 
-    def test_rejects_operation_order_tool_and_delete_target_drift(self) -> None:
+    def test_rejects_operation_order_tool_scheduled_and_form2_write_drift(
+        self,
+    ) -> None:
         for mutate in (
             lambda value: value["operations"].reverse(),
             lambda value: value["operations"][0]["calls"][0].update(
@@ -887,12 +1167,31 @@ class WorkflowRepairPacketTests(unittest.TestCase):
             ),
             lambda value: value["operations"][1]["calls"][0]["args"][
                 "body"
-            ]["workflow_rules"][0]["status"].update({"active": True}),
-            lambda value: value["operations"][3]["calls"][0]["args"][
+            ]["workflow_rules"][0]["execute_when"].update({"type": "edit"}),
+            lambda value: value["operations"][1]["calls"][0]["args"][
                 "body"
-            ]["workflow_rules"][0]["conditions"][0]["scheduled_actions"][0][
-                "actions"
-            ][0].update({"id": "9" * 19}),
+            ]["workflow_rules"][0].update(
+                {
+                    "conditions": [
+                        {
+                            "id": value["bindings"]["rules"]["leadIntake"][
+                                "conditionId"
+                            ],
+                            "sequence_number": 1,
+                            "scheduled_actions": [],
+                        }
+                    ]
+                }
+            ),
+            lambda value: value["operations"][1]["calls"][0]["args"][
+                "body"
+            ]["workflow_rules"][0].update(
+                {
+                    "id": value["bindings"]["rules"]["form2Superseded"][
+                        "ruleId"
+                    ]
+                }
+            ),
         ):
             packet = _packet()
             mutate(packet)
@@ -917,7 +1216,8 @@ class WorkflowRepairPacketTests(unittest.TestCase):
             {"durableConsumptionRequired": False},
             {"operationAuthorizationId": "22222222-2222-4222-8222-222222222222"},
             {"retryAuthorized": True},
-            {"maximumAuthorizedMutationCallCount": 5},
+            {"authorizedMainOperationCount": 5},
+            {"maximumAuthorizedMutationCallCount": 4},
             {"productionAuthorized": True},
             {"expiresAt": "2026-08-28T18:10:00.001Z"},
         )
