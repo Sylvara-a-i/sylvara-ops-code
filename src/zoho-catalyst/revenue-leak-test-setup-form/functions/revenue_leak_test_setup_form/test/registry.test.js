@@ -490,6 +490,10 @@ test("the route manifest exposes exactly the six reviewed fail-closed routes", (
     ["FORM2_SUBMISSION", "POST", "SUBMISSION_PATH"],
   ]);
   assert.equal(new Set(manifest.routes.map((route) => route.id)).size, 6);
+  assert.equal(
+    manifest.routes.find((route) => route.id === "FORM2_ISSUE").payload_contract,
+    "issue-caller-contract.json",
+  );
   assert.equal(manifest.routes.every((route) =>
     Number.isSafeInteger(route.rate_limit_per_minute) &&
     Number.isSafeInteger(route.rate_limit_per_ip_per_minute) &&
@@ -500,6 +504,117 @@ test("the route manifest exposes exactly the six reviewed fail-closed routes", (
     manifest.activation_gates.some((gate) => gate.includes("Never add SMS")),
     true,
   );
+});
+
+test("the typed Form 2 Issue contract matches the route and CRM caller artifacts", () => {
+  const contract = readJson(path.join(controllerRoot, "config/issue-caller-contract.json"));
+  const routes = readJson(path.join(controllerRoot, "config/routes.json"));
+  const callerManifest = readJson(path.join(
+    repositoryRoot,
+    "src/zoho-crm/free-revenue-leak-test/config/caller-manifest.json",
+  ));
+  const caller = callerManifest.callers.find(
+    (candidate) => candidate.logical_name === contract.caller_id,
+  );
+  const route = routes.routes.find((candidate) => candidate.id === contract.route_id);
+
+  assert.equal(contract.schema_version, 1);
+  assert.equal(contract.environment, "Development");
+  assert.equal(contract.controller, "revenue_leak_test_setup_form");
+  assert.equal(route.payload_contract, "issue-caller-contract.json");
+  assert.equal(route.method, "POST");
+  assert.equal(route.content_type, "application/json");
+  assert.ok(caller);
+  assert.equal(caller.request.method, route.method);
+  assert.equal(caller.request.content_type, route.content_type);
+
+  for (const schema of [contract.request_schema, contract.success_response_schema]) {
+    assert.equal(schema.$schema, "https://json-schema.org/draft/2020-12/schema");
+    assert.equal(schema.type, "object");
+    assert.equal(schema.additionalProperties, false);
+    assert.deepEqual(Object.keys(schema.properties), schema.required);
+  }
+  assert.deepEqual(contract.request_schema.required, ["dealId", "issueRequestId"]);
+  assert.deepEqual(caller.request.body_keys, contract.request_schema.required);
+  assert.equal(contract.request_schema.properties.dealId.pattern, "^[1-9][0-9]{9,29}$");
+  assert.equal(
+    contract.request_schema.properties.issueRequestId.pattern,
+    "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+  );
+  assert.equal(contract.success_response_schema.status, caller.success_response.http_status);
+  assert.deepEqual(
+    contract.success_response_schema.required,
+    caller.success_response.exact_body_keys,
+  );
+  assert.equal(contract.success_response_schema.properties.ok.const, true);
+  assert.equal(
+    contract.access_url_policy.private_base_url_placeholder,
+    "{{FORM2_ACCESS_PUBLIC_URL}}",
+  );
+  const privateBasePattern = new RegExp(
+    contract.access_url_policy.private_base_url_schema.pattern,
+  );
+  assert.equal(privateBasePattern.test("https://example.invalid/setup"), true);
+  for (const unsafeBase of [
+    "http://example.invalid/setup",
+    "https://user@example.invalid/setup",
+    "https://example.invalid:8443/setup",
+    "https://example.invalid/setup?mode=test",
+    "https://example.invalid/setup#fragment",
+  ]) {
+    assert.equal(privateBasePattern.test(unsafeBase), false, unsafeBase);
+  }
+  assert.equal(contract.access_url_policy.composition.fragment_literal, "#setupToken=");
+  assert.equal(contract.access_url_policy.composition.token_length, 43);
+  assert.equal(
+    contract.access_url_policy.composition.token_pattern,
+    "^[A-Za-z0-9_-]{43}$",
+  );
+  assert.equal(contract.access_url_policy.composition.exact_private_base_prefix_required, true);
+  assert.equal(contract.access_url_policy.composition.exact_total_length_required, true);
+  assert.equal(contract.access_url_policy.composition.query_allowed, false);
+  assert.equal(contract.access_url_policy.composition.additional_fragment_allowed, false);
+  assert.equal(contract.access_url_policy.composition.whitespace_allowed, false);
+  assert.equal(contract.access_url_policy.caller_enforcement.open_only_after_every_guard, true);
+  assert.equal(contract.retry_policy.automatic_retry, false);
+  assert.equal(caller.request.automatic_retry, false);
+  assert.equal(contract.retry_policy.idempotency_field, "issueRequestId");
+  assert.equal(contract.retry_policy.exact_retry_requires_authoritative_reconciliation, true);
+  assert.equal(contract.retry_policy.ambiguous_result_is_never_retried_blindly, true);
+  assert.equal(contract.failure_policy.open_url, false);
+  assert.equal(contract.failure_policy.log_body_url_header_or_error, false);
+
+  const source = fs.readFileSync(path.join(
+    repositoryRoot,
+    "src/zoho-crm/free-revenue-leak-test/functions/issue_revenue_leak_test_setup.deluge",
+  ), "utf8");
+  const requestBodyKeys = [...source.matchAll(/request_body\.put\("([^"]+)"/g)]
+    .map((match) => match[1]);
+  assert.deepEqual(requestBodyKeys, contract.request_schema.required);
+  assert.match(source, /detailed\s*:\s*true/);
+  assert.match(source, /response-format\s*:\s*STRING/);
+  assert.match(source, /response_body\.size\(\)\s*==\s*3/);
+  for (const key of contract.success_response_schema.required) {
+    assert.match(source, new RegExp(`response_body\\.containKey\\("${key}"\\)`));
+  }
+  assert.match(
+    source,
+    /access_prefix\s*=\s*"\{\{FORM2_ACCESS_PUBLIC_URL\}\}"\s*\+\s*"#setupToken="\s*;/,
+  );
+  assert.match(source, /access_url_text\.startsWith\(access_prefix\)/);
+  assert.match(
+    source,
+    /access_url_text\.length\(\)\s*==\s*access_prefix\.length\(\)\s*\+\s*43/,
+  );
+  assert.match(source, /!access_url_text\.contains\("\?"\)/);
+  assert.match(source, /!access_url_text\.contains\("&"\)/);
+  assert.match(source, /!access_url_text\.contains\(" "\)/);
+  assert.match(source, /setup_token\s*=\s*access_url_text\.right\(43\)/);
+  assert.match(source, /setup_token\.matches\("\^\[A-Za-z0-9_\-\]\{43\}\$"\)/);
+  assert.ok(source.indexOf("can_open = true;") > source.indexOf("setup_token.matches"));
+  assert.match(source, /info "form2_issue_failed";/);
+  assert.match(source, /info "form2_issue_rejected";/);
+  assert.doesNotMatch(source, /info\s+(issue_response|response_body|access_url|failure)\s*;/);
 });
 
 test("the Zoho Forms manifest is email-only and matches the runtime client contract", () => {

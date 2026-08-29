@@ -1,13 +1,13 @@
 /*
 Owning product/workflow: Zoho CRM / Form 1 assisted request issuance.
-Trigger: Unbound Administrator-restricted Leads record-details button template.
+Trigger: Retained Administrator-restricted Leads record-details button bound only to this local fail-closed function; the remote route caller remains unbound.
 Input: lead_id is retained only as the future caller contract; no record is read.
 Authentication: no Connection or route is used while issuance is disabled.
 Idempotency: no token, session, intake identity, or external write is created.
 Failure behavior: fail closed locally and never open a URL.
 Return contract: always return the coarse rejection marker required by the CRM string function.
 Logging: coarse outcome names only; never log IDs, bodies, URLs, headers, or errors.
-Rollback: keep the button unbound and preserve the disabled template.
+Rollback: preserve the exact local fail-closed button binding, or disable the button if that binding cannot be proven; never bind the remote route caller under this template.
 */
 
 if(input.lead_id != null && input.lead_id.toString().matches("^[1-9][0-9]{9,29}$"))

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "reviewed_repository_templates_not_deployed",
+  "status": "form1_local_containment_deployed_form2_template_not_deployed",
   "environment": "Development only",
   "owning_product": "Zoho CRM",
   "runtime_owner": "Zoho Catalyst",
@@ -54,7 +54,9 @@
         "open_target": null
       },
       "failure_policy": "Fail closed locally without invoking Catalyst, CRM, Forms, a Connection, or a URL. Emit only a coarse non-sensitive disabled outcome.",
-      "deployment_status": "disabled_until_non_browser_non_form_entry_token_transport_is_proven"
+      "button_binding_state": "retained_and_bound_to_exact_local_fail_closed_function",
+      "remote_route_caller_binding_state": "unbound",
+      "deployment_status": "deployed_local_containment_remote_assisted_issuance_disabled"
     },
     {
       "logical_name": "FORM2_SETUP_ISSUE_CALLER",
@@ -108,7 +110,7 @@
     }
   ],
   "activation_gates": [
-    "Keep the Form 1 button unbound until an authoritative provider contract proves a server-side or genuinely one-time handoff that never places an access capability in a URL, browser-visible field, form entry, browser storage, referrer, or log.",
+    "Keep the retained Form 1 button bound only to the exact local fail-closed function. Keep its remote route caller unbound until an authoritative provider contract proves a server-side or genuinely one-time handoff that never places an access capability in a URL, browser-visible field, form entry, browser storage, referrer, or log.",
     "Independently verify the exact CRM organization, Development route, function revision, and disabled Production state.",
     "Prove each private Connection injects only its caller's required authentication headers and cannot authorize the other caller.",
     "Prove the Form 2 caller receives a cryptographically strong canonical UUID v4 that remains stable for an exact retry and is never exposed to Forms.",
@@ -117,8 +119,9 @@
     "Keep prior callers and routes available for rollback until synthetic replay and destination checks pass."
   ],
   "rollback": [
-    "Remove or disable the two CRM button associations.",
-    "Revoke the two caller-specific Connections.",
+    "Preserve the retained Form 1 button on the exact local fail-closed function; if its binding drifts, restore that exact contained binding or disable it under a separately approved packet.",
+    "Disable the Form 2 CRM button association if its caller is activated and rollback is required.",
+    "Revoke only caller-specific Connections proven exclusive to an activated remote caller.",
     "Disable the two canonical issue routes only after restoring the prior caller targets.",
     "Preserve Catalyst session rows and CRM readback evidence for reconciliation."
   ],

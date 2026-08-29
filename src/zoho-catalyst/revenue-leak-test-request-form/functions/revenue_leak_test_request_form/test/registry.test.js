@@ -156,7 +156,12 @@ test("the Forms and central manifests keep public Form 1 separate from disabled 
     FORM1_ISSUE: "disabled_returns_503_after_header_validation_before_body_sdk_datastore_adapter_crm_connection_or_outbound_io",
     FORM1_PREFILL: "disabled_returns_503_after_header_validation_before_body_sdk_datastore_adapter_crm_connection_or_outbound_io",
   });
-  assert.equal(assisted.crm_button_binding_state, "unbound");
+  assert.equal(
+    assisted.crm_button_binding_state,
+    "retained_bound_to_exact_local_fail_closed_function",
+  );
+  assert.equal(assisted.crm_button_remote_route_caller, false);
+  assert.equal(assisted.remote_assisted_route_caller_binding_state, "unbound");
   assert.equal(assisted.forms_prefill_webhook_binding_state, "unbound");
   assert.equal(assisted.controller_platform_data_dependencies, "none");
   assert.equal(assisted.controller_request_response_platform, "Catalyst Advanced I/O");

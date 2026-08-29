@@ -23,7 +23,7 @@ The implementation is based on the canonical [2026-08-14 Form 2 CRM contract](..
 
 One Node.js 24 Advanced I/O function accepts six exact paths:
 
-1. **Issue (`POST`):** an administrator-restricted caller provides one Deal ID and an immutable UUID v4 request ID. The function derives a retry-stable bearer token, binds its HMAC and restricted CRM context to one durable session, conditionally marks setup access issued, and returns the Catalyst access URL with the token only in its URL fragment.
+1. **Issue (`POST`):** an administrator-restricted caller provides one Deal ID and an immutable UUID v4 request ID under the exact machine-readable [`config/issue-caller-contract.json`](config/issue-caller-contract.json). The function derives a retry-stable bearer token, binds its HMAC and restricted CRM context to one durable session, conditionally marks setup access issued, and returns the Catalyst access URL with the token only in its URL fragment.
 2. **Access (`GET`):** Catalyst serves a self-contained, nonce-CSP, no-store email-verification page. The browser removes the token fragment immediately and sends no token through a query string.
 3. **OTP request (`POST`):** the controller resolves the session and current CRM records, selects only the current Contact email, durably claims one send, and invokes Catalyst Mail only in the explicitly configured Development send mode. The browser says that a code was sent only after an authoritative provider acceptance; in-flight, retryable, stubbed, ambiguous, and terminal outcomes remain distinct. It stores no email address or raw OTP.
 4. **OTP verify (`POST`):** the controller serializes code comparisons with a short durable lease, validates the bound OTP HMAC with bounded attempts and expiry, records a durable verified proof, and returns the exact stamped Zoho Forms destination.
@@ -85,6 +85,8 @@ The separate write Connection needs only:
 - `ZohoCRM.composite_requests.CUSTOM`
 
 The Catalyst Connection must expose exactly one OAuth `Authorization` header and no query parameters. Raw OAuth client IDs, client secrets, access tokens, and refresh tokens are prohibited in source and function variables.
+
+The exact Development Issue request, 200 response, idempotency field, and no-blind-retry policy are governed by [`config/issue-caller-contract.json`](config/issue-caller-contract.json). Component CI checks that contract against the route manifest, CRM caller manifest, Deluge request and response guards, and the controller's fail-before-side-effects behavior. This closes repository contract drift only; it does not prove the live UUID minter, Connection injection, button binding, route, or runtime response.
 
 The controller updates Contact and Account respondent fields, then these Deal fields through one rollback Composite request:
 

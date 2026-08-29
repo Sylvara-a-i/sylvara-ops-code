@@ -187,7 +187,7 @@
     {
       "variables": ["ISSUE_HEADER_SECRET", "PREFILL_HEADER_SECRET"],
       "consumers": ["revenue_leak_test_request_form"],
-      "rule": "Keep both callers unbound and both routes disabled. Rotate or revoke the controller secrets only under a separate cleanup or deployment packet with exact configuration readback; defer accepted/rejected route testing until a safe assisted transport is separately authorized."
+      "rule": "Keep the retained CRM button bound only to the exact local fail-closed function, keep its remote route caller and the Forms Prefill Webhook unbound, and keep both routes disabled. Rotate or revoke the controller secrets only under a separate cleanup or deployment packet with exact configuration readback; defer accepted/rejected route testing until a safe assisted transport is separately authorized."
     },
     {
       "variables": ["ISSUE_HEADER_SECRET", "PREFILL_HEADER_SECRET", "SUBMISSION_HEADER_SECRET"],

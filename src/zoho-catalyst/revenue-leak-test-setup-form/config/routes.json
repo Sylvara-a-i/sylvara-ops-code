@@ -12,6 +12,7 @@
       "method": "POST",
       "path_reference": "ISSUE_PATH",
       "caller": "administrator-restricted CRM action",
+      "payload_contract": "issue-caller-contract.json",
       "authentication": ["Catalyst API key", "ISSUE_HEADER_NAME and ISSUE_HEADER_SECRET"],
       "content_type": "application/json",
       "rate_limit_per_minute": 30,

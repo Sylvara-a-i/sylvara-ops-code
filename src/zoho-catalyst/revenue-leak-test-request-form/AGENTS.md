@@ -7,6 +7,6 @@
 - Form 1's existing native CRM upsert is the only submission writer. The public Form 1 path remains separate from this assisted controller.
 - Both Issue and Prefill must validate method, JSON content headers, route, and authentication, then return `configuration_invalid` before reading the request body or initializing the Catalyst SDK, Data Store adapter, CRM Connection, session/token machinery, or outbound-network I/O. The Advanced I/O adapter and response I/O necessarily remain in use.
 - Do not restore `FORM1_TOKEN_FIELD_ALIAS`, token issuance, a Form URL, a browser bridge, CRM credentials, session-table variables, or dormant prefill code. A future assisted design requires a new reviewed transport and full request/response/data/credential/rollback contract.
-- Keep the CRM button and Forms Prefill Webhook unbound. Keep both current and predecessor Form 1 assisted routes disabled. Rollback must never restore a pre-containment Form 1 revision or capability map.
+- Keep the retained CRM button bound only to the exact local fail-closed function, with no URL, Connection, record read/write, or outbound capability. Keep its remote route caller and the Forms Prefill Webhook unbound, and keep both current and predecessor Form 1 assisted routes disabled. Rollback must never restore a pre-containment Form 1 revision or capability map.
 - Stamp `lib/source-revision.js` only in a temporary artifact built from a clean, reviewed commit.
 - Use synthetic fixtures only. Run the direct syntax checks, Node test suite, and repository verifier before handoff.

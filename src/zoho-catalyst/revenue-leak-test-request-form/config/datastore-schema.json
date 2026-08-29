@@ -39,7 +39,7 @@
   ],
   "deployment_gates": [
     "Do not bind RevenueLeakTestRequestFormSessions or Form1AssistedSessions to the corrected Form 1 controller.",
-    "Keep the CRM button and Forms Prefill Webhook unbound and keep both the current and predecessor Form 1 assisted routes disabled.",
+    "Keep the retained CRM button bound only to the exact local fail-closed function, keep its remote route caller and the Forms Prefill Webhook unbound, and keep both the current and predecessor Form 1 assisted routes disabled.",
     "Preserve both tables unchanged until exact dependency, row, route, caller, credential, and rollback readback supports a separately approved cleanup packet.",
     "Block all App User permissions and remove administrator DELETE permission.",
     "Keep TOKEN_HASH and INTAKE_SUBMISSION_ID mandatory and unique.",

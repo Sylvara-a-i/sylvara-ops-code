@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "record_type": "sanitized_form2_containment_readback",
+  "observed_at_utc_date": "2026-08-29",
+  "environment_scope": "live Zoho Forms surface; no customer or Production workflow",
+  "form": "Free Revenue Leak Test Setup and Authorization",
+  "method": {
+    "connector_inventory_checked_first": true,
+    "purpose_built_zoho_forms_connector_available": false,
+    "fallback": "authenticated first-party Zoho Forms console",
+    "navigation_only": true,
+    "save_toggle_submit_test_or_record_open_performed": false
+  },
+  "readback": {
+    "public_form_status": "disabled",
+    "public_form_status_control_present": true,
+    "public_form_active_class_present": false,
+    "submission_webhook_status": "disabled",
+    "submission_webhook_switch_checked": false,
+    "submission_webhook_disabled_instruction_present": true,
+    "all_entries_view_reported_no_entries": true,
+    "submission_count": 0
+  },
+  "actions_performed": {
+    "form_enabled_or_disabled": false,
+    "webhook_enabled_or_disabled": false,
+    "settings_saved": false,
+    "form_submitted": false,
+    "entry_opened_read_or_deleted": false,
+    "webhook_tested": false,
+    "catalyst_route_or_function_invoked": false,
+    "crm_record_read_or_written": false,
+    "retell_agent_changed_tested_simulated_or_invoked": false
+  },
+  "release_effect": {
+    "containment_state_currently_matches": true,
+    "form2_reconfiguration_or_acceptance_proven": false,
+    "future_live_mutation_authorized": false,
+    "fresh_packet_prestate_must_be_repeated": true
+  },
+  "disclosure_controls": {
+    "form_ids_aliases_urls_or_private_routes_included": false,
+    "webhook_destination_headers_connection_or_mapping_values_included": false,
+    "credentials_tokens_or_secrets_included": false,
+    "entries_payloads_customer_or_caller_data_included": false,
+    "private_provider_dom_or_response_included": false
+  }
+}

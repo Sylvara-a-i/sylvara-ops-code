@@ -84,6 +84,14 @@ function createFixture(testContext) {
     path.join(repositoryRoot, "src/zoho-forms/free-revenue-leak-test/forms-manifest.json"),
     formsManifest,
   );
+  for (const relativePath of [
+    "src/zoho-crm/free-revenue-leak-test/config/caller-manifest.json",
+    "src/zoho-crm/free-revenue-leak-test/functions/issue_revenue_leak_test_setup.deluge",
+  ]) {
+    const destination = path.join(repository, ...relativePath.split("/"));
+    fs.mkdirSync(path.dirname(destination), { recursive: true });
+    fs.copyFileSync(path.join(repositoryRoot, ...relativePath.split("/")), destination);
+  }
 
   runGit(repository, ["init", "-q", "--object-format=sha1", "--template="]);
   runGit(repository, ["config", "user.name", "Synthetic Artifact Test"]);

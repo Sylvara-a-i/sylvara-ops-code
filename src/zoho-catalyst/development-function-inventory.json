@@ -1,7 +1,7 @@
 {
   "schema_version": 8,
   "record_type": "sanitized_canonical_revenue_desk_function_inventory",
-  "status": "canonical_six_function_revision_and_sanitized_configuration_readback_exact_twelve_routes_gateway_disabled_worker_unconfigured_runtime_acceptance_pending",
+  "status": "historical_six_function_convergence_form1_containment_exact_gateway_disabled_runtime_acceptance_pending",
   "environment_scope": ["Development", "dark Production"],
   "production_traffic_authorized": false,
   "purpose": "Define the exact final Revenue Desk function, Job-pool, table, migration, and cleanup boundary without publishing private runtime identity or configuration.",
@@ -25,6 +25,25 @@
     "development_change_approval_exhausted_after_verified_poststate": true,
     "development_change_approval_reusable": false,
     "live_changes_require_scoped_approval_and_independent_readback": true
+  },
+  "development_form1_containment_readback_2026_08_29": {
+    "evidence_scope": "sanitized Form 1 function metadata, dependency-free archive parity, exact reduced configuration comparison without private values or digests, retained local CRM button/function binding, disabled remote caller and ingress posture, retained aggregate table counts, and zero operator runtime invocation",
+    "source_revision": "57bd6e84e1c9ad802b0115e3e151f77f822844b2",
+    "function": "revenue_leak_test_request_form",
+    "runtime": "node24",
+    "memory_mb": 256,
+    "deployment_mode": "contained",
+    "environment_variable_count": 10,
+    "exact_dependency_free_archive_and_private_map_readback": true,
+    "crm_button_state": "retained_bound_to_exact_local_fail_closed_function_not_a_remote_route_caller",
+    "remote_crm_route_caller_bound": false,
+    "forms_prefill_webhook_bound": false,
+    "api_gateway_enabled": false,
+    "operator_runtime_invocation_performed": false,
+    "public_native_form1_acceptance_proven": false,
+    "whole_journey_runtime_acceptance_proven": false,
+    "evidence": "evidence/free-revenue-leak-test-development-form1-containment-2026-08-29.json",
+    "interpretation": "This supersedes only the historical Form 1 definition and configuration state. It does not reconverge the other five functions or prove public Form 1, Form 2, CRM, Billing TEST, Analytics, migration, final-main, dark Production, or Retell readiness."
   },
   "development_data_store_readback_2026_08_24": {
     "evidence_scope": "sanitized aggregate row-count readback only; no project identifier, row content, customer data, caller data, or private configuration",

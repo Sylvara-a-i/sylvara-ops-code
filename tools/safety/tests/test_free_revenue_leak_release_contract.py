@@ -605,7 +605,17 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             },
         )
         self.assertEqual(
-            form1["assisted_prefill"]["crm_button_binding_state"], "unbound"
+            form1["assisted_prefill"]["crm_button_binding_state"],
+            "retained_bound_to_exact_local_fail_closed_function",
+        )
+        self.assertFalse(
+            form1["assisted_prefill"]["crm_button_remote_route_caller"]
+        )
+        self.assertEqual(
+            form1["assisted_prefill"][
+                "remote_assisted_route_caller_binding_state"
+            ],
+            "unbound",
         )
         self.assertEqual(
             form1["assisted_prefill"]["forms_prefill_webhook_binding_state"],
@@ -644,11 +654,36 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         self.assertFalse(
             form1["assisted_prefill"]["pre_containment_rollback_allowed"]
         )
+        self.assertEqual(
+            form1["assisted_prefill"]["deployed_revision"],
+            "57bd6e84e1c9ad802b0115e3e151f77f822844b2",
+        )
+        self.assertTrue(
+            form1["assisted_prefill"][
+                "deployed_revision_contains_fail_closed_correction"
+            ]
+        )
         release_assisted = self.contract["form1"]["assisted_path"]
         self.assertFalse(release_assisted["enabled"])
         self.assertEqual(
             release_assisted["route_states"],
             form1["assisted_prefill"]["route_states"],
+        )
+        self.assertEqual(
+            release_assisted["crm_button_binding_state"],
+            form1["assisted_prefill"]["crm_button_binding_state"],
+        )
+        self.assertFalse(release_assisted["crm_button_remote_route_caller"])
+        self.assertEqual(
+            release_assisted["remote_assisted_route_caller_binding_state"],
+            "unbound",
+        )
+        self.assertEqual(
+            release_assisted["deployed_revision"],
+            form1["assisted_prefill"]["deployed_revision"],
+        )
+        self.assertTrue(
+            release_assisted["deployed_revision_contains_fail_closed_correction"]
         )
         self.assertEqual(
             release_assisted["controller_platform_data_dependencies"], "none"
@@ -2520,9 +2555,44 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         self.assertEqual(self.inventory["schema_version"], 8)
         self.assertEqual(
             self.inventory["status"],
-            "canonical_six_function_revision_and_sanitized_configuration_"
-            "readback_exact_twelve_routes_gateway_disabled_worker_"
-            "unconfigured_runtime_acceptance_pending",
+            "historical_six_function_convergence_form1_containment_exact_"
+            "gateway_disabled_runtime_acceptance_pending",
+        )
+        form1_containment = self.inventory[
+            "development_form1_containment_readback_2026_08_29"
+        ]
+        self.assertEqual(
+            form1_containment["source_revision"],
+            "57bd6e84e1c9ad802b0115e3e151f77f822844b2",
+        )
+        self.assertEqual(
+            form1_containment["function"], "revenue_leak_test_request_form"
+        )
+        self.assertEqual(form1_containment["runtime"], "node24")
+        self.assertEqual(form1_containment["memory_mb"], 256)
+        self.assertEqual(form1_containment["deployment_mode"], "contained")
+        self.assertEqual(form1_containment["environment_variable_count"], 10)
+        self.assertTrue(
+            form1_containment[
+                "exact_dependency_free_archive_and_private_map_readback"
+            ]
+        )
+        self.assertEqual(
+            form1_containment["crm_button_state"],
+            "retained_bound_to_exact_local_fail_closed_function_not_a_remote_route_caller",
+        )
+        for field in (
+            "remote_crm_route_caller_bound",
+            "forms_prefill_webhook_bound",
+            "api_gateway_enabled",
+            "operator_runtime_invocation_performed",
+            "public_native_form1_acceptance_proven",
+            "whole_journey_runtime_acceptance_proven",
+        ):
+            self.assertFalse(form1_containment[field], field)
+        self.assertEqual(
+            form1_containment["evidence"],
+            "evidence/free-revenue-leak-test-development-form1-containment-2026-08-29.json",
         )
         self.assertEqual(
             inventory_readback["outcome"],
@@ -2839,7 +2909,11 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         ):
             self.assertIn(phrase, deployment_log_entry)
         self.assertIn(
-            "The six canonical function definitions are converged in Catalyst Development",
+            "On 2026-08-28, all six canonical function definitions had converged in Catalyst Development",
+            self.reconciliation_runbook,
+        )
+        self.assertIn(
+            "Form 1 is the bounded exception to that historical six-function convergence",
             self.reconciliation_runbook,
         )
         self.assertIn(
@@ -4261,7 +4335,7 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             self.deployment_log,
         )
 
-        self.assertIn("- **Revision date:** 2026-08-28", self.reconciliation_runbook)
+        self.assertIn("- **Revision date:** 2026-08-29", self.reconciliation_runbook)
         self.assertIn(
             "Production is not initialized, no zero-resource Production inventory is claimed",
             self.reconciliation_runbook,
@@ -5657,11 +5731,11 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         self.assertNotIn("the table count remained 35", superseding_entry)
         self.assertNotIn("no record state was created or changed", superseding_entry)
         self.assertIn(
-            "- **Revision date:** 2026-08-28",
+            "- **Revision date:** 2026-08-29",
             self.reconciliation_runbook,
         )
         self.assertNotIn(
-            "- **Revision date:** 2026-08-26",
+            "- **Revision date:** 2026-08-28",
             self.reconciliation_runbook,
         )
 
@@ -6692,7 +6766,7 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         )
         self.assertEqual(
             form1_rotation["rule"],
-            "Keep both callers unbound and both routes disabled. Rotate or revoke the controller secrets only under a separate cleanup or deployment packet with exact configuration readback; defer accepted/rejected route testing until a safe assisted transport is separately authorized.",
+            "Keep the retained CRM button bound only to the exact local fail-closed function, keep its remote route caller and the Forms Prefill Webhook unbound, and keep both routes disabled. Rotate or revoke the controller secrets only under a separate cleanup or deployment packet with exact configuration readback; defer accepted/rejected route testing until a safe assisted transport is separately authorized.",
         )
         client_portal_components = self.key_rotation_contract[
             "retained_separate_components"

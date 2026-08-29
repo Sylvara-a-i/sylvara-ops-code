@@ -5,6 +5,7 @@ const crypto = require("node:crypto");
 const test = require("node:test");
 const { destinationDigest } = require("../lib/destinations");
 const { CLIENT_KEYS } = require("../lib/form-contract");
+const issueCallerContract = require("../../../config/issue-caller-contract.json");
 const {
   ControllerError,
   buildAccessUrl,
@@ -926,6 +927,7 @@ test("issues one retry-stable access URL with the opaque token only in its fragm
   assert.equal(first.status, 200);
   assert.equal(first.stage, "issue");
   assert.equal(first.outcome, "issued");
+  assert.deepEqual(Object.keys(first.body), issueCallerContract.success_response_schema.required);
   assert.equal(retry.body.accessUrl, first.body.accessUrl);
   const accessUrl = new URL(first.body.accessUrl);
   assert.equal(accessUrl.search, "");
@@ -942,6 +944,17 @@ test("issues one retry-stable access URL with the opaque token only in its fragm
     selected.session.tokenHash,
     hashAccessToken(deriveAccessToken(ISSUE_REQUEST_ID, config().tokenPepper), config().tokenPepper),
   );
+});
+
+test("the typed Issue contract rejects any undeclared request field before side effects", async () => {
+  const selected = fixture();
+  assert.deepEqual(Object.keys(issueBody()), issueCallerContract.request_schema.required);
+  const result = await issue(selected, { ...issueBody(), unexpected: "synthetic" });
+  assert.equal(result.status, 422);
+  assert.deepEqual(result.body, { ok: false, code: "form_invalid" });
+  assert.equal(result.stage, "issue");
+  assert.equal(result.outcome, "form_invalid");
+  assert.deepEqual(selected.events, []);
 });
 
 test("rejects missing locked CRM identity before issuing session or Deal state", async () => {

@@ -5,6 +5,7 @@
   "function": "revenue_leak_test_request_form",
   "default_action": "reject",
   "cors": false,
+  "crm_button_state": "retained_bound_to_exact_local_fail_closed_function_not_a_remote_route_caller",
   "routes": [
     {
       "id": "FORM1_ISSUE",
@@ -46,7 +47,7 @@
     }
   ],
   "activation_gates": [
-    "Keep both current and predecessor assisted routes disabled and keep the CRM button and Forms Prefill Webhook unbound.",
+    "Keep both current and predecessor assisted routes disabled. Keep the retained CRM button bound only to the exact local fail-closed function, keep its remote route caller unbound, and keep the Forms Prefill Webhook unbound.",
     "The contained source has no token, Form URL, CRM Connection, Data Store adapter, session, Catalyst SDK, or outbound-network capability; the Advanced I/O adapter still performs header and response I/O.",
     "Any future assisted flow requires a new reviewed transport, controller, credential, data, request, response, rollback, and readback contract; this manifest cannot authorize activation.",
     "Read back every existing Retell-project Advanced I/O endpoint and Security Rule before enabling API Gateway.",
@@ -55,8 +56,8 @@
     "Reject any optional-auth or wildcard route."
   ],
   "rollback": {
-    "containment_target": "both current and predecessor Form 1 assisted routes inactive with both callers unbound",
-    "first": "unbind the CRM button and Forms Prefill Webhook if either binding is observed",
+    "containment_target": "both current and predecessor Form 1 assisted routes inactive, the remote CRM route caller and Forms Prefill Webhook unbound, and the retained CRM button bound only to the exact local fail-closed function",
+    "first": "restore the retained CRM button to the exact local fail-closed function or disable it if that exact binding cannot be proven; unbind any remote route caller and the Forms Prefill Webhook",
     "then": "disable both current and predecessor Form 1 assisted routes",
     "prohibited": "do not restore any pre-containment Form 1 route, caller binding, variable map, Connection grant, or artifact revision",
     "preserve": ["legacy function", "legacy routes", "legacy session rows", "target session rows"]

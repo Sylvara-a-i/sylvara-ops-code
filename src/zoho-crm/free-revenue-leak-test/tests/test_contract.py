@@ -1620,7 +1620,10 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
 
     def test_caller_manifest_is_development_only_and_not_deployment_authority(self) -> None:
         manifest = self.callers
-        self.assertEqual(manifest["status"], "reviewed_repository_templates_not_deployed")
+        self.assertEqual(
+            manifest["status"],
+            "form1_local_containment_deployed_form2_template_not_deployed",
+        )
         self.assertEqual(manifest["environment"], "Development only")
         self.assertFalse(manifest["render_policy"]["commit_rendered_source"])
         self.assertFalse(manifest["render_policy"]["log_rendered_source"])
@@ -1661,8 +1664,13 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         )
         self.assertEqual(
             form1["deployment_status"],
-            "disabled_until_non_browser_non_form_entry_token_transport_is_proven",
+            "deployed_local_containment_remote_assisted_issuance_disabled",
         )
+        self.assertEqual(
+            form1["button_binding_state"],
+            "retained_and_bound_to_exact_local_fail_closed_function",
+        )
+        self.assertEqual(form1["remote_route_caller_binding_state"], "unbound")
         self.assertEqual(form2["request"]["method"], "POST")
         self.assertEqual(form2["request"]["content_type"], "application/json")
         self.assertEqual(form2["request"]["body_keys"], ["dealId", "issueRequestId"])
