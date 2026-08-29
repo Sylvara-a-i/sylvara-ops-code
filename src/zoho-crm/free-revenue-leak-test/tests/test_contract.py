@@ -1719,6 +1719,11 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         self.assertNotIn("HEADER_SECRET", source)
         self.assertNotRegex(source, r"\b[1-9][0-9]{9,29}\b")
         self.assertNotRegex(source, r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+")
+        self.assertEqual(
+            re.findall(r'^\s*return "([a-z0-9_]+)";\s*$', source, re.MULTILINE),
+            ["form1_issue_rejected"],
+        )
+        self.assertTrue(source.rstrip().endswith('return "form1_issue_rejected";'))
 
     def test_form2_deluge_template_matches_the_exact_caller_contract(self) -> None:
         caller = self.callers["callers"][1]
