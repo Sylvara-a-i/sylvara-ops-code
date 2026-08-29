@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
-  "status": "canonical-target-readback-exact-empty-legacy-source-preserved",
-  "live_state": "legacy Form1AssistedSessions source is preserved with 8 rows; RevenueLeakTestRequestFormSessions exists in Development with the exact 14 application columns, 0 rows, no App User permissions, and no administrator DELETE permission; runtime and caller readback remain pending before cutover",
+  "status": "retained-unbound-containment-evidence",
+  "live_state": "legacy Form1AssistedSessions is preserved with 8 rows; RevenueLeakTestRequestFormSessions exists in Development with the exact 14 application columns, 0 rows, no App User permissions, and no administrator DELETE permission. The corrected repository controller has no table variable, adapter, reader, writer, or session mutation path. Both assisted callers and routes must remain disabled.",
   "observed_at": "2026-08-26",
   "data_policy": {
     "raw_tokens_or_form_payloads_stored": false,
@@ -13,11 +13,12 @@
   },
   "tables": [
     {
-      "runtime_variable": "SESSION_TABLE_NAME",
+      "runtime_variable": null,
+      "runtime_binding": "none-controller-contained",
       "expected_api_name": "RevenueLeakTestRequestFormSessions",
-      "purpose": "Short-lived opaque Form 1 assisted-intake sessions bound to one CRM Lead and one rotating intake identity.",
+      "purpose": "Preserved empty evidence from the superseded assisted-intake design; not an active controller dependency.",
       "required_unique_columns": ["TOKEN_HASH", "INTAKE_SUBMISSION_ID"],
-      "retention": "Retain as an issuance tombstone until a separately reviewed cleanup procedure exists.",
+      "retention": "Retain unchanged until a separately reviewed cleanup packet proves no live reader, writer, route, caller, rollback dependency, or row.",
       "columns": [
         { "api_name": "TOKEN_HASH", "type": "varchar", "max_length": 64, "mandatory": true, "unique": true, "private": true },
         { "api_name": "CRM_LEAD_ID", "type": "varchar", "max_length": 30, "mandatory": true, "unique": false, "private": true },
@@ -37,9 +38,9 @@
     }
   ],
   "deployment_gates": [
-    "Use only the existing Retell Catalyst project in Development and freshly read back RevenueLeakTestRequestFormSessions with the exact API name, all 14 application columns and constraints, no App User permissions, no administrator DELETE permission, and 0 rows before function deployment.",
-    "Keep the legacy Form 1 project live and unchanged until the Retell-target function, routes, Connections, variables, callers, synthetic canary, containment, and rollback have independent readback; legacy deletion is a separate destructive action.",
-    "Bind the Form 1 function only to RevenueLeakTestRequestFormSessions and preserve the legacy Form1AssistedSessions source plus every Retell and Form 2 function, route, table, Connection, variable, and deployment until migration evidence authorizes cleanup.",
+    "Do not bind RevenueLeakTestRequestFormSessions or Form1AssistedSessions to the corrected Form 1 controller.",
+    "Keep the CRM button and Forms Prefill Webhook unbound and keep both the current and predecessor Form 1 assisted routes disabled.",
+    "Preserve both tables unchanged until exact dependency, row, route, caller, credential, and rollback readback supports a separately approved cleanup packet.",
     "Block all App User permissions and remove administrator DELETE permission.",
     "Keep TOKEN_HASH and INTAKE_SUBMISSION_ID mandatory and unique.",
     "Do not store names, email addresses, phone numbers, form bodies, raw tokens, headers, secrets, or CRM responses."

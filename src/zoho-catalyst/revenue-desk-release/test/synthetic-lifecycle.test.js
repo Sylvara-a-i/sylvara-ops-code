@@ -72,8 +72,6 @@ const nonurgentContract = require(path.join(
 
 const FORM1_ISSUE_SECRET = 'i'.repeat(43);
 const FORM1_PREFILL_SECRET = 'p'.repeat(43);
-const FORM1_TOKEN_PEPPER = 't'.repeat(43);
-const LEAD_ID = '9'.repeat(19);
 const CONTACT_ID = `${'8'.repeat(17)}1`;
 const ACCOUNT_ID = `${'8'.repeat(17)}2`;
 const DEAL_ID = '400000001';
@@ -132,130 +130,54 @@ function releaseFixture(environment) {
   return { manifest, readback };
 }
 
-function jsonPost(url, headerName, headerValue, body) {
-  return {
+function containedForm1Request(url, headerName, headerValue, activity) {
+  const request = {
     method: 'POST',
     url,
     headers: {
       'content-type': 'application/json',
       [headerName]: headerValue,
     },
-    rawBody: Buffer.from(JSON.stringify(body), 'utf8'),
   };
+  Object.defineProperty(request, 'rawBody', {
+    get() {
+      activity.push('payload-read');
+      throw new Error('contained Form 1 route must not read a payload');
+    },
+  });
+  return request;
 }
 
 function form1Config() {
   return {
-    assistedConstants: {
-      entryOffer: 'Synthetic test offer',
-      intakeFormVersion: 'synthetic-form1-v1',
-      leadStatus: 'Synthetic requested',
-      sourcePage: 'synthetic-release-test',
-      submissionChannel: 'Synthetic In Person',
-    },
-    form1PublicUrl: 'https://forms.zohopublic.com/synthetic/form/FreeTest/formperma/example',
-    form1TokenFieldAlias: 'assisted_token',
     issuePath: '/form1/issue-test',
     prefillPath: '/form1/prefill-test',
     issueHeaderName: 'x-synthetic-form1-issue',
     prefillHeaderName: 'x-synthetic-form1-prefill',
     issueHeaderSecret: FORM1_ISSUE_SECRET,
     prefillHeaderSecret: FORM1_PREFILL_SECRET,
-    tokenPepper: FORM1_TOKEN_PEPPER,
-    maxBodyBytes: 4096,
-    inboundBodyTimeoutMs: 5000,
   };
 }
 
-async function runForm1Request() {
+async function runForm1Containment() {
   const config = form1Config();
-  const lead = {
-    id: LEAD_ID,
-    Modified_Time: '2026-08-22T06:00:00-05:00',
-    First_Name: 'Casey',
-    Last_Name: 'Tester',
-    Company: 'Synthetic Plumbing A',
-    Decision_Maker_Role: 'Owner / Founder',
-    Designation: 'Owner',
-    Email: 'casey@example.invalid',
-    Mobile: '+15550102000',
-    Lead_Source: 'Synthetic source',
-    Main_Business_Phone: '+15550102100',
-    Current_Call_Handling: 'Office Staff / Dispatcher',
-    Requested_Test_Route: 'After Hours Only',
-    Phone_System_Provider: 'Synthetic PBX',
-    Primary_Service_Area: 'Synthetic County',
-    Field_Team_Size_Band: 'Synthetic Approved Band',
-    Intake_Submission_ID: 'f1a_00000000-0000-4000-8000-000000000000',
-  };
-  let session;
-  let uuidCall = 0;
-  const dependencies = {
-    config,
-    now: () => Date.parse('2026-08-22T12:00:00.000Z'),
-    randomBytes: () => Buffer.alloc(32, 7),
-    randomUUID: () => (++uuidCall === 1
-      ? '11111111-1111-4111-8111-111111111111'
-      : '22222222-2222-4222-8222-222222222222'),
-    crmClient: {
-      async getLead(id) {
-        assert.equal(id, LEAD_ID);
-        return { ...lead };
-      },
-      async updateIntakeSubmissionId(current, intakeSubmissionId) {
-        assert.equal(current.id, LEAD_ID);
-        lead.Intake_Submission_ID = intakeSubmissionId;
-        return { ...lead };
-      },
-    },
-    sessionStore: {
-      async createSession(input) {
-        session = {
-          rowId: '1',
-          ...input,
-          status: 'issuing',
-          expiresAt: '2026-08-22T12:15:00.000Z',
-        };
-        return { ...session };
-      },
-      async markIssued(input) {
-        session = { ...input, status: 'issued' };
-        return { ...session };
-      },
-      async readByTokenHash(tokenHash) {
-        assert.equal(tokenHash, session.tokenHash);
-        return { ...session };
-      },
-      async reservePrefill(input, owner) {
-        assert.equal(owner, '22222222-2222-4222-8222-222222222222');
-        session = { ...input, status: 'prefilling', prefillCount: 1, maxPrefills: 10 };
-        return { ...session };
-      },
-      async completePrefill(input) {
-        session = { ...input, status: 'prefilled' };
-        return { ...session };
-      },
-      async cancelPrefill() { assert.fail('valid prefill must not be cancelled'); },
-      async markExpired() { assert.fail('valid session must not expire'); },
-      async markFailed() { assert.fail('valid issuance must not fail'); },
-      async markReconciliationRequired() { assert.fail('valid issuance must not reconcile'); },
-    },
-  };
-
-  const issued = await handleForm1(jsonPost(
-    config.issuePath,
-    config.issueHeaderName,
-    FORM1_ISSUE_SECRET,
-    { leadId: LEAD_ID },
-  ), dependencies);
-  const token = new URL(issued.body.formUrl).searchParams.get(config.form1TokenFieldAlias);
-  const prefilled = await handleForm1(jsonPost(
-    config.prefillPath,
-    config.prefillHeaderName,
-    FORM1_PREFILL_SECRET,
-    { token },
-  ), dependencies);
-  return { issued, prefilled };
+  const activity = [];
+  const responses = [];
+  for (const [url, headerName, headerValue] of [
+    [config.issuePath, config.issueHeaderName, FORM1_ISSUE_SECRET],
+    [config.prefillPath, config.prefillHeaderName, FORM1_PREFILL_SECRET],
+  ]) {
+    responses.push(await handleForm1(
+      containedForm1Request(url, headerName, headerValue, activity),
+      new Proxy({ config }, {
+        get(target, key) {
+          if (key !== 'config') activity.push(`dependency:${String(key)}`);
+          return Reflect.get(target, key);
+        },
+      }),
+    ));
+  }
+  return { activity, responses };
 }
 
 function runForm2Authorization(intakeSubmissionId) {
@@ -382,7 +304,26 @@ function analyticsJob(environment) {
   };
 }
 
-test('synthetic Development lifecycle crosses all six release boundaries at one revision', async () => {
+test('Form 1 assisted containment is verified separately and does not establish acceptance', async () => {
+  const form1 = await runForm1Containment();
+  assert.deepEqual(form1.activity, []);
+  assert.deepEqual(form1.responses, [
+    {
+      status: 503,
+      body: { ok: false, code: 'configuration_invalid' },
+      stage: 'issue',
+      outcome: 'assisted_route_disabled',
+    },
+    {
+      status: 503,
+      body: { ok: false, code: 'configuration_invalid' },
+      stage: 'prefill',
+      outcome: 'assisted_route_disabled',
+    },
+  ]);
+});
+
+test('synthetic Development downstream lifecycle covers Form 2 through Analytics with Form 1 acceptance blocked', async () => {
   const development = releaseFixture('Development');
   assert.equal(verifyReadback(development.manifest, development.readback, contract), true);
   assert.equal(development.manifest.mode, 'synthetic-only');
@@ -417,13 +358,12 @@ test('synthetic Development lifecycle crosses all six release boundaries at one 
     'AnalyticsSyncOutbox',
   ]);
 
-  const form1 = await runForm1Request();
-  assert.equal(form1.issued.status, 201);
-  assert.equal(form1.prefilled.status, 200);
-  assert.equal(form1.prefilled.body.company, 'Synthetic Plumbing A');
-  assert.match(form1.prefilled.body.intake_submission_id, /^f1a_[0-9a-f-]{36}$/);
-
-  const form2 = runForm2Authorization(form1.prefilled.body.intake_submission_id);
+  // This fixture is an independent downstream precondition. It is not output
+  // from the contained Form 1 controller and therefore proves no Form 1
+  // mapping, upsert, deduplication, or Lead-to-Deal linkage.
+  const independentSyntheticIntakeId = 'SYNTH00001';
+  const form2 = runForm2Authorization(independentSyntheticIntakeId);
+  assert.equal(form2.existing.deal.Intake_Submission_ID, independentSyntheticIntakeId);
   assert.equal(form2.updates.accountUpdate.Account_Name, 'Synthetic Plumbing A');
   assert.equal(form2.updates.dealUpdate.Authorized_Representative_Confirmed, true);
   assert.equal(form2.updates.dealUpdate.Test_Scope_Accepted, true);

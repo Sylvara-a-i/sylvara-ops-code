@@ -572,11 +572,14 @@ try {
         $nodePackages = @(
             @{ Label = "Gateway"; Root = $GatewayRoot },
             @{ Label = "CRM-Billing orchestrator"; Root = $CrmBillingOrchestratorRoot },
-            @{ Label = "Revenue Leak Test Request Form"; Root = $RequestFormRoot },
             @{ Label = "Revenue Leak Test Setup Form"; Root = $SetupFormRoot },
             @{ Label = "Revenue Desk call gateway"; Root = $RevenueDeskCallGatewayRoot },
             @{ Label = "Revenue Desk Analytics"; Root = $RevenueDeskAnalyticsRoot }
         )
+        # The contained Form 1 package deliberately imports no Catalyst SDK and
+        # carries a lock-bound empty dependency tree. Its package and release-
+        # artifact tests enforce that boundary; requiring node_modules here
+        # would falsely reject the safer dependency-free package after npm ci.
         foreach ($package in $nodePackages) {
             $dependency = Join-PathSegments -BasePath $package.Root -Segments @(
                 "node_modules", "zcatalyst-sdk-node", "package.json"

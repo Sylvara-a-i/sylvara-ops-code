@@ -79,11 +79,62 @@
     "go_live_approval_status": "Not Ready",
     "billing_effect": "none"
   },
+  "workflow_criterion_ast": {
+    "schema_version": 1,
+    "empty_value_marker": "${EMPTY}",
+    "private_identifiers_committed": false,
+    "normalization": {
+      "condition_node_fields": ["type", "apiName", "operator", "value"],
+      "group_node_fields": ["type", "operator", "children"],
+      "associative_and": "flatten recursively, then sort children by canonical JSON",
+      "or_grouping": "preserve the OR node and sort its children by canonical JSON",
+      "duplicate_children": "reject",
+      "packet_policy": "Lead Intake, Controls, and Limits must exactly match their reviewed desired normalized trees. Form 2 candidate and superseded rules must carry fresh complete normalized observed trees as immutable non-authoritative evidence. Every immediate pre-mutation readback must match the complete packet-bound rule snapshot, including identity, name, module, status, trigger, repeat, normalized criteria, and all actions; every subsequent readback must remain exact. Any drift stops before mutation."
+    },
+    "rules": {
+      "leadIntake": {
+        "type": "group",
+        "operator": "AND",
+        "children": [
+          { "type": "condition", "apiName": "Entry_Offer", "operator": "equal", "value": "7-Day Revenue Leak Test" },
+          { "type": "condition", "apiName": "Free_Test_Contact_Consent", "operator": "equal", "value": true },
+          { "type": "condition", "apiName": "Intake_Submission_ID", "operator": "not_equal", "value": "${EMPTY}" },
+          { "type": "condition", "apiName": "Lead_Status", "operator": "equal", "value": "Free Test Requested" }
+        ]
+      },
+      "controls": {
+        "type": "group",
+        "operator": "AND",
+        "children": [
+          { "type": "condition", "apiName": "Entry_Offer", "operator": "equal", "value": "7-Day Revenue Leak Test" },
+          { "type": "condition", "apiName": "Setup_Form_Submission_ID", "operator": "equal", "value": "${EMPTY}" }
+        ]
+      },
+      "limits": {
+        "type": "group",
+        "operator": "AND",
+        "children": [
+          { "type": "condition", "apiName": "Entry_Offer", "operator": "equal", "value": "7-Day Revenue Leak Test" },
+          { "type": "condition", "apiName": "Setup_Form_Submission_ID", "operator": "equal", "value": "${EMPTY}" }
+        ]
+      }
+    },
+    "form2_authority": {
+      "status": "blocked_observed_not_authoritative",
+      "desired_criterion_ast_committed": false,
+      "candidate_mutation_authorized": false,
+      "candidate_activation_authorized": false,
+      "superseded_mutation_scope": "status_false_only",
+      "private_packet_requirement": "fresh complete normalized observed candidate and superseded criterion trees labeled non-authoritative",
+      "readback_requirement": "candidate and superseded name, module, complete criteria, and complete actions stay unchanged; both rules finish inactive"
+    }
+  },
   "workflow_set": [
     {
       "logical_name": "FORM1_INTAKE_REVIEW",
       "module": "Leads",
       "single_active_rule": "Leads Free Test Intake Review",
+      "criterion_ast_rule_keys": ["leadIntake"],
       "criteria": [
         "Entry_Offer equals entry_offer_values.crm_display_value",
         "Intake_Submission_ID is present",
@@ -113,6 +164,7 @@
       "provider_rules": [
         {
           "rule_name": "Deals Free Test Initialize Controls",
+          "criterion_ast_rule_key": "controls",
           "trigger": "create_only",
           "action_count": 5,
           "field_updates": [
@@ -125,6 +177,7 @@
         },
         {
           "rule_name": "Deals Free Test Initialize Limits",
+          "criterion_ast_rule_key": "limits",
           "trigger": "create_only",
           "action_count": 3,
           "field_updates": [
@@ -215,6 +268,11 @@
       "single_active_rule": "Deals Revenue Leak Test Setup Form Proof Candidate",
       "observed_development_rule": "Deals Form 2 Controller Proof Candidate",
       "desired_development_rule": "Deals Revenue Leak Test Setup Form Proof Candidate",
+      "criterion_authority": "blocked_observed_not_authoritative",
+      "desired_criterion_ast_committed": false,
+      "workflow_repair_candidate_mutation_authorized": false,
+      "workflow_repair_activation_authorized": false,
+      "workflow_repair_superseded_mutation_scope": "status_false_only",
       "rename_requires_independent_readback": true,
       "trusted_evidence_required": true,
       "effects": [
@@ -282,7 +340,7 @@
       "preexisting_evidence_policy": "required_preexisting_fields and conditional_preexisting_fields must be independently read back before the transition and are not editable during it; membership requires authoritative readback, not a nonempty value, and an is_empty criterion is an explicit successful empty-state requirement",
       "operator_input_policy": "only operator_input_fields and applicable conditional_operator_input_fields may be collected during the manual transition, and every collected field must satisfy its machine-readable operator_input_constraints entry",
       "blocking_gates": [
-        "the inactive live Blueprint candidate must be proven bound to the exact Revenue Desk Sales pipeline and reconstructed to the exact 13-transition topology; the current pipeline binding is unproven, the readback is missing Record Internal Approval and Activate Test Route, and the combined legacy Approve Go Live transition remains",
+        "the Draft live Blueprint candidate is independently proven bound to the exact Revenue Desk Sales pipeline but must still be reconstructed to the exact 13-transition topology; the readback is missing Record Internal Approval and Activate Test Route, and the combined legacy Approve Go Live transition remains",
         "a typed Blueprint/Catalyst caller for the repository validator, durable one-time-consumption compare-and-set production/readback, provider payload, save, independent readback, and ZZZ SYNTHETIC runtime acceptance",
         "repeat the complete metadata, immutable picklist API-value, and active-layout transition-availability readback immediately before deployment because the current preflight can become stale"
       ]

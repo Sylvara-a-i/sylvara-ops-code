@@ -1,13 +1,9 @@
 "use strict";
 
 const crypto = require("node:crypto");
-const { createCatalystDataStoreAdapter } = require("./catalyst-datastore-adapter");
-const { createConnectionAuthorizationProvider } = require("./connection-boundary");
 const { ConfigurationError, loadConfig } = require("./config");
-const { createCrmClient } = require("./crm-client");
 const { handleRequest } = require("./handler");
 const { safeLog } = require("./safe-log");
-const { createSessionStore } = require("./session-store");
 const { ARTIFACT_SOURCE_REVISION } = require("./source-revision");
 
 const CATALYST_PROJECT_ID_PATTERN = /^[1-9][0-9]{0,29}$/;
@@ -15,14 +11,8 @@ const SHA256_HEX_PATTERN = /^[a-f0-9]{64}$/;
 
 const PUBLIC_CODES = new Set([
   "authentication_failed",
-  "body_invalid",
-  "body_required",
-  "body_timeout",
-  "body_too_large",
-  "body_unavailable",
   "configuration_invalid",
   "content_encoding_not_allowed",
-  "content_length_invalid",
   "content_type_not_allowed",
   "method_not_allowed",
   "route_not_found",
@@ -122,9 +112,6 @@ function matchesExpectedProjectId(projectId, expectedSha256) {
 }
 
 function assertCatalystRequestBinding(request, config) {
-  // The pinned Catalyst SDK derives app.config.projectId from this injected
-  // header. Validate the header first, then cross-check the initialized SDK so
-  // a wrong project cannot reach Data Store or Connection-backed operations.
   const headerEnvironment = readCatalystEnvironmentHeader(request);
   if (
     headerEnvironment !== "development" ||
@@ -139,45 +126,11 @@ function assertCatalystRequestBinding(request, config) {
   return requestProjectId;
 }
 
-function assertCatalystSdkBinding(app, requestProjectId, config) {
-  const sdkEnvironment = typeof app?.config?.environment === "string"
-    ? app.config.environment.trim().toLowerCase()
-    : "";
-  const rawSdkProjectId = app?.config?.projectId;
-  const sdkProjectId = typeof rawSdkProjectId === "string"
-    ? rawSdkProjectId
-    : Number.isSafeInteger(rawSdkProjectId) && rawSdkProjectId > 0
-      ? String(rawSdkProjectId)
-      : "";
-  if (
-    sdkEnvironment !== "development" ||
-    sdkEnvironment !== config.deploymentEnvironment ||
-    sdkProjectId !== requestProjectId ||
-    !matchesExpectedProjectId(sdkProjectId, config.expectedCatalystProjectIdSha256)
-  ) {
-    throw new ConfigurationError("Catalyst SDK project binding does not match configuration");
-  }
-}
-
-function assertCatalystEnvironment(
-  request,
-  app,
-  configuredEnvironment,
-  expectedCatalystProjectIdSha256,
-) {
-  const config = { deploymentEnvironment: configuredEnvironment, expectedCatalystProjectIdSha256 };
-  const requestProjectId = assertCatalystRequestBinding(request, config);
-  assertCatalystSdkBinding(app, requestProjectId, config);
-}
-
 function createRequestListener({
-  catalystSdk,
   environment = process.env,
   logger = console,
   now = Date.now,
-  randomBytes = crypto.randomBytes,
   randomUUID = crypto.randomUUID,
-  fetchImpl = globalThis.fetch,
   requestHandler = handleRequest,
   artifactSourceRevision = ARTIFACT_SOURCE_REVISION,
 } = {}) {
@@ -196,33 +149,9 @@ function createRequestListener({
         sendJson(response, 503, { ok: false, code: "service_unavailable", requestId });
         return;
       }
-      const requestProjectId = assertCatalystRequestBinding(request, config);
-      const runtimeSdk = catalystSdk ?? require("zcatalyst-sdk-node");
-      const app = runtimeSdk.initialize(request);
-      assertCatalystSdkBinding(app, requestProjectId, config);
-      const adapter = createCatalystDataStoreAdapter(app, config);
-      const sessionStore = createSessionStore(adapter, config, { now });
-      const crmClient = createCrmClient(config, {
-        readAuthorizationProvider: createConnectionAuthorizationProvider(
-          app,
-          config.crmReadConnectionLinkName,
-          config.platformOperationTimeoutMs,
-        ),
-        writeAuthorizationProvider: createConnectionAuthorizationProvider(
-          app,
-          config.crmWriteConnectionLinkName,
-          config.platformOperationTimeoutMs,
-        ),
-        fetchImpl,
-      });
-      const result = await requestHandler(request, {
-        config,
-        crmClient,
-        now,
-        randomBytes,
-        randomUUID,
-        sessionStore,
-      });
+
+      assertCatalystRequestBinding(request, config);
+      const result = await requestHandler(request, { config });
       safeLog(logger, result.status >= 500 ? "error" : "info", {
         requestId,
         stage: result.stage,
@@ -245,9 +174,7 @@ function createRequestListener({
 }
 
 module.exports = {
-  assertCatalystEnvironment,
   assertCatalystRequestBinding,
-  assertCatalystSdkBinding,
   codeForError,
   createRequestListener,
   readCatalystEnvironmentHeader,

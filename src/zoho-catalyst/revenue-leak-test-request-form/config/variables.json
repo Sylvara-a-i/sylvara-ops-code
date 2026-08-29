@@ -1,9 +1,10 @@
 {
-  "schema_version": 2,
-  "status": "development-active-production-dark",
+  "schema_version": 3,
+  "status": "development-contained-production-dark",
   "rules": {
-    "values": "Private routes, identifiers, URLs, Connection link names, headers, project-identity digest, and secrets exist only in active Catalyst Development configuration. The exact canonical SESSION_TABLE_NAME is a public reviewed contract. Dark Production requires only deployment mode and source revision.",
-    "logging": "No runtime variable may be logged.",
+    "values": "Only private route paths, independent route headers, the project-identity digest, and source identity remain in Catalyst Development configuration. The contained controller has no token, form URL, CRM, Connection, Data Store, outbound-network, or session variable.",
+    "logging": "No runtime variable or request payload may be logged.",
+    "development": "Both assisted routes validate method, JSON content headers, route, and authentication, then return configuration_invalid before reading the request body or initializing the Catalyst SDK, Data Store adapter, CRM Connection, token/session machinery, or outbound-network I/O.",
     "production": "The committed source accepts only dependency-free dark Production and rejects Production activation or an unstamped artifact."
   },
   "variables": [
@@ -16,25 +17,14 @@
     { "name": "ISSUE_HEADER_NAME", "classification": "private-auth-metadata", "required": true },
     { "name": "PREFILL_HEADER_NAME", "classification": "private-auth-metadata", "required": true },
     { "name": "ISSUE_HEADER_SECRET", "classification": "secret", "required": true },
-    { "name": "PREFILL_HEADER_SECRET", "classification": "secret", "required": true },
-    { "name": "TOKEN_PEPPER", "classification": "stable-secret", "required": true },
-    { "name": "FORM1_PUBLIC_URL", "classification": "private-endpoint", "required": true },
-    { "name": "FORM1_TOKEN_FIELD_ALIAS", "classification": "private-form-contract", "required": true },
-    { "name": "FORM1_ENTRY_OFFER_VALUE", "classification": "private-form-contract", "required": true },
-    { "name": "FORM1_INTAKE_FORM_VERSION", "classification": "private-form-contract", "required": true },
-    { "name": "FORM1_LEAD_STATUS_VALUE", "classification": "private-crm-contract", "required": true },
-    { "name": "FORM1_SOURCE_PAGE_VALUE", "classification": "private-form-contract", "required": true },
-    { "name": "FORM1_SUBMISSION_CHANNEL_VALUE", "classification": "private-form-contract", "required": true },
-    { "name": "CRM_API_BASE_URL", "classification": "private-regional-endpoint", "required": true },
-    { "name": "CRM_READ_CONNECTION_LINK_NAME", "classification": "private-connection-identity", "required": true },
-    { "name": "CRM_WRITE_CONNECTION_LINK_NAME", "classification": "private-connection-identity", "required": true },
-    { "name": "SESSION_TABLE_NAME", "classification": "verified-platform-contract", "required": true, "safe_default": "RevenueLeakTestRequestFormSessions" },
-    { "name": "SESSION_TTL_SECONDS", "classification": "bounded-security-policy", "required": false },
-    { "name": "MAX_PREFILLS", "classification": "bounded-security-policy", "required": false },
-    { "name": "MAX_BODY_BYTES", "classification": "bounded-runtime-policy", "required": false },
-    { "name": "INBOUND_BODY_TIMEOUT_MS", "classification": "bounded-runtime-policy", "required": false },
-    { "name": "OUTBOUND_TIMEOUT_MS", "classification": "bounded-runtime-policy", "required": false },
-    { "name": "OUTBOUND_MAX_BYTES", "classification": "bounded-runtime-policy", "required": false },
-    { "name": "PLATFORM_OPERATION_TIMEOUT_MS", "classification": "bounded-runtime-policy", "required": false }
+    { "name": "PREFILL_HEADER_SECRET", "classification": "secret", "required": true }
+  ],
+  "removed_capabilities": [
+    "token generation, validation, hashing, and pepper configuration",
+    "Form 1 public URL construction",
+    "CRM read and update Connections",
+    "CRM HTTP client and outbound fetch",
+    "Data Store adapter and session mutation",
+    "assisted prefill payload construction"
   ]
 }

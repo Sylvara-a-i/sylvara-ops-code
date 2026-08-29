@@ -1,26 +1,28 @@
 "use strict";
 
-const {
-  isApprovedCrmApiHostname,
-  isApprovedFormsPublicHostname,
-} = require("./destinations");
-
-const FORM1_SESSION_TABLE_NAME = "RevenueLeakTestRequestFormSessions";
 const SHA256_HEX_PATTERN = /^[a-f0-9]{64}$/;
 
-const NUMERIC_LIMITS = Object.freeze({
-  SESSION_TTL_SECONDS: Object.freeze({ fallback: 900, minimum: 300, maximum: 3600 }),
-  MAX_PREFILLS: Object.freeze({ fallback: 20, minimum: 2, maximum: 100 }),
-  MAX_BODY_BYTES: Object.freeze({ fallback: 4096, minimum: 512, maximum: 32768 }),
-  INBOUND_BODY_TIMEOUT_MS: Object.freeze({ fallback: 5000, minimum: 250, maximum: 15000 }),
-  OUTBOUND_TIMEOUT_MS: Object.freeze({ fallback: 5000, minimum: 250, maximum: 15000 }),
-  OUTBOUND_MAX_BYTES: Object.freeze({ fallback: 131072, minimum: 4096, maximum: 524288 }),
-  PLATFORM_OPERATION_TIMEOUT_MS: Object.freeze({
-    fallback: 5000,
-    minimum: 250,
-    maximum: 15000,
-  }),
-});
+const FORBIDDEN_LEGACY_VARIABLES = Object.freeze([
+  "CRM_API_BASE_URL",
+  "CRM_READ_CONNECTION_LINK_NAME",
+  "CRM_WRITE_CONNECTION_LINK_NAME",
+  "FORM1_ENTRY_OFFER_VALUE",
+  "FORM1_INTAKE_FORM_VERSION",
+  "FORM1_LEAD_STATUS_VALUE",
+  "FORM1_PUBLIC_URL",
+  "FORM1_SOURCE_PAGE_VALUE",
+  "FORM1_SUBMISSION_CHANNEL_VALUE",
+  "FORM1_TOKEN_FIELD_ALIAS",
+  "INBOUND_BODY_TIMEOUT_MS",
+  "MAX_BODY_BYTES",
+  "MAX_PREFILLS",
+  "OUTBOUND_MAX_BYTES",
+  "OUTBOUND_TIMEOUT_MS",
+  "PLATFORM_OPERATION_TIMEOUT_MS",
+  "SESSION_TABLE_NAME",
+  "SESSION_TTL_SECONDS",
+  "TOKEN_PEPPER",
+]);
 
 class ConfigurationError extends Error {
   constructor(message) {
@@ -37,49 +39,6 @@ function readRequired(environment, name) {
     throw new ConfigurationError(`${name} is required without surrounding whitespace`);
   }
   return value;
-}
-
-function readBoundedText(environment, name, maximum = 200) {
-  const value = readRequired(environment, name);
-  if (
-    [...value].length > maximum ||
-    /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(value)
-  ) {
-    throw new ConfigurationError(`${name} is outside its approved text boundary`);
-  }
-  return value;
-}
-
-function readBoundedInteger(environment, name) {
-  const limit = NUMERIC_LIMITS[name];
-  const raw = environment?.[name];
-  if (raw === undefined || raw === "") return limit.fallback;
-  if (typeof raw !== "string" || !/^[1-9][0-9]*$/.test(raw)) {
-    throw new ConfigurationError(`${name} must be a positive base-10 integer`);
-  }
-  const value = Number(raw);
-  if (!Number.isSafeInteger(value) || value < limit.minimum || value > limit.maximum) {
-    throw new ConfigurationError(`${name} is outside its approved range`);
-  }
-  return value;
-}
-
-function validateIdentifier(value, name, maximum = 64) {
-  const pattern = new RegExp(`^[A-Za-z][A-Za-z0-9_]{0,${maximum - 1}}$`);
-  if (!pattern.test(value)) {
-    throw new ConfigurationError(`${name} is not a safe Catalyst identifier`);
-  }
-  return value;
-}
-
-function validateSessionTable(value) {
-  const selected = validateIdentifier(value, "SESSION_TABLE_NAME");
-  if (selected !== FORM1_SESSION_TABLE_NAME) {
-    throw new ConfigurationError(
-      `SESSION_TABLE_NAME must be the canonical ${FORM1_SESSION_TABLE_NAME} table`,
-    );
-  }
-  return selected;
 }
 
 function validatePath(value, name) {
@@ -124,45 +83,14 @@ function validateProjectIdDigest(value) {
   return value;
 }
 
-function parseHttpsUrl(value, name) {
-  let url;
-  try {
-    url = new URL(value);
-  } catch {
-    throw new ConfigurationError(`${name} must be an absolute HTTPS URL`);
+function rejectLegacyCapabilities(environment) {
+  const present = FORBIDDEN_LEGACY_VARIABLES.filter((name) =>
+    Object.prototype.hasOwnProperty.call(environment ?? {}, name));
+  if (present.length > 0) {
+    // Do not include private values in this configuration error. The variable
+    // name is enough for an operator to remove the obsolete capability.
+    throw new ConfigurationError(`Legacy Form 1 capability variable is forbidden: ${present[0]}`);
   }
-  if (
-    url.protocol !== "https:" ||
-    url.username ||
-    url.password ||
-    url.port ||
-    url.search ||
-    url.hash ||
-    url.hostname !== url.hostname.toLowerCase()
-  ) {
-    throw new ConfigurationError(`${name} must use one exact HTTPS host and path`);
-  }
-  return url;
-}
-
-function validateFormUrl(value) {
-  const url = parseHttpsUrl(value, "FORM1_PUBLIC_URL");
-  if (
-    !isApprovedFormsPublicHostname(url.hostname) ||
-    url.pathname === "/" ||
-    url.pathname.includes("//")
-  ) {
-    throw new ConfigurationError("FORM1_PUBLIC_URL is not the approved US Zoho Forms permalink");
-  }
-  return url.toString();
-}
-
-function validateCrmBase(value) {
-  const url = parseHttpsUrl(value, "CRM_API_BASE_URL");
-  if (!isApprovedCrmApiHostname(url.hostname) || url.pathname !== "/crm/v8") {
-    throw new ConfigurationError("CRM_API_BASE_URL is not the approved US Zoho CRM V8 base");
-  }
-  return `${url.origin}${url.pathname}`;
 }
 
 function loadConfig(environment = process.env, artifactRevision) {
@@ -170,12 +98,12 @@ function loadConfig(environment = process.env, artifactRevision) {
   const deploymentMode = readRequired(environment, "DEPLOYMENT_MODE");
   if (
     !(
-      (deploymentEnvironment === "development" && deploymentMode === "active") ||
+      (deploymentEnvironment === "development" && deploymentMode === "contained") ||
       (deploymentEnvironment === "production" && deploymentMode === "dark")
     )
   ) {
     throw new ConfigurationError(
-      "DEPLOYMENT_ENVIRONMENT and DEPLOYMENT_MODE must be development/active or production/dark",
+      "DEPLOYMENT_ENVIRONMENT and DEPLOYMENT_MODE must be development/contained or production/dark",
     );
   }
 
@@ -185,8 +113,15 @@ function loadConfig(environment = process.env, artifactRevision) {
     throw new ConfigurationError("SOURCE_REVISION does not match the stamped function artifact");
   }
 
+  // The previous artifact carried token, form, CRM, Connection, and Data Store
+  // capabilities. Their presence would make a containment deployment
+  // ambiguous, so the corrected artifact rejects them instead of ignoring
+  // potentially live credentials. This check applies before the dark-mode
+  // return so Production cannot retain a stale capability map silently.
+  rejectLegacyCapabilities(environment);
+
   // Dark Production proves only that the reviewed artifact can be installed.
-  // It intentionally loads no routes, secrets, stores, Connections, or form destination.
+  // It intentionally loads no routes, secrets, project binding, or payload.
   if (deploymentMode === "dark") {
     return Object.freeze({
       darkMode: true,
@@ -214,7 +149,6 @@ function loadConfig(environment = process.env, artifactRevision) {
     throw new ConfigurationError("Issue and prefill header names must be different");
   }
 
-  const tokenPepper = validateSecret(readRequired(environment, "TOKEN_PEPPER"), "TOKEN_PEPPER");
   const issueHeaderSecret = validateSecret(
     readRequired(environment, "ISSUE_HEADER_SECRET"),
     "ISSUE_HEADER_SECRET",
@@ -223,71 +157,29 @@ function loadConfig(environment = process.env, artifactRevision) {
     readRequired(environment, "PREFILL_HEADER_SECRET"),
     "PREFILL_HEADER_SECRET",
   );
-  if (new Set([tokenPepper, issueHeaderSecret, prefillHeaderSecret]).size !== 3) {
-    throw new ConfigurationError("Token pepper and route secrets must be independently generated");
+  if (issueHeaderSecret === prefillHeaderSecret) {
+    throw new ConfigurationError("Issue and prefill route secrets must be independently generated");
   }
 
-  const form1TokenFieldAlias = readRequired(environment, "FORM1_TOKEN_FIELD_ALIAS");
-  if (!/^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(form1TokenFieldAlias)) {
-    throw new ConfigurationError("FORM1_TOKEN_FIELD_ALIAS is invalid");
-  }
-
-  const crmReadConnectionLinkName = validateIdentifier(
-    readRequired(environment, "CRM_READ_CONNECTION_LINK_NAME"),
-    "CRM_READ_CONNECTION_LINK_NAME",
-    100,
-  );
-  const crmWriteConnectionLinkName = validateIdentifier(
-    readRequired(environment, "CRM_WRITE_CONNECTION_LINK_NAME"),
-    "CRM_WRITE_CONNECTION_LINK_NAME",
-    100,
-  );
-  if (crmReadConnectionLinkName === crmWriteConnectionLinkName) {
-    throw new ConfigurationError("CRM read and update Connections must use different link names");
-  }
   return Object.freeze({
-    assistedConstants: Object.freeze({
-      entryOffer: readBoundedText(environment, "FORM1_ENTRY_OFFER_VALUE", 100),
-      intakeFormVersion: readBoundedText(environment, "FORM1_INTAKE_FORM_VERSION", 30),
-      leadStatus: readBoundedText(environment, "FORM1_LEAD_STATUS_VALUE", 100),
-      sourcePage: readBoundedText(environment, "FORM1_SOURCE_PAGE_VALUE", 100),
-      submissionChannel: readBoundedText(
-        environment,
-        "FORM1_SUBMISSION_CHANNEL_VALUE",
-        100,
-      ),
-    }),
-    crmApiBaseUrl: validateCrmBase(readRequired(environment, "CRM_API_BASE_URL")),
-    crmReadConnectionLinkName,
-    crmWriteConnectionLinkName,
     darkMode: false,
     deploymentEnvironment,
     deploymentMode,
     expectedCatalystProjectIdSha256: validateProjectIdDigest(
       readRequired(environment, "EXPECTED_CATALYST_PROJECT_ID_SHA256"),
     ),
-    form1PublicUrl: validateFormUrl(readRequired(environment, "FORM1_PUBLIC_URL")),
-    form1TokenFieldAlias,
-    inboundBodyTimeoutMs: readBoundedInteger(environment, "INBOUND_BODY_TIMEOUT_MS"),
     issueHeaderName,
     issueHeaderSecret,
     issuePath,
-    maxBodyBytes: readBoundedInteger(environment, "MAX_BODY_BYTES"),
-    maxPrefills: readBoundedInteger(environment, "MAX_PREFILLS"),
-    outboundMaxBytes: readBoundedInteger(environment, "OUTBOUND_MAX_BYTES"),
-    outboundTimeoutMs: readBoundedInteger(environment, "OUTBOUND_TIMEOUT_MS"),
-    platformOperationTimeoutMs: readBoundedInteger(
-      environment,
-      "PLATFORM_OPERATION_TIMEOUT_MS",
-    ),
     prefillHeaderName,
     prefillHeaderSecret,
     prefillPath,
-    sessionTableName: validateSessionTable(readRequired(environment, "SESSION_TABLE_NAME")),
-    sessionTtlSeconds: readBoundedInteger(environment, "SESSION_TTL_SECONDS"),
     sourceRevision,
-    tokenPepper,
   });
 }
 
-module.exports = { ConfigurationError, FORM1_SESSION_TABLE_NAME, loadConfig };
+module.exports = {
+  ConfigurationError,
+  FORBIDDEN_LEGACY_VARIABLES,
+  loadConfig,
+};

@@ -5,7 +5,7 @@
   "real_form_ids_or_urls_in_git": false,
   "evidence_boundary": {
     "live_readback_date": "2026-08-28",
-    "live_readback_mode": "historical authenticated read-only Zoho Forms preflight followed by separately approved bounded Form 2 containment and independent readback",
+    "live_readback_mode": "historical authenticated read-only Zoho Forms preflight followed by separately approved bounded Form 2 containment, independent readback, and later no-save Form 1 CRM mapping and field-policy refreshes",
     "public_runtime_source": "external read-only runtime observation with exploit-level details withheld",
     "catalyst_binding_compared_without_runtime_invocation": true,
     "sanitized": true,
@@ -14,6 +14,8 @@
     "latest_sanitized_evidence_tenant_bound": true,
     "historical_read_only_preflight": "evidence/read-only-browser-fallback-preflight-2026-08-28.json",
     "historical_read_only_preflight_preserved": true,
+    "form1_crm_mapping_readback": "evidence/form1-crm-mapping-readback-2026-08-28.json",
+    "form1_field_policy_readback": "evidence/form1-field-policy-readback-2026-08-28.json",
     "rule": "Source-required policy and sanitized live observations are separate. An observed field or integration never proves unobserved aliases, privacy flags, read-only flags, destinations, or runtime behavior."
   },
   "connector_preflight_2026_08_28": {
@@ -52,7 +54,7 @@
       "logical_name": "REVENUE_LEAK_TEST_REQUEST_FORM",
       "platform_name": "RevenueLeakTestRequestForm",
       "title": "Free Revenue Leak Test Request",
-      "purpose": "Public or CRM-assisted request intake",
+      "purpose": "Public request intake; assisted intake is contained and unavailable",
       "crm_integration": {
         "module": "Leads",
         "operation": "upsert",
@@ -67,26 +69,52 @@
           "expected_organization_matched_privately": true,
           "module": "Leads",
           "layout": "Standard",
-          "observed_mapping_count": 6,
+          "observed_mapping_count": 30,
           "observed_mappings": [
             {"crm_field": "Lead Status", "form_field": "Lead Status"},
             {"crm_field": "Lead Source", "form_field": "Lead Source"},
             {"crm_field": "Company", "form_field": "Company"},
             {"crm_field": "Contact Email", "form_field": "Email"},
             {"crm_field": "First Name", "form_field": "Name - First Name"},
-            {"crm_field": "Last Name", "form_field": "Name - Last Name"}
+            {"crm_field": "Last Name", "form_field": "Name - Last Name"},
+            {"crm_field": "Contact Mobile", "form_field": "Mobile Phone"},
+            {"crm_field": "Company Phone", "form_field": "Company Phone"},
+            {"crm_field": "Current Call Handling", "form_field": "Current Call Handling"},
+            {"crm_field": "Requested Test Route", "form_field": "Preferred Test Route"},
+            {"crm_field": "Primary Service Area", "form_field": "Primary Service Area"},
+            {"crm_field": "Field Team Size Band", "form_field": "Approximate Field Team Size"},
+            {"crm_field": "Free Test Request Notes", "form_field": "Additional Notes"},
+            {"crm_field": "Entry Offer", "form_field": "Entry Offer"},
+            {"crm_field": "Submission Channel", "form_field": "Submission Channel"},
+            {"crm_field": "Free Test Contact Consent At", "form_field": "Free Test Contact Consent At"},
+            {"crm_field": "Free Test Contact Consent Version", "form_field": "Free Test Contact Consent Version"},
+            {"crm_field": "Free Test Request Submitted At", "form_field": "Free Test Request Submitted At"},
+            {"crm_field": "Source Page", "form_field": "Source Page"},
+            {"crm_field": "Intake Form Version", "form_field": "Intake Form Version"},
+            {"crm_field": "utm_source", "form_field": "utm_source"},
+            {"crm_field": "utm_medium", "form_field": "utm_medium"},
+            {"crm_field": "utm_campaign", "form_field": "utm_campaign"},
+            {"crm_field": "utm_term", "form_field": "utm_term"},
+            {"crm_field": "utm_content", "form_field": "utm_content"},
+            {"crm_field": "Decision-Maker Role", "form_field": "Title"},
+            {"crm_field": "Free Test Contact Consent", "form_field": "I agree to receive calls and emails from Sylvara about my request, setup, and follow-up. Consent is not required to purchase."},
+            {"crm_field": "Intake Submission ID", "form_field": "Intake Submission ID"},
+            {"crm_field": "Contact Title", "form_field": "Exact Job Title"},
+            {"crm_field": "Phone System Provider", "form_field": "Phone System Provider"}
           ],
           "observed_mappings_are_display_labels": true,
-          "observed_mapping_api_name_crosswalk_proven": false,
-          "exact_missing_api_name_count_proven": false,
-          "required_full_mapping_present": false,
+          "observed_mapping_api_name_crosswalk_proven": true,
+          "exact_missing_api_name_count_proven": true,
+          "required_full_mapping_present": true,
+          "missing_required_api_names": [],
+          "extra_mapping_api_name": "Free_Test_Request_Notes",
           "upsert_enabled": true,
           "upsert_preference_order": ["Intake Submission ID", "Contact Email"],
           "blank_overwrite": false,
           "crm_automation_and_process_management_enabled": true,
           "attachments_signatures_approval_gclid_assignment_and_tags_enabled": false,
           "integration_write_or_test_performed": false,
-          "status": "observed_noncompliant_incomplete_mapping"
+          "status": "canonical_mapping_and_upsert_contract_satisfied"
         }
       },
       "fixed_metadata": {
@@ -112,8 +140,8 @@
           "live_change_blocked": true
         },
         "privacy_dictionary": {
-          "status": "observed_noncompliant_incomplete_field_by_field_and_runtime_editability_dictionary",
-          "field_scope": "every Form 1 field, including all audit, attribution, consent, and assisted-prefill inputs",
+          "status": "builder_field_policy_dictionary_proven_runtime_retention_and_prefill_blocking",
+          "field_scope": "all 26 deployed Form 1 fields, including audit, consent, and the existing inert Assisted Intake Token field, plus the five desired UTM fields that are absent from the builder but retained in CRM mapping",
           "minimum_named_field_scope": [
             "Entry_Offer",
             "Submission_Channel",
@@ -130,18 +158,22 @@
             "UTM_Campaign",
             "UTM_Content",
             "UTM_Term",
-            "assisted prefill token field"
+            "Assisted Intake Token"
           ],
-          "per_field_decisions_required": [
+          "builder_properties_read_back_per_field": [
             "field type and private alias",
             "mandatory rule",
             "personal classification",
             "encryption setting",
-            "hidden or locked state",
-            "respondent editability",
-            "retention and downstream mapping"
+            "default visibility"
           ],
-          "rule": "Do not infer one field's privacy settings from another field or apply a bulk default. Capture and approve the exact live dictionary privately before a browser or connector change.",
+          "remaining_authority_gaps": [
+            "respondent editability",
+            "form-entry retention semantics",
+            "missing UTM builder fields versus retained CRM mappings",
+            "safe assisted-token transport and Prefill-Webhook contract"
+          ],
+          "rule": "The exact builder dictionary is proven for type, alias, mandatory, personal, encryption, and default visibility. Do not infer runtime respondent editability or entry retention from builder controls, and do not authorize a browser or connector mutation until the UTM mismatch and safe assisted-token transport are resolved.",
           "live_readback": {
             "observed_deployed_field_count": 26,
             "mandatory_true_count": 10,
@@ -151,6 +183,7 @@
             "default_hide_count": 11,
             "provider_generated_or_no_visibility_control_count": 1,
             "configured_alias_count": 0,
+            "disabled_or_locked_field_count": 0,
             "missing_optional_attribution_fields": [
               "utm_source",
               "utm_medium",
@@ -158,7 +191,10 @@
               "utm_content",
               "utm_term"
             ],
-            "complete_private_alias_and_read_only_dictionary_proven": false
+            "complete_builder_type_alias_mandatory_personal_encryption_and_visibility_dictionary_proven": true,
+            "complete_builder_alias_dictionary_proven": true,
+            "runtime_respondent_editability_proven": false,
+            "form_entry_retention_proven": false
           },
           "live_change_blocked": true
         }
@@ -226,12 +262,19 @@
           "Source_Page",
           "Intake_Form_Version"
         ],
-        "live_crm_mapping_display_label_count_observed": 6,
-        "live_crm_mapping_api_name_crosswalk_proven": false,
-        "exact_missing_crm_api_destination_set_proven": false,
+        "live_crm_mapping_display_label_count_observed": 30,
+        "live_crm_mapping_api_name_crosswalk_proven": true,
+        "exact_missing_crm_api_destination_set_proven": true,
+        "exact_missing_crm_api_destination_set": [],
+        "extra_noncanonical_mapping": {
+          "forms_field_label": "Additional Notes",
+          "crm_api_name": "Free_Test_Request_Notes"
+        },
         "unresolved_live_properties": [
           "runtime read-only or respondent-editability semantics",
-          "CRM display-label-to-API-name crosswalk and exact missing-destination set"
+          "form-entry retention semantics",
+          "missing UTM builder fields versus retained CRM mappings",
+          "safe assisted-token transport and Prefill-Webhook contract"
         ]
       },
       "contact_consent": {
@@ -283,15 +326,32 @@
         "live_status": "upsert_order_observed_primary_generation_and_retry_safety_unproven"
       },
       "assisted_prefill": {
-        "enabled": true,
+        "enabled": false,
         "controller": "revenue_leak_test_request_form",
-        "route_reference": "PREFILL_PATH",
-        "token_alias_reference": "FORM1_TOKEN_FIELD_ALIAS",
-        "server_side_only": true,
-        "live_alias": null,
-        "live_alias_status": "absent_live",
+        "routes": ["FORM1_ISSUE", "FORM1_PREFILL"],
+        "route_states": {
+          "FORM1_ISSUE": "disabled_returns_503_after_header_validation_before_body_sdk_datastore_adapter_crm_connection_or_outbound_io",
+          "FORM1_PREFILL": "disabled_returns_503_after_header_validation_before_body_sdk_datastore_adapter_crm_connection_or_outbound_io"
+        },
+        "crm_button_binding_state": "unbound",
+        "forms_prefill_webhook_binding_state": "unbound",
+        "controller_platform_data_dependencies": "none",
+        "controller_request_response_platform": "Catalyst Advanced I/O",
+        "controller_payload_access": false,
+        "controller_token_capability": false,
+        "controller_crm_or_data_store_capability": false,
+        "unsafe_url_alias_source_path_present": false,
+        "legacy_url_alias_transport_allowed": false,
+        "deployed_revision": "288a93c7773acaf82fab277702e6b4e3d7354564",
+        "deployed_revision_contains_fail_closed_correction": false,
+        "development_gateway_and_routes_state": "disabled",
         "live_dynamic_prefill_webhook_field_configured": false,
-        "status": "token_field_and_webhook_not_live_configured"
+        "existing_single_line_token_field_must_remain_inert": true,
+        "raw_bearer_token_in_query_string_allowed": false,
+        "safe_live_mutation_packet_available": false,
+        "pre_containment_rollback_allowed": false,
+        "rollback_target": "both current and predecessor Form 1 assisted routes disabled with both callers unbound",
+        "status": "repository_both_routes_contained_live_revision_predates_fix_routes_disabled_no_safe_form1_packet"
       },
       "required_behavior": [
         "immutable intake-submission identity is supplied before CRM upsert",
@@ -706,11 +766,11 @@
     "direct controller tests",
     "exact function and route readback",
     "CRM organization and Connection proof",
-    "Form 1 assisted prefill caller",
+    "Form 1 containment artifact and reduced variable-map readback with both assisted callers unbound and both current and predecessor routes disabled",
     "Form 1 public ZZZ SYNTHETIC submission",
     "Form 2 issue and prefill callers",
     "Form 2 submission caller",
     "one controlled internal email proof",
-    "legacy-route rollback test"
+    "Form 2 legacy-route rollback test; Form 1 rollback keeps both assisted generations disabled"
   ]
 }

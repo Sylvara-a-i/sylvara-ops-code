@@ -14,8 +14,7 @@
     "placeholder_constraints": {
       "issue_url": "one exact HTTPS Development endpoint with no user information, query, fragment, or embedded credential",
       "public_destination": "one exact reviewed HTTPS destination with no user information, query, fragment, or embedded credential",
-      "connection_link_name": "private Zoho Connection link name matching the current CRM identifier rules",
-      "form_field_alias": "private Forms alias matching the controller's reviewed identifier rules"
+      "connection_link_name": "private Zoho Connection link name matching the current CRM identifier rules"
     }
   },
   "callers": [
@@ -35,33 +34,27 @@
         }
       ],
       "request": {
-        "method": "POST",
-        "content_type": "application/json",
-        "body_keys": ["leadId"],
-        "automatic_retry": false
+        "enabled": false,
+        "method": null,
+        "content_type": null,
+        "body_keys": [],
+        "automatic_retry": false,
+        "controller_state": "disabled_before_remote_request"
       },
       "connection": {
-        "placeholder": "{{FORM1_ISSUE_CONNECTION_LINK_NAME}}",
-        "purpose": "inject only the exact Form 1 issue-route authentication required by current Development readback",
+        "placeholder": null,
+        "purpose": "no Connection is used while assisted issuance is disabled",
         "credential_in_source_or_arguments": false,
         "cross_form_reuse_allowed": false
       },
-      "private_placeholders": [
-        "{{FORM1_ISSUE_URL}}",
-        "{{FORM1_ISSUE_CONNECTION_LINK_NAME}}",
-        "{{FORM1_PUBLIC_URL}}",
-        "{{FORM1_TOKEN_FIELD_ALIAS}}"
-      ],
+      "private_placeholders": [],
       "success_response": {
-        "http_status": 201,
-        "exact_body_keys": ["ok", "formUrl", "expiresAt"],
-        "ok": true,
-        "destination": "exact privately rendered Zoho Forms URL plus one 43-character assisted-token query value",
-        "token_grammar": "^[A-Za-z0-9_-]{43}$",
-        "open_target": "new window"
+        "enabled": false,
+        "destination": null,
+        "open_target": null
       },
-      "failure_policy": "Fail closed without opening a URL. Emit only a coarse non-sensitive outcome. Never log or automatically retry an ambiguous response.",
-      "deployment_status": "blocked_until_private_render_connection_and_route_readback"
+      "failure_policy": "Fail closed locally without invoking Catalyst, CRM, Forms, a Connection, or a URL. Emit only a coarse non-sensitive disabled outcome.",
+      "deployment_status": "disabled_until_non_browser_non_form_entry_token_transport_is_proven"
     },
     {
       "logical_name": "FORM2_SETUP_ISSUE_CALLER",
@@ -115,6 +108,7 @@
     }
   ],
   "activation_gates": [
+    "Keep the Form 1 button unbound until an authoritative provider contract proves a server-side or genuinely one-time handoff that never places an access capability in a URL, browser-visible field, form entry, browser storage, referrer, or log.",
     "Independently verify the exact CRM organization, Development route, function revision, and disabled Production state.",
     "Prove each private Connection injects only its caller's required authentication headers and cannot authorize the other caller.",
     "Prove the Form 2 caller receives a cryptographically strong canonical UUID v4 that remains stable for an exact retry and is never exposed to Forms.",

@@ -513,7 +513,7 @@
       "RevenueDeskCalls",
       "RevenueDeskNotifications"
     ],
-    "form1": ["RevenueLeakTestRequestFormSessions"],
+    "form1_retained_unbound": ["RevenueLeakTestRequestFormSessions"],
     "form2": ["Form2SessionsV3Runtime", "Form2PrefillsV3", "Form2SubmissionsV3", "Form2VerificationProofsV3"],
     "supporting": ["CRMBillingOperations", "AnalyticsSyncCheckpoints", "AnalyticsSyncOutbox"],
     "app_user_access_allowed": false,
@@ -525,10 +525,10 @@
       "workflow_name": "RevenueLeakTestRequestForm",
       "customer_facing_form": "Free Revenue Leak Test Request",
       "type": "Advanced I/O",
-      "classification": "canonical_active_target",
-      "owner": "request_intake_and_lead_prefill",
+      "classification": "canonical_containment_target",
+      "owner": "form1_route_containment",
       "source_path": "src/zoho-catalyst/revenue-leak-test-request-form/functions/revenue_leak_test_request_form",
-      "desired_state": "deployed_and_read_back_in_Development_and_dark_Production"
+      "desired_state": "deployed_containment_and_read_back_in_Development_and_dark_Production"
     },
     {
       "api_name": "revenue_leak_test_setup_form",

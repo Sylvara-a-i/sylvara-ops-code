@@ -1,71 +1,17 @@
 /*
 Owning product/workflow: Zoho CRM / Form 1 assisted request issuance.
-Trigger: Administrator-restricted Leads record-details button.
-Input: lead_id mapped from the current Lead record. CRM is authoritative.
-Authentication: the private Form 1 issue Connection injects all route credentials.
-Idempotency: each successful invocation intentionally rotates the assisted intake identity.
-Failure behavior: no automatic retry and no URL open after any non-exact response.
+Trigger: Unbound Administrator-restricted Leads record-details button template.
+Input: lead_id is retained only as the future caller contract; no record is read.
+Authentication: no Connection or route is used while issuance is disabled.
+Idempotency: no token, session, intake identity, or external write is created.
+Failure behavior: fail closed locally and never open a URL.
 Logging: coarse outcome names only; never log IDs, bodies, URLs, headers, or errors.
-Rollback: disable the button, revoke the Connection, and preserve session/readback state.
-Private setup: replace every {{...}} token outside Git, then save and syntax-check in CRM.
+Rollback: keep the button unbound and preserve the disabled template.
 */
 
-can_open = false;
-destination_url = "";
-try
+if(input.lead_id != null && input.lead_id.toString().matches("^[1-9][0-9]{9,29}$"))
 {
-	if(input.lead_id != null && input.lead_id.toString().matches("^[1-9][0-9]{9,29}$"))
-	{
-		request_body = Map();
-		request_body.put("leadId",input.lead_id.toString());
-		request_headers = Map();
-		request_headers.put("Content-Type","application/json");
-		issue_response = invokeurl
-		[
-			url : "{{FORM1_ISSUE_URL}}"
-			type : POST
-			body : request_body.toString()
-			headers : request_headers
-			connection : "{{FORM1_ISSUE_CONNECTION_LINK_NAME}}"
-			detailed : true
-			response-format : STRING
-		];
-		if(issue_response != null && issue_response.containKey("responseCode") && issue_response.get("responseCode").toString() == "201" && issue_response.containKey("responseText"))
-		{
-			response_text = issue_response.get("responseText");
-			if(response_text != null && response_text.toString().length() > 0 && response_text.toString().length() <= 4096)
-			{
-				response_body = response_text.toString().toMap();
-				if(response_body != null && response_body.size() == 3 && response_body.containKey("ok") && response_body.containKey("formUrl") && response_body.containKey("expiresAt") && response_body.get("ok") == true)
-				{
-					form_url = response_body.get("formUrl");
-					expires_at = response_body.get("expiresAt");
-					form_prefix = "{{FORM1_PUBLIC_URL}}" + "?" + "{{FORM1_TOKEN_FIELD_ALIAS}}" + "=";
-					if(form_url != null && expires_at != null)
-					{
-						form_url_text = form_url.toString();
-						if(form_url_text.startsWith(form_prefix) && form_url_text.length() == form_prefix.length() + 43 && !form_url_text.contains("&") && !form_url_text.contains("#") && !form_url_text.contains(" ") && expires_at.toString().matches("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{3})?Z$"))
-						{
-							assisted_token = form_url_text.right(43);
-							if(assisted_token.matches("^[A-Za-z0-9_-]{43}$"))
-							{
-								can_open = true;
-								destination_url = form_url_text;
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-}
-catch(failure)
-{
-	info "form1_issue_failed";
-}
-if(can_open == true)
-{
-	openUrl(destination_url,"new window","successive=true");
+	info "form1_assisted_issue_disabled";
 }
 else
 {

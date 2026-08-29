@@ -1626,7 +1626,7 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         self.assertFalse(manifest["render_policy"]["log_rendered_source"])
         self.assertEqual(
             set(manifest["render_policy"]["placeholder_constraints"]),
-            {"issue_url", "public_destination", "connection_link_name", "form_field_alias"},
+            {"issue_url", "public_destination", "connection_link_name"},
         )
         self.assertFalse(manifest["live_write_authorized"])
         self.assertEqual(
@@ -1641,7 +1641,39 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
                 for caller in manifest["callers"]
             )
         )
-        form2 = manifest["callers"][1]
+        form1, form2 = manifest["callers"]
+        self.assertEqual(
+            form1["request"],
+            {
+                "enabled": False,
+                "method": None,
+                "content_type": None,
+                "body_keys": [],
+                "automatic_retry": False,
+                "controller_state": "disabled_before_remote_request",
+            },
+        )
+        self.assertIsNone(form1["connection"]["placeholder"])
+        self.assertEqual(form1["private_placeholders"], [])
+        self.assertEqual(
+            form1["success_response"],
+            {"enabled": False, "destination": None, "open_target": None},
+        )
+        self.assertEqual(
+            form1["deployment_status"],
+            "disabled_until_non_browser_non_form_entry_token_transport_is_proven",
+        )
+        self.assertEqual(form2["request"]["method"], "POST")
+        self.assertEqual(form2["request"]["content_type"], "application/json")
+        self.assertEqual(form2["request"]["body_keys"], ["dealId", "issueRequestId"])
+        self.assertEqual(
+            form2["private_placeholders"],
+            [
+                "{{FORM2_ISSUE_URL}}",
+                "{{FORM2_ISSUE_CONNECTION_LINK_NAME}}",
+                "{{FORM2_ACCESS_PUBLIC_URL}}",
+            ],
+        )
         uuid_input = next(
             item for item in form2["function_arguments"] if item["name"] == "issue_request_id"
         )
@@ -1655,85 +1687,97 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
             r"\b[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b",
         )
 
-    def test_deluge_templates_match_the_exact_request_and_response_contracts(self) -> None:
-        expected = {
-            "FORM1_ASSISTED_ISSUE_CALLER": {
-                "puts": ['request_body.put("leadId",input.lead_id.toString());'],
-                "status": "201",
-                "response_keys": ["ok", "formUrl", "expiresAt"],
-                "destination_guard": "{{FORM1_PUBLIC_URL}}",
-                "token_variable": "assisted_token",
-            },
-            "FORM2_SETUP_ISSUE_CALLER": {
-                "puts": [
-                    'request_body.put("dealId",input.deal_id.toString());',
-                    'request_body.put("issueRequestId",input.issue_request_id.toString());',
-                ],
-                "status": "200",
-                "response_keys": ["ok", "accessUrl", "expiresAt"],
-                "destination_guard": "{{FORM2_ACCESS_PUBLIC_URL}}",
-                "token_variable": "setup_token",
-            },
-        }
-        for caller in self.callers["callers"]:
-            with self.subTest(caller=caller["logical_name"]):
-                source_path = (CALLER_MANIFEST_PATH.parent / caller["source"]).resolve()
-                self.assertTrue(source_path.is_relative_to(PACKAGE))
-                source = source_path.read_text(encoding="utf-8")
-                contract = expected[caller["logical_name"]]
-                self.assertEqual(
-                    caller["success_response"]["token_grammar"],
-                    "^[A-Za-z0-9_-]{43}$",
-                )
+    def test_form1_deluge_template_is_disabled_before_any_remote_capability(self) -> None:
+        caller = self.callers["callers"][0]
+        self.assertEqual(caller["logical_name"], "FORM1_ASSISTED_ISSUE_CALLER")
+        source_path = (CALLER_MANIFEST_PATH.parent / caller["source"]).resolve()
+        self.assertTrue(source_path.is_relative_to(PACKAGE))
+        source = source_path.read_text(encoding="utf-8")
 
-                self.assertEqual(source.lower().count("invokeurl"), 1)
-                self.assertEqual(source.count("openUrl("), 1)
-                self.assertIn("detailed : true", source)
-                self.assertIn("response-format : STRING", source)
-                self.assertIn('request_headers.put("Content-Type","application/json");', source)
-                self.assertNotIn("for each", source.lower())
-                self.assertNotIn("while", source.lower())
-                self.assertNotIn("ZCFKEY", source)
-                self.assertNotIn("HEADER_SECRET", source)
-                self.assertNotRegex(source, r"https?://")
-                self.assertNotRegex(source, r"\b[1-9][0-9]{9,29}\b")
-                self.assertNotRegex(
-                    source,
-                    r"\b[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b",
-                )
-                self.assertNotRegex(source, r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+")
+        self.assertEqual(source.lower().count("invokeurl"), 0)
+        self.assertEqual(source.count("openUrl("), 0)
+        self.assertEqual(re.findall(r"\{\{[A-Z0-9_]+\}\}", source), [])
+        self.assertNotRegex(source, r"https?://")
+        for forbidden in (
+            "request_body",
+            "request_headers",
+            "issue_response",
+            "destination_url",
+            "form_url",
+            "assisted_token",
+            "FORM1_ISSUE_URL",
+            "FORM1_PUBLIC_URL",
+            "FORM1_TOKEN_FIELD_ALIAS",
+            "^[A-Za-z0-9_-]{43}$",
+            ".right(43)",
+        ):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, source)
+        self.assertNotIn("try", source.lower())
+        self.assertNotIn("catch", source.lower())
+        self.assertNotIn("ZCFKEY", source)
+        self.assertNotIn("HEADER_SECRET", source)
+        self.assertNotRegex(source, r"\b[1-9][0-9]{9,29}\b")
+        self.assertNotRegex(source, r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+")
 
-                placeholders = sorted(set(re.findall(r"\{\{[A-Z0-9_]+\}\}", source)))
-                self.assertEqual(placeholders, sorted(caller["private_placeholders"]))
-                self.assertIn(caller["connection"]["placeholder"], source)
-                self.assertIn(contract["destination_guard"], source)
-                self.assertIn(
-                    f'issue_response.get("responseCode").toString() == "{contract["status"]}"',
-                    source,
-                )
-                for put in contract["puts"]:
-                    self.assertIn(put, source)
-                self.assertEqual(source.count("request_body.put("), len(contract["puts"]))
-                for response_key in contract["response_keys"]:
-                    self.assertIn(f'response_body.containKey("{response_key}")', source)
-                self.assertIn(
-                    f'response_body.size() == {len(contract["response_keys"])}', source
-                )
-                self.assertIn("length() ==", source)
-                self.assertIn("+ 43", source)
-                token_assignment = f'{contract["token_variable"]} = '
-                token_guard = (
-                    f'{contract["token_variable"]}.matches('
-                    '"^[A-Za-z0-9_-]{43}$")'
-                )
-                self.assertIn(token_assignment, source)
-                self.assertIn(token_guard, source)
-                self.assertIn(".right(43);", source)
-                self.assertLess(source.index(token_assignment), source.index(token_guard))
-                self.assertLess(source.index(token_guard), source.index("can_open = true;"))
-                self.assertLess(source.index("can_open = true;"), source.index("openUrl("))
+    def test_form2_deluge_template_matches_the_exact_caller_contract(self) -> None:
+        caller = self.callers["callers"][1]
+        self.assertEqual(caller["logical_name"], "FORM2_SETUP_ISSUE_CALLER")
+        source_path = (CALLER_MANIFEST_PATH.parent / caller["source"]).resolve()
+        self.assertTrue(source_path.is_relative_to(PACKAGE))
+        source = source_path.read_text(encoding="utf-8")
+        self.assertEqual(
+            caller["success_response"]["token_grammar"],
+            "^[A-Za-z0-9_-]{43}$",
+        )
 
-    def test_destination_token_grammar_rejects_delimiters_and_bad_alphabet(self) -> None:
+        self.assertEqual(source.lower().count("invokeurl"), 1)
+        self.assertEqual(source.count("openUrl("), 1)
+        self.assertIn("detailed : true", source)
+        self.assertIn("response-format : STRING", source)
+        self.assertIn('request_headers.put("Content-Type","application/json");', source)
+        self.assertNotIn("for each", source.lower())
+        self.assertNotIn("while", source.lower())
+        self.assertNotIn("ZCFKEY", source)
+        self.assertNotIn("HEADER_SECRET", source)
+        self.assertNotRegex(source, r"https?://")
+        self.assertNotRegex(source, r"\b[1-9][0-9]{9,29}\b")
+        self.assertNotRegex(
+            source,
+            r"\b[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b",
+        )
+        self.assertNotRegex(source, r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+")
+
+        placeholders = sorted(set(re.findall(r"\{\{[A-Z0-9_]+\}\}", source)))
+        self.assertEqual(placeholders, sorted(caller["private_placeholders"]))
+        self.assertIn(caller["connection"]["placeholder"], source)
+        self.assertIn("{{FORM2_ACCESS_PUBLIC_URL}}", source)
+        self.assertIn(
+            'issue_response.get("responseCode").toString() == "200"',
+            source,
+        )
+        puts = [
+            'request_body.put("dealId",input.deal_id.toString());',
+            'request_body.put("issueRequestId",input.issue_request_id.toString());',
+        ]
+        for put in puts:
+            self.assertIn(put, source)
+        self.assertEqual(source.count("request_body.put("), len(puts))
+        for response_key in ("ok", "accessUrl", "expiresAt"):
+            self.assertIn(f'response_body.containKey("{response_key}")', source)
+        self.assertIn("response_body.size() == 3", source)
+        self.assertIn("length() ==", source)
+        self.assertIn("+ 43", source)
+        token_assignment = "setup_token = "
+        token_guard = 'setup_token.matches("^[A-Za-z0-9_-]{43}$")'
+        self.assertIn(token_assignment, source)
+        self.assertIn(token_guard, source)
+        self.assertIn(".right(43);", source)
+        self.assertLess(source.index(token_assignment), source.index(token_guard))
+        self.assertLess(source.index(token_guard), source.index("can_open = true;"))
+        self.assertLess(source.index("can_open = true;"), source.index("openUrl("))
+
+    def test_form2_destination_token_grammar_rejects_bad_values(self) -> None:
         token_pattern = re.compile(r"^[A-Za-z0-9_-]{43}$")
         self.assertIsNotNone(token_pattern.fullmatch("A" * 43))
         for invalid in (
@@ -1750,7 +1794,7 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
 
     def test_deluge_logging_is_coarse_and_never_emits_runtime_values(self) -> None:
         allowed = {
-            'info "form1_issue_failed";',
+            'info "form1_assisted_issue_disabled";',
             'info "form1_issue_rejected";',
             'info "form2_issue_failed";',
             'info "form2_issue_rejected";',

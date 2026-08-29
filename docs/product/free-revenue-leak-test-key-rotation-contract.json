@@ -34,15 +34,6 @@
   },
   "derivation_domains": [
     {
-      "id": "form1_bearer_lookup_v1",
-      "variables": ["TOKEN_PEPPER"],
-      "consumers": ["revenue_leak_test_request_form"],
-      "domains": ["sylvara.form1.assisted-token-hash.v1"],
-      "durable_outputs": ["RevenueLeakTestRequestFormSessions.TOKEN_HASH"],
-      "rotation_gate": "No issuing, issued, prefilling, or prefilled row; no unresolved transition; all old links are intentionally invalidated.",
-      "previous_key_policy": "No final overlap. A separately reviewed overlap may last no longer than the maximum one-hour link TTL, but is unnecessary for this test-only cutover."
-    },
-    {
       "id": "form2_bearer_lookup_v1",
       "variables": ["TOKEN_PEPPER"],
       "consumers": ["revenue_leak_test_setup_form"],
@@ -181,11 +172,22 @@
       "previous_key_policy": "No final overlap. If an old scope can still be invoked or reconciled, rotation is blocked rather than creating a second customer or subscription namespace."
     }
   ],
+  "retired_unbound_derivations": [
+    {
+      "id": "form1_bearer_lookup_v1",
+      "former_variable": "TOKEN_PEPPER",
+      "former_consumer": "revenue_leak_test_request_form",
+      "former_domain": "sylvara.form1.assisted-token-hash.v1",
+      "preserved_evidence": "RevenueLeakTestRequestFormSessions.TOKEN_HASH",
+      "status": "removed-from-contained-runtime",
+      "control": "The contained Form 1 artifact rejects the former token, CRM, Connection, form URL, and session variables. Keep legacy rows unbound and never restore this derivation or its pre-correction artifact as rollback. Revoke the former secret only after fresh caller and route absence readback under a separately approved credential-cleanup packet."
+    }
+  ],
   "authentication_and_binding_secrets": [
     {
       "variables": ["ISSUE_HEADER_SECRET", "PREFILL_HEADER_SECRET"],
       "consumers": ["revenue_leak_test_request_form"],
-      "rule": "Rotate the disabled route and its sole authorized caller together; verify new accepted and old rejected without logging either value."
+      "rule": "Keep both callers unbound and both routes disabled. Rotate or revoke the controller secrets only under a separate cleanup or deployment packet with exact configuration readback; defer accepted/rejected route testing until a safe assisted transport is separately authorized."
     },
     {
       "variables": ["ISSUE_HEADER_SECRET", "PREFILL_HEADER_SECRET", "SUBMISSION_HEADER_SECRET"],

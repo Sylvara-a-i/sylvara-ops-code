@@ -162,7 +162,7 @@ function allRelativePaths(root) {
   return results;
 }
 
-artifactTest("builds one immutable CLI project with tested production dependencies", (testContext) => {
+artifactTest("builds one immutable dependency-free CLI project from the tested lock state", (testContext) => {
   const fixture = createFixture(testContext);
   const result = runBuilder(fixture);
   assert.equal(result.status, 0, result.stderr);
@@ -179,7 +179,7 @@ artifactTest("builds one immutable CLI project with tested production dependenci
   assert.match(output.aggregateSha256, /^[a-f0-9]{64}$/);
 
   const artifactFunction = path.join(fixture.output, "functions", target);
-  assert.equal(fs.existsSync(path.join(artifactFunction, "node_modules/zcatalyst-sdk-node")), true);
+  assert.equal(fs.existsSync(path.join(artifactFunction, "node_modules")), false);
   assert.match(
     fs.readFileSync(path.join(artifactFunction, "lib/source-revision.js"), "utf8"),
     new RegExp(fixture.revision),
@@ -199,6 +199,8 @@ artifactTest("builds one immutable CLI project with tested production dependenci
       packageLock.packages[""].name, catalystConfig.deployment.name],
     Array(5).fill(target),
   );
+  assert.equal(Object.hasOwn(packageJson, "dependencies"), false);
+  assert.deepEqual(Object.keys(packageLock.packages), [""]);
 
   const relativePaths = allRelativePaths(fixture.output);
   assert.equal(relativePaths.some((entry) => /(^|\/)\.git(\/|$)/.test(entry)), false);

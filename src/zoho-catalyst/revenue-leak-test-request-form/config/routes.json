@@ -1,7 +1,7 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "environment": "Development",
-  "gateway_state": "desired-disabled-until-project-wide-route-preservation-readback",
+  "gateway_state": "required-disabled-assisted-token-transport-unresolved",
   "function": "revenue_leak_test_request_form",
   "default_action": "reject",
   "cors": false,
@@ -10,47 +10,55 @@
       "id": "FORM1_ISSUE",
       "method": "POST",
       "path_reference": "ISSUE_PATH",
-      "caller": "administrator-restricted CRM button function",
+      "intended_future_caller": "administrator-restricted CRM button function",
+      "route_state": "disabled",
+      "caller_binding_state": "unbound",
       "authentication": {
         "type": "independent custom header",
         "name_reference": "ISSUE_HEADER_NAME",
         "secret_reference": "ISSUE_HEADER_SECRET"
       },
       "content_type": "application/json",
-      "body_size_reference": "MAX_BODY_BYTES",
-      "body_timeout_reference": "INBOUND_BODY_TIMEOUT_MS",
       "rate_limit_per_minute": 30,
       "rate_limit_per_ip_per_minute": 10,
-      "success_status": 201
+      "controller_state": "fail-closed-after-header-validation-before-body-sdk-datastore-adapter-crm-connection-or-outbound-io",
+      "current_response_status": 503,
+      "successful_response_available": false
     },
     {
       "id": "FORM1_PREFILL",
       "method": "POST",
       "path_reference": "PREFILL_PATH",
-      "caller": "Zoho Forms server-side Prefill Webhook",
+      "intended_future_caller": "Zoho Forms server-side Prefill Webhook",
+      "route_state": "disabled",
+      "caller_binding_state": "unbound",
       "authentication": {
         "type": "independent custom header",
         "name_reference": "PREFILL_HEADER_NAME",
         "secret_reference": "PREFILL_HEADER_SECRET"
       },
       "content_type": "application/json",
-      "body_size_reference": "MAX_BODY_BYTES",
-      "body_timeout_reference": "INBOUND_BODY_TIMEOUT_MS",
       "rate_limit_per_minute": 120,
       "rate_limit_per_ip_per_minute": 30,
-      "success_status": 200
+      "controller_state": "fail-closed-after-header-validation-before-body-sdk-datastore-adapter-crm-connection-or-outbound-io",
+      "current_response_status": 503,
+      "successful_response_available": false
     }
   ],
   "activation_gates": [
+    "Keep both current and predecessor assisted routes disabled and keep the CRM button and Forms Prefill Webhook unbound.",
+    "The contained source has no token, Form URL, CRM Connection, Data Store adapter, session, Catalyst SDK, or outbound-network capability; the Advanced I/O adapter still performs header and response I/O.",
+    "Any future assisted flow requires a new reviewed transport, controller, credential, data, request, response, rollback, and readback contract; this manifest cannot authorize activation.",
     "Read back every existing Retell-project Advanced I/O endpoint and Security Rule before enabling API Gateway.",
-    "Prove the CRM Connection organization and exact Lead READ/UPDATE scopes with a harmless ZZZ SYNTHETIC read.",
-    "Deploy and directly test the exact source revision before changing the CRM button or Forms Prefill Webhook.",
-    "Preserve the legacy function and its two routes until public and assisted same-Lead canaries pass.",
+    "Deploy and read back the exact containment source revision and its reduced variable map before any live cleanup.",
+    "Preserve predecessor source, routes, variables, Connections, and tables as disabled evidence until separately approved cleanup readback succeeds.",
     "Reject any optional-auth or wildcard route."
   ],
   "rollback": {
-    "first": "restore the prior CRM button and Forms Prefill Webhook targets",
-    "then": "disable the two target routes",
+    "containment_target": "both current and predecessor Form 1 assisted routes inactive with both callers unbound",
+    "first": "unbind the CRM button and Forms Prefill Webhook if either binding is observed",
+    "then": "disable both current and predecessor Form 1 assisted routes",
+    "prohibited": "do not restore any pre-containment Form 1 route, caller binding, variable map, Connection grant, or artifact revision",
     "preserve": ["legacy function", "legacy routes", "legacy session rows", "target session rows"]
   }
 }

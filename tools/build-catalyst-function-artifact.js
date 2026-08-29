@@ -502,8 +502,17 @@ function scanFiles(root) {
   return files.sort((left, right) => compareText(left.relativePath, right.relativePath));
 }
 
-function dependencyFingerprint(nodeModulesRoot) {
+function dependencyFingerprint(functionRoot) {
+  const packageJson = readJson(path.join(functionRoot, "package.json"), "package");
+  const declaredDependencies = Object.keys(packageJson.dependencies || {});
+  const nodeModulesRoot = path.join(functionRoot, "node_modules");
   if (!fs.lstatSync(nodeModulesRoot, { throwIfNoEntry: false })?.isDirectory()) {
+    if (declaredDependencies.length === 0) {
+      // npm does not materialize node_modules for a locked dependency-free
+      // package. Bind that exact empty dependency state to the same canonical
+      // fingerprint used for a scanned dependency tree.
+      return crypto.createHash("sha256").update(canonicalFileManifest([])).digest("hex");
+    }
     fail("production dependencies were not materialized");
   }
   const files = scanFiles(nodeModulesRoot).map((entry) => ({
@@ -690,9 +699,9 @@ function build(config, {
     );
     const npm = npmInvocation();
     installProductionDependencies(testFunctionRoot, stagingRoot, npm);
-    const dependenciesBeforeTests = dependencyFingerprint(path.join(testFunctionRoot, "node_modules"));
+    const dependenciesBeforeTests = dependencyFingerprint(testFunctionRoot);
     runSourceTests(testFunctionRoot, stagingRoot, npm, sourceTestTemporary);
-    const testedDependencies = dependencyFingerprint(path.join(testFunctionRoot, "node_modules"));
+    const testedDependencies = dependencyFingerprint(testFunctionRoot);
     if (dependenciesBeforeTests !== testedDependencies) {
       fail("isolated source tests changed the installed production dependencies");
     }
@@ -708,7 +717,7 @@ function build(config, {
     const releaseFunctionRoot = validateRelease(releaseRoot, config);
     stampArtifact(releaseRoot, config, revision, extraStampValue);
     installProductionDependencies(releaseFunctionRoot, stagingRoot, npm);
-    const releaseDependencies = dependencyFingerprint(path.join(releaseFunctionRoot, "node_modules"));
+    const releaseDependencies = dependencyFingerprint(releaseFunctionRoot);
     if (testedDependencies !== releaseDependencies) {
       fail("tested and release production dependency trees differ");
     }
