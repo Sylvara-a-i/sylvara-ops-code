@@ -150,6 +150,32 @@ class FreeRevenueLeakCrmContractTests(unittest.TestCase):
             form2_rules[0]["single_active_rule"],
         )
         self.assertTrue(form2_rules[0]["rename_requires_independent_readback"])
+        self.assertEqual(
+            form2_rules[0]["criterion_authority"], "reviewed_desired"
+        )
+        self.assertEqual(
+            form2_rules[0]["criterion_ast_rule_key"], "form2Candidate"
+        )
+        self.assertTrue(form2_rules[0]["desired_criterion_ast_committed"])
+        self.assertTrue(
+            form2_rules[0]["workflow_repair_candidate_mutation_authorized"]
+        )
+        self.assertTrue(
+            form2_rules[0]["workflow_repair_activation_authorized"]
+        )
+        self.assertEqual(
+            form2_rules[0]["exact_action_contract"]["field_updates"],
+            [{"api_name": "Setup_Access_Status", "value": "Submitted"}],
+        )
+        self.assertEqual(
+            form2_rules[0]["exact_action_contract"][
+                "deleted_field_update_roles"
+            ],
+            ["authorizationSigned", "testStatusSetupPending"],
+        )
+        self.assertEqual(
+            form2_rules[0]["exact_action_contract"]["scheduled_actions"], []
+        )
         self.assertFalse(form2_rules[0]["repeat"])
         self.assertEqual(
             self.contract["blueprint"]["name"],

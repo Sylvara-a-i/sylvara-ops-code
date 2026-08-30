@@ -31,12 +31,16 @@ validate it before and after binding the selected Advanced I/O function IDs:
 node scripts/validate-private-route-packet.js <absolute-private-packet-path>
 node scripts/validate-private-route-packet.js <absolute-private-bound-packet-path> <absolute-private-approval-path>
 node scripts/validate-private-route-packet.js <absolute-private-continuation-packet-path> <absolute-private-continuation-approval-path> <absolute-private-original-bound-packet-path>
+node scripts/validate-private-route-packet.js <absolute-private-additive-reconciliation-packet-path> <absolute-private-additive-reconciliation-approval-path>
+node scripts/verify-private-route-additive-readback.js <absolute-private-additive-reconciliation-packet-path> <absolute-private-final-route-readback-path>
 ```
 
-The validator fixes either the exact 18-route `canonical-all` profile or the
-exact 17-route `setup-journey` profile, including authentication modes, one-minute
+Schema v1 fixes either the exact 18-route `canonical-all` profile or the exact
+17-route `setup-journey` profile, including authentication modes, one-minute
 overall/IP throttles, target functions, disabled zero-route prestate, and
-rollback order. The private packet must contain one ordered runtime-path binding
+rollback order. Schemas v2 and v3 preserve those same immutable route-profile
+bindings while validating an observed nonzero Development inventory. The private
+packet must contain one ordered runtime-path binding
 for every contract route. Each binding repeats the canonical route ID, function,
 and path-reference name, supplies the exact private value configured on that
 function, and carries the independently approved digest of the complete mapping.
@@ -89,9 +93,10 @@ value with the approved numeric target ID.
 whose `packetSha256` binds the complete packet. The envelope must contain canonical
 UTC `capturedAt` and `expiresAt` timestamps no more than 15 minutes apart and
 `singleUse: true`; it is valid only at or after capture and before expiry. The
-validator checks that declaration and time window but does not maintain a replay
-database. Use the envelope for exactly one route-creation execution, discard it,
-and independently read back every route in the selected profile immediately. Never reuse it for a retry.
+schema-v1 and schema-v2 validator checks that declaration and time window but does
+not maintain a replay database. Use either envelope for exactly one route-creation
+execution, discard it, and independently read back every route in the selected
+profile immediately. Never reuse it for a retry.
 After a partial, timed-out, or ambiguous result, read back first and obtain a new
 packet/evidence/approval for any still-required write.
 
@@ -103,6 +108,71 @@ of the initial approval. `buildRouteRequests` returns only the canonical suffix
 after the verified prefix, making recreation of an existing route impossible
 through this contract. If the readback is not an exact prefix, do not construct a
 continuation packet and do not guess which write succeeded.
+
+Schema v3 is the only authorized reconciliation shape when a disabled shared
+Development Gateway already has a nonzero complete provider inventory that is
+not the exact schema-v2 canonical prefix. It is restricted to `setup-journey`.
+Capture a fresh authoritative disabled-Gateway readback and the complete API-route
+inventory before constructing the packet. Set `providerInventoryComplete: true`,
+bind the observed timestamp and prestate-evidence digest, and require
+`gatewayPrestate.routeCount` to equal the complete normalized inventory length.
+`existingRouteInventory` uses the same normalized allowlist as schema v2 but may
+remain in provider-returned order. Every route identity must be unique and must
+match either one of the seventeen setup routes exactly or the one already-existing
+deferred `CRM_BILLING` route. Unknown routes, duplicate identities or endpoints,
+attribute drift, an empty or omitted inventory, a route-count mismatch, Production,
+an enabled Gateway, and an already-complete setup inventory fail closed.
+
+The schema-v3 packet and approval both bind the full provider-inventory digest,
+the exact canonical `missingRoutes` digest, the immutable source revision and
+route-contract digest, the observed-at timestamp, and whether the deferred Billing
+route was present. Both must set `existingRouteMutationAuthorized: false` and
+`billingMutationAuthorized: false`; the packet still sets
+`gatewayActivationAuthorized: false` and `retryAuthorized: false`. The packet's
+lowercase UUIDv4 `operationAuthorizationId` is the stable one-execution authority.
+The approval additionally sets
+`additiveReconciliationAuthorized: true`, repeats the complete-inventory assertion,
+sets `durableConsumptionRequired: true`, binds the same authority ID and the
+domain-separated exact-packet `consumptionSha256`, and uses the same maximum
+15-minute, `singleUse: true` window as schema v2. Approval timestamp reissuance
+cannot rotate either the stable authority or consumption digest. The
+disabled-Gateway prestate itself must be no more than 15 minutes old at request
+generation.
+
+`validate-private-route-packet.js` is validation-only and never consumes an
+approval or authorizes a provider write. Immediately before the first schema-v3
+route create, the authorized executor must run the shared local consumption
+boundary using its fixed private ledger and pinned Node executable:
+
+```text
+python tools/safety/claim_approval_consumption.py catalyst-route-additive-reconciliation-v3 <absolute-private-additive-reconciliation-packet-path> <absolute-private-additive-reconciliation-approval-path>
+```
+
+Continue only when that command returns `claimed`. It atomically stores the stable
+authority as a UNIQUE key with the validator-returned consumption digest before
+the first create. `already-consumed` and `error` are hard stops. The record is
+never cleared after success, partial success, timeout, ambiguity, or local output
+failure. Do not run the claimant merely to validate: a successful claim consumes
+the approval even when no provider call follows. A new authoritative readback,
+packet with a new operation authority, and approval are mandatory after any
+partial, ambiguous, or failed attempt.
+
+`buildRouteRequests` derives the missing setup identities from the complete
+inventory and emits only those routes in canonical setup-profile order. It never
+emits a request for an existing route or for `CRM_BILLING`; it has no update,
+delete, reorder, activation, or Billing mutation path. Existing provider order is
+preserved rather than normalized into a desired order.
+
+After the additive creations, keep the Development Gateway disabled and capture a
+fresh complete normalized readback outside every worktree. The final-readback
+envelope binds the exact schema-v3 packet digest and Development organization,
+project, and environment. `verify-private-route-additive-readback.js` requires all
+seventeen setup routes with exact canonical attributes, requires every pre-existing
+route to be unchanged, requires `CRM_BILLING` exactly when it existed in prestate,
+and rejects every additional route. The readback must be no more than 15 minutes
+old and still report `gatewayEnabled: false`. Development Gateway enablement remains
+a separate action with separate fresh approval and independent readback; neither
+the reconciliation packet nor the final-readback verifier authorizes it.
 
 For the authenticated-browser fallback, the Catalyst console may open the custom
 route form directly after the first custom route instead of showing the initial

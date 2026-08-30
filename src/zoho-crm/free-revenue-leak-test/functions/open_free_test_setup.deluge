@@ -1,7 +1,7 @@
 /*
 Owning workflow: CRM record-bound assisted Form 1 launch.
-Trigger: Administrator-restricted Leads or Deals record-details button.
-Inputs: current record ID and fixed module API name from the button binding.
+Trigger: Administrator-restricted Leads `Open Free-Test Setup` record-details button.
+Inputs: current Lead ID and the exact fixed `Leads` module API name from the button binding.
 Security: Catalyst reads/initializes the canonical CRM journey with a conditional
 server-side write. It receives record identity only over an authenticated private
 request and returns the Catalyst access page with the one-time journey credential
@@ -21,7 +21,7 @@ try
 	record_id_text = ifnull(input.record_id,"").toString().trim();
 	module_text = ifnull(input.crm_module,"").toString().trim();
 	valid_record = record_id_text.matches("^[1-9][0-9]{9,29}$");
-	valid_module = module_text == "Leads" || module_text == "Deals";
+	valid_module = module_text == "Leads";
 	if(valid_record && valid_module)
 	{
 		request_body = Map();

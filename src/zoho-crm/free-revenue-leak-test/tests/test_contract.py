@@ -30,6 +30,7 @@ FORM2_PRODUCER_PATH = (
     / "lib"
     / "form-contract.js"
 )
+FORM2_HANDLER_PATH = FORM2_PRODUCER_PATH.with_name("handler.js")
 RELEASE_CONTRACT_PATH = ROOT / "docs" / "product" / "free-revenue-leak-test-release-contract.json"
 LIVE_TOPOLOGY_PREFLIGHT_PATH = (
     PACKAGE / "evidence" / "live-topology-layout-preflight-2026-08-28.json"
@@ -541,7 +542,6 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         expected_operator_inputs = {
             "Confirm Authorization": [],
             "Begin Setup and QA": [
-                "Test_Phone_Number",
                 "Deployment_Record_ID",
                 "Configuration_Version",
             ],
@@ -830,6 +830,60 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
                 "create one internal setup-and-QA task",
             ],
         )
+        self.assertEqual(form2_rule["criterion_authority"], "reviewed_desired")
+        self.assertEqual(
+            form2_rule["criterion_ast_rule_key"], "form2Candidate"
+        )
+        self.assertTrue(form2_rule["desired_criterion_ast_committed"])
+        self.assertTrue(
+            form2_rule["workflow_repair_candidate_mutation_authorized"]
+        )
+        self.assertTrue(
+            form2_rule["workflow_repair_activation_authorized"]
+        )
+        self.assertEqual(
+            form2_rule["workflow_repair_superseded_mutation_scope"],
+            "none_already_inactive",
+        )
+        action_contract = form2_rule["exact_action_contract"]
+        self.assertEqual(
+            action_contract["field_updates"],
+            [{"api_name": "Setup_Access_Status", "value": "Submitted"}],
+        )
+        self.assertEqual(
+            action_contract["deleted_field_update_roles"],
+            ["authorizationSigned", "testStatusSetupPending"],
+        )
+        self.assertEqual(action_contract["scheduled_actions"], [])
+        task = action_contract["tasks"][0]
+        self.assertEqual(
+            task["subject"],
+            "Review Form 2 Setup and Begin QA — ${Deals.Deal Name}",
+        )
+        self.assertEqual(task["due"], "trigger_plus_0_days")
+        self.assertEqual(task["priority"], "High")
+        self.assertEqual(task["status"], "Not Started")
+        self.assertEqual(task["owner"], "private_internal_operator_binding")
+        self.assertFalse(task["notify_assignee"])
+        self.assertEqual(task["record_association"], "current_deal")
+        self.assertEqual(
+            task["description"],
+            "Trusted Form 2 controller proof was verified for "
+            "${Deals.Deal Name}. Review the submitted evidence, configure "
+            "the approved route and fallback/rollback contacts, and complete "
+            "QA for the exact configuration version. Do not activate routing; "
+            "Test Live still requires separate internal Go-Live Approval "
+            "Status = Approved.",
+        )
+        criterion_text = json.dumps(
+            self.automation["workflow_criterion_ast"]["rules"][
+                "form2Candidate"
+            ],
+            sort_keys=True,
+        )
+        self.assertNotIn("Form_2_Trusted_Proof_Accepted", criterion_text)
+        self.assertNotIn("Authorization_Signed_At", criterion_text)
+        self.assertIn("Setup_Access_Status", criterion_text)
         self.assertIn(
             "treating controller proof as a signature",
             form2_rule["prohibited_effects"],
@@ -853,6 +907,11 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
             {"api_name": "Test_Start_At", "operator": "is_not_empty"},
             activation["criteria"],
         )
+        self.assertIn(
+            {"api_name": "Test_Phone_Number", "operator": "is_not_empty"},
+            activation["criteria"],
+        )
+        self.assertIn("Test_Phone_Number", activation["required_preexisting_fields"])
         approval = by_name["Record Internal Approval"]
         self.assertEqual(
             approval["external_evidence_requirements"],
@@ -1502,6 +1561,150 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         self.assertFalse(repair["deployable_source_in_repository"])
         self.assertFalse(repair["live_write_authorized"])
 
+    def test_form2_lifecycle_keeps_submitted_state_through_setup_and_qa(
+        self,
+    ) -> None:
+        form_contract_source = FORM2_PRODUCER_PATH.read_text(encoding="utf-8")
+        handler_source = FORM2_HANDLER_PATH.read_text(encoding="utf-8")
+        self.assertRegex(
+            form_contract_source,
+            r"(?m)^      Setup_Access_Status: setupAccessSubmittedStatus,$",
+        )
+        submitted_option = (
+            "setupAccessSubmittedStatus: "
+            "dependencies.config.form2AccessStatuses.submitted,"
+        )
+        self.assertEqual(handler_source.count(submitted_option), 1)
+        self.assertNotIn(
+            "setupAccessSubmittedStatus: "
+            "dependencies.config.form2AccessStatuses.verified,",
+            handler_source,
+        )
+
+        workflow_criterion = self.automation["workflow_criterion_ast"][
+            "rules"
+        ]["form2Candidate"]
+
+        def find_workflow_conditions(node: dict) -> list[dict]:
+            if node["type"] == "condition":
+                return [node]
+            return [
+                condition
+                for child in node["children"]
+                for condition in find_workflow_conditions(child)
+            ]
+
+        workflow_setup_status = [
+            condition
+            for condition in find_workflow_conditions(workflow_criterion)
+            if condition["apiName"] == "Setup_Access_Status"
+        ]
+        self.assertEqual(
+            workflow_setup_status,
+            [
+                {
+                    "type": "condition",
+                    "apiName": "Setup_Access_Status",
+                    "operator": "equal",
+                    "value": "Submitted",
+                }
+            ],
+        )
+
+        transitions = {
+            transition["name"]: transition
+            for transition in self.automation["blueprint"][
+                "transition_topology"
+            ]
+        }
+        confirm = transitions["Confirm Authorization"]
+        begin_setup = transitions["Begin Setup and QA"]
+        submitted_criterion = {
+            "api_name": "Setup_Access_Status",
+            "operator": "equals",
+            "value": "Submitted",
+        }
+        self.assertIn(submitted_criterion, confirm["criteria"])
+        self.assertEqual(
+            begin_setup["criteria"],
+            [
+                submitted_criterion,
+                {
+                    "api_name": "Approved_Test_Route",
+                    "operator": "is_not_empty",
+                },
+                {
+                    "api_name": "Approved_Fallback_Destination",
+                    "operator": "is_not_empty",
+                },
+                {
+                    "api_name": "Forwarding_Administrator_Name",
+                    "operator": "is_not_empty",
+                },
+                {
+                    "api_name": "Forwarding_Administrator_Mobile",
+                    "operator": "is_not_empty",
+                },
+                {
+                    "api_name": "Alert_Recipient_Email",
+                    "operator": "is_not_empty",
+                },
+                {
+                    "api_name": "Setup_Access_Verified_At",
+                    "operator": "is_not_empty",
+                },
+                {
+                    "api_name": "Rollback_Contact_Name",
+                    "operator": "is_not_empty",
+                },
+                {
+                    "api_name": "Rollback_Contact_Mobile",
+                    "operator": "is_not_empty",
+                },
+            ],
+        )
+        lifecycle_status_values = {
+            workflow_setup_status[0]["value"],
+            next(
+                criterion["value"]
+                for criterion in confirm["criteria"]
+                if criterion["api_name"] == "Setup_Access_Status"
+            ),
+            next(
+                criterion["value"]
+                for criterion in begin_setup["criteria"]
+                if criterion["api_name"] == "Setup_Access_Status"
+            ),
+        }
+        self.assertEqual(lifecycle_status_values, {"Submitted"})
+        self.assertNotIn("Verified", lifecycle_status_values)
+
+        for transition_name in ("Begin Setup and QA", "Record Internal Approval"):
+            transition = transitions[transition_name]
+            criterion_fields = {
+                criterion.get("api_name")
+                for criterion in transition["criteria"]
+            }
+            self.assertNotIn("Test_Phone_Number", criterion_fields)
+            self.assertNotIn(
+                "Test_Phone_Number", transition["required_preexisting_fields"]
+            )
+            self.assertNotIn("Test_Phone_Number", transition["operator_input_fields"])
+
+        activation = transitions["Activate Test Route"]
+        self.assertIn(
+            {"api_name": "Test_Phone_Number", "operator": "is_not_empty"},
+            activation["criteria"],
+        )
+        self.assertIn("Test_Phone_Number", activation["required_preexisting_fields"])
+        for transition in (confirm, begin_setup):
+            self.assertFalse(
+                any(
+                    action.get("api_name") == "Setup_Access_Status"
+                    for action in transition["allowed_after_actions"]
+                )
+            )
+
     def test_live_topology_preflight_closes_only_the_metadata_layout_gate(self) -> None:
         evidence = self.live_topology
         self.assertEqual(evidence["schema_version"], 1)
@@ -1679,6 +1882,36 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         self.assertEqual(predecessor["button"], "Start Free-Test Request")
         form1 = by_name["FORM1_ASSISTED_ISSUE_CALLER"]
         form2 = by_name["FORM2_SETUP_ISSUE_CALLER"]
+        self.assertEqual(
+            list(
+                dict.fromkeys(
+                    caller["button"]
+                    for caller in manifest["callers"]
+                    if caller is not predecessor
+                )
+            ),
+            [
+                "Open Free-Test Setup",
+                "Approve And Start Free Test",
+                "Stop Or Roll Back Free Test",
+            ],
+        )
+        self.assertEqual(
+            (form1["module"], form1["button"], form1["source"]),
+            ("Leads", "Open Free-Test Setup", "../functions/open_free_test_setup.deluge"),
+        )
+        self.assertEqual(
+            (form2["module"], form2["button"], form2["source"]),
+            (
+                "Deals",
+                "Open Free-Test Setup",
+                "../functions/issue_revenue_leak_test_setup.deluge",
+            ),
+        )
+        self.assertNotIn(
+            "Issue Revenue Leak Test Setup",
+            {caller["button"] for caller in manifest["callers"]},
+        )
         self.assertEqual(form1["request"]["method"], "POST")
         self.assertEqual(
             form1["request"]["body_keys"], ["crmModule", "recordId"]
@@ -1731,6 +1964,66 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
             r"\b[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b",
         )
 
+    def test_lead_scheduled_follow_up_removal_is_browser_only_and_fail_closed(self) -> None:
+        lead = next(
+            workflow
+            for workflow in self.automation["workflow_set"]
+            if workflow["logical_name"] == "FORM1_INTAKE_REVIEW"
+        )
+        removal = lead["scheduled_follow_up_removal"]
+        self.assertEqual(
+            removal["contract_id"],
+            "crm-lead-intake-scheduled-association-removal-browser-v1",
+        )
+        self.assertEqual(removal["execution_surface"], "governed_signed_in_browser")
+        self.assertFalse(removal["connector_mutation_authorized"])
+        self.assertFalse(removal["claim_executor_authorized"])
+        self.assertFalse(removal["global_task_definition_deletion_authorized"])
+        self.assertIn("after the v3 connector repair", removal["required_order"])
+
+        prestate = removal["prestate"]
+        self.assertEqual(
+            prestate["rule"],
+            {
+                "module": "Leads",
+                "name": "Leads Free Test Intake Review",
+                "active": True,
+                "trigger": "create_only",
+                "repeat": False,
+                "criterion_ast_rule_key": "leadIntake",
+                "condition_count": 1,
+                "instant_task_association_count": 1,
+                "scheduled_group_count": 1,
+                "scheduled_task_association_count": 1,
+            },
+        )
+        self.assertIn("scheduled group ID", prestate["private_exact_bindings_required"])
+        inventory = prestate["task_definition_inventory"]
+        self.assertTrue(inventory["pagination_complete"])
+        self.assertEqual(inventory["exact_id_match_count_per_task"], 1)
+        self.assertEqual(inventory["immediate_review"]["dueDays"], 0)
+        self.assertEqual(inventory["scheduled_follow_up"]["dueDays"], 0)
+        self.assertEqual(
+            prestate["scheduled_group"],
+            {
+                "period": "business_days",
+                "unit": 1,
+                "pending_scheduled_execution_count": 0,
+            },
+        )
+
+        mutation = removal["mutation"]
+        self.assertEqual(mutation["maximum_save_count"], 1)
+        self.assertFalse(mutation["automatic_retry"])
+        self.assertIn("global task definitions", " ".join(mutation["preserve"]))
+        poststate = removal["authoritative_poststate"]
+        self.assertEqual(poststate["scheduled_action_groups"], 0)
+        self.assertEqual(poststate["scheduled_task_associations"], 0)
+        self.assertTrue(poststate["rule_and_immediate_task_exactly_match_prestate"])
+        self.assertFalse(
+            removal["containment"]["delete_schedule_action_status_flag_authorized"]
+        )
+
     def test_form1_deluge_template_is_record_bound_and_opens_only_token_url(self) -> None:
         caller = next(
             item for item in self.callers["callers"]
@@ -1740,6 +2033,8 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         self.assertTrue(source_path.is_relative_to(PACKAGE))
         source = source_path.read_text(encoding="utf-8")
 
+        self.assertIn('valid_module = module_text == "Leads";', source)
+        self.assertNotIn('module_text == "Deals"', source)
         self.assertEqual(source.lower().count("invokeurl"), 1)
         self.assertEqual(source.count("openUrl("), 1)
         self.assertEqual(

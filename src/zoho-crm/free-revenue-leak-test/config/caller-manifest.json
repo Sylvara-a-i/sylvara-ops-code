@@ -27,14 +27,14 @@
     {
       "logical_name": "FORM1_ASSISTED_ISSUE_CALLER",
       "source": "../functions/open_free_test_setup.deluge",
-      "module": ["Leads", "Deals"],
+      "module": "Leads",
       "source_format": "Zoho CRM Deluge free-flow button-function body",
       "button": "Open Free-Test Setup",
       "placement": "record details",
       "profile": "Administrator initially",
       "function_arguments": [
         { "name": "record_id", "source": "current record ID", "validation": "canonical 10-to-30-digit CRM record identifier" },
-        { "name": "crm_module", "source": "fixed button binding", "validation": "exact Leads or Deals" }
+        { "name": "crm_module", "source": "fixed button binding", "validation": "exact Leads" }
       ],
       "server_side_identity": {
         "field": "Intake_Submission_ID",
@@ -76,7 +76,7 @@
       "logical_name": "FORM2_SETUP_ISSUE_CALLER",
       "source": "../functions/issue_revenue_leak_test_setup.deluge",
       "module": "Deals",
-      "button": "Issue Revenue Leak Test Setup",
+      "button": "Open Free-Test Setup",
       "placement": "record details",
       "profile": "Administrator initially",
       "function_arguments": [
@@ -131,11 +131,11 @@
   "activation_gates": [
     "Verify the exact CRM organization, Development hosts, immutable source SHA, and disabled Production state before rendering any placeholder.",
     "Prove caller-specific Connections expose only the required API Gateway and private authentication headers.",
-    "Install the replacement Open Free-Test Setup control without deleting the retained contained predecessor.",
+    "Install Open Free-Test Setup separately on Leads and Deals with the exact module-specific function bindings, without deleting the retained contained predecessor.",
     "Run one ZZZ SYNTHETIC launch, approve/activate failure, successful activation, and rollback canary before widening access."
   ],
   "rollback": [
-    "Disable the three replacement controls and preserve their audit evidence.",
+    "Disable every replacement control instance for the three approved visible labels and preserve their audit evidence.",
     "Restore the retained Form 1 predecessor control as the only visible launcher if replacement validation fails.",
     "Keep Catalyst deployment rows stopped and preserve every configuration, receipt, and route readback.",
     "Never delete historical CRM, Form, Catalyst, or Retell evidence as rollback."

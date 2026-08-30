@@ -30,13 +30,20 @@ APPLICATION_ID = 0x53594C56
 USER_VERSION = 2
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
-CRM_WORKFLOW_TRIGGER_REPAIR_VALIDATOR = "crm-workflow-trigger-repair-v2"
+CRM_WORKFLOW_TRIGGER_REPAIR_VALIDATOR = "crm-workflow-trigger-repair-v3"
 # Keep the internal symbol stable for existing safety-test fixtures; its value
-# is the successor namespace, so the consumed v1 identifier is not accepted.
+# is the current namespace, so consumed predecessor identifiers are not accepted.
 CRM_WORKFLOW_REPAIR_VALIDATOR = CRM_WORKFLOW_TRIGGER_REPAIR_VALIDATOR
 ANALYTICS_MUTATION_VALIDATOR = "analytics-mutation-v3"
+CATALYST_ROUTE_ADDITIVE_RECONCILIATION_VALIDATOR = (
+    "catalyst-route-additive-reconciliation-v3"
+)
 SUPPORTED_VALIDATORS = frozenset(
-    (CRM_WORKFLOW_TRIGGER_REPAIR_VALIDATOR, ANALYTICS_MUTATION_VALIDATOR)
+    (
+        CRM_WORKFLOW_TRIGGER_REPAIR_VALIDATOR,
+        ANALYTICS_MUTATION_VALIDATOR,
+        CATALYST_ROUTE_ADDITIVE_RECONCILIATION_VALIDATOR,
+    )
 )
 LEDGER_DIRECTORY_ENV = "SYLVARA_APPROVAL_LEDGER_DIRECTORY"
 NODE_EXECUTABLE_ENV = "SYLVARA_APPROVAL_NODE_EXECUTABLE"
@@ -58,10 +65,25 @@ _ANALYTICS_VALIDATOR_CLI = (
     / "tools"
     / "validate-private-analytics-mutation-packet.js"
 )
+_CATALYST_ROUTE_VALIDATOR_CLI = (
+    REPOSITORY_ROOT
+    / "src"
+    / "zoho-catalyst"
+    / "revenue-desk-release"
+    / "scripts"
+    / "validate-private-route-packet.js"
+)
 _VALIDATOR_RESULT_SCHEMA = "sylvara.bound-validator-result.v1"
 _NODE_BRIDGE = r"""
 "use strict";
 const validator = require(process.argv[1]);
+const validatorName = process.argv[4];
+if (
+  validatorName === "catalyst-route-additive-reconciliation-v3" &&
+  validator.CLAIM_NAMESPACE !== validatorName
+) {
+  throw new Error("validator namespace mismatch");
+}
 const originalWrite = process.stdout.write.bind(process.stdout);
 let result;
 process.stdout.write = () => true;
@@ -72,7 +94,7 @@ try {
 }
 originalWrite(JSON.stringify({
   schema: "sylvara.bound-validator-result.v1",
-  validator: "analytics-mutation-v3",
+  validator: validatorName,
   authorityId: result.operationAuthorizationId,
   consumptionDigest: result.consumptionDigest,
 }));
@@ -689,10 +711,17 @@ def _configured_node_executable() -> Path:
     return resolved
 
 
-def _assert_execution_boundary_source_clean() -> None:
+def _assert_execution_boundary_source_clean(validator: str | None = None) -> None:
     """Bind the wrapper itself to the same committed HEAD as the validators."""
 
-    relative = "tools/safety/claim_approval_consumption.py"
+    relatives = ["tools/safety/claim_approval_consumption.py"]
+    if validator == CATALYST_ROUTE_ADDITIVE_RECONCILIATION_VALIDATOR:
+        relatives.extend(
+            [
+                "src/zoho-catalyst/revenue-desk-release/private-route-packet-contract.json",
+                "src/zoho-catalyst/revenue-desk-release/scripts/validate-private-route-packet.js",
+            ]
+        )
     environment = _git_subprocess_environment()
     common = {
         "cwd": REPOSITORY_ROOT,
@@ -717,7 +746,7 @@ def _assert_execution_boundary_source_clean() -> None:
                 "--porcelain=v1",
                 "--untracked-files=all",
                 "--",
-                relative,
+                *relatives,
             ],
             **common,
         )
@@ -732,7 +761,7 @@ def _assert_execution_boundary_source_clean() -> None:
                 "ls-files",
                 "-v",
                 "--",
-                relative,
+                *relatives,
             ],
             **common,
         )
@@ -743,7 +772,7 @@ def _assert_execution_boundary_source_clean() -> None:
         or status.stdout.strip()
         or status.stderr
         or index.returncode != 0
-        or index.stdout.strip() != f"H {relative}"
+        or set(index.stdout.splitlines()) != {f"H {relative}" for relative in relatives}
         or index.stderr
     ):
         _fail(InvalidClaimInput)
@@ -1230,13 +1259,15 @@ def _strict_json_object(value: str) -> dict[str, Any]:
     return result
 
 
-def _validate_analytics_mutation(
+def _validate_node_mutation(
+    validator_cli: Path,
+    validator_name: str,
     packet_path: str | os.PathLike[str],
     approval_path: str | os.PathLike[str],
 ) -> tuple[str, str]:
     node_path = _configured_node_executable()
     try:
-        if not _ANALYTICS_VALIDATOR_CLI.is_file():
+        if not validator_cli.is_file():
             _fail(InvalidClaimInput)
         environment = _git_subprocess_environment()
         # Caller-controlled Node preload/module paths could replace the fixed
@@ -1255,9 +1286,10 @@ def _validate_analytics_mutation(
                 str(node_path),
                 "-e",
                 _NODE_BRIDGE,
-                str(_ANALYTICS_VALIDATOR_CLI),
+                str(validator_cli),
                 os.fspath(packet_path),
                 os.fspath(approval_path),
+                validator_name,
             ],
             cwd=REPOSITORY_ROOT,
             env=environment,
@@ -1287,10 +1319,34 @@ def _validate_analytics_mutation(
         _fail(InvalidClaimInput)
     if (
         result["schema"] != _VALIDATOR_RESULT_SCHEMA
-        or result["validator"] != ANALYTICS_MUTATION_VALIDATOR
+        or result["validator"] != validator_name
     ):
         _fail(InvalidClaimInput)
     return result["authorityId"], result["consumptionDigest"]
+
+
+def _validate_analytics_mutation(
+    packet_path: str | os.PathLike[str],
+    approval_path: str | os.PathLike[str],
+) -> tuple[str, str]:
+    return _validate_node_mutation(
+        _ANALYTICS_VALIDATOR_CLI,
+        ANALYTICS_MUTATION_VALIDATOR,
+        packet_path,
+        approval_path,
+    )
+
+
+def _validate_catalyst_route_additive_reconciliation(
+    packet_path: str | os.PathLike[str],
+    approval_path: str | os.PathLike[str],
+) -> tuple[str, str]:
+    return _validate_node_mutation(
+        _CATALYST_ROUTE_VALIDATOR_CLI,
+        CATALYST_ROUTE_ADDITIVE_RECONCILIATION_VALIDATOR,
+        packet_path,
+        approval_path,
+    )
 
 
 def _validated_pair(
@@ -1302,6 +1358,10 @@ def _validated_pair(
         return _validate_crm_workflow_repair(packet_path, approval_path)
     elif validator == ANALYTICS_MUTATION_VALIDATOR:
         return _validate_analytics_mutation(packet_path, approval_path)
+    elif validator == CATALYST_ROUTE_ADDITIVE_RECONCILIATION_VALIDATOR:
+        return _validate_catalyst_route_additive_reconciliation(
+            packet_path, approval_path
+        )
     _fail(InvalidClaimInput)
 
 
@@ -1317,7 +1377,7 @@ def validate_and_claim_approval(
     is accepted as a caller-controlled argument.
     """
 
-    _assert_execution_boundary_source_clean()
+    _assert_execution_boundary_source_clean(validator)
     ledger_directory = _configured_ledger_directory()
     authority_id, consumption_digest = _validated_pair(
         validator, packet_path, approval_path

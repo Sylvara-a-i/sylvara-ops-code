@@ -5,7 +5,7 @@ whose values stay outside every Git worktree, and returns only a sanitized
 summary.  The packet digest is exactly::
 
     SHA-256(
-        UTF-8("sylvara.crm.workflow-trigger-repair-packet.v2")
+        UTF-8("sylvara.crm.workflow-trigger-repair-packet.v3")
         || 0x00
         || UTF-8(canonical_json(packet))
     )
@@ -33,15 +33,15 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 MAX_START_WINDOW_SECONDS = 15 * 60
 MAX_PRIVATE_FILE_BYTES = 1024 * 1024
-SCHEMA_VERSION = 2
-CLAIM_NAMESPACE = "crm-workflow-trigger-repair-v2"
+SCHEMA_VERSION = 3
+CLAIM_NAMESPACE = "crm-workflow-trigger-repair-v3"
 
-PACKET_DIGEST_DOMAIN = "sylvara.crm.workflow-trigger-repair-packet.v2"
+PACKET_DIGEST_DOMAIN = "sylvara.crm.workflow-trigger-repair-packet.v3"
 CAPABILITY_DIGEST_DOMAIN = (
-    "sylvara.crm.workflow-trigger-repair-capability.v2"
+    "sylvara.crm.workflow-trigger-repair-capability.v3"
 )
 TOOL_CONTRACT_DIGEST_DOMAIN = (
-    "sylvara.crm.workflow-trigger-repair-tool-contract.v2"
+    "sylvara.crm.workflow-trigger-repair-tool-contract.v3"
 )
 
 WRITE_TOOL = (
@@ -56,11 +56,36 @@ INVENTORY_TOOL = (
     "mcp__codex_apps__sylvara_crm_audit_"
     "zohocrm_getworkflowrules"
 )
+FIELD_UPDATE_BY_ID_TOOL = (
+    "mcp__codex_apps__sylvara_crm_audit_"
+    "zohocrm_getfieldupdatebyid"
+)
+WORKFLOW_TASK_INVENTORY_TOOL = (
+    "mcp__codex_apps__sylvara_crm_audit_"
+    "zohocrm_getworkflowtasks"
+)
 OFFICIAL_UPDATE_CONTRACT = (
     "https://www.zoho.com/crm/developer/docs/api/v8/update-workflow.html"
 )
 
 SUPERSEDED_FORM2_RULE_NAME = "Deals Free Test Form 2 Submitted"
+OBSERVED_FORM2_RULE_NAME = "Deals Form 2 Controller Proof Candidate"
+CANONICAL_FORM2_RULE_NAME = (
+    "Deals Revenue Leak Test Setup Form Proof Candidate"
+)
+FORM2_TASK_SUBJECT = (
+    "Review Form 2 Setup and Begin QA — ${Deals.Deal Name}"
+)
+FORM2_TASK_DESCRIPTION = (
+    "Trusted Form 2 controller proof was verified for ${Deals.Deal Name}. "
+    "Review the submitted evidence, configure the approved route and "
+    "fallback/rollback contacts, and complete QA for the exact configuration "
+    "version. Do not activate routing; Test Live still requires separate "
+    "internal Go-Live Approval Status = Approved."
+)
+FORM2_TASK_DESCRIPTION_SHA256 = hashlib.sha256(
+    FORM2_TASK_DESCRIPTION.encode("utf-8")
+).hexdigest()
 ENTRY_OFFER_VALUE = "7-Day Revenue Leak Test"
 EMPTY_CRITERION_VALUE = "${EMPTY}"
 
@@ -96,11 +121,54 @@ _INITIALIZER_CRITERIA = _criterion_group(
     _criterion("Entry_Offer", "equal", ENTRY_OFFER_VALUE),
     _criterion("Setup_Form_Submission_ID", "equal", EMPTY_CRITERION_VALUE),
 )
+_FORM2_CANDIDATE_CRITERIA = _criterion_group(
+    "AND",
+    _criterion("Entry_Offer", "equal", ENTRY_OFFER_VALUE),
+    _criterion("Setup_Access_Status", "equal", "Submitted"),
+    _criterion("Setup_Form_Submission_ID", "not_equal", EMPTY_CRITERION_VALUE),
+    _criterion("Setup_Form_Submitted_At", "not_equal", EMPTY_CRITERION_VALUE),
+    _criterion("Setup_Form_Version", "not_equal", EMPTY_CRITERION_VALUE),
+    _criterion("Authorized_Representative_Confirmed", "equal", True),
+    _criterion("Authority_Confirmed_At", "not_equal", EMPTY_CRITERION_VALUE),
+    _criterion("Test_Scope_Accepted", "equal", True),
+    _criterion("Test_Scope_Accepted_At", "not_equal", EMPTY_CRITERION_VALUE),
+    _criterion("Test_Scope_Version", "not_equal", EMPTY_CRITERION_VALUE),
+    _criterion_group(
+        "OR",
+        _criterion("Go_Live_Approval_Status", "equal", "Not Ready"),
+        _criterion(
+            "Go_Live_Approval_Status",
+            "equal",
+            "Pending Internal Approval",
+        ),
+    ),
+)
 _REVIEWED_CRITERIA = {
     "leadIntake": _LEAD_CRITERIA,
     "controls": _INITIALIZER_CRITERIA,
     "limits": _INITIALIZER_CRITERIA,
+    "form2Candidate": _FORM2_CANDIDATE_CRITERIA,
 }
+_PRESTATE_REVIEWED_CRITERIA_KEYS = frozenset(
+    {"leadIntake", "controls", "limits"}
+)
+_FORM2_CRITERION_API_NAMES = tuple(
+    sorted(
+        {
+            "Entry_Offer",
+            "Setup_Access_Status",
+            "Setup_Form_Submission_ID",
+            "Setup_Form_Submitted_At",
+            "Setup_Form_Version",
+            "Authorized_Representative_Confirmed",
+            "Authority_Confirmed_At",
+            "Test_Scope_Accepted",
+            "Test_Scope_Accepted_At",
+            "Test_Scope_Version",
+            "Go_Live_Approval_Status",
+        }
+    )
+)
 
 RULE_SPECS = {
     "leadIntake": {
@@ -142,7 +210,7 @@ RULE_SPECS = {
     },
     "form2Candidate": {
         "module": "Deals",
-        "name": "Deals Form 2 Controller Proof Candidate",
+        "name": OBSERVED_FORM2_RULE_NAME,
         "active": False,
         "triggerType": "create_or_edit",
         "lastExecutionMarkerPresent": False,
@@ -193,6 +261,38 @@ TOOL_CONTRACT = {
     "writeTool": WRITE_TOOL,
     "readByIdTool": READ_BY_ID_TOOL,
     "inventoryTool": INVENTORY_TOOL,
+    "fieldUpdateByIdTool": FIELD_UPDATE_BY_ID_TOOL,
+    "workflowTaskInventoryTool": WORKFLOW_TASK_INVENTORY_TOOL,
+    "actionDefinitionNormalization": {
+        "fieldUpdate": [
+            "id",
+            "moduleApiName",
+            "featureType",
+            "fieldApiName",
+            "definitionType",
+            "value",
+        ],
+        "workflowTask": [
+            "id",
+            "moduleApiName",
+            "featureType",
+            "subject",
+            "dueDays",
+            "priority",
+            "status",
+            "ownerId",
+            "ownerInternal",
+            "notifyAssignee",
+            "recordAssociation",
+            "descriptionSha256",
+        ],
+    },
+    "workflowTaskInventoryQuery": {
+        "module": "Deals",
+        "page": 1,
+        "per_page": 200,
+        "nameFilterAuthorized": False,
+    },
 }
 
 EXECUTION_POLICY = {
@@ -209,13 +309,18 @@ EXECUTION_POLICY = {
     "partialTriggerProgressionAccepted": "monotonic_prefix_only",
     "criterionDriftAccepted": False,
     "finalCriteriaReadbackRequired": True,
-    "form2CriterionAuthority": "blocked_observed_not_authoritative",
-    "form2CandidateMutationAuthorized": False,
-    "form2ActivationAuthorized": False,
-    "form2MutationAuthorized": False,
+    "form2CriterionAuthority": "reviewed_desired",
+    "form2CandidateMutationAuthorized": True,
+    "form2ActivationAuthorized": True,
+    "form2MutationAuthorized": True,
     "scheduledActionMutationOrDeletionAuthorized": False,
-    "form2MustRemainDisabled": True,
+    "form2InactiveEditAndReadbackRequiredBeforeActivation": True,
+    "form2UnsafeFieldUpdateDeletionAuthorized": True,
+    "form2AmbiguousActivationMustBeDeactivated": True,
     "form2SubmissionsMustRemainZero": True,
+    "independentActionDefinitionReadbackRequired": True,
+    "taskInventoryMustBeComplete": True,
+    "taskIdMatchCountMustEqualOne": True,
 }
 
 _IDENTIFIER = re.compile(r"^[1-9][0-9]{18}$")
@@ -259,10 +364,10 @@ class WorkflowRepairValidationResult:
     consumption_digest: str
     authority_id: str
     environment: str = "Development"
-    main_operation_count: int = 8
-    main_mutation_call_count: int = 3
-    conditional_containment_operation_count: int = 1
-    maximum_mutation_call_count: int = 3
+    main_operation_count: int = 11
+    main_mutation_call_count: int = 5
+    conditional_containment_operation_count: int = 3
+    maximum_mutation_call_count: int = 6
     mutation_performed: bool = False
     single_use_runtime_enforced: bool = False
 
@@ -299,6 +404,18 @@ def _positive_provider_integer(value: Any, code: str) -> int:
         isinstance(value, int)
         and not isinstance(value, bool)
         and 1 <= value <= _MAX_PROVIDER_INTEGER,
+        code,
+    )
+    return value
+
+
+def _exact_integer(value: Any, expected: int, code: str) -> int:
+    """Require an exact JSON integer, excluding bools and numeric floats."""
+
+    _require(
+        isinstance(value, int)
+        and not isinstance(value, bool)
+        and value == expected,
         code,
     )
     return value
@@ -703,8 +820,129 @@ def assert_private_packet_path(value: str | os.PathLike[str]) -> Path:
     return selected
 
 
+def _validate_form2_action_semantics(value: Any) -> Mapping[str, Any]:
+    semantics = _exact_mapping(
+        value,
+        [
+            "setupAccessSubmitted",
+            "setupAndQaTask",
+            "authorizationSigned",
+            "testStatusSetupPending",
+        ],
+        "binding_form2_action_semantics_shape_invalid",
+    )
+    setup = _exact_mapping(
+        semantics["setupAccessSubmitted"],
+        ["type", "apiName", "value"],
+        "binding_form2_setup_action_invalid",
+    )
+    _require(
+        setup
+        == {
+            "type": "field_update",
+            "apiName": "Setup_Access_Status",
+            "value": "Submitted",
+        },
+        "binding_form2_setup_action_invalid",
+    )
+    authorization = _exact_mapping(
+        semantics["authorizationSigned"],
+        ["type", "apiName", "value"],
+        "binding_form2_authorization_action_invalid",
+    )
+    _require(
+        authorization
+        == {
+            "type": "field_update",
+            "apiName": "Free_Test_Authorization_Status",
+            "value": "Signed",
+        },
+        "binding_form2_authorization_action_invalid",
+    )
+    test_status = _exact_mapping(
+        semantics["testStatusSetupPending"],
+        ["type", "apiName", "value"],
+        "binding_form2_test_status_action_invalid",
+    )
+    _require(
+        test_status
+        == {
+            "type": "field_update",
+            "apiName": "Test_Status",
+            "value": "Setup Pending",
+        },
+        "binding_form2_test_status_action_invalid",
+    )
+    task = _exact_mapping(
+        semantics["setupAndQaTask"],
+        [
+            "type",
+            "subject",
+            "dueDays",
+            "priority",
+            "status",
+            "ownerId",
+            "ownerInternal",
+            "notifyAssignee",
+            "recordAssociation",
+            "descriptionSha256",
+        ],
+        "binding_form2_task_action_invalid",
+    )
+    _require(
+        task["type"] == "task"
+        and task["subject"] == FORM2_TASK_SUBJECT
+        and isinstance(task["dueDays"], int)
+        and not isinstance(task["dueDays"], bool)
+        and task["dueDays"] == 0
+        and task["priority"] == "High"
+        and task["status"] == "Not Started"
+        and task["ownerInternal"] is True
+        and task["notifyAssignee"] is False
+        and task["recordAssociation"] == "current_deal",
+        "binding_form2_task_action_invalid",
+    )
+    _identifier(task["ownerId"], "binding_form2_task_owner_invalid")
+    _require(
+        _sha256(
+            task["descriptionSha256"],
+            "binding_form2_task_description_invalid",
+        )
+        == FORM2_TASK_DESCRIPTION_SHA256,
+        "binding_form2_task_description_invalid",
+    )
+    return semantics
+
+
 def _validate_bindings(value: Any) -> Mapping[str, Any]:
-    bindings = _exact_mapping(value, ["rules"], "bindings_shape_invalid")
+    bindings = _exact_mapping(
+        value,
+        [
+            "rules",
+            "form2CandidateActionSemantics",
+            "form2CriterionFieldIds",
+        ],
+        "bindings_shape_invalid",
+    )
+    _validate_form2_action_semantics(
+        bindings["form2CandidateActionSemantics"]
+    )
+    field_ids = _exact_mapping(
+        bindings["form2CriterionFieldIds"],
+        _FORM2_CRITERION_API_NAMES,
+        "binding_form2_criterion_field_ids_invalid",
+    )
+    normalized_field_ids = [
+        _identifier(
+            field_ids[api_name],
+            "binding_form2_criterion_field_ids_invalid",
+        )
+        for api_name in _FORM2_CRITERION_API_NAMES
+    ]
+    _require(
+        len(normalized_field_ids) == len(set(normalized_field_ids)),
+        "binding_form2_criterion_field_ids_invalid",
+    )
     rules = _exact_mapping(
         bindings["rules"], RULE_ORDER, "binding_rules_shape_invalid"
     )
@@ -782,16 +1020,23 @@ def _validate_bindings(value: Any) -> Mapping[str, Any]:
 
 
 def _action_rows(
-    rule_binding: Mapping[str, Any], specs: Sequence[tuple[str, str]]
-) -> list[dict[str, str]]:
-    return [
-        {
+    rule_binding: Mapping[str, Any],
+    specs: Sequence[tuple[str, str]],
+    action_semantics: Mapping[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for role, action_type in specs:
+        row: dict[str, Any] = {
             "role": role,
             "type": action_type,
             "id": rule_binding["actionIds"][role],
         }
-        for role, action_type in specs
-    ]
+        if action_semantics is not None:
+            row["semantics"] = json.loads(
+                _canonical_json(action_semantics[role])
+            )
+        rows.append(row)
+    return rows
 
 
 def _scheduled_action_rows(
@@ -815,7 +1060,7 @@ def expected_prestate_rules(
     bindings: Mapping[str, Any],
     observed_form2_criteria: Mapping[str, Any],
 ) -> list[dict[str, Any]]:
-    """Render desired criteria and immutable non-authoritative Form2 evidence."""
+    """Render exact prestate, including the contained Form2 repair source."""
 
     rules = bindings["rules"]
     form2_criteria = normalize_observed_form2_criteria(
@@ -838,18 +1083,30 @@ def expected_prestate_rules(
                 "repeat": False,
                 "criteria": (
                     expected_criterion_ast(key)
-                    if key in _REVIEWED_CRITERIA
+                    if key in _PRESTATE_REVIEWED_CRITERIA_KEYS
                     else form2_criteria[key]
                 ),
                 "criteriaAuthority": (
                     "reviewed_desired"
-                    if key in _REVIEWED_CRITERIA
-                    else "observed_not_authoritative_activation_blocked"
+                    if key in _PRESTATE_REVIEWED_CRITERIA_KEYS
+                    else (
+                        "observed_repair_source_desired_committed"
+                        if key == "form2Candidate"
+                        else "observed_not_authoritative_inactive"
+                    )
                 ),
                 "lastExecutionMarkerPresent": spec[
                     "lastExecutionMarkerPresent"
                 ],
-                "instantActions": _action_rows(rule, spec["instant"]),
+                "instantActions": _action_rows(
+                    rule,
+                    spec["instant"],
+                    (
+                        bindings["form2CandidateActionSemantics"]
+                        if key == "form2Candidate"
+                        else None
+                    ),
+                ),
                 "scheduledActions": _scheduled_action_rows(
                     rule, spec["scheduled"]
                 ),
@@ -872,6 +1129,131 @@ def _read_call(rule_id: str) -> dict[str, Any]:
     }
 
 
+def _field_update_definition_read_call(action_id: str) -> dict[str, Any]:
+    return {
+        "tool": FIELD_UPDATE_BY_ID_TOOL,
+        "args": {"path_variables": {"id": action_id}},
+    }
+
+
+def _workflow_task_inventory_call() -> dict[str, Any]:
+    # The connector's name filter is not a reliable read boundary. A complete,
+    # unfiltered Deals inventory is small and lets the executor prove one exact
+    # private task ID rather than trusting a name search.
+    return {
+        "tool": WORKFLOW_TASK_INVENTORY_TOOL,
+        "args": {
+            "query_params": {
+                "module": "Deals",
+                "page": 1,
+                "per_page": 200,
+            }
+        },
+    }
+
+
+def _normalized_form2_field_update_definition(
+    bindings: Mapping[str, Any], role: str
+) -> dict[str, Any]:
+    semantics = bindings["form2CandidateActionSemantics"][role]
+    return {
+        "id": bindings["rules"]["form2Candidate"]["actionIds"][role],
+        "moduleApiName": "Deals",
+        "featureType": "workflow",
+        "fieldApiName": semantics["apiName"],
+        "definitionType": "static",
+        "value": semantics["value"],
+    }
+
+
+def _normalized_form2_task_definition(
+    bindings: Mapping[str, Any], role: str
+) -> dict[str, Any]:
+    semantics = bindings["form2CandidateActionSemantics"][role]
+    return {
+        "id": bindings["rules"]["form2Candidate"]["actionIds"][role],
+        "moduleApiName": "Deals",
+        "featureType": "workflow",
+        "subject": semantics["subject"],
+        "dueDays": semantics["dueDays"],
+        "priority": semantics["priority"],
+        "status": semantics["status"],
+        "ownerId": semantics["ownerId"],
+        "ownerInternal": semantics["ownerInternal"],
+        "notifyAssignee": semantics["notifyAssignee"],
+        "recordAssociation": semantics["recordAssociation"],
+        "descriptionSha256": semantics["descriptionSha256"],
+    }
+
+
+def _independent_form2_action_definition_gate(
+    bindings: Mapping[str, Any], roles: Sequence[str]
+) -> dict[str, Any]:
+    _require(
+        bool(roles)
+        and len(roles) == len(set(roles))
+        and set(roles).issubset(
+            {
+                "setupAccessSubmitted",
+                "setupAndQaTask",
+                "authorizationSigned",
+                "testStatusSetupPending",
+            }
+        ),
+        "internal_form2_action_definition_roles_invalid",
+    )
+    reads: list[dict[str, Any]] = []
+    for role in roles:
+        action_id = bindings["rules"]["form2Candidate"]["actionIds"][role]
+        if role == "setupAndQaTask":
+            reads.append(
+                {
+                    "role": role,
+                    "definitionType": "workflow_task_inventory_match",
+                    "call": _workflow_task_inventory_call(),
+                    "acceptance": {
+                        "paginationComplete": True,
+                        "infoMoreRecords": False,
+                        "exactTaskId": action_id,
+                        "exactTaskIdMatchCount": 1,
+                        "normalizedDefinition": (
+                            _normalized_form2_task_definition(bindings, role)
+                        ),
+                        "additionalTaskDefinitionsAccepted": True,
+                        "missingTruncatedOrDuplicateTargetAccepted": False,
+                    },
+                }
+            )
+            continue
+        reads.append(
+            {
+                "role": role,
+                "definitionType": "field_update_by_id",
+                "call": _field_update_definition_read_call(action_id),
+                "acceptance": {
+                    "singleDefinitionResult": True,
+                    "returnedActionId": action_id,
+                    "normalizedDefinition": (
+                        _normalized_form2_field_update_definition(
+                            bindings, role
+                        )
+                    ),
+                    "missingTruncatedOrAdditionalDataAccepted": False,
+                },
+            }
+        )
+    return {
+        "type": "exact_independent_form2_action_definition_set",
+        "requiredRoleOrder": list(roles),
+        "normalizationContract": TOOL_CONTRACT[
+            "actionDefinitionNormalization"
+        ],
+        "reads": reads,
+        "allDefinitionsMustMatchBeforeContinuing": True,
+        "workflowRuleActionReferenceAloneAccepted": False,
+    }
+
+
 def _success_acceptance(rule_id: str) -> dict[str, Any]:
     return {
         "singleRuleResult": True,
@@ -883,6 +1265,7 @@ def _success_acceptance(rule_id: str) -> dict[str, Any]:
 
 def _pre_mutation_exact_rule_readback(
     rule: Mapping[str, Any],
+    independent_action_definition_gate: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     expected_rule = json.loads(_canonical_json(rule))
     criteria = normalize_criterion_ast(rule["criteria"])
@@ -890,7 +1273,7 @@ def _pre_mutation_exact_rule_readback(
         _canonical_json(criteria) == _canonical_json(rule["criteria"]),
         "internal_criterion_ast_not_normalized",
     )
-    return {
+    gate = {
         "call": _read_call(rule["ruleId"]),
         "acceptance": {
             "type": "exact_packet_bound_rule",
@@ -907,6 +1290,11 @@ def _pre_mutation_exact_rule_readback(
         },
         "mustPassBeforeMutation": True,
     }
+    if independent_action_definition_gate is not None:
+        gate["independentActionDefinitionGate"] = json.loads(
+            _canonical_json(independent_action_definition_gate)
+        )
+    return gate
 
 
 def _readback_rule(
@@ -920,6 +1308,92 @@ def _readback_rule(
     return selected
 
 
+def _cleaned_form2_candidate_rule(
+    prestate_rule: Mapping[str, Any],
+    bindings: Mapping[str, Any],
+    *,
+    active: bool,
+) -> dict[str, Any]:
+    selected = json.loads(_canonical_json(prestate_rule))
+    selected["name"] = CANONICAL_FORM2_RULE_NAME
+    selected["active"] = active
+    selected["criteria"] = expected_criterion_ast("form2Candidate")
+    selected["criteriaAuthority"] = "reviewed_desired"
+    selected["instantActions"] = _action_rows(
+        bindings["rules"]["form2Candidate"],
+        (
+            ("setupAccessSubmitted", "field_updates"),
+            ("setupAndQaTask", "tasks"),
+        ),
+        bindings["form2CandidateActionSemantics"],
+    )
+    return selected
+
+
+def _provider_criterion_ast(
+    value: Any, field_ids: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Render the exact Zoho V8 criteria shape from reviewed semantics."""
+
+    node = normalize_criterion_ast(value)
+    if node["type"] == "condition":
+        api_name = node["apiName"]
+        _require(
+            api_name in field_ids,
+            "internal_form2_criterion_field_binding_missing",
+        )
+        return {
+            "field": {
+                "api_name": api_name,
+                "id": field_ids[api_name],
+            },
+            "comparator": node["operator"],
+            "type": "value",
+            # Zoho's authoritative V8 readback preserves the literal marker;
+            # rewriting it as JSON null would not round-trip exactly.
+            "value": node["value"],
+        }
+    return {
+        "group_operator": node["operator"],
+        "group": [
+            _provider_criterion_ast(child, field_ids)
+            for child in node["children"]
+        ],
+    }
+
+
+def _form2_inactive_edit_payload(bindings: Mapping[str, Any]) -> dict[str, Any]:
+    rule = bindings["rules"]["form2Candidate"]
+    return {
+        "id": rule["ruleId"],
+        "name": CANONICAL_FORM2_RULE_NAME,
+        "conditions": [
+            {
+                "id": rule["conditionId"],
+                "sequence_number": rule["conditionSequenceNumber"],
+                "criteria": _provider_criterion_ast(
+                    expected_criterion_ast("form2Candidate"),
+                    bindings["form2CriterionFieldIds"],
+                ),
+                "instant_actions": {
+                    "actions": [
+                        {
+                            "id": rule["actionIds"]["authorizationSigned"],
+                            "type": "field_updates",
+                            "_delete": None,
+                        },
+                        {
+                            "id": rule["actionIds"]["testStatusSetupPending"],
+                            "type": "field_updates",
+                            "_delete": None,
+                        },
+                    ]
+                },
+            }
+        ],
+    }
+
+
 def _operation(
     ordinal: int,
     name: str,
@@ -928,11 +1402,17 @@ def _operation(
     acceptance: Mapping[str, Any],
     *,
     pre_mutation_rule: Mapping[str, Any] | None = None,
+    pre_mutation_action_definition_gate: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     mutation_kind = kind in ("mutation", "conditional_mutation")
     _require(
         mutation_kind == (pre_mutation_rule is not None),
         "internal_pre_mutation_gate_invalid",
+    )
+    _require(
+        pre_mutation_action_definition_gate is None
+        or pre_mutation_rule is not None,
+        "internal_pre_mutation_action_gate_invalid",
     )
     return {
         "ordinal": ordinal,
@@ -941,7 +1421,10 @@ def _operation(
         "calls": list(calls),
         "acceptance": dict(acceptance),
         "preMutationExactRuleReadback": (
-            _pre_mutation_exact_rule_readback(pre_mutation_rule)
+            _pre_mutation_exact_rule_readback(
+                pre_mutation_rule,
+                pre_mutation_action_definition_gate,
+            )
             if pre_mutation_rule is not None
             else None
         ),
@@ -952,14 +1435,17 @@ def _operation(
 
 def _criterion_authority_state() -> dict[str, Any]:
     return {
-        "reviewedDesiredRuleKeys": ["leadIntake", "controls", "limits"],
-        "observedNotAuthoritativeRuleKeys": [
+        "reviewedDesiredRuleKeys": [
+            "leadIntake",
+            "controls",
+            "limits",
             "form2Candidate",
-            "form2Superseded",
         ],
-        "form2DesiredCriterionContractPresent": False,
-        "form2ActivationAuthorized": False,
-        "status": "blocked_observed_not_authoritative",
+        "observedRepairSourceRuleKeys": ["form2Candidate"],
+        "observedNotAuthoritativeRuleKeys": ["form2Superseded"],
+        "form2DesiredCriterionContractPresent": True,
+        "form2ActivationAuthorized": True,
+        "status": "reviewed_desired",
     }
 
 
@@ -967,7 +1453,7 @@ def expected_operations(
     bindings: Mapping[str, Any],
     observed_form2_criteria: Mapping[str, Any],
 ) -> list[dict[str, Any]]:
-    """Render the three trigger-only repairs from the contained Form2 state."""
+    """Render trigger repair plus inactive Form2 cleanup and activation."""
 
     rules = bindings["rules"]
     prestate_by_key = {
@@ -986,11 +1472,34 @@ def expected_operations(
     limits_poststate = _readback_rule(
         prestate_by_key["limits"], trigger_type="create"
     )
+    candidate_inactive = _cleaned_form2_candidate_rule(
+        prestate_by_key["form2Candidate"], bindings, active=False
+    )
+    candidate_active = _cleaned_form2_candidate_rule(
+        prestate_by_key["form2Candidate"], bindings, active=True
+    )
+    candidate_current_action_gate = (
+        _independent_form2_action_definition_gate(
+            bindings,
+            (
+                "setupAccessSubmitted",
+                "setupAndQaTask",
+                "authorizationSigned",
+                "testStatusSetupPending",
+            ),
+        )
+    )
+    candidate_retained_action_gate = (
+        _independent_form2_action_definition_gate(
+            bindings,
+            ("setupAccessSubmitted", "setupAndQaTask"),
+        )
+    )
     final_rules = [
         lead_poststate,
         controls_poststate,
         limits_poststate,
-        prestate_by_key["form2Candidate"],
+        candidate_active,
         prestate_by_key["form2Superseded"],
     ]
     all_rule_reads = [_read_call(rules[key]["ruleId"]) for key in RULE_ORDER]
@@ -1019,6 +1528,7 @@ def expected_operations(
                 "candidateInactive": True,
                 "supersededInactive": True,
                 "bothForm2RulesInactive": True,
+                "candidateObservedRepairSource": True,
                 "criteriaAuthority": _criterion_authority_state(),
                 "missingTruncatedOrAdditionalDataAccepted": False,
             },
@@ -1112,26 +1622,99 @@ def expected_operations(
         ),
         _operation(
             8,
-            "final_exact_rule_set_and_both_form2_inactive_readback_gate",
+            "edit_form2_candidate_while_inactive",
+            "mutation",
+            [_write_call(_form2_inactive_edit_payload(bindings))],
+            _success_acceptance(rules["form2Candidate"]["ruleId"]),
+            pre_mutation_rule=prestate_by_key["form2Candidate"],
+            pre_mutation_action_definition_gate=(
+                candidate_current_action_gate
+            ),
+        ),
+        _operation(
+            9,
+            "form2_candidate_inactive_exact_post_write_readback_gate",
             "readback_gate",
-            [*all_rule_reads, inventory_call],
+            [
+                _read_call(rules["form2Candidate"]["ruleId"]),
+                _read_call(rules["form2Superseded"]["ruleId"]),
+                *[
+                    row["call"]
+                    for row in candidate_retained_action_gate["reads"]
+                ],
+            ],
+            {
+                "type": "exact_rule_set",
+                "rules": [
+                    candidate_inactive,
+                    prestate_by_key["form2Superseded"],
+                ],
+                "candidateInactive": True,
+                "supersededInactiveAndUnchanged": True,
+                "canonicalNamePresent": True,
+                "reviewedDesiredCriteriaPresent": True,
+                "safeActionSemanticsPresent": True,
+                "authorizationAndTestStatusActionsAbsent": True,
+                "independentRetainedActionDefinitionGate": (
+                    candidate_retained_action_gate
+                ),
+                "criteriaAuthority": _criterion_authority_state(),
+                "missingTruncatedOrAdditionalDataAccepted": False,
+            },
+        ),
+        _operation(
+            10,
+            "activate_cleaned_form2_candidate_status_only",
+            "mutation",
+            [
+                _write_call(
+                    {
+                        "id": rules["form2Candidate"]["ruleId"],
+                        "status": {"active": True},
+                    }
+                )
+            ],
+            _success_acceptance(rules["form2Candidate"]["ruleId"]),
+            pre_mutation_rule=candidate_inactive,
+            pre_mutation_action_definition_gate=(
+                candidate_retained_action_gate
+            ),
+        ),
+        _operation(
+            11,
+            "final_exact_rule_set_and_single_active_form2_inventory_gate",
+            "readback_gate",
+            [
+                *all_rule_reads,
+                inventory_call,
+                *[
+                    row["call"]
+                    for row in candidate_retained_action_gate["reads"]
+                ],
+            ],
             {
                 "type": "exact_rule_set_and_complete_deals_inventory",
                 "rules": final_rules,
-                "bothForm2RulesInactive": True,
+                "canonicalCandidateActive": True,
+                "supersededInactive": True,
                 "allCriteriaExactlyMatchPacketBoundAst": True,
                 "criteriaAuthority": _criterion_authority_state(),
-                "candidateMutationPerformed": False,
+                "candidateMutationPerformed": True,
                 "supersededMutationPerformed": False,
+                "unsafeFieldUpdateDeletionPerformed": True,
                 "scheduledActionMutationOrDeletionPerformed": False,
+                "independentRetainedActionDefinitionGate": (
+                    candidate_retained_action_gate
+                ),
                 "inventory": {
                     "paginationComplete": True,
-                    "candidateObservedNameMatchCount": 1,
-                    "candidateActiveCount": 0,
+                    "candidateCanonicalNameMatchCount": 1,
+                    "candidateObservedNameMatchCount": 0,
+                    "candidateActiveCount": 1,
                     "supersededObservedNameMatchCount": 1,
                     "supersededActiveCount": 0,
-                    "logicalForm2ActiveCount": 0,
-                    "form2DesiredCriteriaAuthorityPresent": False,
+                    "logicalForm2ActiveCount": 1,
+                    "form2DesiredCriteriaAuthorityPresent": True,
                 },
                 "missingTruncatedOrAdditionalDataAccepted": False,
             },
@@ -1143,7 +1726,7 @@ def expected_failure_containment(
     bindings: Mapping[str, Any],
     observed_form2_criteria: Mapping[str, Any],
 ) -> dict[str, Any]:
-    """Render read-only reconciliation for every bounded trigger prefix."""
+    """Render fail-closed reconciliation and one bounded deactivation."""
 
     rules = bindings["rules"]
     prestate_by_key = {
@@ -1157,12 +1740,44 @@ def expected_failure_containment(
     lead_and_controls[1]["triggerType"] = "create"
     all_three = json.loads(_canonical_json(lead_and_controls))
     all_three[2]["triggerType"] = "create"
+    candidate_inactive = _cleaned_form2_candidate_rule(
+        prestate_by_key["form2Candidate"], bindings, active=False
+    )
+    candidate_active = _cleaned_form2_candidate_rule(
+        prestate_by_key["form2Candidate"], bindings, active=True
+    )
+    all_three_candidate_cleaned = json.loads(_canonical_json(all_three))
+    all_three_candidate_cleaned[3] = candidate_inactive
+    all_three_candidate_active = json.loads(
+        _canonical_json(all_three_candidate_cleaned)
+    )
+    all_three_candidate_active[3] = candidate_active
     allowed_states = [
         {"name": "no_trigger_write_observed", "rules": unchanged},
         {"name": "lead_only_observed", "rules": lead_only},
         {"name": "lead_and_controls_observed", "rules": lead_and_controls},
         {"name": "all_three_observed", "rules": all_three},
+        {
+            "name": "candidate_cleaned_inactive_observed",
+            "rules": all_three_candidate_cleaned,
+        },
+        {
+            "name": "candidate_active_observed",
+            "rules": all_three_candidate_active,
+        },
     ]
+    terminal_states = allowed_states[:-1]
+    inventory_call = {
+        "tool": INVENTORY_TOOL,
+        "args": {
+            "query_params": {
+                "module": "Deals",
+                "include_inner_details": True,
+                "page": 1,
+                "per_page": 200,
+            }
+        },
+    }
     return {
         "trigger": "failure_after_packet_start",
         "operations": [
@@ -1174,11 +1789,74 @@ def expected_failure_containment(
                 {
                     "type": "one_of_exact_packet_bound_rule_sets",
                     "allowedStates": allowed_states,
-                    "allowedStateCount": 4,
+                    "allowedStateCount": 6,
                     "monotonicTriggerPrefixRequired": True,
                     "allFiveRulesReadByIdRequired": True,
-                    "bothForm2RulesInactive": True,
+                    "supersededRuleInactive": True,
+                    "candidateActiveOnlyInFinalAllowedState": True,
                     "allCriteriaExactlyMatchPacketBoundAst": True,
+                    "scheduledActionsExactlyMatchPacketBoundPrestate": True,
+                    "criteriaAuthority": _criterion_authority_state(),
+                    "missingTruncatedOrAdditionalDataAccepted": False,
+                },
+            ),
+            _operation(
+                2,
+                "conditionally_deactivate_ambiguously_active_form2_candidate",
+                "conditional_mutation",
+                [
+                    _write_call(
+                        {
+                            "id": rules["form2Candidate"]["ruleId"],
+                            "status": {
+                                "active": False,
+                                "delete_schedule_action": False,
+                            },
+                        }
+                    )
+                ],
+                {
+                    "type": "execute_only_for_exact_classified_state",
+                    "executeWhenState": "candidate_active_observed",
+                    "skipWhenStates": [
+                        state["name"] for state in terminal_states
+                    ],
+                    "executedAcceptance": _success_acceptance(
+                        rules["form2Candidate"]["ruleId"]
+                    ),
+                    "automaticRetry": False,
+                },
+                pre_mutation_rule=candidate_active,
+            ),
+            _operation(
+                3,
+                "final_failure_containment_all_rule_readback_gate",
+                "conditional_readback_gate",
+                [
+                    *[
+                        _read_call(rules[key]["ruleId"])
+                        for key in RULE_ORDER
+                    ],
+                    inventory_call,
+                ],
+                {
+                    "type": (
+                        "one_of_exact_packet_bound_rule_sets_and_"
+                        "complete_deals_inventory"
+                    ),
+                    "allowedStates": terminal_states,
+                    "allowedStateCount": 5,
+                    "allFiveRulesReadByIdRequired": True,
+                    "bothForm2RulesInactive": True,
+                    "supersededRuleUnchanged": True,
+                    "inventory": {
+                        "paginationComplete": True,
+                        "candidateCanonicalNameMatchCountMaximum": 1,
+                        "candidateActiveCount": 0,
+                        "supersededObservedNameMatchCount": 1,
+                        "supersededActiveCount": 0,
+                        "logicalForm2ActiveCount": 0,
+                    },
                     "scheduledActionsExactlyMatchPacketBoundPrestate": True,
                     "criteriaAuthority": _criterion_authority_state(),
                     "missingTruncatedOrAdditionalDataAccepted": False,
@@ -1188,17 +1866,19 @@ def expected_failure_containment(
         "terminalState": {
             "canonicalCandidateActive": False,
             "supersededRuleActive": False,
-            "triggerRepairState": "one_of_four_exact_monotonic_prefix_states",
+            "triggerRepairState": "one_of_five_exact_contained_states",
             "scheduledActionsUnchanged": True,
         },
         "neverReactivateSupersededRule": True,
-        "neverActivateEitherForm2Rule": True,
-        "candidateMutationAuthorized": False,
+        "neverActivateSupersededRule": True,
+        "candidateMutationAuthorized": True,
+        "candidateActivationAuthorizedOnlyAfterInactiveReadback": True,
+        "conditionalCandidateDeactivationAuthorized": True,
         "retrySupersededDeactivationAuthorized": False,
         "retryAnyMutationAuthorized": False,
         "onAmbiguousContainment": (
             "stop_and_require_manual_all_rule_readback_without_"
-            "changing_scheduled_actions_form2_or_retrying_any_mutation"
+            "changing_scheduled_actions_or_retrying_any_mutation"
         ),
     }
 
@@ -1222,8 +1902,9 @@ def _validate_capability(
         ],
         "capability_shape_invalid",
     )
-    _require(
-        capability["schemaVersion"] == SCHEMA_VERSION,
+    _exact_integer(
+        capability["schemaVersion"],
+        SCHEMA_VERSION,
         "capability_schema_invalid",
     )
     _require(
@@ -1267,13 +1948,18 @@ def _validate_prestate(
         ],
         "prestate_shape_invalid",
     )
-    _require(
-        prestate["schemaVersion"] == SCHEMA_VERSION,
+    _exact_integer(
+        prestate["schemaVersion"],
+        SCHEMA_VERSION,
         "prestate_schema_invalid",
+    )
+    _exact_integer(
+        prestate["organizationMatchCount"],
+        1,
+        "prestate_target_invalid",
     )
     _require(
         prestate["organizationId"] == target_organization_id
-        and prestate["organizationMatchCount"] == 1
         and prestate["paginationComplete"] is True,
         "prestate_target_invalid",
     )
@@ -1289,10 +1975,14 @@ def _validate_prestate(
         ],
         "prestate_form2_shape_invalid",
     )
+    _exact_integer(
+        form2["submissionCount"],
+        0,
+        "prestate_form2_not_contained",
+    )
     _require(
         form2["publicFormDisabled"] is True
-        and form2["submissionWebhookDisabled"] is True
-        and form2["submissionCount"] == 0,
+        and form2["submissionWebhookDisabled"] is True,
         "prestate_form2_not_contained",
     )
     _sha256(form2["privateEvidenceSha256"], "prestate_form2_evidence_invalid")
@@ -1321,17 +2011,23 @@ def _validate_prestate(
             == _canonical_json(normalized_criteria),
             "prestate_criterion_ast_not_normalized",
         )
-        if key in _REVIEWED_CRITERIA:
+        if key in _PRESTATE_REVIEWED_CRITERIA_KEYS:
             _require(
                 selected_rule.get("criteriaAuthority") == "reviewed_desired"
                 and _canonical_json(normalized_criteria)
                 == _canonical_json(expected_criterion_ast(key)),
                 "prestate_reviewed_criterion_drift",
             )
+        elif key == "form2Candidate":
+            _require(
+                selected_rule.get("criteriaAuthority")
+                == "observed_repair_source_desired_committed",
+                "prestate_form2_criterion_authority_invalid",
+            )
         else:
             _require(
                 selected_rule.get("criteriaAuthority")
-                == "observed_not_authoritative_activation_blocked",
+                == "observed_not_authoritative_inactive",
                 "prestate_form2_criterion_authority_invalid",
             )
     _require(tuple(rules_by_key) == RULE_ORDER, "prestate_workflow_drift")
@@ -1375,6 +2071,7 @@ def _validate_approval(
             "packetSha256",
             "operationAuthorizationId",
             "workflowMutationAuthorized",
+            "form2CandidateActivationAuthorized",
             "containmentAuthorized",
             "authorizedMainOperationCount",
             "authorizedConditionalContainmentOperationCount",
@@ -1387,8 +2084,9 @@ def _validate_approval(
         ],
         "approval_shape_invalid",
     )
-    _require(
-        approval["schemaVersion"] == SCHEMA_VERSION,
+    _exact_integer(
+        approval["schemaVersion"],
+        SCHEMA_VERSION,
         "approval_schema_invalid",
     )
     approval_window = _validate_window(approval, "approval", now_ms)
@@ -1414,12 +2112,25 @@ def _validate_approval(
         and _digests_equal(approval["packetSha256"], packet_digest),
         "approval_binding_invalid",
     )
+    _exact_integer(
+        approval["authorizedMainOperationCount"],
+        11,
+        "approval_authority_invalid",
+    )
+    _exact_integer(
+        approval["authorizedConditionalContainmentOperationCount"],
+        3,
+        "approval_authority_invalid",
+    )
+    _exact_integer(
+        approval["maximumAuthorizedMutationCallCount"],
+        6,
+        "approval_authority_invalid",
+    )
     _require(
         approval["workflowMutationAuthorized"] is True
+        and approval["form2CandidateActivationAuthorized"] is True
         and approval["containmentAuthorized"] is True
-        and approval["authorizedMainOperationCount"] == 8
-        and approval["authorizedConditionalContainmentOperationCount"] == 1
-        and approval["maximumAuthorizedMutationCallCount"] == 3
         and approval["singleUse"] is True
         and approval["durableConsumptionRequired"] is True
         and approval["retryAuthorized"] is False
@@ -1462,8 +2173,9 @@ def validate_workflow_repair_packet(
         ],
         "packet_shape_invalid",
     )
-    _require(
-        packet["schemaVersion"] == SCHEMA_VERSION,
+    _exact_integer(
+        packet["schemaVersion"],
+        SCHEMA_VERSION,
         "packet_schema_invalid",
     )
     _require(
@@ -1547,6 +2259,7 @@ __all__ = [
     "EMPTY_CRITERION_VALUE",
     "ENTRY_OFFER_VALUE",
     "EXECUTION_POLICY",
+    "FIELD_UPDATE_BY_ID_TOOL",
     "FORBIDDEN_ACTIONS",
     "INVENTORY_TOOL",
     "MAX_PRIVATE_FILE_BYTES",
@@ -1563,6 +2276,7 @@ __all__ = [
     "TOOL_CONTRACT",
     "TOOL_CONTRACT_DIGEST_DOMAIN",
     "WRITE_TOOL",
+    "WORKFLOW_TASK_INVENTORY_TOOL",
     "WorkflowRepairPacketValidationError",
     "WorkflowRepairValidationResult",
     "assert_package_source_clean",
