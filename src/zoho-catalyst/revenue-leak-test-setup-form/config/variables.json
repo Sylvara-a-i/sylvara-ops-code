@@ -1,5 +1,5 @@
 {
-  "schema_version": 4,
+  "schema_version": 5,
   "status": "development-active-production-dark",
   "rules": {
     "values": "Any real secret, private endpoint, route, alias, Connection, picklist, project-identity digest, and deployment value must exist only in active Catalyst Development configuration. Reviewed public protocol constants and exact canonical table names may use the declared code defaults. Dark Production requires only deployment mode and source revision.",
@@ -12,6 +12,7 @@
     { "name": "DEPLOYMENT_ENVIRONMENT", "classification": "safe-enum", "required": true, "example_allowed": true },
     { "name": "DEPLOYMENT_MODE", "classification": "safe-enum", "required": true, "example_allowed": true },
     { "name": "EXPECTED_CATALYST_PROJECT_ID_SHA256", "classification": "private-platform-identifier", "required": true, "example_allowed": false },
+    { "name": "CRM_ORGANIZATION_ID_SHA256", "classification": "private-platform-identifier", "required": true, "example_allowed": false },
     { "name": "SOURCE_REVISION", "classification": "public-build-identity", "required": true, "example_allowed": true },
     { "name": "ISSUE_PATH", "classification": "private-route", "required": true, "example_allowed": false },
     { "name": "FORM2_ACCESS_PATH", "classification": "private-route", "required": true, "example_allowed": false },
@@ -33,7 +34,7 @@
     { "name": "FORM2_MAIL_FROM", "classification": "private-outbound-allowlist", "required": true, "example_allowed": false },
     { "name": "FORM2_PROOF_ALLOWED_RECIPIENT_DIGESTS", "classification": "private-outbound-allowlist", "required": false, "required_when": "FORM2_PROOF_MODE=send_development", "example_allowed": false, "safe_default": "[]" },
     { "name": "FORM2_PROOF_TEMPLATE_VERSION", "classification": "business-contract", "required": false, "example_allowed": true, "safe_default": "email-otp-v1" },
-    { "name": "FORM2_TOKEN_FIELD_ALIAS", "classification": "private-form-contract", "required": true, "example_allowed": false },
+    { "name": "FORM2_PREFILL_HANDLE_FIELD_ALIAS", "classification": "private-form-contract", "required": true, "example_allowed": false },
     { "name": "FORM2_FORM_VERSION", "classification": "business-contract", "required": true, "example_allowed": true },
     { "name": "FORM2_ENTRY_OFFER_VALUE", "classification": "private-crm-contract", "required": true, "example_allowed": false },
     { "name": "FORM2_PHONE_SYSTEM_PROVIDERS", "classification": "private-crm-contract", "required": true, "example_allowed": false },
@@ -54,6 +55,7 @@
     { "name": "VERIFIED_SESSION_TTL_SECONDS", "classification": "fixed-security-policy", "required": false, "example_allowed": true },
     { "name": "MAX_VERIFICATION_ATTEMPTS", "classification": "bounded-security-policy", "required": false, "example_allowed": true },
     { "name": "FORM2_PROOF_TTL_SECONDS", "classification": "bounded-security-policy", "required": false, "example_allowed": true },
+    { "name": "PREFILL_HANDLE_TTL_SECONDS", "classification": "bounded-security-policy", "required": false, "example_allowed": true, "safe_default": "600" },
     { "name": "FORM2_PROOF_MAX_ATTEMPTS", "classification": "bounded-security-policy", "required": false, "example_allowed": true },
     { "name": "FORM2_PROOF_MAX_SENDS", "classification": "bounded-security-policy", "required": false, "example_allowed": true },
     { "name": "FORM2_PROOF_RESEND_COOLDOWN_SECONDS", "classification": "bounded-security-policy", "required": false, "example_allowed": true },

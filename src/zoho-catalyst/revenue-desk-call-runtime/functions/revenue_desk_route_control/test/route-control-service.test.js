@@ -10,11 +10,14 @@ const { RevenueDeskError }
   = require('revenue_desk_call_gateway/lib/errors');
 const { numberLookupKey }
   = require('revenue_desk_call_gateway/lib/security');
+const { authorizationReceiptFingerprint }
+  = require('revenue_desk_call_gateway/lib/authorization-receipt');
 const { activeAt, loadDeployment }
   = require('revenue_desk_call_gateway/lib/runtime-service');
 
 const SOURCE_REVISION = 'a'.repeat(40);
 const NOW = Date.parse('2026-08-29T12:10:00.000Z');
+const EVENT_CHAIN_SECRET = 'e'.repeat(32);
 const IDS = Object.freeze({
   deal: '400000001', journey: 'journey_synthetic', deployment: 'deployment_synthetic',
   configuration: 'configuration_version_synthetic_v1',
@@ -371,7 +374,7 @@ function fixture({ dealOverrides = {}, deploymentOverrides = {}, configOverrides
   };
   const config = {
     environment: 'development', deploymentMode: 'active', sourceRevision: SOURCE_REVISION,
-    operatorVerificationSecret: 'o'.repeat(32), eventChainSecret: 'e'.repeat(32),
+    operatorVerificationSecret: 'o'.repeat(32), eventChainSecret: EVENT_CHAIN_SECRET,
     operatorIdHash: `operator_${'4'.repeat(64)}`, tables,
     retellRouteMode: 'isolated_test', retellPhoneNumber: '+15550100104',
     numberSecret: 'n'.repeat(32),
@@ -379,6 +382,7 @@ function fixture({ dealOverrides = {}, deploymentOverrides = {}, configOverrides
   const runtimeConfig = {
     environment: 'development', sourceRevision: SOURCE_REVISION,
     sharedAgentId: 'agent_synthetic', sharedAgentVersion: 7, tables,
+    authorizationEventSecret: EVENT_CHAIN_SECRET,
   };
   const service = createRouteControlService({
     config, store, crm, provider, now: () => clock,
@@ -586,6 +590,65 @@ test('activation rejects absent approval, absent route verification, and stale r
   }
 });
 
+for (const [name, corrupt] of [
+  ['missing', (subject, approval) => {
+    subject.store.rows = subject.store.rows.filter((row) => row !== approval);
+  }],
+  ['Prepared', (_subject, approval) => {
+    approval.STATUS = 'Prepared';
+    approval.PROCESSED_AT = null;
+  }],
+  ['tampered event hash', (_subject, approval) => {
+    const data = JSON.parse(approval.EVENT_DATA_JSON);
+    data.eventHash = '0'.repeat(64);
+    approval.EVENT_DATA_JSON = JSON.stringify(data);
+    approval.PAYLOAD_FINGERPRINT = authorizationReceiptFingerprint(
+      EVENT_CHAIN_SECRET, approval.EVENT_DATA_JSON,
+    );
+  }],
+  ['cross-journey binding', (_subject, approval) => {
+    const data = JSON.parse(approval.EVENT_DATA_JSON);
+    data.controlBinding.journeyId = 'journey_other';
+    approval.EVENT_DATA_JSON = JSON.stringify(data);
+    approval.PAYLOAD_FINGERPRINT = authorizationReceiptFingerprint(
+      EVENT_CHAIN_SECRET, approval.EVENT_DATA_JSON,
+    );
+  }],
+  ['duplicate decision', (subject, approval) => {
+    subject.store.rows.push({
+      ...copy(approval),
+      ROWID: '998',
+      EVENT_KEY: `approval_${'f'.repeat(64)}`,
+    });
+  }],
+]) {
+  test(`activation rejects a ${name} approval receipt before any side effect`, async () => {
+    const subject = fixture();
+    await subject.service.approve(command('approve'));
+    const approval = subject.store.rows.find((row) =>
+      row.__table === 'RevenueDeskEventReceipts' && row.EVENT_TYPE === 'approve');
+    assert.ok(approval);
+    corrupt(subject, approval);
+    const deploymentBefore = await subject.store.unique(
+      'RevenueDeskDeployments', 'DEPLOYMENT_ID', IDS.deployment,
+    );
+    const crmBefore = copy(subject.crmState);
+    subject.setClock(NOW + 300_000);
+
+    await assert.rejects(subject.service.activate(command('activate')),
+      { code: 'CONTROL_AUDIT_INVALID' });
+
+    assert.equal(subject.getProviderVerificationCalls(), 0);
+    assert.equal(subject.getCrmActivationCalls(), 0);
+    assert.deepEqual(await subject.store.unique(
+      'RevenueDeskDeployments', 'DEPLOYMENT_ID', IDS.deployment,
+    ), deploymentBefore);
+    assert.deepEqual(subject.crmState, crmBefore);
+    assert.equal(subject.store.rows.filter((row) =>
+      row.__table === 'RevenueDeskEventReceipts' && row.EVENT_TYPE === 'activate').length, 0);
+  });
+}
+
 test('activation contains a CRM Deal that drifts after route validation begins', async () => {
   const subject = fixture({
     mutateDealDuringRouteVerification(state) {
@@ -632,10 +695,38 @@ test('approval then activation is split, exact, and idempotent', async () => {
   assert.equal(activated.deployment.GO_LIVE_APPROVAL_STATUS, 'Approved');
   assert.equal(Date.parse(activated.deployment.EXPIRES_AT)
     - Date.parse(activated.deployment.ACTUAL_START_AT), 7 * 86_400_000);
+  const approvalReceipt = subject.store.rows.find((row) =>
+    row.__table === 'RevenueDeskEventReceipts' && row.EVENT_TYPE === 'approve');
+  const approvalData = JSON.parse(approvalReceipt.EVENT_DATA_JSON);
+  const activationData = JSON.parse(activated.receipt.EVENT_DATA_JSON);
+  assert.equal(activated.receipt.RELATED_EVENT_KEY, approvalReceipt.EVENT_KEY);
+  assert.equal(activationData.previousEventHash, approvalData.eventHash);
   const replay = await subject.service.activate(command('activate'));
   assert.equal(replay.replayed, true);
   assert.equal(replay.deployment.ACTIVATION_EVENT_KEY,
     activated.deployment.ACTIVATION_EVENT_KEY);
+});
+
+test('completed activation replay rejects a forged event hash before any side effect', async () => {
+  const subject = fixture();
+  await subject.service.approve(command('approve'));
+  subject.setClock(NOW + 300_000);
+  await subject.service.activate(command('activate'));
+  const receipt = subject.store.rows.find((row) =>
+    row.__table === 'RevenueDeskEventReceipts' && row.EVENT_TYPE === 'activate');
+  const data = { ...JSON.parse(receipt.EVENT_DATA_JSON), eventHash: '0'.repeat(64) };
+  receipt.EVENT_DATA_JSON = JSON.stringify(data);
+  receipt.PAYLOAD_FINGERPRINT = authorizationReceiptFingerprint(
+    EVENT_CHAIN_SECRET, receipt.EVENT_DATA_JSON,
+  );
+  const providerCalls = subject.getProviderVerificationCalls();
+  const crmCalls = subject.getCrmActivationCalls();
+
+  await assert.rejects(subject.service.activate(command('activate')),
+    { code: 'CONTROL_AUDIT_INVALID' });
+  assert.equal(subject.getProviderVerificationCalls(), providerCalls);
+  assert.equal(subject.getCrmActivationCalls(), crmCalls);
+  assert.equal(receipt.STATUS, 'Completed');
 });
 
 test('activation remains gateway-dark at every Prepared checkpoint and canonical receipts load after completion', async () => {
@@ -714,6 +805,37 @@ for (const crashPoint of [
     assert.doesNotThrow(() => activeAt(admitted, NOW + 300_000));
   });
 }
+
+test('prepared activation resume rejects a forged event hash before any side effect', async () => {
+  let crash = true;
+  const subject = fixture({
+    async onActivationCheckpoint({ name }) {
+      if (crash && name === 'deployment_live_prepared') {
+        crash = false;
+        throw new Error('synthetic crash before activation side effects');
+      }
+    },
+  });
+  await subject.service.approve(command('approve'));
+  subject.setClock(NOW + 300_000);
+  await assert.rejects(subject.service.activate(command('activate')),
+    /synthetic crash before activation side effects/);
+  const receipt = subject.store.rows.find((row) =>
+    row.__table === 'RevenueDeskEventReceipts' && row.EVENT_TYPE === 'activate');
+  const data = { ...JSON.parse(receipt.EVENT_DATA_JSON), eventHash: '0'.repeat(64) };
+  receipt.EVENT_DATA_JSON = JSON.stringify(data);
+  receipt.PAYLOAD_FINGERPRINT = authorizationReceiptFingerprint(
+    EVENT_CHAIN_SECRET, receipt.EVENT_DATA_JSON,
+  );
+  const providerCalls = subject.getProviderVerificationCalls();
+  const crmCalls = subject.getCrmActivationCalls();
+
+  await assert.rejects(subject.service.activate(command('activate')),
+    { code: 'CONTROL_AUDIT_INVALID' });
+  assert.equal(subject.getProviderVerificationCalls(), providerCalls);
+  assert.equal(subject.getCrmActivationCalls(), crmCalls);
+  assert.equal(receipt.STATUS, 'Prepared');
+});
 
 test('interrupted local activation containment resumes with its receipt timestamp', async () => {
   let interrupt = true;

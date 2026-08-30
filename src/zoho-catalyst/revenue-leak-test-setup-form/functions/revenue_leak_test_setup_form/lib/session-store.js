@@ -17,6 +17,7 @@ const ISSUE_INPUT_KEYS = new Set([
   "crmContactId",
   "crmAccountId",
   "crmDealId",
+  "journeyBindingDigest",
 ]);
 
 const STORED_FIELDS = Object.freeze([
@@ -26,6 +27,7 @@ const STORED_FIELDS = Object.freeze([
   "CRM_CONTACT_ID",
   "CRM_ACCOUNT_ID",
   "CRM_DEAL_ID",
+  "JOURNEY_BINDING_DIGEST",
   "DEAL_ISSUANCE_KEY",
   "STATUS",
   "ISSUED_AT",
@@ -142,6 +144,7 @@ function normalizeRow(rawRow, tableName) {
     crmContactId: optionalRecordId(row.CRM_CONTACT_ID, "CRM_CONTACT_ID"),
     crmAccountId: optionalRecordId(row.CRM_ACCOUNT_ID, "CRM_ACCOUNT_ID"),
     crmDealId: optionalRecordId(row.CRM_DEAL_ID, "CRM_DEAL_ID"),
+    journeyBindingDigest: String(row.JOURNEY_BINDING_DIGEST ?? ""),
     dealIssuanceKey: String(row.DEAL_ISSUANCE_KEY ?? ""),
     status: String(row.STATUS ?? ""),
     issuedAt: String(row.ISSUED_AT ?? ""),
@@ -162,6 +165,7 @@ function normalizeRow(rawRow, tableName) {
   if (
     !TOKEN_HASH_PATTERN.test(normalized.issueRequestKey) ||
     !TOKEN_HASH_PATTERN.test(normalized.tokenHash) ||
+    !TOKEN_HASH_PATTERN.test(normalized.journeyBindingDigest) ||
     !TOKEN_HASH_PATTERN.test(normalized.dealIssuanceKey) ||
     !STATUS_SET.has(normalized.status) ||
     !OUTCOME_PATTERN.test(normalized.lastOutcome) ||
@@ -185,7 +189,8 @@ function sameSessionIdentity(left, right) {
     left.tokenHash === right.tokenHash &&
     left.crmContactId === right.crmContactId &&
     left.crmAccountId === right.crmAccountId &&
-    left.crmDealId === right.crmDealId;
+    left.crmDealId === right.crmDealId &&
+    left.journeyBindingDigest === right.journeyBindingDigest;
 }
 
 function validateIssueInput(input) {
@@ -202,7 +207,8 @@ function validateIssueInput(input) {
   }
   if (
     !TOKEN_HASH_PATTERN.test(input.issueRequestKey ?? "") ||
-    !TOKEN_HASH_PATTERN.test(input.tokenHash ?? "")
+    !TOKEN_HASH_PATTERN.test(input.tokenHash ?? "") ||
+    !TOKEN_HASH_PATTERN.test(input.journeyBindingDigest ?? "")
   ) {
     throw new SessionStoreError("Session key is invalid", "session_input_invalid");
   }
@@ -217,7 +223,7 @@ function validateIssueInput(input) {
       "session_input_invalid",
     );
   }
-  return ids;
+  return { ...ids, journeyBindingDigest: input.journeyBindingDigest };
 }
 
 function validateNow(now) {
@@ -331,6 +337,7 @@ function createCatalystSessionStore(adapter, config, { now = Date.now } = {}) {
       session.crmContactId === expected.CRM_CONTACT_ID &&
       session.crmAccountId === expected.CRM_ACCOUNT_ID &&
       session.crmDealId === expected.CRM_DEAL_ID &&
+      session.journeyBindingDigest === expected.JOURNEY_BINDING_DIGEST &&
       // The stored revision is creation provenance, not issuance identity. An
       // active deterministic-token retry must survive a controller deployment.
       session.sourceEnvironment === expected.SOURCE_ENVIRONMENT &&
@@ -349,6 +356,7 @@ function createCatalystSessionStore(adapter, config, { now = Date.now } = {}) {
       CRM_CONTACT_ID: ids.crmContactId,
       CRM_ACCOUNT_ID: ids.crmAccountId,
       CRM_DEAL_ID: ids.crmDealId,
+      JOURNEY_BINDING_DIGEST: ids.journeyBindingDigest,
       DEAL_ISSUANCE_KEY: deriveDealIssuanceKey("active", ids.crmDealId),
       STATUS: "issuing",
       ISSUED_AT: new Date(nowMs).toISOString(),

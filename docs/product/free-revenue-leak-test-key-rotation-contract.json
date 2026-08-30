@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 3,
   "status": "required-before-final-ready-status",
   "scope": "Development testing only; Production remains dark",
   "functions": [
@@ -50,6 +50,15 @@
       "previous_key_policy": "No final overlap. Reissue a new short-lived opaque assisted artifact for resumable journeys after rotation; never restore or log an old bearer value."
     },
     {
+      "id": "form1_prefill_handle_v1",
+      "variables": ["PREFILL_HANDLE_PEPPER"],
+      "consumers": ["revenue_leak_test_request_form"],
+      "domains": ["sylvara.form1.prefill-handle-hash.v1"],
+      "durable_outputs": ["RevenueLeakTestRequestFormSessions.PREFILL_HANDLE_HASH"],
+      "rotation_gate": "All five Form 1 routes and the Zoho Forms Prefill-Webhook caller are disabled; no handle_issued or prefilled session and no reconciliation_required session remains; every outstanding handle is intentionally invalidated or the exact digest namespace is migrated with readback.",
+      "previous_key_policy": "No final overlap. A resumable journey receives a newly issued ten-minute prefill handle after rotation; the old handle remains unusable and is never restored or logged."
+    },
+    {
       "id": "form2_bearer_lookup_v1",
       "variables": ["TOKEN_PEPPER"],
       "consumers": ["revenue_leak_test_setup_form"],
@@ -68,15 +77,20 @@
       "domains": [
         "sylvara.form2.workflow-key.v1",
         "sylvara.form2.prefill-snapshot.v1",
-        "sylvara.form2.submission.v1"
+        "sylvara.form2.submission.v1",
+        "sylvara.form2.prefill-handle-hash.v1",
+        "sylvara.form2.prefill-binding.v1"
       ],
       "durable_outputs": [
+        "Form2SessionsV3Runtime.JOURNEY_BINDING_DIGEST",
         "Form2PrefillsV3.PREFILL_KEY",
+        "Form2PrefillsV3.PREFILL_HANDLE_HASH",
+        "Form2PrefillsV3.JOURNEY_BINDING_DIGEST",
         "Form2PrefillsV3.SNAPSHOT_FINGERPRINT",
         "Form2SubmissionsV3.SUBMISSION_KEY",
         "Form2SubmissionsV3.SUBMISSION_FINGERPRINT"
       ],
-      "rotation_gate": "Every prefill is submitted or removed under approved retention; every submission is succeeded; no processing, failed, or reconciliation_required row remains.",
+      "rotation_gate": "Every prefill handle is consumed or expired, every prefill is submitted or removed under approved retention, every submission is succeeded, and no processing, failed, or reconciliation_required row remains.",
       "previous_key_policy": "A previous key is allowed only inside a disabled-route migration that reads old rows by old key, writes or verifies the new namespace, compares exact counts and keyed digests, and removes the old key before cutover."
     },
     {
@@ -146,12 +160,17 @@
     {
       "id": "revenue_desk_route_control_identity_v1",
       "variables": ["ROUTE_CONTROL_EVENT_HMAC_SECRET"],
-      "consumers": ["revenue_desk_route_control"],
+      "consumers": [
+        "revenue_desk_route_control",
+        "revenue_desk_call_gateway",
+        "revenue_desk_call_worker"
+      ],
       "domains": [
         "revenue-desk-route-control-state-v1",
         "revenue-desk-route-control-idempotency-v1",
         "revenue-desk-route-control-operator-v1",
         "revenue-desk-authorization-event-v1",
+        "revenue-desk-authorization-receipt-v2",
         "revenue-desk-approval-intent-fingerprint-v1",
         "revenue-desk-activation-intent-fingerprint-v1",
         "revenue-desk-rollback-claim-key-v1",
@@ -228,12 +247,12 @@
     {
       "variables": ["ISSUE_HEADER_SECRET", "PREFILL_HEADER_SECRET", "SUBMISSION_HEADER_SECRET"],
       "consumers": ["revenue_leak_test_request_form"],
-      "rule": "Keep assisted issue, prefill, and submission routes disabled while rotating each server-to-server caller with its matching independent secret. Prove the new caller accepted and the old caller rejected before binding the CRM launcher or assisted Form 1 webhook; browser requests never receive a shared secret."
+      "rule": "Keep all five Form 1 routes disabled while rotating the three server-to-server callers with their matching independent secrets. Prove the new CRM Issue caller and both Zoho Forms callers accepted and each old caller rejected before binding the CRM launcher or Dynamic Prefill-Webhook; the browser-only Access and Exchange routes never receive a shared secret."
     },
     {
       "variables": ["ROUTE_CONTROL_SHARED_HEADER_VALUE", "ROUTE_CONTROL_OPERATOR_HMAC_SECRET", "ROUTE_CONTROL_EVENT_HMAC_SECRET"],
-      "consumers": ["revenue_desk_route_control"],
-      "rule": "Keep route control Development-only and disabled. Rotate the administrator caller header and operator signing key together, preserve separation from the event-chain key, prove old caller and intent signatures rejected, migrate or retire every event-chain-derived receipt and rollback claim, then independently read back the exact disabled binding before any synthetic operation."
+      "consumers": ["revenue_desk_route_control", "revenue_desk_call_gateway", "revenue_desk_call_worker"],
+      "rule": "Keep route control and call ingress Development-only and disabled. Rotate the administrator caller header and operator signing key together, preserve separation from the event-chain key, bind the new event key to route control, gateway, and worker as one atomic release, prove old caller and intent signatures rejected, migrate or retire every event-chain-derived receipt and rollback claim, then independently read back the exact disabled binding before any synthetic operation."
     },
     {
       "variables": ["ISSUE_HEADER_SECRET", "PREFILL_HEADER_SECRET", "SUBMISSION_HEADER_SECRET"],

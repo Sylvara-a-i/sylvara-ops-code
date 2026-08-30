@@ -1,5 +1,5 @@
 {
-  "schema_version": 5,
+  "schema_version": 6,
   "record_type": "revenue_desk_call_runtime_variable_registry",
   "committed_values_are_synthetic_or_placeholders": true,
   "fixed_public_runtime_contract": {
@@ -422,11 +422,11 @@
     },
     {
       "name": "ROUTE_CONTROL_EVENT_HMAC_SECRET",
-      "consumer": "route_control",
+      "consumer": "both",
       "secret": true,
       "required": true,
       "format": "32-4096 opaque characters",
-      "boundary": "Creates immutable idempotency and chained authorization-event identities."
+      "boundary": "Route control signs the chained event and full receipt payload; gateway and worker verify both before admission or replay."
     },
     {
       "name": "ROUTE_CONTROL_MAX_BODY_BYTES",

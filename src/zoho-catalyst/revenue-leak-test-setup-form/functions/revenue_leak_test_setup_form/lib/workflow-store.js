@@ -4,6 +4,7 @@ const crypto = require("node:crypto");
 const { SOURCE_REVISION_PATTERN } = require("./config");
 
 const PREFILL_STATUSES = Object.freeze([
+  "handle_issued",
   "ready",
   "submitted",
   "reconciliation_required",
@@ -18,6 +19,7 @@ const SUBMISSION_STATUSES = Object.freeze([
 const PREFILL_STORED_FIELDS = Object.freeze([
   "ROWID",
   "PREFILL_KEY",
+  "PREFILL_HANDLE_HASH",
   "SESSION_ROW_ID",
   "SESSION_ATTEMPT_COUNT",
   "CRM_CONTACT_ID",
@@ -27,9 +29,17 @@ const PREFILL_STORED_FIELDS = Object.freeze([
   "ACCOUNT_MODIFIED_TIME",
   "DEAL_MODIFIED_TIME",
   "SNAPSHOT_FINGERPRINT",
+  "CRM_ORGANIZATION_HASH",
+  "JOURNEY_BINDING_DIGEST",
+  "FORM_IDENTITY_HASH",
+  "EXPECTED_STAGE",
   "STATUS",
   "CONSUMPTION_OWNER",
   "ISSUED_AT",
+  "HANDLE_ISSUED_AT",
+  "HANDLE_EXPIRES_AT",
+  "HANDLE_CONSUMED_AT",
+  "HANDLE_VERSION",
   "SUBMITTED_AT",
   "RECONCILIATION_REQUIRED_AT",
   "UPDATED_AT",
@@ -80,9 +90,22 @@ const PREFILL_BINDING_KEYS = new Set([
   "accountModifiedTime",
   "dealModifiedTime",
   "snapshotFingerprint",
+  "crmOrganizationHash",
+  "journeyBindingDigest",
+  "formIdentityHash",
+  "expectedStage",
 ]);
+const PREFILL_MINT_KEYS = new Set([...PREFILL_BINDING_KEYS, "prefillHandleHash"]);
 const PREFILL_CONSUME_KEYS = new Set([...PREFILL_BINDING_KEYS, "prefillId"]);
 const PREFILL_READ_KEYS = new Set(["prefillId", "sessionRowId"]);
+const PREFILL_HANDLE_CONSUME_KEYS = new Set([
+  "prefillHandleHash",
+  "crmOrganizationHash",
+  "journeyBindingDigest",
+  "formIdentityHash",
+  "expectedStage",
+  "configurationRevision",
+]);
 const SUBMISSION_CLAIM_KEYS = new Set([
   "submissionId",
   "prefillId",
@@ -118,6 +141,7 @@ function validateAdapter(adapter) {
     "insertRow",
     "updateRow",
     "findRowsByPrefillKey",
+    "findRowsByPrefillHandleHash",
     "findRowsBySubmissionKey",
     "findRowsByRowId",
   ]) {
@@ -145,7 +169,10 @@ function validateConfig(config) {
     config.platformOperationTimeoutMs > 15000 ||
     !Number.isSafeInteger(config?.maxSubmissionAttempts) ||
     config.maxSubmissionAttempts < 1 ||
-    config.maxSubmissionAttempts > 10
+    config.maxSubmissionAttempts > 10 ||
+    !Number.isSafeInteger(config?.prefillHandleTtlSeconds) ||
+    config.prefillHandleTtlSeconds < 300 ||
+    config.prefillHandleTtlSeconds > 900
   ) {
     throw new WorkflowStoreError("Workflow store configuration is invalid");
   }
@@ -263,6 +290,7 @@ function normalizePrefillRow(rawRow, tableName) {
   const normalized = {
     rowId: validateRowId(row.ROWID, "workflow_store_unavailable"),
     prefillKey: String(row.PREFILL_KEY ?? ""),
+    prefillHandleHash: String(row.PREFILL_HANDLE_HASH ?? ""),
     sessionRowId: validateRowId(row.SESSION_ROW_ID, "workflow_store_unavailable"),
     sessionAttemptCount: safeInteger(
       row.SESSION_ATTEMPT_COUNT,
@@ -277,9 +305,17 @@ function normalizePrefillRow(rawRow, tableName) {
     accountModifiedTime: String(row.ACCOUNT_MODIFIED_TIME ?? ""),
     dealModifiedTime: String(row.DEAL_MODIFIED_TIME ?? ""),
     snapshotFingerprint: String(row.SNAPSHOT_FINGERPRINT ?? ""),
+    crmOrganizationHash: String(row.CRM_ORGANIZATION_HASH ?? ""),
+    journeyBindingDigest: String(row.JOURNEY_BINDING_DIGEST ?? ""),
+    formIdentityHash: String(row.FORM_IDENTITY_HASH ?? ""),
+    expectedStage: String(row.EXPECTED_STAGE ?? ""),
     status: String(row.STATUS ?? ""),
     consumptionOwner: String(row.CONSUMPTION_OWNER ?? ""),
     issuedAt: String(row.ISSUED_AT ?? ""),
+    handleIssuedAt: String(row.HANDLE_ISSUED_AT ?? ""),
+    handleExpiresAt: String(row.HANDLE_EXPIRES_AT ?? ""),
+    handleConsumedAt: String(row.HANDLE_CONSUMED_AT ?? ""),
+    handleVersion: safeInteger(row.HANDLE_VERSION, "HANDLE_VERSION", 1, 1000000),
     submittedAt: String(row.SUBMITTED_AT ?? ""),
     reconciliationRequiredAt: String(row.RECONCILIATION_REQUIRED_AT ?? ""),
     updatedAt: String(row.UPDATED_AT ?? ""),
@@ -290,8 +326,13 @@ function normalizePrefillRow(rawRow, tableName) {
 
   if (
     !HASH_PATTERN.test(normalized.prefillKey) ||
+    !HASH_PATTERN.test(normalized.prefillHandleHash) ||
     !PREFILL_STATUS_SET.has(normalized.status) ||
     !HASH_PATTERN.test(normalized.snapshotFingerprint) ||
+    !HASH_PATTERN.test(normalized.crmOrganizationHash) ||
+    !HASH_PATTERN.test(normalized.journeyBindingDigest) ||
+    !HASH_PATTERN.test(normalized.formIdentityHash) ||
+    normalized.expectedStage !== "form2" ||
     !SOURCE_REVISION_PATTERN.test(normalized.sourceRevision) ||
     normalized.sourceEnvironment !== "development" ||
     !OUTCOME_PATTERN.test(normalized.lastOutcome)
@@ -302,17 +343,33 @@ function normalizePrefillRow(rawRow, tableName) {
   validateModifiedTime(normalized.accountModifiedTime, "ACCOUNT_MODIFIED_TIME");
   validateModifiedTime(normalized.dealModifiedTime, "DEAL_MODIFIED_TIME");
   validateIso(normalized.issuedAt, "ISSUED_AT");
+  validateIso(normalized.handleIssuedAt, "HANDLE_ISSUED_AT");
+  validateIso(normalized.handleExpiresAt, "HANDLE_EXPIRES_AT");
+  validateIso(normalized.handleConsumedAt, "HANDLE_CONSUMED_AT", { allowEmpty: true });
   validateIso(normalized.updatedAt, "UPDATED_AT");
   validateIso(normalized.submittedAt, "SUBMITTED_AT", { allowEmpty: true });
   validateIso(normalized.reconciliationRequiredAt, "RECONCILIATION_REQUIRED_AT", {
     allowEmpty: true,
   });
 
-  if (normalized.status === "ready") {
-    if (normalized.consumptionOwner || normalized.submittedAt || normalized.reconciliationRequiredAt) {
+  if (normalized.status === "handle_issued") {
+    if (normalized.handleConsumedAt || normalized.consumptionOwner || normalized.submittedAt ||
+        normalized.reconciliationRequiredAt) {
+      throw new WorkflowStoreError("Issued prefill handle contains terminal metadata");
+    }
+  } else if (normalized.status === "ready") {
+    if (!normalized.handleConsumedAt) {
+      throw new WorkflowStoreError("Ready prefill revision has no consumed handle");
+    }
+    validateUuid(normalized.consumptionOwner, "CONSUMPTION_OWNER",
+      "workflow_store_unavailable");
+    if (normalized.submittedAt || normalized.reconciliationRequiredAt) {
       throw new WorkflowStoreError("Ready prefill revision contains terminal metadata");
     }
   } else {
+    if (!normalized.handleConsumedAt) {
+      throw new WorkflowStoreError("Terminal prefill revision has no consumed handle");
+    }
     validateUuid(normalized.consumptionOwner, "CONSUMPTION_OWNER", "workflow_store_unavailable");
     validateIso(normalized.submittedAt, "SUBMITTED_AT");
     if (
@@ -397,6 +454,15 @@ function validatePrefillBinding(input, allowedKeys = PREFILL_BINDING_KEYS) {
     accountModifiedTime: validateModifiedTime(input.accountModifiedTime, "accountModifiedTime"),
     dealModifiedTime: validateModifiedTime(input.dealModifiedTime, "dealModifiedTime"),
     snapshotFingerprint: validateFingerprint(input.snapshotFingerprint),
+    crmOrganizationHash: validateFingerprint(input.crmOrganizationHash),
+    journeyBindingDigest: validateFingerprint(input.journeyBindingDigest),
+    formIdentityHash: validateFingerprint(input.formIdentityHash),
+    expectedStage: input.expectedStage === "form2"
+      ? input.expectedStage
+      : (() => { throw new WorkflowStoreError(
+        "expectedStage is invalid",
+        "workflow_input_invalid",
+      ); })(),
   };
 }
 
@@ -411,6 +477,10 @@ function samePrefillBinding(row, binding) {
     row.accountModifiedTime === binding.accountModifiedTime &&
     row.dealModifiedTime === binding.dealModifiedTime &&
     row.snapshotFingerprint === binding.snapshotFingerprint
+    && row.crmOrganizationHash === binding.crmOrganizationHash
+    && row.journeyBindingDigest === binding.journeyBindingDigest
+    && row.formIdentityHash === binding.formIdentityHash
+    && row.expectedStage === binding.expectedStage
   );
 }
 
@@ -519,6 +589,13 @@ function createWorkflowStore(
     "the durable prefill revision",
   );
 
+  const readPrefillByHandleHash = (handleHash, notFoundAllowed = true) => queryUnique(
+    () => adapter.findRowsByPrefillHandleHash(prefillTable, handleHash),
+    (row) => normalizePrefillRow(row, prefillTable),
+    notFoundAllowed,
+    "the durable prefill handle",
+  );
+
   const readPrefillByRowId = (rowId) => queryUnique(
     () => adapter.findRowsByRowId(prefillTable, validateRowId(rowId)),
     (row) => normalizePrefillRow(row, prefillTable),
@@ -570,15 +647,20 @@ function createWorkflowStore(
   }
 
   async function mintPrefill(input) {
-    const binding = validatePrefillBinding(input);
+    const binding = validatePrefillBinding(input, PREFILL_MINT_KEYS);
+    const prefillHandleHash = validateFingerprint(input.prefillHandleHash);
     const prefillId = derivePrefillId(
       binding.sessionRowId,
       binding.sessionAttemptCount,
     );
     const prefillKey = deriveKey("prefill", prefillId);
     const timestamp = new Date(validateNow(now)).toISOString();
+    const handleExpiresAt = new Date(
+      Date.parse(timestamp) + config.prefillHandleTtlSeconds * 1000,
+    ).toISOString();
     const row = {
       PREFILL_KEY: prefillKey,
+      PREFILL_HANDLE_HASH: prefillHandleHash,
       SESSION_ROW_ID: binding.sessionRowId,
       SESSION_ATTEMPT_COUNT: binding.sessionAttemptCount,
       CRM_CONTACT_ID: binding.crmContactId,
@@ -588,15 +670,23 @@ function createWorkflowStore(
       ACCOUNT_MODIFIED_TIME: binding.accountModifiedTime,
       DEAL_MODIFIED_TIME: binding.dealModifiedTime,
       SNAPSHOT_FINGERPRINT: binding.snapshotFingerprint,
-      STATUS: "ready",
+      CRM_ORGANIZATION_HASH: binding.crmOrganizationHash,
+      JOURNEY_BINDING_DIGEST: binding.journeyBindingDigest,
+      FORM_IDENTITY_HASH: binding.formIdentityHash,
+      EXPECTED_STAGE: binding.expectedStage,
+      STATUS: "handle_issued",
       CONSUMPTION_OWNER: "",
       ISSUED_AT: timestamp,
+      HANDLE_ISSUED_AT: timestamp,
+      HANDLE_EXPIRES_AT: handleExpiresAt,
+      HANDLE_CONSUMED_AT: "",
+      HANDLE_VERSION: 1,
       SUBMITTED_AT: "",
       RECONCILIATION_REQUIRED_AT: "",
       UPDATED_AT: timestamp,
       SOURCE_REVISION: config.sourceRevision,
       SOURCE_ENVIRONMENT: config.deploymentEnvironment,
-      LAST_OUTCOME: "ready",
+      LAST_OUTCOME: "prefill_handle_issued",
     };
 
     try {
@@ -635,10 +725,62 @@ function createWorkflowStore(
         "reconciliation_required",
       );
     }
-    if (readback.status !== "ready" || readback.lastOutcome !== "ready") {
+    if (readback.status === "handle_issued" &&
+        readback.prefillHandleHash === prefillHandleHash &&
+        readback.handleIssuedAt === timestamp &&
+        readback.handleExpiresAt === handleExpiresAt &&
+        readback.handleVersion === 1) {
+      return Object.freeze({ prefillId, revision: readback });
+    }
+    if (readback.status === "handle_issued" &&
+        Date.parse(readback.handleExpiresAt) > validateNow(now)) {
+      // A different live handle already won this session attempt. Rotating it
+      // here would invalidate a successful URL returned by the winning caller.
+      throw new WorkflowStoreError(
+        "A prefill handle is already active for this attempt",
+        "prefill_conflict",
+      );
+    }
+    if (!new Set(["handle_issued", "ready"]).has(readback.status)) {
       throw new WorkflowStoreError("Prefill attempt has an unknown state");
     }
-    return Object.freeze({ prefillId, revision: readback });
+    const patch = {
+      PREFILL_HANDLE_HASH: prefillHandleHash,
+      STATUS: "handle_issued",
+      CONSUMPTION_OWNER: "",
+      HANDLE_ISSUED_AT: timestamp,
+      HANDLE_EXPIRES_AT: handleExpiresAt,
+      HANDLE_CONSUMED_AT: "",
+      HANDLE_VERSION: readback.handleVersion + 1,
+      UPDATED_AT: timestamp,
+      LAST_OUTCOME: "prefill_handle_reissued",
+    };
+    try {
+      await adapter.updateRow(prefillTable, { ROWID: readback.rowId, ...patch }, {
+        PREFILL_HANDLE_HASH: readback.prefillHandleHash,
+        STATUS: readback.status,
+        HANDLE_VERSION: readback.handleVersion,
+        UPDATED_AT: readback.updatedAt,
+      });
+    } catch {
+      // Exact readback below distinguishes this issuer from a competing retry.
+    }
+    const rotated = await readPrefillByRowId(readback.rowId);
+    if (!samePrefillBinding(rotated, binding) ||
+        rotated.prefillHandleHash !== prefillHandleHash ||
+        rotated.status !== "handle_issued" ||
+        rotated.handleIssuedAt !== timestamp ||
+        rotated.handleExpiresAt !== handleExpiresAt ||
+        rotated.handleConsumedAt !== "" ||
+        rotated.consumptionOwner !== "" ||
+        rotated.handleVersion !== patch.HANDLE_VERSION ||
+        rotated.lastOutcome !== "prefill_handle_reissued") {
+      throw new WorkflowStoreError(
+        "Prefill handle issuance requires operator reconciliation",
+        "reconciliation_required",
+      );
+    }
+    return Object.freeze({ prefillId, revision: rotated });
   }
 
   async function readPrefill(input) {
@@ -651,6 +793,84 @@ function createWorkflowStore(
       throw new WorkflowStoreError("Prefill context does not match", "prefill_context_invalid");
     }
     return row;
+  }
+
+  async function readPrefillById(prefillId) {
+    const selected = validateUuid(prefillId, "prefillId");
+    return readPrefillByKey(deriveKey("prefill", selected));
+  }
+
+  async function readPrefillHandle(prefillHandleHash) {
+    const handleHash = validateFingerprint(prefillHandleHash);
+    const revision = await readPrefillByHandleHash(handleHash);
+    if (!revision || revision.prefillHandleHash !== handleHash ||
+        revision.status !== "handle_issued" ||
+        Date.parse(revision.handleExpiresAt) <= validateNow(now)) {
+      return null;
+    }
+    const prefillId = derivePrefillId(
+      revision.sessionRowId,
+      revision.sessionAttemptCount,
+    );
+    if (deriveKey("prefill", prefillId) !== revision.prefillKey) {
+      throw new WorkflowStoreError(
+        "Prefill handle identity requires reconciliation",
+        "reconciliation_required",
+      );
+    }
+    return Object.freeze({ prefillId, revision });
+  }
+
+  async function consumePrefillHandle(input) {
+    assertExactKeys(input, PREFILL_HANDLE_CONSUME_KEYS, "Prefill handle binding is invalid");
+    const handleHash = validateFingerprint(input.prefillHandleHash);
+    const current = await readPrefillByHandleHash(handleHash);
+    if (!current || current.prefillHandleHash !== handleHash ||
+        current.crmOrganizationHash !== validateFingerprint(input.crmOrganizationHash) ||
+        current.journeyBindingDigest !== validateFingerprint(input.journeyBindingDigest) ||
+        current.formIdentityHash !== validateFingerprint(input.formIdentityHash) ||
+        input.expectedStage !== "form2" || current.expectedStage !== input.expectedStage ||
+        input.configurationRevision !== config.sourceRevision ||
+        current.sourceRevision !== input.configurationRevision ||
+        Date.parse(current.handleExpiresAt) <= validateNow(now)) {
+      throw new WorkflowStoreError("Prefill handle was not found", "prefill_not_found");
+    }
+    if (current.status !== "handle_issued") {
+      throw new WorkflowStoreError("Prefill handle was not found", "prefill_not_found");
+    }
+    const timestamp = new Date(validateNow(now)).toISOString();
+    const handleConsumptionOwner = mintUuid("prefill handle consumption owner");
+    const patch = {
+      STATUS: "ready",
+      HANDLE_CONSUMED_AT: timestamp,
+      CONSUMPTION_OWNER: handleConsumptionOwner,
+      UPDATED_AT: timestamp,
+      LAST_OUTCOME: "ready",
+    };
+    try {
+      await adapter.updateRow(prefillTable, { ROWID: current.rowId, ...patch }, {
+        PREFILL_HANDLE_HASH: current.prefillHandleHash,
+        STATUS: "handle_issued",
+        HANDLE_VERSION: current.handleVersion,
+        UPDATED_AT: current.updatedAt,
+      });
+    } catch {
+      // A lost response or concurrent use is resolved only by exact readback.
+    }
+    const readback = await readPrefillByRowId(current.rowId);
+    if (readback.status === "ready" &&
+        readback.consumptionOwner !== handleConsumptionOwner) {
+      throw new WorkflowStoreError("Prefill handle was not found", "prefill_not_found");
+    }
+    if (readback.status !== "ready" || readback.handleConsumedAt !== timestamp ||
+        readback.consumptionOwner !== handleConsumptionOwner ||
+        readback.updatedAt !== timestamp || readback.lastOutcome !== "ready") {
+      throw new WorkflowStoreError(
+        "Prefill handle consumption requires operator reconciliation",
+        "reconciliation_required",
+      );
+    }
+    return Object.freeze({ revision: readback, replayed: false });
   }
 
   async function consumePrefill(input) {
@@ -694,6 +914,7 @@ function createWorkflowStore(
         STATUS: "ready",
         PREFILL_KEY: current.prefillKey,
         SESSION_ROW_ID: current.sessionRowId,
+        CONSUMPTION_OWNER: current.consumptionOwner,
       });
     } catch {
       // Conditional conflicts and timeouts are resolved by exact readback.
@@ -971,6 +1192,7 @@ function createWorkflowStore(
 
   return Object.freeze({
     claimSubmission,
+    consumePrefillHandle,
     consumePrefill,
     markPrefillReconciliationRequired,
     markSubmissionFailed,
@@ -978,6 +1200,8 @@ function createWorkflowStore(
     markSubmissionSucceeded,
     mintPrefill,
     readPrefill,
+    readPrefillById,
+    readPrefillHandle,
     readSubmission,
   });
 }

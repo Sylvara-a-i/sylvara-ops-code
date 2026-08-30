@@ -1,5 +1,6 @@
 "use strict";
 
+const crypto = require("node:crypto");
 const { isApprovedCrmApiHostname } = require("./destinations");
 const { HttpBoundaryError, requestJson } = require("./http");
 const { verifyRecordRelationships } = require("./form-contract");
@@ -214,8 +215,12 @@ function validateConfig(config) {
   if (!Number.isSafeInteger(maximumBytes) || maximumBytes < 1024 || maximumBytes > 524288) {
     fail("CRM response limit is invalid", { publicCode: "configuration_invalid" });
   }
+  if (!/^[a-f0-9]{64}$/.test(config.crmOrganizationHash ?? "")) {
+    fail("CRM organization binding is invalid", { publicCode: "configuration_invalid" });
+  }
   return Object.freeze({
     apiBaseUrl: validateBaseUrl(config.crmApiBaseUrl),
+    crmOrganizationHash: config.crmOrganizationHash,
     timeoutMs,
     maximumBytes,
   });
@@ -488,6 +493,8 @@ function createCrmClient(
   ) {
     fail("CRM authorization providers are unavailable", { publicCode: "configuration_invalid" });
   }
+  let readOrganizationVerified = false;
+  let writeOrganizationVerified = false;
 
   async function authorizedRequest(url, options, { sideEffecting, write }) {
     let authorization;
@@ -519,7 +526,34 @@ function createCrmClient(
     }
   }
 
+  async function assertOrganization(write) {
+    if ((write && writeOrganizationVerified) || (!write && readOrganizationVerified)) return;
+    const response = await authorizedRequest(
+      `${boundary.apiBaseUrl}/org`,
+      { method: "GET", headers: { Accept: "application/json" } },
+      { sideEffecting: false, write },
+    );
+    const organizations = response.json?.org;
+    const id = Array.isArray(organizations) && organizations.length === 1
+      ? organizations[0]?.zgid
+      : null;
+    const observed = typeof id === "string" && /^[1-9][0-9]{0,29}$/.test(id)
+      ? crypto.createHash("sha256").update(id, "utf8").digest("hex")
+      : null;
+    const expected = boundary.crmOrganizationHash;
+    if (response.status !== 200 || !observed ||
+        !crypto.timingSafeEqual(Buffer.from(observed, "hex"), Buffer.from(expected, "hex"))) {
+      fail("CRM Connection organization does not match", {
+        publicCode: "connection_organization_mismatch",
+        status: 503,
+      });
+    }
+    if (write) writeOrganizationVerified = true;
+    else readOrganizationVerified = true;
+  }
+
   async function getRecord(module, recordId) {
+    await assertOrganization(false);
     const response = await authorizedRequest(
       recordUrl(boundary, module, recordId),
       { method: "GET", headers: { Accept: "application/json" } },
@@ -534,6 +568,7 @@ function createCrmClient(
   }
 
   async function updateRecord(module, recordId, update, { ifUnmodifiedSince } = {}) {
+    await assertOrganization(true);
     const serializedUpdate = serializeUpdate(module, update);
     validateModifiedTime(ifUnmodifiedSince);
     const response = await authorizedRequest(
@@ -564,6 +599,7 @@ function createCrmClient(
   }
 
   async function updateForm2Composite(existing, updates) {
+    await assertOrganization(true);
     verifyRecordRelationships(existing);
     if (!isPlainObject(updates)) {
       fail("Form 2 update bundle is invalid", { publicCode: "configuration_invalid" });

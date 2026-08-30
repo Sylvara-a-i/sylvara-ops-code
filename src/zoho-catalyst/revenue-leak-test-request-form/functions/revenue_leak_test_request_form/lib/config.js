@@ -1,5 +1,6 @@
 "use strict";
 
+const crypto = require("node:crypto");
 const { validateOperatorHash, validateSecret } = require("./security");
 
 const FORM1_SESSION_TABLE_NAME = "RevenueLeakTestRequestFormSessions";
@@ -7,6 +8,7 @@ const CRM_API_BASE_URL = "https://www.zohoapis.com/crm/v8";
 const SHA256_HEX_PATTERN = /^[a-f0-9]{64}$/;
 const NUMERIC_LIMITS = Object.freeze({
   SESSION_TTL_SECONDS: Object.freeze({ fallback: 1800, minimum: 300, maximum: 3600 }),
+  PREFILL_HANDLE_TTL_SECONDS: Object.freeze({ fallback: 600, minimum: 300, maximum: 900 }),
   MAX_BODY_BYTES: Object.freeze({ fallback: 32768, minimum: 1024, maximum: 262144 }),
   INBOUND_BODY_TIMEOUT_MS: Object.freeze({ fallback: 5000, minimum: 250, maximum: 15000 }),
   OUTBOUND_TIMEOUT_MS: Object.freeze({ fallback: 5000, minimum: 250, maximum: 15000 }),
@@ -103,6 +105,24 @@ function formUrl(value) {
   return url.toString();
 }
 
+function accessUrl(value, expectedPath) {
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new ConfigurationError("FORM1_ACCESS_PUBLIC_URL must be one exact HTTPS URL");
+  }
+  const developmentHost = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+development\.(?:catalystserverless|zohocatalyst)\.(?:com|in|eu|ca|com\.au)$/;
+  if (url.protocol !== "https:" || url.username || url.password || url.port ||
+      url.search || url.hash || !developmentHost.test(url.hostname) ||
+      url.pathname !== expectedPath) {
+    throw new ConfigurationError(
+      "FORM1_ACCESS_PUBLIC_URL must match the exact Catalyst Development access route",
+    );
+  }
+  return url.toString();
+}
+
 function boundedText(environment, name, maximum) {
   const value = required(environment, name);
   if ([...value].length > maximum || /[\u0000-\u001f\u007f]/.test(value)) {
@@ -135,10 +155,12 @@ function loadConfig(environment = process.env, artifactRevision) {
 
   const paths = {
     issue: pathValue(required(environment, "ISSUE_PATH"), "ISSUE_PATH"),
+    access: pathValue(required(environment, "ACCESS_PATH"), "ACCESS_PATH"),
+    exchange: pathValue(required(environment, "EXCHANGE_PATH"), "EXCHANGE_PATH"),
     prefill: pathValue(required(environment, "PREFILL_PATH"), "PREFILL_PATH"),
     submission: pathValue(required(environment, "SUBMISSION_PATH"), "SUBMISSION_PATH"),
   };
-  if (new Set(Object.values(paths)).size !== 3) {
+  if (new Set(Object.values(paths)).size !== 5) {
     throw new ConfigurationError("Form 1 route paths must be different");
   }
   const headers = {
@@ -159,12 +181,16 @@ function loadConfig(environment = process.env, artifactRevision) {
         "SUBMISSION_HEADER_SECRET",
       ),
       tokenPepper: validateSecret(required(environment, "TOKEN_PEPPER"), "TOKEN_PEPPER"),
+      prefillHandlePepper: validateSecret(
+        required(environment, "PREFILL_HANDLE_PEPPER"),
+        "PREFILL_HANDLE_PEPPER",
+      ),
     };
     validateOperatorHash(required(environment, "ISSUING_ACTOR_HASH"));
   } catch (error) {
     throw new ConfigurationError(error.message);
   }
-  if (new Set(Object.values(secrets)).size !== 4) {
+  if (new Set(Object.values(secrets)).size !== 5) {
     throw new ConfigurationError("Form 1 route secrets and token pepper must be different");
   }
   const readConnection = identifier(
@@ -189,9 +215,14 @@ function loadConfig(environment = process.env, artifactRevision) {
   if (reviewedDefault(environment, "CRM_API_BASE_URL", CRM_API_BASE_URL) !== CRM_API_BASE_URL) {
     throw new ConfigurationError("CRM_API_BASE_URL must be the exact reviewed Zoho CRM v8 base");
   }
-  const tokenAlias = identifier(required(environment, "FORM1_TOKEN_FIELD_ALIAS"),
-    "FORM1_TOKEN_FIELD_ALIAS", 64);
+  const prefillHandleAlias = identifier(
+    required(environment, "FORM1_PREFILL_HANDLE_FIELD_ALIAS"),
+    "FORM1_PREFILL_HANDLE_FIELD_ALIAS",
+    64,
+  );
+  const selectedFormUrl = formUrl(required(environment, "FORM1_PUBLIC_URL"));
   return Object.freeze({
+    accessPath: paths.access,
     assistedConstants: Object.freeze({
       entryOffer: boundedText(environment, "FORM1_ENTRY_OFFER_VALUE", 100),
       intakeFormVersion: boundedText(environment, "FORM1_INTAKE_FORM_VERSION", 30),
@@ -213,8 +244,14 @@ function loadConfig(environment = process.env, artifactRevision) {
       required(environment, "EXPECTED_CATALYST_PROJECT_ID_SHA256"),
       "EXPECTED_CATALYST_PROJECT_ID_SHA256",
     ),
-    form1PublicUrl: formUrl(required(environment, "FORM1_PUBLIC_URL")),
-    form1TokenFieldAlias: tokenAlias,
+    exchangePath: paths.exchange,
+    form1AccessPublicUrl: accessUrl(
+      required(environment, "FORM1_ACCESS_PUBLIC_URL"),
+      paths.access,
+    ),
+    form1PublicUrl: selectedFormUrl,
+    form1PrefillHandleFieldAlias: prefillHandleAlias,
+    formIdentityHash: crypto.createHash("sha256").update(selectedFormUrl, "utf8").digest("hex"),
     inboundBodyTimeoutMs: boundedInteger(environment, "INBOUND_BODY_TIMEOUT_MS"),
     issueHeaderName: headers.issue,
     issueHeaderSecret: secrets.issue,
@@ -226,6 +263,8 @@ function loadConfig(environment = process.env, artifactRevision) {
     platformOperationTimeoutMs: boundedInteger(environment, "PLATFORM_OPERATION_TIMEOUT_MS"),
     prefillHeaderName: headers.prefill,
     prefillHeaderSecret: secrets.prefill,
+    prefillHandlePepper: secrets.prefillHandlePepper,
+    prefillHandleTtlSeconds: boundedInteger(environment, "PREFILL_HANDLE_TTL_SECONDS"),
     prefillPath: paths.prefill,
     sessionTableName: selectedTable,
     sessionTtlSeconds: boundedInteger(environment, "SESSION_TTL_SECONDS"),

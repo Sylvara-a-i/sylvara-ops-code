@@ -1,6 +1,6 @@
 {
-  "schema_version": 4,
-  "contract_id": "sylvara-free-revenue-leak-test-e2e-v4",
+  "schema_version": 5,
+  "contract_id": "sylvara-free-revenue-leak-test-e2e-v5",
   "status": "bounded-source-candidate-development-installation-pending",
   "environments": ["development", "dark_production"],
   "customer_facing_name": "Free Revenue Leak Test",
@@ -10,8 +10,8 @@
     "note": "The free-test values remain stable during migration. They do not authorize a second free-only runtime."
   },
   "identifier_migration": {
-    "from_schema_version": 3,
-    "previous_contract_id": "sylvara-free-revenue-leak-test-e2e-v3",
+    "from_schema_version": 4,
+    "previous_contract_id": "sylvara-free-revenue-leak-test-e2e-v4",
     "function_aliases": {
       "form1_assisted_controller": "revenue_leak_test_request_form",
       "form2_controller": "revenue_leak_test_setup_form"
@@ -114,23 +114,29 @@
     },
     "assisted_path": {
       "controller": "revenue_leak_test_request_form",
-      "routes": ["FORM1_ISSUE", "FORM1_PREFILL", "FORM1_SUBMISSION"],
-      "writer": "Catalyst controller exact-record update after server-side token resolution",
+      "routes": ["FORM1_ISSUE", "FORM1_ACCESS", "FORM1_EXCHANGE", "FORM1_PREFILL", "FORM1_SUBMISSION"],
+      "writer": "Catalyst controller exact-record update after server-side prefill revision resolution",
       "public_writer_unchanged": "native Zoho Forms CRM integration",
       "enabled": false,
       "source_candidate_enabled": true,
       "live_enabled": false,
-      "browser_visible_identity": "opaque short-lived bearer only",
+      "browser_visible_identity": "one-time journey credential in the Catalyst URL fragment, then a separate one-time Form prefill handle",
       "raw_crm_id_or_pii_in_url": false,
-      "crm_record_and_journey_resolution": "digest-bound Catalyst session only",
+      "journey_credential_reaches_zoho_forms": false,
+      "crm_record_and_journey_resolution": "digest-bound Catalyst session and immutable prefill revision only",
       "native_crm_integration_condition": "public tokenless lane only",
       "crm_button_binding_state": "desired Open Free-Test Setup launcher; old control retained until E2E acceptance",
       "forms_prefill_webhook_binding_state": "desired exact authenticated Development route",
       "forms_submission_webhook_binding_state": "desired exact authenticated Development route",
       "controller_platform_data_dependencies": "Catalyst Data Store plus distinct CRM read and write Connections",
       "controller_request_response_platform": "Catalyst Advanced I/O",
-      "token_storage": "domain-separated HMAC digest only",
-      "default_ttl_seconds": 1800,
+      "journey_credential_storage": "domain-separated HMAC digest only",
+      "journey_credential_ttl_seconds": 1800,
+      "prefill_handle_storage": "domain-separated HMAC digest only",
+      "prefill_handle_ttl_seconds": 600,
+      "prefill_handle_authority": "one minimum-data Form 1 prefill only",
+      "prefill_response_server_fields": ["prefillId", "configurationRevision"],
+      "assisted_submission_server_fields": ["prefillId", "configurationRevision", "submissionId"],
       "submission_consumption": "after exact CRM readback only",
       "replay_policy": "same submission is harmless; changed submission conflicts",
       "production_state": "dark",
@@ -177,7 +183,7 @@
         "runtime read-only or respondent-editability semantics",
         "form-entry retention semantics",
         "missing UTM builder fields versus retained CRM mappings",
-        "provider-supported safe assisted-token handoff"
+        "provider-supported one-time prefill-handle handoff"
       ]
     },
     "live_configuration_prerequisites": {
@@ -230,9 +236,9 @@
           "respondent editability",
           "form-entry retention semantics",
           "missing UTM builder fields versus retained CRM mappings",
-          "safe assisted-token transport and Prefill-Webhook contract"
+          "safe one-time prefill-handle transport and Dynamic Prefill-Webhook contract"
         ],
-        "rule": "The exact builder dictionary is proven for type, alias, mandatory, personal, encryption, and default visibility. Do not infer runtime respondent editability or entry retention from builder controls, and do not authorize a browser or connector mutation until the UTM mismatch and safe assisted-token transport are resolved.",
+        "rule": "The exact builder dictionary is proven for type, alias, mandatory, personal, encryption, and default visibility. Do not infer runtime respondent editability or entry retention from builder controls, and do not authorize a browser or connector mutation until the UTM mismatch and one-time prefill-handle transport are resolved.",
         "live_readback": {
           "observed_deployed_field_count": 26,
           "mandatory_true_count": 10,
@@ -318,8 +324,9 @@
       "prohibited_client_fields": ["testPhoneNumber", "alertRecipientMobile", "smsRecipient", "paymentData"]
     },
     "controller_field_policy": {
-      "setupToken": {"mandatory": true, "personal": true, "encrypted": true, "respondent_editable": false},
+      "prefillHandle": {"mandatory": true, "personal": false, "encrypted": true, "respondent_editable": false, "submission_webhook_forwarded": false, "authority": "one minimum-data prefill only", "ttl_seconds": 600},
       "prefillId": {"mandatory": true, "personal": true, "encrypted": true, "respondent_editable": false},
+      "configurationRevision": {"mandatory": true, "personal": false, "encrypted": false, "respondent_editable": false},
       "submissionId": {"mandatory": "generated before submission webhook", "personal": false, "encrypted": false, "respondent_editable": false}
     },
     "native_action_policy": {
@@ -877,14 +884,16 @@
     {"id": "ROUTE_CONTROL_ACTIVATE", "function": "revenue_desk_route_control", "method": "POST", "path_reference": "ROUTE_CONTROL_ACTIVATE_PATH", "authentication": "Catalyst project and Development host binding plus independent operator header and CRM Connection", "caller": "Administrator-restricted CRM control", "request_fields": ["dealId", "journeyId", "deploymentId", "configurationVersionId", "idempotencyKey"], "content_type": "application/json", "size_reference": "ROUTE_CONTROL_MAX_BODY_BYTES", "current_state": "source_complete_install_pending"},
     {"id": "ROUTE_CONTROL_ROLLBACK", "function": "revenue_desk_route_control", "method": "POST", "path_reference": "ROUTE_CONTROL_ROLLBACK_PATH", "authentication": "Catalyst project and Development host binding plus independent operator header and CRM Connection", "caller": "Administrator-restricted CRM control", "request_fields": ["dealId", "journeyId", "deploymentId", "configurationVersionId", "idempotencyKey", "reason"], "content_type": "application/json", "size_reference": "ROUTE_CONTROL_MAX_BODY_BYTES", "current_state": "source_complete_install_pending"},
     {"id": "FORM1_ISSUE", "function": "revenue_leak_test_request_form", "method": "POST", "path_reference": "ISSUE_PATH", "authentication": "Catalyst project binding plus ISSUE_HEADER_SECRET", "caller": "administrator-restricted CRM launcher", "request_fields": ["crmModule", "recordId"], "content_type": "application/json", "size_reference": "MAX_BODY_BYTES", "current_state": "source_complete_install_pending"},
-    {"id": "FORM1_PREFILL", "function": "revenue_leak_test_request_form", "method": "POST", "path_reference": "PREFILL_PATH", "authentication": "Catalyst project binding plus PREFILL_HEADER_SECRET plus opaque bearer", "caller": "Zoho Forms server-side Prefill Webhook", "request_fields": ["token"], "content_type": "application/json", "size_reference": "MAX_BODY_BYTES", "current_state": "source_complete_install_pending"},
-    {"id": "FORM1_SUBMISSION", "function": "revenue_leak_test_request_form", "method": "POST", "path_reference": "SUBMISSION_PATH", "authentication": "Catalyst project binding plus SUBMISSION_HEADER_SECRET and opaque bearer on assisted lane", "caller": "Zoho Forms server-side submission webhook", "assisted_request_fields": ["token", "submissionId", "formData"], "public_request_fields": ["submissionId"], "content_type": "application/json", "size_reference": "MAX_BODY_BYTES", "current_state": "source_complete_install_pending"},
+    {"id": "FORM1_ACCESS", "function": "revenue_leak_test_request_form", "method": "GET", "path_reference": "ACCESS_PATH", "authentication": "one-time journey credential retained only in the URL fragment and therefore absent from the GET request", "caller": "CRM-launched operator browser", "content_type": "none", "size_reference": "none", "current_state": "source_complete_install_pending"},
+    {"id": "FORM1_EXCHANGE", "function": "revenue_leak_test_request_form", "method": "POST", "path_reference": "EXCHANGE_PATH", "authentication": "one-time journey credential in exact same-origin JSON POST", "caller": "Catalyst access client", "request_fields": ["journeyToken"], "content_type": "application/json", "size_reference": "MAX_BODY_BYTES", "current_state": "source_complete_install_pending"},
+    {"id": "FORM1_PREFILL", "function": "revenue_leak_test_request_form", "method": "POST", "path_reference": "PREFILL_PATH", "authentication": "Catalyst project binding plus PREFILL_HEADER_SECRET and one-time prefill handle", "caller": "Zoho Forms server-side Prefill Webhook", "request_fields": ["prefillHandle"], "response_server_fields": ["prefillId", "configurationRevision"], "content_type": "application/json", "size_reference": "MAX_BODY_BYTES", "current_state": "source_complete_install_pending"},
+    {"id": "FORM1_SUBMISSION", "function": "revenue_leak_test_request_form", "method": "POST", "path_reference": "SUBMISSION_PATH", "authentication": "Catalyst project binding plus SUBMISSION_HEADER_SECRET and immutable prefill revision on the assisted lane", "caller": "Zoho Forms server-side submission webhook", "assisted_request_fields": ["prefillId", "configurationRevision", "submissionId", "formData"], "public_request_fields": ["submissionId"], "content_type": "application/json", "size_reference": "MAX_BODY_BYTES", "current_state": "source_complete_install_pending"},
     {"id": "FORM2_ISSUE", "function": "revenue_leak_test_setup_form", "method": "POST", "path_reference": "ISSUE_PATH", "authentication": "Catalyst API key plus ISSUE_HEADER_NAME and ISSUE_HEADER_SECRET", "caller": "administrator-restricted CRM action", "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"},
     {"id": "FORM2_ACCESS", "function": "revenue_leak_test_setup_form", "method": "GET", "path_reference": "FORM2_ACCESS_PATH", "authentication": "high-entropy setup token retained in URL fragment", "caller": "authorized representative browser", "content_type": "none", "size_reference": "none"},
     {"id": "FORM2_OTP_REQUEST", "function": "revenue_leak_test_setup_form", "method": "POST", "path_reference": "FORM2_OTP_REQUEST_PATH", "authentication": "high-entropy setup token possession plus same-origin JSON boundary", "caller": "same-origin setup-form access page", "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"},
     {"id": "FORM2_OTP_VERIFY", "function": "revenue_leak_test_setup_form", "method": "POST", "path_reference": "FORM2_OTP_VERIFY_PATH", "authentication": "high-entropy setup token possession plus eight-digit email OTP plus same-origin JSON boundary", "caller": "same-origin setup-form access page", "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"},
-    {"id": "FORM2_PREFILL", "function": "revenue_leak_test_setup_form", "method": "POST", "path_reference": "PREFILL_PATH", "authentication": "Catalyst API key plus FORMS_HEADER_NAME and PREFILL_HEADER_SECRET plus consumed email proof", "caller": "Zoho Forms server-side Prefill Webhook", "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"},
-    {"id": "FORM2_SUBMISSION", "function": "revenue_leak_test_setup_form", "method": "POST", "path_reference": "SUBMISSION_PATH", "authentication": "Catalyst API key plus FORMS_HEADER_NAME and SUBMISSION_HEADER_SECRET plus verified session and one-time prefill", "caller": "Zoho Forms server-side submission webhook", "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"},
+    {"id": "FORM2_PREFILL", "function": "revenue_leak_test_setup_form", "method": "POST", "path_reference": "PREFILL_PATH", "authentication": "Catalyst API key plus FORMS_HEADER_NAME and PREFILL_HEADER_SECRET plus one-time prefill handle bound to a consumed email proof", "caller": "Zoho Forms server-side Prefill Webhook", "request_fields": ["prefillHandle"], "response_server_fields": ["prefillId", "configurationRevision"], "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"},
+    {"id": "FORM2_SUBMISSION", "function": "revenue_leak_test_setup_form", "method": "POST", "path_reference": "SUBMISSION_PATH", "authentication": "Catalyst API key plus FORMS_HEADER_NAME and SUBMISSION_HEADER_SECRET plus verified session and immutable prefill revision", "caller": "Zoho Forms server-side submission webhook", "server_fields": ["prefillId", "configurationRevision", "submissionId"], "prefill_handle_forwarded": false, "setup_token_forwarded": false, "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"},
     {"id": "CRM_REPORT_SUMMARY", "function": "crm_billing_orchestrator", "method": "POST", "path_reference": "ALLOWED_PATH", "authentication": "Catalyst API Gateway ZCFKEY plus SHARED_HEADER_NAME carrying REPORT_SUMMARY_HEADER_VALUE", "caller": "revenue_desk_call_worker retry_scan only", "action": "sync_report_summary", "request_fields": ["schemaVersion", "action", "dealId", "operationKey"], "success_gate": "exact Deal readback plus CRMBillingOperations STATUS completed and LAST_OUTCOME report_summary_readback_confirmed", "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"},
     {"id": "CRM_BILLING_ACCEPTED", "function": "crm_billing_orchestrator", "method": "POST", "path_reference": "ALLOWED_PATH", "authentication": "caller-specific Catalyst API Gateway ZCFKEY plus SHARED_HEADER_NAME carrying SHARED_HEADER_VALUE", "caller": "approved CRM paid-acceptance action", "actions": ["prepare_paid_subscription", "reconcile"], "request_fields": ["schemaVersion", "action", "dealId"], "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"}
   ],
@@ -928,6 +937,15 @@
     "production_activation_authorized": false
   },
   "required_new_environment_variables": [
+    {"name": "ACCESS_PATH", "consumer": "revenue_leak_test_request_form", "secret": false},
+    {"name": "EXCHANGE_PATH", "consumer": "revenue_leak_test_request_form", "secret": false},
+    {"name": "PREFILL_HANDLE_PEPPER", "consumer": "revenue_leak_test_request_form", "secret": true},
+    {"name": "FORM1_ACCESS_PUBLIC_URL", "consumer": "revenue_leak_test_request_form", "secret": false},
+    {"name": "FORM1_PREFILL_HANDLE_FIELD_ALIAS", "consumer": "revenue_leak_test_request_form", "secret": false},
+    {"name": "PREFILL_HANDLE_TTL_SECONDS", "consumer": "revenue_leak_test_request_form", "secret": false},
+    {"name": "CRM_ORGANIZATION_ID_SHA256", "consumer": "revenue_leak_test_setup_form", "secret": true},
+    {"name": "FORM2_PREFILL_HANDLE_FIELD_ALIAS", "consumer": "revenue_leak_test_setup_form", "secret": false},
+    {"name": "PREFILL_HANDLE_TTL_SECONDS", "consumer": "revenue_leak_test_setup_form", "secret": false},
     {"name": "FORM2_PROOF_TABLE_NAME", "consumer": "revenue_leak_test_setup_form", "secret": false},
     {"name": "FORM2_PROOF_HMAC_SECRET", "consumer": "revenue_leak_test_setup_form", "secret": true},
     {"name": "FORM2_PROOF_MODE", "consumer": "revenue_leak_test_setup_form", "secret": false},
@@ -960,8 +978,8 @@
     "crm_billing_orchestrator": ["CRM_READ_CONNECTION_LINK_NAME", "CRM_WRITE_CONNECTION_LINK_NAME", "BILLING_READ_CONNECTION_LINK_NAME", "BILLING_WRITE_CONNECTION_LINK_NAME"],
     "analytics_sync": ["ANALYTICS_READ_CONNECTION_LINK_NAME", "ANALYTICS_WRITE_CONNECTION_LINK_NAME"]
   },
-  "deployment_order": ["bounded repository patch and complete tests", "merge the immutable release into main", "build and stamp all artifacts from final main", "fresh Development organization, project, function, route, table, Connection, CRM, Forms, and Retell readback", "install Form 1 assisted issue, prefill, and submission routes while retaining the contained predecessor control", "install Form 2 controlled private routes and webhooks", "install revenue_desk_route_control in disabled mode unless an isolated Retell test number is authoritatively proven", "install the three simple CRM controls and exact separate Blueprint transitions", "immediate boundary readback", "ZZZ SYNTHETIC assisted and public Form 1 canaries", "ZZZ SYNTHETIC Form 2, approval, activation-gate, resume, and rollback canaries", "telephony-path proof only if an isolated Retell test number is proven"],
+  "deployment_order": ["bounded repository patch and complete tests", "merge the immutable release into main", "build and stamp all artifacts from final main", "fresh Development organization, project, function, route, table, Connection, CRM, Forms, and Retell readback", "install all five Form 1 assisted routes and the dedicated Dynamic Prefill-Webhook handle field while retaining the contained predecessor control", "install Form 2 controlled private routes and handle-only Dynamic Prefill-Webhook", "install revenue_desk_route_control in disabled mode unless an isolated Retell test number is authoritatively proven", "install the three simple CRM controls and exact separate Blueprint transitions", "immediate boundary readback", "ZZZ SYNTHETIC assisted and public Form 1 canaries", "ZZZ SYNTHETIC Form 2, approval, activation-gate, resume, and rollback canaries", "telephony-path proof only if an isolated Retell test number is proven"],
   "rollback_order": ["keep Production traffic dark", "stop the exact synthetic Catalyst deployment first", "unbind a Retell route only after exact synthetic number and deployment ownership readback", "disable the replacement CRM controls and Form webhooks", "retain the Start Free-Test Request predecessor as the launch fallback", "restore the prior verified Development function revisions and route definitions", "preserve every journey, configuration, authorization, route-verification, receipt, and rollback record"],
-  "acceptance_scenarios": ["authenticated CRM launch issues one opaque assisted Form 1 token whose digest-only session binds the exact CRM record and canonical journey", "invalid, expired, tampered, cross-record, changed-payload, and conflicting replay attempts fail closed", "public Form 1 remains tokenless and cannot manufacture an assisted CRM binding", "interrupted Form 1 issuance resumes by safe token rotation without a duplicate journey", "Form 2 invalid or replayed proof has no downstream effects", "approval is a durable state that does not activate a route or start time", "activation requires the exact approved configuration and fresh authoritative route readback", "approval success followed by activation failure remains approved and inactive or explicitly requires reconciliation", "Prepared receipt recovery, idempotent activation, repeated rollback, and activation-after-stop fail closed", "configuration, route, fingerprint, source, or conflicting-deployment changes invalidate control", "Development rollback preserves evidence", "telephony activation remains blocked by ISOLATED_RETELL_TEST_NUMBER_REQUIRED when no isolated number is proven"],
+  "acceptance_scenarios": ["authenticated CRM launch issues one digest-only journey credential in the Catalyst access fragment, exchanges it once, and gives Zoho Forms only a separate ten-minute digest-only prefill handle bound to the exact CRM record and canonical journey", "invalid, expired, tampered, cross-record, changed-payload, and conflicting replay attempts fail closed", "assisted submissions accept only server-validated prefillId, configurationRevision, and submissionId and never receive a journey credential or prefill handle", "public Form 1 remains tokenless and cannot manufacture an assisted CRM binding", "interrupted Form 1 issuance resumes by safe artifact reissue without a duplicate journey", "Form 2 invalid or replayed proof or prefill handle has no downstream effects", "approval is a durable state that does not activate a route or start time", "activation requires the exact approved configuration and fresh authoritative route readback", "approval success followed by activation failure remains approved and inactive or explicitly requires reconciliation", "Prepared receipt recovery, idempotent activation, repeated rollback, and activation-after-stop fail closed", "configuration, route, fingerprint, source, or conflicting-deployment changes invalidate control", "Development rollback preserves evidence", "telephony activation remains blocked by ISOLATED RETELL TEST NUMBER REQUIRED when no isolated number is proven"],
   "out_of_scope": ["prospect or customer traffic", "real customer data", "contractor forwarding", "real charge", "payment method", "SMS", "Retell call", "Retell native simulation", "conversation-flow tuning", "prompt tuning", "voice, model, interruption, or latency tuning", "booking", "dispatch", "pricing quotes", "payment collection", "outbound marketing", "paid capability activation", "Launch, Growth, or Scale conversation behavior", "client portal product build"]
 }

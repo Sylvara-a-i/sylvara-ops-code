@@ -158,10 +158,39 @@ class SecretRotationContractTests(unittest.TestCase):
         config_source = (setup_root / "lib/config.js").read_text(encoding="utf-8")
         handler_source = (setup_root / "lib/handler.js").read_text(encoding="utf-8")
         workflow_source = (setup_root / "lib/workflow-store.js").read_text(encoding="utf-8")
+        security_source = (setup_root / "lib/security.js").read_text(encoding="utf-8")
         self.assertIn('readRequired(environment, "WORKFLOW_HMAC_SECRET")', config_source)
         self.assertIn("dependencies.config.workflowKeyMaterial", handler_source)
         self.assertNotIn("config.tokenPepper", workflow_source)
         self.assertIn("sylvara.form2.workflow-key.v1", workflow_source)
+        self.assertIn("sylvara.form2.prefill-handle-hash.v1", security_source)
+        self.assertIn("sylvara.form2.prefill-binding.v1", security_source)
+
+    def test_dynamic_prefill_handle_derivations_are_explicit(self) -> None:
+        domains = {entry["id"]: entry for entry in self.contract["derivation_domains"]}
+        form1_handle = domains["form1_prefill_handle_v1"]
+        self.assertEqual(form1_handle["variables"], ["PREFILL_HANDLE_PEPPER"])
+        self.assertEqual(
+            form1_handle["domains"],
+            ["sylvara.form1.prefill-handle-hash.v1"],
+        )
+        self.assertEqual(
+            form1_handle["durable_outputs"],
+            ["RevenueLeakTestRequestFormSessions.PREFILL_HANDLE_HASH"],
+        )
+
+        form2_workflow = domains["form2_workflow_identity_v1"]
+        for domain in (
+            "sylvara.form2.prefill-handle-hash.v1",
+            "sylvara.form2.prefill-binding.v1",
+        ):
+            self.assertIn(domain, form2_workflow["domains"])
+        for output in (
+            "Form2SessionsV3Runtime.JOURNEY_BINDING_DIGEST",
+            "Form2PrefillsV3.PREFILL_HANDLE_HASH",
+            "Form2PrefillsV3.JOURNEY_BINDING_DIGEST",
+        ):
+            self.assertIn(output, form2_workflow["durable_outputs"])
 
     def test_crm_and_runtime_domains_exist_in_executable_source(self) -> None:
         crm_root = ROOT / "src/zoho-catalyst/crm-billing-orchestrator/functions/crm_billing_orchestrator/lib"
@@ -176,6 +205,7 @@ class SecretRotationContractTests(unittest.TestCase):
             path.read_text(encoding="utf-8")
             for path in (
                 runtime_root / "security.js",
+                runtime_root / "authorization-receipt.js",
                 runtime_root / "analytics-outbox.js",
                 runtime_root / "runtime-service.js",
                 runtime_root / "catalyst-mail.js",
@@ -191,6 +221,7 @@ class SecretRotationContractTests(unittest.TestCase):
             path.read_text(encoding="utf-8")
             for path in (
                 runtime_root / "approval-control.js",
+                runtime_root / "authorization-receipt.js",
                 runtime_root / "route-control-service.js",
                 ROOT
                 / "src/zoho-catalyst/revenue-desk-call-runtime/functions"
@@ -218,6 +249,7 @@ class SecretRotationContractTests(unittest.TestCase):
             "revenue-desk-quarantine-call-v1",
             "revenue-desk-correlation-v1",
             "revenue-desk-number-v1",
+            "revenue-desk-authorization-receipt-v2",
             "revenue-desk-analytics-client-v1",
             "revenue-desk-analytics-deployment-v1",
             "sylvara.crm-report-summary.v2",
@@ -225,6 +257,7 @@ class SecretRotationContractTests(unittest.TestCase):
             self.assertIn(domain, runtime_source)
         for domain in [
             "sylvara.form1.assisted-token-hash.v2",
+            "sylvara.form1.prefill-handle-hash.v1",
             "sylvara.form1.assisted-submission-hash.v1",
         ]:
             self.assertIn(domain, form1_source)

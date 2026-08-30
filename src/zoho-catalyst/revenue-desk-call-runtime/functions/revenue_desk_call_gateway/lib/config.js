@@ -148,14 +148,22 @@ function loadSharedConfig(env, options = {}) {
     runtimeSecret(env, 'EVENT_HMAC_SECRET', { minimum: 32, maximum: 4096 }),
     'EVENT_HMAC_SECRET', /^\S{32,4096}$/, 'must be 32-4096 non-whitespace characters',
   );
+  const authorizationEventSecret = patterned(
+    runtimeSecret(env, 'ROUTE_CONTROL_EVENT_HMAC_SECRET', { minimum: 32, maximum: 4096 }),
+    'ROUTE_CONTROL_EVENT_HMAC_SECRET', /^\S{32,4096}$/,
+    'must be 32-4096 non-whitespace characters',
+  );
   const analyticsPartitionSecret = patterned(
     runtimeSecret(env, 'ANALYTICS_PARTITION_HMAC_SECRET', { minimum: 32, maximum: 256 }),
     'ANALYTICS_PARTITION_HMAC_SECRET', /^\S{32,256}$/,
     'must be 32-256 non-whitespace characters',
   );
-  invariant(analyticsPartitionSecret !== eventSecret,
+  invariant(new Set([
+    eventSecret, authorizationEventSecret, analyticsPartitionSecret,
+  ]).size === 3,
     'INVALID_RUNTIME_CONFIGURATION',
-    'Analytics partition and runtime event secrets must be distinct.', { httpStatus: 503 });
+    'Runtime event, authorization event, and Analytics secrets must be distinct.',
+    { httpStatus: 503 });
   const tables = {};
   for (const variable of TABLE_VARIABLES) {
     const table = required(env, variable, { maximum: 128 });
@@ -181,6 +189,7 @@ function loadSharedConfig(env, options = {}) {
   return Object.freeze({
     ...identity,
     eventSecret,
+    authorizationEventSecret,
     analyticsPartitionSecret,
     sharedAgentId: patterned(
       required(env, 'RETELL_SHARED_AGENT_ID', { minimum: 8, maximum: 128, trim: false }),
@@ -230,9 +239,10 @@ function loadConfig(env = process.env, options = {}) {
     'must be 32-256 non-whitespace characters',
   );
   invariant(new Set([
-    retellVerificationKey, shared.eventSecret, shared.analyticsPartitionSecret,
+    retellVerificationKey, shared.eventSecret, shared.authorizationEventSecret,
+    shared.analyticsPartitionSecret,
     numberSecret, readinessToken,
-  ]).size === 5,
+  ]).size === 6,
   'INVALID_RUNTIME_CONFIGURATION', 'Webhook and keyed-identifier secrets must be distinct.',
   { httpStatus: 503 });
   const inboundPath = required(env, 'RETELL_INBOUND_PATH', { maximum: 80 });

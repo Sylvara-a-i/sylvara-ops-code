@@ -13,6 +13,11 @@ const OLD_TIME = "2026-08-14T12:00:00-05:00";
 const NEW_TIME = "2026-08-14T12:01:00-05:00";
 const READ_AUTHORIZATION = "Zoho-oauthtoken SyntheticReadToken123456789";
 const WRITE_AUTHORIZATION = "Zoho-oauthtoken SyntheticWriteToken12345678";
+const SYNTHETIC_ORG_REFERENCE = "200000000000001";
+const CRM_ORGANIZATION_HASH = require("node:crypto")
+  .createHash("sha256")
+  .update(SYNTHETIC_ORG_REFERENCE, "utf8")
+  .digest("hex");
 const PROTECTED_DEAL_FIELDS = Object.freeze({
   Free_Test_Authorization_Status: "Signed",
   Authorization_Signed_At: "2026-08-14T18:05:00.987Z",
@@ -27,6 +32,7 @@ function config(overrides = {}) {
     crmApiBaseUrl: "https://www.zohoapis.com/crm/v8",
     outboundTimeoutMs: 5000,
     outboundMaxBytes: 131072,
+    crmOrganizationHash: CRM_ORGANIZATION_HASH,
     ...overrides,
   };
 }
@@ -211,7 +217,12 @@ function clientWithFetch(fetchImpl) {
   return createCrmClient(config(), {
     readAuthorizationProvider: async () => READ_AUTHORIZATION,
     writeAuthorizationProvider: async () => WRITE_AUTHORIZATION,
-    fetchImpl,
+    fetchImpl: async (url, options) => {
+      if (new URL(url).pathname === "/crm/v8/org") {
+        return jsonResponse({ org: [{ zgid: SYNTHETIC_ORG_REFERENCE }] });
+      }
+      return fetchImpl(url, options);
+    },
   });
 }
 

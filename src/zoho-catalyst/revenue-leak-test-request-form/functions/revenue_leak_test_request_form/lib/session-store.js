@@ -7,6 +7,7 @@ const {
   normalizeCrmModule,
   normalizeCrmRecordId,
   normalizeJourneyId,
+  normalizePrefillId,
   validateOperatorHash,
 } = require("./security");
 
@@ -17,8 +18,8 @@ const SHA256_PATTERN = /^[a-f0-9]{64}$/;
 const FINGERPRINT_PATTERN = /^[a-f0-9]{64}$/;
 const CLAIM_ID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const STAGE = "form1";
-const MAX_PREFILLS = 20;
-const ACTIVE_STATUSES = new Set(["issued", "prefilled"]);
+const MAX_PREFILLS = 1;
+const ACTIVE_STATUSES = new Set(["issued", "handle_issued", "prefilled"]);
 
 class SessionStoreError extends Error {
   constructor(message, { publicCode = "session_store_unavailable", ambiguous = false,
@@ -68,6 +69,14 @@ function normalizeRow(raw, table) {
   const selected = {
     rowId: String(value.ROWID ?? ""),
     tokenHash: String(value.TOKEN_HASH ?? ""),
+    prefillHandleHash: value.PREFILL_HANDLE_HASH ?? null,
+    prefillHandleIssuedAt: value.PREFILL_HANDLE_ISSUED_AT ?? null,
+    prefillHandleExpiresAt: value.PREFILL_HANDLE_EXPIRES_AT ?? null,
+    prefillHandleConsumedAt: value.PREFILL_HANDLE_CONSUMED_AT ?? null,
+    prefillConsumptionOwner: value.PREFILL_CONSUMPTION_OWNER ?? null,
+    prefillId: value.PREFILL_ID ?? null,
+    configurationRevision: value.CONFIGURATION_REVISION ?? null,
+    formIdentityHash: String(value.FORM_IDENTITY_HASH ?? ""),
     recordId: String(value.CRM_LEAD_ID ?? ""),
     journeyId: String(value.INTAKE_SUBMISSION_ID ?? ""),
     status: String(value.STATUS ?? ""),
@@ -95,10 +104,11 @@ function normalizeRow(raw, table) {
   };
   if (!ROW_ID_PATTERN.test(selected.rowId) || !isValidTokenHash(selected.tokenHash) ||
       !REVISION_PATTERN.test(selected.sourceRevision) ||
+      !SHA256_PATTERN.test(selected.formIdentityHash) ||
       selected.sourceEnvironment !== "development" ||
       !SHA256_PATTERN.test(selected.crmOrganizationHash) ||
       selected.expectedStage !== STAGE ||
-      !new Set(["issued", "prefilled", "submitting", "consumed", "expired", "revoked"])
+      !new Set(["issued", "handle_issued", "prefilled", "submitting", "consumed", "expired", "revoked"])
         .has(selected.status)) {
     fail("Session row contains invalid state");
   }
@@ -114,7 +124,36 @@ function normalizeRow(raw, table) {
   iso(selected.revokedAt, "REVOKED_AT", true);
   iso(selected.consumedAt, "CONSUMED_AT", true);
   iso(selected.submissionStartedAt, "SUBMISSION_STARTED_AT", true);
+  iso(selected.prefillHandleIssuedAt, "PREFILL_HANDLE_ISSUED_AT", true);
+  iso(selected.prefillHandleExpiresAt, "PREFILL_HANDLE_EXPIRES_AT", true);
+  iso(selected.prefillHandleConsumedAt, "PREFILL_HANDLE_CONSUMED_AT", true);
   crmRecordVersion(selected.crmRecordVersion, true);
+  if (selected.prefillHandleHash !== null && !isValidTokenHash(selected.prefillHandleHash)) {
+    fail("PREFILL_HANDLE_HASH is invalid");
+  }
+  if (selected.prefillConsumptionOwner !== null &&
+      !CLAIM_ID_PATTERN.test(selected.prefillConsumptionOwner)) {
+    fail("PREFILL_CONSUMPTION_OWNER is invalid");
+  }
+  if (selected.prefillId !== null) normalizePrefillId(selected.prefillId);
+  if (selected.configurationRevision !== null &&
+      !REVISION_PATTERN.test(selected.configurationRevision)) {
+    fail("CONFIGURATION_REVISION is invalid");
+  }
+  if (new Set(["handle_issued", "prefilled", "submitting", "consumed"]).has(selected.status) &&
+      (!selected.prefillHandleHash || !selected.prefillHandleIssuedAt ||
+       !selected.prefillHandleExpiresAt || !selected.prefillId ||
+       !selected.configurationRevision)) {
+    fail("Prefill handle binding is incomplete");
+  }
+  if (new Set(["prefilled", "submitting", "consumed"]).has(selected.status) &&
+      (!selected.prefillHandleConsumedAt || !selected.prefillConsumptionOwner ||
+       !selected.crmRecordVersion)) {
+    fail("Prefill completion binding is incomplete");
+  }
+  if (selected.status === "handle_issued" && selected.prefillConsumptionOwner !== null) {
+    fail("Unconsumed prefill handle has an owner");
+  }
   if (selected.submissionFingerprint !== null &&
       !FINGERPRINT_PATTERN.test(selected.submissionFingerprint)) {
     fail("SUBMISSION_FINGERPRINT is invalid");
@@ -142,7 +181,10 @@ function validateConfig(config) {
       !REVISION_PATTERN.test(config?.sourceRevision ?? "") ||
       !SHA256_PATTERN.test(config?.crmOrganizationHash ?? "") ||
       !Number.isSafeInteger(config?.sessionTtlSeconds) ||
-      config.sessionTtlSeconds < 300 || config.sessionTtlSeconds > 3600) {
+      config.sessionTtlSeconds < 300 || config.sessionTtlSeconds > 3600 ||
+      !Number.isSafeInteger(config?.prefillHandleTtlSeconds) ||
+      config.prefillHandleTtlSeconds < 300 || config.prefillHandleTtlSeconds > 900 ||
+      !SHA256_PATTERN.test(config?.formIdentityHash ?? "")) {
     fail("Session configuration is invalid", { publicCode: "configuration_invalid" });
   }
   validateOperatorHash(config.issuingActorHash);
@@ -150,7 +192,8 @@ function validateConfig(config) {
 
 function validateAdapter(adapter) {
   for (const name of [
-    "findRowsByJourneyId", "findRowsByRowId", "findRowsByTokenHash", "insertRow", "updateRow",
+    "findRowsByJourneyId", "findRowsByPrefillHandleHash", "findRowsByPrefillId",
+    "findRowsByRowId", "findRowsByTokenHash", "insertRow", "updateRow",
   ]) {
     if (typeof adapter?.[name] !== "function") {
       fail(`Session adapter is missing ${name}`, { publicCode: "configuration_invalid" });
@@ -204,6 +247,15 @@ function createSessionStore(adapter, config, {
     });
     return unique(() => adapter.findRowsByTokenHash(table, tokenHash), true);
   };
+  const readByPrefillHandleHash = (handleHash) => {
+    if (!isValidTokenHash(handleHash)) fail("Prefill handle hash is invalid", {
+      publicCode: "session_input_invalid",
+      status: 422,
+    });
+    return unique(() => adapter.findRowsByPrefillHandleHash(table, handleHash), true);
+  };
+  const readByPrefillId = (prefillId) =>
+    unique(() => adapter.findRowsByPrefillId(table, normalizePrefillId(prefillId)), true);
   const readByJourneyId = (journeyId) =>
     unique(() => adapter.findRowsByJourneyId(table, normalizeJourneyId(journeyId)), true);
   const readByRowId = (rowId) => unique(() => adapter.findRowsByRowId(table, rowId));
@@ -214,6 +266,7 @@ function createSessionStore(adapter, config, {
       row.crmModule === requested.crmModule &&
       row.crmOrganizationHash === config.crmOrganizationHash &&
       row.expectedStage === STAGE &&
+      row.formIdentityHash === config.formIdentityHash &&
       row.sourceRevision === config.sourceRevision &&
       row.sourceEnvironment === config.deploymentEnvironment;
   }
@@ -221,6 +274,7 @@ function createSessionStore(adapter, config, {
   function assertRuntimeBinding(session) {
     if (!session || session.crmOrganizationHash !== config.crmOrganizationHash
         || session.expectedStage !== STAGE
+        || session.formIdentityHash !== config.formIdentityHash
         || session.sourceRevision !== config.sourceRevision
         || session.sourceEnvironment !== config.deploymentEnvironment
         || session.issuingActorHash !== config.issuingActorHash) {
@@ -243,6 +297,9 @@ function createSessionStore(adapter, config, {
       CRM_MODULE: current.crmModule,
       CRM_LEAD_ID: current.recordId,
       INTAKE_SUBMISSION_ID: current.journeyId,
+      PREFILL_HANDLE_HASH: current.prefillHandleHash,
+      PREFILL_CONSUMPTION_OWNER: current.prefillConsumptionOwner,
+      PREFILL_ID: current.prefillId,
       SUBMISSION_CLAIM_ID: current.submissionClaimId,
       EXPECTED_STAGE: STAGE,
       SOURCE_REVISION: current.sourceRevision,
@@ -260,6 +317,12 @@ function createSessionStore(adapter, config, {
           const property = {
             TOKEN_HASH: "tokenHash", STATUS: "status", ISSUED_AT: "issuedAt",
             EXPIRES_AT: "expiresAt", PREFILL_COUNT: "prefillCount", LAST_OUTCOME: "lastOutcome",
+            PREFILL_HANDLE_HASH: "prefillHandleHash",
+            PREFILL_HANDLE_ISSUED_AT: "prefillHandleIssuedAt",
+            PREFILL_HANDLE_EXPIRES_AT: "prefillHandleExpiresAt",
+            PREFILL_HANDLE_CONSUMED_AT: "prefillHandleConsumedAt",
+            PREFILL_CONSUMPTION_OWNER: "prefillConsumptionOwner",
+            PREFILL_ID: "prefillId", CONFIGURATION_REVISION: "configurationRevision",
             LAST_PREFILLED_AT: "lastPrefilledAt", REVOKED_AT: "revokedAt",
             UPDATED_AT: "updatedAt", CONSUMED_AT: "consumedAt",
             SUBMISSION_FINGERPRINT: "submissionFingerprint",
@@ -324,6 +387,13 @@ function createSessionStore(adapter, config, {
         SUBMISSION_STARTED_AT: null,
         SUBMISSION_CLAIM_ID: null,
         CRM_RECORD_VERSION: null,
+        PREFILL_HANDLE_HASH: null,
+        PREFILL_HANDLE_ISSUED_AT: null,
+        PREFILL_HANDLE_EXPIRES_AT: null,
+        PREFILL_HANDLE_CONSUMED_AT: null,
+        PREFILL_CONSUMPTION_OWNER: null,
+        PREFILL_ID: null,
+        CONFIGURATION_REVISION: null,
         UPDATED_AT: issuedAt,
       });
     }
@@ -345,6 +415,7 @@ function createSessionStore(adapter, config, {
       CRM_ORGANIZATION_HASH: config.crmOrganizationHash,
       CRM_MODULE: requested.crmModule,
       EXPECTED_STAGE: STAGE,
+      FORM_IDENTITY_HASH: config.formIdentityHash,
       ISSUING_ACTOR_HASH: config.issuingActorHash,
       CREATED_AT: issuedAt,
       CONSUMED_AT: null,
@@ -352,6 +423,13 @@ function createSessionStore(adapter, config, {
       SUBMISSION_STARTED_AT: null,
       SUBMISSION_CLAIM_ID: null,
       CRM_RECORD_VERSION: null,
+      PREFILL_HANDLE_HASH: null,
+      PREFILL_HANDLE_ISSUED_AT: null,
+      PREFILL_HANDLE_EXPIRES_AT: null,
+      PREFILL_HANDLE_CONSUMED_AT: null,
+      PREFILL_CONSUMPTION_OWNER: null,
+      PREFILL_ID: null,
+      CONFIGURATION_REVISION: null,
       SESSION_VERSION: 1,
     };
     try {
@@ -389,19 +467,73 @@ function createSessionStore(adapter, config, {
     return session;
   }
 
-  async function recordPrefill(session) {
+  async function issuePrefillHandle(session, { handleHash, prefillId }) {
     await assertUsable(session);
-    if (session.prefillCount >= session.maxPrefills) {
+    if (session.status !== "issued" || !isValidTokenHash(handleHash)) {
+      fail("Assisted session was not found", { publicCode: "session_not_found", status: 404 });
+    }
+    const selectedPrefillId = normalizePrefillId(prefillId);
+    const nowMs = timestamp();
+    const issuedAt = new Date(nowMs).toISOString();
+    const expiresAt = new Date(Math.min(
+      Date.parse(session.expiresAt),
+      nowMs + config.prefillHandleTtlSeconds * 1000,
+    )).toISOString();
+    return checkedUpdate(session, {
+      STATUS: "handle_issued",
+      PREFILL_HANDLE_HASH: handleHash,
+      PREFILL_HANDLE_ISSUED_AT: issuedAt,
+      PREFILL_HANDLE_EXPIRES_AT: expiresAt,
+      PREFILL_HANDLE_CONSUMED_AT: null,
+      PREFILL_CONSUMPTION_OWNER: null,
+      PREFILL_ID: selectedPrefillId,
+      CONFIGURATION_REVISION: config.sourceRevision,
+      LAST_OUTCOME: "prefill_handle_issued",
+      UPDATED_AT: issuedAt,
+    });
+  }
+
+  async function resolvePrefillHandle(handleHash) {
+    if (!isValidTokenHash(handleHash)) {
+      fail("Assisted session was not found", { publicCode: "session_not_found", status: 404 });
+    }
+    const session = await readByPrefillHandleHash(handleHash);
+    assertRuntimeBinding(session);
+    if (!session || session.status !== "handle_issued" ||
+        session.prefillHandleHash !== handleHash ||
+        session.configurationRevision !== config.sourceRevision ||
+        Date.parse(session.prefillHandleExpiresAt) <= timestamp() ||
+        Date.parse(session.expiresAt) <= timestamp()) {
+      fail("Assisted session was not found", { publicCode: "session_not_found", status: 404 });
+    }
+    return session;
+  }
+
+  async function consumePrefillHandle(session, handleHash, recordVersion) {
+    assertRuntimeBinding(session);
+    const selectedVersion = crmRecordVersion(recordVersion);
+    await assertUsable(session);
+    if (session.status !== "handle_issued" || session.prefillHandleHash !== handleHash ||
+        Date.parse(session.prefillHandleExpiresAt) <= timestamp() ||
+        session.prefillCount >= session.maxPrefills) {
       fail("Assisted session was not found", { publicCode: "session_not_found", status: 404 });
     }
     const selectedAt = new Date(timestamp()).toISOString();
-    return checkedUpdate(session, {
+    const consumptionOwner = randomUUID();
+    if (typeof consumptionOwner !== "string" || !CLAIM_ID_PATTERN.test(consumptionOwner)) {
+      fail("Session entropy is invalid", { publicCode: "configuration_invalid" });
+    }
+    const row = await checkedUpdate(session, {
       STATUS: "prefilled",
       PREFILL_COUNT: session.prefillCount + 1,
+      PREFILL_HANDLE_CONSUMED_AT: selectedAt,
+      PREFILL_CONSUMPTION_OWNER: consumptionOwner,
+      CRM_RECORD_VERSION: selectedVersion,
       LAST_OUTCOME: "prefilled",
       LAST_PREFILLED_AT: selectedAt,
       UPDATED_AT: selectedAt,
     });
+    return Object.freeze({ row, replayed: false });
   }
 
   async function beginSubmission(session, fingerprint, recordVersion = null) {
@@ -431,6 +563,12 @@ function createSessionStore(adapter, config, {
       return Object.freeze({ row: session, replayed: true });
     }
     await assertUsable(session);
+    if (session.status !== "prefilled" || !session.prefillHandleConsumedAt) {
+      fail("Assisted session was not prepared by the approved prefill", {
+        publicCode: "session_state_invalid",
+        status: 409,
+      });
+    }
     const selectedRecordVersion = crmRecordVersion(recordVersion);
     const startedAt = new Date(timestamp()).toISOString();
     const claimId = randomUUID();
@@ -487,12 +625,16 @@ function createSessionStore(adapter, config, {
     assertRuntimeBinding,
     assertUsable,
     beginSubmission,
+    consumePrefillHandle,
     consume,
     issue,
+    issuePrefillHandle,
     readByJourneyId,
+    readByPrefillHandleHash,
+    readByPrefillId,
     readByRowId,
     readByTokenHash,
-    recordPrefill,
+    resolvePrefillHandle,
   });
 }
 

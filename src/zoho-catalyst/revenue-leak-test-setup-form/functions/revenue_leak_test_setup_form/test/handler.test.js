@@ -16,6 +16,7 @@ const {
   deriveAccessToken,
   deriveIssueRequestKey,
   hashAccessToken,
+  prefillBindingDigest,
 } = require("../lib/security");
 
 const NOW_MS = Date.parse("2026-08-14T18:00:00.000Z");
@@ -50,7 +51,7 @@ function config() {
     form2AccessPublicUrl: "https://synthetic.development.catalystserverless.com/form2/session/access",
     form2PublicUrl: FORM2_PUBLIC_URL,
     form2DestinationSha256: FORM2_DESTINATION_SHA256,
-    form2TokenFieldAlias: "access_token",
+    form2PrefillHandleFieldAlias: "prefill_handle",
     form2FormVersion: "form2-v1",
     form2EntryOfferValue: "Synthetic Free Test",
     form2PhoneSystemProviders: Object.freeze([
@@ -69,13 +70,18 @@ function config() {
       "Different Private Band",
     ]),
     maxVerificationAttempts: 3,
+    prefillHandleTtlSeconds: 600,
+    crmOrganizationHash: "c".repeat(64),
+    formIdentityHash: FORM2_DESTINATION_SHA256,
+    sourceRevision: "a".repeat(40),
+    deploymentEnvironment: "development",
     maxBodyBytes: 32768,
     inboundBodyTimeoutMs: 5000,
   });
 }
 
 test("form links are fail-closed to the exact approved Zoho Forms host", () => {
-  const setupToken = deriveAccessToken(ISSUE_REQUEST_ID, config().tokenPepper);
+  const prefillHandle = Buffer.alloc(32, 0x41).toString("base64url");
   for (const form2PublicUrl of [
     "https://forms.zohopublic.evil.com/synthetic/form",
     "https://forms.example.invalid/synthetic/form",
@@ -83,11 +89,11 @@ test("form links are fail-closed to the exact approved Zoho Forms host", () => {
     "https://forms.zohopublic.com/other/form/perma/synthetic",
   ]) {
     assert.throws(
-      () => buildFormUrl({ ...config(), form2PublicUrl }, setupToken),
+      () => buildFormUrl({ ...config(), form2PublicUrl }, prefillHandle),
       (error) =>
         error instanceof ControllerError &&
         error.publicCode === "configuration_invalid" &&
-        !error.message.includes(setupToken),
+        !error.message.includes(prefillHandle),
     );
   }
 });
@@ -127,6 +133,7 @@ test("serves the email-verification access page with a locked browser boundary",
 
 test("OTP request and verify need no browser-held shared secret and expose no CRM IDs", async () => {
   const selected = fixture();
+  await issue(selected);
   const setupToken = deriveAccessToken(ISSUE_REQUEST_ID, config().tokenPepper);
   const requestBody = Buffer.from(JSON.stringify({ setupToken }));
   const requested = await handleForm2Request({
@@ -139,10 +146,15 @@ test("OTP request and verify need no browser-held shared secret and expose no CR
     rawBody: requestBody,
   }, selected.dependencies);
   assert.equal(requested.status, 202);
-  assert.deepEqual(requested.body, { ok: true, state: "sent_confirmed" });
+  assert.equal(requested.body.ok, true);
+  assert.equal(requested.body.state, "sent_confirmed");
+  assert.match(requested.body.verificationId, /^[a-f0-9]{64}$/);
   assert.equal(selected.events.includes("verification.email.request"), true);
 
-  const verifyBody = Buffer.from(JSON.stringify({ setupToken, code: "12345678" }));
+  const verifyBody = Buffer.from(JSON.stringify({
+    verificationId: requested.body.verificationId,
+    code: "12345678",
+  }));
   const verified = await handleForm2Request({
     method: "POST",
     url: selected.dependencies.config.otpVerifyPath,
@@ -162,6 +174,7 @@ test("OTP request and verify need no browser-held shared secret and expose no CR
 
 test("an already verified token resumes at the exact stamped Form without another send", async () => {
   const selected = fixture();
+  await issue(selected);
   selected.dependencies.verificationService.requestEmailOtp = async () => ({
     state: "already_verified",
   });
@@ -191,6 +204,7 @@ test("OTP delivery states never imply a send without provider evidence", async (
     ["terminal_failure", 503],
   ]) {
     const selected = fixture();
+    await issue(selected);
     selected.dependencies.verificationService.requestEmailOtp = async () => ({ state });
     const rawBody = Buffer.from(JSON.stringify({ setupToken }));
     const result = await handleForm2Request({
@@ -330,8 +344,8 @@ function issueBody() {
 function validSubmission(prefillBody, overrides = {}) {
   const values = Object.fromEntries(CLIENT_KEYS.map((key) => [key, prefillBody[key]]));
   return {
-    setupToken: deriveAccessToken(ISSUE_REQUEST_ID, config().tokenPepper),
     prefillId: prefillBody.prefillId,
+    configurationRevision: prefillBody.configurationRevision,
     submissionId: "10001",
     ...values,
     requestedStartDate: "2026-08-20",
@@ -371,6 +385,21 @@ function fixture() {
   let proofDestination = null;
   let changeContactEmailAfterVerifyUpdate = false;
   let compositeReplay = false;
+  let entropy = 1;
+
+  function currentJourneyBindingDigest() {
+    return prefillBindingDigest({
+      crmOrganizationHash: selectedConfig.crmOrganizationHash,
+      crmContactId: records.contact.id,
+      crmAccountId: records.account.id,
+      crmDealId: records.deal.id,
+      journeyId: records.deal.Intake_Submission_ID,
+      formIdentityHash: selectedConfig.formIdentityHash,
+      expectedStage: "form2",
+      formVersion: selectedConfig.form2FormVersion,
+      configurationRevision: selectedConfig.sourceRevision,
+    }, selectedConfig.workflowKeyMaterial);
+  }
 
   function nextModifiedTime() {
     modifiedSequence += 1;
@@ -439,6 +468,7 @@ function fixture() {
           crmContactId: input.crmContactId,
           crmAccountId: input.crmAccountId,
           crmDealId: input.crmDealId,
+          journeyBindingDigest: input.journeyBindingDigest,
           dealIssuanceKey: activeKey,
           status: "issuing",
           issuedAt: "2026-08-14T18:00:00.000Z",
@@ -454,6 +484,7 @@ function fixture() {
       } else {
         assert.equal(input.issueRequestKey, match.issueRequestKey);
         assert.equal(input.tokenHash, match.tokenHash);
+        assert.equal(input.journeyBindingDigest, match.journeyBindingDigest);
       }
       session = match;
       return Object.freeze({ ...match });
@@ -668,11 +699,18 @@ function fixture() {
     async mintPrefill(binding) {
       events.push("workflow.prefill.mint");
       if (mintError) throw mintError;
+      if (prefill?.status === "handle_issued" &&
+          prefill.prefillHandleHash !== binding.prefillHandleHash) {
+        const error = new Error("synthetic live prefill handle conflict");
+        error.publicCode = "prefill_conflict";
+        throw error;
+      }
       prefill = {
         rowId: "7100000000001",
         prefillKey: "a".repeat(64),
-        status: "ready",
+        status: "handle_issued",
         consumptionOwner: "",
+        sourceRevision: selectedConfig.sourceRevision,
         ...binding,
       };
       return { prefillId: PREFILL_ID, revision: Object.freeze({ ...prefill }) };
@@ -682,6 +720,30 @@ function fixture() {
       if (!prefill || input.prefillId !== PREFILL_ID) return null;
       assert.equal(String(input.sessionRowId), String(prefill.sessionRowId));
       return Object.freeze({ ...prefill });
+    },
+    async readPrefillById(prefillId) {
+      events.push("workflow.prefill.read-id");
+      return prefill && prefillId === PREFILL_ID ? Object.freeze({ ...prefill }) : null;
+    },
+    async readPrefillHandle(prefillHandleHash) {
+      events.push("workflow.prefill.read-handle");
+      if (!prefill || prefill.status !== "handle_issued" ||
+          prefill.prefillHandleHash !== prefillHandleHash) return null;
+      return Object.freeze({ prefillId: PREFILL_ID, revision: { ...prefill } });
+    },
+    async consumePrefillHandle(input) {
+      events.push("workflow.prefill.consume-handle");
+      if (!prefill || prefill.status !== "handle_issued" ||
+          prefill.prefillHandleHash !== input.prefillHandleHash ||
+          prefill.journeyBindingDigest !== input.journeyBindingDigest ||
+          input.configurationRevision !== selectedConfig.sourceRevision) {
+        const error = new Error("synthetic prefill handle missing");
+        error.publicCode = "prefill_not_found";
+        throw error;
+      }
+      prefill.status = "ready";
+      prefill.consumptionOwner = "50000000-0000-4000-8000-000000000005";
+      return Object.freeze({ revision: { ...prefill }, replayed: false });
     },
     async readSubmission(input) {
       events.push("workflow.submission.read");
@@ -784,14 +846,68 @@ function fixture() {
     },
   };
 
+  const verificationContexts = new Map();
+  function verificationBinding(selectedSession) {
+    return selectedSession ? {
+      sessionRowId: selectedSession.rowId,
+      issueRequestKey: selectedSession.issueRequestKey,
+      tokenHash: selectedSession.tokenHash,
+      crmContactId: selectedSession.crmContactId,
+      crmAccountId: selectedSession.crmAccountId,
+      crmDealId: selectedSession.crmDealId,
+      journeyBindingDigest: selectedSession.journeyBindingDigest,
+      issuedAt: selectedSession.issuedAt,
+      expiresAt: selectedSession.expiresAt,
+    } : null;
+  }
   const verificationService = {
-    async requestEmailOtp() {
+    async requestEmailOtp(verificationId) {
       events.push("verification.email.request");
-      return { state: "sent_confirmed" };
+      const selectedSession = verificationContexts.get(verificationId);
+      return {
+        state: "sent_confirmed",
+        verificationId,
+        binding: verificationBinding(selectedSession),
+      };
     },
-    async verifyEmailOtp() {
+    async exchangeSetupToken(setupToken) {
+      let tokenHash;
+      try {
+        tokenHash = hashAccessToken(setupToken, dependencies.config.tokenPepper);
+      } catch {
+        tokenHash = null;
+      }
+      const selectedSession = sessions.find((candidate) =>
+        candidate.tokenHash === tokenHash &&
+        new Set(["issued", "verified"]).has(candidate.status) &&
+        Date.parse(candidate.expiresAt) > NOW_MS);
+      if (!selectedSession) {
+        const error = new Error("synthetic setup access unavailable");
+        error.publicCode = "setup_not_found";
+        error.status = 404;
+        throw error;
+      }
+      const verificationId = crypto.createHash("sha256")
+        .update(`synthetic-verification\0${selectedSession.rowId}`, "utf8")
+        .digest("hex");
+      verificationContexts.set(verificationId, selectedSession);
+      const result = await verificationService.requestEmailOtp(verificationId);
+      return {
+        ...result,
+        verificationId,
+        binding: result.binding ?? verificationBinding(selectedSession),
+      };
+    },
+    async verifyEmailOtp(verificationId) {
       events.push("verification.email.verify");
-      return { verified: true };
+      const selectedSession = verificationContexts.get(verificationId);
+      if (!selectedSession) {
+        const error = new Error("synthetic setup access unavailable");
+        error.publicCode = "setup_not_found";
+        error.status = 404;
+        throw error;
+      }
+      return { verified: true, binding: verificationBinding(selectedSession) };
     },
     async consumeVerifiedProof(binding, destinationEmail) {
       events.push("verification.proof.consume");
@@ -825,6 +941,7 @@ function fixture() {
     verificationService,
     workflowStore,
     now: () => NOW_MS,
+    randomBytes: (size) => Buffer.alloc(size, entropy++),
   };
   return {
     dependencies,
@@ -873,14 +990,72 @@ async function seedIssuingSession(fixtureValue, issueRequestId = ISSUE_REQUEST_I
     crmContactId: IDS.contact,
     crmAccountId: IDS.account,
     crmDealId: IDS.deal,
+    journeyBindingDigest: prefillBindingDigest({
+      crmOrganizationHash: fixtureValue.dependencies.config.crmOrganizationHash,
+      crmContactId: IDS.contact,
+      crmAccountId: IDS.account,
+      crmDealId: IDS.deal,
+      journeyId: fixtureValue.records.deal.Intake_Submission_ID,
+      formIdentityHash: fixtureValue.dependencies.config.formIdentityHash,
+      expectedStage: "form2",
+      formVersion: fixtureValue.dependencies.config.form2FormVersion,
+      configurationRevision: fixtureValue.dependencies.config.sourceRevision,
+    }, fixtureValue.dependencies.config.workflowKeyMaterial),
   });
 }
 
 async function prefill(fixtureValue) {
+  const setupToken = deriveAccessToken(
+    ISSUE_REQUEST_ID,
+    fixtureValue.dependencies.config.tokenPepper,
+  );
+  const exchangeBody = Buffer.from(JSON.stringify({ setupToken }));
+  const exchanged = await handleForm2Request({
+    method: "POST",
+    url: fixtureValue.dependencies.config.otpRequestPath,
+    headers: {
+      "content-type": "application/json",
+      "content-length": String(exchangeBody.length),
+    },
+    rawBody: exchangeBody,
+  }, fixtureValue.dependencies);
+  if (!new Set([200, 202]).has(exchanged.status)) return exchanged;
+  if (typeof exchanged.body.formUrl === "string") {
+    return submitPrefillHandle(fixtureValue, exchanged.body.formUrl);
+  }
+  const verifyBody = Buffer.from(JSON.stringify({
+    verificationId: exchanged.body.verificationId,
+    code: "12345678",
+  }));
+  const verified = await handleForm2Request({
+    method: "POST",
+    url: fixtureValue.dependencies.config.otpVerifyPath,
+    headers: {
+      "content-type": "application/json",
+      "content-length": String(verifyBody.length),
+    },
+    rawBody: verifyBody,
+  }, fixtureValue.dependencies);
+  if (verified.status !== 200 || typeof verified.body.formUrl !== "string") return verified;
+  return submitPrefillHandle(fixtureValue, verified.body.formUrl);
+}
+
+async function submitPrefillHandle(fixtureValue, formUrl) {
+  const url = new URL(formUrl);
+  assert.deepEqual([...url.searchParams.keys()], [
+    fixtureValue.dependencies.config.form2PrefillHandleFieldAlias,
+  ]);
+  const prefillHandle = url.searchParams.get(
+    fixtureValue.dependencies.config.form2PrefillHandleFieldAlias,
+  );
+  assert.match(prefillHandle, /^[A-Za-z0-9_-]{43}$/);
+  assert.equal(formUrl.includes(IDS.contact), false);
+  assert.equal(formUrl.includes(IDS.account), false);
+  assert.equal(formUrl.includes(IDS.deal), false);
   return handleForm2Request(
     createRequest(
       fixtureValue.dependencies.config.prefillPath,
-      { setupToken: deriveAccessToken(ISSUE_REQUEST_ID, config().tokenPepper) },
+      { prefillHandle },
       fixtureValue.dependencies.config.prefillHeaderSecret,
     ),
     fixtureValue.dependencies,
@@ -927,7 +1102,11 @@ test("issues one retry-stable access URL with the opaque token only in its fragm
   assert.equal(first.status, 200);
   assert.equal(first.stage, "issue");
   assert.equal(first.outcome, "issued");
-  assert.deepEqual(Object.keys(first.body), issueCallerContract.success_response_schema.required);
+  // requestId is transport-owned and appended exactly once by the Catalyst adapter.
+  assert.deepEqual(
+    Object.keys(first.body),
+    issueCallerContract.success_response_schema.required.filter((key) => key !== "requestId"),
+  );
   assert.equal(retry.body.accessUrl, first.body.accessUrl);
   const accessUrl = new URL(first.body.accessUrl);
   assert.equal(accessUrl.search, "");
@@ -1009,6 +1188,17 @@ test("an exact issuing row plus CRM Issued readback finalizes after a crash", as
     crmContactId: IDS.contact,
     crmAccountId: IDS.account,
     crmDealId: IDS.deal,
+    journeyBindingDigest: prefillBindingDigest({
+      crmOrganizationHash: selected.dependencies.config.crmOrganizationHash,
+      crmContactId: IDS.contact,
+      crmAccountId: IDS.account,
+      crmDealId: IDS.deal,
+      journeyId: selected.records.deal.Intake_Submission_ID,
+      formIdentityHash: selected.dependencies.config.formIdentityHash,
+      expectedStage: "form2",
+      formVersion: selected.dependencies.config.form2FormVersion,
+      configurationRevision: selected.dependencies.config.sourceRevision,
+    }, selected.dependencies.config.workflowKeyMaterial),
   });
   Object.assign(selected.records.deal, {
     Setup_Access_Status: "Synthetic Issued",
@@ -1182,8 +1372,16 @@ test("verifies CRM, mints a bound prefill revision, and returns no IDs or token"
   assert.equal(result.status, 200);
   assert.equal(result.stage, "prefill");
   assert.equal(result.outcome, "prepared");
-  assert.deepEqual(Object.keys(result.body), [...CLIENT_KEYS, "prefillId"]);
+  assert.deepEqual(Object.keys(result.body), [
+    ...CLIENT_KEYS,
+    "prefillId",
+    "configurationRevision",
+  ]);
   assert.equal(result.body.prefillId, PREFILL_ID);
+  assert.equal(
+    result.body.configurationRevision,
+    selected.dependencies.config.sourceRevision,
+  );
   assert.match(selected.prefill.snapshotFingerprint, /^[a-f0-9]{64}$/);
   assert.equal(selected.prefill.dealModifiedTime, selected.records.deal.Modified_Time);
   const serialized = JSON.stringify(result.body);
@@ -1279,123 +1477,30 @@ test("a verified prefill retry accepts CRM whole-second DateTime precision", asy
   assert.equal(selected.events.includes("session.reconciliation"), false);
 });
 
-test("durably expires an elapsed prefill session before returning the generic 404", async () => {
+test("an expired journey credential fails at exchange and Issue owns cleanup", async () => {
   const selected = fixture();
-  await issue(selected);
-  selected.session.expiresAt = "2026-08-14T17:59:59.000Z";
+  assert.equal((await issue(selected)).status, 200);
+  const expiredSession = selected.session;
+  expiredSession.expiresAt = "2026-08-14T17:59:59.000Z";
   selected.events.length = 0;
 
   const result = await prefill(selected);
 
   assert.equal(result.status, 404);
   assert.deepEqual(result.body, { ok: false, code: "setup_not_found" });
-  assert.equal(selected.session.status, "expired");
-  assert.equal(selected.session.expiredAt, "2026-08-14T18:00:00.000Z");
-  assert.equal(selected.records.deal.Setup_Access_Status, "Synthetic Expired");
-  assert.equal(selected.session.lastOutcome, "crm_expiry_synced");
-  assert.deepEqual(selected.events, [
-    "session.read",
-    "session.verify",
-    "crm.get.Deals",
-    "crm.update.Deals",
-    "session.expiry.synced",
-  ]);
-});
-
-test("a persisted expiry-pending session repairs CRM after a process restart", async () => {
-  const selected = fixture();
-  assert.equal((await issue(selected)).status, 200);
-  assert.equal((await prefill(selected)).status, 200);
-  selected.session.status = "expired";
-  selected.session.expiredAt = "2026-08-14T18:00:00.000Z";
-  selected.session.expiresAt = "2026-08-14T17:59:59.000Z";
-  selected.session.lastOutcome = "crm_expiry_pending";
-  selected.events.length = 0;
-
-  const result = await prefill(selected);
-
-  assert.equal(result.status, 404);
-  assert.equal(selected.records.deal.Setup_Access_Status, "Synthetic Expired");
-  assert.equal(selected.session.status, "expired");
-  assert.equal(selected.session.lastOutcome, "crm_expiry_synced");
+  assert.equal(expiredSession.status, "issued");
+  assert.equal(selected.records.deal.Setup_Access_Status, "Synthetic Issued");
+  assert.equal(selected.events.includes("crm.update.Deals"), false);
   assert.equal(selected.events.includes("session.verify"), false);
-  assert.ok(
-    selected.events.indexOf("crm.update.Deals") <
-      selected.events.indexOf("session.expiry.synced"),
-  );
-});
+  assert.equal(selected.events.includes("workflow.prefill.mint"), false);
 
-test("expiry never acknowledges 404 after the durable row becomes reconciliation-required", async () => {
-  const selected = fixture();
-  assert.equal((await issue(selected)).status, 200);
-  assert.equal((await prefill(selected)).status, 200);
-  selected.session.expiresAt = "2026-08-14T17:59:59.000Z";
-  const originalUpdate = selected.dependencies.crmClient.updateRecord.bind(
-    selected.dependencies.crmClient,
-  );
-  selected.dependencies.crmClient.updateRecord = async (...argumentsList) => {
-    const result = await originalUpdate(...argumentsList);
-    selected.session.status = "reconciliation_required";
-    selected.session.lastOutcome = "synthetic_concurrent_reconciliation";
-    return result;
-  };
-
-  const result = await prefill(selected);
-
-  assert.equal(result.status, 503);
-  assert.deepEqual(result.body, { ok: false, code: "service_unavailable" });
-  assert.equal(selected.session.status, "reconciliation_required");
-});
-
-test("moves an expired session to reconciliation when the CRM terminal state cannot converge", async () => {
-  const selected = fixture();
-  await issue(selected);
-  selected.session.expiresAt = "2026-08-14T17:59:59.000Z";
-  const originalUpdate = selected.dependencies.crmClient.updateRecord.bind(
-    selected.dependencies.crmClient,
-  );
-  selected.dependencies.crmClient.updateRecord = async (...argumentsList) => {
-    if (argumentsList[2].Setup_Access_Status === "Synthetic Expired") {
-      const error = new Error("synthetic CRM expiry update unavailable");
-      error.ambiguous = true;
-      throw error;
-    }
-    return originalUpdate(...argumentsList);
-  };
   selected.events.length = 0;
-
-  const result = await prefill(selected);
-
-  assert.equal(result.status, 503);
-  assert.deepEqual(result.body, { ok: false, code: "service_unavailable" });
-  assert.equal(selected.session.status, "reconciliation_required");
-  assert.equal(selected.events.includes("session.reconciliation"), true);
-});
-
-test("an ambiguous expiry write returns 404 only after exact independent CRM convergence", async () => {
-  const selected = fixture();
-  await issue(selected);
-  selected.session.expiresAt = "2026-08-14T17:59:59.000Z";
-  const originalUpdate = selected.dependencies.crmClient.updateRecord.bind(
-    selected.dependencies.crmClient,
-  );
-  selected.dependencies.crmClient.updateRecord = async (...argumentsList) => {
-    const readback = await originalUpdate(...argumentsList);
-    if (argumentsList[2].Setup_Access_Status === "Synthetic Expired") {
-      throw new Error("synthetic expiry acknowledgment lost after commit");
-    }
-    return readback;
-  };
-  selected.events.length = 0;
-
-  const result = await prefill(selected);
-
-  assert.equal(result.status, 404);
-  assert.deepEqual(result.body, { ok: false, code: "setup_not_found" });
-  assert.equal(selected.session.status, "expired");
+  const oldIdentityRetry = await issue(selected);
+  assert.equal(oldIdentityRetry.status, 409);
+  assert.deepEqual(oldIdentityRetry.body, { ok: false, code: "setup_conflict" });
+  assert.equal(expiredSession.status, "expired");
+  assert.equal(expiredSession.lastOutcome, "crm_expiry_synced");
   assert.equal(selected.records.deal.Setup_Access_Status, "Synthetic Expired");
-  assert.equal(selected.events.filter((event) => event === "crm.get.Deals").length, 2);
-  assert.equal(selected.events.includes("session.reconciliation"), false);
 });
 
 test("a fresh issuance identity reissues an exact expired Deal without reviving the old token", async () => {
@@ -1463,6 +1568,7 @@ test("pepper rotation cannot reuse an issuance UUID after its tombstone is synch
   const oldSession = selected.session;
   oldSession.expiresAt = "2026-08-14T17:59:59.000Z";
   assert.equal((await prefill(selected)).status, 404);
+  assert.equal((await issue(selected)).status, 409);
   assert.equal(oldSession.lastOutcome, "crm_expiry_synced");
 
   selected.dependencies.config = Object.freeze({
@@ -1698,7 +1804,7 @@ test("does not mint when a failed verified retry did not advance its durable att
   assert.equal(selected.events.includes("workflow.prefill.mint"), false);
 });
 
-test("two simultaneous exact prefills converge after one conditional CRM winner", async () => {
+test("two simultaneous exact prefills produce one one-time handle", async () => {
   const selected = fixture();
   await issue(selected);
   const originalUpdate = selected.dependencies.crmClient.updateRecord.bind(
@@ -1722,7 +1828,10 @@ test("two simultaneous exact prefills converge after one conditional CRM winner"
   };
 
   const results = await Promise.all([prefill(selected), prefill(selected)]);
-  assert.deepEqual(results.map((result) => result.status), [200, 200]);
+  assert.deepEqual(
+    results.map((result) => result.status).sort((left, right) => left - right),
+    [200, 503],
+  );
   assert.equal(selected.session.status, "verified");
   assert.equal(selected.events.includes("session.reconciliation"), false);
   assert.equal(selected.records.deal.Setup_Access_Status, "Synthetic Verified");
@@ -2069,7 +2178,7 @@ test("an exact succeeded duplicate remains recoverable after the setup-token TTL
   assert.equal(selected.events.includes("session.verify"), false);
 });
 
-test("a completed duplicate does not depend on the prefill row remaining available", async () => {
+test("a completed duplicate fails closed when its immutable prefill revision is unavailable", async () => {
   const selected = fixture();
   await issue(selected);
   const prefillResult = await prefill(selected);
@@ -2080,13 +2189,14 @@ test("a completed duplicate does not depend on the prefill row remaining availab
 
   const duplicate = await submit(selected, body);
 
-  assert.equal(duplicate.status, 200);
-  assert.equal(selected.events.includes("workflow.submission.read"), true);
-  assert.equal(selected.events.includes("workflow.prefill.read"), false);
+  assert.equal(duplicate.status, 409);
+  assert.deepEqual(duplicate.body, { ok: false, code: "setup_conflict" });
+  assert.equal(selected.events.includes("workflow.prefill.read-id"), true);
+  assert.equal(selected.events.includes("workflow.submission.read"), false);
   assert.equal(selected.events.includes("crm.composite"), false);
 });
 
-test("a verified crash-gap session repairs from its receipt after prefill cleanup", async () => {
+test("a verified crash-gap session fails closed when its prefill revision is unavailable", async () => {
   const selected = fixture();
   await issue(selected);
   const prefillResult = await prefill(selected);
@@ -2100,9 +2210,10 @@ test("a verified crash-gap session repairs from its receipt after prefill cleanu
 
   const recovered = await submit(selected, body);
 
-  assert.equal(recovered.status, 200);
-  assert.equal(selected.session.status, "submitted");
-  assert.equal(selected.events.includes("workflow.prefill.read"), false);
+  assert.equal(recovered.status, 409);
+  assert.deepEqual(recovered.body, { ok: false, code: "setup_conflict" });
+  assert.equal(selected.session.status, "verified");
+  assert.equal(selected.events.includes("workflow.prefill.read-id"), true);
   assert.equal(selected.events.includes("workflow.submission.claim"), false);
   assert.equal(selected.events.includes("crm.composite"), false);
 });

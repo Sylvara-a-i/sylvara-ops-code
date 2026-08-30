@@ -6,6 +6,7 @@ const { validateConfigurationVersionRow } = require('./configuration-version');
 const { invariant } = require('./errors');
 const { keyedDigest } = require('./security');
 const {
+  authorizationEventHash,
   authorizationReceiptFingerprint,
   serializeAuthorizationReceiptData,
 } = require('./authorization-receipt');
@@ -459,8 +460,7 @@ function evaluateApprovalTransition({
     PREVIOUS_EVENT_HASH: previousEventHash,
     DECIDED_AT: decidedAt,
   };
-  event.EVENT_HASH = keyedDigest(eventChainSecret, 'revenue-desk-authorization-event-v1',
-    Object.keys(event).map((key) => event[key]));
+  event.EVENT_HASH = authorizationEventHash(eventChainSecret, event);
   const deploymentPatch = approvedIntent.action === 'approve' ? {
     GO_LIVE_APPROVAL_STATUS: CONTRACT.approved_go_live_status,
     TEST_STATUS: 'Scheduled',
@@ -492,6 +492,50 @@ function activationIntentFingerprint(secret, intent) {
     [canonicalActivationIntent(intent)]);
 }
 
+function approvalEventForActivation({
+  existingEvents, activationIntent, deployment, expectedRouteFingerprint, eventChainSecret,
+}) {
+  invariant(Array.isArray(existingEvents) && existingEvents.length <= 10_000,
+    'INVALID_APPROVAL_EVENT_HISTORY', 'Authorization event history is invalid.');
+  const matches = existingEvents.filter((event) =>
+    event?.AUTHORIZATION_EVENT_ID === activationIntent.approval_event_key);
+  invariant(matches.length === 1,
+    'ACTIVATION_PRECONDITION_FAILED',
+    'Activation requires one exact completed approval decision.');
+  const [approval] = matches;
+  const approvedAt = canonicalTimestamp(approval.DECIDED_AT,
+    'ACTIVATION_PRECONDITION_FAILED', 'Approval decision timestamp');
+  const evidenceAt = canonicalTimestamp(approval.EVIDENCE_OBSERVED_AT,
+    'ACTIVATION_PRECONDITION_FAILED', 'Approval evidence timestamp');
+  invariant(approval.EVENT_SCHEMA_VERSION === 1
+    && approval.ACTION === 'approve'
+    && approval.DECISION === 'Approved'
+    && approval.DEPLOYMENT_ID === activationIntent.deployment_id
+    && approval.CONFIGURATION_VERSION_ID === activationIntent.configuration_version_id
+    && approval.ROUTE_FINGERPRINT === expectedRouteFingerprint
+    && OPERATOR_HASH_PATTERN.test(approval.OPERATOR_ID_HASH || '')
+    && /^[a-f0-9]{64}$/.test(approval.INTENT_FINGERPRINT || '')
+    && approval.EVIDENCE_REVISION === activationIntent.evidence_revision
+    && Number.isSafeInteger(approval.EXPECTED_DEPLOYMENT_VERSION)
+    && approval.EXPECTED_DEPLOYMENT_VERSION + 1
+      === activationIntent.expected_deployment_version
+    && Number.isSafeInteger(approval.CAPACITY_REMAINING_AT_DECISION)
+    && approval.CAPACITY_REMAINING_AT_DECISION >= 1
+    && (approval.PREVIOUS_EVENT_HASH === 'genesis'
+      || /^[a-f0-9]{64}$/.test(approval.PREVIOUS_EVENT_HASH || ''))
+    && approval.DECIDED_AT === deployment.GO_LIVE_APPROVED_AT
+    && evidenceAt <= approvedAt
+    && approvedAt - evidenceAt <= 3_600_000
+    && /^[a-f0-9]{64}$/.test(approval.EVENT_HASH || ''),
+  'ACTIVATION_PRECONDITION_FAILED',
+  'The referenced approval decision does not match the activation target.');
+  const expectedEventHash = authorizationEventHash(eventChainSecret, approval);
+  invariant(approval.EVENT_HASH === expectedEventHash,
+    'ACTIVATION_PRECONDITION_FAILED',
+    'The referenced approval decision failed integrity verification.');
+  return Object.freeze({ ...approval });
+}
+
 function evaluateActivationTransition({
   intent, signature, operatorVerificationSecret, eventChainSecret,
   deployment, configurationVersion, evidence, existingEvents = [], nowMs,
@@ -501,10 +545,6 @@ function evaluateActivationTransition({
     intent, signature, secret: operatorVerificationSecret, nowMs, maxAgeMs: maxIntentAgeMs,
   });
   const fingerprint = activationIntentFingerprint(eventChainSecret, activationIntent);
-  const replay = existingApprovalEvent(existingEvents, activationIntent, fingerprint);
-  if (replay) return Object.freeze({ replayed: true, event: Object.freeze({ ...replay }),
-    deploymentPatch: null });
-
   const route = routeFromRows(deployment, configurationVersion);
   const expectedRouteFingerprint = routeFingerprint(route);
   invariant(expectedRouteFingerprint === activationIntent.route_fingerprint,
@@ -513,6 +553,16 @@ function evaluateActivationTransition({
     && deployment.SOURCE_ENVIRONMENT === 'development'
     && configurationVersion.SOURCE_ENVIRONMENT === 'development',
   'PRODUCTION_DARK', 'Production activation is prohibited.');
+  const approvalEvent = approvalEventForActivation({
+    existingEvents,
+    activationIntent,
+    deployment,
+    expectedRouteFingerprint,
+    eventChainSecret,
+  });
+  const replay = existingApprovalEvent(existingEvents, activationIntent, fingerprint);
+  if (replay) return Object.freeze({ replayed: true, event: Object.freeze({ ...replay }),
+    deploymentPatch: null });
   invariant(deployment.DEPLOYMENT_ID === activationIntent.deployment_id
     && deployment.ACTIVE_CONFIGURATION_VERSION_ID === activationIntent.configuration_version_id
     && deployment.APPROVED_CONFIGURATION_VERSION_ID === activationIntent.configuration_version_id
@@ -581,10 +631,7 @@ function evaluateActivationTransition({
 
   const decidedAt = new Date(nowMs).toISOString();
   const expiresAt = new Date(nowMs + CONTRACT.test_duration_days * 86_400_000).toISOString();
-  const previousEventHash = existingEvents.length === 0 ? 'genesis'
-    : existingEvents[existingEvents.length - 1]?.EVENT_HASH;
-  invariant(previousEventHash === 'genesis' || /^[a-f0-9]{64}$/.test(previousEventHash),
-    'INVALID_APPROVAL_EVENT_HISTORY', 'Authorization event chain is invalid.');
+  const previousEventHash = approvalEvent.EVENT_HASH;
   const event = {
     AUTHORIZATION_EVENT_ID: activationIntent.event_id,
     EVENT_SCHEMA_VERSION: 1,
@@ -606,8 +653,7 @@ function evaluateActivationTransition({
     EXPIRES_AT: expiresAt,
     DECIDED_AT: decidedAt,
   };
-  event.EVENT_HASH = keyedDigest(eventChainSecret, 'revenue-desk-authorization-event-v1',
-    Object.keys(event).map((key) => event[key]));
+  event.EVENT_HASH = authorizationEventHash(eventChainSecret, event);
   return Object.freeze({
     replayed: false,
     event: Object.freeze(event),
@@ -621,8 +667,11 @@ function evaluateActivationTransition({
   });
 }
 
-function authorizationReceiptRow(event, { sourceRevision, environment, controlBinding }) {
+function authorizationReceiptRow(event, {
+  sourceRevision, environment, controlBinding, eventChainSecret,
+}) {
   invariant(isPlainObject(event)
+    && event.EVENT_SCHEMA_VERSION === 1
     && (APPROVAL_EVENT_PATTERN.test(event.AUTHORIZATION_EVENT_ID || '')
       || ACTIVATION_EVENT_PATTERN.test(event.AUTHORIZATION_EVENT_ID || ''))
     && /^[a-f0-9]{64}$/.test(event.INTENT_FINGERPRINT || '')
@@ -633,6 +682,8 @@ function authorizationReceiptRow(event, { sourceRevision, environment, controlBi
     'INVALID_APPROVAL_EVENT', 'Source revision');
   invariant(environment === 'development', 'PRODUCTION_DARK',
     'Production authorization persistence is prohibited.');
+  invariant(event.EVENT_HASH === authorizationEventHash(eventChainSecret, event),
+    'INVALID_APPROVAL_EVENT', 'Authorization event failed integrity verification.');
   canonicalTimestamp(event.DECIDED_AT, 'INVALID_APPROVAL_EVENT', 'Decision timestamp');
   const eventData = {
     schemaVersion: 1,
@@ -660,7 +711,7 @@ function authorizationReceiptRow(event, { sourceRevision, environment, controlBi
     code: 'INVALID_APPROVAL_EVENT',
     message: 'Authorization receipt payload is invalid.',
   });
-  const receiptFingerprint = authorizationReceiptFingerprint(serializedEvent);
+  const receiptFingerprint = authorizationReceiptFingerprint(eventChainSecret, serializedEvent);
   return Object.freeze({
     EVENT_KEY: event.AUTHORIZATION_EVENT_ID,
     RECEIPT_KIND: 'authorization_event',

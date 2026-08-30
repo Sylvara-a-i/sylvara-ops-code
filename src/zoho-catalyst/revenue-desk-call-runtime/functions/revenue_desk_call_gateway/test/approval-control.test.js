@@ -229,6 +229,7 @@ test('approval binds the reviewed version and route without activating or starti
     sourceRevision: fixture.deployment.SOURCE_REVISION,
     environment: 'development',
     controlBinding: receiptControlBinding(result.event),
+    eventChainSecret: EVENT_KEY,
   });
   assert.equal(receipt.CONFIGURATION_VERSION_ID, fixture.intent.configuration_version_id);
   assert.equal(receipt.ROUTE_FINGERPRINT, fixture.intent.route_fingerprint);
@@ -244,6 +245,7 @@ test('activation requires route readback and starts an exact seven-day interval 
   assert.equal(result.event.APPROVAL_EVENT_KEY, fixture.deployment.APPROVAL_EVENT_KEY);
   assert.equal(result.event.ROUTE_READBACK_FINGERPRINT,
     fixture.intent.route_readback_fingerprint);
+  assert.equal(result.event.PREVIOUS_EVENT_HASH, fixture.approvalResult.event.EVENT_HASH);
   assert.deepEqual(result.deploymentPatch, {
     TEST_STATUS: 'Live',
     ACTIVATION_EVENT_KEY: fixture.intent.event_id,
@@ -258,6 +260,7 @@ test('activation requires route readback and starts an exact seven-day interval 
     sourceRevision: fixture.deployment.SOURCE_REVISION,
     environment: 'development',
     controlBinding: receiptControlBinding(result.event),
+    eventChainSecret: EVENT_KEY,
   });
   assert.equal(receipt.RELATED_EVENT_KEY, fixture.deployment.APPROVAL_EVENT_KEY);
   assert.equal(JSON.parse(receipt.EVENT_DATA_JSON).actualStartAt,
@@ -333,6 +336,41 @@ test('approval and activation fail closed on invalid signature, stale state, cap
     ...activate,
     deployment: { ...activate.deployment, HANDLED_COUNT: 25 },
   }), { code: 'CAPACITY_UNAVAILABLE' });
+});
+
+test('activation and its replay require the exact integrity-verified approval event', () => {
+  const missing = activationFixture();
+  assert.throws(() => evaluateActivationTransition({
+    ...missing,
+    existingEvents: [],
+  }), { code: 'ACTIVATION_PRECONDITION_FAILED' });
+
+  const tampered = activationFixture();
+  tampered.existingEvents[0] = {
+    ...tampered.existingEvents[0],
+    EVENT_HASH: '0'.repeat(64),
+  };
+  assert.throws(() => evaluateActivationTransition(tampered),
+    { code: 'ACTIVATION_PRECONDITION_FAILED' });
+
+  const wrongBinding = activationFixture();
+  wrongBinding.existingEvents[0] = {
+    ...wrongBinding.existingEvents[0],
+    CONFIGURATION_VERSION_ID: 'configuration_version_other',
+  };
+  assert.throws(() => evaluateActivationTransition(wrongBinding),
+    { code: 'ACTIVATION_PRECONDITION_FAILED' });
+
+  const replay = activationFixture();
+  const activated = evaluateActivationTransition(replay);
+  const forgedApproval = {
+    ...replay.existingEvents[0],
+    EVENT_HASH: 'f'.repeat(64),
+  };
+  assert.throws(() => evaluateActivationTransition({
+    ...replay,
+    existingEvents: [forgedApproval, activated.event],
+  }), { code: 'ACTIVATION_PRECONDITION_FAILED' });
 });
 
 test('any governed configuration, route, source, or readback change invalidates activation', () => {

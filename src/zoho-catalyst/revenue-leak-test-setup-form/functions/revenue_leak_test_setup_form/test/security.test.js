@@ -77,6 +77,7 @@ test("email proof identities are normalized, domain-separated, and binding-speci
     crmContactId: `${"9".repeat(17)}1`,
     crmAccountId: `${"9".repeat(17)}2`,
     crmDealId: `${"9".repeat(17)}3`,
+    journeyBindingDigest: "4".repeat(64),
   };
   const bound = proofBindingDigest(binding, destination, secret);
   const otp = proofOtpDigest({ selectedProofKey, generation: 1, otp: "12345678" }, secret);

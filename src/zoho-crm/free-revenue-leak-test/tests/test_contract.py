@@ -1685,6 +1685,25 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         )
         self.assertFalse(form1["request"]["url_contains_record_or_pii"])
         self.assertFalse(form1["connection"]["credential_in_source_or_arguments"])
+        self.assertEqual(
+            form1["private_placeholders"],
+            [
+                "{{FORM1_ISSUE_URL}}",
+                "{{FORM1_ISSUE_CONNECTION_LINK_NAME}}",
+                "{{FORM1_ACCESS_PUBLIC_URL}}",
+            ],
+        )
+        self.assertEqual(
+            form1["success_response"]["exact_body_keys"],
+            ["ok", "accessUrl", "expiresAt", "requestId"],
+        )
+        self.assertEqual(
+            form1["success_response"]["request_id_grammar"],
+            "UUID v4 lowercase canonical",
+        )
+        self.assertFalse(
+            form1["success_response"]["zoho_forms_receives_journey_credential"]
+        )
         self.assertEqual(form2["request"]["method"], "POST")
         self.assertEqual(form2["request"]["content_type"], "application/json")
         self.assertEqual(form2["request"]["body_keys"], ["dealId", "issueRequestId"])
@@ -1743,8 +1762,18 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         self.assertNotIn("updateRecord", source)
         self.assertNotIn("zoho.encryption", source)
         self.assertIn('issue_response.get("responseCode").toString() == "201"', source)
-        self.assertIn('form_url.right(43).matches("^[A-Za-z0-9_-]{43}$")', source)
-        self.assertIn('!form_url.contains(record_id_text)', source)
+        self.assertIn('prefix = "{{FORM1_ACCESS_PUBLIC_URL}}#journeyToken=";', source)
+        self.assertIn('access_url.right(43).matches("^[A-Za-z0-9_-]{43}$")', source)
+        self.assertIn('!access_url.contains("?")', source)
+        self.assertIn('!access_url.contains("&")', source)
+        self.assertIn('!access_url.contains(record_id_text)', source)
+        self.assertIn('response_body.containKey("requestId")', source)
+        self.assertIn("response_body.size() == 4", source)
+        self.assertIn(
+            'request_id.matches("^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")',
+            source,
+        )
+        self.assertNotIn("form_url", source)
         self.assertLess(source.index("can_open = true;"), source.index("openUrl("))
 
     def test_form2_deluge_template_matches_the_exact_caller_contract(self) -> None:
@@ -1792,9 +1821,13 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         for put in puts:
             self.assertIn(put, source)
         self.assertEqual(source.count("request_body.put("), len(puts))
-        for response_key in ("ok", "accessUrl", "expiresAt"):
+        for response_key in ("ok", "accessUrl", "expiresAt", "requestId"):
             self.assertIn(f'response_body.containKey("{response_key}")', source)
-        self.assertIn("response_body.size() == 3", source)
+        self.assertIn("response_body.size() == 4", source)
+        self.assertIn(
+            'request_id.matches("^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")',
+            source,
+        )
         self.assertIn("length() ==", source)
         self.assertIn("+ 43", source)
         token_assignment = "setup_token = "

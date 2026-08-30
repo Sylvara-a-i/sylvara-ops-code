@@ -73,6 +73,24 @@ function normalizeFormData(value) {
   return Object.freeze(normalized);
 }
 
+function buildPrefillPayload(record, constants) {
+  if (!record || typeof record !== "object" || Array.isArray(record) ||
+      !constants || typeof constants.sourcePage !== "string" || !constants.sourcePage) {
+    throw new FormContractError("Prefill context is invalid", {
+      status: 503,
+      publicCode: "configuration_invalid",
+    });
+  }
+  const payload = {};
+  for (const [key, crm, maximum] of FIELD_SPECS) {
+    const fallback = key === "sourcePage" && !record[crm] ? constants.sourcePage : record[crm];
+    const selected = text(fallback, key, maximum, false);
+    if (selected !== null) payload[key] = selected;
+  }
+  // Consent is deliberately never prefilled; the respondent must provide it.
+  return Object.freeze(payload);
+}
+
 function buildCrmPatch(formData, constants, { journeyId, submittedAt }) {
   const normalized = normalizeFormData(formData);
   if (!constants || typeof constants !== "object" ||
@@ -116,6 +134,7 @@ module.exports = {
   FIELD_SPECS,
   FORM_KEYS,
   FormContractError,
+  buildPrefillPayload,
   buildCrmPatch,
   normalizeFormData,
 };

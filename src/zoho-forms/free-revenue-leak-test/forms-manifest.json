@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 4,
   "status": "development-desired-state",
   "customer_facing_offer": "Free Revenue Leak Test",
   "real_form_ids_or_urls_in_git": false,
@@ -171,9 +171,9 @@
             "respondent editability",
             "form-entry retention semantics",
             "missing UTM builder fields versus retained CRM mappings",
-            "safe assisted-token transport and Prefill-Webhook contract"
+            "safe one-time prefill-handle transport and Dynamic Prefill-Webhook contract"
           ],
-          "rule": "The exact builder dictionary is proven for type, alias, mandatory, personal, encryption, and default visibility. Do not infer runtime respondent editability or entry retention from builder controls, and do not authorize a browser or connector mutation until the UTM mismatch and safe assisted-token transport are resolved.",
+          "rule": "The exact builder dictionary is proven for type, alias, mandatory, personal, encryption, and default visibility. Do not infer runtime respondent editability or entry retention from builder controls, and do not authorize a browser or connector mutation until the UTM mismatch and one-time prefill-handle transport are resolved.",
           "live_readback": {
             "observed_deployed_field_count": 26,
             "mandatory_true_count": 10,
@@ -274,7 +274,7 @@
           "runtime read-only or respondent-editability semantics",
           "form-entry retention semantics",
           "missing UTM builder fields versus retained CRM mappings",
-          "safe assisted-token transport and Prefill-Webhook contract"
+          "safe one-time prefill-handle transport and Dynamic Prefill-Webhook contract"
         ]
       },
       "contact_consent": {
@@ -332,11 +332,12 @@
         "installation_blocked_until_authoritative_readback": true,
         "environment": "Development",
         "controller": "revenue_leak_test_request_form",
-        "routes": ["FORM1_ISSUE", "FORM1_PREFILL", "FORM1_SUBMISSION"],
+        "routes": ["FORM1_ISSUE", "FORM1_ACCESS", "FORM1_EXCHANGE", "FORM1_PREFILL", "FORM1_SUBMISSION"],
         "crm_launcher": {
           "label": "Open Free-Test Setup",
           "server_side": true,
-          "browser_visible_values": ["opaque_assisted_access_token"],
+          "browser_visible_values": ["one-time journey credential in Catalyst URL fragment", "one-time prefill handle in Zoho Forms URL"],
+          "zoho_forms_receives_journey_credential": false,
           "prohibited_url_values": [
             "CRM record ID",
             "journey ID",
@@ -346,39 +347,67 @@
             "company"
           ]
         },
-        "token_transport": {
-          "field": "Assisted Intake Token",
-          "field_alias_required": true,
-          "raw_value_storage_allowed": false,
+        "journey_credential_transport": {
+          "location": "Catalyst access URL fragment only",
+          "exchange_method": "same-origin POST followed by immediate fragment removal",
+          "zoho_forms_field": false,
           "controller_storage": "domain-separated keyed digest only",
-          "ttl_seconds_default": 1800,
-          "single_journey_reissue_rotates_old_token": true
+          "ttl_seconds_default": 1800
+        },
+        "prefill_handle_transport": {
+          "field": "Assisted Prefill Handle",
+          "controller_key": "prefillHandle",
+          "alias_reference": "FORM1_PREFILL_HANDLE_FIELD_ALIAS",
+          "field_alias_required": true,
+          "raw_value_in_url_form_field_or_form_entry_allowed": true,
+          "raw_value_in_catalyst_storage_or_logs_allowed": false,
+          "controller_storage": "domain-separated keyed digest only",
+          "randomness_bits": 256,
+          "ttl_seconds_default": 600,
+          "maximum_successful_prefills": 1,
+          "authority": "minimum-data Form 1 prefill only",
+          "prohibited_authority": ["CRM write", "approval", "activation", "rollback", "routing", "billing"]
         },
         "prefill_webhook": {
           "method": "POST",
           "route_reference": "PREFILL_PATH",
-          "request_keys": ["token"],
-          "response_contains_pii": false,
+          "authentication": ["Catalyst API key", "route-specific protected custom header"],
+          "request_keys": ["prefillHandle"],
+          "response_contains_minimum_mapped_record_fields": true,
           "response_contains_crm_record_id": false,
-          "response_contains_journey_id": false
+          "response_contains_journey_id": false,
+          "response_server_keys": ["prefillId", "configurationRevision"],
+          "handle_consumed_after_successful_prefill": true
+        },
+        "submission_webhook": {
+          "method": "POST",
+          "route_reference": "SUBMISSION_PATH",
+          "authentication": ["Catalyst API key", "route-specific protected custom header"],
+          "assisted_server_keys": ["prefillId", "configurationRevision", "submissionId"],
+          "assisted_form_data_key": "formData",
+          "prefill_handle_forwarded": false,
+          "journey_credential_forwarded": false,
+          "public_server_keys": ["submissionId"]
         },
         "submission_lanes": {
           "public": {
             "token_required": false,
             "writer": "existing native CRM upsert",
-            "deduplication_order": ["Intake_Submission_ID", "Email"]
+            "deduplication_order": ["Intake_Submission_ID", "Email"],
+            "native_crm_integration_condition": "may run only when prefillHandle, prefillId, and configurationRevision are all blank"
           },
           "assisted": {
-            "token_required": true,
+            "bearer_forwarded": false,
+            "prefill_binding_required": true,
             "writer": "Catalyst controller through exact CRM record update",
-            "native_crm_integration_condition": "must not run when Assisted Intake Token is nonblank",
+            "native_crm_integration_condition": "must never run; assisted binding requires server validation of both prefillId and configurationRevision",
             "browser_supplied_record_or_journey_identity_accepted": false,
             "consume_after_exact_crm_readback": true
           }
         },
         "existing_controls_preserved_until_e2e_acceptance": true,
         "live_readback": {
-          "assisted_token_transport_safe": false,
+          "prefill_handle_transport_safe": false,
           "prefill_webhook_bound": false,
           "submission_webhook_bound": false,
           "native_crm_assisted_lane_suppression_proven": false
@@ -464,7 +493,7 @@
         "save_next_or_submit_clicked": false,
         "status": "anonymous_surface_contained_required_controller_and_field_policies_unproven"
       },
-      "controller_hidden_fields": ["setupToken", "prefillId"],
+      "controller_hidden_fields": ["prefillHandle", "prefillId", "configurationRevision"],
       "live_field_inventory": {
         "complete_required_field_policy_proven": false,
         "complete_private_runtime_dictionary_retained_outside_github": false,
@@ -478,21 +507,24 @@
       },
       "controller_field_policy": [
         {
-          "key": "setupToken",
+          "key": "prefillHandle",
           "field_kind": "prefill_webhook_input",
-          "alias_reference": "FORM2_TOKEN_FIELD_ALIAS",
-          "live_alias_status": "private_noncompliant_details_withheld",
+          "alias_reference": "FORM2_PREFILL_HANDLE_FIELD_ALIAS",
+          "live_alias_status": "installation_pending",
           "source_policy": {
             "mandatory": true,
-            "personal": true,
+            "personal": false,
             "encrypted": true,
-            "respondent_editable": false
+            "respondent_editable": false,
+            "submission_webhook_forwarded": false,
+            "authority": "one minimum-data prefill only",
+            "ttl_seconds": 600
           },
           "live_readback": {
             "required_policy_proven": false,
             "private_details_published": false
           },
-          "status": "observed_noncompliant"
+          "status": "source_required_installation_pending"
         },
         {
           "key": "prefillId",
@@ -509,7 +541,24 @@
             "required_policy_proven": false,
             "private_details_published": false
           },
-          "status": "observed_noncompliant"
+          "status": "source_required_installation_pending"
+        },
+        {
+          "key": "configurationRevision",
+          "field_kind": "immutable_source_revision",
+          "alias_reference": null,
+          "live_alias_status": "installation_pending",
+          "source_policy": {
+            "mandatory": true,
+            "personal": false,
+            "encrypted": false,
+            "respondent_editable": false
+          },
+          "live_readback": {
+            "required_policy_proven": false,
+            "private_details_published": false
+          },
+          "status": "source_required_installation_pending"
         }
       ],
       "server_generated_submission_field": {
@@ -548,7 +597,11 @@
           "Catalyst API key",
           "FORMS_HEADER_NAME and PREFILL_HEADER_SECRET"
         ],
-        "json_keys": ["setupToken"]
+        "json_keys": ["prefillHandle"],
+        "response_server_keys": ["prefillId", "configurationRevision"],
+        "response_client_keys_source": "field_contract.runtime_authority",
+        "minimum_data_only": true,
+        "handle_consumed_after_successful_prefill": true
       },
       "submission_webhook": {
         "method": "POST",
@@ -557,7 +610,9 @@
           "Catalyst API key",
           "FORMS_HEADER_NAME and SUBMISSION_HEADER_SECRET"
         ],
-        "server_keys": ["setupToken", "prefillId", "submissionId"],
+        "server_keys": ["prefillId", "configurationRevision", "submissionId"],
+        "prefill_handle_forwarded": false,
+        "setup_token_forwarded": false,
         "client_keys": [
           "firstName",
           "lastName",
@@ -786,8 +841,11 @@
       },
       "confirmation_copy": "Your setup information was received for Sylvara review. This does not activate call routing, confirm go-live, accept paid service, create billing, or authorize SMS.",
       "required_behavior": [
-        "prefill is bound to the exact Contact, Account, Deal, issuance request, and destination",
-        "submission requires server-verifiable one-time proof",
+        "the real setup credential remains only in the Catalyst URL fragment and is exchanged through POST before removal",
+        "only an independent one-time prefill handle reaches the Zoho Forms URL and Prefill-Webhook field",
+        "prefill is bound to the exact organization, Contact, Account, Deal, canonical journey, form, stage, release, and destination",
+        "submission validates prefillId, provider submissionId, journey binding, record binding, and immutable configurationRevision server-side",
+        "direct Form 2 access without a successful controlled prefill fails closed",
         "test-number assignment remains Setup/QA-owned and is not a respondent field",
         "authorization and scope affirmations must both be true",
         "duplicate submission has no duplicate effect",
@@ -799,7 +857,7 @@
     "direct controller tests",
     "exact function and route readback",
     "CRM organization and Connection proof",
-    "Form 1 assisted issue, prefill, and submission routes installed from the immutable release with exact variable, Connection, table, alias, webhook, and source readback while the contained predecessor CRM control remains available",
+    "All five Form 1 assisted routes installed from the immutable release with exact variable, Connection, table, dedicated prefill-handle alias, webhook, and source readback while the contained predecessor CRM control remains available",
     "Form 1 public ZZZ SYNTHETIC submission followed by one record-bound assisted ZZZ SYNTHETIC launch, prefill, submission, replay, and cross-record rejection",
     "Form 2 issue and prefill callers",
     "Form 2 submission caller",

@@ -21,7 +21,7 @@ This contract is desired state, not deployment authorization. The repository top
 [`config/caller-manifest.json`](config/caller-manifest.json) and [`functions/`](functions/) define five bounded Development callers or controls:
 
 - `Start Free-Test Request` remains the unchanged contained predecessor and rollback fallback.
-- `Open Free-Test Setup` reads or initializes the canonical journey on the current Lead or Deal, calls the authenticated Catalyst issue route, and opens only the exact Form 1 URL containing one opaque token and no CRM identity or PII.
+- `Open Free-Test Setup` reads or initializes the canonical journey on the current Lead or Deal, calls the authenticated Catalyst issue route, and opens only the exact Catalyst access URL with the real journey credential in its fragment. Catalyst removes and exchanges that credential before Zoho Forms receives a separate limited prefill handle; neither URL contains CRM identity or PII.
 - `Issue Revenue Leak Test Setup` retains the controlled Form 2 issuance contract.
 - `Approve And Start Free Test` performs approval and activation as two separate backend requests and returns approved/inactive when activation fails.
 - `Stop Or Roll Back Free Test` invokes the exact durable stop/unbind/CRM rollback path and displays approved manual provider instructions when automatic restoration is unavailable.

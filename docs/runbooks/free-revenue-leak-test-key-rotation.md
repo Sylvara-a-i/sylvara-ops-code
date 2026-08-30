@@ -35,7 +35,8 @@ An exposed old value may exist only inside the contained migration window. It mu
 ## Special cases
 
 - `PAID_COMMERCIAL_TERMS_JSON` is confidential business configuration, not a cryptographic credential. Rebind the exact approved terms and compare a private digest; do not change price or commercial semantics as “rotation.”
-- Form 2 uses `TOKEN_PEPPER` only for bearer derivation/hash and the independent `WORKFLOW_HMAC_SECRET` for prefill/submission durable identities. Rotating the bearer must not change workflow keys.
+- Form 1 uses independent `TOKEN_PEPPER` and `PREFILL_HANDLE_PEPPER` values. Rotate the journey credential and Dynamic Prefill-Webhook handle namespaces independently while all five Form 1 routes are dark; old handles fail closed and resumable journeys receive new short-lived handles.
+- Form 2 uses `TOKEN_PEPPER` only for journey-credential derivation/hash and the independent `WORKFLOW_HMAC_SECRET` for prefill-handle, journey-binding, prefill, and submission durable identities. Rotating the journey credential must not change workflow keys.
 - `FORM2_PROOF_HMAC_SECRET` rotation also requires recomputing `FORM2_PROOF_ALLOWED_RECIPIENT_DIGESTS`.
 - `EVENT_HMAC_SECRET` covers inbound/event receipt keys, payload fingerprints, in-flight Retell ownership tokens, call/correlation keys, notification and recipient identities, mail evidence references, counted-call keys, and downstream Analytics call facts. It cannot be rekeyed one table at a time.
 - `NUMBER_LOOKUP_HMAC_SECRET` changes the reviewed route. The new route needs fresh approval and activation evidence after exact hash readback.

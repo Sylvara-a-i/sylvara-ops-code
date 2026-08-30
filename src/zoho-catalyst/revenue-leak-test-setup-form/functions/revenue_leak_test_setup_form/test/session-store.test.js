@@ -13,6 +13,7 @@ const {
 const TABLE = "Form2_Sessions";
 const ISSUE_REQUEST_KEY = "b".repeat(64);
 const TOKEN_HASH = "a".repeat(64);
+const JOURNEY_BINDING_DIGEST = "c".repeat(64);
 const NOW_MS = Date.parse("2026-08-14T18:00:00.000Z");
 const SUBMISSION_FINGERPRINT = "f".repeat(64);
 
@@ -118,6 +119,7 @@ function issueInput(overrides = {}) {
     crmContactId: `${"1".repeat(18)}1`,
     crmAccountId: `${"1".repeat(18)}2`,
     crmDealId: `${"1".repeat(18)}3`,
+    journeyBindingDigest: JOURNEY_BINDING_DIGEST,
     ...overrides,
   };
 }

@@ -5,6 +5,7 @@ const { Readable } = require('node:stream');
 const { loadConfig } = require('../lib/config');
 const { RevenueDeskError } = require('../lib/errors');
 const { numberLookupKey } = require('../lib/security');
+const { authorizationEventHash } = require('../lib/authorization-receipt');
 const { routeFingerprint, routeFromRows, authorizationReceiptRow } = require('../lib/approval-control');
 const { createRequestListener } = require('../lib/runtime-boundary');
 const { createRuntimeService } = require('../lib/runtime-service');
@@ -36,6 +37,7 @@ function environment(overrides = {}) {
     CRM_BILLING_DISPATCH_TIMEOUT_MS: '3000',
     MAX_WEBHOOK_BYTES: '262144', INBOUND_BODY_TIMEOUT_MS: '5000',
     EVENT_HMAC_SECRET: 'b'.repeat(32),
+    ROUTE_CONTROL_EVENT_HMAC_SECRET: 'h'.repeat(32),
     ANALYTICS_PARTITION_HMAC_SECRET: 'e'.repeat(32),
     NUMBER_LOOKUP_HMAC_SECRET: 'c'.repeat(32),
     INTERNAL_READINESS_TOKEN: 'd'.repeat(32),
@@ -133,7 +135,7 @@ function configurationRow(config, letter, rowId) {
   };
 }
 
-function authorizationRows(deployment, configurationVersion, letter) {
+function authorizationRows(deployment, configurationVersion, letter, eventChainSecret) {
   const suffix = letter.toLowerCase();
   const approvalKey = `approval_${suffix.repeat(64)}`;
   const activationSuffix = letter === 'A' ? 'c' : 'd';
@@ -154,6 +156,7 @@ function authorizationRows(deployment, configurationVersion, letter) {
   });
   const approval = {
     AUTHORIZATION_EVENT_ID: approvalKey,
+    EVENT_SCHEMA_VERSION: 1,
     ACTION: 'approve', DECISION: 'Approved',
     DEPLOYMENT_ID: deployment.DEPLOYMENT_ID,
     CONFIGURATION_VERSION_ID: configurationVersion.CONFIGURATION_VERSION_ID,
@@ -165,11 +168,12 @@ function authorizationRows(deployment, configurationVersion, letter) {
     EXPECTED_DEPLOYMENT_VERSION: 0,
     CAPACITY_REMAINING_AT_DECISION: 25,
     PREVIOUS_EVENT_HASH: 'genesis',
-    EVENT_HASH: crypto.createHash('sha256').update(`approval-event:${letter}`).digest('hex'),
     DECIDED_AT: approvedAt,
   };
+  approval.EVENT_HASH = authorizationEventHash(eventChainSecret, approval);
   const activation = {
     AUTHORIZATION_EVENT_ID: activationKey,
+    EVENT_SCHEMA_VERSION: 1,
     ACTION: 'activate', DECISION: 'Activated',
     DEPLOYMENT_ID: deployment.DEPLOYMENT_ID,
     CONFIGURATION_VERSION_ID: configurationVersion.CONFIGURATION_VERSION_ID,
@@ -183,11 +187,11 @@ function authorizationRows(deployment, configurationVersion, letter) {
     EVIDENCE_OBSERVED_AT: routeObservedAt,
     EXPECTED_DEPLOYMENT_VERSION: 1,
     PREVIOUS_EVENT_HASH: approval.EVENT_HASH,
-    EVENT_HASH: crypto.createHash('sha256').update(`activation-event:${letter}`).digest('hex'),
     ACTUAL_START_AT: actualStartAt,
     EXPIRES_AT: expiresAt,
     DECIDED_AT: actualStartAt,
   };
+  activation.EVENT_HASH = authorizationEventHash(eventChainSecret, activation);
   return [approval, activation].map((event, index) => authorizationReceiptRow(event, {
     sourceRevision: SOURCE_REVISION,
     environment: 'development',
@@ -203,6 +207,7 @@ function authorizationRows(deployment, configurationVersion, letter) {
       deploymentControlPrestateDigest: null,
       deploymentControlPoststateDigest: null,
     },
+    eventChainSecret,
   }));
 }
 
@@ -216,7 +221,8 @@ class RuntimeMemoryStore {
       configurationRow(config, 'A', 3), configurationRow(config, 'B', 4),
     ];
     this.authorizationRows = deployments.flatMap((deployment, index) => (
-      authorizationRows(deployment, configurationVersions[index], index === 0 ? 'A' : 'B')
+      authorizationRows(deployment, configurationVersions[index], index === 0 ? 'A' : 'B',
+        config.authorizationEventSecret)
     ));
     this.rows.get(config.tables.DEPLOYMENT_TABLE).push(...deployments);
     this.rows.get(config.tables.CONFIGURATION_VERSION_TABLE).push(...configurationVersions);

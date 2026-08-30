@@ -8,8 +8,10 @@ const TOKEN_HASH_PATTERN = /^[a-f0-9]{64}$/;
 const CRM_RECORD_ID_PATTERN = /^[1-9][0-9]{9,29}$/;
 const JOURNEY_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/;
 const SUBMISSION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+const PREFILL_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const OPERATOR_HASH_PATTERN = /^operator_[a-f0-9]{64}$/;
 const TOKEN_HASH_DOMAIN = "sylvara.form1.assisted-token-hash.v2";
+const PREFILL_HANDLE_HASH_DOMAIN = "sylvara.form1.prefill-handle-hash.v1";
 const SUBMISSION_HASH_DOMAIN = "sylvara.form1.assisted-submission-hash.v1";
 
 class SecurityError extends Error {
@@ -58,6 +60,13 @@ function hashToken(token, pepper) {
   return domainHash(TOKEN_HASH_DOMAIN, token, pepper);
 }
 
+function hashPrefillHandle(handle, pepper) {
+  if (!isValidToken(handle)) {
+    throw new SecurityError("Prefill handle is invalid", "prefill_handle_invalid");
+  }
+  return domainHash(PREFILL_HANDLE_HASH_DOMAIN, handle, pepper);
+}
+
 function isValidTokenHash(value) {
   return typeof value === "string" && TOKEN_HASH_PATTERN.test(value);
 }
@@ -90,18 +99,37 @@ function normalizeSubmissionId(value) {
   return value;
 }
 
-function submissionFingerprint(submissionId, tokenHash, normalizedFormData, secret) {
-  const normalized = normalizeSubmissionId(submissionId);
-  if (!isValidTokenHash(tokenHash)) {
-    throw new SecurityError("Token hash is invalid", "request_invalid");
+function normalizePrefillId(value) {
+  if (typeof value !== "string" || !PREFILL_ID_PATTERN.test(value)) {
+    throw new SecurityError("Prefill identifier is invalid", "request_invalid");
   }
+  return value;
+}
+
+function normalizeConfigurationRevision(value) {
+  if (typeof value !== "string" || !/^[a-f0-9]{40}$/.test(value)) {
+    throw new SecurityError("Configuration revision is invalid", "request_invalid");
+  }
+  return value;
+}
+
+function submissionFingerprint(
+  submissionId,
+  prefillId,
+  configurationRevision,
+  normalizedFormData,
+  secret,
+) {
+  const normalized = normalizeSubmissionId(submissionId);
+  const selectedPrefillId = normalizePrefillId(prefillId);
+  const selectedRevision = normalizeConfigurationRevision(configurationRevision);
   if (!normalizedFormData || typeof normalizedFormData !== "object" ||
       Array.isArray(normalizedFormData)) {
     throw new SecurityError("Submission data is invalid", "request_invalid");
   }
   return domainHash(
     SUBMISSION_HASH_DOMAIN,
-    `${normalized}\0${tokenHash}\0${JSON.stringify(normalizedFormData)}`,
+    `${normalized}\0${selectedPrefillId}\0${selectedRevision}\0${JSON.stringify(normalizedFormData)}`,
     secret,
   );
 }
@@ -147,12 +175,15 @@ module.exports = {
   TOKEN_LENGTH,
   constantTimeEqual,
   generateToken,
+  hashPrefillHandle,
   hashToken,
   isValidToken,
   isValidTokenHash,
+  normalizeConfigurationRevision,
   normalizeCrmModule,
   normalizeCrmRecordId,
   normalizeJourneyId,
+  normalizePrefillId,
   normalizeSubmissionId,
   submissionFingerprint,
   validateOperatorHash,

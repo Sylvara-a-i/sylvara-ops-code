@@ -13,6 +13,8 @@ const HMAC_DOMAINS = Object.freeze({
   proofDestination: "sylvara.form2.email-proof-destination.v1",
   proofBinding: "sylvara.form2.email-proof-binding.v1",
   proofOtp: "sylvara.form2.email-proof-otp.v1",
+  prefillHandle: "sylvara.form2.prefill-handle-hash.v1",
+  prefillBinding: "sylvara.form2.prefill-binding.v1",
 });
 const ISSUE_REQUEST_DOMAIN = "sylvara.form2.issue-request-key.v1";
 
@@ -104,6 +106,51 @@ function hashAccessToken(token, pepper) {
   return domainSeparatedHmac(token, pepper, HMAC_DOMAINS.linkDigest).toString("hex");
 }
 
+function generatePrefillHandle(randomBytes = crypto.randomBytes) {
+  return generateAccessToken(randomBytes);
+}
+
+function hashPrefillHandle(handle, secret) {
+  if (!isValidAccessToken(handle)) {
+    throw new SecurityError("Prefill handle is invalid", "prefill_handle_invalid");
+  }
+  return domainSeparatedHmac(handle, secret, HMAC_DOMAINS.prefillHandle).toString("hex");
+}
+
+function normalizeVerificationId(value) {
+  if (typeof value !== "string" || !TOKEN_HASH_PATTERN.test(value)) {
+    throw new SecurityError("Verification identifier is invalid", "setup_not_found");
+  }
+  return value;
+}
+
+function prefillBindingDigest(binding, secret) {
+  const values = [
+    binding?.crmOrganizationHash,
+    binding?.crmContactId,
+    binding?.crmAccountId,
+    binding?.crmDealId,
+    binding?.journeyId,
+    binding?.formIdentityHash,
+    binding?.expectedStage,
+    binding?.formVersion,
+    binding?.configurationRevision,
+  ].map((value) => String(value ?? ""));
+  if (!TOKEN_HASH_PATTERN.test(values[0]) ||
+      !values.slice(1, 4).every((value) => /^[1-9][0-9]{9,29}$/.test(value)) ||
+      !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/.test(values[4]) ||
+      !TOKEN_HASH_PATTERN.test(values[5]) || values[6] !== "form2" ||
+      !/^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$/.test(values[7]) ||
+      !/^[a-f0-9]{40}$/.test(values[8])) {
+    throw new SecurityError("Prefill binding is invalid", "identity_mismatch");
+  }
+  return domainSeparatedHmac(
+    values.join("\0"),
+    secret,
+    HMAC_DOMAINS.prefillBinding,
+  ).toString("hex");
+}
+
 function constantTimeEqual(left, right) {
   if (typeof left !== "string" || typeof right !== "string") return false;
   // Digest both inputs first so timingSafeEqual always receives equal-length
@@ -177,13 +224,15 @@ function proofBindingDigest(binding, destinationDigest, secret) {
     binding?.crmContactId,
     binding?.crmAccountId,
     binding?.crmDealId,
+    binding?.journeyBindingDigest,
     destinationDigest,
   ].map((value) => String(value ?? ""));
   if (
     !/^[0-9]{1,30}$/.test(values[0]) ||
     !values.slice(1, 3).every((value) => TOKEN_HASH_PATTERN.test(value)) ||
     !values.slice(3, 6).every((value) => /^[1-9][0-9]{9,29}$/.test(value)) ||
-    !TOKEN_HASH_PATTERN.test(values[6])
+    !TOKEN_HASH_PATTERN.test(values[6]) ||
+    !TOKEN_HASH_PATTERN.test(values[7])
   ) {
     throw new SecurityError("Proof binding is invalid");
   }
@@ -247,9 +296,13 @@ module.exports = {
   deriveIssueRequestKey,
   generateAccessToken,
   generateEmailOtp,
+  generatePrefillHandle,
   hashAccessToken,
+  hashPrefillHandle,
   isValidAccessToken,
+  normalizeVerificationId,
   normalizeProofEmail,
+  prefillBindingDigest,
   proofBindingDigest,
   proofDestinationDigest,
   proofKey,

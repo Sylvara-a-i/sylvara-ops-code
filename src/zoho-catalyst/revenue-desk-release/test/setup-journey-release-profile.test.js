@@ -71,7 +71,7 @@ test('binds the exact Development setup journey to one immutable revision', () =
   ]);
   assert.equal(manifest.job_pools.length, 1);
   assert.equal(manifest.tables.length, 12);
-  assert.equal(Object.keys(manifest.contract_sha256).length, 26);
+  assert.equal(Object.keys(manifest.contract_sha256).length, 29);
   assert.equal(verifyReadback(manifest, readback, contract), true);
 });
 
@@ -82,7 +82,7 @@ test('selects only the setup routes and keeps CRM Billing deferred', () => {
   assert.equal(targets.route_profile, 'setup-journey');
   assert.deepEqual(targets.route_ids, setupProfile.route_ids);
   assert.deepEqual(targets.route_ids, routeIds.filter((id) => id !== 'CRM_BILLING'));
-  assert.equal(targets.route_ids.length, 15);
+  assert.equal(targets.route_ids.length, 17);
   assert.deepEqual(targets.deferred_route_ids, ['CRM_BILLING']);
   assert.deepEqual(
     [...targets.route_ids, ...targets.deferred_route_ids].sort(),

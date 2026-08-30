@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "environment": "Development",
   "strategy": "additive-v3-zero-promotion",
   "source_stores": ["legacy Form 2 version 2", "Retell-project Form 2 version 2 copy"],
@@ -21,6 +21,21 @@
     "schema_mismatches": 0,
     "app_user_permissions_per_target": 0,
     "admin_permissions_per_target": 4
+  },
+  "v4_runtime_extension": {
+    "contract": "dynamic-prefill-handle-v1",
+    "status": "additive-installation-required",
+    "application_columns_by_target": {
+      "Form2SessionsV3Runtime": 21,
+      "Form2PrefillsV3": 28,
+      "Form2SubmissionsV3": 16,
+      "Form2VerificationProofsV3": 26
+    },
+    "total_application_columns": 91,
+    "additive_application_columns": 10,
+    "unique_columns": 6,
+    "historical_destination_readback_is_target_proof": false,
+    "authoritative_post_install_readback_required": true
   },
   "quarantined_unbound_probe_artifacts": [
     "Form2SessionsV3",

@@ -15,7 +15,7 @@ function json(selected) {
 
 test("the variable registry and placeholder environment remain in exact lockstep", () => {
   const registry = json(path.join(componentRoot, "config/variables.json"));
-  assert.equal(registry.schema_version, 4);
+  assert.equal(registry.schema_version, 5);
   assert.equal(registry.status, "development-active-production-dark");
   const names = registry.variables.map((entry) => entry.name);
   assert.equal(new Set(names).size, names.length);
@@ -30,22 +30,29 @@ test("the variable registry and placeholder environment remain in exact lockstep
   assert.doesNotMatch(example, /Zoho-oauthtoken|client_secret|refresh_token|@/i);
 });
 
-test("the exact manifest exposes only three authenticated Development routes", () => {
+test("the exact manifest exposes five Development routes with three server callers", () => {
   const manifest = json(path.join(componentRoot, "config/routes.json"));
-  assert.equal(manifest.schema_version, 3);
+  assert.equal(manifest.schema_version, 4);
   assert.equal(manifest.environment, "Development");
   assert.equal(manifest.default_action, "reject");
   assert.equal(manifest.cors, false);
   assert.deepEqual(manifest.routes.map((route) => route.id), [
-    "FORM1_ISSUE", "FORM1_PREFILL", "FORM1_SUBMISSION",
+    "FORM1_ISSUE", "FORM1_ACCESS", "FORM1_EXCHANGE", "FORM1_PREFILL", "FORM1_SUBMISSION",
   ]);
-  assert.equal(new Set(manifest.routes.map((route) =>
-    route.authentication.secret_reference)).size, 3);
-  assert.equal(manifest.routes.every((route) =>
-    route.method === "POST" && route.content_type === "application/json"), true);
+  const secretReferences = manifest.routes
+    .map((route) => route.authentication.secret_reference)
+    .filter(Boolean);
+  assert.equal(new Set(secretReferences).size, 3);
+  assert.equal(secretReferences.length, 3);
+  const access = manifest.routes.find((route) => route.id === "FORM1_ACCESS");
+  assert.equal(access.method, "GET");
+  assert.equal(Object.hasOwn(access, "content_type"), false);
+  assert.equal(Object.hasOwn(access, "body_keys"), false);
+  assert.equal(manifest.routes.filter((route) => route.method === "POST").every((route) =>
+    route.content_type === "application/json"), true);
 
   const schema = json(path.join(componentRoot, "config/datastore-schema.json"));
-  assert.equal(schema.schema_version, 5);
+  assert.equal(schema.schema_version, 7);
   assert.deepEqual(schema.tables.map((table) => table.expected_api_name),
     ["RevenueLeakTestRequestFormSessions"]);
   assert.equal(schema.tables[0].columns.some((column) =>
@@ -54,6 +61,15 @@ test("the exact manifest exposes only three authenticated Development routes", (
     column.api_name === "CRM_RECORD_VERSION"), true);
   assert.equal(schema.tables[0].columns.some((column) =>
     column.api_name === "SESSION_VERSION"), true);
+  assert.deepEqual(schema.tables[0].required_unique_columns,
+    ["TOKEN_HASH", "PREFILL_HANDLE_HASH", "PREFILL_ID", "INTAKE_SUBMISSION_ID"]);
+  for (const name of [
+    "FORM_IDENTITY_HASH", "CONFIGURATION_REVISION", "PREFILL_HANDLE_ISSUED_AT",
+    "PREFILL_HANDLE_EXPIRES_AT", "PREFILL_HANDLE_CONSUMED_AT",
+    "PREFILL_CONSUMPTION_OWNER",
+  ]) {
+    assert.equal(schema.tables[0].columns.some((column) => column.api_name === name), true);
+  }
   assert.equal(schema.data_policy.raw_tokens_or_form_payloads_stored, false);
   assert.equal(schema.data_policy.delete_permission, false);
 });
@@ -75,8 +91,29 @@ test("the Forms contract preserves exactly two forms and separates public and as
   assert.equal(form1.assisted_prefill.source_candidate_enabled, true);
   assert.equal(form1.assisted_prefill.live_enabled, false);
   assert.deepEqual(form1.assisted_prefill.routes, [
-    "FORM1_ISSUE", "FORM1_PREFILL", "FORM1_SUBMISSION",
+    "FORM1_ISSUE", "FORM1_ACCESS", "FORM1_EXCHANGE", "FORM1_PREFILL",
+    "FORM1_SUBMISSION",
   ]);
+  assert.equal(
+    form1.assisted_prefill.crm_launcher.zoho_forms_receives_journey_credential,
+    false,
+  );
+  assert.equal(
+    form1.assisted_prefill.prefill_handle_transport.ttl_seconds_default,
+    600,
+  );
+  assert.equal(
+    form1.assisted_prefill.prefill_handle_transport.maximum_successful_prefills,
+    1,
+  );
+  assert.deepEqual(
+    form1.assisted_prefill.prefill_webhook.request_keys,
+    ["prefillHandle"],
+  );
+  assert.deepEqual(
+    form1.assisted_prefill.submission_webhook.assisted_server_keys,
+    ["prefillId", "configurationRevision", "submissionId"],
+  );
   assert.equal(form1.assisted_prefill.submission_lanes.public.writer,
     "existing native CRM upsert");
   assert.equal(form1.assisted_prefill.submission_lanes.assisted

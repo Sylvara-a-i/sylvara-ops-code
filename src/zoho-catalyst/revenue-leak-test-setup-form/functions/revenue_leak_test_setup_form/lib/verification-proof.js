@@ -48,6 +48,7 @@ function validBinding(binding, nowMs) {
     "crmContactId",
     "crmAccountId",
     "crmDealId",
+    "journeyBindingDigest",
     "issuedAt",
     "expiresAt",
   ])) &&
@@ -57,6 +58,7 @@ function validBinding(binding, nowMs) {
     RECORD_ID_PATTERN.test(binding.crmContactId ?? "") &&
     RECORD_ID_PATTERN.test(binding.crmAccountId ?? "") &&
     RECORD_ID_PATTERN.test(binding.crmDealId ?? "") &&
+    HASH_PATTERN.test(binding.journeyBindingDigest ?? "") &&
     Number.isSafeInteger(nowMs) &&
     nowMs >= 0 &&
     Number.isFinite(parseInstant(binding.issuedAt)) &&

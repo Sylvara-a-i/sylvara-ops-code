@@ -200,7 +200,7 @@ Use the least exposed mechanism that meets the workflow.
 
 | Method | Use | Security Position |
 |---|---|---|
-| Field Alias / query-string prefill | Low-sensitivity convenience values only | Values are placed in the URL. Never use for PII, CRM IDs, access codes, tokens, authorization state, or customer-specific routing data |
+| Field Alias / query-string prefill | Low-sensitivity convenience values or one narrowly scoped Dynamic Prefill-Webhook trigger | Values are placed in the URL. Never use for PII, CRM IDs, configuration data, the real journey credential, authorization state, customer-specific routing data, or a reusable/general-authority bearer. A separately generated, digest-only, approximately ten-minute, one-prefill handle is permitted only under the hybrid controls below |
 | Static Prefill URL | Fixed, controlled scenarios | Better concealment than readable aliases, but the link is persistent and reusable. Do not treat it as identity proof or a per-customer secure session |
 | Prefill-Webhook | Dynamic customer-specific lookup | Preferred builder mechanism when a server must authorize the lookup and return an allowlisted response |
 | Prefill-Zoho Sheet | Simple governed worksheet lookup | Suitable only when the sheet is an approved source and the lookup does not expose records to unauthorized respondents |
@@ -208,15 +208,15 @@ Use the least exposed mechanism that meets the workflow.
 
 For a sensitive external setup form:
 
-1. use a generic form URL with no PII, record IDs, codes, or tokens in the query string;
-2. verify the respondent before returning customer-specific data;
-3. send Prefill-Webhook input by POST request body rather than URL parameters;
-4. use a managed Connection or supported custom authorization header;
-5. return only allowlisted display/edit fields plus, if required, a short-lived opaque session reference;
-6. never return CRM record IDs or server-controlled statuses to the browser unless there is a documented, unavoidable requirement;
+1. keep PII, record IDs, configuration data, the real journey credential, authorization state, routing data, and reusable/general-authority bearers out of the query string;
+2. when a Dynamic Prefill-Webhook requires a Field Alias trigger, pass only a separately generated opaque handle with at least 128 bits of randomness, an approximately ten-minute expiry, digest-only server storage, exact organization/record/journey/form/stage/revision binding, and authority for one minimum-data prefill;
+3. verify or bind the respondent's controlled journey before issuing that handle;
+4. send the handle from Zoho Forms to the Prefill-Webhook by `POST` body through a managed Connection or supported custom authorization header;
+5. consume the handle only after successful prefill and return only allowlisted display/edit fields plus a non-secret prefill identity and immutable revision;
+6. never return CRM record IDs or server-controlled approval, activation, rollback, routing, or billing authority to the browser or form;
 7. treat all prefilled, disabled, hidden, calculated, and submitted values as untrusted;
-8. re-resolve the authoritative records and revalidate every rule on submission; and
-9. revoke or consume one-time access after successful acceptance.
+8. re-resolve the authoritative records and validate prefill identity, submission identity, exact binding, and immutable revision on submission; and
+9. never use Form submission itself as approval or activation.
 
 ## Form Security And Privacy Baseline
 

@@ -15,6 +15,7 @@ const binding = Object.freeze({
   crmContactId: `${"9".repeat(17)}1`,
   crmAccountId: `${"9".repeat(17)}2`,
   crmDealId: `${"9".repeat(17)}3`,
+  journeyBindingDigest: "e".repeat(64),
   issuedAt: "2026-08-14T18:00:00.000Z",
   expiresAt: "2026-08-14T19:00:00.000Z",
 });

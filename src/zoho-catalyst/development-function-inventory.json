@@ -538,6 +538,7 @@
     ],
     "form1_retained_unbound": ["RevenueLeakTestRequestFormSessions"],
     "form1_active_source_candidate": ["RevenueLeakTestRequestFormSessions"],
+    "form1_installation_target": ["RevenueLeakTestRequestFormSessions"],
     "form2": ["Form2SessionsV3Runtime", "Form2PrefillsV3", "Form2SubmissionsV3", "Form2VerificationProofsV3"],
     "supporting": ["CRMBillingOperations", "AnalyticsSyncCheckpoints", "AnalyticsSyncOutbox"],
     "app_user_access_allowed": false,

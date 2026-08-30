@@ -26,6 +26,11 @@ const SYNTHETIC_CATALYST_PROJECT_ID_SHA256 = require("node:crypto")
   .createHash("sha256")
   .update(SYNTHETIC_CATALYST_PROJECT_ID, "utf8")
   .digest("hex");
+const SYNTHETIC_CRM_ORGANIZATION_ID = "200000000000001";
+const SYNTHETIC_CRM_ORGANIZATION_ID_SHA256 = require("node:crypto")
+  .createHash("sha256")
+  .update(SYNTHETIC_CRM_ORGANIZATION_ID, "utf8")
+  .digest("hex");
 
 function providerChoices(count) {
   return Array.from(
@@ -68,7 +73,8 @@ function baseEnvironment(overrides = {}) {
     FORM2_MAIL_FROM: "synthetic@example.invalid",
     FORM2_PROOF_ALLOWED_RECIPIENT_DIGESTS: "[]",
     FORM2_PROOF_TEMPLATE_VERSION: "email-otp-v1",
-    FORM2_TOKEN_FIELD_ALIAS: "access_token",
+    FORM2_PREFILL_HANDLE_FIELD_ALIAS: "prefill_handle",
+    PREFILL_HANDLE_TTL_SECONDS: "600",
     FORM2_FORM_VERSION: "form2-v1",
     FORM2_ENTRY_OFFER_VALUE: "Synthetic Free Test",
     FORM2_PHONE_SYSTEM_PROVIDERS: '["Synthetic PBX","Different Synthetic PBX"]',
@@ -79,6 +85,7 @@ function baseEnvironment(overrides = {}) {
     FORM2_ACCESS_STATUS_SUBMITTED_VALUE: "Synthetic Submitted",
     FORM2_ACCESS_STATUS_EXPIRED_VALUE: "Synthetic Expired",
     CRM_API_BASE_URL: "https://www.zohoapis.com/crm/v8",
+    CRM_ORGANIZATION_ID_SHA256: SYNTHETIC_CRM_ORGANIZATION_ID_SHA256,
     CRM_READ_CONNECTION_LINK_NAME: SYNTHETIC_CRM_READ_LINK,
     CRM_WRITE_CONNECTION_LINK_NAME: SYNTHETIC_CRM_WRITE_LINK,
     SOURCE_REVISION: "a".repeat(40),
@@ -115,6 +122,9 @@ test("loads an immutable active Development configuration with bounded defaults"
   assert.equal(config.form2ProofTtlSeconds, 600);
   assert.equal(config.form2ProofMaxAttempts, 5);
   assert.equal(config.form2ProofMaxSends, 3);
+  assert.equal(config.prefillHandleTtlSeconds, 600);
+  assert.equal(config.crmOrganizationHash, SYNTHETIC_CRM_ORGANIZATION_ID_SHA256);
+  assert.equal(config.form2PrefillHandleFieldAlias, "prefill_handle");
   assert.deepEqual(config.form2ProofAllowedRecipientDigests, []);
   assert.ok(Object.isFrozen(config.form2ProofAllowedRecipientDigests));
   assert.equal(config.form2ProofResendCooldownSeconds, 60);
@@ -397,6 +407,7 @@ test("parses all numeric controls as strict bounded base-10 integers", () => {
       FORM2_PROOF_MAX_SENDS: "form2ProofMaxSends",
       FORM2_PROOF_RESEND_COOLDOWN_SECONDS: "form2ProofResendCooldownSeconds",
       FORM2_PROOF_SEND_LEASE_SECONDS: "form2ProofSendLeaseSeconds",
+      PREFILL_HANDLE_TTL_SECONDS: "prefillHandleTtlSeconds",
       FORM2_MAIL_TIMEOUT_MS: "form2MailTimeoutMs",
       MAX_SUBMISSION_ATTEMPTS: "maxSubmissionAttempts",
       MAX_BODY_BYTES: "maxBodyBytes",
@@ -430,7 +441,7 @@ test("parses all numeric controls as strict bounded base-10 integers", () => {
 
 test("rejects malformed aliases, versions, revisions, and Connection link names", () => {
   for (const overrides of [
-    { FORM2_TOKEN_FIELD_ALIAS: "access-token" },
+    { FORM2_PREFILL_HANDLE_FIELD_ALIAS: "prefill-handle" },
     { FORM2_FORM_VERSION: "version with spaces" },
     { SOURCE_REVISION: "short" },
     { SOURCE_REVISION: "A".repeat(40) },

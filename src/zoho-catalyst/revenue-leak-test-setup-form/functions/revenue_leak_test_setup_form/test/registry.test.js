@@ -145,15 +145,15 @@ test("the Data Store schema matches the runtime and Catalyst uniqueness boundary
   ]);
   const expectedUniqueColumns = new Map([
     ["SESSION_TABLE_NAME", ["ISSUE_REQUEST_KEY", "DEAL_ISSUANCE_KEY"]],
-    ["PREFILL_TABLE_NAME", ["PREFILL_KEY"]],
+    ["PREFILL_TABLE_NAME", ["PREFILL_KEY", "PREFILL_HANDLE_HASH"]],
     ["SUBMISSION_TABLE_NAME", ["SUBMISSION_KEY"]],
     ["FORM2_PROOF_TABLE_NAME", ["PROOF_KEY"]],
   ]);
 
-  assert.equal(schema.status, "development-provisioned-schema-verified-not-cut-over");
+  assert.equal(schema.status, "development-v4-additive-schema-installation-required");
   assert.equal(
     schema.live_state,
-    "retell-development-four-v3-runtime-targets-schema-verified-empty-probes-quarantined-callers-not-cut-over",
+    "retell-development-v3-readback-preserved-v4-additive-columns-not-installed-callers-not-cut-over",
   );
   assert.equal(schema.observed_at, "2026-08-24");
   assert.deepEqual(
@@ -175,6 +175,20 @@ test("the Data Store schema matches the runtime and Catalyst uniqueness boundary
   assert.equal(schema.observed_development_readback.schema_mismatches, 0);
   assert.equal(schema.observed_development_readback.app_user_permissions_per_target, 0);
   assert.equal(schema.observed_development_readback.runtime_bound, false);
+  assert.deepEqual(schema.desired_installation_target, {
+    contract: "dynamic-prefill-handle-v1",
+    application_columns_by_target: {
+      Form2SessionsV3Runtime: 21,
+      Form2PrefillsV3: 28,
+      Form2SubmissionsV3: 16,
+      Form2VerificationProofsV3: 26,
+    },
+    total_application_columns: 91,
+    additive_application_columns: 10,
+    unique_columns: 6,
+    historical_readback_is_target_proof: false,
+    authoritative_post_install_readback_required: true,
+  });
   assert.deepEqual(
     schema.quarantined_unbound_probe_artifacts.map((artifact) => [
       artifact.api_name,
@@ -193,7 +207,7 @@ test("the Data Store schema matches the runtime and Catalyst uniqueness boundary
   assert.equal(schema.tables.length, 4);
   assert.equal(
     schema.tables.reduce((total, table) => total + table.columns.length, 0),
-    81,
+    schema.desired_installation_target.total_application_columns,
   );
   assert.deepEqual(
     sorted(schema.tables.map((table) => table.runtime_variable)),
@@ -277,7 +291,9 @@ test("the Data Store schema matches the runtime and Catalyst uniqueness boundary
     gate.includes("four exact empty operational targets") && gate.includes("Never rename")), true);
   assert.equal(
     schema.deployment_gates.some((gate) =>
-      gate.includes("LAST_OUTCOME") && gate.includes("read back")),
+      gate.includes("91 desired application columns") &&
+      gate.includes("PREFILL_HANDLE_HASH") &&
+      gate.includes("JOURNEY_BINDING_DIGEST")),
     true,
   );
   assert.equal(
@@ -593,10 +609,14 @@ test("the typed Form 2 Issue contract matches the route and CRM caller artifacts
   assert.deepEqual(requestBodyKeys, contract.request_schema.required);
   assert.match(source, /detailed\s*:\s*true/);
   assert.match(source, /response-format\s*:\s*STRING/);
-  assert.match(source, /response_body\.size\(\)\s*==\s*3/);
+  assert.match(source, /response_body\.size\(\)\s*==\s*4/);
   for (const key of contract.success_response_schema.required) {
     assert.match(source, new RegExp(`response_body\\.containKey\\("${key}"\\)`));
   }
+  assert.match(
+    source,
+    /request_id\.matches\("\^\[0-9a-f\]\{8\}-\[0-9a-f\]\{4\}-4\[0-9a-f\]\{3\}-\[89ab\]\[0-9a-f\]\{3\}-\[0-9a-f\]\{12\}\$"\)/,
+  );
   assert.match(
     source,
     /access_prefix\s*=\s*"\{\{FORM2_ACCESS_PUBLIC_URL\}\}"\s*\+\s*"#setupToken="\s*;/,
@@ -631,7 +651,10 @@ test("the Zoho Forms manifest is email-only and matches the runtime client contr
   assert.equal(form2.access.sms_otp, false);
   assert.equal(form2.access.sms_delivery, false);
   assert.equal(form2.access.proof_destination, "current CRM-bound Contact.Email only");
-  assert.deepEqual(form2.controller_hidden_fields, ["setupToken", "prefillId"]);
+  assert.deepEqual(
+    form2.controller_hidden_fields,
+    ["prefillHandle", "prefillId", "configurationRevision"],
+  );
   assert.deepEqual(form2.prohibited_hidden_fields, [
     "Contact_ID",
     "Account_ID",
@@ -641,6 +664,24 @@ test("the Zoho Forms manifest is email-only and matches the runtime client contr
     "Test_Scope_Version",
   ]);
   assert.equal(form2.server_generated_submission_field.controller_key, "submissionId");
+  assert.deepEqual(form2.prefill_webhook.json_keys, ["prefillHandle"]);
+  assert.deepEqual(
+    form2.prefill_webhook.response_server_keys,
+    ["prefillId", "configurationRevision"],
+  );
+  assert.equal(form2.prefill_webhook.handle_consumed_after_successful_prefill, true);
+  assert.deepEqual(
+    form2.submission_webhook.server_keys,
+    ["prefillId", "configurationRevision", "submissionId"],
+  );
+  assert.equal(form2.submission_webhook.prefill_handle_forwarded, false);
+  assert.equal(form2.submission_webhook.setup_token_forwarded, false);
+  const handleField = form2.controller_field_policy.find(
+    (field) => field.key === "prefillHandle",
+  );
+  assert.equal(handleField.alias_reference, "FORM2_PREFILL_HANDLE_FIELD_ALIAS");
+  assert.equal(handleField.source_policy.ttl_seconds, 600);
+  assert.equal(handleField.source_policy.submission_webhook_forwarded, false);
   assert.deepEqual(form2.submission_webhook.client_keys, CLIENT_KEYS);
   assert.equal(form2.required_fields.includes("alertRecipientEmail"), true);
   assert.equal(form2.prohibited_fields.includes("alertRecipientMobile"), true);
@@ -652,6 +693,7 @@ test("the Zoho Forms manifest is email-only and matches the runtime client contr
 
 test("the additive v3 migration manifest preserves v2 and authorizes no promotion", () => {
   const manifest = readJson(path.join(controllerRoot, "config/migration-v2-to-v3.json"));
+  assert.equal(manifest.schema_version, 2);
   assert.equal(manifest.environment, "Development");
   assert.equal(manifest.strategy, "additive-v3-zero-promotion");
   assert.deepEqual(manifest.destination_tables, [
@@ -666,6 +708,21 @@ test("the additive v3 migration manifest preserves v2 and authorizes no promotio
   assert.equal(manifest.destination_readback.all_targets_empty, true);
   assert.equal(manifest.destination_readback.total_application_columns, 81);
   assert.equal(manifest.destination_readback.schema_mismatches, 0);
+  assert.deepEqual(manifest.v4_runtime_extension, {
+    contract: "dynamic-prefill-handle-v1",
+    status: "additive-installation-required",
+    application_columns_by_target: {
+      Form2SessionsV3Runtime: 21,
+      Form2PrefillsV3: 28,
+      Form2SubmissionsV3: 16,
+      Form2VerificationProofsV3: 26,
+    },
+    total_application_columns: 91,
+    additive_application_columns: 10,
+    unique_columns: 6,
+    historical_destination_readback_is_target_proof: false,
+    authoritative_post_install_readback_required: true,
+  });
   assert.deepEqual(manifest.quarantined_unbound_probe_artifacts, [
     "Form2SessionsV3",
     "ZZZ_Quarantined_Form2SessionsV3_ColumnProbe",

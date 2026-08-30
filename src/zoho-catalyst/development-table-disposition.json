@@ -64,12 +64,12 @@
   },
   "disposition_counts": {
     "retain_additive": 0,
-    "retain_bind_canonical": 12,
-    "retain_unbound_evidence": 1,
+    "retain_bind_canonical": 13,
+    "retain_unbound_evidence": 0,
     "quarantine_then_delete": 14,
     "delete_after_dependency_absence": 8,
     "create_additive_canonical": 0,
-    "final_canonical_tables": 12
+    "final_canonical_tables": 13
   },
   "final_canonical_tables": [
     "RevenueDeskDeployments",
@@ -77,6 +77,7 @@
     "RevenueDeskEventReceipts",
     "RevenueDeskCalls",
     "RevenueDeskNotifications",
+    "RevenueLeakTestRequestFormSessions",
     "Form2SessionsV3Runtime",
     "Form2PrefillsV3",
     "Form2SubmissionsV3",
@@ -230,17 +231,17 @@
       "row_count_observed_at": "2026-08-27",
       "row_count_method": "complete-cursor-pagination",
       "owner": "revenue_leak_test_request_form",
-      "purpose": "Preserved empty evidence from the superseded Form 1 assisted-intake design; not an active controller dependency.",
-      "generation": "contained-form1-evidence",
-      "expected_readers": [],
-      "expected_writers": [],
+      "purpose": "Canonical digest-only session, one-time prefill-handle, immutable prefill-revision, and idempotent assisted-submission state for Form 1.",
+      "generation": "canonical-form1-assisted-runtime",
+      "expected_readers": ["revenue_leak_test_request_form"],
+      "expected_writers": ["revenue_leak_test_request_form"],
       "active_bindings_verified": false,
-      "ownership_evidence": "fresh-exact-schema-readback-and-private-absence-of-function-binding-proof-required",
-      "semantic_successors": [],
-      "action": "retain_unbound_evidence",
+      "ownership_evidence": "fresh-exact-schema-constraint-permission-function-variable-and-five-route-readback-required",
+      "semantic_successors": ["RevenueLeakTestRequestFormSessions"],
+      "action": "retain_bind_canonical",
       "active_promotion_allowed": false,
-      "gate_profile": "retain_unbound_evidence",
-      "rollback": "Keep both Form 1 assisted routes and callers disabled and unbound; preserve the empty table unchanged."
+      "gate_profile": "retain_bind_empty",
+      "rollback": "Disable and unbind FORM1_ISSUE, FORM1_ACCESS, FORM1_EXCHANGE, FORM1_PREFILL, FORM1_SUBMISSION, the replacement CRM caller, and both Forms server callers; preserve every session row and the retained predecessor CRM control."
     },
     {
       "api_name": "Calls",

@@ -3,6 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { queryClientReport } = require('../lib/reporting');
+const { authorizationReceiptFingerprint } = require('../lib/authorization-receipt');
 const {
   NOW, payloadInbound, eventPayload, invoke, runtimeFixture,
 } = require('./runtime-fixture');
@@ -286,6 +287,21 @@ test('acceptance: live status requires exact approval and activation receipts fo
         routeReadbackFingerprint: `readback_${'f'.repeat(64)}`,
       }) };
     }],
+    ['activation event hash is forged under an otherwise valid receipt fingerprint', (fixture) => {
+      const index = fixture.store.authorizationRows.findIndex(
+        (row) => row.EVENT_KEY.startsWith('activation_c'),
+      );
+      const activation = fixture.store.authorizationRows[index];
+      const data = { ...JSON.parse(activation.EVENT_DATA_JSON), eventHash: '0'.repeat(64) };
+      const serialized = JSON.stringify(data);
+      fixture.store.authorizationRows[index] = {
+        ...activation,
+        EVENT_DATA_JSON: serialized,
+        PAYLOAD_FINGERPRINT: authorizationReceiptFingerprint(
+          fixture.config.authorizationEventSecret, serialized,
+        ),
+      };
+    }],
     ['authorization source changed', (fixture) => {
       const index = fixture.store.authorizationRows.findIndex(
         (row) => row.EVENT_KEY.startsWith('approval_a'),
@@ -305,6 +321,40 @@ test('acceptance: live status requires exact approval and activation receipts fo
     assert.equal(fixture.store.rows.get('RevenueDeskCalls').length, 0, name);
     assert.equal(fixture.store.rows.get('RevenueDeskNotifications').length, 0, name);
   }
+});
+
+test('acceptance: a forged activation interval cannot extend admission past its signed expiry', async () => {
+  const originalExpiry = Date.parse('2026-08-27T12:00:00.000Z');
+  const now = originalExpiry + 3_600_000;
+  const fixture = runtimeFixture({ now });
+  const index = fixture.store.authorizationRows.findIndex(
+    (row) => row.EVENT_KEY.startsWith('activation_c'),
+  );
+  const activation = fixture.store.authorizationRows[index];
+  const data = JSON.parse(activation.EVENT_DATA_JSON);
+  const shiftMs = 86_400_000;
+  for (const field of [
+    'evidenceObservedAt', 'routeObservedAt', 'actualStartAt', 'expiresAt', 'decidedAt',
+  ]) data[field] = new Date(Date.parse(data[field]) + shiftMs).toISOString();
+  const serialized = JSON.stringify(data);
+  fixture.store.authorizationRows[index] = {
+    ...activation,
+    EVENT_DATA_JSON: serialized,
+    PAYLOAD_FINGERPRINT: authorizationReceiptFingerprint(
+      fixture.config.authorizationEventSecret, serialized,
+    ),
+    RECEIVED_AT: data.decidedAt,
+    PROCESSED_AT: data.decidedAt,
+  };
+  Object.assign(fixture.store.rows.get('RevenueDeskDeployments')[0], {
+    ACTUAL_START_AT: data.actualStartAt,
+    EXPIRES_AT: data.expiresAt,
+  });
+
+  const rejected = await resolve(fixture, 'A', now);
+  assert.deepEqual(rejected.body, { call_inbound: { reject: true } });
+  assert.equal(fixture.store.rows.get('RevenueDeskCalls').length, 0);
+  assert.equal(fixture.store.rows.get('RevenueDeskNotifications').length, 0);
 });
 
 test('acceptance: sensitive and immediate-danger evidence is minimized or preserved safely downstream', async () => {

@@ -2,13 +2,15 @@
 
 This Node.js 24 Advanced I/O function provides the bounded record-assisted lane for Form 1 while preserving the ordinary public Zoho Forms lane. Source is complete; Development installation and authoritative readback remain pending.
 
-The exact authenticated Development routes are:
+The exact Development routes are:
 
 1. **Issue** accepts only CRM module and record ID from an Administrator-restricted CRM caller. It reads the record through a CRM Connection and, only when the canonical journey is blank, initializes it with an `If-Unmodified-Since` write and exact readback. A concurrent valid CRM journey wins without a second write. The controller then issues a 256-bit bearer and stores only its HMAC digest.
-2. **Prefill** accepts only the opaque bearer, resolves the CRM binding server-side, and returns non-PII assisted constants.
-3. **Submission** either acknowledges the tokenless public lane without a CRM binding or validates the assisted bearer, binds ownership to the full allowlisted form payload, writes the exact server-resolved CRM record, and consumes the session only after exact CRM readback.
+2. **Access** serves a no-store Catalyst client page. The real journey credential arrives only in the URL fragment, so it is not sent with the `GET` request.
+3. **Exchange** accepts that credential once through a same-origin `POST`, removes the fragment immediately, and issues a separate 256-bit Form prefill handle with a default ten-minute lifetime.
+4. **Prefill** accepts only the Form prefill handle from Zoho Forms' authenticated Dynamic Prefill-Webhook, consumes it once, resolves the CRM binding server-side, and returns the minimum non-PII assisted constants plus a non-secret `prefillId` and immutable configuration revision.
+5. **Submission** either acknowledges the public lane without an assisted binding or validates `prefillId`, configuration revision, and submission identity server-side, writes only the exact server-resolved CRM record, and consumes the session only after exact CRM readback.
 
-The URL contains only the configured Form 1 permalink, one private field alias, and the 43-character opaque bearer. It never contains a CRM record ID, journey ID, email, phone, company name, or other PII. `RevenueLeakTestRequestFormSessions` binds organization digest, module, record, journey, stage, actor digest, release, creation/expiry, consumption, and submission fingerprint. Token reissue rotates the bearer for the same resumable journey; consumed or in-progress submissions cannot be reissued.
+The Catalyst client URL contains the real journey credential only in its fragment. The Zoho Forms URL contains only the separate 43-character prefill handle under its dedicated field alias. Neither URL contains a CRM record ID, journey ID, email, phone, company name, configuration value, or other PII. `RevenueLeakTestRequestFormSessions` binds organization digest, module, record, journey, form, stage, actor digest, release, creation/expiry, one-time prefill, consumption, and submission fingerprint. Reissue preserves the canonical journey while invalidating or replacing unusable short-lived artifacts; consumed or in-progress submissions cannot be rebound.
 
 The retained `Start Free-Test Request` containment control remains the immediate CRM fallback until the replacement `Open Free-Test Setup` path passes Development E2E. Historical containment evidence remains historical and does not prove the new source is installed.
 
@@ -17,8 +19,8 @@ The historical `288a93c` convergence evidence remains preserved in `free-revenue
 ## Security contract
 
 - Production accepts only `production`/`dark` and rejects before SDK, table, Connection, CRM, token, or form access.
-- Development requires exact project/environment/source binding and independent route secrets before body or SDK access.
-- Bearer values are never stored or logged. Route secrets, token pepper, Connection authorization, CRM payloads, form data, URLs, identifiers, and private variable values never enter logs.
+- Development requires exact project/environment/source binding. Issue, Prefill, and Submission require independent server-caller secrets before body or SDK access; Access and Exchange expose only the narrow fragment-exchange boundary.
+- Journey credentials and prefill handles are never stored or logged. Route secrets, peppers, Connection authorization, CRM payloads, form data, URLs, identifiers, and private variable values never enter logs.
 - Assisted record identity is resolved server-side. Browser-supplied CRM identity is not part of the submission contract.
 - Session transitions use conditional readback, preserve harmless exact replay, reject changed-payload replay, and fail closed on expiry, tampering, stage drift, cross-record input, ambiguous state, or concurrent ownership.
 - The public lane remains owned by the existing native Forms upsert and cannot manufacture an assisted binding with hidden record fields.
@@ -28,11 +30,11 @@ The historical `288a93c` convergence evidence remains preserved in `free-revenue
 Install only from the final immutable release. The complete variable-name and classification registry is [`config/variables.json`](config/variables.json); values remain private Catalyst configuration.
 
 - Deployment/source: `DEPLOYMENT_ENVIRONMENT`, `DEPLOYMENT_MODE`, `EXPECTED_CATALYST_PROJECT_ID_SHA256`, `CRM_ORGANIZATION_ID_SHA256`, `SOURCE_REVISION`.
-- Routes/authentication: `ISSUE_PATH`, `PREFILL_PATH`, `SUBMISSION_PATH`, the three matching `*_HEADER_NAME` and `*_HEADER_SECRET` variables, `TOKEN_PEPPER`, and `ISSUING_ACTOR_HASH`.
-- Forms/CRM: `FORM1_PUBLIC_URL`, `FORM1_TOKEN_FIELD_ALIAS`, `CRM_READ_CONNECTION_LINK_NAME`, `CRM_WRITE_CONNECTION_LINK_NAME`, `SESSION_TABLE_NAME`, `CRM_API_BASE_URL`, and the five `FORM1_*` canonical value/version variables.
-- Bounded operation defaults: `SESSION_TTL_SECONDS`, `MAX_BODY_BYTES`, `INBOUND_BODY_TIMEOUT_MS`, `OUTBOUND_TIMEOUT_MS`, `OUTBOUND_MAX_BYTES`, and `PLATFORM_OPERATION_TIMEOUT_MS`.
+- Routes/authentication: `ISSUE_PATH`, `ACCESS_PATH`, `EXCHANGE_PATH`, `PREFILL_PATH`, `SUBMISSION_PATH`, the three matching server-caller `*_HEADER_NAME` and `*_HEADER_SECRET` variables, `TOKEN_PEPPER`, `PREFILL_HANDLE_PEPPER`, and `ISSUING_ACTOR_HASH`.
+- Forms/CRM: `FORM1_PUBLIC_URL`, `FORM1_ACCESS_PUBLIC_URL`, `FORM1_PREFILL_HANDLE_FIELD_ALIAS`, `CRM_READ_CONNECTION_LINK_NAME`, `CRM_WRITE_CONNECTION_LINK_NAME`, `SESSION_TABLE_NAME`, `CRM_API_BASE_URL`, and the five `FORM1_*` canonical value/version variables.
+- Bounded operation defaults: `SESSION_TTL_SECONDS`, `PREFILL_HANDLE_TTL_SECONDS`, `MAX_BODY_BYTES`, `INBOUND_BODY_TIMEOUT_MS`, `OUTBOUND_TIMEOUT_MS`, `OUTBOUND_MAX_BYTES`, and `PLATFORM_OPERATION_TIMEOUT_MS`.
 
-Install the three routes, session table, two CRM Connections, Forms alias/webhooks, and the `Open Free-Test Setup` caller together, then read each back immediately. Preserve the predecessor button and all historical session evidence. Rollback disables the replacement caller/webhooks/routes and returns operators to the retained contained control; it never restores unsafe pre-containment code.
+Install the five routes, session table, two CRM Connections, dedicated Forms prefill-handle alias and webhooks, and the `Open Free-Test Setup` caller together, then read each back immediately. Preserve the predecessor button and all historical session evidence. Rollback disables the replacement caller, webhooks, and five routes and returns operators to the retained contained control; it never restores unsafe pre-containment code.
 
 ## Verification
 
@@ -43,7 +45,7 @@ npm ci --ignore-scripts
 npm run ci
 ```
 
-The tests cover Development/source/project binding, exact variables, three authenticated routes, conditional CRM journey initialization, digest-only bearer storage, durable session ownership, exact CRM readback, public/assisted writer separation, Catalyst SDK packaging, and dark Production.
+The tests cover Development/source/project binding, exact variables, all five routes, fragment exchange, digest-only journey credentials and prefill handles, one-time Dynamic Prefill-Webhook access, conditional CRM journey initialization, immutable assisted submission binding, durable session ownership, exact CRM readback, public/assisted writer separation, Catalyst SDK packaging, and dark Production.
 
 For a separately authorized Catalyst CLI release, build a complete immutable project outside the repository. The output child directory must not already exist:
 

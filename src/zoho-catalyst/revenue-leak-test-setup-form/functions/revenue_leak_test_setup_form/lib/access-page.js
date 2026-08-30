@@ -34,26 +34,40 @@ function renderAccessPage({ otpRequestPath, otpVerifyPath, randomBytes = crypto.
       const button = document.getElementById("verify");
       const resend = document.getElementById("resend");
       const fragment = new URLSearchParams(location.hash.slice(1));
-      const setupToken = fragment.get("setupToken") || "";
+      let setupToken = fragment.get("setupToken") || "";
+      let verificationId = "";
       history.replaceState(null, "", location.pathname);
       if (!/^[A-Za-z0-9_-]{43}$/.test(setupToken)) {
+        setupToken = "";
         status.textContent = "This setup link is unavailable.";
         button.disabled = true;
         resend.disabled = true;
         return;
       }
-      const send = (path, body) => fetch(path, {
+      const sendBody = (path, body) => fetch(path, {
         method: "POST",
         credentials: "omit",
         cache: "no-store",
         redirect: "error",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
+        body,
       }).then(async (response) => ({ response, body: await response.json() }));
+      const send = (path, value) => sendBody(path, JSON.stringify(value));
       const requestCode = () => {
         resend.disabled = true;
-        return send(${JSON.stringify(requestPath)}, { setupToken })
+        let request;
+        if (verificationId) {
+          request = send(${JSON.stringify(requestPath)}, { verificationId });
+        } else {
+          const body = JSON.stringify({ setupToken });
+          setupToken = "";
+          request = sendBody(${JSON.stringify(requestPath)}, body);
+        }
+        return request
           .then(({ response, body }) => {
+          if (/^[a-f0-9]{64}$/.test(body.verificationId || "")) {
+            verificationId = body.verificationId;
+          }
           if (response.ok && typeof body.formUrl === "string") {
             location.assign(body.formUrl);
             return;
@@ -95,7 +109,7 @@ function renderAccessPage({ otpRequestPath, otpVerifyPath, randomBytes = crypto.
         button.disabled = true;
         try {
           const { response, body } = await send(${JSON.stringify(verifyPath)}, {
-            setupToken,
+            verificationId,
             code: value,
           });
           if (!response.ok || typeof body.formUrl !== "string") {

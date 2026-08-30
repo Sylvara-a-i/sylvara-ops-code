@@ -147,7 +147,7 @@ function form1Request(url, headerName, headerValue, body) {
     url,
     headers: {
       'content-type': 'application/json',
-      [headerName]: headerValue,
+      ...(headerName ? { [headerName]: headerValue } : {}),
     },
     rawBody: Buffer.from(JSON.stringify(body), 'utf8'),
   };
@@ -162,6 +162,8 @@ function form1Config() {
     CRM_ORGANIZATION_ID_SHA256: '2'.repeat(64),
     SOURCE_REVISION,
     ISSUE_PATH: '/form1/issue-test',
+    ACCESS_PATH: '/form1/access-test',
+    EXCHANGE_PATH: '/form1/exchange-test',
     PREFILL_PATH: '/form1/prefill-test',
     SUBMISSION_PATH: '/form1/submission-test',
     ISSUE_HEADER_NAME: 'x-synthetic-form1-issue',
@@ -171,9 +173,11 @@ function form1Config() {
     PREFILL_HEADER_SECRET: FORM1_PREFILL_SECRET,
     SUBMISSION_HEADER_SECRET: FORM1_SUBMISSION_SECRET,
     TOKEN_PEPPER: 't'.repeat(43),
+    PREFILL_HANDLE_PEPPER: 'h'.repeat(43),
     ISSUING_ACTOR_HASH: `operator_${'3'.repeat(64)}`,
     FORM1_PUBLIC_URL: 'https://forms.zohopublic.com/example/form/Request/formperma/example',
-    FORM1_TOKEN_FIELD_ALIAS: 'AssistedIntakeToken',
+    FORM1_ACCESS_PUBLIC_URL: 'https://synthetic.development.catalystserverless.com/form1/access-test',
+    FORM1_PREFILL_HANDLE_FIELD_ALIAS: 'AssistedPrefillHandle',
     CRM_READ_CONNECTION_LINK_NAME: FORM1_CRM_READ_LINK,
     CRM_WRITE_CONNECTION_LINK_NAME: FORM1_CRM_WRITE_LINK,
     FORM1_ENTRY_OFFER_VALUE: 'Free 7-Day Missed-Call',
@@ -196,6 +200,13 @@ function form1MemoryAdapter() {
     },
     async findRowsByTokenHash(_table, value) {
       return rows.filter((row) => row.TOKEN_HASH === value).map((row) => ({ ...row }));
+    },
+    async findRowsByPrefillHandleHash(_table, value) {
+      return rows.filter((row) => row.PREFILL_HANDLE_HASH === value)
+        .map((row) => ({ ...row }));
+    },
+    async findRowsByPrefillId(_table, value) {
+      return rows.filter((row) => row.PREFILL_ID === value).map((row) => ({ ...row }));
     },
     async insertRow(_table, row) { rows.push({ ROWID: String(rows.length + 1), ...row }); },
     async updateRow(_table, update, expected) {
@@ -233,10 +244,16 @@ async function runForm1AssistedJourney() {
     Modified_Time: '2026-08-29T11:59:00.000Z',
     Intake_Submission_ID: journeyId,
   };
+  let entropy = 1;
+  let uuidSequence = 1;
+  const randomBytes = (size) => Buffer.alloc(size, entropy++);
+  const randomUUID = () =>
+    `00000000-0000-4000-8000-${String(uuidSequence++).padStart(12, '0')}`;
   const dependencies = {
     config,
     now: () => Date.parse('2026-08-29T12:00:00.000Z'),
-    randomBytes: () => Buffer.alloc(32, 7),
+    randomBytes,
+    randomUUID,
     crmClient: {
       async getRecord(_module, selectedId) {
         assert.equal(selectedId, recordId);
@@ -265,25 +282,71 @@ async function runForm1AssistedJourney() {
   };
   dependencies.sessionStore = createForm1SessionStore(adapter, config, {
     now: dependencies.now,
+    randomUUID,
   });
   const issue = await handleForm1(form1Request(
     config.issuePath, config.issueHeaderName, FORM1_ISSUE_SECRET,
     { crmModule: 'Leads', recordId },
   ), dependencies);
-  const issuedUrl = new URL(issue.body.formUrl);
-  const token = issuedUrl.searchParams.get(config.form1TokenFieldAlias);
-  const prefill = await handleForm1(form1Request(
-    config.prefillPath, config.prefillHeaderName, FORM1_PREFILL_SECRET, { token },
+  const issuedUrl = new URL(issue.body.accessUrl);
+  assert.equal(issuedUrl.search, '');
+  assert.deepEqual([...new URLSearchParams(issuedUrl.hash.slice(1)).keys()], ['journeyToken']);
+  const journeyToken = new URLSearchParams(issuedUrl.hash.slice(1)).get('journeyToken');
+  const access = await handleForm1({
+    method: 'GET',
+    url: config.accessPath,
+    headers: {},
+    rawBody: Buffer.alloc(0),
+  }, dependencies);
+  assert.equal(access.status, 200);
+  assert.equal(access.headers['Cache-Control'], 'no-store, max-age=0');
+  assert.equal(access.body.includes(journeyToken), false);
+  assert.equal(access.body.includes(recordId), false);
+  const exchanged = await handleForm1(form1Request(
+    config.exchangePath, null, null, { journeyToken },
   ), dependencies);
+  const formUrl = new URL(exchanged.body.formUrl);
+  assert.deepEqual([...formUrl.searchParams.keys()], [config.form1PrefillHandleFieldAlias]);
+  const prefillHandle = formUrl.searchParams.get(config.form1PrefillHandleFieldAlias);
+  assert.notEqual(prefillHandle, journeyToken);
+  assert.equal(exchanged.body.formUrl.includes(journeyToken), false);
+  const prefill = await handleForm1(form1Request(
+    config.prefillPath, config.prefillHeaderName, FORM1_PREFILL_SECRET,
+    { prefillHandle },
+  ), dependencies);
+  await assert.rejects(
+    () => handleForm1(form1Request(
+      config.prefillPath, config.prefillHeaderName, FORM1_PREFILL_SECRET,
+      { prefillHandle },
+    ), dependencies),
+    (error) => error.status === 404 && error.publicCode === 'session_not_found',
+  );
   const submission = await handleForm1(form1Request(
     config.submissionPath, config.submissionHeaderName, FORM1_SUBMISSION_SECRET,
-    { token, submissionId: 'form1_submission_synthetic_001', formData: syntheticForm1Data() },
+    {
+      prefillId: prefill.body.prefillId,
+      configurationRevision: prefill.body.configurationRevision,
+      submissionId: 'form1_submission_synthetic_001',
+      formData: syntheticForm1Data(),
+    },
   ), dependencies);
   const publicSubmission = await handleForm1(form1Request(
     config.submissionPath, config.submissionHeaderName, FORM1_SUBMISSION_SECRET,
     { submissionId: 'form1_public_submission_synthetic_001' },
   ), dependencies);
-  return { adapter, issue, issuedUrl, prefill, publicSubmission, record, submission, token };
+  return {
+    access,
+    adapter,
+    formUrl,
+    issue,
+    issuedUrl,
+    journeyToken,
+    prefill,
+    prefillHandle,
+    publicSubmission,
+    record,
+    submission,
+  };
 }
 
 function runForm2Authorization(intakeSubmissionId) {
@@ -413,12 +476,19 @@ function analyticsJob(environment) {
 test('Form 1 assisted issue, prefill, submission, and public lane remain isolated', async () => {
   const form1 = await runForm1AssistedJourney();
   assert.equal(form1.issue.status, 201);
-  assert.match(form1.token, /^[A-Za-z0-9_-]{43}$/);
-  assert.deepEqual([...form1.issuedUrl.searchParams.keys()], ['AssistedIntakeToken']);
-  assert.equal(form1.issue.body.formUrl.includes(form1.record.id), false);
+  assert.match(form1.journeyToken, /^[A-Za-z0-9_-]{43}$/);
+  assert.match(form1.prefillHandle, /^[A-Za-z0-9_-]{43}$/);
+  assert.deepEqual([...form1.formUrl.searchParams.keys()], ['AssistedPrefillHandle']);
+  assert.equal(form1.issue.body.accessUrl.includes(form1.record.id), false);
   assert.equal(form1.adapter.rows.length, 1);
-  assert.equal(JSON.stringify(form1.adapter.rows[0]).includes(form1.token), false);
-  assert.equal(form1.prefill.body.assisted, true);
+  assert.equal(JSON.stringify(form1.adapter.rows[0]).includes(form1.journeyToken), false);
+  assert.equal(JSON.stringify(form1.adapter.rows[0]).includes(form1.prefillHandle), false);
+  assert.match(form1.adapter.rows[0].TOKEN_HASH, /^[a-f0-9]{64}$/);
+  assert.match(form1.adapter.rows[0].PREFILL_HANDLE_HASH, /^[a-f0-9]{64}$/);
+  assert.equal(form1.adapter.rows[0].PREFILL_COUNT, 1);
+  assert.match(form1.prefill.body.prefillId, /^[0-9a-f-]{36}$/);
+  assert.equal(form1.prefill.body.configurationRevision, SOURCE_REVISION);
+  assert.equal(Object.hasOwn(form1.prefill.body, 'contactConsent'), false);
   assert.deepEqual(form1.submission.body, { ok: true, replayed: false });
   assert.equal(form1.adapter.rows[0].STATUS, 'consumed');
   assert.equal(form1.record.Submission_Channel, 'CRM Assisted');

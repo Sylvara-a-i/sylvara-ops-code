@@ -28,6 +28,7 @@ function config(overrides = {}) {
     deploymentEnvironment: "development",
     platformOperationTimeoutMs: 5000,
     maxSubmissionAttempts: 3,
+    prefillHandleTtlSeconds: 600,
     workflowKeyMaterial: "synthetic-workflow-key-material-32-bytes-minimum-do-not-use",
     ...overrides,
   };
@@ -44,8 +45,38 @@ function prefillBinding(overrides = {}) {
     accountModifiedTime: "2026-08-14T12:02:03-05:00",
     dealModifiedTime: "2026-08-14T12:03:04-05:00",
     snapshotFingerprint: "a".repeat(64),
+    crmOrganizationHash: "c".repeat(64),
+    journeyBindingDigest: "d".repeat(64),
+    formIdentityHash: "e".repeat(64),
+    expectedStage: "form2",
     ...overrides,
   };
+}
+
+function prefillMintBinding(overrides = {}) {
+  const { prefillHandleHash = "f".repeat(64), ...bindingOverrides } = overrides;
+  return {
+    ...prefillBinding(bindingOverrides),
+    prefillHandleHash,
+  };
+}
+
+function prefillHandleBinding(input = prefillMintBinding()) {
+  return {
+    prefillHandleHash: input.prefillHandleHash,
+    crmOrganizationHash: input.crmOrganizationHash,
+    journeyBindingDigest: input.journeyBindingDigest,
+    formIdentityHash: input.formIdentityHash,
+    expectedStage: input.expectedStage,
+    configurationRevision: "a".repeat(40),
+  };
+}
+
+async function preparePrefill(store, overrides = {}) {
+  const input = prefillMintBinding(overrides);
+  const minted = await store.mintPrefill(input);
+  const consumed = await store.consumePrefillHandle(prefillHandleBinding(input));
+  return { prefillId: minted.prefillId, revision: consumed.revision };
 }
 
 function submissionClaim(prefillId = UUIDS[0], overrides = {}) {
@@ -74,6 +105,7 @@ function fixture({
     insert: [],
     update: [],
     prefillQueries: [],
+    prefillHandleQueries: [],
     submissionQueries: [],
     rowQueries: [],
   };
@@ -159,6 +191,14 @@ function fixture({
         .map((row) => ({ [tableName]: { ...row } }));
     },
 
+    async findRowsByPrefillHandleHash(tableName, prefillHandleHash) {
+      calls.events.push(`find-prefill-handle:${tableName}`);
+      calls.prefillHandleQueries.push({ tableName, prefillHandleHash });
+      return rowsFor(tableName)
+        .filter((row) => row.PREFILL_HANDLE_HASH === prefillHandleHash)
+        .map((row) => ({ [tableName]: { ...row } }));
+    },
+
     async findRowsBySubmissionKey(tableName, submissionKey) {
       calls.events.push(`find-submission:${tableName}`);
       calls.submissionQueries.push({ tableName, submissionKey });
@@ -189,12 +229,12 @@ function fixture({
 
 test("mints a unique prefill revision and stores no raw identifier, payload, or PII", async () => {
   const { calls, store } = fixture();
-  const minted = await store.mintPrefill(prefillBinding());
+  const minted = await store.mintPrefill(prefillMintBinding());
   assert.match(
     minted.prefillId,
     /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
   );
-  assert.equal(minted.revision.status, "ready");
+  assert.equal(minted.revision.status, "handle_issued");
   assert.equal(minted.revision.sessionRowId, "9000000000001");
   assert.equal(minted.revision.sessionAttemptCount, 1);
 
@@ -227,9 +267,9 @@ test("bearer-token rotation cannot change durable workflow identities", async ()
     },
   });
 
-  const original = await first.store.mintPrefill(prefillBinding());
-  const sameDurableIdentity = await rotatedBearer.store.mintPrefill(prefillBinding());
-  const rekeyed = await rotatedWorkflowKey.store.mintPrefill(prefillBinding());
+  const original = await first.store.mintPrefill(prefillMintBinding());
+  const sameDurableIdentity = await rotatedBearer.store.mintPrefill(prefillMintBinding());
+  const rekeyed = await rotatedWorkflowKey.store.mintPrefill(prefillMintBinding());
 
   assert.equal(sameDurableIdentity.prefillId, original.prefillId);
   assert.equal(
@@ -243,24 +283,26 @@ test("bearer-token rotation cannot change durable workflow identities", async ()
   );
 });
 
-test("concurrent exact mints coalesce on one durable session verification attempt", async () => {
+test("concurrent mints cannot invalidate the one live handle returned to the winner", async () => {
   const { calls, clock, store, tables } = fixture();
-  const first = await store.mintPrefill(prefillBinding());
+  const first = await store.mintPrefill(prefillMintBinding());
   clock.nowMs += 1000;
-  const concurrent = await Promise.all(
-    Array.from({ length: 20 }, () => store.mintPrefill(prefillBinding())),
+  const concurrent = await Promise.allSettled(
+    Array.from({ length: 20 }, (_, index) => store.mintPrefill(prefillMintBinding({
+      prefillHandleHash: (index + 1).toString(16).padStart(64, "0"),
+    }))),
   );
 
   assert.equal(tables[PREFILL_TABLE].length, 1);
   assert.equal(calls.insert.filter(({ tableName }) => tableName === PREFILL_TABLE).length, 21);
   for (const result of concurrent) {
-    assert.equal(result.prefillId, first.prefillId);
-    assert.equal(result.revision.rowId, first.revision.rowId);
-    assert.equal(result.revision.issuedAt, "2026-08-14T18:00:00.000Z");
-    assert.equal(result.revision.sessionAttemptCount, 1);
+    assert.equal(result.status, "rejected");
+    assert.equal(result.reason.publicCode, "prefill_conflict");
   }
+  assert.equal(tables[PREFILL_TABLE][0].PREFILL_HANDLE_HASH, "f".repeat(64));
+  assert.equal(first.revision.status, "handle_issued");
 
-  const nextAttempt = await store.mintPrefill(prefillBinding({ sessionAttemptCount: 2 }));
+  const nextAttempt = await store.mintPrefill(prefillMintBinding({ sessionAttemptCount: 2 }));
   assert.notEqual(nextAttempt.prefillId, first.prefillId);
   assert.notEqual(nextAttempt.revision.prefillKey, first.revision.prefillKey);
   assert.equal(tables[PREFILL_TABLE].length, 2);
@@ -268,21 +310,21 @@ test("concurrent exact mints coalesce on one durable session verification attemp
 
 test("same-attempt binding mismatches and terminal revisions fail closed", async () => {
   const conflict = fixture();
-  await conflict.store.mintPrefill(prefillBinding());
+  await conflict.store.mintPrefill(prefillMintBinding());
   await assert.rejects(
-    conflict.store.mintPrefill(prefillBinding({ snapshotFingerprint: "b".repeat(64) })),
+    conflict.store.mintPrefill(prefillMintBinding({ snapshotFingerprint: "b".repeat(64) })),
     (error) => error.publicCode === "prefill_conflict",
   );
 
   const consumedFixture = fixture();
-  const consumedMint = await consumedFixture.store.mintPrefill(prefillBinding());
+  const consumedMint = await preparePrefill(consumedFixture.store);
   const consumed = await consumedFixture.store.consumePrefill({
     ...prefillBinding(),
     prefillId: consumedMint.prefillId,
   });
-  assert.equal(consumed.consumptionOwner, UUIDS[0]);
+  assert.equal(consumed.consumptionOwner, UUIDS[1]);
   await assert.rejects(
-    consumedFixture.store.mintPrefill(prefillBinding()),
+    consumedFixture.store.mintPrefill(prefillMintBinding()),
     (error) => error.publicCode === "prefill_consumed",
   );
 
@@ -291,7 +333,7 @@ test("same-attempt binding mismatches and terminal revisions fail closed", async
     consumptionOwner: consumed.consumptionOwner,
   });
   await assert.rejects(
-    consumedFixture.store.mintPrefill(prefillBinding()),
+    consumedFixture.store.mintPrefill(prefillMintBinding()),
     (error) => error.publicCode === "reconciliation_required",
   );
 });
@@ -299,28 +341,28 @@ test("same-attempt binding mismatches and terminal revisions fail closed", async
 test("rejects unstructured, stale, and PII-shaped prefill inputs before writes", async () => {
   const { calls, store } = fixture();
   await assert.rejects(
-    store.mintPrefill({ ...prefillBinding(), email: "person@example.invalid" }),
+    store.mintPrefill({ ...prefillMintBinding(), email: "person@example.invalid" }),
     (error) => error instanceof WorkflowStoreError && error.publicCode === "workflow_input_invalid",
   );
   await assert.rejects(
-    store.mintPrefill(prefillBinding({ snapshotFingerprint: "not-a-fingerprint" })),
+    store.mintPrefill(prefillMintBinding({ snapshotFingerprint: "not-a-fingerprint" })),
     WorkflowStoreError,
   );
   await assert.rejects(
-    store.mintPrefill(prefillBinding({ dealModifiedTime: "yesterday" })),
+    store.mintPrefill(prefillMintBinding({ dealModifiedTime: "yesterday" })),
     WorkflowStoreError,
   );
   await assert.rejects(
-    store.mintPrefill(prefillBinding({ sessionAttemptCount: 0 })),
+    store.mintPrefill(prefillMintBinding({ sessionAttemptCount: 0 })),
     WorkflowStoreError,
   );
   await assert.rejects(
-    store.mintPrefill(prefillBinding({ sessionAttemptCount: 11 })),
+    store.mintPrefill(prefillMintBinding({ sessionAttemptCount: 11 })),
     WorkflowStoreError,
   );
   assert.equal(calls.insert.length, 0);
 
-  const minted = await store.mintPrefill(prefillBinding());
+  const minted = await preparePrefill(store);
   await assert.rejects(
     store.consumePrefill({
       ...prefillBinding({ dealModifiedTime: "2026-08-14T12:03:05-05:00" }),
@@ -328,59 +370,61 @@ test("rejects unstructured, stale, and PII-shaped prefill inputs before writes",
     }),
     (error) => error.publicCode === "prefill_stale",
   );
-  assert.equal(calls.update.length, 0);
+  assert.equal(calls.update.length, 1);
 });
 
 test("consumes a matching prefill revision once and rejects a replay", async () => {
   const { calls, store } = fixture();
-  const minted = await store.mintPrefill(prefillBinding());
+  const minted = await preparePrefill(store);
   const consumed = await store.consumePrefill({
     ...prefillBinding(),
     prefillId: minted.prefillId,
   });
   assert.equal(consumed.status, "submitted");
-  assert.equal(consumed.consumptionOwner, UUIDS[0]);
+  assert.equal(consumed.consumptionOwner, UUIDS[1]);
   assert.equal(consumed.submittedAt, "2026-08-14T18:00:00.000Z");
-  assert.deepEqual(calls.update[0].expected, {
+  assert.deepEqual(calls.update[1].expected, {
     STATUS: "ready",
     PREFILL_KEY: minted.revision.prefillKey,
     SESSION_ROW_ID: "9000000000001",
+    CONSUMPTION_OWNER: UUIDS[0],
   });
 
   await assert.rejects(
     store.consumePrefill({ ...prefillBinding(), prefillId: minted.prefillId }),
     (error) => error.publicCode === "prefill_consumed",
   );
-  assert.equal(calls.update.length, 1);
+  assert.equal(calls.update.length, 2);
 });
 
 test("uses exact readback for ambiguous prefill inserts and updates", async () => {
   const insertAfter = fixture({
     insertFailure: { [PREFILL_TABLE]: "after" },
   });
-  assert.equal((await insertAfter.store.mintPrefill(prefillBinding())).revision.status, "ready");
+  assert.equal((await insertAfter.store.mintPrefill(prefillMintBinding())).revision.status,
+    "handle_issued");
 
   const insertBefore = fixture({
     insertFailure: { [PREFILL_TABLE]: "before" },
   });
   await assert.rejects(
-    insertBefore.store.mintPrefill(prefillBinding()),
+    insertBefore.store.mintPrefill(prefillMintBinding()),
     (error) => error.publicCode === "reconciliation_required",
   );
 
   const updateAfter = fixture({
     updateFailure: { [PREFILL_TABLE]: "after" },
   });
-  const minted = await updateAfter.store.mintPrefill(prefillBinding());
+  const minted = await preparePrefill(updateAfter.store);
   assert.equal((await updateAfter.store.consumePrefill({
     ...prefillBinding(),
     prefillId: minted.prefillId,
   })).status, "submitted");
 
-  const updateBefore = fixture({
-    updateFailure: { [PREFILL_TABLE]: "before" },
-  });
-  const unconsumed = await updateBefore.store.mintPrefill(prefillBinding());
+  const delayedFailure = {};
+  const updateBefore = fixture({ updateFailure: delayedFailure });
+  const unconsumed = await preparePrefill(updateBefore.store);
+  delayedFailure[PREFILL_TABLE] = "before";
   await assert.rejects(
     updateBefore.store.consumePrefill({
       ...prefillBinding(),
@@ -392,7 +436,7 @@ test("uses exact readback for ambiguous prefill inserts and updates", async () =
 
 test("marks an owned consumed prefill as reconciliation-required", async () => {
   const { store } = fixture();
-  const minted = await store.mintPrefill(prefillBinding());
+  const minted = await preparePrefill(store);
   const consumed = await store.consumePrefill({
     ...prefillBinding(),
     prefillId: minted.prefillId,
@@ -631,7 +675,7 @@ test("uses exact readback after ambiguous submission insert and transition write
 
 test("fails closed on multiple key rows, unknown states, and lease mismatches", async () => {
   const duplicatePrefill = fixture();
-  const minted = await duplicatePrefill.store.mintPrefill(prefillBinding());
+  const minted = await duplicatePrefill.store.mintPrefill(prefillMintBinding());
   duplicatePrefill.tables[PREFILL_TABLE].push({
     ...duplicatePrefill.tables[PREFILL_TABLE][0],
     ROWID: "7000000000099",

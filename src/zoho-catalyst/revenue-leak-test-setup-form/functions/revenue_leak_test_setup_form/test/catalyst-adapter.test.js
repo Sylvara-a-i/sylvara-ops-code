@@ -26,6 +26,10 @@ const SYNTHETIC_CATALYST_PROJECT_ID_SHA256 = crypto
   .createHash("sha256")
   .update(SYNTHETIC_CATALYST_PROJECT_ID, "utf8")
   .digest("hex");
+const SYNTHETIC_CRM_ORGANIZATION_ID_SHA256 = crypto
+  .createHash("sha256")
+  .update("200000000000001", "utf8")
+  .digest("hex");
 
 function catalystHeaders(overrides = {}) {
   return {
@@ -64,7 +68,8 @@ function listenerEnvironment() {
     FORM2_MAIL_FROM: "synthetic@example.invalid",
     FORM2_PROOF_ALLOWED_RECIPIENT_DIGESTS: "[]",
     FORM2_PROOF_TEMPLATE_VERSION: "email-otp-v1",
-    FORM2_TOKEN_FIELD_ALIAS: "access_token",
+    FORM2_PREFILL_HANDLE_FIELD_ALIAS: "prefill_handle",
+    PREFILL_HANDLE_TTL_SECONDS: "600",
     FORM2_FORM_VERSION: "form2-v1",
     FORM2_ENTRY_OFFER_VALUE: "Synthetic Free Test",
     FORM2_PHONE_SYSTEM_PROVIDERS: '["Synthetic PBX"]',
@@ -75,6 +80,7 @@ function listenerEnvironment() {
     FORM2_ACCESS_STATUS_SUBMITTED_VALUE: "Synthetic Submitted",
     FORM2_ACCESS_STATUS_EXPIRED_VALUE: "Synthetic Expired",
     CRM_API_BASE_URL: "https://www.zohoapis.com/crm/v8",
+    CRM_ORGANIZATION_ID_SHA256: SYNTHETIC_CRM_ORGANIZATION_ID_SHA256,
     CRM_READ_CONNECTION_LINK_NAME: SYNTHETIC_CRM_READ_LINK,
     CRM_WRITE_CONNECTION_LINK_NAME: SYNTHETIC_CRM_WRITE_LINK,
     SOURCE_REVISION: "a".repeat(40),
@@ -291,6 +297,7 @@ test("listener logs stage and outcome for controller successes and handled error
     const publicBody = JSON.parse(output.payload);
     assert.equal(publicBody.stage, undefined);
     assert.equal(publicBody.outcome, undefined);
+    assert.equal(publicBody.requestId, "10000000-0000-4000-8000-000000000001");
   }
 });
 

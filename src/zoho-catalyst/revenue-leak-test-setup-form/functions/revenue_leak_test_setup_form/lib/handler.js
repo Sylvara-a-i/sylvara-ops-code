@@ -23,8 +23,12 @@ const {
   SecurityError,
   deriveAccessToken,
   deriveIssueRequestKey,
+  generatePrefillHandle,
   hashAccessToken,
+  hashPrefillHandle,
   isValidAccessToken,
+  normalizeVerificationId,
+  prefillBindingDigest,
   verifyCustomHeader,
 } = require("./security");
 const { fingerprintSnapshot, fingerprintSubmission } = require("./snapshot");
@@ -32,10 +36,13 @@ const { requireEmailOtpVerified } = require("./verification-proof");
 const { renderAccessPage } = require("./access-page");
 
 const ISSUE_REQUEST_KEYS = new Set(["dealId", "issueRequestId"]);
-const PREFILL_KEYS = new Set(["setupToken"]);
-const OTP_REQUEST_KEYS = new Set(["setupToken"]);
-const OTP_VERIFY_KEYS = new Set(["setupToken", "code"]);
-const SUBMISSION_KEYS = new Set(["setupToken", "prefillId", "submissionId", ...CLIENT_KEYS]);
+const PREFILL_KEYS = new Set(["prefillHandle"]);
+const OTP_REQUEST_EXCHANGE_KEYS = new Set(["setupToken"]);
+const OTP_REQUEST_RESUME_KEYS = new Set(["verificationId"]);
+const OTP_VERIFY_KEYS = new Set(["verificationId", "code"]);
+const SUBMISSION_KEYS = new Set([
+  "prefillId", "configurationRevision", "submissionId", ...CLIENT_KEYS,
+]);
 const RECORD_ID_PATTERN = /^[1-9][0-9]{9,29}$/;
 const SUBMISSION_ID_PATTERN = /^[0-9]{1,30}$/;
 const RESPONSE_STAGES = new Set([
@@ -142,8 +149,8 @@ function normalizeNow(now) {
   return value;
 }
 
-function buildFormUrl(config, setupToken) {
-  if (!isValidAccessToken(setupToken)) {
+function buildFormUrl(config, prefillHandle) {
+  if (!isValidAccessToken(prefillHandle)) {
     throw new ControllerError("Setup token is invalid", {
       status: 404,
       publicCode: "setup_not_found",
@@ -165,13 +172,13 @@ function buildFormUrl(config, setupToken) {
     url.search ||
     url.hash ||
     !isArtifactBoundFormUrl(url.href, config.form2DestinationSha256) ||
-    !/^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(config.form2TokenFieldAlias ?? "")
+    !/^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(config.form2PrefillHandleFieldAlias ?? "")
   ) {
     throw new ControllerError("Form URL configuration is invalid", {
       publicCode: "configuration_invalid",
     });
   }
-  url.searchParams.set(config.form2TokenFieldAlias, setupToken);
+  url.searchParams.set(config.form2PrefillHandleFieldAlias, prefillHandle);
   return url.toString();
 }
 
@@ -266,6 +273,7 @@ function assertBindingMatchesSession(binding, session) {
     binding.crmContactId !== session.crmContactId ||
     binding.crmAccountId !== session.crmAccountId ||
     binding.crmDealId !== session.crmDealId ||
+    binding.journeyBindingDigest !== session.journeyBindingDigest ||
     String(binding.sessionRowId) !== String(session.rowId) ||
     binding.sessionAttemptCount !== session.attemptCount
   ) {
@@ -276,7 +284,35 @@ function assertBindingMatchesSession(binding, session) {
   }
 }
 
-function prefillBinding(session, existing, snapshotFingerprint) {
+function prefillSecurityBinding(existing, config) {
+  const journeyId = existing?.deal?.Intake_Submission_ID;
+  if (typeof journeyId !== "string" ||
+      !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/.test(journeyId)) {
+    throw new ControllerError("Canonical journey binding is unavailable", {
+      status: 409,
+      publicCode: "setup_conflict",
+    });
+  }
+  const binding = {
+    crmOrganizationHash: config.crmOrganizationHash,
+    crmContactId: existing.contact.id,
+    crmAccountId: existing.account.id,
+    crmDealId: existing.deal.id,
+    journeyId,
+    formIdentityHash: config.formIdentityHash,
+    expectedStage: "form2",
+    formVersion: config.form2FormVersion,
+    configurationRevision: config.sourceRevision,
+  };
+  return Object.freeze({
+    crmOrganizationHash: binding.crmOrganizationHash,
+    journeyBindingDigest: prefillBindingDigest(binding, config.workflowKeyMaterial),
+    formIdentityHash: binding.formIdentityHash,
+    expectedStage: binding.expectedStage,
+  });
+}
+
+function prefillBinding(session, existing, snapshotFingerprint, config) {
   return {
     sessionRowId: session.rowId,
     sessionAttemptCount: session.attemptCount,
@@ -287,6 +323,7 @@ function prefillBinding(session, existing, snapshotFingerprint) {
     accountModifiedTime: existing.account.Modified_Time,
     dealModifiedTime: existing.deal.Modified_Time,
     snapshotFingerprint,
+    ...prefillSecurityBinding(existing, config),
   };
 }
 
@@ -513,49 +550,6 @@ async function expireSession(candidate, tokenHash, dependencies) {
   );
 }
 
-async function readPrefillSession(setupToken, dependencies, nowMs) {
-  let tokenHash;
-  try {
-    tokenHash = hashAccessToken(setupToken, dependencies.config.tokenPepper);
-  } catch {
-    throw genericSetupNotFound();
-  }
-  let session;
-  try {
-    session = await dependencies.sessionStore.readByTokenHash(tokenHash);
-  } catch (error) {
-    throw publicError(error);
-  }
-  const expiresAt = Date.parse(session?.expiresAt);
-  if (
-    session?.status === "expired" &&
-    Number.isFinite(expiresAt) &&
-    hasValue(session.expiredAt)
-  ) {
-    if (new Set(["crm_expiry_pending", "issuing_expiry_pending"]).has(
-      session.lastOutcome,
-    )) {
-      await expireSession(session, tokenHash, dependencies);
-    }
-    throw genericSetupNotFound();
-  }
-  if (
-    !session ||
-    !new Set(["issued", "verified"]).has(session.status) ||
-    !Number.isFinite(expiresAt)
-  ) {
-    throw genericSetupNotFound();
-  }
-  if (expiresAt <= nowMs) {
-    await expireSession(session, tokenHash, dependencies);
-    throw genericSetupNotFound();
-  }
-  if (session.status === "verified" && !hasValue(session.verifiedAt)) {
-    throw genericSetupNotFound();
-  }
-  return Object.freeze({ session, tokenHash });
-}
-
 async function verifyPrefillSession(candidate, tokenHash, dependencies, nowMs) {
   let result;
   try {
@@ -591,50 +585,6 @@ async function verifyPrefillSession(candidate, tokenHash, dependencies, nowMs) {
     throw genericSetupNotFound();
   }
   return result.session;
-}
-
-async function resolveSubmissionSession(setupToken, dependencies, nowMs) {
-  let tokenHash;
-  try {
-    tokenHash = hashAccessToken(setupToken, dependencies.config.tokenPepper);
-  } catch {
-    throw genericSetupNotFound();
-  }
-  let session;
-  try {
-    session = await dependencies.sessionStore.readByTokenHash(tokenHash);
-  } catch (error) {
-    throw publicError(error);
-  }
-  const expiresAt = Date.parse(session?.expiresAt);
-  if (
-    session?.status === "expired" &&
-    Number.isFinite(expiresAt) &&
-    hasValue(session.expiredAt)
-  ) {
-    if (new Set(["crm_expiry_pending", "issuing_expiry_pending"]).has(
-      session.lastOutcome,
-    )) {
-      await expireSession(session, tokenHash, dependencies);
-    }
-    throw genericSetupNotFound();
-  }
-  if (
-    !session ||
-    !new Set(["verified", "submitting", "submitted"]).has(session.status) ||
-    !Number.isFinite(expiresAt) ||
-    !hasValue(session.verifiedAt) ||
-    (session.status === "submitting" &&
-      !/^submitting_[a-f0-9]{64}$/.test(session.lastOutcome)) ||
-    (session.status === "submitted" && !hasValue(session.submittedAt))
-  ) {
-    throw genericSetupNotFound();
-  }
-  return Object.freeze({
-    expired: session.status === "verified" && expiresAt <= nowMs,
-    session,
-    tokenHash,
-  });
 }
 
 async function bestEffort(operation) {
@@ -1074,6 +1024,16 @@ async function handleIssue(body, dependencies, nowMs) {
   buildPrefillPayload(existing, {
     allowedPhoneSystemProviders: dependencies.config.form2PhoneSystemProviders,
   });
+  const journeyBindingDigest = prefillSecurityBinding(
+    existing,
+    dependencies.config,
+  ).journeyBindingDigest;
+  if (priorSession && priorSession.journeyBindingDigest !== journeyBindingDigest) {
+    throw new ControllerError("Setup journey changed after access issuance", {
+      status: 409,
+      publicCode: "setup_conflict",
+    });
+  }
 
   let session;
   try {
@@ -1081,6 +1041,7 @@ async function handleIssue(body, dependencies, nowMs) {
       issueRequestKey,
       tokenHash,
       ...binding,
+      journeyBindingDigest,
     });
   } catch (error) {
     throw publicError(error);
@@ -1177,9 +1138,31 @@ async function handleIssue(body, dependencies, nowMs) {
   );
 }
 
-async function handlePrefill(body, dependencies, nowMs) {
-  assertExactKeys(body, PREFILL_KEYS, "Prefill request is invalid");
-  const candidate = await readPrefillSession(body.setupToken, dependencies, nowMs);
+async function preparePrefill(verificationBinding, dependencies, nowMs) {
+  if (!isPlainObject(verificationBinding)) throw genericSetupNotFound();
+  let candidateSession;
+  try {
+    candidateSession = await dependencies.sessionStore.readByRowId(
+      verificationBinding.sessionRowId,
+    );
+  } catch {
+    throw genericSetupNotFound();
+  }
+  if (!candidateSession ||
+      candidateSession.issueRequestKey !== verificationBinding.issueRequestKey ||
+      candidateSession.tokenHash !== verificationBinding.tokenHash ||
+      candidateSession.crmContactId !== verificationBinding.crmContactId ||
+      candidateSession.crmAccountId !== verificationBinding.crmAccountId ||
+      candidateSession.crmDealId !== verificationBinding.crmDealId ||
+      candidateSession.journeyBindingDigest !== verificationBinding.journeyBindingDigest ||
+      !new Set(["issued", "verified"]).has(candidateSession.status) ||
+      Date.parse(candidateSession.expiresAt) <= nowMs) {
+    throw genericSetupNotFound();
+  }
+  const candidate = Object.freeze({
+    session: candidateSession,
+    tokenHash: candidateSession.tokenHash,
+  });
   let existing = await fetchSessionContext(dependencies.crmClient, candidate.session);
   const statuses = dependencies.config.form2AccessStatuses;
   requireEligibleContext(
@@ -1187,6 +1170,10 @@ async function handlePrefill(body, dependencies, nowMs) {
     dependencies.config,
     new Set([statuses.issued, statuses.verified]),
   );
+  if (prefillSecurityBinding(existing, dependencies.config).journeyBindingDigest !==
+      candidate.session.journeyBindingDigest) {
+    throw genericSetupNotFound();
+  }
   // Fail deterministic CRM/Form contract defects before consuming the
   // one-time email proof or changing durable session state.
   buildPrefillPayload(existing, {
@@ -1199,6 +1186,7 @@ async function handlePrefill(body, dependencies, nowMs) {
     crmContactId: candidate.session.crmContactId,
     crmAccountId: candidate.session.crmAccountId,
     crmDealId: candidate.session.crmDealId,
+    journeyBindingDigest: candidate.session.journeyBindingDigest,
     issuedAt: candidate.session.issuedAt,
     expiresAt: candidate.session.expiresAt,
   };
@@ -1258,6 +1246,10 @@ async function handlePrefill(body, dependencies, nowMs) {
 
   existing = await fetchSessionContext(dependencies.crmClient, session);
   requireEligibleContext(existing, dependencies.config, new Set([statuses.verified]));
+  if (prefillSecurityBinding(existing, dependencies.config).journeyBindingDigest !==
+      session.journeyBindingDigest) {
+    throw genericSetupNotFound();
+  }
   try {
     // CRM may have changed after proof consumption and the verified-state
     // write. Re-read and rebind the consumed proof before minting any prefill.
@@ -1286,10 +1278,80 @@ async function handlePrefill(body, dependencies, nowMs) {
     prefill,
     dependencies.config.workflowKeyMaterial,
   );
-  const minted = await dependencies.workflowStore.mintPrefill(
-    prefillBinding(session, existing, snapshotFingerprint),
+  const prefillHandle = generatePrefillHandle(dependencies.randomBytes);
+  const prefillHandleHash = hashPrefillHandle(
+    prefillHandle,
+    dependencies.config.workflowKeyMaterial,
   );
-  return response(200, { ...prefill, prefillId: minted.prefillId }, "prefill", "prepared");
+  const minted = await dependencies.workflowStore.mintPrefill(
+    {
+      ...prefillBinding(session, existing, snapshotFingerprint, dependencies.config),
+      prefillHandleHash,
+    },
+  );
+  return Object.freeze({
+    prefillHandle,
+    prefillId: minted.prefillId,
+    configurationRevision: minted.revision.sourceRevision,
+  });
+}
+
+async function handlePrefill(body, dependencies) {
+  assertExactKeys(body, PREFILL_KEYS, "Prefill request is invalid");
+  let prefillHandleHash;
+  try {
+    prefillHandleHash = hashPrefillHandle(
+      body.prefillHandle,
+      dependencies.config.workflowKeyMaterial,
+    );
+  } catch {
+    throw genericSetupNotFound();
+  }
+  const selected = await dependencies.workflowStore.readPrefillHandle(prefillHandleHash);
+  if (!selected) throw genericSetupNotFound();
+  const session = await dependencies.sessionStore.readByRowId(selected.revision.sessionRowId);
+  if (!session || session.status !== "verified") throw genericSetupNotFound();
+  assertBindingMatchesSession(selected.revision, session);
+  const existing = await fetchSessionContext(dependencies.crmClient, session);
+  requireEligibleContext(
+    existing,
+    dependencies.config,
+    new Set([dependencies.config.form2AccessStatuses.verified]),
+  );
+  assertFreshPrefill(existing, selected.revision);
+  const prefill = buildPrefillPayload(existing, {
+    allowedPhoneSystemProviders: dependencies.config.form2PhoneSystemProviders,
+  });
+  const snapshotFingerprint = fingerprintSnapshot(
+    prefill,
+    dependencies.config.workflowKeyMaterial,
+  );
+  if (snapshotFingerprint !== selected.revision.snapshotFingerprint) {
+    throw new ControllerError("Prefill snapshot no longer matches", {
+      status: 409,
+      publicCode: "setup_conflict",
+    });
+  }
+  const securityBinding = prefillSecurityBinding(existing, dependencies.config);
+  if (securityBinding.journeyBindingDigest !== session.journeyBindingDigest) {
+    throw genericSetupNotFound();
+  }
+  const consumed = await dependencies.workflowStore.consumePrefillHandle({
+    prefillHandleHash,
+    ...securityBinding,
+    configurationRevision: dependencies.config.sourceRevision,
+  });
+  if (consumed.revision.prefillKey !== selected.revision.prefillKey) {
+    throw new ControllerError("Prefill binding does not match", {
+      status: 409,
+      publicCode: "setup_conflict",
+    });
+  }
+  return response(200, {
+    ...prefill,
+    prefillId: selected.prefillId,
+    configurationRevision: consumed.revision.sourceRevision,
+  }, "prefill", consumed.replayed ? "replayed" : "prepared");
 }
 
 function handleAccessPage(dependencies) {
@@ -1301,9 +1363,17 @@ function handleAccessPage(dependencies) {
   return response(200, rendered.html, "access", "served", rendered.headers);
 }
 
-async function handleOtpRequest(body, dependencies) {
-  assertExactKeys(body, OTP_REQUEST_KEYS, "Verification request is invalid");
-  const result = await dependencies.verificationService.requestEmailOtp(body.setupToken);
+async function handleOtpRequest(body, dependencies, nowMs) {
+  const exchanging = Object.prototype.hasOwnProperty.call(body ?? {}, "setupToken");
+  assertExactKeys(
+    body,
+    exchanging ? OTP_REQUEST_EXCHANGE_KEYS : OTP_REQUEST_RESUME_KEYS,
+    "Verification request is invalid",
+  );
+  const result = exchanging
+    ? await dependencies.verificationService.exchangeSetupToken(body.setupToken)
+    : await dependencies.verificationService.requestEmailOtp(body.verificationId);
+  const verificationId = normalizeVerificationId(result?.verificationId);
   if (!new Set([
     "already_verified",
     "sent_confirmed",
@@ -1317,9 +1387,15 @@ async function handleOtpRequest(body, dependencies) {
     });
   }
   if (result.state === "already_verified") {
+    const prepared = await preparePrefill(result.binding, dependencies, nowMs);
     return response(
       200,
-      { ok: true, state: result.state, formUrl: buildFormUrl(dependencies.config, body.setupToken) },
+      {
+        ok: true,
+        state: result.state,
+        verificationId,
+        formUrl: buildFormUrl(dependencies.config, prepared.prefillHandle),
+      },
       "otp_request",
       "already_verified",
     );
@@ -1327,23 +1403,23 @@ async function handleOtpRequest(body, dependencies) {
   if (new Set(["sent_confirmed", "in_flight"]).has(result.state)) {
     return response(
       202,
-      { ok: true, state: result.state },
+      { ok: true, state: result.state, verificationId },
       "otp_request",
       result.state,
     );
   }
   return response(
     503,
-    { ok: false, state: result.state },
+    { ok: false, state: result.state, verificationId },
     "otp_request",
     result.state,
   );
 }
 
-async function handleOtpVerify(body, dependencies) {
+async function handleOtpVerify(body, dependencies, nowMs) {
   assertExactKeys(body, OTP_VERIFY_KEYS, "Verification request is invalid");
   const result = await dependencies.verificationService.verifyEmailOtp(
-    body.setupToken,
+    body.verificationId,
     body.code,
   );
   if (result?.verified !== true) {
@@ -1351,9 +1427,10 @@ async function handleOtpVerify(body, dependencies) {
       publicCode: "service_unavailable",
     });
   }
+  const prepared = await preparePrefill(result.binding, dependencies, nowMs);
   return response(
     200,
-    { ok: true, formUrl: buildFormUrl(dependencies.config, body.setupToken) },
+    { ok: true, formUrl: buildFormUrl(dependencies.config, prepared.prefillHandle) },
     "otp_verify",
     "verified",
   );
@@ -1645,16 +1722,45 @@ async function handleSubmission(body, dependencies, nowMs) {
     dependencies.config,
     body.submissionId,
   );
-  const resolvedSession = await resolveSubmissionSession(
-    body.setupToken,
-    dependencies,
-    nowMs,
-  );
-  const { expired, tokenHash } = resolvedSession;
-  let session = resolvedSession.session;
+  if (body.configurationRevision !== dependencies.config.sourceRevision ||
+      !/^[a-f0-9]{40}$/.test(body.configurationRevision ?? "")) {
+    throw new ControllerError("Configuration revision does not match", {
+      status: 409,
+      publicCode: "setup_conflict",
+    });
+  }
+  let revision;
+  try {
+    revision = await dependencies.workflowStore.readPrefillById(body.prefillId);
+  } catch (error) {
+    throw publicError(error);
+  }
+  if (!revision || revision.sourceRevision !== body.configurationRevision ||
+      !new Set(["ready", "submitted"]).has(revision.status)) {
+    throw new ControllerError("Prefill revision was not found", {
+      status: 409,
+      publicCode: "setup_conflict",
+    });
+  }
+  let session;
+  try {
+    session = await dependencies.sessionStore.readByRowId(revision.sessionRowId);
+  } catch {
+    throw genericSetupNotFound();
+  }
+  if (!session || !new Set(["verified", "submitting", "submitted"]).has(session.status) ||
+      !hasValue(session.verifiedAt)) {
+    throw genericSetupNotFound();
+  }
+  assertBindingMatchesSession(revision, session);
+  const tokenHash = session.tokenHash;
+  const expiresAt = Date.parse(session.expiresAt);
+  const expired = session.status === "verified" &&
+    Number.isFinite(expiresAt) && expiresAt <= nowMs;
   const submissionFingerprint = fingerprintSubmission({
     submissionId: namespacedSubmissionId,
     prefillId: body.prefillId,
+    configurationRevision: body.configurationRevision,
     values: formPayload,
   }, dependencies.config.workflowKeyMaterial);
   const submissionBinding = {
@@ -1729,23 +1835,6 @@ async function handleSubmission(body, dependencies, nowMs) {
     await expireSession(session, tokenHash, dependencies);
     throw genericSetupNotFound();
   }
-
-  let revision;
-  try {
-    revision = await dependencies.workflowStore.readPrefill({
-      prefillId: body.prefillId,
-      sessionRowId: session.rowId,
-    });
-  } catch (error) {
-    throw publicError(error);
-  }
-  if (!revision) {
-    throw new ControllerError("Prefill revision was not found", {
-      status: 409,
-      publicCode: "setup_conflict",
-    });
-  }
-  assertBindingMatchesSession(revision, session);
 
   if (session.status === "verified") {
     session = await beginSubmissionOwnership(session, submissionFingerprint, dependencies);
@@ -1828,7 +1917,7 @@ async function handleSubmission(body, dependencies, nowMs) {
     consumeStarted = true;
     consumedPrefill = await dependencies.workflowStore.consumePrefill({
       prefillId: body.prefillId,
-      ...prefillBinding(session, existing, currentFingerprint),
+      ...prefillBinding(session, existing, currentFingerprint, dependencies.config),
     });
     const crmOutcome = await dependencies.crmClient.updateForm2Composite(existing, updates);
     crmCommitted = true;
@@ -1995,8 +2084,8 @@ async function handleForm2Request(request, dependencies) {
     const now = typeof dependencies.now === "function" ? dependencies.now : Date.now;
     const nowMs = normalizeNow(now);
     if (path === config.issuePath) return await handleIssue(body, dependencies, nowMs);
-    if (path === config.otpRequestPath) return await handleOtpRequest(body, dependencies);
-    if (path === config.otpVerifyPath) return await handleOtpVerify(body, dependencies);
+    if (path === config.otpRequestPath) return await handleOtpRequest(body, dependencies, nowMs);
+    if (path === config.otpVerifyPath) return await handleOtpVerify(body, dependencies, nowMs);
     if (path === config.prefillPath) return await handlePrefill(body, dependencies, nowMs);
     return await handleSubmission(body, dependencies, nowMs);
   } catch (error) {

@@ -59,12 +59,14 @@
         "purpose": "inject the exact Catalyst Gateway key and independent Form 1 issue-route header",
         "credential_in_source_or_arguments": false
       },
-      "private_placeholders": ["{{FORM1_ISSUE_URL}}", "{{FORM1_ISSUE_CONNECTION_LINK_NAME}}", "{{FORM1_PUBLIC_URL}}", "{{FORM1_TOKEN_FIELD_ALIAS}}"],
+      "private_placeholders": ["{{FORM1_ISSUE_URL}}", "{{FORM1_ISSUE_CONNECTION_LINK_NAME}}", "{{FORM1_ACCESS_PUBLIC_URL}}"],
       "success_response": {
         "http_status": 201,
-        "exact_body_keys": ["ok", "formUrl", "expiresAt"],
-        "url_shape": "exact Form 1 public URL plus one private field alias and one 43-character base64url token",
+        "exact_body_keys": ["ok", "accessUrl", "expiresAt", "requestId"],
+        "request_id_grammar": "UUID v4 lowercase canonical",
+        "url_shape": "exact Catalyst Development access URL plus #journeyToken= and one 43-character base64url credential",
         "forbidden_url_data": ["CRM record ID", "journey ID", "email", "phone", "company name", "PII"],
+        "zoho_forms_receives_journey_credential": false,
         "open_target": "new window"
       },
       "failure_policy": "Fail closed without opening a URL; never log or automatically retry an ambiguous response.",
@@ -84,7 +86,7 @@
       "request": { "method": "POST", "content_type": "application/json", "body_keys": ["dealId", "issueRequestId"], "automatic_retry": false },
       "connection": { "placeholder": "{{FORM2_ISSUE_CONNECTION_LINK_NAME}}", "credential_in_source_or_arguments": false },
       "private_placeholders": ["{{FORM2_ISSUE_URL}}", "{{FORM2_ISSUE_CONNECTION_LINK_NAME}}", "{{FORM2_ACCESS_PUBLIC_URL}}"],
-      "success_response": { "http_status": 200, "exact_body_keys": ["ok", "accessUrl", "expiresAt"], "token_grammar": "^[A-Za-z0-9_-]{43}$" },
+      "success_response": { "http_status": 200, "exact_body_keys": ["ok", "accessUrl", "expiresAt", "requestId"], "token_grammar": "^[A-Za-z0-9_-]{43}$", "request_id_grammar": "UUID v4 lowercase canonical" },
       "deployment_status": "install_after_authoritative_readback"
     },
     {

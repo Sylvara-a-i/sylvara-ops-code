@@ -25,7 +25,7 @@
     "status": 200,
     "type": "object",
     "additionalProperties": false,
-    "required": ["ok", "accessUrl", "expiresAt"],
+    "required": ["ok", "accessUrl", "expiresAt", "requestId"],
     "properties": {
       "ok": {
         "const": true
@@ -38,6 +38,10 @@
       "expiresAt": {
         "type": "string",
         "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{3})?Z$"
+      },
+      "requestId": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
       }
     }
   },

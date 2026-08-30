@@ -14,7 +14,7 @@ For the bounded setup journey, build only the five selected artifacts and use th
 node scripts/build-release-manifest.js --profile setup-journey --source-revision <exact-head-sha> --environment Development --artifact revenue_leak_test_request_form=<path> --artifact revenue_leak_test_setup_form=<path> --artifact revenue_desk_call_gateway=<path> --artifact revenue_desk_call_worker=<path> --artifact revenue_desk_route_control=<path> --output <outside-repository-path>
 ```
 
-The setup profile selects the exact fifteen-route `setup-journey` API Gateway profile and explicitly defers `CRM_BILLING`. Create those routes while the Development gateway is disabled, read back every exact route and target binding, then enable only the Development API Gateway and verify availability. The private route-creation packet itself never authorizes that enablement. `RETELL_ROUTE_MODE` remains `disabled`; no Retell number, webhook/provider binding, publish, call, or Production gateway activation is authorized. In this state the activation control fails closed with `ISOLATED_RETELL_TEST_NUMBER_REQUIRED`. Verify all five Catalyst artifacts and resource inventory with `verify-release-readback.js --profile setup-journey`; CRM, Forms, Retell, gateway availability, and traffic state still require separate provider-observed evidence. Unknown profiles, arbitrary contract paths, and Production setup-journey manifests fail closed.
+The setup profile selects the exact seventeen-route `setup-journey` API Gateway profile and explicitly defers `CRM_BILLING`. Create those routes while the Development gateway is disabled, read back every exact route and target binding, then enable only the Development API Gateway and verify availability. The private route-creation packet itself never authorizes that enablement. `RETELL_ROUTE_MODE` remains `disabled`; no Retell number, webhook/provider binding, publish, call, or Production gateway activation is authorized. In this state the activation control fails closed with `ISOLATED_RETELL_TEST_NUMBER_REQUIRED`. Verify all five Catalyst artifacts and resource inventory with `verify-release-readback.js --profile setup-journey`; CRM, Forms, Retell, gateway availability, and traffic state still require separate provider-observed evidence. Unknown profiles, arbitrary contract paths, and Production setup-journey manifests fail closed.
 
 Each artifact path must be its Catalyst project root and contain `catalyst.json` plus `functions/<canonical-name>/package.json` and its lockfile. The checkout must be clean and the output must be outside Git. After deployment, create an allowlisted sanitized readback containing only the fields accepted by `verify-release-readback.js`. Exact function, source, artifact, table, Job-pool, contract, and environment parity is mandatory. Production additionally fails unless traffic, routes, and schedules are all dark.
 
@@ -33,8 +33,8 @@ node scripts/validate-private-route-packet.js <absolute-private-bound-packet-pat
 node scripts/validate-private-route-packet.js <absolute-private-continuation-packet-path> <absolute-private-continuation-approval-path> <absolute-private-original-bound-packet-path>
 ```
 
-The validator fixes either the exact 16-route `canonical-all` profile or the
-exact 15-route `setup-journey` profile, including authentication modes, one-minute
+The validator fixes either the exact 18-route `canonical-all` profile or the
+exact 17-route `setup-journey` profile, including authentication modes, one-minute
 overall/IP throttles, target functions, disabled zero-route prestate, and
 rollback order. The private packet must contain one ordered runtime-path binding
 for every contract route. Each binding repeats the canonical route ID, function,

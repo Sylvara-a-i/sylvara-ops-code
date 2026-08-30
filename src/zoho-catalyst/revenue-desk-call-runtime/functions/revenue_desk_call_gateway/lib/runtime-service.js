@@ -26,8 +26,7 @@ const {
 } = require('./crm-report-outbox');
 const { routeFingerprint, routeFromRows } = require('./approval-control');
 const {
-  authorizationReceiptFingerprint,
-  parseAuthorizationReceiptData,
+  verifyAuthorizationReceiptIntegrity,
 } = require('./authorization-receipt');
 
 const RECEIPT_IMMUTABLE = Object.freeze([
@@ -414,11 +413,12 @@ function authorizationReceiptData(receipt, deployment, config, kind) {
     && receipt.SOURCE_ENVIRONMENT === config.environment
     && HASH_PATTERN.test(receipt.PAYLOAD_FINGERPRINT || ''),
   'CONFIGURATION_UNAVAILABLE', `${kind} authorization receipt binding is invalid.`);
-  const data = parseAuthorizationReceiptData(receipt.EVENT_DATA_JSON, {
-    code: 'CONFIGURATION_UNAVAILABLE',
-    message: `${kind} authorization event is invalid.`,
-  });
-  const expectedReceiptFingerprint = authorizationReceiptFingerprint(receipt.EVENT_DATA_JSON);
+  const { data } = verifyAuthorizationReceiptIntegrity(
+    receipt, config.authorizationEventSecret, {
+      code: 'CONFIGURATION_UNAVAILABLE',
+      message: `${kind} authorization event failed integrity verification.`,
+    },
+  );
   invariant(data.schemaVersion === 1
     && data.configurationVersionId === deployment.configurationVersionId
     && data.routeFingerprint === deployment.approvedRouteFingerprint
@@ -428,7 +428,6 @@ function authorizationReceiptData(receipt, deployment, config, kind) {
     && data.controlBinding.action === (kind === 'Approval' ? 'approve' : 'activate')
     && OPERATOR_HASH_PATTERN.test(data.operatorIdHash || '')
     && HASH_PATTERN.test(data.intentFingerprint || '')
-    && receipt.PAYLOAD_FINGERPRINT === expectedReceiptFingerprint
     && data.evidenceRevision === config.sourceRevision
     && Number.isSafeInteger(data.expectedDeploymentVersion)
     && data.expectedDeploymentVersion >= 0

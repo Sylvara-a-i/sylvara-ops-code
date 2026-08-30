@@ -117,6 +117,17 @@ function createCatalystDataStoreAdapter(app, config) {
     if (!isValidTokenHash(tokenHash)) throw inputError("Token hash is invalid");
     return find(table, "TOKEN_HASH", tokenHash);
   }
+  async function findRowsByPrefillHandleHash(table, handleHash) {
+    if (!isValidTokenHash(handleHash)) throw inputError("Prefill handle hash is invalid");
+    return find(table, "PREFILL_HANDLE_HASH", handleHash);
+  }
+  async function findRowsByPrefillId(table, prefillId) {
+    if (typeof prefillId !== "string" ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(prefillId)) {
+      throw inputError("Prefill identifier is invalid");
+    }
+    return find(table, "PREFILL_ID", prefillId);
+  }
   async function findRowsByJourneyId(table, journeyId) {
     return find(table, "INTAKE_SUBMISSION_ID", normalizeJourneyId(journeyId));
   }
@@ -155,6 +166,8 @@ function createCatalystDataStoreAdapter(app, config) {
   }
   return Object.freeze({
     findRowsByJourneyId,
+    findRowsByPrefillHandleHash,
+    findRowsByPrefillId,
     findRowsByRowId,
     findRowsByTokenHash,
     insertRow,

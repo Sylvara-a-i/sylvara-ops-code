@@ -6,7 +6,9 @@ const {
   constantTimeEqual,
   generateEmailOtp,
   hashAccessToken,
+  normalizeVerificationId,
   normalizeProofEmail,
+  prefillBindingDigest,
   proofBindingDigest,
   proofDestinationDigest,
   proofKey,
@@ -67,14 +69,7 @@ function createVerificationService({
     return value;
   }
 
-  async function readContext(setupToken) {
-    let tokenHash;
-    try {
-      tokenHash = hashAccessToken(setupToken, config.tokenPepper);
-    } catch {
-      fail("Setup access is unavailable", { publicCode: "setup_not_found", status: 404 });
-    }
-    const session = await sessionStore.readByTokenHash(tokenHash);
+  async function buildContext(session) {
     const current = nowMs();
     if (
       !session ||
@@ -102,6 +97,25 @@ function createVerificationService({
       fail("Setup relationship does not match", { publicCode: "identity_mismatch", status: 409 });
     }
     verifyRecordRelationships({ contact, account, deal });
+    let currentJourneyBindingDigest;
+    try {
+      currentJourneyBindingDigest = prefillBindingDigest({
+        crmOrganizationHash: config.crmOrganizationHash,
+        crmContactId: contact.id,
+        crmAccountId: account.id,
+        crmDealId: deal.id,
+        journeyId: deal.Intake_Submission_ID,
+        formIdentityHash: config.formIdentityHash,
+        expectedStage: "form2",
+        formVersion: config.form2FormVersion,
+        configurationRevision: config.sourceRevision,
+      }, config.workflowKeyMaterial);
+    } catch {
+      fail("Setup access is unavailable", { publicCode: "setup_not_found", status: 404 });
+    }
+    if (!constantTimeEqual(session.journeyBindingDigest, currentJourneyBindingDigest)) {
+      fail("Setup access is unavailable", { publicCode: "setup_not_found", status: 404 });
+    }
     const destination = normalizeProofEmail(contact.Email);
     const selectedProofKey = proofKey(session.rowId, config.proofHmacSecret);
     const destinationDigest = proofDestinationDigest(destination, config.proofHmacSecret);
@@ -118,10 +132,11 @@ function createVerificationService({
     const binding = Object.freeze({
       sessionRowId: session.rowId,
       issueRequestKey: session.issueRequestKey,
-      tokenHash,
+      tokenHash: session.tokenHash,
       crmContactId: session.crmContactId,
       crmAccountId: session.crmAccountId,
       crmDealId: session.crmDealId,
+      journeyBindingDigest: session.journeyBindingDigest,
       issuedAt: session.issuedAt,
       expiresAt: session.expiresAt,
     });
@@ -138,6 +153,38 @@ function createVerificationService({
       proofKey: selectedProofKey,
       session,
     });
+  }
+
+  async function readContext(setupToken) {
+    let tokenHash;
+    try {
+      tokenHash = hashAccessToken(setupToken, config.tokenPepper);
+    } catch {
+      fail("Setup access is unavailable", { publicCode: "setup_not_found", status: 404 });
+    }
+    const session = await sessionStore.readByTokenHash(tokenHash);
+    if (!session || session.tokenHash !== tokenHash) {
+      fail("Setup access is unavailable", { publicCode: "setup_not_found", status: 404 });
+    }
+    return buildContext(session);
+  }
+
+  async function readContextByVerificationId(verificationId) {
+    let selected;
+    try {
+      selected = normalizeVerificationId(verificationId);
+    } catch {
+      fail("Setup access is unavailable", { publicCode: "setup_not_found", status: 404 });
+    }
+    const proof = await proofStore.readByProofKey(selected);
+    if (!proof) fail("Setup access is unavailable", { publicCode: "setup_not_found", status: 404 });
+    const session = await sessionStore.readByRowId(proof.sessionRowId);
+    const context = await buildContext(session);
+    if (!constantTimeEqual(selected, context.proofKey)) {
+      fail("Setup access is unavailable", { publicCode: "setup_not_found", status: 404 });
+    }
+    assertProofOwnership(proof, context);
+    return context;
   }
 
   function assertProofOwnership(proof, context) {
@@ -189,8 +236,7 @@ function createVerificationService({
     return null;
   }
 
-  async function requestEmailOtp(setupToken) {
-    const context = await readContext(setupToken);
+  async function requestEmailOtpForContext(context) {
     let proof = await proofStore.readByProofKey(context.proofKey);
     assertProofOwnership(proof, context);
     if (proof?.status === "sending") {
@@ -307,11 +353,29 @@ function createVerificationService({
     return Object.freeze({ state: completedState });
   }
 
-  async function verifyEmailOtp(setupToken, otp) {
+  function withPublicIdentity(result, context) {
+    return Object.freeze({
+      ...result,
+      verificationId: context.proofKey,
+      binding: context.binding,
+    });
+  }
+
+  async function exchangeSetupToken(setupToken) {
+    const context = await readContext(setupToken);
+    return withPublicIdentity(await requestEmailOtpForContext(context), context);
+  }
+
+  async function requestEmailOtp(verificationId) {
+    const context = await readContextByVerificationId(verificationId);
+    return withPublicIdentity(await requestEmailOtpForContext(context), context);
+  }
+
+  async function verifyEmailOtp(verificationId, otp) {
     if (typeof otp !== "string" || !/^[0-9]{8}$/.test(otp)) {
       fail("Verification code is invalid");
     }
-    const context = await readContext(setupToken);
+    const context = await readContextByVerificationId(verificationId);
     let proof = await proofStore.readByProofKey(context.proofKey);
     assertProofOwnership(proof, context);
     if (!proof) fail("Verification proof is unavailable");
@@ -405,6 +469,7 @@ function createVerificationService({
 
   return Object.freeze({
     consumeVerifiedProof,
+    exchangeSetupToken,
     requestEmailOtp,
     verifyEmailOtp,
   });

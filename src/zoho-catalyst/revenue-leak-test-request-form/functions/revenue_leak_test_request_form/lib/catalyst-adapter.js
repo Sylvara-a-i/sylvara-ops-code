@@ -47,6 +47,23 @@ function sendJson(response, status, body) {
   else throw new Error("Catalyst response adapter is unavailable");
 }
 
+function sendControllerResult(response, result, requestId) {
+  if (typeof result?.body !== "string") {
+    sendJson(response, result.status, { ...result.body, requestId });
+    return;
+  }
+  if (typeof response.status === "function") response.status(result.status);
+  else response.statusCode = result.status;
+  if (typeof response.setHeader === "function") {
+    for (const [name, value] of Object.entries(result.headers ?? {})) {
+      response.setHeader(name, value);
+    }
+  }
+  if (typeof response.send === "function") response.send(result.body);
+  else if (typeof response.end === "function") response.end(result.body);
+  else throw new Error("Catalyst response adapter is unavailable");
+}
+
 function headerValues(request, headerName) {
   const normalizedName = headerName.toLowerCase();
   const distinct = Object.entries(request?.headersDistinct ?? {})
@@ -171,12 +188,13 @@ function createRequestListener({
         crmClient,
         now,
         randomBytes,
+        randomUUID,
         sessionStore,
       });
       safeLog(logger, result.status >= 500 ? "error" : "info", {
         requestId, stage: result.stage, outcome: result.outcome, elapsedMs: now() - startedAt,
       });
-      sendJson(response, result.status, result.body);
+      sendControllerResult(response, result, requestId);
     } catch (rawError) {
       const error = normalizeError(rawError);
       const status = statusForError(error);
@@ -197,5 +215,6 @@ module.exports = {
   readCatalystEnvironmentHeader,
   readCatalystProjectIdHeader,
   sendJson,
+  sendControllerResult,
   statusForError,
 };

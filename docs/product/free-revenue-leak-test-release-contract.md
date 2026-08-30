@@ -27,7 +27,7 @@ Form 2's executable contract has exactly 33 client fields: 25 unconditionally re
 
 One existing Catalyst project hosts exactly seven active Revenue Desk functions:
 
-1. `revenue_leak_test_request_form` — Advanced I/O for public Form 1 ingestion plus opaque, server-bound assisted issue, prefill, and submission routes; Production remains dark.
+1. `revenue_leak_test_request_form` — Advanced I/O for public Form 1 ingestion plus server-bound assisted Issue, fragment-only Access, one-time Exchange, Dynamic Prefill-Webhook, and Submission routes; Production remains dark.
 2. `revenue_leak_test_setup_form` — Advanced I/O for Form 2 issuance, durable email proof, prefill, and bounded authorization submission.
 3. `revenue_desk_call_gateway` — Advanced I/O for `POST /retell/inbound`, `POST /retell/events`, and `GET /internal/readiness`.
 4. `revenue_desk_route_control` — private Development-only Advanced I/O for separate configuration approval, isolated activation, and stop or rollback operations.

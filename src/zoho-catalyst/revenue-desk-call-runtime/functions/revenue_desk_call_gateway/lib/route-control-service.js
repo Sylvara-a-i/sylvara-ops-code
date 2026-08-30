@@ -14,11 +14,16 @@ const { ROLLBACK_CONTROL_REASON_TO_CRM, STOP_REASON_TO_CRM } = require('./contra
 const { RevenueDeskError, invariant } = require('./errors');
 const { keyedDigest, numberLookupKey } = require('./security');
 const { E164_PATTERN, validateConfiguration } = require('./validation');
-const { parseAuthorizationReceiptData } = require('./authorization-receipt');
+const {
+  verifyAuthorizationReceiptIntegrity,
+} = require('./authorization-receipt');
 
 const CRM_ID = /^[1-9][0-9]{7,29}$/;
 const OPAQUE_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
 const IDEMPOTENCY_ID = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
+const APPROVAL_EVENT_PATTERN = /^approval_[a-f0-9]{64}$/;
+const HASH_PATTERN = /^[a-f0-9]{64}$/;
+const OPERATOR_HASH_PATTERN = /^operator_[a-f0-9]{64}$/;
 const ROLLBACK_REASON_TO_CRM = Object.freeze(Object.fromEntries(
   ROLLBACK_CONTROL_REASON_TO_CRM,
 ));
@@ -117,43 +122,118 @@ function verifyControlPatch(row, patch) {
   { httpStatus: 503, retryable: true, ambiguous: true });
 }
 
-function eventFromReceipt(receipt) {
+function eventFromReceipt(receipt, config) {
   invariant(plain(receipt) && receipt.RECEIPT_KIND === 'authorization_event'
     && receipt.STATUS === 'Completed' && typeof receipt.EVENT_DATA_JSON === 'string',
   'CONTROL_AUDIT_INVALID', 'Authorization history is invalid.', { httpStatus: 503 });
-  const data = receiptData(receipt);
-  invariant(plain(data) && data.schemaVersion === 1,
+  const { data, event } = verifyAuthorizationReceiptIntegrity(
+    receipt, config.eventChainSecret, {
+      code: 'CONTROL_AUDIT_INVALID',
+      message: 'Authorization history failed integrity verification.',
+    },
+  );
+  invariant(data.schemaVersion === 1,
     'CONTROL_AUDIT_INVALID', 'Authorization history payload is invalid.', { httpStatus: 503 });
-  return Object.freeze({
-    AUTHORIZATION_EVENT_ID: receipt.EVENT_KEY,
-    EVENT_SCHEMA_VERSION: 1,
-    ACTION: data.action,
-    DECISION: data.decision,
-    DEPLOYMENT_ID: receipt.DEPLOYMENT_ID,
-    CONFIGURATION_VERSION_ID: data.configurationVersionId,
-    ROUTE_FINGERPRINT: data.routeFingerprint,
-    ROUTE_READBACK_FINGERPRINT: data.routeReadbackFingerprint,
-    ROUTE_OBSERVED_AT: data.routeObservedAt,
-    APPROVAL_EVENT_KEY: data.approvalEventKey,
-    OPERATOR_ID_HASH: data.operatorIdHash,
-    INTENT_FINGERPRINT: data.intentFingerprint,
-    EVIDENCE_REVISION: data.evidenceRevision,
-    EVIDENCE_OBSERVED_AT: data.evidenceObservedAt,
-    EXPECTED_DEPLOYMENT_VERSION: data.expectedDeploymentVersion,
-    CAPACITY_REMAINING_AT_DECISION: data.capacityRemainingAtDecision,
-    PREVIOUS_EVENT_HASH: data.previousEventHash,
-    EVENT_HASH: data.eventHash,
-    ACTUAL_START_AT: data.actualStartAt,
-    EXPIRES_AT: data.expiresAt,
-    DECIDED_AT: data.decidedAt,
-  });
+  return event;
 }
 
-function receiptData(receipt) {
-  return parseAuthorizationReceiptData(receipt?.EVENT_DATA_JSON, {
+function receiptData(receipt, config) {
+  return verifyAuthorizationReceiptIntegrity(receipt, config.eventChainSecret, {
     code: 'CONTROL_AUDIT_INVALID',
-    message: 'Authorization history payload is invalid.',
-  });
+    message: 'Authorization history failed integrity verification.',
+  }).data;
+}
+
+function exactTimestamp(value) {
+  const parsed = typeof value === 'string' ? Date.parse(value) : Number.NaN;
+  return Number.isFinite(parsed) && new Date(parsed).toISOString() === value;
+}
+
+function validateCompletedApprovalReceipt(receipt, {
+  command, deployment, configurationRow, expectedRouteFingerprint, config,
+}) {
+  const { data, event } = verifyAuthorizationReceiptIntegrity(
+    receipt, config.eventChainSecret, {
+      code: 'CONTROL_AUDIT_INVALID',
+      message: 'The completed approval receipt failed integrity verification.',
+    },
+  );
+  const binding = data.controlBinding;
+  const evidenceAt = Date.parse(data.evidenceObservedAt);
+  const decidedAt = Date.parse(data.decidedAt);
+  invariant(plain(receipt)
+    && receipt.RECEIPT_KIND === 'authorization_event'
+    && receipt.STATUS === 'Completed'
+    && Number(receipt.RECEIPT_VERSION) === 1
+    && Number(receipt.ATTEMPT_COUNT) === 0
+    && (receipt.CALL_KEY === null || receipt.CALL_KEY === undefined)
+    && (receipt.CORRELATION_ID === null || receipt.CORRELATION_ID === undefined)
+    && (receipt.ROUTE_READBACK_FINGERPRINT === null
+      || receipt.ROUTE_READBACK_FINGERPRINT === undefined)
+    && (receipt.RELATED_EVENT_KEY === null || receipt.RELATED_EVENT_KEY === undefined)
+    && [null, undefined].includes(receipt.LEASE_TOKEN)
+    && (receipt.LEASE_EXPIRES_AT === null || receipt.LEASE_EXPIRES_AT === undefined)
+    && (receipt.JOB_REFERENCE === null || receipt.JOB_REFERENCE === undefined)
+    && (receipt.ENQUEUED_AT === null || receipt.ENQUEUED_AT === undefined)
+    && (receipt.NEXT_ATTEMPT_AT === null || receipt.NEXT_ATTEMPT_AT === undefined)
+    && (receipt.LAST_ERROR_CODE === null || receipt.LAST_ERROR_CODE === undefined)
+    && APPROVAL_EVENT_PATTERN.test(receipt.EVENT_KEY || '')
+    && receipt.EVENT_KEY === deployment.APPROVAL_EVENT_KEY
+    && receipt.EVENT_TYPE === 'approve'
+    && receipt.DEPLOYMENT_ID === command.deploymentId
+    && receipt.CONFIGURATION_VERSION_ID === command.configurationVersionId
+    && receipt.ROUTE_FINGERPRINT === expectedRouteFingerprint
+    && receipt.SOURCE_REVISION === config.sourceRevision
+    && receipt.SOURCE_ENVIRONMENT === config.environment
+    && data.schemaVersion === 1
+    && data.action === 'approve'
+    && data.decision === 'Approved'
+    && data.configurationVersionId === command.configurationVersionId
+    && data.routeFingerprint === expectedRouteFingerprint
+    && data.operatorIdHash === config.operatorIdHash
+    && OPERATOR_HASH_PATTERN.test(data.operatorIdHash || '')
+    && HASH_PATTERN.test(data.intentFingerprint || '')
+    && data.evidenceRevision === config.sourceRevision
+    && exactTimestamp(data.evidenceObservedAt)
+    && exactTimestamp(data.decidedAt)
+    && evidenceAt <= decidedAt
+    && decidedAt - evidenceAt <= 3_600_000
+    && Number.isSafeInteger(data.expectedDeploymentVersion)
+    && data.expectedDeploymentVersion >= 0
+    && Number(deployment.COUNT_VERSION) >= data.expectedDeploymentVersion + 1
+    && Number.isSafeInteger(data.capacityRemainingAtDecision)
+    && data.capacityRemainingAtDecision >= 1
+    && (data.previousEventHash === 'genesis'
+      || HASH_PATTERN.test(data.previousEventHash || ''))
+    && HASH_PATTERN.test(data.eventHash || '')
+    && data.decidedAt === deployment.GO_LIVE_APPROVED_AT
+    && receipt.RECEIVED_AT === data.decidedAt
+    && receipt.PROCESSED_AT === data.decidedAt
+    && data.approvalEventKey === null
+    && data.routeReadbackFingerprint === null
+    && data.routeObservedAt === null
+    && data.actualStartAt === null
+    && data.expiresAt === null
+    && binding.action === 'approve'
+    && binding.dealId === command.dealId
+    && binding.journeyId === command.journeyId
+    && binding.deploymentId === command.deploymentId
+    && binding.configurationVersionId === command.configurationVersionId
+    && binding.reason === null
+    && binding.deploymentControlPrestateDigest === null
+    && binding.deploymentControlPoststateDigest === null
+    && deployment.DEPLOYMENT_ID === command.deploymentId
+    && deployment.APPROVED_CONFIGURATION_VERSION_ID === command.configurationVersionId
+    && deployment.APPROVED_ROUTE_FINGERPRINT === expectedRouteFingerprint
+    && deployment.GO_LIVE_APPROVAL_STATUS === 'Approved'
+    && configurationRow.CONFIGURATION_VERSION_ID === command.configurationVersionId
+    && configurationRow.DEPLOYMENT_ID === command.deploymentId
+    && configurationRow.SOURCE_REVISION === config.sourceRevision
+    && configurationRow.SOURCE_ENVIRONMENT === config.environment,
+  'CONTROL_AUDIT_INVALID',
+  'The completed approval receipt does not match the activation target.',
+  { httpStatus: 503 });
+  return Object.freeze({ receipt, data, event });
 }
 
 function canonicalControlState(row) {
@@ -188,10 +268,29 @@ function controlBinding(action, command, {
   });
 }
 
-function assertReceiptCommand(receipt, action, command) {
-  const data = receiptData(receipt);
+function assertReceiptCommand(receipt, action, command, config) {
+  const data = receiptData(receipt, config);
   const binding = data.controlBinding;
-  invariant(binding.schemaVersion === 1
+  const eventAction = action === 'rollback' ? 'revoke' : action;
+  invariant(receipt.RECEIPT_KIND === 'authorization_event'
+    && Number(receipt.RECEIPT_VERSION) === 1
+    && receipt.EVENT_KEY === eventKey(config, action, command.idempotencyKey)
+    && receipt.EVENT_TYPE === eventAction
+    && receipt.DEPLOYMENT_ID === command.deploymentId
+    && receipt.CONFIGURATION_VERSION_ID === command.configurationVersionId
+    && receipt.ROUTE_FINGERPRINT === data.routeFingerprint
+    && (receipt.ROUTE_READBACK_FINGERPRINT ?? null)
+      === (data.routeReadbackFingerprint ?? null)
+    && (receipt.RELATED_EVENT_KEY ?? null) === (data.approvalEventKey ?? null)
+    && receipt.SOURCE_REVISION === config.sourceRevision
+    && receipt.SOURCE_ENVIRONMENT === config.environment
+    && (receipt.CALL_KEY === null || receipt.CALL_KEY === undefined)
+    && (receipt.CORRELATION_ID === null || receipt.CORRELATION_ID === undefined)
+    && receipt.RECEIVED_AT === data.decidedAt
+    && data.schemaVersion === 1
+    && data.action === eventAction
+    && data.configurationVersionId === command.configurationVersionId
+    && binding.schemaVersion === 1
     && binding.action === action
     && binding.dealId === command.dealId
     && binding.journeyId === command.journeyId
@@ -199,16 +298,14 @@ function assertReceiptCommand(receipt, action, command) {
     && binding.configurationVersionId === command.configurationVersionId
     && binding.idempotencyKey === command.idempotencyKey
     && binding.reason === (action === 'rollback' ? command.reason : null)
-    && receipt.EVENT_TYPE === (action === 'rollback' ? 'revoke' : action)
-    && receipt.DEPLOYMENT_ID === command.deploymentId
-    && receipt.CONFIGURATION_VERSION_ID === command.configurationVersionId,
+    && binding.configurationVersionId === command.configurationVersionId,
   'CONTROL_IDEMPOTENCY_CONFLICT', 'Control idempotency key is bound to another command.',
   { httpStatus: 409 });
   return data;
 }
 
-function decisionPatch(action, receipt, command) {
-  const data = assertReceiptCommand(receipt, action, command);
+function decisionPatch(action, receipt, command, config) {
+  const data = assertReceiptCommand(receipt, action, command, config);
   const expectedVersion = Number(data.expectedDeploymentVersion);
   invariant(Number.isSafeInteger(expectedVersion) && expectedVersion >= 0
     && Number.isFinite(Date.parse(data.decidedAt)),
@@ -770,7 +867,7 @@ function createRouteControlService({
       && activationReceipt.CONFIGURATION_VERSION_ID === command.configurationVersionId,
     'CONTROL_AUDIT_INVALID', 'Activation receipt does not match the rollback target.',
     { httpStatus: 503 });
-    const activationData = receiptData(activationReceipt);
+    const activationData = receiptData(activationReceipt, config);
     const binding = activationData.controlBinding;
     invariant(binding.action === 'activate'
       && binding.dealId === command.dealId
@@ -1026,8 +1123,59 @@ function createRouteControlService({
       configurationRow, command, config.sourceRevision, deployment,
     );
     const events = receipts.filter((receipt) => receipt.STATUS === 'Completed')
-      .map(eventFromReceipt);
+      .map((receipt) => eventFromReceipt(receipt, config));
     return { deployment, configurationRow, configuration, deal, events, receipts };
+  }
+
+  async function requireCompletedActivationApproval(command, suppliedState = null) {
+    const [deployment, configurationRow, receipts] = suppliedState?.deployment
+      && suppliedState?.configurationRow && Array.isArray(suppliedState?.receipts)
+      ? [suppliedState.deployment, suppliedState.configurationRow, suppliedState.receipts]
+      : await Promise.all([
+        store.unique(tables.DEPLOYMENT_TABLE, 'DEPLOYMENT_ID', command.deploymentId),
+        store.unique(tables.CONFIGURATION_VERSION_TABLE, 'CONFIGURATION_VERSION_ID',
+          command.configurationVersionId),
+        store.queryBounded(tables.EVENT_RECEIPT_TABLE, 'DEPLOYMENT_ID', command.deploymentId,
+          'RECEIVED_AT', 100, { RECEIPT_KIND: 'authorization_event' }),
+      ]);
+    invariant(deployment && configurationRow,
+      'CONTROL_PRECONDITION_FAILED', 'Activation state is unavailable.',
+      { httpStatus: 409 });
+    invariant(APPROVAL_EVENT_PATTERN.test(deployment.APPROVAL_EVENT_KEY || '')
+      && deployment.GO_LIVE_APPROVAL_STATUS === 'Approved'
+      && deployment.APPROVED_CONFIGURATION_VERSION_ID === command.configurationVersionId
+      && typeof deployment.APPROVED_ROUTE_FINGERPRINT === 'string',
+    'CONTROL_PRECONDITION_FAILED', 'Activation has no completed configuration approval.',
+    { httpStatus: 409 });
+    invariant(receipts.length < 100,
+      'CONTROL_AUDIT_INVALID', 'Approval receipt inventory is incomplete.',
+      { httpStatus: 503 });
+    const approvals = receipts.filter((receipt) => receipt.EVENT_TYPE === 'approve');
+    invariant(approvals.length === 1
+      && approvals[0].EVENT_KEY === deployment.APPROVAL_EVENT_KEY,
+    'CONTROL_AUDIT_INVALID', 'Activation requires one exact referenced approval receipt.',
+    { httpStatus: 503 });
+    const expectedRouteFingerprint = suppliedState?.routeFingerprint
+      || routeFingerprint(routeFromRows(deployment, configurationRow));
+    return validateCompletedApprovalReceipt(approvals[0], {
+      command,
+      deployment,
+      configurationRow,
+      expectedRouteFingerprint,
+      config,
+    });
+  }
+
+  function assertActivationApprovalChain(receipt, data, approval) {
+    invariant(receipt?.EVENT_TYPE === 'activate'
+      && receipt.RELATED_EVENT_KEY === approval.receipt.EVENT_KEY
+      && data?.action === 'activate'
+      && data.decision === 'Activated'
+      && data.approvalEventKey === approval.receipt.EVENT_KEY
+      && data.previousEventHash === approval.data.eventHash,
+    'CONTROL_AUDIT_INVALID',
+    'Activation receipt is not chained to the completed approval receipt.',
+    { httpStatus: 503 });
   }
 
   async function readBoundIdentity(command) {
@@ -1086,6 +1234,7 @@ function createRouteControlService({
         sourceRevision: config.sourceRevision,
         environment: config.environment,
         controlBinding: controlBinding(action, command, rollbackDigests),
+        eventChainSecret: config.eventChainSecret,
       }),
       STATUS: 'Prepared',
       PROCESSED_AT: null,
@@ -1098,7 +1247,7 @@ function createRouteControlService({
     ]);
     invariant(new Set(['Prepared', 'Completed']).has(inserted.row.STATUS),
       'CONTROL_IDEMPOTENCY_CONFLICT', 'Control receipt is not resumable.', { httpStatus: 409 });
-    const receiptPayload = assertReceiptCommand(inserted.row, action, command);
+    const receiptPayload = assertReceiptCommand(inserted.row, action, command, config);
     let poststate = deployment;
     const alreadyApplied = Object.entries(patch).every(([field, value]) => same(poststate[field], value));
     if (!alreadyApplied) {
@@ -1190,7 +1339,7 @@ function createRouteControlService({
       || (new Set(['activate', 'rollback']).has(action)
         && receipt.STATUS === 'ReconciliationRequired'),
       'CONTROL_IDEMPOTENCY_CONFLICT', 'Control receipt is not resumable.', { httpStatus: 409 });
-    const data = assertReceiptCommand(receipt, action, command);
+    const data = assertReceiptCommand(receipt, action, command, config);
     const [deployment, configurationRow, deal] = await Promise.all([
       store.unique(tables.DEPLOYMENT_TABLE, 'DEPLOYMENT_ID', command.deploymentId),
       store.unique(tables.CONFIGURATION_VERSION_TABLE, 'CONFIGURATION_VERSION_ID',
@@ -1265,7 +1414,7 @@ function createRouteControlService({
           activationContainmentPending: true, receipt, receiptData: data,
           deployment, configurationRow, routeFingerprint: route, deal });
       }
-      const patch = decisionPatch(action, receipt, command);
+      const patch = decisionPatch(action, receipt, command, config);
       let poststate = deployment;
       const alreadyApplied = Object.entries(patch)
         .every(([field, value]) => same(poststate[field], value));
@@ -1287,6 +1436,7 @@ function createRouteControlService({
         }
         if (beforePreparedApply) await beforePreparedApply({
           deployment: poststate, configurationRow, routeFingerprint: route,
+          receipt, receiptData: data,
         });
         if (action === 'rollback') {
           try {
@@ -1376,7 +1526,7 @@ function createRouteControlService({
     invariant(containmentReceipt?.ROWID,
       'CONTROL_AUDIT_INCOMPLETE', 'Activation containment receipt is unavailable.',
       { httpStatus: 503, ambiguous: true });
-    assertReceiptCommand(containmentReceipt, 'activate', command);
+    assertReceiptCommand(containmentReceipt, 'activate', command, config);
     if (containmentReceipt.STATUS === 'Completed') {
       throw new RevenueDeskError('CONTROL_PRECONDITION_FAILED',
         'Completed activation history won the containment race and was not mutated.', {
@@ -1403,7 +1553,7 @@ function createRouteControlService({
           RECEIPT_VERSION: 1,
         },
       );
-      assertReceiptCommand(fenced, 'activate', command);
+      assertReceiptCommand(fenced, 'activate', command, config);
       if (fenced.STATUS === 'Completed') {
         throw new RevenueDeskError('CONTROL_PRECONDITION_FAILED',
           'Completed activation history won the containment race and was not mutated.', {
@@ -1470,7 +1620,7 @@ function createRouteControlService({
       let terminalProofError = null;
       if (currentReceipt?.STATUS === 'Completed') {
         try {
-          const currentData = assertReceiptCommand(currentReceipt, 'activate', command);
+          const currentData = assertReceiptCommand(currentReceipt, 'activate', command, config);
           invariant(activationBindingIsRuntimeTerminal(
             compensated, currentReceipt, currentData, command,
           ),
@@ -1535,7 +1685,7 @@ function createRouteControlService({
     const ownershipReceipt = await store.unique(
       tables.EVENT_RECEIPT_TABLE, 'EVENT_KEY', receiptKey,
     );
-    assertReceiptCommand(ownershipReceipt, 'activate', command);
+    assertReceiptCommand(ownershipReceipt, 'activate', command, config);
     if (ownershipReceipt.STATUS === 'ReconciliationRequired'
       && ownershipReceipt.LAST_ERROR_CODE === 'ACTIVATION_SUPERSEDED_BY_ROLLBACK') {
       throw new RevenueDeskError('ACTIVATION_SUPERSEDED_BY_ROLLBACK',
@@ -1637,7 +1787,7 @@ function createRouteControlService({
     );
     invariant(receipt && new Set(['Prepared', 'Completed']).has(receipt.STATUS),
       'CONTROL_AUDIT_INVALID', 'Activation receipt is unavailable.', { httpStatus: 503 });
-    const data = assertReceiptCommand(receipt, 'activate', command);
+    const data = assertReceiptCommand(receipt, 'activate', command, config);
     const receiptKey = receipt.EVENT_KEY;
     async function stopForRollbackClaim(error) {
       const currentReceipt = await store.unique(
@@ -1887,7 +2037,7 @@ function createRouteControlService({
       'CONTROL_STATE_INVALID',
       'Runtime-terminal deployment has no completed activation receipt.',
       { httpStatus: 503, ambiguous: true });
-    const activationData = receiptData(activationReceipt);
+    const activationData = receiptData(activationReceipt, config);
     invariant(activationBindingIsRuntimeTerminal(
       state.deployment, activationReceipt, activationData, command,
     ),
@@ -2033,8 +2183,18 @@ function createRouteControlService({
   async function activate(raw) {
     const command = validateCommand('activate', raw);
     await assertNoActiveRollbackClaim(command);
-    const replay = await existingDecision('activate', command);
+    // A Prepared activation resume can apply its deployment CAS inside existingDecision.
+    // Prove the immutable approval receipt before entering that resumable write path.
+    await requireCompletedActivationApproval(command);
+    const replay = await existingDecision('activate', command, {
+      beforePreparedApply: async ({ receipt, receiptData }) => {
+        const approval = await requireCompletedActivationApproval(command);
+        assertActivationApprovalChain(receipt, receiptData, approval);
+      },
+    });
     if (replay) {
+      const approval = await requireCompletedActivationApproval(command);
+      assertActivationApprovalChain(replay.receipt, replay.receiptData, approval);
       if (replay.activationContainmentPending) {
         await containActivationFailure(
           new RevenueDeskError('CRM_ACTIVATION_PROVEN_INACTIVE',
@@ -2143,6 +2303,7 @@ function createRouteControlService({
     state.routeFingerprint = routeFingerprint(routeFromRows(
       state.deployment, state.configurationRow,
     ));
+    const approval = await requireCompletedActivationApproval(command, state);
     validateActivationDeal(state.deal, command, state.configuration,
       state.deployment, config);
     await assertNoConflictingDeployment(state.deployment);
@@ -2181,7 +2342,7 @@ function createRouteControlService({
       deployment: state.deployment,
       configurationVersion: state.configurationRow,
       evidence,
-      existingEvents: state.events,
+      existingEvents: [approval.event],
       nowMs: now(),
     });
     const deployment = await persistDecision(result, state.deployment, command, 'activate');
@@ -2227,7 +2388,7 @@ function createRouteControlService({
         let resumed = existing;
         if (existing.receipt.STATUS === 'ReconciliationRequired'
           && new Set(['Scheduled', 'Live']).has(existing.deployment.TEST_STATUS)) {
-          const patch = decisionPatch('rollback', existing.receipt, command);
+          const patch = decisionPatch('rollback', existing.receipt, command, config);
           const deployment = await applyRollbackDecision(
             existing.deployment,
             patch,

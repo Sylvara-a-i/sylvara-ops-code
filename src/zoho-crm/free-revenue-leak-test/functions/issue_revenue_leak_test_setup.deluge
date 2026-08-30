@@ -40,15 +40,16 @@ try
 			if(response_text != null && response_text.toString().length() > 0 && response_text.toString().length() <= 4096)
 			{
 				response_body = response_text.toString().toMap();
-				if(response_body != null && response_body.size() == 3 && response_body.containKey("ok") && response_body.containKey("accessUrl") && response_body.containKey("expiresAt") && response_body.get("ok") == true)
+				if(response_body != null && response_body.size() == 4 && response_body.containKey("ok") && response_body.containKey("accessUrl") && response_body.containKey("expiresAt") && response_body.containKey("requestId") && response_body.get("ok") == true)
 				{
 					access_url = response_body.get("accessUrl");
 					expires_at = response_body.get("expiresAt");
+					request_id = ifnull(response_body.get("requestId"),"").toString();
 					access_prefix = "{{FORM2_ACCESS_PUBLIC_URL}}" + "#setupToken=";
 					if(access_url != null && expires_at != null)
 					{
 						access_url_text = access_url.toString();
-						if(access_url_text.startsWith(access_prefix) && access_url_text.length() == access_prefix.length() + 43 && !access_url_text.contains("?") && !access_url_text.contains("&") && !access_url_text.contains(" ") && expires_at.toString().matches("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{3})?Z$"))
+						if(access_url_text.startsWith(access_prefix) && access_url_text.length() == access_prefix.length() + 43 && !access_url_text.contains("?") && !access_url_text.contains("&") && !access_url_text.contains(" ") && expires_at.toString().matches("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{3})?Z$") && request_id.matches("^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"))
 						{
 							setup_token = access_url_text.right(43);
 							if(setup_token.matches("^[A-Za-z0-9_-]{43}$"))

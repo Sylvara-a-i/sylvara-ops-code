@@ -56,6 +56,7 @@ const NUMERIC_LIMITS = Object.freeze({
   // the first successful verification transition.
   MAX_VERIFICATION_ATTEMPTS: Object.freeze({ fallback: 3, minimum: 2, maximum: 10 }),
   FORM2_PROOF_TTL_SECONDS: Object.freeze({ fallback: 600, minimum: 300, maximum: 900 }),
+  PREFILL_HANDLE_TTL_SECONDS: Object.freeze({ fallback: 600, minimum: 300, maximum: 900 }),
   FORM2_PROOF_MAX_ATTEMPTS: Object.freeze({ fallback: 5, minimum: 2, maximum: 10 }),
   FORM2_PROOF_MAX_SENDS: Object.freeze({ fallback: 3, minimum: 1, maximum: 5 }),
   FORM2_PROOF_RESEND_COOLDOWN_SECONDS: Object.freeze({
@@ -585,6 +586,15 @@ function loadConfig(
     prefillTableName,
     submissionTableName,
     proofTableName,
+    crmOrganizationHash: (() => {
+      const value = readRequired(environment, "CRM_ORGANIZATION_ID_SHA256");
+      if (!SHA256_HEX_PATTERN.test(value)) {
+        throw new ConfigurationError(
+          "CRM_ORGANIZATION_ID_SHA256 must be one lowercase SHA-256 digest",
+        );
+      }
+      return value;
+    })(),
     issuePath,
     accessPath,
     otpRequestPath,
@@ -630,10 +640,11 @@ function loadConfig(
       artifactFormDestinationSha256,
     ),
     form2DestinationSha256: artifactFormDestinationSha256,
-    form2TokenFieldAlias: validateIdentifier(
-      readRequired(environment, "FORM2_TOKEN_FIELD_ALIAS"),
-      "FORM2_TOKEN_FIELD_ALIAS",
+    form2PrefillHandleFieldAlias: validateIdentifier(
+      readRequired(environment, "FORM2_PREFILL_HANDLE_FIELD_ALIAS"),
+      "FORM2_PREFILL_HANDLE_FIELD_ALIAS",
     ),
+    formIdentityHash: artifactFormDestinationSha256,
     form2FormVersion: validateFormVersion(
       readRequired(environment, "FORM2_FORM_VERSION"),
     ),
@@ -668,6 +679,10 @@ function loadConfig(
       "MAX_VERIFICATION_ATTEMPTS",
     ),
     form2ProofTtlSeconds: parseBoundedInteger(environment, "FORM2_PROOF_TTL_SECONDS"),
+    prefillHandleTtlSeconds: parseBoundedInteger(
+      environment,
+      "PREFILL_HANDLE_TTL_SECONDS",
+    ),
     form2ProofMaxAttempts: parseBoundedInteger(
       environment,
       "FORM2_PROOF_MAX_ATTEMPTS",

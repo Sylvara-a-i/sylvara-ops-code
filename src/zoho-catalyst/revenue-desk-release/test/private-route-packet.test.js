@@ -144,26 +144,26 @@ function continuationPacket(existingCount = 1, routeProfile = "canonical-all") {
   };
 }
 
-test("validates one exact 16-route definition without authorizing activation", () => {
+test("validates one exact 18-route definition without authorizing activation", () => {
   const value = packet();
   const result = validateRoutePacket(value);
   assert.equal(result.phase, "definition");
-  assert.equal(result.routeCount, 16);
+  assert.equal(result.routeCount, 18);
   assert.equal(result.routeProfile, "canonical-all");
   assert.match(result.digest, /^[a-f0-9]{64}$/);
   assert.equal(digestRoutePacket(Object.fromEntries(Object.entries(value).reverse())), result.digest);
 });
 
-test("validates the closed 15-route setup profile and keeps CRM Billing absent", () => {
+test("validates the closed 17-route setup profile and keeps CRM Billing absent", () => {
   const definition = packet("definition", "setup-journey");
   const definitionResult = validateRoutePacket(definition);
   assert.equal(definitionResult.routeProfile, "setup-journey");
-  assert.equal(definitionResult.routeCount, 15);
+  assert.equal(definitionResult.routeCount, 17);
   assert.equal(definition.routes.some(({ id }) => id === "CRM_BILLING"), false);
 
   const bound = packet("bound", "setup-journey");
   const requests = buildRouteRequests(bound, approval(bound), NOW_MS);
-  assert.equal(requests.length, 15);
+  assert.equal(requests.length, 17);
   assert.equal(requests.some(({ body }) => body.name === "CRM_BILLING"), false);
   assert.equal(
     CONTRACT.route_profiles["setup-journey"].development_api_gateway_availability_authorized,
@@ -179,7 +179,7 @@ test("validates the closed 15-route setup profile and keeps CRM Billing absent",
   );
 
   const original = packet("bound", "setup-journey");
-  const continuation = continuationPacket(14, "setup-journey");
+  const continuation = continuationPacket(16, "setup-journey");
   const continuationResult = validateRoutePacket(continuation, original);
   assert.equal(continuationResult.routeProfile, "setup-journey");
   assert.equal(continuationResult.requestRouteCount, 1);
@@ -267,7 +267,7 @@ test("builds exact project-bound Advanced I/O requests only after function IDs a
   const value = packet("bound");
   assert.throws(() => buildRouteRequests(value), /approval/);
   const requests = buildRouteRequests(value, approval(value), NOW_MS);
-  assert.equal(requests.length, 16);
+  assert.equal(requests.length, 18);
   assert.ok(requests.every((request) =>
     request.path_variables.projectId === value.projectId &&
     request.headers["Catalyst-org"] === value.organizationId &&
@@ -458,7 +458,7 @@ test("separate approval binds organization, project, routes, targets, and runtim
 
 test("route approval is single-use and valid only inside a maximum 15-minute window", () => {
   const value = packet("bound");
-  assert.equal(buildRouteRequests(value, approval(value), NOW_MS).length, 16);
+  assert.equal(buildRouteRequests(value, approval(value), NOW_MS).length, 18);
   assert.throws(
     () => buildRouteRequests(value, approval(value, {
       expiresAt: "2026-08-26T18:05:00.000Z",
@@ -501,7 +501,10 @@ test("rejects Production, activation, route drift, endpoint reuse, and target am
   assert.throws(() => validateRoutePacket(duplicate), /unique/);
 
   const ambiguous = packet("bound");
-  const form1RouteIds = new Set(["FORM1_ISSUE", "FORM1_PREFILL", "FORM1_SUBMISSION"]);
+  const form1RouteIds = new Set([
+    "FORM1_ISSUE", "FORM1_ACCESS", "FORM1_EXCHANGE", "FORM1_PREFILL",
+    "FORM1_SUBMISSION",
+  ]);
   ambiguous.routes
     .filter(({ id }) => form1RouteIds.has(id))
     .forEach((route) => {
@@ -520,13 +523,13 @@ test("schema-v2 continuation emits only the untouched canonical suffix", () => {
   const result = validateRoutePacket(value, original);
   assert.equal(result.schemaVersion, 2);
   assert.equal(result.phase, "continuation");
-  assert.equal(result.routeCount, 16);
+  assert.equal(result.routeCount, 18);
   assert.equal(result.existingRouteCount, 1);
-  assert.equal(result.requestRouteCount, 15);
+  assert.equal(result.requestRouteCount, 17);
   assert.equal(result.existingRoutePrefixSha256, value.existingRoutePrefixSha256);
 
   const requests = buildRouteRequests(value, approval(value), NOW_MS, original);
-  assert.equal(requests.length, 15);
+  assert.equal(requests.length, 17);
   assert.equal(requests[0].body.name, "RETELL_EVENTS");
   assert.equal(requests.at(-1).body.name, "CRM_BILLING");
   assert.equal(requests.some(({ body }) => body.name === "RETELL_INBOUND"), false);
@@ -575,7 +578,7 @@ test("schema-v2 continuation cannot replace remaining targets or bindings by rec
   const original = packet("bound");
   const changed = continuationPacket(1);
   const forgedOriginal = structuredClone(original);
-  const form1Indexes = [6, 7, 8];
+  const form1Indexes = [6, 7, 8, 9, 10];
   form1Indexes.forEach((index) => {
     changed.routes[index].targetId = "999";
     changed.remainingRoutes[index - 1].targetId = "999";
@@ -635,7 +638,7 @@ test("schema-v2 continuation rejects gaps, reordered prefixes, and non-suffix re
   assert.throws(() => validateRoutePacket(recreateExisting, original), /exact canonical suffix/);
 
   assert.throws(() => validateRoutePacket(continuationPacket(0), original), /non-empty incomplete/);
-  assert.throws(() => validateRoutePacket(continuationPacket(16), original), /non-empty incomplete/);
+  assert.throws(() => validateRoutePacket(continuationPacket(18), original), /non-empty incomplete/);
 });
 
 test("schema-v2 continuation rejects existing-route attribute and evidence drift", async (t) => {
@@ -674,7 +677,7 @@ test("schema-v2 continuation rejects existing-route attribute and evidence drift
 test("schema-v2 continuation requires fresh exact single-use continuation approval", () => {
   const value = continuationPacket(1);
   const original = packet("bound");
-  assert.equal(buildRouteRequests(value, approval(value), NOW_MS, original).length, 15);
+  assert.equal(buildRouteRequests(value, approval(value), NOW_MS, original).length, 17);
   assert.throws(
     () => buildRouteRequests(
       value,
