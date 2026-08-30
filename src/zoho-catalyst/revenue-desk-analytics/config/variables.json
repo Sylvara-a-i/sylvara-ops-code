@@ -1,0 +1,39 @@
+{
+  "schema_version": 2,
+  "status": "proposed-private-runtime-binding",
+  "rules": {
+    "repository_values": "names, classifications, formats, and safe defaults only",
+    "runtime_values": "Catalyst private configuration or Connections",
+    "logging": "prohibited for every configured value",
+    "production": "disabled or readiness only; both require identity fields only and are external-I/O-free",
+    "source_revision": "SOURCE_REVISION must exactly equal the immutable revision stamped into the isolated release artifact"
+  },
+  "variables": [
+    { "name": "DEPLOYMENT_ENVIRONMENT", "classification": "safe-enum", "required": true, "allowed": ["development", "production"] },
+    { "name": "X_ZOHO_CATALYST_ENVIRONMENT", "classification": "runtime-metadata", "configured_by_operator": false, "required": true, "allowed": ["Development", "Production"], "rule": "must equal the title-case mapping of DEPLOYMENT_ENVIRONMENT" },
+    { "name": "SOURCE_REVISION", "classification": "public-build-identity", "required": true, "format": "40 lowercase hexadecimal characters" },
+    { "name": "ANALYTICS_SYNC_MODE", "classification": "safe-enum", "required": true, "allowed": ["disabled", "readiness", "active"] },
+    { "name": "EXPECTED_CATALYST_PROJECT_ID", "classification": "private-platform-identifier", "required": true },
+    { "name": "ANALYTICS_JOB_POOL_ID", "classification": "private-platform-identifier", "required": true },
+    { "name": "ANALYTICS_CHECKPOINT_TABLE", "classification": "private-platform-identifier", "required_when": "development", "safe_default": "AnalyticsSyncCheckpoints" },
+    { "name": "ANALYTICS_OUTBOX_TABLE", "classification": "private-platform-identifier", "required_when": "development", "safe_default": "AnalyticsSyncOutbox" },
+    { "name": "ANALYTICS_READ_CONNECTION_LINK_NAME", "classification": "private-connection-identity", "required_when": "development active" },
+    { "name": "ANALYTICS_WRITE_CONNECTION_LINK_NAME", "classification": "private-connection-identity", "required_when": "development active" },
+    { "name": "ANALYTICS_API_BASE_URL", "classification": "private-regional-endpoint", "required_when": "development active" },
+    { "name": "ANALYTICS_ORGANIZATION_ID", "classification": "private-platform-identifier", "required_when": "development active" },
+    { "name": "ANALYTICS_WORKSPACE_ID", "classification": "private-platform-identifier", "required_when": "development active" },
+    { "name": "ANALYTICS_TARGETS_JSON", "classification": "private-platform-map", "required_when": "development active", "rule": "table names must equal the five public names in analytics-model-contract.json; view_id values must be private and unique; every import revalidates view ID, exact table name and type, workspace ID, and organization ID through the read-only Connection before requesting write authorization" },
+    { "name": "ANALYTICS_MIGRATION_EVIDENCE_DIGEST", "classification": "sanitized-evidence-digest", "required_when": "development active", "format": "64 lowercase hexadecimal characters" },
+    { "name": "ANALYTICS_MAX_BATCH_SIZE", "classification": "bounded-runtime-policy", "required": false, "safe_default": "25", "minimum": 1, "maximum": 100 },
+    { "name": "ANALYTICS_MAX_ROLLUP_CALLS", "classification": "bounded-runtime-policy", "required": false, "safe_default": "250", "minimum": 1, "maximum": 1000, "applies_when": "development active" },
+    { "name": "ANALYTICS_LEASE_SECONDS", "classification": "bounded-runtime-policy", "required": false, "safe_default": "120", "minimum": 30, "maximum": 600 },
+    { "name": "ANALYTICS_MAX_ATTEMPTS", "classification": "bounded-runtime-policy", "required": false, "safe_default": "4", "minimum": 1, "maximum": 8 },
+    { "name": "ANALYTICS_MAX_POLL_COUNT", "classification": "bounded-runtime-policy", "required": false, "safe_default": "20", "minimum": 1, "maximum": 60 },
+    { "name": "ANALYTICS_RETRY_DELAYS_SECONDS", "classification": "bounded-runtime-policy", "required": false, "safe_default": "60,300,1800" },
+    { "name": "ANALYTICS_POLL_DELAY_SECONDS", "classification": "bounded-runtime-policy", "required": false, "safe_default": "30", "minimum": 10, "maximum": 300 },
+    { "name": "ANALYTICS_STALE_AFTER_SECONDS", "classification": "bounded-runtime-policy", "required": false, "safe_default": "7200", "minimum": 300, "maximum": 86400 },
+    { "name": "PLATFORM_OPERATION_TIMEOUT_MS", "classification": "bounded-runtime-policy", "required": false, "safe_default": "10000", "minimum": 1000, "maximum": 30000 },
+    { "name": "ANALYTICS_OPERATION_TIMEOUT_MS", "classification": "bounded-runtime-policy", "required": false, "safe_default": "20000", "minimum": 1000, "maximum": 60000 },
+    { "name": "ANALYTICS_RESPONSE_MAX_BYTES", "classification": "bounded-runtime-policy", "required": false, "safe_default": "1048576", "minimum": 1024, "maximum": 5242880 }
+  ]
+}

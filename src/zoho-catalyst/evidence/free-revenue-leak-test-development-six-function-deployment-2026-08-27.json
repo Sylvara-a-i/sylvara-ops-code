@@ -1,0 +1,331 @@
+{
+  "schema_version": 1,
+  "record_type": "sanitized_free_revenue_leak_test_development_six_function_deployment",
+  "execution_date_utc": "2026-08-27",
+  "environment": "Development",
+  "source_revision": "aab7c18c27f4ff5e1468da51eae433ede9b852f6",
+  "outcome": "canonical_revision_and_sanitized_configuration_readback_exact_one_route_created_ingress_disabled_runtime_acceptance_pending",
+  "authorization": {
+    "approval_reference": "owner-approval-retained-in-private-task-record",
+    "approved_scope": "deploy and independently read back the six canonical Catalyst Development function definitions and bounded private configuration, inventory the disabled API Gateway, execute only the exact approved route packet with stop-on-drift behavior, restore the disabled gateway, and perform no function, Job, route, Retell, customer, or Production invocation",
+    "approval_scope_finite": true,
+    "approval_exhausted_after_verified_poststate": true,
+    "approval_reusable": false,
+    "route_packet_approval_exhausted_after_partial_stop": true,
+    "route_packet_approval_reusable": false,
+    "future_live_action_authorized_by_this_record": false,
+    "future_live_action_requires_fresh_scoped_approval": true,
+    "retell_agent_development_or_testing_authorized": false,
+    "production_or_customer_activity_authorized": false
+  },
+  "execution_surfaces": {
+    "connector_first_discovery_and_independent_readback": "Sylvara Catalyst connector",
+    "connector_source_or_archive_download_available": false,
+    "archive_pullback": "authenticated first-party Catalyst UI Download fallback",
+    "fallback_reason": "connector discovery exposed no source or archive download operation",
+    "direct_rest_or_shell_automation_used": false
+  },
+  "deployment_readback": {
+    "canonical_function_count": 6,
+    "functions": [
+      {
+        "api_name": "revenue_leak_test_request_form",
+        "type": "Advanced I/O",
+        "runtime": "node24",
+        "memory_mb": 256,
+        "environment_variable_count": 30,
+        "source_revision_stamp_exact": true
+      },
+      {
+        "api_name": "revenue_leak_test_setup_form",
+        "type": "Advanced I/O",
+        "runtime": "node24",
+        "memory_mb": 256,
+        "environment_variable_count": 34,
+        "source_revision_stamp_exact": true
+      },
+      {
+        "api_name": "revenue_desk_call_gateway",
+        "type": "Advanced I/O",
+        "runtime": "node24",
+        "memory_mb": 256,
+        "environment_variable_count": 31,
+        "source_revision_stamp_exact": true
+      },
+      {
+        "api_name": "revenue_desk_call_worker",
+        "type": "Job",
+        "runtime": "node24",
+        "memory_mb": 256,
+        "environment_variable_count": 0,
+        "source_revision_stamp_exact": true
+      },
+      {
+        "api_name": "crm_billing_orchestrator",
+        "type": "Advanced I/O",
+        "runtime": "node24",
+        "memory_mb": 256,
+        "environment_variable_count": 30,
+        "source_revision_stamp_exact": true
+      },
+      {
+        "api_name": "analytics_sync",
+        "type": "Job",
+        "runtime": "node24",
+        "memory_mb": 256,
+        "environment_variable_count": 7,
+        "source_revision_stamp_exact": true
+      }
+    ],
+    "all_source_revision_stamps_exact": true,
+    "deployed_archive_pullback_count": 6,
+    "uploaded_archive_byte_parity_count": 6,
+    "uploaded_archive_byte_parity_exact": true,
+    "private_release_manifest_artifact_verification_passed": true,
+    "complete_function_inventory_read_back": true,
+    "observed_function_count": 12,
+    "canonical_function_count_in_inventory": 6,
+    "legacy_function_count_in_inventory": 6,
+    "other_function_count_in_inventory": 0,
+    "all_canonical_functions_present_exactly_once": true,
+    "provider_is_deployed_flag_false_for_all_canonical_functions": true,
+    "provider_is_deployed_flag_interpretation": "The flag is recorded without treating it as a source-installation failure or Production deployment result. Exact Development source, runtime, configuration, and archive readbacks remain the bounded evidence.",
+    "final_main_parity_proven": false,
+    "parity_limitation": "Archive pullback proves byte-for-byte parity with the six exact revision aab7c18 uploads; it does not prove final-main parity, route parity, invocation, or lifecycle acceptance."
+  },
+  "safe_configuration_readback": {
+    "revenue_leak_test_request_form": {
+      "live_environment_variable_count": 30,
+      "approved_private_runtime_binding_exact": true,
+      "source_revision_binding_exact": true,
+      "private_values_included": false
+    },
+    "revenue_leak_test_setup_form": {
+      "live_environment_variable_count": 34,
+      "approved_private_runtime_binding_exact": true,
+      "source_revision_binding_exact": true,
+      "proof_mode_configuration_readback": "stub",
+      "provider_send_invoked": false,
+      "private_values_included": false
+    },
+    "revenue_desk_call_gateway": {
+      "live_environment_variable_count": 31,
+      "approved_private_runtime_binding_exact": true,
+      "source_revision_binding_exact": true,
+      "runtime_mode_configuration_readback": "dry_run",
+      "private_values_included": false
+    },
+    "revenue_desk_call_worker": {
+      "live_environment_variable_count": 0,
+      "required_runtime_binding_present": false,
+      "static_configuration_contract_fails_closed": true,
+      "runtime_fail_closed_invocation_proven": false,
+      "private_values_included": false
+    },
+    "crm_billing_orchestrator": {
+      "live_environment_variable_count": 30,
+      "public_registry_variable_name_count": 42,
+      "approved_private_runtime_binding_exact": true,
+      "source_revision_binding_exact": true,
+      "legacy_extra_live_variable_names_present": false,
+      "paid_subscription_preparation_enabled": false,
+      "development_compatibility_probe_enabled": false,
+      "artifact_bound_runtime_proof_rotated_and_read_back_exact": true,
+      "sync_report_summary_disabled_by_paid_or_probe_gates": false,
+      "private_values_included": false
+    },
+    "analytics_sync": {
+      "live_environment_variable_count": 7,
+      "public_registry_variable_name_count": 26,
+      "approved_private_runtime_binding_exact": true,
+      "source_revision_binding_exact": true,
+      "legacy_extra_live_variable_names_present": false,
+      "runtime_mode_configuration_readback": "disabled",
+      "disabled_no_op_runtime_proven": false,
+      "private_values_included": false
+    }
+  },
+  "ingress_containment": {
+    "api_gateway_initially_enabled": false,
+    "api_gateway_temporarily_enabled_for_inventory_and_approved_route_execution": true,
+    "temporary_enablement_scope": "route_inventory_and_exact_approved_route_packet_execution",
+    "initial_route_inventory_readback_complete": true,
+    "initial_observed_route_count": 0,
+    "route_create_attempt_count": 1,
+    "created_routes": [
+      {
+        "id": "RETELL_INBOUND",
+        "approved_method_target_authentication_and_throttles_exact": true,
+        "independent_readback_exact": true
+      }
+    ],
+    "post_write_route_inventory_readback_complete": true,
+    "post_write_observed_route_count": 1,
+    "second_route_save_attempted": false,
+    "partial_stop_reason": "provider_modal_flow_changed_before_the_second_save",
+    "operator_route_update_or_delete_performed": false,
+    "operator_route_invocation_performed": false,
+    "negative_route_invocation_inventory_proven": false,
+    "api_gateway_disabled_rollback_performed": true,
+    "api_gateway_finally_enabled": false,
+    "api_gateway_final_disabled_state_independently_read_back": true,
+    "advanced_io_security_rules": [
+      {
+        "function": "revenue_leak_test_request_form",
+        "method": "POST",
+        "authentication": "required",
+        "independent_readback_exact": true
+      },
+      {
+        "function": "revenue_leak_test_setup_form",
+        "method": "POST",
+        "authentication": "required",
+        "independent_readback_exact": true
+      },
+      {
+        "function": "revenue_desk_call_gateway",
+        "method": "POST",
+        "authentication": "required",
+        "independent_readback_exact": true
+      },
+      {
+        "function": "crm_billing_orchestrator",
+        "method": "POST",
+        "authentication": "required",
+        "independent_readback_exact": true
+      }
+    ],
+    "private_rule_values_included": false,
+    "direct_function_url_rule_posture_read_back": true,
+    "route_count_readback_available": true,
+    "twelve_route_api_gateway_parity_proven": false,
+    "negative_direct_caller_inventory_proven": false,
+    "callable_surface_inertness_proven": false,
+    "no_invocation_performed_does_not_prove_noncallability": true,
+    "route_limitation": "The initial inventory proved zero routes. Exactly RETELL_INBOUND was created and independently read back against its approved method, target, authentication, and throttle contract. Execution stopped before a second save when the provider modal flow changed, and API Gateway was immediately restored to disabled. Eleven required routes, including Form 2 GET access, remain absent."
+  },
+  "job_infrastructure": {
+    "job_pool_inventory_readback_complete": true,
+    "observed_job_pool_count": 4,
+    "canonical_job_pool_count": 2,
+    "noncanonical_job_pool_count": 2,
+    "pools": [
+      {
+        "name": "RevenueDeskCallJobs",
+        "type": "Function",
+        "memory_mb": 512,
+        "independent_readback_exact": true
+      },
+      {
+        "name": "RevenueDeskAnalyticsJobs",
+        "type": "Function",
+        "memory_mb": 512,
+        "independent_readback_exact": true
+      }
+    ],
+    "cron_inventory_readback_complete": true,
+    "observed_cron_count": 1,
+    "active_cron_count": 0,
+    "inactive_cron_count": 1,
+    "inactive_legacy_target_cron_count": 1,
+    "canonical_pool_cron_reference_count": 0,
+    "noncanonical_pool_cron_reference_count": 1,
+    "job_target_or_cron_binding_proven": false,
+    "scheduler_and_legacy_caller_bindings_reconciled": false,
+    "retry_cron": {
+      "name": "RevenueDeskRetry1m",
+      "present": false
+    }
+  },
+  "runtime_acceptance": {
+    "operator_function_invocations": 0,
+    "operator_job_invocations": 0,
+    "operator_route_invocations": 0,
+    "negative_runtime_invocation_inventory_proven": false,
+    "consumer_first_deployment_order_proven": false,
+    "compatibility_probe_invoked": false,
+    "compatibility_probe_noninvocation_reason": "no_verified_private_advanced_io_invocation_channel",
+    "live_report_v1_compatibility_proven": false,
+    "live_report_v2_compatibility_proven": false,
+    "synthetic_development_e2e_proven": false,
+    "inertness_proven": false
+  },
+  "provider_log_readback": {
+    "official_contract_verified_on": "2026-08-27",
+    "development_retention_days": 7,
+    "post_update_window_minutes": 1440,
+    "readback_applies_to_current_source_revision": false,
+    "all_six_definition_updates_within_post_update_window": false,
+    "post_update_access_record_count": 0,
+    "post_update_application_record_count": 0,
+    "negative_post_update_log_inventory_proven": false,
+    "retention_window_access_record_count": 24,
+    "retention_window_application_record_count": 0,
+    "retention_access_records_all_predate_post_update_window": true,
+    "retention_access_records_only_on_updated_preexisting_definitions": true,
+    "negative_direct_caller_inventory_proven": false,
+    "callable_surface_inertness_proven": false,
+    "limitation": "These counts are retained as the prior bounded log snapshot and do not cover the later aab7c18 convergence. The operator performed no invocation, but current-revision negative caller inventory and callable-surface inertness remain unproven."
+  },
+  "retell_boundary": {
+    "agent_changed": false,
+    "agent_tested": false,
+    "agent_simulated": false,
+    "call_performed": false,
+    "read_only_configuration_reconciliation_performed": true,
+    "published_phone_bound_version_resolved_privately": true,
+    "provider_neutral_dynamic_variable_contract_parity": true,
+    "provider_neutral_post_call_analysis_contract_parity": true,
+    "provider_neutral_webhook_event_contract_parity": true,
+    "webhook_timeout_contract_parity": true,
+    "canonical_catalyst_gateway_bound": false,
+    "legacy_catalyst_boundary_bound": true,
+    "required_no_retained_content_posture_proven": false,
+    "carrier_one_way_media_gate_proven": false,
+    "dtmf_assent_before_speech_recognition_proven": false,
+    "static_notice_before_ai_proven": false,
+    "private_agent_prompt_identifier_phone_url_or_runtime_value_included": false
+  },
+  "production_boundary": {
+    "production_change_performed": false,
+    "production_deployment_performed": false,
+    "customer_traffic_enablement_performed": false,
+    "negative_production_state_inventory_proven": false,
+    "negative_customer_traffic_inventory_proven": false
+  },
+  "rollback_readiness": {
+    "preexisting_definition_count": 2,
+    "updated_existing_definition_count": 2,
+    "new_definition_count": 4,
+    "crm_predecessor_revision_metadata_captured_privately": true,
+    "analytics_predecessor_source_captured_privately": true,
+    "exact_predecessor_deployed_archives_preserved": false,
+    "exact_predecessor_restore_rehearsed": false,
+    "source_rollback_for_both_updated_definitions_proven": false,
+    "containment_posture_is_executable_source_rollback": false,
+    "limitation": "CRM and Analytics predecessor metadata or source evidence exists privately, but exact predecessor deployed archives were not preserved and no predecessor restore was rehearsed. Keeping ingress and triggers dark is containment, not executable source rollback."
+  },
+  "remaining_gates": [
+    "supply and independently read back the worker's private Development binding before any Job submission",
+    "implement and independently read back the twelve-route API Gateway contract before any route activation",
+    "prove Job-pool bindings and the disabled-first retry schedule before any Job submission",
+    "invoke and reconcile the report-compatibility cases only through a verified private Advanced I/O channel",
+    "prove the required consumer-first deployment order on a future immutable release",
+    "recover or reconstruct exact predecessor artifacts and rehearse source rollback for both updated definitions",
+    "preserve the inactive legacy Cron and noncanonical pools until their dependencies and retirement rollback are reconciled",
+    "move the phone webhook from the legacy boundary only in the separate Retell task after required storage, media-gate, DTMF-assent, notice, and rollback controls are proven",
+    "complete synthetic Development lifecycle, migration, provider, rollback, and cleanup acceptance without Retell agent testing",
+    "obtain separate approval and evidence for any dark Production deployment"
+  ],
+  "disclosure_controls": {
+    "platform_identifier_values_included": false,
+    "private_runtime_locator_values_included": false,
+    "credential_or_secret_values_included": false,
+    "operator_identity_included": false,
+    "environment_variable_values_included_beyond_safe_gates": false,
+    "retell_identifier_values_included": false,
+    "retell_prompt_flow_topology_phone_or_runtime_values_included": false,
+    "customer_or_caller_data_included": false,
+    "raw_provider_payloads_errors_or_logs_included": false
+  }
+}

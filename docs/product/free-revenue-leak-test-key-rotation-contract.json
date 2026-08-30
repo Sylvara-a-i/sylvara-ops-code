@@ -1,0 +1,393 @@
+{
+  "schema_version": 3,
+  "status": "required-before-final-ready-status",
+  "scope": "Development testing only; Production remains dark",
+  "functions": [
+    "revenue_leak_test_request_form",
+    "revenue_leak_test_setup_form",
+    "revenue_desk_call_gateway",
+    "revenue_desk_route_control",
+    "revenue_desk_call_worker",
+    "crm_billing_orchestrator",
+    "analytics_sync"
+  ],
+  "retained_separate_components": [
+    {
+      "id": "client_portal_billing_webhook_gateway",
+      "classification": "required_hardening_pending",
+      "repository_package": "../../src/zoho-catalyst/billing-webhook-gateway",
+      "runtime_variable_registry": "../../src/zoho-catalyst/billing-webhook-gateway/config/variables.json",
+      "development_function_target": "sylvara_client_portal_hmac_gateway_function",
+      "included_in_exact_seven_revenue_desk_functions": false,
+      "production_code_block_required": true,
+      "development_deployment_authorized": false,
+      "credential_rotation_authorized": false,
+      "duplicate_removal_authorized": false
+    }
+  ],
+  "rules": {
+    "secret_values_in_repository_or_evidence": false,
+    "rotation_before_development_e2e_cleanup": false,
+    "exposed_previous_key_permitted_after_cutover": false,
+    "production_activation_authorized": false,
+    "blind_retry_after_ambiguous_write": false,
+    "failure_action": "Keep every route, job producer, paid-mutation gate, and Production deployment dark; preserve evidence and stop."
+  },
+  "derivation_domains": [
+    {
+      "id": "form1_assisted_session_v2",
+      "variables": ["TOKEN_PEPPER"],
+      "consumers": ["revenue_leak_test_request_form"],
+      "domains": [
+        "sylvara.form1.assisted-token-hash.v2",
+        "sylvara.form1.assisted-submission-hash.v1"
+      ],
+      "durable_outputs": [
+        "RevenueLeakTestRequestFormSessions.TOKEN_HASH",
+        "RevenueLeakTestRequestFormSessions.SUBMISSION_FINGERPRINT"
+      ],
+      "rotation_gate": "Assisted Form 1 routes disabled; no issued, claimed, or reconciliation_required session; every retained completed session is either migrated with exact keyed readback or intentionally invalidated; old bearer artifacts fail closed.",
+      "previous_key_policy": "No final overlap. Reissue a new short-lived opaque assisted artifact for resumable journeys after rotation; never restore or log an old bearer value."
+    },
+    {
+      "id": "form1_prefill_handle_v1",
+      "variables": ["PREFILL_HANDLE_PEPPER"],
+      "consumers": ["revenue_leak_test_request_form"],
+      "domains": ["sylvara.form1.prefill-handle-hash.v1"],
+      "durable_outputs": ["RevenueLeakTestRequestFormSessions.PREFILL_HANDLE_HASH"],
+      "rotation_gate": "All five Form 1 routes and the Zoho Forms Prefill-Webhook caller are disabled; no handle_issued or prefilled session and no reconciliation_required session remains; every outstanding handle is intentionally invalidated or the exact digest namespace is migrated with readback.",
+      "previous_key_policy": "No final overlap. A resumable journey receives a newly issued ten-minute prefill handle after rotation; the old handle remains unusable and is never restored or logged."
+    },
+    {
+      "id": "form2_bearer_lookup_v1",
+      "variables": ["TOKEN_PEPPER"],
+      "consumers": ["revenue_leak_test_setup_form"],
+      "domains": [
+        "sylvara.form2.access-token.v1",
+        "sylvara.form2.access-token-hash.v1"
+      ],
+      "durable_outputs": ["Form2SessionsV3Runtime.ACCESS_TOKEN_HASH"],
+      "rotation_gate": "No issuing, issued, verified, or submitting session; no reconciliation_required session; expired sessions read back crm_expiry_synced; old bearers are intentionally invalidated.",
+      "previous_key_policy": "No final overlap. Immutable ISSUE_REQUEST_KEY and DEAL_ISSUANCE_KEY tombstones remain the replay boundary."
+    },
+    {
+      "id": "form2_workflow_identity_v1",
+      "variables": ["WORKFLOW_HMAC_SECRET"],
+      "consumers": ["revenue_leak_test_setup_form"],
+      "domains": [
+        "sylvara.form2.workflow-key.v1",
+        "sylvara.form2.prefill-snapshot.v1",
+        "sylvara.form2.submission.v1",
+        "sylvara.form2.prefill-handle-hash.v1",
+        "sylvara.form2.prefill-binding.v1"
+      ],
+      "durable_outputs": [
+        "Form2SessionsV3Runtime.JOURNEY_BINDING_DIGEST",
+        "Form2PrefillsV3.PREFILL_KEY",
+        "Form2PrefillsV3.PREFILL_HANDLE_HASH",
+        "Form2PrefillsV3.JOURNEY_BINDING_DIGEST",
+        "Form2PrefillsV3.SNAPSHOT_FINGERPRINT",
+        "Form2SubmissionsV3.SUBMISSION_KEY",
+        "Form2SubmissionsV3.SUBMISSION_FINGERPRINT"
+      ],
+      "rotation_gate": "Every prefill handle is consumed or expired, every prefill is submitted or removed under approved retention, every submission is succeeded, and no processing, failed, or reconciliation_required row remains.",
+      "previous_key_policy": "A previous key is allowed only inside a disabled-route migration that reads old rows by old key, writes or verifies the new namespace, compares exact counts and keyed digests, and removes the old key before cutover."
+    },
+    {
+      "id": "form2_email_proof_v1",
+      "variables": ["FORM2_PROOF_HMAC_SECRET"],
+      "consumers": ["revenue_leak_test_setup_form"],
+      "domains": [
+        "sylvara.form2.email-proof-key.v1",
+        "sylvara.form2.email-proof-destination.v1",
+        "sylvara.form2.email-proof-binding.v1",
+        "sylvara.form2.email-proof-otp.v1",
+        "sylvara.form2.otp-mail-stub.v1",
+        "sylvara.form2.otp-mail-result.v1"
+      ],
+      "durable_outputs": [
+        "Form2VerificationProofsV3.PROOF_KEY",
+        "Form2VerificationProofsV3.DESTINATION_DIGEST",
+        "Form2VerificationProofsV3.BINDING_DIGEST",
+        "Form2VerificationProofsV3.OTP_DIGEST",
+        "Form2VerificationProofsV3.PROVIDER_RESULT_REFERENCE",
+        "FORM2_PROOF_ALLOWED_RECIPIENT_DIGESTS"
+      ],
+      "rotation_gate": "No pending_send, sending, issued, verifying, verified, retry_required, ambiguous, or reconciliation_required proof; recompute the recipient allowlist under the new key before any Development send.",
+      "previous_key_policy": "No final overlap; unresolved provider-send evidence blocks rotation."
+    },
+    {
+      "id": "revenue_desk_event_identity_v1",
+      "variables": ["EVENT_HMAC_SECRET"],
+      "consumers": ["revenue_desk_call_gateway", "revenue_desk_call_worker"],
+      "domains": [
+        "revenue-desk-event-v1",
+        "revenue-desk-call-v1",
+        "revenue-desk-event-payload-v1",
+        "revenue-desk-inbound-receipt-v1",
+        "revenue-desk-runtime-binding-v1",
+        "revenue-desk-notification-v1",
+        "free-test-mail-recipient-v1",
+        "free-test-mail-result-v1",
+        "revenue-desk-quarantine-event-v1",
+        "revenue-desk-quarantine-call-v1",
+        "revenue-desk-correlation-v1"
+      ],
+      "durable_outputs": [
+        "RevenueDeskEventReceipts.EVENT_KEY",
+        "RevenueDeskEventReceipts.PAYLOAD_FINGERPRINT",
+        "RevenueDeskCalls.CALL_KEY",
+        "RevenueDeskCalls.CORRELATION_ID and CANONICAL_CALL_JSON keyed identity",
+        "RevenueDeskNotifications.NOTIFICATION_KEY",
+        "RevenueDeskNotifications.RECIPIENT_FINGERPRINT",
+        "RevenueDeskNotifications.PROVIDER_RESULT_REFERENCE",
+        "RevenueDeskDeployments.COUNTED_CALL_KEYS_JSON",
+        "Retell in-flight ownership metadata.ownership_token",
+        "AnalyticsSyncOutbox call RECORD_KEY, payload binding, and derived row keys"
+      ],
+      "rotation_gate": "Ingress and Retell delivery disabled; no live or in-flight provider call; RevenueDeskCallJobs drained; no receipt, canonical call, notification, or event-secret-derived Analytics call row; every deployment counted-call list empty; no unresolved worker or send outcome.",
+      "previous_key_policy": "No final overlap. Any retained call graph needs an offline all-reference migration; partial rekeying is prohibited."
+    },
+    {
+      "id": "revenue_desk_number_lookup_v1",
+      "variables": ["NUMBER_LOOKUP_HMAC_SECRET"],
+      "consumers": ["revenue_desk_call_gateway", "revenue_desk_route_control"],
+      "domains": ["revenue-desk-number-v1"],
+      "durable_outputs": ["RevenueDeskDeployments.NUMBER_LOOKUP_HASH"],
+      "rotation_gate": "Ingress disabled; authoritative private test-number mapping read back; every deployment hash recomputed; route approval and activation evidence regenerated for the resulting canonical route; old hash resolves no route.",
+      "previous_key_policy": "A previous key may be used only during a bounded disabled-ingress read migration. Remove it before readiness."
+    },
+    {
+      "id": "revenue_desk_route_control_identity_v1",
+      "variables": ["ROUTE_CONTROL_EVENT_HMAC_SECRET"],
+      "consumers": [
+        "revenue_desk_route_control",
+        "revenue_desk_call_gateway",
+        "revenue_desk_call_worker"
+      ],
+      "domains": [
+        "revenue-desk-route-control-state-v1",
+        "revenue-desk-route-control-idempotency-v1",
+        "revenue-desk-route-control-operator-v1",
+        "revenue-desk-authorization-event-v1",
+        "revenue-desk-authorization-receipt-v2",
+        "revenue-desk-approval-intent-fingerprint-v1",
+        "revenue-desk-activation-intent-fingerprint-v1",
+        "revenue-desk-rollback-claim-key-v1",
+        "revenue-desk-rollback-claim-v1"
+      ],
+      "durable_outputs": [
+        "RevenueDeskEventReceipts.EVENT_KEY",
+        "RevenueDeskEventReceipts.EVENT_HASH",
+        "RevenueDeskEventReceipts.PAYLOAD_FINGERPRINT",
+        "RevenueDeskDeployments.APPROVAL_EVENT_KEY",
+        "RevenueDeskDeployments.ACTIVATION_EVENT_KEY",
+        "route-control operator identity digest and deployment prestate/poststate digests"
+      ],
+      "rotation_gate": "All route-control operations and call ingress disabled; no Prepared or ReconciliationRequired authorization receipt or rollback claim; no active Development deployment; every retained receipt and deployment binding is migrated and independently read back or permanently retired.",
+      "previous_key_policy": "No final overlap. Partial rekeying of authorization receipts, rollback claims, or deployment event bindings is prohibited."
+    },
+    {
+      "id": "revenue_desk_analytics_partition_v1",
+      "variables": ["ANALYTICS_PARTITION_HMAC_SECRET"],
+      "consumers": [
+        "revenue_desk_call_gateway",
+        "revenue_desk_call_worker",
+        "crm_billing_orchestrator"
+      ],
+      "domains": [
+        "revenue-desk-analytics-client-v1",
+        "revenue-desk-analytics-deployment-v1",
+        "revenue-desk-analytics-conversion-v2",
+        "sylvara.crm-report-summary.v1",
+        "sylvara.crm-report-summary.v2"
+      ],
+      "durable_outputs": [
+        "AnalyticsSyncOutbox.RECORD_KEY for CRM conversion v2 facts with free_test origin and paid_service target",
+        "AnalyticsSyncOutbox.CLIENT_KEY for ROW_SCHEMA_VERSION=2",
+        "AnalyticsSyncOutbox.DEPLOYMENT_KEY for ROW_SCHEMA_VERSION=2",
+        "AnalyticsSyncCheckpoints partition identity for additive v2",
+        "CRMBillingOperations.OPERATION_KEY for sync_report_summary",
+        "CRMBillingOperations.OPERATION_FINGERPRINT for sync_report_summary",
+        "CRMBillingOperations.OPERATION_PAYLOAD_JSON callSetDigest and canonical report revision binding"
+      ],
+      "rotation_gate": "Every call-runtime and CRM/Billing producer, report dispatcher, and analytics_sync consumer is disabled; no unresolved additive-v2 outbox or report-summary operation; v2 checkpoint/target rows and retained report operations are either zero or migrated and independently read back by exact key, fingerprint, payload digest, call-set digest, full report-revision digest, count, environment, watermark, and authoritative CRM summary.",
+      "previous_key_policy": "No mixed Analytics or CRM-report namespace. A previous key is migration-only: read old rows by old identity, write or verify the new operation/fingerprint/payload namespace, reset affected deployment reconciliation markers, reconcile exact Analytics and CRM readback, and remove the old key before any producer, dispatcher, or consumer is active."
+    },
+    {
+      "id": "crm_billing_idempotency_v1",
+      "variables": ["IDEMPOTENCY_PEPPER"],
+      "consumers": ["crm_billing_orchestrator"],
+      "domains": [
+        "sylvara.crm-billing.idempotency.v1",
+        "sylvara.crm-billing.test-customer.v1"
+      ],
+      "durable_outputs": [
+        "CRMBillingOperations.OPERATION_KEY",
+        "CRMBillingOperations.OPERATION_FINGERPRINT",
+        "Zoho Billing reference_id",
+        "Development TEST customer synthetic identity"
+      ],
+      "rotation_gate": "Route and paid mutation disabled; no processing or reconciliation_required operation; all synthetic subscriptions and customers independently cleaned up; every retained scope record is permanently retired or fully migrated with operation and Billing reference readback.",
+      "previous_key_policy": "No final overlap. If an old scope can still be invoked or reconciled, rotation is blocked rather than creating a second customer or subscription namespace."
+    }
+  ],
+  "retired_unbound_derivations": [
+    {
+      "id": "form1_bearer_lookup_v1",
+      "former_variable": "TOKEN_PEPPER",
+      "former_consumer": "revenue_leak_test_request_form",
+      "former_domain": "sylvara.form1.assisted-token-hash.v1",
+      "preserved_evidence": "RevenueLeakTestRequestFormSessions.TOKEN_HASH",
+      "status": "removed-from-contained-runtime",
+      "control": "The contained Form 1 artifact rejects the former token, CRM, Connection, form URL, and session variables. Keep legacy rows unbound and never restore this derivation or its pre-correction artifact as rollback. Revoke the former secret only after fresh caller and route absence readback under a separately approved credential-cleanup packet."
+    }
+  ],
+  "authentication_and_binding_secrets": [
+    {
+      "variables": ["ISSUE_HEADER_SECRET", "PREFILL_HEADER_SECRET", "SUBMISSION_HEADER_SECRET"],
+      "consumers": ["revenue_leak_test_request_form"],
+      "rule": "Keep all five Form 1 routes disabled while rotating the three server-to-server callers with their matching independent secrets. Prove the new CRM Issue caller and both Zoho Forms callers accepted and each old caller rejected before binding the CRM launcher or Dynamic Prefill-Webhook; the browser-only Access and Exchange routes never receive a shared secret."
+    },
+    {
+      "variables": ["ROUTE_CONTROL_SHARED_HEADER_VALUE", "ROUTE_CONTROL_OPERATOR_HMAC_SECRET", "ROUTE_CONTROL_EVENT_HMAC_SECRET"],
+      "consumers": ["revenue_desk_route_control", "revenue_desk_call_gateway", "revenue_desk_call_worker"],
+      "rule": "Keep route control and call ingress Development-only and disabled. Rotate the administrator caller header and operator signing key together, preserve separation from the event-chain key, bind the new event key to route control, gateway, and worker as one atomic release, prove old caller and intent signatures rejected, migrate or retire every event-chain-derived receipt and rollback claim, then independently read back the exact disabled binding before any synthetic operation."
+    },
+    {
+      "variables": ["ISSUE_HEADER_SECRET", "PREFILL_HEADER_SECRET", "SUBMISSION_HEADER_SECRET"],
+      "consumers": ["revenue_leak_test_setup_form"],
+      "rule": "Rotate each disabled route independently with the matching Zoho Forms or CRM caller; browser routes never receive a shared secret."
+    },
+    {
+      "variables": ["RETELL_WEBHOOK_API_KEY", "INTERNAL_READINESS_TOKEN"],
+      "consumers": ["revenue_desk_call_gateway"],
+      "rule": "Keep ingress disabled; bind the new provider verification key and readiness token; run only signature/readiness negative tests; confirm the old values fail before enabling any test ingress."
+    },
+    {
+      "variables": ["DEVELOPMENT_RUNTIME_PROOF", "SHARED_HEADER_VALUE"],
+      "consumers": ["crm_billing_orchestrator"],
+      "external_caller_credential": "the approved CRM paid-action caller's Catalyst API Gateway key",
+      "rule": "Rebuild the immutable Development artifact with the new runtime proof, deploy the exact reviewed SHA while the route and mutation gate remain disabled, rotate the paid-action SHARED_HEADER_VALUE and its caller-owned Catalyst API Gateway key together, prove prepare/reconcile accepted with both new factors, prove report sync rejected, prove both old factors rejected, and independently read back the artifact binding."
+    },
+    {
+      "variables": ["CRM_BILLING_API_GATEWAY_KEY", "CRM_BILLING_SHARED_HEADER_VALUE"],
+      "consumers": ["revenue_desk_call_worker"],
+      "paired_consumer_variable": "crm_billing_orchestrator.REPORT_SUMMARY_HEADER_VALUE",
+      "rule": "Keep retry_scan report dispatch disabled. The platform-generated Development ZCFKEY may be common across Development projects and is never sole authorization: regenerate or replace it only when the Catalyst control plane exposes that operation and old-key rejection can be proven; otherwise record it non-rotatable. Production uses a separately generated key. In every case rotate and pair worker CRM_BILLING_SHARED_HEADER_VALUE exactly with orchestrator REPORT_SUMMARY_HEADER_VALUE, prove sync_report_summary succeeds with both factors, paid/reconcile reject the report secret, the paid secret rejects report sync, and the old report factor fails before dispatch is enabled."
+    },
+    {
+      "variables": ["REPORT_SUMMARY_HEADER_VALUE"],
+      "consumers": ["crm_billing_orchestrator"],
+      "paired_caller_variable": "revenue_desk_call_worker.CRM_BILLING_SHARED_HEADER_VALUE",
+      "rule": "Rotate only while report dispatch is disabled; pair the value exactly with the worker caller, prove report sync accepted with both transport factors, prove paid/reconcile rejected, and prove the old report secret rejected before enabling retry_scan dispatch."
+    }
+  ],
+  "confidential_configuration": [
+    {
+      "variables": ["PAID_COMMERCIAL_TERMS_JSON"],
+      "rule": "Do not change approved business terms merely to simulate credential rotation. Rebind the exact approved terms privately and compare a private digest; any semantic change requires separate commercial approval."
+    },
+    {
+      "variables": [
+        "CRM_READ_CONNECTION_LINK_NAME",
+        "CRM_WRITE_CONNECTION_LINK_NAME",
+        "BILLING_READ_CONNECTION_LINK_NAME",
+        "BILLING_WRITE_CONNECTION_LINK_NAME",
+        "ANALYTICS_READ_CONNECTION_LINK_NAME",
+        "ANALYTICS_WRITE_CONNECTION_LINK_NAME",
+        "RETELL_CONNECTION_LINK_NAME"
+      ],
+      "rule": "Connection names are identities, not credentials. Rotate or replace each underlying least-privilege read and write OAuth grant independently, validate exact read-only versus write authority and target product, then revoke each exposed superseded grant."
+    }
+  ],
+  "client_portal_gateway_rotation": {
+    "component_id": "client_portal_billing_webhook_gateway",
+    "classification": "required_hardening_pending",
+    "included_in_exact_seven_revenue_desk_functions": false,
+    "production_code_block_required": true,
+    "development_deployment_authorized": false,
+    "credential_rotation_authorized": false,
+    "duplicate_removal_authorized": false,
+    "authentication_and_signing_rotation": [
+      {
+        "variables": [
+          "BILLING_WEBHOOK_SECRET",
+          "BILLING_WEBHOOK_SECRET_PREVIOUS",
+          "BILLING_WEBHOOK_SECRET_PREVIOUS_EXPIRES_AT"
+        ],
+        "rule": "Disable the Billing webhook before changing either side. Bind a new Development-only HMAC value to the exact test-organization webhook and immutable Catalyst artifact, prove a new signed synthetic fixture succeeds and the exposed old value fails, then remove both previous-secret variables. No exposed previous key may remain after cutover."
+      },
+      {
+        "variables": ["SHARED_HEADER_NAME", "SHARED_HEADER_VALUE"],
+        "rule": "If the optional defense is retained, rotate its sole authorized caller and the disabled gateway together, prove new accepted and old rejected, and remove every old value. If it is not retained, independently prove both variables absent."
+      }
+    ],
+    "durable_fingerprint_rotation": {
+      "variables": ["BILLING_EVENT_FINGERPRINT_SECRET"],
+      "durable_outputs": ["Billing_Webhook_Inbox.EVENT_FINGERPRINT"],
+      "rule": "Keep the webhook and Creator delivery disabled. Read back every inbox partition and require either a proven zero-row clean namespace or an offline all-row rekey with exact source count, destination count, event-key set, status set, keyed digest, conflict report, and authoritative Billing event readback. A nonterminal or unreproducible row blocks rotation.",
+      "previous_key_policy": "No mixed fingerprint namespace and no final overlap. The exposed old key is removed only after exact migration/readback; it is never restored after revocation."
+    },
+    "source_identity_binding": {
+      "variables": ["BILLING_SOURCE_KEY"],
+      "rule": "This private source alias is durable event-key identity rather than a credential. Do not change it during credential rotation unless every retained EVENT_KEY and downstream reference is migrated and independently reconciled under a separately approved identity migration."
+    },
+    "creator_connection_rotation": {
+      "variables": ["CREATOR_CONNECTION_LINK_NAME"],
+      "rule": "After Creator Custom API inventory and the exact pinned-SDK authentication path are proven, create or replace the underlying least-privilege Zohocreator.customapi.EXECUTE grant, validate the exact Development destination and authoritative acknowledgment contract, switch only the immutable reviewed Development artifact, read back the grant boundary, and revoke the superseded grant. The Connection link name is private identity, not credential material."
+    },
+    "retired_raw_oauth_revocation": {
+      "variables": [
+        "ZOHO_CLIENT_ID",
+        "ZOHO_CLIENT_SECRET",
+        "ZOHO_REFRESH_TOKEN",
+        "ZOHO_ACCOUNTS_URL",
+        "ACCOUNTS_ALLOWED_HOSTS"
+      ],
+      "rule": "After the hardened Connection path and rollback are proven, revoke every historical raw OAuth refresh grant at its authority, remove the legacy values from every Development and Production function revision and configuration surface, and independently prove the retired variables absent. Never print, export, or restore an exposed value."
+    },
+    "required_hardening_gates": [
+      "Creator Custom API inventory and exact authentication contract proven",
+      "immutable reviewed Development artifact deployed and independently read back",
+      "Billing webhook to Development route ownership and disabled-change-state proof",
+      "Production duplicate removal, rollback, and independent absence-readback proof",
+      "Billing webhook and durable event-fingerprint secrets rotated with old-key rejection",
+      "least-privilege Creator Connection grant rotated and independently read back",
+      "all historical raw OAuth grants revoked and retired runtime variables proven absent",
+      "final Billing, Catalyst, Connection, inbox, Creator, route, source-revision, and Production-block readback"
+    ],
+    "final_readback": [
+      "Exact reviewed source revision and Development function target match the immutable artifact.",
+      "The Billing source state and target route match the separately approved state without disclosing the route.",
+      "New webhook and optional shared-header authentication succeed only in the approved synthetic path; exposed old values fail.",
+      "The fingerprint namespace has exact count, key-set, status, digest, conflict, and authoritative-source reconciliation evidence.",
+      "The least-privilege Creator Connection grant works for the exact Custom API contract and every superseded Connection or raw OAuth grant is revoked.",
+      "The Production code block remains effective and duplicate removal is proven by rollback plus independent absence readback."
+    ]
+  },
+  "rotation_order": [
+    "Disable API Gateway ingress, Retell delivery, Forms/CRM callers, paid mutations, Analytics producer/consumer activity, new Function Job submissions, the Client Portal Billing webhook, and Client Portal Creator delivery.",
+    "Drain RevenueDeskCallJobs and RevenueDeskAnalyticsJobs; independently read back zero running or queued work, reconcile the Client Portal inbox, and preserve unresolved evidence.",
+    "Using the old keys only inside the contained window, terminalize or reconcile Form 1, Form 2, call, notification, Analytics-v2, CRM, Billing test, and Client Portal gateway state; perform every per-domain and retained-component gate above.",
+    "Rotate durable key-derivation material and rekey only the explicitly approved clean desired state, including the Client Portal event-fingerprint namespace. Regenerate number-route approval and activation evidence after NUMBER_LOOKUP_HMAC_SECRET changes.",
+    "Rebuild and deploy exact reviewed artifacts whose private binding proofs changed, including the separate Client Portal Development artifact only after its Creator auth gate passes; read back source revision, environment, mode, function name, and dark/disabled gates.",
+    "Rotate route, webhook, readiness, caller, and Client Portal authentication secrets while every route remains disabled; rotate underlying least-privilege Connection grants and validate each boundary.",
+    "Run new-key positive cryptographic/readiness checks and old-key negative checks without a call, message, subscription, invoice, charge, or production write.",
+    "Revoke every exposed old key, Client Portal raw OAuth refresh grant, and superseded Connection grant. Re-read configuration metadata and provider state without returning values; prove no previous-key variable, retired raw OAuth variable, or old grant remains.",
+    "Recreate only the clean Development readiness state under the new key versions. Keep Production dark and all real traffic disabled."
+  ],
+  "readback": [
+    "Record variable names, domain versions, counts, statuses, reviewed source SHA, and sanitized digests only; never record values.",
+    "A successful new-key check plus a failed old-key check is required for authentication credentials.",
+    "Every durable rekey requires source count, destination count, sorted keyed digest, duplicate report, conflict report, samples, and authoritative downstream readback.",
+    "Any ambiguous write or revocation is unresolved until independent metadata and behavior readback proves the exact outcome.",
+    "The final state contains no exposed previous-key overlap, no active test side effect, no unresolved row, no historical raw OAuth grant, and no Production capability.",
+    "The retained Client Portal gateway remains outside the exact seven Revenue Desk functions and stays required_hardening_pending until every component hardening gate and final readback passes."
+  ],
+  "rollback": {
+    "before_old_key_revocation": "Keep all ingress and mutations disabled. Restore only the prior reviewed artifact/configuration long enough to reconcile or export evidence; never activate traffic on an exposed key.",
+    "after_old_key_revocation": "Do not restore an exposed key or grant. Keep the system dark and roll forward with a new key plus a repeated migration/readback. If the old key is required, the task remains blocked.",
+    "containment": "Disable routes and producers, preserve durable rows and private evidence, do not retry ambiguous side effects, and leave Production dark."
+  }
+}

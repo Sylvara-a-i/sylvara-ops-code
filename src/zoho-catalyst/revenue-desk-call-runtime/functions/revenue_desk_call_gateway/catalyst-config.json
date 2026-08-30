@@ -1,0 +1,10 @@
+{
+  "deployment": {
+    "name": "revenue_desk_call_gateway",
+    "stack": "node24",
+    "type": "advancedio"
+  },
+  "execution": {
+    "main": "index.js"
+  }
+}

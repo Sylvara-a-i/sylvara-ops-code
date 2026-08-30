@@ -1,0 +1,209 @@
+{
+  "schema_version": 4,
+  "status": "development-v4-additive-schema-installation-required",
+  "live_state": "retell-development-v3-readback-preserved-v4-additive-columns-not-installed-callers-not-cut-over",
+  "observed_at": "2026-08-24",
+  "observed_development_readback": {
+    "operational_targets": [
+      { "api_name": "Form2SessionsV3Runtime", "application_columns": 20, "rows": 0 },
+      { "api_name": "Form2PrefillsV3", "application_columns": 19, "rows": 0 },
+      { "api_name": "Form2SubmissionsV3", "application_columns": 16, "rows": 0 },
+      { "api_name": "Form2VerificationProofsV3", "application_columns": 26, "rows": 0 }
+    ],
+    "total_application_columns": 81,
+    "unique_columns": 5,
+    "audit_consent_columns": 25,
+    "schema_mismatches": 0,
+    "app_user_permissions_per_target": 0,
+    "admin_permissions_per_target": 4,
+    "runtime_bound": false,
+    "callers_cut_over": false
+  },
+  "desired_installation_target": {
+    "contract": "dynamic-prefill-handle-v1",
+    "application_columns_by_target": {
+      "Form2SessionsV3Runtime": 21,
+      "Form2PrefillsV3": 28,
+      "Form2SubmissionsV3": 16,
+      "Form2VerificationProofsV3": 26
+    },
+    "total_application_columns": 91,
+    "additive_application_columns": 10,
+    "unique_columns": 6,
+    "historical_readback_is_target_proof": false,
+    "authoritative_post_install_readback_required": true
+  },
+  "quarantined_unbound_probe_artifacts": [
+    {
+      "api_name": "Form2SessionsV3",
+      "application_column_count": 1,
+      "application_columns": ["TYPE_PROBE_ENCRYPTED_TEXT"],
+      "rows": 0,
+      "app_user_permissions": 0
+    },
+    {
+      "api_name": "ZZZ_Quarantined_Form2SessionsV3_ColumnProbe",
+      "application_column_count": 3,
+      "application_column_types": ["text", "boolean", "varchar"],
+      "rows": 0,
+      "app_user_permissions": 0
+    },
+    {
+      "api_name": "ZZZ_Quarantined_Form2SessionsV3_TypeProbe",
+      "application_column_count": 0,
+      "application_columns": [],
+      "rows": 0,
+      "app_user_permissions": 0
+    }
+  ],
+  "probe_policy": "Never bind, rename, reuse, or delete these empty Development probe artifacts during Form 2 deployment, cutover, or rollback rehearsal. Later removal is a separately approved post-cutover cleanup with dependency-absence and restoration proof.",
+  "data_policy": {
+    "direct_form_payloads_stored": false,
+    "raw_tokens_or_submission_ids_stored": false,
+    "crm_record_ids_stored": true,
+    "crm_record_id_classification": "restricted-linkable-record-context",
+    "access": "function-runtime and separately approved reconciliation operators only",
+    "client_access": "none"
+  },
+  "tables": [
+    {
+      "runtime_variable": "SESSION_TABLE_NAME",
+      "expected_api_name": "Form2SessionsV3Runtime",
+      "purpose": "One expiring, CRM-bound Form 2 bearer-token generation per stable immutable-request digest, with a pepper-bound bearer lookup digest and one atomic active-generation lock per Deal.",
+      "required_unique_columns": ["ISSUE_REQUEST_KEY", "DEAL_ISSUANCE_KEY"],
+      "retention": "Retain as an issuance tombstone. Do not delete or alter any session row under this controller; removal requires a separately reviewed migration or upstream immutable-UUID deduplication design.",
+      "columns": [
+        { "api_name": "ISSUE_REQUEST_KEY", "type": "varchar", "max_length": 64, "mandatory": true, "unique": true, "pii_ephi": true },
+        { "api_name": "ACCESS_TOKEN_HASH", "type": "varchar", "max_length": 64, "mandatory": true, "unique": false, "pii_ephi": true },
+        { "api_name": "CRM_CONTACT_ID", "type": "varchar", "max_length": 30, "mandatory": true, "unique": false, "pii_ephi": true },
+        { "api_name": "CRM_ACCOUNT_ID", "type": "varchar", "max_length": 30, "mandatory": true, "unique": false, "pii_ephi": true },
+        { "api_name": "CRM_DEAL_ID", "type": "varchar", "max_length": 30, "mandatory": true, "unique": false, "pii_ephi": true },
+        { "api_name": "JOURNEY_BINDING_DIGEST", "type": "varchar", "max_length": 64, "mandatory": true, "unique": false, "private": true },
+        { "api_name": "DEAL_ISSUANCE_KEY", "type": "varchar", "max_length": 64, "mandatory": true, "unique": true, "pii_ephi": true },
+        { "api_name": "STATUS", "type": "varchar", "max_length": 32, "mandatory": true, "unique": false },
+        { "api_name": "ISSUED_AT", "type": "varchar", "max_length": 32, "mandatory": true, "unique": false },
+        { "api_name": "EXPIRES_AT", "type": "varchar", "max_length": 32, "mandatory": true, "unique": false },
+        { "api_name": "ATTEMPT_COUNT", "type": "bigint", "mandatory": true, "unique": false },
+        { "api_name": "MAX_ATTEMPTS", "type": "bigint", "mandatory": true, "unique": false },
+        { "api_name": "SOURCE_REVISION", "type": "varchar", "max_length": 80, "mandatory": true, "unique": false },
+        { "api_name": "SOURCE_ENVIRONMENT", "type": "varchar", "max_length": 16, "mandatory": true, "unique": false },
+        { "api_name": "LAST_OUTCOME", "type": "varchar", "max_length": 80, "mandatory": true, "unique": false, "pii_ephi": true },
+        { "api_name": "VERIFIED_AT", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false },
+        { "api_name": "SUBMITTED_AT", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false },
+        { "api_name": "EXPIRED_AT", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false },
+        { "api_name": "REVOKED_AT", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false },
+        { "api_name": "FAILED_AT", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false },
+        { "api_name": "UPDATED_AT", "type": "varchar", "max_length": 32, "mandatory": true, "unique": false }
+      ]
+    },
+    {
+      "runtime_variable": "PREFILL_TABLE_NAME",
+      "expected_api_name": "Form2PrefillsV3",
+      "purpose": "One immutable CRM optimistic-concurrency snapshot and one digest-only Dynamic Prefill-Webhook handle generation for each durable session verification attempt.",
+      "required_unique_columns": ["PREFILL_KEY", "PREFILL_HANDLE_HASH"],
+      "retention": "Remove 30 days after terminal status under an approved private cleanup procedure.",
+      "columns": [
+        { "api_name": "PREFILL_KEY", "type": "varchar", "max_length": 64, "mandatory": true, "unique": true, "pii_ephi": true },
+        { "api_name": "PREFILL_HANDLE_HASH", "type": "varchar", "max_length": 64, "mandatory": true, "unique": true, "pii_ephi": true },
+        { "api_name": "SESSION_ROW_ID", "type": "varchar", "max_length": 30, "mandatory": true, "unique": false, "pii_ephi": true },
+        { "api_name": "SESSION_ATTEMPT_COUNT", "type": "bigint", "mandatory": true, "unique": false },
+        { "api_name": "CRM_CONTACT_ID", "type": "varchar", "max_length": 30, "mandatory": true, "unique": false, "pii_ephi": true },
+        { "api_name": "CRM_ACCOUNT_ID", "type": "varchar", "max_length": 30, "mandatory": true, "unique": false, "pii_ephi": true },
+        { "api_name": "CRM_DEAL_ID", "type": "varchar", "max_length": 30, "mandatory": true, "unique": false, "pii_ephi": true },
+        { "api_name": "CONTACT_MODIFIED_TIME", "type": "varchar", "max_length": 64, "mandatory": true, "unique": false },
+        { "api_name": "ACCOUNT_MODIFIED_TIME", "type": "varchar", "max_length": 64, "mandatory": true, "unique": false },
+        { "api_name": "DEAL_MODIFIED_TIME", "type": "varchar", "max_length": 64, "mandatory": true, "unique": false },
+        { "api_name": "SNAPSHOT_FINGERPRINT", "type": "varchar", "max_length": 64, "mandatory": true, "unique": false, "pii_ephi": true },
+        { "api_name": "CRM_ORGANIZATION_HASH", "type": "varchar", "max_length": 64, "mandatory": true, "unique": false, "pii_ephi": true },
+        { "api_name": "JOURNEY_BINDING_DIGEST", "type": "varchar", "max_length": 64, "mandatory": true, "unique": false, "pii_ephi": true },
+        { "api_name": "FORM_IDENTITY_HASH", "type": "varchar", "max_length": 64, "mandatory": true, "unique": false, "pii_ephi": true },
+        { "api_name": "EXPECTED_STAGE", "type": "varchar", "max_length": 16, "mandatory": true, "unique": false },
+        { "api_name": "STATUS", "type": "varchar", "max_length": 32, "mandatory": true, "unique": false },
+        { "api_name": "CONSUMPTION_OWNER", "type": "varchar", "max_length": 36, "mandatory": false, "unique": false },
+        { "api_name": "ISSUED_AT", "type": "varchar", "max_length": 32, "mandatory": true, "unique": false },
+        { "api_name": "HANDLE_ISSUED_AT", "type": "varchar", "max_length": 32, "mandatory": true, "unique": false },
+        { "api_name": "HANDLE_EXPIRES_AT", "type": "varchar", "max_length": 32, "mandatory": true, "unique": false },
+        { "api_name": "HANDLE_CONSUMED_AT", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false },
+        { "api_name": "HANDLE_VERSION", "type": "bigint", "mandatory": true, "unique": false },
+        { "api_name": "SUBMITTED_AT", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false },
+        { "api_name": "RECONCILIATION_REQUIRED_AT", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false },
+        { "api_name": "UPDATED_AT", "type": "varchar", "max_length": 32, "mandatory": true, "unique": false },
+        { "api_name": "SOURCE_REVISION", "type": "varchar", "max_length": 80, "mandatory": true, "unique": false },
+        { "api_name": "SOURCE_ENVIRONMENT", "type": "varchar", "max_length": 16, "mandatory": true, "unique": false },
+        { "api_name": "LAST_OUTCOME", "type": "varchar", "max_length": 80, "mandatory": true, "unique": false }
+      ]
+    },
+    {
+      "runtime_variable": "SUBMISSION_TABLE_NAME",
+      "expected_api_name": "Form2SubmissionsV3",
+      "purpose": "Unique, leased receipt for one immutable Zoho Forms submission identity.",
+      "required_unique_columns": ["SUBMISSION_KEY"],
+      "retention": "Keep 180 days for replay defense and reconciliation, then remove under an approved private cleanup procedure.",
+      "columns": [
+        { "api_name": "SUBMISSION_KEY", "type": "varchar", "max_length": 64, "mandatory": true, "unique": true, "pii_ephi": true },
+        { "api_name": "PREFILL_KEY", "type": "varchar", "max_length": 64, "mandatory": true, "unique": false, "pii_ephi": true },
+        { "api_name": "SESSION_ROW_ID", "type": "varchar", "max_length": 30, "mandatory": true, "unique": false, "pii_ephi": true },
+        { "api_name": "SUBMISSION_FINGERPRINT", "type": "varchar", "max_length": 64, "mandatory": true, "unique": false, "pii_ephi": true },
+        { "api_name": "STATUS", "type": "varchar", "max_length": 32, "mandatory": true, "unique": false },
+        { "api_name": "LEASE_OWNER", "type": "varchar", "max_length": 36, "mandatory": true, "unique": false },
+        { "api_name": "LEASE_EXPIRES_AT", "type": "varchar", "max_length": 32, "mandatory": true, "unique": false },
+        { "api_name": "ATTEMPT_COUNT", "type": "bigint", "mandatory": true, "unique": false },
+        { "api_name": "CLAIMED_AT", "type": "varchar", "max_length": 32, "mandatory": true, "unique": false },
+        { "api_name": "SUCCEEDED_AT", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false },
+        { "api_name": "FAILED_AT", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false },
+        { "api_name": "RECONCILIATION_REQUIRED_AT", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false },
+        { "api_name": "UPDATED_AT", "type": "varchar", "max_length": 32, "mandatory": true, "unique": false },
+        { "api_name": "SOURCE_REVISION", "type": "varchar", "max_length": 80, "mandatory": true, "unique": false },
+        { "api_name": "SOURCE_ENVIRONMENT", "type": "varchar", "max_length": 16, "mandatory": true, "unique": false },
+        { "api_name": "LAST_OUTCOME", "type": "varchar", "max_length": 80, "mandatory": true, "unique": false }
+      ]
+    },
+    {
+      "runtime_variable": "FORM2_PROOF_TABLE_NAME",
+      "expected_api_name": "Form2VerificationProofsV3",
+      "purpose": "One durable, one-time, email-only verification proof bound to an exact Form 2 session and CRM identity without storing an email address or OTP.",
+      "required_unique_columns": ["PROOF_KEY"],
+      "retention": "Retain with the associated session as verification and replay evidence; deletion requires a separately reviewed private retention procedure.",
+      "columns": [
+        { "api_name": "PROOF_KEY", "type": "varchar", "max_length": 64, "mandatory": true, "unique": true, "pii_ephi": true },
+        { "api_name": "SESSION_ROW_ID", "type": "varchar", "max_length": 30, "mandatory": true, "unique": false, "pii_ephi": true },
+        { "api_name": "BINDING_DIGEST", "type": "varchar", "max_length": 64, "mandatory": true, "unique": false, "pii_ephi": true },
+        { "api_name": "DESTINATION_DIGEST", "type": "varchar", "max_length": 64, "mandatory": true, "unique": false, "pii_ephi": true },
+        { "api_name": "OTP_DIGEST", "type": "varchar", "max_length": 64, "mandatory": true, "unique": false, "pii_ephi": true },
+        { "api_name": "OTP_GENERATION", "type": "bigint", "mandatory": true, "unique": false },
+        { "api_name": "STATUS", "type": "varchar", "max_length": 32, "mandatory": true, "unique": false },
+        { "api_name": "ATTEMPT_COUNT", "type": "bigint", "mandatory": true, "unique": false },
+        { "api_name": "MAX_ATTEMPTS", "type": "bigint", "mandatory": true, "unique": false },
+        { "api_name": "SEND_COUNT", "type": "bigint", "mandatory": true, "unique": false },
+        { "api_name": "MAX_SENDS", "type": "bigint", "mandatory": true, "unique": false },
+        { "api_name": "ISSUED_AT", "type": "varchar", "max_length": 32, "mandatory": true, "unique": false },
+        { "api_name": "EXPIRES_AT", "type": "varchar", "max_length": 32, "mandatory": true, "unique": false },
+        { "api_name": "LAST_ATTEMPT_AT", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false },
+        { "api_name": "VERIFICATION_OWNER", "type": "varchar", "max_length": 71, "mandatory": false, "unique": false, "pii_ephi": true },
+        { "api_name": "VERIFICATION_LEASE_EXPIRES_AT", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false },
+        { "api_name": "VERIFIED_AT", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false },
+        { "api_name": "CONSUMED_AT", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false },
+        { "api_name": "PROVIDER_STATE", "type": "varchar", "max_length": 32, "mandatory": true, "unique": false },
+        { "api_name": "PROVIDER_ATTEMPT_COUNT", "type": "bigint", "mandatory": true, "unique": false },
+        { "api_name": "PROVIDER_INVOKED_AT", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false },
+        { "api_name": "PROVIDER_RESULT_REFERENCE", "type": "varchar", "max_length": 128, "mandatory": false, "unique": false, "pii_ephi": true },
+        { "api_name": "SOURCE_REVISION", "type": "varchar", "max_length": 80, "mandatory": true, "unique": false },
+        { "api_name": "SOURCE_ENVIRONMENT", "type": "varchar", "max_length": 16, "mandatory": true, "unique": false },
+        { "api_name": "LAST_OUTCOME", "type": "varchar", "max_length": 80, "mandatory": true, "unique": false, "pii_ephi": true },
+        { "api_name": "UPDATED_AT", "type": "varchar", "max_length": 32, "mandatory": true, "unique": false }
+      ]
+    }
+  ],
+  "deployment_gates": [
+    "Use only the existing Retell Catalyst project in Development and independently re-read both existing version-2 stores before binding any version-3 runtime target.",
+    "Use only the four exact empty operational targets recorded in observed_development_readback. Never rename, overwrite, backfill, update, or delete either existing version-2 store during migration, cutover, or rollback rehearsal; later removal requires the separate superseding-contract cleanup gate.",
+    "Promote no version-2 row whose immutable ISSUE_REQUEST_KEY, ownership, or state cannot be proven. Conflicting, terminal, missing, and unverifiably bound rows remain quarantined in version 2.",
+    "Independently read back all 91 desired application columns, the six exact unique constraints including PREFILL_HANDLE_HASH and PROOF_KEY, every mandatory/privacy flag including JOURNEY_BINDING_DIGEST and LAST_OUTCOME, table access, and App User denial before source upload or route activation. The historical 81-column observation is not proof of the desired runtime schema.",
+    "Bind revenue_leak_test_setup_form only to the four distinct reviewed operational targets, never any quarantined probe artifact, and preserve every legacy Setup Form, Retell, and Request Form function, route, table, Connection, variable, and deployment.",
+    "Treat every version-3 session row as an issuance tombstone: ISSUE_REQUEST_KEY remains stable across TOKEN_PEPPER rotation; only expired rows with crm_expiry_synced have a rotated terminal Deal key, and no session status is cleanup-eligible without a separately reviewed migration.",
+    "The key columns named in required_unique_columns must be mandatory and unique; runtime safety depends on the unique insert being atomic.",
+    "Block all client-side table access and restrict reconciliation access to the minimum operator role.",
+    "Verify conditional ZCQL UPDATE behavior, unique-conflict behavior, and SDK response shapes with concurrent synthetic requests before route activation or caller cutover.",
+    "Do not add names, email addresses, phone numbers, plaintext OTPs, raw Forms bodies, raw tokens, raw submission identifiers, OAuth material, or logs to these tables."
+  ]
+}

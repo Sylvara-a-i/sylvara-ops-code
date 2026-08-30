@@ -1,0 +1,241 @@
+{
+  "schema_version": 1,
+  "record_type": "sanitized_free_revenue_leak_test_crm_topology_layout_preflight",
+  "observed_at": "2026-08-28",
+  "repository_head_at_observation": "0af87a26e2103ddaf4178bf03ebfa67b972cea24",
+  "automation_contract_revision": "2026-08-28-blueprint-topology-v4",
+  "status": "metadata_and_layout_preflight_satisfied_blueprint_workflow_and_runtime_blocking",
+  "historical_evidence": {
+    "count_only_record_preserved_without_rewrite": true,
+    "record": "src/zoho-crm/free-revenue-leak-test/evidence/live-metadata-preflight-2026-08-28.json",
+    "authority_limit": "The earlier record remains authoritative only for its bounded 17-field and then-observed workflow and Blueprint conclusions."
+  },
+  "evidence_boundary": {
+    "connector_first_sources": [
+      "Sylvara CRM Audit connector",
+      "Sylvara CRM Blueprint Changes connector"
+    ],
+    "organization_identity_verified_privately": true,
+    "organization_type": "production-type existing organization",
+    "records_or_record_photos_read": false,
+    "customer_prospect_or_employee_pii_read": false,
+    "private_identifiers_urls_payloads_or_raw_responses_in_repository": false,
+    "writes_or_runtime_invocations_performed": false,
+    "retell_action_performed": false,
+    "customer_communication_billing_or_production_traffic_action_performed": false
+  },
+  "connector_and_browser_boundary": {
+    "crm_metadata_workflow_and_singular_blueprint_reads_connector_first": true,
+    "blueprint_list_connector_accepted_required_deals_module": false,
+    "blueprint_list_connector_failure_was_read_only": true,
+    "authenticated_first_party_crm_console_fallback_used": true,
+    "fallback_scope": "locate the exact inactive Blueprint candidate and inspect its visible state and transition labels only",
+    "browser_save_clone_activate_transition_or_record_action_performed": false,
+    "browser_fallback_used_only_after_connector_capability_failure": true,
+    "singular_connector_state_transition_and_enrolled_count_readback_resumed_after_fallback": true
+  },
+  "metadata_and_layout_readback": {
+    "module": "Deals",
+    "active_visible_layout_count": 1,
+    "active_layout_name": "Standard",
+    "active_layout_section_count": 16,
+    "observed_module_field_count": 188,
+    "snapshot_derived_gap_source": "src/zoho-crm/reference/snapshots/2026-08-14/crm-layout-field-order.csv",
+    "snapshot_derived_gap_count": 25,
+    "resolved_api_names": [
+      "Approved_Configuration_Version",
+      "Approved_Deployment_Record_ID",
+      "Billing_Automation_Error",
+      "Billing_Automation_Status",
+      "Billing_Frequency",
+      "Billing_Last_Sync_At",
+      "Billing_Subscription_ID",
+      "Call_Totals_Reconciled",
+      "Configuration_Version",
+      "Deployment_Record_ID",
+      "Expected_Monthly_Connected_Minutes_Max",
+      "Expected_Monthly_Connected_Minutes_Min",
+      "Recommended_Paid_Coverage",
+      "Subscription_Acceptance_Status",
+      "Subscription_Acceptance_Version",
+      "Subscription_Accepted_At",
+      "Subscription_Start_Date",
+      "Subscription_Status",
+      "Test_Actual_Avg_Call_Duration_Seconds",
+      "Test_Bookable_Opportunities",
+      "Test_Data_Confidence_Notes",
+      "Test_Observed_Workflow_Failures",
+      "Test_Office_Follow_Up_Calls",
+      "Test_Out_Of_Area_Or_Wrong_Fit_Calls",
+      "Test_Urgent_Requests"
+    ],
+    "all_resolved_exactly_once": true,
+    "all_visible": true,
+    "all_read_only_false": true,
+    "all_api_create_enabled": true,
+    "all_api_update_enabled": true,
+    "all_active_layout_associated": true,
+    "all_transition_field_available": true,
+    "fields_matching_predeclared_types": [
+      { "api_name": "Approved_Configuration_Version", "data_type": "text", "json_type": "string" },
+      { "api_name": "Approved_Deployment_Record_ID", "data_type": "text", "json_type": "string" },
+      { "api_name": "Billing_Frequency", "data_type": "picklist", "json_type": "string" },
+      { "api_name": "Billing_Subscription_ID", "data_type": "text", "json_type": "string" },
+      { "api_name": "Configuration_Version", "data_type": "text", "json_type": "string" },
+      { "api_name": "Deployment_Record_ID", "data_type": "text", "json_type": "string" },
+      { "api_name": "Expected_Monthly_Connected_Minutes_Max", "data_type": "integer", "json_type": "integer" },
+      { "api_name": "Expected_Monthly_Connected_Minutes_Min", "data_type": "integer", "json_type": "integer" },
+      { "api_name": "Recommended_Paid_Coverage", "data_type": "picklist", "json_type": "string" },
+      { "api_name": "Subscription_Acceptance_Status", "data_type": "picklist", "json_type": "string" },
+      { "api_name": "Subscription_Acceptance_Version", "data_type": "text", "json_type": "string" },
+      { "api_name": "Subscription_Accepted_At", "data_type": "datetime", "json_type": "string" },
+      { "api_name": "Subscription_Start_Date", "data_type": "date", "json_type": "string" },
+      { "api_name": "Subscription_Status", "data_type": "picklist", "json_type": "string" },
+      { "api_name": "Test_Actual_Avg_Call_Duration_Seconds", "data_type": "integer", "json_type": "integer" },
+      { "api_name": "Test_Bookable_Opportunities", "data_type": "integer", "json_type": "integer" },
+      { "api_name": "Test_Data_Confidence_Notes", "data_type": "textarea", "json_type": "string" },
+      { "api_name": "Test_Observed_Workflow_Failures", "data_type": "textarea", "json_type": "string" },
+      { "api_name": "Test_Office_Follow_Up_Calls", "data_type": "integer", "json_type": "integer" },
+      { "api_name": "Test_Out_Of_Area_Or_Wrong_Fit_Calls", "data_type": "integer", "json_type": "integer" },
+      { "api_name": "Test_Urgent_Requests", "data_type": "integer", "json_type": "integer" }
+    ],
+    "newly_explicit_type_contracts": [
+      { "api_name": "Billing_Automation_Error", "data_type": "textarea", "json_type": "string" },
+      { "api_name": "Billing_Automation_Status", "data_type": "picklist", "json_type": "string" },
+      { "api_name": "Billing_Last_Sync_At", "data_type": "datetime", "json_type": "string" },
+      { "api_name": "Call_Totals_Reconciled", "data_type": "boolean", "json_type": "boolean" }
+    ],
+    "required_picklist_api_values": {
+      "Billing_Automation_Status": ["Paid Verified"],
+      "Billing_Frequency": ["Monthly"],
+      "Recommended_Paid_Coverage": [
+        "After Hours Only",
+        "No Answer / Overflow Only",
+        "After Hours + Overflow"
+      ],
+      "Subscription_Acceptance_Status": ["Pending", "Accepted"],
+      "Subscription_Status": ["Active"]
+    },
+    "all_required_picklist_api_values_present": true,
+    "metadata_and_layout_gate_currently_satisfied": true,
+    "fresh_readback_still_required_immediately_before_deployment": true
+  },
+  "workflow_readback": {
+    "complete_first_page_inventory_no_more_pages": true,
+    "lead_rule_count": 3,
+    "deal_rule_count": 5,
+    "lead_workflow_task_count": 5,
+    "deal_workflow_task_count": 5,
+    "journey_rules": [
+      {
+        "name": "Leads Free Test Intake Review",
+        "count": 1,
+        "active": true,
+        "trigger": "create_or_edit",
+        "execution_marker_present": true,
+        "instant_actions": { "tasks": 1 },
+        "scheduled_actions": { "tasks": 1 }
+      },
+      {
+        "name": "Deals Free Test Initialize Controls",
+        "count": 1,
+        "active": true,
+        "trigger": "create_or_edit",
+        "execution_marker_present": true,
+        "instant_actions": { "field_updates": 5 },
+        "scheduled_actions": {}
+      },
+      {
+        "name": "Deals Free Test Initialize Limits",
+        "count": 1,
+        "active": true,
+        "trigger": "create_or_edit",
+        "execution_marker_present": true,
+        "instant_actions": { "field_updates": 3 },
+        "scheduled_actions": {}
+      },
+      {
+        "name": "Deals Revenue Leak Test Setup Form Proof Candidate",
+        "count": 0,
+        "active": false,
+        "trigger": null,
+        "execution_marker_present": false,
+        "instant_actions": {},
+        "scheduled_actions": {}
+      },
+      {
+        "name": "Deals Form 2 Controller Proof Candidate",
+        "count": 1,
+        "active": false,
+        "trigger": "create_or_edit",
+        "execution_marker_present": false,
+        "instant_actions": { "field_updates": 3, "tasks": 1 },
+        "scheduled_actions": {}
+      },
+      {
+        "name": "Deals Free Test Form 2 Submitted",
+        "count": 1,
+        "active": true,
+        "trigger": "create_or_edit",
+        "execution_marker_present": true,
+        "instant_actions": { "field_updates": 3, "tasks": 1 },
+        "scheduled_actions": {}
+      }
+    ],
+    "execution_markers_are_runtime_acceptance": false,
+    "desired_create_only_trigger_parity_proven": false,
+    "form1_uncontracted_scheduled_follow_up_task_present": true,
+    "single_active_form2_rule_parity_proven": false
+  },
+  "blueprint_readback": {
+    "name": "Revenue Desk Free Test v6 - Control Candidate",
+    "count": 1,
+    "status": "Inactive",
+    "module_api_name": "Potentials",
+    "layout_name": "Standard",
+    "enrolled_record_count": 0,
+    "expected_state_count": 8,
+    "observed_state_count": 8,
+    "all_expected_states_present": true,
+    "expected_transition_count": 13,
+    "observed_transition_count": 12,
+    "expected_transition_count_present": 11,
+    "missing_expected_transitions": [
+      "Record Internal Approval",
+      "Activate Test Route"
+    ],
+    "unexpected_transitions": ["Approve Go Live"],
+    "topology_matches_contract": false,
+    "pipeline_binding_matches_revenue_desk_sales": "not_proven",
+    "singular_state_readbacks_succeeded": 8,
+    "singular_transition_readbacks_succeeded": 12,
+    "provider_save_or_activation_readback_proven": false,
+    "runtime_acceptance_proven": false
+  },
+  "release_classification": {
+    "crm_metadata_and_active_layout_preflight": "currently_satisfied",
+    "crm_workflow_parity": "not_proven",
+    "crm_blueprint_topology": "not_converged",
+    "crm_blueprint_deployability": "blocked",
+    "crm_synthetic_runtime_acceptance": "not_proven",
+    "retell_agent_testing_readiness": "not_ready"
+  },
+  "remaining_gates": [
+    "remove or explicitly approve the uncontracted Form 1 scheduled action and prove the intended create-only trigger behavior",
+    "rename the inactive Form 2 candidate in place and establish exactly one active canonical Form 2 rule while retiring the superseded rule",
+    "reconstruct the inactive Blueprint with separate Record Internal Approval and Activate Test Route transitions and no combined legacy activation transition",
+    "prove the inactive Blueprint is bound to the exact Revenue Desk Sales pipeline",
+    "implement and test every external-evidence validator plus a typed save and independent readback contract",
+    "prove caller, Connection, function, webhook, and button bindings through complete inventory",
+    "run a disposable ZZZ SYNTHETIC non-Retell lifecycle only under a fresh exact execution packet"
+  ],
+  "future_live_change_authorized_by_this_record": false,
+  "disclosure_controls": {
+    "private_provider_organization_layout_blueprint_workflow_field_or_record_identifier_values_included": false,
+    "private_urls_or_connector_payloads_included": false,
+    "credential_key_token_or_secret_values_included": false,
+    "operator_identity_included": false,
+    "customer_prospect_employee_or_caller_data_included": false,
+    "retell_identifier_prompt_phone_or_runtime_values_included": false
+  }
+}

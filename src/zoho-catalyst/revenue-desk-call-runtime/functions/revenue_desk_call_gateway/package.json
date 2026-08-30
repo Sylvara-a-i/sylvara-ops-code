@@ -1,0 +1,26 @@
+{
+  "name": "revenue_desk_call_gateway",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Authenticated Revenue Desk call ingress with durable Catalyst receipts and Function Job dispatch.",
+  "main": "index.js",
+  "type": "commonjs",
+  "files": [
+    "lib/**/*.js",
+    "contracts/*.json"
+  ],
+  "engines": {
+    "node": ">=18 <25"
+  },
+  "scripts": {
+    "check": "node --check index.js && node --check lib/analysis.js && node --check lib/analytics-outbox.js && node --check lib/approval-control.js && node --check lib/catalyst-jobs.js && node --check lib/catalyst-mail.js && node --check lib/catalyst-store.js && node --check lib/config.js && node --check lib/contracts.js && node --check lib/crm-report-dispatch.js && node --check lib/crm-report-outbox.js && node --check lib/errors.js && node --check lib/http.js && node --check lib/job-handler.js && node --check lib/logging.js && node --check lib/reporting.js && node --check lib/route-control-service.js && node --check lib/runtime-boundary.js && node --check lib/runtime-service.js && node --check lib/security.js && node --check lib/source-revision.js && node --check lib/validation.js && node --check ../../scripts/build-release.js",
+    "test:unit": "node --test test/unit.test.js test/coverage-mode-contract.test.js test/job-handler.test.js test/approval-control.test.js test/crm-report-dispatch.test.js test/release-builder.test.js test/response-deadline.test.js test/workflow-failure-evidence.test.js",
+    "test:integration": "node --test test/runtime.test.js",
+    "test:acceptance": "node --test test/acceptance.test.js",
+    "test": "npm run test:unit && npm run test:integration && npm run test:acceptance",
+    "ci": "npm run check && npm test"
+  },
+  "dependencies": {
+    "zcatalyst-sdk-node": "3.4.0"
+  }
+}

@@ -1,0 +1,95 @@
+{
+  "schema_version": 4,
+  "environment": "Development",
+  "gateway_state": "required-active-exact-routes",
+  "function": "revenue_leak_test_request_form",
+  "default_action": "reject",
+  "cors": false,
+  "routes": [
+    {
+      "id": "FORM1_ISSUE",
+      "method": "POST",
+      "path_reference": "ISSUE_PATH",
+      "caller": "administrator-restricted CRM button function",
+      "route_state": "active-after-install-readback",
+      "authentication": {
+        "type": "Catalyst project binding plus independent custom header",
+        "name_reference": "ISSUE_HEADER_NAME",
+        "secret_reference": "ISSUE_HEADER_SECRET"
+      },
+      "content_type": "application/json",
+      "body_keys": ["crmModule", "recordId"],
+      "success_status": 201
+    },
+    {
+      "id": "FORM1_ACCESS",
+      "method": "GET",
+      "path_reference": "ACCESS_PATH",
+      "caller": "CRM-launched browser",
+      "route_state": "active-after-install-readback",
+      "authentication": {
+        "type": "one-time journey credential in URL fragment; fragment is never sent in the GET request"
+      },
+      "success_status": 200
+    },
+    {
+      "id": "FORM1_EXCHANGE",
+      "method": "POST",
+      "path_reference": "EXCHANGE_PATH",
+      "caller": "same-origin Catalyst access client",
+      "route_state": "active-after-install-readback",
+      "authentication": {
+        "type": "single-use journey credential in exact JSON body"
+      },
+      "content_type": "application/json",
+      "body_keys": ["journeyToken"],
+      "success_status": 200
+    },
+    {
+      "id": "FORM1_PREFILL",
+      "method": "POST",
+      "path_reference": "PREFILL_PATH",
+      "caller": "Zoho Forms server-side Prefill Webhook",
+      "route_state": "active-after-install-readback",
+      "authentication": {
+        "type": "Catalyst project binding plus independent custom header",
+        "name_reference": "PREFILL_HEADER_NAME",
+        "secret_reference": "PREFILL_HEADER_SECRET"
+      },
+      "content_type": "application/json",
+      "body_keys": ["prefillHandle"],
+      "success_status": 200
+    },
+    {
+      "id": "FORM1_SUBMISSION",
+      "method": "POST",
+      "path_reference": "SUBMISSION_PATH",
+      "caller": "Zoho Forms server-side submission webhook",
+      "route_state": "active-after-install-readback",
+      "authentication": {
+        "type": "Catalyst project binding plus independent custom header",
+        "name_reference": "SUBMISSION_HEADER_NAME",
+        "secret_reference": "SUBMISSION_HEADER_SECRET"
+      },
+      "content_type": "application/json",
+      "assisted_body_keys": ["prefillId", "configurationRevision", "submissionId", "formData"],
+      "public_body_keys": ["submissionId"],
+      "success_status": 200
+    }
+  ],
+  "security_invariants": [
+    "The real journey credential appears only in the Catalyst client URL fragment, is exchanged once through POST, and never reaches Zoho Forms.",
+    "The Forms URL contains only an independent 32-byte prefill handle; it contains no CRM ID, journey ID, PII, or configuration value.",
+    "Only keyed digests of journey credentials and prefill handles are persisted. Raw bearer values are never logged or stored.",
+    "Issue, prefill, and submission use different route secrets; access and exchange expose only the narrow browser exchange boundary.",
+    "The assisted submission contains no bearer, CRM record, or journey identifier and resolves its binding exclusively from prefillId and immutable revision.",
+    "A tokenless public acknowledgment performs no assisted Data Store or CRM operation; the existing native public upsert remains the public writer.",
+    "Production remains dark."
+  ],
+  "rollback": {
+    "first": "unbind the CRM assisted launcher and both Zoho Forms server-side callers",
+    "then": "disable the five exact Development routes or the Development API Gateway",
+    "preserve": ["session rows", "CRM history", "public Form 1 native integration", "old CRM control"],
+    "delete_history": false
+  }
+}

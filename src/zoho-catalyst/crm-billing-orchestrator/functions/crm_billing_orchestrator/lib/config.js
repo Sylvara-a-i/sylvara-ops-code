@@ -4,11 +4,22 @@ const {
   ARTIFACT_DEVELOPMENT_ZAID_HMAC_SHA256,
   ARTIFACT_SOURCE_REVISION,
 } = require("./source-revision");
+const {
+  PLAN_FREQUENCY_KEYS,
+  parsePaidCommercialTerms,
+} = require("./commercial-terms");
 
 const REVISION = /^[a-f0-9]{40}$/;
 const IDENTIFIER = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
 const PLAN_CODE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
-const CUSTOMER_PROVISIONING_MODES = new Set(["native_crm_import", "test_direct_customer"]);
+const CUSTOMER_PROVISIONING_MODES = new Set(["test_direct_customer"]);
+const OPERATION_TABLE_NAME = "CRMBillingOperations";
+const ANALYTICS_OUTBOX_TABLE_NAME = "AnalyticsSyncOutbox";
+const PAID_USAGE_ADDON_UNIT = "minute";
+const PAID_SUBSCRIPTION_STATUS_MAP = Object.freeze({
+  future: "Scheduled",
+  live: "Active",
+});
 
 class ConfigurationError extends Error {
   constructor(message) {
@@ -48,11 +59,6 @@ function integer(environment, name, fallback, minimum, maximum) {
   return parsed;
 }
 
-function requiredInteger(environment, name, minimum, maximum) {
-  required(environment, name);
-  return integer(environment, name, null, minimum, maximum);
-}
-
 function requiredBoolean(environment, name) {
   const result = required(environment, name);
   if (!new Set(["true", "false"]).has(result)) {
@@ -75,9 +81,37 @@ function identifier(environment, name) {
   return result;
 }
 
+function operationTable(environment) {
+  const selected = identifier(environment, "OPERATION_TABLE");
+  if (selected !== OPERATION_TABLE_NAME) {
+    throw new ConfigurationError(
+      `OPERATION_TABLE must be the canonical ${OPERATION_TABLE_NAME} table`,
+    );
+  }
+  return selected;
+}
+
+function analyticsOutboxTable(environment) {
+  const selected = identifier(environment, "ANALYTICS_OUTBOX_TABLE");
+  if (selected !== ANALYTICS_OUTBOX_TABLE_NAME) {
+    throw new ConfigurationError(
+      `ANALYTICS_OUTBOX_TABLE must be the canonical ${ANALYTICS_OUTBOX_TABLE_NAME} table`,
+    );
+  }
+  return selected;
+}
+
 function planCode(environment, name) {
   const result = required(environment, name);
   if (!PLAN_CODE.test(result)) throw new ConfigurationError(`${name} is invalid`);
+  return result;
+}
+
+function billingRecordId(environment, name) {
+  const result = required(environment, name);
+  if (!/^[1-9][0-9]{7,29}$/.test(result)) {
+    throw new ConfigurationError(`${name} is invalid`);
+  }
   return result;
 }
 
@@ -134,7 +168,7 @@ function duplicateCodes(environment) {
   return Object.freeze(entries);
 }
 
-function paidPlanMap(environment, enabled) {
+function paidPlanMap(environment) {
   let parsed;
   try {
     parsed = JSON.parse(required(environment, "PAID_PLAN_CODE_MAP"));
@@ -145,7 +179,8 @@ function paidPlanMap(environment, enabled) {
     throw new ConfigurationError("PAID_PLAN_CODE_MAP must be an object");
   }
   const entries = Object.entries(parsed);
-  if (entries.length > 20 || (enabled && entries.length < 1) || (!enabled && entries.length !== 0)) {
+  const expectedKeys = [...PLAN_FREQUENCY_KEYS].sort();
+  if (JSON.stringify(entries.map(([key]) => key).sort()) !== JSON.stringify(expectedKeys)) {
     throw new ConfigurationError("PAID_PLAN_CODE_MAP has an invalid size");
   }
   const result = Object.create(null);
@@ -158,7 +193,58 @@ function paidPlanMap(environment, enabled) {
     ) throw new ConfigurationError("PAID_PLAN_CODE_MAP contains an invalid mapping");
     result[crmValue] = code;
   }
+  if (new Set(Object.values(result)).size !== Object.values(result).length) {
+    throw new ConfigurationError("PAID_PLAN_CODE_MAP plan codes must be unique");
+  }
   return Object.freeze(result);
+}
+
+function paidSubscriptionStatusMap(environment) {
+  let parsed;
+  try {
+    parsed = JSON.parse(required(environment, "PAID_SUBSCRIPTION_STATUS_MAP"));
+  } catch {
+    throw new ConfigurationError("PAID_SUBSCRIPTION_STATUS_MAP must be JSON");
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new ConfigurationError("PAID_SUBSCRIPTION_STATUS_MAP must be an object");
+  }
+  const entries = Object.entries(parsed);
+  const expectedKeys = Object.keys(PAID_SUBSCRIPTION_STATUS_MAP);
+  if (
+    JSON.stringify(entries.map(([key]) => key).sort()) !== JSON.stringify(expectedKeys) ||
+    entries.some(([key, value]) => value !== PAID_SUBSCRIPTION_STATUS_MAP[key])
+  ) throw new ConfigurationError("PAID_SUBSCRIPTION_STATUS_MAP is invalid");
+  return PAID_SUBSCRIPTION_STATUS_MAP;
+}
+
+function paidUsageAddonUnit(environment) {
+  if (required(environment, "PAID_USAGE_ADDON_UNIT") !== PAID_USAGE_ADDON_UNIT) {
+    throw new ConfigurationError("PAID_USAGE_ADDON_UNIT must be minute");
+  }
+  return PAID_USAGE_ADDON_UNIT;
+}
+
+function paidConfiguration(environment) {
+  let paidCommercialTerms;
+  try {
+    paidCommercialTerms = parsePaidCommercialTerms(required(
+      environment,
+      "PAID_COMMERCIAL_TERMS_JSON",
+    ));
+  } catch {
+    throw new ConfigurationError("PAID_COMMERCIAL_TERMS_JSON is invalid");
+  }
+  return Object.freeze({
+    paidCommercialTerms,
+    paidPlanCodeMap: paidPlanMap(environment),
+    paidUsageAddonCode: planCode(environment, "PAID_USAGE_ADDON_CODE"),
+    paidUsageAddonUnit: paidUsageAddonUnit(environment),
+    paidUsageAddonProductId: billingRecordId(environment, "PAID_USAGE_ADDON_PRODUCT_ID"),
+    paidSubscriptionStatusMap: paidSubscriptionStatusMap(environment),
+    paidAcceptanceValue: boundedText(environment, "PAID_ACCEPTANCE_VALUE"),
+    closedWonStageValue: boundedText(environment, "CLOSED_WON_STAGE_VALUE"),
+  });
 }
 
 function loadConfig(environment = process.env, {
@@ -166,12 +252,30 @@ function loadConfig(environment = process.env, {
   artifactDevelopmentZaidHmacSha256 = ARTIFACT_DEVELOPMENT_ZAID_HMAC_SHA256,
 } = {}) {
   const deploymentEnvironment = required(environment, "DEPLOYMENT_ENVIRONMENT");
-  if (deploymentEnvironment !== "development") {
-    throw new ConfigurationError("Production activation is blocked in this source revision");
+  const deploymentMode = required(environment, "DEPLOYMENT_MODE");
+  if (
+    !(
+      (deploymentEnvironment === "development" && deploymentMode === "active") ||
+      (deploymentEnvironment === "production" && deploymentMode === "dark")
+    )
+  ) {
+    throw new ConfigurationError(
+      "DEPLOYMENT_ENVIRONMENT and DEPLOYMENT_MODE must be development/active or production/dark",
+    );
   }
   const sourceRevision = required(environment, "SOURCE_REVISION");
   if (!REVISION.test(sourceRevision) || !REVISION.test(artifactRevision) || sourceRevision !== artifactRevision) {
     throw new ConfigurationError("SOURCE_REVISION does not match the immutable artifact");
+  }
+  // Dark Production is installation evidence only. It loads no route, credential,
+  // organization, catalog, Connection, operation table, or mutation capability.
+  if (deploymentMode === "dark") {
+    return Object.freeze({
+      darkMode: true,
+      deploymentEnvironment,
+      deploymentMode,
+      sourceRevision,
+    });
   }
   const headerName = required(environment, "SHARED_HEADER_NAME").toLowerCase();
   if (
@@ -186,33 +290,42 @@ function loadConfig(environment = process.env, {
     environment,
     "ENABLE_PAID_SUBSCRIPTION_PREPARATION",
   );
-  if (enablePaidSubscriptionPreparation) {
-    throw new ConfigurationError(
-      "Paid subscription preparation is blocked until exact commercial terms are enforced",
-    );
-  }
+  const enableDevelopmentCompatibilityProbe = requiredBoolean(
+    environment,
+    "ENABLE_DEVELOPMENT_COMPATIBILITY_PROBE",
+  );
   const selectedCustomerProvisioningMode = customerProvisioningMode(environment);
   const enableTestDirectCustomerProvisioning = requiredBoolean(
     environment,
     "ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING",
   );
-  if (
-    (selectedCustomerProvisioningMode === "test_direct_customer") !==
-    enableTestDirectCustomerProvisioning
-  ) {
+  if (!enableTestDirectCustomerProvisioning) {
     throw new ConfigurationError(
-      "Direct customer provisioning requires its exact Development test gate",
+      "Paid conversion requires the exact Development TEST customer gate",
     );
   }
+  const idempotencyPepper = secret(environment, "IDEMPOTENCY_PEPPER");
+  const analyticsPartitionSecret = secret(environment, "ANALYTICS_PARTITION_HMAC_SECRET");
+  const sharedHeaderValue = secret(environment, "SHARED_HEADER_VALUE");
+  const reportSummaryHeaderValue = secret(environment, "REPORT_SUMMARY_HEADER_VALUE");
+  if (analyticsPartitionSecret === idempotencyPepper) {
+    throw new ConfigurationError("Analytics partition and operation identity secrets must differ");
+  }
+  if (sharedHeaderValue === reportSummaryHeaderValue) {
+    throw new ConfigurationError("Paid and report-summary caller secrets must differ");
+  }
   return Object.freeze({
+    darkMode: false,
     deploymentEnvironment,
+    deploymentMode,
     sourceRevision,
     artifactDevelopmentZaidHmacSha256,
     developmentFunctionHost: developmentFunctionHost(environment),
     developmentRuntimeProof: secret(environment, "DEVELOPMENT_RUNTIME_PROOF"),
     allowedPath: exactPath(environment),
     sharedHeaderName: headerName,
-    sharedHeaderValue: secret(environment, "SHARED_HEADER_VALUE"),
+    sharedHeaderValue,
+    reportSummaryHeaderValue,
     crmApiBaseUrl: apiBase(environment, "CRM_API_BASE_URL", "/crm/v8"),
     billingApiBaseUrl: apiBase(environment, "BILLING_API_BASE_URL", "/billing/v1"),
     billingOrganizationId: organizationId,
@@ -222,26 +335,19 @@ function loadConfig(environment = process.env, {
     crmWriteConnectionLinkName: identifier(environment, "CRM_WRITE_CONNECTION_LINK_NAME"),
     billingReadConnectionLinkName: identifier(environment, "BILLING_READ_CONNECTION_LINK_NAME"),
     billingWriteConnectionLinkName: identifier(environment, "BILLING_WRITE_CONNECTION_LINK_NAME"),
-    operationTable: identifier(environment, "OPERATION_TABLE"),
+    operationTable: operationTable(environment),
+    analyticsOutboxTable: analyticsOutboxTable(environment),
     duplicateErrorCodes: duplicateCodes(environment),
-    idempotencyPepper: secret(environment, "IDEMPOTENCY_PEPPER"),
-    evaluationPlanCode: planCode(environment, "EVALUATION_PLAN_CODE"),
+    idempotencyPepper,
+    analyticsPartitionSecret,
     enablePaidSubscriptionPreparation,
-    paidPlanCodeMap: paidPlanMap(environment, false),
-    paidAcceptanceValue: boundedText(environment, "PAID_ACCEPTANCE_VALUE"),
+    enableDevelopmentCompatibilityProbe,
+    ...(enablePaidSubscriptionPreparation ? paidConfiguration(environment) : {}),
     revenueDeskPipelineValue: boundedText(environment, "REVENUE_DESK_PIPELINE_VALUE"),
     freeTestEntryOfferValue: boundedText(environment, "FREE_TEST_ENTRY_OFFER_VALUE"),
     initialSaleTypeValue: boundedText(environment, "INITIAL_SALE_TYPE_VALUE"),
-    setupQaStageValue: boundedText(environment, "SETUP_QA_STAGE_VALUE"),
-    testLiveStageValue: boundedText(environment, "TEST_LIVE_STAGE_VALUE"),
-    resultsReviewStageValue: boundedText(environment, "RESULTS_REVIEW_STAGE_VALUE"),
     subscriptionProposedStageValue: boundedText(environment, "SUBSCRIPTION_PROPOSED_STAGE_VALUE"),
-    closedLostStageValue: boundedText(environment, "CLOSED_LOST_STAGE_VALUE"),
-    goLiveApprovedValue: boundedText(environment, "GO_LIVE_APPROVED_VALUE"),
     testCompletedStatusValue: boundedText(environment, "TEST_COMPLETED_STATUS_VALUE"),
-    paidReadyStatusValue: boundedText(environment, "PAID_READY_STATUS_VALUE"),
-    freeTestDurationDays: requiredInteger(environment, "FREE_TEST_DURATION_DAYS", 1, 30),
-    freeTestCallLimit: requiredInteger(environment, "FREE_TEST_CALL_LIMIT", 1, 1000),
     maxBodyBytes: integer(environment, "MAX_BODY_BYTES", 2048, 256, 8192),
     outboundTimeoutMs: integer(environment, "OUTBOUND_TIMEOUT_MS", 5000, 250, 10000),
     outboundMaxBytes: integer(environment, "OUTBOUND_MAX_BYTES", 262144, 4096, 524288),
@@ -255,4 +361,6 @@ function loadConfig(environment = process.env, {
   });
 }
 
-module.exports = { ConfigurationError, REVISION, loadConfig };
+module.exports = {
+  ANALYTICS_OUTBOX_TABLE_NAME, ConfigurationError, OPERATION_TABLE_NAME, REVISION, loadConfig,
+};

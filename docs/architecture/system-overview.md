@@ -78,44 +78,44 @@ Use Catalyst only when a concrete integration requires controls that a managed c
 
 ## Proposed Call And Reporting Flow
 
-[ADR 0006](../adr/0006-shared-seven-day-monitor-with-client-number-isolation.md) governs the free-test topology and tenancy model. [The shared-agent runbook](../runbooks/shared-seven-day-monitor-number-routing.md) sequences Development validation, acceptance, containment, and rollback. ADR 0004 and the generic reporting runbook retain compatible system-ownership and reporting controls. The dated reconciliation records signed Catalyst lifecycle, durable state, one internal email, one Development number binding, and rollback evidence. It does not prove a completed voice test, two live-number isolation, a prospect route, legal approval, or Production deployment.
+[The final consolidated release contract](../product/free-revenue-leak-test-release-contract.md) governs the Free Revenue Leak Test topology, migration, deployment, cleanup, and stopping point. ADR 0006 and its one-number proof are historical migration evidence only.
 
 ```text
-Approved carrier route
+Form 1 -> CRM Lead -> controlled Lead conversion -> Form 2 authorization
         |
         v
-Client-specific Retell number
+Canonical Catalyst deployment + immutable configuration version
         |
+        | out-of-band approval, provider-route readback, activation receipt
         v
-One shared 7-Day Free Test agent
-        |
-        | exact pre-call configuration gate
-        v
-Client-specific Catalyst deployment/configuration snapshot
-        |
-        | signed shared-agent post-call events
-        v
-Catalyst verification, immutable call/deployment binding, minimized event
-ledger, normalized call/outcome, handled count, and durable email state
-        |
-        +----> Catalyst Mail email record (`dry_run` by default)
-        |
-        +----> Catalyst Function Job for due retryable state
-        |
-        +----> client-partitioned query and sanitized CSV report
+Retell -> revenue_desk_call_gateway -> RevenueDeskCallJobs
+        |                                  |
+        |                                  v
+        |                     revenue_desk_call_worker
+        |                                  |
+        |                     +------------+-------------+
+        |                     |                          |
+        v                     v                          v
+durable receipts/calls   CRM/Billing outbox       Analytics outbox
+                                |                          |
+                                v                          v
+                  crm_billing_orchestrator   RevenueDeskAnalyticsJobs
+                                                           |
+                                                           v
+                                                   analytics_sync
 ```
 
-All active free tests use the same accepted Retell agent and flow. Each client has a dedicated Retell number and a versioned Catalyst deployment/configuration snapshot. A known authenticated invalid, unknown, ambiguous, inactive, expired, or exhausted resolution returns HTTP 200 explicit rejection, starts no agent, and creates no resolver-side write. Transport/authentication/timeout/503/malformed/invalid-override failure may fall back only to the number-bound shared agent, whose exact Configuration Unavailable gate ends without intake. The seven-field gate, strict seven-day boundary, practical 25-handled-call stop, and ownership priority are defined in ADR 0006. Calls already in flight may create a reported count overshoot; the MVP does not claim a concurrency-perfect cap. The shared `agent_id` is never sufficient tenancy evidence. A separately accepted Revenue Desk agent is appropriate only after paid conversion requires deeper client-specific workflow behavior.
+One Retell agent and the same `revenue_desk_call_gateway`/`revenue_desk_call_worker` support `free_test` and future `paid_service` engagements through immutable versioned configuration. Number ownership and exact deployment/configuration evidence establish tenancy; `agent_id` alone never does. The free-test profile is published and bounded to seven calendar days or 25 connected calls. Launch, Growth, and Scale profiles remain disabled and Draft, so paid conversation behavior and activation fail closed.
 
-Catalyst is the canonical free-test operational store: deployment ownership, configuration versions, current number binding, event claims, immutable call bindings, canonical outcomes, handled count, email notification record, and reportable fields. Development email defaults to `dry_run`: one `DryRunRecorded` row, zero attempts, no `sendMail` invocation. One controlled `send_development` message received provider/inbox readback, replay produced no second provider invocation, and the mode returned to `dry_run`. CRM is disabled in the MVP call path. Internal reporting uses client-partitioned queries and sanitized CSV; Analytics is deferred and is not an internal-test blocker. The free test does not book, dispatch, quote, take payment, or mutate a customer operating system.
+Catalyst is the operational source for deployment, configuration, event/call, notification, operation, checkpoint, and outbox state. CRM remains authoritative for relationship and commercial status; Billing TEST proves subscription orchestration without a charge; Analytics receives sanitized derived facts only. Neither CRM/Billing nor Analytics runs inside the critical conversational path.
 
-Use one voice-integration Catalyst project per environment rather than one project or function stack per client. Keep ingress, the separate retry Job, post-call processing, Catalyst Mail state, and query/CSV responsibilities small and explicit. The Billing gateway remains separate.
+One existing Catalyst project must end with exactly seven active Revenue Desk functions and two Function Job pools. The seventh function is the private Development-only split approval, activation, and rollback controller; retry and reconciliation remain worker modes, not separate free-test functions. The Client Portal Billing gateway remains a separate project and trust boundary classified `required_hardening_pending`; it does not expand the exact seven-function Revenue Desk topology.
 
-Backend isolation uses two distinct synthetic number values and two synthetic configurations. The current minimal internal phone scope uses one existing non-customer Development number pinned to the reviewed shared agent version; a second live number is deferred. Do not reuse or move the current number during validation. After completion, preserve its binding evidence and place it into cooldown. Before two concurrent deployments or the first-controlled-prospect technical gate, add a second dedicated number and repeat live same-version isolation proof.
+Development must prove synthetic client, deployment, engagement, environment, replay, route, and partition isolation without placing a call or running a Retell simulation. Production receives final `main` only as a dark deployment with independent credentials, no number/webhook binding, no recurring trigger, no real records, and no traffic.
 
-Managed Analytics MCP roles remain reference material for a later reporting phase. The free-test MVP does not depend on an Analytics workspace, connection, import, job, or dashboard. The [dated managed MCP catalog](../zoho/mcp/reference/zoho-analytics-managed-mcp-catalog-2026-08-18.md) remains separate evidence and does not imply adoption.
+Analytics must reconcile the exact `deployment`, `call`, `daily_metric`, `final_test_result`, and `conversion_status` record types and create the exact internal dashboard titles **Free-Test Operations Dashboard** and **Customer Results Dashboard**. Public links, embeds, scheduled exports, and direct customer access remain prohibited.
 
-The first report is a manually reviewed Catalyst query/CSV export for exactly one client/deployment. Any later external delivery requires approved recipients, restricted export handling, reconciled counts, and clear separation between estimated opportunity value and verified booked, completed, invoiced, or paid value. Scheduled Analytics delivery and a client portal remain deferred.
+The release remains **NOT READY FOR RETELL AGENT TESTING** until repository verification, canonical Development deployment and migration, CRM/Billing/Analytics E2E, cleanup, exposed-key revocation, final-main parity, dark-Production proof, rollback, and zero P0/P1 defects are independently read back. `READY FOR RETELL AGENT TESTING ONLY` authorizes only later Retell testing; it does not authorize prospect/customer traffic or Production activation.
 
 ## Change And Data Flow
 

@@ -1,0 +1,12 @@
+{
+  "functions": {
+    "source": "functions",
+    "targets": [
+      "revenue_leak_test_request_form"
+    ],
+    "ignore": [
+      "test/**",
+      ".env*"
+    ]
+  }
+}

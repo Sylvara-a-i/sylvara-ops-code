@@ -2,7 +2,7 @@
 
 ## Status
 
-These controls govern offline/synthetic Development validation and a separately scoped controlled internal Development phone test for [ADR 0006](../adr/0006-shared-seven-day-monitor-with-client-number-isolation.md). They are not a security certification, legal conclusion, Production authorization, or prospect/customer approval. The Catalyst controls below were exercised in Development; deferred Retell voice/provider-fallback evidence is recorded in the [Development reconciliation](../runbooks/free-test-development-reconciliation-2026-08-22.md).
+These controls are retained as historical Development evidence and contribute to the [final consolidated release contract](../product/free-revenue-leak-test-release-contract.md). They are not a security certification, legal conclusion, Production authorization, prospect/customer approval, or phone-test authorization. The earlier Catalyst proof must be migrated and repeated against final `main` before readiness.
 
 ## Trust And Tenant Boundary
 
@@ -10,7 +10,8 @@ These controls govern offline/synthetic Development validation and a separately 
 - Require the complete seven-field gate and approval/status/expiry/count invariants from one consistent snapshot.
 - Treat the shared Retell `agent_id` as product identity, never tenant evidence.
 - Derive an opaque call lookup key with a keyed HMAC of the provider call identifier; do not retain/log the raw identifier. Bind that key once to immutable client/deployment/configuration ownership and reject later attempts to move it.
-- For a known authenticated invalid, unknown, ambiguous, conflicting, inactive, expired, or exhausted resolution, return HTTP 200 explicit rejection, start no agent, and create no resolver-side write. Transport/authentication/timeout/503/malformed/invalid-override failure may fall back only to the number-bound shared agent's exact Configuration Unavailable no-intake gate. Do not perform degraded intake.
+- For a known authenticated invalid, unknown, ambiguous, conflicting, inactive, expired, or exhausted resolution, return HTTP 200 with `{ "call_inbound": { "reject": true } }`, start no agent, create no call, notification, Analytics fact, or failure row, and retain exactly one minimized replay-safe `inbound_resolution` receipt. Omitting `reject` may continue with the number-bound agent. Transport/authentication/timeout/503/malformed/invalid-override failure may fall back only to that agent's exact Configuration Unavailable no-intake gate. Do not perform degraded intake.
+- A `Resolved` inbound receipt that remains unmatched after a response-deadline 503 is ambiguous completion evidence. Keep terminal reconciliation and readiness pending; do not time-age it into a no-call assertion or emit final CRM/Analytics artifacts. Live ingress requires a separately verified Retell provider-readback disposition contract.
 - Partition calls, email notification rows, queries, CSV exports, caches, retries, and operator readback by both client and deployment.
 
 Cross-client configuration, call ownership, email notification, query, or CSV exposure is a P0 incident. Stop every affected route and follow the [rollback checklist](../runbooks/rollback-checklist.md).
@@ -26,11 +27,11 @@ Cross-client configuration, call ownership, email notification, query, or CSV ex
 
 ## Secrets And Least Privilege
 
-- The component-owned [`variables.json`](../../src/zoho-catalyst/retell-free-test/config/variables.json) is the public name/classification/format registry; real values stay in Catalyst secrets or private environment configuration.
+- The shared runtime [`variables.json`](../../src/zoho-catalyst/revenue-desk-call-runtime/config/variables.json) is the public name/classification/format registry; real values stay in Catalyst secrets or private environment configuration.
 - The Catalyst Mail adapter consumes `FREE_TEST_NOTIFICATION_MODE` with the reviewed Development values `dry_run` or `send_development` and `FREE_TEST_MAIL_FROM` with a privately configured verified Development sender. The committed/default operating mode is `dry_run`; `send_development` is allowed only for the single controlled delivery/readback, after which mode returns to `dry_run`. Do not substitute `CATALYST_MAIL_MODE` or silently default either variable.
 - Use distinct HMAC keys for provider verification, event/call identity, and number lookup where the contract specifies them. Never log or reuse them across purposes.
 - Development and Production identities, projects, tables, numbers, agents, providers, recipients, Connections, and keys remain separate.
-- The Development package rejects Production mode, restricts notification to Catalyst Mail email, disables CRM, and has no Analytics integration.
+- The call runtime permits active behavior only in reviewed Development state. Dark Production permits disabled/readiness behavior only and returns before SDK or data access. CRM/Billing mutation and Analytics synchronization remain independently gated outside the call path.
 - Grant ingress, the retry Job, and notification processing only the tables/secrets each requires. Catalyst Mail send capability remains unreachable in `dry_run`; Retell never receives a delivery credential.
 - Missing required variables, secret-store access, table contract, or target identity fails at startup or request boundary.
 
@@ -61,6 +62,6 @@ The current Catalyst acceptance evidence covers:
 10. immutable lifecycle correlation; and
 11. rehearsed containment with preserved evidence.
 
-Current classification is **READY FOR CONTROLLED INTERNAL PHONE TEST** for the one-number Development scope. Readback proves the four-table schema and App User denial, two-function parity at the recorded revision, private configuration, HTTP 200 readiness, signed inbound/event handling, durable replay-safe lifecycle, manual retry Job, seven-day and practical 25-call stops, one controlled email with no duplicate provider invocation, restored `dry_run`, and route rollback. The retry Cron remains disabled. No scoped Catalyst P0/P1 remains.
+Current classification is **NOT READY FOR RETELL AGENT TESTING**. The earlier four-table/two-function proof is migration evidence, not proof of the canonical six-function runtime, CRM/Billing and Analytics boundaries, canonical table generation, cleanup, key rotation, final-main parity, or dark-Production isolation.
 
 Retell voice/audio quality and provider behavior for timeout, 503, malformed response, invalid override, and endpoint unavailability remain P2 deferred evidence to collect during later controlled internal calls. A second live number is also deferred. Neither deferral authorizes a prospect call or weakens the one-number ownership rule. The [legal archive](../legal-compliance/README.md) is research and a historical conservative profile, not legal advice or an automatic approval/prohibition; prospect-facing review and route approval remain separate.

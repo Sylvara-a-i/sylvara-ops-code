@@ -1,0 +1,17 @@
+{
+  "functions": {
+    "source": "functions",
+    "targets": [
+      "revenue_desk_call_gateway",
+      "revenue_desk_route_control",
+      "revenue_desk_call_worker"
+    ],
+    "ignore": [
+      "test/**",
+      ".env*"
+    ],
+    "scripts": {
+      "predeploy": "npm --prefix revenue_desk_route_control ci --ignore-scripts --install-links && npm --prefix revenue_desk_call_worker ci --ignore-scripts --install-links"
+    }
+  }
+}

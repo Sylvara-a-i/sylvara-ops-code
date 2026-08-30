@@ -1,0 +1,226 @@
+{
+  "schema_version": 2,
+  "contract_id": "sylvara-revenue-desk-call-runtime-v1",
+  "environment": "development",
+  "production_mode": "dark_readiness_only",
+  "engagement_type": "free_test",
+  "capability_profile": "call_gap_monitor_v1",
+  "resolved_status": "Resolved",
+  "configuration_unavailable_status": "ConfigurationUnavailable",
+  "test_duration_days": 7,
+  "handled_call_limit": 25,
+  "canonical_call_schema_version": 2,
+  "legacy_canonical_call_schema_versions": [1],
+  "canonical_coverage_modes": [
+    "AfterHoursOnly",
+    "NoAnswerOverflowOnly",
+    "AfterHoursAndOverflow"
+  ],
+  "display_label_mappings": [
+    {
+      "display_label": "After Hours Only",
+      "coverage_mode": "AfterHoursOnly"
+    },
+    {
+      "display_label": "No Answer / Overflow Only",
+      "coverage_mode": "NoAnswerOverflowOnly"
+    },
+    {
+      "display_label": "After Hours + Overflow",
+      "coverage_mode": "AfterHoursAndOverflow"
+    }
+  ],
+  "crm_test_statuses": [
+    "Not Started",
+    "Setup Pending",
+    "QA In Progress",
+    "Ready for Approval",
+    "Scheduled",
+    "Live",
+    "Paused",
+    "Completed",
+    "Stopped",
+    "Rolled Back",
+    "Failed"
+  ],
+  "crm_go_live_approval_statuses": [
+    "Not Ready",
+    "Pending Internal Approval",
+    "Approved",
+    "Blocked",
+    "Revoked"
+  ],
+  "active_test_status": "Live",
+  "approved_go_live_status": "Approved",
+  "stop_reason_mappings": [
+    { "internal": "seven_day_limit_reached", "crm_test_end_reason": "Seven-Day Limit Reached" },
+    { "internal": "call_limit_reached", "crm_test_end_reason": "Call Limit Reached" },
+    { "internal": "client_requested_stop", "crm_test_end_reason": "Client Requested Stop" },
+    { "internal": "sylvara_stopped", "crm_test_end_reason": "Sylvara Stopped" },
+    { "internal": "technical_failure", "crm_test_end_reason": "Technical Failure" },
+    { "internal": "converted_early", "crm_test_end_reason": "Converted Early" },
+    { "internal": "other", "crm_test_end_reason": "Other" }
+  ],
+  "rollback_control_reason_mappings": [
+    { "internal": "operator_requested", "crm_test_end_reason": "Sylvara Stopped" },
+    { "internal": "route_verification_failed", "crm_test_end_reason": "Technical Failure" },
+    { "internal": "configuration_changed", "crm_test_end_reason": "Technical Failure" },
+    { "internal": "synthetic_test_complete", "crm_test_end_reason": "Other" }
+  ],
+  "outcomes": [
+    { "value": "potential_job", "label": "Potential Job" },
+    { "value": "existing_customer", "label": "Existing Customer" },
+    { "value": "urgent_potential_job", "label": "Urgent Potential Job" },
+    { "value": "spam", "label": "Spam" },
+    { "value": "unsupported_service", "label": "Unsupported Service" },
+    { "value": "out_of_area", "label": "Out Of Area" },
+    { "value": "other_general_inquiry", "label": "Other / General Inquiry" },
+    { "value": "sensitive_data_ended", "label": "Sensitive Data Ended" },
+    { "value": "configuration_failure", "label": "Configuration Failure" },
+    { "value": "caller_abandoned", "label": "Caller Abandoned" },
+    { "value": "unresolved", "label": "Unresolved" }
+  ],
+  "coverage_triggers": [
+    "AfterHours",
+    "NoAnswerOverflow",
+    "Unknown"
+  ],
+  "compatible_triggers_by_coverage_mode": {
+    "AfterHoursOnly": [
+      "AfterHours"
+    ],
+    "NoAnswerOverflowOnly": [
+      "NoAnswerOverflow"
+    ],
+    "AfterHoursAndOverflow": [
+      "AfterHours",
+      "NoAnswerOverflow"
+    ]
+  },
+  "unknown_coverage_trigger_policy": {
+    "value": "Unknown",
+    "allowed_for_all_canonical_coverage_modes": true,
+    "meaning": "Provider analysis did not establish a coverage trigger; retain the call without inferring one."
+  },
+  "coverage_validation": {
+    "case_sensitive": true,
+    "trim_inputs": false,
+    "unknown_mode_values_fail_closed": true,
+    "coverage_trigger_is_separate_from_coverage_mode": true
+  },
+  "value_evidence_classes": [
+    "confirmed_revenue",
+    "booked_revenue",
+    "customer_supplied_estimate",
+    "internal_estimate_with_method",
+    "unknown"
+  ],
+  "mvp_report_value_evidence_classes": [
+    "unknown",
+    "customer_supplied_estimate"
+  ],
+  "mvp_report_value_evidence_sources": [
+    "retell"
+  ],
+  "retell_custom_analysis_fields": [
+    "outcome",
+    "coverage_trigger",
+    "caller_name",
+    "callback_number",
+    "customer_type",
+    "caller_intent",
+    "issue_summary",
+    "city_or_zip",
+    "urgency",
+    "specific_person_requested",
+    "sensitive_data_detected",
+    "bookable_opportunity",
+    "office_follow_up_required",
+    "workflow_failure_code",
+    "workflow_failure_text"
+  ],
+  "retell_live_shared_agent_analysis_fields": [
+    "outcome",
+    "coverage_trigger",
+    "caller_name",
+    "callback_number",
+    "customer_type",
+    "caller_intent",
+    "issue_summary",
+    "city_or_zip",
+    "urgency",
+    "specific_person_requested",
+    "sensitive_data_detected"
+  ],
+  "retell_required_runtime_analysis_fields": [
+    "outcome",
+    "coverage_trigger",
+    "customer_type",
+    "urgency",
+    "sensitive_data_detected"
+  ],
+  "retell_conversation_variable_fields": [
+    "configuration_version",
+    "company_description",
+    "callback_expectation",
+    "client_id",
+    "unsupported_services_json",
+    "business_hours",
+    "coverage_mode",
+    "capability_profile",
+    "service_area_json",
+    "company_name",
+    "resolver_status",
+    "deployment_id",
+    "engagement_type",
+    "urgent_conditions_json",
+    "services_handled_json"
+  ],
+  "customer_types": [
+    "new",
+    "existing",
+    "unknown"
+  ],
+  "urgencies": [
+    "routine",
+    "urgent",
+    "immediate_danger",
+    "unknown"
+  ],
+  "retell_custom_analysis_readback": {
+    "runtime_supported_field_count": 15,
+    "live_shared_agent_field_count": 11,
+    "status": "pending_retell_agent_qa",
+    "caller_intent_value_contract": "bounded text only; read-only metadata exposed the field but not an authoritative complete enum, so no closed value set is inferred",
+    "missing_evidence_behavior": "preserve null and withhold affected aggregates"
+  },
+  "optional_value_evidence_fields": [
+    "value_evidence_class",
+    "value_minor_units",
+    "value_currency",
+    "value_method_id",
+    "value_method_version"
+  ],
+  "reporting": {
+    "monthly_connected_minutes_methodology_id": "retell_duration_elapsed_calendar_run_rate_v1",
+    "monthly_min_calendar_days": 28,
+    "monthly_max_calendar_days": 31,
+    "in_flight_overshoot_methodology": "max(handled_call_count - call_limit, 0); overshoot represents calls already admitted before the stored threshold became visible and is not evidence of exact concurrent admission.",
+    "monthly_connected_minutes_methodology": "When every handled call has a validated authoritative Retell duration_ms, divide observed handled connected minutes by elapsed approved test calendar days and multiply by 28 and 31; round to two decimals. Timestamps define the test observation window but do not substitute for connected duration. This is a directional run-rate, not a usage guarantee, and applies no seasonality, growth, or revenue assumption."
+  },
+  "retell_events": [
+    "call_ended",
+    "call_analyzed"
+  ],
+  "notification_states": [
+    "Pending",
+    "Sending",
+    "Sent",
+    "RetryRequired",
+    "Ambiguous",
+    "ReconciliationRequired",
+    "Succeeded",
+    "TerminalFailure",
+    "DryRunRecorded"
+  ]
+}

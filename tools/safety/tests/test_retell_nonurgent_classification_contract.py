@@ -22,7 +22,7 @@ CONTRACT_PATH = (
 SHADOW_HARNESS_PATH = RETELL_ROOT / "tools" / "run_shadow_qa.py"
 SHADOW_CONTRACT_PATH = CONTRACT_PATH.with_name("shadow-qa-contract.json")
 SHADOW_CORPUS_PATH = RETELL_ROOT / "agents" / "7-day-free-test" / "tests" / "fixtures" / "shadow-qa-corpus.json"
-COVERAGE_PATH = REPOSITORY_ROOT / "src" / "zoho-catalyst" / "retell-inbound-resolver" / "contracts" / "coverage-mode-contract.json"
+COVERAGE_PATH = REPOSITORY_ROOT / "src" / "zoho-catalyst" / "revenue-desk-call-runtime" / "functions" / "revenue_desk_call_gateway" / "contracts" / "revenue-desk-call-contract.json"
 
 
 def _load_validator():

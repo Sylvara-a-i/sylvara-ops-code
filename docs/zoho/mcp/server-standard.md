@@ -66,7 +66,7 @@ tool_timeout_sec = 60
 
 The example name is a role convention, not proof of a production connection. Actual endpoints, headers, scopes, and connection names stay private.
 
-`codex mcp login` works only when the streamable HTTP server supports Codex-managed OAuth. A configured-selection snapshot or advertised input contract does not establish how a server authenticates. Use the approved private provisioning method for the exact server and verify access afterward; do not repeatedly retry an unsupported login path or substitute Browser automation.
+`codex mcp login` works only when the streamable HTTP server supports Codex-managed OAuth. A configured-selection snapshot or advertised input contract does not establish how a server authenticates. Use the approved private provisioning method for the exact server and verify access afterward; do not repeatedly retry an unsupported login path or use browser automation to extract credentials or imitate MCP authentication. When the intended provider operation separately qualifies for the governed browser fallback, perform it through the authenticated provider UI under that policy rather than treating the browser as an MCP login mechanism.
 
 ## Acceptance Sequence
 
@@ -101,9 +101,9 @@ Approval is limited to that target, state, payload, and action. It does not auth
 
 ## Fail-Closed Conditions
 
-Stop without writing when identity is ambiguous, a prerequisite tool is missing, output is truncated, OAuth scope is insufficient, a payload schema is untyped, state drifted, a target has zero or multiple matches, the response is malformed, or a timeout leaves success unknown.
+Stop without writing through the MCP server when identity is ambiguous, a prerequisite tool is missing, output is truncated, OAuth scope is insufficient, a payload schema is untyped, state drifted, a target has zero or multiple matches, the response is malformed, or a timeout leaves success unknown. If the only blocker is that the correct server is unavailable, inaccessible, failed for the operation, or capability-incomplete, the authenticated in-app browser may be selected under the connector-first fallback in [`../AGENTS.md`](../AGENTS.md); re-establish identity, prestate, approval, rollback, and independent readback for that UI action.
 
-Do not substitute another connector, infer a payload from official API documentation alone, or use a write-capable server merely because it is visible.
+Do not substitute another connector, infer a payload from official API documentation alone, or use a write-capable server merely because it is visible. Browser fallback is not permission to guess semantics or bypass any stopped safety condition.
 
 ## Review And Decommissioning
 

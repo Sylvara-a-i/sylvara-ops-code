@@ -46,7 +46,7 @@ Approval is limited to the named action, payload, target, and observed state. It
 Stop without writing when any of the following is true:
 
 - authenticated identity, organization, tenant, environment, or permissions are unclear;
-- the requested connector or operation is unavailable;
+- the preferred connector or operation is unavailable and the audited browser-fallback gate below cannot be satisfied;
 - a target has zero matches, multiple matches, or a stale identifier;
 - live state differs materially from the approved prestate;
 - a response is truncated, malformed, ambiguous, or reports an authorization error;
@@ -55,6 +55,16 @@ Stop without writing when any of the following is true:
 - secrets, PII, client data, or unrelated changes may be exposed.
 
 Do not substitute a different connector or guess a production payload to bypass a stopped operation.
+
+## Audited Browser Fallback
+
+Use the matching purpose-built integration first. The authenticated in-app browser is an approved fallback only after current tool discovery records that the preferred plugin, MCP server, connector, API, or CLI is unavailable, cannot access the target, fails for the required operation, or lacks that capability.
+
+The fallback must preserve every applicable pre-write and verification control in this standard. Confirm the visible tenant and environment, capture a fresh sanitized prestate, bind approval to one exact UI action, prevent duplicates, define rollback or containment, and perform authoritative post-write readback separate from the save response. Use an independent read-only connector or credential when the action's risk standard requires it. Otherwise, prefer that independent path when available; if it is unavailable, leave the edited view and perform a fresh provider-UI read without mislabeling that same-session read as independent. Treat a partial page, stale session, validation warning, timeout, unexpected navigation, or unclear save result as ambiguous and reconcile before retrying.
+
+Use only ordinary visible controls in the provider's first-party authenticated UI. Do not inject scripts, use developer tools, call private APIs, or inspect browser credentials, cookies, or storage.
+
+Do not place credentials, secret values, private payloads, or customer data in chat, command text, screenshots, Git, or logs. Secret entry requires an approved private or human-controlled path; automation may verify only the variable name and masked presence. Browser fallback does not authorize a live action, resolve unknown field semantics, make an unsafe rollback acceptable, or permit a different tenant, direct REST request, shell workaround, or untyped payload.
 
 ## Safe Write And Verification
 

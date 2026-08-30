@@ -1,0 +1,10 @@
+{
+  "deployment": {
+    "name": "revenue_desk_route_control",
+    "stack": "node24",
+    "type": "advancedio"
+  },
+  "execution": {
+    "main": "index.js"
+  }
+}

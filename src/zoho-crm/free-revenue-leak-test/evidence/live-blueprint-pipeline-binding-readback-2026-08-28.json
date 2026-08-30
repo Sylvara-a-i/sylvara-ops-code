@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "record_type": "sanitized_free_revenue_leak_test_crm_blueprint_pipeline_binding_readback",
+  "observed_at": "2026-08-28",
+  "repository_head_at_observation": "558c7fdf3d8d809ae1237fc8b840ca1432011c6a",
+  "status": "pipeline_binding_satisfied_blueprint_topology_and_runtime_blocking",
+  "evidence_boundary": {
+    "source": "Sylvara CRM Audit connector",
+    "organization_identity_verified_privately": true,
+    "browser_fallback_used": false,
+    "record_customer_prospect_employee_or_caller_data_read": false,
+    "private_organization_layout_pipeline_blueprint_or_transition_identifiers_in_repository": false,
+    "writes_saves_activations_or_runtime_invocations_performed": false,
+    "retell_billing_customer_communication_or_production_action_performed": false
+  },
+  "pipeline_binding_readback": {
+    "blueprint_name": "Revenue Desk Free Test v6 - Control Candidate",
+    "blueprint_status": "Draft",
+    "module_api_name": "Potentials",
+    "layout_name": "Standard",
+    "required_pipeline_name": "Revenue Desk Sales",
+    "required_pipeline_exists": true,
+    "candidate_and_required_pipeline_identifiers_compared_privately": true,
+    "pipeline_binding_matches_revenue_desk_sales": true
+  },
+  "authority_limit": {
+    "prior_topology_evidence_superseded": false,
+    "topology_matches_contract": false,
+    "missing_expected_transitions": [
+      "Record Internal Approval",
+      "Activate Test Route"
+    ],
+    "unexpected_transition_remains": "Approve Go Live",
+    "provider_save_or_activation_readback_proven": false,
+    "typed_live_caller_and_durable_compare_and_set_proven": false,
+    "synthetic_runtime_acceptance_proven": false,
+    "future_live_change_authorized_by_this_record": false
+  }
+}

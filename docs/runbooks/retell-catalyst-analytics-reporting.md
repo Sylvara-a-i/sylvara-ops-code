@@ -3,15 +3,15 @@
 ## Status
 
 - Runbook status: **Proposed**
-- Implementation status: **READY FOR CONTROLLED INTERNAL PHONE TEST for the one-number Development scope; Catalyst/Zoho lifecycle is proven and later Retell voice/fallback work is deferred**
+- Implementation status: **NOT READY FOR RETELL AGENT TESTING; retained as migration/reporting evidence under the consolidated release contract**
 - Live Retell, Catalyst, CRM, or Analytics change authorized by this file: **No**
 - Production call path: **Not authorized; required operating evidence and approvals are absent**
 
-This runbook preserves the general future reporting boundary in [ADR 0004](../adr/0004-retell-catalyst-crm-analytics-integration-boundary.md). For the 7-Day Free Test, [ADR 0006](../adr/0006-shared-seven-day-monitor-with-client-number-isolation.md) and the [shared-agent runbook](shared-seven-day-monitor-number-routing.md) supersede this file's client-agent mapping, admission, notification, CRM, Analytics, number-change, and evaluation-agent lifecycle instructions. It does not contain live names, URLs, identifiers, credentials, customer data, call content, or deployment values.
+This runbook preserves historical reporting and containment controls. The [final consolidated release contract](../product/free-revenue-leak-test-release-contract.md) supersedes its topology, deployment, Analytics-deferral, paid-runtime separation, and stopping-point instructions. It does not contain live names, URLs, identifiers, credentials, customer data, call content, or deployment values.
 
 ### Free-Test MVP Override
 
-The free-test MVP uses the exact configuration gate plus a durable handled-count check; it has no pre-call reservation/orphan state and may report calls already in flight after the 25th handled call. Its only notification channel is Catalyst Mail email. Default Development mode records `DryRunRecorded`, zero attempts, and `CATALYST_MAIL_DRY_RUN` without invoking `sendMail`; one controlled `send_development` proof received provider/inbox readback, replay caused no second provider invocation, and mode returned to `dry_run`. Internal reporting is a client/deployment-scoped Catalyst query and sanitized JSON/CSV export. CRM is disabled and Analytics is deferred. The current one-number route is frozen and enters cooldown after completion; reassignment and a second live number are deferred.
+The historical MVP proof used a configuration gate, durable handled count, Catalyst Mail, and client/deployment-scoped query/CSV output. The consolidated runtime retains the bounded seven-day/25-connected-call rule while adding explicit CRM/Billing and Analytics outbox boundaries; historical proof does not authorize those writes or a route.
 
 ## Objective
 
@@ -124,13 +124,13 @@ Choose physical packaging from the observed contract:
 - deploy and independently read back the separate `retell_free_test_retry` Function Job for slow or retrying work;
 - do not create a function per client;
 - do not place Retell processing inside the Billing webhook gateway; and
-- preserve independent disablement of webhook ingress and every external write; CRM and Analytics stay disabled.
+- preserve independent disablement of webhook ingress, CRM/Billing mutation, Analytics synchronization, notification delivery, and every external write.
 
 Document the decision and read the final function inventory back before deployment.
 
 ## Phase 2: Establish Private Configuration
 
-The free-test component owns its exact public variable registry at [`src/zoho-catalyst/retell-free-test/config/variables.json`](../../src/zoho-catalyst/retell-free-test/config/variables.json). It defines each consumer, secret classification, required format, Development behavior, and Production prohibition. Do not use old root Retell/Make variable lists or infer a live value from the registry.
+The shared call runtime owns its exact public variable registry at [`src/zoho-catalyst/revenue-desk-call-runtime/config/variables.json`](../../src/zoho-catalyst/revenue-desk-call-runtime/config/variables.json). It defines each consumer, secret classification, required format, Development behavior, and dark-Production prohibition. Do not use old root Retell/Make variable lists or infer a live value from the registry.
 
 Secrets and OAuth material stay only in platform-native secret/Connection storage. Private identifiers remain in environment configuration. Missing or invalid required values fail closed. Do not commit a populated `.env`, endpoint, platform identifier, or configuration export.
 
@@ -169,7 +169,7 @@ Acceptance:
 - no mapping by mutable name or prompt text;
 - a known authenticated invalid/unknown/ambiguous/inactive/expired/exhausted resolution returns HTTP 200 explicit rejection with no agent or resolver write; transport/authentication/timeout/503/malformed/invalid-override failure may reach only the shared agent's Configuration Unavailable no-intake gate;
 - historical calls retain their embedded configuration/call ownership; initial validation numbers are not reused, completed numbers enter documented cooldown, and later reuse is separately reviewed; and
-- conversion creates a separately accepted Revenue Desk agent rather than promoting or cloning the free-test flow.
+- paid acceptance remains separate, but any future approved paid call uses the same gateway/worker under an exact published paid capability profile; all paid profiles remain disabled and Draft in this release.
 
 ## Phase 4: Build The Catalyst Ingress
 

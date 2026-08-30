@@ -7,6 +7,10 @@ const {
   assertCatalystSdkBinding,
   createRequestListener,
 } = require("../lib/catalyst-adapter");
+const {
+  DEVELOPMENT_COMPATIBILITY_PROBE_ACTION,
+  DEVELOPMENT_COMPATIBILITY_PROBE_CASES,
+} = require("../lib/action-contract");
 const { loadConfig } = require("../lib/config");
 const {
   DEVELOPMENT_ZAID_HMAC_SHA256,
@@ -29,7 +33,7 @@ function responseCapture() {
 
 function requestFor(environment = baseEnvironment(), overrides = {}) {
   const body = JSON.stringify({
-    schemaVersion: "crm-billing-lifecycle-v1",
+    schemaVersion: "crm-billing-lifecycle-v2",
     action: "reconcile",
     dealId: "100000000000001",
   });
@@ -48,6 +52,26 @@ function requestFor(environment = baseEnvironment(), overrides = {}) {
   };
 }
 
+function compatibilityProbeRequest(environment, selectedCase) {
+  const body = JSON.stringify({
+    schemaVersion: "crm-billing-lifecycle-v2",
+    action: DEVELOPMENT_COMPATIBILITY_PROBE_ACTION,
+    case: selectedCase,
+  });
+  return {
+    method: "POST",
+    url: environment.ALLOWED_PATH,
+    headers: {
+      host: environment.DEVELOPMENT_FUNCTION_HOST,
+      "content-type": "application/json",
+      "content-length": String(Buffer.byteLength(body)),
+      "x-zc-project-key": SYNTHETIC_DEVELOPMENT_ZAID,
+      [environment.SHARED_HEADER_NAME]: environment.REPORT_SUMMARY_HEADER_VALUE,
+    },
+    body,
+  };
+}
+
 function listenerOptions(environment = baseEnvironment(), overrides = {}) {
   return {
     artifactRevision: REVISION,
@@ -63,6 +87,7 @@ function listenerOptions(environment = baseEnvironment(), overrides = {}) {
         }),
       }),
       createOperationStore: () => ({}),
+      createAnalyticsOutboxStore: () => ({}),
     },
     logger: { error: () => {}, info: () => {} },
     now: () => 100,
@@ -524,6 +549,136 @@ test("request authentication fails before SDK initialization", async () => {
   assert.equal(JSON.parse(result.body).code, "authentication_failed");
 });
 
+test("Development compatibility cases parse and map before SDK or dependency factories", async () => {
+  const environment = baseEnvironment({
+    ENABLE_PAID_SUBSCRIPTION_PREPARATION: "false",
+    ENABLE_DEVELOPMENT_COMPATIBILITY_PROBE: "true",
+  });
+  for (const name of [
+    "PAID_COMMERCIAL_TERMS_JSON",
+    "PAID_PLAN_CODE_MAP",
+    "PAID_USAGE_ADDON_CODE",
+    "PAID_USAGE_ADDON_UNIT",
+    "PAID_USAGE_ADDON_PRODUCT_ID",
+    "PAID_SUBSCRIPTION_STATUS_MAP",
+    "PAID_ACCEPTANCE_VALUE",
+    "CLOSED_WON_STAGE_VALUE",
+  ]) delete environment[name];
+  for (const [selectedCase, expectedSchema, expectedMapping] of [
+    [DEVELOPMENT_COMPATIBILITY_PROBE_CASES[0], 1, "counted"],
+    [DEVELOPMENT_COMPATIBILITY_PROBE_CASES[1], 2, "unavailable"],
+  ]) {
+    let initialized = false;
+    let factoryCalled = false;
+    const options = listenerOptions(environment, {
+      catalystSdk: {
+        initialize: () => {
+          initialized = true;
+          throw new Error("SDK must not initialize for the compatibility probe");
+        },
+      },
+    });
+    for (const name of Object.keys(options.factories)) {
+      options.factories[name] = () => {
+        factoryCalled = true;
+        throw new Error("factory must not run for the compatibility probe");
+      };
+    }
+    const { response, result } = responseCapture();
+    await createRequestListener(options)(
+      compatibilityProbeRequest(environment, selectedCase),
+      response,
+    );
+    assert.equal(initialized, false);
+    assert.equal(factoryCalled, false);
+    assert.equal(result.statusCode, 200);
+    assert.deepEqual(JSON.parse(result.body), {
+      ok: true,
+      action: DEVELOPMENT_COMPATIBILITY_PROBE_ACTION,
+      outcome: "report_summary_contract_validated",
+      compatibility_case: selectedCase,
+      report_summary_schema_version: expectedSchema,
+      workflow_failure_mapping: expectedMapping,
+      request_id: "00000000-0000-4000-8000-000000000000",
+    });
+  }
+});
+
+test("disabled Development compatibility probe rejects before SDK or factories", async () => {
+  const environment = baseEnvironment();
+  let initialized = false;
+  let factoryCalled = false;
+  const options = listenerOptions(environment, {
+    catalystSdk: {
+      initialize: () => {
+        initialized = true;
+        throw new Error("SDK must not initialize for a disabled compatibility probe");
+      },
+    },
+  });
+  for (const name of Object.keys(options.factories)) {
+    options.factories[name] = () => {
+      factoryCalled = true;
+      throw new Error("factory must not run for a disabled compatibility probe");
+    };
+  }
+  const { response, result } = responseCapture();
+  await createRequestListener(options)(compatibilityProbeRequest(
+    environment,
+    DEVELOPMENT_COMPATIBILITY_PROBE_CASES[1],
+  ), response);
+  assert.equal(initialized, false);
+  assert.equal(factoryCalled, false);
+  assert.equal(result.statusCode, 409);
+  assert.equal(JSON.parse(result.body).code, "operation_invalid");
+});
+
+test("disabled paid lifecycle actions reject before SDK or dependency factories", async () => {
+  const environment = baseEnvironment({ ENABLE_PAID_SUBSCRIPTION_PREPARATION: "false" });
+  for (const name of [
+    "PAID_COMMERCIAL_TERMS_JSON",
+    "PAID_PLAN_CODE_MAP",
+    "PAID_USAGE_ADDON_CODE",
+    "PAID_USAGE_ADDON_UNIT",
+    "PAID_USAGE_ADDON_PRODUCT_ID",
+    "PAID_SUBSCRIPTION_STATUS_MAP",
+    "PAID_ACCEPTANCE_VALUE",
+    "CLOSED_WON_STAGE_VALUE",
+  ]) delete environment[name];
+
+  for (const action of ["prepare_paid_subscription", "reconcile"]) {
+    let initialized = false;
+    let factoryCalled = false;
+    const options = listenerOptions(environment, {
+      catalystSdk: {
+        initialize: () => {
+          initialized = true;
+          throw new Error("SDK must not initialize for a disabled paid action");
+        },
+      },
+    });
+    for (const name of Object.keys(options.factories)) {
+      options.factories[name] = () => {
+        factoryCalled = true;
+        throw new Error("factory must not run for a disabled paid action");
+      };
+    }
+    const body = JSON.stringify({
+      schemaVersion: "crm-billing-lifecycle-v2",
+      action,
+      dealId: "100000000000001",
+    });
+    const request = requestFor(environment, { body });
+    request.headers["content-length"] = String(Buffer.byteLength(body));
+    const { response, result } = responseCapture();
+    await createRequestListener(options)(request, response);
+    assert.equal(initialized, false);
+    assert.equal(factoryCalled, false);
+    assert.equal(result.statusCode, 409);
+    assert.equal(JSON.parse(result.body).code, "operation_invalid");
+  }
+});
+
 test("Production configuration and missing proof fail before SDK initialization", async () => {
   for (const overrides of [
     { DEPLOYMENT_ENVIRONMENT: "production" },
@@ -554,4 +709,41 @@ test("Production configuration and missing proof fail before SDK initialization"
     assert.equal(result.statusCode, 503);
     assert.equal(JSON.parse(result.body).code, "configuration_invalid");
   }
+});
+
+test("dark Production returns unavailable before request parsing, SDK, or factories", async () => {
+  const environment = {
+    DEPLOYMENT_ENVIRONMENT: "production",
+    DEPLOYMENT_MODE: "dark",
+    SOURCE_REVISION: REVISION,
+  };
+  let initialized = false;
+  let factoryCalls = 0;
+  const { response, result } = responseCapture();
+  const handler = createRequestListener(listenerOptions(environment, {
+    catalystSdk: {
+      initialize: () => {
+        initialized = true;
+        throw new Error("must not initialize");
+      },
+    },
+    factories: {
+      createBillingClient: () => { factoryCalls += 1; },
+      createCrmClient: () => { factoryCalls += 1; },
+      createLifecycleHandler: () => { factoryCalls += 1; },
+      createOperationStore: () => { factoryCalls += 1; },
+      createAnalyticsOutboxStore: () => { factoryCalls += 1; },
+    },
+  }));
+
+  await handler({ method: "POST", url: "/unrouted", headers: {} }, response);
+
+  assert.equal(initialized, false);
+  assert.equal(factoryCalls, 0);
+  assert.equal(result.statusCode, 503);
+  assert.deepEqual(JSON.parse(result.body), {
+    ok: false,
+    code: "service_unavailable",
+    request_id: "00000000-0000-4000-8000-000000000000",
+  });
 });

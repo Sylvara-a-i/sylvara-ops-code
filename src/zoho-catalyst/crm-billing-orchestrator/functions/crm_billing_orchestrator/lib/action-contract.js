@@ -2,15 +2,26 @@
 
 const crypto = require("node:crypto");
 
-const SCHEMA_VERSION = "crm-billing-lifecycle-v1";
+const SCHEMA_VERSION = "crm-billing-lifecycle-v2";
+const DEVELOPMENT_COMPATIBILITY_PROBE_ACTION = "validate_report_summary_contract";
+const DEVELOPMENT_COMPATIBILITY_PROBE_CASES = Object.freeze([
+  "report_v1_non_null_workflow_failures",
+  "report_v2_null_workflow_failures",
+]);
+const DEVELOPMENT_COMPATIBILITY_PROBE_CASE_SET = new Set(
+  DEVELOPMENT_COMPATIBILITY_PROBE_CASES,
+);
 const ACTIONS = Object.freeze([
-  "ensure_customer",
-  "start_evaluation",
-  "end_evaluation",
+  "sync_report_summary",
   "prepare_paid_subscription",
   "reconcile",
+  DEVELOPMENT_COMPATIBILITY_PROBE_ACTION,
 ]);
 const ACTION_SET = new Set(ACTIONS);
+const REPORT_CREDENTIAL_ACTIONS = new Set([
+  "sync_report_summary",
+  DEVELOPMENT_COMPATIBILITY_PROBE_ACTION,
+]);
 
 class RequestContractError extends Error {
   constructor(message, status = 400, publicCode = "request_invalid") {
@@ -64,20 +75,36 @@ function validatePayload(payload) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     throw new RequestContractError("JSON body must be an object");
   }
+  const reportAction = payload.action === "sync_report_summary";
+  const compatibilityProbe = payload.action === DEVELOPMENT_COMPATIBILITY_PROBE_ACTION;
+  const expectedKeys = compatibilityProbe
+    ? ["action", "case", "schemaVersion"]
+    : reportAction
+      ? ["action", "dealId", "operationKey", "schemaVersion"]
+      : ["action", "dealId", "schemaVersion"];
   const keys = Object.keys(payload).sort();
-  if (JSON.stringify(keys) !== JSON.stringify(["action", "dealId", "schemaVersion"])) {
+  if (JSON.stringify(keys) !== JSON.stringify(expectedKeys)) {
     throw new RequestContractError("JSON body fields do not match the contract");
   }
   if (payload.schemaVersion !== SCHEMA_VERSION || !ACTION_SET.has(payload.action)) {
     throw new RequestContractError("Lifecycle version or action is unsupported", 422);
   }
-  if (typeof payload.dealId !== "string" || !/^[1-9][0-9]{7,29}$/.test(payload.dealId)) {
+  if (!compatibilityProbe
+    && (typeof payload.dealId !== "string" || !/^[1-9][0-9]{7,29}$/.test(payload.dealId))) {
     throw new RequestContractError("Deal identifier is invalid", 422);
+  }
+  if (reportAction && (typeof payload.operationKey !== "string"
+    || !/^[a-f0-9]{64}$/.test(payload.operationKey))) {
+    throw new RequestContractError("Report operation key is invalid", 422);
+  }
+  if (compatibilityProbe && !DEVELOPMENT_COMPATIBILITY_PROBE_CASE_SET.has(payload.case)) {
+    throw new RequestContractError("Compatibility probe case is invalid", 422);
   }
   return Object.freeze({
     schemaVersion: payload.schemaVersion,
     action: payload.action,
-    dealId: payload.dealId,
+    ...(compatibilityProbe ? { case: payload.case } : { dealId: payload.dealId }),
+    ...(reportAction ? { operationKey: payload.operationKey } : {}),
   });
 }
 
@@ -102,7 +129,10 @@ async function parseActionRequest(request, config) {
   if (declaredLength && (!/^[0-9]+$/.test(declaredLength) || Number(declaredLength) > config.maxBodyBytes)) {
     throw new RequestContractError("Content length is invalid", 413, "body_too_large");
   }
-  if (!safeEqual(getHeader(request, config.sharedHeaderName), config.sharedHeaderValue)) {
+  const suppliedCredential = getHeader(request, config.sharedHeaderName);
+  const paidCredential = safeEqual(suppliedCredential, config.sharedHeaderValue);
+  const reportCredential = safeEqual(suppliedCredential, config.reportSummaryHeaderValue);
+  if (!paidCredential && !reportCredential) {
     throw new RequestContractError("Request authentication failed", 401, "authentication_failed");
   }
   const raw = await readBody(request, config.maxBodyBytes);
@@ -112,8 +142,20 @@ async function parseActionRequest(request, config) {
   } catch {
     throw new RequestContractError("Body is not valid UTF-8 JSON");
   }
-  return validatePayload(payload);
+  const validated = validatePayload(payload);
+  if (REPORT_CREDENTIAL_ACTIONS.has(validated.action) !== reportCredential) {
+    throw new RequestContractError("Caller is not authorized for this action", 401,
+      "authentication_failed");
+  }
+  return validated;
 }
 
-module.exports = { ACTIONS, RequestContractError, SCHEMA_VERSION, parseActionRequest, validatePayload };
-
+module.exports = {
+  ACTIONS,
+  DEVELOPMENT_COMPATIBILITY_PROBE_ACTION,
+  DEVELOPMENT_COMPATIBILITY_PROBE_CASES,
+  RequestContractError,
+  SCHEMA_VERSION,
+  parseActionRequest,
+  validatePayload,
+};

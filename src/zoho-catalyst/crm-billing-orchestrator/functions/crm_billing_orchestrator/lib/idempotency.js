@@ -10,7 +10,20 @@ const RECORD_ID = /^[1-9][0-9]{7,29}$/;
 const OUTCOME = /^[a-z0-9_]{1,80}$/;
 const ACTION_SET = new Set(ACTIONS);
 const TEST_CUSTOMER_PROVISIONING_ACTION = "provision_test_customer";
+const REPORT_SUMMARY_ACTION = "sync_report_summary";
+const REPORT_CLAIM = /^report_claim_[a-f0-9]{32}$/;
+const REPORT_WRITE_STARTED = /^report_write_started_[a-f0-9]{32}$/;
+const REPORT_STATUS_SET = new Set([
+  "pending", "processing", "reconciliation_required", "completed",
+]);
+const REPORT_RECONCILIATION_OUTCOMES = new Set([
+  "report_binding_stale",
+  "report_revision_protected",
+  "report_summary_readback_required",
+  "report_test_status_conflict",
+]);
 const CLAIM_ACTION_SET = new Set([...ACTIONS, TEST_CUSTOMER_PROVISIONING_ACTION]);
+const IDEMPOTENCY_DOMAIN = "sylvara.crm-billing.idempotency.v1";
 
 class IdempotencyError extends Error {
   constructor(message, publicCode = "idempotency_unavailable") {
@@ -49,6 +62,26 @@ function safeHashEqual(left, right) {
   );
 }
 
+function isReportSummaryPreWrite(operation) {
+  return operation?.STATUS === "processing"
+    && REPORT_CLAIM.test(String(operation?.LAST_OUTCOME ?? ""));
+}
+
+function sameReportOperationIdentity(expected, actual) {
+  return Boolean(actual)
+    && String(actual.ROWID ?? "") === String(expected.ROWID ?? "")
+    && safeHashEqual(String(actual.OPERATION_KEY ?? ""), String(expected.OPERATION_KEY ?? ""))
+    && safeHashEqual(
+      String(actual.OPERATION_FINGERPRINT ?? ""),
+      String(expected.OPERATION_FINGERPRINT ?? ""),
+    )
+    && actual.ACTION === REPORT_SUMMARY_ACTION
+    && actual.CRM_DEAL_ID === expected.CRM_DEAL_ID
+    && actual.SOURCE_REVISION === expected.SOURCE_REVISION
+    && actual.SOURCE_ENVIRONMENT === expected.SOURCE_ENVIRONMENT
+    && actual.OPERATION_PAYLOAD_JSON === expected.OPERATION_PAYLOAD_JSON;
+}
+
 function canonicalMaterial(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new IdempotencyError("Operation identity material is invalid", "operation_invalid");
@@ -71,12 +104,15 @@ function deriveScopedIdentity(config, action, scopeId, material, referencePrefix
     throw new IdempotencyError("Operation identity input is invalid", "operation_invalid");
   }
   const canonical = canonicalMaterial(material);
+  // The durable key and Billing reference intentionally exclude mutable acceptance and
+  // commercial fields. Those fields live in the immutable fingerprint, so a changed
+  // acceptance conflicts with the same unique operation instead of creating a second reference.
   const stableIdentity = `${config.deploymentEnvironment}\0${scopeId}\0${action}`;
   const key = crypto.createHmac("sha256", config.idempotencyPepper)
-    .update(`operation\0${stableIdentity}`)
+    .update(`${IDEMPOTENCY_DOMAIN}\0operation\0${stableIdentity}`)
     .digest("hex");
   const fingerprint = crypto.createHmac("sha256", config.idempotencyPepper)
-    .update(`fingerprint\0${stableIdentity}\0${canonical}`)
+    .update(`${IDEMPOTENCY_DOMAIN}\0fingerprint\0${stableIdentity}\0${canonical}`)
     .digest("hex");
   return Object.freeze({
     operationKey: key,
@@ -89,11 +125,7 @@ function deriveOperationIdentity(config, action, dealId, material) {
   if (!ACTION_SET.has(action)) {
     throw new IdempotencyError("Operation identity input is invalid", "operation_invalid");
   }
-  const referencePrefix = action === "start_evaluation"
-    ? "syl-evaluation-"
-    : action === "prepare_paid_subscription"
-      ? "syl-paid-"
-      : null;
+  const referencePrefix = action === "prepare_paid_subscription" ? "syl-paid-" : null;
   return deriveScopedIdentity(config, action, dealId, material, referencePrefix);
 }
 
@@ -135,14 +167,161 @@ function createOperationStore(app, config) {
   async function readByKey(operationKey) {
     if (!HASH.test(operationKey)) throw new IdempotencyError("Operation key is invalid");
     return query(
-      `SELECT ROWID, OPERATION_KEY, OPERATION_FINGERPRINT, ACTION, CRM_DEAL_ID, STATUS, LAST_OUTCOME FROM ${config.operationTable} WHERE OPERATION_KEY = '${operationKey}'`,
+      `SELECT ROWID, OPERATION_KEY, OPERATION_FINGERPRINT, ACTION, CRM_DEAL_ID, STATUS, SOURCE_REVISION, SOURCE_ENVIRONMENT, LAST_OUTCOME, OPERATION_PAYLOAD_JSON, OPERATION_VERSION, CREATED_AT, UPDATED_AT FROM ${config.operationTable} WHERE OPERATION_KEY = '${operationKey}'`,
     );
   }
 
   async function readByRowId(selectedRowId) {
     const normalized = rowId(selectedRowId);
     return query(
-      `SELECT ROWID, STATUS, LAST_OUTCOME FROM ${config.operationTable} WHERE ROWID = ${normalized}`,
+      `SELECT ROWID, STATUS, LAST_OUTCOME, OPERATION_VERSION, UPDATED_AT FROM ${config.operationTable} WHERE ROWID = ${normalized}`,
+    );
+  }
+
+  async function claimReportSummary(operation, claimToken, claimedAt) {
+    const normalized = rowId(operation?.ROWID);
+    const version = Number(operation?.OPERATION_VERSION);
+    const pending = operation?.STATUS === "pending"
+      && operation?.LAST_OUTCOME === "terminal_report_ready";
+    const reclaimable = isReportSummaryPreWrite(operation);
+    if (
+      operation?.ACTION !== REPORT_SUMMARY_ACTION || (!pending && !reclaimable) ||
+      !HASH.test(String(operation?.OPERATION_KEY ?? "")) ||
+      !HASH.test(String(operation?.OPERATION_FINGERPRINT ?? "")) ||
+      !Number.isSafeInteger(version) || version < 1 || !REPORT_CLAIM.test(claimToken) ||
+      typeof claimedAt !== "string" || new Date(claimedAt).toISOString() !== claimedAt
+    ) throw new IdempotencyError("Report-summary claim input is invalid", "operation_invalid");
+    const nextVersion = version + 1;
+    const statement = `UPDATE ${config.operationTable} SET STATUS = 'processing', LAST_OUTCOME = '${claimToken}', OPERATION_VERSION = ${nextVersion}, UPDATED_AT = '${claimedAt}' WHERE ROWID = ${normalized} AND STATUS = '${operation.STATUS}' AND LAST_OUTCOME = '${operation.LAST_OUTCOME}' AND OPERATION_VERSION = ${version}`;
+    try {
+      await withOperationTimeout(
+        () => app.zcql().executeZCQLQuery(statement),
+        config.platformOperationTimeoutMs,
+        { ambiguous: true },
+      );
+    } catch {
+      // The exact token/version readback below determines whether this caller owns the claim.
+    }
+    const readback = await readByKey(operation.OPERATION_KEY);
+    const claimed = Boolean(readback
+      && readback.STATUS === "processing"
+      && Number(readback.OPERATION_VERSION) === nextVersion
+      && readback.LAST_OUTCOME === claimToken
+      && readback.UPDATED_AT === claimedAt
+      && safeHashEqual(String(readback.OPERATION_FINGERPRINT ?? ""), operation.OPERATION_FINGERPRINT));
+    return Object.freeze({ claimed, row: readback });
+  }
+
+  async function beginReportSummaryWrite(operation, claimToken, startedAt) {
+    const normalized = rowId(operation?.ROWID);
+    const version = Number(operation?.OPERATION_VERSION);
+    if (
+      operation?.ACTION !== REPORT_SUMMARY_ACTION || !isReportSummaryPreWrite(operation) ||
+      operation.LAST_OUTCOME !== claimToken ||
+      !HASH.test(String(operation?.OPERATION_KEY ?? "")) ||
+      !HASH.test(String(operation?.OPERATION_FINGERPRINT ?? "")) ||
+      !Number.isSafeInteger(version) || version < 2 || !REPORT_CLAIM.test(claimToken) ||
+      typeof startedAt !== "string" || new Date(startedAt).toISOString() !== startedAt
+    ) throw new IdempotencyError(
+      "Report-summary write-start input is invalid", "operation_invalid",
+    );
+    const writeStarted = claimToken.replace("report_claim_", "report_write_started_");
+    if (!REPORT_WRITE_STARTED.test(writeStarted)) {
+      throw new IdempotencyError("Report-summary write-start input is invalid", "operation_invalid");
+    }
+    const nextVersion = version + 1;
+    const statement = `UPDATE ${config.operationTable} SET LAST_OUTCOME = '${writeStarted}', OPERATION_VERSION = ${nextVersion}, UPDATED_AT = '${startedAt}' WHERE ROWID = ${normalized} AND STATUS = 'processing' AND LAST_OUTCOME = '${claimToken}' AND OPERATION_VERSION = ${version}`;
+    try {
+      await withOperationTimeout(
+        () => app.zcql().executeZCQLQuery(statement),
+        config.platformOperationTimeoutMs,
+        { ambiguous: true },
+      );
+    } catch {
+      // A caller may enter CRM only after exact write-start readback proves ownership.
+    }
+    const readback = await readByKey(operation.OPERATION_KEY);
+    const started = Boolean(readback
+      && readback.STATUS === "processing"
+      && Number(readback.OPERATION_VERSION) === nextVersion
+      && readback.LAST_OUTCOME === writeStarted
+      && readback.UPDATED_AT === startedAt
+      && safeHashEqual(String(readback.OPERATION_FINGERPRINT ?? ""), operation.OPERATION_FINGERPRINT));
+    return Object.freeze({ started, row: readback });
+  }
+
+  async function transitionReportSummary(operation, status, lastOutcome, transitionedAt) {
+    const normalized = rowId(operation?.ROWID);
+    const validTarget = status === "completed"
+      ? lastOutcome === "report_summary_readback_confirmed"
+      : status === "reconciliation_required"
+        && REPORT_RECONCILIATION_OUTCOMES.has(lastOutcome);
+    if (
+      operation?.ACTION !== REPORT_SUMMARY_ACTION || !REPORT_STATUS_SET.has(operation?.STATUS) ||
+      !OUTCOME.test(String(operation?.LAST_OUTCOME ?? "")) || !validTarget ||
+      !HASH.test(String(operation?.OPERATION_KEY ?? "")) ||
+      !HASH.test(String(operation?.OPERATION_FINGERPRINT ?? "")) ||
+      !Number.isSafeInteger(Number(operation?.OPERATION_VERSION)) ||
+      Number(operation.OPERATION_VERSION) < 1 ||
+      typeof transitionedAt !== "string" || new Date(transitionedAt).toISOString() !== transitionedAt
+    ) throw new IdempotencyError(
+      "Report-summary transition input is invalid", "operation_invalid",
+    );
+
+    let cursor = operation;
+    // One retry tolerates a concurrent cursor-only version advance. Any semantic
+    // status/outcome change belongs to another invocation and must never be overwritten.
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      if (!sameReportOperationIdentity(operation, cursor)) {
+        throw new IdempotencyError(
+          "Report-summary transition identity changed", "reconciliation_required",
+        );
+      }
+      const version = Number(cursor.OPERATION_VERSION);
+      if (!Number.isSafeInteger(version) || version < 1
+        || !REPORT_STATUS_SET.has(cursor.STATUS)
+        || !OUTCOME.test(String(cursor.LAST_OUTCOME ?? ""))) {
+        throw new IdempotencyError(
+          "Report-summary transition cursor is invalid", "reconciliation_required",
+        );
+      }
+      const nextVersion = version + 1;
+      const statement = `UPDATE ${config.operationTable} SET STATUS = '${status}', LAST_OUTCOME = '${lastOutcome}', OPERATION_VERSION = ${nextVersion}, UPDATED_AT = '${transitionedAt}' WHERE ROWID = ${normalized} AND STATUS = '${cursor.STATUS}' AND LAST_OUTCOME = '${cursor.LAST_OUTCOME}' AND OPERATION_VERSION = ${version}`;
+      try {
+        await withOperationTimeout(
+          () => app.zcql().executeZCQLQuery(statement),
+          config.platformOperationTimeoutMs,
+          { ambiguous: true },
+        );
+      } catch {
+        // Exact semantic/version readback below resolves an uncertain CAS result.
+      }
+      const readback = await readByKey(operation.OPERATION_KEY);
+      if (!sameReportOperationIdentity(operation, readback)) {
+        throw new IdempotencyError(
+          "Report-summary transition readback identity changed", "reconciliation_required",
+        );
+      }
+      const readbackVersion = Number(readback.OPERATION_VERSION);
+      if (!Number.isSafeInteger(readbackVersion) || readbackVersion < version) {
+        throw new IdempotencyError(
+          "Report-summary transition readback version is invalid", "reconciliation_required",
+        );
+      }
+      if (
+        readback.STATUS === status && readback.LAST_OUTCOME === lastOutcome &&
+        readbackVersion >= nextVersion
+      ) return Object.freeze({ transitioned: true, row: readback });
+      const semanticCursorUnchanged = readback.STATUS === cursor.STATUS
+        && readback.LAST_OUTCOME === cursor.LAST_OUTCOME;
+      if (semanticCursorUnchanged && attempt === 0) {
+        cursor = readback;
+        continue;
+      }
+      return Object.freeze({ transitioned: false, row: readback });
+    }
+    throw new IdempotencyError(
+      "Report-summary transition did not converge", "reconciliation_required",
     );
   }
 
@@ -184,6 +363,10 @@ function createOperationStore(app, config) {
     return Object.freeze({
       outcome: existing.STATUS === "completed" ? "duplicate-completed" : "duplicate-unresolved",
       rowId: rowId(existing.ROWID),
+      status: existing.STATUS,
+      lastOutcome: existing.LAST_OUTCOME,
+      sourceEnvironment: existing.SOURCE_ENVIRONMENT,
+      sourceRevision: existing.SOURCE_REVISION,
     });
   }
 
@@ -209,7 +392,15 @@ function createOperationStore(app, config) {
     return Object.freeze({ rowId: normalized, status, lastOutcome });
   }
 
-  return Object.freeze({ claim, mark, readByKey, readByRowId });
+  return Object.freeze({
+    beginReportSummaryWrite,
+    claim,
+    claimReportSummary,
+    mark,
+    readByKey,
+    readByRowId,
+    transitionReportSummary,
+  });
 }
 
 module.exports = {
@@ -218,4 +409,5 @@ module.exports = {
   createOperationStore,
   deriveOperationIdentity,
   deriveTestCustomerProvisioningIdentity,
+  isReportSummaryPreWrite,
 };

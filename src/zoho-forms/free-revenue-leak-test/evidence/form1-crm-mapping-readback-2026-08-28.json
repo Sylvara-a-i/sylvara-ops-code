@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "record_type": "sanitized_free_revenue_leak_test_form1_crm_mapping_readback",
+  "observed_at": "2026-08-28",
+  "repository_head_at_observation": "558c7fdf3d8d809ae1237fc8b840ca1432011c6a",
+  "status": "crm_mapping_and_upsert_contract_satisfied_remaining_form1_gates_blocking",
+  "evidence_boundary": {
+    "connector_first_check_found_a_purpose_built_zoho_forms_connector": false,
+    "authenticated_zoho_forms_browser_fallback_used": true,
+    "crm_metadata_crosswalk_source": "Sylvara CRM Audit connector",
+    "expected_forms_tenant_and_crm_organization_verified_privately": true,
+    "form_entry_record_or_customer_data_read": false,
+    "private_identifiers_urls_aliases_payloads_or_raw_responses_in_repository": false,
+    "writes_saves_submissions_tests_or_runtime_invocations_performed": false,
+    "retell_billing_customer_communication_or_production_action_performed": false
+  },
+  "mapping_readback": {
+    "module": "Leads",
+    "layout": "Standard",
+    "observed_mapping_count": 30,
+    "canonical_required_destination_count": 29,
+    "all_canonical_required_destinations_mapped_exactly_once": true,
+    "display_labels_resolved_to_api_names_exactly_once": true,
+    "missing_canonical_destinations": [],
+    "extra_mapping": {
+      "forms_field_label": "Additional Notes",
+      "crm_api_name": "Free_Test_Request_Notes",
+      "classification": "intentional_noncanonical_notes_mapping"
+    },
+    "canonical_crm_api_names": [
+      "First_Name",
+      "Last_Name",
+      "Company",
+      "Decision_Maker_Role",
+      "Designation",
+      "Email",
+      "Mobile",
+      "Lead_Source",
+      "Main_Business_Phone",
+      "Current_Call_Handling",
+      "Requested_Test_Route",
+      "Phone_System_Provider",
+      "Primary_Service_Area",
+      "Field_Team_Size_Band",
+      "Entry_Offer",
+      "Submission_Channel",
+      "Intake_Submission_ID",
+      "Free_Test_Contact_Consent",
+      "Free_Test_Contact_Consent_Version",
+      "Free_Test_Contact_Consent_At",
+      "Free_Test_Request_Submitted_At",
+      "Intake_Form_Version",
+      "Lead_Status",
+      "Source_Page",
+      "UTM_Source",
+      "UTM_Medium",
+      "UTM_Campaign",
+      "UTM_Content",
+      "UTM_Term"
+    ]
+  },
+  "upsert_readback": {
+    "enabled": true,
+    "ordered_match_fields": ["Intake_Submission_ID", "Email"],
+    "blank_overwrite_enabled": false,
+    "automation_and_process_management_enabled": true,
+    "approval_enabled": false,
+    "assignment_rules_enabled": false,
+    "tag_records_enabled": false,
+    "attachment_and_signature_enabled": false
+  },
+  "authority_limit": {
+    "crm_mapping_and_upsert_configuration_proven": true,
+    "generated_identity_retry_or_repush_stability_proven": false,
+    "duplicate_lead_runtime_behavior_proven": false,
+    "complete_field_privacy_and_editability_dictionary_proven": false,
+    "assisted_prefill_alias_or_webhook_proven": false,
+    "public_or_assisted_submission_acceptance_proven": false,
+    "future_live_change_authorized_by_this_record": false
+  }
+}

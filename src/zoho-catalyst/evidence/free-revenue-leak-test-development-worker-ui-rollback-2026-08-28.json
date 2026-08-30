@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "record_type": "sanitized_free_revenue_leak_test_development_worker_ui_rollback",
+  "execution_date_utc": "2026-08-28",
+  "environment": "Development",
+  "outcome": "single_variable_created_then_exactly_rolled_back",
+  "authorization": {
+    "approval_reference": "owner-approval-retained-in-private-task-record",
+    "approved_scope": "create the exact approved 28-variable worker map serially through the first-party Catalyst Development configuration UI, stop on the first mismatch, remove only variables created by the packet in reverse order, and independently read back the worker, Gateway, and Cron state; no global configuration save, invocation, Retell action, customer action, or Production action",
+    "approval_scope_finite": true,
+    "approval_consumed_by_first_successful_save": true,
+    "approval_exhausted": true,
+    "approval_reusable": false,
+    "retry_authorized_by_consumed_approval": false,
+    "future_live_action_authorized_by_this_record": false,
+    "retell_agent_development_or_testing_authorized": false,
+    "production_or_customer_activity_authorized": false,
+    "private_packet_or_variable_map_digests_included": false
+  },
+  "verified_prestate": {
+    "function_name": "revenue_desk_call_worker",
+    "function_type": "job",
+    "runtime": "node24",
+    "memory_mb": 256,
+    "environment_variable_count": 0,
+    "gateway_disabled": true,
+    "canonical_cron_reference_count": 0
+  },
+  "attempt": {
+    "requested_environment_variable_count": 28,
+    "first_variable_save_succeeded": true,
+    "approval_consumed_after_first_save": true,
+    "next_create_control_unavailable": true,
+    "automation_stopped_immediately": true,
+    "retry_performed": false,
+    "additional_variable_save_attempted": false,
+    "successfully_created_variable_count": 1,
+    "environment_variable_names_or_values_included": false,
+    "global_configuration_save_performed": false
+  },
+  "rollback": {
+    "surface": "first-party authenticated Catalyst Development UI fallback",
+    "variables_removed": 1,
+    "only_packet_created_variable_removed": true,
+    "removal_confirmed_in_ui": true,
+    "normal_create_control_restored_in_ui": true,
+    "additional_configuration_changed": false
+  },
+  "independent_post_rollback_readback": {
+    "surface": "Sylvara Catalyst Audit connector",
+    "function_readback_complete": true,
+    "environment_variable_count": 0,
+    "partial_environment_map_present": false,
+    "exact_empty_prestate_restored": true,
+    "memory_mb": 256,
+    "gateway_disabled": true,
+    "gateway_readback_failed_closed_without_route_payload": true,
+    "canonical_cron_reference_count": 0,
+    "worker_required_runtime_binding_present": false,
+    "worker_static_configuration_contract_fails_closed": true,
+    "worker_runtime_invocation_proven": false
+  },
+  "containment": {
+    "operator_route_invocations": 0,
+    "operator_function_invocations": 0,
+    "operator_job_invocations": 0,
+    "operator_cron_submissions": 0,
+    "retell_agent_changed_tested_simulated_called_or_published": false,
+    "customer_or_production_action_performed": false,
+    "gateway_mutation_performed": false,
+    "runtime_acceptance_proven": false
+  },
+  "remaining_gates": [
+    "use a fresh exact single-use packet for any further worker configuration write; the consumed UI packet cannot authorize a retry",
+    "prefer one bounded typed connector operation with a fresh concurrency precondition over serial browser saves when the effective contract can be proven",
+    "independently verify the exact final variable map, function identity, memory, Gateway state, and Cron references after any future write",
+    "preserve the no-Retell boundary and perform no route, function, Job, or Cron invocation under this containment record"
+  ],
+  "disclosure_controls": {
+    "platform_identifier_values_included": false,
+    "private_runtime_locator_values_included": false,
+    "credential_key_or_secret_values_included": false,
+    "environment_variable_names_or_values_included": false,
+    "private_packet_or_variable_map_digests_included": false,
+    "operator_identity_included": false,
+    "retell_identifier_values_included": false,
+    "customer_or_caller_data_included": false,
+    "raw_provider_payloads_errors_or_logs_included": false
+  }
+}

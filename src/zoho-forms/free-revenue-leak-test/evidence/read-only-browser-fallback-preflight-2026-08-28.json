@@ -1,0 +1,133 @@
+{
+  "schema_version": 2,
+  "record_type": "sanitized_free_revenue_leak_test_zoho_forms_read_only_browser_fallback_preflight",
+  "observed_at": "2026-08-28",
+  "repository_head_at_builder_observation": "caef1d81567cbc2d8ef02e479a299fe849d2ccf5",
+  "repository_head_at_tenant_binding_readback": "caef1d81567cbc2d8ef02e479a299fe849d2ccf5",
+  "release_contract_at_observation": {
+    "contract_id": "sylvara-free-revenue-leak-test-e2e-v4",
+    "schema_version": 4
+  },
+  "status": "expected_tenant_bound_current_builder_and_public_runtime_blockers_confirmed",
+  "tenant_binding": {
+    "verified_privately": true,
+    "authenticated_business_account_match": true,
+    "tenant_namespace_match": true,
+    "canonical_form_title_match": true,
+    "private_account_tenant_namespace_or_user_value_included": false
+  },
+  "evidence_boundary": {
+    "sylvara_forms_audit_connector_available": false,
+    "sylvara_forms_changes_connector_available": false,
+    "zoho_creator_form_metadata_substituted": false,
+    "fallback_reason": "No purpose-built Sylvara Zoho Forms connector was advertised for the required builder and integration metadata.",
+    "source": "authenticated read-only Zoho Forms builder and integration settings, external read-only runtime observation, and sanitized comparison to current read-only Catalyst binding metadata",
+    "public_runtime_source": "external read-only runtime observation with exploit-level details withheld",
+    "catalyst_binding_comparison_source": "authenticated read-only Catalyst project, function, route, and environment binding metadata",
+    "catalyst_binding_compared_without_runtime_invocation": true,
+    "authenticated_account_identity_observed_privately": true,
+    "expected_sylvara_forms_tenant_binding_proven": true,
+    "private_account_tenant_or_user_identity_included": false,
+    "canonical_active_form_count": 2,
+    "bounded_observed_builder_state_refreshed": true,
+    "public_runtime_read_only_render_checked": true,
+    "unobserved_builder_or_tenant_state_inferred": false,
+    "private_form_ids_urls_aliases_destinations_headers_or_values_included": false,
+    "customer_or_submission_records_read": false,
+    "public_runtime_fields_or_values_entered": false,
+    "public_runtime_save_next_or_submit_clicked": false,
+    "writes_saves_submissions_webhook_tests_or_runtime_invocations_performed": false,
+    "retell_customer_billing_or_production_action_performed": false
+  },
+  "form1": {
+    "public_submission_identity": {
+      "field_present": true,
+      "respondent_visible": false,
+      "generation_owner": "Zoho Forms",
+      "generation_mechanism": "provider-generated alphanumeric identifier",
+      "configured_length": 10,
+      "restrict_id_repetition": true,
+      "mechanism_observed": true,
+      "generated_before_native_crm_upsert_proven": false,
+      "stable_across_provider_retry_or_repush_proven": false,
+      "duplicate_lead_prevention_proven": false
+    },
+    "field_alias_configuration": {
+      "configured_alias_count": 0,
+      "assisted_token_alias_present": false
+    },
+    "field_inventory": {
+      "observed_deployed_field_count": 26,
+      "mandatory_true_count": 10,
+      "personal_true_count": 7,
+      "encrypted_true_count": 0,
+      "default_show_count": 14,
+      "default_hide_count": 11,
+      "provider_generated_or_no_visibility_control_count": 1,
+      "missing_optional_attribution_fields": [
+        "utm_source",
+        "utm_medium",
+        "utm_campaign",
+        "utm_content",
+        "utm_term"
+      ],
+      "all_observed_properties_discarded_without_save": true
+    },
+    "assisted_token": {
+      "field_present": true,
+      "mandatory": false,
+      "personal": false,
+      "encrypted": false,
+      "prefill_webhook_field_present": false
+    },
+    "native_crm_integration": {
+      "configured": true,
+      "expected_organization_matched_privately": true,
+      "module": "Leads",
+      "layout": "Standard",
+      "observed_mapping_count": 6,
+      "observed_mappings": [
+        {"crm_field": "Lead Status", "form_field": "Lead Status"},
+        {"crm_field": "Lead Source", "form_field": "Lead Source"},
+        {"crm_field": "Company", "form_field": "Company"},
+        {"crm_field": "Contact Email", "form_field": "Email"},
+        {"crm_field": "First Name", "form_field": "Name - First Name"},
+        {"crm_field": "Last Name", "form_field": "Name - Last Name"}
+      ],
+      "observed_mappings_are_display_labels": true,
+      "observed_mapping_api_name_crosswalk_proven": false,
+      "exact_missing_api_name_count_proven": false,
+      "required_full_mapping_present": false,
+      "upsert_enabled": true,
+      "upsert_preference_order": ["Intake Submission ID", "Contact Email"],
+      "blank_overwrite": false,
+      "crm_automation_and_process_management_enabled": true,
+      "attachments_signatures_approval_gclid_assignment_and_tags_enabled": false,
+      "integration_write_or_test_performed": false
+    },
+    "complete_privacy_and_read_only_dictionary_proven": false
+  },
+  "form2": {
+    "status": "blocked_pending_private_containment_and_reconfiguration",
+    "complete_required_field_policy_proven": false,
+    "required_prefill_boundary_proven": false,
+    "required_controller_field_policy_proven": false,
+    "required_respondent_field_policy_proven": false,
+    "required_controller_gate_proven": false,
+    "required_submission_webhook_contract_proven": false,
+    "required_submission_destination_binding_proven": false,
+    "required_submission_authentication_proven": false,
+    "read_only_public_runtime_observation_performed": true,
+    "private_exploit_details_included": false,
+    "field_value_entered": false,
+    "save_next_or_submit_clicked": false,
+    "webhook_test_performed": false
+  },
+  "containment": {
+    "builder_change_authorized_by_this_record": false,
+    "webhook_change_authorized_by_this_record": false,
+    "gateway_activation_authorized_by_this_record": false,
+    "synthetic_submission_authorized_by_this_record": false,
+    "future_live_change_authorized_by_this_record": false
+  }
+}

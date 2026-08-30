@@ -1,0 +1,94 @@
+{
+  "schema_version": 2,
+  "environment": "Development",
+  "strategy": "additive-v3-zero-promotion",
+  "source_stores": ["legacy Form 2 version 2", "Retell-project Form 2 version 2 copy"],
+  "destination_tables": [
+    "Form2SessionsV3Runtime",
+    "Form2PrefillsV3",
+    "Form2SubmissionsV3",
+    "Form2VerificationProofsV3"
+  ],
+  "form2_v3_legacy_source_mapping": {
+    "Form2SessionsV3": "Form2SessionsV3Runtime"
+  },
+  "destination_readback": {
+    "observed_at": "2026-08-24",
+    "all_targets_empty": true,
+    "total_application_columns": 81,
+    "unique_columns": 5,
+    "audit_consent_columns": 25,
+    "schema_mismatches": 0,
+    "app_user_permissions_per_target": 0,
+    "admin_permissions_per_target": 4
+  },
+  "v4_runtime_extension": {
+    "contract": "dynamic-prefill-handle-v1",
+    "status": "additive-installation-required",
+    "application_columns_by_target": {
+      "Form2SessionsV3Runtime": 21,
+      "Form2PrefillsV3": 28,
+      "Form2SubmissionsV3": 16,
+      "Form2VerificationProofsV3": 26
+    },
+    "total_application_columns": 91,
+    "additive_application_columns": 10,
+    "unique_columns": 6,
+    "historical_destination_readback_is_target_proof": false,
+    "authoritative_post_install_readback_required": true
+  },
+  "quarantined_unbound_probe_artifacts": [
+    "Form2SessionsV3",
+    "ZZZ_Quarantined_Form2SessionsV3_ColumnProbe",
+    "ZZZ_Quarantined_Form2SessionsV3_TypeProbe"
+  ],
+  "rules": [
+    "Never rename, update, delete, or backfill either version-2 store during migration, cutover, or rollback rehearsal. A later removal is a separate post-cutover cleanup requiring private archive and restore proof, recovery-window expiry, scoped destructive approval, and independent absence readback.",
+    "Never infer ISSUE_REQUEST_KEY from ACCESS_TOKEN_HASH, CRM state, timestamps, or row order.",
+    "Never select the more advanced status when two stores disagree.",
+    "Promote no terminal, ambiguous, conflicting, missing, or unverifiably bound row.",
+    "Abort if any destination version-3 table is nonempty.",
+    "Never bind, migrate into, rename, reuse, or delete a quarantined probe artifact during Form 2 deployment, cutover, or rollback rehearsal. A later removal is a separate post-cutover cleanup requiring dependency-absence proof, private schema restoration evidence, recovery-window expiry, scoped destructive approval, and independent absence readback.",
+    "Cut over callers only after every live version-2 invitation is expired or separately contained."
+  ],
+  "reason_codes": [
+    "retained_terminal",
+    "quarantined_reconciliation_required",
+    "quarantined_state_conflict",
+    "quarantined_missing_copy",
+    "quarantined_issue_request_key_unavailable",
+    "retained_v2_prefill",
+    "retained_v2_submission"
+  ],
+  "observed_sanitized_disposition": {
+    "promoted_sessions": 0,
+    "promoted_prefills": 0,
+    "promoted_submissions": 0,
+    "retained_terminal_sessions": 2,
+    "quarantined_reconciliation_sessions": 1,
+    "quarantined_state_conflicts": 1,
+    "quarantined_missing_prefills": 8,
+    "retained_v2_prefills": 13,
+    "retained_v2_submissions": 0
+  },
+  "observed_sanitized_source_state": {
+    "legacy": {
+      "sessions": 4,
+      "expired_sessions": 2,
+      "reconciliation_required_sessions": 1,
+      "verified_sessions": 1,
+      "ready_prefills": 21,
+      "submissions": 0
+    },
+    "retell_copy": {
+      "sessions": 4,
+      "expired_sessions": 2,
+      "reconciliation_required_sessions": 1,
+      "issued_sessions": 1,
+      "ready_prefills": 13,
+      "submissions": 0
+    },
+    "nonterminal_sessions_time_expired": 2
+  },
+  "output_policy": "Report counts, reason codes, and one digest of sorted opaque source references only. Never output rows, CRM IDs, emails, tokens, or platform identifiers."
+}

@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "record_type": "sanitized_free_revenue_leak_test_development_form1_containment",
+  "execution_date_utc": "2026-08-29",
+  "environment": "Development",
+  "source_revision": "57bd6e84e1c9ad802b0115e3e151f77f822844b2",
+  "outcome": "form1_containment_exact_crm_button_retained_local_fail_closed_no_runtime_invocation",
+  "authorization": {
+    "approval_reference": "exact_single_use_form1_contained_state_cleanup_approval_retained_in_private_task_record",
+    "approved_scope": "converge only the Form 1 containment artifact and reduced Development configuration, retain the CRM button on the exact local fail-closed function, independently read back all bounded poststate, and perform no Retell, customer, billing, payment, route, function, form, or Production invocation",
+    "approval_consumed": true,
+    "approval_exhausted": true,
+    "approval_reusable": false,
+    "future_live_action_authorized_by_this_record": false
+  },
+  "execution_surfaces": {
+    "connector_first_identity_configuration_and_readback": "Sylvara Catalyst and CRM connectors",
+    "source_bundle_upload_or_archive_download_available_through_connector": false,
+    "source_bundle_and_settings_readback_fallback": "authenticated first-party Development consoles",
+    "browser_fallback_used_only_for_missing_connector_capability": true,
+    "forms_builder_readback_was_no_save": true,
+    "direct_rest_or_shell_runtime_invocation_used": false
+  },
+  "catalyst_function_readback": {
+    "api_name": "revenue_leak_test_request_form",
+    "type": "Advanced I/O",
+    "runtime": "node24",
+    "memory_mb": 256,
+    "deployment_environment": "development",
+    "deployment_mode": "contained",
+    "source_revision_exact": true,
+    "environment_variable_count": 10,
+    "reviewed_variable_name_set_exact": true,
+    "complete_private_configuration_map_exact": true,
+    "private_configuration_values_or_digest_included": false,
+    "archive_file_count": 11,
+    "archive_size_matches_private_approved_artifact": true,
+    "archive_digest_matches_private_approved_artifact": true,
+    "archive_path_set_and_file_content_exact": true,
+    "runtime_dependencies_present": false,
+    "crm_connection_or_data_store_binding_present": false
+  },
+  "crm_button_readback": {
+    "button": "Start Free-Test Request",
+    "module": "Leads",
+    "layout": "Standard",
+    "placement": "Record - Details",
+    "profile": "Administrator",
+    "action_type": "Function",
+    "configured_function_identity_matches_private_approved_local_containment": true,
+    "binding_state": "retained_and_bound_to_local_fail_closed_function",
+    "function_active": true,
+    "function_draft_present": false,
+    "published_code_size_matches_private_readback": true,
+    "published_code_digest_matches_private_readback": true,
+    "outbound_request_url_or_connection_capability_present": false,
+    "crm_record_read_or_write_capability_present": false,
+    "terminal_return": "form1_issue_rejected",
+    "settings_save_performed": false
+  },
+  "remote_assisted_surface": {
+    "crm_button_is_remote_route_caller": false,
+    "form1_issue_route_caller_bound": false,
+    "forms_prefill_webhook_bound": false,
+    "api_gateway_enabled": false,
+    "function_trigger_enabled_or_configured": false,
+    "canonical_cron_reference_count": 0
+  },
+  "forms_and_data_readback": {
+    "form_title": "Free Revenue Leak Test Request",
+    "prefill_webhook_field_configured": false,
+    "builder_save_or_submit_performed": false,
+    "RevenueLeakTestRequestFormSessions_row_count": 0,
+    "Form1AssistedSessions_row_count": 8,
+    "table_row_or_schema_write_performed": false
+  },
+  "runtime_and_external_action_boundary": {
+    "operator_function_invocations": 0,
+    "operator_route_invocations": 0,
+    "operator_form_submissions": 0,
+    "operator_crm_record_writes": 0,
+    "retell_agent_changed_tested_simulated_or_invoked": false,
+    "customer_or_production_activity_performed": false
+  },
+  "rollback": {
+    "target": "keep the exact local fail-closed CRM function and retained button binding while both assisted routes, the Forms Prefill Webhook, API Gateway ingress, and all remote callers remain disabled or unbound",
+    "pre_containment_artifact_or_capability_map_allowed": false,
+    "rollback_invoked": false,
+    "rollback_rehearsed": false
+  },
+  "release_classification": {
+    "form1_development_containment": "proven",
+    "form1_public_native_upsert_acceptance": "not_proven",
+    "whole_journey_development_acceptance": "not_proven",
+    "dark_production_readiness": "not_proven",
+    "retell_agent_testing_readiness": "not_ready"
+  },
+  "evidence_limitations": [
+    "The retained CRM button is a local fail-closed user interface binding, not a bound Catalyst route caller and not assisted-flow acceptance.",
+    "Zero operator invocations do not prove provider-complete all-history absence.",
+    "Form 1 containment does not prove native public Form 1 idempotency, duplicate handling, Form 2, CRM, Billing TEST, Analytics, final-main, dark Production, or Retell readiness."
+  ],
+  "disclosure_controls": {
+    "platform_identifiers_private_routes_endpoints_or_hosts_included": false,
+    "credentials_tokens_headers_or_secret_values_included": false,
+    "private_configuration_digest_included": false,
+    "customer_caller_or_financial_data_included": false,
+    "raw_payloads_logs_responses_or_errors_included": false,
+    "retell_identifier_prompt_phone_or_runtime_value_included": false
+  }
+}

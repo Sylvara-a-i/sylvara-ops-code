@@ -1,0 +1,150 @@
+{
+  "schema_version": 2,
+  "status": "repository-approved-live-creation-and-sharing-blocked",
+  "production_authorized": false,
+  "model_contract_path": "config/analytics-model-contract.json",
+  "workspace_strategy": {
+    "action": "reuse-existing-workspace-after-private-identity-and-schema-readback",
+    "create_new_workspace": false,
+    "existing_assets_are_migration_evidence": true,
+    "rename_or_delete_existing_assets": false
+  },
+  "source_contract": {
+    "record_types": [
+      "deployment",
+      "call",
+      "daily_metric",
+      "final_test_result",
+      "conversion_status"
+    ],
+    "partition_columns": [
+      "ENVIRONMENT",
+      "CLIENT_KEY",
+      "DEPLOYMENT_KEY",
+      "CONFIGURATION_VERSION",
+      "ENGAGEMENT_TYPE"
+    ],
+    "engagement_semantics": {
+      "partition_field": "ENGAGEMENT_TYPE",
+      "partition_meaning": "The engagement that originated the evidence; it is never rewritten to the destination commercial state.",
+      "conversion_status": {
+        "origin_field": "ENGAGEMENT_TYPE",
+        "origin_value": "free_test",
+        "target_field": "TARGET_ENGAGEMENT_TYPE",
+        "target_value": "paid_service",
+        "rule": "A free-test conversion remains in the free_test source partition while its separately named target identifies the proposed paid engagement."
+      }
+    },
+    "deduplication": "Use the exact imported RECORD_KEY within the immutable environment, client, and deployment partition. Same-watermark conflicts block publication.",
+    "time_zone": "UTC",
+    "currency_rule": "Never add values across currency codes or evidence classes. Suppress value metrics when evidence or currency is incomplete.",
+    "freshness_rule": "Every Data Freshness report displays SOURCE_MODIFIED_AT only as an observed watermark. Neither recency nor row presence implies health. The evaluator is an operator acceptance gate and does not change Analytics visibility. Operators must keep both dashboards unshared, unpublished, and unavailable to non-administrators until it returns ready for the complete included scope inventory and access readback passes."
+  },
+  "pre_render_gate": {
+    "model_gate_key": "catalyst-checkpoint-and-analytics-readback-v1",
+    "required_before": ["dashboard visibility", "fixed-client rendering", "Reconciled label"],
+    "ready_behavior": "After independent access readback also passes, an operator may authorize the dashboard for its approved administrator audience and label freshness Reconciled; keep the observed per-record-type watermarks visible.",
+    "blocked_behavior": "Keep the dashboard unshared, unpublished, and unavailable to non-administrators, and record Unavailable - reconciliation required in the private operator evidence. The evaluator does not enforce visibility. Do not substitute a recent timestamp, empty report, zero, or browser visual inspection for the ready verdict.",
+    "evidence_location": "Fresh populated evidence remains in the approved private operator package and is evaluated locally; it is never committed or embedded in a report."
+  },
+  "dashboards": [
+    {
+      "key": "operations",
+      "title": "Free-Test Operations Dashboard",
+      "audience": "internal-revenue-desk-operators-only",
+      "pre_render_gate_key": "catalyst-checkpoint-and-analytics-readback-v1",
+      "required_filters": [
+        { "column": "ENVIRONMENT", "required": true, "single_value": true },
+        { "column": "ENGAGEMENT_TYPE", "required": true, "fixed_value": "free_test" },
+        { "column": "CLIENT_KEY", "required": false, "single_value": false },
+        { "column": "DEPLOYMENT_KEY", "required": false, "single_value": false }
+      ],
+      "user_filter_controls": [
+        { "name": "Environment", "column": "ENVIRONMENT", "control": "single-select", "required": true, "visible": false, "locked": true, "fixed_value": "development", "applies_to": "all widgets" },
+        { "name": "Engagement Type", "column": "ENGAGEMENT_TYPE", "control": "single-select", "required": true, "visible": false, "locked": true, "fixed_value": "free_test", "applies_to": "all widgets" },
+        { "name": "Client", "column": "CLIENT_KEY", "control": "multi-select", "required": false, "visible": true, "locked": false, "applies_to": "all widgets" },
+        { "name": "Deployment", "column": "DEPLOYMENT_KEY", "control": "multi-select", "required": false, "visible": true, "locked": false, "applies_to": "all widgets" },
+        { "name": "Expiry Window", "column": "EXPIRES_AT", "control": "relative-date", "required": true, "visible": true, "locked": true, "default": "next 48 hours", "applies_to": ["operations_tests_ending_soon"] }
+      ],
+      "widgets": [
+        { "title": "Active Free Tests", "type": "summary", "source": "deployment", "report_key": "operations_active_free_tests", "definition": "Distinct current DEPLOYMENT_KEY values with DEPLOYMENT_STATUS=live inside the selected Development partition." },
+        { "title": "Connected Calls", "type": "summary", "source": "daily_metric", "report_key": "operations_connected_calls", "definition": "Sum TOTAL_CALLS_HANDLED after exact partition and period filters." },
+        { "title": "Qualified Opportunities", "type": "summary", "source": "daily_metric", "report_key": "operations_qualified_opportunities", "definition": "Sum QUALIFIED_OPPORTUNITIES; never infer a booking or revenue outcome." },
+        { "title": "Calls Remaining", "type": "summary", "source": "deployment", "report_key": "operations_calls_remaining", "definition": "Maximum of zero and CALL_LIMIT minus HANDLED_COUNT from the latest deployment fact." },
+        { "title": "Tests Ending Soon", "type": "table", "source": "deployment", "report_key": "operations_tests_ending_soon", "definition": "Latest live deployments expiring in the locked next-48-hours window, showing only opaque partitions, status, handled count, call limit, start, and expiry." },
+        { "title": "Daily Call Outcomes", "type": "chart", "source": "daily_metric", "report_key": "operations_daily_call_outcomes", "definition": "UTC trend of TOTAL_CALLS_HANDLED, QUALIFIED_OPPORTUNITIES, URGENT_REQUESTS, and UNRESOLVED_CALLS." },
+        { "title": "Exception Mix", "type": "chart", "source": "daily_metric", "report_key": "operations_exception_mix", "definition": "Separate WRONG_FIT_CALLS, SPAM_CALLS, and UNRESOLVED_CALLS; missing fields remain unknown rather than zero." },
+        { "title": "Final Test Results", "type": "table", "source": "final_test_result", "report_key": "operations_final_test_results", "definition": "Terminal results only, including end reason, captured calls, limits, evidence-completeness flags, and UTC period." },
+        { "title": "Conversion Readiness", "type": "table", "source": "conversion_status", "report_key": "operations_conversion_readiness", "definition": "Free-test-origin rows only (ENGAGEMENT_TYPE=free_test), with TARGET_ENGAGEMENT_TYPE=paid_service plus CRM, Billing, Results Review, and paid-acceptance classifications after authoritative readback; this widget performs no writeback." },
+        { "title": "Data Freshness", "type": "label", "source": "all", "report_key": "operations_data_freshness", "definition": "Observed source watermark and row count per record type. The report never emits or implies Healthy; a Reconciled label is allowed only after the authoritative pre-render gate returns ready for the complete operations scope inventory." }
+      ],
+      "access": {
+        "workspace_admin_only": true,
+        "public_link": false,
+        "embed": false,
+        "scheduled_export": false,
+        "direct_customer_access": false
+      }
+    },
+    {
+      "key": "customer",
+      "title": "Customer Results Dashboard",
+      "audience": "internal-results-review-and-approved-fixed-client-render",
+      "pre_render_gate_key": "catalyst-checkpoint-and-analytics-readback-v1",
+      "required_filters": [
+        { "column": "ENVIRONMENT", "required": true, "single_value": true },
+        { "column": "ENGAGEMENT_TYPE", "required": true, "fixed_value": "free_test" },
+        { "column": "CLIENT_KEY", "required": true, "single_value": true, "locked_before_render": true },
+        { "column": "DEPLOYMENT_KEY", "required": true, "single_value": true, "locked_before_render": true }
+      ],
+      "user_filter_controls": [
+        { "name": "Environment", "column": "ENVIRONMENT", "control": "single-select", "required": true, "visible": false, "locked": true, "fixed_value": "development", "applies_to": "all widgets" },
+        { "name": "Engagement Type", "column": "ENGAGEMENT_TYPE", "control": "single-select", "required": true, "visible": false, "locked": true, "fixed_value": "free_test", "applies_to": "all widgets" },
+        { "name": "Client", "column": "CLIENT_KEY", "control": "single-select", "required": true, "visible": false, "locked": true, "bind_before_render": true, "applies_to": "all widgets" },
+        { "name": "Deployment", "column": "DEPLOYMENT_KEY", "control": "single-select", "required": true, "visible": false, "locked": true, "bind_before_render": true, "applies_to": "all widgets" }
+      ],
+      "widgets": [
+        { "title": "Test Period", "type": "summary", "source": "final_test_result", "report_key": "customer_test_period", "definition": "TEST_STARTED_AT through TEST_ENDED_AT in UTC with TEST_END_REASON." },
+        { "title": "Connected Calls", "type": "summary", "source": "final_test_result", "report_key": "customer_connected_calls", "definition": "CALLS_CAPTURED from one terminal reconciled test result." },
+        { "title": "Qualified Opportunities", "type": "summary", "source": "final_test_result", "report_key": "customer_qualified_opportunities", "definition": "QUALIFIED_OPPORTUNITIES; label as an observed call classification, not booked or confirmed revenue." },
+        { "title": "Urgent Requests", "type": "summary", "source": "final_test_result", "report_key": "customer_urgent_requests", "definition": "URGENT_REQUESTS from handled calls." },
+        { "title": "Daily Results", "type": "chart", "source": "daily_metric", "report_key": "customer_daily_results", "definition": "UTC trend for calls, qualified opportunities, urgent requests, and existing-customer calls." },
+        { "title": "Call Mix", "type": "chart", "source": "daily_metric", "report_key": "customer_call_mix", "definition": "Qualified, existing-customer, wrong-fit, spam, and unresolved classifications shown separately." },
+        { "title": "Bookable Evidence", "type": "summary", "source": "optional_evidence", "report_key": "customer_bookable_evidence", "definition": "Show BOOKABLE_EVIDENCE_STATE with BOOKABLE_OPPORTUNITIES from the derived view. available plus 0 is a verified zero; not_available plus null displays Not Available. Never hide or filter out the state." },
+        { "title": "Office Follow-Up", "type": "summary", "source": "optional_evidence", "report_key": "customer_office_follow_up", "definition": "Show OFFICE_FOLLOW_UP_EVIDENCE_STATE with OFFICE_FOLLOW_UP_CALLS from the derived view. available plus 0 is a verified zero; not_available plus null displays Not Available. Never hide or filter out the state." },
+        { "title": "Value Evidence", "type": "table", "source": "call", "report_key": "customer_value_evidence", "definition": "Aggregate VALUE_MINOR_UNITS separately by VALUE_EVIDENCE_CLASS and VALUE_CURRENCY. Never label estimated value as verified, invoiced, paid, or guaranteed." },
+        { "title": "Data Freshness", "type": "label", "source": "all", "report_key": "customer_data_freshness", "definition": "Observed source watermark and row count per record type. The report never emits or implies Healthy; the fixed-client render and Reconciled label require a ready authoritative pre-render verdict for the exact locked client/deployment scope." }
+      ],
+      "access": {
+        "workspace_admin_only": true,
+        "public_link": false,
+        "embed": false,
+        "scheduled_export": false,
+        "direct_customer_access": false,
+        "fixed_client_render_requires_manual_review": true
+      }
+    }
+  ],
+  "creation_order": [
+    "Read back the exact Analytics organization, workspace, tables, columns, keys, row counts, views, permissions, and current shares.",
+    "Reconcile existing Dim_Client, Fact_Calls, Fact_Client_Daily, templates, and dashboards to the v2 record-type contract without overwrite or deletion.",
+    "Prove the five target tables with synthetic Development imports, provider jobs, exact row/hash/watermark readback, and one-client isolation.",
+    "Create or uniquely verify the three exact root folders from the model contract with makeDefaultFolder=false; stop on duplicate exact names, non-root placement, access ambiguity, or unexpected existing membership.",
+    "Create the reports required by each widget with exact filters and null behavior, preserving both optional-evidence state discriminators as visible output.",
+    "Resolve folder and view IDs through fresh private readback, then place the nine model views, ten operations reports, and ten customer reports exactly as assigned by the model contract; do not move a legacy view.",
+    "Assemble both exact dashboard titles in the native Analytics console because the approved Changes connector exposes report creation but not dashboard creation.",
+    "After each dashboard ID is independently read back, place it in its assigned canonical folder through the Changes connector and verify exact membership.",
+    "Build a fresh private checkpoint/outbox plus Analytics readback evidence envelope and run the fail-closed operator acceptance evaluator; timestamp-only, unresolved, stale, scope-mismatched, or readback-mismatched evidence must block publication authorization for both dashboards.",
+    "Test stale-data acceptance blocking, cross-client isolation, verified-zero versus missing optional evidence, export restrictions, and non-admin access.",
+    "Record screenshots and live IDs only in the approved private evidence package; commit only sanitized readback results.",
+    "Do not enable public links, embeds, scheduled delivery, or direct customer access in this task."
+  ],
+  "rollback": [
+    "Disable analytics_sync active mode and stop new import Jobs.",
+    "Preserve unresolved imports, existing views, and imported rows for reconciliation.",
+    "Hide newly created reports and dashboards from every non-admin audience.",
+    "Reverse only an exact canonical-asset folder move whose prior folder ID was captured in the approved private prestate; the Changes connector has no folder-delete operation, so preserve a partial empty folder for separately approved cleanup.",
+    "Delete only synthetic views or rows whose exact ownership and zero-dependency readback are proven and separately approved.",
+    "Re-read target row counts, watermarks, permissions, shares, and existing dashboard availability."
+  ]
+}

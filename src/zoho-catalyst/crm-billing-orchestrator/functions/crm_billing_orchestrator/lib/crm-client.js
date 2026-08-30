@@ -3,15 +3,31 @@
 const { HttpBoundaryError, requestJson } = require("./http");
 
 const RECORD_ID = /^[1-9][0-9]{7,29}$/;
+// CRM returns the picklist's immutable API value, not its current UI label.
+// Keep this translation explicit so a metadata change fails closed instead of selecting a price.
+const CANONICAL_PLAN_BY_CRM_API_VALUE = Object.freeze({
+  "Option 1": "Launch",
+  "Option 2": "Growth",
+  Pro: "Scale",
+});
 const INTEGRATION_FIELDS = new Set([
   "Billing_Customer_ID",
-  "Billing_Evaluation_Subscription_ID",
-  "Billing_Evaluation_Status",
   "Billing_Subscription_ID",
   "Subscription_Status",
   "Billing_Automation_Status",
   "Billing_Last_Sync_At",
   "Billing_Automation_Error",
+]);
+const REPORT_SUMMARY_FIELDS = new Set([
+  "Test_Status", "Test_Start_At", "Test_End_At", "Test_End_Reason",
+  "Call_Totals_Reconciled", "Test_Calls_Reaching_Route",
+  "Test_Qualified_Opportunities", "Test_Existing_Customer_Calls",
+  "Test_Actual_Avg_Call_Duration_Seconds",
+  "Test_Out_Of_Area_Or_Wrong_Fit_Calls", "Test_Urgent_Requests",
+  "Test_Bookable_Opportunities", "Test_Office_Follow_Up_Calls",
+  "Test_Observed_Workflow_Failures", "Recommended_Paid_Coverage",
+  "Expected_Monthly_Connected_Minutes_Min", "Expected_Monthly_Connected_Minutes_Max",
+  "Test_Data_Confidence_Notes",
 ]);
 
 class CrmClientError extends Error {
@@ -81,10 +97,17 @@ function parseUpdate(json, expectedId) {
 
 function classifyStatus(status, sideEffecting) {
   if (status === 412) return { publicCode: "record_stale", status: 409 };
+  if (!sideEffecting && retryableReadStatus(status)) {
+    return { publicCode: "crm_dependency_failed", status: 503 };
+  }
   if (!sideEffecting || [400, 401, 403, 404, 409, 422].includes(status)) {
     return { publicCode: "crm_rejected", status: 502 };
   }
   return { ambiguous: true, publicCode: "reconciliation_required", status: 503 };
+}
+
+function retryableReadStatus(status) {
+  return new Set([408, 425, 429, 500, 502, 503, 504]).has(status);
 }
 
 function createCrmClient(config, {
@@ -97,27 +120,44 @@ function createCrmClient(config, {
   }
   const dealFields = Object.freeze([
     "Modified_Time",
+    "Deal_Name",
     "Pipeline",
     "Stage",
     "Entry_Offer",
     "Type",
     "Account_Name",
-    "Go_Live_Approval_Status",
-    "Go_Live_Approved_At",
     "Test_Status",
-    "Test_Duration_Days",
-    "Test_Call_Limit",
-    "Test_Scope_Version",
+    "Plan",
+    "Billing_Frequency",
+    "Monthly_Recurring_Revenue",
+    "Setup_Fee",
+    "Subscription_Start_Date",
+    "Subscription_Acceptance_Status",
+    "Subscription_Accepted_At",
+    "Subscription_Acceptance_Version",
+    "Results_Review_At",
     "Test_Start_At",
     "Test_End_At",
     "Test_End_Reason",
-    "Plan",
-    "Billing_Frequency",
-    "Subscription_Start_Date",
-    "Subscription_Acceptance_Status",
+    "Call_Totals_Reconciled",
+    "Test_Calls_Reaching_Route",
+    "Test_Qualified_Opportunities",
+    "Test_Existing_Customer_Calls",
+    "Test_Actual_Avg_Call_Duration_Seconds",
+    "Test_Out_Of_Area_Or_Wrong_Fit_Calls",
+    "Test_Urgent_Requests",
+    "Test_Bookable_Opportunities",
+    "Test_Office_Follow_Up_Calls",
+    "Test_Observed_Workflow_Failures",
+    "Recommended_Paid_Coverage",
+    "Expected_Monthly_Connected_Minutes_Min",
+    "Expected_Monthly_Connected_Minutes_Max",
+    "Test_Data_Confidence_Notes",
+    "Deployment_Record_ID",
+    "Configuration_Version",
+    "Approved_Deployment_Record_ID",
+    "Approved_Configuration_Version",
     "Billing_Customer_ID",
-    "Billing_Evaluation_Subscription_ID",
-    "Billing_Evaluation_Status",
     "Billing_Subscription_ID",
     "Subscription_Status",
     "Billing_Automation_Status",
@@ -127,32 +167,40 @@ function createCrmClient(config, {
   const accountFields = Object.freeze(["Modified_Time", "Account_Name"]);
 
   async function authorizedRequest(url, options, { write, sideEffecting }) {
-    let token;
-    try {
-      token = authorization(await (write ? writeAuthorizationProvider() : readAuthorizationProvider()));
-    } catch (error) {
-      if (error instanceof CrmClientError) throw error;
-      fail("CRM Connection is unavailable", { publicCode: "connection_unavailable" });
-    }
-    try {
-      return await requestJson(url, {
-        ...options,
-        headers: { ...options.headers, Authorization: token },
-      }, {
-        timeoutMs: config.outboundTimeoutMs,
-        maximumBytes: config.outboundMaxBytes,
-        sideEffecting,
-      }, fetchImpl);
-    } catch (error) {
-      if (error instanceof HttpBoundaryError) {
-        fail("CRM request did not return an authoritative result", {
-          ambiguous: error.ambiguous,
-          publicCode: error.publicCode === "dependency_failed" ? "crm_dependency_failed" : error.publicCode,
-          status: error.status,
-        });
+    const maximumAttempts = sideEffecting ? 1 : 2;
+    for (let attempt = 1; attempt <= maximumAttempts; attempt += 1) {
+      let token;
+      try {
+        token = authorization(await (write ? writeAuthorizationProvider() : readAuthorizationProvider()));
+      } catch (error) {
+        if (attempt < maximumAttempts) continue;
+        if (error instanceof CrmClientError) throw error;
+        fail("CRM Connection is unavailable", { publicCode: "connection_unavailable" });
       }
-      throw error;
+      try {
+        const response = await requestJson(url, {
+          ...options,
+          headers: { ...options.headers, Authorization: token },
+        }, {
+          timeoutMs: config.outboundTimeoutMs,
+          maximumBytes: config.outboundMaxBytes,
+          sideEffecting,
+        }, fetchImpl);
+        if (attempt < maximumAttempts && retryableReadStatus(response.status)) continue;
+        return response;
+      } catch (error) {
+        if (attempt < maximumAttempts && error instanceof HttpBoundaryError) continue;
+        if (error instanceof HttpBoundaryError) {
+          fail("CRM request did not return an authoritative result", {
+            ambiguous: error.ambiguous,
+            publicCode: error.publicCode === "dependency_failed" ? "crm_dependency_failed" : error.publicCode,
+            status: error.status,
+          });
+        }
+        throw error;
+      }
     }
+    fail("CRM read retry boundary was exhausted", { publicCode: "crm_dependency_failed" });
   }
 
   async function getRecord(module, id, fields) {
@@ -167,6 +215,8 @@ function createCrmClient(config, {
     return parseRecord(response.json, id);
   }
 
+  // Report synchronization legitimately runs before a paid Plan is selected. Preserve raw Deal
+  // state here; the paid-action validator owns exact Plan API-value normalization.
   const getDeal = (id) => getRecord("Deals", id, dealFields);
   const getAccount = (id) => getRecord("Accounts", id, accountFields);
 
@@ -200,24 +250,37 @@ function createCrmClient(config, {
       })
     ) fail("CRM integration update is outside the allowlist", { publicCode: "configuration_invalid" });
 
-    const response = await authorizedRequest(`${config.crmApiBaseUrl}/Deals/${deal.id}`, {
-      method: "PUT",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        "If-Unmodified-Since": deal.Modified_Time,
-      },
-      body: JSON.stringify({
-        data: [{ id: deal.id, ...patch }],
-        trigger: [],
-        skip_feature_execution: [{ name: "cadences" }],
-      }),
-    }, { write: true, sideEffecting: true });
-    if (response.status !== 200) fail("CRM rejected the Deal update", classifyStatus(response.status, true));
-    parseUpdate(response.json, deal.id);
-    const readback = await getDeal(deal.id);
+    try {
+      const response = await authorizedRequest(`${config.crmApiBaseUrl}/Deals/${deal.id}`, {
+        method: "PUT",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          "If-Unmodified-Since": deal.Modified_Time,
+        },
+        body: JSON.stringify({
+          data: [{ id: deal.id, ...patch }],
+          trigger: [],
+          skip_feature_execution: [{ name: "cadences" }],
+        }),
+      }, { write: true, sideEffecting: true });
+      if (response.status === 200) parseUpdate(response.json, deal.id);
+    } catch {
+      // Once the write may have reached CRM, only readback can establish its outcome.
+    }
+    let readback;
+    try {
+      readback = await getDeal(deal.id);
+    } catch {
+      fail("CRM Deal update outcome requires reconciliation", {
+        ambiguous: true,
+        publicCode: "reconciliation_required",
+      });
+    }
     for (const [field, expected] of entries) {
-      const matches = expected === null ? readback[field] == null : readback[field] === expected;
+      const matches = expected === null
+        ? Object.hasOwn(readback, field) && readback[field] === null
+        : readback[field] === expected;
       if (!matches) fail("CRM Deal readback does not match", {
         ambiguous: true,
         publicCode: "reconciliation_required",
@@ -226,7 +289,79 @@ function createCrmClient(config, {
     return readback;
   }
 
-  return Object.freeze({ getAccount, getContext, getDeal, updateDealIntegration });
+  async function updateDealReportSummary(deal, patch) {
+    if (!plainObject(deal) || !plainObject(patch)) {
+      fail("CRM report-summary update is malformed", { publicCode: "configuration_invalid" });
+    }
+    recordId(deal.id);
+    modifiedTime(deal.Modified_Time);
+    const entries = Object.entries(patch);
+    if (entries.length !== REPORT_SUMMARY_FIELDS.size
+      || entries.some(([field, candidate]) => {
+        if (!REPORT_SUMMARY_FIELDS.has(field)) return true;
+        if (candidate === null) return false;
+        if (field === "Call_Totals_Reconciled") return candidate !== true;
+        if (typeof candidate === "number") return !Number.isSafeInteger(candidate)
+          || candidate < 0 || candidate > 999999999;
+        return typeof candidate !== "string" || !candidate || candidate.length > 2000
+          || Buffer.byteLength(candidate, "utf8") > 2000
+          || /[\u0000-\u001f\u007f]/.test(candidate);
+      })) fail("CRM report-summary update is outside the allowlist", {
+      publicCode: "configuration_invalid",
+    });
+
+    try {
+      const response = await authorizedRequest(`${config.crmApiBaseUrl}/Deals/${deal.id}`, {
+        method: "PUT",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          "If-Unmodified-Since": deal.Modified_Time,
+        },
+        body: JSON.stringify({
+          data: [{ id: deal.id, ...patch }],
+          trigger: [],
+          skip_feature_execution: [{ name: "cadences" }],
+        }),
+      }, { write: true, sideEffecting: true });
+      if (response.status === 200) parseUpdate(response.json, deal.id);
+    } catch {
+      // A write timeout is ambiguous. The exact Deal readback below is the only
+      // authority and prevents a retry from fabricating a second state transition.
+    }
+    let readback;
+    try {
+      readback = await getDeal(deal.id);
+    } catch {
+      fail("CRM report-summary update outcome requires reconciliation", {
+        ambiguous: true,
+        publicCode: "reconciliation_required",
+      });
+    }
+    for (const [field, expected] of entries) {
+      const matches = expected === null
+        ? Object.hasOwn(readback, field) && readback[field] === null
+        : new Set(["Test_Start_At", "Test_End_At"]).has(field)
+          ? Number.isFinite(Date.parse(readback[field]))
+            && Date.parse(readback[field]) === Date.parse(expected)
+          : readback[field] === expected;
+      if (!matches) fail("CRM report-summary readback does not match", {
+        ambiguous: true,
+        publicCode: "reconciliation_required",
+      });
+    }
+    return readback;
+  }
+
+  return Object.freeze({
+    getAccount, getContext, getDeal, updateDealIntegration, updateDealReportSummary,
+  });
 }
 
-module.exports = { CrmClientError, INTEGRATION_FIELDS, createCrmClient };
+module.exports = {
+  CANONICAL_PLAN_BY_CRM_API_VALUE,
+  CrmClientError,
+  INTEGRATION_FIELDS,
+  REPORT_SUMMARY_FIELDS,
+  createCrmClient,
+};

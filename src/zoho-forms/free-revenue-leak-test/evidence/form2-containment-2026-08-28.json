@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "record_type": "sanitized_free_revenue_leak_test_form2_containment",
+  "observed_at": "2026-08-28",
+  "repository_head_at_attempt": "605208993873ab1c53723ade1c5c87216fa67fc8",
+  "release_contract_at_attempt": {
+    "contract_id": "sylvara-free-revenue-leak-test-e2e-v4",
+    "schema_version": 4
+  },
+  "status": "bounded_live_surface_contained_reconfiguration_and_acceptance_blocked",
+  "target_binding": {
+    "expected_private_target_matched": true,
+    "private_target_values_included": false
+  },
+  "authorization_history": {
+    "preceding_attempt_count": 2,
+    "toggle_only_attempt_consumed": true,
+    "toggle_only_attempt_persisted": false,
+    "toggle_and_save_attempt_consumed": true,
+    "toggle_and_save_attempt_persisted": false,
+    "preceding_approvals_reused": false,
+    "final_confirmation_packet_separately_approved": true,
+    "final_confirmation_packet_consumed": true,
+    "final_confirmation_packet_reusable": false,
+    "retry_under_consumed_approval_performed": false,
+    "future_live_action_authorized_by_this_record": false
+  },
+  "final_confirmation_attempt": {
+    "native_confirmation_yes_selected": true,
+    "save_control_used": false,
+    "owner_email_sent": false,
+    "submission_delivery_disable_persisted": true
+  },
+  "independent_readback": {
+    "dashboard_status": "disabled",
+    "dashboard_status_persisted": true,
+    "anonymous_runtime_checked": true,
+    "anonymous_disabled_message_matched_private_expected_copy": true,
+    "expected_disabled_message_copy_included": false,
+    "anonymous_visible_field_count": 0,
+    "anonymous_visible_submit_control_count": 0,
+    "submission_delivery_status": "disabled",
+    "submission_delivery_status_persisted": true,
+    "private_configuration_shape": {
+      "destination_binding_unchanged": true,
+      "content_encoding_unchanged": true,
+      "authentication_mode_unchanged": true,
+      "connection_binding_unchanged": true,
+      "payload_mapping_count": 38,
+      "payload_mapping_set_unchanged": true,
+      "custom_parameter_counts_unchanged": true,
+      "complete_private_configuration_digest_equal": true,
+      "raw_private_configuration_or_digest_included": false
+    }
+  },
+  "containment": {
+    "live_surface_containment_proven_within_observed_scope": true,
+    "complete_required_field_policy_proven": false,
+    "required_prefill_boundary_proven": false,
+    "required_controller_field_policy_proven": false,
+    "required_respondent_field_policy_proven": false,
+    "required_controller_gate_proven": false,
+    "required_submission_contract_proven": false,
+    "required_submission_destination_binding_proven": false,
+    "required_submission_authentication_proven": false,
+    "value_entered": false,
+    "submission_performed": false,
+    "submission_delivery_test_performed": false,
+    "runtime_function_or_route_invocation_performed": false,
+    "crm_billing_analytics_or_catalyst_action_performed": false,
+    "retell_agent_changed_tested_simulated_called_or_published": false,
+    "customer_or_production_action_performed": false
+  },
+  "disclosure_controls": {
+    "form_or_platform_identifier_values_included": false,
+    "private_location_values_included": false,
+    "private_destination_or_connection_values_included": false,
+    "credential_or_authentication_values_included": false,
+    "private_configuration_digest_included": false,
+    "account_tenant_user_or_owner_identity_included": false,
+    "field_names_values_or_exploit_details_included": false,
+    "raw_provider_payloads_errors_or_logs_included": false,
+    "customer_or_submission_data_included": false
+  }
+}

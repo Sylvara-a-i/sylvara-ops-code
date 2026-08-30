@@ -1,14 +1,16 @@
 # 7-Day Free Test Development Reconciliation
 
+> **Historical Retell/Catalyst milestone:** This record's classification applies only to the shared Retell call-runtime scope accepted on 2026-08-24. The broader Form 1 → CRM → Form 2 → Catalyst → report → paid-acceptance → Billing TEST release is governed by the [current E2E reconciliation](free-revenue-leak-test-e2e-reconciliation-2026-08-24.md), which is not yet ready for Retell Agent QA.
+
 Last updated: 2026-08-24
 
 Environment: Development only
 
-Current classification: **READY FOR CONTROLLED INTERNAL PHONE TEST**
+Historical classification: **Superseded one-number Development milestone; not current Retell testing authority**
 
 This sanitized record reconciles the repository, Catalyst Development, and the minimum Retell configuration needed to hand the system to a later controlled internal phone test. It contains no private identifiers, endpoints, phone numbers, recipients, secrets, payloads, transcripts, recordings, or caller content. Production, prospects, customers, contractor forwarding, CRM, Analytics, SMS, billing, booking, dispatch, transfers, pricing, and payments remained untouched.
 
-[ADR 0006](../adr/0006-shared-seven-day-monitor-with-client-number-isolation.md) remains authoritative: one shared free-test agent, one dedicated number per active deployment, and client variation in immutable Catalyst configuration. The present scope uses one non-customer Retell Development number for one active phone deployment. A second live number and paid/native voice or provider-fallback testing are deferred; this document does not claim the first-controlled-prospect technical gate.
+[ADR 0006](../adr/0006-shared-seven-day-monitor-with-client-number-isolation.md) records the historical one-number milestone. The [final consolidated release contract](../product/free-revenue-leak-test-release-contract.md) is now authoritative and requires one shared free/paid call runtime plus the complete E2E gate before Retell agent testing.
 
 ## Current-State Audit
 

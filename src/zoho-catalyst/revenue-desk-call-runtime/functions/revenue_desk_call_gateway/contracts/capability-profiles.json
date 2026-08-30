@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "engagement_types": [
+    "free_test",
+    "paid_service"
+  ],
+  "profiles": [
+    {
+      "id": "call_gap_monitor_v1",
+      "engagement_type": "free_test",
+      "plan_tier": "none",
+      "status": "active",
+      "enabled": true,
+      "limit_policy": "seven_calendar_days_or_25_connected_calls_v1",
+      "billing_mode": "none",
+      "traffic_environments": [
+        "development"
+      ]
+    },
+    {
+      "id": "launch_v1",
+      "engagement_type": "paid_service",
+      "plan_tier": "Launch",
+      "status": "draft",
+      "enabled": false,
+      "limit_policy": "disabled",
+      "billing_mode": "disabled",
+      "traffic_environments": []
+    },
+    {
+      "id": "growth_v1",
+      "engagement_type": "paid_service",
+      "plan_tier": "Growth",
+      "status": "draft",
+      "enabled": false,
+      "limit_policy": "disabled",
+      "billing_mode": "disabled",
+      "traffic_environments": []
+    },
+    {
+      "id": "scale_v1",
+      "engagement_type": "paid_service",
+      "plan_tier": "Scale",
+      "status": "draft",
+      "enabled": false,
+      "limit_policy": "disabled",
+      "billing_mode": "disabled",
+      "traffic_environments": []
+    }
+  ],
+  "unknown_or_disabled_behavior": "fail_closed",
+  "production_traffic_enabled": false
+}

@@ -1,10 +1,27 @@
 {
   "status": "proposed-development-only",
-  "table": "configured privately by OPERATION_TABLE",
+  "table": "CRMBillingOperations",
+  "runtime_variable": "OPERATION_TABLE",
   "retention_days_minimum": 180,
   "columns": [
-    { "name": "OPERATION_KEY", "type": "Var Char", "max_length": 64, "mandatory": true, "unique": true, "private": true },
-    { "name": "OPERATION_FINGERPRINT", "type": "Var Char", "max_length": 64, "mandatory": true, "unique": false, "private": true },
+    {
+      "name": "OPERATION_KEY",
+      "type": "Var Char",
+      "max_length": 64,
+      "mandatory": true,
+      "unique": true,
+      "private": true,
+      "semantics": "Paid/customer rows use the stable sylvara.crm-billing.idempotency.v1 HMAC domain. New sync_report_summary rows use sylvara.crm-report-summary.v2; retained v1 rows remain readable only under the strict legacy contract. Each version binds environment, Deal, deployment, configuration, report schema, canonical call-set digest, full canonical report-revision digest, and action so a changed terminal report creates a new immutable operation."
+    },
+    {
+      "name": "OPERATION_FINGERPRINT",
+      "type": "Var Char",
+      "max_length": 64,
+      "mandatory": true,
+      "unique": false,
+      "private": true,
+      "semantics": "Paid/customer rows use sylvara.crm-billing.idempotency.v1 to bind accepted commercial evidence. New sync_report_summary rows use sylvara.crm-report-summary.v2 to bind the full canonical sanitized payload and its revision-specific operation identity; retained v1 rows validate against the original domain."
+    },
     { "name": "ACTION", "type": "Var Char", "max_length": 40, "mandatory": true, "unique": false, "private": false },
     {
       "name": "CRM_DEAL_ID",
@@ -16,8 +33,50 @@
       "semantics": "Legacy physical column: CRM Deal ID for public lifecycle rows; CRM Account ID for the private provision_test_customer row."
     },
     { "name": "STATUS", "type": "Var Char", "max_length": 32, "mandatory": true, "unique": false, "private": false },
-    { "name": "SOURCE_REVISION", "type": "Var Char", "max_length": 40, "mandatory": true, "unique": false, "private": false },
+    {
+      "name": "SOURCE_REVISION",
+      "type": "Var Char",
+      "max_length": 40,
+      "mandatory": true,
+      "unique": false,
+      "private": false,
+      "semantics": "Immutable creation audit evidence. Reconciliation verifies operation identity and Development environment but does not require equality to the current deployment revision."
+    },
     { "name": "SOURCE_ENVIRONMENT", "type": "Var Char", "max_length": 16, "mandatory": true, "unique": false, "private": false },
-    { "name": "LAST_OUTCOME", "type": "Var Char", "max_length": 80, "mandatory": true, "unique": false, "private": false }
+    { "name": "LAST_OUTCOME", "type": "Var Char", "max_length": 80, "mandatory": true, "unique": false, "private": false, "semantics": "Report rows start terminal_report_ready; a reclaimable pre-write owner stores report_claim_<32-hex>; exact report_write_started_<32-hex> readback is required before CRM PUT and is never automatically reclaimed; only authoritative CRM readback stores report_summary_readback_confirmed with STATUS completed." },
+    {
+      "name": "OPERATION_PAYLOAD_JSON",
+      "type": "Encrypted Text",
+      "max_length": 10000,
+      "mandatory": false,
+      "unique": false,
+      "private": true,
+      "audit_consent": true,
+      "required_for_report_summary_rows": true,
+      "semantics": "Exact sanitized terminal report-summary payload. Raw call data, caller data, Results_Review_At, and paid acceptance are prohibited."
+    },
+    { "name": "OPERATION_VERSION", "type": "BigInt", "mandatory": false, "unique": false, "required_for_report_summary_rows": true, "semantics": "Every report claim, write-start, completion, or containment transition increments this cursor. Completion and containment compare ROWID, STATUS, LAST_OUTCOME, and OPERATION_VERSION; a changed semantic state is never overwritten. After the operation cursor is observed, every completion transition and completed replay requires fresh exact Deal account/binding/patch readback. A mismatch CAS-keeps or demotes reconciliation; if stale containment first observes a winning completion, one fresh read and at most one repair CAS may converge it." },
+    { "name": "CREATED_AT", "type": "Var Char", "max_length": 32, "mandatory": false, "unique": false, "required_for_report_summary_rows": true },
+    { "name": "UPDATED_AT", "type": "Var Char", "max_length": 32, "mandatory": false, "unique": false, "required_for_report_summary_rows": true }
+  ],
+  "report_summary_outbox": {
+    "producer": "revenue_desk_call_worker after terminal call/event/notification reconciliation",
+    "consumer": "crm_billing_orchestrator action sync_report_summary on its existing authenticated route",
+    "replay": "An exact report revision reuses its OPERATION_KEY and immutable fingerprint/payload. A changed canonical report gets a different revision-specific key. Pending or processing report_claim pre-write rows may be atomically claimed/reclaimed with an OPERATION_VERSION fence. After exact report_write_started readback, processing or reconciliation_required rows never repeat the CRM write and converge only through exact Deal readback. Report completion and containment are compare-and-set transitions over ROWID, STATUS, LAST_OUTCOME, and OPERATION_VERSION; one bounded retry tolerates only a cursor advance with unchanged status/outcome, never a semantic conflict.",
+    "human_only_field": "Results_Review_At",
+    "migration_gate": "Add the four nullable columns without modifying legacy rows; read back exact types, privacy, encrypted-text audit consent, and multiple legacy null behavior before enabling either producer or consumer."
+  },
+  "shared_tables": [
+    {
+      "table": "AnalyticsSyncOutbox",
+      "runtime_variable": "ANALYTICS_OUTBOX_TABLE",
+      "role": "producer-only sanitized conversion_status v2 facts after authoritative CRM/Billing and operation completion readback",
+      "schema_owner": "../revenue-desk-analytics/config/datastore-schema.json",
+      "row_schema_version": 2,
+      "required_unique_columns": ["OUTBOX_KEY"],
+      "outbox_key_contract": "SHA-256 of the NUL-delimited analytics-provider-version-v1 domain, conversion_status record type, environment, client key, deployment key, record key, and SOURCE_MODIFIED_AT normalized through Date.toISOString(). Exact replay converges on this key; a different immutable payload at the same key requires reconciliation.",
+      "state_column": "SYNC_STATUS",
+      "legacy_rows_mutated": false
+    }
   ]
 }

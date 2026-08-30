@@ -1,0 +1,240 @@
+{
+  "schema_version": 2,
+  "status": "private-source-captured-behavior-map-complete-bounded-schema-proof-recorded-live-binding-and-fixture-parity-blocking",
+  "observed_at": "2026-08-25",
+  "evidence_boundary": "All live Development source modules were captured and reviewed privately from the Catalyst console. Raw source, credentials, identifiers, endpoints, payloads, and customer data were not emitted into GitHub.",
+  "deployment_replacement_authorized": false,
+  "candidate_path_base": "src/zoho-catalyst/revenue-desk-analytics",
+  "function_semantics": {
+    "live_function": "analytics_sync",
+    "live_type": "Job",
+    "observed_scope": "Catalyst source datasets, daily rollups, mappings, Zoho Analytics import and polling, checkpoints, normalized readback, confirmations, watermarks, synthetic guards, and safe logging.",
+    "candidate_owner": "analytics_sync",
+    "candidate_entrypoint": "functions/analytics_sync/index.js",
+    "candidate_tests": [
+      "functions/analytics_sync/test/job-handler.test.js",
+      "functions/analytics_sync/test/package.test.js",
+      "functions/analytics_sync/test/service.test.js"
+    ],
+    "parity": "behavior-map-complete-private-live-fixture-and-runtime-binding-diff-required"
+  },
+  "private_source_audit_2026_08_25": {
+    "module_count": 15,
+    "raw_source_retained_in_repository": false,
+    "raw_source_printed_or_logged": false,
+    "live_tests_reviewed_privately": true,
+    "live_behavior_classes": [
+      "direct source mappings",
+      "daily rollups",
+      "provider serialization",
+      "Connection authorization",
+      "asynchronous import submission and polling",
+      "normalized readback",
+      "checkpoint and watermark persistence",
+      "reconciliation",
+      "synthetic fixtures",
+      "safe logging"
+    ],
+    "candidate_rehome": {
+      "deployment": "revenue_desk_call_gateway Analytics outbox producer",
+      "call": "revenue_desk_call_gateway Analytics outbox producer",
+      "daily_metric": "analytics_sync deterministic daily rollup",
+      "final_test_result": "revenue_desk_call_worker terminal reconciled report producer",
+      "conversion_status": "crm_billing_orchestrator post-readback producer"
+    },
+    "blocking_evidence": [
+      "Private source fixtures have not been executed against the candidate for a record-by-record differential result.",
+      "At this observation date, the additive Development columns and nullable unique semantics had not yet been read back from Catalyst; the superseding 2026-08-26 Packet A resolution below proves the checkpoint application columns, outbox column count, and nullable-unique OUTBOX_KEY contract, but not the full outbox application schema or current activation readiness.",
+      "The private Connection, organization, workspace, and target-view bindings have not been proven against the candidate.",
+      "Legacy outbox and checkpoint rows have not been reconciled to immutable v2 facts and watermarks."
+    ]
+  },
+  "superseding_packet_a_resolution_2026_08_26": {
+    "evidence": "../../evidence/free-revenue-leak-test-development-packet-a-resolution-2026-08-26.json",
+    "analytics_outbox_total_columns": 71,
+    "analytics_outbox_full_application_schema_readback_exact": false,
+    "analytics_outbox_outbox_key_contract": {
+      "type": "varchar",
+      "max_length": 64,
+      "mandatory": false,
+      "unique": true,
+      "audit_consent": true
+    },
+    "analytics_checkpoints_required_application_columns_exact": true,
+    "outbox_key_nullable_unique_contract_readback_exact": true,
+    "legacy_outbox_rows_rewritten": false,
+    "legacy_checkpoint_rows_rewritten": false,
+    "fresh_pre_activation_schema_readback_still_required": true,
+    "live_binding_fixture_parity_and_reconciliation_proven": false
+  },
+  "live_analytics_ui_audit_2026_08_25": {
+    "access_method": "read-only signed-in Zoho Analytics browser after the audit connector returned an authentication failure",
+    "workspace_observed": "existing Sylvara voice-operations workspace",
+    "source_tables_observed": [
+      "Dim_Client",
+      "Fact_Calls",
+      "Fact_Client_Daily"
+    ],
+    "existing_view_classes": [
+      "seven-day test template",
+      "executive operations dashboard",
+      "Development client outcome and value snapshot"
+    ],
+    "required_exact_views_present": {
+      "Free-Test Operations Dashboard": false,
+      "Customer Results Dashboard": false
+    },
+    "writes_performed": false,
+    "decision": "Preserve the existing workspace and tables as migration evidence. Do not overwrite, rename, or delete them before target-schema readback, v2 import proof, dashboard construction, reconciliation, and rollback approval."
+  },
+  "connector_preflight_2026_08_28": {
+    "source": "Sylvara Analytics Audit and Sylvara Catalyst Audit connectors",
+    "analytics_organization_identity_verified_privately": true,
+    "accessible_analytics_organization_count": 1,
+    "accessible_workspace_count": 2,
+    "development_workspace_uniquely_resolved_by_private_environment_marking": true,
+    "development_workspace_view_count": 30,
+    "development_workspace_folder_count": 6,
+    "legacy_source_table_matches": 3,
+    "canonical_target_table_matches": 0,
+    "canonical_query_view_matches": 0,
+    "canonical_report_title_matches": 0,
+    "canonical_dashboard_title_matches": 0,
+    "analytics_function": {
+      "name": "analytics_sync",
+      "runtime": "node24",
+      "memory_mb": 256,
+      "environment_variable_count": 7,
+      "source_revision": "aab7c18c27f4ff5e1468da51eae433ede9b852f6",
+      "analytics_sync_mode": "disabled",
+      "provider_bindings_present": false
+    },
+    "private_identifiers_names_urls_queries_rows_payloads_or_raw_responses_in_repository": false,
+    "analytics_rows_or_exports_read": false,
+    "writes_imports_runtime_invocations_or_dashboard_actions_performed": false,
+    "retell_customer_or_production_action_performed": false,
+    "future_live_change_authorized_by_this_record": false
+  },
+  "live_modules": [
+    {
+      "name": "index.js",
+      "live_symbols_or_semantics": ["Job entrypoint", "runtime dependency wiring"],
+      "candidate_owner": "analytics_sync",
+      "repository_candidate": ["functions/analytics_sync/index.js", "functions/analytics_sync/lib/job-handler.js"],
+      "candidate_tests": ["functions/analytics_sync/test/job-handler.test.js", "functions/analytics_sync/test/package.test.js"],
+      "parity": "partial-empty-params-identity-modes-and-dark-production-covered"
+    },
+    {
+      "name": "analytics-client.js",
+      "live_symbols_or_semantics": ["AnalyticsClient", "API error classification", "async import submit", "import polling"],
+      "candidate_owner": "analytics_sync",
+      "repository_candidate": ["functions/analytics_sync/lib/analytics-client.js"],
+      "candidate_tests": ["functions/analytics_sync/test/analytics-client.test.js", "functions/analytics_sync/test/service.test.js"],
+      "parity": "unverified-against-live-response-fixtures"
+    },
+    {
+      "name": "catalyst-store.js",
+      "live_symbols_or_semantics": ["CatalystStore", "outbox claims", "checkpoint persistence", "durable readback"],
+      "candidate_owner": "analytics_sync",
+      "repository_candidate": ["functions/analytics_sync/lib/catalyst-store.js"],
+      "candidate_tests": ["functions/analytics_sync/test/service.test.js", "functions/analytics_sync/test/package.test.js"],
+      "parity": "unverified-additive-v2-only-legacy-rows-never-claimed"
+    },
+    {
+      "name": "config.js",
+      "live_symbols_or_semantics": ["runtime validation", "Analytics table bindings", "legacy source and reporting table bindings"],
+      "candidate_owner": "analytics_sync",
+      "repository_candidate": ["functions/analytics_sync/lib/config.js", "config/variables.json"],
+      "candidate_tests": ["functions/analytics_sync/test/config.test.js", "functions/analytics_sync/test/package.test.js"],
+      "parity": "intentionally-narrowed-to-outbox-and-checkpoints-source-rehome-diff-blocking"
+    },
+    {
+      "name": "connection.js",
+      "live_symbols_or_semantics": ["Catalyst Connection credential extraction", "connector-token compatibility"],
+      "candidate_owner": "analytics_sync",
+      "repository_candidate": ["functions/analytics_sync/lib/connection-boundary.js"],
+      "candidate_tests": ["functions/analytics_sync/test/analytics-client.test.js"],
+      "parity": "partial-exact-authorization-header-contract-covered-connector-token-diff-required"
+    },
+    {
+      "name": "daily-rollup.js",
+      "live_symbols_or_semantics": ["build daily metrics", "persist daily metrics", "late correction and replay behavior"],
+      "candidate_owner": "analytics_sync",
+      "repository_candidate": ["functions/analytics_sync/lib/daily-rollup.js", "functions/analytics_sync/lib/facts.js"],
+      "candidate_tests": ["functions/analytics_sync/test/daily-rollup.test.js", "functions/analytics_sync/test/facts.test.js"],
+      "parity": "canonical-pure-rollup-implemented-persistence-and-private-live-fixture-parity-blocked"
+    },
+    {
+      "name": "mappings.js",
+      "live_symbols_or_semantics": ["Calls mapping", "ClientDailyMetrics mapping", "ClientDeployments mapping", "OutcomeLinks mapping"],
+      "candidate_owner": "analytics_sync for Analytics facts; revenue_desk_call_gateway for canonical source generation",
+      "repository_candidate": ["functions/analytics_sync/lib/facts.js", "functions/analytics_sync/lib/daily-rollup.js"],
+      "candidate_tests": ["functions/analytics_sync/test/facts.test.js", "functions/analytics_sync/test/daily-rollup.test.js"],
+      "parity": "partial-blocking-field-target-and-authority-diff-required"
+    },
+    {
+      "name": "reconcile.js",
+      "live_symbols_or_semantics": ["strict normalized dataset readback", "source and target count reconciliation", "watermark verification"],
+      "candidate_owner": "analytics_sync",
+      "repository_candidate": ["functions/analytics_sync/lib/analytics-client.js", "functions/analytics_sync/lib/service.js"],
+      "candidate_tests": ["functions/analytics_sync/test/analytics-client.test.js", "functions/analytics_sync/test/service.test.js"],
+      "parity": "partial-exact-key-hash-partition-readback-covered-full-live-dataset-diff-blocking"
+    },
+    {
+      "name": "sync-engine.js",
+      "live_symbols_or_semantics": ["SyncEngine", "key chunks", "checkpoints", "synthetic guards", "confirmations", "watermarks"],
+      "candidate_owner": "analytics_sync",
+      "repository_candidate": ["functions/analytics_sync/lib/service.js", "functions/analytics_sync/lib/catalyst-store.js"],
+      "candidate_tests": ["functions/analytics_sync/test/service.test.js", "functions/analytics_sync/test/job-handler.test.js"],
+      "parity": "partial-bounded-claim-submit-poll-readback-checkpoint-state-covered-private-differential-fixtures-blocking"
+    },
+    {
+      "name": "synthetic-fixtures.js",
+      "live_symbols_or_semantics": ["synthetic source fixtures", "failure and reconciliation fixtures", "production guards"],
+      "candidate_owner": "analytics_sync tests",
+      "repository_candidate": ["functions/analytics_sync/test/helpers.js", "functions/analytics_sync/test/*.test.js"],
+      "candidate_tests": ["functions/analytics_sync/test/*.test.js"],
+      "parity": "partial-private-live-fixture-export-and-differential-results-blocking"
+    },
+    {
+      "name": "csv.js",
+      "live_symbols_or_semantics": ["provider serialization and escaping"],
+      "candidate_owner": "revenue_desk_call_gateway for canonical source facts; analytics_sync uses bounded JSON import",
+      "repository_candidate": ["functions/analytics_sync/lib/analytics-client.js"],
+      "candidate_tests": ["functions/analytics_sync/test/analytics-client.test.js"],
+      "parity": "explicitly-superseded-for-Analytics-import-report-CSV-parity-owned-by-call-worker"
+    },
+    {
+      "name": "hash.js",
+      "live_symbols_or_semantics": ["deterministic normalized keys and digests"],
+      "candidate_owner": "analytics_sync",
+      "repository_candidate": ["functions/analytics_sync/lib/facts.js"],
+      "candidate_tests": ["functions/analytics_sync/test/facts.test.js", "functions/analytics_sync/test/daily-rollup.test.js"],
+      "parity": "partial-new-v2-namespaces-intentional-legacy-digest-diff-blocking"
+    },
+    {
+      "name": "time.js",
+      "live_symbols_or_semantics": ["UTC normalization", "watermark ordering", "bounded retry and lease timing"],
+      "candidate_owner": "analytics_sync",
+      "repository_candidate": ["functions/analytics_sync/lib/facts.js", "functions/analytics_sync/lib/daily-rollup.js", "functions/analytics_sync/lib/service.js"],
+      "candidate_tests": ["functions/analytics_sync/test/facts.test.js", "functions/analytics_sync/test/daily-rollup.test.js", "functions/analytics_sync/test/service.test.js"],
+      "parity": "partial-strict-UTC-and-monotonic-ordering-covered-live-edge-diff-required"
+    },
+    {
+      "name": "safe-log.js",
+      "live_symbols_or_semantics": ["identifier and payload suppression", "coarse operational events"],
+      "candidate_owner": "analytics_sync",
+      "repository_candidate": ["functions/analytics_sync/lib/logging.js"],
+      "candidate_tests": ["functions/analytics_sync/test/logging.test.js"],
+      "parity": "candidate-allowlist-covered-private-live-log-fixture-diff-required"
+    }
+  ],
+  "required_before_activation": [
+    "Privately export the exact live source without printing credentials, identifiers, payloads, or customer data.",
+    "Produce a symbol-by-symbol and fixture-by-fixture semantic diff against this candidate.",
+    "Verify daily-rollup persistence ownership and preserve every current mapping, checkpoint, synthetic guard, confirmation, and watermark behavior.",
+    "Reconcile the 307 observed outbox rows and 10 observed checkpoint rows by normalized key, immutable fact hash, source count, target count, and watermark.",
+    "Pass synthetic old-versus-new differential tests and an additive Development migration/rollback rehearsal.",
+    "Obtain a fresh source/runtime readback for the exact reviewed revision."
+  ]
+}

@@ -182,7 +182,7 @@ The 2026-08-14 CRM refresh supersedes the CRM portion of the older configured-se
 
 No typed module-level Lead Conversion Mapping editor was captured, and native Lead conversion remains a human-approved runtime action. Zoho Forms configuration was not available through the CRM roles. Therefore:
 
-- treat only an exercised typed operation as verified and recheck the target before reuse;
+- treat only an exercised typed integration operation or exact reviewed first-party UI action as verified, and recheck the target before reuse;
 - do not guess a field, layout, workflow, conversion, module, or subform payload;
 - do not substitute generic record creation for native Lead conversion or a configuration endpoint;
 - do not infer Forms, conversion-map, native-conversion, or unexercised writes from official REST API support; and
@@ -250,7 +250,7 @@ The immutable 2026-08-05 package records the earlier schema and completed-change
 - the exact CRM organization, data center, edition, environment, administrators, and least-privilege audit/change identities;
 - module, layout, section, field, profile, workflow, picklist, lookup, and dependency metadata required by the change;
 - authoritative-system ownership, duplicate keys, trigger policy, migration/backfill behavior, retention, and reporting impact;
-- a typed write contract, one-change approval, rollback or containment procedure, and independent audit readback; and
+- a typed integration write contract or exact reviewed first-party UI action contract, one-change approval, rollback or containment procedure, and independent audit readback; and
 - a private deployment record containing the approved current/proposed diff and sanitized validation result.
 
 Repository review does not authorize a live schema or record mutation.

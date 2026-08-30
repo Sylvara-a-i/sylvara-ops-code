@@ -1,0 +1,10 @@
+{
+  "deployment": {
+    "name": "analytics_sync",
+    "stack": "node24",
+    "type": "job"
+  },
+  "execution": {
+    "main": "index.js"
+  }
+}

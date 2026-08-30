@@ -1,0 +1,78 @@
+/*
+Owning product/workflow: Zoho CRM / Form 2 setup-access issuance.
+Trigger: Administrator-restricted Deals record-details button.
+Inputs: deal_id from the current Deal and its persisted retry-stable
+Setup_Access_Issue_Request_ID value, mapped by the CRM button.
+Authentication: the private Form 2 issue Connection injects all route credentials.
+Idempotency: only the same immutable issue_request_id may identify an exact retry.
+Failure behavior: no automatic retry and no URL open after any non-exact response.
+Logging: coarse outcome names only; never log IDs, bodies, URLs, headers, or errors.
+Rollback: disable the button, revoke the Connection, and preserve session/readback state.
+Private setup: replace every {{...}} token outside Git, then save and syntax-check in CRM.
+*/
+
+can_open = false;
+destination_url = "";
+try
+{
+	valid_deal_id = input.deal_id != null && input.deal_id.toString().matches("^[1-9][0-9]{9,29}$");
+	valid_issue_request_id = input.issue_request_id != null && input.issue_request_id.toString().matches("^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$");
+	if(valid_deal_id && valid_issue_request_id)
+	{
+		request_body = Map();
+		request_body.put("dealId",input.deal_id.toString());
+		request_body.put("issueRequestId",input.issue_request_id.toString());
+		request_headers = Map();
+		request_headers.put("Content-Type","application/json");
+		issue_response = invokeurl
+		[
+			url : "{{FORM2_ISSUE_URL}}"
+			type : POST
+			body : request_body.toString()
+			headers : request_headers
+			connection : "{{FORM2_ISSUE_CONNECTION_LINK_NAME}}"
+			detailed : true
+			response-format : STRING
+		];
+		if(issue_response != null && issue_response.containKey("responseCode") && issue_response.get("responseCode").toString() == "200" && issue_response.containKey("responseText"))
+		{
+			response_text = issue_response.get("responseText");
+			if(response_text != null && response_text.toString().length() > 0 && response_text.toString().length() <= 4096)
+			{
+				response_body = response_text.toString().toMap();
+				if(response_body != null && response_body.size() == 4 && response_body.containKey("ok") && response_body.containKey("accessUrl") && response_body.containKey("expiresAt") && response_body.containKey("requestId") && response_body.get("ok") == true)
+				{
+					access_url = response_body.get("accessUrl");
+					expires_at = response_body.get("expiresAt");
+					request_id = ifnull(response_body.get("requestId"),"").toString();
+					access_prefix = "{{FORM2_ACCESS_PUBLIC_URL}}" + "#setupToken=";
+					if(access_url != null && expires_at != null)
+					{
+						access_url_text = access_url.toString();
+						if(access_url_text.startsWith(access_prefix) && access_url_text.length() == access_prefix.length() + 43 && !access_url_text.contains("?") && !access_url_text.contains("&") && !access_url_text.contains(" ") && expires_at.toString().matches("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{3})?Z$") && request_id.matches("^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"))
+						{
+							setup_token = access_url_text.right(43);
+							if(setup_token.matches("^[A-Za-z0-9_-]{43}$"))
+							{
+								can_open = true;
+								destination_url = access_url_text;
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+catch(failure)
+{
+	info "form2_issue_failed";
+}
+if(can_open == true)
+{
+	openUrl(destination_url,"new window","successive=true");
+}
+else
+{
+	info "form2_issue_rejected";
+}

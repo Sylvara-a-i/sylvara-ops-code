@@ -1,0 +1,145 @@
+{
+  "schema_version": 2,
+  "status": "bounded_development_installation_candidate",
+  "environment": "Development only",
+  "owning_product": "Zoho CRM",
+  "runtime_owner": "Zoho Catalyst",
+  "authentication_policy": "Every remote caller is Administrator-restricted and uses a separately verified private Zoho Connection. Source and arguments contain no credential values.",
+  "render_policy": {
+    "mode": "private_exact_placeholder_substitution_before_import",
+    "commit_rendered_source": false,
+    "log_rendered_source": false,
+    "readback_required": true,
+    "placeholders_must_resolve_to_one_reviewed_development_environment": true
+  },
+  "callers": [
+    {
+      "logical_name": "FORM1_CONTAINED_PREDECESSOR",
+      "source": "../functions/start_free_revenue_leak_test_request.deluge",
+      "module": "Leads",
+      "button": "Start Free-Test Request",
+      "placement": "record details",
+      "profile": "Administrator",
+      "remote_request_enabled": false,
+      "purpose": "Retained fail-closed predecessor and immediate rollback target until replacement E2E acceptance.",
+      "deployment_status": "retain_unchanged_during_replacement_validation"
+    },
+    {
+      "logical_name": "FORM1_ASSISTED_ISSUE_CALLER",
+      "source": "../functions/open_free_test_setup.deluge",
+      "module": ["Leads", "Deals"],
+      "source_format": "Zoho CRM Deluge free-flow button-function body",
+      "button": "Open Free-Test Setup",
+      "placement": "record details",
+      "profile": "Administrator initially",
+      "function_arguments": [
+        { "name": "record_id", "source": "current record ID", "validation": "canonical 10-to-30-digit CRM record identifier" },
+        { "name": "crm_module", "source": "fixed button binding", "validation": "exact Leads or Deals" }
+      ],
+      "server_side_identity": {
+        "field": "Intake_Submission_ID",
+        "initializer": "authenticated Catalyst issue operation",
+        "crm_launcher_reads_or_writes_identity": false,
+        "read_before_conditional_write": true,
+        "initialize_only_when_blank": true,
+        "initialization": "domain-separated deterministic opaque assisted journey ID with If-Unmodified-Since",
+        "concurrent_winner_policy": "accept the valid authoritative CRM readback without a second write",
+        "readback_required": true,
+        "browser_identity_accepted": false
+      },
+      "request": {
+        "method": "POST",
+        "content_type": "application/json",
+        "body_keys": ["crmModule", "recordId"],
+        "automatic_retry": false,
+        "url_contains_record_or_pii": false
+      },
+      "connection": {
+        "placeholder": "{{FORM1_ISSUE_CONNECTION_LINK_NAME}}",
+        "purpose": "inject the exact Catalyst Gateway key and independent Form 1 issue-route header",
+        "credential_in_source_or_arguments": false
+      },
+      "private_placeholders": ["{{FORM1_ISSUE_URL}}", "{{FORM1_ISSUE_CONNECTION_LINK_NAME}}", "{{FORM1_ACCESS_PUBLIC_URL}}"],
+      "success_response": {
+        "http_status": 201,
+        "exact_body_keys": ["ok", "accessUrl", "expiresAt", "requestId"],
+        "request_id_grammar": "UUID v4 lowercase canonical",
+        "url_shape": "exact Catalyst Development access URL plus #journeyToken= and one 43-character base64url credential",
+        "forbidden_url_data": ["CRM record ID", "journey ID", "email", "phone", "company name", "PII"],
+        "zoho_forms_receives_journey_credential": false,
+        "open_target": "new window"
+      },
+      "failure_policy": "Fail closed without opening a URL; never log or automatically retry an ambiguous response.",
+      "deployment_status": "install_in_parallel_with_contained_predecessor"
+    },
+    {
+      "logical_name": "FORM2_SETUP_ISSUE_CALLER",
+      "source": "../functions/issue_revenue_leak_test_setup.deluge",
+      "module": "Deals",
+      "button": "Issue Revenue Leak Test Setup",
+      "placement": "record details",
+      "profile": "Administrator initially",
+      "function_arguments": [
+        { "name": "deal_id", "source": "current Deal ID" },
+        { "name": "issue_request_id", "source": "persisted Setup_Access_Issue_Request_ID", "security_classification": "non-secret idempotency identifier; never an access token", "provider_binding_status": "repository_bound_live_function_workflow_button_and_readback_required" }
+      ],
+      "request": { "method": "POST", "content_type": "application/json", "body_keys": ["dealId", "issueRequestId"], "automatic_retry": false },
+      "connection": { "placeholder": "{{FORM2_ISSUE_CONNECTION_LINK_NAME}}", "credential_in_source_or_arguments": false },
+      "private_placeholders": ["{{FORM2_ISSUE_URL}}", "{{FORM2_ISSUE_CONNECTION_LINK_NAME}}", "{{FORM2_ACCESS_PUBLIC_URL}}"],
+      "success_response": { "http_status": 200, "exact_body_keys": ["ok", "accessUrl", "expiresAt", "requestId"], "token_grammar": "^[A-Za-z0-9_-]{43}$", "request_id_grammar": "UUID v4 lowercase canonical" },
+      "deployment_status": "install_after_authoritative_readback"
+    },
+    {
+      "logical_name": "APPROVE_AND_START_FREE_TEST_CALLER",
+      "source": "../functions/approve_and_start_free_test.deluge",
+      "module": "Deals",
+      "button": "Approve And Start Free Test",
+      "placement": "record details",
+      "profile": "Administrator",
+      "function_arguments": [{ "name": "deal_id", "source": "current Deal ID" }],
+      "server_side_identity": "Freshly reads journey, deployment, and configuration from the exact Deal and derives separate deterministic UUID-v4 idempotency identities.",
+      "operations": [
+        { "name": "approve", "path": "/internal/revenue-desk/approve-configuration", "expected_state": "Scheduled", "activates": false },
+        { "name": "activate", "path": "/internal/revenue-desk/activate-free-test", "expected_state": "Live", "requires_prior_exact_approval": true }
+      ],
+      "connection": { "placeholder": "{{ROUTE_CONTROL_CONNECTION_LINK_NAME}}", "credential_in_source_or_arguments": false },
+      "private_placeholders": ["{{ROUTE_CONTROL_APPROVE_URL}}", "{{ROUTE_CONTROL_ACTIVATE_URL}}", "{{ROUTE_CONTROL_CONNECTION_LINK_NAME}}"],
+      "failure_policy": "If approval succeeds and activation fails, return approved inactive; never report Live.",
+      "deployment_status": "install_after_private_function_readback"
+    },
+    {
+      "logical_name": "STOP_OR_ROLLBACK_FREE_TEST_CALLER",
+      "source": "../functions/stop_or_rollback_free_test.deluge",
+      "module": "Deals",
+      "button": "Stop Or Roll Back Free Test",
+      "placement": "record details",
+      "profile": "Administrator",
+      "function_arguments": [{ "name": "deal_id", "source": "current Deal ID" }],
+      "operation": {
+        "name": "rollback",
+        "path": "/internal/revenue-desk/rollback-free-test",
+        "first_state": "Stopped",
+        "provider_unbind_after_stop": true,
+        "manual_instructions_returned_when_unbind_unproven": true
+      },
+      "connection": { "placeholder": "{{ROUTE_CONTROL_CONNECTION_LINK_NAME}}", "credential_in_source_or_arguments": false },
+      "private_placeholders": ["{{ROUTE_CONTROL_ROLLBACK_URL}}", "{{ROUTE_CONTROL_CONNECTION_LINK_NAME}}"],
+      "failure_policy": "Fail closed and preserve evidence; repeated invocation is idempotent.",
+      "deployment_status": "install_after_private_function_readback"
+    }
+  ],
+  "activation_gates": [
+    "Verify the exact CRM organization, Development hosts, immutable source SHA, and disabled Production state before rendering any placeholder.",
+    "Prove caller-specific Connections expose only the required API Gateway and private authentication headers.",
+    "Install the replacement Open Free-Test Setup control without deleting the retained contained predecessor.",
+    "Run one ZZZ SYNTHETIC launch, approve/activate failure, successful activation, and rollback canary before widening access."
+  ],
+  "rollback": [
+    "Disable the three replacement controls and preserve their audit evidence.",
+    "Restore the retained Form 1 predecessor control as the only visible launcher if replacement validation fails.",
+    "Keep Catalyst deployment rows stopped and preserve every configuration, receipt, and route readback.",
+    "Never delete historical CRM, Form, Catalyst, or Retell evidence as rollback."
+  ],
+  "bounded_development_write_authorized": true,
+  "production_write_authorized": false
+}

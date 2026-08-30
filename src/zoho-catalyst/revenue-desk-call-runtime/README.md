@@ -1,0 +1,116 @@
+# Revenue Desk Call Runtime
+
+Status: **the immutable source candidate now contains gateway, worker, and private Development route-control targets. Route control implements separate approval, activation, and rollback operations, durable full-row CAS/audit recovery, CRM Blueprint readback, provider ownership verification, and telephony-disabled installation. It is not yet installed or read back. Historical Development parity for gateway and worker revision 288a93c remains valid only within its recorded scope; it does not prove the new target or current release. Production and live traffic remain dark.**
+
+The complete visible `All Time` Jobs UI result, with `All Status` selected, displayed 15 rows, no pagination controls, and zero references to the canonical pools. Provider-complete all-history Job inventory remains unproven. Both canonical Function Job pools matched exact at 512 MB, while their function-target binding was unavailable from the inspected surfaces. All nine required Connections were Connected with their exact least-privilege scope sets, and the complete Cron inventory contained zero canonical references. A relative prior-24-hour access and application log query ran after the final disabled-Gateway readback and returned zero rows for all six canonical functions; its exact UTC bounds were not retained, and it does not prove exact all-history execution. Direct caller and webhook bindings remain unproven.
+
+The preceding pool, Connection, log, and visible Job-history paragraph is historical 2026-08-27 route-continuation evidence, not a claim that those surfaces were freshly revalidated by either the e1da1bc predecessor packet or the 288a93c reconvergence packet. During these executions, the operator invoked no route, function, Job, or Cron; that statement applies to the historical route continuation and both definition-convergence packets within their separately recorded scopes.
+
+This shared Zoho Catalyst package contains exactly three deployable functions:
+
+- `revenue_desk_call_gateway` — Advanced I/O ingress.
+- `revenue_desk_call_worker` — private Function Job target.
+- `revenue_desk_route_control` — private Development-only Advanced I/O approval, activation, and rollback target.
+
+The canonical source profile is `free_test/call_gap_monitor_v1`. Registered paid-service profiles `launch_v1`, `growth_v1`, and `scale_v1` remain disabled drafts and fail closed. The Development definition deployment and subsequent reconciliation do not authorize route invocation or further route mutation, a customer test, paid offer, Production traffic, migration, mail send, binding, Retell test, or Retell change.
+
+## Boundaries
+
+`POST /retell/events` verifies the raw-body signature, validates and minimizes the envelope, durably claims one `provider_event` receipt, and conditionally submits `{ mode: "process_event", event_key }` to `RevenueDeskCallJobs` without business processing. Before the external submit, a compare-and-set transition to `Queued` places a private dispatch token in the existing receipt lease field; only that token owner may submit. This fences a timed-out original request from submitting again after a provider retry has won the race. A submit/readback ambiguity clears the dispatch token but remains `Queued`; HTTP replay never re-submits, and `retry_scan` directly processes the durable receipt. Both Retell ingress routes enforce an eight-second end-to-end response budget, leaving two seconds of margin under Retell's current ten-second webhook timeout; exhaustion returns a sanitized retryable 503 rather than claiming completion. Catalyst SDK operations are not cancellable, so delayed completion and provider retry converge through this dispatch fence, the durable receipt, processing lease, idempotency, and readback controls. The pinned `zcatalyst-sdk-node@3.4.0` adapter uses `app.jobScheduling().JOB.submitJob()` with `target_type=Function` and `target_name=revenue_desk_call_worker`; there is no REST fallback.
+
+`POST /retell/inbound` must return synchronously. It verifies the request, resolves one active immutable configuration version, applies route/capacity gates, returns bounded variables, and durably records the minimized `Resolved` or `ConfigurationUnavailable` decision as an `inbound_resolution` receipt. It does not write calls, notifications, or Analytics facts.
+
+`GET /internal/readiness` is authenticated and Development-only. It reads capped, provider-ordered pages of source-bound deployments and configuration versions, validates local source/environment/status/timestamp/reconciliation relationships, and reports whether either 100-row evidence page was capped. Traffic is reported enabled only when an eligible active row is present, the scan is not capped, and no incomplete terminal reconciliation evidence is visible. Exact approval/activation evidence remains enforced on the call path; level-triggered `retry_scan` owns exact Completed-artifact verification and repair so readiness never performs an unbounded per-deployment report walk. Production has no callable readiness exception.
+
+The worker accepts only exact string parameters:
+
+| Mode | Parameters | Work |
+| --- | --- | --- |
+| `process_event` | `mode`, `event_key` | Converge one provider receipt. |
+| `retry_scan` | `mode` | Retry due provider receipts/notifications, reconcile bounded terminal deployments, and dispatch at most five durable CRM report summaries. |
+| `rebuild_report` | `mode`, `deployment_id` | Reconcile a report and sanitized outbox facts. |
+| `reconcile_deployment` | `mode`, `deployment_id` | Return deployment reconciliation evidence. |
+
+Unknown modes, extra keys, non-string values, malformed keys, wrong project/pool identity, and Production fail before SDK or durable access.
+
+## Environment and capability isolation
+
+Development requires `DEPLOYMENT_ENVIRONMENT=development`, `DEPLOYMENT_MODE=active`, reviewed private configuration, exact table names, and an artifact-stamped `SOURCE_REVISION`. Runtime rows must match the active and approved configuration-version IDs, engagement, capability, environment, revision, binding, shared agent/version, coverage, approval receipt, activation receipt, activation time, and handled-call state. Status strings never substitute for durable authorization evidence.
+
+Production uses only:
+
+```text
+DEPLOYMENT_ENVIRONMENT=production
+DEPLOYMENT_MODE=dark
+SOURCE_REVISION=<release-stamped-40-character-sha>
+```
+
+Every Production gateway path and worker invocation returns 503 before host parsing, Job Request inspection, SDK initialization, Data Store, Mail, or outbox access. Dark provisioning never authorizes activation.
+
+## Durable contract
+
+Five tables are canonical operational state:
+
+1. `RevenueDeskDeployments` — number ownership, active configuration-version reference, nullable approval/activation receipt references, activation-time/capacity gates, and handled-call convergence. `ACTUAL_START_AT` and `EXPIRES_AT` stay null through approval and are set only after route-activation readback.
+2. `RevenueDeskConfigurationVersions` — authoritative immutable configuration with engagement/capability attribution.
+3. `RevenueDeskEventReceipts` — append-only `inbound_resolution`, `provider_event`, or `authorization_event` evidence; provider rows use the private lease field first as a dispatch fence and later as the processing lease, authorization rows bind the configuration, route, route readback, and related approval event, and `CALL_KEY` remains optional for non-provider evidence.
+4. `RevenueDeskCalls` — canonical calls with immutable `CONFIGURATION_VERSION_ID`, label, `ENGAGEMENT_TYPE`, and `CAPABILITY_PROFILE`, repeated in canonical JSON integrity checks.
+5. `RevenueDeskNotifications` — bounded dry-run or authorized Development email state with the same immutable attribution.
+
+The sixth runtime-consumed table, `AnalyticsSyncOutbox`, is shared delivery infrastructure, not transactional authority. Completed calls and deployment/report reconciliation create sanitized additive-v2 facts with deterministic keys, hashes, opaque partitions, immutable `SOURCE_DATE_UTC`, and exact duplicate readback. A `final_test_result` fact is emitted only after the reconciled report has an authoritative terminal timestamp and reason; an in-progress report emits none. The dedicated `ANALYTICS_PARTITION_HMAC_SECRET` produces the same opaque client/deployment partitions across approved package-local producers without sharing the broader runtime event secret. Each v2 fact normalizes every payload timestamp through `Date.toISOString()` before canonical JSON and hashing. Its sole provider-enforced identity is the existing unique `OUTBOX_KEY`, derived as SHA-256 over the NUL-delimited `analytics-provider-version-v1` domain, record type, environment, client key, deployment key, record key, and normalized `SOURCE_MODIFIED_AT`; a same-watermark payload conflict fails closed through exact immutable readback and `PAYLOAD_HASH`. The v2 state column is `SYNC_STATUS` to avoid a case-insensitive collision with the live v1 `Status` column. All additive outbox columns remain physically nullable for legacy-row preservation and are enforced for v2 rows in code. Facts contain no phone, email, name, narrative, transcript, recording, audio, prompt, or raw provider payload. Analytics cannot reverse-write runtime state.
+
+The seventh runtime-consumed table, `CRMBillingOperations`, is shared producer/consumer infrastructure owned by `crm_billing_orchestrator`. A terminal free-test report creates an encrypted, sanitized, revision-specific `sync_report_summary` row. New rows use schema/domain `sylvara.crm-report-summary.v2`, which explicitly permits a null workflow-failure total; the consumer retains read compatibility with v1 only when that legacy count is a non-null integer. The key binds environment, Deal, deployment, configuration, report schema, canonical call set, full canonical report revision, and action. `retry_scan` is the sole automatic caller: it sends the exact Deal ID and operation key to the existing orchestrator route with Catalyst `ZCFKEY` and a separate report-only header credential, applies one end-to-end timeout and bounded JSON response, then requires the row at `STATUS=completed` with `LAST_OUTCOME=report_summary_readback_confirmed`. Pending or ambiguous CRM state keeps deployment reconciliation and readiness pending. Workflow-failure, bookable-opportunity, and office-follow-up totals remain null through the report when privacy minimization or missing provider fields withhold the underlying evidence; erased or absent evidence is never represented as zero. The worker never writes CRM `Stage`, `Results_Review_At`, paid acceptance, or Billing state.
+
+An unmatched `Resolved` inbound receipt is never aged into a no-call conclusion. If Catalyst durably resolves a request after the eight-second response deadline, Retell may have received only the retryable 503 and used its number-bound fallback without the returned correlation metadata. Because the inbound request has no provider call identifier and Retell does not publish an authoritative retry-spacing or failed-call-absence receipt, terminal reporting remains `AwaitingSettlement`; no final Analytics fact or CRM report operation is created. Live ingress therefore remains dark until the separately scoped Retell task supplies and verifies an authoritative provider-readback reconciliation contract. A timer may escalate this state but must not complete it.
+
+[`config/datastore-schema.json`](config/datastore-schema.json) remains an activation contract, not live authorization. Full-table pagination confirms 35 retained tables, 466 aggregate rows, and complete zero/nonzero classification; this does not authorize migration or deletion. On 2026-08-28, the gateway and worker definitions converged at revision `288a93c7773acaf82fab277702e6b4e3d7354564` with Node 24, 256 MB, exact configuration, and Catalyst archive pullback parity by path set and file content. The gateway's exact 31-variable private map read back with deployment mode active while Gateway ingress remained disabled. The worker's complete 28-variable Development map read back with dry-run notification. Neither function nor the worker Job was invoked, so runtime behavior remains unproven.
+
+The earlier API Gateway execution began from zero routes, created and independently read back only `RETELL_INBOUND`, then stopped on provider modal-flow drift and restored Gateway to disabled. That exact one-route state is historical, not current. Under a separate consumed creation approval, `RETELL_EVENTS` was created and immediately contained when exact readback exposed one duplicate separator in its target endpoint. A separate single-use remediation approval corrected only that defect, independently read back the exact route, restored Gateway to disabled, and established the exact two-route prestate; both approvals were exhausted and are not reusable. A fresh ten-route continuation approval then created the remaining routes serially and established exact twelve-route parity without deleting or recreating an existing route. That continuation approval is also consumed.
+
+The operator used the historical route configuration actions without invoking a route or function. API Gateway remains independently confirmed disabled and fail-closed; its latest disabled readback returned no route payload and therefore did not revalidate route parity. The complete visible `All Time` Jobs UI result remains bounded historical evidence, not provider-complete all-history inventory. Both canonical Function Job pools are present, but no inspected surface proves their function-target binding. Earlier readback recorded all nine required Connections with exact least-privilege scopes; the latest release packet did not revalidate them. The complete current Cron inventory contains zero canonical references. Earlier bounded log evidence does not prove exact all-history execution. Direct caller and webhook bindings remain unproven. During the historical e1da1bc convergence, the operator invoked no route, function, Job, or Cron and performed no Retell-provider or agent test, call, simulation, publish, phone-route, other provider-side change, customer action, or Production action; the 288a93c reconvergence preserved the same boundary. Migration, reconciliation, synthetic acceptance, and rollback acceptance remain mandatory, and live ingress stays dark until the separately scoped Retell task. The historical [execution record](../evidence/free-revenue-leak-test-development-packet-a-execution-2026-08-26.json), [ADR 0008](../../../docs/adr/0008-single-key-analytics-outbox-fence.md), sanitized [Packet A resolution evidence](../evidence/free-revenue-leak-test-development-packet-a-resolution-2026-08-26.json), [six-function Development deployment evidence](../evidence/free-revenue-leak-test-development-six-function-deployment-2026-08-27.json), [twelve-route continuation evidence](../evidence/free-revenue-leak-test-development-route-continuation-2026-08-27.json), [historical PR-head convergence evidence](../evidence/free-revenue-leak-test-development-pr-head-convergence-2026-08-28.json), and [current convergence evidence](../evidence/free-revenue-leak-test-development-pr-head-convergence-2026-08-28-288a93c.json) preserve their bounded conclusions.
+
+The 288a93c deployment reconfirmed the required consumer-first six-function upload order. Runtime consumer compatibility remains a separate release gate: the operator did not invoke the Development compatibility probe because no verified private Advanced I/O invocation channel was available. A later scoped synthetic proof must show that the consumer accepts a v2 null workflow-failure total and still validates a retained v1 non-null row; do not use a real Deal or Retell traffic. Keep the gateway and retry trigger dark until compatibility readback passes. This ordering remains mandatory because an older v1-only consumer correctly rejects a v2 payload and would leave terminal reconciliation pending.
+
+[`config/retry-job.json`](config/retry-job.json) is the provider-native Development contract for the disabled `RevenueDeskRetry1m` Cron. It binds only the private `RevenueDeskCallJobs` Function pool and `revenue_desk_call_worker` target, supplies only `{ "mode": "retry_scan" }`, and sets provider retries to zero. Provisioning remains blocked until a fresh pre-defined inventory proves one complete untruncated array, every item exposes a lossless ID/name/execution-type/status, pagination behavior is known, and a separate all-execution-type check excludes same-name collisions. An empty pre-defined list alone never proves absence. Exact comparison then requires the singular get-by-ID call and a lossless Cron-ID projection plus the documented numeric schedule/retry normalization.
+
+The installed Changes connector advertises a full Cron body for status changes, while the official provider operation is status-only. Do not discover the accepted shape by mutation. Exact classification exhaustively buckets every advertised schedule, end, notification, request, header, URL, retry, provider-identity, and metadata field; canonical-absent fields must be literally absent, and nulls, empty values, defaults, unknown keys, or unproven absence fail closed. The current full-body templates are not execution-ready until read-only evidence proves status-only/nonreplacement semantics, and they must never be applied to a drifted or duplicate predecessor. Without a proven safe status-only shape, keep the worker mode dark, preserve those predecessor definitions, mark Cron containment unproven, and stop. A Cron create/resource `data.id`, persisted Job-definition or `cron_detail.jobId`, or pool/target/function identifier is not a submitted execution Job ID. Terminal canary evidence must bind the exact lossless manual-submit `data.job_id` through the get-by-ID request/response and bind `source_type=Cron` plus the exact source Cron ID, name, and `pre-defined` execution type; pool/target/params/time matching is insufficient. The contract does not authorize a live write or activation. Its dark-worker containment canary remains blocked until the provider exposes a lossless Job-to-execution identifier binding and callable execution-scoped log readback; it would not prove `retry_scan` business behavior. Conditional rollback deletion additionally needs fresh exact authority, permanently destroys Cron history, is never retried after ambiguity, and succeeds only after complete name/ID inventory absence plus shape-proven get-by-ID not-found readback.
+
+## Private approval, activation, and rollback control
+
+`revenue_desk_route_control` exposes exactly three authenticated Development `POST` operations: approve configuration, activate free test, and stop or roll back free test. It uses the shared evaluators in [`lib/approval-control.js`](functions/revenue_desk_call_gateway/lib/approval-control.js), while keeping operator controls off the Retell gateway. Every command binds Deal, journey, deployment, configuration, idempotency identity, and rollback reason where applicable. Prepared receipts recover exact CAS poststate after interruption; command drift conflicts. Approval moves only to `Scheduled`; activation requires the exact approval plus fresh authoritative route readback; rollback stops Catalyst before provider unbinding and preserves all evidence.
+
+`RETELL_ROUTE_MODE=disabled` is the install-safe default. It requires no Retell number or Connection, activation fails with `ISOLATED_RETELL_TEST_NUMBER_REQUIRED`, and rollback returns the approved manual instructions. `isolated_test` additionally requires the exact test number, shared agent/version, Development webhook, and Retell Connection. Rollback performs no PATCH unless fresh readback proves the `ZZZ SYNTHETIC` number belongs to the exact deployment and route. Neither mode publishes an agent, buys a number, calls, sends SMS, or permits Production.
+
+The exact prestate, mutation predicates, readback, ambiguity, invalidation, containment, rollback, and legacy retirement rules are in [`route-approval-control-plane-runbook.md`](route-approval-control-plane-runbook.md). Legacy deletion and activation remain blocked until the legacy source export, dependency map, and live route/Job/webhook/caller binding proof are reconciled. The legacy boundary remains stopped but recoverable; legacy status or receipt rows are historical/quarantine evidence and never authorize a canonical route.
+
+## Release artifact and migration gates
+
+The checkout contains an unbuilt revision sentinel; an environment SHA alone cannot claim parity. Build a separate release tree after selecting final main:
+
+```powershell
+node scripts/build-release.js --revision <40-character-final-main-sha> --output <new-release-directory>
+```
+
+The builder accepts only the exact clean checked-out Git `HEAD`, reads the deployable allowlist from that commit's blobs, refuses existing or in-repository output, rejects non-regular paths, stamps only an atomic outside-repository artifact, validates the exact three targets and linked local dependencies, and writes deterministic hashes in `release-manifest.json`. Materialize dependencies only in that staged tree. Never deploy the mutable or unstamped checkout.
+
+Observed Development counts require preservation: `FreeTestDeployments=3`, `FreeTestCalls=30`, `FreeTestNotifications=6`, `FreeTestRetellEventReceipts=39`, plus nonempty generic resolver/call/Analytics tables. No deletion, rename, truncate, in-place rewrite, or cutover is safe. A future one-way migration must preserve keys, environment/engagement ownership, configuration-version IDs, receipt kinds/idempotency, call attribution, notifications, authorization chains, handled counts, and outbox lineage, then prove counts, per-partition keyed digests, samples, every conflict, rollback, and a recovery window.
+
+## Verification
+
+```powershell
+cd functions/revenue_desk_call_gateway
+npm ci --ignore-scripts
+npm run ci
+
+cd ../revenue_desk_call_worker
+npm ci --ignore-scripts --install-links
+npm run ci
+
+cd ../revenue_desk_route_control
+npm ci --ignore-scripts --install-links
+npm run ci
+```
+
+Tests cover the SDK Job payload/readback, fast durable ingress, the exact three gateway routes and four worker modes, replay/reordering, inbound audit, tenant/configuration/capability isolation, approval-versus-activation timing, receipt/readback invalidation, call limits, minimized notifications/outbox facts, report reconciliation, source-stamp mismatch, isolated release building, and no-access Production dark containment.
+
+No live call, route invocation, further Catalyst route mutation, Retell-provider or agent change, provider-side phone or route change, migration, deletion, Production access, real mail, CRM write, Analytics reverse-write, booking, dispatch, transfer, quote, payment, SMS, outbound communication, private ID, or secret is authorized or included.

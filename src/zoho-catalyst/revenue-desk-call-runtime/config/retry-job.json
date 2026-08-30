@@ -1,0 +1,841 @@
+{
+  "schema_version": 4,
+  "record_type": "revenue_desk_call_worker_job_contract",
+  "current_status": "repository_provider_native_contract_defined_live_provisioning_unverified",
+  "environment": "Development",
+  "production_authorized": false,
+  "function_target": {
+    "name": "revenue_desk_call_worker",
+    "stack": "node24",
+    "type": "job",
+    "memory_mb": 256
+  },
+  "job_pool": {
+    "name": "RevenueDeskCallJobs",
+    "type": "Function",
+    "memory_mb": 512,
+    "id_runtime_variable": "REVENUE_DESK_WORKER_JOB_POOL_ID"
+  },
+  "sdk_submission": {
+    "sdk_version": "3.4.0",
+    "shape": "app.jobScheduling().JOB.submitJob(payload)",
+    "target_type": "Function",
+    "target_name": "revenue_desk_call_worker",
+    "jobpool_name": "RevenueDeskCallJobs",
+    "platform_retries": 0
+  },
+  "scheduled_retry_scan": {
+    "job_name": "RevenueDeskRetryScan",
+    "params": {
+      "mode": "retry_scan"
+    },
+    "cron_name": "RevenueDeskRetry1m",
+    "cron_name_max_characters": 20,
+    "initial_status": "disabled",
+    "schedule": {
+      "hour": 0,
+      "minute": 1,
+      "second": 0,
+      "repetition_type": "every"
+    }
+  },
+  "development_submitter": {
+    "environment": "Development",
+    "production_authorized": false,
+    "submitter_type": "Cron",
+    "initial_status": "disabled",
+    "cron_name": "RevenueDeskRetry1m",
+    "cron_name_max_characters": 20,
+    "job_name": "RevenueDeskRetryScan",
+    "write_connector": {
+      "name": "Sylvara Catalyst Changes",
+      "create_tool": "mcp__codex_apps__sylvara_catalyst_changes_catalystbyzoho_create_cron_job",
+      "status_tool": "mcp__codex_apps__sylvara_catalyst_changes_catalystbyzoho_update_cron_job_status",
+      "submit_tool": "mcp__codex_apps__sylvara_catalyst_changes_catalystbyzoho_submit_cron_job",
+      "delete_tool": "mcp__codex_apps__sylvara_catalyst_changes_catalystbyzoho_delete_cron_job"
+    },
+    "audit_connector": {
+      "name": "Sylvara Catalyst Audit",
+      "inventory_tool": "mcp__codex_apps__sylvara_catalyst_audit_catalystbyzoho_list_all_crons",
+      "resource_tool": "mcp__codex_apps__sylvara_catalyst_audit_catalystbyzoho_get_cron_job_by_id",
+      "job_tool": "mcp__codex_apps__sylvara_catalyst_audit_catalystbyzoho_get_job_by_id",
+      "log_tool": "mcp__codex_apps__sylvara_catalyst_audit_catalystbyzoho_get_logs"
+    },
+    "private_bindings": {
+      "organization_id": {
+        "placeholder": "TBD_PRIVATE_CATALYST_ORG_ID",
+        "required_type": "number",
+        "destination": "headers.Catalyst-org"
+      },
+      "project_id": {
+        "placeholder": "TBD_PRIVATE_CATALYST_PROJECT_ID",
+        "required_type": "string",
+        "destination": "path_variables.projectId"
+      },
+      "job_pool_id": {
+        "placeholder": "TBD_PRIVATE_CALL_JOB_POOL_ID",
+        "required_type": "string",
+        "destination": "body.job_meta.jobpool_id"
+      },
+      "function_id": {
+        "placeholder": "TBD_PRIVATE_CALL_WORKER_FUNCTION_ID",
+        "required_type": "string",
+        "destination": "body.job_meta.target_id"
+      },
+      "cron_id": {
+        "placeholder": "TBD_PRIVATE_CALL_RETRY_CRON_ID",
+        "required_type": "string",
+        "source": "fresh exact Cron inventory or create-response readback",
+        "destinations": [
+          "provider_readback.arguments_template.path_variables.id",
+          "status_change.exact_canonical_arguments_templates.*.path_variables.id",
+          "disabled_canary.submission_arguments_template.path_variables.id",
+          "prestate_and_rollback.conditional_delete.arguments_template.path_variables.id"
+        ]
+      },
+      "job_id": {
+        "placeholder": "TBD_PRIVATE_CALL_RETRY_JOB_ID",
+        "required_type": "string",
+        "source": "manual-submit response",
+        "destination": "disabled_canary.terminal_job_readback.arguments_template.path_variables.id"
+      },
+      "execution_id": {
+        "placeholder": "TBD_PRIVATE_CALL_RETRY_EXECUTION_ID",
+        "required_type": "string",
+        "source": "fresh lossless Job-to-execution correlation proof",
+        "destination": "disabled_canary.execution_scoped_log_readback.arguments_template.query_params.execution_id"
+      },
+      "rules": [
+        "Resolve every identifier from fresh Development Audit readback immediately before a separately approved write.",
+        "Require the private project, Function pool, and Job function names to match the public names in this contract before binding their IDs.",
+        "Substitute every placeholder with its required type in private runtime memory; never commit, print, log, or infer an identifier.",
+        "A missing, duplicate, stale, differently named, or differently typed binding blocks the write."
+      ]
+    },
+    "create_arguments_template": {
+      "headers": {
+        "Catalyst-org": "TBD_PRIVATE_CATALYST_ORG_ID",
+        "Environment": "Development"
+      },
+      "path_variables": {
+        "projectId": "TBD_PRIVATE_CATALYST_PROJECT_ID"
+      },
+      "body": {
+        "cron_execution_type": "pre-defined",
+        "cron_name": "RevenueDeskRetry1m",
+        "cron_status": false,
+        "cron_type": "Periodic",
+        "job_detail": {
+          "hour": "0",
+          "minute": "1",
+          "second": "0",
+          "repetition_type": "every"
+        },
+        "job_meta": {
+          "job_name": "RevenueDeskRetryScan",
+          "jobpool_id": "TBD_PRIVATE_CALL_JOB_POOL_ID",
+          "jobpool_name": "RevenueDeskCallJobs",
+          "params": {
+            "mode": "retry_scan"
+          },
+          "source_type": "Cron",
+          "target_id": "TBD_PRIVATE_CALL_WORKER_FUNCTION_ID",
+          "target_name": "revenue_desk_call_worker",
+          "target_type": "Function",
+          "job_config": {
+            "number_of_retries": "0"
+          }
+        }
+      }
+    },
+    "inventory_readback": {
+      "tool": "mcp__codex_apps__sylvara_catalyst_audit_catalystbyzoho_list_all_crons",
+      "arguments_template": {
+        "headers": {
+          "Catalyst-org": "TBD_PRIVATE_CATALYST_ORG_ID",
+          "Environment": "Development"
+        },
+        "path_variables": {
+          "projectId": "TBD_PRIVATE_CATALYST_PROJECT_ID"
+        }
+      },
+      "shape_status": "fresh_complete_array_item_and_pagination_proof_required_before_classification",
+      "documented_inventory_scope": "pre-defined Crons only",
+      "candidate_raw_array_path": "data",
+      "required_item_path_map": {
+        "cron_id": "data[].id",
+        "cron_name": "data[].cron_name",
+        "cron_execution_type": "data[].cron_execution_type",
+        "cron_status": "data[].cron_status"
+      },
+      "required_item_type_map": {
+        "data[].id": "lossless_exact_identifier",
+        "data[].cron_name": "string",
+        "data[].cron_execution_type": "string",
+        "data[].cron_status": "boolean"
+      },
+      "completeness_gates": [
+        "Prove that data is the complete untruncated array for the authenticated Development project; an empty, malformed, partial, capped, or pagination-ambiguous response never proves absence.",
+        "Require every item to expose a lossless ID, exact name, execution type, and status; an invalid item blocks all classification.",
+        "Because the documented inventory is pre-defined-only, independently prove that no dynamic, expression, one-time, or other execution-type Cron can collide on RevenueDeskRetry1m; if an all-type name inventory is unavailable, absent classification and create remain blocked."
+      ],
+      "classification_rules": {
+        "candidate_name": "RevenueDeskRetry1m",
+        "absent": "Complete all-type name-collision proof plus complete pre-defined inventory contains zero exact-name matches.",
+        "exact": "Exactly one lossless exact-name pre-defined match exists, its get-by-ID normalized projection equals the phase-specific canonical projection, and the closed-world exact_behavior_field_policy passes without an absent-unproven or unknown field.",
+        "drifted": "Exactly one lossless exact-name pre-defined match exists but its singular readback differs from the canonical projection or fails any closed-world behavior-field condition.",
+        "duplicate": "More than one exact-name match exists in any execution type, or cross-type collision exclusion is incomplete after any match is observed."
+      },
+      "stop_gate": "No branch may run until inventory array shape, item types, completeness, pagination behavior, and all-execution-type name-collision exclusion are proven."
+    },
+    "provider_readback": {
+      "shape_status": "fresh_audit_response_shape_proof_required_before_create_or_exact_comparison",
+      "tool": "mcp__codex_apps__sylvara_catalyst_audit_catalystbyzoho_get_cron_job_by_id",
+      "arguments_template": {
+        "headers": {
+          "Catalyst-org": "TBD_PRIVATE_CATALYST_ORG_ID",
+          "Environment": "Development"
+        },
+        "path_variables": {
+          "id": "TBD_PRIVATE_CALL_RETRY_CRON_ID",
+          "projectId": "TBD_PRIVATE_CATALYST_PROJECT_ID"
+        }
+      },
+      "exact_behavior_field_policy": {
+        "advertised_connector_body_leaf_paths": [
+          "body.cron_execution_type",
+          "body.cron_expression",
+          "body.cron_name",
+          "body.cron_status",
+          "body.cron_type",
+          "body.description",
+          "body.end_time",
+          "body.job_detail.dateInmonth",
+          "body.job_detail.days",
+          "body.job_detail.hour",
+          "body.job_detail.minute",
+          "body.job_detail.months",
+          "body.job_detail.periodicity",
+          "body.job_detail.repetition_type",
+          "body.job_detail.second",
+          "body.job_detail.skipFrequency",
+          "body.job_detail.start_date",
+          "body.job_detail.start_month",
+          "body.job_detail.start_year",
+          "body.job_detail.time_of_execution",
+          "body.job_detail.timezone",
+          "body.job_detail.week_day",
+          "body.job_detail.weeks_of_month",
+          "body.job_meta.content_type",
+          "body.job_meta.headers",
+          "body.job_meta.id",
+          "body.job_meta.is_query_param_enable",
+          "body.job_meta.job_config.number_of_retries",
+          "body.job_meta.job_config.retry_interval",
+          "body.job_meta.job_desc",
+          "body.job_meta.job_name",
+          "body.job_meta.jobpool_details.capacity.memory",
+          "body.job_meta.jobpool_details.capacity.number",
+          "body.job_meta.jobpool_details.created_by",
+          "body.job_meta.jobpool_details.created_time",
+          "body.job_meta.jobpool_details.description",
+          "body.job_meta.jobpool_details.modified_by",
+          "body.job_meta.jobpool_details.modified_time",
+          "body.job_meta.jobpool_details.name",
+          "body.job_meta.jobpool_details.parentId",
+          "body.job_meta.jobpool_details.projectId",
+          "body.job_meta.jobpool_details.type",
+          "body.job_meta.jobpool_id",
+          "body.job_meta.jobpool_name",
+          "body.job_meta.notify_url",
+          "body.job_meta.params",
+          "body.job_meta.request_body",
+          "body.job_meta.request_method",
+          "body.job_meta.source_details.details",
+          "body.job_meta.source_details.id",
+          "body.job_meta.source_details.source_name",
+          "body.job_meta.source_id",
+          "body.job_meta.source_type",
+          "body.job_meta.target_details.details",
+          "body.job_meta.target_details.id",
+          "body.job_meta.target_details.target_name",
+          "body.job_meta.target_id",
+          "body.job_meta.target_name",
+          "body.job_meta.target_type",
+          "body.job_meta.url",
+          "body.project_details"
+        ],
+        "canonical_present_leaf_paths": [
+          "body.cron_execution_type",
+          "body.cron_name",
+          "body.cron_status",
+          "body.cron_type",
+          "body.job_detail.hour",
+          "body.job_detail.minute",
+          "body.job_detail.repetition_type",
+          "body.job_detail.second",
+          "body.job_meta.job_config.number_of_retries",
+          "body.job_meta.job_name",
+          "body.job_meta.jobpool_id",
+          "body.job_meta.jobpool_name",
+          "body.job_meta.params",
+          "body.job_meta.source_type",
+          "body.job_meta.target_id",
+          "body.job_meta.target_name",
+          "body.job_meta.target_type"
+        ],
+        "canonical_absent_behavior_leaf_paths": [
+          "body.cron_expression",
+          "body.description",
+          "body.end_time",
+          "body.job_detail.dateInmonth",
+          "body.job_detail.days",
+          "body.job_detail.months",
+          "body.job_detail.periodicity",
+          "body.job_detail.skipFrequency",
+          "body.job_detail.start_date",
+          "body.job_detail.start_month",
+          "body.job_detail.start_year",
+          "body.job_detail.time_of_execution",
+          "body.job_detail.timezone",
+          "body.job_detail.week_day",
+          "body.job_detail.weeks_of_month",
+          "body.job_meta.content_type",
+          "body.job_meta.headers",
+          "body.job_meta.is_query_param_enable",
+          "body.job_meta.job_config.retry_interval",
+          "body.job_meta.job_desc",
+          "body.job_meta.jobpool_details.capacity.number",
+          "body.job_meta.notify_url",
+          "body.job_meta.request_body",
+          "body.job_meta.request_method",
+          "body.job_meta.target_details.details",
+          "body.job_meta.url"
+        ],
+        "provider_generated_identity_or_integrity_leaf_paths": [
+          "body.job_meta.id",
+          "body.job_meta.jobpool_details.capacity.memory",
+          "body.job_meta.jobpool_details.name",
+          "body.job_meta.jobpool_details.parentId",
+          "body.job_meta.jobpool_details.projectId",
+          "body.job_meta.jobpool_details.type",
+          "body.job_meta.source_details.details",
+          "body.job_meta.source_details.id",
+          "body.job_meta.source_details.source_name",
+          "body.job_meta.source_id",
+          "body.job_meta.target_details.id",
+          "body.job_meta.target_details.target_name",
+          "body.project_details"
+        ],
+        "provider_metadata_never_resent_leaf_paths": [
+          "body.job_meta.jobpool_details.created_by",
+          "body.job_meta.jobpool_details.created_time",
+          "body.job_meta.jobpool_details.description",
+          "body.job_meta.jobpool_details.modified_by",
+          "body.job_meta.jobpool_details.modified_time"
+        ],
+        "provider_readback_paths_that_must_be_proven_absent": [
+          "data.cron_expression",
+          "data.description",
+          "data.end_time",
+          "data.cron_detail.dateInmonth",
+          "data.cron_detail.days",
+          "data.cron_detail.months",
+          "data.cron_detail.periodicity",
+          "data.cron_detail.skipFrequency",
+          "data.cron_detail.start_date",
+          "data.cron_detail.start_month",
+          "data.cron_detail.start_year",
+          "data.cron_detail.time_of_execution",
+          "data.cron_detail.timezone",
+          "data.cron_detail.week_day",
+          "data.cron_detail.weeks_of_month",
+          "data.job_meta.content_type",
+          "data.job_meta.headers",
+          "data.job_meta.is_query_param_enable",
+          "data.job_meta.job_config.retry_interval",
+          "data.job_meta.job_desc",
+          "data.job_meta.jobpool_details.capacity.number",
+          "data.job_meta.notify_url",
+          "data.job_meta.request_body",
+          "data.job_meta.request_method",
+          "data.job_meta.target_details.details",
+          "data.job_meta.url"
+        ],
+        "provider_generated_exact_relations": [
+          "data.id must losslessly equal the bound Cron ID and the get-by-ID request path ID.",
+          "data.project_details, when scalar, or its shape-proven ID member must losslessly equal the bound Development project ID.",
+          "data.job_meta.id must be a lossless stable persisted Job-definition ID; it is not a submitted execution Job ID.",
+          "data.cron_detail.jobId, if the proven response schema contains it, must losslessly equal data.job_meta.id and is never a submitted execution Job ID.",
+          "data.job_meta.jobpool_id and shape-proven data.job_meta.jobpool_details.id must losslessly equal the bound pool ID; pool name, type, project ID, and memory must equal RevenueDeskCallJobs, Function, the bound project ID, and 512 respectively.",
+          "data.job_meta.source_details.id and any data.job_meta.source_id must losslessly equal the bound Cron ID; source_name and details.cron_execution_type must equal RevenueDeskRetry1m and pre-defined.",
+          "data.job_meta.target_details.id and data.job_meta.target_id must losslessly equal the bound function ID; target name and type must equal revenue_desk_call_worker and Function.",
+          "Provider-created or modified audit metadata may be retained as readback evidence only; it must never be copied into a status body."
+        ],
+        "known_provider_only_paths": [
+          "data.id",
+          "data.created_by",
+          "data.created_time",
+          "data.cron_detail.jobId",
+          "data.job_meta.jobpool_details.id",
+          "data.job_meta.jobpool_details.project_details.id",
+          "data.job_meta.jobpool_details.project_details.project_name",
+          "data.job_meta.jobpool_details.project_details.project_type",
+          "data.modified_by",
+          "data.modified_time"
+        ],
+        "rules": [
+          "The four advertised-field buckets are mutually exclusive and their union must equal the complete advertised connector body leaf-path inventory before exact classification or any status mutation.",
+          "A canonical-absent field must be literally absent in a fresh shape-proven readback. Null, empty, zero, an injected default, or an omitted path whose absence was not proven is not equivalent to absence.",
+          "Every advertised field, known provider-only path, and shape variant must either materialize with its required exact value or have its absence proven by the fresh response-shape contract; an unobserved path is not evidence of absence.",
+          "Every provider-generated identity or integrity field must satisfy its exact relation, and every provider metadata field must remain readback-only.",
+          "Any unknown, unmapped, differently nested, or newly exposed key under data, cron_detail, job_meta, job_config, jobpool_details, capacity, source_details, target_details, headers, params, or request bodies blocks exact classification, create, status mutation, activation, canary acceptance, and deletion until this contract and its tests are reviewed."
+        ]
+      },
+      "documented_raw_path_map": {
+        "cron_id": "data.id",
+        "cron_execution_type": "data.cron_execution_type",
+        "cron_name": "data.cron_name",
+        "cron_status": "data.cron_status",
+        "cron_type": "data.cron_type",
+        "schedule.hour": "data.cron_detail.hour",
+        "schedule.minute": "data.cron_detail.minute",
+        "schedule.second": "data.cron_detail.second",
+        "schedule.repetition_type": "data.cron_detail.repetition_type",
+        "job.job_name": "data.job_meta.job_name",
+        "job.job_pool_id": "data.job_meta.jobpool_id",
+        "job.job_pool_name": "data.job_meta.jobpool_details.name",
+        "job.job_pool_type": "data.job_meta.jobpool_details.type",
+        "job.params": "data.job_meta.params",
+        "job.source_type": "data.job_meta.source_type",
+        "job.target_id": "data.job_meta.target_details.id",
+        "job.target_name": "data.job_meta.target_details.target_name",
+        "job.target_type": "data.job_meta.target_type",
+        "job.number_of_retries": "data.job_meta.job_config.number_of_retries"
+      },
+      "documented_raw_type_requirements": {
+        "data.id": "lossless_exact_identifier",
+        "data.cron_status": "boolean",
+        "data.cron_detail.hour": "number",
+        "data.cron_detail.minute": "number",
+        "data.cron_detail.second": "number",
+        "data.job_meta.jobpool_id": "lossless_exact_identifier",
+        "data.job_meta.params": "object",
+        "data.job_meta.target_details.id": "lossless_exact_identifier",
+        "data.job_meta.job_config.number_of_retries": "number"
+      },
+      "expected_normalized_projection_base": {
+        "cron_id": "TBD_PRIVATE_CALL_RETRY_CRON_ID",
+        "cron_execution_type": "pre-defined",
+        "cron_name": "RevenueDeskRetry1m",
+        "cron_type": "Periodic",
+        "schedule": {
+          "hour": 0,
+          "minute": 1,
+          "second": 0,
+          "repetition_type": "every"
+        },
+        "job": {
+          "job_name": "RevenueDeskRetryScan",
+          "job_pool_id": "TBD_PRIVATE_CALL_JOB_POOL_ID",
+          "job_pool_name": "RevenueDeskCallJobs",
+          "job_pool_type": "Function",
+          "params": {
+            "mode": "retry_scan"
+          },
+          "source_type": "Cron",
+          "target_id": "TBD_PRIVATE_CALL_WORKER_FUNCTION_ID",
+          "target_name": "revenue_desk_call_worker",
+          "target_type": "Function",
+          "number_of_retries": 0
+        }
+      },
+      "expected_cron_status_by_phase": {
+        "prestate_provisioning_and_disabled_canary": false,
+        "post_activation": true,
+        "containment_and_rollback": false
+      },
+      "normalization_rules": [
+        "Require a fresh private Audit response to match every documented raw path and type before using this projection; an opaque, missing, renamed, or differently typed field blocks create and activation.",
+        "Normalize documented numeric Cron schedule and retry fields to finite nonnegative integers before exact comparison; request strings are never treated as readback strings.",
+        "Read target name and identifier only from target_details and pool name and type only from jobpool_details; request-shaped fallback fields are forbidden.",
+        "Compare private identifiers only through a lossless exact representation. An unsafe JSON number or any ambiguous conversion blocks comparison.",
+        "After normalization and private binding substitution, compose expected_normalized_projection_base with the exact phase-specific cron_status and require deep equality plus a passing exact_behavior_field_policy."
+      ],
+      "forbidden_unproven_request_shaped_paths": [
+        "data.job_detail",
+        "data.job_meta.jobpool_name",
+        "data.job_meta.target_id",
+        "data.job_meta.target_name"
+      ],
+      "stop_gate": "If fresh Audit shape proof or lossless execution identity is unavailable, perform no create, update, activation, canary, or deletion and preserve mode-first containment."
+    },
+    "status_change": {
+      "shape_status": "fresh_connector_status_schema_proof_required_before_first_use",
+      "tool": "mcp__codex_apps__sylvara_catalyst_changes_catalystbyzoho_update_cron_job_status",
+      "advertised_connector_shape": "headers plus path_variables with Cron and project IDs plus the complete Cron body",
+      "official_status_only_shape": "Cron ID plus cron_status",
+      "full_body_safety_gate": {
+        "execution_ready": false,
+        "required_contract": "provider_readback.exact_behavior_field_policy",
+        "prerequisites": [
+          "Fresh read-only evidence must prove the connector issues the provider's status-only PATCH or otherwise prove nonreplacement semantics; never infer this from the tool name or description.",
+          "The exact Cron must pass the closed-world advertised-field inventory, every canonical-absent field must be proven absent, every provider identity relation must match, and no unknown field may exist.",
+          "If the connector can replace configuration from the advertised full body, these canonical templates are not executable because they intentionally omit provider-generated identity and readback-only metadata; stop for a new reviewed packet instead of reconstructing a body."
+        ],
+        "unproven_action": "keep DEPLOYMENT_MODE=dark, perform no status write, preserve the Cron definition, record Cron containment as unproven, and stop"
+      },
+      "exact_canonical_arguments_templates": {
+        "disable": {
+          "headers": {
+            "Catalyst-org": "TBD_PRIVATE_CATALYST_ORG_ID",
+            "Environment": "Development"
+          },
+          "path_variables": {
+            "id": "TBD_PRIVATE_CALL_RETRY_CRON_ID",
+            "projectId": "TBD_PRIVATE_CATALYST_PROJECT_ID"
+          },
+          "body": {
+            "cron_execution_type": "pre-defined",
+            "cron_name": "RevenueDeskRetry1m",
+            "cron_status": false,
+            "cron_type": "Periodic",
+            "job_detail": {
+              "hour": "0",
+              "minute": "1",
+              "second": "0",
+              "repetition_type": "every"
+            },
+            "job_meta": {
+              "job_name": "RevenueDeskRetryScan",
+              "jobpool_id": "TBD_PRIVATE_CALL_JOB_POOL_ID",
+              "jobpool_name": "RevenueDeskCallJobs",
+              "params": {
+                "mode": "retry_scan"
+              },
+              "source_type": "Cron",
+              "target_id": "TBD_PRIVATE_CALL_WORKER_FUNCTION_ID",
+              "target_name": "revenue_desk_call_worker",
+              "target_type": "Function",
+              "job_config": {
+                "number_of_retries": "0"
+              }
+            }
+          }
+        },
+        "enable": {
+          "headers": {
+            "Catalyst-org": "TBD_PRIVATE_CATALYST_ORG_ID",
+            "Environment": "Development"
+          },
+          "path_variables": {
+            "id": "TBD_PRIVATE_CALL_RETRY_CRON_ID",
+            "projectId": "TBD_PRIVATE_CATALYST_PROJECT_ID"
+          },
+          "body": {
+            "cron_execution_type": "pre-defined",
+            "cron_name": "RevenueDeskRetry1m",
+            "cron_status": true,
+            "cron_type": "Periodic",
+            "job_detail": {
+              "hour": "0",
+              "minute": "1",
+              "second": "0",
+              "repetition_type": "every"
+            },
+            "job_meta": {
+              "job_name": "RevenueDeskRetryScan",
+              "jobpool_id": "TBD_PRIVATE_CALL_JOB_POOL_ID",
+              "jobpool_name": "RevenueDeskCallJobs",
+              "params": {
+                "mode": "retry_scan"
+              },
+              "source_type": "Cron",
+              "target_id": "TBD_PRIVATE_CALL_WORKER_FUNCTION_ID",
+              "target_name": "revenue_desk_call_worker",
+              "target_type": "Function",
+              "job_config": {
+                "number_of_retries": "0"
+              }
+            }
+          }
+        }
+      },
+      "rules": [
+        "Prove which advertised status body shape the connector actually accepts before the first status write; do not probe by mutation.",
+        "Use the full-body template only after exact canonical readback and the complete exact_behavior_field_policy prove every behavior, side-effect, identity, absent, and unknown-field condition and read-only evidence proves nonreplacement status semantics.",
+        "Never use the canonical full-body template to disable a drifted or duplicate Cron because it could overwrite predecessor state.",
+        "If a safe status-only shape is not proven for drifted or duplicate prestate, keep DEPLOYMENT_MODE=dark, preserve the Cron definitions, record disabled-Cron containment as unproven, and stop."
+      ]
+    },
+    "prestate_and_rollback": {
+      "contained_function_configuration": {
+        "function_name": "revenue_desk_call_worker",
+        "variable": "DEPLOYMENT_MODE",
+        "contained_value": "dark",
+        "activation_value": "active",
+        "development_dark_effect": "intentional fail-closed configuration rejection before SDK initialization",
+        "gateway_configuration_mutation_authorized": false
+      },
+      "mode_first_containment": [
+        "Set DEPLOYMENT_MODE=dark on revenue_desk_call_worker only and independently read back the exact worker configuration before any Cron create, update, disable, activation, rollback, or deletion; do not change revenue_desk_call_gateway configuration under this contract.",
+        "Use status_change to disable a same-name Cron and read back cron_status=false only after its safe connector shape is proven; otherwise retain worker mode dark, record Cron containment as unproven, and stop before another mutation.",
+        "Drain every known or newly discovered associated Job to an independently read-back terminal state; if execution inventory is incomplete, drain is unproven and activation, mutation, or deletion stops."
+      ],
+      "job_drain": {
+        "accepted_job_id_sources": [
+          {
+            "surface": "manual Cron submit response",
+            "documented_path": "data.job_id",
+            "fresh_shape_proof_required": true
+          },
+          {
+            "surface": "provider-complete Cron execution history",
+            "documented_path": null,
+            "status": "unproven_until_a_fresh_lossless_execution_history_shape_is_available"
+          }
+        ],
+        "forbidden_job_id_sources": [
+          "Cron create response data.id",
+          "Cron resource data.id",
+          "cron_detail.jobId",
+          "Job metadata, pool, target, or function IDs"
+        ],
+        "readback_tool": "mcp__codex_apps__sylvara_catalyst_audit_catalystbyzoho_get_job_by_id",
+        "terminal_readback_required": true,
+        "complete_execution_inventory_required": true,
+        "unknown_or_nonterminal_action": "keep the worker mode dark, preserve every proven Cron status and definition, record Cron containment and Job drain as unproven, and stop"
+      },
+      "prestate_branches": {
+        "absent": "After mode-first containment, fresh Audit response-shape proof, and exact private binding, create the exact disabled definition once and require normalized exact provider readback.",
+        "exact": "Perform no create or update; preserve the one exact Cron disabled and repeat exact provider readback.",
+        "drifted": "Keep the worker mode dark; only with proven safe status shape disable and read back the one same-name Cron. Otherwise record Cron containment unproven. Drain only proven Job IDs, preserve the predecessor definition privately, and stop for separately scoped remediation.",
+        "duplicate": "Keep the worker mode dark; only with proven safe status shape disable and read back every same-name Cron. Otherwise record Cron containment unproven. Drain only proven Job IDs, preserve all definitions privately, and stop without selecting or deleting a winner."
+      },
+      "rollback_branches": {
+        "created_from_absent": "After mode-first containment and Job drain, delete only when the fresh live packet explicitly authorizes deletion of the exact packet-created Cron ID as conditional rollback; otherwise preserve it disabled.",
+        "preexisting_exact": "Do not delete or replace it; preserve the exact predecessor disabled and read it back again.",
+        "drifted_or_duplicate": "Do not update, consolidate, or delete under this contract. Preserve every affected definition; if safe status shape is unavailable, keep the worker mode dark and record Cron containment unproven until fresh exact remediation and deletion authority exists.",
+        "ambiguous_create": "Re-list through the complete inventory contract, classify every same-name result as duplicate prestate, drain only proven Job IDs, and perform no retry or deletion without fresh exact authority; if safe status shape is unavailable, record Cron containment unproven."
+      },
+      "conditional_delete": {
+        "authorized_by_this_contract": false,
+        "tool": "mcp__codex_apps__sylvara_catalyst_changes_catalystbyzoho_delete_cron_job",
+        "arguments_template": {
+          "headers": {
+            "Catalyst-org": "TBD_PRIVATE_CATALYST_ORG_ID",
+            "Environment": "Development"
+          },
+          "path_variables": {
+            "id": "TBD_PRIVATE_CALL_RETRY_CRON_ID",
+            "projectId": "TBD_PRIVATE_CATALYST_PROJECT_ID"
+          }
+        },
+        "destructive_effect": "Permanently deletes the exact Cron and all associated execution history; the operation cannot be undone.",
+        "prerequisites": [
+          "A fresh live packet must explicitly authorize conditional deletion of the exact packet-created Cron ID after absent prestate; repository approval and this contract do not authorize it.",
+          "Mode-first containment and exact disabled Cron readback must succeed through a proven safe status shape.",
+          "Provider-complete execution inventory and terminal drain must be proven, and required sanitized private evidence must be preserved before history is destroyed."
+        ],
+        "success_readback": [
+          "Re-run the complete all-execution-type name-collision and pre-defined inventory contract and require the exact Cron ID and name to be absent.",
+          "A fresh get-by-ID must return the provider's shape-proven not-found result for the exact Cron ID; an opaque failure is not deletion proof."
+        ],
+        "success_readback_contracts": {
+          "inventory": {
+            "tool": "mcp__codex_apps__sylvara_catalyst_audit_catalystbyzoho_list_all_crons",
+            "arguments_template": {
+              "headers": {
+                "Catalyst-org": "TBD_PRIVATE_CATALYST_ORG_ID",
+                "Environment": "Development"
+              },
+              "path_variables": {
+                "projectId": "TBD_PRIVATE_CATALYST_PROJECT_ID"
+              }
+            },
+            "required_result": "complete pre-defined inventory plus separate all-execution-type proof contains neither the exact Cron ID nor RevenueDeskRetry1m"
+          },
+          "resource": {
+            "tool": "mcp__codex_apps__sylvara_catalyst_audit_catalystbyzoho_get_cron_job_by_id",
+            "arguments_template": {
+              "headers": {
+                "Catalyst-org": "TBD_PRIVATE_CATALYST_ORG_ID",
+                "Environment": "Development"
+              },
+              "path_variables": {
+                "id": "TBD_PRIVATE_CALL_RETRY_CRON_ID",
+                "projectId": "TBD_PRIVATE_CATALYST_PROJECT_ID"
+              }
+            },
+            "required_result": "fresh shape-proven provider not-found result for the exact Cron ID"
+          }
+        },
+        "ambiguous_outcome": "Never retry deletion. Preserve DEPLOYMENT_MODE=dark, re-run both independent readbacks for the exact ID and name, retain all remaining definitions and evidence, and stop for fresh authority if absence is not proven."
+      },
+      "deletion_authorized_by_this_contract": false
+    },
+    "disabled_canary": {
+      "acceptance_status": "blocked_until_lossless_job_to_execution_id_binding_is_proven",
+      "live_action_authorized_by_this_contract": false,
+      "canary_scope": "worker_dark_containment_only_not_retry_scan_business_behavior",
+      "required_worker_mode": "dark",
+      "required_cron_status": false,
+      "submission_tool": "mcp__codex_apps__sylvara_catalyst_changes_catalystbyzoho_submit_cron_job",
+      "submission_arguments_template": {
+        "headers": {
+          "Catalyst-org": "TBD_PRIVATE_CATALYST_ORG_ID",
+          "Environment": "Development"
+        },
+        "path_variables": {
+          "id": "TBD_PRIVATE_CALL_RETRY_CRON_ID",
+          "projectId": "TBD_PRIVATE_CATALYST_PROJECT_ID"
+        },
+        "body": {
+          "job_name": "RevenueDeskRetryScan",
+          "jobpool_id": "TBD_PRIVATE_CALL_JOB_POOL_ID",
+          "jobpool_name": "RevenueDeskCallJobs",
+          "params": {
+            "mode": "retry_scan"
+          },
+          "source_type": "Cron",
+          "target_id": "TBD_PRIVATE_CALL_WORKER_FUNCTION_ID",
+          "target_name": "revenue_desk_call_worker",
+          "target_type": "Function",
+          "job_config": {
+            "number_of_retries": "0"
+          }
+        }
+      },
+      "terminal_job_readback": {
+        "tool": "mcp__codex_apps__sylvara_catalyst_audit_catalystbyzoho_get_job_by_id",
+        "arguments_template": {
+          "headers": {
+            "Catalyst-org": "TBD_PRIVATE_CATALYST_ORG_ID",
+            "Environment": "Development"
+          },
+          "path_variables": {
+            "id": "TBD_PRIVATE_CALL_RETRY_JOB_ID",
+            "projectId": "TBD_PRIVATE_CATALYST_PROJECT_ID"
+          }
+        },
+        "shape_status": "fresh_audit_job_meta_details_shape_terminal_value_and_execution_correlation_required",
+        "documented_raw_paths": {
+          "job_id": "data.job_id",
+          "job_status": "data.job_status",
+          "job_metadata_root": "data.job_meta_details",
+          "job_name": "data.job_meta_details.job_name",
+          "job_pool_id": "data.job_meta_details.jobpool_id",
+          "job_pool_name": "data.job_meta_details.jobpool_details.name",
+          "params": "data.job_meta_details.params",
+          "source_type": "data.job_meta_details.source_type",
+          "source_cron_id": "data.job_meta_details.source_details.id",
+          "source_cron_name": "data.job_meta_details.source_details.source_name",
+          "source_cron_execution_type": "data.job_meta_details.source_details.details.cron_execution_type",
+          "target_id": "data.job_meta_details.target_details.id",
+          "target_name": "data.job_meta_details.target_details.target_name",
+          "target_type": "data.job_meta_details.target_type",
+          "number_of_retries": "data.job_meta_details.job_config.number_of_retries"
+        },
+        "documented_raw_type_requirements": {
+          "data.job_id": "lossless_exact_identifier",
+          "data.job_status": "string",
+          "data.job_meta_details.jobpool_id": "lossless_exact_identifier",
+          "data.job_meta_details.params": "object",
+          "data.job_meta_details.source_details.id": "lossless_exact_identifier",
+          "data.job_meta_details.target_details.id": "lossless_exact_identifier",
+          "data.job_meta_details.job_config.number_of_retries": "number"
+        },
+        "documented_terminal_success_value": "SUCCESS",
+        "expected_normalized_job_projection_template": {
+          "job_id": "TBD_PRIVATE_CALL_RETRY_JOB_ID",
+          "job_status": "SUCCESS",
+          "job_name": "RevenueDeskRetryScan",
+          "job_pool_id": "TBD_PRIVATE_CALL_JOB_POOL_ID",
+          "job_pool_name": "RevenueDeskCallJobs",
+          "params": {
+            "mode": "retry_scan"
+          },
+          "source_type": "Cron",
+          "source_cron_id": "TBD_PRIVATE_CALL_RETRY_CRON_ID",
+          "source_cron_name": "RevenueDeskRetry1m",
+          "source_cron_execution_type": "pre-defined",
+          "target_id": "TBD_PRIVATE_CALL_WORKER_FUNCTION_ID",
+          "target_name": "revenue_desk_call_worker",
+          "target_type": "Function",
+          "number_of_retries": 0
+        },
+        "submission_identity_binding": {
+          "manual_submit_response_job_id_path": "data.job_id",
+          "required_equalities": [
+            "The lossless manual-submit response data.job_id must equal TBD_PRIVATE_CALL_RETRY_JOB_ID, the get-by-ID request path ID, and the get-by-ID response data.job_id.",
+            "The readback source_type must equal Cron, and source_details.id, source_name, and details.cron_execution_type must exactly equal the submitted Cron ID, RevenueDeskRetry1m, and pre-defined.",
+            "A Job reached by a different ID or attributed only by pool, target, parameters, name, or time window is not canary evidence."
+          ]
+        },
+        "metadata_path_map": "documented_raw_paths_require_fresh_shape_proof_and_exact_normalized_comparison",
+        "missing_or_ambiguous_metadata_action": "keep the worker mode dark and Cron disabled and stop without claiming canary acceptance",
+        "terminal_readback_required": true
+      },
+      "execution_correlation": {
+        "documented_job_response_execution_id_path": null,
+        "status": "blocked_until_a_lossless_job_to_execution_id_binding_is_proven",
+        "required_for_canary_acceptance": true,
+        "time_window_or_unscoped_log_fallback_allowed": false
+      },
+      "execution_scoped_log_readback": {
+        "tool": "mcp__codex_apps__sylvara_catalyst_audit_catalystbyzoho_get_logs",
+        "arguments_template": {
+          "headers": {
+            "Catalyst-org": "TBD_PRIVATE_CATALYST_ORG_ID",
+            "Environment": "Development"
+          },
+          "path_variables": {
+            "projectId": "TBD_PRIVATE_CATALYST_PROJECT_ID"
+          },
+          "query_params": {
+            "execution_id": "TBD_PRIVATE_CALL_RETRY_EXECUTION_ID",
+            "resource_list": "TBD_PRIVATE_CALL_WORKER_FUNCTION_ID",
+            "logType": "application",
+            "level": "ERROR",
+            "search": "revenue_desk_worker_failed",
+            "timezone": "UTC"
+          }
+        },
+        "required_exact_event": "revenue_desk_worker_failed",
+        "required_exact_error_code": "INVALID_RUNTIME_CONFIGURATION"
+      },
+      "no_io_conclusion": {
+        "classification": "inference_only_not_provider_io_telemetry",
+        "basis": [
+          "exact deployed-archive pullback parity to the reviewed source",
+          "the reviewed Development-plus-dark code path rejects configuration before Job parameter inspection, SDK initialization, Data Store, Mail, CRM dispatch, or Retell access"
+        ],
+        "provider_io_absence_directly_observed": false
+      }
+    },
+    "activation": {
+      "separate_development_approval_required": true,
+      "mode_before_cron_status": true,
+      "rules": [
+        "Keep the worker mode dark and Cron disabled through provisioning, exact definition readback, and any separately approved containment canary.",
+        "Do not treat the containment canary as retry_scan business-behavior acceptance.",
+        "Activate only after the worker's separate datastore, CRM-summary compatibility, notification, reconciliation, and rollback gates pass.",
+        "Set DEPLOYMENT_MODE=active on revenue_desk_call_worker only and independently read back the exact worker configuration before enabling the Cron; then immediately read back the exact active Cron definition.",
+        "On any mismatch or ambiguous response, return to mode-first containment and stop without retrying."
+      ]
+    }
+  },
+  "private_modes": {
+    "process_event": ["mode", "event_key"],
+    "retry_scan": ["mode"],
+    "rebuild_report": ["mode", "deployment_id"],
+    "reconcile_deployment": ["mode", "deployment_id"]
+  },
+  "activation_gate": [
+    "Deploy only an isolated artifact stamped with the selected final-main SHA.",
+    "Materialize the gateway file dependency with npm ci --ignore-scripts --install-links in the staged worker directory.",
+    "Satisfy the exact provider-native Cron prestate, private-binding, normalized-readback, containment, Job-drain, and rollback contract.",
+    "Keep the worker mode dark and the Cron disabled until a separately authorized Development workflow passes the remaining worker acceptance gates."
+  ],
+  "rollback": "Apply mode-first worker containment, disable and read back every affected Cron, drain associated Jobs, preserve durable rows and private predecessor evidence, and follow the exact rollback branch without inferring deletion authority."
+}

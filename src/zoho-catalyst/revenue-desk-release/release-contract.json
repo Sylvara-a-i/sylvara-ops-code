@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "manifest_schema_version": 2,
+  "release_kind": "revenue_desk_seven_function_release",
+  "status": "canonical-seven-function-release-boundary",
+  "functions": [
+    {
+      "name": "revenue_leak_test_request_form",
+      "source_root": "src/zoho-catalyst/revenue-leak-test-request-form/functions/revenue_leak_test_request_form",
+      "revision_stamp_target": "revenue_leak_test_request_form"
+    },
+    {
+      "name": "revenue_leak_test_setup_form",
+      "source_root": "src/zoho-catalyst/revenue-leak-test-setup-form/functions/revenue_leak_test_setup_form",
+      "revision_stamp_target": "revenue_leak_test_setup_form"
+    },
+    {
+      "name": "revenue_desk_call_gateway",
+      "source_root": "src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_gateway",
+      "revision_stamp_target": "revenue_desk_call_gateway"
+    },
+    {
+      "name": "revenue_desk_call_worker",
+      "source_root": "src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_worker",
+      "revision_stamp_target": "revenue_desk_call_gateway"
+    },
+    {
+      "name": "revenue_desk_route_control",
+      "source_root": "src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_route_control",
+      "revision_stamp_target": "revenue_desk_call_gateway"
+    },
+    {
+      "name": "crm_billing_orchestrator",
+      "source_root": "src/zoho-catalyst/crm-billing-orchestrator/functions/crm_billing_orchestrator",
+      "revision_stamp_target": "crm_billing_orchestrator"
+    },
+    {
+      "name": "analytics_sync",
+      "source_root": "src/zoho-catalyst/revenue-desk-analytics/functions/analytics_sync",
+      "revision_stamp_target": "analytics_sync"
+    }
+  ],
+  "job_pools": [
+    "RevenueDeskCallJobs",
+    "RevenueDeskAnalyticsJobs"
+  ],
+  "tables": [
+    "RevenueDeskDeployments",
+    "RevenueDeskConfigurationVersions",
+    "RevenueDeskEventReceipts",
+    "RevenueDeskCalls",
+    "RevenueDeskNotifications",
+    "RevenueLeakTestRequestFormSessions",
+    "Form2SessionsV3Runtime",
+    "Form2PrefillsV3",
+    "Form2SubmissionsV3",
+    "Form2VerificationProofsV3",
+    "CRMBillingOperations",
+    "AnalyticsSyncCheckpoints",
+    "AnalyticsSyncOutbox"
+  ],
+  "contract_files": [
+    "src/zoho-catalyst/revenue-desk-release/release-contract.json",
+    "docs/product/free-revenue-leak-test-release-contract.json",
+    "src/zoho-forms/free-revenue-leak-test/forms-manifest.json",
+    "src/zoho-catalyst/development-function-inventory.json",
+    "src/zoho-catalyst/revenue-desk-call-runtime/config/datastore-schema.json",
+    "src/zoho-catalyst/revenue-leak-test-request-form/config/datastore-schema.json",
+    "src/zoho-catalyst/revenue-leak-test-setup-form/config/datastore-schema.json",
+    "src/zoho-catalyst/crm-billing-orchestrator/config/datastore-schema.json",
+    "src/zoho-catalyst/revenue-desk-analytics/config/datastore-schema.json"
+  ],
+  "environment_modes": {
+    "Development": "synthetic-only",
+    "Production": "dark"
+  },
+  "production_invariants": {
+    "traffic_enabled": false,
+    "routes_active": false,
+    "schedules_active": false,
+    "retell_bindings_active": false,
+    "legacy_retell_assets_callable": false
+  }
+}

@@ -1,0 +1,18 @@
+# RevenueLeakTestSetupForm Instructions
+
+These rules apply to the proposed Zoho Forms `RevenueLeakTestSetupForm` handler.
+
+- Production remains code-blocked. A merge, pipeline build, or Development test does not authorize Production.
+- `RevenueLeakTestRequestForm` and `RevenueLeakTestSetupForm` target the existing Retell Catalyst project in Development, but they remain separate functions with separate routes, tables, Connections, variables, artifacts, and rollback paths. Deploy only `revenue_leak_test_setup_form`; never use an unscoped command that can change another Retell-project resource.
+- The Retell Development table copies have initial readback evidence. The two Setup Form CRM Connections were read back as Connected with the exact approved scopes on 2026-08-23, but their CRM-organization binding and runtime behavior remain unverified. The legacy project remains live under its former Form 2 name, and the function, routes, variables, pipeline, and Forms callers have not been cut over. Do not delete or disable the legacy project until replacement deployment and the explicit row disposition are proven.
+- Keep every Retell-target Form 2 route disabled until the Catalyst email-OTP proof path, additive version-3 stores, and all six routes have independent Development readback. CAPTCHA may be optional bot mitigation but is not identity proof. Native Forms UI configuration alone is not server proof. SMS is outside the approved workflow and must not be configured.
+- Never place CRM record IDs, contact data, business data, configuration values, or the real setup token in the Form URL. The setup token is fragment-only and exchanged once through same-origin `POST`; Zoho Forms receives only the separate approximately ten-minute prefill handle. Never log either bearer.
+- Verify the exact route, JSON content type, and route-specific shared header before parsing business fields. Bound every inbound and outbound body and operation.
+- Store only journey-token, prefill-handle, binding, and submission HMACs plus minimum restricted record context. Raw tokens, handles, Forms bodies, CRM responses, headers, and PII must not be stored or logged.
+- Bind every submission server-side to one non-secret `prefillId`, immutable configuration revision, exact journey/record/form/stage identity, and its three CRM `Modified_Time` values. The setup token and prefill handle are not submission fields. A stale or reused revision must fail closed.
+- Claim the immutable Forms submission identity with a unique Data Store key before CRM mutation. Unknown duplicate or timeout outcomes require reconciliation.
+- Apply Contact, Account, and Deal changes as one ordered CRM Composite request with rollback on failure. Put Deal last so its workflow observes complete related state.
+- Lock Business Email. Reject Mobile changes until an independently approved reverification flow exists. Preserve original request, approved route, duration, call-limit, and scope-version fields.
+- Do not send Form 2 to Zoho Sign. Treat `Authorized_Representative_Confirmed` and `Authority_Confirmed_At` only as the approved checkbox attestation for Form 2. They do not authorize phone routing or go-live; that requires the separate explicit CRM go-live approval.
+- Require independent CRM readback before acknowledging success. Never retry an ambiguous mutation without resolving current CRM and receipt state first.
+- Use synthetic fixtures only. Run `npm run ci`, then the repository verifier before handoff.

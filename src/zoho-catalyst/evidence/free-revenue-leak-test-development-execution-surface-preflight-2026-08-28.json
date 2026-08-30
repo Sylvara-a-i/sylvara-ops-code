@@ -1,0 +1,147 @@
+{
+  "schema_version": 1,
+  "record_type": "sanitized_free_revenue_leak_test_development_execution_surface_preflight",
+  "observed_at": "2026-08-28",
+  "environment": "Development",
+  "repository_head_at_observation": "0af87a26e2103ddaf4178bf03ebfa67b972cea24",
+  "source_revision": "288a93c7773acaf82fab277702e6b4e3d7354564",
+  "status": "canonical_table_schema_converged_execution_and_caller_bindings_blocking",
+  "outcome": "canonical_execution_surfaces_and_required_table_schemas_present_gateway_and_canonical_schedules_dark_callable_surface_unproven",
+  "historical_evidence": {
+    "release_head_convergence_record_preserved_without_rewrite": true,
+    "record": "src/zoho-catalyst/evidence/free-revenue-leak-test-development-pr-head-convergence-2026-08-28-288a93c.json",
+    "authority_limit": "The release-head record remains the source, archive, and configuration convergence authority; this record adds only later read-only execution-surface and table-schema evidence."
+  },
+  "evidence_boundary": {
+    "source": "Sylvara Catalyst Audit connector",
+    "project_and_environment_identity_verified_privately": true,
+    "connector_first": true,
+    "browser_fallback_used": false,
+    "direct_rest_or_shell_api_used": false,
+    "writes_or_runtime_invocations_performed": false,
+    "table_rows_read": false,
+    "customer_caller_financial_or_production_data_read": false,
+    "retell_provider_or_agent_action_performed": false
+  },
+  "function_gateway_cron_and_pool_readback": {
+    "observed_function_count": 12,
+    "canonical_function_count": 6,
+    "canonical_functions": [
+      "crm_billing_orchestrator",
+      "revenue_leak_test_request_form",
+      "revenue_leak_test_setup_form",
+      "revenue_desk_call_gateway",
+      "revenue_desk_call_worker",
+      "analytics_sync"
+    ],
+    "all_canonical_functions_present_exactly_once": true,
+    "api_gateway_enabled": false,
+    "api_gateway_disabled_positive_signal": true,
+    "route_payload_returned_while_disabled": false,
+    "current_route_count_claimed": false,
+    "observed_cron_count": 1,
+    "observed_cron_disabled": true,
+    "observed_cron_execution_type": "pre-defined",
+    "canonical_cron_name_pool_or_function_reference_count": 0,
+    "cron_detail_readback_succeeded": true,
+    "provider_complete_cron_history_proven": false,
+    "observed_job_pool_count": 4,
+    "canonical_job_pool_count": 2,
+    "canonical_job_pools": [
+      "RevenueDeskCallJobs",
+      "RevenueDeskAnalyticsJobs"
+    ],
+    "all_canonical_job_pools_present_exactly_once": true,
+    "canonical_job_pool_detail_readbacks_succeeded": 2,
+    "expected_function_targets_exposed_by_pool_details": false,
+    "job_pool_function_target_binding_proven": false,
+    "all_jobs_or_execution_inventory_available": false,
+    "job_to_execution_correlation_proven": false,
+    "direct_caller_inventory_available": false,
+    "webhook_inventory_available": false
+  },
+  "table_schema_readback": {
+    "observed_table_count": 35,
+    "canonical_table_count": 13,
+    "all_canonical_tables_present_exactly_once": true,
+    "all_canonical_column_readbacks_succeeded": true,
+    "required_name_type_mandatory_unique_and_max_length_subsets_exact": true,
+    "repository_required_application_schema_projection_match": true,
+    "unexpected_application_schema_mismatch_count": 0,
+    "missing_required_columns": 0,
+    "type_mismatches": 0,
+    "mandatory_mismatches": 0,
+    "unique_mismatches": 0,
+    "max_length_mismatches": 0,
+    "provider_system_column_count_excluded_per_table": 4,
+    "tables_with_no_noncontract_application_columns": [
+      "RevenueDeskDeployments",
+      "RevenueDeskConfigurationVersions",
+      "RevenueDeskEventReceipts",
+      "RevenueDeskCalls",
+      "RevenueDeskNotifications",
+      "RevenueLeakTestRequestFormSessions",
+      "Form2SessionsV3Runtime",
+      "Form2PrefillsV3",
+      "Form2SubmissionsV3",
+      "Form2VerificationProofsV3",
+      "CRMBillingOperations"
+    ],
+    "additive_legacy_columns_retained": {
+      "AnalyticsSyncCheckpoints": 18,
+      "AnalyticsSyncOutbox": 28
+    },
+    "analytics_additive_legacy_columns_treated_as_schema_failure": false,
+    "canonical_table_details_readbacks_succeeded": 13,
+    "row_counts_exposed_by_table_detail": false,
+    "row_emptiness_revalidated": false,
+    "row_content_or_pagination_token_retrieved": false
+  },
+  "table_access_readback": {
+    "permission_readbacks_succeeded": 13,
+    "scope_readbacks_succeeded": 13,
+    "explicit_public_or_anonymous_marker_observed": false,
+    "public_or_anonymous_access_proven_absent": false,
+    "limitation": "Role permission and scope metadata do not prove every external endpoint or anonymous access boundary."
+  },
+  "runtime_and_external_action_boundary": {
+    "operator_function_invocations": 0,
+    "operator_job_invocations": 0,
+    "operator_route_invocations": 0,
+    "operator_cron_submissions": 0,
+    "synthetic_development_lifecycle_executed": false,
+    "retell_agent_changed": false,
+    "retell_agent_tested": false,
+    "retell_agent_simulated": false,
+    "customer_record_action_performed": false,
+    "billing_payment_or_charge_action_performed": false,
+    "production_change_or_invocation_performed": false
+  },
+  "release_classification": {
+    "canonical_table_presence_and_required_schema": "proven_current",
+    "development_runtime_acceptance": "not_proven",
+    "job_pool_function_target_binding": "not_proven",
+    "direct_caller_and_webhook_inventory": "not_proven",
+    "provider_complete_execution_absence": "not_proven",
+    "callable_surface_inertness_proven": false,
+    "retell_agent_testing_readiness": "not_ready"
+  },
+  "remaining_gates": [
+    "obtain a provider-verifiable canonical Job-pool-to-function target binding",
+    "obtain complete direct-caller, webhook, Job, and execution inventory with stable identifiers and correlation",
+    "prove the disabled-first canonical retry schedule before any Job submission",
+    "perform separately approved synthetic non-Retell runtime acceptance and exact durable readback",
+    "reconcile rows, migration, isolation, and rollback without retrieving or publishing private row content",
+    "keep API Gateway disabled until the separately approved ingress and Retell task gates are complete"
+  ],
+  "future_live_change_authorized_by_this_record": false,
+  "disclosure_controls": {
+    "private_provider_project_environment_function_table_pool_cron_or_route_identifier_values_included": false,
+    "private_runtime_locator_or_endpoint_values_included": false,
+    "credential_key_token_or_secret_values_included": false,
+    "operator_identity_included": false,
+    "raw_provider_payloads_errors_logs_or_responses_included": false,
+    "customer_caller_or_financial_data_included": false,
+    "retell_identifier_prompt_phone_or_runtime_values_included": false
+  }
+}

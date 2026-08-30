@@ -11,12 +11,28 @@ SCRIPT = ROOT / "tools" / "verify.ps1"
 WRAPPER = ROOT / "tools" / "verify.cmd"
 TOOLS_README = ROOT / "tools" / "README.md"
 ROOT_README = ROOT / "README.md"
+WORKFLOW = ROOT / ".github" / "workflows" / "repo-checks.yml"
+DEPENDABOT = ROOT / ".github" / "dependabot.yml"
+NETWORK_DEPENDENT_ARTIFACT_TESTS = (
+    ROOT / "src" / "zoho-catalyst" / "billing-webhook-gateway"
+    / "test" / "artifact-builder.test.js",
+    ROOT / "src" / "zoho-catalyst" / "crm-billing-orchestrator" / "functions"
+    / "crm_billing_orchestrator" / "test" / "artifact-builder.test.js",
+    ROOT / "src" / "zoho-catalyst" / "revenue-desk-analytics" / "functions"
+    / "analytics_sync" / "test" / "artifact-builder.test.js",
+    ROOT / "src" / "zoho-catalyst" / "revenue-leak-test-request-form" / "functions"
+    / "revenue_leak_test_request_form" / "test" / "release-artifact-builder.test.js",
+    ROOT / "src" / "zoho-catalyst" / "revenue-leak-test-setup-form" / "functions"
+    / "revenue_leak_test_setup_form" / "test" / "release-artifact-builder.test.js",
+)
 
 
 class VerifyEntrypointTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.script = SCRIPT.read_text(encoding="utf-8")
+        cls.workflow = WORKFLOW.read_text(encoding="utf-8")
+        cls.dependabot = DEPENDABOT.read_text(encoding="utf-8")
 
     def test_canonical_entrypoint_and_parameter_contract_exist(self) -> None:
         self.assertTrue(SCRIPT.is_file())
@@ -36,28 +52,82 @@ class VerifyEntrypointTests(unittest.TestCase):
             ".cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
             self.script,
         )
-        self.assertIn('if ($OnWindows) { "npm.cmd" } else { "npm" }', self.script)
+        self.assertIn('Get-Command -Name "npm.cmd" -CommandType Application', self.script)
+        self.assertIn('"node_modules", "npm", "bin", "npm-cli.js"', self.script)
+        self.assertIn("$script:VerifiedNodeExecutable $script:NpmCliPath @Arguments", self.script)
 
     def test_quick_is_offline_and_all_or_bootstrap_enables_installs(self) -> None:
         self.assertIn('$useRegistry = $Bootstrap -or $Mode -eq "All"', self.script)
+        self.assertIn(
+            '$env:SYLVARA_ARTIFACT_INNER_VERIFY = "0"', self.script
+        )
+        recursion_reset = self.script.index(
+            '$env:SYLVARA_ARTIFACT_INNER_VERIFY = "0"'
+        )
         self.assertIn('if ($useRegistry) {', self.script)
         self.assertIn('"--require-hashes"', self.script)
         self.assertIn('"ci", "--ignore-scripts", "--no-audit", "--no-fund"', self.script)
         self.assertEqual(
-            7,
+            8,
             self.script.count('"ci", "--ignore-scripts", "--no-audit", "--no-fund"'),
         )
         self.assertIn('"--install-links"', self.script)
         self.assertIn('if ($Mode -eq "All") {', self.script)
         self.assertIn('"audit", "--omit=dev", "--audit-level=moderate"', self.script)
         self.assertEqual(
-            7,
+            8,
             self.script.count('"audit", "--omit=dev", "--audit-level=moderate"'),
         )
         self.assertIn('$env:npm_config_offline = "true"', self.script)
         self.assertIn('$env:npm_config_update_notifier = "false"', self.script)
+        registry_start = self.script.index('if ($useRegistry) {')
+        self.assertLess(recursion_reset, registry_start)
+        quick_start = self.script.index('} else {', registry_start)
+        dependency_check_start = self.script.index(
+            'Assert-PythonDependencies', quick_start
+        )
+        registry_branch = self.script[registry_start:quick_start]
+        quick_branch = self.script[quick_start:dependency_check_start]
+        self.assertIn(
+            '$env:SYLVARA_OFFLINE_QUICK_VERIFY = "0"', registry_branch
+        )
+        self.assertNotIn(
+            '$env:SYLVARA_OFFLINE_QUICK_VERIFY = "1"', registry_branch
+        )
+        self.assertIn(
+            '$env:SYLVARA_OFFLINE_QUICK_VERIFY = "1"', quick_branch
+        )
+        self.assertNotIn(
+            '$env:SYLVARA_OFFLINE_QUICK_VERIFY = "0"', quick_branch
+        )
         for unsafe_downloader in ("Invoke-WebRequest", "curl.exe", "Start-BitsTransfer"):
             self.assertNotIn(unsafe_downloader, self.script)
+
+    def test_network_dependent_artifact_tests_skip_only_in_quick(self) -> None:
+        direct_guard = (
+            "const artifactTest = "
+            "process.env.SYLVARA_OFFLINE_QUICK_VERIFY === {quote}1{quote} "
+            "? test.skip : test;"
+        )
+        recursive_guard = (
+            'process.env.SYLVARA_ARTIFACT_INNER_VERIFY === "1" ||\n'
+            '  process.env.SYLVARA_OFFLINE_QUICK_VERIFY === "1";\n'
+            'const artifactTest = innerVerification ? test.skip : test;'
+        )
+
+        for test_file in NETWORK_DEPENDENT_ARTIFACT_TESTS:
+            with self.subTest(test_file=test_file.relative_to(ROOT).as_posix()):
+                self.assertTrue(test_file.is_file())
+                source = test_file.read_text(encoding="utf-8")
+                self.assertEqual(1, source.count("SYLVARA_OFFLINE_QUICK_VERIFY"))
+                self.assertIn("artifactTest(", source)
+                if "SYLVARA_ARTIFACT_INNER_VERIFY" in source:
+                    self.assertIn(recursive_guard, source)
+                else:
+                    self.assertTrue(
+                        direct_guard.format(quote='"') in source
+                        or direct_guard.format(quote="'") in source
+                    )
 
     def test_every_required_check_is_owned_by_the_entrypoint(self) -> None:
         for required_fragment in (
@@ -66,11 +136,12 @@ class VerifyEntrypointTests(unittest.TestCase):
             '"-m", "unittest", "discover"',
             '"run", "ci", "--prefix", $GatewayRoot',
             '"run", "ci", "--prefix", $CrmBillingOrchestratorRoot',
-            '"run", "ci", "--prefix", $Form1ControllerRoot',
-            '"run", "ci", "--prefix", $Form2ControllerRoot',
-            '"run", "ci", "--prefix", $RetellResolverRoot',
-            '"run", "ci", "--prefix", $RetellFreeTestRoot',
-            '"run", "ci", "--prefix", $RetellFreeTestRetryRoot',
+            '"run", "ci", "--prefix", $RequestFormRoot',
+            '"run", "ci", "--prefix", $SetupFormRoot',
+            '"run", "ci", "--prefix", $RevenueDeskCallGatewayRoot',
+            '"run", "ci", "--prefix", $RevenueDeskRouteControlRoot',
+            '"run", "ci", "--prefix", $RevenueDeskCallWorkerRoot',
+            '"run", "ci", "--prefix", $RevenueDeskAnalyticsRoot',
         ):
             with self.subTest(fragment=required_fragment):
                 self.assertIn(required_fragment, self.script)
@@ -88,13 +159,16 @@ class VerifyEntrypointTests(unittest.TestCase):
                 self.assertNotIn(nonportable, self.script)
         self.assertIn("function Join-PathSegments", self.script)
         self.assertIn('$CrmBillingOrchestratorRoot = Join-PathSegments $RepoRoot @(', self.script)
-        self.assertIn('$Form1ControllerRoot = Join-PathSegments $RepoRoot @(', self.script)
-        self.assertIn('$Form2ControllerRoot = Join-PathSegments $RepoRoot @(', self.script)
-        self.assertIn('$RetellResolverRoot = Join-PathSegments $RepoRoot @(', self.script)
-        self.assertIn('$RetellFreeTestRoot = Join-PathSegments $RepoRoot @(', self.script)
-        self.assertIn('$RetellFreeTestRetryRoot = Join-PathSegments $RepoRoot @(', self.script)
-        self.assertIn('"node_modules", "retell_free_test", "package.json"', self.script)
+        self.assertIn('$RequestFormRoot = Join-PathSegments $RepoRoot @(', self.script)
+        self.assertIn('$SetupFormRoot = Join-PathSegments $RepoRoot @(', self.script)
+        self.assertIn('$RevenueDeskCallGatewayRoot = Join-PathSegments $RepoRoot @(', self.script)
+        self.assertIn('$RevenueDeskRouteControlRoot = Join-PathSegments $RepoRoot @(', self.script)
+        self.assertIn('$RevenueDeskCallWorkerRoot = Join-PathSegments $RepoRoot @(', self.script)
+        self.assertIn('$RevenueDeskAnalyticsRoot = Join-PathSegments $RepoRoot @(', self.script)
+        self.assertIn('"node_modules", "revenue_desk_call_gateway", "package.json"', self.script)
         self.assertIn('"node_modules", "zcatalyst-sdk-node", "package.json"', self.script)
+        self.assertNotIn("retell-free-test", self.script)
+        self.assertNotIn("RetellFreeTest", self.script)
         self.assertIn("function Ensure-LocalPythonEnvironment", self.script)
         self.assertIn("Get-ManagedVenvPythonCandidates", self.script)
         self.assertIn("safety-venv-cpython-3.12-x64-", self.script)
@@ -105,6 +179,44 @@ class VerifyEntrypointTests(unittest.TestCase):
             "Refusing to create a managed verification environment through a reparse-point",
             self.script,
         )
+
+    def test_revenue_desk_topology_is_fail_closed_and_exact(self) -> None:
+        self.assertIn("function Assert-RevenueDeskTopology", self.script)
+        self.assertIn("canonical_project_count -ne 1", self.script)
+        self.assertIn("final_active_function_count -ne 7", self.script)
+        for exact_fragment in (
+            "revenue_leak_test_request_form|Advanced I/O",
+            "revenue_leak_test_setup_form|Advanced I/O",
+            "revenue_desk_call_gateway|Advanced I/O",
+            "revenue_desk_route_control|Advanced I/O",
+            "revenue_desk_call_worker|Job",
+            "crm_billing_orchestrator|Advanced I/O",
+            "analytics_sync|Job",
+            "RevenueDeskCallJobs|revenue_desk_call_worker",
+            "RevenueDeskAnalyticsJobs|analytics_sync",
+        ):
+            with self.subTest(fragment=exact_fragment):
+                self.assertIn(exact_fragment, self.script)
+        self.assertIn("Assert-RevenueDeskTopology", self.script)
+
+    def test_ci_and_dependabot_use_only_the_new_revenue_desk_packages(self) -> None:
+        canonical_paths = (
+            "src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_gateway",
+            "src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_route_control",
+            "src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_worker",
+            "src/zoho-catalyst/revenue-desk-analytics/functions/analytics_sync",
+        )
+        for path in canonical_paths:
+            with self.subTest(path=path):
+                self.assertEqual(3, self.workflow.count(path))
+                self.assertEqual(1, self.dependabot.count(f"/{path}"))
+        for obsolete in (
+            "src/zoho-catalyst/retell-free-test/functions/retell_free_test",
+            "src/zoho-catalyst/retell-free-test/functions/retell_free_test_retry",
+        ):
+            with self.subTest(obsolete=obsolete):
+                self.assertNotIn(obsolete, self.workflow)
+                self.assertNotIn(obsolete, self.dependabot)
 
     def test_documentation_uses_the_canonical_command(self) -> None:
         root_readme = ROOT_README.read_text(encoding="utf-8")

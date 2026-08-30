@@ -2,9 +2,9 @@
 
 This checklist separates offline/synthetic Development, a controlled internal Development phone test, and a later prospect/Production workflow. The [legal archive](../legal-compliance/README.md) preserves a conservative historical profile but does not itself decide authorization for a particular test.
 
-Current classification is **READY FOR CONTROLLED INTERNAL PHONE TEST** for the one-number Development scope. This is readiness to begin a bounded internal phone test, not evidence that the voice test passed and not authorization for a prospect, customer, or Production route.
+Current classification is **NOT READY FOR RETELL AGENT TESTING**. No phone call, Retell simulation, prospect/customer route, or Production traffic is authorized by this checklist.
 
-Current sanitized Catalyst evidence: the exact four-table schema and App User denial, two 256 MB functions at revision `d4f5af31be310df400532641ef163c16de31066c`, 29-file source parity, a 512 MB Job pool, disabled one-minute Cron with zero platform retries, complete private configuration, verified sender, non-cacheable HTTP 200 readiness, signed inbound/event matrices, durable call/count/notification rows, manual Job execution, seven-day and practical 25-call stops, one controlled internal email with replay suppression, restored `dry_run`, and rollback readback are proven. CRM, Analytics, SMS, Production, prospect/customer traffic, and contractor forwarding remained untouched. If the final reviewed commit changes, redeploy and repeat parity/readiness before using this classification.
+The earlier four-table/two-function Development proof is historical migration evidence. Readiness now requires the exact final-main six-function and two-pool topology, canonical migration/reconciliation, CRM and Billing TEST lifecycle, both Analytics dashboards, staged cleanup, exposed-key rotation and revocation, dark-Production zero-traffic proof, rollback, and zero open P0/P1 defects under the [final release contract](../product/free-revenue-leak-test-release-contract.md).
 
 ## Safety Preconditions
 
@@ -43,7 +43,7 @@ This scope exercises source locally or in a separately authorized isolated Devel
 - [ ] Two synthetic Catalyst clients use different client/deployment/configuration-version/company/service-area/recipient/number values and the same reviewed shared agent version.
 - [ ] Each synthetic number value resolves only its own versioned deployment/configuration; this backend isolation proof does not require buying a second live Retell number.
 - [ ] All seven exact gate values and every ownership/approval/status/expiry/count invariant pass before normal intake.
-- [ ] Every known authenticated invalid, unknown, ambiguous, mismatched, inactive, expired, or exhausted resolution returns HTTP 200 with `{ "call_inbound": { "reject": true } }`, starts no agent, and creates no resolver-side write.
+- [ ] Every known authenticated invalid, unknown, ambiguous, mismatched, inactive, expired, or exhausted resolution returns HTTP 200 with `{ "call_inbound": { "reject": true } }`, starts no agent, creates no call, notification, Analytics fact, or failure row, and retains exactly one minimized replay-safe `inbound_resolution` receipt.
 - [ ] Transport/authentication/timeout/503/unavailable, malformed-response, and invalid-override cases may fall back only to the number-bound shared agent; its exact Configuration Unavailable gate collects no caller data.
 - [ ] A resolver request fails at a durable handled count of 25; processing the 25th unique handled call completes the deployment; any already-in-flight overshoot is counted and reported honestly.
 - [ ] Duplicate, delayed, reordered, malformed, and retried events preserve one immutable call binding and one canonical outcome.

@@ -11,6 +11,8 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $script:FailureExitCode = 1
+$script:VerifiedNodeExecutable = $null
+$script:NpmCliPath = $null
 
 function Join-PathSegments {
     param(
@@ -30,22 +32,40 @@ $GatewayRoot = Join-PathSegments $RepoRoot @("src", "zoho-catalyst", "billing-we
 $CrmBillingOrchestratorRoot = Join-PathSegments $RepoRoot @(
     "src", "zoho-catalyst", "crm-billing-orchestrator", "functions", "crm_billing_orchestrator"
 )
-$Form1ControllerRoot = Join-PathSegments $RepoRoot @(
-    "src", "zoho-catalyst", "form1-controller", "functions", "form1_assisted_controller"
+$RequestFormRoot = Join-PathSegments $RepoRoot @(
+    "src", "zoho-catalyst", "revenue-leak-test-request-form", "functions", "revenue_leak_test_request_form"
 )
-$Form2ControllerRoot = Join-PathSegments $RepoRoot @(
-    "src", "zoho-catalyst", "form2-controller", "functions", "form2_controller"
+$SetupFormRoot = Join-PathSegments $RepoRoot @(
+    "src", "zoho-catalyst", "revenue-leak-test-setup-form", "functions", "revenue_leak_test_setup_form"
 )
-$RetellResolverRoot = Join-PathSegments $RepoRoot @("src", "zoho-catalyst", "retell-inbound-resolver")
-$RetellFreeTestRoot = Join-PathSegments $RepoRoot @(
-    "src", "zoho-catalyst", "retell-free-test", "functions", "retell_free_test"
+$RevenueDeskCallGatewayRoot = Join-PathSegments $RepoRoot @(
+    "src", "zoho-catalyst", "revenue-desk-call-runtime", "functions", "revenue_desk_call_gateway"
 )
-$RetellFreeTestRetryRoot = Join-PathSegments $RepoRoot @(
-    "src", "zoho-catalyst", "retell-free-test", "functions", "retell_free_test_retry"
+$RevenueDeskRouteControlRoot = Join-PathSegments $RepoRoot @(
+    "src", "zoho-catalyst", "revenue-desk-call-runtime", "functions", "revenue_desk_route_control"
+)
+$RevenueDeskCallWorkerRoot = Join-PathSegments $RepoRoot @(
+    "src", "zoho-catalyst", "revenue-desk-call-runtime", "functions", "revenue_desk_call_worker"
+)
+$RevenueDeskMigrationRoot = Join-PathSegments $RepoRoot @(
+    "src", "zoho-catalyst", "revenue-desk-call-runtime", "migration"
+)
+$RevenueDeskAnalyticsRoot = Join-PathSegments $RepoRoot @(
+    "src", "zoho-catalyst", "revenue-desk-analytics", "functions", "analytics_sync"
+)
+$RevenueDeskReleaseRoot = Join-PathSegments $RepoRoot @(
+    "src", "zoho-catalyst", "revenue-desk-release"
+)
+$CrmFreeRevenueLeakTestRoot = Join-PathSegments $RepoRoot @(
+    "src", "zoho-crm", "free-revenue-leak-test"
+)
+$RevenueDeskInventoryPath = Join-PathSegments $RepoRoot @(
+    "src", "zoho-catalyst", "development-function-inventory.json"
 )
 $RequirementsPath = Join-PathSegments $RepoRoot @("tools", "safety", "requirements.txt")
 $VenvParent = Join-PathSegments $RepoRoot @(".codex-tmp")
 $VenvRoot = Join-PathSegments $VenvParent @("safety-venv")
+$NpmCacheRoot = Join-PathSegments $VenvParent @("npm-cache-node-24.19.0")
 $ManagedVenvMarker = ".sylvara-verify-venv"
 $ExpectedNodeVersion = "24.19.0"
 $OnWindows = [System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT
@@ -64,6 +84,72 @@ function Resolve-Application {
         return $null
     }
     return $command.Source
+}
+
+function Assert-ExactStringSequence {
+    param(
+        [Parameter(Mandatory = $true)][string]$Label,
+        [Parameter(Mandatory = $true)][object[]]$Actual,
+        [Parameter(Mandatory = $true)][string[]]$Expected
+    )
+
+    $actualStrings = @($Actual | ForEach-Object { [string]$_ })
+    if ($actualStrings.Count -ne $Expected.Count) {
+        throw "$Label must contain exactly $($Expected.Count) entries."
+    }
+    for ($index = 0; $index -lt $Expected.Count; $index++) {
+        if ($actualStrings[$index] -cne $Expected[$index]) {
+            throw "$Label entry $($index + 1) must be $($Expected[$index])."
+        }
+    }
+}
+
+function Assert-RevenueDeskTopology {
+    if (-not (Test-Path -LiteralPath $RevenueDeskInventoryPath -PathType Leaf)) {
+        throw "Revenue Desk function inventory is missing."
+    }
+    try {
+        $inventory = Get-Content -LiteralPath $RevenueDeskInventoryPath -Raw |
+            ConvertFrom-Json
+    } catch {
+        throw "Revenue Desk function inventory is not valid JSON."
+    }
+
+    $expectedFunctions = @(
+        "revenue_leak_test_request_form|Advanced I/O",
+        "revenue_leak_test_setup_form|Advanced I/O",
+        "revenue_desk_call_gateway|Advanced I/O",
+        "revenue_desk_route_control|Advanced I/O",
+        "revenue_desk_call_worker|Job",
+        "crm_billing_orchestrator|Advanced I/O",
+        "analytics_sync|Job"
+    )
+    $topology = $inventory.topology_decision
+    if ($topology.canonical_project_count -ne 1) {
+        throw "Revenue Desk topology must declare exactly one canonical Catalyst project."
+    }
+    if ($topology.final_active_function_count -ne 7) {
+        throw "Revenue Desk topology must declare exactly seven active functions."
+    }
+    if ($topology.separate_free_and_paid_call_stacks_allowed -ne $false) {
+        throw "Revenue Desk topology must use one shared free/paid call stack."
+    }
+    Assert-ExactStringSequence -Label "Revenue Desk active-function list" `
+        -Actual @($topology.final_active_functions) `
+        -Expected @($expectedFunctions | ForEach-Object { ($_ -split '\|', 2)[0] })
+    Assert-ExactStringSequence -Label "Revenue Desk function inventory" `
+        -Actual @($inventory.functions | ForEach-Object { "$($_.api_name)|$($_.type)" }) `
+        -Expected $expectedFunctions
+
+    Assert-ExactStringSequence -Label "Revenue Desk Function Job pools" `
+        -Actual @(
+            $inventory.function_job_pools |
+                ForEach-Object { "$($_.name)|$($_.target)" }
+        ) `
+        -Expected @(
+            "RevenueDeskCallJobs|revenue_desk_call_worker",
+            "RevenueDeskAnalyticsJobs|analytics_sync"
+        )
 }
 
 function Resolve-ExecutableValue {
@@ -90,7 +176,18 @@ function Invoke-Native {
     Write-Host "==> $Label"
     Push-Location -LiteralPath $WorkingDirectory
     try {
-        & $Executable @Arguments
+        if (
+            $null -ne $script:NpmCliPath -and
+            $null -ne $script:VerifiedNodeExecutable -and
+            [System.IO.Path]::GetFullPath($Executable) -eq
+                [System.IO.Path]::GetFullPath($script:NpmCliPath)
+        ) {
+            # npm.cmd prefers a sibling node.exe on Windows. Invoke npm's CLI with the
+            # already verified Node binary so dependency work cannot drift runtimes.
+            & $script:VerifiedNodeExecutable $script:NpmCliPath @Arguments
+        } else {
+            & $Executable @Arguments
+        }
         $exitCode = $LASTEXITCODE
     } finally {
         Pop-Location
@@ -364,12 +461,25 @@ function Assert-NodeBaseline {
 }
 
 function Resolve-Npm {
-    $name = if ($OnWindows) { "npm.cmd" } else { "npm" }
-    $npm = Resolve-Application -Name $name
-    if ($null -eq $npm) {
-        throw "$name was not found on PATH. Install npm for Node.js $ExpectedNodeVersion and retry."
+    if (-not $OnWindows) {
+        $npm = Resolve-Application -Name "npm"
+        if ($null -eq $npm) {
+            throw "npm was not found on PATH. Install npm for Node.js $ExpectedNodeVersion and retry."
+        }
+        return $npm
     }
-    return $npm
+
+    $commands = @(Get-Command -Name "npm.cmd" -CommandType Application `
+        -All -ErrorAction SilentlyContinue)
+    foreach ($command in $commands) {
+        $candidate = Join-PathSegments (Split-Path -Parent $command.Source) @(
+            "node_modules", "npm", "bin", "npm-cli.js"
+        )
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+            return (Resolve-Path -LiteralPath $candidate).Path
+        }
+    }
+    throw "npm-cli.js was not found. Install npm for Node.js $ExpectedNodeVersion and retry."
 }
 
 try {
@@ -381,17 +491,35 @@ try {
         }
         $expectedPyYaml = $Matches[1]
 
+        Assert-RevenueDeskTopology
         $python = Find-PythonRuntime
         $pythonInfo = Assert-PythonBaseline -Executable $python
         $node = Assert-NodeBaseline
         $npm = Resolve-Npm
+        $script:VerifiedNodeExecutable = $node
+        if ($OnWindows) {
+            $script:NpmCliPath = $npm
+        }
         $useRegistry = $Bootstrap -or $Mode -eq "All"
 
+        # The artifact builder sets this only for its recursive package test. A
+        # top-level verification run must not inherit it and silently skip the
+        # outer release-artifact suites.
+        $env:SYLVARA_ARTIFACT_INNER_VERIFY = "0"
+
         if ($useRegistry) {
+            $env:SYLVARA_OFFLINE_QUICK_VERIFY = "0"
             Write-Host "Registry access is enabled for hash-pinned dependency installation."
             Ensure-LocalPythonEnvironment -BasePython $python
             $python = (Resolve-Path -LiteralPath $VenvPython).Path
             $pythonInfo = Assert-PythonBaseline -Executable $python
+            if (Test-ReparsePoint -Path $NpmCacheRoot) {
+                throw "Refusing to use a linked or reparse-point npm verification cache."
+            }
+            if (-not (Test-Path -LiteralPath $NpmCacheRoot -PathType Container)) {
+                New-Item -ItemType Directory -Path $NpmCacheRoot | Out-Null
+            }
+            $env:npm_config_cache = $NpmCacheRoot
 
             Invoke-Native -Label "Install hash-pinned Python dependencies" `
                 -Executable $python -Arguments @(
@@ -411,35 +539,42 @@ try {
                     "ci", "--ignore-scripts", "--no-audit", "--no-fund",
                     "--prefix", $CrmBillingOrchestratorRoot
                 )
-            Invoke-Native -Label "Install exact Form 1 controller dependencies" `
+            Invoke-Native -Label "Install exact Revenue Leak Test Request Form dependencies" `
                 -Executable $npm -Arguments @(
                     "ci", "--ignore-scripts", "--no-audit", "--no-fund",
-                    "--prefix", $Form1ControllerRoot
+                    "--prefix", $RequestFormRoot
                 )
-            Invoke-Native -Label "Install exact Form 2 controller dependencies" `
+            Invoke-Native -Label "Install exact Revenue Leak Test Setup Form dependencies" `
                 -Executable $npm -Arguments @(
                     "ci", "--ignore-scripts", "--no-audit", "--no-fund",
-                    "--prefix", $Form2ControllerRoot
+                    "--prefix", $SetupFormRoot
                 )
-            Invoke-Native -Label "Validate exact Retell resolver package lock" `
+            Invoke-Native -Label "Install exact Revenue Desk call-gateway dependencies" `
                 -Executable $npm -Arguments @(
                     "ci", "--ignore-scripts", "--no-audit", "--no-fund",
-                    "--prefix", $RetellResolverRoot
+                    "--prefix", $RevenueDeskCallGatewayRoot
                 )
-            Invoke-Native -Label "Install exact Retell free-test dependencies" `
-                -Executable $npm -Arguments @(
-                    "ci", "--ignore-scripts", "--no-audit", "--no-fund",
-                    "--prefix", $RetellFreeTestRoot
-                )
-            Invoke-Native -Label "Install exact Retell retry dependencies" `
+            Invoke-Native -Label "Install exact Revenue Desk route-control dependencies" `
                 -Executable $npm -Arguments @(
                     "ci", "--ignore-scripts", "--no-audit", "--no-fund",
                     "--install-links",
-                    "--prefix", $RetellFreeTestRetryRoot
+                    "--prefix", $RevenueDeskRouteControlRoot
+                )
+            Invoke-Native -Label "Install exact Revenue Desk call-worker dependencies" `
+                -Executable $npm -Arguments @(
+                    "ci", "--ignore-scripts", "--no-audit", "--no-fund",
+                    "--install-links",
+                    "--prefix", $RevenueDeskCallWorkerRoot
+                )
+            Invoke-Native -Label "Install exact Revenue Desk Analytics dependencies" `
+                -Executable $npm -Arguments @(
+                    "ci", "--ignore-scripts", "--no-audit", "--no-fund",
+                    "--prefix", $RevenueDeskAnalyticsRoot
                 )
         } else {
             $env:npm_config_offline = "true"
             $env:npm_config_update_notifier = "false"
+            $env:SYLVARA_OFFLINE_QUICK_VERIFY = "1"
             Write-Host "Quick mode disables npm registry access and uses existing local dependencies."
         }
 
@@ -447,9 +582,10 @@ try {
         $nodePackages = @(
             @{ Label = "Gateway"; Root = $GatewayRoot },
             @{ Label = "CRM-Billing orchestrator"; Root = $CrmBillingOrchestratorRoot },
-            @{ Label = "Form 1 controller"; Root = $Form1ControllerRoot },
-            @{ Label = "Form 2 controller"; Root = $Form2ControllerRoot },
-            @{ Label = "Retell free-test"; Root = $RetellFreeTestRoot }
+            @{ Label = "Revenue Leak Test Request Form"; Root = $RequestFormRoot },
+            @{ Label = "Revenue Leak Test Setup Form"; Root = $SetupFormRoot },
+            @{ Label = "Revenue Desk call gateway"; Root = $RevenueDeskCallGatewayRoot },
+            @{ Label = "Revenue Desk Analytics"; Root = $RevenueDeskAnalyticsRoot }
         )
         foreach ($package in $nodePackages) {
             $dependency = Join-PathSegments -BasePath $package.Root -Segments @(
@@ -459,17 +595,29 @@ try {
                 throw "$($package.Label) dependencies are missing. Run .\tools\verify.cmd -Bootstrap once before offline Quick verification."
             }
         }
-        $retellRetryDependency = Join-PathSegments $RetellFreeTestRetryRoot @(
-            "node_modules", "retell_free_test", "package.json"
+        $routeControlGatewayDependency = Join-PathSegments $RevenueDeskRouteControlRoot @(
+            "node_modules", "revenue_desk_call_gateway", "package.json"
         )
-        $retellRetryCatalystSdk = Join-PathSegments $RetellFreeTestRetryRoot @(
+        $routeControlCatalystSdk = Join-PathSegments $RevenueDeskRouteControlRoot @(
             "node_modules", "zcatalyst-sdk-node", "package.json"
         )
         if (
-            (-not (Test-Path -LiteralPath $retellRetryDependency -PathType Leaf)) -or
-            (-not (Test-Path -LiteralPath $retellRetryCatalystSdk -PathType Leaf))
+            (-not (Test-Path -LiteralPath $routeControlGatewayDependency -PathType Leaf)) -or
+            (-not (Test-Path -LiteralPath $routeControlCatalystSdk -PathType Leaf))
         ) {
-            throw "Retell retry dependencies are missing. Run .\tools\verify.cmd -Bootstrap once before offline Quick verification."
+            throw "Revenue Desk route-control dependencies are missing. Run .\tools\verify.cmd -Bootstrap once before offline Quick verification."
+        }
+        $callWorkerGatewayDependency = Join-PathSegments $RevenueDeskCallWorkerRoot @(
+            "node_modules", "revenue_desk_call_gateway", "package.json"
+        )
+        $callWorkerCatalystSdk = Join-PathSegments $RevenueDeskCallWorkerRoot @(
+            "node_modules", "zcatalyst-sdk-node", "package.json"
+        )
+        if (
+            (-not (Test-Path -LiteralPath $callWorkerGatewayDependency -PathType Leaf)) -or
+            (-not (Test-Path -LiteralPath $callWorkerCatalystSdk -PathType Leaf))
+        ) {
+            throw "Revenue Desk call-worker dependencies are missing. Run .\tools\verify.cmd -Bootstrap once before offline Quick verification."
         }
         Invoke-Native -Label "Public repository safety scan" -Executable $python `
             -Arguments @("tools/safety/pre-commit-safety-check.py")
@@ -478,6 +626,12 @@ try {
         Invoke-Native -Label "Python regression tests" -Executable $python `
             -Arguments @(
                 "-m", "unittest", "discover", "-s", "tools/safety/tests",
+                "-p", "test_*.py", "-v"
+            )
+        Invoke-Native -Label "CRM free Revenue Leak Test contract checks" -Executable $python `
+            -Arguments @(
+                "-m", "unittest", "discover", "-s",
+                (Join-Path $CrmFreeRevenueLeakTestRoot "tests"),
                 "-p", "test_*.py", "-v"
             )
 
@@ -492,46 +646,57 @@ try {
                     "audit", "--omit=dev", "--audit-level=moderate",
                     "--prefix", $CrmBillingOrchestratorRoot
                 )
-            Invoke-Native -Label "Form 1 controller production dependency audit" `
+            Invoke-Native -Label "Revenue Leak Test Request Form production dependency audit" `
                 -Executable $npm -Arguments @(
                     "audit", "--omit=dev", "--audit-level=moderate",
-                    "--prefix", $Form1ControllerRoot
+                    "--prefix", $RequestFormRoot
                 )
-            Invoke-Native -Label "Form 2 controller production dependency audit" `
+            Invoke-Native -Label "Revenue Leak Test Setup Form production dependency audit" `
                 -Executable $npm -Arguments @(
                     "audit", "--omit=dev", "--audit-level=moderate",
-                    "--prefix", $Form2ControllerRoot
+                    "--prefix", $SetupFormRoot
                 )
-            Invoke-Native -Label "Retell resolver production dependency audit" -Executable $npm `
+            Invoke-Native -Label "Revenue Desk call-gateway production dependency audit" -Executable $npm `
                 -Arguments @(
                     "audit", "--omit=dev", "--audit-level=moderate",
-                    "--prefix", $RetellResolverRoot
+                    "--prefix", $RevenueDeskCallGatewayRoot
                 )
-            Invoke-Native -Label "Retell free-test production dependency audit" -Executable $npm `
+            Invoke-Native -Label "Revenue Desk route-control production dependency audit" -Executable $npm `
                 -Arguments @(
                     "audit", "--omit=dev", "--audit-level=moderate",
-                    "--prefix", $RetellFreeTestRoot
+                    "--prefix", $RevenueDeskRouteControlRoot
                 )
-            Invoke-Native -Label "Retell retry production dependency audit" -Executable $npm `
+            Invoke-Native -Label "Revenue Desk call-worker production dependency audit" -Executable $npm `
                 -Arguments @(
                     "audit", "--omit=dev", "--audit-level=moderate",
-                    "--prefix", $RetellFreeTestRetryRoot
+                    "--prefix", $RevenueDeskCallWorkerRoot
+                )
+            Invoke-Native -Label "Revenue Desk Analytics production dependency audit" -Executable $npm `
+                -Arguments @(
+                    "audit", "--omit=dev", "--audit-level=moderate",
+                    "--prefix", $RevenueDeskAnalyticsRoot
                 )
         }
         Invoke-Native -Label "Billing gateway checks and tests" -Executable $npm `
             -Arguments @("run", "ci", "--prefix", $GatewayRoot)
         Invoke-Native -Label "CRM-Billing orchestrator checks and tests" -Executable $npm `
             -Arguments @("run", "ci", "--prefix", $CrmBillingOrchestratorRoot)
-        Invoke-Native -Label "Form 1 controller checks and tests" -Executable $npm `
-            -Arguments @("run", "ci", "--prefix", $Form1ControllerRoot)
-        Invoke-Native -Label "Form 2 controller checks and tests" -Executable $npm `
-            -Arguments @("run", "ci", "--prefix", $Form2ControllerRoot)
-        Invoke-Native -Label "Retell resolver contract checks" -Executable $npm `
-            -Arguments @("run", "ci", "--prefix", $RetellResolverRoot)
-        Invoke-Native -Label "Retell free-test checks and tests" -Executable $npm `
-            -Arguments @("run", "ci", "--prefix", $RetellFreeTestRoot)
-        Invoke-Native -Label "Retell retry checks and tests" -Executable $npm `
-            -Arguments @("run", "ci", "--prefix", $RetellFreeTestRetryRoot)
+        Invoke-Native -Label "Revenue Leak Test Request Form checks and tests" -Executable $npm `
+            -Arguments @("run", "ci", "--prefix", $RequestFormRoot)
+        Invoke-Native -Label "Revenue Leak Test Setup Form checks and tests" -Executable $npm `
+            -Arguments @("run", "ci", "--prefix", $SetupFormRoot)
+        Invoke-Native -Label "Revenue Desk call-gateway checks and tests" -Executable $npm `
+            -Arguments @("run", "ci", "--prefix", $RevenueDeskCallGatewayRoot)
+        Invoke-Native -Label "Revenue Desk route-control checks and tests" -Executable $npm `
+            -Arguments @("run", "ci", "--prefix", $RevenueDeskRouteControlRoot)
+        Invoke-Native -Label "Revenue Desk call-worker checks and tests" -Executable $npm `
+            -Arguments @("run", "ci", "--prefix", $RevenueDeskCallWorkerRoot)
+        Invoke-Native -Label "Revenue Desk canonical-table migration checks and tests" `
+            -Executable $npm -Arguments @("run", "ci", "--prefix", $RevenueDeskMigrationRoot)
+        Invoke-Native -Label "Revenue Desk Analytics checks and tests" -Executable $npm `
+            -Arguments @("run", "ci", "--prefix", $RevenueDeskAnalyticsRoot)
+        Invoke-Native -Label "Revenue Desk seven-function release checks" -Executable $npm `
+            -Arguments @("run", "ci", "--prefix", $RevenueDeskReleaseRoot)
 
         Write-Host "Verification passed ($Mode mode)."
     } finally {

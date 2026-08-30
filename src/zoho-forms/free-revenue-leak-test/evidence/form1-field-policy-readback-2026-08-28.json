@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "record_type": "sanitized_free_revenue_leak_test_form1_field_policy_readback",
+  "observed_at": "2026-08-28",
+  "repository_head_at_observation": "558c7fdf3d8d809ae1237fc8b840ca1432011c6a",
+  "status": "builder_field_policy_dictionary_proven_runtime_retention_and_prefill_blocking",
+  "evidence_boundary": {
+    "connector_first_check_found_a_purpose_built_zoho_forms_connector": false,
+    "authenticated_zoho_forms_browser_fallback_used": true,
+    "expected_forms_tenant_verified_privately": true,
+    "form_entry_record_or_customer_data_read": false,
+    "private_identifiers_urls_aliases_payloads_or_raw_responses_in_repository": false,
+    "writes_saves_field_additions_submissions_tests_or_runtime_invocations_performed": false,
+    "retell_billing_customer_communication_or_production_action_performed": false
+  },
+  "summary": {
+    "deployed_field_count": 26,
+    "mandatory_control_true_count": 10,
+    "personal_true_count": 7,
+    "encrypted_true_count": 0,
+    "show_count": 14,
+    "hide_count": 11,
+    "provider_generated_or_no_visibility_control_count": 1,
+    "configured_alias_count": 0,
+    "disabled_or_locked_field_count": 0,
+    "missing_optional_attribution_fields": [
+      "utm_source",
+      "utm_medium",
+      "utm_campaign",
+      "utm_content",
+      "utm_term"
+    ]
+  },
+  "fields": [
+    {"key":"Name","type":"NAME","visibility":"show","mandatory":"first_and_last_name_required_by_builder_and_public_ui","personal":true,"encrypted":false,"alias_configured":false,"no_duplicates":false},
+    {"key":"Company","type":"SINGLE_LINE","visibility":"show","mandatory":true,"personal":false,"encrypted":false,"alias_configured":false,"no_duplicates":false},
+    {"key":"Title","type":"DROPDOWN","visibility":"show","mandatory":true,"personal":true,"encrypted":false,"alias_configured":false,"no_duplicates":false},
+    {"key":"Exact Job Title","type":"SINGLE_LINE","visibility":"show","mandatory":false,"personal":true,"encrypted":false,"alias_configured":false,"no_duplicates":false},
+    {"key":"Email","type":"EMAIL","visibility":"show","mandatory":true,"personal":true,"encrypted":false,"alias_configured":false,"no_duplicates":true},
+    {"key":"Mobile Phone","type":"PHONE","visibility":"show","mandatory":true,"personal":true,"encrypted":false,"alias_configured":false,"no_duplicates":true},
+    {"key":"Company Phone","type":"PHONE","visibility":"show","mandatory":true,"personal":false,"encrypted":false,"alias_configured":false,"no_duplicates":false},
+    {"key":"Current Call Handling","type":"DROPDOWN","visibility":"show","mandatory":true,"personal":false,"encrypted":false,"alias_configured":false,"no_duplicates":false},
+    {"key":"Preferred Test Route","type":"DROPDOWN","visibility":"show","mandatory":true,"personal":false,"encrypted":false,"alias_configured":false,"no_duplicates":false},
+    {"key":"Phone System Provider","type":"DROPDOWN","visibility":"show","mandatory":false,"personal":false,"encrypted":false,"alias_configured":false,"no_duplicates":false},
+    {"key":"Primary Service Area","type":"MULTI_LINE","visibility":"show","mandatory":false,"personal":false,"encrypted":false,"alias_configured":false,"no_duplicates":false},
+    {"key":"Approximate Field Team Size","type":"DROPDOWN","visibility":"show","mandatory":false,"personal":false,"encrypted":false,"alias_configured":false,"no_duplicates":false},
+    {"key":"Additional Notes","type":"MULTI_LINE","visibility":"show","mandatory":false,"personal":true,"encrypted":false,"alias_configured":false,"no_duplicates":false},
+    {"key":"Free Test Contact Consent","type":"DECISION_BOX","visibility":"show","mandatory":true,"personal":true,"encrypted":false,"alias_configured":false,"no_duplicates":false},
+    {"key":"Entry Offer","type":"DROPDOWN","visibility":"hide","mandatory":false,"personal":false,"encrypted":false,"alias_configured":false,"no_duplicates":false},
+    {"key":"Submission Channel","type":"DROPDOWN","visibility":"hide","mandatory":false,"personal":false,"encrypted":false,"alias_configured":false,"no_duplicates":false},
+    {"key":"Lead Source","type":"DROPDOWN","visibility":"hide","mandatory":true,"personal":false,"encrypted":false,"alias_configured":false,"no_duplicates":false},
+    {"key":"Lead Status","type":"DROPDOWN","visibility":"hide","mandatory":true,"personal":false,"encrypted":false,"alias_configured":false,"no_duplicates":false},
+    {"key":"Free Test Contact Consent At","type":"DATETIME","visibility":"hide","mandatory":false,"personal":false,"encrypted":false,"alias_configured":false,"no_duplicates":false},
+    {"key":"Free Test Contact Consent Version","type":"SINGLE_LINE","visibility":"hide","mandatory":false,"personal":false,"encrypted":false,"alias_configured":false,"no_duplicates":false},
+    {"key":"Free Test Request Submitted At","type":"DATETIME","visibility":"hide","mandatory":false,"personal":false,"encrypted":false,"alias_configured":false,"no_duplicates":false},
+    {"key":"Source Page","type":"SINGLE_LINE","visibility":"hide","mandatory":false,"personal":false,"encrypted":false,"alias_configured":false,"no_duplicates":false},
+    {"key":"Intake Form Version","type":"SINGLE_LINE","visibility":"hide","mandatory":false,"personal":false,"encrypted":false,"alias_configured":false,"no_duplicates":false},
+    {"key":"Intake Submission ID","type":"RANDOM_ID","visibility":"provider_generated_no_control","mandatory":"provider_generated","personal":"control_unavailable","encrypted":"control_unavailable","alias_configured":false,"no_duplicates":"provider_repetition_restriction_enabled"},
+    {"key":"Assisted By","type":"SINGLE_LINE","visibility":"hide","mandatory":false,"personal":false,"encrypted":false,"alias_configured":false,"no_duplicates":false},
+    {"key":"Assisted Intake Token","type":"SINGLE_LINE","visibility":"hide","mandatory":false,"personal":false,"encrypted":false,"alias_configured":false,"no_duplicates":false}
+  ],
+  "prefill_readback": {
+    "prefill_webhook_field_present": false,
+    "available_palette_field_type": "INC_WEBHOOK_SEARCH",
+    "configured_alias_count": 0,
+    "existing_assisted_intake_token_field_is_inert_hidden_and_unaliased": true,
+    "existing_assisted_intake_token_field_safe_to_repurpose": false,
+    "exact_webhook_method_auth_body_header_response_mapping_and_retention_contract_proven": false
+  },
+  "authority_limit": {
+    "complete_builder_type_alias_mandatory_personal_encryption_and_visibility_dictionary_proven": true,
+    "runtime_respondent_editability_proven": false,
+    "form_entry_retention_proven": false,
+    "missing_utm_builder_fields_reconciled_with_existing_crm_mappings": false,
+    "assisted_token_transport_safe": false,
+    "future_live_change_authorized_by_this_record": false
+  }
+}

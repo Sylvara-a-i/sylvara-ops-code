@@ -17,9 +17,11 @@ COVERAGE_PATH = (
     REPOSITORY_ROOT
     / "src"
     / "zoho-catalyst"
-    / "retell-inbound-resolver"
+    / "revenue-desk-call-runtime"
+    / "functions"
+    / "revenue_desk_call_gateway"
     / "contracts"
-    / "coverage-mode-contract.json"
+    / "revenue-desk-call-contract.json"
 )
 VALIDATOR_PATH = RETELL_ROOT / "tools" / "validate_workspace.py"
 

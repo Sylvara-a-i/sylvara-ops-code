@@ -1,0 +1,151 @@
+{
+  "schema_version": 2,
+  "status": "proposed-additive-revenue-desk-analytics-v2-row-contract",
+  "live_state": "packet-a-bounded-schema-proof-recorded-existing-development-rows-preserved-full-outbox-schema-lineage-and-activation-require-fresh-readback",
+  "production_authorized": false,
+  "data_policy": {
+    "client_access": "none",
+    "app_user_permissions": [],
+    "raw_phone_numbers": false,
+    "personal_email_addresses": false,
+    "raw_names": false,
+    "raw_transcripts": false,
+    "audio_or_recording_references": false,
+    "raw_provider_payloads": false,
+    "payload_storage": "encrypted minimized flat fact with an exact allowlist and keyed opaque partitions"
+  },
+  "migration_policy": {
+    "observed_at": "2026-08-24",
+    "observed_counts": {
+      "AnalyticsSyncOutbox": 307,
+      "AnalyticsSyncCheckpoints": 10,
+      "ClientDailyMetrics": 10,
+      "ReportRuns": 1,
+      "Calls": 13,
+      "FreeTestCalls": 30
+    },
+    "evidence_boundary": "counts only; current columns, constraints, normalized keys, immutable fact hashes, producer lineage, target counts, and watermarks remain unverified",
+    "superseding_schema_resolution_2026_08_26": {
+      "evidence": "../../evidence/free-revenue-leak-test-development-packet-a-resolution-2026-08-26.json",
+      "analytics_outbox_total_columns": 71,
+      "analytics_outbox_full_application_schema_readback_exact": false,
+      "analytics_outbox_outbox_key_contract": {
+        "type": "varchar",
+        "max_length": 64,
+        "mandatory": false,
+        "unique": true,
+        "audit_consent": true
+      },
+      "analytics_checkpoints_required_application_columns_exact": true,
+      "outbox_key_nullable_unique_contract_readback_exact": true,
+      "legacy_rows_rewritten": false,
+      "fresh_pre_activation_schema_and_lineage_readback_required": true
+    },
+    "strategy": "additive v2 columns and v2 rows only after metadata readback; never rebuild, truncate, rename, or delete a nonempty table from this contract",
+    "legacy_selection": "analytics_sync selects only ROW_SCHEMA_VERSION=2; null or other versions remain untouched",
+    "documented_v1_casefold_reserved_columns": {
+      "AnalyticsSyncCheckpoints": [],
+      "AnalyticsSyncOutbox": ["Status"]
+    },
+    "casefold_collision_rule": "No proposed v2 column may case-insensitively collide with a documented v1 column. The v2 outbox state is SYNC_STATUS; checkpoint STATUS remains unchanged because that table has no documented collision.",
+    "required_migration_evidence": [
+      "source row counts by table and environment",
+      "normalized-key count and digest with the normalization algorithm recorded",
+      "immutable minimized-fact hashes",
+      "provider-version-fenced OUTBOX_KEY count and digest with duplicate and payload-conflict reports",
+      "Zoho Analytics import and independent readback counts and watermarks",
+      "legacy-row disposition and rollback or containment"
+    ]
+  },
+  "tables": [
+    {
+      "runtime_variable": "ANALYTICS_CHECKPOINT_TABLE",
+      "api_name": "AnalyticsSyncCheckpoints",
+      "purpose": "One monotonic, version-fenced synchronization watermark per environment, record type, client, and deployment partition.",
+      "required_unique_columns": ["CHECKPOINT_KEY"],
+      "required_pii_ephi_columns": [],
+      "columns": [
+        { "api_name": "CHECKPOINT_KEY", "type": "varchar", "max_length": 64, "mandatory": false, "unique": true, "private": true, "required_for_v2_rows": true },
+        { "api_name": "ROW_SCHEMA_VERSION", "type": "bigint", "mandatory": false, "unique": false, "required_for_v2_rows": true },
+        { "api_name": "RECORD_TYPE", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false, "required_for_v2_rows": true },
+        { "api_name": "TARGET_TABLE_ALIAS", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false, "required_for_v2_rows": true },
+        { "api_name": "CLIENT_KEY", "type": "varchar", "max_length": 80, "mandatory": false, "unique": false, "private": true, "required_for_v2_rows": true },
+        { "api_name": "DEPLOYMENT_KEY", "type": "varchar", "max_length": 80, "mandatory": false, "unique": false, "private": true, "required_for_v2_rows": true },
+        { "api_name": "ENVIRONMENT", "type": "varchar", "max_length": 16, "mandatory": false, "unique": false, "required_for_v2_rows": true },
+        { "api_name": "LAST_SOURCE_MODIFIED_AT", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false, "required_for_v2_rows": true },
+        { "api_name": "LAST_RECORD_KEY", "type": "varchar", "max_length": 80, "mandatory": false, "unique": false, "private": true, "required_for_v2_rows": true },
+        { "api_name": "PROVIDER_WATERMARK", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false, "required_for_v2_rows": true },
+        { "api_name": "LAST_PROVIDER_JOB_ID", "type": "varchar", "max_length": 128, "mandatory": false, "unique": false, "private": true, "required_for_v2_rows": true },
+        { "api_name": "LAST_ACCEPTED_ROW_COUNT", "type": "bigint", "mandatory": false, "unique": false, "required_for_v2_rows": true },
+        { "api_name": "LAST_REJECTED_ROW_COUNT", "type": "bigint", "mandatory": false, "unique": false, "required_for_v2_rows": true },
+        { "api_name": "STATUS", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false, "required_for_v2_rows": true },
+        { "api_name": "STALE_AFTER_AT", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false, "required_for_v2_rows": true },
+        { "api_name": "LAST_ERROR_CODE", "type": "varchar", "max_length": 64, "mandatory": false, "unique": false },
+        { "api_name": "VERSION", "type": "bigint", "mandatory": false, "unique": false, "required_for_v2_rows": true },
+        { "api_name": "LAST_SYNC_AT", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false, "required_for_v2_rows": true },
+        { "api_name": "LAST_RECONCILED_AT", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false, "required_for_v2_rows": true },
+        { "api_name": "CREATED_AT", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false, "required_for_v2_rows": true },
+        { "api_name": "UPDATED_AT", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false, "required_for_v2_rows": true },
+        { "api_name": "SOURCE_REVISION", "type": "varchar", "max_length": 40, "mandatory": false, "unique": false, "required_for_v2_rows": true },
+        { "api_name": "METRIC_VERSION", "type": "varchar", "max_length": 40, "mandatory": false, "unique": false, "required_for_v2_rows": true }
+      ]
+    },
+    {
+      "runtime_variable": "ANALYTICS_OUTBOX_TABLE",
+      "api_name": "AnalyticsSyncOutbox",
+      "purpose": "Immutable minimized Analytics facts with durable claim, retry, import-job, readback, reconciliation, and completion state.",
+      "required_unique_columns": ["OUTBOX_KEY"],
+      "required_pii_ephi_columns": ["PAYLOAD_JSON"],
+      "columns": [
+        { "api_name": "OUTBOX_KEY", "type": "varchar", "max_length": 64, "mandatory": false, "unique": true, "private": true, "required_for_v2_rows": true, "purpose": "Atomic provider identity plus normalized source-watermark fence; PAYLOAD_HASH independently binds the immutable canonical payload." },
+        { "api_name": "ROW_SCHEMA_VERSION", "type": "bigint", "mandatory": false, "unique": false, "required_for_v2_rows": true },
+        { "api_name": "RECORD_TYPE", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false, "required_for_v2_rows": true },
+        { "api_name": "RECORD_KEY", "type": "varchar", "max_length": 80, "mandatory": false, "unique": false, "private": true, "required_for_v2_rows": true },
+        { "api_name": "CLIENT_KEY", "type": "varchar", "max_length": 80, "mandatory": false, "unique": false, "private": true, "required_for_v2_rows": true },
+        { "api_name": "DEPLOYMENT_KEY", "type": "varchar", "max_length": 80, "mandatory": false, "unique": false, "private": true, "required_for_v2_rows": true },
+        { "api_name": "CONFIGURATION_VERSION", "type": "varchar", "max_length": 128, "mandatory": false, "unique": false, "private": true, "required_for_v2_rows": true },
+        { "api_name": "ENGAGEMENT_TYPE", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false, "required_for_v2_rows": true },
+        { "api_name": "ENVIRONMENT", "type": "varchar", "max_length": 16, "mandatory": false, "unique": false, "required_for_v2_rows": true },
+        { "api_name": "PAYLOAD_JSON", "type": "encrypted_text", "max_length": 10000, "mandatory": false, "unique": false, "private": true, "audit_consent": true, "required_for_v2_rows": true },
+        { "api_name": "PAYLOAD_HASH", "type": "varchar", "max_length": 64, "mandatory": false, "unique": false, "private": true, "required_for_v2_rows": true },
+        { "api_name": "METRIC_VERSION", "type": "varchar", "max_length": 40, "mandatory": false, "unique": false, "required_for_v2_rows": true },
+        { "api_name": "SOURCE_MODIFIED_AT", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false, "required_for_v2_rows": true },
+        { "api_name": "SOURCE_DATE_UTC", "type": "varchar", "max_length": 10, "mandatory": false, "unique": false, "required_for_v2_rows": true, "purpose": "Non-PII bounded daily-rollup routing date; call rows bind to STARTED_AT UTC date." },
+        { "api_name": "SYNC_STATUS", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false, "required_for_v2_rows": true },
+        { "api_name": "BATCH_KEY", "type": "varchar", "max_length": 64, "mandatory": false, "unique": false, "private": true },
+        { "api_name": "ATTEMPT_COUNT", "type": "bigint", "mandatory": false, "unique": false, "required_for_v2_rows": true },
+        { "api_name": "CLAIM_COUNT", "type": "bigint", "mandatory": false, "unique": false, "required_for_v2_rows": true },
+        { "api_name": "POLL_COUNT", "type": "bigint", "mandatory": false, "unique": false, "required_for_v2_rows": true },
+        { "api_name": "NEXT_ATTEMPT_AT", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false, "required_for_v2_rows": true },
+        { "api_name": "LEASE_OWNER", "type": "varchar", "max_length": 64, "mandatory": false, "unique": false, "private": true },
+        { "api_name": "LEASE_TOKEN", "type": "varchar", "max_length": 64, "mandatory": false, "unique": false, "private": true },
+        { "api_name": "LEASE_EXPIRES_AT", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false },
+        { "api_name": "FENCE_VERSION", "type": "bigint", "mandatory": false, "unique": false, "required_for_v2_rows": true },
+        { "api_name": "PROVIDER_JOB_ID", "type": "varchar", "max_length": 128, "mandatory": false, "unique": false, "private": true },
+        { "api_name": "PROVIDER_STATE", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false },
+        { "api_name": "EXPECTED_ROW_COUNT", "type": "bigint", "mandatory": false, "unique": false },
+        { "api_name": "ACCEPTED_ROW_COUNT", "type": "bigint", "mandatory": false, "unique": false },
+        { "api_name": "REJECTED_ROW_COUNT", "type": "bigint", "mandatory": false, "unique": false },
+        { "api_name": "READBACK_JOB_ID", "type": "varchar", "max_length": 128, "mandatory": false, "unique": false, "private": true },
+        { "api_name": "READBACK_ROW_COUNT", "type": "bigint", "mandatory": false, "unique": false },
+        { "api_name": "READBACK_WATERMARK", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false },
+        { "api_name": "LAST_ERROR_CODE", "type": "varchar", "max_length": 64, "mandatory": false, "unique": false },
+        { "api_name": "LAST_ATTEMPT_AT", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false },
+        { "api_name": "SUBMITTED_AT", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false },
+        { "api_name": "RECONCILED_AT", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false },
+        { "api_name": "CREATED_AT", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false, "required_for_v2_rows": true },
+        { "api_name": "UPDATED_AT", "type": "varchar", "max_length": 32, "mandatory": false, "unique": false, "required_for_v2_rows": true },
+        { "api_name": "SOURCE_REVISION", "type": "varchar", "max_length": 40, "mandatory": false, "unique": false, "required_for_v2_rows": true }
+      ]
+    }
+  ],
+  "provisioning_gates": [
+    "Preserve the existing nonempty AnalyticsSyncCheckpoints and AnalyticsSyncOutbox tables and every other observed Analytics-supporting table until lineage is reconciled.",
+    "Read back every current API name, type, maximum length, mandatory flag, uniqueness constraint, encrypted-text audit consent, App User permission, row count, and producer/consumer before proposing additive columns.",
+    "Add only compatible physically nullable columns needed for ROW_SCHEMA_VERSION=2, then independently read them back; do not recreate, truncate, rename, or delete either table. Every logical v2 requirement is enforced by required_for_v2_rows plus runtime validation, not by rewriting nonempty legacy rows.",
+    "Packet A proved general nullable-unique behavior with multiple null rows and read back the retained OUTBOX_KEY contract exact, but did not prove the full 71-column outbox application schema. Fresh-read both Analytics tables and repeat the exact constraint check before activation; any drift blocks activation.",
+    "For every retained v2 row, normalize accepted UTC timestamps with new Date(value).toISOString(), recompute and verify OUTBOX_KEY and PAYLOAD_HASH, then compare counts and digests. Any duplicate OUTBOX_KEY, provider identity mapped to a different key, or same key and identity with different immutable ownership or payload blocks activation.",
+    "Do not bind analytics_sync until source/runtime parity and synthetic claim, retry, ambiguity, reconciliation, and environment-isolation tests pass.",
+    "Production is dark: the function returns DarkNoOp before SDK initialization or any Data Store or Analytics operation."
+  ]
+}

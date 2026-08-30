@@ -9,9 +9,10 @@
     "node": "24.x"
   },
   "scripts": {
-    "check": "node --check index.js && node --check lib/catalyst-adapter.js && node --check lib/config.js && node --check lib/connection-boundary.js && node --check lib/creator-client.js && node --check lib/creator-destination.js && node --check lib/destinations.js && node --check lib/handler.js && node --check lib/http.js && node --check lib/idempotency.js && node --check lib/iso-timestamp.js && node --check lib/normalize-event.js && node --check lib/operation-timeout.js && node --check lib/redact.js && node --check lib/signature.js && node --check lib/source-revision.js",
+    "check": "node --check index.js && node --check lib/catalyst-adapter.js && node --check lib/config.js && node --check lib/connection-boundary.js && node --check lib/creator-client.js && node --check lib/creator-destination.js && node --check lib/destinations.js && node --check lib/handler.js && node --check lib/http.js && node --check lib/idempotency.js && node --check lib/iso-timestamp.js && node --check lib/normalize-event.js && node --check lib/operation-timeout.js && node --check lib/redact.js && node --check lib/signature.js && node --check lib/source-revision.js && node --check tools/build-development-artifact.js",
     "test": "node --test test/*.test.js",
-    "ci": "npm run check && npm test"
+    "ci": "npm run check && npm test",
+    "artifact:build": "node tools/build-development-artifact.js"
   },
   "dependencies": {
     "zcatalyst-sdk-node": "3.4.0"

@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "record_type": "sanitized_free_revenue_leak_test_dark_production_prestate",
+  "captured_at_utc": "2026-08-28T00:00:03Z",
+  "target_environment": "Production",
+  "source_revision": "aab7c18c27f4ff5e1468da51eae433ede9b852f6",
+  "connector_first_readback": {
+    "development_project_metadata_readback_succeeded": true,
+    "observed_environment_count": 1,
+    "observed_environment_names": [
+      "Development"
+    ],
+    "observed_development_environment_status": "Active",
+    "production_project_readback_succeeded": false,
+    "production_function_inventory_readback_succeeded": false,
+    "production_table_inventory_readback_succeeded": false,
+    "production_job_pool_inventory_readback_succeeded": false,
+    "production_cron_inventory_readback_succeeded": false,
+    "production_route_inventory_readback_succeeded": false,
+    "shared_failure_class": "invalid_environment_name",
+    "production_zero_resource_state_proven": false
+  },
+  "governed_browser_fallback": {
+    "reason": "The Catalyst Audit connector rejected Production because the target project exposes only the Development environment and provides no Production-initialization operation.",
+    "authenticated_project_console_readback_succeeded": true,
+    "deploy_to_production_control_visible": true,
+    "deploy_to_production_control_clicked": false,
+    "production_initialization_or_deployment_performed": false,
+    "production_configuration_or_traffic_mutated": false
+  },
+  "conclusion": {
+    "production_environment_initialized": false,
+    "dark_production_deployment_exists": false,
+    "dark_production_deployment_absence_proven_by_inventory": false,
+    "blocking_reason": "Production must first be initialized through a fresh exact deployment packet; only then can independent Production inventory, final-main parity, zero-traffic, disabled-route, disabled-schedule, synthetic containment, and rollback readback be proven.",
+    "future_production_write_authorized_by_this_record": false
+  },
+  "containment": {
+    "connector_calls_were_read_only": true,
+    "browser_actions_were_navigation_and_readback_only": true,
+    "gateway_or_route_mutation_performed": false,
+    "function_table_job_pool_or_cron_mutation_performed": false,
+    "route_function_job_or_cron_invocation_performed": false,
+    "retell_agent_development_test_simulation_call_publish_or_provider_route_change_performed": false,
+    "customer_or_production_traffic_action_performed": false
+  },
+  "disclosure_controls": {
+    "organization_project_environment_or_resource_identifiers_included": false,
+    "private_endpoints_paths_or_hosts_included": false,
+    "credential_key_or_secret_values_included": false,
+    "raw_connector_or_browser_payloads_included": false,
+    "customer_caller_or_operator_identity_included": false,
+    "retell_identifier_values_included": false
+  }
+}

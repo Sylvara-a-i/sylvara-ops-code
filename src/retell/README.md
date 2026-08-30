@@ -22,7 +22,7 @@ For every future Retell update:
 
 Complete raw responses, connector labels, runtime-derived variable names, prompts, routing conditions and destinations, security-control structure, runtime defaults, production identifiers, private endpoints, precise platform timestamps, calls, transcripts, and secrets never enter Git. Public acceptance artifacts use independent provider-neutral aliases and never publish their private runtime mapping.
 
-The approved provider-neutral coverage-mode enum, exact CRM-label mapping, and per-call trigger compatibility rules live in the Catalyst-owned [`coverage-mode-contract.json`](../zoho-catalyst/retell-inbound-resolver/contracts/coverage-mode-contract.json). This public contract does not expose a live deployment mapping, runtime value, or private resolver configuration.
+The approved provider-neutral coverage-mode enum, exact CRM-label mapping, explicit unknown-trigger policy, and per-call trigger compatibility rules live in the canonical Catalyst-owned [`revenue-desk-call-contract.json`](../zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_gateway/contracts/revenue-desk-call-contract.json). This public contract does not expose a live deployment mapping, runtime value, or private resolver configuration.
 
 ## Historical Snapshot Observation
 
@@ -32,7 +32,7 @@ This is historical observation only. Assignment references are not treated as pu
 
 ## Current Development Readback
 
-The later sanitized 2026-08-24 readback is recorded in the free-test [`conversation-contract.json`](agents/7-day-free-test/contracts/conversation-contract.json) and [Development reconciliation](../../docs/runbooks/free-test-development-reconciliation-2026-08-22.md). It proves one published shared free-test version, the shared-agent post-call webhook, one bound non-customer Development number, and the reviewed first-node gate/capability boundary. Paid/native voice and provider-fallback cases, a second live number, prospect/customer routing, and Production remain deferred or unauthorized. Do not edit the immutable 2026-08-20 snapshots to reflect later runtime state.
+The latest sanitized read-only reconciliation on 2026-08-27 resolved the exact bound published agent and flow privately without invoking or changing either resource. The provider-neutral dynamic-variable, post-call analysis, webhook-event, and timeout contracts match the repository contract. The phone webhook still targets the legacy Catalyst boundary, and the required no-retained-content posture, carrier one-way media gate before assent, DTMF assent before speech recognition, and static notice before AI remain unproven. The release is therefore not ready for Retell agent testing. No Retell edit, publish, route change, call, simulation, or agent test occurred. Identifiers, names, phone data, endpoints, prompts, flow topology, live control values, and raw responses remain only in the ignored private audit store. The official Get Voice Agent and Get Conversation Flow read contracts were reverified on 2026-08-27. Do not edit the immutable 2026-08-20 snapshots to reflect later runtime state.
 
 ## Provider-Neutral Acceptance Contract
 

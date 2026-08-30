@@ -1,0 +1,102 @@
+/*
+Owning product/workflow: Zoho CRM / retry-stable Form 2 issuance identity.
+Trigger: one create-only Deals workflow for the Free Revenue Leak Test entry offer.
+Input: deal_id from the current Deal workflow context.
+Identity: a deterministic UUID-v4-shaped non-secret idempotency identifier derived
+from a domain-separated SHA-256 digest of the Deal ID. It is not an authentication
+token; Catalyst derives the access token with a private HMAC key.
+Failure behavior: never overwrite a nonblank value, perform at most one write,
+never retry an ambiguous write, and require exact independent readback.
+Logging: coarse outcomes only; never log record IDs, identifiers, payloads, or errors.
+Rollback: deactivate only the owning workflow; preserve the stored identifier.
+*/
+
+void automation.initialize_setup_access_issue_request_id(string deal_id)
+{
+	deal_id_text = ifnull(deal_id,"").toString().trim();
+	if(!deal_id_text.matches("^[1-9][0-9]{9,29}$"))
+	{
+		info "setup_issue_identity_rejected";
+		return;
+	}
+	try
+	{
+		deal_id_long = deal_id_text.toLong();
+		read_query = Map();
+		read_query.put("fields","Setup_Access_Issue_Request_ID");
+		initial_record = zoho.crm.v8.getRecordById("Deals",deal_id_long,read_query);
+		if(initial_record == null || !initial_record.containKey("Setup_Access_Issue_Request_ID"))
+		{
+			info "setup_issue_identity_read_failed";
+			return;
+		}
+		initial_value = ifnull(initial_record.get("Setup_Access_Issue_Request_ID"),"").toString().trim();
+		canonical_pattern = "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$";
+		if(initial_value.matches(canonical_pattern))
+		{
+			info "setup_issue_identity_exists";
+			return;
+		}
+		if(initial_value != "")
+		{
+			info "setup_issue_identity_conflict";
+			return;
+		}
+
+		identity_digest = zoho.encryption.sha256("sylvara:free-revenue-leak-test:setup-issue:v1:" + deal_id_text);
+		if(identity_digest == null || !identity_digest.matches("^[0-9a-f]{64}$"))
+		{
+			info "setup_issue_identity_generation_failed";
+			return;
+		}
+		candidate = identity_digest.subString(0,8) + "-" + identity_digest.subString(8,12) + "-4" + identity_digest.subString(12,15) + "-8" + identity_digest.subString(15,18) + "-" + identity_digest.subString(18,30);
+		if(!candidate.matches(canonical_pattern))
+		{
+			info "setup_issue_identity_generation_failed";
+			return;
+		}
+
+		prewrite_record = zoho.crm.v8.getRecordById("Deals",deal_id_long,read_query);
+		if(prewrite_record == null || !prewrite_record.containKey("Setup_Access_Issue_Request_ID"))
+		{
+			info "setup_issue_identity_read_failed";
+			return;
+		}
+		prewrite_value = ifnull(prewrite_record.get("Setup_Access_Issue_Request_ID"),"").toString().trim();
+		if(prewrite_value == candidate)
+		{
+			info "setup_issue_identity_exists";
+			return;
+		}
+		if(prewrite_value != "")
+		{
+			info "setup_issue_identity_conflict";
+			return;
+		}
+
+		update_map = Map();
+		update_map.put("Setup_Access_Issue_Request_ID",candidate);
+		trigger_options = Map();
+		trigger_options.put("trigger",List());
+		update_response = zoho.crm.v8.updateRecord("Deals",deal_id_long,update_map,trigger_options);
+		postwrite_record = zoho.crm.v8.getRecordById("Deals",deal_id_long,read_query);
+		if(postwrite_record == null || !postwrite_record.containKey("Setup_Access_Issue_Request_ID"))
+		{
+			info "setup_issue_identity_read_failed";
+			return;
+		}
+		postwrite_value = ifnull(postwrite_record.get("Setup_Access_Issue_Request_ID"),"").toString().trim();
+		if(postwrite_value == candidate)
+		{
+			info "setup_issue_identity_initialized";
+		}
+		else
+		{
+			info "setup_issue_identity_reconciliation_required";
+		}
+	}
+	catch(failure)
+	{
+		info "setup_issue_identity_failed";
+	}
+}

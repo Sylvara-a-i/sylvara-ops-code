@@ -1,8 +1,8 @@
 # ADR 0004: Retell, Catalyst, CRM, And Analytics Integration Boundary
 
-- Status: Accepted as a proposed integration boundary; free-test topology and tenancy sections superseded by [ADR 0006](0006-shared-seven-day-monitor-with-client-number-isolation.md)
+- Status: Historical integration-boundary evidence; topology and execution are superseded by the [final consolidated release contract](../product/free-revenue-leak-test-release-contract.md)
 - Date: 2026-08-18
-- Deployment status: **READY FOR CONTROLLED INTERNAL PHONE TEST** for one non-customer Development number; Catalyst/Zoho lifecycle proof is complete, while Retell voice/fallback and a second live number are deferred
+- Deployment status: **NOT READY FOR RETELL AGENT TESTING**; prior lifecycle proof is migration evidence only
 - Product scope: `after-hours-new-residential-service-request-v1` and later separately approved extensions
 
 ## Context
@@ -45,7 +45,7 @@ The boundaries below are implemented for the Catalyst/Zoho Development lane. The
 2. Assign one dedicated Retell number and one versioned Catalyst deployment/configuration record to each active test client.
 3. Resolve ownership from the called number and exact approved configuration gate before any client-specific conversation. Never use the shared `agent_id` as the tenant key.
 4. Keep service areas, schedules, eligibility, urgency, route approval, notification destinations, and test limits in the immutable deployment snapshot. Retell presents approved values but is not their authority.
-5. For a known authenticated invalid, unknown, ambiguous, inactive, expired, or exhausted resolution, return HTTP 200 with `{ "call_inbound": { "reject": true } }`, start no agent, and create no resolver-side write. Transport, authentication, timeout, 503/unavailable, malformed-response, or invalid-override failure may instead cause Retell to use the number-bound shared agent; its exact first-node gate must terminate through Configuration Unavailable with no intake. There is no degraded intake or client-clone fallback.
+5. For a known authenticated invalid, unknown, ambiguous, inactive, expired, or exhausted resolution, return HTTP 200 with `{ "call_inbound": { "reject": true } }` under Retell's documented inbound-webhook contract, start no agent, create no call, notification, Analytics fact, or failure row, and retain exactly one minimized replay-safe `inbound_resolution` receipt. Omitting `reject` is not a rejection and may continue with the number-bound agent. Transport, authentication, timeout, 503/unavailable, malformed-response, or invalid-override failure may instead cause Retell to use that number-bound shared agent; its exact first-node gate must terminate through Configuration Unavailable with no intake. There is no degraded intake or client-clone fallback.
 6. After a separately approved conversion, create and accept a dedicated Revenue Desk agent if deeper client-specific behavior is required. The shared free-test agent is not promoted into paid service.
 7. Do not reuse the number assigned to an active deployment during validation. When a test completes, preserve its binding evidence and place the number into a documented cooldown. Any later reuse is a separately reviewed stopped-route administrative process; automatic reassignment is deferred. Historical calls retain embedded deployment/configuration ownership.
 
