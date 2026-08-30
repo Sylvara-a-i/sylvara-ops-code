@@ -44,14 +44,18 @@ function attachedWorktreeRoots() {
   return roots;
 }
 
-function packet(phase = "definition") {
+function packet(phase = "definition", routeProfile = "canonical-all") {
   const functionIds = {
     crm_billing_orchestrator: "902",
     revenue_desk_call_gateway: "903",
+    revenue_desk_route_control: "904",
     revenue_leak_test_request_form: "905",
     revenue_leak_test_setup_form: "906",
   };
-  const runtimePathBindings = CONTRACT.routes.map((route) => ({
+  const profile = CONTRACT.route_profiles[routeProfile];
+  const routesById = new Map(CONTRACT.routes.map((route) => [route.id, route]));
+  const profileRoutes = profile.route_ids.map((id) => routesById.get(id));
+  const runtimePathBindings = profileRoutes.map((route) => ({
     function: route.function,
     pathReference: route.path_reference,
     routeId: route.id,
@@ -71,8 +75,9 @@ function packet(phase = "definition") {
       restoreCallersBeforeRoutes: true,
       restoreGlobalGatewayState: "disabled",
     },
+    routeProfile,
     routeContractSha256: ROUTE_CONTRACT_SHA256,
-    routes: CONTRACT.routes.map((route, index) => {
+    routes: profileRoutes.map((route, index) => {
       const endpoint = `/${route.id.toLowerCase().replaceAll("_", "-")}/${String(index).padStart(2, "0")}${"x".repeat(30)}`;
       return {
         id: route.id,
@@ -108,8 +113,8 @@ function approval(value, overrides = {}) {
   return { ...envelope, ...overrides };
 }
 
-function continuationPacket(existingCount = 1) {
-  const initial = packet("bound");
+function continuationPacket(existingCount = 1, routeProfile = "canonical-all") {
+  const initial = packet("bound", routeProfile);
   const initialRequests = buildRouteRequests(initial, approval(initial), NOW_MS);
   const existingRoutePrefix = initialRequests.slice(0, existingCount).map(({ body }) => ({
     ...structuredClone(body),
@@ -139,13 +144,67 @@ function continuationPacket(existingCount = 1) {
   };
 }
 
-test("validates one exact 12-route definition without authorizing activation", () => {
+test("validates one exact 16-route definition without authorizing activation", () => {
   const value = packet();
   const result = validateRoutePacket(value);
   assert.equal(result.phase, "definition");
-  assert.equal(result.routeCount, 12);
+  assert.equal(result.routeCount, 16);
+  assert.equal(result.routeProfile, "canonical-all");
   assert.match(result.digest, /^[a-f0-9]{64}$/);
   assert.equal(digestRoutePacket(Object.fromEntries(Object.entries(value).reverse())), result.digest);
+});
+
+test("validates the closed 15-route setup profile and keeps CRM Billing absent", () => {
+  const definition = packet("definition", "setup-journey");
+  const definitionResult = validateRoutePacket(definition);
+  assert.equal(definitionResult.routeProfile, "setup-journey");
+  assert.equal(definitionResult.routeCount, 15);
+  assert.equal(definition.routes.some(({ id }) => id === "CRM_BILLING"), false);
+
+  const bound = packet("bound", "setup-journey");
+  const requests = buildRouteRequests(bound, approval(bound), NOW_MS);
+  assert.equal(requests.length, 15);
+  assert.equal(requests.some(({ body }) => body.name === "CRM_BILLING"), false);
+  assert.equal(
+    CONTRACT.route_profiles["setup-journey"].development_api_gateway_availability_authorized,
+    true,
+  );
+  assert.equal(
+    CONTRACT.route_profiles["setup-journey"].retell_provider_activation_authorized,
+    false,
+  );
+  assert.equal(
+    CONTRACT.route_profiles["setup-journey"].production_gateway_activation_authorized,
+    false,
+  );
+
+  const original = packet("bound", "setup-journey");
+  const continuation = continuationPacket(14, "setup-journey");
+  const continuationResult = validateRoutePacket(continuation, original);
+  assert.equal(continuationResult.routeProfile, "setup-journey");
+  assert.equal(continuationResult.requestRouteCount, 1);
+  assert.deepEqual(
+    buildRouteRequests(continuation, approval(continuation), NOW_MS, original)
+      .map(({ body }) => body.name),
+    ["FORM2_SUBMISSION"],
+  );
+
+  const missingRoute = packet("definition", "setup-journey");
+  missingRoute.routes.pop();
+  missingRoute.runtimePathBindings.pop();
+  missingRoute.runtimePathBindingsSha256 = digestRuntimePathBindings(
+    missingRoute.runtimePathBindings,
+  );
+  assert.throws(() => validateRoutePacket(missingRoute), /binding count|route count/);
+  const reordered = packet("definition", "setup-journey");
+  [reordered.routes[0], reordered.routes[1]] = [reordered.routes[1], reordered.routes[0]];
+  assert.throws(() => validateRoutePacket(reordered), /identity or ordering drifted/);
+
+  delete definition.routeProfile;
+  assert.throws(() => validateRoutePacket(definition), /fields are not exact|routeProfile is required/);
+  const unknown = packet();
+  unknown.routeProfile = "caller-selected";
+  assert.throws(() => validateRoutePacket(unknown), /not a closed route profile/);
 });
 
 test("normalizes only canonical route-list fields and rejects enhanced detail target names", () => {
@@ -208,7 +267,7 @@ test("builds exact project-bound Advanced I/O requests only after function IDs a
   const value = packet("bound");
   assert.throws(() => buildRouteRequests(value), /approval/);
   const requests = buildRouteRequests(value, approval(value), NOW_MS);
-  assert.equal(requests.length, 12);
+  assert.equal(requests.length, 16);
   assert.ok(requests.every((request) =>
     request.path_variables.projectId === value.projectId &&
     request.headers["Catalyst-org"] === value.organizationId &&
@@ -226,7 +285,8 @@ test("builds exact project-bound Advanced I/O requests only after function IDs a
   });
   assert.deepEqual(
     requests.filter(({ body }) => body.authentication.includes("APIKey")).map(({ body }) => body.name),
-    ["FORM2_ISSUE", "FORM2_PREFILL", "FORM2_SUBMISSION", "CRM_BILLING"],
+    ["ROUTE_CONTROL_APPROVE", "ROUTE_CONTROL_ACTIVATE", "ROUTE_CONTROL_ROLLBACK",
+      "FORM2_ISSUE", "FORM2_PREFILL", "FORM2_SUBMISSION", "CRM_BILLING"],
   );
 });
 
@@ -398,7 +458,7 @@ test("separate approval binds organization, project, routes, targets, and runtim
 
 test("route approval is single-use and valid only inside a maximum 15-minute window", () => {
   const value = packet("bound");
-  assert.equal(buildRouteRequests(value, approval(value), NOW_MS).length, 12);
+  assert.equal(buildRouteRequests(value, approval(value), NOW_MS).length, 16);
   assert.throws(
     () => buildRouteRequests(value, approval(value, {
       expiresAt: "2026-08-26T18:05:00.000Z",
@@ -441,7 +501,7 @@ test("rejects Production, activation, route drift, endpoint reuse, and target am
   assert.throws(() => validateRoutePacket(duplicate), /unique/);
 
   const ambiguous = packet("bound");
-  const form1RouteIds = new Set(["FORM1_ISSUE", "FORM1_PREFILL"]);
+  const form1RouteIds = new Set(["FORM1_ISSUE", "FORM1_PREFILL", "FORM1_SUBMISSION"]);
   ambiguous.routes
     .filter(({ id }) => form1RouteIds.has(id))
     .forEach((route) => {
@@ -460,13 +520,13 @@ test("schema-v2 continuation emits only the untouched canonical suffix", () => {
   const result = validateRoutePacket(value, original);
   assert.equal(result.schemaVersion, 2);
   assert.equal(result.phase, "continuation");
-  assert.equal(result.routeCount, 12);
+  assert.equal(result.routeCount, 16);
   assert.equal(result.existingRouteCount, 1);
-  assert.equal(result.requestRouteCount, 11);
+  assert.equal(result.requestRouteCount, 15);
   assert.equal(result.existingRoutePrefixSha256, value.existingRoutePrefixSha256);
 
   const requests = buildRouteRequests(value, approval(value), NOW_MS, original);
-  assert.equal(requests.length, 11);
+  assert.equal(requests.length, 15);
   assert.equal(requests[0].body.name, "RETELL_EVENTS");
   assert.equal(requests.at(-1).body.name, "CRM_BILLING");
   assert.equal(requests.some(({ body }) => body.name === "RETELL_INBOUND"), false);
@@ -515,7 +575,7 @@ test("schema-v2 continuation cannot replace remaining targets or bindings by rec
   const original = packet("bound");
   const changed = continuationPacket(1);
   const forgedOriginal = structuredClone(original);
-  const form1Indexes = [3, 4];
+  const form1Indexes = [6, 7, 8];
   form1Indexes.forEach((index) => {
     changed.routes[index].targetId = "999";
     changed.remainingRoutes[index - 1].targetId = "999";
@@ -575,7 +635,7 @@ test("schema-v2 continuation rejects gaps, reordered prefixes, and non-suffix re
   assert.throws(() => validateRoutePacket(recreateExisting, original), /exact canonical suffix/);
 
   assert.throws(() => validateRoutePacket(continuationPacket(0), original), /non-empty incomplete/);
-  assert.throws(() => validateRoutePacket(continuationPacket(12), original), /non-empty incomplete/);
+  assert.throws(() => validateRoutePacket(continuationPacket(16), original), /non-empty incomplete/);
 });
 
 test("schema-v2 continuation rejects existing-route attribute and evidence drift", async (t) => {
@@ -614,7 +674,7 @@ test("schema-v2 continuation rejects existing-route attribute and evidence drift
 test("schema-v2 continuation requires fresh exact single-use continuation approval", () => {
   const value = continuationPacket(1);
   const original = packet("bound");
-  assert.equal(buildRouteRequests(value, approval(value), NOW_MS, original).length, 11);
+  assert.equal(buildRouteRequests(value, approval(value), NOW_MS, original).length, 15);
   assert.throws(
     () => buildRouteRequests(
       value,

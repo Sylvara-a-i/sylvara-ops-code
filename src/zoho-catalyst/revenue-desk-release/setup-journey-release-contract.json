@@ -23,6 +23,11 @@
       "name": "revenue_desk_call_worker",
       "source_root": "src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_worker",
       "revision_stamp_target": "revenue_desk_call_gateway"
+    },
+    {
+      "name": "revenue_desk_route_control",
+      "source_root": "src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_route_control",
+      "revision_stamp_target": "revenue_desk_call_gateway"
     }
   ],
   "job_pools": [
@@ -34,6 +39,7 @@
     "RevenueDeskEventReceipts",
     "RevenueDeskCalls",
     "RevenueDeskNotifications",
+    "RevenueLeakTestRequestFormSessions",
     "Form2SessionsV3Runtime",
     "Form2PrefillsV3",
     "Form2SubmissionsV3",
@@ -46,14 +52,22 @@
     "docs/product/free-revenue-leak-test-release-contract.json",
     "src/zoho-catalyst/development-function-inventory.json",
     "src/zoho-catalyst/revenue-desk-call-runtime/config/datastore-schema.json",
+    "src/zoho-catalyst/revenue-desk-call-runtime/config/runtime-readiness.json",
+    "src/zoho-catalyst/revenue-desk-call-runtime/config/variables.json",
+    "src/zoho-catalyst/revenue-desk-call-runtime/catalyst.json",
     "src/zoho-catalyst/revenue-leak-test-request-form/config/datastore-schema.json",
+    "src/zoho-catalyst/revenue-leak-test-request-form/config/routes.json",
+    "src/zoho-catalyst/revenue-leak-test-request-form/config/variables.json",
     "src/zoho-catalyst/revenue-leak-test-setup-form/config/datastore-schema.json",
     "src/zoho-forms/free-revenue-leak-test/forms-manifest.json",
     "src/zoho-crm/free-revenue-leak-test/config/automation-contract.json",
     "src/zoho-crm/free-revenue-leak-test/config/caller-manifest.json",
     "src/zoho-crm/free-revenue-leak-test/functions/start_free_revenue_leak_test_request.deluge",
+    "src/zoho-crm/free-revenue-leak-test/functions/open_free_test_setup.deluge",
     "src/zoho-crm/free-revenue-leak-test/functions/initialize_setup_access_issue_request_id.deluge",
     "src/zoho-crm/free-revenue-leak-test/functions/issue_revenue_leak_test_setup.deluge",
+    "src/zoho-crm/free-revenue-leak-test/functions/approve_and_start_free_test.deluge",
+    "src/zoho-crm/free-revenue-leak-test/functions/stop_or_rollback_free_test.deluge",
     "src/retell/agents/7-day-free-test/manifest.json",
     "src/retell/agents/7-day-free-test/contracts/conversation-contract.json",
     "src/retell/agents/7-day-free-test/contracts/nonurgent-classification-contract.json",
@@ -62,22 +76,25 @@
     "src/zoho-catalyst/revenue-desk-release/private-route-packet-contract.json"
   ],
   "environment_modes": {
-    "Development": "contained-setup-journey"
+    "Development": "bounded-setup-journey"
   },
   "installation_scope": {
     "crm": {
       "modules": ["Leads", "Deals"],
       "functions": [
         "start_free_revenue_leak_test_request",
+        "open_free_test_setup",
         "initialize_setup_access_issue_request_id",
-        "issue_revenue_leak_test_setup"
+        "issue_revenue_leak_test_setup",
+        "approve_and_start_free_test",
+        "stop_or_rollback_free_test"
       ],
       "controls": [
         "Start Free-Test Request",
+        "Open Free-Test Setup",
         "Issue Revenue Leak Test Setup",
-        "Record Internal Approval",
-        "Activate Test Route",
-        "Close Live Test"
+        "Approve And Start Free Test",
+        "Stop Or Roll Back Free Test"
       ],
       "workflow_rules": [
         "Leads Free Test Intake Review",
@@ -100,15 +117,21 @@
         "revenue_leak_test_request_form",
         "revenue_leak_test_setup_form",
         "revenue_desk_call_gateway",
+        "revenue_desk_route_control",
         "revenue_desk_call_worker"
       ],
       "job_pools": ["RevenueDeskCallJobs"],
+      "route_profile": "setup-journey",
       "route_ids": [
         "RETELL_INBOUND",
         "RETELL_EVENTS",
         "RETELL_READINESS",
+        "ROUTE_CONTROL_APPROVE",
+        "ROUTE_CONTROL_ACTIVATE",
+        "ROUTE_CONTROL_ROLLBACK",
         "FORM1_ISSUE",
         "FORM1_PREFILL",
+        "FORM1_SUBMISSION",
         "FORM2_ISSUE",
         "FORM2_ACCESS",
         "FORM2_OTP_REQUEST",
@@ -117,14 +140,23 @@
         "FORM2_SUBMISSION"
       ],
       "deferred_route_ids": ["CRM_BILLING"],
-      "gateway_activation_authorized": false
+      "development_api_gateway_availability_authorized": true,
+      "development_api_gateway_required_post_install_state": "enabled",
+      "gateway_enablement_requires_exact_route_readback": true,
+      "route_packet_gateway_activation_authorized": false,
+      "retell_route_mode": "disabled",
+      "retell_provider_binding_authorized": false,
+      "production_gateway_activation_authorized": false
     },
     "retell": {
       "local_agent_key": "agent_7_day_free_test",
       "mode": "development-or-draft-only",
       "publish_authorized": false,
       "real_traffic_authorized": false,
-      "number_binding": "synthetic-or-provider-test-resource-only"
+      "number_binding": "synthetic-or-provider-test-resource-only",
+      "installation_number_binding_authorized": false,
+      "installation_webhook_provider_binding_authorized": false,
+      "activation_failure_code_when_disabled": "ISOLATED_RETELL_TEST_NUMBER_REQUIRED"
     },
     "billing_test": {
       "involved": false

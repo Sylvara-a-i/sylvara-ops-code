@@ -70,6 +70,20 @@ function configuration(letter) {
       recipientId: `recipient_${letter}`, approved: true, name: `Recipient ${letter}`,
       channel: 'email', email: `${letter.toLowerCase()}@example.invalid`, mobile: null,
     },
+    phoneSystemProvider: 'Synthetic PBX',
+    approvedTestRoute: letter === 'A' ? 'After Hours Only' : 'No Answer / Overflow Only',
+    noAnswerDelay: letter === 'A' ? null : 25,
+    forwardingAdministratorName: `Synthetic Administrator ${letter}`,
+    forwardingAdministratorMobile: letter === 'A' ? '+15550102301' : '+15550102302',
+    approvedFallbackDestination: 'Voicemail', approvedFallbackNumber: null,
+    rollbackContactName: `Synthetic Rollback ${letter}`,
+    rollbackContactMobile: letter === 'A' ? '+15550102501' : '+15550102502',
+    rollbackInstructions: 'Disable the synthetic forwarding rule and confirm the original route.',
+    rollbackInstructionsVersion: 'synthetic_v1',
+    authorizedRepresentativeConfirmed: true, testScopeAccepted: true,
+    authorityConfirmedAt: '2026-08-20T11:30:00.000Z',
+    setupFormSubmissionId: `synthetic_form2_${letter}`,
+    setupFormVersion: 'synthetic_form2_v1',
   };
 }
 
@@ -174,9 +188,21 @@ function authorizationRows(deployment, configurationVersion, letter) {
     EXPIRES_AT: expiresAt,
     DECIDED_AT: actualStartAt,
   };
-  return [approval, activation].map((event) => authorizationReceiptRow(event, {
+  return [approval, activation].map((event, index) => authorizationReceiptRow(event, {
     sourceRevision: SOURCE_REVISION,
     environment: 'development',
+    controlBinding: {
+      schemaVersion: 1,
+      action: event.ACTION,
+      dealId: configuration(letter).crmDealId,
+      journeyId: `journey_${letter.toLowerCase()}`,
+      deploymentId: event.DEPLOYMENT_ID,
+      configurationVersionId: event.CONFIGURATION_VERSION_ID,
+      idempotencyKey: `00000000-0000-4000-8000-00000000000${letter === 'A' ? index + 1 : index + 3}`,
+      reason: null,
+      deploymentControlPrestateDigest: null,
+      deploymentControlPoststateDigest: null,
+    },
   }));
 }
 

@@ -1,65 +1,70 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "environment": "Development",
-  "gateway_state": "required-disabled-assisted-token-transport-unresolved",
+  "gateway_state": "required-active-exact-routes",
   "function": "revenue_leak_test_request_form",
   "default_action": "reject",
   "cors": false,
-  "crm_button_state": "retained_bound_to_exact_local_fail_closed_function_not_a_remote_route_caller",
   "routes": [
     {
       "id": "FORM1_ISSUE",
       "method": "POST",
       "path_reference": "ISSUE_PATH",
-      "intended_future_caller": "administrator-restricted CRM button function",
-      "route_state": "disabled",
-      "caller_binding_state": "unbound",
+      "caller": "administrator-restricted CRM button function",
+      "route_state": "active-after-install-readback",
       "authentication": {
-        "type": "independent custom header",
+        "type": "Catalyst project binding plus independent custom header",
         "name_reference": "ISSUE_HEADER_NAME",
         "secret_reference": "ISSUE_HEADER_SECRET"
       },
       "content_type": "application/json",
-      "rate_limit_per_minute": 30,
-      "rate_limit_per_ip_per_minute": 10,
-      "controller_state": "fail-closed-after-header-validation-before-body-sdk-datastore-adapter-crm-connection-or-outbound-io",
-      "current_response_status": 503,
-      "successful_response_available": false
+      "body_keys": ["crmModule", "recordId", "journeyId"],
+      "success_status": 201
     },
     {
       "id": "FORM1_PREFILL",
       "method": "POST",
       "path_reference": "PREFILL_PATH",
-      "intended_future_caller": "Zoho Forms server-side Prefill Webhook",
-      "route_state": "disabled",
-      "caller_binding_state": "unbound",
+      "caller": "Zoho Forms server-side Prefill Webhook",
+      "route_state": "active-after-install-readback",
       "authentication": {
-        "type": "independent custom header",
+        "type": "Catalyst project binding plus independent custom header",
         "name_reference": "PREFILL_HEADER_NAME",
         "secret_reference": "PREFILL_HEADER_SECRET"
       },
       "content_type": "application/json",
-      "rate_limit_per_minute": 120,
-      "rate_limit_per_ip_per_minute": 30,
-      "controller_state": "fail-closed-after-header-validation-before-body-sdk-datastore-adapter-crm-connection-or-outbound-io",
-      "current_response_status": 503,
-      "successful_response_available": false
+      "body_keys": ["token"],
+      "success_status": 200
+    },
+    {
+      "id": "FORM1_SUBMISSION",
+      "method": "POST",
+      "path_reference": "SUBMISSION_PATH",
+      "caller": "Zoho Forms server-side submission webhook",
+      "route_state": "active-after-install-readback",
+      "authentication": {
+        "type": "Catalyst project binding plus independent custom header",
+        "name_reference": "SUBMISSION_HEADER_NAME",
+        "secret_reference": "SUBMISSION_HEADER_SECRET"
+      },
+      "content_type": "application/json",
+      "assisted_body_keys": ["token", "submissionId", "formData"],
+      "public_body_keys": ["submissionId"],
+      "success_status": 200
     }
   ],
-  "activation_gates": [
-    "Keep both current and predecessor assisted routes disabled. Keep the retained CRM button bound only to the exact local fail-closed function, keep its remote route caller unbound, and keep the Forms Prefill Webhook unbound.",
-    "The contained source has no token, Form URL, CRM Connection, Data Store adapter, session, Catalyst SDK, or outbound-network capability; the Advanced I/O adapter still performs header and response I/O.",
-    "Any future assisted flow requires a new reviewed transport, controller, credential, data, request, response, rollback, and readback contract; this manifest cannot authorize activation.",
-    "Read back every existing Retell-project Advanced I/O endpoint and Security Rule before enabling API Gateway.",
-    "Deploy and read back the exact containment source revision and its reduced variable map before any live cleanup.",
-    "Preserve predecessor source, routes, variables, Connections, and tables as disabled evidence until separately approved cleanup readback succeeds.",
-    "Reject any optional-auth or wildcard route."
+  "security_invariants": [
+    "The launch URL contains only one opaque 32-byte bearer in the reviewed Form field alias; it contains no CRM ID, journey ID, name, email, phone, or company value.",
+    "Only a keyed digest of the bearer is persisted. Raw bearer values are never logged or stored.",
+    "Issue, prefill, and submission use different route secrets and exact POST-only paths.",
+    "The assisted submission contains no CRM record or journey identifier and resolves both exclusively from the durable token binding.",
+    "A tokenless public acknowledgment performs no assisted Data Store or CRM operation; the existing native public upsert remains the public writer.",
+    "Production remains dark."
   ],
   "rollback": {
-    "containment_target": "both current and predecessor Form 1 assisted routes inactive, the remote CRM route caller and Forms Prefill Webhook unbound, and the retained CRM button bound only to the exact local fail-closed function",
-    "first": "restore the retained CRM button to the exact local fail-closed function or disable it if that exact binding cannot be proven; unbind any remote route caller and the Forms Prefill Webhook",
-    "then": "disable both current and predecessor Form 1 assisted routes",
-    "prohibited": "do not restore any pre-containment Form 1 route, caller binding, variable map, Connection grant, or artifact revision",
-    "preserve": ["legacy function", "legacy routes", "legacy session rows", "target session rows"]
+    "first": "unbind the CRM assisted launcher and both Zoho Forms server-side callers",
+    "then": "disable the three exact Development routes or the Development API Gateway",
+    "preserve": ["session rows", "CRM history", "public Form 1 native integration", "old CRM control"],
+    "delete_history": false
   }
 }

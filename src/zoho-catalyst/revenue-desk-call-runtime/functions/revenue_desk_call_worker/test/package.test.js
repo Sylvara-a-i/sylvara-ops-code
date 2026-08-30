@@ -24,9 +24,11 @@ test('job target is independently deployable and imports a materialized reviewed
   assert.equal(Object.hasOwn(config.deployment, 'env_variables'), false);
   assert.equal(config.execution.main, 'index.js');
   const projectConfig = JSON.parse(fs.readFileSync(path.join(functionRoot, '..', '..', 'catalyst.json'), 'utf8'));
-  assert.deepEqual(projectConfig.functions.targets, ['revenue_desk_call_gateway', 'revenue_desk_call_worker']);
+  assert.deepEqual(projectConfig.functions.targets, [
+    'revenue_desk_call_gateway', 'revenue_desk_route_control', 'revenue_desk_call_worker',
+  ]);
   assert.equal(projectConfig.functions.scripts.predeploy,
-    'npm --prefix revenue_desk_call_worker ci --ignore-scripts --install-links');
+    'npm --prefix revenue_desk_route_control ci --ignore-scripts --install-links && npm --prefix revenue_desk_call_worker ci --ignore-scripts --install-links');
   const retryConfig = JSON.parse(fs.readFileSync(
     path.join(functionRoot, '..', '..', 'config', 'retry-job.json'), 'utf8',
   ));

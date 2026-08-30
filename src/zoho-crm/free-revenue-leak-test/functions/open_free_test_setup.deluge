@@ -1,0 +1,73 @@
+/*
+Owning workflow: CRM record-bound assisted Form 1 launch.
+Trigger: Administrator-restricted Leads or Deals record-details button.
+Inputs: current record ID and fixed module API name from the button binding.
+Security: Catalyst reads/initializes the canonical CRM journey with a conditional
+server-side write. It receives record identity only over an authenticated private
+request and returns a URL containing only one opaque bearer token. No record ID
+or PII enters the URL.
+Idempotency: Catalyst conditionally initializes the journey only when blank and
+rotates or resumes the token session for the authoritative canonical journey.
+Failure: no URL opens unless the exact 201 response and URL grammar verify.
+Logging: coarse outcomes only; never log IDs, tokens, URLs, payloads, or errors.
+Rollback: disable this replacement button and leave the retained containment button.
+*/
+
+can_open = false;
+destination_url = "";
+try
+{
+	record_id_text = ifnull(input.record_id,"").toString().trim();
+	module_text = ifnull(input.crm_module,"").toString().trim();
+	valid_record = record_id_text.matches("^[1-9][0-9]{9,29}$");
+	valid_module = module_text == "Leads" || module_text == "Deals";
+	if(valid_record && valid_module)
+	{
+		request_body = Map();
+		request_body.put("crmModule",module_text);
+		request_body.put("recordId",record_id_text);
+		request_headers = Map();
+		request_headers.put("Content-Type","application/json");
+		issue_response = invokeurl
+		[
+			url : "{{FORM1_ISSUE_URL}}"
+			type : POST
+			body : request_body.toString()
+			headers : request_headers
+			connection : "{{FORM1_ISSUE_CONNECTION_LINK_NAME}}"
+			detailed : true
+			response-format : STRING
+		];
+		if(issue_response != null && issue_response.containKey("responseCode") && issue_response.get("responseCode").toString() == "201" && issue_response.containKey("responseText"))
+		{
+			response_text = ifnull(issue_response.get("responseText"),"").toString();
+			if(response_text.length() > 0 && response_text.length() <= 4096)
+			{
+				response_body = response_text.toMap();
+				if(response_body != null && response_body.size() == 3 && response_body.get("ok") == true && response_body.containKey("formUrl") && response_body.containKey("expiresAt"))
+				{
+					form_url = ifnull(response_body.get("formUrl"),"").toString();
+					expires_at = ifnull(response_body.get("expiresAt"),"").toString();
+					prefix = "{{FORM1_PUBLIC_URL}}?{{FORM1_TOKEN_FIELD_ALIAS}}=";
+					if(form_url.startsWith(prefix) && form_url.length() == prefix.length() + 43 && form_url.right(43).matches("^[A-Za-z0-9_-]{43}$") && !form_url.contains("&") && !form_url.contains("#") && !form_url.contains(record_id_text) && expires_at.matches("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{3})?Z$"))
+					{
+						can_open = true;
+						destination_url = form_url;
+					}
+				}
+			}
+		}
+	}
+}
+catch(failure)
+{
+	info "form1_assisted_issue_failed";
+}
+if(can_open == true)
+{
+	openUrl(destination_url,"new window","successive=true");
+}
+else
+{
+	info "form1_assisted_issue_rejected";
+}

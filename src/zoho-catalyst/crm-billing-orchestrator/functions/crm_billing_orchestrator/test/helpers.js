@@ -6,6 +6,8 @@ const {
 } = require("../lib/commercial-terms");
 
 const REVISION = "a".repeat(40);
+const SYNTHETIC_CRM_READ_LINK = "syntheticfixturevalue123456789";
+const SYNTHETIC_CRM_WRITE_LINK = "syntheticbillingsecret1234";
 const DEVELOPMENT_RUNTIME_PROOF = "r".repeat(64);
 const SYNTHETIC_DEVELOPMENT_ZAID = "synthetic-development-zaid";
 const DEVELOPMENT_ZAID_HMAC_SHA256 = crypto
@@ -50,8 +52,8 @@ function baseEnvironment(overrides = {}) {
     BILLING_ORGANIZATION_ID: "100000000000001",
     CUSTOMER_PROVISIONING_MODE: "test_direct_customer",
     ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING: "true",
-    CRM_READ_CONNECTION_LINK_NAME: "CrmRead",
-    CRM_WRITE_CONNECTION_LINK_NAME: "CrmWrite",
+    CRM_READ_CONNECTION_LINK_NAME: SYNTHETIC_CRM_READ_LINK,
+    CRM_WRITE_CONNECTION_LINK_NAME: SYNTHETIC_CRM_WRITE_LINK,
     BILLING_READ_CONNECTION_LINK_NAME: "BillingRead",
     BILLING_WRITE_CONNECTION_LINK_NAME: "BillingWrite",
     OPERATION_TABLE: "CRMBillingOperations",

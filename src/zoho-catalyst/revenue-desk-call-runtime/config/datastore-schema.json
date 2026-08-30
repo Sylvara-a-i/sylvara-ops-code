@@ -404,7 +404,7 @@
     {
       "runtime_variable": "EVENT_RECEIPT_TABLE",
       "api_name": "RevenueDeskEventReceipts",
-      "purpose": "Append-only minimized inbound-resolution, provider-event, and authorization-event evidence. Provider-event rows also own the durable Function Job dispatch fence and processing leases.",
+      "purpose": "Append-only minimized inbound-resolution, provider-event, authorization-event, and deployment-global rollback-claim evidence. Provider-event rows also own the durable Function Job dispatch fence and processing leases; rollback claims fence activation and runtime admission until exact rollback completion or reconciliation.",
       "required_unique_columns": [
         "EVENT_KEY"
       ],

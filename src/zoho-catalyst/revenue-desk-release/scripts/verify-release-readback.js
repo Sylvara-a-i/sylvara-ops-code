@@ -22,16 +22,16 @@ function loadJson(name) {
 }
 
 const profileContracts = Object.freeze({
-  'canonical-six': 'release-contract.json',
+  'canonical-seven': 'release-contract.json',
   'setup-journey': 'setup-journey-release-contract.json',
 });
 
 try {
   const selectedProfiles = values('--profile');
   if (selectedProfiles.length > 1) throw new Error('--profile must not be repeated.');
-  const profile = selectedProfiles[0] || 'canonical-six';
+  const profile = selectedProfiles[0] || 'canonical-seven';
   const contractFile = profileContracts[profile];
-  if (!contractFile) throw new Error('--profile must be canonical-six or setup-journey.');
+  if (!contractFile) throw new Error('--profile must be canonical-seven or setup-journey.');
   const contract = JSON.parse(fs.readFileSync(path.resolve(__dirname, '..', contractFile), 'utf8'));
   verifyReadback(loadJson('--manifest'), loadJson('--readback'), contract);
   process.stdout.write('release-readback-ok\n');

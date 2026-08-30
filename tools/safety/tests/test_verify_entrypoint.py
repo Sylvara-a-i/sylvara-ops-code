@@ -68,14 +68,14 @@ class VerifyEntrypointTests(unittest.TestCase):
         self.assertIn('"--require-hashes"', self.script)
         self.assertIn('"ci", "--ignore-scripts", "--no-audit", "--no-fund"', self.script)
         self.assertEqual(
-            7,
+            8,
             self.script.count('"ci", "--ignore-scripts", "--no-audit", "--no-fund"'),
         )
         self.assertIn('"--install-links"', self.script)
         self.assertIn('if ($Mode -eq "All") {', self.script)
         self.assertIn('"audit", "--omit=dev", "--audit-level=moderate"', self.script)
         self.assertEqual(
-            7,
+            8,
             self.script.count('"audit", "--omit=dev", "--audit-level=moderate"'),
         )
         self.assertIn('$env:npm_config_offline = "true"', self.script)
@@ -139,6 +139,7 @@ class VerifyEntrypointTests(unittest.TestCase):
             '"run", "ci", "--prefix", $RequestFormRoot',
             '"run", "ci", "--prefix", $SetupFormRoot',
             '"run", "ci", "--prefix", $RevenueDeskCallGatewayRoot',
+            '"run", "ci", "--prefix", $RevenueDeskRouteControlRoot',
             '"run", "ci", "--prefix", $RevenueDeskCallWorkerRoot',
             '"run", "ci", "--prefix", $RevenueDeskAnalyticsRoot',
         ):
@@ -161,6 +162,7 @@ class VerifyEntrypointTests(unittest.TestCase):
         self.assertIn('$RequestFormRoot = Join-PathSegments $RepoRoot @(', self.script)
         self.assertIn('$SetupFormRoot = Join-PathSegments $RepoRoot @(', self.script)
         self.assertIn('$RevenueDeskCallGatewayRoot = Join-PathSegments $RepoRoot @(', self.script)
+        self.assertIn('$RevenueDeskRouteControlRoot = Join-PathSegments $RepoRoot @(', self.script)
         self.assertIn('$RevenueDeskCallWorkerRoot = Join-PathSegments $RepoRoot @(', self.script)
         self.assertIn('$RevenueDeskAnalyticsRoot = Join-PathSegments $RepoRoot @(', self.script)
         self.assertIn('"node_modules", "revenue_desk_call_gateway", "package.json"', self.script)
@@ -181,11 +183,12 @@ class VerifyEntrypointTests(unittest.TestCase):
     def test_revenue_desk_topology_is_fail_closed_and_exact(self) -> None:
         self.assertIn("function Assert-RevenueDeskTopology", self.script)
         self.assertIn("canonical_project_count -ne 1", self.script)
-        self.assertIn("final_active_function_count -ne 6", self.script)
+        self.assertIn("final_active_function_count -ne 7", self.script)
         for exact_fragment in (
             "revenue_leak_test_request_form|Advanced I/O",
             "revenue_leak_test_setup_form|Advanced I/O",
             "revenue_desk_call_gateway|Advanced I/O",
+            "revenue_desk_route_control|Advanced I/O",
             "revenue_desk_call_worker|Job",
             "crm_billing_orchestrator|Advanced I/O",
             "analytics_sync|Job",
@@ -199,6 +202,7 @@ class VerifyEntrypointTests(unittest.TestCase):
     def test_ci_and_dependabot_use_only_the_new_revenue_desk_packages(self) -> None:
         canonical_paths = (
             "src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_gateway",
+            "src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_route_control",
             "src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_worker",
             "src/zoho-catalyst/revenue-desk-analytics/functions/analytics_sync",
         )

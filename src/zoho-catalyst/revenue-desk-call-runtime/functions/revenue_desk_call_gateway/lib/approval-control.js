@@ -5,6 +5,10 @@ const { CONTRACT, COVERAGE_MODES } = require('./contracts');
 const { validateConfigurationVersionRow } = require('./configuration-version');
 const { invariant } = require('./errors');
 const { keyedDigest } = require('./security');
+const {
+  authorizationReceiptFingerprint,
+  serializeAuthorizationReceiptData,
+} = require('./authorization-receipt');
 
 const INTENT_FIELDS = Object.freeze([
   'schema_version', 'event_id', 'action', 'deployment_id', 'configuration_version_id',
@@ -18,7 +22,8 @@ const ACTIVATION_INTENT_FIELDS = Object.freeze([
   'operator_id_hash', 'expected_deployment_version',
 ]);
 const ROUTE_FIELDS = Object.freeze([
-  'deployment_id', 'configuration_version_id', 'configuration_snapshot_fingerprint',
+  'client_id', 'deployment_id', 'configuration_version_id',
+  'configuration_snapshot_fingerprint',
   'number_lookup_hash', 'binding_id',
   'binding_version', 'monitor_agent_id', 'monitor_agent_version', 'coverage_mode',
   'call_limit', 'source_revision', 'environment',
@@ -199,6 +204,7 @@ function verifySignedActivationIntent({
 function validateRoute(route) {
   const code = 'INVALID_ROUTE_FINGERPRINT_INPUT';
   exactObject(route, ROUTE_FIELDS, code, 'Route');
+  boundedString(route.client_id, OPAQUE_ID_PATTERN, code, 'Client ID');
   boundedString(route.deployment_id, OPAQUE_ID_PATTERN, code, 'Deployment ID');
   boundedString(route.configuration_version_id, OPAQUE_ID_PATTERN, code,
     'Configuration-version ID');
@@ -256,6 +262,7 @@ function routeFromRows(deployment, configurationVersion) {
   invariant(isPlainObject(deployment) && isPlainObject(configurationVersion),
     'APPROVAL_PRECONDITION_FAILED', 'Deployment and configuration version are required.');
   return {
+    client_id: deployment.CLIENT_ID,
     deployment_id: deployment.DEPLOYMENT_ID,
     configuration_version_id: configurationVersion.CONFIGURATION_VERSION_ID,
     configuration_snapshot_fingerprint: configurationSnapshotFingerprint(configurationVersion),
@@ -614,7 +621,7 @@ function evaluateActivationTransition({
   });
 }
 
-function authorizationReceiptRow(event, { sourceRevision, environment }) {
+function authorizationReceiptRow(event, { sourceRevision, environment, controlBinding }) {
   invariant(isPlainObject(event)
     && (APPROVAL_EVENT_PATTERN.test(event.AUTHORIZATION_EVENT_ID || '')
       || ACTIVATION_EVENT_PATTERN.test(event.AUTHORIZATION_EVENT_ID || ''))
@@ -647,11 +654,13 @@ function authorizationReceiptRow(event, { sourceRevision, environment }) {
     routeObservedAt: event.ROUTE_OBSERVED_AT ?? null,
     actualStartAt: event.ACTUAL_START_AT ?? null,
     expiresAt: event.EXPIRES_AT ?? null,
+    controlBinding,
   };
-  const serializedEvent = JSON.stringify(eventData);
-  const receiptFingerprint = crypto.createHash('sha256')
-    .update('revenue-desk-authorization-receipt-v1\0', 'utf8')
-    .update(serializedEvent, 'utf8').digest('hex');
+  const serializedEvent = serializeAuthorizationReceiptData(eventData, {
+    code: 'INVALID_APPROVAL_EVENT',
+    message: 'Authorization receipt payload is invalid.',
+  });
+  const receiptFingerprint = authorizationReceiptFingerprint(serializedEvent);
   return Object.freeze({
     EVENT_KEY: event.AUTHORIZATION_EVENT_ID,
     RECEIPT_KIND: 'authorization_event',

@@ -8,7 +8,6 @@ const SHA_PATTERN = /^[a-f0-9]{40}$/;
 const DIGEST_PATTERN = /^[a-f0-9]{64}$/;
 const SAFE_NAME_PATTERN = /^[A-Za-z0-9._-]+$/;
 const ARTIFACT_PROVENANCE_SCHEMA = 'revenue-desk-artifact-provenance-v1';
-const DEFAULT_RELEASE_KIND = 'revenue_desk_six_function_release';
 const MAX_FILE_BYTES = 32 * 1024 * 1024;
 const MAX_ARTIFACT_BYTES = 128 * 1024 * 1024;
 
@@ -46,7 +45,10 @@ function canonicalJson(value) {
 }
 
 function releaseKind(contract) {
-  const value = contract.release_kind || DEFAULT_RELEASE_KIND;
+  const value = contract.release_kind;
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new Error('Release kind is required.');
+  }
   if (!SAFE_NAME_PATTERN.test(value)) throw new Error('Release kind is invalid.');
   return value;
 }

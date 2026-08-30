@@ -1,10 +1,11 @@
 {
-  "schema_version": 8,
+  "schema_version": 9,
   "record_type": "revenue_desk_call_runtime_readiness_contract",
   "current_status": "unverified_requires_deployment_and_readback",
   "source_revision_committed": false,
   "targets": [
     "revenue_desk_call_gateway",
+    "revenue_desk_route_control",
     "revenue_desk_call_worker"
   ],
   "development": {
@@ -52,8 +53,13 @@
     "results_review_at": "human_only"
   },
   "approval_control": {
-    "execution_boundary": "out_of_band_private_change_control_only",
-    "adds_gateway_route_function_or_worker_mode": false,
+    "execution_boundary": "authenticated_private_development_route_control_function",
+    "target": "revenue_desk_route_control",
+    "adds_public_gateway_route_or_worker_mode": false,
+    "separate_operations": ["approve", "activate", "rollback"],
+    "full_deployment_row_compare_and_set": true,
+    "activation_failure_preserves_approved_inactive_state": true,
+    "rollback_blocks_runtime_before_provider_unbind": true,
     "approval_status": "Scheduled",
     "activation_status": "Live",
     "seven_day_clock_origin": "authoritative_route_activation_readback_then_activation_receipt",

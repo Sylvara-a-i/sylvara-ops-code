@@ -1,20 +1,20 @@
 # Revenue Desk Release Boundary
 
-This package creates and verifies immutable release manifests for two closed profiles. The default `canonical-six` profile preserves the six canonical Catalyst functions, thirteen tables, and both Function Job pools. The Development-only `setup-journey` profile binds the four setup-critical functions, eleven runtime dependencies, CRM and Forms contracts, Retell's provider-neutral contract, and the intended source installation scope to one Git commit. The scope is desired-state provenance, not provider-observed state or installation authorization. The builder does not trust the caller's `function=path` label: it inspects the artifact's Catalyst target, package and lock identity, and immutable source-revision stamp, then produces a provenance digest that also binds the artifact hash to the exact Git-derived source-tree digest.
+This package creates and verifies immutable release manifests for two closed profiles. The default `canonical-seven` profile preserves the seven canonical Catalyst functions, thirteen tables, and both Function Job pools. The Development-only `setup-journey` profile binds the five setup-critical functions, twelve tables, one Function Job pool, CRM and Forms contracts, Retell's provider-neutral contract, and the intended source installation scope to one Git commit. The scope is desired-state provenance, not provider-observed state. The builder does not trust the caller's `function=path` label: it inspects the artifact's Catalyst target, package and lock identity, and immutable source-revision stamp, then produces a provenance digest that also binds the artifact hash to the exact Git-derived source-tree digest.
 
-The manifest is evidence, not a deployer. It contains no project, organization, route value, Connection, credential, or production record identifier. Build the six function artifacts with their owning package builders, then run the default profile:
-
-```text
-node scripts/build-release-manifest.js --source-revision <exact-head-sha> --environment Development --artifact revenue_leak_test_request_form=<path> --artifact revenue_leak_test_setup_form=<path> --artifact revenue_desk_call_gateway=<path> --artifact revenue_desk_call_worker=<path> --artifact crm_billing_orchestrator=<path> --artifact analytics_sync=<path> --output <outside-repository-path>
-```
-
-For the bounded setup journey, build only the four selected artifacts and use the closed profile:
+The manifest is evidence, not a deployer. It contains no project, organization, route value, Connection, credential, or production record identifier. Build the seven function artifacts with their owning package builders, then run the default profile:
 
 ```text
-node scripts/build-release-manifest.js --profile setup-journey --source-revision <exact-head-sha> --environment Development --artifact revenue_leak_test_request_form=<path> --artifact revenue_leak_test_setup_form=<path> --artifact revenue_desk_call_gateway=<path> --artifact revenue_desk_call_worker=<path> --output <outside-repository-path>
+node scripts/build-release-manifest.js --source-revision <exact-head-sha> --environment Development --artifact revenue_leak_test_request_form=<path> --artifact revenue_leak_test_setup_form=<path> --artifact revenue_desk_call_gateway=<path> --artifact revenue_desk_call_worker=<path> --artifact revenue_desk_route_control=<path> --artifact crm_billing_orchestrator=<path> --artifact analytics_sync=<path> --output <outside-repository-path>
 ```
 
-The setup profile selects the first eleven canonical API Gateway route IDs and explicitly defers `CRM_BILLING`; it never authorizes gateway activation. It is therefore a containment/preflight manifest, not an executable Phase 2 installation manifest. Form 2 issuance and Retell webhook ingress remain unavailable until a separate private all-route activation boundary has fresh provider prestate, exact target bindings, rollback, scoped authorization, and authoritative post-write readback. Verify only the four Catalyst artifacts and resource inventory with `verify-release-readback.js --profile setup-journey`; CRM, Forms, Retell, route activation, and traffic state require separate provider-observed evidence. Unknown profiles, arbitrary contract paths, and Production setup-journey manifests fail closed.
+For the bounded setup journey, build only the five selected artifacts and use the closed profile:
+
+```text
+node scripts/build-release-manifest.js --profile setup-journey --source-revision <exact-head-sha> --environment Development --artifact revenue_leak_test_request_form=<path> --artifact revenue_leak_test_setup_form=<path> --artifact revenue_desk_call_gateway=<path> --artifact revenue_desk_call_worker=<path> --artifact revenue_desk_route_control=<path> --output <outside-repository-path>
+```
+
+The setup profile selects the exact fifteen-route `setup-journey` API Gateway profile and explicitly defers `CRM_BILLING`. Create those routes while the Development gateway is disabled, read back every exact route and target binding, then enable only the Development API Gateway and verify availability. The private route-creation packet itself never authorizes that enablement. `RETELL_ROUTE_MODE` remains `disabled`; no Retell number, webhook/provider binding, publish, call, or Production gateway activation is authorized. In this state the activation control fails closed with `ISOLATED_RETELL_TEST_NUMBER_REQUIRED`. Verify all five Catalyst artifacts and resource inventory with `verify-release-readback.js --profile setup-journey`; CRM, Forms, Retell, gateway availability, and traffic state still require separate provider-observed evidence. Unknown profiles, arbitrary contract paths, and Production setup-journey manifests fail closed.
 
 Each artifact path must be its Catalyst project root and contain `catalyst.json` plus `functions/<canonical-name>/package.json` and its lockfile. The checkout must be clean and the output must be outside Git. After deployment, create an allowlisted sanitized readback containing only the fields accepted by `verify-release-readback.js`. Exact function, source, artifact, table, Job-pool, contract, and environment parity is mandatory. Production additionally fails unless traffic, routes, and schedules are all dark.
 
@@ -25,7 +25,7 @@ Private API Gateway route values are governed by
 contract and requires its canonical `routeContractSha256` in both the packet and
 approval envelope, so a method, authentication, throttling, function, or other
 contract-file drift invalidates the approval. Keep the populated packet outside Git and
-validate it before and after binding the four Advanced I/O function IDs:
+validate it before and after binding the selected Advanced I/O function IDs:
 
 ```text
 node scripts/validate-private-route-packet.js <absolute-private-packet-path>
@@ -33,7 +33,8 @@ node scripts/validate-private-route-packet.js <absolute-private-bound-packet-pat
 node scripts/validate-private-route-packet.js <absolute-private-continuation-packet-path> <absolute-private-continuation-approval-path> <absolute-private-original-bound-packet-path>
 ```
 
-The validator fixes the 12 physical routes, authentication modes, one-minute
+The validator fixes either the exact 16-route `canonical-all` profile or the
+exact 15-route `setup-journey` profile, including authentication modes, one-minute
 overall/IP throttles, target functions, disabled zero-route prestate, and
 rollback order. The private packet must contain one ordered runtime-path binding
 for every contract route. Each binding repeats the canonical route ID, function,
@@ -49,8 +50,8 @@ partial or ambiguous execution. Once authoritative readback confirms that one
 or more routes exist, keep the gateway disabled and create a schema-v2
 `continuation` packet outside every worktree. Schema v2 is accepted only when the
 existing routes are a non-empty, incomplete, exact ordered prefix of the same
-12-route contract. It carries all 12 original endpoint and target bindings, all
-12 runtime-path bindings, the original zero-route prestate evidence digest, and
+closed route profile. It carries every original endpoint and target binding, every
+runtime-path binding, the original zero-route prestate evidence digest, and
 the exact initial bound-packet digest. The separately preserved original
 schema-v1 bound packet is a required validation input. The validator validates
 that packet independently, requires its digest to match, reconstructs the
@@ -90,7 +91,7 @@ UTC `capturedAt` and `expiresAt` timestamps no more than 15 minutes apart and
 `singleUse: true`; it is valid only at or after capture and before expiry. The
 validator checks that declaration and time window but does not maintain a replay
 database. Use the envelope for exactly one route-creation execution, discard it,
-and independently read back all 12 routes immediately. Never reuse it for a retry.
+and independently read back every route in the selected profile immediately. Never reuse it for a retry.
 After a partial, timed-out, or ambiguous result, read back first and obtain a new
 packet/evidence/approval for any still-required write.
 
@@ -107,7 +108,7 @@ For the authenticated-browser fallback, the Catalyst console may open the custom
 route form directly after the first custom route instead of showing the initial
 creation-mode chooser. Treat that only as a navigation-state change. Populate
 the next request returned by `buildRouteRequests`; never replay the first item
-from the original 12-request list.
+from the original selected-profile request list.
 
 Each Advanced I/O target is derived as
 `/server/<canonical-function><approved-runtime-path>`; a caller cannot supply or

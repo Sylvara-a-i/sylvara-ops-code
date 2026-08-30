@@ -438,7 +438,35 @@ test('unit: approved gate taxonomies, engagement types, and capability profiles 
 test('unit: environment registry permits only minimal Production dark mode and rejects unsafe values', () => {
   const registry = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', '..', 'config', 'variables.json'), 'utf8'));
   const env = environment();
-  assert.deepEqual(Object.keys(env).sort(), registry.variables.map(({ name }) => name).sort());
+  assert.deepEqual(Object.keys(env).sort(), registry.variables
+    .filter(({ consumer }) => consumer !== 'route_control')
+    .map(({ name }) => name).sort());
+  const controlNames = registry.variables
+    .filter(({ consumer }) => consumer === 'route_control').map(({ name }) => name);
+  assert.equal(controlNames.length >= 17, true);
+  assert.equal(new Set(controlNames).size, controlNames.length);
+  const routeControlSet = registry.function_variable_sets.revenue_desk_route_control;
+  assert.equal(routeControlSet.always_required.length, 28);
+  assert.equal(routeControlSet.required_when_retell_route_mode_isolated_test.length, 5);
+  const routeControlNames = [
+    ...routeControlSet.always_required,
+    ...routeControlSet.required_when_retell_route_mode_isolated_test,
+  ];
+  assert.equal(new Set(routeControlNames).size, routeControlNames.length,
+    'route-control variable ownership must not duplicate a variable');
+  const registryNames = new Set(registry.variables.map(({ name }) => name));
+  assert.equal(routeControlNames.every((name) => registryNames.has(name)), true,
+    'every route-control variable must be documented in the shared registry');
+  const routeControlExample = fs.readFileSync(path.join(
+    __dirname, '..', '..', 'revenue_desk_route_control', '.env.example',
+  ), 'utf8');
+  const routeControlExampleNames = routeControlExample.split(/\r?\n/)
+    .filter((line) => /^[A-Z][A-Z0-9_]*=/.test(line))
+    .map((line) => line.slice(0, line.indexOf('=')));
+  assert.equal(new Set(routeControlExampleNames).size, routeControlExampleNames.length,
+    'route-control environment example must not duplicate a variable');
+  assert.deepEqual(routeControlExampleNames.sort(), routeControlNames.sort(),
+    'route-control install ownership must exactly match its environment example');
   const workerExample = fs.readFileSync(path.join(
     __dirname, '..', '..', 'revenue_desk_call_worker', '.env.example',
   ), 'utf8');
@@ -1000,6 +1028,9 @@ test('unit: runtime readiness keeps Development gated and Production uncondition
     ['DEPLOYMENT_ENVIRONMENT', 'DEPLOYMENT_MODE', 'SOURCE_REVISION']);
   assert.equal(readiness.production.all_gateway_and_worker_invocations,
     '503_before_sdk_or_store');
+  assert.equal(readiness.approval_control.target, 'revenue_desk_route_control');
+  assert.deepEqual(readiness.approval_control.separate_operations,
+    ['approve', 'activate', 'rollback']);
   assert.equal(readiness.production.traffic_or_activation_authorized, false);
   assert.equal(readiness.tables.canonical_operational.length, 5);
   assert.deepEqual(readiness.tables.delivery_infrastructure,
@@ -1013,16 +1044,17 @@ test('unit: runtime readiness keeps Development gated and Production uncondition
   assert.equal(readiness.legacy_deletion_gate.safe, false);
 });
 
-test('unit: package manifest contains only the exact gateway and worker targets', () => {
+test('unit: package manifest contains only the gateway, private control, and worker targets', () => {
   const project = JSON.parse(fs.readFileSync(path.join(
     __dirname, '..', '..', '..', 'catalyst.json',
   ), 'utf8'));
   assert.deepEqual(project.functions.targets, [
     'revenue_desk_call_gateway',
+    'revenue_desk_route_control',
     'revenue_desk_call_worker',
   ]);
   assert.equal(project.functions.scripts.predeploy,
-    'npm --prefix revenue_desk_call_worker ci --ignore-scripts --install-links');
+    'npm --prefix revenue_desk_route_control ci --ignore-scripts --install-links && npm --prefix revenue_desk_call_worker ci --ignore-scripts --install-links');
 });
 
 test('unit: Advanced I/O entrypoint exports the Catalyst request handler', () => {

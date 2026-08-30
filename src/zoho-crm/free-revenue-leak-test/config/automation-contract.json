@@ -1,7 +1,7 @@
 {
   "schema_version": 3,
-  "contract_revision": "2026-08-28-blueprint-topology-v4",
-  "status": "desired_state_not_deployable",
+  "contract_revision": "2026-08-29-assisted-form1-and-route-control-v2",
+  "status": "source_candidate_requires_development_installation_and_readback",
   "customer_facing_offer": "Free Revenue Leak Test",
   "legacy_internal_offer_value": "7-Day Revenue Leak Test",
   "entry_offer_values": {
@@ -24,7 +24,7 @@
     "production_traffic_authorized": false
   },
   "authorities": {
-    "form1": "Zoho Forms native Lead upsert plus one CRM review workflow",
+    "form1": "Zoho Forms native public Lead upsert plus authenticated Catalyst record-bound assisted submission and one CRM review workflow",
     "lead_conversion": "explicit human-operated native CRM conversion",
     "form2": "revenue_leak_test_setup_form bounded Deal update",
     "go_live": "version-specific internal Sylvara approval plus separate post-route-readback Catalyst activation validation",
@@ -66,7 +66,7 @@
     "field_by_field_public_evidence_available": true,
     "evidence_path": "src/zoho-crm/free-revenue-leak-test/evidence/live-topology-layout-preflight-2026-08-28.json",
     "historical_count_only_evidence_path": "src/zoho-crm/free-revenue-leak-test/evidence/live-metadata-preflight-2026-08-28.json",
-    "authority_limit": "The fresh field-by-field evidence closes the current metadata and layout gap only. It does not prove Blueprint topology, provider save/readback, workflow parity, validator caller binding or durable-CAS execution, or synthetic runtime acceptance, and it must be repeated immediately before deployment.",
+    "authority_limit": "The fresh field-by-field evidence closes the historical metadata and layout gap only. The bounded caller and durable control-plane source now exist, but Blueprint installation, provider save/readback, workflow parity, and synthetic runtime acceptance still require fresh Development readback.",
     "private_identifiers_committed": false,
     "write_performed": false
   },
@@ -382,9 +382,9 @@
       "Closed Lost"
     ],
     "deployment_boundary": {
-      "status": "desired_state_not_deployable",
-      "live_write_authorized": false,
-      "writer_or_provider_payload_contract_in_repository": false,
+      "status": "source_candidate_requires_development_installation_and_readback",
+      "live_write_authorized": true,
+      "writer_or_provider_payload_contract_in_repository": true,
       "provider_save_readback_proven": false,
       "runtime_acceptance_proven": false,
       "external_evidence_validator_in_repository": true,
@@ -411,8 +411,8 @@
       "preexisting_evidence_policy": "required_preexisting_fields and conditional_preexisting_fields must be independently read back before the transition and are not editable during it; membership requires authoritative readback, not a nonempty value, and an is_empty criterion is an explicit successful empty-state requirement",
       "operator_input_policy": "only operator_input_fields and applicable conditional_operator_input_fields may be collected during the manual transition, and every collected field must satisfy its machine-readable operator_input_constraints entry",
       "blocking_gates": [
-        "the Draft live Blueprint candidate is independently proven bound to the exact Revenue Desk Sales pipeline but must still be reconstructed to the exact 13-transition topology; the readback is missing Record Internal Approval and Activate Test Route, and the combined legacy Approve Go Live transition remains",
-        "a typed Blueprint/Catalyst caller for the repository validator, durable one-time-consumption compare-and-set production/readback, provider payload, save, independent readback, and ZZZ SYNTHETIC runtime acceptance",
+        "install and independently read back the exact 14-transition Development Blueprint topology, including separate Record Internal Approval, Activate Test Route, and controller-only Contain Failed Activation transitions while retaining existing controls until acceptance",
+        "install and read back the private Catalyst route-control target, exact CRM callers, provider-disabled or proven-isolated Retell mode, durable receipt/CAS behavior, and ZZZ SYNTHETIC runtime acceptance",
         "repeat the complete metadata, immutable picklist API-value, and active-layout transition-availability readback immediately before deployment because the current preflight can become stale"
       ]
     },
@@ -1345,6 +1345,46 @@
         ]
       },
       {
+        "name": "Contain Failed Activation",
+        "from_state": "Test Live",
+        "to_state": "Setup and QA",
+        "execution": "controller_only",
+        "criteria": [
+          { "api_name": "Go_Live_Approval_Status", "operator": "equals", "value": "Approved" },
+          { "left_api_name": "Approved_Deployment_Record_ID", "operator": "equals_field", "right_api_name": "Deployment_Record_ID" },
+          { "left_api_name": "Approved_Configuration_Version", "operator": "equals_field", "right_api_name": "Configuration_Version" },
+          { "api_name": "Test_Status", "operator": "equals", "value": "Live" },
+          { "api_name": "Test_Start_At", "operator": "is_not_empty" },
+          { "api_name": "Test_End_At", "operator": "is_empty" }
+        ],
+        "invariants": [
+          "the authenticated Catalyst controller has already made gateway admission non-Live for the exact deployment and configuration",
+          "the activation receipt remains non-admissible until CRM and provider containment finish",
+          "approved deployment, configuration, approval status, approval timestamp, and approval event remain unchanged",
+          "Test Status returns to Scheduled and Test Start At is cleared",
+          "the transition cannot be invoked through an unauthenticated public endpoint or by direct field editing"
+        ],
+        "required_preexisting_fields": [
+          "Go_Live_Approval_Status",
+          "Go_Live_Approved_At",
+          "Approved_Deployment_Record_ID",
+          "Deployment_Record_ID",
+          "Approved_Configuration_Version",
+          "Configuration_Version",
+          "Test_Status",
+          "Test_Start_At",
+          "Test_End_At"
+        ],
+        "operator_input_fields": [],
+        "conditional_preexisting_fields": [],
+        "conditional_operator_input_fields": [],
+        "external_evidence_requirements": [],
+        "allowed_after_actions": [
+          { "type": "field_update", "api_name": "Test_Status", "value": "Scheduled" },
+          { "type": "field_update", "api_name": "Test_Start_At", "value": null }
+        ]
+      },
+      {
         "name": "Complete Free Test",
         "from_state": "Test Live",
         "to_state": "Results Review",
@@ -1710,6 +1750,13 @@
         "Test Status equals Live",
         "Actual Start At follows route readback",
         "Expires At equals Actual Start At plus exactly seven days"
+      ],
+      "Contain Failed Activation": [
+        "the authenticated Catalyst controller has already made gateway admission non-Live for the exact deployment and configuration",
+        "the activation receipt remains non-admissible until CRM and provider containment finish",
+        "approved deployment, configuration, approval status, approval timestamp, and approval event remain unchanged",
+        "Test Status returns to Scheduled and Test Start At is cleared",
+        "the transition cannot be invoked through an unauthenticated public endpoint or by direct field editing"
       ],
       "Complete Free Test": [
         "CRMBillingOperations exact report revision has STATUS completed and LAST_OUTCOME report_summary_readback_confirmed",

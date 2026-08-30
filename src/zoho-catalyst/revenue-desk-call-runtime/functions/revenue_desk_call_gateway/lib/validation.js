@@ -100,7 +100,12 @@ function validateConfiguration(input) {
     'clientId', 'crmDealId', 'deploymentId', 'configurationVersion', 'approved', 'companyName',
     'companyDescription', 'businessHours', 'coverageMode', 'servicesHandled',
     'unsupportedServices', 'serviceArea', 'urgentConditions', 'callbackExpectation',
-    'notificationRecipient',
+    'notificationRecipient', 'phoneSystemProvider', 'approvedTestRoute', 'noAnswerDelay',
+    'forwardingAdministratorName', 'forwardingAdministratorMobile',
+    'approvedFallbackDestination', 'approvedFallbackNumber', 'rollbackContactName',
+    'rollbackContactMobile', 'rollbackInstructions', 'rollbackInstructionsVersion',
+    'authorizedRepresentativeConfirmed', 'testScopeAccepted', 'authorityConfirmedAt',
+    'setupFormSubmissionId', 'setupFormVersion',
   ], 'configuration');
   const serviceArea = object(value.serviceArea, 'configuration.serviceArea');
   exactKeys(serviceArea, ['cities', 'zips'], 'configuration.serviceArea');
@@ -121,6 +126,30 @@ function validateConfiguration(input) {
   });
   invariant(/^[1-9][0-9]{7,29}$/.test(crmDealId),
     'INVALID_SCHEMA', 'configuration.crmDealId must be a CRM record identifier.');
+  const coverageMode = enumValue(value.coverageMode, COVERAGE_MODES,
+    'configuration.coverageMode');
+  const approvedTestRoute = enumValue(value.approvedTestRoute,
+    new Set(['After Hours Only', 'No Answer / Overflow Only']),
+    'configuration.approvedTestRoute');
+  invariant((coverageMode === 'AfterHoursOnly' && approvedTestRoute === 'After Hours Only')
+    || (coverageMode === 'NoAnswerOverflowOnly'
+      && approvedTestRoute === 'No Answer / Overflow Only'),
+  'INVALID_SCHEMA', 'Approved test route does not match coverage mode.');
+  const noAnswerDelay = value.noAnswerDelay === null || value.noAnswerDelay === undefined
+    ? null : integer(value.noAnswerDelay, 'configuration.noAnswerDelay', 1, 120);
+  invariant(coverageMode === 'AfterHoursOnly' ? noAnswerDelay === null : noAnswerDelay !== null,
+    'INVALID_SCHEMA', 'No-answer delay does not match the approved route.');
+  const fallbackNumber = value.approvedFallbackNumber === null
+    || value.approvedFallbackNumber === undefined || value.approvedFallbackNumber === ''
+    ? null : e164(value.approvedFallbackNumber, 'configuration.approvedFallbackNumber');
+  const fallbackDestination = string(value.approvedFallbackDestination,
+    'configuration.approvedFallbackDestination', { maximum: 120 });
+  invariant(!/phone|number/i.test(fallbackDestination) || fallbackNumber !== null,
+    'INVALID_SCHEMA', 'Telephone fallback destination requires a fallback number.');
+  const authorityConfirmedAt = string(value.authorityConfirmedAt,
+    'configuration.authorityConfirmedAt', { maximum: 32, trim: false });
+  invariant(Number.isFinite(Date.parse(authorityConfirmedAt)),
+    'INVALID_SCHEMA', 'Authority confirmation timestamp is invalid.');
   return Object.freeze({
     clientId: identifier(value.clientId, 'configuration.clientId'),
     crmDealId,
@@ -133,7 +162,7 @@ function validateConfiguration(input) {
     companyName: string(value.companyName, 'configuration.companyName', { maximum: 120 }),
     companyDescription: optionalString(value.companyDescription, 'configuration.companyDescription', { maximum: 500 }),
     businessHours: string(value.businessHours, 'configuration.businessHours', { maximum: 500 }),
-    coverageMode: enumValue(value.coverageMode, COVERAGE_MODES, 'configuration.coverageMode'),
+    coverageMode,
     servicesHandled: stringArray(value.servicesHandled, 'configuration.servicesHandled', { minimum: 1, maximum: 30 }),
     unsupportedServices: stringArray(value.unsupportedServices, 'configuration.unsupportedServices', { maximum: 30 }),
     serviceArea: Object.freeze({ cities, zips }),
@@ -147,6 +176,31 @@ function validateConfiguration(input) {
       email,
       mobile,
     }),
+    phoneSystemProvider: string(value.phoneSystemProvider,
+      'configuration.phoneSystemProvider', { maximum: 120 }),
+    approvedTestRoute,
+    noAnswerDelay,
+    forwardingAdministratorName: string(value.forwardingAdministratorName,
+      'configuration.forwardingAdministratorName', { maximum: 120 }),
+    forwardingAdministratorMobile: e164(value.forwardingAdministratorMobile,
+      'configuration.forwardingAdministratorMobile'),
+    approvedFallbackDestination: fallbackDestination,
+    approvedFallbackNumber: fallbackNumber,
+    rollbackContactName: string(value.rollbackContactName,
+      'configuration.rollbackContactName', { maximum: 120 }),
+    rollbackContactMobile: e164(value.rollbackContactMobile,
+      'configuration.rollbackContactMobile'),
+    rollbackInstructions: string(value.rollbackInstructions,
+      'configuration.rollbackInstructions', { maximum: 1000 }),
+    rollbackInstructionsVersion: identifier(value.rollbackInstructionsVersion,
+      'configuration.rollbackInstructionsVersion'),
+    authorizedRepresentativeConfirmed: boolean(value.authorizedRepresentativeConfirmed,
+      'configuration.authorizedRepresentativeConfirmed'),
+    testScopeAccepted: boolean(value.testScopeAccepted, 'configuration.testScopeAccepted'),
+    authorityConfirmedAt,
+    setupFormSubmissionId: identifier(value.setupFormSubmissionId,
+      'configuration.setupFormSubmissionId'),
+    setupFormVersion: identifier(value.setupFormVersion, 'configuration.setupFormVersion'),
   });
 }
 

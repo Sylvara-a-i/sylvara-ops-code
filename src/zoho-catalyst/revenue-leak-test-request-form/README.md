@@ -1,45 +1,38 @@
 # RevenueLeakTestRequestForm
 
-This isolated Node.js 24 Advanced I/O function is a containment boundary for the disabled Form 1 assisted flow. Its two Development JSON `POST` routes validate method, JSON content headers, route, and authentication, then return `configuration_invalid` before reading the request body or initializing the Catalyst SDK, Data Store adapter, CRM Connection, token/session machinery, or outbound-network I/O. The Advanced I/O adapter necessarily handles request and response I/O. The function has no runtime dependencies. Production supports only dependency-free dark installation and returns unavailable before route or secret access. The exact disabled caller and rollback controls are versioned in [`config/routes.json`](config/routes.json); the separate public Form 1 contract is in [`../../zoho-forms/free-revenue-leak-test/forms-manifest.json`](../../zoho-forms/free-revenue-leak-test/forms-manifest.json).
+This Node.js 24 Advanced I/O function provides the bounded record-assisted lane for Form 1 while preserving the ordinary public Zoho Forms lane. Source is complete; Development installation and authoritative readback remain pending.
 
-**Development status, updated 2026-08-29:** Fresh readback proves that `revenue_leak_test_request_form` is installed at revision `57bd6e84e1c9ad802b0115e3e151f77f822844b2` with Node 24, 256 MB, the exact dependency-free containment archive, and the reviewed ten-variable private map. The controller rejects every superseded token, Form URL, CRM, Connection, Data Store, session, body, and outbound variable. `RevenueLeakTestRequestFormSessions` remains empty and `Form1AssistedSessions` remains preserved with eight rows; neither table is bound by the controller. The `Start Free-Test Request` CRM button is intentionally retained and bound only to the exact local fail-closed function, which has no URL, Connection, record read/write, or outbound capability. It is not a remote route caller. Both current and predecessor assisted routes, the remote CRM caller, and the Forms Prefill Webhook remain disabled or unbound. This proves containment only; public native Form 1 acceptance and any future assisted design remain blocked.**
+The exact authenticated Development routes are:
 
-Current sanitized evidence: [Form 1 Development containment](../evidence/free-revenue-leak-test-development-form1-containment-2026-08-29.json). Historical six-function evidence remains authoritative only within its recorded limits: [Development release-head convergence](../evidence/free-revenue-leak-test-development-pr-head-convergence-2026-08-28-288a93c.json).
+1. **Issue** accepts only CRM module and record ID from an Administrator-restricted CRM caller. It reads the record through a CRM Connection and, only when the canonical journey is blank, initializes it with an `If-Unmodified-Since` write and exact readback. A concurrent valid CRM journey wins without a second write. The controller then issues a 256-bit bearer and stores only its HMAC digest.
+2. **Prefill** accepts only the opaque bearer, resolves the CRM binding server-side, and returns non-PII assisted constants.
+3. **Submission** either acknowledges the tokenless public lane without a CRM binding or validates the assisted bearer, binds ownership to the full allowlisted form payload, writes the exact server-resolved CRM record, and consumes the session only after exact CRM readback.
 
-Shared-project release readback confirms that the call worker now has its exact complete 28-variable Development map with dry-run notification, but no Job was invoked. Both canonical Function Job pools are present, although their function-target binding remains unproven, and the complete current Cron inventory contains zero canonical references. Earlier visible Job-history evidence is bounded and does not prove provider-complete all-history inventory or direct caller/webhook absence. During this execution, the operator performed no Retell-provider or agent test, call, simulation, publish, phone-route, other provider-side change, customer action, or Production action.
+The URL contains only the configured Form 1 permalink, one private field alias, and the 43-character opaque bearer. It never contains a CRM record ID, journey ID, email, phone, company name, or other PII. `RevenueLeakTestRequestFormSessions` binds organization digest, module, record, journey, stage, actor digest, release, creation/expiry, consumption, and submission fingerprint. Token reissue rotates the bearer for the same resumable journey; consumed or in-progress submissions cannot be reissued.
 
-Historical route-continuation evidence recorded that both canonical Function Job pools match exact at 512 MB. Provider-complete all-history Job inventory and direct caller and webhook bindings remain unproven. During this execution, the operator invoked no route, function, Job, or Cron; the historical statement is preserved without treating it as fresh current-release pool or caller readback.
+The retained `Start Free-Test Request` containment control remains the immediate CRM fallback until the replacement `Open Free-Test Setup` path passes Development E2E. Historical containment evidence remains historical and does not prove the new source is installed.
 
-1. **Issue** authenticates the exact route and returns `configuration_invalid` before reading the body or accessing any platform capability.
-2. **Prefill** has the same containment behavior. The former token lookup, session reservation, CRM read, and payload-construction implementation has been removed.
-
-Form 1's existing native CRM integration remains the only submission writer. Its current upsert order is `Intake Submission ID` first and `Contact Email` second, with blank overwrite disabled. There is no Catalyst submission route.
+The historical `288a93c` convergence evidence remains preserved in `free-revenue-leak-test-development-pr-head-convergence-2026-08-28-288a93c.json` for the predecessor release; it is not a current source stamp and does not prove this assisted controller is installed.
 
 ## Security contract
 
-- Production activation is blocked in source. Only `production`/`dark` is accepted, loads no operational dependencies, and returns unavailable; an unstamped or source-revision-mismatched artifact still fails configuration.
-- Development accepts only `development`/`contained`. Any superseded capability variable fails configuration rather than being silently ignored.
-- API Gateway route secrets remain independent, are verified before containment, and stay outside source and logs.
-- The function never reads a request body, imports the Catalyst SDK, creates a Data Store adapter, obtains Connection credentials, calls CRM, touches Data Store, generates or validates a bearer token, builds a Form URL, or performs outbound fetch.
-- Runtime logs contain only request ID, coarse stage, coarse outcome, and elapsed time.
-- The retained CRM button is bound only to the exact local fail-closed function and is not a remote route caller. The remote CRM route caller and Forms Prefill Webhook remain unbound. Both current and predecessor route generations remain disabled.
-
-## Secure token transport blocker
-
-Zoho's current [Prefill-Webhook contract](https://help.zoho.com/portal/en/kb/forms/field-types/form-fields/prefill/articles/prefill-webhook) requires the Prefill-Webhook field value in the request body or URL parameters. Automatic lookup on load requires prefilling that field through a field-alias URL. The [Prefill overview](https://help.zoho.com/portal/en/kb/forms/field-types/form-fields/prefill/articles/prefill-fields-overview) otherwise describes an explicit respondent-entered search value. Neither mechanism can carry this controller's bearer token while preserving a generic URL and keeping the token out of browser and form surfaces.
-
-Do not add an alias, expose the token as a respondent-entered code, use a static prefill URL as authorization, or build a browser bridge. The remaining prerequisite is an authoritative provider contract for a server-side or truly one-time handoff that is not present in a URL, form field, form entry, browser storage, referrer, or log. A separately designed verified-identity flow may be evaluated, but the current controller and live Form 1 do not contain such a contract.
-
-The 2026-08-28 connector-first readback found no purpose-built Zoho Forms connector, so the authenticated no-save browser fallback inspected the builder and native CRM integration without entering values, submitting, testing, or reading entries. It proved all 30 live CRM mappings: every one of the 29 canonical API-name destinations exactly once plus the intentional `Additional Notes` to `Free_Test_Request_Notes` mapping. It also proved the exact 26-field builder dictionary. Runtime respondent editability, form-entry retention, the missing five UTM builder fields, retry/re-push stability, and duplicate-Lead behavior remain unproven. The existing `Assisted Intake Token` field is hidden, unaliased, and inert; it is not safe to repurpose. These gaps define no safe assisted Form 1 mutation or activation packet.
+- Production accepts only `production`/`dark` and rejects before SDK, table, Connection, CRM, token, or form access.
+- Development requires exact project/environment/source binding and independent route secrets before body or SDK access.
+- Bearer values are never stored or logged. Route secrets, token pepper, Connection authorization, CRM payloads, form data, URLs, identifiers, and private variable values never enter logs.
+- Assisted record identity is resolved server-side. Browser-supplied CRM identity is not part of the submission contract.
+- Session transitions use conditional readback, preserve harmless exact replay, reject changed-payload replay, and fail closed on expiry, tampering, stage drift, cross-record input, ambiguous state, or concurrent ownership.
+- The public lane remains owned by the existing native Forms upsert and cannot manufacture an assisted binding with hidden record fields.
 
 ## Development setup
 
-1. Keep API Gateway, both current assisted routes, both predecessor assisted routes, the remote CRM route caller, and the Forms Prefill Webhook disabled or unbound. Keep the retained CRM button bound only to the exact local fail-closed function. Do not use a prior artifact as rollback.
-2. Before any separately approved containment change, read back the exact function revision, full variable-name set, route generations, remote caller bindings, the retained local button/function binding, Connection grants, and both session tables. Stop on drift.
-3. The containment packet established `revenue_leak_test_request_form` from a clean stamped artifact and reduced its variable map exactly to `config/variables.json`. No Form 1-specific Connection or table binding remains. Do not delete shared Connections or tables without independent dependency and ownership proof.
-4. Preserve exact artifact parity, the ten-name variable map, dependency-free package, both disabled route generations, unbound remote callers, the retained exact local fail-closed button function, and zero table/Connection binding. Any ambiguity leaves both route generations disabled.
-5. Preserve both session tables and predecessor source until a separately approved cleanup packet proves exact dependency absence, row disposition, and rollback evidence. Rollback means returning to the contained state, never restoring pre-containment behavior.
-6. A future assisted flow is a new design. It requires an authoritative non-browser transport plus new reviewed request, response, credential, data, retention, abuse, readback, and rollback contracts before code or live testing.
+Install only from the final immutable release. The complete variable-name and classification registry is [`config/variables.json`](config/variables.json); values remain private Catalyst configuration.
+
+- Deployment/source: `DEPLOYMENT_ENVIRONMENT`, `DEPLOYMENT_MODE`, `EXPECTED_CATALYST_PROJECT_ID_SHA256`, `CRM_ORGANIZATION_ID_SHA256`, `SOURCE_REVISION`.
+- Routes/authentication: `ISSUE_PATH`, `PREFILL_PATH`, `SUBMISSION_PATH`, the three matching `*_HEADER_NAME` and `*_HEADER_SECRET` variables, `TOKEN_PEPPER`, and `ISSUING_ACTOR_HASH`.
+- Forms/CRM: `FORM1_PUBLIC_URL`, `FORM1_TOKEN_FIELD_ALIAS`, `CRM_READ_CONNECTION_LINK_NAME`, `CRM_WRITE_CONNECTION_LINK_NAME`, `SESSION_TABLE_NAME`, `CRM_API_BASE_URL`, and the five `FORM1_*` canonical value/version variables.
+- Bounded operation defaults: `SESSION_TTL_SECONDS`, `MAX_BODY_BYTES`, `INBOUND_BODY_TIMEOUT_MS`, `OUTBOUND_TIMEOUT_MS`, `OUTBOUND_MAX_BYTES`, and `PLATFORM_OPERATION_TIMEOUT_MS`.
+
+Install the three routes, session table, two CRM Connections, Forms alias/webhooks, and the `Open Free-Test Setup` caller together, then read each back immediately. Preserve the predecessor button and all historical session evidence. Rollback disables the replacement caller/webhooks/routes and returns operators to the retained contained control; it never restores unsafe pre-containment code.
 
 ## Verification
 
@@ -50,7 +43,7 @@ npm ci --ignore-scripts
 npm run ci
 ```
 
-The tests cover contained Development/source/project binding, exact reduced variables, rejection of every superseded capability variable, exact disabled route state, both listener paths validating request headers and returning 503 before body or platform-data access, coarse sanitized logs, dependency-free packaging, retained-but-unbound table evidence, public/assisted contract separation, and dark Production.
+The tests cover Development/source/project binding, exact variables, three authenticated routes, conditional CRM journey initialization, digest-only bearer storage, durable session ownership, exact CRM readback, public/assisted writer separation, Catalyst SDK packaging, and dark Production.
 
 For a separately authorized Catalyst CLI release, build a complete immutable project outside the repository. The output child directory must not already exist:
 

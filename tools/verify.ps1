@@ -41,6 +41,9 @@ $SetupFormRoot = Join-PathSegments $RepoRoot @(
 $RevenueDeskCallGatewayRoot = Join-PathSegments $RepoRoot @(
     "src", "zoho-catalyst", "revenue-desk-call-runtime", "functions", "revenue_desk_call_gateway"
 )
+$RevenueDeskRouteControlRoot = Join-PathSegments $RepoRoot @(
+    "src", "zoho-catalyst", "revenue-desk-call-runtime", "functions", "revenue_desk_route_control"
+)
 $RevenueDeskCallWorkerRoot = Join-PathSegments $RepoRoot @(
     "src", "zoho-catalyst", "revenue-desk-call-runtime", "functions", "revenue_desk_call_worker"
 )
@@ -116,6 +119,7 @@ function Assert-RevenueDeskTopology {
         "revenue_leak_test_request_form|Advanced I/O",
         "revenue_leak_test_setup_form|Advanced I/O",
         "revenue_desk_call_gateway|Advanced I/O",
+        "revenue_desk_route_control|Advanced I/O",
         "revenue_desk_call_worker|Job",
         "crm_billing_orchestrator|Advanced I/O",
         "analytics_sync|Job"
@@ -124,8 +128,8 @@ function Assert-RevenueDeskTopology {
     if ($topology.canonical_project_count -ne 1) {
         throw "Revenue Desk topology must declare exactly one canonical Catalyst project."
     }
-    if ($topology.final_active_function_count -ne 6) {
-        throw "Revenue Desk topology must declare exactly six active functions."
+    if ($topology.final_active_function_count -ne 7) {
+        throw "Revenue Desk topology must declare exactly seven active functions."
     }
     if ($topology.separate_free_and_paid_call_stacks_allowed -ne $false) {
         throw "Revenue Desk topology must use one shared free/paid call stack."
@@ -550,6 +554,12 @@ try {
                     "ci", "--ignore-scripts", "--no-audit", "--no-fund",
                     "--prefix", $RevenueDeskCallGatewayRoot
                 )
+            Invoke-Native -Label "Install exact Revenue Desk route-control dependencies" `
+                -Executable $npm -Arguments @(
+                    "ci", "--ignore-scripts", "--no-audit", "--no-fund",
+                    "--install-links",
+                    "--prefix", $RevenueDeskRouteControlRoot
+                )
             Invoke-Native -Label "Install exact Revenue Desk call-worker dependencies" `
                 -Executable $npm -Arguments @(
                     "ci", "--ignore-scripts", "--no-audit", "--no-fund",
@@ -572,14 +582,11 @@ try {
         $nodePackages = @(
             @{ Label = "Gateway"; Root = $GatewayRoot },
             @{ Label = "CRM-Billing orchestrator"; Root = $CrmBillingOrchestratorRoot },
+            @{ Label = "Revenue Leak Test Request Form"; Root = $RequestFormRoot },
             @{ Label = "Revenue Leak Test Setup Form"; Root = $SetupFormRoot },
             @{ Label = "Revenue Desk call gateway"; Root = $RevenueDeskCallGatewayRoot },
             @{ Label = "Revenue Desk Analytics"; Root = $RevenueDeskAnalyticsRoot }
         )
-        # The contained Form 1 package deliberately imports no Catalyst SDK and
-        # carries a lock-bound empty dependency tree. Its package and release-
-        # artifact tests enforce that boundary; requiring node_modules here
-        # would falsely reject the safer dependency-free package after npm ci.
         foreach ($package in $nodePackages) {
             $dependency = Join-PathSegments -BasePath $package.Root -Segments @(
                 "node_modules", "zcatalyst-sdk-node", "package.json"
@@ -587,6 +594,18 @@ try {
             if (-not (Test-Path -LiteralPath $dependency -PathType Leaf)) {
                 throw "$($package.Label) dependencies are missing. Run .\tools\verify.cmd -Bootstrap once before offline Quick verification."
             }
+        }
+        $routeControlGatewayDependency = Join-PathSegments $RevenueDeskRouteControlRoot @(
+            "node_modules", "revenue_desk_call_gateway", "package.json"
+        )
+        $routeControlCatalystSdk = Join-PathSegments $RevenueDeskRouteControlRoot @(
+            "node_modules", "zcatalyst-sdk-node", "package.json"
+        )
+        if (
+            (-not (Test-Path -LiteralPath $routeControlGatewayDependency -PathType Leaf)) -or
+            (-not (Test-Path -LiteralPath $routeControlCatalystSdk -PathType Leaf))
+        ) {
+            throw "Revenue Desk route-control dependencies are missing. Run .\tools\verify.cmd -Bootstrap once before offline Quick verification."
         }
         $callWorkerGatewayDependency = Join-PathSegments $RevenueDeskCallWorkerRoot @(
             "node_modules", "revenue_desk_call_gateway", "package.json"
@@ -642,6 +661,11 @@ try {
                     "audit", "--omit=dev", "--audit-level=moderate",
                     "--prefix", $RevenueDeskCallGatewayRoot
                 )
+            Invoke-Native -Label "Revenue Desk route-control production dependency audit" -Executable $npm `
+                -Arguments @(
+                    "audit", "--omit=dev", "--audit-level=moderate",
+                    "--prefix", $RevenueDeskRouteControlRoot
+                )
             Invoke-Native -Label "Revenue Desk call-worker production dependency audit" -Executable $npm `
                 -Arguments @(
                     "audit", "--omit=dev", "--audit-level=moderate",
@@ -663,13 +687,15 @@ try {
             -Arguments @("run", "ci", "--prefix", $SetupFormRoot)
         Invoke-Native -Label "Revenue Desk call-gateway checks and tests" -Executable $npm `
             -Arguments @("run", "ci", "--prefix", $RevenueDeskCallGatewayRoot)
+        Invoke-Native -Label "Revenue Desk route-control checks and tests" -Executable $npm `
+            -Arguments @("run", "ci", "--prefix", $RevenueDeskRouteControlRoot)
         Invoke-Native -Label "Revenue Desk call-worker checks and tests" -Executable $npm `
             -Arguments @("run", "ci", "--prefix", $RevenueDeskCallWorkerRoot)
         Invoke-Native -Label "Revenue Desk canonical-table migration checks and tests" `
             -Executable $npm -Arguments @("run", "ci", "--prefix", $RevenueDeskMigrationRoot)
         Invoke-Native -Label "Revenue Desk Analytics checks and tests" -Executable $npm `
             -Arguments @("run", "ci", "--prefix", $RevenueDeskAnalyticsRoot)
-        Invoke-Native -Label "Revenue Desk six-function release checks" -Executable $npm `
+        Invoke-Native -Label "Revenue Desk seven-function release checks" -Executable $npm `
             -Arguments @("run", "ci", "--prefix", $RevenueDeskReleaseRoot)
 
         Write-Host "Verification passed ($Mode mode)."

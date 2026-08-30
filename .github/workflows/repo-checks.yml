@@ -133,6 +133,12 @@ jobs:
           npm ci --ignore-scripts --no-audit --no-fund
           --prefix src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_gateway
 
+      - name: Install exact Revenue Desk route-control dependencies without lifecycle scripts
+        run: >-
+          npm ci --ignore-scripts --no-audit --no-fund
+          --install-links
+          --prefix src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_route_control
+
       - name: Install exact Revenue Desk call-worker dependencies without lifecycle scripts
         run: >-
           npm ci --ignore-scripts --no-audit --no-fund
@@ -169,6 +175,11 @@ jobs:
           npm audit --omit=dev --audit-level=moderate
           --prefix src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_gateway
 
+      - name: Audit Revenue Desk route-control production dependencies
+        run: >-
+          npm audit --omit=dev --audit-level=moderate
+          --prefix src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_route_control
+
       - name: Audit Revenue Desk call-worker production dependencies
         run: >-
           npm audit --omit=dev --audit-level=moderate
@@ -196,6 +207,9 @@ jobs:
       - name: Run Revenue Desk call-gateway checks and tests
         run: npm run ci --prefix src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_gateway
 
+      - name: Run Revenue Desk route-control checks and tests
+        run: npm run ci --prefix src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_route_control
+
       - name: Run Revenue Desk call-worker checks and tests
         run: npm run ci --prefix src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_worker
 
@@ -205,7 +219,7 @@ jobs:
       - name: Run Revenue Desk Analytics checks and tests
         run: npm run ci --prefix src/zoho-catalyst/revenue-desk-analytics/functions/analytics_sync
 
-      - name: Run Revenue Desk six-function release checks
+      - name: Run Revenue Desk seven-function release checks
         run: npm run ci --prefix src/zoho-catalyst/revenue-desk-release
 
       - name: Run the canonical verifier on Linux

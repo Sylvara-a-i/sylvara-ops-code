@@ -19,6 +19,8 @@ const { destinationDigest } = require("../lib/destinations");
 const FORM2_PUBLIC_URL =
   "https://forms.zohopublic.com/synthetic/form/perma/synthetic";
 const FORM2_DESTINATION_SHA256 = destinationDigest(FORM2_PUBLIC_URL);
+const SYNTHETIC_CRM_READ_LINK = "syntheticfixturevalue123456789";
+const SYNTHETIC_CRM_WRITE_LINK = "syntheticbillingsecret1234";
 const SYNTHETIC_CATALYST_PROJECT_ID = "100000000000001";
 const SYNTHETIC_CATALYST_PROJECT_ID_SHA256 = crypto
   .createHash("sha256")
@@ -73,8 +75,8 @@ function listenerEnvironment() {
     FORM2_ACCESS_STATUS_SUBMITTED_VALUE: "Synthetic Submitted",
     FORM2_ACCESS_STATUS_EXPIRED_VALUE: "Synthetic Expired",
     CRM_API_BASE_URL: "https://www.zohoapis.com/crm/v8",
-    CRM_READ_CONNECTION_LINK_NAME: "SyntheticCrmRead",
-    CRM_WRITE_CONNECTION_LINK_NAME: "SyntheticCrmWrite",
+    CRM_READ_CONNECTION_LINK_NAME: SYNTHETIC_CRM_READ_LINK,
+    CRM_WRITE_CONNECTION_LINK_NAME: SYNTHETIC_CRM_WRITE_LINK,
     SOURCE_REVISION: "a".repeat(40),
   };
 }

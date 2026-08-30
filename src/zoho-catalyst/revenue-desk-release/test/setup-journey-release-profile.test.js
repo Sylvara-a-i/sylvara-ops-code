@@ -61,33 +61,56 @@ function fixture() {
 test('binds the exact Development setup journey to one immutable revision', () => {
   const { manifest, readback } = fixture();
   assert.equal(manifest.release_kind, 'revenue_desk_setup_journey_release');
-  assert.equal(manifest.mode, 'contained-setup-journey');
+  assert.equal(manifest.mode, 'bounded-setup-journey');
   assert.deepEqual(manifest.functions.map(({ name }) => name), [
     'revenue_leak_test_request_form',
     'revenue_leak_test_setup_form',
     'revenue_desk_call_gateway',
     'revenue_desk_call_worker',
+    'revenue_desk_route_control',
   ]);
   assert.equal(manifest.job_pools.length, 1);
-  assert.equal(manifest.tables.length, 11);
-  assert.equal(Object.keys(manifest.contract_sha256).length, 18);
+  assert.equal(manifest.tables.length, 12);
+  assert.equal(Object.keys(manifest.contract_sha256).length, 26);
   assert.equal(verifyReadback(manifest, readback, contract), true);
 });
 
 test('selects only the setup routes and keeps CRM Billing deferred', () => {
   const routeIds = routeContract.routes.map(({ id }) => id);
   const targets = contract.installation_scope.catalyst;
-  assert.deepEqual(targets.route_ids, routeIds.slice(0, 11));
+  const setupProfile = routeContract.route_profiles['setup-journey'];
+  assert.equal(targets.route_profile, 'setup-journey');
+  assert.deepEqual(targets.route_ids, setupProfile.route_ids);
+  assert.deepEqual(targets.route_ids, routeIds.filter((id) => id !== 'CRM_BILLING'));
+  assert.equal(targets.route_ids.length, 15);
   assert.deepEqual(targets.deferred_route_ids, ['CRM_BILLING']);
-  const classifiedRouteIds = [...targets.route_ids, ...targets.deferred_route_ids];
-  assert.equal(new Set(classifiedRouteIds).size, classifiedRouteIds.length);
-  assert.deepEqual([...classifiedRouteIds].sort(), [...routeIds].sort());
-  assert.equal(targets.gateway_activation_authorized, false);
+  assert.deepEqual(
+    [...targets.route_ids, ...targets.deferred_route_ids].sort(),
+    [...routeIds].sort(),
+  );
+  assert.equal(targets.development_api_gateway_availability_authorized, true);
+  assert.equal(targets.development_api_gateway_required_post_install_state, 'enabled');
+  assert.equal(targets.gateway_enablement_requires_exact_route_readback, true);
+  assert.equal(targets.route_packet_gateway_activation_authorized, false);
+  assert.equal(targets.retell_route_mode, 'disabled');
+  assert.equal(targets.retell_provider_binding_authorized, false);
+  assert.equal(targets.production_gateway_activation_authorized, false);
+  assert.equal(contract.installation_scope.retell.publish_authorized, false);
+  assert.equal(contract.installation_scope.retell.real_traffic_authorized, false);
+  assert.equal(contract.installation_scope.retell.installation_number_binding_authorized, false);
+  assert.equal(
+    contract.installation_scope.retell.installation_webhook_provider_binding_authorized,
+    false,
+  );
+  assert.equal(
+    contract.installation_scope.retell.activation_failure_code_when_disabled,
+    'ISOLATED_RETELL_TEST_NUMBER_REQUIRED',
+  );
   const functions = new Set(contract.functions.map(({ name }) => name));
-  for (const route of routeContract.routes.slice(0, 11)) {
+  for (const route of routeContract.routes.slice(0, -1)) {
     assert.equal(functions.has(route.function), true);
   }
-  assert.equal(functions.has(routeContract.routes[11].function), false);
+  assert.equal(functions.has(routeContract.routes.at(-1).function), false);
 });
 
 test('rejects extra artifacts, mixed live state, and Production', () => {
@@ -118,7 +141,7 @@ test('rejects extra artifacts, mixed live state, and Production', () => {
 
 test('rejects source-scope drift and never treats it as provider readback', () => {
   const { manifest, readback } = fixture();
-  manifest.installation_scope.catalyst.gateway_activation_authorized = true;
+  manifest.installation_scope.catalyst.retell_route_mode = 'isolated_test';
   assert.throws(() => verifyReadback(manifest, readback, contract), /source-scope parity/);
   const clean = fixture();
   clean.readback.installation_scope = JSON.parse(

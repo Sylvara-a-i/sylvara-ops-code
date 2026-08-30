@@ -26,6 +26,10 @@ const STOP_REASON_TO_CRM = freezeMap(
 const CRM_STOP_REASON_TO_INTERNAL = freezeMap(
   contract.stop_reason_mappings.map(({ internal, crm_test_end_reason: reason }) => [reason, internal]),
 );
+const ROLLBACK_CONTROL_REASON_TO_CRM = freezeMap(
+  contract.rollback_control_reason_mappings
+    .map(({ internal, crm_test_end_reason: reason }) => [internal, reason]),
+);
 const OUTCOME_TO_LABEL = freezeMap(contract.outcomes.map(({ value, label }) => [value, label]));
 const OUTCOMES = freezeSet(contract.outcomes.map(({ value }) => value));
 const COVERAGE_TRIGGERS = freezeSet(contract.coverage_triggers);
@@ -70,6 +74,11 @@ function assertContract() {
   if (contract.resolved_status !== 'Resolved') throw new Error('Unexpected resolver status.');
   if (contract.test_duration_days !== 7 || contract.handled_call_limit !== 25) {
     throw new Error('Unexpected free-test duration or handled-call limit.');
+  }
+  if (ROLLBACK_CONTROL_REASON_TO_CRM.size !== 4
+    || [...ROLLBACK_CONTROL_REASON_TO_CRM.values()]
+      .some((reason) => !new Set(STOP_REASON_TO_CRM.values()).has(reason))) {
+    throw new Error('Rollback-control stop reasons must map to approved CRM labels.');
   }
   if (contract.canonical_call_schema_version !== 2
     || contract.legacy_canonical_call_schema_versions.length !== 1
@@ -204,6 +213,7 @@ module.exports = Object.freeze({
   CRM_APPROVAL_STATUSES,
   STOP_REASON_TO_CRM,
   CRM_STOP_REASON_TO_INTERNAL,
+  ROLLBACK_CONTROL_REASON_TO_CRM,
   OUTCOME_TO_LABEL,
   OUTCOMES,
   COVERAGE_TRIGGERS,

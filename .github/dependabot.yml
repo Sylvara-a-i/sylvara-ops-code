@@ -67,6 +67,17 @@ updates:
       prefix: "chore(zoho-catalyst)"
 
   - package-ecosystem: npm
+    directory: /src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_route_control
+    schedule:
+      interval: weekly
+      day: monday
+      time: "14:15"
+      timezone: America/Chicago
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(zoho-catalyst)"
+
+  - package-ecosystem: npm
     directory: /src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_worker
     schedule:
       interval: weekly

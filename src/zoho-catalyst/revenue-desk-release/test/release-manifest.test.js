@@ -1,6 +1,7 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -52,16 +53,72 @@ function fixture(environment = 'Development') {
     contract_sha256: { ...manifest.contract_sha256 },
   };
   if (environment === 'Production') Object.assign(readback, contract.production_invariants);
-  return { manifest, readback };
+  return { artifacts, contractDigests, manifest, readback, sourceTrees };
 }
 
-test('builds one manifest containing exactly six functions at one source revision', () => {
+test('builds one manifest containing exactly seven functions at one source revision', () => {
   const { manifest } = fixture();
-  assert.equal(manifest.functions.length, 6);
+  assert.equal(manifest.release_kind, 'revenue_desk_seven_function_release');
+  assert.equal(manifest.functions.length, 7);
   assert.deepEqual(new Set(manifest.functions.map(({ source_revision: sourceRevision }) => sourceRevision)),
     new Set([revision]));
   assert.equal(manifest.tables.length, 13);
   assert.equal(manifest.job_pools.length, 2);
+  assert.equal(Object.keys(manifest.contract_sha256).length, 9);
+  assert.equal(
+    Object.hasOwn(
+      manifest.contract_sha256,
+      'src/zoho-catalyst/revenue-desk-release/release-contract.json',
+    ),
+    true,
+  );
+});
+
+test('requires an explicit release kind and rejects the stale canonical-six profile', () => {
+  const { artifacts, contractDigests, sourceTrees } = fixture();
+  const missingReleaseKind = structuredClone(contract);
+  delete missingReleaseKind.release_kind;
+  assert.throws(() => buildManifest({
+    contract: missingReleaseKind,
+    sourceRevision: revision,
+    environment: 'Development',
+    artifacts,
+    sourceTrees,
+    contractDigests,
+  }), /Release kind is required/);
+
+  for (const script of ['build-release-manifest.js', 'verify-release-readback.js']) {
+    const scriptPath = path.join(__dirname, '..', 'scripts', script);
+    const stale = spawnSync(process.execPath, [scriptPath, '--profile', 'canonical-six'], {
+      encoding: 'utf8',
+    });
+    assert.notEqual(stale.status, 0);
+    assert.match(stale.stderr, /canonical-seven or setup-journey/);
+
+    const current = spawnSync(process.execPath, [scriptPath, '--profile', 'canonical-seven'], {
+      encoding: 'utf8',
+    });
+    assert.notEqual(current.status, 0);
+    assert.doesNotMatch(current.stderr, /canonical-seven or setup-journey/);
+  }
+});
+
+test('requires and verifies the canonical contract self-digest', () => {
+  const { artifacts, contractDigests, manifest, readback, sourceTrees } = fixture();
+  const selfPath = 'src/zoho-catalyst/revenue-desk-release/release-contract.json';
+  const missingSelfDigest = { ...contractDigests };
+  delete missingSelfDigest[selfPath];
+  assert.throws(() => buildManifest({
+    contract,
+    sourceRevision: revision,
+    environment: 'Development',
+    artifacts,
+    sourceTrees,
+    contractDigests: missingSelfDigest,
+  }), /Contract digest paths/);
+
+  readback.contract_sha256[selfPath] = 'c'.repeat(64);
+  assert.throws(() => verifyReadback(manifest, readback, contract), /digest does not match/);
 });
 
 test('rejects missing or extra artifacts', () => {

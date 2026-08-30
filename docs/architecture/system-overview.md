@@ -109,7 +109,7 @@ One Retell agent and the same `revenue_desk_call_gateway`/`revenue_desk_call_wor
 
 Catalyst is the operational source for deployment, configuration, event/call, notification, operation, checkpoint, and outbox state. CRM remains authoritative for relationship and commercial status; Billing TEST proves subscription orchestration without a charge; Analytics receives sanitized derived facts only. Neither CRM/Billing nor Analytics runs inside the critical conversational path.
 
-One existing Catalyst project must end with exactly six active Revenue Desk functions and two Function Job pools. Retry and reconciliation are worker modes, not separate free-test functions. The Client Portal Billing gateway remains a separate project and trust boundary classified `required_hardening_pending`; it does not expand the exact six-function Revenue Desk topology.
+One existing Catalyst project must end with exactly seven active Revenue Desk functions and two Function Job pools. The seventh function is the private Development-only split approval, activation, and rollback controller; retry and reconciliation remain worker modes, not separate free-test functions. The Client Portal Billing gateway remains a separate project and trust boundary classified `required_hardening_pending`; it does not expand the exact seven-function Revenue Desk topology.
 
 Development must prove synthetic client, deployment, engagement, environment, replay, route, and partition isolation without placing a call or running a Retell simulation. Production receives final `main` only as a dark deployment with independent credentials, no number/webhook binding, no recurring trigger, no real records, and no traffic.
 

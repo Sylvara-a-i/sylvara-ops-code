@@ -1,35 +1,37 @@
 # Route Approval Control Plane
 
-Status: **repository contract only; no live mutation, route activation, migration, or deletion is authorized**.
+Status: **private Development source complete; immutable release, installation, and synthetic readback pending**.
 
-This runbook is the only proposed operator path for approving and activating a Revenue Desk route. It is intentionally out of band: it adds no gateway endpoint, deployable function, Job target, worker mode, public form action, or customer-controlled input. The gateway remains limited to `POST /retell/inbound`, `POST /retell/events`, and authenticated `GET /internal/readiness`; the worker remains limited to `process_event`, `retry_scan`, `rebuild_report`, and `reconcile_deployment`.
+This runbook governs the private `revenue_desk_route_control` target. It adds exactly three authenticated Development operations—approve configuration, activate free test, and stop or roll back—without changing the three-route Retell gateway or four-mode worker. CRM exposes two simple operator controls: `Approve And Start Free Test` calls approval and then activation as separate requests; `Stop Or Roll Back Free Test` calls rollback. No operation is public or customer-controlled.
 
-## Non-negotiable blockers
+## Development execution gates
 
 Stop before any mutation unless all of the following are independently available in an approved private evidence system:
 
 1. A sanitized release artifact whose stamped source revision exactly matches the intended Development runtime.
 2. Fresh Data Store metadata proving schema version 5, unique `EVENT_KEY`, and the nullable authorization columns in this package's [`config/datastore-schema.json`](config/datastore-schema.json).
 3. Exact Development project, function, Job-pool, table, variable-name, permission, route, and disabled-schedule readback. Never record secret values or private identifiers in Git or logs.
-4. A complete source export for the legacy `retell_route_approval_control` function, including its dependency lock, entrypoint, configuration-variable names, sanitized logic map, and tests.
-5. Fresh live-binding proof for the legacy function: inbound routes, internal callers, Jobs, schedules, webhooks, credentials, and any other invocation path. Absence from this repository and recent log silence are not proof of no dependency.
-6. Scoped approval for the exact external route mutation, including provider/tool, current state, proposed state, parameters, rollback, and independent readback. Repository approval is insufficient.
+4. Exact readback of the three CRM controls and separate `Record Internal Approval` / `Activate Test Route` Blueprint transitions.
+5. `RETELL_ROUTE_MODE=disabled`, unless fresh provider readback proves the configured number is isolated, `ZZZ SYNTHETIC`, unassigned to real traffic, and bound only to the exact Development agent/version and route.
+6. Fresh source/runtime/configuration readback for the private target and its CRM Connections. Every live write remains Development-only and ZZZ SYNTHETIC.
 
-Items 4 and 5 remain explicit activation and deletion blockers until reconciled against the canonical control below. The legacy function must remain stopped but recoverable; it must not be deleted, silently reactivated, or treated as authoritative approval history.
+Legacy source export and live-binding proof remain deletion gates, not blockers to installing the canonical private target in parallel. The legacy function stays stopped but recoverable and non-authoritative.
+
+When an approved connector cannot perform a listed Development configuration write or authoritative readback, the governed fallback is the authenticated in-app browser. Bind the UI action to the same fresh prestate and the same conditional predicates as the manifest; perform only the exact listed save. Apply the same ambiguity handling as the API path, including stop-and-reconcile behavior for an uncertain save. Completion requires independent readback through a fresh provider view, never the save response alone.
 
 ## Governed identity
 
 The route fingerprint is deterministic SHA-256 over these canonical fields, in this exact order:
 
-`deployment_id`, `configuration_version_id`, `configuration_snapshot_fingerprint`, `number_lookup_hash`, `binding_id`, `binding_version`, `monitor_agent_id`, `monitor_agent_version`, `coverage_mode`, `call_limit`, `source_revision`, `environment`.
+`client_id`, `deployment_id`, `configuration_version_id`, `configuration_snapshot_fingerprint`, `number_lookup_hash`, `binding_id`, `binding_version`, `monitor_agent_id`, `monitor_agent_version`, `coverage_mode`, `call_limit`, `source_revision`, `environment`.
 
 The configuration snapshot fingerprint is a separately domain-separated SHA-256 digest of the exact configuration version label, encrypted configuration JSON projection, engagement type, capability profile, status, approval status, source revision, and environment. The implementation prefixes the route digest with `route_` and domain-separates it as `revenue-desk-route-authorization-v1`. Neither fingerprint is derived from a rotatable runtime secret. A change to any listed field, configuration content, active configuration reference, configuration approval/status/profile, or source artifact invalidates prior approval. Approval receipts are historical evidence only; they are never edited or reused for a changed route.
 
-## Approved tool boundary
+## Executable boundary
 
-After the blockers above are closed, prefer the separately authorized Catalyst change-control capability for append-only receipt insertion and conditional ZCQL mutation (the reviewed `Insert Rows` and `Execute Query` operations), with a separately authorized Catalyst audit/readback capability for independent verification. If current discovery proves the correct change-control capability unavailable, inaccessible, failed for the operation, or capability-incomplete, the authenticated in-app browser may perform the exact same reviewed operation under the connector-first fallback in [`docs/zoho/AGENTS.md`](../../../docs/zoho/AGENTS.md). Browser use requires the same fresh prestate, signed intent, scoped approval, conditional predicates, ambiguity handling, containment, and independent readback; prefer Catalyst Audit for that readback and otherwise perform a fresh provider-UI read. Do not use direct REST, shell automation, another connector, or an untyped write tool.
+The CRM callers invoke only the exact authenticated Catalyst routes. The private target fresh-reads CRM, configuration, deployment, receipt history, conflicting client deployments, and provider state where applicable. It creates signed internal decisions, writes a Prepared immutable receipt, performs one full-row deployment CAS, reads it back, and finalizes the receipt. A crash resumes the same Prepared receipt and exact poststate; a changed Deal, journey, configuration, idempotency identity, or rollback reason conflicts.
 
-Every event key is generated once, contains no provider/customer identifier, and is never reused. Signed intents and operator identity hashes remain in the approved private change record; no signing key or raw operator identity enters Git or runtime logs.
+Every event key is generated once and contains no provider/customer identifier. Signing keys, bearer values, OAuth authorization, raw operator identity, CRM payloads, provider payloads, and private IDs never enter Git or runtime logs.
 
 ## 1. Approve the reviewed route without activating it
 
@@ -95,7 +97,7 @@ For suspected misrouting, invalid evidence, capacity exhaustion, source drift, o
 2. Stop/unbind the provider route with separately scoped approval and independently read back absence.
 3. Append the signed revoke evidence and reconcile approval/activation receipts, calls already admitted, counts, notifications, Jobs, and outbox state. Never delete ambiguous rows.
 4. Disable any affected schedule or Job producer while preserving tables and evidence.
-5. Code rollback means redeploying the last reviewed canonical six-function artifact and repeating source/route/pool/readiness readback. The unexported or unreconciled legacy approval function is not an authorized rollback target.
+5. Code rollback means redeploying the last reviewed canonical seven-function artifact, or the exact prior verified Development release when the new target itself failed installation, then repeating source/route/pool/readiness readback. The unexported or unreconciled legacy approval function is not an authorized rollback target.
 
 ## Legacy retirement proof
 

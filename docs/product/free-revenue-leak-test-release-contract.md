@@ -25,14 +25,15 @@ Form 2's executable contract has exactly 33 client fields: 25 unconditionally re
 
 ## Canonical Catalyst topology
 
-One existing Catalyst project hosts exactly six active Revenue Desk functions:
+One existing Catalyst project hosts exactly seven active Revenue Desk functions:
 
-1. `revenue_leak_test_request_form` — dependency-free Advanced I/O containment sentinel for disabled Form 1 Issue and Prefill routes.
+1. `revenue_leak_test_request_form` — Advanced I/O for public Form 1 ingestion plus opaque, server-bound assisted issue, prefill, and submission routes; Production remains dark.
 2. `revenue_leak_test_setup_form` — Advanced I/O for Form 2 issuance, durable email proof, prefill, and bounded authorization submission.
 3. `revenue_desk_call_gateway` — Advanced I/O for `POST /retell/inbound`, `POST /retell/events`, and `GET /internal/readiness`.
-4. `revenue_desk_call_worker` — Job Function for event processing, retry scans, report rebuilds, deployment reconciliation, and bounded automatic terminal-summary dispatch.
-5. `crm_billing_orchestrator` — Advanced I/O for terminal CRM summary write/readback and later accepted-state CRM and Billing TEST orchestration.
-6. `analytics_sync` — Job Function for sanitized Catalyst-to-Zoho Analytics synchronization.
+4. `revenue_desk_route_control` — private Development-only Advanced I/O for separate configuration approval, isolated activation, and stop or rollback operations.
+5. `revenue_desk_call_worker` — Job Function for event processing, retry scans, report rebuilds, deployment reconciliation, and bounded automatic terminal-summary dispatch.
+6. `crm_billing_orchestrator` — Advanced I/O for terminal CRM summary write/readback and later accepted-state CRM and Billing TEST orchestration.
+7. `analytics_sync` — Job Function for sanitized Catalyst-to-Zoho Analytics synchronization.
 
 The only canonical Function Job pools are:
 

@@ -28,6 +28,7 @@ const EVENT_KEY = syntheticKey('event-chain');
 
 function rows(overrides = {}) {
   const deployment = {
+    CLIENT_ID: 'client_synthetic',
     DEPLOYMENT_ID: 'deployment_synthetic',
     ACTIVE_CONFIGURATION_VERSION_ID: 'configuration_version_synthetic_v1',
     APPROVED_CONFIGURATION_VERSION_ID: null,
@@ -75,6 +76,23 @@ function rows(overrides = {}) {
     ...overrides.configurationVersion,
   };
   return { deployment, configurationVersion };
+}
+
+function receiptControlBinding(event) {
+  return {
+    schemaVersion: 1,
+    action: event.ACTION === 'activate' ? 'activate' : 'approve',
+    dealId: '400000001',
+    journeyId: 'journey_synthetic',
+    deploymentId: event.DEPLOYMENT_ID,
+    configurationVersionId: event.CONFIGURATION_VERSION_ID,
+    idempotencyKey: event.ACTION === 'activate'
+      ? '00000000-0000-4000-8000-000000000002'
+      : '00000000-0000-4000-8000-000000000001',
+    reason: null,
+    deploymentControlPrestateDigest: null,
+    deploymentControlPoststateDigest: null,
+  };
 }
 
 function approvalFixture(action = 'approve', overrides = {}) {
@@ -210,6 +228,7 @@ test('approval binds the reviewed version and route without activating or starti
   const receipt = authorizationReceiptRow(result.event, {
     sourceRevision: fixture.deployment.SOURCE_REVISION,
     environment: 'development',
+    controlBinding: receiptControlBinding(result.event),
   });
   assert.equal(receipt.CONFIGURATION_VERSION_ID, fixture.intent.configuration_version_id);
   assert.equal(receipt.ROUTE_FINGERPRINT, fixture.intent.route_fingerprint);
@@ -238,6 +257,7 @@ test('activation requires route readback and starts an exact seven-day interval 
   const receipt = authorizationReceiptRow(result.event, {
     sourceRevision: fixture.deployment.SOURCE_REVISION,
     environment: 'development',
+    controlBinding: receiptControlBinding(result.event),
   });
   assert.equal(receipt.RELATED_EVENT_KEY, fixture.deployment.APPROVAL_EVENT_KEY);
   assert.equal(JSON.parse(receipt.EVENT_DATA_JSON).actualStartAt,

@@ -18,6 +18,9 @@ const { destinationDigest } = require("../lib/destinations");
 const FORM2_PUBLIC_URL =
   "https://forms.zohopublic.com/synthetic/form/perma/synthetic";
 const FORM2_DESTINATION_SHA256 = destinationDigest(FORM2_PUBLIC_URL);
+const SYNTHETIC_CRM_READ_LINK = "syntheticfixturevalue123456789";
+const SYNTHETIC_CRM_WRITE_LINK = "syntheticbillingsecret1234";
+const INVALID_CONNECTION_LINK = "unsafe-link";
 const SYNTHETIC_CATALYST_PROJECT_ID = "100000000000001";
 const SYNTHETIC_CATALYST_PROJECT_ID_SHA256 = require("node:crypto")
   .createHash("sha256")
@@ -76,8 +79,8 @@ function baseEnvironment(overrides = {}) {
     FORM2_ACCESS_STATUS_SUBMITTED_VALUE: "Synthetic Submitted",
     FORM2_ACCESS_STATUS_EXPIRED_VALUE: "Synthetic Expired",
     CRM_API_BASE_URL: "https://www.zohoapis.com/crm/v8",
-    CRM_READ_CONNECTION_LINK_NAME: "SyntheticCrmRead",
-    CRM_WRITE_CONNECTION_LINK_NAME: "SyntheticCrmWrite",
+    CRM_READ_CONNECTION_LINK_NAME: SYNTHETIC_CRM_READ_LINK,
+    CRM_WRITE_CONNECTION_LINK_NAME: SYNTHETIC_CRM_WRITE_LINK,
     SOURCE_REVISION: "a".repeat(40),
     ...overrides,
   };
@@ -433,8 +436,8 @@ test("rejects malformed aliases, versions, revisions, and Connection link names"
     { SOURCE_REVISION: "A".repeat(40) },
     { SOURCE_REVISION: "a".repeat(39) },
     { SOURCE_REVISION: "a".repeat(41) },
-    { CRM_READ_CONNECTION_LINK_NAME: "unsafe-link" },
-    { CRM_WRITE_CONNECTION_LINK_NAME: "SyntheticCrmRead" },
+    { CRM_READ_CONNECTION_LINK_NAME: INVALID_CONNECTION_LINK },
+    { CRM_WRITE_CONNECTION_LINK_NAME: SYNTHETIC_CRM_READ_LINK },
     { FORM2_ENTRY_OFFER_VALUE: "Unsafe\nValue" },
     { FORM2_PHONE_SYSTEM_PROVIDERS: "not-json" },
     { FORM2_PHONE_SYSTEM_PROVIDERS: "[]" },

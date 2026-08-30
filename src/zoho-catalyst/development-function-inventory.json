@@ -1,7 +1,7 @@
 {
   "schema_version": 8,
   "record_type": "sanitized_canonical_revenue_desk_function_inventory",
-  "status": "historical_six_function_convergence_form1_containment_exact_gateway_disabled_runtime_acceptance_pending",
+  "status": "historical_six_function_evidence_preserved_seven_function_source_candidate_installation_pending",
   "environment_scope": ["Development", "dark Production"],
   "production_traffic_authorized": false,
   "purpose": "Define the exact final Revenue Desk function, Job-pool, table, migration, and cleanup boundary without publishing private runtime identity or configuration.",
@@ -430,17 +430,19 @@
   },
   "topology_decision": {
     "canonical_project_count": 1,
-    "final_active_function_count": 6,
+    "final_active_function_count": 7,
     "final_active_functions": [
       "revenue_leak_test_request_form",
       "revenue_leak_test_setup_form",
       "revenue_desk_call_gateway",
+      "revenue_desk_route_control",
       "revenue_desk_call_worker",
       "crm_billing_orchestrator",
       "analytics_sync"
     ],
     "separate_free_and_paid_call_stacks_allowed": false,
-    "additional_function_requires_explicit_approval": true
+    "additional_function_requires_explicit_approval": true,
+    "route_control_function_authorized_by_2026_08_29_completion_patch": true
   },
   "function_job_pools": [
     {
@@ -513,9 +515,11 @@
     "unknown_unpublished_disabled_or_mismatched_profile_behavior": "reject"
   },
   "route_approval_control_plane": {
-    "classification": "out_of_band_private_change_control_not_a_function_route_or_job_mode",
+    "classification": "private_development_only_authenticated_function_not_a_public_gateway_route_or_job_mode",
     "runbook": "revenue-desk-call-runtime/route-approval-control-plane-runbook.md",
-    "function_count_increment": 0,
+    "function_count_increment": 1,
+    "function": "revenue_desk_route_control",
+    "operations": ["approve", "activate", "rollback"],
     "gateway_routes": ["POST /retell/inbound", "POST /retell/events", "GET /internal/readiness"],
     "worker_modes": ["process_event", "retry_scan", "rebuild_report", "reconcile_deployment"],
     "approval_transition": "Ready for Approval/Pending Internal Approval to Scheduled/Approved with immutable exact-version receipt and no clock",
@@ -533,6 +537,7 @@
       "RevenueDeskNotifications"
     ],
     "form1_retained_unbound": ["RevenueLeakTestRequestFormSessions"],
+    "form1_active_source_candidate": ["RevenueLeakTestRequestFormSessions"],
     "form2": ["Form2SessionsV3Runtime", "Form2PrefillsV3", "Form2SubmissionsV3", "Form2VerificationProofsV3"],
     "supporting": ["CRMBillingOperations", "AnalyticsSyncCheckpoints", "AnalyticsSyncOutbox"],
     "app_user_access_allowed": false,
@@ -544,10 +549,10 @@
       "workflow_name": "RevenueLeakTestRequestForm",
       "customer_facing_form": "Free Revenue Leak Test Request",
       "type": "Advanced I/O",
-      "classification": "canonical_containment_target",
-      "owner": "form1_route_containment",
+      "classification": "canonical_active_development_production_dark_target",
+      "owner": "assisted_and_public_form1_ingestion",
       "source_path": "src/zoho-catalyst/revenue-leak-test-request-form/functions/revenue_leak_test_request_form",
-      "desired_state": "deployed_containment_and_read_back_in_Development_and_dark_Production"
+      "desired_state": "assisted_and_public_paths_active_in_Development_and_fail_closed_dark_in_Production"
     },
     {
       "api_name": "revenue_leak_test_setup_form",
@@ -566,6 +571,14 @@
       "owner": "shared_free_and_paid_call_ingress",
       "source_path": "src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_gateway",
       "desired_state": "only_retell_http_boundary_with_fast_durable_job_submission"
+    },
+    {
+      "api_name": "revenue_desk_route_control",
+      "type": "Advanced I/O",
+      "classification": "canonical_private_development_target",
+      "owner": "split_configuration_approval_route_activation_and_rollback",
+      "source_path": "src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_route_control",
+      "desired_state": "authenticated_private_development_only_with_telephony_disabled_until_isolated_number_readback"
     },
     {
       "api_name": "revenue_desk_call_worker",
@@ -607,7 +620,7 @@
     },
     {
       "api_name": "retell_route_approval_control",
-      "replacement": ["out-of-band private change control", "revenue_desk_call_gateway strict receipt validation"],
+      "replacement": ["revenue_desk_route_control", "revenue_desk_call_gateway strict receipt validation"],
       "deletion_gate": "complete source/dependency/test export, live route/Job/schedule/webhook/internal-caller binding proof, historical approval quarantine mapping, canonical Development approval plus post-readback activation acceptance, rollback rehearsal, and independent absence readback"
     },
     {
@@ -695,7 +708,7 @@
   },
   "rollback_policy": {
     "containment_first": "Keep Production dark, stop synthetic deployments, unbind Retell routes, disable Jobs and Crons, and preserve durable evidence.",
-    "code_rollback": "Redeploy the last reviewed canonical six-function revision and independently repeat source, route, pool, readiness, migration, and synthetic lifecycle readback.",
+    "code_rollback": "Before replacement acceptance, redeploy the exact prior verified Development release; after acceptance, redeploy the final reviewed canonical seven-function revision. In either case independently repeat source, route, pool, readiness, migration, and synthetic lifecycle readback.",
     "data_rollback": "Use reconciled migration evidence to restore readers to the prior generation without deleting ambiguous or unreconciled rows."
   }
 }

@@ -3,7 +3,7 @@
 const crypto = require('node:crypto');
 const {
   CONTRACT, COVERAGE_MODES, NOTIFICATION_STATES, CRM_TEST_STATUSES,
-  RETELL_CONVERSATION_VARIABLE_FIELDS,
+  RETELL_CONVERSATION_VARIABLE_FIELDS, ROLLBACK_CONTROL_REASON_TO_CRM,
 } = require('./contracts');
 const { validateConfigurationVersionRow } = require('./configuration-version');
 const { RevenueDeskError, invariant } = require('./errors');
@@ -25,6 +25,10 @@ const {
   buildCrmReportSummary, ensureCrmReportSummary, reportSummaryIdentity,
 } = require('./crm-report-outbox');
 const { routeFingerprint, routeFromRows } = require('./approval-control');
+const {
+  authorizationReceiptFingerprint,
+  parseAuthorizationReceiptData,
+} = require('./authorization-receipt');
 
 const RECEIPT_IMMUTABLE = Object.freeze([
   'EVENT_KEY', 'RECEIPT_KIND', 'CALL_KEY', 'PAYLOAD_FINGERPRINT',
@@ -72,14 +76,6 @@ const OWNERSHIP_METADATA_FIELDS = Object.freeze([
   'configuration_version', 'engagement_type',
   'capability_profile', 'coverage_mode', 'number_binding_id', 'number_binding_version',
   'correlation_id', 'resolved_at', 'ownership_token',
-]);
-const AUTHORIZATION_EVENT_DATA_FIELDS = Object.freeze([
-  'schemaVersion', 'action', 'decision', 'configurationVersionId', 'routeFingerprint',
-  'operatorIdHash', 'intentFingerprint', 'evidenceRevision', 'evidenceObservedAt',
-  'expectedDeploymentVersion',
-  'capacityRemainingAtDecision', 'previousEventHash', 'eventHash', 'decidedAt',
-  'approvalEventKey', 'routeReadbackFingerprint', 'routeObservedAt', 'actualStartAt',
-  'expiresAt',
 ]);
 const APPROVAL_EVENT_PATTERN = /^approval_[a-f0-9]{64}$/;
 const ACTIVATION_EVENT_PATTERN = /^activation_[a-f0-9]{64}$/;
@@ -354,7 +350,8 @@ function deploymentFromRow(row, configurationRow, config) {
   'CONFIGURATION_UNAVAILABLE', 'Number binding is invalid.');
   invariant((stopReason === null && stoppedAt === null)
     || (typeof stopReason === 'string'
-      && CONTRACT.stop_reason_mappings.some((item) => item.internal === stopReason)
+      && (CONTRACT.stop_reason_mappings.some((item) => item.internal === stopReason)
+        || ROLLBACK_CONTROL_REASON_TO_CRM.has(stopReason))
       && stoppedAt !== null),
   'CONFIGURATION_UNAVAILABLE', 'Deployment stop state is inconsistent.');
   return Object.freeze({
@@ -417,14 +414,18 @@ function authorizationReceiptData(receipt, deployment, config, kind) {
     && receipt.SOURCE_ENVIRONMENT === config.environment
     && HASH_PATTERN.test(receipt.PAYLOAD_FINGERPRINT || ''),
   'CONFIGURATION_UNAVAILABLE', `${kind} authorization receipt binding is invalid.`);
-  const data = parseJsonColumn(receipt.EVENT_DATA_JSON, `${kind} EVENT_DATA_JSON`);
-  exactFields(data, AUTHORIZATION_EVENT_DATA_FIELDS, `${kind} authorization event`);
-  const expectedReceiptFingerprint = crypto.createHash('sha256')
-    .update('revenue-desk-authorization-receipt-v1\0', 'utf8')
-    .update(receipt.EVENT_DATA_JSON, 'utf8').digest('hex');
+  const data = parseAuthorizationReceiptData(receipt.EVENT_DATA_JSON, {
+    code: 'CONFIGURATION_UNAVAILABLE',
+    message: `${kind} authorization event is invalid.`,
+  });
+  const expectedReceiptFingerprint = authorizationReceiptFingerprint(receipt.EVENT_DATA_JSON);
   invariant(data.schemaVersion === 1
     && data.configurationVersionId === deployment.configurationVersionId
     && data.routeFingerprint === deployment.approvedRouteFingerprint
+    && data.controlBinding.dealId === deployment.crmDealId
+    && data.controlBinding.deploymentId === deployment.deploymentId
+    && data.controlBinding.configurationVersionId === deployment.configurationVersionId
+    && data.controlBinding.action === (kind === 'Approval' ? 'approve' : 'activate')
     && OPERATOR_HASH_PATTERN.test(data.operatorIdHash || '')
     && HASH_PATTERN.test(data.intentFingerprint || '')
     && receipt.PAYLOAD_FINGERPRINT === expectedReceiptFingerprint
@@ -509,13 +510,38 @@ function validateAuthorizationEvidence(deployment, approvalReceipt, activationRe
   });
 }
 
-async function loadDeployment(store, row, config) {
+async function loadDeployment(store, row, config, {
+  rollbackClaims: suppliedRollbackClaims = null,
+  rollbackClaimsComplete = true,
+} = {}) {
   invariant(isPlainObject(row), 'CONFIGURATION_UNAVAILABLE', 'Deployment row is unavailable.');
-  const configurationRow = await store.unique(
-    config.tables.CONFIGURATION_VERSION_TABLE,
-    'CONFIGURATION_VERSION_ID',
-    row.ACTIVE_CONFIGURATION_VERSION_ID,
-  );
+  const [configurationRow, rollbackClaims] = await Promise.all([
+    store.unique(
+      config.tables.CONFIGURATION_VERSION_TABLE,
+      'CONFIGURATION_VERSION_ID',
+      row.ACTIVE_CONFIGURATION_VERSION_ID,
+    ),
+    suppliedRollbackClaims === null
+      ? store.queryBounded(
+        config.tables.EVENT_RECEIPT_TABLE,
+        'DEPLOYMENT_ID',
+        row.DEPLOYMENT_ID,
+        'RECEIVED_AT',
+        100,
+        { RECEIPT_KIND: 'control_claim' },
+      )
+      : Promise.resolve(suppliedRollbackClaims),
+  ]);
+  invariant(rollbackClaimsComplete === true
+    && Array.isArray(rollbackClaims)
+    && rollbackClaims.length < 100
+    && rollbackClaims.every((claim) => claim.RECEIPT_KIND === 'control_claim'
+      && claim.DEPLOYMENT_ID === row.DEPLOYMENT_ID),
+    'CONFIGURATION_UNAVAILABLE',
+    'Rollback claim inventory is incomplete.');
+  const rollbackClaimActive = rollbackClaims.some((claim) => new Set([
+    'Prepared', 'Completed', 'ReconciliationRequired',
+  ]).has(claim.STATUS));
   const deployment = deploymentFromRow(row, configurationRow, config);
   const approvalReceipt = deployment.approvalEventKey === null ? null : await store.unique(
     config.tables.EVENT_RECEIPT_TABLE, 'EVENT_KEY', deployment.approvalEventKey,
@@ -523,18 +549,20 @@ async function loadDeployment(store, row, config) {
   const activationReceipt = deployment.activationEventKey === null ? null : await store.unique(
     config.tables.EVENT_RECEIPT_TABLE, 'EVENT_KEY', deployment.activationEventKey,
   );
-  return validateAuthorizationEvidence(
+  const validated = validateAuthorizationEvidence(
     deployment, approvalReceipt, activationReceipt, config,
   );
+  return Object.freeze({ ...validated, rollbackClaimActive });
 }
 
-function activeAt(deployment, timestampMs) {
+function activeAt(deployment, timestampMs, { allowRollbackClaim = false } = {}) {
   invariant(deployment.testStatus === CONTRACT.active_test_status
     && deployment.approvalStatus === CONTRACT.approved_go_live_status
     && deployment.approvalEvidenceValidated === true
     && deployment.activationEvidenceValidated === true
     && deployment.stopReason === null
-    && deployment.stoppedAt === null,
+    && deployment.stoppedAt === null
+    && (allowRollbackClaim || deployment.rollbackClaimActive !== true),
   'CONFIGURATION_UNAVAILABLE', 'Deployment is not approved and active.');
   invariant(timestampMs >= Date.parse(deployment.actualStartAt)
     && timestampMs < Date.parse(deployment.expiresAt),
@@ -1036,6 +1064,9 @@ function createRuntimeService({
     invariant(rows.length === 1, 'CALL_OWNERSHIP_UNRESOLVED',
       'Called-number hash does not resolve uniquely.');
     const deployment = await loadDeployment(store, rows[0], config);
+    // A number-only fallback has no durable proof that it was admitted before
+    // a rollback claim. Treat it as new ingress and fail closed once rollback
+    // has been claimed; signed metadata and an existing call are handled above.
     activeAt(deployment, eventData.startTimestamp);
     return {
       deployment,
@@ -2193,9 +2224,25 @@ function createRuntimeService({
       'CREATED_AT',
       READINESS_DEPLOYMENT_LIMIT,
     );
+    const rollbackClaims = await store.queryBounded(
+      receiptTable,
+      'RECEIPT_KIND',
+      'control_claim',
+      'RECEIVED_AT',
+      READINESS_DEPLOYMENT_LIMIT,
+      { SOURCE_REVISION: config.sourceRevision },
+    );
+    const rollbackClaimsComplete = rollbackClaims.length < READINESS_DEPLOYMENT_LIMIT;
+    const claimsByDeployment = new Map();
+    for (const claim of rollbackClaims) {
+      const claims = claimsByDeployment.get(claim.DEPLOYMENT_ID) || [];
+      claims.push(claim);
+      claimsByDeployment.set(claim.DEPLOYMENT_ID, claims);
+    }
     const readinessScanCapped = Boolean(base.sourceDeploymentCountCapped)
       || rows.length === READINESS_DEPLOYMENT_LIMIT
-      || configurationRows.length === READINESS_DEPLOYMENT_LIMIT;
+      || configurationRows.length === READINESS_DEPLOYMENT_LIMIT
+      || !rollbackClaimsComplete;
     let activeDeploymentCount = 0;
     let terminalReconciliationPendingCount = readinessScanCapped ? 1 : 0;
     for (const row of rows) {
@@ -2203,7 +2250,10 @@ function createRuntimeService({
       try {
         // Readiness uses the same exact immutable-version and authorization-receipt readback
         // as ingress; status strings or shallow row shape can never make a route ready.
-        deployment = await loadDeployment(store, row, config);
+        deployment = await loadDeployment(store, row, config, {
+          rollbackClaims: claimsByDeployment.get(row.DEPLOYMENT_ID) || [],
+          rollbackClaimsComplete,
+        });
       } catch (error) {
         if (!(error instanceof RevenueDeskError)) throw error;
         terminalReconciliationPendingCount += 1;

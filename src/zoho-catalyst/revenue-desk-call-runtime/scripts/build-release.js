@@ -16,6 +16,12 @@ const TARGET_CONTRACTS = Object.freeze({
     type: 'advancedio',
     nodeEngine: '>=18 <25',
   }),
+  control: Object.freeze({
+    name: 'revenue_desk_route_control',
+    stack: 'node24',
+    type: 'advancedio',
+    nodeEngine: '24.x',
+  }),
   worker: Object.freeze({
     name: 'revenue_desk_call_worker',
     stack: 'node24',
@@ -31,6 +37,10 @@ const REQUIRED_FILES = new Set([
   'functions/revenue_desk_call_gateway/index.js',
   'functions/revenue_desk_call_gateway/package-lock.json',
   'functions/revenue_desk_call_gateway/package.json',
+  'functions/revenue_desk_route_control/catalyst-config.json',
+  'functions/revenue_desk_route_control/index.js',
+  'functions/revenue_desk_route_control/package-lock.json',
+  'functions/revenue_desk_route_control/package.json',
   'functions/revenue_desk_call_worker/catalyst-config.json',
   'functions/revenue_desk_call_worker/index.js',
   'functions/revenue_desk_call_worker/package-lock.json',
@@ -67,6 +77,8 @@ function isDeployable(relative) {
   if (REQUIRED_FILES.has(relative)) return true;
   return /^functions\/revenue_desk_call_gateway\/lib\/[A-Za-z0-9._-]+\.js$/.test(relative)
     || /^functions\/revenue_desk_call_gateway\/contracts\/[A-Za-z0-9._-]+\.json$/
+      .test(relative)
+    || /^functions\/revenue_desk_route_control\/lib\/[A-Za-z0-9._-]+\.js$/
       .test(relative);
 }
 
@@ -154,10 +166,11 @@ function validateArtifact(root) {
   const catalyst = parseJsonFile(root, 'catalyst.json');
   const targets = catalyst?.functions?.targets;
   if (!Array.isArray(targets)
-    || targets.length !== 2
+    || targets.length !== 3
     || targets[0] !== 'revenue_desk_call_gateway'
-    || targets[1] !== 'revenue_desk_call_worker') {
-    throw new Error('Release artifact must contain exactly the gateway and worker targets.');
+    || targets[1] !== 'revenue_desk_route_control'
+    || targets[2] !== 'revenue_desk_call_worker') {
+    throw new Error('Release artifact must contain exactly the gateway, route control, and worker targets.');
   }
 
   const { functionLock: gatewayLock, functionPackage: gatewayPackage }
@@ -166,12 +179,17 @@ function validateArtifact(root) {
   const { functionLock: workerLock, functionPackage: workerPackage }
     = validateTargetContract(root, 'revenue_desk_call_worker', 'worker',
       TARGET_CONTRACTS.worker);
+  const { functionLock: controlLock, functionPackage: controlPackage }
+    = validateTargetContract(root, 'revenue_desk_route_control', 'route control',
+      TARGET_CONTRACTS.control);
   const dependency = 'file:../revenue_desk_call_gateway';
   if (gatewayLock?.packages?.['']?.name !== gatewayPackage.name
     || workerLock?.packages?.['']?.name !== workerPackage.name
     || workerPackage?.dependencies?.revenue_desk_call_gateway !== dependency
-    || workerLock?.packages?.['']?.dependencies?.revenue_desk_call_gateway !== dependency) {
-    throw new Error('Release package roots or the worker gateway dependency are inconsistent.');
+    || workerLock?.packages?.['']?.dependencies?.revenue_desk_call_gateway !== dependency
+    || controlPackage?.dependencies?.revenue_desk_call_gateway !== dependency
+    || controlLock?.packages?.['']?.dependencies?.revenue_desk_call_gateway !== dependency) {
+    throw new Error('Release package roots or local gateway dependencies are inconsistent.');
   }
 }
 

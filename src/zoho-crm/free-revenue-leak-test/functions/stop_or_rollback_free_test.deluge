@@ -1,0 +1,75 @@
+/*
+Owning workflow: authenticated stop or rollback of one exact Free Test deployment.
+Trigger: Administrator-restricted Deals record-details button.
+Ordering: Catalyst stops event processing first, then attempts provider unbinding,
+then updates CRM only after route-inactive readback. Historical evidence is retained.
+*/
+
+result_message = "free_test_rollback_rejected";
+try
+{
+	deal_id_text = ifnull(input.deal_id,"").toString().trim();
+	if(deal_id_text.matches("^[1-9][0-9]{9,29}$"))
+	{
+		query = Map();
+		query.put("fields","Intake_Submission_ID,Deployment_Record_ID,Configuration_Version");
+		deal = zoho.crm.v8.getRecordById("Deals",deal_id_text.toLong(),query);
+		journey_id = ifnull(deal.get("Intake_Submission_ID"),"").toString().trim();
+		deployment_id = ifnull(deal.get("Deployment_Record_ID"),"").toString().trim();
+		configuration_id = ifnull(deal.get("Configuration_Version"),"").toString().trim();
+		identity_pattern = "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$";
+		if(journey_id.matches(identity_pattern) && deployment_id.matches(identity_pattern) && configuration_id.matches(identity_pattern))
+		{
+			digest = zoho.encryption.sha256("sylvara:route-control:rollback:v1:" + deal_id_text + ":" + journey_id + ":" + deployment_id + ":" + configuration_id);
+			rollback_key = digest.subString(0,8) + "-" + digest.subString(8,12) + "-4" + digest.subString(12,15) + "-8" + digest.subString(15,18) + "-" + digest.subString(18,30);
+			body = Map();
+			body.put("dealId",deal_id_text);
+			body.put("journeyId",journey_id);
+			body.put("deploymentId",deployment_id);
+			body.put("configurationVersionId",configuration_id);
+			body.put("idempotencyKey",rollback_key);
+			body.put("reason","operator_requested");
+			headers = Map();
+			headers.put("Content-Type","application/json");
+			rollback = invokeurl
+			[
+				url : "{{ROUTE_CONTROL_ROLLBACK_URL}}"
+				type : POST
+				body : body.toString()
+				headers : headers
+				connection : "{{ROUTE_CONTROL_CONNECTION_LINK_NAME}}"
+				detailed : true
+				response-format : STRING
+			];
+			rollback_text = ifnull(rollback.get("responseText"),"").toString();
+			if(rollback_text.length() <= 8192)
+			{
+				rollback_body = rollback_text.toMap();
+				if(rollback.get("responseCode").toString() == "200" && rollback_body.get("ok") == true && rollback_body.get("stopped") == true)
+				{
+					if(rollback_body.get("rollbackStatus") == "route_inactive")
+					{
+						result_message = "free_test_stopped_and_route_inactive";
+					}
+					else if(rollback_body.containKey("rollbackInstructions") && ifnull(rollback_body.get("rollbackInstructions"),"").toString().length() <= 1000)
+					{
+						result_message = rollback_body.get("rollbackInstructions").toString();
+					}
+				}
+				else if(rollback.get("responseCode").toString() == "409" && rollback_body.get("code") == "rollback_manual_required" && rollback_body.get("contained") == true && rollback_body.containKey("rollbackInstructions") && ifnull(rollback_body.get("rollbackInstructions"),"").toString().length() <= 1000)
+				{
+					result_message = rollback_body.get("rollbackInstructions").toString();
+				}
+				else if(rollback.get("responseCode").toString() == "409" && rollback_body.get("code") == "crm_manual_close_required" && rollback_body.get("contained") == true && rollback_body.get("stopped") == true)
+				{
+					result_message = "free_test_stopped_route_inactive_complete_manual_crm_close";
+				}
+			}
+		}
+	}
+}
+catch(failure)
+{
+	info "free_test_rollback_failed";
+}
+return result_message;

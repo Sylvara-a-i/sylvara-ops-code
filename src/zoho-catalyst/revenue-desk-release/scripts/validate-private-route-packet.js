@@ -15,7 +15,7 @@ const CONTINUATION_PACKET_SCHEMA_VERSION = 2;
 
 const BASE_PACKET_FIELDS = [
   "approvedSourceRevision", "environment", "gatewayActivationAuthorized", "gatewayPrestate",
-  "organizationId", "phase", "prestateEvidenceSha256", "projectId", "rollback", "routes",
+  "organizationId", "phase", "prestateEvidenceSha256", "projectId", "rollback", "routeProfile", "routes",
   "routeContractSha256", "runtimePathBindings", "runtimePathBindingsSha256", "schemaVersion",
 ];
 
@@ -105,6 +105,21 @@ function digestMatches(actual, expected) {
     && crypto.timingSafeEqual(Buffer.from(actual, "hex"), Buffer.from(expected, "hex"));
 }
 
+function routeProfileRoutes(packet) {
+  if (typeof packet.routeProfile !== "string") fail("routeProfile is required");
+  const profile = CONTRACT.route_profiles?.[packet.routeProfile];
+  if (!plainObject(profile) || !Array.isArray(profile.route_ids) || profile.route_ids.length === 0) {
+    fail("routeProfile is not a closed route profile");
+  }
+  const routesById = new Map(CONTRACT.routes.map((route) => [route.id, route]));
+  if (new Set(profile.route_ids).size !== profile.route_ids.length) {
+    fail("routeProfile contains duplicate route identities");
+  }
+  const routes = profile.route_ids.map((id) => routesById.get(id));
+  if (routes.some((route) => !route)) fail("routeProfile references an unknown route");
+  return routes;
+}
+
 function canonicalUtcTimestampMs(value, label) {
   if (
     typeof value !== "string" ||
@@ -131,13 +146,14 @@ function validateApprovalWindow(approval, nowMs = Date.now()) {
 }
 
 function validateRuntimePathBindings(packet) {
-  if (!Array.isArray(packet.runtimePathBindings) || packet.runtimePathBindings.length !== CONTRACT.routes.length) {
+  const profileRoutes = routeProfileRoutes(packet);
+  if (!Array.isArray(packet.runtimePathBindings) || packet.runtimePathBindings.length !== profileRoutes.length) {
     fail("runtime path binding count is not exact");
   }
 
   const pathsByFunction = new Map();
   packet.runtimePathBindings.forEach((binding, index) => {
-    const expected = CONTRACT.routes[index];
+    const expected = profileRoutes[index];
     exactKeys(
       binding,
       ["function", "pathReference", "routeId", "runtimePath"],
@@ -167,7 +183,7 @@ function validateRuntimePathBindings(packet) {
 }
 
 function routeRequestBody(packet, index) {
-  const route = CONTRACT.routes[index];
+  const route = routeProfileRoutes(packet)[index];
   const runtimeBinding = packet.runtimePathBindings[index];
   return {
     authentication: [...route.authentication],
@@ -252,13 +268,14 @@ function validateRollback(packet) {
 }
 
 function validateRouteBindings(packet, requireBoundTargets) {
-  if (!Array.isArray(packet.routes) || packet.routes.length !== CONTRACT.routes.length) {
+  const profileRoutes = routeProfileRoutes(packet);
+  if (!Array.isArray(packet.routes) || packet.routes.length !== profileRoutes.length) {
     fail("physical route count is not exact");
   }
   const endpoints = new Set();
   const targetIdsByFunction = new Map();
   packet.routes.forEach((route, index) => {
-    const expected = CONTRACT.routes[index];
+    const expected = profileRoutes[index];
     exactKeys(route, ["id", "sourceEndpoint", "targetId"], `routes[${index}]`);
     if (route.id !== expected.id) fail(`routes[${index}] identity or ordering drifted`);
     privateEndpoint(route.sourceEndpoint, `routes[${index}].sourceEndpoint`);
@@ -363,7 +380,7 @@ function buildAdvancedIoTargetRemediation(input) {
   if (
     !Number.isInteger(index) ||
     index < packetResult.existingRouteCount ||
-    index >= CONTRACT.routes.length
+    index >= packetResult.routeCount
   ) {
     fail("Advanced I/O remediation index is outside the authorized canonical suffix");
   }
@@ -411,6 +428,7 @@ function initialBoundPacketFromContinuation(packet) {
     prestateEvidenceSha256: packet.initialPrestateEvidenceSha256,
     projectId: packet.projectId,
     rollback: packet.rollback,
+    routeProfile: packet.routeProfile,
     routes: packet.routes,
     routeContractSha256: packet.routeContractSha256,
     runtimePathBindings: packet.runtimePathBindings,
@@ -420,6 +438,7 @@ function initialBoundPacketFromContinuation(packet) {
 }
 
 function validateContinuationState(packet, originalBoundPacket) {
+  const profileRoutes = routeProfileRoutes(packet);
   if (!/^[a-f0-9]{64}$/.test(packet.initialPrestateEvidenceSha256)) {
     fail("initialPrestateEvidenceSha256 is invalid");
   }
@@ -454,7 +473,7 @@ function validateContinuationState(packet, originalBoundPacket) {
     fail("continuation gateway route count must be an integer");
   }
   const existingCount = packet.gatewayPrestate.routeCount;
-  if (existingCount <= 0 || existingCount >= CONTRACT.routes.length) {
+  if (existingCount <= 0 || existingCount >= profileRoutes.length) {
     fail("continuation requires a non-empty incomplete canonical route prefix");
   }
   validateGatewayPrestate(packet, existingCount);
@@ -473,7 +492,7 @@ function validateContinuationState(packet, originalBoundPacket) {
     fail("existing route prefix does not match its allowlisted readback digest");
   }
 
-  const remainingCount = CONTRACT.routes.length - existingCount;
+  const remainingCount = profileRoutes.length - existingCount;
   if (!Array.isArray(packet.remainingRoutes) || packet.remainingRoutes.length !== remainingCount) {
     fail("remaining route count is not the exact canonical suffix");
   }
@@ -508,6 +527,7 @@ function validateRoutePacket(packet, originalBoundPacket) {
   numericHeaderId(packet.organizationId, "organizationId");
   numericId(packet.projectId, "projectId");
   if (packet.gatewayActivationAuthorized !== false) fail("gateway activation is not authorized by this packet");
+  const profileRoutes = routeProfileRoutes(packet);
 
   validateRollback(packet);
 
@@ -515,7 +535,7 @@ function validateRoutePacket(packet, originalBoundPacket) {
   validateRouteBindings(packet, packet.phase !== "definition");
 
   let existingRouteCount = 0;
-  let requestRouteCount = CONTRACT.routes.length;
+  let requestRouteCount = profileRoutes.length;
   let existingRoutePrefixSha256 = null;
   if (packet.schemaVersion === CONTRACT.schema_version) {
     validateGatewayPrestate(packet, 0);
@@ -532,6 +552,7 @@ function validateRoutePacket(packet, originalBoundPacket) {
     existingRoutePrefixSha256,
     phase: packet.phase,
     requestRouteCount,
+    routeProfile: packet.routeProfile,
     routeContractSha256: ROUTE_CONTRACT_SHA256,
     routeCount: packet.routes.length,
     runtimePathBindingsSha256,
@@ -584,7 +605,7 @@ function buildRouteRequests(packet, approval, nowMs = Date.now(), originalBoundP
     fail("route requests require a bound packet or schema-v2 continuation packet");
   }
   validateRouteApproval(approval, packet, result.digest, nowMs);
-  return CONTRACT.routes.slice(result.existingRouteCount).map((_, offset) => {
+  return routeProfileRoutes(packet).slice(result.existingRouteCount).map((_, offset) => {
     const index = result.existingRouteCount + offset;
     return {
       body: routeRequestBody(packet, index),

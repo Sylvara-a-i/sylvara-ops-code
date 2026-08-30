@@ -14,6 +14,7 @@ EXACT_FUNCTIONS = [
     "revenue_leak_test_request_form",
     "revenue_leak_test_setup_form",
     "revenue_desk_call_gateway",
+    "revenue_desk_route_control",
     "revenue_desk_call_worker",
     "crm_billing_orchestrator",
     "analytics_sync",
@@ -23,6 +24,7 @@ REGISTRIES = {
     "revenue_leak_test_request_form": ROOT / "src/zoho-catalyst/revenue-leak-test-request-form/config/variables.json",
     "revenue_leak_test_setup_form": ROOT / "src/zoho-catalyst/revenue-leak-test-setup-form/config/variables.json",
     "revenue_desk_call_gateway": ROOT / "src/zoho-catalyst/revenue-desk-call-runtime/config/variables.json",
+    "revenue_desk_route_control": ROOT / "src/zoho-catalyst/revenue-desk-call-runtime/config/variables.json",
     "revenue_desk_call_worker": ROOT / "src/zoho-catalyst/revenue-desk-call-runtime/config/variables.json",
     "crm_billing_orchestrator": ROOT / "src/zoho-catalyst/crm-billing-orchestrator/config/variables.json",
     "analytics_sync": ROOT / "src/zoho-catalyst/revenue-desk-analytics/config/variables.json",
@@ -38,7 +40,7 @@ class SecretRotationContractTests(unittest.TestCase):
             CLIENT_PORTAL_REGISTRY_PATH.read_text(encoding="utf-8")
         )
 
-    def test_contract_covers_exact_six_functions_and_two_job_pools(self) -> None:
+    def test_contract_covers_exact_seven_functions_and_two_job_pools(self) -> None:
         self.assertEqual(self.contract["functions"], EXACT_FUNCTIONS)
         self.assertIn("RevenueDeskCallJobs", json.dumps(self.contract))
         self.assertIn("RevenueDeskAnalyticsJobs", json.dumps(self.contract))
@@ -72,7 +74,7 @@ class SecretRotationContractTests(unittest.TestCase):
         component = components[0]
         self.assertEqual(component["id"], "client_portal_billing_webhook_gateway")
         self.assertEqual(component["classification"], "required_hardening_pending")
-        self.assertFalse(component["included_in_exact_six_revenue_desk_functions"])
+        self.assertFalse(component["included_in_exact_seven_revenue_desk_functions"])
         self.assertNotIn(
             component["development_function_target"],
             self.contract["functions"],
@@ -85,7 +87,7 @@ class SecretRotationContractTests(unittest.TestCase):
         rotation = self.contract["client_portal_gateway_rotation"]
         self.assertEqual(rotation["component_id"], component["id"])
         self.assertEqual(rotation["classification"], "required_hardening_pending")
-        self.assertFalse(rotation["included_in_exact_six_revenue_desk_functions"])
+        self.assertFalse(rotation["included_in_exact_seven_revenue_desk_functions"])
         self.assertTrue(rotation["production_code_block_required"])
         for field in (
             "development_deployment_authorized",
@@ -180,6 +182,21 @@ class SecretRotationContractTests(unittest.TestCase):
                 runtime_root / "crm-report-outbox.js",
             )
         )
+        form1_source = (
+            ROOT
+            / "src/zoho-catalyst/revenue-leak-test-request-form/functions"
+            / "revenue_leak_test_request_form/lib/security.js"
+        ).read_text(encoding="utf-8")
+        route_control_source = "".join(
+            path.read_text(encoding="utf-8")
+            for path in (
+                runtime_root / "approval-control.js",
+                runtime_root / "route-control-service.js",
+                ROOT
+                / "src/zoho-catalyst/revenue-desk-call-runtime/functions"
+                / "revenue_desk_route_control/lib/config.js",
+            )
+        )
         for domain in [
             "sylvara.crm-billing.idempotency.v1",
             "sylvara.crm-billing.test-customer.v1",
@@ -206,6 +223,22 @@ class SecretRotationContractTests(unittest.TestCase):
             "sylvara.crm-report-summary.v2",
         ]:
             self.assertIn(domain, runtime_source)
+        for domain in [
+            "sylvara.form1.assisted-token-hash.v2",
+            "sylvara.form1.assisted-submission-hash.v1",
+        ]:
+            self.assertIn(domain, form1_source)
+        for domain in [
+            "revenue-desk-route-control-state-v1",
+            "revenue-desk-route-control-idempotency-v1",
+            "revenue-desk-route-control-operator-v1",
+            "revenue-desk-authorization-event-v1",
+            "revenue-desk-approval-intent-fingerprint-v1",
+            "revenue-desk-activation-intent-fingerprint-v1",
+            "revenue-desk-rollback-claim-key-v1",
+            "revenue-desk-rollback-claim-v1",
+        ]:
+            self.assertIn(domain, route_control_source)
 
         analytics_partition = next(
             entry for entry in self.contract["derivation_domains"]

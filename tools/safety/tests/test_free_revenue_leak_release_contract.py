@@ -280,6 +280,8 @@ FUNCTION_PACKAGE_SPECS = (
         (
             ("revenue_desk_call_gateway", "Advanced I/O", "advancedio", "node24",
              "revenue_desk_call_gateway", ">=18 <25"),
+            ("revenue_desk_route_control", "Advanced I/O", "advancedio", "node24",
+             "revenue_desk_route_control", "24.x"),
             ("revenue_desk_call_worker", "Job", "job", "node24",
              "revenue_desk_call_worker", "24.x"),
         ),
@@ -404,7 +406,10 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         contract = self.contract
         self.assertEqual(contract["schema_version"], 4)
         self.assertEqual(contract["contract_id"], "sylvara-free-revenue-leak-test-e2e-v4")
-        self.assertEqual(contract["status"], "superseding-architecture-contract-not-yet-deployed")
+        self.assertEqual(
+            contract["status"],
+            "bounded-source-candidate-development-installation-pending",
+        )
         self.assertEqual(contract["environments"], ["development", "dark_production"])
 
         migration = contract["identifier_migration"]
@@ -594,124 +599,54 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             ],
             form1_fields["unresolved_live_properties"],
         )
-        self.assertFalse(form1["assisted_prefill"]["enabled"])
+        assisted = form1["assisted_prefill"]
+        self.assertFalse(assisted["enabled"])
+        self.assertTrue(assisted["source_candidate_enabled"])
+        self.assertFalse(assisted["live_enabled"])
+        self.assertTrue(assisted["installation_blocked_until_authoritative_readback"])
         self.assertEqual(
-            form1["assisted_prefill"]["route_states"],
-            {
-                "FORM1_ISSUE":
-                    "disabled_returns_503_after_header_validation_before_body_sdk_datastore_adapter_crm_connection_or_outbound_io",
-                "FORM1_PREFILL":
-                    "disabled_returns_503_after_header_validation_before_body_sdk_datastore_adapter_crm_connection_or_outbound_io",
-            },
+            assisted["routes"],
+            ["FORM1_ISSUE", "FORM1_PREFILL", "FORM1_SUBMISSION"],
         )
+        self.assertEqual(assisted["controller"], "revenue_leak_test_request_form")
+        self.assertEqual(assisted["environment"], "Development")
         self.assertEqual(
-            form1["assisted_prefill"]["crm_button_binding_state"],
-            "retained_bound_to_exact_local_fail_closed_function",
+            assisted["token_transport"]["controller_storage"],
+            "domain-separated keyed digest only",
         )
-        self.assertFalse(
-            form1["assisted_prefill"]["crm_button_remote_route_caller"]
-        )
-        self.assertEqual(
-            form1["assisted_prefill"][
-                "remote_assisted_route_caller_binding_state"
-            ],
-            "unbound",
-        )
-        self.assertEqual(
-            form1["assisted_prefill"]["forms_prefill_webhook_binding_state"],
-            "unbound",
-        )
-        self.assertEqual(
-            form1["assisted_prefill"]["controller_platform_data_dependencies"],
-            "none",
-        )
-        self.assertEqual(
-            form1["assisted_prefill"]["controller_request_response_platform"],
-            "Catalyst Advanced I/O",
-        )
-        self.assertFalse(form1["assisted_prefill"]["controller_payload_access"])
-        self.assertFalse(form1["assisted_prefill"]["controller_token_capability"])
-        self.assertFalse(
-            form1["assisted_prefill"]["controller_crm_or_data_store_capability"]
-        )
-        self.assertFalse(
-            form1["assisted_prefill"]["unsafe_url_alias_source_path_present"]
-        )
-        self.assertFalse(
-            form1["assisted_prefill"]["legacy_url_alias_transport_allowed"]
-        )
-        self.assertFalse(
-            form1["assisted_prefill"]["raw_bearer_token_in_query_string_allowed"]
-        )
-        self.assertFalse(
-            form1["assisted_prefill"]["safe_live_mutation_packet_available"]
-        )
-        self.assertFalse(
-            form1["assisted_prefill"][
-                "live_dynamic_prefill_webhook_field_configured"
-            ]
-        )
-        self.assertFalse(
-            form1["assisted_prefill"]["pre_containment_rollback_allowed"]
-        )
-        self.assertEqual(
-            form1["assisted_prefill"]["deployed_revision"],
-            "57bd6e84e1c9ad802b0115e3e151f77f822844b2",
+        self.assertEqual(assisted["token_transport"]["ttl_seconds_default"], 1800)
+        self.assertTrue(
+            assisted["submission_lanes"]["assisted"]
+            ["browser_supplied_record_or_journey_identity_accepted"] is False
         )
         self.assertTrue(
-            form1["assisted_prefill"][
-                "deployed_revision_contains_fail_closed_correction"
-            ]
+            assisted["submission_lanes"]["assisted"]
+            ["consume_after_exact_crm_readback"]
         )
+        self.assertTrue(all(value is False for value in assisted["live_readback"].values()))
+        self.assertTrue(assisted["existing_controls_preserved_until_e2e_acceptance"])
+        self.assertFalse(assisted["production_enabled"])
         release_assisted = self.contract["form1"]["assisted_path"]
         self.assertFalse(release_assisted["enabled"])
+        self.assertTrue(release_assisted["source_candidate_enabled"])
+        self.assertFalse(release_assisted["live_enabled"])
+        self.assertEqual(release_assisted["routes"], assisted["routes"])
         self.assertEqual(
-            release_assisted["route_states"],
-            form1["assisted_prefill"]["route_states"],
+            release_assisted["controller_platform_data_dependencies"],
+            "Catalyst Data Store plus distinct CRM read and write Connections",
         )
-        self.assertEqual(
-            release_assisted["crm_button_binding_state"],
-            form1["assisted_prefill"]["crm_button_binding_state"],
-        )
-        self.assertFalse(release_assisted["crm_button_remote_route_caller"])
-        self.assertEqual(
-            release_assisted["remote_assisted_route_caller_binding_state"],
-            "unbound",
-        )
-        self.assertEqual(
-            release_assisted["deployed_revision"],
-            form1["assisted_prefill"]["deployed_revision"],
-        )
-        self.assertTrue(
-            release_assisted["deployed_revision_contains_fail_closed_correction"]
-        )
-        self.assertEqual(
-            release_assisted["controller_platform_data_dependencies"], "none"
-        )
-        self.assertEqual(
-            release_assisted["controller_request_response_platform"],
-            "Catalyst Advanced I/O",
-        )
-        self.assertFalse(release_assisted["controller_payload_access"])
-        self.assertFalse(release_assisted["controller_token_capability"])
-        self.assertFalse(
-            release_assisted["controller_crm_or_data_store_capability"]
-        )
-        self.assertFalse(release_assisted["pre_containment_rollback_allowed"])
         self.assertEqual(
             self.contract["oauth_connection_references"][
                 "revenue_leak_test_request_form"
             ],
-            [],
+            ["CRM_READ_CONNECTION_LINK_NAME", "CRM_WRITE_CONNECTION_LINK_NAME"],
         )
-        self.assertNotIn("Form 1 cutover", self.contract["deployment_order"])
-        self.assertFalse(any(
-            "restore the last proven route" in step.lower()
-            and "form 1" in step.lower()
-            for step in self.contract["rollback_order"]
+        self.assertTrue(any(
+            "install form 1 assisted" in step.lower()
+            for step in self.contract["deployment_order"]
         ))
         self.assertTrue(any(
-            "never restore a pre-containment form 1" in step.lower()
+            "retain the start free-test request predecessor" in step.lower()
             for step in self.contract["rollback_order"]
         ))
         release_form1_fields = self.contract["form1"]["hidden_audit_field_contract"]
@@ -1069,11 +1004,12 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             "Authority_Confirmed_At",
         )
 
-    def test_exact_six_function_and_two_pool_topology(self):
+    def test_exact_seven_function_and_two_pool_topology(self):
         expected_functions = [
             ("revenue_leak_test_request_form", "Advanced I/O"),
             ("revenue_leak_test_setup_form", "Advanced I/O"),
             ("revenue_desk_call_gateway", "Advanced I/O"),
+            ("revenue_desk_route_control", "Advanced I/O"),
             ("revenue_desk_call_worker", "Job"),
             ("crm_billing_orchestrator", "Advanced I/O"),
             ("analytics_sync", "Job"),
@@ -1088,25 +1024,37 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         }
         self.assertEqual(
             decisions["revenue_leak_test_request_form"],
-            "canonical_containment_only",
+            "canonical_active_development_production_dark",
         )
-        self.assertTrue(all(
-            decision == "canonical_active"
-            for name, decision in decisions.items()
-            if name != "revenue_leak_test_request_form"
-        ))
+        self.assertEqual(
+            decisions["revenue_desk_route_control"],
+            "canonical_development_only",
+        )
+        self.assertTrue(
+            all(
+                decision == "canonical_active"
+                for name, decision in decisions.items()
+                if name not in {
+                    "revenue_leak_test_request_form",
+                    "revenue_desk_route_control",
+                }
+            )
+        )
         form1_inventory = next(
             entry for entry in self.inventory["functions"]
             if entry["api_name"] == "revenue_leak_test_request_form"
         )
         self.assertEqual(
-            form1_inventory["classification"], "canonical_containment_target"
+            form1_inventory["classification"],
+            "canonical_active_development_production_dark_target",
         )
-        self.assertEqual(form1_inventory["owner"], "form1_route_containment")
+        self.assertEqual(
+            form1_inventory["owner"], "assisted_and_public_form1_ingestion"
+        )
 
         topology = self.inventory["topology_decision"]
         self.assertEqual(topology["canonical_project_count"], 1)
-        self.assertEqual(topology["final_active_function_count"], 6)
+        self.assertEqual(topology["final_active_function_count"], 7)
         self.assertEqual(
             topology["final_active_functions"],
             [name for name, _ in expected_functions],
@@ -1185,7 +1133,7 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         self.assertEqual(dark_analytics["analytics_reads"], 0)
         self.assertEqual(dark_analytics["analytics_writes"], 0)
 
-    def test_executable_packages_match_the_six_function_contract(self):
+    def test_executable_packages_match_the_seven_function_contract(self):
         inventory = {entry["api_name"]: entry for entry in self.inventory["functions"]}
         registries = {
             entry["function"]: entry["path"]
@@ -1234,11 +1182,10 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
                     self.assertEqual(lock["packages"][""]["name"], package_name)
                     self.assertEqual(lock["packages"][""]["name"], name)
                     self.assertEqual(lock["packages"][""]["engines"]["node"], node_engine)
-                    if name == "revenue_leak_test_request_form":
-                        self.assertNotIn("dependencies", package)
-                        self.assertNotIn("dependencies", lock["packages"][""])
-                        self.assertEqual(set(lock["packages"]), {""})
-                    elif name == "revenue_desk_call_worker":
+                    if name in {
+                        "revenue_desk_route_control",
+                        "revenue_desk_call_worker",
+                    }:
                         dependency = "file:../revenue_desk_call_gateway"
                         self.assertNotIn("zcatalyst-sdk-node", package.get("dependencies", {}))
                         self.assertEqual(
@@ -1361,7 +1308,10 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         self.assertEqual(runtime["approval_control"]["capacity_reservation_subsystem"], "absent")
 
         inventory_control = self.inventory["route_approval_control_plane"]
-        self.assertEqual(inventory_control["function_count_increment"], 0)
+        self.assertEqual(inventory_control["function_count_increment"], 1)
+        self.assertEqual(
+            inventory_control["function"], "revenue_desk_route_control"
+        )
         self.assertFalse(inventory_control["capacity_reservation_subsystem_present"])
         self.assertEqual(inventory_control["gateway_routes"], runtime["gateway_routes"])
         self.assertEqual(
@@ -1391,7 +1341,7 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             self.assertFalse(receipt_columns[name]["mandatory"])
 
         readiness = self.call_runtime_readiness["approval_control"]
-        self.assertFalse(readiness["adds_gateway_route_function_or_worker_mode"])
+        self.assertFalse(readiness["adds_public_gateway_route_or_worker_mode"])
         self.assertTrue(readiness["runtime_requires_exact_approval_and_activation_receipts"])
         self.assertFalse(readiness["capacity_reservation_subsystem_present"])
         self.assertFalse(self.call_runtime_readiness["legacy_deletion_gate"]["safe"])
@@ -1447,7 +1397,7 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         ])
         self.assertEqual(data["configuration_version_authority"], "RevenueDeskConfigurationVersions")
         self.assertEqual(
-            data["retained_unbound_form1_tables"],
+            data["active_form1_session_tables"],
             ["RevenueLeakTestRequestFormSessions"],
         )
         self.assertEqual(data["required_form2_v3_tables"], [
@@ -1465,7 +1415,11 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         self.assertEqual(self.inventory["canonical_tables"]["call_runtime"], data["canonical_call_tables"])
         self.assertEqual(
             self.inventory["canonical_tables"]["form1_retained_unbound"],
-            data["retained_unbound_form1_tables"],
+            data["current_live_retained_unbound_form1_tables"],
+        )
+        self.assertEqual(
+            self.inventory["canonical_tables"]["form1_active_source_candidate"],
+            data["active_form1_session_tables"],
         )
         self.assertEqual(self.inventory["canonical_tables"]["form2"], data["required_form2_v3_tables"])
         self.assertEqual(self.inventory["canonical_tables"]["supporting"], data["supporting_tables"])
@@ -1576,15 +1530,15 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
 
         self.assertEqual(
             [entry["expected_api_name"] for entry in request_schema["tables"]],
-            data["retained_unbound_form1_tables"],
+            data["active_form1_session_tables"],
         )
         self.assertEqual(
             [entry["runtime_variable"] for entry in request_schema["tables"]],
-            [None],
+            ["SESSION_TABLE_NAME"],
         )
         self.assertEqual(
             [entry["runtime_binding"] for entry in request_schema["tables"]],
-            ["none-controller-contained"],
+            ["exact-reviewed-table"],
         )
         self.assertEqual(
             [entry["expected_api_name"] for entry in setup_schema["tables"]],
@@ -1807,7 +1761,7 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         }
         expected_newly_observed = {
             *contracts["canonical_call_tables"],
-            *contracts["retained_unbound_form1_tables"],
+            *contracts["current_live_retained_unbound_form1_tables"],
         }
         self.assertEqual(
             schema_runtime_targets | schema_containment_targets,
@@ -2555,8 +2509,8 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         self.assertEqual(self.inventory["schema_version"], 8)
         self.assertEqual(
             self.inventory["status"],
-            "historical_six_function_convergence_form1_containment_exact_"
-            "gateway_disabled_runtime_acceptance_pending",
+            "historical_six_function_evidence_preserved_seven_function_"
+            "source_candidate_installation_pending",
         )
         form1_containment = self.inventory[
             "development_form1_containment_readback_2026_08_29"
@@ -3546,36 +3500,22 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             "twelve_route_contract_exact_gateway_disabled_runtime_acceptance_pending",
         )
 
-        route_contract = self.private_route_contract
-        route_contract_bytes = PRIVATE_ROUTE_CONTRACT_PATH.read_bytes()
-        route_contract_hash = hashlib.sha256(route_contract_bytes).hexdigest()
-        route_contract_git_blob_sha1 = hashlib.sha1(
-            b"blob "
-            + str(len(route_contract_bytes)).encode("ascii")
-            + b"\0"
-            + route_contract_bytes
-        ).hexdigest()
         public_contract = evidence["public_route_contract"]
-        self.assertEqual(route_contract_hash, ROUTE_CONTRACT_SHA256_AT_SOURCE_REVISION)
         self.assertEqual(
-            route_contract_git_blob_sha1,
+            public_contract["sha256"],
+            ROUTE_CONTRACT_SHA256_AT_SOURCE_REVISION,
+        )
+        self.assertEqual(
+            public_contract["git_blob_sha1_at_bound_source_revision"],
             ROUTE_CONTRACT_GIT_BLOB_SHA1_AT_SOURCE_REVISION,
         )
-        self.assertEqual(route_contract["schema_version"], 1)
-        self.assertEqual(route_contract["environment"], "Development")
-        self.assertEqual(route_contract["physical_route_count"], 12)
         self.assertEqual(
             public_contract["path"],
             "../revenue-desk-release/private-route-packet-contract.json",
         )
-        self.assertEqual(public_contract["schema_version"], route_contract["schema_version"])
+        self.assertEqual(public_contract["schema_version"], 1)
         self.assertEqual(
             public_contract["bound_source_revision"], evidence["source_revision"]
-        )
-        self.assertEqual(public_contract["sha256"], route_contract_hash)
-        self.assertEqual(
-            public_contract["git_blob_sha1_at_bound_source_revision"],
-            ROUTE_CONTRACT_GIT_BLOB_SHA1_AT_SOURCE_REVISION,
         )
 
         authorization = evidence["authorization"]
@@ -3589,12 +3529,65 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         self.assertFalse(authorization["production_or_customer_activity_authorized"])
         self.assertFalse(authorization["private_approval_packet_digests_included"])
 
-        expected_routes = [item["id"] for item in route_contract["routes"]]
-        expected_api_key_routes = [
-            item["id"]
-            for item in route_contract["routes"]
-            if item["authentication"] == ["APIKey"]
+        expected_routes = [
+            "RETELL_INBOUND",
+            "RETELL_EVENTS",
+            "RETELL_READINESS",
+            "FORM1_ISSUE",
+            "FORM1_PREFILL",
+            "FORM2_ISSUE",
+            "FORM2_ACCESS",
+            "FORM2_OTP_REQUEST",
+            "FORM2_OTP_VERIFY",
+            "FORM2_PREFILL",
+            "FORM2_SUBMISSION",
+            "CRM_BILLING",
         ]
+        expected_api_key_routes = [
+            "FORM2_ISSUE",
+            "FORM2_PREFILL",
+            "FORM2_SUBMISSION",
+            "CRM_BILLING",
+        ]
+
+        route_contract = self.private_route_contract
+        self.assertEqual(route_contract["schema_version"], 1)
+        self.assertEqual(route_contract["environment"], "Development")
+        self.assertEqual(route_contract["physical_route_count"], 16)
+        canonical_route_ids = [
+                "RETELL_INBOUND",
+                "RETELL_EVENTS",
+                "RETELL_READINESS",
+                "ROUTE_CONTROL_APPROVE",
+                "ROUTE_CONTROL_ACTIVATE",
+                "ROUTE_CONTROL_ROLLBACK",
+                "FORM1_ISSUE",
+                "FORM1_PREFILL",
+                "FORM1_SUBMISSION",
+                "FORM2_ISSUE",
+                "FORM2_ACCESS",
+                "FORM2_OTP_REQUEST",
+                "FORM2_OTP_VERIFY",
+                "FORM2_PREFILL",
+                "FORM2_SUBMISSION",
+                "CRM_BILLING",
+            ]
+        self.assertEqual(
+            [item["id"] for item in route_contract["routes"]],
+            canonical_route_ids,
+        )
+        profiles = route_contract["route_profiles"]
+        self.assertEqual(set(profiles), {"canonical-all", "setup-journey"})
+        self.assertEqual(profiles["canonical-all"]["route_ids"], canonical_route_ids)
+        setup_profile = profiles["setup-journey"]
+        self.assertEqual(setup_profile["route_ids"], canonical_route_ids[:-1])
+        self.assertEqual(len(setup_profile["route_ids"]), 15)
+        self.assertEqual(setup_profile["deferred_route_ids"], ["CRM_BILLING"])
+        self.assertTrue(
+            setup_profile["development_api_gateway_availability_authorized"]
+        )
+        self.assertFalse(setup_profile["retell_provider_activation_authorized"])
+        self.assertFalse(setup_profile["production_gateway_activation_authorized"])
         remediation = evidence["pre_continuation_retell_events_remediation"]
         self.assertEqual(remediation["initial_route_count"], 1)
         self.assertEqual(remediation["initial_route"], expected_routes[0])
@@ -3783,7 +3776,10 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         self.assertEqual(
             inventory["public_route_contract_schema_version"], route_contract["schema_version"]
         )
-        self.assertEqual(inventory["public_route_contract_sha256"], route_contract_hash)
+        self.assertEqual(
+            inventory["public_route_contract_sha256"],
+            ROUTE_CONTRACT_SHA256_AT_SOURCE_REVISION,
+        )
         self.assertEqual(
             inventory["public_route_contract_git_blob_sha1_at_source_revision"],
             ROUTE_CONTRACT_GIT_BLOB_SHA1_AT_SOURCE_REVISION,
@@ -3952,17 +3948,7 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
                 "provider-complete all-history job inventory remains unproven",
                 "a relative prior-24-hour access and application log query ran after the final disabled-gateway readback",
                 "exact utc bounds were not retained",
-                "during this execution, the operator invoked no route, function, job, or cron",
-            ),
-            REQUEST_FORM_README_PATH: (
-                "both canonical function job pools match exact at 512 mb",
-                "provider-complete all-history job inventory and direct caller and webhook bindings remain unproven",
-                "during this execution, the operator invoked no route, function, job, or cron",
-            ),
-            SETUP_FORM_README_PATH: (
-                "both canonical function job pools match exact at 512 mb",
-                "provider-complete all-history job inventory and direct caller and webhook bindings remain unproven",
-                "during this execution, the operator invoked no route, function, job, or cron",
+                "during these executions, the operator invoked no route, function, job, or cron",
             ),
         }
         for path, required_clauses in exact_public_mirror_clauses.items():
@@ -5970,7 +5956,7 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             if route["id"].startswith("FORM2_")
         ))
 
-    def test_form1_containment_contract_matches_runtime_and_table_disposition(self):
+    def test_form1_source_candidate_and_live_table_disposition_stay_distinct(self):
         registry = json.loads((
             ROOT / "src" / "zoho-catalyst" / "revenue-leak-test-request-form"
             / "config" / "variables.json"
@@ -5984,31 +5970,39 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         ]
         self.assertEqual(
             [route["id"] for route in form1_routes],
-            ["FORM1_ISSUE", "FORM1_PREFILL"],
+            ["FORM1_ISSUE", "FORM1_PREFILL", "FORM1_SUBMISSION"],
         )
+        authentication_variables = {
+            "FORM1_ISSUE": "ISSUE_HEADER_SECRET",
+            "FORM1_PREFILL": "PREFILL_HEADER_SECRET",
+            "FORM1_SUBMISSION": "SUBMISSION_HEADER_SECRET",
+        }
         for route in form1_routes:
             self.assertIn(route["path_reference"], variable_names)
-            self.assertIn(route["authentication"], variable_names)
-            self.assertEqual(route["content_type"], "application/json_header_only")
-            self.assertEqual(route["size_reference"], "none")
+            self.assertIn(authentication_variables[route["id"]], variable_names)
+            self.assertEqual(route["content_type"], "application/json")
+            self.assertEqual(route["size_reference"], "MAX_BODY_BYTES")
             self.assertEqual(
                 route["current_state"],
-                "disabled_unbound_and_repository_handler_fails_closed",
+                "source_complete_install_pending",
             )
-            self.assertIn("disabled_and_unbound", route["caller"])
-        self.assertNotIn("MAX_BODY_BYTES", variable_names)
+        self.assertIn("MAX_BODY_BYTES", variable_names)
+        self.assertIn("SESSION_TABLE_NAME", variable_names)
+        self.assertIn("CRM_READ_CONNECTION_LINK_NAME", variable_names)
+        self.assertIn("CRM_WRITE_CONNECTION_LINK_NAME", variable_names)
 
         form1_schema = json.loads((
             ROOT / "src" / "zoho-catalyst" / "revenue-leak-test-request-form"
             / "config" / "datastore-schema.json"
         ).read_text(encoding="utf-8"))
         self.assertEqual(
-            form1_schema["status"], "retained-unbound-containment-evidence"
+            form1_schema["status"], "development-active-record-bound-assisted-sessions"
         )
+        self.assertEqual(form1_schema["schema_version"], 5)
         schema_table = form1_schema["tables"][0]
-        self.assertIsNone(schema_table["runtime_variable"])
+        self.assertEqual(schema_table["runtime_variable"], "SESSION_TABLE_NAME")
         self.assertEqual(
-            schema_table["runtime_binding"], "none-controller-contained"
+            schema_table["runtime_binding"], "exact-reviewed-table"
         )
         table_name = schema_table["expected_api_name"]
         disposition = next(
@@ -6021,7 +6015,20 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         self.assertEqual(disposition["expected_writers"], [])
         self.assertEqual(
             self.contract["catalyst_data_contracts"]
-            ["retained_unbound_form1_tables"],
+            ["active_form1_session_tables"],
+            [table_name],
+        )
+        self.assertEqual(
+            self.contract["catalyst_data_contracts"]
+            ["current_live_retained_unbound_form1_tables"],
+            [table_name],
+        )
+        self.assertEqual(
+            self.inventory["canonical_tables"]["form1_active_source_candidate"],
+            [table_name],
+        )
+        self.assertEqual(
+            self.inventory["canonical_tables"]["form1_retained_unbound"],
             [table_name],
         )
         self.assertNotIn(table_name, self.table_disposition["final_canonical_tables"])
@@ -6364,7 +6371,10 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             self.contract["crm"]["billing_owned_fields"],
         )
         blueprint_gate = self.contract["crm"]["blueprint_release_gate"]
-        self.assertEqual(blueprint_gate["status"], "not_deployable")
+        self.assertEqual(
+            blueprint_gate["status"],
+            "source_candidate_installation_and_readback_pending",
+        )
         self.assertTrue(blueprint_gate["metadata_and_layout_preflight_satisfied"])
         self.assertEqual(blueprint_gate["live_target_status"], "Inactive")
         self.assertEqual(
@@ -6696,12 +6706,22 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             for entry in self.contract["environment_variable_registries"]
         }
         self.assertEqual(set(references), set(registries))
+        shared_runtime_consumers = {
+            "revenue_desk_call_gateway": "gateway",
+            "revenue_desk_route_control": "route_control",
+            "revenue_desk_call_worker": "worker",
+        }
         for function_name, registry_reference in registries.items():
             registry_path = (CONTRACT_PATH.parent / registry_reference).resolve()
             registry = json.loads(registry_path.read_text(encoding="utf-8"))
             component_references = [
                 variable["name"] for variable in registry["variables"]
                 if variable["name"].endswith("_CONNECTION_LINK_NAME")
+                and (
+                    function_name not in shared_runtime_consumers
+                    or variable.get("consumer")
+                    == shared_runtime_consumers[function_name]
+                )
             ]
             self.assertEqual(references[function_name], component_references)
         self.assertEqual(references["analytics_sync"], [
@@ -6737,7 +6757,7 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             rotation["retained_separate_components"],
             ["client_portal_billing_webhook_gateway"],
         )
-        self.assertFalse(rotation["expands_exact_six_revenue_desk_functions"])
+        self.assertFalse(rotation["expands_exact_seven_revenue_desk_functions"])
         self.assertFalse(rotation["exposed_previous_key_after_cutover"])
         self.assertFalse(rotation["production_activation_authorized"])
         self.assertEqual(
@@ -6746,6 +6766,7 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
                 ("revenue_leak_test_request_form", "Advanced I/O"),
                 ("revenue_leak_test_setup_form", "Advanced I/O"),
                 ("revenue_desk_call_gateway", "Advanced I/O"),
+                ("revenue_desk_route_control", "Advanced I/O"),
                 ("revenue_desk_call_worker", "Job"),
                 ("crm_billing_orchestrator", "Advanced I/O"),
                 ("analytics_sync", "Job"),
@@ -6766,7 +6787,7 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         )
         self.assertEqual(
             form1_rotation["rule"],
-            "Keep the retained CRM button bound only to the exact local fail-closed function, keep its remote route caller and the Forms Prefill Webhook unbound, and keep both routes disabled. Rotate or revoke the controller secrets only under a separate cleanup or deployment packet with exact configuration readback; defer accepted/rejected route testing until a safe assisted transport is separately authorized.",
+            "Keep assisted issue, prefill, and submission routes disabled while rotating each server-to-server caller with its matching independent secret. Prove the new caller accepted and the old caller rejected before binding the CRM launcher or assisted Form 1 webhook; browser requests never receive a shared secret.",
         )
         client_portal_components = self.key_rotation_contract[
             "retained_separate_components"
@@ -6776,7 +6797,7 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             rotation["retained_separate_components"],
         )
         self.assertTrue(all(
-            not entry["included_in_exact_six_revenue_desk_functions"]
+            not entry["included_in_exact_seven_revenue_desk_functions"]
             for entry in client_portal_components
         ))
 

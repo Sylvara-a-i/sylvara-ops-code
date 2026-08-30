@@ -94,8 +94,11 @@ test('release builder exports only a clean exact Git revision and stamps only it
   assert.equal(manifest.files.some(({ path: relative }) => relative.startsWith('scripts/')), false);
   assert.equal(fs.existsSync(path.join(output, 'functions', 'revenue_desk_call_worker',
     'node_modules')), false);
+  assert.equal(fs.existsSync(path.join(output, 'functions', 'revenue_desk_route_control',
+    'node_modules')), false);
   assert.deepEqual(require(path.join(output, 'catalyst.json')).functions.targets,
-    ['revenue_desk_call_gateway', 'revenue_desk_call_worker']);
+    ['revenue_desk_call_gateway', 'revenue_desk_route_control',
+      'revenue_desk_call_worker']);
   assert.equal(runOk('git', ['status', '--porcelain=v1', '--untracked-files=all'],
     fixture.repository), '');
 

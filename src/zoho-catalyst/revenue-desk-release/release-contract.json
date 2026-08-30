@@ -1,6 +1,8 @@
 {
   "schema_version": 1,
-  "status": "canonical-six-function-release-boundary",
+  "manifest_schema_version": 2,
+  "release_kind": "revenue_desk_seven_function_release",
+  "status": "canonical-seven-function-release-boundary",
   "functions": [
     {
       "name": "revenue_leak_test_request_form",
@@ -20,6 +22,11 @@
     {
       "name": "revenue_desk_call_worker",
       "source_root": "src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_worker",
+      "revision_stamp_target": "revenue_desk_call_gateway"
+    },
+    {
+      "name": "revenue_desk_route_control",
+      "source_root": "src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_route_control",
       "revision_stamp_target": "revenue_desk_call_gateway"
     },
     {
@@ -53,6 +60,7 @@
     "AnalyticsSyncOutbox"
   ],
   "contract_files": [
+    "src/zoho-catalyst/revenue-desk-release/release-contract.json",
     "docs/product/free-revenue-leak-test-release-contract.json",
     "src/zoho-forms/free-revenue-leak-test/forms-manifest.json",
     "src/zoho-catalyst/development-function-inventory.json",

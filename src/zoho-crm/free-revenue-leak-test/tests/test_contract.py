@@ -354,9 +354,12 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
     def test_blueprint_transition_topology_is_exact_manual_and_fail_closed(self) -> None:
         blueprint = self.automation["blueprint"]
         boundary = blueprint["deployment_boundary"]
-        self.assertEqual(boundary["status"], "desired_state_not_deployable")
-        self.assertFalse(boundary["live_write_authorized"])
-        self.assertFalse(boundary["writer_or_provider_payload_contract_in_repository"])
+        self.assertEqual(
+            boundary["status"],
+            "source_candidate_requires_development_installation_and_readback",
+        )
+        self.assertTrue(boundary["live_write_authorized"])
+        self.assertTrue(boundary["writer_or_provider_payload_contract_in_repository"])
         self.assertFalse(boundary["provider_save_readback_proven"])
         self.assertFalse(boundary["runtime_acceptance_proven"])
         self.assertTrue(boundary["external_evidence_validator_in_repository"])
@@ -390,6 +393,7 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
             ("Begin Setup and QA", "Test Authorized", "Setup and QA"),
             ("Record Internal Approval", "Setup and QA", "Setup and QA"),
             ("Activate Test Route", "Setup and QA", "Test Live"),
+            ("Contain Failed Activation", "Test Live", "Setup and QA"),
             ("Complete Free Test", "Test Live", "Results Review"),
             ("Propose Subscription", "Results Review", "Subscription Proposed"),
             ("Activate Subscription", "Subscription Proposed", "Closed Won"),
@@ -407,8 +411,19 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
             ],
             expected_edges,
         )
-        self.assertTrue(
-            all(transition["execution"] == "manual_only" for transition in topology)
+        self.assertEqual(
+            {
+                transition["name"]: transition["execution"]
+                for transition in topology
+            },
+            {
+                name: (
+                    "controller_only"
+                    if name == "Contain Failed Activation"
+                    else "manual_only"
+                )
+                for name, _, _ in expected_edges
+            },
         )
         self.assertEqual(
             {transition["from_state"] for transition in topology}
@@ -494,18 +509,32 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
             "Close Live Test": "Rolled Back",
         }
         for transition in topology:
-            expected_status = expected_status_actions.get(transition["name"])
-            expected_actions = (
-                [
+            if transition["name"] == "Contain Failed Activation":
+                expected_actions = [
                     {
                         "type": "field_update",
                         "api_name": "Test_Status",
-                        "value": expected_status,
-                    }
+                        "value": "Scheduled",
+                    },
+                    {
+                        "type": "field_update",
+                        "api_name": "Test_Start_At",
+                        "value": None,
+                    },
                 ]
-                if expected_status is not None
-                else []
-            )
+            else:
+                expected_status = expected_status_actions.get(transition["name"])
+                expected_actions = (
+                    [
+                        {
+                            "type": "field_update",
+                            "api_name": "Test_Status",
+                            "value": expected_status,
+                        }
+                    ]
+                    if expected_status is not None
+                    else []
+                )
             with self.subTest(after_actions=transition["name"]):
                 self.assertEqual(transition["allowed_after_actions"], expected_actions)
 
@@ -523,6 +552,7 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
                 "Approved_Configuration_Version",
             ],
             "Activate Test Route": [],
+            "Contain Failed Activation": [],
             "Complete Free Test": [],
             "Propose Subscription": [
                 "Results_Review_At",
@@ -1482,9 +1512,15 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         )
         self.assertEqual(
             evidence["automation_contract_revision"],
-            self.automation["contract_revision"],
+            "2026-08-28-blueprint-topology-v4",
         )
-        self.assertEqual(self.automation["status"], "desired_state_not_deployable")
+        self.assertNotEqual(
+            evidence["automation_contract_revision"], self.automation["contract_revision"]
+        )
+        self.assertEqual(
+            self.automation["status"],
+            "source_candidate_requires_development_installation_and_readback",
+        )
         self.assertEqual(
             evidence["status"],
             "metadata_and_layout_preflight_satisfied_blueprint_workflow_and_runtime_blocking",
@@ -1620,57 +1656,35 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
 
     def test_caller_manifest_is_development_only_and_not_deployment_authority(self) -> None:
         manifest = self.callers
-        self.assertEqual(
-            manifest["status"],
-            "form1_local_containment_deployed_form2_repository_candidate_not_deployed",
-        )
+        self.assertEqual(manifest["schema_version"], 2)
+        self.assertEqual(manifest["status"], "bounded_development_installation_candidate")
         self.assertEqual(manifest["environment"], "Development only")
         self.assertFalse(manifest["render_policy"]["commit_rendered_source"])
         self.assertFalse(manifest["render_policy"]["log_rendered_source"])
-        self.assertEqual(
-            set(manifest["render_policy"]["placeholder_constraints"]),
-            {"issue_url", "public_destination", "connection_link_name"},
-        )
-        self.assertFalse(manifest["live_write_authorized"])
+        self.assertTrue(manifest["bounded_development_write_authorized"])
+        self.assertFalse(manifest["production_write_authorized"])
         self.assertEqual(
             [caller["logical_name"] for caller in manifest["callers"]],
-            ["FORM1_ASSISTED_ISSUE_CALLER", "FORM2_SETUP_ISSUE_CALLER"],
+            [
+                "FORM1_CONTAINED_PREDECESSOR",
+                "FORM1_ASSISTED_ISSUE_CALLER",
+                "FORM2_SETUP_ISSUE_CALLER",
+                "APPROVE_AND_START_FREE_TEST_CALLER",
+                "STOP_OR_ROLLBACK_FREE_TEST_CALLER",
+            ],
         )
-        self.assertTrue(
-            all(
-                caller["connection"]["credential_in_source_or_arguments"] is False
-                and caller["connection"]["cross_form_reuse_allowed"] is False
-                and caller["request"]["automatic_retry"] is False
-                for caller in manifest["callers"]
-            )
-        )
-        form1, form2 = manifest["callers"]
+        by_name = {caller["logical_name"]: caller for caller in manifest["callers"]}
+        predecessor = by_name["FORM1_CONTAINED_PREDECESSOR"]
+        self.assertFalse(predecessor["remote_request_enabled"])
+        self.assertEqual(predecessor["button"], "Start Free-Test Request")
+        form1 = by_name["FORM1_ASSISTED_ISSUE_CALLER"]
+        form2 = by_name["FORM2_SETUP_ISSUE_CALLER"]
+        self.assertEqual(form1["request"]["method"], "POST")
         self.assertEqual(
-            form1["request"],
-            {
-                "enabled": False,
-                "method": None,
-                "content_type": None,
-                "body_keys": [],
-                "automatic_retry": False,
-                "controller_state": "disabled_before_remote_request",
-            },
+            form1["request"]["body_keys"], ["crmModule", "recordId"]
         )
-        self.assertIsNone(form1["connection"]["placeholder"])
-        self.assertEqual(form1["private_placeholders"], [])
-        self.assertEqual(
-            form1["success_response"],
-            {"enabled": False, "destination": None, "open_target": None},
-        )
-        self.assertEqual(
-            form1["deployment_status"],
-            "deployed_local_containment_remote_assisted_issuance_disabled",
-        )
-        self.assertEqual(
-            form1["button_binding_state"],
-            "retained_and_bound_to_exact_local_fail_closed_function",
-        )
-        self.assertEqual(form1["remote_route_caller_binding_state"], "unbound")
+        self.assertFalse(form1["request"]["url_contains_record_or_pii"])
+        self.assertFalse(form1["connection"]["credential_in_source_or_arguments"])
         self.assertEqual(form2["request"]["method"], "POST")
         self.assertEqual(form2["request"]["content_type"], "application/json")
         self.assertEqual(form2["request"]["body_keys"], ["dealId", "issueRequestId"])
@@ -1698,47 +1712,46 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
             r"\b[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b",
         )
 
-    def test_form1_deluge_template_is_disabled_before_any_remote_capability(self) -> None:
-        caller = self.callers["callers"][0]
-        self.assertEqual(caller["logical_name"], "FORM1_ASSISTED_ISSUE_CALLER")
+    def test_form1_deluge_template_is_record_bound_and_opens_only_token_url(self) -> None:
+        caller = next(
+            item for item in self.callers["callers"]
+            if item["logical_name"] == "FORM1_ASSISTED_ISSUE_CALLER"
+        )
         source_path = (CALLER_MANIFEST_PATH.parent / caller["source"]).resolve()
         self.assertTrue(source_path.is_relative_to(PACKAGE))
         source = source_path.read_text(encoding="utf-8")
 
-        self.assertEqual(source.lower().count("invokeurl"), 0)
-        self.assertEqual(source.count("openUrl("), 0)
-        self.assertEqual(re.findall(r"\{\{[A-Z0-9_]+\}\}", source), [])
+        self.assertEqual(source.lower().count("invokeurl"), 1)
+        self.assertEqual(source.count("openUrl("), 1)
+        self.assertEqual(
+            sorted(set(re.findall(r"\{\{[A-Z0-9_]+\}\}", source))),
+            sorted(caller["private_placeholders"]),
+        )
         self.assertNotRegex(source, r"https?://")
-        for forbidden in (
-            "request_body",
-            "request_headers",
-            "issue_response",
-            "destination_url",
-            "form_url",
-            "assisted_token",
-            "FORM1_ISSUE_URL",
-            "FORM1_PUBLIC_URL",
-            "FORM1_TOKEN_FIELD_ALIAS",
-            "^[A-Za-z0-9_-]{43}$",
-            ".right(43)",
-        ):
-            with self.subTest(forbidden=forbidden):
-                self.assertNotIn(forbidden, source)
-        self.assertNotIn("try", source.lower())
-        self.assertNotIn("catch", source.lower())
         self.assertNotIn("ZCFKEY", source)
         self.assertNotIn("HEADER_SECRET", source)
         self.assertNotRegex(source, r"\b[1-9][0-9]{9,29}\b")
         self.assertNotRegex(source, r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+")
-        self.assertEqual(
-            re.findall(r'^\s*return "([a-z0-9_]+)";\s*$', source, re.MULTILINE),
-            ["form1_issue_rejected"],
-        )
-        self.assertTrue(source.rstrip().endswith('return "form1_issue_rejected";'))
+        for put in (
+            'request_body.put("crmModule",module_text);',
+            'request_body.put("recordId",record_id_text);',
+        ):
+            self.assertIn(put, source)
+        self.assertEqual(source.count("request_body.put("), 2)
+        self.assertNotIn("journey_id", source)
+        self.assertNotIn("getRecordById", source)
+        self.assertNotIn("updateRecord", source)
+        self.assertNotIn("zoho.encryption", source)
+        self.assertIn('issue_response.get("responseCode").toString() == "201"', source)
+        self.assertIn('form_url.right(43).matches("^[A-Za-z0-9_-]{43}$")', source)
+        self.assertIn('!form_url.contains(record_id_text)', source)
+        self.assertLess(source.index("can_open = true;"), source.index("openUrl("))
 
     def test_form2_deluge_template_matches_the_exact_caller_contract(self) -> None:
-        caller = self.callers["callers"][1]
-        self.assertEqual(caller["logical_name"], "FORM2_SETUP_ISSUE_CALLER")
+        caller = next(
+            item for item in self.callers["callers"]
+            if item["logical_name"] == "FORM2_SETUP_ISSUE_CALLER"
+        )
         source_path = (CALLER_MANIFEST_PATH.parent / caller["source"]).resolve()
         self.assertTrue(source_path.is_relative_to(PACKAGE))
         source = source_path.read_text(encoding="utf-8")
@@ -1793,6 +1806,39 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         self.assertLess(source.index(token_guard), source.index("can_open = true;"))
         self.assertLess(source.index("can_open = true;"), source.index("openUrl("))
 
+    def test_split_control_callers_preserve_separate_transitions_and_rollback(self) -> None:
+        by_name = {caller["logical_name"]: caller for caller in self.callers["callers"]}
+        control = by_name["APPROVE_AND_START_FREE_TEST_CALLER"]
+        rollback = by_name["STOP_OR_ROLLBACK_FREE_TEST_CALLER"]
+        control_source = (CALLER_MANIFEST_PATH.parent / control["source"]).read_text(
+            encoding="utf-8"
+        )
+        rollback_source = (CALLER_MANIFEST_PATH.parent / rollback["source"]).read_text(
+            encoding="utf-8"
+        )
+        self.assertEqual(control_source.lower().count("invokeurl"), 2)
+        self.assertLess(
+            control_source.index("{{ROUTE_CONTROL_APPROVE_URL}}"),
+            control_source.index("{{ROUTE_CONTROL_ACTIVATE_URL}}"),
+        )
+        self.assertNotIn("zoho.currenttime", control_source)
+        self.assertIn(
+            'activate_digest = zoho.encryption.sha256("sylvara:route-control:activate:v1:" + deal_id_text + ":" + journey_id + ":" + deployment_id + ":" + configuration_id);',
+            control_source,
+        )
+        self.assertIn('body.put("idempotencyKey",approve_key);', control_source)
+        self.assertIn('body.put("idempotencyKey",activate_key);', control_source)
+        self.assertNotIn('update_map.put("Stage"', control_source)
+        self.assertEqual(rollback_source.lower().count("invokeurl"), 1)
+        self.assertIn('body.put("reason","operator_requested");', rollback_source)
+        for caller, source in ((control, control_source), (rollback, rollback_source)):
+            self.assertEqual(
+                sorted(set(re.findall(r"\{\{[A-Z0-9_]+\}\}", source))),
+                sorted(caller["private_placeholders"]),
+            )
+            self.assertNotRegex(source, r"https?://")
+            self.assertNotRegex(source, r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+")
+
     def test_form2_destination_token_grammar_rejects_bad_values(self) -> None:
         token_pattern = re.compile(r"^[A-Za-z0-9_-]{43}$")
         self.assertIsNotNone(token_pattern.fullmatch("A" * 43))
@@ -1812,8 +1858,12 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         allowed = {
             'info "form1_assisted_issue_disabled";',
             'info "form1_issue_rejected";',
+            'info "form1_assisted_issue_failed";',
+            'info "form1_assisted_issue_rejected";',
             'info "form2_issue_failed";',
             'info "form2_issue_rejected";',
+            'info "free_test_control_failed";',
+            'info "free_test_rollback_failed";',
         }
         observed = set()
         for caller in self.callers["callers"]:

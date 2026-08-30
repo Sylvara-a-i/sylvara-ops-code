@@ -20,6 +20,14 @@ const { handleRequest: handleForm1 } = require(fromCatalyst(
   'revenue-leak-test-request-form', 'functions', 'revenue_leak_test_request_form',
   'lib', 'handler',
 ));
+const { loadConfig: loadForm1Config } = require(fromCatalyst(
+  'revenue-leak-test-request-form', 'functions', 'revenue_leak_test_request_form',
+  'lib', 'config',
+));
+const { createSessionStore: createForm1SessionStore } = require(fromCatalyst(
+  'revenue-leak-test-request-form', 'functions', 'revenue_leak_test_request_form',
+  'lib', 'session-store',
+));
 const { validateForm2Payload } = require(fromCatalyst(
   'revenue-leak-test-setup-form', 'functions', 'revenue_leak_test_setup_form',
   'lib', 'form-contract',
@@ -72,6 +80,9 @@ const nonurgentContract = require(path.join(
 
 const FORM1_ISSUE_SECRET = 'i'.repeat(43);
 const FORM1_PREFILL_SECRET = 'p'.repeat(43);
+const FORM1_SUBMISSION_SECRET = 's'.repeat(43);
+const FORM1_CRM_READ_LINK = 'syntheticfixturevalue123456789';
+const FORM1_CRM_WRITE_LINK = 'syntheticbillingsecret1234';
 const CONTACT_ID = `${'8'.repeat(17)}1`;
 const ACCOUNT_ID = `${'8'.repeat(17)}2`;
 const DEAL_ID = '400000001';
@@ -130,54 +141,149 @@ function releaseFixture(environment) {
   return { manifest, readback };
 }
 
-function containedForm1Request(url, headerName, headerValue, activity) {
-  const request = {
+function form1Request(url, headerName, headerValue, body) {
+  return {
     method: 'POST',
     url,
     headers: {
       'content-type': 'application/json',
       [headerName]: headerValue,
     },
+    rawBody: Buffer.from(JSON.stringify(body), 'utf8'),
   };
-  Object.defineProperty(request, 'rawBody', {
-    get() {
-      activity.push('payload-read');
-      throw new Error('contained Form 1 route must not read a payload');
-    },
-  });
-  return request;
 }
 
 function form1Config() {
+  const projectId = '100000000000001';
+  return loadForm1Config({
+    DEPLOYMENT_ENVIRONMENT: 'development',
+    DEPLOYMENT_MODE: 'active',
+    EXPECTED_CATALYST_PROJECT_ID_SHA256: digest(projectId),
+    CRM_ORGANIZATION_ID_SHA256: '2'.repeat(64),
+    SOURCE_REVISION,
+    ISSUE_PATH: '/form1/issue-test',
+    PREFILL_PATH: '/form1/prefill-test',
+    SUBMISSION_PATH: '/form1/submission-test',
+    ISSUE_HEADER_NAME: 'x-synthetic-form1-issue',
+    PREFILL_HEADER_NAME: 'x-synthetic-form1-prefill',
+    SUBMISSION_HEADER_NAME: 'x-synthetic-form1-submission',
+    ISSUE_HEADER_SECRET: FORM1_ISSUE_SECRET,
+    PREFILL_HEADER_SECRET: FORM1_PREFILL_SECRET,
+    SUBMISSION_HEADER_SECRET: FORM1_SUBMISSION_SECRET,
+    TOKEN_PEPPER: 't'.repeat(43),
+    ISSUING_ACTOR_HASH: `operator_${'3'.repeat(64)}`,
+    FORM1_PUBLIC_URL: 'https://forms.zohopublic.com/example/form/Request/formperma/example',
+    FORM1_TOKEN_FIELD_ALIAS: 'AssistedIntakeToken',
+    CRM_READ_CONNECTION_LINK_NAME: FORM1_CRM_READ_LINK,
+    CRM_WRITE_CONNECTION_LINK_NAME: FORM1_CRM_WRITE_LINK,
+    FORM1_ENTRY_OFFER_VALUE: 'Free 7-Day Missed-Call',
+    FORM1_INTAKE_FORM_VERSION: 'revenue-leak-test-request-v1',
+    FORM1_LEAD_STATUS_VALUE: 'Free Test Requested',
+    FORM1_SOURCE_PAGE_VALUE: 'crm-assisted-form1',
+    FORM1_SUBMISSION_CHANNEL_VALUE: 'CRM Assisted',
+  }, SOURCE_REVISION);
+}
+
+function form1MemoryAdapter() {
+  const rows = [];
   return {
-    issuePath: '/form1/issue-test',
-    prefillPath: '/form1/prefill-test',
-    issueHeaderName: 'x-synthetic-form1-issue',
-    prefillHeaderName: 'x-synthetic-form1-prefill',
-    issueHeaderSecret: FORM1_ISSUE_SECRET,
-    prefillHeaderSecret: FORM1_PREFILL_SECRET,
+    rows,
+    async findRowsByJourneyId(_table, value) {
+      return rows.filter((row) => row.INTAKE_SUBMISSION_ID === value).map((row) => ({ ...row }));
+    },
+    async findRowsByRowId(_table, value) {
+      return rows.filter((row) => row.ROWID === String(value)).map((row) => ({ ...row }));
+    },
+    async findRowsByTokenHash(_table, value) {
+      return rows.filter((row) => row.TOKEN_HASH === value).map((row) => ({ ...row }));
+    },
+    async insertRow(_table, row) { rows.push({ ROWID: String(rows.length + 1), ...row }); },
+    async updateRow(_table, update, expected) {
+      const row = rows.find((candidate) => candidate.ROWID === String(update.ROWID));
+      if (!row || Object.entries(expected).some(([key, value]) =>
+        (typeof value === 'number' ? Number(row[key]) !== value : row[key] !== value))) return [];
+      Object.assign(row, Object.fromEntries(
+        Object.entries(update).filter(([key]) => key !== 'ROWID'),
+      ));
+      return [];
+    },
   };
 }
 
-async function runForm1Containment() {
+function syntheticForm1Data() {
+  return {
+    firstName: 'ZZZ', lastName: 'Synthetic', company: 'ZZZ SYNTHETIC Plumbing',
+    decisionMakerRole: 'Owner', jobTitle: '', email: 'synthetic@example.invalid',
+    mobilePhone: '+15555550101', companyPhone: '+15555550102',
+    currentCallHandling: 'Voicemail', preferredTestRoute: 'After Hours',
+    phoneSystemProvider: 'Synthetic Provider', primaryServiceArea: 'ZZZ SYNTHETIC',
+    fieldTeamSizeBand: '1-5', additionalNotes: '', contactConsent: true,
+    leadSource: 'Other', sourcePage: '', utmSource: 'synthetic', utmMedium: '',
+    utmCampaign: '', utmTerm: '', utmContent: '',
+  };
+}
+
+async function runForm1AssistedJourney() {
   const config = form1Config();
-  const activity = [];
-  const responses = [];
-  for (const [url, headerName, headerValue] of [
-    [config.issuePath, config.issueHeaderName, FORM1_ISSUE_SECRET],
-    [config.prefillPath, config.prefillHeaderName, FORM1_PREFILL_SECRET],
-  ]) {
-    responses.push(await handleForm1(
-      containedForm1Request(url, headerName, headerValue, activity),
-      new Proxy({ config }, {
-        get(target, key) {
-          if (key !== 'config') activity.push(`dependency:${String(key)}`);
-          return Reflect.get(target, key);
-        },
-      }),
-    ));
-  }
-  return { activity, responses };
+  const adapter = form1MemoryAdapter();
+  const recordId = '4000000001';
+  const journeyId = 'journey_synthetic_release_001';
+  const record = {
+    id: recordId,
+    Modified_Time: '2026-08-29T11:59:00.000Z',
+    Intake_Submission_ID: journeyId,
+  };
+  const dependencies = {
+    config,
+    now: () => Date.parse('2026-08-29T12:00:00.000Z'),
+    randomBytes: () => Buffer.alloc(32, 7),
+    crmClient: {
+      async getRecord(_module, selectedId) {
+        assert.equal(selectedId, recordId);
+        return { ...record };
+      },
+      async getOrInitializeJourney(_module, selectedId) {
+        assert.equal(selectedId, recordId);
+        return { record: { ...record }, journeyId, initialized: false };
+      },
+      assertJourney(selected, selectedJourney) {
+        assert.equal(selected.Intake_Submission_ID, selectedJourney);
+      },
+      recordVersion(selected) {
+        return selected.Modified_Time;
+      },
+      recordMatches(selected, patch) {
+        return Object.entries(patch).every(([field, value]) => selected[field] === value);
+      },
+      async completeAssistedSubmission(_module, selected, patch, expectedRecordVersion) {
+        assert.equal(selected.id, recordId);
+        assert.equal(selected.Modified_Time, expectedRecordVersion);
+        Object.assign(record, patch);
+        return { record: { ...record }, replayed: false };
+      },
+    },
+  };
+  dependencies.sessionStore = createForm1SessionStore(adapter, config, {
+    now: dependencies.now,
+  });
+  const issue = await handleForm1(form1Request(
+    config.issuePath, config.issueHeaderName, FORM1_ISSUE_SECRET,
+    { crmModule: 'Leads', recordId },
+  ), dependencies);
+  const issuedUrl = new URL(issue.body.formUrl);
+  const token = issuedUrl.searchParams.get(config.form1TokenFieldAlias);
+  const prefill = await handleForm1(form1Request(
+    config.prefillPath, config.prefillHeaderName, FORM1_PREFILL_SECRET, { token },
+  ), dependencies);
+  const submission = await handleForm1(form1Request(
+    config.submissionPath, config.submissionHeaderName, FORM1_SUBMISSION_SECRET,
+    { token, submissionId: 'form1_submission_synthetic_001', formData: syntheticForm1Data() },
+  ), dependencies);
+  const publicSubmission = await handleForm1(form1Request(
+    config.submissionPath, config.submissionHeaderName, FORM1_SUBMISSION_SECRET,
+    { submissionId: 'form1_public_submission_synthetic_001' },
+  ), dependencies);
+  return { adapter, issue, issuedUrl, prefill, publicSubmission, record, submission, token };
 }
 
 function runForm2Authorization(intakeSubmissionId) {
@@ -304,26 +410,23 @@ function analyticsJob(environment) {
   };
 }
 
-test('Form 1 assisted containment is verified separately and does not establish acceptance', async () => {
-  const form1 = await runForm1Containment();
-  assert.deepEqual(form1.activity, []);
-  assert.deepEqual(form1.responses, [
-    {
-      status: 503,
-      body: { ok: false, code: 'configuration_invalid' },
-      stage: 'issue',
-      outcome: 'assisted_route_disabled',
-    },
-    {
-      status: 503,
-      body: { ok: false, code: 'configuration_invalid' },
-      stage: 'prefill',
-      outcome: 'assisted_route_disabled',
-    },
-  ]);
+test('Form 1 assisted issue, prefill, submission, and public lane remain isolated', async () => {
+  const form1 = await runForm1AssistedJourney();
+  assert.equal(form1.issue.status, 201);
+  assert.match(form1.token, /^[A-Za-z0-9_-]{43}$/);
+  assert.deepEqual([...form1.issuedUrl.searchParams.keys()], ['AssistedIntakeToken']);
+  assert.equal(form1.issue.body.formUrl.includes(form1.record.id), false);
+  assert.equal(form1.adapter.rows.length, 1);
+  assert.equal(JSON.stringify(form1.adapter.rows[0]).includes(form1.token), false);
+  assert.equal(form1.prefill.body.assisted, true);
+  assert.deepEqual(form1.submission.body, { ok: true, replayed: false });
+  assert.equal(form1.adapter.rows[0].STATUS, 'consumed');
+  assert.equal(form1.record.Submission_Channel, 'CRM Assisted');
+  assert.deepEqual(form1.publicSubmission.body, { ok: true, binding: 'public_unbound' });
+  assert.equal(form1.adapter.rows.length, 1);
 });
 
-test('synthetic Development downstream lifecycle covers Form 2 through Analytics with Form 1 acceptance blocked', async () => {
+test('synthetic Development lifecycle covers the bound Form 1 journey through Analytics', async () => {
   const development = releaseFixture('Development');
   assert.equal(verifyReadback(development.manifest, development.readback, contract), true);
   assert.equal(development.manifest.mode, 'synthetic-only');
@@ -332,6 +435,7 @@ test('synthetic Development downstream lifecycle covers Form 2 through Analytics
     'revenue_leak_test_setup_form',
     'revenue_desk_call_gateway',
     'revenue_desk_call_worker',
+    'revenue_desk_route_control',
     'crm_billing_orchestrator',
     'analytics_sync',
   ]);
@@ -358,9 +462,9 @@ test('synthetic Development downstream lifecycle covers Form 2 through Analytics
     'AnalyticsSyncOutbox',
   ]);
 
-  // This fixture is an independent downstream precondition. It is not output
-  // from the contained Form 1 controller and therefore proves no Form 1
-  // mapping, upsert, deduplication, or Lead-to-Deal linkage.
+  // Controlled conversion remains a CRM-owned human transition. This fixture
+  // uses the same canonical journey identity produced by the assisted Form 1
+  // boundary without claiming a live CRM Blueprint execution.
   const independentSyntheticIntakeId = 'SYNTH00001';
   const form2 = runForm2Authorization(independentSyntheticIntakeId);
   assert.equal(form2.existing.deal.Intake_Submission_ID, independentSyntheticIntakeId);

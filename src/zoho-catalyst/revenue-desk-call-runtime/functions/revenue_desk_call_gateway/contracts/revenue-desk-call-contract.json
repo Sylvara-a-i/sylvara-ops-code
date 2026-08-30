@@ -61,6 +61,12 @@
     { "internal": "converted_early", "crm_test_end_reason": "Converted Early" },
     { "internal": "other", "crm_test_end_reason": "Other" }
   ],
+  "rollback_control_reason_mappings": [
+    { "internal": "operator_requested", "crm_test_end_reason": "Sylvara Stopped" },
+    { "internal": "route_verification_failed", "crm_test_end_reason": "Technical Failure" },
+    { "internal": "configuration_changed", "crm_test_end_reason": "Technical Failure" },
+    { "internal": "synthetic_test_complete", "crm_test_end_reason": "Other" }
+  ],
   "outcomes": [
     { "value": "potential_job", "label": "Potential Job" },
     { "value": "existing_customer", "label": "Existing Customer" },

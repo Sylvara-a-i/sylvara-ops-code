@@ -1,15 +1,16 @@
 # Revenue Desk Call Runtime
 
-Status: **canonical gateway and worker definitions are installed in Development at release-candidate revision 288a93c with exact source/runtime/configuration and archive-pullback parity to their exact uploads. The gateway's 31-variable private map is exact with deployment mode active, while API Gateway ingress is disabled and fail-closed. The worker's complete 28-variable Development map is exact with dry-run notification. The latest disabled-Gateway readback returned no route payload, so the separately recorded twelve-route configuration was not freshly revalidated. During this execution, the operator invoked no route, function, Job, or Cron and performed no Retell-provider or agent test, call, simulation, publish, phone-route, or other provider-side change, customer action, or Production action. The legacy phone-webhook binding, canonical pool function-target binding, migration, rollback, and runtime acceptance remain unresolved; live ingress stays dark until the separate Retell task**.
+Status: **the immutable source candidate now contains gateway, worker, and private Development route-control targets. Route control implements separate approval, activation, and rollback operations, durable full-row CAS/audit recovery, CRM Blueprint readback, provider ownership verification, and telephony-disabled installation. It is not yet installed or read back. Historical Development parity for gateway and worker revision 288a93c remains valid only within its recorded scope; it does not prove the new target or current release. Production and live traffic remain dark.**
 
 The complete visible `All Time` Jobs UI result, with `All Status` selected, displayed 15 rows, no pagination controls, and zero references to the canonical pools. Provider-complete all-history Job inventory remains unproven. Both canonical Function Job pools matched exact at 512 MB, while their function-target binding was unavailable from the inspected surfaces. All nine required Connections were Connected with their exact least-privilege scope sets, and the complete Cron inventory contained zero canonical references. A relative prior-24-hour access and application log query ran after the final disabled-Gateway readback and returned zero rows for all six canonical functions; its exact UTC bounds were not retained, and it does not prove exact all-history execution. Direct caller and webhook bindings remain unproven.
 
 The preceding pool, Connection, log, and visible Job-history paragraph is historical 2026-08-27 route-continuation evidence, not a claim that those surfaces were freshly revalidated by either the e1da1bc predecessor packet or the 288a93c reconvergence packet. During these executions, the operator invoked no route, function, Job, or Cron; that statement applies to the historical route continuation and both definition-convergence packets within their separately recorded scopes.
 
-This shared Zoho Catalyst package contains exactly two deployable functions:
+This shared Zoho Catalyst package contains exactly three deployable functions:
 
 - `revenue_desk_call_gateway` — Advanced I/O ingress.
 - `revenue_desk_call_worker` — private Function Job target.
+- `revenue_desk_route_control` — private Development-only Advanced I/O approval, activation, and rollback target.
 
 The canonical source profile is `free_test/call_gap_monitor_v1`. Registered paid-service profiles `launch_v1`, `growth_v1`, and `scale_v1` remain disabled drafts and fail closed. The Development definition deployment and subsequent reconciliation do not authorize route invocation or further route mutation, a customer test, paid offer, Production traffic, migration, mail send, binding, Retell test, or Retell change.
 
@@ -74,9 +75,11 @@ The 288a93c deployment reconfirmed the required consumer-first six-function uplo
 
 The installed Changes connector advertises a full Cron body for status changes, while the official provider operation is status-only. Do not discover the accepted shape by mutation. Exact classification exhaustively buckets every advertised schedule, end, notification, request, header, URL, retry, provider-identity, and metadata field; canonical-absent fields must be literally absent, and nulls, empty values, defaults, unknown keys, or unproven absence fail closed. The current full-body templates are not execution-ready until read-only evidence proves status-only/nonreplacement semantics, and they must never be applied to a drifted or duplicate predecessor. Without a proven safe status-only shape, keep the worker mode dark, preserve those predecessor definitions, mark Cron containment unproven, and stop. A Cron create/resource `data.id`, persisted Job-definition or `cron_detail.jobId`, or pool/target/function identifier is not a submitted execution Job ID. Terminal canary evidence must bind the exact lossless manual-submit `data.job_id` through the get-by-ID request/response and bind `source_type=Cron` plus the exact source Cron ID, name, and `pre-defined` execution type; pool/target/params/time matching is insufficient. The contract does not authorize a live write or activation. Its dark-worker containment canary remains blocked until the provider exposes a lossless Job-to-execution identifier binding and callable execution-scoped log readback; it would not prove `retry_scan` business behavior. Conditional rollback deletion additionally needs fresh exact authority, permanently destroys Cron history, is never retried after ambiguity, and succeeds only after complete name/ID inventory absence plus shape-proven get-by-ID not-found readback.
 
-## Out-of-band approval and activation control
+## Private approval, activation, and rollback control
 
-[`lib/approval-control.js`](functions/revenue_desk_call_gateway/lib/approval-control.js) is reusable control-plane validation code, not a seventh function, gateway route, or worker mode. It separates signed `approve`/`revoke` decisions from signed `activate` decisions; binds both to the exact immutable configuration, deterministic route fingerprint, source revision, optimistic row version, and fresh evidence; chains activation to approval; requires authoritative route readback; rejects Production; and projects append-only `authorization_event` receipts. Approval moves a row only to `Scheduled`; activation alone moves it to `Live` and starts the exact seven-day interval. Capacity is enforced from durable handled-call convergence, with only the already documented in-flight overshoot; there is no unused reservation subsystem.
+`revenue_desk_route_control` exposes exactly three authenticated Development `POST` operations: approve configuration, activate free test, and stop or roll back free test. It uses the shared evaluators in [`lib/approval-control.js`](functions/revenue_desk_call_gateway/lib/approval-control.js), while keeping operator controls off the Retell gateway. Every command binds Deal, journey, deployment, configuration, idempotency identity, and rollback reason where applicable. Prepared receipts recover exact CAS poststate after interruption; command drift conflicts. Approval moves only to `Scheduled`; activation requires the exact approval plus fresh authoritative route readback; rollback stops Catalyst before provider unbinding and preserves all evidence.
+
+`RETELL_ROUTE_MODE=disabled` is the install-safe default. It requires no Retell number or Connection, activation fails with `ISOLATED_RETELL_TEST_NUMBER_REQUIRED`, and rollback returns the approved manual instructions. `isolated_test` additionally requires the exact test number, shared agent/version, Development webhook, and Retell Connection. Rollback performs no PATCH unless fresh readback proves the `ZZZ SYNTHETIC` number belongs to the exact deployment and route. Neither mode publishes an agent, buys a number, calls, sends SMS, or permits Production.
 
 The exact prestate, mutation predicates, readback, ambiguity, invalidation, containment, rollback, and legacy retirement rules are in [`route-approval-control-plane-runbook.md`](route-approval-control-plane-runbook.md). Legacy deletion and activation remain blocked until the legacy source export, dependency map, and live route/Job/webhook/caller binding proof are reconciled. The legacy boundary remains stopped but recoverable; legacy status or receipt rows are historical/quarantine evidence and never authorize a canonical route.
 
@@ -88,7 +91,7 @@ The checkout contains an unbuilt revision sentinel; an environment SHA alone can
 node scripts/build-release.js --revision <40-character-final-main-sha> --output <new-release-directory>
 ```
 
-The builder accepts only the exact clean checked-out Git `HEAD`, reads the deployable allowlist from that commit's blobs, refuses existing or in-repository output, rejects non-regular paths, stamps only an atomic outside-repository artifact, validates the exact two targets and linked worker dependency, and writes deterministic hashes in `release-manifest.json`. Materialize dependencies only in that staged tree. Never deploy the mutable or unstamped checkout.
+The builder accepts only the exact clean checked-out Git `HEAD`, reads the deployable allowlist from that commit's blobs, refuses existing or in-repository output, rejects non-regular paths, stamps only an atomic outside-repository artifact, validates the exact three targets and linked local dependencies, and writes deterministic hashes in `release-manifest.json`. Materialize dependencies only in that staged tree. Never deploy the mutable or unstamped checkout.
 
 Observed Development counts require preservation: `FreeTestDeployments=3`, `FreeTestCalls=30`, `FreeTestNotifications=6`, `FreeTestRetellEventReceipts=39`, plus nonempty generic resolver/call/Analytics tables. No deletion, rename, truncate, in-place rewrite, or cutover is safe. A future one-way migration must preserve keys, environment/engagement ownership, configuration-version IDs, receipt kinds/idempotency, call attribution, notifications, authorization chains, handled counts, and outbox lineage, then prove counts, per-partition keyed digests, samples, every conflict, rollback, and a recovery window.
 
@@ -100,6 +103,10 @@ npm ci --ignore-scripts
 npm run ci
 
 cd ../revenue_desk_call_worker
+npm ci --ignore-scripts --install-links
+npm run ci
+
+cd ../revenue_desk_route_control
 npm ci --ignore-scripts --install-links
 npm run ci
 ```

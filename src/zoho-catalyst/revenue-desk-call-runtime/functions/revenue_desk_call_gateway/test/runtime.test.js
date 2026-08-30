@@ -301,6 +301,59 @@ test('integration: ended/analyzed convergence counts once, records one dry-run n
   }
 });
 
+test('integration: rollback claims reject unseen number-only events but preserve proven settlement', async () => {
+  const fixture = runtimeFixture();
+  const durableInbound = await invoke(fixture.listener, {
+    url: '/retell/inbound', payload: payloadInbound('A'), env: fixture.env,
+  });
+  const signedInbound = await invoke(fixture.listener, {
+    url: '/retell/inbound', payload: payloadInbound('A'), env: fixture.env,
+  });
+  const durableCallId = 'rollback_proven_durable_A';
+  assert.equal((await invoke(fixture.listener, {
+    url: '/retell/events',
+    payload: eventPayload('call_ended', durableCallId,
+      durableInbound.body.call_inbound.metadata, 'A'),
+    env: fixture.env,
+  })).status, 200);
+
+  fixture.store.rows.get('RevenueDeskEventReceipts').push({
+    ROWID: 'rollback_claim_runtime_A',
+    EVENT_KEY: `rollback_claim_${'a'.repeat(64)}`,
+    RECEIPT_KIND: 'control_claim',
+    EVENT_TYPE: 'rollback_claim',
+    DEPLOYMENT_ID: 'deployment_A',
+    STATUS: 'Prepared',
+    RECEIVED_AT: new Date(fixture.clock.value).toISOString(),
+  });
+
+  assert.equal((await invoke(fixture.listener, {
+    url: '/retell/events',
+    payload: eventPayload('call_ended', 'rollback_proven_signed_A',
+      signedInbound.body.call_inbound.metadata, 'A'),
+    env: fixture.env,
+  })).status, 200, 'pre-claim signed ownership may still settle');
+  assert.equal((await invoke(fixture.listener, {
+    url: '/retell/events',
+    payload: eventPayload('call_analyzed', durableCallId, undefined, 'A'),
+    env: fixture.env,
+  })).status, 200, 'an existing durable call may still settle');
+
+  const unknown = await invoke(fixture.listener, {
+    url: '/retell/events',
+    payload: eventPayload('call_ended', 'rollback_unproven_number_only_A', undefined, 'A'),
+    env: fixture.env,
+  });
+  assert.equal(unknown.status, 200);
+  assert.equal(fixture.workerErrors.at(-1).code, 'CONFIGURATION_UNAVAILABLE');
+  const calls = fixture.store.rows.get('RevenueDeskCalls');
+  assert.equal(calls.length, 2);
+  assert.equal(calls.some((row) => row.CALL_KEY === callLookupKey(
+    fixture.config.eventSecret, 'rollback_unproven_number_only_A',
+  )), false);
+  assert.equal(fixture.store.rows.get('RevenueDeskDeployments')[0].HANDLED_COUNT, 2);
+});
+
 test('integration: conflicting lifecycle timestamps are quarantined without rewriting or notifying', async () => {
   const fixture = runtimeFixture();
   const inbound = await invoke(fixture.listener, { url: '/retell/inbound',
@@ -2003,8 +2056,8 @@ test('integration: readiness is query-bounded and fails closed on capped or malf
     now: () => fixture.clock.value,
   });
   const readiness = await service.readiness();
-  assert.equal(boundedQueries, 3,
-    'readiness uses one bounded store probe plus two bounded local evidence pages');
+  assert.equal(boundedQueries, 4,
+    'readiness uses one bounded store probe plus deployment, configuration, and rollback-claim evidence pages');
   assert.equal(unboundedSourceQueries, 0);
   assert.equal(readiness.readinessScanCapped, true);
   assert.equal(readiness.sourceDeploymentCount, 100);

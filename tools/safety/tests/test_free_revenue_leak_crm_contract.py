@@ -43,7 +43,10 @@ class FreeRevenueLeakCrmContractTests(unittest.TestCase):
     def test_crm_contract_is_synthetic_only_and_contains_no_active_sign_or_sms_path(self):
         contract = self.contract
         self.assertEqual(contract["schema_version"], 3)
-        self.assertEqual(contract["status"], "desired_state_not_deployable")
+        self.assertEqual(
+            contract["status"],
+            "source_candidate_requires_development_installation_and_readback",
+        )
         self.assertEqual(contract["identifier_migration"]["from_schema_version"], 2)
         self.assertEqual(
             contract["identifier_migration"]["controller_aliases"]["form2_controller"],
@@ -89,7 +92,10 @@ class FreeRevenueLeakCrmContractTests(unittest.TestCase):
             "src/zoho-crm/free-revenue-leak-test/evidence/"
             "live-topology-layout-preflight-2026-08-28.json",
         )
-        self.assertIn("closes the current metadata and layout gap only", evidence["authority_limit"])
+        self.assertIn(
+            "closes the historical metadata and layout gap only",
+            evidence["authority_limit"],
+        )
         self.assertFalse(evidence["private_identifiers_committed"])
         self.assertFalse(evidence["write_performed"])
 
@@ -172,9 +178,12 @@ class FreeRevenueLeakCrmContractTests(unittest.TestCase):
     def test_blueprint_topology_cannot_auto_activate_bill_message_or_close_won(self):
         blueprint = self.contract["blueprint"]
         boundary = blueprint["deployment_boundary"]
-        self.assertEqual(boundary["status"], "desired_state_not_deployable")
-        self.assertFalse(boundary["live_write_authorized"])
-        self.assertFalse(boundary["writer_or_provider_payload_contract_in_repository"])
+        self.assertEqual(
+            boundary["status"],
+            "source_candidate_requires_development_installation_and_readback",
+        )
+        self.assertTrue(boundary["live_write_authorized"])
+        self.assertTrue(boundary["writer_or_provider_payload_contract_in_repository"])
         self.assertFalse(boundary["provider_save_readback_proven"])
         self.assertFalse(boundary["runtime_acceptance_proven"])
         self.assertTrue(boundary["external_evidence_validator_in_repository"])
@@ -209,9 +218,19 @@ class FreeRevenueLeakCrmContractTests(unittest.TestCase):
         self.assertEqual(metadata_gate["unverified_api_names"], [])
 
         topology = blueprint["transition_topology"]
-        self.assertEqual(len(topology), 13)
-        self.assertEqual(len({item["name"] for item in topology}), 13)
-        self.assertTrue(all(item["execution"] == "manual_only" for item in topology))
+        self.assertEqual(len(topology), 14)
+        self.assertEqual(len({item["name"] for item in topology}), 14)
+        self.assertEqual(
+            [item["name"] for item in topology if item["execution"] == "controller_only"],
+            ["Contain Failed Activation"],
+        )
+        self.assertTrue(
+            all(
+                item["execution"] == "manual_only"
+                for item in topology
+                if item["name"] != "Contain Failed Activation"
+            )
+        )
         self.assertTrue(
             all(
                 item["from_state"] in blueprint["states"]
@@ -575,7 +594,7 @@ class FreeRevenueLeakCrmContractTests(unittest.TestCase):
             for item in topology
             for action in item["allowed_after_actions"]
         }
-        self.assertEqual(allowed_action_fields, {"Test_Status"})
+        self.assertEqual(allowed_action_fields, {"Test_Status", "Test_Start_At"})
         self.assertEqual(allowed_action_types, {"field_update"})
         self.assertEqual(
             by_name["Close Live Test"]["allowed_after_actions"],
@@ -618,7 +637,15 @@ class FreeRevenueLeakCrmContractTests(unittest.TestCase):
         )
         self.assertEqual(
             evidence["automation_contract_revision"],
+            "2026-08-28-blueprint-topology-v4",
+        )
+        self.assertNotEqual(
+            evidence["automation_contract_revision"],
             self.contract["contract_revision"],
+        )
+        self.assertTrue(
+            self.contract["blueprint"]["transition_field_metadata_gate"]
+            ["fresh_readback_required_before_deployment"]
         )
         metadata = evidence["metadata_and_layout_readback"]
         matching = metadata["fields_matching_predeclared_types"]

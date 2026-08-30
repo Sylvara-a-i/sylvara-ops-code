@@ -6,6 +6,7 @@
     "revenue_leak_test_request_form",
     "revenue_leak_test_setup_form",
     "revenue_desk_call_gateway",
+    "revenue_desk_route_control",
     "revenue_desk_call_worker",
     "crm_billing_orchestrator",
     "analytics_sync"
@@ -17,7 +18,7 @@
       "repository_package": "../../src/zoho-catalyst/billing-webhook-gateway",
       "runtime_variable_registry": "../../src/zoho-catalyst/billing-webhook-gateway/config/variables.json",
       "development_function_target": "sylvara_client_portal_hmac_gateway_function",
-      "included_in_exact_six_revenue_desk_functions": false,
+      "included_in_exact_seven_revenue_desk_functions": false,
       "production_code_block_required": true,
       "development_deployment_authorized": false,
       "credential_rotation_authorized": false,
@@ -33,6 +34,21 @@
     "failure_action": "Keep every route, job producer, paid-mutation gate, and Production deployment dark; preserve evidence and stop."
   },
   "derivation_domains": [
+    {
+      "id": "form1_assisted_session_v2",
+      "variables": ["TOKEN_PEPPER"],
+      "consumers": ["revenue_leak_test_request_form"],
+      "domains": [
+        "sylvara.form1.assisted-token-hash.v2",
+        "sylvara.form1.assisted-submission-hash.v1"
+      ],
+      "durable_outputs": [
+        "RevenueLeakTestRequestFormSessions.TOKEN_HASH",
+        "RevenueLeakTestRequestFormSessions.SUBMISSION_FINGERPRINT"
+      ],
+      "rotation_gate": "Assisted Form 1 routes disabled; no issued, claimed, or reconciliation_required session; every retained completed session is either migrated with exact keyed readback or intentionally invalidated; old bearer artifacts fail closed.",
+      "previous_key_policy": "No final overlap. Reissue a new short-lived opaque assisted artifact for resumable journeys after rotation; never restore or log an old bearer value."
+    },
     {
       "id": "form2_bearer_lookup_v1",
       "variables": ["TOKEN_PEPPER"],
@@ -121,11 +137,36 @@
     {
       "id": "revenue_desk_number_lookup_v1",
       "variables": ["NUMBER_LOOKUP_HMAC_SECRET"],
-      "consumers": ["revenue_desk_call_gateway"],
+      "consumers": ["revenue_desk_call_gateway", "revenue_desk_route_control"],
       "domains": ["revenue-desk-number-v1"],
       "durable_outputs": ["RevenueDeskDeployments.NUMBER_LOOKUP_HASH"],
       "rotation_gate": "Ingress disabled; authoritative private test-number mapping read back; every deployment hash recomputed; route approval and activation evidence regenerated for the resulting canonical route; old hash resolves no route.",
       "previous_key_policy": "A previous key may be used only during a bounded disabled-ingress read migration. Remove it before readiness."
+    },
+    {
+      "id": "revenue_desk_route_control_identity_v1",
+      "variables": ["ROUTE_CONTROL_EVENT_HMAC_SECRET"],
+      "consumers": ["revenue_desk_route_control"],
+      "domains": [
+        "revenue-desk-route-control-state-v1",
+        "revenue-desk-route-control-idempotency-v1",
+        "revenue-desk-route-control-operator-v1",
+        "revenue-desk-authorization-event-v1",
+        "revenue-desk-approval-intent-fingerprint-v1",
+        "revenue-desk-activation-intent-fingerprint-v1",
+        "revenue-desk-rollback-claim-key-v1",
+        "revenue-desk-rollback-claim-v1"
+      ],
+      "durable_outputs": [
+        "RevenueDeskEventReceipts.EVENT_KEY",
+        "RevenueDeskEventReceipts.EVENT_HASH",
+        "RevenueDeskEventReceipts.PAYLOAD_FINGERPRINT",
+        "RevenueDeskDeployments.APPROVAL_EVENT_KEY",
+        "RevenueDeskDeployments.ACTIVATION_EVENT_KEY",
+        "route-control operator identity digest and deployment prestate/poststate digests"
+      ],
+      "rotation_gate": "All route-control operations and call ingress disabled; no Prepared or ReconciliationRequired authorization receipt or rollback claim; no active Development deployment; every retained receipt and deployment binding is migrated and independently read back or permanently retired.",
+      "previous_key_policy": "No final overlap. Partial rekeying of authorization receipts, rollback claims, or deployment event bindings is prohibited."
     },
     {
       "id": "revenue_desk_analytics_partition_v1",
@@ -185,9 +226,14 @@
   ],
   "authentication_and_binding_secrets": [
     {
-      "variables": ["ISSUE_HEADER_SECRET", "PREFILL_HEADER_SECRET"],
+      "variables": ["ISSUE_HEADER_SECRET", "PREFILL_HEADER_SECRET", "SUBMISSION_HEADER_SECRET"],
       "consumers": ["revenue_leak_test_request_form"],
-      "rule": "Keep the retained CRM button bound only to the exact local fail-closed function, keep its remote route caller and the Forms Prefill Webhook unbound, and keep both routes disabled. Rotate or revoke the controller secrets only under a separate cleanup or deployment packet with exact configuration readback; defer accepted/rejected route testing until a safe assisted transport is separately authorized."
+      "rule": "Keep assisted issue, prefill, and submission routes disabled while rotating each server-to-server caller with its matching independent secret. Prove the new caller accepted and the old caller rejected before binding the CRM launcher or assisted Form 1 webhook; browser requests never receive a shared secret."
+    },
+    {
+      "variables": ["ROUTE_CONTROL_SHARED_HEADER_VALUE", "ROUTE_CONTROL_OPERATOR_HMAC_SECRET", "ROUTE_CONTROL_EVENT_HMAC_SECRET"],
+      "consumers": ["revenue_desk_route_control"],
+      "rule": "Keep route control Development-only and disabled. Rotate the administrator caller header and operator signing key together, preserve separation from the event-chain key, prove old caller and intent signatures rejected, migrate or retire every event-chain-derived receipt and rollback claim, then independently read back the exact disabled binding before any synthetic operation."
     },
     {
       "variables": ["ISSUE_HEADER_SECRET", "PREFILL_HEADER_SECRET", "SUBMISSION_HEADER_SECRET"],
@@ -230,7 +276,8 @@
         "BILLING_READ_CONNECTION_LINK_NAME",
         "BILLING_WRITE_CONNECTION_LINK_NAME",
         "ANALYTICS_READ_CONNECTION_LINK_NAME",
-        "ANALYTICS_WRITE_CONNECTION_LINK_NAME"
+        "ANALYTICS_WRITE_CONNECTION_LINK_NAME",
+        "RETELL_CONNECTION_LINK_NAME"
       ],
       "rule": "Connection names are identities, not credentials. Rotate or replace each underlying least-privilege read and write OAuth grant independently, validate exact read-only versus write authority and target product, then revoke each exposed superseded grant."
     }
@@ -238,7 +285,7 @@
   "client_portal_gateway_rotation": {
     "component_id": "client_portal_billing_webhook_gateway",
     "classification": "required_hardening_pending",
-    "included_in_exact_six_revenue_desk_functions": false,
+    "included_in_exact_seven_revenue_desk_functions": false,
     "production_code_block_required": true,
     "development_deployment_authorized": false,
     "credential_rotation_authorized": false,
@@ -317,7 +364,7 @@
     "Every durable rekey requires source count, destination count, sorted keyed digest, duplicate report, conflict report, samples, and authoritative downstream readback.",
     "Any ambiguous write or revocation is unresolved until independent metadata and behavior readback proves the exact outcome.",
     "The final state contains no exposed previous-key overlap, no active test side effect, no unresolved row, no historical raw OAuth grant, and no Production capability.",
-    "The retained Client Portal gateway remains outside the exact six Revenue Desk functions and stays required_hardening_pending until every component hardening gate and final readback passes."
+    "The retained Client Portal gateway remains outside the exact seven Revenue Desk functions and stays required_hardening_pending until every component hardening gate and final readback passes."
   ],
   "rollback": {
     "before_old_key_revocation": "Keep all ingress and mutations disabled. Restore only the prior reviewed artifact/configuration long enough to reconcile or export evidence; never activate traffic on an exposed key.",

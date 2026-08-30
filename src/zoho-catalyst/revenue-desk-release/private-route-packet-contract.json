@@ -1,15 +1,64 @@
 {
   "schema_version": 1,
   "environment": "Development",
-  "physical_route_count": 12,
+  "physical_route_count": 16,
   "gateway_prestate": "disabled-with-zero-routes",
   "activation_authorized": false,
+  "route_profiles": {
+    "canonical-all": {
+      "route_ids": [
+        "RETELL_INBOUND",
+        "RETELL_EVENTS",
+        "RETELL_READINESS",
+        "ROUTE_CONTROL_APPROVE",
+        "ROUTE_CONTROL_ACTIVATE",
+        "ROUTE_CONTROL_ROLLBACK",
+        "FORM1_ISSUE",
+        "FORM1_PREFILL",
+        "FORM1_SUBMISSION",
+        "FORM2_ISSUE",
+        "FORM2_ACCESS",
+        "FORM2_OTP_REQUEST",
+        "FORM2_OTP_VERIFY",
+        "FORM2_PREFILL",
+        "FORM2_SUBMISSION",
+        "CRM_BILLING"
+      ]
+    },
+    "setup-journey": {
+      "route_ids": [
+        "RETELL_INBOUND",
+        "RETELL_EVENTS",
+        "RETELL_READINESS",
+        "ROUTE_CONTROL_APPROVE",
+        "ROUTE_CONTROL_ACTIVATE",
+        "ROUTE_CONTROL_ROLLBACK",
+        "FORM1_ISSUE",
+        "FORM1_PREFILL",
+        "FORM1_SUBMISSION",
+        "FORM2_ISSUE",
+        "FORM2_ACCESS",
+        "FORM2_OTP_REQUEST",
+        "FORM2_OTP_VERIFY",
+        "FORM2_PREFILL",
+        "FORM2_SUBMISSION"
+      ],
+      "deferred_route_ids": ["CRM_BILLING"],
+      "development_api_gateway_availability_authorized": true,
+      "retell_provider_activation_authorized": false,
+      "production_gateway_activation_authorized": false
+    }
+  },
   "routes": [
     {"id":"RETELL_INBOUND","function":"revenue_desk_call_gateway","method":"POST","path_reference":"RETELL_INBOUND_PATH","authentication":[],"overall_per_minute":120,"per_ip_per_minute":120},
     {"id":"RETELL_EVENTS","function":"revenue_desk_call_gateway","method":"POST","path_reference":"RETELL_EVENTS_PATH","authentication":[],"overall_per_minute":300,"per_ip_per_minute":300},
     {"id":"RETELL_READINESS","function":"revenue_desk_call_gateway","method":"GET","path_reference":"INTERNAL_READINESS_PATH","authentication":[],"overall_per_minute":30,"per_ip_per_minute":10},
+    {"id":"ROUTE_CONTROL_APPROVE","function":"revenue_desk_route_control","method":"POST","path_reference":"ROUTE_CONTROL_APPROVE_PATH","authentication":["APIKey"],"overall_per_minute":30,"per_ip_per_minute":10},
+    {"id":"ROUTE_CONTROL_ACTIVATE","function":"revenue_desk_route_control","method":"POST","path_reference":"ROUTE_CONTROL_ACTIVATE_PATH","authentication":["APIKey"],"overall_per_minute":30,"per_ip_per_minute":10},
+    {"id":"ROUTE_CONTROL_ROLLBACK","function":"revenue_desk_route_control","method":"POST","path_reference":"ROUTE_CONTROL_ROLLBACK_PATH","authentication":["APIKey"],"overall_per_minute":30,"per_ip_per_minute":10},
     {"id":"FORM1_ISSUE","function":"revenue_leak_test_request_form","method":"POST","path_reference":"ISSUE_PATH","authentication":[],"overall_per_minute":30,"per_ip_per_minute":10},
     {"id":"FORM1_PREFILL","function":"revenue_leak_test_request_form","method":"POST","path_reference":"PREFILL_PATH","authentication":[],"overall_per_minute":120,"per_ip_per_minute":30},
+    {"id":"FORM1_SUBMISSION","function":"revenue_leak_test_request_form","method":"POST","path_reference":"SUBMISSION_PATH","authentication":[],"overall_per_minute":60,"per_ip_per_minute":15},
     {"id":"FORM2_ISSUE","function":"revenue_leak_test_setup_form","method":"POST","path_reference":"ISSUE_PATH","authentication":["APIKey"],"overall_per_minute":30,"per_ip_per_minute":10},
     {"id":"FORM2_ACCESS","function":"revenue_leak_test_setup_form","method":"GET","path_reference":"FORM2_ACCESS_PATH","authentication":[],"overall_per_minute":120,"per_ip_per_minute":30},
     {"id":"FORM2_OTP_REQUEST","function":"revenue_leak_test_setup_form","method":"POST","path_reference":"FORM2_OTP_REQUEST_PATH","authentication":[],"overall_per_minute":30,"per_ip_per_minute":5},
