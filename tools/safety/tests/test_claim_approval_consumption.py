@@ -197,9 +197,9 @@ class ApprovalConsumptionTests(unittest.TestCase):
             self.assertEqual("error\n", result.stderr)
         self.assertEqual([], list(self.ledger.iterdir()))
 
-    def test_only_the_v2_crm_trigger_repair_namespace_is_supported(self) -> None:
+    def test_only_the_v3_crm_trigger_repair_namespace_is_supported(self) -> None:
         self.assertEqual(
-            "crm-workflow-trigger-repair-v2",
+            "crm-workflow-trigger-repair-v3",
             ledger_tool.CRM_WORKFLOW_TRIGGER_REPAIR_VALIDATOR,
         )
         self.assertEqual(
@@ -212,6 +212,31 @@ class ApprovalConsumptionTests(unittest.TestCase):
         )
         self.assertNotIn(
             "crm-workflow-repair-v1", ledger_tool.SUPPORTED_VALIDATORS
+        )
+        self.assertNotIn(
+            "crm-workflow-trigger-repair-v2",
+            ledger_tool.SUPPORTED_VALIDATORS,
+        )
+        browser_contract = "crm-lead-intake-scheduled-association-removal-browser-v1"
+        self.assertNotIn(browser_contract, ledger_tool.SUPPORTED_VALIDATORS)
+        with self.assertRaises(ledger_tool.InvalidClaimInput):
+            ledger_tool._parse_cli(
+                [browser_contract, "private-packet.json", "private-approval.json"]
+            )
+        self.assertEqual([], list(self.ledger.iterdir()))
+
+    def test_catalyst_schema_v3_additive_route_namespace_is_supported(self) -> None:
+        self.assertEqual(
+            "catalyst-route-additive-reconciliation-v3",
+            ledger_tool.CATALYST_ROUTE_ADDITIVE_RECONCILIATION_VALIDATOR,
+        )
+        self.assertIn(
+            ledger_tool.CATALYST_ROUTE_ADDITIVE_RECONCILIATION_VALIDATOR,
+            ledger_tool.SUPPORTED_VALIDATORS,
+        )
+        self.assertNotIn(
+            "catalyst-route-additive-reconciliation-v2",
+            ledger_tool.SUPPORTED_VALIDATORS,
         )
 
     def test_crm_validator_namespace_mismatch_fails_before_validation(self) -> None:
@@ -375,6 +400,68 @@ class ApprovalConsumptionTests(unittest.TestCase):
         self.assertNotIn(ledger_tool.NODE_EXECUTABLE_ENV, invoked["env"])
         self.assertNotIn(ledger_tool.NODE_EXECUTABLE_SHA256_ENV, invoked["env"])
 
+    def test_catalyst_route_machine_result_is_strict_and_never_relayed(self) -> None:
+        machine_result = json.dumps(
+            {
+                "authorityId": AUTHORITY_ID,
+                "consumptionDigest": DIGEST,
+                "schema": ledger_tool._VALIDATOR_RESULT_SCHEMA,
+                "validator": (
+                    ledger_tool.CATALYST_ROUTE_ADDITIVE_RECONCILIATION_VALIDATOR
+                ),
+            },
+            separators=(",", ":"),
+        )
+        completed = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout=machine_result, stderr=""
+        )
+        with mock.patch.object(
+            ledger_tool,
+            "_configured_node_executable",
+            return_value=Path(sys.executable),
+        ) as configured_node, mock.patch.object(
+            ledger_tool.subprocess, "run", return_value=completed
+        ) as runner:
+            pair = ledger_tool._validate_catalyst_route_additive_reconciliation(
+                self.root / "packet.json", self.root / "approval.json"
+            )
+
+        self.assertEqual((AUTHORITY_ID, DIGEST), pair)
+        self.assertEqual(2, configured_node.call_count)
+        command = runner.call_args.args[0]
+        self.assertEqual(
+            ledger_tool.CATALYST_ROUTE_ADDITIVE_RECONCILIATION_VALIDATOR,
+            command[-1],
+        )
+        self.assertEqual(
+            str(ledger_tool._CATALYST_ROUTE_VALIDATOR_CLI), command[-4]
+        )
+
+    def test_same_catalyst_route_envelope_is_claimed_once_and_never_released(self) -> None:
+        with mock.patch.object(
+            ledger_tool, "_assert_execution_boundary_source_clean"
+        ), mock.patch.object(
+            ledger_tool,
+            "_validate_catalyst_route_additive_reconciliation",
+            return_value=(AUTHORITY_ID, DIGEST),
+        ) as validator:
+            receipt = ledger_tool.validate_and_claim_approval(
+                ledger_tool.CATALYST_ROUTE_ADDITIVE_RECONCILIATION_VALIDATOR,
+                self.root / "private-route-packet.json",
+                self.root / "private-route-approval.json",
+            )
+            with self.assertRaises(ledger_tool.ApprovalAlreadyConsumed):
+                ledger_tool.validate_and_claim_approval(
+                    ledger_tool.CATALYST_ROUTE_ADDITIVE_RECONCILIATION_VALIDATOR,
+                    self.root / "private-route-packet.json",
+                    self.root / "private-route-approval.json",
+                )
+
+        self.assertTrue(receipt.claimed)
+        self.assertEqual(2, validator.call_count)
+        self.assertEqual(1, len(self.rows()))
+        self.assertEqual((AUTHORITY_ID, DIGEST), self.rows()[0][:2])
+
     def test_execution_boundary_source_must_be_committed_and_visible(self) -> None:
         normal = subprocess.CompletedProcess(
             args=[],
@@ -414,6 +501,33 @@ class ApprovalConsumptionTests(unittest.TestCase):
         ):
             with self.assertRaises(ledger_tool.InvalidClaimInput):
                 ledger_tool._assert_execution_boundary_source_clean()
+
+    def test_catalyst_route_claim_binds_fixed_validator_and_contract_sources(self) -> None:
+        clean = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="", stderr=""
+        )
+        relative_paths = (
+            "tools/safety/claim_approval_consumption.py",
+            "src/zoho-catalyst/revenue-desk-release/private-route-packet-contract.json",
+            "src/zoho-catalyst/revenue-desk-release/scripts/validate-private-route-packet.js",
+        )
+        visible = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout="".join(f"H {relative}\n" for relative in reversed(relative_paths)),
+            stderr="",
+        )
+        with mock.patch.object(
+            ledger_tool.subprocess, "run", side_effect=[clean, visible]
+        ) as runner:
+            ledger_tool._assert_execution_boundary_source_clean(
+                ledger_tool.CATALYST_ROUTE_ADDITIVE_RECONCILIATION_VALIDATOR
+            )
+
+        for call in runner.call_args_list:
+            command = call.args[0]
+            for relative in relative_paths:
+                self.assertIn(relative, command)
 
     def test_git_subprocess_environment_rejects_repository_override_poisoning(
         self,

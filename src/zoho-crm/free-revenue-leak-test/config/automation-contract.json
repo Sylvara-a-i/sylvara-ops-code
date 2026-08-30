@@ -1,6 +1,6 @@
 {
   "schema_version": 3,
-  "contract_revision": "2026-08-29-assisted-form1-and-route-control-v2",
+  "contract_revision": "2026-08-30-form2-workflow-authority-v3",
   "status": "source_candidate_requires_development_installation_and_readback",
   "customer_facing_offer": "Free Revenue Leak Test",
   "legacy_internal_offer_value": "7-Day Revenue Leak Test",
@@ -89,7 +89,7 @@
       "associative_and": "flatten recursively, then sort children by canonical JSON",
       "or_grouping": "preserve the OR node and sort its children by canonical JSON",
       "duplicate_children": "reject",
-      "packet_policy": "Lead Intake, Controls, and Limits must exactly match their reviewed desired normalized trees. Form 2 candidate and superseded rules must carry fresh complete normalized observed trees as immutable non-authoritative evidence. Every immediate pre-mutation readback must match the complete packet-bound rule snapshot, including identity, name, module, status, trigger, repeat, normalized criteria, and all actions; every subsequent readback must remain exact. Any drift stops before mutation."
+      "packet_policy": "Lead Intake, Controls, and Limits must exactly match their reviewed desired normalized trees throughout. The Form 2 candidate begins as fresh complete packet-bound observed repair-source evidence, then must exactly match the reviewed desired normalized tree after its inactive edit and before activation. The superseded Form 2 rule remains fresh complete normalized observed evidence and must stay inactive and unchanged. Every immediate pre-mutation readback must match the complete packet-bound rule snapshot, including identity, name, module, status, trigger, repeat, normalized criteria, and all action semantics; every subsequent readback must remain exact. Any drift stops before mutation."
     },
     "rules": {
       "leadIntake": {
@@ -117,16 +117,53 @@
           { "type": "condition", "apiName": "Entry_Offer", "operator": "equal", "value": "7-Day Revenue Leak Test" },
           { "type": "condition", "apiName": "Setup_Form_Submission_ID", "operator": "equal", "value": "${EMPTY}" }
         ]
+      },
+      "form2Candidate": {
+        "type": "group",
+        "operator": "AND",
+        "children": [
+          { "type": "condition", "apiName": "Authority_Confirmed_At", "operator": "not_equal", "value": "${EMPTY}" },
+          { "type": "condition", "apiName": "Authorized_Representative_Confirmed", "operator": "equal", "value": true },
+          { "type": "condition", "apiName": "Entry_Offer", "operator": "equal", "value": "7-Day Revenue Leak Test" },
+          { "type": "condition", "apiName": "Setup_Access_Status", "operator": "equal", "value": "Submitted" },
+          { "type": "condition", "apiName": "Setup_Form_Submission_ID", "operator": "not_equal", "value": "${EMPTY}" },
+          { "type": "condition", "apiName": "Setup_Form_Submitted_At", "operator": "not_equal", "value": "${EMPTY}" },
+          { "type": "condition", "apiName": "Setup_Form_Version", "operator": "not_equal", "value": "${EMPTY}" },
+          { "type": "condition", "apiName": "Test_Scope_Accepted", "operator": "equal", "value": true },
+          { "type": "condition", "apiName": "Test_Scope_Accepted_At", "operator": "not_equal", "value": "${EMPTY}" },
+          { "type": "condition", "apiName": "Test_Scope_Version", "operator": "not_equal", "value": "${EMPTY}" },
+          {
+            "type": "group",
+            "operator": "OR",
+            "children": [
+              { "type": "condition", "apiName": "Go_Live_Approval_Status", "operator": "equal", "value": "Not Ready" },
+              { "type": "condition", "apiName": "Go_Live_Approval_Status", "operator": "equal", "value": "Pending Internal Approval" }
+            ]
+          }
+        ]
       }
     },
     "form2_authority": {
-      "status": "blocked_observed_not_authoritative",
-      "desired_criterion_ast_committed": false,
-      "candidate_mutation_authorized": false,
-      "candidate_activation_authorized": false,
-      "superseded_mutation_scope": "status_false_only",
-      "private_packet_requirement": "fresh complete normalized observed candidate and superseded criterion trees labeled non-authoritative",
-      "readback_requirement": "candidate and superseded name, module, complete criteria, and complete actions stay unchanged; both rules finish inactive"
+      "status": "reviewed_desired_candidate_activation_packet_required",
+      "desired_criterion_ast_committed": true,
+      "candidate_mutation_authorized": true,
+      "candidate_activation_authorized": true,
+      "superseded_mutation_scope": "none_already_inactive",
+      "private_packet_requirement": "fresh complete candidate and superseded readback with exact private identifiers and exact action semantics; Form 2 remains disabled with its submission webhook disabled and zero submissions before the first mutation",
+      "readback_requirement": "candidate is edited only while inactive, independently read back with the canonical name, reviewed criteria, one Submitted field update, and one internal task, then activated by a separate status-only write; the superseded rule stays inactive and unchanged",
+      "controller_proof_boundary": "the workflow criterion routes controller-owned persisted submission evidence; durable proof remains the consumed Catalyst proof plus the exact controller receipt and CRM readback, never a standalone CRM Boolean",
+      "allowed_field_update": { "api_name": "Setup_Access_Status", "value": "Submitted" },
+      "allowed_task": {
+        "subject": "Review Form 2 Setup and Begin QA — ${Deals.Deal Name}",
+        "due": "trigger_plus_0_days",
+        "priority": "High",
+        "status": "Not Started",
+        "owner": "private_internal_operator_binding",
+        "notify_assignee": false,
+        "record_association": "current_deal",
+        "description": "Trusted Form 2 controller proof was verified for ${Deals.Deal Name}. Review the submitted evidence, configure the approved route and fallback/rollback contacts, and complete QA for the exact configuration version. Do not activate routing; Test Live still requires separate internal Go-Live Approval Status = Approved."
+      },
+      "deleted_field_update_roles": ["authorizationSigned", "testStatusSetupPending"]
     }
   },
   "workflow_set": [
@@ -142,6 +179,122 @@
         "Free_Test_Contact_Consent equals true"
       ],
       "effects": ["create one internal review task"],
+      "scheduled_follow_up_removal": {
+        "contract_id": "crm-lead-intake-scheduled-association-removal-browser-v1",
+        "status": "separate_governed_browser_action_pending_fresh_private_prestate",
+        "environment": "Development",
+        "execution_surface": "governed_signed_in_browser",
+        "required_order": "only after the v3 connector repair has completed and its final exact readback has passed",
+        "connector_mutation_authorized": false,
+        "claim_executor_authorized": false,
+        "global_task_definition_deletion_authorized": false,
+        "prestate": {
+          "organization": "exact private Sylvara CRM organization binding",
+          "rule": {
+            "module": "Leads",
+            "name": "Leads Free Test Intake Review",
+            "active": true,
+            "trigger": "create_only",
+            "repeat": false,
+            "criterion_ast_rule_key": "leadIntake",
+            "condition_count": 1,
+            "instant_task_association_count": 1,
+            "scheduled_group_count": 1,
+            "scheduled_task_association_count": 1
+          },
+          "private_exact_bindings_required": [
+            "organization ID",
+            "rule ID",
+            "condition ID",
+            "scheduled group ID",
+            "immediate review task ID",
+            "scheduled follow-up task ID",
+            "both internal owner IDs",
+            "both complete task-description SHA-256 values",
+            "fresh complete browser and independent API readback evidence SHA-256"
+          ],
+          "task_definition_inventory": {
+            "module": "Leads",
+            "pagination_complete": true,
+            "exact_id_match_count_per_task": 1,
+            "normalized_fields": [
+              "id",
+              "moduleApiName",
+              "featureType",
+              "subject",
+              "dueDays",
+              "priority",
+              "status",
+              "ownerId",
+              "ownerInternal",
+              "notifyAssignee",
+              "recordAssociation",
+              "descriptionSha256"
+            ],
+            "immediate_review": {
+              "moduleApiName": "Leads",
+              "featureType": "workflow",
+              "subject": "Review Free-Test Request — ${Leads.Company}",
+              "dueDays": 0,
+              "priority": "High",
+              "status": "Not Started",
+              "ownerId": "private_exact_internal_owner_binding",
+              "ownerInternal": true,
+              "notifyAssignee": true,
+              "recordAssociation": "current_lead",
+              "descriptionSha256": "private_exact_readback_binding_required"
+            },
+            "scheduled_follow_up": {
+              "moduleApiName": "Leads",
+              "featureType": "workflow",
+              "subject": "Follow Up — Free-Test Setup Not Scheduled — ${Leads.Company}",
+              "dueDays": 0,
+              "priority": "High",
+              "status": "Not Started",
+              "ownerId": "private_exact_internal_owner_binding",
+              "ownerInternal": true,
+              "notifyAssignee": true,
+              "recordAssociation": "current_lead",
+              "descriptionSha256": "private_exact_readback_binding_required"
+            }
+          },
+          "scheduled_group": {
+            "period": "business_days",
+            "unit": 1,
+            "pending_scheduled_execution_count": 0
+          },
+          "save_control_contract": "the governed browser must freshly expose the exact scheduled association remove control and one unambiguous save action; otherwise stop without mutation"
+        },
+        "mutation": {
+          "maximum_save_count": 1,
+          "automatic_retry": false,
+          "remove_only": "the exact packet-bound scheduled follow-up task association from the exact packet-bound scheduled group",
+          "preserve": [
+            "rule identity, name, active status, create-only trigger, non-repeat state, condition, and criterion AST",
+            "the exact immediate review task association and complete task definition",
+            "both global task definitions and every unrelated automation object",
+            "all pending records and customer or prospect records"
+          ]
+        },
+        "authoritative_poststate": {
+          "rule_by_id_and_complete_browser_readback_required": true,
+          "rule_and_immediate_task_exactly_match_prestate": true,
+          "scheduled_action_groups": 0,
+          "scheduled_task_associations": 0,
+          "global_task_definitions_unchanged": true,
+          "missing_truncated_or_additional_data_accepted": false
+        },
+        "containment": {
+          "on_failed_or_ambiguous_save": "do not retry; independently read the exact rule and both task definitions",
+          "accepted_states": [
+            "exact packet-bound prestate",
+            "exact desired poststate"
+          ],
+          "any_other_state": "stop and require manual reconciliation without another write",
+          "rollback": "restore only the exact packet-bound association from fresh exact prestate under separate scoped approval, then require the same independent readback",
+          "delete_schedule_action_status_flag_authorized": false
+        }
+      },
       "repeat": false
     },
     {
@@ -339,17 +492,37 @@
       "single_active_rule": "Deals Revenue Leak Test Setup Form Proof Candidate",
       "observed_development_rule": "Deals Form 2 Controller Proof Candidate",
       "desired_development_rule": "Deals Revenue Leak Test Setup Form Proof Candidate",
-      "criterion_authority": "blocked_observed_not_authoritative",
-      "desired_criterion_ast_committed": false,
-      "workflow_repair_candidate_mutation_authorized": false,
-      "workflow_repair_activation_authorized": false,
-      "workflow_repair_superseded_mutation_scope": "status_false_only",
+      "criterion_authority": "reviewed_desired",
+      "criterion_ast_rule_key": "form2Candidate",
+      "desired_criterion_ast_committed": true,
+      "workflow_repair_candidate_mutation_authorized": true,
+      "workflow_repair_activation_authorized": true,
+      "workflow_repair_superseded_mutation_scope": "none_already_inactive",
       "rename_requires_independent_readback": true,
       "trusted_evidence_required": true,
       "effects": [
         "set Setup Access Status to Submitted",
         "create one internal setup-and-QA task"
       ],
+      "exact_action_contract": {
+        "field_updates": [
+          { "api_name": "Setup_Access_Status", "value": "Submitted" }
+        ],
+        "tasks": [
+          {
+            "subject": "Review Form 2 Setup and Begin QA — ${Deals.Deal Name}",
+            "due": "trigger_plus_0_days",
+            "priority": "High",
+            "status": "Not Started",
+            "owner": "private_internal_operator_binding",
+            "notify_assignee": false,
+            "record_association": "current_deal",
+            "description": "Trusted Form 2 controller proof was verified for ${Deals.Deal Name}. Review the submitted evidence, configure the approved route and fallback/rollback contacts, and complete QA for the exact configuration version. Do not activate routing; Test Live still requires separate internal Go-Live Approval Status = Approved."
+          }
+        ],
+        "deleted_field_update_roles": ["authorizationSigned", "testStatusSetupPending"],
+        "scheduled_actions": []
+      },
       "prohibited_effects": [
         "treating controller proof as a signature",
         "Free Test Authorization Status change from controller proof",
@@ -500,10 +673,6 @@
       }
     },
     "operator_input_constraints": {
-      "Test_Phone_Number": {
-        "expected_data_type": "phone",
-        "rules": [{ "operator": "is_not_empty" }]
-      },
       "Deployment_Record_ID": {
         "expected_data_type": "text",
         "metadata_gate": "fresh_authoritative_readback_required",
@@ -1202,7 +1371,7 @@
         "to_state": "Setup and QA",
         "execution": "manual_only",
         "criteria": [
-          { "api_name": "Setup_Access_Status", "operator": "equals", "value": "Verified" },
+          { "api_name": "Setup_Access_Status", "operator": "equals", "value": "Submitted" },
           { "api_name": "Approved_Test_Route", "operator": "is_not_empty" },
           { "api_name": "Approved_Fallback_Destination", "operator": "is_not_empty" },
           { "api_name": "Forwarding_Administrator_Name", "operator": "is_not_empty" },
@@ -1230,7 +1399,6 @@
           "Rollback_Contact_Mobile"
         ],
         "operator_input_fields": [
-          "Test_Phone_Number",
           "Deployment_Record_ID",
           "Configuration_Version"
         ],
@@ -1306,6 +1474,7 @@
           { "left_api_name": "Approved_Deployment_Record_ID", "operator": "equals_field", "right_api_name": "Deployment_Record_ID" },
           { "left_api_name": "Approved_Configuration_Version", "operator": "equals_field", "right_api_name": "Configuration_Version" },
           { "api_name": "Test_Status", "operator": "equals", "value": "Scheduled" },
+          { "api_name": "Test_Phone_Number", "operator": "is_not_empty" },
           { "api_name": "Test_Start_At", "operator": "is_not_empty" },
           { "api_name": "Test_End_At", "operator": "is_empty" }
         ],
@@ -1326,6 +1495,7 @@
           "Approved_Configuration_Version",
           "Configuration_Version",
           "Test_Status",
+          "Test_Phone_Number",
           "Test_Start_At",
           "Test_End_At"
         ],

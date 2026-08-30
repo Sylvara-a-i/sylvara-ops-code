@@ -113,6 +113,34 @@ test('selects only the setup routes and keeps CRM Billing deferred', () => {
   assert.equal(functions.has(routeContract.routes.at(-1).function), false);
 });
 
+test('binds exactly three replacement CRM labels plus the retained predecessor', () => {
+  const crm = contract.installation_scope.crm;
+  assert.deepEqual(crm.controls, [
+    'Start Free-Test Request',
+    'Open Free-Test Setup',
+    'Approve And Start Free Test',
+    'Stop Or Roll Back Free Test',
+  ]);
+  assert.deepEqual(crm.control_bindings, [
+    { label: 'Start Free-Test Request', module: 'Leads',
+      function: 'start_free_revenue_leak_test_request', replacement: false },
+    { label: 'Open Free-Test Setup', module: 'Leads',
+      function: 'open_free_test_setup', replacement: true },
+    { label: 'Open Free-Test Setup', module: 'Deals',
+      function: 'issue_revenue_leak_test_setup', replacement: true },
+    { label: 'Approve And Start Free Test', module: 'Deals',
+      function: 'approve_and_start_free_test', replacement: true },
+    { label: 'Stop Or Roll Back Free Test', module: 'Deals',
+      function: 'stop_or_rollback_free_test', replacement: true },
+  ]);
+  assert.deepEqual(
+    [...new Set(crm.control_bindings
+      .filter(({ replacement }) => replacement)
+      .map(({ label }) => label))],
+    crm.controls.slice(1),
+  );
+});
+
 test('rejects extra artifacts, mixed live state, and Production', () => {
   const { artifacts, contractDigests, manifest, readback, sourceTrees } = fixture();
   const extraArtifacts = { ...artifacts, crm_billing_orchestrator: artifacts[Object.keys(artifacts)[0]] };

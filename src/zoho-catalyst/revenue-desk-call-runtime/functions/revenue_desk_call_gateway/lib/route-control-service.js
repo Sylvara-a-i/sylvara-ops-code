@@ -413,7 +413,7 @@ function validateDealBinding(deal, command, configurationVersion) {
     && deal.Intake_Submission_ID === command.journeyId
     && CRM_ID.test(lookupId(deal.Account_Name) || '')
     && CRM_ID.test(lookupId(deal.Contact_Name) || '')
-    && deal.Setup_Access_Status === 'Verified'
+    && deal.Setup_Access_Status === 'Submitted'
     && hasText(deal.Setup_Access_Verified_At)
     && deal.Setup_Form_Submission_ID === configurationVersion.setupFormSubmissionId
     && deal.Setup_Form_Version === configurationVersion.setupFormVersion

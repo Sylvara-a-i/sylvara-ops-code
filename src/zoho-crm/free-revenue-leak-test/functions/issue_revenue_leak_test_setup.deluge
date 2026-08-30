@@ -1,6 +1,6 @@
 /*
 Owning product/workflow: Zoho CRM / Form 2 setup-access issuance.
-Trigger: Administrator-restricted Deals record-details button.
+Trigger: Administrator-restricted Deals `Open Free-Test Setup` record-details button.
 Inputs: deal_id from the current Deal and its persisted retry-stable
 Setup_Access_Issue_Request_ID value, mapped by the CRM button.
 Authentication: the private Form 2 issue Connection injects all route credentials.

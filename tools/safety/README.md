@@ -37,7 +37,8 @@ verification being unavailable is an error, not a permissive fallback.
 
 The executor must privately configure `SYLVARA_APPROVAL_LEDGER_DIRECTORY` once to
 the one canonical ledger directory for this host/account. The CLI has no ledger
-argument. Analytics additionally requires an absolute
+argument. Analytics and Catalyst schema-v3 additive route reconciliation also
+require an absolute
 `SYLVARA_APPROVAL_NODE_EXECUTABLE` and the exact lowercase file digest in
 `SYLVARA_APPROVAL_NODE_EXECUTABLE_SHA256`. The executable must be a regular
 single-link file on fixed local storage, contain no link/reparse component, stay
@@ -47,8 +48,9 @@ preload and module-path environment overrides are removed from the child.
 Supported invocation shapes after that private executor configuration:
 
 ```text
-python tools/safety/claim_approval_consumption.py crm-workflow-trigger-repair-v2 <private-packet-json> <private-approval-json>
+python tools/safety/claim_approval_consumption.py crm-workflow-trigger-repair-v3 <private-packet-json> <private-approval-json>
 python tools/safety/claim_approval_consumption.py analytics-mutation-v3 <private-packet-json> <private-approval-json>
+python tools/safety/claim_approval_consumption.py catalyst-route-additive-reconciliation-v3 <private-packet-json> <private-approval-json>
 ```
 
 The packet and approval paths remain subject to their owning validator's private

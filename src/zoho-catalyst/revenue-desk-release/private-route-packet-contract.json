@@ -4,6 +4,21 @@
   "physical_route_count": 18,
   "gateway_prestate": "disabled-with-zero-routes",
   "activation_authorized": false,
+  "additive_reconciliation": {
+    "packet_schema_version": 3,
+    "route_profile": "setup-journey",
+    "gateway_prestate": "disabled-with-fresh-complete-nonzero-route-inventory",
+    "allowed_preserved_deferred_route_ids": ["CRM_BILLING"],
+    "existing_route_mutation_authorized": false,
+    "billing_mutation_authorized": false,
+    "gateway_activation_authorized": false,
+    "operation_authorization_id_required": true,
+    "durable_consumption_required": true,
+    "retry_authorized": false,
+    "claim_namespace": "catalyst-route-additive-reconciliation-v3",
+    "consumption_digest_domain": "sylvara.catalyst-route-additive-reconciliation-consumption.v1",
+    "final_complete_readback_required": true
+  },
   "route_profiles": {
     "canonical-all": {
       "route_ids": [

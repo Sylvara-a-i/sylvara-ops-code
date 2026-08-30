@@ -105,7 +105,7 @@ function deal() {
     Pipeline: 'Revenue Desk Sales', Stage: 'Setup and QA',
     Entry_Offer: '7-Day Revenue Leak Test', Intake_Submission_ID: IDS.journey,
     Account_Name: { id: '400000002' }, Contact_Name: { id: '400000003' },
-    Setup_Access_Status: 'Verified', Setup_Access_Verified_At: '2026-08-29T12:02:00Z',
+    Setup_Access_Status: 'Submitted', Setup_Access_Verified_At: '2026-08-29T12:02:00Z',
     Setup_Form_Submission_ID: 'setup_submission_synthetic',
     Setup_Form_Version: 'form2_v1', Setup_Form_Submitted_At: '2026-08-29T12:01:00Z',
     Authorized_Representative_Confirmed: true, Test_Scope_Accepted: true,
@@ -422,6 +422,7 @@ function command(action, overrides = {}) {
 
 test('approval succeeds only after complete Form 2 and exact immutable configuration', async () => {
   const happy = fixture();
+  happy.crmState.Test_Phone_Number = null;
   const result = await happy.service.approve(command('approve'));
   assert.equal(result.deployment.GO_LIVE_APPROVAL_STATUS, 'Approved');
   assert.equal(result.deployment.TEST_STATUS, 'Scheduled');
@@ -430,6 +431,12 @@ test('approval succeeds only after complete Form 2 and exact immutable configura
 
   const incomplete = fixture({ dealOverrides: { Setup_Form_Submission_ID: null } });
   await assert.rejects(incomplete.service.approve(command('approve')),
+    { code: 'CONTROL_PRECONDITION_FAILED' });
+});
+
+test('approval rejects the pre-submission Verified access state', async () => {
+  const subject = fixture({ dealOverrides: { Setup_Access_Status: 'Verified' } });
+  await assert.rejects(subject.service.approve(command('approve')),
     { code: 'CONTROL_PRECONDITION_FAILED' });
 });
 
@@ -466,6 +473,14 @@ test('activation rejects a CRM test number that differs from the isolated route'
   const subject = fixture();
   await subject.service.approve(command('approve'));
   subject.crmState.Test_Phone_Number = '+15550100109';
+  subject.setClock(NOW + 300_000);
+  await assert.rejects(subject.service.activate(command('activate')),
+    { code: 'ISOLATED_RETELL_TEST_NUMBER_REQUIRED' });
+});
+
+test('activation requires the isolated test number after number-free approval', async () => {
+  const subject = fixture({ dealOverrides: { Test_Phone_Number: null } });
+  await subject.service.approve(command('approve'));
   subject.setClock(NOW + 300_000);
   await assert.rejects(subject.service.activate(command('activate')),
     { code: 'ISOLATED_RETELL_TEST_NUMBER_REQUIRED' });

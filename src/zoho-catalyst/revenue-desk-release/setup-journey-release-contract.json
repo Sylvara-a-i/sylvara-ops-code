@@ -95,9 +95,15 @@
       "controls": [
         "Start Free-Test Request",
         "Open Free-Test Setup",
-        "Issue Revenue Leak Test Setup",
         "Approve And Start Free Test",
         "Stop Or Roll Back Free Test"
+      ],
+      "control_bindings": [
+        { "label": "Start Free-Test Request", "module": "Leads", "function": "start_free_revenue_leak_test_request", "replacement": false },
+        { "label": "Open Free-Test Setup", "module": "Leads", "function": "open_free_test_setup", "replacement": true },
+        { "label": "Open Free-Test Setup", "module": "Deals", "function": "issue_revenue_leak_test_setup", "replacement": true },
+        { "label": "Approve And Start Free Test", "module": "Deals", "function": "approve_and_start_free_test", "replacement": true },
+        { "label": "Stop Or Roll Back Free Test", "module": "Deals", "function": "stop_or_rollback_free_test", "replacement": true }
       ],
       "workflow_rules": [
         "Leads Free Test Intake Review",
