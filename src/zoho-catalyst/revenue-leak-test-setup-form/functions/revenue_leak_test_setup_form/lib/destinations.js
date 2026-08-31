@@ -9,6 +9,7 @@ const crypto = require("node:crypto");
 const APPROVED_CRM_API_HOSTS = Object.freeze(["www.zohoapis.com"]);
 const APPROVED_FORMS_PUBLIC_HOSTS = Object.freeze(["forms.zohopublic.com"]);
 const CATALYST_DEVELOPMENT_HOST_PATTERN = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+development\.(?:catalystserverless|zohocatalyst)\.(?:com|in|eu|ca|com\.au)$/;
+const CATALYST_GATEWAY_SOURCE_PATH_PATTERN = /^\/[a-z][a-z0-9-]{2,31}\/[A-Za-z0-9_-]{32,64}$/;
 
 function isApprovedCrmApiHostname(hostname) {
   return APPROVED_CRM_API_HOSTS.includes(hostname);
@@ -20,6 +21,35 @@ function isApprovedFormsPublicHostname(hostname) {
 
 function isApprovedCatalystDevelopmentHostname(hostname) {
   return CATALYST_DEVELOPMENT_HOST_PATTERN.test(hostname ?? "");
+}
+
+// A Gateway source endpoint and an Advanced I/O target path are distinct
+// provider identifiers. Keep the public bearer-bearing link confined to one
+// canonical private Development Gateway source URL.
+function normalizeApprovedCatalystDevelopmentGatewayUrl(raw) {
+  if (typeof raw !== "string") return null;
+  let parsed;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return null;
+  }
+  if (
+    parsed.protocol !== "https:" ||
+    parsed.username ||
+    parsed.password ||
+    parsed.port ||
+    raw !== parsed.href ||
+    raw.includes("?") ||
+    raw.includes("#") ||
+    parsed.search ||
+    parsed.hash ||
+    !isApprovedCatalystDevelopmentHostname(parsed.hostname) ||
+    !CATALYST_GATEWAY_SOURCE_PATH_PATTERN.test(parsed.pathname)
+  ) {
+    return null;
+  }
+  return parsed.href;
 }
 
 function normalizeApprovedFormUrl(raw) {
@@ -73,5 +103,6 @@ module.exports = {
   isApprovedCrmApiHostname,
   isApprovedFormsPublicHostname,
   isArtifactBoundFormUrl,
+  normalizeApprovedCatalystDevelopmentGatewayUrl,
   normalizeApprovedFormUrl,
 };

@@ -51,7 +51,8 @@ function config() {
     submissionHeaderSecret: "S".repeat(43),
     tokenPepper: "P".repeat(43),
     workflowKeyMaterial: "W".repeat(43),
-    form2AccessPublicUrl: "https://synthetic.development.catalystserverless.com/form2/session/access",
+    form2AccessPublicUrl:
+      `https://synthetic.development.catalystserverless.com/sylvara-dev/${"B".repeat(43)}`,
     form2PublicUrl: FORM2_PUBLIC_URL,
     form2DestinationSha256: FORM2_DESTINATION_SHA256,
     form2PrefillHandleFieldAlias: "prefill_handle",
@@ -133,17 +134,26 @@ test("configuration evidence references use the durable receipt revision", () =>
   }
 });
 
-test("access links are confined to an approved Catalyst Development host", () => {
+test("access links preserve the Gateway source path and append only the setup fragment", () => {
   const setupToken = deriveAccessToken(ISSUE_REQUEST_ID, config().tokenPepper);
+  const result = new URL(buildAccessUrl(config(), setupToken));
+  assert.equal(result.origin, "https://synthetic.development.catalystserverless.com");
+  assert.equal(result.pathname, `/sylvara-dev/${"B".repeat(43)}`);
+  assert.equal(result.search, "");
+  assert.equal(result.hash, `#setupToken=${setupToken}`);
+  assert.notEqual(result.pathname, config().accessPath);
+
   for (const form2AccessPublicUrl of [
     "https://controller.example.invalid/form2/session/access",
     "https://synthetic.catalystserverless.com/form2/session/access",
-    "https://synthetic.development.catalystserverless.com/form2/session/other",
+    "https://synthetic.development.catalystserverless.com/form2/session/access",
+    "https://synthetic.development.catalystserverless.com/server/revenue_leak_test_setup_form/form2/session/access",
   ]) {
     assert.throws(
       () => buildAccessUrl({ ...config(), form2AccessPublicUrl }, setupToken),
       (error) => error instanceof ControllerError &&
-        error.publicCode === "configuration_invalid",
+        error.publicCode === "configuration_invalid" &&
+        !error.message.includes(setupToken),
     );
   }
 });

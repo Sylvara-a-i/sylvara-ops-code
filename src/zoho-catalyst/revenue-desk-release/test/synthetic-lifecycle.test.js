@@ -177,7 +177,8 @@ function form1Config() {
     PREFILL_HANDLE_PEPPER: 'h'.repeat(43),
     ISSUING_ACTOR_HASH: `operator_${'3'.repeat(64)}`,
     FORM1_PUBLIC_URL: 'https://forms.zohopublic.com/example/form/Request/formperma/example',
-    FORM1_ACCESS_PUBLIC_URL: 'https://synthetic.development.catalystserverless.com/form1/access-test',
+    FORM1_ACCESS_PUBLIC_URL:
+      `https://synthetic.development.catalystserverless.com/sylvara-dev/${'A'.repeat(43)}`,
     FORM1_PREFILL_HANDLE_FIELD_ALIAS: 'AssistedPrefillHandle',
     CRM_READ_CONNECTION_LINK_NAME: FORM1_CRM_READ_LINK,
     CRM_WRITE_CONNECTION_LINK_NAME: FORM1_CRM_WRITE_LINK,

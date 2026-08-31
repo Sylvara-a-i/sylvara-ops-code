@@ -62,7 +62,8 @@ function listenerEnvironment() {
     TOKEN_PEPPER: "P".repeat(43),
     WORKFLOW_HMAC_SECRET: "W".repeat(43),
     FORM2_PROOF_HMAC_SECRET: "V".repeat(43),
-    FORM2_ACCESS_PUBLIC_URL: "https://synthetic.development.catalystserverless.com/form2/session/access",
+    FORM2_ACCESS_PUBLIC_URL:
+      `https://synthetic.development.catalystserverless.com/sylvara-dev/${"B".repeat(43)}`,
     FORM2_PUBLIC_URL,
     FORM2_PROOF_MODE: "stub",
     FORM2_MAIL_FROM: "synthetic@example.invalid",

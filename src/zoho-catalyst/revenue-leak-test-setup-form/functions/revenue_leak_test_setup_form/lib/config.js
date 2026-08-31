@@ -3,9 +3,9 @@
 const { brotliDecompressSync } = require("node:zlib");
 
 const {
-  isApprovedCatalystDevelopmentHostname,
   isApprovedCrmApiHostname,
   isArtifactBoundFormUrl,
+  normalizeApprovedCatalystDevelopmentGatewayUrl,
 } = require("./destinations");
 const { ARTIFACT_FORM_DESTINATION_SHA256 } = require("./form-destination");
 const { ARTIFACT_SOURCE_REVISION } = require("./source-revision");
@@ -617,16 +617,13 @@ function loadConfig(
     form2ProofAllowedRecipientDigests: proofAllowedRecipientDigests,
     form2AccessPublicUrl: (() => {
       const value = readRequired(environment, "FORM2_ACCESS_PUBLIC_URL");
-      const parsed = parseHttpsUrl(value, "FORM2_ACCESS_PUBLIC_URL");
-      if (
-        !isApprovedCatalystDevelopmentHostname(parsed.hostname) ||
-        parsed.pathname !== accessPath
-      ) {
+      const normalized = normalizeApprovedCatalystDevelopmentGatewayUrl(value);
+      if (!normalized) {
         throw new ConfigurationError(
-          "FORM2_ACCESS_PUBLIC_URL must use an approved Catalyst Development host and path",
+          "FORM2_ACCESS_PUBLIC_URL must be one exact Catalyst Development Gateway source URL",
         );
       }
-      return value;
+      return normalized;
     })(),
     form2MailFrom: validateEmailAddress(
       readRequired(environment, "FORM2_MAIL_FROM"),
