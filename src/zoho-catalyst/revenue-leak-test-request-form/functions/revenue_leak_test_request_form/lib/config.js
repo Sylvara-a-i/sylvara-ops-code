@@ -153,6 +153,10 @@ function loadConfig(environment = process.env, artifactRevision) {
     });
   }
 
+  if (required(environment, "ZOHO_CATALYST_ZCQL_PARSER") !== "V2") {
+    throw new ConfigurationError("ZOHO_CATALYST_ZCQL_PARSER must equal V2");
+  }
+
   const paths = {
     issue: pathValue(required(environment, "ISSUE_PATH"), "ISSUE_PATH"),
     access: pathValue(required(environment, "ACCESS_PATH"), "ACCESS_PATH"),

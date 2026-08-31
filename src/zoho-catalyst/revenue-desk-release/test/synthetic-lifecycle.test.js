@@ -161,6 +161,7 @@ function form1Config() {
     EXPECTED_CATALYST_PROJECT_ID_SHA256: digest(projectId),
     CRM_ORGANIZATION_ID_SHA256: '2'.repeat(64),
     SOURCE_REVISION,
+    ZOHO_CATALYST_ZCQL_PARSER: 'V2',
     ISSUE_PATH: '/form1/issue-test',
     ACCESS_PATH: '/form1/access-test',
     EXCHANGE_PATH: '/form1/exchange-test',

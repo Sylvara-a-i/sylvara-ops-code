@@ -10,6 +10,8 @@ is never sent to Zoho Forms.
 Idempotency: Catalyst conditionally initializes the journey only when blank and
 rotates or resumes the token session for the authoritative canonical journey.
 Failure: no URL opens unless the exact 201 response and URL grammar verify.
+Navigation: a verified destination replaces the current CRM tab so browser popup
+handling cannot suppress the launch.
 Logging: coarse outcomes only; never log IDs, tokens, URLs, payloads, or errors.
 Rollback: disable this replacement button and leave the retained containment button.
 */
@@ -67,7 +69,7 @@ catch(failure)
 }
 if(can_open == true)
 {
-	openUrl(destination_url,"new window","successive=true");
+	openUrl(destination_url,"same window");
 }
 else
 {

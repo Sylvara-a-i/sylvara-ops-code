@@ -89,6 +89,7 @@ function baseEnvironment(overrides = {}) {
     CRM_READ_CONNECTION_LINK_NAME: SYNTHETIC_CRM_READ_LINK,
     CRM_WRITE_CONNECTION_LINK_NAME: SYNTHETIC_CRM_WRITE_LINK,
     SOURCE_REVISION: "a".repeat(40),
+    ZOHO_CATALYST_ZCQL_PARSER: "V2",
     ...overrides,
   };
 }
@@ -276,6 +277,7 @@ test("allows only active Development or dependency-free dark Production", () => 
   const darkEnvironment = baseEnvironment({
     DEPLOYMENT_ENVIRONMENT: "production",
     DEPLOYMENT_MODE: "dark",
+    ZOHO_CATALYST_ZCQL_PARSER: undefined,
   });
   const dark = load(darkEnvironment);
   assert.deepEqual(dark, {
@@ -284,6 +286,13 @@ test("allows only active Development or dependency-free dark Production", () => 
     deploymentMode: "dark",
     sourceRevision: darkEnvironment.SOURCE_REVISION,
   });
+
+  for (const invalidParser of [undefined, "V1", "v2", "V2 "]) {
+    assert.throws(
+      () => load(baseEnvironment({ ZOHO_CATALYST_ZCQL_PARSER: invalidParser })),
+      /ZOHO_CATALYST_ZCQL_PARSER/,
+    );
+  }
 
   for (const [deploymentEnvironment, deploymentMode] of [
     ["production", "active"],

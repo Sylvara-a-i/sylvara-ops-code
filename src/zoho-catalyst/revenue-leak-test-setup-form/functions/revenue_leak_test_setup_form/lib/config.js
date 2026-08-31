@@ -429,6 +429,10 @@ function loadConfig(
     });
   }
 
+  if (readRequired(environment, "ZOHO_CATALYST_ZCQL_PARSER") !== "V2") {
+    throw new ConfigurationError("ZOHO_CATALYST_ZCQL_PARSER must equal V2");
+  }
+
   const sessionTableName = validateSessionV3Table(
     readReviewedDefault(environment, "SESSION_TABLE_NAME", FORM2_SESSION_TABLE_NAME),
   );
