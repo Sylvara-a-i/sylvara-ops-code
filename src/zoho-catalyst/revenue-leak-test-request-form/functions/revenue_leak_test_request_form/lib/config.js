@@ -1,6 +1,7 @@
 "use strict";
 
 const crypto = require("node:crypto");
+const { normalizeApprovedCatalystDevelopmentGatewayUrl } = require("./destinations");
 const { validateOperatorHash, validateSecret } = require("./security");
 
 const FORM1_SESSION_TABLE_NAME = "RevenueLeakTestRequestFormSessions";
@@ -101,24 +102,6 @@ function formUrl(value) {
       url.search || url.hash || url.hostname !== "forms.zohopublic.com" ||
       url.pathname === "/" || url.pathname.includes("//")) {
     throw new ConfigurationError("FORM1_PUBLIC_URL must be the exact US Zoho Forms permalink");
-  }
-  return url.toString();
-}
-
-function accessUrl(value, expectedPath) {
-  let url;
-  try {
-    url = new URL(value);
-  } catch {
-    throw new ConfigurationError("FORM1_ACCESS_PUBLIC_URL must be one exact HTTPS URL");
-  }
-  const developmentHost = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+development\.(?:catalystserverless|zohocatalyst)\.(?:com|in|eu|ca|com\.au)$/;
-  if (url.protocol !== "https:" || url.username || url.password || url.port ||
-      url.search || url.hash || !developmentHost.test(url.hostname) ||
-      url.pathname !== expectedPath) {
-    throw new ConfigurationError(
-      "FORM1_ACCESS_PUBLIC_URL must match the exact Catalyst Development access route",
-    );
   }
   return url.toString();
 }
@@ -249,10 +232,16 @@ function loadConfig(environment = process.env, artifactRevision) {
       "EXPECTED_CATALYST_PROJECT_ID_SHA256",
     ),
     exchangePath: paths.exchange,
-    form1AccessPublicUrl: accessUrl(
-      required(environment, "FORM1_ACCESS_PUBLIC_URL"),
-      paths.access,
-    ),
+    form1AccessPublicUrl: (() => {
+      const value = required(environment, "FORM1_ACCESS_PUBLIC_URL");
+      const normalized = normalizeApprovedCatalystDevelopmentGatewayUrl(value);
+      if (!normalized) {
+        throw new ConfigurationError(
+          "FORM1_ACCESS_PUBLIC_URL must be one exact Catalyst Development Gateway source URL",
+        );
+      }
+      return normalized;
+    })(),
     form1PublicUrl: selectedFormUrl,
     form1PrefillHandleFieldAlias: prefillHandleAlias,
     formIdentityHash: crypto.createHash("sha256").update(selectedFormUrl, "utf8").digest("hex"),

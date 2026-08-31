@@ -67,7 +67,8 @@ function baseEnvironment(overrides = {}) {
     TOKEN_PEPPER: "P".repeat(43),
     WORKFLOW_HMAC_SECRET: "W".repeat(43),
     FORM2_PROOF_HMAC_SECRET: "V".repeat(43),
-    FORM2_ACCESS_PUBLIC_URL: "https://synthetic.development.catalystserverless.com/form2/session/access",
+    FORM2_ACCESS_PUBLIC_URL:
+      `https://synthetic.development.catalystserverless.com/sylvara-dev/${"B".repeat(43)}`,
     FORM2_PUBLIC_URL,
     FORM2_PROOF_MODE: "stub",
     FORM2_MAIL_FROM: "synthetic@example.invalid",
@@ -107,6 +108,11 @@ test("loads an immutable active Development configuration with bounded defaults"
   assert.equal(config.deploymentEnvironment, "development");
   assert.equal(config.deploymentMode, "active");
   assert.equal(config.darkMode, false);
+  assert.equal(config.accessPath, "/form2/session/access");
+  assert.equal(
+    new URL(config.form2AccessPublicUrl).pathname,
+    `/sylvara-dev/${"B".repeat(43)}`,
+  );
   assert.equal(
     config.expectedCatalystProjectIdSha256,
     SYNTHETIC_CATALYST_PROJECT_ID_SHA256,
@@ -152,6 +158,34 @@ test("loads an immutable active Development configuration with bounded defaults"
   });
   assert.ok(Object.isFrozen(config.form2AccessStatuses));
   assert.ok(Object.isFrozen(config));
+});
+
+test("requires one canonical Development Gateway source URL distinct from the runtime path", () => {
+  const valid = `https://synthetic.development.catalystserverless.com/sylvara-dev/${"B".repeat(43)}`;
+  assert.equal(load(baseEnvironment({ FORM2_ACCESS_PUBLIC_URL: valid }))
+    .form2AccessPublicUrl, valid);
+
+  for (const FORM2_ACCESS_PUBLIC_URL of [
+    "https://synthetic.development.catalystserverless.com/form2/session/access",
+    "https://synthetic.development.catalystserverless.com/server/revenue_leak_test_setup_form/form2/session/access",
+    `https://synthetic.catalystserverless.com/sylvara-dev/${"B".repeat(43)}`,
+    `https://synthetic.development.catalystserverless.com/Sylvara-dev/${"B".repeat(43)}`,
+    `https://synthetic.development.catalystserverless.com/sy/${"B".repeat(43)}`,
+    `https://synthetic.development.catalystserverless.com/sylvara-dev/${"B".repeat(31)}`,
+    `https://synthetic.development.catalystserverless.com/sylvara-dev/${"B".repeat(65)}`,
+    `https://synthetic.development.catalystserverless.com/sylvara-dev/${"B".repeat(43)}/extra`,
+    `https://synthetic.development.catalystserverless.com/sylvara-dev/${"B".repeat(43)}/`,
+    `https://synthetic.development.catalystserverless.com/sylvara-dev/${"B".repeat(43)}?`,
+    `https://synthetic.development.catalystserverless.com/sylvara-dev/${"B".repeat(43)}#`,
+    `http://synthetic.development.catalystserverless.com/sylvara-dev/${"B".repeat(43)}`,
+    `https://${"user"}@synthetic.development.catalystserverless.com/sylvara-dev/${"B".repeat(43)}`,
+    `https://synthetic.development.catalystserverless.com:443/sylvara-dev/${"B".repeat(43)}`,
+  ]) {
+    assert.throws(
+      () => load(baseEnvironment({ FORM2_ACCESS_PUBLIC_URL })),
+      /Gateway source URL/,
+    );
+  }
 });
 
 test("uses reviewed public defaults when Catalyst map limits require omission", () => {

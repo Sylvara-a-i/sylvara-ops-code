@@ -1,8 +1,8 @@
 "use strict";
 
 const {
-  isApprovedCatalystDevelopmentHostname,
   isArtifactBoundFormUrl,
+  normalizeApprovedCatalystDevelopmentGatewayUrl,
 } = require("./destinations");
 const {
   CLIENT_KEYS,
@@ -213,28 +213,15 @@ function buildFormUrl(config, prefillHandle) {
 
 function buildAccessUrl(config, setupToken) {
   if (!isValidAccessToken(setupToken)) throw genericSetupNotFound();
-  let url;
-  try {
-    url = new URL(config.form2AccessPublicUrl);
-  } catch {
+  const normalized = normalizeApprovedCatalystDevelopmentGatewayUrl(
+    config.form2AccessPublicUrl,
+  );
+  if (!normalized) {
     throw new ControllerError("Access URL configuration is invalid", {
       publicCode: "configuration_invalid",
     });
   }
-  if (
-    url.protocol !== "https:" ||
-    url.username ||
-    url.password ||
-    url.port ||
-    url.search ||
-    url.hash ||
-    !isApprovedCatalystDevelopmentHostname(url.hostname) ||
-    url.pathname !== config.accessPath
-  ) {
-    throw new ControllerError("Access URL configuration is invalid", {
-      publicCode: "configuration_invalid",
-    });
-  }
+  const url = new URL(normalized);
   url.hash = new URLSearchParams({ setupToken }).toString();
   return url.toString();
 }

@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const { loadConfig } = require("../lib/config");
 const { normalizeFormData } = require("../lib/form-contract");
-const { handleRequest } = require("../lib/handler");
+const { ControllerError, buildAccessUrl, handleRequest } = require("../lib/handler");
 const { submissionFingerprint } = require("../lib/security");
 const { createSessionStore } = require("../lib/session-store");
 const { REVISION, environment } = require("./helpers");
@@ -13,6 +13,28 @@ const RECORD_ID = "4000000001";
 const OTHER_RECORD_ID = "4000000002";
 const JOURNEY_ID = "journey_synthetic_001";
 const NOW = Date.parse("2026-08-29T12:00:00.000Z");
+
+test("access links preserve the Gateway source path and append only the credential fragment", () => {
+  const config = loadConfig(environment(), REVISION);
+  const journeyToken = Buffer.alloc(32, 0x41).toString("base64url");
+  const result = new URL(buildAccessUrl(config, journeyToken));
+  assert.equal(result.origin, "https://synthetic.development.catalystserverless.com");
+  assert.equal(result.pathname, `/sylvara-dev/${"A".repeat(43)}`);
+  assert.equal(result.search, "");
+  assert.equal(result.hash, `#journeyToken=${journeyToken}`);
+  assert.notEqual(result.pathname, config.accessPath);
+
+  assert.throws(
+    () => buildAccessUrl({
+      ...config,
+      form1AccessPublicUrl:
+        "https://synthetic.development.catalystserverless.com/form1/access-test",
+    }, journeyToken),
+    (error) => error instanceof ControllerError &&
+      error.publicCode === "configuration_invalid" &&
+      !error.message.includes(journeyToken),
+  );
+});
 
 function formData(overrides = {}) {
   return {

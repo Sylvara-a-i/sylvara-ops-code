@@ -1,6 +1,7 @@
 "use strict";
 
 const { renderAccessPage } = require("./access-page");
+const { normalizeApprovedCatalystDevelopmentGatewayUrl } = require("./destinations");
 const {
   buildCrmPatch,
   buildPrefillPayload,
@@ -170,20 +171,15 @@ function buildAccessUrl(config, journeyToken) {
       publicCode: "session_not_found",
     });
   }
-  let url;
-  try {
-    url = new URL(config.form1AccessPublicUrl);
-  } catch {
+  const normalized = normalizeApprovedCatalystDevelopmentGatewayUrl(
+    config.form1AccessPublicUrl,
+  );
+  if (!normalized) {
     throw new ControllerError("Access URL configuration is invalid", {
       publicCode: "configuration_invalid",
     });
   }
-  if (url.protocol !== "https:" || url.username || url.password || url.port ||
-      url.search || url.hash || url.pathname !== config.accessPath) {
-    throw new ControllerError("Access URL configuration is invalid", {
-      publicCode: "configuration_invalid",
-    });
-  }
+  const url = new URL(normalized);
   url.hash = new URLSearchParams({ journeyToken }).toString();
   return url.toString();
 }

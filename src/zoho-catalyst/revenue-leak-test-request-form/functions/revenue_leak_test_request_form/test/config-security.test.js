@@ -26,6 +26,11 @@ test("configuration binds active Development and dark Production to the stamped 
   assert.equal(config.sourceRevision, REVISION);
   assert.equal(config.sessionTtlSeconds, 1800);
   assert.equal(config.sessionTableName, "RevenueLeakTestRequestFormSessions");
+  assert.equal(config.accessPath, "/form1/access-test");
+  assert.equal(
+    new URL(config.form1AccessPublicUrl).pathname,
+    `/sylvara-dev/${"A".repeat(43)}`,
+  );
 
   const dark = loadConfig(environment({
     DEPLOYMENT_ENVIRONMENT: "production",
@@ -53,6 +58,34 @@ test("configuration binds active Development and dark Production to the stamped 
     assert.throws(
       () => loadConfig(environment({ SOURCE_REVISION: invalidRevision }), REVISION),
       /lowercase 40-character Git commit/,
+    );
+  }
+});
+
+test("the public access URL is one canonical Development Gateway source endpoint", () => {
+  const valid = `https://synthetic.development.catalystserverless.com/sylvara-dev/${"A".repeat(43)}`;
+  assert.equal(loadConfig(environment({ FORM1_ACCESS_PUBLIC_URL: valid }), REVISION)
+    .form1AccessPublicUrl, valid);
+
+  for (const FORM1_ACCESS_PUBLIC_URL of [
+    "https://synthetic.development.catalystserverless.com/form1/access-test",
+    "https://synthetic.development.catalystserverless.com/server/revenue_leak_test_request_form/form1/access-test",
+    `https://synthetic.catalystserverless.com/sylvara-dev/${"A".repeat(43)}`,
+    `https://synthetic.development.catalystserverless.com/Sylvara-dev/${"A".repeat(43)}`,
+    `https://synthetic.development.catalystserverless.com/sy/${"A".repeat(43)}`,
+    `https://synthetic.development.catalystserverless.com/sylvara-dev/${"A".repeat(31)}`,
+    `https://synthetic.development.catalystserverless.com/sylvara-dev/${"A".repeat(65)}`,
+    `https://synthetic.development.catalystserverless.com/sylvara-dev/${"A".repeat(43)}/extra`,
+    `https://synthetic.development.catalystserverless.com/sylvara-dev/${"A".repeat(43)}/`,
+    `https://synthetic.development.catalystserverless.com/sylvara-dev/${"A".repeat(43)}?`,
+    `https://synthetic.development.catalystserverless.com/sylvara-dev/${"A".repeat(43)}#`,
+    `http://synthetic.development.catalystserverless.com/sylvara-dev/${"A".repeat(43)}`,
+    `https://${"user"}@synthetic.development.catalystserverless.com/sylvara-dev/${"A".repeat(43)}`,
+    `https://synthetic.development.catalystserverless.com:443/sylvara-dev/${"A".repeat(43)}`,
+  ]) {
+    assert.throws(
+      () => loadConfig(environment({ FORM1_ACCESS_PUBLIC_URL }), REVISION),
+      /Gateway source URL/,
     );
   }
 });
