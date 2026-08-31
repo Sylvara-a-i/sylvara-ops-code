@@ -67,7 +67,7 @@
         "url_shape": "exact Catalyst Development access URL plus #journeyToken= and one 43-character base64url credential",
         "forbidden_url_data": ["CRM record ID", "journey ID", "email", "phone", "company name", "PII"],
         "zoho_forms_receives_journey_credential": false,
-        "open_target": "same window"
+        "open_target": "new window"
       },
       "failure_policy": "Fail closed without opening a URL; never log or automatically retry an ambiguous response.",
       "deployment_status": "install_in_parallel_with_contained_predecessor"
@@ -114,7 +114,7 @@
       "request": { "method": "POST", "content_type": "application/json", "body_keys": ["dealId", "issueRequestId"], "automatic_retry": false },
       "connection": { "placeholder": "{{FORM2_ISSUE_CONNECTION_LINK_NAME}}", "credential_in_source_or_arguments": false },
       "private_placeholders": ["{{FORM2_ISSUE_URL}}", "{{FORM2_ISSUE_CONNECTION_LINK_NAME}}", "{{FORM2_ACCESS_PUBLIC_URL}}"],
-      "success_response": { "http_status": 200, "exact_body_keys": ["ok", "accessUrl", "expiresAt", "requestId"], "token_grammar": "^[A-Za-z0-9_-]{43}$", "request_id_grammar": "UUID v4 lowercase canonical", "open_target": "same window" },
+      "success_response": { "http_status": 200, "exact_body_keys": ["ok", "accessUrl", "expiresAt", "requestId"], "token_grammar": "^[A-Za-z0-9_-]{43}$", "request_id_grammar": "UUID v4 lowercase canonical", "open_target": "new window" },
       "deployment_status": "install_after_authoritative_readback"
     },
     {
