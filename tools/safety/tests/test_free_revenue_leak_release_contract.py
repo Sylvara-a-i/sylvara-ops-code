@@ -6176,11 +6176,44 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         self.assertEqual(
             form1_schema["status"], "development-active-record-bound-assisted-sessions"
         )
-        self.assertEqual(form1_schema["schema_version"], 7)
+        self.assertEqual(form1_schema["schema_version"], 8)
         schema_table = form1_schema["tables"][0]
         self.assertEqual(schema_table["runtime_variable"], "SESSION_TABLE_NAME")
         self.assertEqual(
             schema_table["runtime_binding"], "exact-reviewed-table"
+        )
+        columns = {
+            column["api_name"]: column for column in schema_table["columns"]
+        }
+        for name in ("PREFILL_HANDLE_HASH", "PREFILL_ID"):
+            self.assertFalse(columns[name]["mandatory"])
+            self.assertFalse(columns[name]["unique"])
+            self.assertTrue(columns[name]["search_indexed"])
+            self.assertTrue(columns[name]["private"])
+            self.assertTrue(columns[name]["pii_ephi"])
+        self.assertEqual(
+            schema_table["required_unique_columns"],
+            ["TOKEN_HASH", "INTAKE_SUBMISSION_ID"],
+        )
+        self.assertEqual(columns["PREFILL_HANDLE_HASH"]["max_length"], 64)
+        self.assertEqual(columns["PREFILL_ID"]["max_length"], 36)
+        self.assertEqual(columns["SOURCE_REVISION"]["max_length"], 80)
+        self.assertTrue(columns["SOURCE_REVISION"]["mandatory"])
+        self.assertFalse(columns["SOURCE_REVISION"]["unique"])
+        self.assertEqual(
+            form1_schema["provider_constraints"]
+            ["source_revision_runtime_pattern"],
+            "^[a-f0-9]{40}$",
+        )
+        self.assertEqual(
+            form1_schema["provider_constraints"]
+            ["physical_unique_varchar_columns"],
+            ["TOKEN_HASH", "INTAKE_SUBMISSION_ID"],
+        )
+        self.assertEqual(
+            form1_schema["provider_constraints"]
+            ["application_duplicate_lookup_behavior"],
+            "fail_closed",
         )
         table_name = schema_table["expected_api_name"]
         disposition = next(

@@ -30,7 +30,18 @@ function formData(overrides = {}) {
 function memoryAdapter() {
   const rows = [];
   let nextRowId = 1;
+  const mandatoryUniqueColumns = ["TOKEN_HASH", "INTAKE_SUBMISSION_ID"];
   const selected = (predicate) => rows.filter(predicate).map((row) => ({ ...row }));
+  const assertProviderShape = (candidate, currentRowId = null) => {
+    if (mandatoryUniqueColumns.some((column) =>
+      typeof candidate[column] !== "string" || candidate[column].length === 0)) {
+      throw new Error("mandatory");
+    }
+    if (rows.some((row) => row.ROWID !== currentRowId &&
+        mandatoryUniqueColumns.some((column) => row[column] === candidate[column]))) {
+      throw new Error("duplicate");
+    }
+  };
   return {
     rows,
     findRowsByJourneyId: async (_table, value) =>
@@ -41,17 +52,18 @@ function memoryAdapter() {
     findRowsByRowId: async (_table, value) => selected((row) => row.ROWID === String(value)),
     findRowsByTokenHash: async (_table, value) => selected((row) => row.TOKEN_HASH === value),
     async insertRow(_table, row) {
-      if (rows.some((candidate) => candidate.TOKEN_HASH === row.TOKEN_HASH ||
-          candidate.INTAKE_SUBMISSION_ID === row.INTAKE_SUBMISSION_ID)) throw new Error("duplicate");
+      assertProviderShape(row);
       rows.push({ ROWID: String(nextRowId++), ...row });
     },
     async updateRow(_table, update, expected) {
       const row = rows.find((candidate) => candidate.ROWID === String(update.ROWID));
       if (!row || Object.entries(expected).some(([key, value]) =>
         (typeof value === "number" ? Number(row[key]) !== value : row[key] !== value))) return [];
-      Object.assign(row, Object.fromEntries(
+      const patch = Object.fromEntries(
         Object.entries(update).filter(([key]) => key !== "ROWID"),
-      ));
+      );
+      assertProviderShape({ ...row, ...patch }, row.ROWID);
+      Object.assign(row, patch);
       return [];
     },
   };
@@ -238,6 +250,8 @@ test("launch keeps the journey credential in a Catalyst fragment and stores only
   assert.equal(row.INTAKE_SUBMISSION_ID, JOURNEY_ID);
   assert.equal(row.EXPECTED_STAGE, "form1");
   assert.match(row.FORM_IDENTITY_HASH, /^[a-f0-9]{64}$/);
+  assert.equal(row.PREFILL_HANDLE_HASH, null);
+  assert.equal(row.PREFILL_ID, null);
 });
 
 test("access page removes the fragment and posts the journey credential once", async () => {
@@ -263,6 +277,48 @@ test("exchange creates a distinct digest-only one-time prefill handle", async ()
   assert.notEqual(prefillHandle, journeyToken);
   await assert.rejects(() => exchange(selected, journeyToken), (error) =>
     error.status === 404 && error.publicCode === "session_not_found");
+});
+
+test("duplicate prefill-handle lookup results fail closed", async () => {
+  const selected = fixture();
+  const journeyToken = journeyTokenFrom(await launch(selected));
+  const { prefillHandle } = await exchange(selected, journeyToken);
+  const [source] = selected.adapter.rows;
+  selected.adapter.rows.push({
+    ...source,
+    ROWID: "2",
+    TOKEN_HASH: "d".repeat(64),
+    PREFILL_ID: "10000000-0000-4000-8000-000000000099",
+    INTAKE_SUBMISSION_ID: "journey_synthetic_duplicate_handle",
+  });
+
+  await assert.rejects(
+    () => prefill(selected, prefillHandle),
+    (error) => error.status === 503 && error.publicCode === "service_unavailable" &&
+      error.ambiguous === true,
+  );
+  assert.equal(selected.events.filter(([name]) => name === "get").length, 1);
+});
+
+test("duplicate prefill-identifier lookup results fail closed", async () => {
+  const selected = fixture();
+  const prepared = await prepare(selected);
+  const [source] = selected.adapter.rows;
+  selected.adapter.rows.push({
+    ...source,
+    ROWID: "2",
+    TOKEN_HASH: "d".repeat(64),
+    PREFILL_HANDLE_HASH: "e".repeat(64),
+    INTAKE_SUBMISSION_ID: "journey_synthetic_duplicate_prefill_id",
+  });
+
+  const writes = selected.events.filter(([name]) => name === "update").length;
+  await assert.rejects(
+    () => submit(selected, prepared),
+    (error) => error.status === 503 && error.publicCode === "service_unavailable" &&
+      error.ambiguous === true,
+  );
+  assert.equal(selected.events.filter(([name]) => name === "update").length, writes);
 });
 
 test("missing, tampered, expired, and consumed handles fail closed", async () => {
@@ -503,10 +559,18 @@ test("reissue rotates both credentials without duplicating the journey", async (
   const selected = fixture();
   const first = journeyTokenFrom(await launch(selected));
   const firstHandle = (await exchange(selected, first)).prefillHandle;
+  const firstPrefillId = selected.adapter.rows[0].PREFILL_ID;
   const second = journeyTokenFrom(await launch(selected));
   assert.notEqual(first, second);
   assert.equal(selected.adapter.rows.length, 1);
+  assert.equal(selected.adapter.rows[0].STATUS, "issued");
+  assert.equal(selected.adapter.rows[0].PREFILL_HANDLE_HASH, null);
+  assert.equal(selected.adapter.rows[0].PREFILL_ID, null);
   await assert.rejects(() => prefill(selected, firstHandle), (error) => error.status === 404);
+  await assert.rejects(() => submit(selected, {
+    prefillId: firstPrefillId,
+    configurationRevision: REVISION,
+  }), (error) => error.status === 404 && error.publicCode === "session_not_found");
   const secondHandle = (await exchange(selected, second)).prefillHandle;
   assert.equal((await prefill(selected, secondHandle)).status, 200);
 });
