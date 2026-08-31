@@ -11,8 +11,8 @@ Idempotency: the deterministic UUID-v4-shaped issue identity and bounded default
 initialization are safe to repeat. Ambiguous writes are never retried.
 Failure behavior: no URL opens after any conflict, incomplete read, failed write,
 readback mismatch, non-exact response, or malformed destination.
-Navigation: a verified destination replaces the current CRM tab so browser popup
-handling cannot suppress the launch.
+Navigation: Zoho CRM custom-function buttons support opening the verified
+destination in a new browser tab or window. The default named window is reused.
 Logging: coarse outcomes only; never log IDs, bodies, URLs, headers, or errors.
 Rollback: disable the button, revoke the Connection, and preserve CRM/session evidence.
 Private setup: replace every {{...}} token outside Git, then save and syntax-check in CRM.
@@ -201,7 +201,7 @@ catch(failure)
 }
 if(can_open == true)
 {
-	openUrl(destination_url,"same window");
+	openUrl(destination_url,"new window");
 }
 else
 {
