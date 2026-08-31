@@ -1,5 +1,5 @@
 {
-  "schema_version": 7,
+  "schema_version": 8,
   "status": "development-active-record-bound-assisted-sessions",
   "data_policy": {
     "raw_tokens_or_form_payloads_stored": false,
@@ -15,15 +15,15 @@
       "runtime_binding": "exact-reviewed-table",
       "expected_api_name": "RevenueLeakTestRequestFormSessions",
       "purpose": "Short-lived digest-only Form 1 journey access and one-time Dynamic Prefill-Webhook handles with exact CRM/journey/form binding, resume, and submission idempotency.",
-      "required_unique_columns": ["TOKEN_HASH", "PREFILL_HANDLE_HASH", "PREFILL_ID", "INTAKE_SUBMISSION_ID"],
+      "required_unique_columns": ["TOKEN_HASH", "INTAKE_SUBMISSION_ID"],
       "columns": [
         {"api_name":"TOKEN_HASH","type":"varchar","max_length":64,"mandatory":true,"unique":true,"private":true},
-        {"api_name":"PREFILL_HANDLE_HASH","type":"varchar","max_length":64,"mandatory":false,"unique":true,"private":true},
+        {"api_name":"PREFILL_HANDLE_HASH","type":"varchar","max_length":64,"mandatory":false,"unique":false,"search_indexed":true,"private":true,"pii_ephi":true,"semantic":"high-entropy digest lookup; application requires exactly one result and fails closed on duplicates"},
         {"api_name":"PREFILL_HANDLE_ISSUED_AT","type":"varchar","max_length":32,"mandatory":false,"unique":false},
         {"api_name":"PREFILL_HANDLE_EXPIRES_AT","type":"varchar","max_length":32,"mandatory":false,"unique":false},
         {"api_name":"PREFILL_HANDLE_CONSUMED_AT","type":"varchar","max_length":32,"mandatory":false,"unique":false},
         {"api_name":"PREFILL_CONSUMPTION_OWNER","type":"varchar","max_length":36,"mandatory":false,"unique":false,"private":true,"semantic":"per-prefill CAS ownership; never exposed outside the controller"},
-        {"api_name":"PREFILL_ID","type":"varchar","max_length":36,"mandatory":false,"unique":true,"private":true,"semantic":"non-secret server-issued submission binding"},
+        {"api_name":"PREFILL_ID","type":"varchar","max_length":36,"mandatory":false,"unique":false,"search_indexed":true,"private":true,"pii_ephi":true,"semantic":"non-secret high-entropy server-issued submission binding; application requires exactly one result and fails closed on duplicates"},
         {"api_name":"CONFIGURATION_REVISION","type":"varchar","max_length":40,"mandatory":false,"unique":false},
         {"api_name":"CRM_LEAD_ID","type":"varchar","max_length":30,"mandatory":true,"unique":false,"private":true,"semantic":"generic CRM record ID for CRM_MODULE; legacy physical column retained"},
         {"api_name":"INTAKE_SUBMISSION_ID","type":"varchar","max_length":100,"mandatory":true,"unique":true,"private":true,"semantic":"canonical journey ID"},
@@ -32,7 +32,7 @@
         {"api_name":"EXPIRES_AT","type":"varchar","max_length":32,"mandatory":true,"unique":false},
         {"api_name":"PREFILL_COUNT","type":"bigint","mandatory":true,"unique":false},
         {"api_name":"MAX_PREFILLS","type":"bigint","mandatory":true,"unique":false},
-        {"api_name":"SOURCE_REVISION","type":"varchar","max_length":40,"mandatory":true,"unique":false},
+        {"api_name":"SOURCE_REVISION","type":"varchar","max_length":80,"mandatory":true,"unique":false,"semantic":"provider-compatible retained physical width; runtime accepts only the exact lowercase 40-character immutable Git SHA"},
         {"api_name":"SOURCE_ENVIRONMENT","type":"varchar","max_length":16,"mandatory":true,"unique":false},
         {"api_name":"LAST_OUTCOME","type":"varchar","max_length":80,"mandatory":true,"unique":false},
         {"api_name":"LAST_PREFILLED_AT","type":"varchar","max_length":32,"mandatory":false,"unique":false},
@@ -53,11 +53,21 @@
       ]
     }
   ],
+  "provider_constraints": {
+    "maximum_unique_varchar_columns": 2,
+    "physical_unique_varchar_columns": ["TOKEN_HASH", "INTAKE_SUBMISSION_ID"],
+    "application_single_result_lookup_columns": ["PREFILL_HANDLE_HASH", "PREFILL_ID"],
+    "application_duplicate_lookup_behavior": "fail_closed",
+    "search_indexed_columns": ["PREFILL_HANDLE_HASH", "PREFILL_ID"],
+    "pii_ephi_columns": ["PREFILL_HANDLE_HASH", "PREFILL_ID"],
+    "source_revision_physical_max_length": 80,
+    "source_revision_runtime_pattern": "^[a-f0-9]{40}$"
+  },
   "deployment_gates": [
     "Fresh readback must prove the existing table is empty before additive column installation.",
     "Additive migration only; do not delete or recreate the retained table.",
     "Block every App User permission and administrator DELETE permission.",
-    "Read back every column type, maximum, mandatory flag, unique flag, and permission before route activation.",
+    "Read back every column type, maximum, mandatory flag, unique flag, Search Index flag, PII/ePHI flag, and permission before route activation.",
     "Do not store names, email addresses, phone numbers, form bodies, raw tokens, headers, secrets, CRM responses, or URLs."
   ]
 }

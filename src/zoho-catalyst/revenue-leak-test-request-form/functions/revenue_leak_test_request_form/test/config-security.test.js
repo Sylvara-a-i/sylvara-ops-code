@@ -40,6 +40,14 @@ test("configuration binds active Development and dark Production to the stamped 
   assert.throws(() => loadConfig(environment({ DEPLOYMENT_MODE: "contained" }), REVISION),
     /development\/active/);
   assert.throws(() => loadConfig(environment(), "2".repeat(40)), /stamped function artifact/);
+  for (const invalidRevision of [
+    "a".repeat(39), "a".repeat(41), "a".repeat(80), "A".repeat(40),
+  ]) {
+    assert.throws(
+      () => loadConfig(environment({ SOURCE_REVISION: invalidRevision }), REVISION),
+      /lowercase 40-character Git commit/,
+    );
+  }
 });
 
 test("paths, credentials, organization identity, and Connections remain exact and independent", () => {

@@ -61,7 +61,7 @@ test("the exact manifest exposes five Development routes with three server calle
   assert.equal(submission.success_status, 200);
 
   const schema = json(path.join(componentRoot, "config/datastore-schema.json"));
-  assert.equal(schema.schema_version, 7);
+  assert.equal(schema.schema_version, 8);
   assert.deepEqual(schema.tables.map((table) => table.expected_api_name),
     ["RevenueLeakTestRequestFormSessions"]);
   assert.equal(schema.tables[0].columns.some((column) =>
@@ -71,7 +71,46 @@ test("the exact manifest exposes five Development routes with three server calle
   assert.equal(schema.tables[0].columns.some((column) =>
     column.api_name === "SESSION_VERSION"), true);
   assert.deepEqual(schema.tables[0].required_unique_columns,
-    ["TOKEN_HASH", "PREFILL_HANDLE_HASH", "PREFILL_ID", "INTAKE_SUBMISSION_ID"]);
+    ["TOKEN_HASH", "INTAKE_SUBMISSION_ID"]);
+  const columns = Object.fromEntries(schema.tables[0].columns.map((column) =>
+    [column.api_name, column]));
+  assert.deepEqual(columns.PREFILL_HANDLE_HASH, {
+    api_name: "PREFILL_HANDLE_HASH",
+    type: "varchar",
+    max_length: 64,
+    mandatory: false,
+    unique: false,
+    search_indexed: true,
+    private: true,
+    pii_ephi: true,
+    semantic: "high-entropy digest lookup; application requires exactly one result and fails closed on duplicates",
+  });
+  assert.deepEqual(columns.PREFILL_ID, {
+    api_name: "PREFILL_ID",
+    type: "varchar",
+    max_length: 36,
+    mandatory: false,
+    unique: false,
+    search_indexed: true,
+    private: true,
+    pii_ephi: true,
+    semantic: "non-secret high-entropy server-issued submission binding; application requires exactly one result and fails closed on duplicates",
+  });
+  assert.deepEqual(
+    [columns.SOURCE_REVISION.max_length, columns.SOURCE_REVISION.mandatory,
+      columns.SOURCE_REVISION.unique],
+    [80, true, false],
+  );
+  assert.deepEqual(schema.provider_constraints, {
+    maximum_unique_varchar_columns: 2,
+    physical_unique_varchar_columns: ["TOKEN_HASH", "INTAKE_SUBMISSION_ID"],
+    application_single_result_lookup_columns: ["PREFILL_HANDLE_HASH", "PREFILL_ID"],
+    application_duplicate_lookup_behavior: "fail_closed",
+    search_indexed_columns: ["PREFILL_HANDLE_HASH", "PREFILL_ID"],
+    pii_ephi_columns: ["PREFILL_HANDLE_HASH", "PREFILL_ID"],
+    source_revision_physical_max_length: 80,
+    source_revision_runtime_pattern: "^[a-f0-9]{40}$",
+  });
   for (const name of [
     "FORM_IDENTITY_HASH", "CONFIGURATION_REVISION", "PREFILL_HANDLE_ISSUED_AT",
     "PREFILL_HANDLE_EXPIRES_AT", "PREFILL_HANDLE_CONSUMED_AT",

@@ -14,6 +14,8 @@ The Catalyst client URL contains the real journey credential only in its fragmen
 
 The retained `Start Free-Test Request` containment control remains the immediate CRM fallback until the replacement `Open Free-Test Setup` path passes Development E2E. Historical containment evidence remains historical and does not prove the new source is installed.
 
+Catalyst Development permits only two unique Var Char columns on this retained table; those physical constraints remain on `TOKEN_HASH` and `INTAKE_SUBMISSION_ID`. `PREFILL_HANDLE_HASH` and `PREFILL_ID` therefore remain nullable, non-unique, search-indexed private columns. Their values are still generated from high-entropy server-side material, and every application lookup requires exactly one matching row so any duplicate result fails closed. The retained table's physical `SOURCE_REVISION` width remains 80 while runtime validation still accepts only the exact lowercase 40-character immutable Git SHA. These provider accommodations do not expose a credential or relax the one-time binding.
+
 The historical `288a93c` convergence evidence remains preserved in `free-revenue-leak-test-development-pr-head-convergence-2026-08-28-288a93c.json` for the predecessor release; it is not a current source stamp and does not prove this assisted controller is installed.
 
 ## Security contract
