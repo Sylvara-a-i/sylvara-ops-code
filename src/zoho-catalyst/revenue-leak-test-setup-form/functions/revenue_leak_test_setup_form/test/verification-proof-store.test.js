@@ -10,6 +10,7 @@ function fixture() {
   let selectedNow = NOW;
   let row = null;
   let updateFailures = 0;
+  const updateCalls = [];
   const adapter = {
     async insertRow(_table, candidate) {
       if (row) throw new Error("unique conflict");
@@ -17,6 +18,11 @@ function fixture() {
       return { ...row };
     },
     async updateRow(_table, candidate, expected) {
+      assert.ok(
+        Object.keys(expected).length <= 4,
+        "proof transitions must fit ROWID plus four explicit ZCQL predicates",
+      );
+      updateCalls.push({ candidate: { ...candidate }, expected: { ...expected } });
       if (updateFailures > 0) {
         updateFailures -= 1;
         throw new Error("synthetic update failure");
@@ -46,6 +52,7 @@ function fixture() {
   };
   return {
     get row() { return row; },
+    get updateCalls() { return updateCalls; },
     failUpdates(count) { updateFailures = count; },
     setNow(value) { selectedNow = value; },
     store: createVerificationProofStore(adapter, config, { now: () => selectedNow }),
@@ -117,6 +124,41 @@ test("only one concurrent provider claim owns the send", async () => {
   );
   assert.equal(owners.length, 1);
   assert.equal(selected.row.STATUS, "sending");
+});
+
+test("keeps proof transition fences within the provider limit without weakening ownership", async () => {
+  const selected = fixture();
+  let proof = await selected.store.reserve(reservation());
+  const claim = `claim_${"a".repeat(64)}`;
+
+  proof = await selected.store.claimSend(proof, claim);
+  assert.deepEqual(selected.updateCalls.at(-1).expected, {
+    STATUS: "pending_send",
+    OTP_GENERATION: 1,
+    UPDATED_AT: "2026-08-14T18:00:00.000Z",
+  });
+
+  proof = await selected.store.markSendInvoking(proof, claim);
+  assert.deepEqual(selected.updateCalls.at(-1).expected, {
+    STATUS: "sending",
+    OTP_GENERATION: 1,
+    PROVIDER_STATE: "claimed",
+    PROVIDER_RESULT_REFERENCE: claim,
+  });
+
+  proof = await selected.store.completeSend(proof, {
+    outcome: "accepted",
+    providerResultReference: `mail_${"b".repeat(64)}`,
+  }, claim);
+  const owner = `verify_${"c".repeat(64)}`;
+  proof = await selected.store.claimVerificationAttempt(proof, owner);
+  assert.deepEqual(selected.updateCalls.at(-1).expected, {
+    STATUS: "issued",
+    OTP_GENERATION: 1,
+    VERIFICATION_OWNER: "",
+    VERIFICATION_LEASE_EXPIRES_AT: "",
+  });
+  assert.equal(proof.verificationOwner, owner);
 });
 
 test("wrong codes are bounded and provider ambiguity is terminally quarantined", async () => {

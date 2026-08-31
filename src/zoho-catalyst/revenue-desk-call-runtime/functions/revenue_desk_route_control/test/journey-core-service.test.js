@@ -134,6 +134,8 @@ class MemoryStore {
   }
 
   async conditionalUpdate(table, rowId, patch, expected) {
+    assert.ok(Object.keys(expected).length <= 4,
+      'conditional updates may use at most four explicit predicates');
     this.tables.push(table);
     const current = this.rows.find((row) => row.ROWID === String(rowId));
     if (!current || !Object.entries(expected).every(([key, value]) => current[key] === value)) {
@@ -329,7 +331,7 @@ test('completed receipt authority rejects JSON, HMAC, and immutable outer-column
   }
 });
 
-test('receipt completion CAS rejects immutable drift between claim and readback', async () => {
+test('receipt completion readback rejects immutable drift after provider-bounded CAS', async () => {
   const selected = fixture();
   const conditionalUpdate = selected.store.conditionalUpdate.bind(selected.store);
   let tampered = false;
@@ -344,7 +346,12 @@ test('receipt completion CAS rejects immutable drift between claim and readback'
   await assert.rejects(selected.service.approve(command('approve')),
     { code: 'CONTROL_AUDIT_INVALID' });
   assert.equal(selected.approvalWrites, 1);
-  assert.equal(selected.store.rows[0].STATUS, 'Processing');
+  // The provider-bounded update can land, but the changed immutable identity
+  // prevents this row from ever becoming replayable approval authority.
+  assert.equal(selected.store.rows[0].STATUS, 'Completed');
+  await assert.rejects(selected.service.approve(command('approve')),
+    { code: 'CONTROL_AUDIT_INVALID' });
+  assert.equal(selected.approvalWrites, 1);
 });
 
 test('subsecond runtime clocks produce exact whole-second CRM approval and rollback evidence',

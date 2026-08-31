@@ -259,13 +259,30 @@ function createVerificationProofStore(adapter, config, { now = Date.now } = {}) 
   }
 
   async function writeAndReadBack(current, patch, expected = {}) {
+    const additionalFences = Object.entries(expected);
+    if (
+      additionalFences.length > 2 ||
+      additionalFences.some(([field]) => (
+        field === "STATUS" || field === "OTP_GENERATION" || field === "UPDATED_AT"
+      ))
+    ) {
+      fail("Verification proof transition fences are invalid", "configuration_invalid");
+    }
+    // ZCQL permits five WHERE conditions including ROWID. Status plus the OTP
+    // generation are the stable state/version fence. UPDATED_AT is the attempt
+    // fence unless the transition needs two stronger lease/owner predicates.
+    const transitionFences = {
+      STATUS: current.status,
+      OTP_GENERATION: current.otpGeneration,
+      ...(additionalFences.length < 2 ? { UPDATED_AT: current.updatedAt } : {}),
+      ...expected,
+    };
     try {
-      await adapter.updateRow(tableName, { ROWID: current.rowId, ...patch }, {
-        STATUS: current.status,
-        OTP_GENERATION: current.otpGeneration,
-        UPDATED_AT: current.updatedAt,
-        ...expected,
-      });
+      await adapter.updateRow(
+        tableName,
+        { ROWID: current.rowId, ...patch },
+        transitionFences,
+      );
     } catch {
       // Conditional-write failures and timeouts are resolved only by durable readback.
     }

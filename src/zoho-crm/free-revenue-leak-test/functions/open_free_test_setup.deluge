@@ -18,6 +18,7 @@ Rollback: disable this replacement button and leave the retained containment but
 
 can_open = false;
 destination_url = "";
+rejection_code = "request_invalid";
 try
 {
 	record_id_text = ifnull(input.record_id,"").toString().trim();
@@ -26,6 +27,7 @@ try
 	valid_module = module_text == "Leads";
 	if(valid_record && valid_module)
 	{
+		rejection_code = "transport_envelope";
 		request_body = Map();
 		request_body.put("crmModule",module_text);
 		request_body.put("recordId",record_id_text);
@@ -43,9 +45,11 @@ try
 		];
 		if(issue_response != null && issue_response.containKey("responseCode") && issue_response.get("responseCode").toString() == "201" && issue_response.containKey("responseText"))
 		{
+			rejection_code = "response_text";
 			response_text = ifnull(issue_response.get("responseText"),"").toString();
 			if(response_text.length() > 0 && response_text.length() <= 4096)
 			{
+				rejection_code = "response_body";
 				response_body = response_text.toMap();
 				if(response_body != null && response_body.size() == 4 && response_body.get("ok") == true && response_body.containKey("accessUrl") && response_body.containKey("expiresAt") && response_body.containKey("requestId"))
 				{
@@ -53,10 +57,20 @@ try
 					expires_at = ifnull(response_body.get("expiresAt"),"").toString();
 					request_id = ifnull(response_body.get("requestId"),"").toString();
 					prefix = "{{FORM1_ACCESS_PUBLIC_URL}}#journeyToken=";
-					if(access_url.startsWith(prefix) && access_url.length() == prefix.length() + 43 && access_url.right(43).matches("^[A-Za-z0-9_-]{43}$") && !access_url.contains("?") && !access_url.contains("&") && !access_url.contains(record_id_text) && expires_at.matches("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{3})?Z$") && request_id.matches("^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"))
+					rejection_code = "access_url_base";
+					if(access_url.startsWith(prefix) && access_url.length() == prefix.length() + 43 && !access_url.contains("?") && !access_url.contains("&") && !access_url.contains(record_id_text))
 					{
-						can_open = true;
-						destination_url = access_url;
+						rejection_code = "access_url_token";
+						if(access_url.right(43).matches("^[A-Za-z0-9_-]{43}$"))
+						{
+							rejection_code = "response_metadata";
+							if(expires_at.matches("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{3})?Z$") && request_id.matches("^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"))
+							{
+								can_open = true;
+								destination_url = access_url;
+								rejection_code = "accepted";
+							}
+						}
 					}
 				}
 			}
@@ -65,6 +79,7 @@ try
 }
 catch(failure)
 {
+	rejection_code = "handler_error";
 	info "form1_assisted_issue_failed";
 }
 if(can_open == true)
@@ -73,5 +88,5 @@ if(can_open == true)
 }
 else
 {
-	info "form1_assisted_issue_rejected";
+	info "form1_assisted_issue_rejected_" + rejection_code;
 }

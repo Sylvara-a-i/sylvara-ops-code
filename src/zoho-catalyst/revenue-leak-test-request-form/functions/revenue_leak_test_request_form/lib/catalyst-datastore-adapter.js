@@ -8,6 +8,7 @@ const COLUMN_PATTERN = /^[A-Z][A-Z0-9_]{0,63}$/;
 const ROW_ID_PATTERN = /^[0-9]{1,30}$/;
 const MAX_STRING_BYTES = 4096;
 const MAX_ROW_BYTES = 32768;
+const MAX_UPDATE_PREDICATES = 4;
 
 class CatalystDataStoreAdapterError extends Error {
   constructor(message, { publicCode = "datastore_unavailable", ambiguous = false } = {}) {
@@ -154,9 +155,23 @@ function createCatalystDataStoreAdapter(app, config) {
     const validated = row(value, true);
     const predicates = row(expected);
     if (!validated.ROWID) throw inputError("ROWID is required");
+    if (!Object.hasOwn(predicates, "SESSION_VERSION") ||
+        !Number.isSafeInteger(predicates.SESSION_VERSION) ||
+        predicates.SESSION_VERSION < 1 ||
+        Object.keys(predicates).length > MAX_UPDATE_PREDICATES) {
+      throw inputError("Conditional Data Store predicates are invalid");
+    }
     const updates = Object.entries(validated).filter(([key]) => key !== "ROWID").sort();
     const setClause = updates.map(([key, selected]) => `${key} = ${sql(selected)}`).join(", ");
-    const whereClause = Object.entries(predicates).sort().map(([key, selected]) =>
+    // Catalyst accepts at most five UPDATE conditions. ROWID consumes one;
+    // SESSION_VERSION is the primary optimistic-lock fence and is rendered first.
+    const predicateEntries = [
+      ["SESSION_VERSION", predicates.SESSION_VERSION],
+      ...Object.entries(predicates)
+        .filter(([key]) => key !== "SESSION_VERSION")
+        .sort(([left], [right]) => left.localeCompare(right)),
+    ];
+    const whereClause = predicateEntries.map(([key, selected]) =>
       selected === null ? `${key} IS NULL` : `${key} = ${sql(selected)}`).join(" AND ");
     return query(
       `UPDATE ${tableName} SET ${setClause} WHERE ROWID = ${validated.ROWID} AND ${whereClause}`,

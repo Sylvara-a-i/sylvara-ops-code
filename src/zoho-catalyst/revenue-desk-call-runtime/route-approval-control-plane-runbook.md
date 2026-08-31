@@ -29,7 +29,9 @@ The configuration snapshot fingerprint is a separately domain-separated SHA-256 
 
 ## Executable boundary
 
-The CRM callers invoke only the exact authenticated Catalyst routes. The private target fresh-reads CRM, configuration, deployment, receipt history, conflicting client deployments, and provider state where applicable. It creates signed internal decisions, writes a Prepared immutable receipt, performs one full-row deployment CAS, reads it back, and finalizes the receipt. A crash resumes the same Prepared receipt and exact poststate; a changed Deal, journey, configuration, idempotency identity, or rollback reason conflicts.
+The CRM callers invoke only the exact authenticated Catalyst routes. The private target fresh-reads CRM, configuration, deployment, receipt history, conflicting client deployments, and provider state where applicable. It creates signed internal decisions, writes a Prepared immutable receipt, performs one provider-bounded deployment CAS, reads it back, and finalizes the receipt. A crash resumes the same Prepared receipt and exact poststate; a changed Deal, journey, configuration, idempotency identity, or rollback reason conflicts.
+
+Catalyst permits at most five `WHERE` conditions. The shared adapter reserves one for exact `ROWID` and rejects more than four explicit predicates before sending ZCQL. Deployment transitions fence both `COUNT_VERSION` and `REPORT_RECONCILIATION_VERSION` plus `TEST_STATUS` and `GO_LIVE_APPROVAL_STATUS`; full business prestate is validated before mutation, and every intended patch field is verified through authoritative readback. Receipt transitions use four mutable state/version fences while immutable receipt identity is verified before mutation and again after readback.
 
 Every event key is generated once and contains no provider/customer identifier. Signing keys, bearer values, OAuth authorization, raw operator identity, CRM payloads, provider payloads, and private IDs never enter Git or runtime logs.
 
@@ -48,7 +50,7 @@ Read the deployment by its private key and the configuration by `ACTIVE_CONFIGUR
 ### Mutation and readback
 
 1. Insert one immutable `authorization_event` receipt whose key is the signed `approval_…` event key, action is `approve`, decision is `Approved`, and configuration/route/source fields match the prestate. Read it back by exact `EVENT_KEY` through the audit boundary and compare every immutable field plus the decrypted allowlisted event projection.
-2. Conditionally update the deployment by exact `ROWID` with predicates for the observed `COUNT_VERSION`, active configuration ID, both statuses, `HANDLED_COUNT`, source/environment, all governed route fields, null authorization fields, and null stop state.
+2. Conditionally update the deployment by exact `ROWID` with the observed `COUNT_VERSION`, `REPORT_RECONCILIATION_VERSION`, `TEST_STATUS`, and `GO_LIVE_APPROVAL_STATUS`. The prior step has already validated the full active-configuration, capacity, source/environment, governed-route, authorization-null, and stop-null prestate.
 3. Set only `TEST_STATUS=Scheduled`, `GO_LIVE_APPROVAL_STATUS=Approved`, the four approval references, `UPDATED_AT`, and `COUNT_VERSION=expected+1`. Keep `ACTIVATION_EVENT_KEY`, `ACTUAL_START_AT`, and `EXPIRES_AT` null.
 4. Independently read the deployment and receipt again. Approval is complete only when both match exactly. It does not authorize or prove an active provider route and does not start the seven-day clock.
 
@@ -66,7 +68,7 @@ Reject unless the Data Store row is still `Scheduled` / `Approved`; its active a
 
 1. Create a signed `activate` intent bound to the approval event, route fingerprint, route-readback fingerprint, readback timestamp, source revision, and exact current `COUNT_VERSION`.
 2. Insert its immutable `authorization_event` receipt with decision `Activated` and `RELATED_EVENT_KEY` equal to the approval event. Read it back independently and require its `PREVIOUS_EVENT_HASH` to equal the approval event hash.
-3. After that readback, choose one canonical activation instant. Conditionally update the deployment using all observed approval, route, source, status, count, capacity, timing-null, and stop-null predicates.
+3. After that readback, choose one canonical activation instant. Conditionally update the deployment by exact `ROWID` with the observed count and reconciliation versions plus both lifecycle statuses. The complete approval, route, source, capacity, timing-null, and stop-null prestate has already been validated, and exact intended poststate must read back.
 4. Set `TEST_STATUS=Live`, `ACTIVATION_EVENT_KEY`, `ACTUAL_START_AT=activation instant`, `EXPIRES_AT=activation instant + exactly 7 calendar days (604800000 ms)`, `UPDATED_AT`, and `COUNT_VERSION=expected+1`.
 5. Independently read the route, activation receipt, approval receipt, deployment, and authenticated readiness response. Require `active_authorized_deployment_count` to include the route and require the exact seven-day difference. The clock never starts at request, setup, approval, provider mutation submission, or an ambiguous response; it starts only after authoritative route-activation readback.
 

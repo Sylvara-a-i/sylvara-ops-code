@@ -441,6 +441,10 @@ test("concurrent identical submissions cross the CRM boundary once", async () =>
   assert.equal(results.filter(({ status }) => status === "fulfilled").length, 1);
   assert.equal(selected.events.filter(([name]) => name === "update").length, 1);
   assert.equal(selected.adapter.rows[0].STATUS, "consumed");
+  const replay = await submit(selected, prepared);
+  assert.equal(replay.status, 200);
+  assert.equal(replay.body.replayed, true);
+  assert.equal(selected.events.filter(([name]) => name === "update").length, 1);
 });
 
 test("public Form 1 remains tokenless and cannot manufacture assisted binding", async () => {
@@ -573,6 +577,34 @@ test("reissue rotates both credentials without duplicating the journey", async (
   }), (error) => error.status === 404 && error.publicCode === "session_not_found");
   const secondHandle = (await exchange(selected, second)).prefillHandle;
   assert.equal((await prefill(selected, secondHandle)).status, 200);
+});
+
+test("concurrent reissue keeps one version-fenced winner and one durable journey", async () => {
+  const selected = fixture();
+  await launch(selected);
+  const originalFind = selected.adapter.findRowsByJourneyId;
+  let arrivals = 0;
+  let release;
+  const bothReady = new Promise((resolve) => { release = resolve; });
+  selected.adapter.findRowsByJourneyId = async (...args) => {
+    const rows = await originalFind(...args);
+    arrivals += 1;
+    if (arrivals === 2) release();
+    await bothReady;
+    return rows;
+  };
+
+  const results = await Promise.allSettled([launch(selected), launch(selected)]);
+  const successes = results.filter(({ status }) => status === "fulfilled");
+  const failures = results.filter(({ status }) => status === "rejected");
+  assert.equal(successes.length, 1);
+  assert.equal(successes[0].value.status, 201);
+  assert.equal(failures.length, 1);
+  assert.equal(failures[0].reason.ambiguous, true);
+  assert.equal(selected.adapter.rows.length, 1);
+  assert.equal(selected.adapter.rows[0].SESSION_VERSION, 2);
+  assert.equal(selected.adapter.rows[0].STATUS, "issued");
+  assert.equal(selected.adapter.rows[0].LAST_OUTCOME, "reissued");
 });
 
 test("exact crash retry resumes while a stale CRM edit remains fenced", async () => {

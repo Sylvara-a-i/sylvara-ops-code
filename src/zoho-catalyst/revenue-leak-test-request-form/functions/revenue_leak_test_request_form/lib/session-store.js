@@ -288,22 +288,14 @@ function createSessionStore(adapter, config, {
 
   async function checkedUpdate(current, patch) {
     const next = { ...patch, SESSION_VERSION: current.sessionVersion + 1 };
+    // Catalyst permits at most five UPDATE conditions. ROWID plus this four-field
+    // fence prevents stale transitions; the exact readback below validates every
+    // immutable binding and requested poststate without expanding the WHERE clause.
     const expected = {
-      TOKEN_HASH: current.tokenHash,
-      STATUS: current.status,
       SESSION_VERSION: current.sessionVersion,
+      STATUS: current.status,
+      TOKEN_HASH: current.tokenHash,
       UPDATED_AT: current.updatedAt,
-      CRM_ORGANIZATION_HASH: current.crmOrganizationHash,
-      CRM_MODULE: current.crmModule,
-      CRM_LEAD_ID: current.recordId,
-      INTAKE_SUBMISSION_ID: current.journeyId,
-      PREFILL_HANDLE_HASH: current.prefillHandleHash,
-      PREFILL_CONSUMPTION_OWNER: current.prefillConsumptionOwner,
-      PREFILL_ID: current.prefillId,
-      SUBMISSION_CLAIM_ID: current.submissionClaimId,
-      EXPECTED_STAGE: STAGE,
-      SOURCE_REVISION: current.sourceRevision,
-      SOURCE_ENVIRONMENT: current.sourceEnvironment,
     };
     try {
       await adapter.updateRow(table, { ROWID: current.rowId, ...next }, expected);
