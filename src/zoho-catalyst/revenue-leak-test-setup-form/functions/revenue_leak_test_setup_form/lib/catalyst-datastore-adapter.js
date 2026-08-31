@@ -10,6 +10,9 @@ const MAX_COLUMNS = 64;
 const MAX_STRING_BYTES = 4096;
 const MAX_ROW_VALUE_BYTES = 32768;
 const MAX_STATEMENT_BYTES = 65536;
+// Catalyst counts ROWID as one of the five allowed ZCQL WHERE conditions.
+// Callers therefore have four predicates available for optimistic concurrency.
+const MAX_EXPLICIT_UPDATE_PREDICATES = 4;
 
 class CatalystDataStoreAdapterError extends Error {
   constructor(
@@ -94,8 +97,12 @@ function validateRecord(record, { allowRowId, requireRowId = false } = {}) {
 
 function validateExpected(expected) {
   const validated = validateRecord(expected, { allowRowId: false });
-  if (Object.keys(validated).length === 0) {
+  const conditionCount = Object.keys(validated).length;
+  if (conditionCount === 0) {
     throw inputError("A conditional Data Store update requires expected fields");
+  }
+  if (conditionCount > MAX_EXPLICIT_UPDATE_PREDICATES) {
+    throw inputError("A conditional Data Store update exceeds the provider condition limit");
   }
   return validated;
 }

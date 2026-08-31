@@ -7,6 +7,9 @@ const COLUMN_PATTERN = /^[A-Z][A-Z0-9_]{0,63}$/;
 const ROW_ID_PATTERN = /^[0-9]{1,30}$/;
 const MAX_STATEMENT_BYTES = 65_536;
 const MAX_ROW_BYTES = 48_000;
+// Catalyst permits at most five WHERE conditions. Conditional updates always
+// spend one on ROWID, leaving four explicit compare-and-swap predicates.
+const MAX_CONDITIONAL_UPDATE_PREDICATES = 4;
 // Catalyst caps both Text and Encrypted Text columns at 10,000 characters.
 // A UTF-8 byte bound is intentionally conservative and prevents an accepted
 // runtime value from reaching the provider with an unsupported encoded size.
@@ -239,6 +242,10 @@ function createCatalystStore(app, config) {
     const predicates = validateRow(expected);
     invariant(Object.keys(changed).length > 0 && Object.keys(predicates).length > 0,
       'INVALID_DATASTORE_ROW', 'Conditional update requires changes and predicates.', { httpStatus: 503 });
+    invariant(Object.keys(predicates).length <= MAX_CONDITIONAL_UPDATE_PREDICATES,
+      'INVALID_DATASTORE_QUERY',
+      'Catalyst conditional update exceeds the provider predicate limit.',
+      { httpStatus: 503 });
     const setClause = Object.entries(changed).sort().map(([key, value]) => `${key} = ${sqlValue(value)}`).join(', ');
     const whereClause = Object.entries(predicates).sort().map(([key, value]) => (
       value === null ? `${key} IS NULL` : `${key} = ${sqlValue(value)}`
@@ -305,4 +312,10 @@ function createCatalystStore(app, config) {
   });
 }
 
-module.exports = { createCatalystStore, unwrapRows, sqlValue, MAX_CATALYST_TEXT_BYTES };
+module.exports = {
+  createCatalystStore,
+  unwrapRows,
+  sqlValue,
+  MAX_CATALYST_TEXT_BYTES,
+  MAX_CONDITIONAL_UPDATE_PREDICATES,
+};

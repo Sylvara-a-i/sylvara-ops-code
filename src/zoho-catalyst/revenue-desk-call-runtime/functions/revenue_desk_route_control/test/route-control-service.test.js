@@ -4,7 +4,11 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const { routeFingerprint, routeFromRows }
   = require('revenue_desk_call_gateway/lib/approval-control');
-const { createRouteControlService, ROLLBACK_REASON_TO_CRM }
+const {
+  createRouteControlService,
+  ROLLBACK_REASON_TO_CRM,
+  verifyDeploymentPoststate,
+}
   = require('revenue_desk_call_gateway/lib/route-control-service');
 const { RevenueDeskError }
   = require('revenue_desk_call_gateway/lib/errors');
@@ -132,6 +136,23 @@ function deal() {
 
 function copy(value) { return structuredClone(value); }
 
+test('deployment CAS readback rejects non-versioned governed drift', () => {
+  const prestate = deployment();
+  const patch = {
+    TEST_STATUS: 'Scheduled',
+    GO_LIVE_APPROVAL_STATUS: 'Approved',
+    COUNT_VERSION: 1,
+  };
+  assert.doesNotThrow(() => verifyDeploymentPoststate(
+    prestate, { ...prestate, ...patch }, patch,
+  ));
+  assert.throws(() => verifyDeploymentPoststate(prestate, {
+    ...prestate,
+    ...patch,
+    ACTIVE_CONFIGURATION_VERSION_ID: 'configuration_version_conflict',
+  }, patch), { code: 'CONTROL_CAS_CONFLICT' });
+});
+
 function deferred() {
   let resolve;
   const promise = new Promise((done) => { resolve = done; });
@@ -168,6 +189,8 @@ class MemoryStore {
   }
 
   async conditionalUpdate(table, rowId, patch, expected) {
+    assert.ok(Object.keys(expected).length <= 4,
+      'conditional updates may use at most four explicit predicates');
     const row = this.rows.find((candidate) => candidate.__table === table
       && candidate.ROWID === String(rowId));
     assert.ok(row);

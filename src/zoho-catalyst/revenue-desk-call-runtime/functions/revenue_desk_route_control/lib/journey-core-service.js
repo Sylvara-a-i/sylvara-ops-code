@@ -232,13 +232,15 @@ function receiptIdentityMatches(left, right) {
 }
 
 function receiptCasPredicates(receipt) {
-  return {
-    ...Object.fromEntries(RECEIPT_IMMUTABLE_FIELDS.map((field) => [field, receipt[field]])),
+  // ROWID binds immutable receipt identity. These four mutable fields are the
+  // provider-bounded state/version fence; parseReceipt verifies full identity
+  // before mutation and again on authoritative readback.
+  return Object.freeze({
     STATUS: receipt.STATUS,
     RECEIPT_VERSION: Number(receipt.RECEIPT_VERSION),
     PROCESSED_AT: receipt.PROCESSED_AT ?? null,
     LAST_ERROR_CODE: receipt.LAST_ERROR_CODE ?? null,
-  };
+  });
 }
 
 function parseReceipt(receipt, config) {

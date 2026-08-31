@@ -104,6 +104,42 @@ test("builds one atomic conditional UPDATE with every expected field and escaped
   );
 });
 
+test("limits conditional UPDATEs to ROWID plus four explicit predicates", async () => {
+  const { adapter, calls } = fixture();
+  await adapter.updateRow(SESSION_TABLE, {
+    ROWID: "1000000000001",
+    STATUS: "verified",
+  }, {
+    STATUS: "issued",
+    ATTEMPT_COUNT: 1,
+    LAST_OUTCOME: "issued",
+    UPDATED_AT: "2026-08-14T18:00:00.000Z",
+  });
+  assert.match(
+    calls.queries[0],
+    /WHERE ROWID = 1000000000001 AND ATTEMPT_COUNT = 1 AND LAST_OUTCOME = 'issued' AND STATUS = 'issued' AND UPDATED_AT = '2026-08-14T18:00:00.000Z'$/,
+  );
+
+  await assert.rejects(
+    adapter.updateRow(SESSION_TABLE, {
+      ROWID: "1000000000001",
+      STATUS: "submitted",
+    }, {
+      STATUS: "verified",
+      ATTEMPT_COUNT: 1,
+      LAST_OUTCOME: "verified",
+      UPDATED_AT: "2026-08-14T18:00:00.000Z",
+      LEASE_OWNER: "owner",
+    }),
+    (error) => (
+      error instanceof CatalystDataStoreAdapterError &&
+      error.publicCode === "datastore_input_invalid" &&
+      /condition limit/.test(error.message)
+    ),
+  );
+  assert.equal(calls.queries.length, 1);
+});
+
 test("executes exact hash and ROWID SELECT statements for every store lookup", async () => {
   const { adapter, calls } = fixture();
   await adapter.findRowsByTokenHash(SESSION_TABLE, "a".repeat(64));

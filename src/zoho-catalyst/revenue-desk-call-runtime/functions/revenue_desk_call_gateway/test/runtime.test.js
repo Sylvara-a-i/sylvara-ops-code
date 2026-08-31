@@ -4,7 +4,11 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loadConfig: loadRuntimeConfig } = require('../lib/config');
 const { RevenueDeskError } = require('../lib/errors');
-const { createCatalystStore, MAX_CATALYST_TEXT_BYTES } = require('../lib/catalyst-store');
+const {
+  createCatalystStore,
+  MAX_CATALYST_TEXT_BYTES,
+  MAX_CONDITIONAL_UPDATE_PREDICATES,
+} = require('../lib/catalyst-store');
 const { createRequestListener } = require('../lib/runtime-boundary');
 const { createRuntimeService } = require('../lib/runtime-service');
 const { createWorkerJobHandler: createRuntimeWorkerJobHandler } = require('../lib/job-handler');
@@ -152,6 +156,39 @@ test('integration: Catalyst adapter rejects text beyond the provider 10,000-byte
     EVENT_DATA_JSON: 'x'.repeat(MAX_CATALYST_TEXT_BYTES + 1),
   }), { code: 'INVALID_DATASTORE_ROW' });
   assert.equal(inserted.length, 1);
+});
+
+test('integration: Catalyst conditional updates reserve ROWID within the five-condition limit', async () => {
+  const config = loadConfig(environment());
+  const statements = [];
+  const app = {
+    datastore() { return { table() { return { async insertRow(row) { return row; } }; } }; },
+    zcql() { return { async executeZCQLQuery(statement) {
+      statements.push(statement);
+      if (statement.startsWith('UPDATE ')) return [];
+      return [{ RevenueDeskDeployments: { ROWID: '101' } }];
+    } }; },
+  };
+  const store = createCatalystStore(app, config);
+  const expected = {
+    COUNT_VERSION: 2,
+    REPORT_RECONCILIATION_VERSION: 1,
+    TEST_STATUS: 'Ready for Approval',
+    GO_LIVE_APPROVAL_STATUS: 'Pending Internal Approval',
+  };
+  assert.equal(Object.keys(expected).length, MAX_CONDITIONAL_UPDATE_PREDICATES);
+  await store.conditionalUpdate('RevenueDeskDeployments', '101', {
+    TEST_STATUS: 'Scheduled',
+  }, expected);
+  assert.equal(statements[0], "UPDATE RevenueDeskDeployments SET TEST_STATUS = 'Scheduled' WHERE ROWID = 101 AND COUNT_VERSION = 2 AND GO_LIVE_APPROVAL_STATUS = 'Pending Internal Approval' AND REPORT_RECONCILIATION_VERSION = 1 AND TEST_STATUS = 'Ready for Approval'");
+
+  const statementCount = statements.length;
+  await assert.rejects(store.conditionalUpdate('RevenueDeskDeployments', '101', {
+    TEST_STATUS: 'Scheduled',
+  }, { ...expected, SOURCE_ENVIRONMENT: 'development' }), {
+    code: 'INVALID_DATASTORE_QUERY',
+  });
+  assert.equal(statements.length, statementCount);
 });
 
 test('integration: ambiguous deployment IDs fail closed without database uniqueness', async () => {

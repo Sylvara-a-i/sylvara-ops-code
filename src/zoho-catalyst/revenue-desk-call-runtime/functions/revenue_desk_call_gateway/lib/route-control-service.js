@@ -98,18 +98,35 @@ function same(actual, expected) {
   return (actual === undefined ? null : actual) === expected;
 }
 
-function fullDeploymentPrestate(row) {
+function deploymentCasPredicates(row) {
   invariant(plain(row) && /^[0-9]{1,30}$/.test(String(row.ROWID || '')),
     'CONTROL_STATE_INVALID', 'Deployment row is unavailable.', { httpStatus: 503 });
-  return Object.fromEntries(DEPLOYMENT_CAS_FIELDS.map((field) => [
-    field, row[field] === undefined ? null : row[field],
-  ]));
+  const countVersion = Number(row.COUNT_VERSION);
+  const reconciliationVersion = Number(row.REPORT_RECONCILIATION_VERSION);
+  invariant(Number.isSafeInteger(countVersion) && countVersion >= 0
+    && Number.isSafeInteger(reconciliationVersion) && reconciliationVersion >= 0
+    && typeof row.TEST_STATUS === 'string' && row.TEST_STATUS.length > 0
+    && typeof row.GO_LIVE_APPROVAL_STATUS === 'string'
+    && row.GO_LIVE_APPROVAL_STATUS.length > 0,
+  'CONTROL_STATE_INVALID', 'Deployment concurrency state is invalid.', { httpStatus: 503 });
+  // ROWID is the fifth provider condition. The two versions fence runtime and
+  // reconciliation writers; the lifecycle fields fence approval-state changes.
+  return Object.freeze({
+    COUNT_VERSION: countVersion,
+    REPORT_RECONCILIATION_VERSION: reconciliationVersion,
+    TEST_STATUS: row.TEST_STATUS,
+    GO_LIVE_APPROVAL_STATUS: row.GO_LIVE_APPROVAL_STATUS,
+  });
 }
 
-function verifyPatch(row, patch) {
-  invariant(plain(row) && Object.entries(patch).every(([field, value]) => same(row[field], value)),
-    'CONTROL_CAS_CONFLICT', 'Deployment transition did not read back exactly.',
-    { httpStatus: 503, retryable: true, ambiguous: true });
+function verifyDeploymentPoststate(prestate, row, patch) {
+  invariant(plain(prestate) && plain(row) && plain(patch)
+    && String(row.ROWID || '') === String(prestate.ROWID || '')
+    && DEPLOYMENT_CAS_FIELDS.every((field) => same(
+      row[field], Object.hasOwn(patch, field) ? patch[field] : prestate[field],
+    )),
+  'CONTROL_CAS_CONFLICT', 'Deployment transition did not read back exactly.',
+  { httpStatus: 503, retryable: true, ambiguous: true });
 }
 
 function verifyControlPatch(row, patch) {
@@ -946,7 +963,6 @@ function createRouteControlService({
           activationReceipt.ROWID,
           { LAST_ERROR_CODE: 'ACTIVATION_SUPERSEDED_BY_ROLLBACK' },
           {
-            EVENT_KEY: activationReceipt.EVENT_KEY,
             STATUS: 'ReconciliationRequired',
             LAST_ERROR_CODE: priorContainmentOutcome,
             PAYLOAD_FINGERPRINT: activationReceipt.PAYLOAD_FINGERPRINT,
@@ -1275,9 +1291,9 @@ function createRouteControlService({
             tables.DEPLOYMENT_TABLE,
             deployment.ROWID,
             patch,
-            fullDeploymentPrestate(deployment),
+            deploymentCasPredicates(deployment),
           );
-          verifyPatch(poststate, patch);
+          verifyDeploymentPoststate(deployment, poststate, patch);
           try {
             await assertNoActiveRollbackClaim(command);
           } catch (error) {
@@ -1296,8 +1312,8 @@ function createRouteControlService({
         }
       } else {
         poststate = await store.conditionalUpdate(tables.DEPLOYMENT_TABLE, deployment.ROWID,
-          patch, fullDeploymentPrestate(deployment));
-        verifyPatch(poststate, patch);
+          patch, deploymentCasPredicates(deployment));
+        verifyDeploymentPoststate(deployment, poststate, patch);
       }
     }
     if (action !== 'activate' && inserted.row.STATUS !== 'Completed') {
@@ -1449,9 +1465,14 @@ function createRouteControlService({
             throw error;
           }
         } else {
-          poststate = await store.conditionalUpdate(tables.DEPLOYMENT_TABLE, poststate.ROWID,
-            patch, fullDeploymentPrestate(poststate));
-          verifyPatch(poststate, patch);
+          const deploymentPrestate = poststate;
+          poststate = await store.conditionalUpdate(
+            tables.DEPLOYMENT_TABLE,
+            deploymentPrestate.ROWID,
+            patch,
+            deploymentCasPredicates(deploymentPrestate),
+          );
+          verifyDeploymentPoststate(deploymentPrestate, poststate, patch);
         }
       }
       if (action !== 'activate') await finalizePreparedReceipt(receipt, data.decidedAt);
@@ -1754,7 +1775,7 @@ function createRouteControlService({
       ? 'CRM_ACTIVATION_PROVEN_INACTIVE' : 'CRM_ACTIVATION_RECONCILIATION_REQUIRED');
     const updated = await store.conditionalUpdate(tables.EVENT_RECEIPT_TABLE, receipt.ROWID,
       { STATUS: receiptStatus, LAST_ERROR_CODE: lastErrorCode }, {
-        EVENT_KEY: receiptKey, STATUS: 'ReconciliationRequired',
+        STATUS: 'ReconciliationRequired',
         LAST_ERROR_CODE: receipt.LAST_ERROR_CODE,
         PAYLOAD_FINGERPRINT: receipt.PAYLOAD_FINGERPRINT, RECEIPT_VERSION: 1,
       });
@@ -2531,5 +2552,6 @@ module.exports = Object.freeze({
   ROLLBACK_REASONS,
   createRouteControlService,
   validateCommand,
-  fullDeploymentPrestate,
+  deploymentCasPredicates,
+  verifyDeploymentPoststate,
 });

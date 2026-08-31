@@ -2123,6 +2123,23 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         self.assertNotIn('"new window"', source)
         self.assertNotIn("successive=true", source)
         self.assertLess(source.index("can_open = true;"), source.index("openUrl("))
+        for rejection_code in (
+            "request_invalid",
+            "transport_envelope",
+            "response_text",
+            "response_body",
+            "access_url_base",
+            "access_url_token",
+            "response_metadata",
+            "handler_error",
+        ):
+            self.assertIn(f'rejection_code = "{rejection_code}";', source)
+        self.assertIn(
+            'info "form1_assisted_issue_rejected_" + rejection_code;', source
+        )
+        self.assertNotIn("info issue_response", source)
+        self.assertNotIn("info response_text", source)
+        self.assertNotIn("info response_body", source)
 
     def test_form2_deluge_template_matches_the_exact_caller_contract(self) -> None:
         caller = next(
@@ -2313,7 +2330,7 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
             'info "form1_assisted_issue_disabled";',
             'info "form1_issue_rejected";',
             'info "form1_assisted_issue_failed";',
-            'info "form1_assisted_issue_rejected";',
+            'info "form1_assisted_issue_rejected_" + rejection_code;',
             'info "form2_issue_failed";',
             'info "form2_issue_rejected";',
             'info "free_test_control_failed";',
