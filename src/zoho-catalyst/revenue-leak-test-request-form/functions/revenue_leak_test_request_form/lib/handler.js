@@ -4,6 +4,7 @@ const { renderAccessPage } = require("./access-page");
 const {
   buildCrmPatch,
   buildPrefillPayload,
+  FORM_KEYS,
   FormContractError,
   normalizeFormData,
 } = require("./form-contract");
@@ -36,6 +37,9 @@ const PREFILL_KEYS = new Set(["prefillHandle"]);
 const PUBLIC_SUBMISSION_KEYS = new Set(["submissionId"]);
 const ASSISTED_SUBMISSION_KEYS = new Set([
   "prefillId", "configurationRevision", "submissionId", "formData",
+]);
+const ZOHO_FORMS_SUBMISSION_KEYS = new Set([
+  "prefillId", "configurationRevision", "submissionId", ...FORM_KEYS,
 ]);
 const STAGES = new Set(["issue", "access", "exchange", "prefill", "submission"]);
 
@@ -86,6 +90,41 @@ function requireExact(value, expected) {
       publicCode: "request_invalid",
     });
   }
+}
+
+function providerBindingValueIsBlank(value) {
+  return value === "" || value === null;
+}
+
+function normalizeSubmissionEnvelope(body) {
+  if (exactKeys(body, PUBLIC_SUBMISSION_KEYS) ||
+      exactKeys(body, ASSISTED_SUBMISSION_KEYS)) return body;
+
+  requireExact(body, ZOHO_FORMS_SUBMISSION_KEYS);
+  const prefillIdBlank = providerBindingValueIsBlank(body.prefillId);
+  const revisionBlank = providerBindingValueIsBlank(body.configurationRevision);
+  if (prefillIdBlank !== revisionBlank) {
+    throw new ControllerError("Assisted submission binding is incomplete", {
+      status: 422,
+      publicCode: "request_invalid",
+    });
+  }
+
+  // Zoho Forms emits one fixed flat parameter map for public and assisted
+  // submissions. Collapse the blank server binding to the canonical public
+  // acknowledgment; otherwise nest only the allowlisted form fields. This
+  // boundary never accepts provider-supplied CRM or journey identity.
+  if (prefillIdBlank) {
+    return Object.freeze({ submissionId: body.submissionId });
+  }
+  return Object.freeze({
+    prefillId: body.prefillId,
+    configurationRevision: body.configurationRevision,
+    submissionId: body.submissionId,
+    formData: Object.freeze(Object.fromEntries(
+      [...FORM_KEYS].map((key) => [key, body[key]]),
+    )),
+  });
 }
 
 function nowMilliseconds(now) {
@@ -295,17 +334,20 @@ async function prefill(body, dependencies) {
 }
 
 async function submit(body, dependencies) {
-  if (exactKeys(body, PUBLIC_SUBMISSION_KEYS)) {
-    normalizeSubmissionId(body.submissionId);
+  const submission = normalizeSubmissionEnvelope(body);
+  if (exactKeys(submission, PUBLIC_SUBMISSION_KEYS)) {
+    normalizeSubmissionId(submission.submissionId);
     // Public Form 1 remains owned by its existing native CRM upsert. This
     // authenticated webhook acknowledgment carries no CRM or journey binding.
-    return response(202, { ok: true, binding: "public_unbound" },
+    return response(200, { ok: true, binding: "public_unbound" },
       "submission", "public_unbound");
   }
-  requireExact(body, ASSISTED_SUBMISSION_KEYS);
-  const submissionId = normalizeSubmissionId(body.submissionId);
-  const prefillId = normalizePrefillId(body.prefillId);
-  const configurationRevision = normalizeConfigurationRevision(body.configurationRevision);
+  requireExact(submission, ASSISTED_SUBMISSION_KEYS);
+  const submissionId = normalizeSubmissionId(submission.submissionId);
+  const prefillId = normalizePrefillId(submission.prefillId);
+  const configurationRevision = normalizeConfigurationRevision(
+    submission.configurationRevision,
+  );
   const session = await dependencies.sessionStore.readByPrefillId(prefillId);
   if (!session || session.prefillId !== prefillId ||
       session.configurationRevision !== configurationRevision ||
@@ -319,7 +361,7 @@ async function submit(body, dependencies) {
   dependencies.sessionStore.assertRuntimeBinding(session);
   // Bind durable submission ownership to the complete allowlisted payload so
   // an ambiguous retry cannot change CRM fields under the original identity.
-  const normalizedFormData = normalizeFormData(body.formData);
+  const normalizedFormData = normalizeFormData(submission.formData);
   const fingerprint = submissionFingerprint(
     submissionId,
     prefillId,
@@ -347,7 +389,7 @@ async function submit(body, dependencies) {
     fingerprint,
     dependencies.crmClient.recordVersion(record),
   );
-  const patch = buildCrmPatch(body.formData, dependencies.config.assistedConstants, {
+  const patch = buildCrmPatch(submission.formData, dependencies.config.assistedConstants, {
     journeyId: ownership.row.journeyId,
     submittedAt: ownership.row.submissionStartedAt,
   });
@@ -445,6 +487,7 @@ module.exports = {
   ASSISTED_SUBMISSION_KEYS,
   ControllerError,
   PUBLIC_SUBMISSION_KEYS,
+  ZOHO_FORMS_SUBMISSION_KEYS,
   authenticateRequest,
   buildAccessUrl,
   buildFormUrl,

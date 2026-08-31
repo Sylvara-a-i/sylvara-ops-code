@@ -1,0 +1,319 @@
+{
+  "schema_version": 1,
+  "manifest_schema_version": 2,
+  "release_kind": "free_test_journey_core_v1_release",
+  "status": "development-only-journey-core-source-boundary",
+  "functions": [
+    {
+      "name": "revenue_leak_test_request_form",
+      "source_root": "src/zoho-catalyst/revenue-leak-test-request-form/functions/revenue_leak_test_request_form",
+      "revision_stamp_target": "revenue_leak_test_request_form"
+    },
+    {
+      "name": "revenue_leak_test_setup_form",
+      "source_root": "src/zoho-catalyst/revenue-leak-test-setup-form/functions/revenue_leak_test_setup_form",
+      "revision_stamp_target": "revenue_leak_test_setup_form"
+    },
+    {
+      "name": "revenue_desk_call_gateway",
+      "source_root": "src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_gateway",
+      "revision_stamp_target": "revenue_desk_call_gateway"
+    },
+    {
+      "name": "revenue_desk_call_worker",
+      "source_root": "src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_worker",
+      "revision_stamp_target": "revenue_desk_call_gateway"
+    },
+    {
+      "name": "revenue_desk_route_control",
+      "source_root": "src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_route_control",
+      "revision_stamp_target": "revenue_desk_call_gateway"
+    }
+  ],
+  "job_pools": [
+    "RevenueDeskCallJobs"
+  ],
+  "tables": [
+    "RevenueDeskDeployments",
+    "RevenueDeskConfigurationVersions",
+    "RevenueDeskEventReceipts",
+    "RevenueDeskCalls",
+    "RevenueDeskNotifications",
+    "RevenueLeakTestRequestFormSessions",
+    "Form2SessionsV3Runtime",
+    "Form2PrefillsV3",
+    "Form2SubmissionsV3",
+    "Form2VerificationProofsV3",
+    "CRMBillingOperations",
+    "AnalyticsSyncOutbox"
+  ],
+  "contract_files": [
+    "src/zoho-catalyst/revenue-desk-release/free-test-journey-core-v1-release-contract.json",
+    "docs/product/free-revenue-leak-test-release-contract.json",
+    "src/zoho-catalyst/development-function-inventory.json",
+    "src/zoho-catalyst/revenue-desk-call-runtime/config/datastore-schema.json",
+    "src/zoho-catalyst/revenue-desk-call-runtime/config/runtime-readiness.json",
+    "src/zoho-catalyst/revenue-desk-call-runtime/config/variables.json",
+    "src/zoho-catalyst/revenue-desk-call-runtime/catalyst.json",
+    "src/zoho-catalyst/revenue-leak-test-request-form/config/datastore-schema.json",
+    "src/zoho-catalyst/revenue-leak-test-request-form/config/routes.json",
+    "src/zoho-catalyst/revenue-leak-test-request-form/config/variables.json",
+    "src/zoho-catalyst/revenue-leak-test-setup-form/config/datastore-schema.json",
+    "src/zoho-catalyst/revenue-leak-test-setup-form/config/routes.json",
+    "src/zoho-catalyst/revenue-leak-test-setup-form/config/variables.json",
+    "src/zoho-catalyst/revenue-leak-test-setup-form/config/migration-v2-to-v3.json",
+    "src/zoho-forms/free-revenue-leak-test/forms-manifest.json",
+    "src/zoho-crm/free-revenue-leak-test/config/automation-contract.json",
+    "src/zoho-crm/free-revenue-leak-test/config/caller-manifest.json",
+    "src/zoho-crm/free-revenue-leak-test/functions/start_free_revenue_leak_test_request.deluge",
+    "src/zoho-crm/free-revenue-leak-test/functions/open_free_test_setup.deluge",
+    "src/zoho-crm/free-revenue-leak-test/functions/initialize_setup_access_issue_request_id.deluge",
+    "src/zoho-crm/free-revenue-leak-test/functions/issue_revenue_leak_test_setup.deluge",
+    "src/zoho-crm/free-revenue-leak-test/functions/approve_and_start_free_test.deluge",
+    "src/zoho-crm/free-revenue-leak-test/functions/stop_or_rollback_free_test.deluge",
+    "src/retell/agents/7-day-free-test/manifest.json",
+    "src/retell/agents/7-day-free-test/contracts/conversation-contract.json",
+    "src/retell/agents/7-day-free-test/contracts/nonurgent-classification-contract.json",
+    "src/retell/agents/7-day-free-test/contracts/shadow-qa-contract.json",
+    "src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_gateway/contracts/revenue-desk-call-contract.json",
+    "src/zoho-catalyst/revenue-desk-release/private-route-packet-contract.json"
+  ],
+  "environment_modes": {
+    "Development": "free-test-journey-core-v1"
+  },
+  "installation_scope": {
+    "profile": {
+      "id": "free-test-journey-core-v1",
+      "current_installation_acceptance_profile": true,
+      "full_automation_profile_preserved": true,
+      "authoritative_journey_and_security_boundary": "Catalyst",
+      "crm_role": "authenticated operator controls and operational record",
+      "forms_role": "respondent-facing bounded intake",
+      "retell_role": "read-only contract reference"
+    },
+    "crm": {
+      "modules": ["Leads", "Deals"],
+      "functions": [
+        "start_free_revenue_leak_test_request",
+        "open_free_test_setup",
+        "initialize_setup_access_issue_request_id",
+        "issue_revenue_leak_test_setup",
+        "approve_and_start_free_test",
+        "stop_or_rollback_free_test"
+      ],
+      "journey_core_functions": [
+        "start_free_revenue_leak_test_request",
+        "open_free_test_setup",
+        "issue_revenue_leak_test_setup",
+        "approve_and_start_free_test",
+        "stop_or_rollback_free_test"
+      ],
+      "preserved_unrequired_functions": [
+        "initialize_setup_access_issue_request_id"
+      ],
+      "controls": [
+        "Start Free-Test Request",
+        "Open Free-Test Setup",
+        "Approve And Start Free Test",
+        "Stop Or Roll Back Free Test"
+      ],
+      "control_bindings": [
+        { "label": "Start Free-Test Request", "module": "Leads", "function": "start_free_revenue_leak_test_request", "replacement": false },
+        { "label": "Open Free-Test Setup", "module": "Leads", "function": "open_free_test_setup", "replacement": true },
+        { "label": "Open Free-Test Setup", "module": "Deals", "function": "issue_revenue_leak_test_setup", "replacement": true },
+        { "label": "Approve And Start Free Test", "module": "Deals", "function": "approve_and_start_free_test", "replacement": true },
+        { "label": "Stop Or Roll Back Free Test", "module": "Deals", "function": "stop_or_rollback_free_test", "replacement": true }
+      ],
+      "authoritative_write_model": {
+        "deal_initialization": "administrator-restricted CRM function fresh-read plus bounded trigger-suppressed CRM write and exact readback before Catalyst issuance",
+        "form2_submission": "authenticated bounded idempotent Catalyst-to-CRM persistence with exact readback",
+        "approval_activation_and_rollback": "separate authenticated backend operations with exact readback",
+        "browser_supplied_record_identity_trusted": false,
+        "ordinary_field_editing_is_security_authority": false
+      },
+      "workflow_dependency_required": false,
+      "required_workflow_rules": [],
+      "preserved_unrequired_workflow_rules": [
+        "Leads Free Test Intake Review"
+      ],
+      "legacy_form1_review_task": {
+        "state": "preserved_nonblocking",
+        "required_for_current_acceptance": false,
+        "workflow_execution_is_security_authority": false
+      },
+      "deferred_setup_initialization_workflow_rules": [
+        "Deals Free Test Initialize Controls",
+        "Deals Free Test Initialize Limits",
+        "Deals Free Test Initialize Setup Issue Identity"
+      ],
+      "deferred_inactive_form2_workflow_rules": [
+        "Deals Form 2 Controller Proof Candidate",
+        "Deals Free Test Form 2 Submitted"
+      ],
+      "form2_workflow_state": "FORM2_WORKFLOW_DEFERRED_INACTIVE",
+      "blueprint": {
+        "required": false,
+        "transition_dependency_required": false,
+        "state": "FULL_BLUEPRINT_DEFERRED",
+        "inert_actions_preserved_unassociated": true,
+        "installation_or_publication_authorized": false
+      },
+      "internal_review_task_automation": {
+        "scope": "Form 2",
+        "required": false,
+        "state": "deferred"
+      }
+    },
+    "forms": {
+      "exact_form_count": 2,
+      "logical_names": [
+        "REVENUE_LEAK_TEST_REQUEST_FORM",
+        "REVENUE_LEAK_TEST_SETUP_FORM"
+      ],
+      "form1": {
+        "mandatory": true,
+        "required_paths": ["public", "assisted"],
+        "assisted_identity": "opaque digest-backed record-bound handle",
+        "raw_crm_id_or_pii_in_url": false,
+        "approved_public_access_and_accessibility_source": "src/zoho-forms/free-revenue-leak-test/forms-manifest.json"
+      },
+      "form2": {
+        "mandatory": true,
+        "access_model": "publicly reachable only through the controlled Catalyst Journey",
+        "required_access_proof": "one-time email OTP bound to the Journey, Deal, Contact, Account, issue identity, destination, form, stage, and immutable revision",
+        "required_controls": [
+          "opaque record-bound short-lived handle validation",
+          "one-time email OTP proof",
+          "Dynamic Prefill-Webhook",
+          "protected header",
+          "exact prefill mapping",
+          "exact 36-key submission mapping",
+          "submission webhook",
+          "server-side Journey, record, form, stage, and immutable-revision validation",
+          "direct bounded Catalyst-to-CRM persistence",
+          "idempotent replay",
+          "conflicting replay rejection"
+        ],
+        "submission_result": "Setup_Access_Status read back as Submitted",
+        "missing_invalid_expired_cross_record_or_cross_stage_access": "fail_closed",
+        "submission_can_approve": false,
+        "submission_can_activate": false,
+        "approved_public_access_and_accessibility_source": "src/zoho-forms/free-revenue-leak-test/forms-manifest.json",
+        "public_url_enablement_gate": "all access, prefill, submission, protected-header, and server-side validation controls pass authoritative readback"
+      }
+    },
+    "catalyst": {
+      "environment": "Development",
+      "artifact_and_revision_parity_functions": [
+        "revenue_leak_test_request_form",
+        "revenue_leak_test_setup_form",
+        "revenue_desk_call_gateway",
+        "revenue_desk_route_control",
+        "revenue_desk_call_worker"
+      ],
+      "journey_core_execution_functions": [
+        "revenue_leak_test_request_form",
+        "revenue_leak_test_setup_form",
+        "revenue_desk_route_control"
+      ],
+      "packaging_parity_only_functions": [
+        "revenue_desk_call_gateway",
+        "revenue_desk_call_worker"
+      ],
+      "job_pools_preserved_not_executed": ["RevenueDeskCallJobs"],
+      "route_inventory_policy": "preserve the exact existing 18-route Development inventory; create, edit, delete, or reorder no route when authoritative readback already matches",
+      "required_journey_route_ids": [
+        "ROUTE_CONTROL_APPROVE",
+        "ROUTE_CONTROL_ACTIVATE",
+        "ROUTE_CONTROL_ROLLBACK",
+        "FORM1_ISSUE",
+        "FORM1_ACCESS",
+        "FORM1_EXCHANGE",
+        "FORM1_PREFILL",
+        "FORM1_SUBMISSION",
+        "FORM2_ISSUE",
+        "FORM2_ACCESS",
+        "FORM2_OTP_REQUEST",
+        "FORM2_OTP_VERIFY",
+        "FORM2_PREFILL",
+        "FORM2_SUBMISSION"
+      ],
+      "preserved_deferred_route_ids": [
+        "RETELL_INBOUND",
+        "RETELL_EVENTS",
+        "RETELL_READINESS",
+        "CRM_BILLING"
+      ],
+      "existing_route_mutation_authorized": false,
+      "development_api_gateway_availability_authorized": true,
+      "development_api_gateway_required_post_install_state": "enabled",
+      "gateway_enablement_requires_exact_complete_route_readback": true,
+      "retell_route_mode": "disabled",
+      "retell_provider_binding_authorized": false,
+      "production_gateway_activation_authorized": false
+    },
+    "acceptance": {
+      "mandatory_paths": [
+        "assisted Form 1",
+        "public Form 1",
+        "manual native Lead conversion",
+        "Deal initialization without CRM workflows",
+        "controlled Form 2 access and OTP proof",
+        "Form 2 dynamic prefill and exact submission persistence",
+        "approval without a phone number",
+        "expected fail-closed activation before Retell",
+        "resume",
+        "idempotent rollback"
+      ],
+      "form2_live_happy_path_required": true,
+      "form2_live_failure_path_required": true,
+      "approval_requires_valid_form2_evidence": true,
+      "route_control_request_contract": {
+        "required_fields": ["dealId", "journeyId", "configurationVersionId", "idempotencyKey"],
+        "rollback_additional_required_fields": ["reason"],
+        "optional_fields": ["deploymentId"],
+        "deployment_id_policy": "omitted_or_empty_string_only",
+        "configuration_version_grammar": "^form2cfgv1:[1-9][0-9]{0,29}:[a-f0-9]{40}$",
+        "approval_requires_telephony_deployment": false,
+        "blueprint_transition_required": false,
+        "retell_operation_required": false
+      },
+      "activation_expected_result_without_isolated_number_and_route_evidence": "fail_closed_before_any_Retell_operation",
+      "deployment_remains_approved_and_inactive_after_expected_activation_failure": true
+    },
+    "excluded_from_current_acceptance": {
+      "form2_crm_workflow_activation": true,
+      "setup_initialization_workflows": true,
+      "full_crm_blueprint": true,
+      "internal_review_task_automation": true,
+      "billing_execution": true,
+      "analytics_execution": true,
+      "retell_ingress_execution": true,
+      "call_worker_execution": true,
+      "telephony_execution": true
+    },
+    "retell": {
+      "mode": "read-only-reference-only",
+      "schema_readback_authorized": true,
+      "publish_authorized": false,
+      "provider_configuration_write_authorized": false,
+      "number_binding_authorized": false,
+      "test_simulation_or_call_authorized": false,
+      "usage_generating_action_authorized": false,
+      "activation_failure_wire_code_when_disabled": "isolated_retell_test_number_required",
+      "activation_failure_internal_code_when_disabled": "ISOLATED_RETELL_TEST_NUMBER_REQUIRED"
+    },
+    "billing_test": {
+      "involved": false,
+      "execution_authorized": false
+    },
+    "analytics": {
+      "involved": false,
+      "execution_authorized": false
+    },
+    "production": {
+      "installation_authorized": false,
+      "traffic_authorized": false
+    }
+  }
+}

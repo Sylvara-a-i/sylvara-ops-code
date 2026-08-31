@@ -18,7 +18,13 @@ const CRM_ORGANIZATION_HASH = require("node:crypto")
   .createHash("sha256")
   .update(SYNTHETIC_ORG_REFERENCE, "utf8")
   .digest("hex");
+const CONFIGURATION_REFERENCE =
+  `form2cfgv1:7200000000001:${"a".repeat(40)}`;
 const PROTECTED_DEAL_FIELDS = Object.freeze({
+  Pipeline: "Synthetic Other Pipeline",
+  Stage: "Synthetic Other Stage",
+  Setup_Access_Issue_Request_ID: "20000000-0000-4000-8000-000000000002",
+  Deployment_Record_ID: "synthetic-deployment-reference",
   Free_Test_Authorization_Status: "Signed",
   Authorization_Signed_At: "2026-08-14T18:05:00.987Z",
   Go_Live_Approval_Status: "Approved",
@@ -75,14 +81,19 @@ function existingRecords() {
     deal: {
       id: IDS.deal,
       Modified_Time: OLD_TIME,
+      Pipeline: "Revenue Desk Sales",
+      Stage: "Setup and Authorization",
       Account_Name: { id: IDS.account },
       Contact_Name: { id: IDS.contact },
+      Setup_Access_Issue_Request_ID: "10000000-0000-4000-8000-000000000001",
       Current_Call_Handling: "Office Staff / Dispatcher",
       Requested_Test_Route: "No Answer / Overflow Only",
       Approved_Test_Route: "No Answer / Overflow Only",
       Alert_Recipient_Mobile: "555-010-2600",
       Setup_Access_Issued_At: "2026-08-14T17:55:00.000Z",
       Setup_Access_Verified_At: "2026-08-14T17:58:00.000Z",
+      Configuration_Version: null,
+      Deployment_Record_ID: null,
       Free_Test_Authorization_Status: "Not Sent",
       Authorization_Signed_At: null,
       Go_Live_Approval_Status: "Not Ready",
@@ -141,6 +152,7 @@ function updates() {
       Setup_Form_Version: "form2-v1",
       Setup_Form_Submitted_At: "2026-08-14T18:00:00.000Z",
       Setup_Access_Status: "Submitted",
+      Configuration_Version: CONFIGURATION_REFERENCE,
     },
   };
 }
@@ -243,7 +255,7 @@ test("GET is restricted to one approved record endpoint and a fixed field projec
   assert.equal(captured.options.redirect, "error");
 });
 
-test("Deal reads project signature, go-live, and test-status controls", async () => {
+test("Deal reads immutable setup context, signature, go-live, and test-status controls", async () => {
   let capturedUrl;
   const record = existingRecords().deal;
   const client = clientWithFetch(async (url) => {
@@ -256,6 +268,7 @@ test("Deal reads project signature, go-live, and test-status controls", async ()
   for (const field of Object.keys(PROTECTED_DEAL_FIELDS)) {
     assert.equal(fields.has(field), true, field);
   }
+  assert.equal(fields.has("Configuration_Version"), true);
 });
 
 test("uses one ordered rollback composite and verifies all three records by independent GET", async () => {
@@ -275,6 +288,7 @@ test("uses one ordered rollback composite and verifies all three records by inde
 
   const result = await client.updateForm2Composite(existingRecords(), updates());
   assert.equal(result.deal.Setup_Form_Version, "form2-v1");
+  assert.equal(result.deal.Configuration_Version, CONFIGURATION_REFERENCE);
   assert.equal(result.replayed, false);
   assert.equal(calls.length, 4);
   const composite = calls[0];
@@ -299,7 +313,7 @@ test("uses one ordered rollback composite and verifies all three records by inde
   );
   assert.deepEqual(
     body.__composite_requests.map((entry) => entry.body.trigger),
-    [["workflow"], ["workflow"], ["workflow"]],
+    [[], [], []],
   );
   assert.deepEqual(
     body.__composite_requests[2].body.data[0],
@@ -526,7 +540,7 @@ test("post-composite readback rejects workflow changes to setup access timestamp
   }
 });
 
-test("Form 2 cannot write or indirectly mutate signature, go-live, or test-status controls", async () => {
+test("Form 2 cannot write or indirectly mutate immutable setup, signature, go-live, or test-status controls", async () => {
   let fetchCalls = 0;
   const rejectingClient = clientWithFetch(async () => {
     fetchCalls += 1;
@@ -621,6 +635,7 @@ test("single-record update serializes CRM DateTime fields to the documented wire
     Setup_Access_Issued_At: "2026-08-14T18:00:00+00:00",
     Setup_Access_Verified_At: null,
   });
+  assert.deepEqual(updateBody.trigger, []);
 });
 
 test("stale writes are rejected without being classified as ambiguous", async () => {

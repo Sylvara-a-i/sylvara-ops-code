@@ -9,6 +9,7 @@ const issueCallerContract = require("../../../config/issue-caller-contract.json"
 const {
   ControllerError,
   buildAccessUrl,
+  buildConfigurationReference,
   buildFormUrl,
   handleForm2Request,
 } = require("../lib/handler");
@@ -27,6 +28,8 @@ const ISSUE_REQUEST_ID = "10000000-0000-4000-8000-000000000001";
 const PREFILL_ID = "20000000-0000-4000-8000-000000000002";
 const LEASE_OWNER = "30000000-0000-4000-8000-000000000003";
 const CONSUMPTION_OWNER = "40000000-0000-4000-8000-000000000004";
+const CONFIGURATION_REFERENCE =
+  `form2cfgv1:7200000000001:${"a".repeat(40)}`;
 const IDS = Object.freeze({
   contact: `${"9".repeat(17)}1`,
   account: `${"9".repeat(17)}2`,
@@ -94,6 +97,38 @@ test("form links are fail-closed to the exact approved Zoho Forms host", () => {
         error instanceof ControllerError &&
         error.publicCode === "configuration_invalid" &&
         !error.message.includes(prefillHandle),
+    );
+  }
+});
+
+test("configuration evidence references use the durable receipt revision", () => {
+  const durableRevision = "b".repeat(40);
+  assert.equal(
+    buildConfigurationReference({
+      rowId: "7200000000001",
+      sourceRevision: durableRevision,
+    }),
+    `form2cfgv1:7200000000001:${durableRevision}`,
+  );
+  assert.equal(
+    buildConfigurationReference({
+      rowId: 7200000000001,
+      sourceRevision: durableRevision,
+    }),
+    `form2cfgv1:7200000000001:${durableRevision}`,
+  );
+  for (const receipt of [
+    { rowId: "7200000000001" },
+    { rowId: "7200000000001", sourceRevision: "B".repeat(40) },
+    { rowId: "7200000000001", sourceRevision: "a".repeat(39) },
+    { rowId: "0", sourceRevision: durableRevision },
+    { rowId: "07200000000001", sourceRevision: durableRevision },
+    { rowId: Number.MAX_SAFE_INTEGER + 1, sourceRevision: durableRevision },
+  ]) {
+    assert.throws(
+      () => buildConfigurationReference(receipt),
+      (error) => error instanceof ControllerError &&
+        error.publicCode === "configuration_invalid",
     );
   }
 });
@@ -273,8 +308,11 @@ function initialRecords() {
     deal: {
       id: IDS.deal,
       Modified_Time: "2026-08-14T12:00:00-05:00",
+      Pipeline: "Revenue Desk Sales",
+      Stage: "Setup and Authorization",
       Account_Name: { id: IDS.account, name: "Synthetic Plumbing" },
       Contact_Name: { id: IDS.contact, name: "Casey Tester" },
+      Setup_Access_Issue_Request_ID: ISSUE_REQUEST_ID,
       Entry_Offer: "Synthetic Free Test",
       Current_Call_Handling: "Office Staff / Dispatcher",
       Requested_Test_Route: "No Answer / Overflow Only",
@@ -284,6 +322,17 @@ function initialRecords() {
       Setup_Access_Status: "Synthetic Initial",
       Setup_Access_Issued_At: null,
       Setup_Access_Verified_At: null,
+      Configuration_Version: null,
+      Deployment_Record_ID: null,
+      Approved_Deployment_Record_ID: null,
+      Approved_Configuration_Version: null,
+      Go_Live_Approval_Status: null,
+      Go_Live_Approved_At: null,
+      Test_Status: null,
+      Test_Start_At: null,
+      Test_End_At: null,
+      Test_End_Reason: null,
+      Rollback_Completed_At: null,
       Target_Start_Date: null,
       Test_Phone_Number: null,
       No_Answer_Delay: null,
@@ -736,6 +785,10 @@ function fixture() {
       if (!prefill || prefill.status !== "handle_issued" ||
           prefill.prefillHandleHash !== input.prefillHandleHash ||
           prefill.journeyBindingDigest !== input.journeyBindingDigest ||
+          prefill.formIdentityHash !== input.formIdentityHash ||
+          input.formIdentityHash !== selectedConfig.formIdentityHash ||
+          prefill.expectedStage !== input.expectedStage ||
+          input.expectedStage !== "form2" ||
           input.configurationRevision !== selectedConfig.sourceRevision) {
         const error = new Error("synthetic prefill handle missing");
         error.publicCode = "prefill_not_found";
@@ -799,6 +852,7 @@ function fixture() {
         failedAt: "",
         reconciliationRequiredAt: "",
         updatedAt: "2026-08-14T18:00:00.000Z",
+        sourceRevision: selectedConfig.sourceRevision,
         lastOutcome: "processing",
       };
       return { outcome: "claimed", receipt: Object.freeze({ ...receipt }) };
@@ -976,6 +1030,10 @@ async function issue(fixtureValue, body = issueBody()) {
   );
 }
 
+function persistIssueIdentity(fixtureValue, issueRequestId) {
+  fixtureValue.records.deal.Setup_Access_Issue_Request_ID = issueRequestId;
+}
+
 async function seedIssuingSession(fixtureValue, issueRequestId = ISSUE_REQUEST_ID) {
   const setupToken = deriveAccessToken(
     issueRequestId,
@@ -1149,6 +1207,27 @@ test("rejects missing locked CRM identity before issuing session or Deal state",
   }
 });
 
+test("issue requires the exact Deal pipeline, stage, and persisted issue identity", async () => {
+  const cases = [
+    { Pipeline: "Synthetic Other Pipeline" },
+    { Stage: "Synthetic Other Stage" },
+    { Setup_Access_Issue_Request_ID: "20000000-0000-4000-8000-000000000002" },
+    { Deployment_Record_ID: "synthetic-deployment-reference" },
+  ];
+  for (const mutation of cases) {
+    const selected = fixture();
+    Object.assign(selected.records.deal, mutation);
+
+    const result = await issue(selected);
+
+    assert.equal(result.status, 409);
+    assert.deepEqual(result.body, { ok: false, code: "setup_conflict" });
+    assert.equal(selected.session, null);
+    assert.equal(selected.events.includes("session.issue"), false);
+    assert.equal(selected.events.includes("crm.update.Deals"), false);
+  }
+});
+
 test("two simultaneous exact issue retries converge without invalidating their shared token", async () => {
   const selected = fixture();
   const originalUpdate = selected.dependencies.crmClient.updateRecord.bind(
@@ -1224,10 +1303,7 @@ test("two concurrent distinct issuance identities leave exactly one usable token
       selected.records.deal.Setup_Access_Issued_At = "2026-08-14T17:00:00.000Z";
     }
     const results = await Promise.all([
-      issue(selected, {
-        ...issueBody(),
-        issueRequestId: "10000000-0000-4000-8000-000000000011",
-      }),
+      issue(selected),
       issue(selected, {
         ...issueBody(),
         issueRequestId: "10000000-0000-4000-8000-000000000012",
@@ -1392,6 +1468,21 @@ test("verifies CRM, mints a bound prefill revision, and returns no IDs or token"
   assert.ok(selected.events.indexOf("crm.update.Deals") < selected.events.indexOf("workflow.prefill.mint"));
 });
 
+test("prefill rejects a Deal whose persisted issue identity changed after issuance", async () => {
+  const selected = fixture();
+  assert.equal((await issue(selected)).status, 200);
+  selected.records.deal.Setup_Access_Issue_Request_ID =
+    "20000000-0000-4000-8000-000000000002";
+  selected.events.length = 0;
+
+  const result = await prefill(selected);
+
+  assert.equal(result.status, 409);
+  assert.deepEqual(result.body, { ok: false, code: "setup_conflict" });
+  assert.equal(selected.events.includes("workflow.prefill.mint"), false);
+  assert.equal(selected.events.includes("workflow.prefill.consume-handle"), false);
+});
+
 test("a Contact email change after proof consumption blocks prefill minting", async () => {
   const selected = fixture();
   await issue(selected);
@@ -1515,9 +1606,11 @@ test("a fresh issuance identity reissues an exact expired Deal without reviving 
   assert.equal((await prefill(selected)).status, 404);
   const expiredSession = selected.session;
 
+  const freshIssueRequestId = "10000000-0000-4000-8000-000000000002";
+  persistIssueIdentity(selected, freshIssueRequestId);
   const reissued = await issue(selected, {
     ...issueBody(),
-    issueRequestId: "10000000-0000-4000-8000-000000000002",
+    issueRequestId: freshIssueRequestId,
   });
 
   assert.equal(reissued.status, 200);
@@ -1552,9 +1645,11 @@ test("the issue route expires an unused issued generation and requires a fresh U
   assert.equal(selected.records.deal.Setup_Access_Status, "Synthetic Expired");
   assert.equal(selected.sessions.length, 1);
 
+  const freshIssueRequestId = "10000000-0000-4000-8000-000000000021";
+  persistIssueIdentity(selected, freshIssueRequestId);
   const fresh = await issue(selected, {
     ...issueBody(),
-    issueRequestId: "10000000-0000-4000-8000-000000000021",
+    issueRequestId: freshIssueRequestId,
   });
   assert.equal(fresh.status, 200);
   assert.equal(selected.sessions.length, 2);
@@ -1593,9 +1688,11 @@ test("the issue route expires an unused verified generation before reissue", asy
   oldSession.expiresAt = "2026-08-14T17:59:59.000Z";
   selected.events.length = 0;
 
+  const freshIssueRequestId = "10000000-0000-4000-8000-000000000022";
+  persistIssueIdentity(selected, freshIssueRequestId);
   const fresh = await issue(selected, {
     ...issueBody(),
-    issueRequestId: "10000000-0000-4000-8000-000000000022",
+    issueRequestId: freshIssueRequestId,
   });
 
   assert.equal(fresh.status, 200);
@@ -1616,9 +1713,11 @@ test("the issue route resumes a persisted pending expiry before reissue", async 
   oldSession.expiresAt = "2026-08-14T17:59:59.000Z";
   selected.events.length = 0;
 
+  const freshIssueRequestId = "10000000-0000-4000-8000-000000000023";
+  persistIssueIdentity(selected, freshIssueRequestId);
   const fresh = await issue(selected, {
     ...issueBody(),
-    issueRequestId: "10000000-0000-4000-8000-000000000023",
+    issueRequestId: freshIssueRequestId,
   });
 
   assert.equal(fresh.status, 200);
@@ -1635,9 +1734,11 @@ test("a stale issuing generation fences CRM Initial before releasing its lock", 
   stale.expiresAt = "2026-08-14T17:59:59.000Z";
   selected.events.length = 0;
 
+  const freshIssueRequestId = "10000000-0000-4000-8000-000000000024";
+  persistIssueIdentity(selected, freshIssueRequestId);
   const fresh = await issue(selected, {
     ...issueBody(),
-    issueRequestId: "10000000-0000-4000-8000-000000000024",
+    issueRequestId: freshIssueRequestId,
   });
 
   assert.equal(fresh.status, 200);
@@ -1662,9 +1763,11 @@ test("the issue route resumes stale-issuing expiry pending with CRM Initial", as
   assert.equal(selected.records.deal.Setup_Access_Status, "Synthetic Initial");
   selected.events.length = 0;
 
+  const freshIssueRequestId = "10000000-0000-4000-8000-000000000028";
+  persistIssueIdentity(selected, freshIssueRequestId);
   const fresh = await issue(selected, {
     ...issueBody(),
-    issueRequestId: "10000000-0000-4000-8000-000000000028",
+    issueRequestId: freshIssueRequestId,
   });
 
   assert.equal(fresh.status, 200);
@@ -1686,9 +1789,11 @@ test("a stale issuing generation finalizes exact CRM Issued before expiry", asyn
   });
   selected.events.length = 0;
 
+  const freshIssueRequestId = "10000000-0000-4000-8000-000000000025";
+  persistIssueIdentity(selected, freshIssueRequestId);
   const fresh = await issue(selected, {
     ...issueBody(),
-    issueRequestId: "10000000-0000-4000-8000-000000000025",
+    issueRequestId: freshIssueRequestId,
   });
 
   assert.equal(fresh.status, 200);
@@ -1712,9 +1817,11 @@ test("a stale issuing CRM mismatch retains the active lock in reconciliation", a
   });
   selected.events.length = 0;
 
+  const freshIssueRequestId = "10000000-0000-4000-8000-000000000026";
+  persistIssueIdentity(selected, freshIssueRequestId);
   const blocked = await issue(selected, {
     ...issueBody(),
-    issueRequestId: "10000000-0000-4000-8000-000000000026",
+    issueRequestId: freshIssueRequestId,
   });
 
   assert.equal(blocked.status, 503);
@@ -1755,9 +1862,11 @@ test("a delayed Issue writer is fenced before stale issuing lock release", async
   };
   selected.events.length = 0;
 
+  const freshIssueRequestId = "10000000-0000-4000-8000-000000000027";
+  persistIssueIdentity(selected, freshIssueRequestId);
   const fresh = await issue(selected, {
     ...issueBody(),
-    issueRequestId: "10000000-0000-4000-8000-000000000027",
+    issueRequestId: freshIssueRequestId,
   });
 
   assert.equal(fresh.status, 200);
@@ -1839,6 +1948,12 @@ test("two simultaneous exact prefills produce one one-time handle", async () => 
 
 test("runs claim, one-time consume, atomic CRM composite, receipt, then session in order", async () => {
   const selected = fixture();
+  const immutableDealContext = {
+    Pipeline: selected.records.deal.Pipeline,
+    Stage: selected.records.deal.Stage,
+    Setup_Access_Issue_Request_ID:
+      selected.records.deal.Setup_Access_Issue_Request_ID,
+  };
   await issue(selected);
   const prefillResult = await prefill(selected);
   selected.events.length = 0;
@@ -1862,6 +1977,86 @@ test("runs claim, one-time consume, atomic CRM composite, receipt, then session 
     "form2-v1:10001",
   );
   assert.equal(selected.records.deal.Setup_Access_Status, "Synthetic Submitted");
+  assert.equal(
+    selected.records.deal.Configuration_Version,
+    CONFIGURATION_REFERENCE,
+  );
+  assert.equal(selected.records.deal.Deployment_Record_ID, null);
+  assert.deepEqual(
+    {
+      Pipeline: selected.records.deal.Pipeline,
+      Stage: selected.records.deal.Stage,
+      Setup_Access_Issue_Request_ID:
+        selected.records.deal.Setup_Access_Issue_Request_ID,
+    },
+    immutableDealContext,
+  );
+  assert.equal(selected.records.deal.Free_Test_Authorization_Status, undefined);
+  assert.equal(selected.records.deal.Go_Live_Approval_Status, null);
+  assert.equal(selected.records.deal.Test_Status, null);
+});
+
+test("submission rejects a conflicting preexisting Configuration_Version after its durable claim", async () => {
+  const selected = fixture();
+  assert.equal((await issue(selected)).status, 200);
+  const prefillResult = await prefill(selected);
+  selected.records.deal.Configuration_Version =
+    `form2cfgv1:7200000000002:${"a".repeat(40)}`;
+  selected.events.length = 0;
+
+  const result = await submit(selected, validSubmission(prefillResult.body));
+
+  assert.equal(result.status, 409);
+  assert.deepEqual(result.body, { ok: false, code: "setup_conflict" });
+  assert.equal(selected.events.includes("workflow.submission.claim"), true);
+  assert.equal(selected.events.includes("crm.composite"), false);
+  assert.equal(selected.records.deal.Deployment_Record_ID, null);
+});
+
+test("submission rejects cross-record, cross-stage, and issue-identity drift before CRM write", async () => {
+  const cases = [
+    {
+      name: "cross-record",
+      mutate(selected) {
+        selected.records.deal.Contact_Name = {
+          id: `${"8".repeat(17)}1`,
+          name: "Synthetic Other Contact",
+        };
+      },
+    },
+    {
+      name: "cross-stage",
+      mutate(selected) {
+        selected.records.deal.Stage = "Synthetic Other Stage";
+      },
+    },
+    {
+      name: "issue-identity",
+      mutate(selected) {
+        selected.records.deal.Setup_Access_Issue_Request_ID =
+          "20000000-0000-4000-8000-000000000002";
+      },
+    },
+  ];
+
+  for (const selectedCase of cases) {
+    const selected = fixture();
+    assert.equal((await issue(selected)).status, 200);
+    const prefillResult = await prefill(selected);
+    assert.equal(prefillResult.status, 200);
+    selectedCase.mutate(selected);
+    selected.events.length = 0;
+
+    const result = await submit(selected, validSubmission(prefillResult.body));
+
+    assert.equal(result.status, 409, selectedCase.name);
+    assert.deepEqual(
+      result.body,
+      { ok: false, code: "setup_conflict" },
+      selectedCase.name,
+    );
+    assert.equal(selected.events.includes("crm.composite"), false, selectedCase.name);
+  }
 });
 
 test("accepts an exact submission with no requested start date", async () => {
@@ -2117,27 +2312,180 @@ test("an exact succeeded duplicate requires matching CRM readback and does not r
   assert.equal(selected.events.includes("crm.composite"), false);
   assert.equal(selected.events.includes("workflow.submission.read"), true);
   assert.equal(selected.events.includes("workflow.submission.claim"), false);
+  assert.equal(
+    selected.records.deal.Configuration_Version,
+    `form2cfgv1:${selected.receipt.rowId}:${selected.dependencies.config.sourceRevision}`,
+  );
+  assert.equal(selected.records.deal.Deployment_Record_ID, null);
 });
 
-test("a positive CRM mismatch durably terminalizes an already-submitted session", async () => {
+test("a durable receipt remains the configuration authority after a runtime source redeploy", async () => {
   const selected = fixture();
   await issue(selected);
   const prefillResult = await prefill(selected);
   const body = validSubmission(prefillResult.body);
   assert.equal((await submit(selected, body)).status, 200);
-  selected.records.deal.Setup_Form_Submission_ID = "different:succeeded:id";
+  const durableReference = selected.records.deal.Configuration_Version;
+  const newerDependencies = {
+    ...selected.dependencies,
+    config: {
+      ...selected.dependencies.config,
+      sourceRevision: "b".repeat(40),
+    },
+  };
   selected.events.length = 0;
 
-  const mismatch = await submit(selected, body);
+  const duplicate = await handleForm2Request(
+    createRequest(
+      newerDependencies.config.submissionPath,
+      body,
+      newerDependencies.config.submissionHeaderSecret,
+    ),
+    newerDependencies,
+  );
 
-  assert.equal(mismatch.status, 503);
-  assert.deepEqual(mismatch.body, { ok: false, code: "service_unavailable" });
-  assert.equal(selected.receipt.status, "succeeded");
-  assert.equal(selected.session.status, "reconciliation_required");
-  assert.equal(selected.session.lastOutcome, "succeeded_receipt_crm_mismatch");
-  assert.equal(selected.events.includes("session.submitted.reconciliation"), true);
-  assert.equal(selected.events.includes("workflow.submission.reconciliation"), false);
+  assert.equal(duplicate.status, 200);
+  assert.deepEqual(duplicate.body, { ok: true, accepted: true, duplicate: true });
+  assert.equal(
+    durableReference,
+    `form2cfgv1:${selected.receipt.rowId}:${selected.receipt.sourceRevision}`,
+  );
+  assert.equal(selected.records.deal.Configuration_Version, durableReference);
   assert.equal(selected.events.includes("crm.composite"), false);
+});
+
+test("exact duplicates accept only coherent Journey-core post-submission states", async () => {
+  const cases = [
+    {
+      name: "approved inactive",
+      patch(selected) {
+        return {
+          Stage: "Setup and QA",
+          Test_Status: "Scheduled",
+          Go_Live_Approval_Status: "Approved",
+          Go_Live_Approved_At: "2026-08-14T18:05:00.000Z",
+          Approved_Configuration_Version: selected.records.deal.Configuration_Version,
+        };
+      },
+    },
+    {
+      name: "stopped inactive",
+      patch(selected) {
+        return {
+          Stage: "Closed Lost",
+          Test_Status: "Failed",
+          Go_Live_Approval_Status: "Revoked",
+          Go_Live_Approved_At: "2026-08-14T18:05:00.000Z",
+          Approved_Configuration_Version: selected.records.deal.Configuration_Version,
+          Test_End_At: "2026-08-14T18:10:00.000Z",
+          Test_End_Reason: "Sylvara Stopped",
+          Rollback_Completed_At: "2026-08-14T18:10:00.000Z",
+        };
+      },
+    },
+  ];
+  for (const selectedCase of cases) {
+    const selected = fixture();
+    await issue(selected);
+    const prefillResult = await prefill(selected);
+    const body = validSubmission(prefillResult.body);
+    assert.equal((await submit(selected, body)).status, 200, selectedCase.name);
+    Object.assign(selected.records.deal, selectedCase.patch(selected));
+    selected.events.length = 0;
+
+    const duplicate = await submit(selected, body);
+
+    assert.equal(duplicate.status, 200, selectedCase.name);
+    assert.deepEqual(
+      duplicate.body,
+      { ok: true, accepted: true, duplicate: true },
+      selectedCase.name,
+    );
+    assert.equal(selected.events.includes("crm.composite"), false, selectedCase.name);
+  }
+});
+
+test("exact duplicates reject unrelated post-submission stage, identity, or control drift", async () => {
+  const cases = [
+    ["unrelated stage", { Stage: "Test Live" }],
+    ["stale stop reason", { Test_End_Reason: "Technical Failure" }],
+    ["deployment binding", { Deployment_Record_ID: "synthetic-deployment" }],
+    ["approved deployment binding", {
+      Stage: "Setup and QA",
+      Test_Status: "Scheduled",
+      Go_Live_Approval_Status: "Approved",
+      Go_Live_Approved_At: "2026-08-14T18:05:00.000Z",
+      Approved_Deployment_Record_ID: "synthetic-deployment",
+    }],
+    ["cross-issue identity", {
+      Setup_Access_Issue_Request_ID: "10000000-0000-4000-8000-000000000009",
+    }],
+  ];
+  for (const [name, patch] of cases) {
+    const selected = fixture();
+    await issue(selected);
+    const prefillResult = await prefill(selected);
+    const body = validSubmission(prefillResult.body);
+    assert.equal((await submit(selected, body)).status, 200, name);
+    Object.assign(selected.records.deal, patch);
+    if (name === "approved deployment binding") {
+      selected.records.deal.Approved_Configuration_Version =
+        selected.records.deal.Configuration_Version;
+    }
+    selected.events.length = 0;
+
+    const mismatch = await submit(selected, body);
+
+    assert.equal(mismatch.status, 503, name);
+    assert.deepEqual(mismatch.body, { ok: false, code: "service_unavailable" }, name);
+    assert.equal(selected.session.status, "reconciliation_required", name);
+    assert.equal(selected.events.includes("crm.composite"), false, name);
+  }
+});
+
+test("a positive submitted-ID or Configuration_Version mismatch terminalizes exact replay", async () => {
+  for (const [field, value] of [
+    ["Setup_Form_Submission_ID", "different:succeeded:id"],
+    [
+      "Configuration_Version",
+      `form2cfgv1:7200000000002:${"a".repeat(40)}`,
+    ],
+  ]) {
+    const selected = fixture();
+    await issue(selected);
+    const prefillResult = await prefill(selected);
+    const body = validSubmission(prefillResult.body);
+    assert.equal((await submit(selected, body)).status, 200);
+    selected.records.deal[field] = value;
+    selected.events.length = 0;
+
+    const mismatch = await submit(selected, body);
+
+    assert.equal(mismatch.status, 503, field);
+    assert.deepEqual(
+      mismatch.body,
+      { ok: false, code: "service_unavailable" },
+      field,
+    );
+    assert.equal(selected.receipt.status, "succeeded", field);
+    assert.equal(selected.session.status, "reconciliation_required", field);
+    assert.equal(
+      selected.session.lastOutcome,
+      "succeeded_receipt_crm_mismatch",
+      field,
+    );
+    assert.equal(
+      selected.events.includes("session.submitted.reconciliation"),
+      true,
+      field,
+    );
+    assert.equal(
+      selected.events.includes("workflow.submission.reconciliation"),
+      false,
+      field,
+    );
+    assert.equal(selected.events.includes("crm.composite"), false, field);
+  }
 });
 
 test("a malformed submitted outcome is never acknowledged as a duplicate", async () => {

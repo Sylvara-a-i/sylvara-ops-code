@@ -416,6 +416,7 @@ function runForm2Authorization(intakeSubmissionId) {
     setupFormVersion: 'synthetic-form2-v1',
     submissionId: 'synthetic-form2-submission-0001',
     setupAccessSubmittedStatus: 'Synthetic Submitted',
+    configurationVersion: `form2cfgv1:7200000000001:${SOURCE_REVISION}`,
     allowedPhoneSystemProviders: ['Synthetic PBX'],
   });
   return { existing, payload, updates };

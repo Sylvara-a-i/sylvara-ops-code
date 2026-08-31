@@ -157,12 +157,36 @@ class FreeRevenueLeakCrmContractTests(unittest.TestCase):
             form2_rules[0]["criterion_ast_rule_key"], "form2Candidate"
         )
         self.assertTrue(form2_rules[0]["desired_criterion_ast_committed"])
+        self.assertEqual(
+            form2_rules[0]["deployment_profile_scope"], "full-automation"
+        )
+        self.assertEqual(
+            form2_rules[0]["journey_core_state"],
+            "FORM2_WORKFLOW_DEFERRED_INACTIVE",
+        )
         self.assertTrue(
+            form2_rules[0]["future_full_automation_contract_preserved"]
+        )
+        self.assertTrue(form2_rules[0]["separate_future_authorization_required"])
+        self.assertFalse(
             form2_rules[0]["workflow_repair_candidate_mutation_authorized"]
         )
-        self.assertTrue(
+        self.assertFalse(
             form2_rules[0]["workflow_repair_activation_authorized"]
         )
+        core_profile = self.contract["deployment_profiles"][
+            "free-test-journey-core-v1"
+        ]
+        self.assertEqual(
+            core_profile["form2_workflow"], "FORM2_WORKFLOW_DEFERRED_INACTIVE"
+        )
+        self.assertEqual(
+            core_profile["form2_submission_persistence"],
+            "direct_bounded_catalyst_to_crm_with_exact_readback",
+        )
+        full_profile = self.contract["deployment_profiles"]["full-automation"]
+        self.assertTrue(full_profile["preserved_for_future_review"])
+        self.assertFalse(full_profile["current_installation_acceptance_profile"])
         self.assertEqual(
             form2_rules[0]["exact_action_contract"]["field_updates"],
             [{"api_name": "Setup_Access_Status", "value": "Submitted"}],
@@ -206,9 +230,19 @@ class FreeRevenueLeakCrmContractTests(unittest.TestCase):
         boundary = blueprint["deployment_boundary"]
         self.assertEqual(
             boundary["status"],
-            "source_candidate_requires_development_installation_and_readback",
+            "deferred_full_automation_contract_separate_authorization_required",
         )
-        self.assertTrue(boundary["live_write_authorized"])
+        self.assertEqual(boundary["deployment_profile_scope"], "full-automation")
+        self.assertEqual(boundary["journey_core_state"], "FULL_BLUEPRINT_DEFERRED")
+        self.assertTrue(boundary["future_full_automation_contract_preserved"])
+        self.assertTrue(boundary["separate_future_authorization_required"])
+        self.assertFalse(boundary["live_write_authorized"])
+        self.assertEqual(
+            self.contract["deployment_profiles"]["free-test-journey-core-v1"][
+                "full_blueprint"
+            ],
+            "FULL_BLUEPRINT_DEFERRED",
+        )
         self.assertTrue(boundary["writer_or_provider_payload_contract_in_repository"])
         self.assertFalse(boundary["provider_save_readback_proven"])
         self.assertFalse(boundary["runtime_acceptance_proven"])

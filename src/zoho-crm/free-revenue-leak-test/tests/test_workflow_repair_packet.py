@@ -556,12 +556,28 @@ class WorkflowRepairPacketTests(unittest.TestCase):
         )
         self.assertEqual(
             contract["form2_authority"]["status"],
-            "reviewed_desired_candidate_activation_packet_required",
+            "deferred_full_automation_contract_separate_authorization_required",
+        )
+        self.assertEqual(
+            contract["form2_authority"]["deployment_profile_scope"],
+            "full-automation",
+        )
+        self.assertFalse(
+            contract["form2_authority"]["free_test_journey_core_v1_authorized"]
+        )
+        self.assertTrue(
+            contract["form2_authority"]["future_full_automation_contract_preserved"]
+        )
+        self.assertTrue(
+            contract["form2_authority"]["separate_future_authorization_required"]
         )
         self.assertTrue(
             contract["form2_authority"]["desired_criterion_ast_committed"]
         )
-        self.assertTrue(
+        self.assertFalse(
+            contract["form2_authority"]["candidate_mutation_authorized"]
+        )
+        self.assertFalse(
             contract["form2_authority"]["candidate_activation_authorized"]
         )
 
@@ -588,7 +604,28 @@ class WorkflowRepairPacketTests(unittest.TestCase):
             workflows["FORM2_SUBMISSION"]["criterion_ast_rule_key"],
             "form2Candidate",
         )
+        self.assertEqual(
+            workflows["FORM2_SUBMISSION"]["deployment_profile_scope"],
+            "full-automation",
+        )
+        self.assertEqual(
+            workflows["FORM2_SUBMISSION"]["journey_core_state"],
+            "FORM2_WORKFLOW_DEFERRED_INACTIVE",
+        )
         self.assertTrue(
+            workflows["FORM2_SUBMISSION"][
+                "future_full_automation_contract_preserved"
+            ]
+        )
+        self.assertTrue(
+            workflows["FORM2_SUBMISSION"]["separate_future_authorization_required"]
+        )
+        self.assertFalse(
+            workflows["FORM2_SUBMISSION"][
+                "workflow_repair_candidate_mutation_authorized"
+            ]
+        )
+        self.assertFalse(
             workflows["FORM2_SUBMISSION"][
                 "workflow_repair_activation_authorized"
             ]

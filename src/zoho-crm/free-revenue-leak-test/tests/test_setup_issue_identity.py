@@ -25,7 +25,7 @@ class SetupIssueIdentityContractTests(unittest.TestCase):
             encoding="utf-8"
         )
 
-    def test_create_only_workflow_is_the_single_writer(self):
+    def test_create_only_workflow_writer_is_preserved_for_the_deferred_profile(self):
         workflow = next(
             item
             for item in self.automation["workflow_set"]
@@ -104,22 +104,69 @@ class SetupIssueIdentityContractTests(unittest.TestCase):
         for line in info_lines:
             self.assertRegex(line, r'^info "setup_issue_identity_[a-z_]+";$')
 
-    def test_button_uses_persisted_identity_and_keeps_exact_post_body(self):
+    def test_core_button_derives_and_reads_back_identity_without_a_workflow_argument(self):
         form2 = next(
             caller
             for caller in self.callers["callers"]
             if caller["logical_name"] == "FORM2_SETUP_ISSUE_CALLER"
         )
-        issue_argument = next(
-            item for item in form2["function_arguments"] if item["name"] == "issue_request_id"
+        self.assertEqual(
+            [item["name"] for item in form2["function_arguments"]], ["deal_id"]
         )
-        self.assertIn("Setup_Access_Issue_Request_ID", issue_argument["source"])
-        self.assertEqual(issue_argument["security_classification"], "non-secret idempotency identifier; never an access token")
+        initialization = form2["deal_initialization"]
+        self.assertFalse(initialization["workflow_or_blueprint_triggered"])
+        self.assertTrue(initialization["authoritative_readback_required"])
+        self.assertEqual(
+            initialization["issue_identity"]["field"],
+            "Setup_Access_Issue_Request_ID",
+        )
+        self.assertFalse(
+            initialization["issue_identity"]["browser_supplied_identity_accepted"]
+        )
+        self.assertIn(
+            "domain-separated digest",
+            initialization["issue_identity"]["expired_restart"],
+        )
+        self.assertIn(
+            "resets Setup_Access_Status to Not Issued",
+            initialization["issue_identity"]["expired_restart"],
+        )
         self.assertEqual(form2["request"]["body_keys"], ["dealId", "issueRequestId"])
         self.assertIn(
-            'request_body.put("issueRequestId",input.issue_request_id.toString());',
+            'request_body.put("issueRequestId",issue_request_id);',
             self.form2,
         )
+        self.assertNotIn("input.issue_request_id", self.form2)
+        self.assertIn("zoho.encryption.sha256", self.form2)
+        self.assertIn("sylvara:free-revenue-leak-test:setup-reissue:v1:", self.form2)
+        self.assertIn('else if(setup_access_status == "Expired")', self.form2)
+        self.assertIn(
+            'update_map.put("Setup_Access_Issue_Request_ID",issue_request_id);',
+            self.form2,
+        )
+        expired_branch = self.form2.split(
+            'else if(setup_access_status == "Expired")', 1
+        )[1].split(
+            '\n\t\t\t\tif(issue_request_id.matches(identity_pattern))\n', 1
+        )[0]
+        self.assertIn(
+            'update_map.put("Setup_Access_Status","Not Issued");',
+            expired_branch,
+        )
+        self.assertIn(
+            'expected_setup_access_status = "Not Issued";',
+            expired_branch,
+        )
+        self.assertIn(
+            "readback_setup_status == expected_setup_access_status",
+            self.form2,
+        )
+        self.assertNotIn("readback_setup_valid", self.form2)
+        self.assertEqual(self.form2.count("zoho.crm.v8.updateRecord"), 1)
+        self.assertEqual(self.form2.count("zoho.crm.v8.getRecordById"), 3)
+        self.assertIn('trigger_options.put("trigger",List());', self.form2)
+        self.assertIn("prewrite_exact", self.form2)
+        self.assertIn("write_safe", self.form2)
         self.assertIn("Setup_Access_Issue_Request_ID", self.form2)
 
 

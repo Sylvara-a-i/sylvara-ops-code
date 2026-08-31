@@ -24,6 +24,8 @@ const IDS = Object.freeze({
   deal: `${"9".repeat(17)}3`,
 });
 const MODIFIED_TIME = "2026-08-14T12:00:00-05:00";
+const CONFIGURATION_REFERENCE =
+  `form2cfgv1:7200000000001:${"a".repeat(40)}`;
 
 function existingRecords() {
   return {
@@ -75,6 +77,8 @@ function existingRecords() {
       Alert_Recipient_Name: null,
       Alert_Recipient_Mobile: null,
       Alert_Recipient_Email: null,
+      Configuration_Version: null,
+      Deployment_Record_ID: null,
     },
   };
 }
@@ -132,6 +136,7 @@ const SERVER_OPTIONS = Object.freeze({
   setupFormVersion: "form2-v1",
   submissionId: "synthetic-submission-0001",
   setupAccessSubmittedStatus: "Synthetic Submitted",
+  configurationVersion: CONFIGURATION_REFERENCE,
   allowedPhoneSystemProviders: Object.freeze([
     "Synthetic PBX",
     "Different Synthetic PBX",
@@ -156,6 +161,7 @@ test("normalizes the approved Form 2 payload into three bounded CRM updates", ()
   assert.equal(updates.dealUpdate.Setup_Form_Version, "form2-v1");
   assert.equal(updates.dealUpdate.Setup_Form_Submitted_At, SERVER_OPTIONS.trustedNow);
   assert.equal(updates.dealUpdate.Setup_Access_Status, "Synthetic Submitted");
+  assert.equal(updates.dealUpdate.Configuration_Version, CONFIGURATION_REFERENCE);
   assert.equal(updates.dealUpdate.Authorized_Representative_Confirmed, true);
   assert.equal(updates.dealUpdate.Test_Scope_Accepted, true);
   assert.equal(updates.dealUpdate.Authority_Confirmed_At, SERVER_OPTIONS.trustedNow);
@@ -166,6 +172,7 @@ test("normalizes the approved Form 2 payload into three bounded CRM updates", ()
     "Go_Live_Approval_Status",
     "Go_Live_Approved_At",
     "Test_Status",
+    "Deployment_Record_ID",
   ]) {
     assert.equal(updates.dealUpdate[field], undefined, field);
   }
@@ -173,6 +180,30 @@ test("normalizes the approved Form 2 payload into three bounded CRM updates", ()
   assert.equal(updates.dealUpdate.Test_Call_Limit, undefined);
   assert.equal(updates.dealUpdate.Test_Scope_Version, undefined);
   assert.equal(Object.isFrozen(updates), true);
+});
+
+test("requires Configuration_Version to be blank or the exact server-owned evidence reference", () => {
+  const exact = existingRecords();
+  exact.deal.Configuration_Version = CONFIGURATION_REFERENCE;
+  assert.equal(
+    validateForm2Payload(validPayload(), { existing: exact, ...SERVER_OPTIONS })
+      .dealUpdate.Configuration_Version,
+    CONFIGURATION_REFERENCE,
+  );
+
+  const conflicting = existingRecords();
+  conflicting.deal.Configuration_Version =
+    `form2cfgv1:7200000000002:${"a".repeat(40)}`;
+  assert.throws(
+    () => validateForm2Payload(
+      validPayload(),
+      { existing: conflicting, ...SERVER_OPTIONS },
+    ),
+    (error) =>
+      error instanceof FormContractError &&
+      error.publicCode === "setup_conflict" &&
+      error.status === 409,
+  );
 });
 
 test("keeps requested start date optional while validating any supplied value", () => {

@@ -123,6 +123,7 @@ const NUMBERED_FALLBACKS = new Set([
   "On-Call Mobile",
   "Other",
 ]);
+const CONFIGURATION_REFERENCE_PATTERN = /^form2cfgv1:[1-9][0-9]{0,29}:[a-f0-9]{40}$/;
 
 class FormContractError extends Error {
   constructor(message, { field = null, publicCode = "form_invalid", status = 400 } = {}) {
@@ -434,6 +435,29 @@ function assertReadOnlyMatch(submitted, current, field) {
   }
 }
 
+function normalizeConfigurationReference(value) {
+  const normalized = normalizeServerText(value, "Configuration version", 100);
+  if (!CONFIGURATION_REFERENCE_PATTERN.test(normalized)) {
+    throw new FormContractError("Configuration version is invalid", {
+      publicCode: "configuration_invalid",
+      status: 503,
+    });
+  }
+  return normalized;
+}
+
+function assertConfigurationReferencePrestate(current, expected) {
+  const blank = current === null ||
+    current === undefined ||
+    (typeof current === "string" && current.trim() === "");
+  if (!blank && current !== expected) {
+    fail("configurationVersion", "Configuration version already identifies different evidence", {
+      publicCode: "setup_conflict",
+      status: 409,
+    });
+  }
+}
+
 function validatePrivateBand(value, existingValue, allowedValues) {
   if (value === null) return null;
   const permitted = Array.isArray(allowedValues)
@@ -654,6 +678,13 @@ function validateForm2Payload(payload, options = {}) {
     "Submitted setup-access status",
     120,
   );
+  const configurationVersion = normalizeConfigurationReference(
+    options.configurationVersion,
+  );
+  assertConfigurationReferencePrestate(
+    existing.deal.Configuration_Version,
+    configurationVersion,
+  );
 
   return freezeUpdates({
     contactUpdate: {
@@ -695,6 +726,7 @@ function validateForm2Payload(payload, options = {}) {
       Setup_Form_Version: setupFormVersion,
       Setup_Form_Submitted_At: submittedAt,
       Setup_Access_Status: setupAccessSubmittedStatus,
+      Configuration_Version: configurationVersion,
     },
   });
 }

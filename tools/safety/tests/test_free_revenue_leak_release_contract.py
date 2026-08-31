@@ -483,12 +483,118 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
         self.assertFalse(boundary["billing_required_to_start"])
         self.assertFalse(boundary["automatic_paid_conversion"])
 
+    def test_journey_core_profiles_legacy_route_and_state_assumptions(self):
+        profiles = self.contract["deployment_profiles"]
+        self.assertEqual(
+            profiles["current_installation_acceptance_profile"],
+            "free-test-journey-core-v1",
+        )
+        core = profiles["free-test-journey-core-v1"]
+        self.assertFalse(core["crm_automation"]["workflow_dependency_required"])
+        self.assertFalse(
+            core["crm_automation"]["blueprint_transition_dependency_required"]
+        )
+        self.assertEqual(
+            core["crm_automation"]["legacy_form1_review_task_state"],
+            "preserved_nonblocking",
+        )
+        self.assertFalse(
+            core["crm_automation"]["legacy_form1_review_task_required_for_acceptance"]
+        )
+        self.assertFalse(core["state_contract"]["crm_blueprint_transition_required"])
+        self.assertFalse(core["state_contract"]["retell_operation_required"])
+
+        request = core["route_control_request_contract"]
+        self.assertEqual(request["optional_fields"], ["deploymentId"])
+        self.assertEqual(request["deployment_id_policy"], "omitted_or_empty_string_only")
+        self.assertFalse(request["approval_requires_telephony_deployment"])
+        configuration_pattern = re.compile(request["configuration_version_grammar"])
+        digest = "a" * 40
+        self.assertRegex(f"form2cfgv1:1:{digest}", configuration_pattern)
+        self.assertNotRegex(f"form2cfgv1:0:{digest}", configuration_pattern)
+        self.assertNotRegex(f"form2cfgv1:01:{digest}", configuration_pattern)
+        self.assertEqual(
+            request["wire_activation_failure_code"],
+            "isolated_retell_test_number_required",
+        )
+        self.assertEqual(
+            request["internal_activation_failure_code"],
+            "ISOLATED_RETELL_TEST_NUMBER_REQUIRED",
+        )
+
+        self.assertEqual(self.contract["state_machine_profile_scope"], "full-automation")
+        self.assertEqual(self.contract["deployment_order_profile_scope"], "full-automation")
+        self.assertEqual(self.contract["rollback_order_profile_scope"], "full-automation")
+        self.assertFalse(profiles["full-automation"]["current_installation_acceptance_dependency"])
+        for route_id in (
+            "ROUTE_CONTROL_APPROVE",
+            "ROUTE_CONTROL_ACTIVATE",
+            "ROUTE_CONTROL_ROLLBACK",
+        ):
+            route = next(
+                item for item in self.contract["route_manifest"]
+                if item["id"] == route_id
+            )
+            core_request = route["request_contracts"]["free-test-journey-core-v1"]
+            self.assertEqual(core_request["optional_fields"], ["deploymentId"])
+            self.assertEqual(
+                core_request["deployment_id_policy"],
+                "omitted_or_empty_string_only",
+            )
+            self.assertEqual(
+                core_request["configuration_version_grammar"],
+                request["configuration_version_grammar"],
+            )
+            self.assertIn(
+                "deploymentId",
+                route["request_contracts"]["full-automation"]["required_fields"],
+            )
+
     def test_forms_contract_matrix_is_exact_and_separates_live_observation(self):
         forms = {
             entry["logical_name"]: entry for entry in self.forms_manifest["forms"]
         }
         form1 = forms["REVENUE_LEAK_TEST_REQUEST_FORM"]
         form2 = forms["REVENUE_LEAK_TEST_SETUP_FORM"]
+
+        desired_accessibility = {
+            "public_url": "Enabled",
+            "enhanced_accessibility": "Yes",
+            "respondent_font_size_control": "Disabled",
+            "respondent_letter_spacing_control": "Disabled",
+            "respondent_themes_control": "Disabled",
+        }
+        for form in (form1, form2):
+            access = form["approved_public_access_and_accessibility"]
+            self.assertEqual(access["desired_state"], desired_accessibility)
+            readback = access["authoritative_live_readback"]
+            self.assertFalse(readback["source_values_inferred_as_live"])
+            for field in desired_accessibility:
+                self.assertIsNone(readback[field])
+        form2_access = form2["approved_public_access_and_accessibility"]
+        self.assertFalse(form2_access["organization_only_sharing_allowed"])
+        self.assertFalse(form2_access["bare_permalink_distribution_allowed"])
+        self.assertEqual(
+            form2_access["public_url_enablement_gate"],
+            [
+                "Catalyst Form 2 server-side fail-closed validation deployed and read back",
+                "Dynamic Prefill-Webhook saved and read back",
+                "submission webhook saved and read back",
+                "Development protected headers rotated and matched on Forms and Catalyst",
+                "exact prefill and 36-key submission mappings saved and read back",
+            ],
+        )
+        self.assertIsNone(
+            form2_access["authoritative_live_readback"][
+                "server_protection_gate_passed"
+            ]
+        )
+        self.assertEqual(
+            form1["preserved_nonblocking_behavior"],
+            [
+                "the legacy CRM review task may still be created when its existing workflow runs, but task creation is not a Journey-core acceptance dependency"
+            ],
+        )
 
         evidence = self.forms_manifest["evidence_boundary"]
         self.assertEqual("2026-08-28", evidence["live_readback_date"])

@@ -8,6 +8,8 @@ const DEAL_ID = '400000001';
 const DEPLOYMENT_ID = 'deployment_synthetic';
 const CONFIGURATION_ID = 'configuration_synthetic';
 const ACTIVATED_AT = '2026-08-29T12:15:00.000Z';
+const CORE_APPROVED_AT = '2026-08-29T12:10:00.789Z';
+const CORE_STOPPED_AT = '2026-08-29T12:20:00.789Z';
 const SYNTHETIC_ORGANIZATION_ID = '606';
 
 function scheduledDeal() {
@@ -33,9 +35,12 @@ function response(status, value) {
 
 function fixture(transitionOutcome, organizationId = SYNTHETIC_ORGANIZATION_ID) {
   const state = scheduledDeal();
+  const requests = [];
+  const writes = [];
   let modified = 0;
   const fetchImpl = async (url, options) => {
     const parsed = new URL(url);
+    requests.push({ method: options.method, pathname: parsed.pathname });
     if (options.method === 'GET' && parsed.pathname.endsWith('/org')) {
       return response(200, { org: [{ zgid: organizationId }] });
     }
@@ -43,8 +48,10 @@ function fixture(transitionOutcome, organizationId = SYNTHETIC_ORGANIZATION_ID) 
       return response(200, { data: [{ ...state }] });
     }
     if (options.method === 'PUT' && parsed.pathname.endsWith(`/Deals/${DEAL_ID}`)) {
-      const [{ id, ...patch }] = JSON.parse(options.body).data;
+      const body = JSON.parse(options.body);
+      const [{ id, ...patch }] = body.data;
       assert.equal(id, DEAL_ID);
+      writes.push({ patch: structuredClone(patch), trigger: structuredClone(body.trigger) });
       Object.assign(state, patch, {
         Modified_Time: `2026-08-29T07:00:0${++modified}-05:00`,
       });
@@ -99,7 +106,7 @@ function fixture(transitionOutcome, organizationId = SYNTHETIC_ORGANIZATION_ID) 
     writeAuthorization: async () => 'Zoho-oauthtoken synthetic-write',
     fetchImpl,
   });
-  return { client, state, getModifiedCount: () => modified };
+  return { client, state, requests, writes, getModifiedCount: () => modified };
 }
 
 test('ambiguous activation acknowledgement accepts exact authoritative Live readback', async () => {
@@ -113,6 +120,9 @@ test('ambiguous activation acknowledgement accepts exact authoritative Live read
   assert.equal(result.Stage, 'Test Live');
   assert.equal(result.Test_Status, 'Live');
   assert.equal(result.Test_Start_At, ACTIVATED_AT);
+  assert.equal(selected.requests.some(({ pathname }) =>
+    pathname.endsWith('/actions/blueprint')), true);
+  assert.deepEqual(selected.writes[0].trigger, ['workflow']);
 });
 
 test('failed activation clears only proven Scheduled state and reports inactive', async () => {
@@ -357,4 +367,63 @@ test('lookup snapshots compare canonical CRM ids and reject cross-record drift',
     expectedDeal: driftExpected,
   }), { code: 'CRM_TRANSITION_PRECONDITION_FAILED' });
   assert.equal(drifted.state.Test_Start_At, null);
+});
+
+test('Journey-core writes bypass workflows and normalize CRM DateTimes without Blueprint',
+  async () => {
+  const selected = fixture('not-committed');
+  Object.assign(selected.state, {
+    Stage: 'Setup and Authorization', Test_Status: 'Not Started',
+    Setup_Access_Status: 'Submitted', Go_Live_Approval_Status: 'Not Ready',
+    Go_Live_Approved_At: null, Deployment_Record_ID: null,
+    Approved_Deployment_Record_ID: null, Approved_Configuration_Version: null,
+    Test_Start_At: null, Test_End_At: null, Test_End_Reason: null,
+    Rollback_Completed_At: null,
+  });
+  const approved = await selected.client.recordCoreApproval(DEAL_ID, {
+    configurationVersionId: CONFIGURATION_ID, approvedAt: CORE_APPROVED_AT,
+    expectedDeal: structuredClone(selected.state),
+  });
+  assert.equal(approved.Stage, 'Setup and QA');
+  assert.equal(approved.Test_Status, 'Scheduled');
+  assert.equal(approved.Go_Live_Approved_At, '2026-08-29T12:10:00+00:00');
+  assert.deepEqual(selected.writes[0].trigger, []);
+
+  const stopped = await selected.client.recordCoreRollback(DEAL_ID, {
+    configurationVersionId: CONFIGURATION_ID, stoppedAt: CORE_STOPPED_AT,
+    reason: 'Sylvara Stopped', expectedDeal: structuredClone(selected.state),
+  });
+  assert.equal(stopped.Stage, 'Closed Lost');
+  assert.equal(stopped.Test_Status, 'Failed');
+  assert.equal(stopped.Go_Live_Approval_Status, 'Revoked');
+  assert.equal(stopped.Test_End_At, '2026-08-29T12:20:00+00:00');
+  assert.equal(stopped.Rollback_Completed_At, '2026-08-29T12:20:00+00:00');
+  assert.deepEqual(selected.writes[1].trigger, []);
+  assert.equal(selected.requests.some(({ pathname }) =>
+    pathname.endsWith('/actions/blueprint')), false);
+});
+
+test('Journey-core approval rejects workflow-shaped and conflicting prestates', async () => {
+  for (const conflict of [
+    { Test_Status: 'Setup Pending' },
+    { Stage: 'Setup and QA' },
+    { Go_Live_Approval_Status: 'Pending Internal Approval' },
+    { Go_Live_Approved_At: '2026-08-29T12:10:00+00:00' },
+    { Approved_Configuration_Version: 'configuration_other' },
+    { Deployment_Record_ID: DEPLOYMENT_ID },
+  ]) {
+    const selected = fixture('not-committed');
+    Object.assign(selected.state, {
+      Stage: 'Setup and Authorization', Test_Status: 'Not Started',
+      Setup_Access_Status: 'Submitted', Go_Live_Approval_Status: 'Not Ready',
+      Go_Live_Approved_At: null, Deployment_Record_ID: null,
+      Approved_Deployment_Record_ID: null, Approved_Configuration_Version: null,
+      Test_Start_At: null, Test_End_At: null,
+    }, conflict);
+    await assert.rejects(selected.client.recordCoreApproval(DEAL_ID, {
+      configurationVersionId: CONFIGURATION_ID, approvedAt: CORE_APPROVED_AT,
+      expectedDeal: structuredClone(selected.state),
+    }), { code: 'CRM_TRANSITION_PRECONDITION_FAILED' });
+    assert.equal(selected.writes.length, 0);
+  }
 });

@@ -55,6 +55,25 @@
       "platform_name": "RevenueLeakTestRequestForm",
       "title": "Free Revenue Leak Test Request",
       "purpose": "Public request intake with a separately authenticated record-bound assisted lane",
+      "approved_public_access_and_accessibility": {
+        "desired_state": {
+          "public_url": "Enabled",
+          "enhanced_accessibility": "Yes",
+          "respondent_font_size_control": "Disabled",
+          "respondent_letter_spacing_control": "Disabled",
+          "respondent_themes_control": "Disabled"
+        },
+        "public_url_enablement_gate": "preserve the normal public prospect path while the assisted Catalyst lane remains separately authenticated",
+        "authoritative_live_readback": {
+          "status": "current_provider_readback_required_after_save",
+          "public_url": null,
+          "enhanced_accessibility": null,
+          "respondent_font_size_control": null,
+          "respondent_letter_spacing_control": null,
+          "respondent_themes_control": null,
+          "source_values_inferred_as_live": false
+        }
+      },
       "crm_integration": {
         "module": "Leads",
         "operation": "upsert",
@@ -320,6 +339,8 @@
         "blank_overwrite": false,
         "workflow_trigger": true,
         "task_owner": "one CRM workflow action",
+        "task_state_for_free_test_journey_core_v1": "preserved_nonblocking",
+        "task_required_for_current_acceptance": false,
         "live_order_observed": ["Intake_Submission_ID", "Email"],
         "primary_generated_before_upsert_proven": false,
         "retry_duplicate_prevention_proven": false,
@@ -383,6 +404,35 @@
           "method": "POST",
           "route_reference": "SUBMISSION_PATH",
           "authentication": ["Catalyst API key", "route-specific protected custom header"],
+          "provider_transport_shape": "exact flat JSON parameter map",
+          "provider_transport_keys": [
+            "prefillId",
+            "configurationRevision",
+            "submissionId",
+            "firstName",
+            "lastName",
+            "company",
+            "decisionMakerRole",
+            "jobTitle",
+            "email",
+            "mobilePhone",
+            "companyPhone",
+            "currentCallHandling",
+            "preferredTestRoute",
+            "phoneSystemProvider",
+            "primaryServiceArea",
+            "fieldTeamSizeBand",
+            "additionalNotes",
+            "leadSource",
+            "sourcePage",
+            "utmSource",
+            "utmMedium",
+            "utmCampaign",
+            "utmTerm",
+            "utmContent",
+            "contactConsent"
+          ],
+          "provider_binding_derivation": "both prefillId and configurationRevision blank is public; both present is assisted; partial binding is rejected",
           "assisted_server_keys": ["prefillId", "configurationRevision", "submissionId"],
           "assisted_form_data_key": "formData",
           "prefill_handle_forwarded": false,
@@ -420,8 +470,10 @@
         "contact consent, consent version, and consent time are retained",
         "source and UTM attribution are retained",
         "duplicate submission updates one Lead",
-        "one CRM review task is created",
         "no Billing, routing, SMS, or paid-service action"
+      ],
+      "preserved_nonblocking_behavior": [
+        "the legacy CRM review task may still be created when its existing workflow runs, but task creation is not a Journey-core acceptance dependency"
       ]
     },
     {
@@ -430,6 +482,34 @@
       "title": "Free Revenue Leak Test Setup and Authorization",
       "purpose": "CRM-bound setup details, bounded-test authorization, and email proof",
       "controller": "revenue_leak_test_setup_form",
+      "approved_public_access_and_accessibility": {
+        "desired_state": {
+          "public_url": "Enabled",
+          "enhanced_accessibility": "Yes",
+          "respondent_font_size_control": "Disabled",
+          "respondent_letter_spacing_control": "Disabled",
+          "respondent_themes_control": "Disabled"
+        },
+        "public_url_enablement_gate": [
+          "Catalyst Form 2 server-side fail-closed validation deployed and read back",
+          "Dynamic Prefill-Webhook saved and read back",
+          "submission webhook saved and read back",
+          "Development protected headers rotated and matched on Forms and Catalyst",
+          "exact prefill and 36-key submission mappings saved and read back"
+        ],
+        "organization_only_sharing_allowed": false,
+        "bare_permalink_distribution_allowed": false,
+        "authoritative_live_readback": {
+          "status": "current_provider_readback_required_after_protected_enablement",
+          "public_url": null,
+          "enhanced_accessibility": null,
+          "respondent_font_size_control": null,
+          "respondent_letter_spacing_control": null,
+          "respondent_themes_control": null,
+          "server_protection_gate_passed": null,
+          "source_values_inferred_as_live": false
+        }
+      },
       "crm_integration": {
         "module": "Deals",
         "operation": "controller-mediated bounded update",

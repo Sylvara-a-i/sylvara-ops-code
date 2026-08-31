@@ -10,7 +10,9 @@ const repositoryRoot = path.resolve(componentRoot, '..', '..', '..');
 const profileContracts = Object.freeze({
   'canonical-seven': 'release-contract.json',
   'setup-journey': 'setup-journey-release-contract.json',
+  'free-test-journey-core-v1': 'free-test-journey-core-v1-release-contract.json',
 });
+const profileNames = Object.freeze(Object.keys(profileContracts));
 
 function values(name) {
   const found = [];
@@ -88,7 +90,7 @@ function main() {
   if (selectedProfiles.length > 1) throw new Error('--profile must not be repeated.');
   const profile = selectedProfiles[0] || 'canonical-seven';
   const contractFile = profileContracts[profile];
-  if (!contractFile) throw new Error('--profile must be canonical-seven or setup-journey.');
+  if (!contractFile) throw new Error(`--profile must be one of: ${profileNames.join(', ')}.`);
   const contract = JSON.parse(fs.readFileSync(path.join(componentRoot, contractFile), 'utf8'));
   const revision = value('--source-revision');
   const environment = value('--environment');

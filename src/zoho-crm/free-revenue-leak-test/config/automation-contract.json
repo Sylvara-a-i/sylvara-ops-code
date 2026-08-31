@@ -1,7 +1,56 @@
 {
   "schema_version": 3,
-  "contract_revision": "2026-08-30-form2-workflow-authority-v3",
+  "contract_revision": "2026-08-30-free-test-journey-core-v2",
   "status": "source_candidate_requires_development_installation_and_readback",
+  "deployment_profiles": {
+    "free-test-journey-core-v1": {
+      "authority": "Catalyst-backed authenticated controllers with exact CRM readback",
+      "form1_required": true,
+      "form2_required": true,
+      "manual_lead_conversion": true,
+      "deal_initialization": {
+        "source": "../functions/issue_revenue_leak_test_setup.deluge",
+        "function_arguments": ["deal_id"],
+        "workflow_dependency": false,
+        "initialize_only_missing_defaults": true,
+        "conflicting_nonblank_behavior": "fail_closed_no_overwrite",
+        "expired_session_restart": "administrator launcher atomically rotates the persisted issue UUID by domain-separated digest and resets Setup_Access_Status to Not Issued so an ambiguous Catalyst response retries the same new identity",
+        "crm_automation_triggers_suppressed": true,
+        "exact_readback_required": true
+      },
+      "form2_submission_persistence": "direct_bounded_catalyst_to_crm_with_exact_readback",
+      "route_control_callers": {
+        "sources": [
+          "../functions/approve_and_start_free_test.deluge",
+          "../functions/stop_or_rollback_free_test.deluge"
+        ],
+        "identity_fields": ["dealId", "journeyId", "configurationVersionId"],
+        "configuration_version_grammar": "^form2cfgv1:[1-9][0-9]{0,29}:[a-f0-9]{40}$",
+        "deployment_record_id_precondition": "blank",
+        "deployment_id_sent": false,
+        "connection_count": 1,
+        "connection_binding": "one privately rendered existing Development route-control Connection for approve, activate, and rollback",
+        "approval_result": "Scheduled_approved_inactive",
+        "activation_result": "expected_isolated_retell_test_number_required_approved_inactive",
+        "rollback_result": "Stopped_Revoked_route_inactive",
+        "crm_workflow_dependency": false,
+        "blueprint_dependency": false,
+        "retell_execution": false
+      },
+      "form2_workflow": "FORM2_WORKFLOW_DEFERRED_INACTIVE",
+      "full_blueprint": "FULL_BLUEPRINT_DEFERRED",
+      "internal_form2_review_task": "deferred",
+      "retell_execution": false,
+      "billing_execution": false,
+      "analytics_execution": false
+    },
+    "full-automation": {
+      "preserved_for_future_review": true,
+      "current_installation_acceptance_profile": false,
+      "deployment_bound_route_control_contracts_preserved": true,
+      "provider_unbind_and_manual_reconciliation_contracts_preserved": true
+    }
+  },
   "customer_facing_offer": "Free Revenue Leak Test",
   "legacy_internal_offer_value": "7-Day Revenue Leak Test",
   "entry_offer_values": {
@@ -144,10 +193,14 @@
       }
     },
     "form2_authority": {
-      "status": "reviewed_desired_candidate_activation_packet_required",
+      "status": "deferred_full_automation_contract_separate_authorization_required",
+      "deployment_profile_scope": "full-automation",
+      "free_test_journey_core_v1_authorized": false,
+      "future_full_automation_contract_preserved": true,
+      "separate_future_authorization_required": true,
       "desired_criterion_ast_committed": true,
-      "candidate_mutation_authorized": true,
-      "candidate_activation_authorized": true,
+      "candidate_mutation_authorized": false,
+      "candidate_activation_authorized": false,
       "superseded_mutation_scope": "none_already_inactive",
       "private_packet_requirement": "fresh complete candidate and superseded readback with exact private identifiers and exact action semantics; Form 2 remains disabled with its submission webhook disabled and zero submissions before the first mutation",
       "readback_requirement": "candidate is edited only while inactive, independently read back with the canonical name, reviewed criteria, one Submitted field update, and one internal task, then activated by a separate status-only write; the superseded rule stays inactive and unchanged",
@@ -495,8 +548,12 @@
       "criterion_authority": "reviewed_desired",
       "criterion_ast_rule_key": "form2Candidate",
       "desired_criterion_ast_committed": true,
-      "workflow_repair_candidate_mutation_authorized": true,
-      "workflow_repair_activation_authorized": true,
+      "deployment_profile_scope": "full-automation",
+      "journey_core_state": "FORM2_WORKFLOW_DEFERRED_INACTIVE",
+      "future_full_automation_contract_preserved": true,
+      "separate_future_authorization_required": true,
+      "workflow_repair_candidate_mutation_authorized": false,
+      "workflow_repair_activation_authorized": false,
       "workflow_repair_superseded_mutation_scope": "none_already_inactive",
       "rename_requires_independent_readback": true,
       "trusted_evidence_required": true,
@@ -555,8 +612,12 @@
       "Closed Lost"
     ],
     "deployment_boundary": {
-      "status": "source_candidate_requires_development_installation_and_readback",
-      "live_write_authorized": true,
+      "status": "deferred_full_automation_contract_separate_authorization_required",
+      "deployment_profile_scope": "full-automation",
+      "journey_core_state": "FULL_BLUEPRINT_DEFERRED",
+      "future_full_automation_contract_preserved": true,
+      "separate_future_authorization_required": true,
+      "live_write_authorized": false,
       "writer_or_provider_payload_contract_in_repository": true,
       "provider_save_readback_proven": false,
       "runtime_acceptance_proven": false,

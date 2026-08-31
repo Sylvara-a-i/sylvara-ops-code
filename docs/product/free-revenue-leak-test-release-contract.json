@@ -22,6 +22,127 @@
     },
     "legacy_aliases_are_deployment_targets": false
   },
+  "deployment_profiles": {
+    "current_installation_acceptance_profile": "free-test-journey-core-v1",
+    "free-test-journey-core-v1": {
+      "status": "current_development_installation_acceptance_profile",
+      "authority_model": {
+        "journey_and_security": "Catalyst",
+        "respondent_form_layer": "Zoho Forms",
+        "operator_controls_and_operational_record": "Zoho CRM",
+        "crm_workflows_are_security_authority": false,
+        "crm_blueprint_is_security_authority": false
+      },
+      "mandatory_journey": [
+        "public and assisted Form 1",
+        "manual native CRM Lead conversion",
+        "idempotent Deal and Journey initialization",
+        "controlled Form 2 access",
+        "Form 2 dynamic prefill, OTP proof, and exact submission persistence",
+        "separate configuration approval",
+        "expected fail-closed activation before any Retell operation",
+        "resume",
+        "idempotent rollback"
+      ],
+      "form2": {
+        "mandatory": true,
+        "required_controls": [
+          "opaque short-lived digest-backed handle bound to the Journey, record, form, stage, and immutable revision",
+          "one-time email OTP proof where required by the executable Form 2 contract",
+          "Dynamic Prefill-Webhook",
+          "rotated Development protected header",
+          "exact prefill mapping",
+          "exact 36-key submission mapping",
+          "submission webhook",
+          "server-side Journey, record, form, stage, and immutable-revision validation",
+          "direct bounded idempotent Catalyst-to-CRM persistence with exact readback",
+          "idempotent replay and conflicting replay rejection"
+        ],
+        "successful_submission_state": "Setup_Access_Status=Submitted",
+        "missing_expired_invalid_cross_record_or_cross_stage_access": "fail_closed",
+        "submission_can_approve": false,
+        "submission_can_activate": false,
+        "approval_requires_valid_form2_evidence": true
+      },
+      "crm_automation": {
+        "workflow_dependency_required": false,
+        "form2_workflow_state": "FORM2_WORKFLOW_DEFERRED_INACTIVE",
+        "setup_initialization_workflows_required": false,
+        "full_blueprint_state": "FULL_BLUEPRINT_DEFERRED",
+        "blueprint_transition_dependency_required": false,
+        "internal_form2_review_task_automation_required": false,
+        "legacy_form1_review_task_state": "preserved_nonblocking",
+        "legacy_form1_review_task_required_for_acceptance": false,
+        "direct_write_policy": "authenticated bounded idempotent Catalyst-to-CRM writes with exact CRM readback and no browser-supplied record authority"
+      },
+      "backend_operations": [
+        "Approve Configuration",
+        "Activate Free Test",
+        "Stop Or Roll Back Free Test"
+      ],
+      "activation_without_separately_verified_number_and_route_evidence": "fail_closed_before_any_Retell_operation_while_preserving_approval_and_inactive_state",
+      "route_control_request_contract": {
+        "required_fields": ["dealId", "journeyId", "configurationVersionId", "idempotencyKey"],
+        "rollback_additional_required_fields": ["reason"],
+        "optional_fields": ["deploymentId"],
+        "deployment_id_policy": "omitted_or_empty_string_only",
+        "configuration_version_grammar": "^form2cfgv1:[1-9][0-9]{0,29}:[a-f0-9]{40}$",
+        "approval_requires_telephony_deployment": false,
+        "wire_activation_failure_code": "isolated_retell_test_number_required",
+        "internal_activation_failure_code": "ISOLATED_RETELL_TEST_NUMBER_REQUIRED"
+      },
+      "state_contract": {
+        "form2_submission": "Submitted and inactive",
+        "approval": "Scheduled, approved, and inactive without a telephony deployment or phone number",
+        "activation_without_isolated_number_and_route_evidence": "expected fail-closed result before any Retell operation; approval remains durable",
+        "rollback": "Stopped, revoked, route inactive, and idempotent",
+        "crm_blueprint_transition_required": false,
+        "retell_operation_required": false
+      },
+      "installation_order": [
+        "build and verify immutable Journey-core artifacts from final main",
+        "deploy and read back the three Journey-core execution functions in Catalyst Development",
+        "configure and read back Form 1 public and assisted protections",
+        "configure and read back controlled Form 2 access, OTP, prefill, protected headers, and submission",
+        "enable the exact preserved Development Gateway only after all server protections pass",
+        "install and read back the three replacement CRM controls while retaining the predecessor",
+        "run ZZZ SYNTHETIC Form 1, Form 2, approval, expected fail-closed activation, resume, and rollback canaries"
+      ],
+      "rollback_order": [
+        "disable the replacement CRM controls and Form webhooks",
+        "disable the Development Gateway if route or function readback is not exact",
+        "retain the Start Free-Test Request predecessor as the launch fallback",
+        "restore only prior verified Development function revisions when required",
+        "preserve every journey, Form 2 configuration reference, approval, receipt, and rollback record"
+      ],
+      "excluded_from_current_acceptance": [
+        "Form 2 CRM workflow activation",
+        "setup initialization CRM workflows",
+        "full CRM Blueprint",
+        "internal Form 2 review-task automation",
+        "Billing execution",
+        "Analytics execution",
+        "Retell ingress execution",
+        "call-worker execution",
+        "telephony execution"
+      ]
+    },
+    "full-automation": {
+      "status": "deferred_preserved_profile",
+      "preserves": [
+        "CRM workflow enhancement contracts",
+        "full CRM Blueprint and paid-plan transitions",
+        "internal task automation",
+        "Billing and Analytics contracts",
+        "Retell runtime execution contracts"
+      ],
+      "legacy_state_machine_key": "state_machine",
+      "legacy_route_request_contracts": "route_manifest.request_contracts.full-automation",
+      "legacy_deployment_order_key": "deployment_order",
+      "legacy_rollback_order_key": "rollback_order",
+      "current_installation_acceptance_dependency": false
+    }
+  },
   "commercial_boundary": {
     "duration_calendar_days": 7,
     "connected_call_limit": 25,
@@ -38,6 +159,7 @@
     "No Answer / Overflow Only": "NoAnswerOverflowOnly",
     "After Hours + Overflow": "AfterHoursAndOverflow"
   },
+  "state_machine_profile_scope": "full-automation",
   "state_machine": [
     {
       "state": "REQUESTED",
@@ -876,18 +998,61 @@
     "real_calls_allowed": false,
     "traffic_activation_allowed": false
   },
+  "route_manifest_profile_scope": "shared route inventory with profile-specific request contracts",
   "route_manifest": [
     {"id": "RETELL_INBOUND", "function": "revenue_desk_call_gateway", "method": "POST", "path_reference": "RETELL_INBOUND_PATH", "authentication": "Retell raw-body signature", "caller": "Retell", "content_type": "application/json", "size_reference": "MAX_WEBHOOK_BYTES"},
     {"id": "RETELL_EVENTS", "function": "revenue_desk_call_gateway", "method": "POST", "path_reference": "RETELL_EVENTS_PATH", "authentication": "Retell raw-body signature", "caller": "Retell", "content_type": "application/json", "size_reference": "MAX_WEBHOOK_BYTES"},
     {"id": "RETELL_READINESS", "function": "revenue_desk_call_gateway", "method": "GET", "path_reference": "INTERNAL_READINESS_PATH", "authentication": "INTERNAL_READINESS_TOKEN", "caller": "Sylvara operator", "content_type": "none", "size_reference": "none"},
-    {"id": "ROUTE_CONTROL_APPROVE", "function": "revenue_desk_route_control", "method": "POST", "path_reference": "ROUTE_CONTROL_APPROVE_PATH", "authentication": "Catalyst project and Development host binding plus independent operator header and CRM Connection", "caller": "Administrator-restricted CRM control", "request_fields": ["dealId", "journeyId", "deploymentId", "configurationVersionId", "idempotencyKey"], "content_type": "application/json", "size_reference": "ROUTE_CONTROL_MAX_BODY_BYTES", "current_state": "source_complete_install_pending"},
-    {"id": "ROUTE_CONTROL_ACTIVATE", "function": "revenue_desk_route_control", "method": "POST", "path_reference": "ROUTE_CONTROL_ACTIVATE_PATH", "authentication": "Catalyst project and Development host binding plus independent operator header and CRM Connection", "caller": "Administrator-restricted CRM control", "request_fields": ["dealId", "journeyId", "deploymentId", "configurationVersionId", "idempotencyKey"], "content_type": "application/json", "size_reference": "ROUTE_CONTROL_MAX_BODY_BYTES", "current_state": "source_complete_install_pending"},
-    {"id": "ROUTE_CONTROL_ROLLBACK", "function": "revenue_desk_route_control", "method": "POST", "path_reference": "ROUTE_CONTROL_ROLLBACK_PATH", "authentication": "Catalyst project and Development host binding plus independent operator header and CRM Connection", "caller": "Administrator-restricted CRM control", "request_fields": ["dealId", "journeyId", "deploymentId", "configurationVersionId", "idempotencyKey", "reason"], "content_type": "application/json", "size_reference": "ROUTE_CONTROL_MAX_BODY_BYTES", "current_state": "source_complete_install_pending"},
+    {
+      "id": "ROUTE_CONTROL_APPROVE",
+      "function": "revenue_desk_route_control",
+      "method": "POST",
+      "path_reference": "ROUTE_CONTROL_APPROVE_PATH",
+      "authentication": "Catalyst project and Development host binding plus independent operator header and CRM Connection",
+      "caller": "Administrator-restricted CRM control",
+      "request_contracts": {
+        "free-test-journey-core-v1": {"required_fields": ["dealId", "journeyId", "configurationVersionId", "idempotencyKey"], "optional_fields": ["deploymentId"], "deployment_id_policy": "omitted_or_empty_string_only", "configuration_version_grammar": "^form2cfgv1:[1-9][0-9]{0,29}:[a-f0-9]{40}$"},
+        "full-automation": {"required_fields": ["dealId", "journeyId", "deploymentId", "configurationVersionId", "idempotencyKey"], "status": "deferred_separate_authorization_required"}
+      },
+      "content_type": "application/json",
+      "size_reference": "ROUTE_CONTROL_MAX_BODY_BYTES",
+      "current_state": "source_complete_install_pending"
+    },
+    {
+      "id": "ROUTE_CONTROL_ACTIVATE",
+      "function": "revenue_desk_route_control",
+      "method": "POST",
+      "path_reference": "ROUTE_CONTROL_ACTIVATE_PATH",
+      "authentication": "Catalyst project and Development host binding plus independent operator header and CRM Connection",
+      "caller": "Administrator-restricted CRM control",
+      "request_contracts": {
+        "free-test-journey-core-v1": {"required_fields": ["dealId", "journeyId", "configurationVersionId", "idempotencyKey"], "optional_fields": ["deploymentId"], "deployment_id_policy": "omitted_or_empty_string_only", "configuration_version_grammar": "^form2cfgv1:[1-9][0-9]{0,29}:[a-f0-9]{40}$", "expected_wire_failure_code_without_activation_evidence": "isolated_retell_test_number_required"},
+        "full-automation": {"required_fields": ["dealId", "journeyId", "deploymentId", "configurationVersionId", "idempotencyKey"], "status": "deferred_separate_authorization_required"}
+      },
+      "content_type": "application/json",
+      "size_reference": "ROUTE_CONTROL_MAX_BODY_BYTES",
+      "current_state": "source_complete_install_pending"
+    },
+    {
+      "id": "ROUTE_CONTROL_ROLLBACK",
+      "function": "revenue_desk_route_control",
+      "method": "POST",
+      "path_reference": "ROUTE_CONTROL_ROLLBACK_PATH",
+      "authentication": "Catalyst project and Development host binding plus independent operator header and CRM Connection",
+      "caller": "Administrator-restricted CRM control",
+      "request_contracts": {
+        "free-test-journey-core-v1": {"required_fields": ["dealId", "journeyId", "configurationVersionId", "idempotencyKey", "reason"], "optional_fields": ["deploymentId"], "deployment_id_policy": "omitted_or_empty_string_only", "configuration_version_grammar": "^form2cfgv1:[1-9][0-9]{0,29}:[a-f0-9]{40}$"},
+        "full-automation": {"required_fields": ["dealId", "journeyId", "deploymentId", "configurationVersionId", "idempotencyKey", "reason"], "status": "deferred_separate_authorization_required"}
+      },
+      "content_type": "application/json",
+      "size_reference": "ROUTE_CONTROL_MAX_BODY_BYTES",
+      "current_state": "source_complete_install_pending"
+    },
     {"id": "FORM1_ISSUE", "function": "revenue_leak_test_request_form", "method": "POST", "path_reference": "ISSUE_PATH", "authentication": "Catalyst project binding plus ISSUE_HEADER_SECRET", "caller": "administrator-restricted CRM launcher", "request_fields": ["crmModule", "recordId"], "content_type": "application/json", "size_reference": "MAX_BODY_BYTES", "current_state": "source_complete_install_pending"},
     {"id": "FORM1_ACCESS", "function": "revenue_leak_test_request_form", "method": "GET", "path_reference": "ACCESS_PATH", "authentication": "one-time journey credential retained only in the URL fragment and therefore absent from the GET request", "caller": "CRM-launched operator browser", "content_type": "none", "size_reference": "none", "current_state": "source_complete_install_pending"},
     {"id": "FORM1_EXCHANGE", "function": "revenue_leak_test_request_form", "method": "POST", "path_reference": "EXCHANGE_PATH", "authentication": "one-time journey credential in exact same-origin JSON POST", "caller": "Catalyst access client", "request_fields": ["journeyToken"], "content_type": "application/json", "size_reference": "MAX_BODY_BYTES", "current_state": "source_complete_install_pending"},
     {"id": "FORM1_PREFILL", "function": "revenue_leak_test_request_form", "method": "POST", "path_reference": "PREFILL_PATH", "authentication": "Catalyst project binding plus PREFILL_HEADER_SECRET and one-time prefill handle", "caller": "Zoho Forms server-side Prefill Webhook", "request_fields": ["prefillHandle"], "response_server_fields": ["prefillId", "configurationRevision"], "content_type": "application/json", "size_reference": "MAX_BODY_BYTES", "current_state": "source_complete_install_pending"},
-    {"id": "FORM1_SUBMISSION", "function": "revenue_leak_test_request_form", "method": "POST", "path_reference": "SUBMISSION_PATH", "authentication": "Catalyst project binding plus SUBMISSION_HEADER_SECRET and immutable prefill revision on the assisted lane", "caller": "Zoho Forms server-side submission webhook", "assisted_request_fields": ["prefillId", "configurationRevision", "submissionId", "formData"], "public_request_fields": ["submissionId"], "content_type": "application/json", "size_reference": "MAX_BODY_BYTES", "current_state": "source_complete_install_pending"},
+    {"id": "FORM1_SUBMISSION", "function": "revenue_leak_test_request_form", "method": "POST", "path_reference": "SUBMISSION_PATH", "authentication": "Catalyst project binding plus SUBMISSION_HEADER_SECRET and immutable prefill revision on the assisted lane", "caller": "Zoho Forms server-side submission webhook", "zoho_forms_transport_shape": "exact flat JSON parameter map", "zoho_forms_transport_fields": ["prefillId", "configurationRevision", "submissionId", "firstName", "lastName", "company", "decisionMakerRole", "jobTitle", "email", "mobilePhone", "companyPhone", "currentCallHandling", "preferredTestRoute", "phoneSystemProvider", "primaryServiceArea", "fieldTeamSizeBand", "additionalNotes", "leadSource", "sourcePage", "utmSource", "utmMedium", "utmCampaign", "utmTerm", "utmContent", "contactConsent"], "transport_binding_derivation": "both binding fields blank derives public; both present derives assisted; partial binding is rejected", "assisted_request_fields": ["prefillId", "configurationRevision", "submissionId", "formData"], "public_request_fields": ["submissionId"], "content_type": "application/json", "size_reference": "MAX_BODY_BYTES", "current_state": "source_complete_install_pending"},
     {"id": "FORM2_ISSUE", "function": "revenue_leak_test_setup_form", "method": "POST", "path_reference": "ISSUE_PATH", "authentication": "Catalyst API key plus ISSUE_HEADER_NAME and ISSUE_HEADER_SECRET", "caller": "administrator-restricted CRM action", "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"},
     {"id": "FORM2_ACCESS", "function": "revenue_leak_test_setup_form", "method": "GET", "path_reference": "FORM2_ACCESS_PATH", "authentication": "high-entropy setup token retained in URL fragment", "caller": "authorized representative browser", "content_type": "none", "size_reference": "none"},
     {"id": "FORM2_OTP_REQUEST", "function": "revenue_leak_test_setup_form", "method": "POST", "path_reference": "FORM2_OTP_REQUEST_PATH", "authentication": "high-entropy setup token possession plus same-origin JSON boundary", "caller": "same-origin setup-form access page", "content_type": "application/json", "size_reference": "MAX_BODY_BYTES"},
@@ -978,7 +1143,9 @@
     "crm_billing_orchestrator": ["CRM_READ_CONNECTION_LINK_NAME", "CRM_WRITE_CONNECTION_LINK_NAME", "BILLING_READ_CONNECTION_LINK_NAME", "BILLING_WRITE_CONNECTION_LINK_NAME"],
     "analytics_sync": ["ANALYTICS_READ_CONNECTION_LINK_NAME", "ANALYTICS_WRITE_CONNECTION_LINK_NAME"]
   },
+  "deployment_order_profile_scope": "full-automation",
   "deployment_order": ["bounded repository patch and complete tests", "merge the immutable release into main", "build and stamp all artifacts from final main", "fresh Development organization, project, function, route, table, Connection, CRM, Forms, and Retell readback", "install all five Form 1 assisted routes and the dedicated Dynamic Prefill-Webhook handle field while retaining the contained predecessor control", "install Form 2 controlled private routes and handle-only Dynamic Prefill-Webhook", "install revenue_desk_route_control in disabled mode unless an isolated Retell test number is authoritatively proven", "install the three simple CRM controls and exact separate Blueprint transitions", "immediate boundary readback", "ZZZ SYNTHETIC assisted and public Form 1 canaries", "ZZZ SYNTHETIC Form 2, approval, activation-gate, resume, and rollback canaries", "telephony-path proof only if an isolated Retell test number is proven"],
+  "rollback_order_profile_scope": "full-automation",
   "rollback_order": ["keep Production traffic dark", "stop the exact synthetic Catalyst deployment first", "unbind a Retell route only after exact synthetic number and deployment ownership readback", "disable the replacement CRM controls and Form webhooks", "retain the Start Free-Test Request predecessor as the launch fallback", "restore the prior verified Development function revisions and route definitions", "preserve every journey, configuration, authorization, route-verification, receipt, and rollback record"],
   "acceptance_scenarios": ["authenticated CRM launch issues one digest-only journey credential in the Catalyst access fragment, exchanges it once, and gives Zoho Forms only a separate ten-minute digest-only prefill handle bound to the exact CRM record and canonical journey", "invalid, expired, tampered, cross-record, changed-payload, and conflicting replay attempts fail closed", "assisted submissions accept only server-validated prefillId, configurationRevision, and submissionId and never receive a journey credential or prefill handle", "public Form 1 remains tokenless and cannot manufacture an assisted CRM binding", "interrupted Form 1 issuance resumes by safe artifact reissue without a duplicate journey", "Form 2 invalid or replayed proof or prefill handle has no downstream effects", "approval is a durable state that does not activate a route or start time", "activation requires the exact approved configuration and fresh authoritative route readback", "approval success followed by activation failure remains approved and inactive or explicitly requires reconciliation", "Prepared receipt recovery, idempotent activation, repeated rollback, and activation-after-stop fail closed", "configuration, route, fingerprint, source, or conflicting-deployment changes invalidate control", "Development rollback preserves evidence", "telephony activation remains blocked by ISOLATED RETELL TEST NUMBER REQUIRED when no isolated number is proven"],
   "out_of_scope": ["prospect or customer traffic", "real customer data", "contractor forwarding", "real charge", "payment method", "SMS", "Retell call", "Retell native simulation", "conversation-flow tuning", "prompt tuning", "voice, model, interruption, or latency tuning", "booking", "dispatch", "pricing quotes", "payment collection", "outbound marketing", "paid capability activation", "Launch, Growth, or Scale conversation behavior", "client portal product build"]

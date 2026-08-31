@@ -1,13 +1,12 @@
 /*
-Owning workflow: one explicit operator action over two separate backend transitions.
+Current deployment profile: free-test-journey-core-v1.
 Trigger: Administrator-restricted Deals record-details button.
-Security: every identity is freshly read from the current Deal; the private CRM
-Connection authenticates both Catalyst operations. Approval and activation use
-different idempotency identities and different audit receipts. Approval is
-retry-stable; the exact approved deployment and configuration reuse one activation
-attempt identity so an ambiguous click can resume without forking the decision.
-Failure: activation is attempted only after exact approval readback. A failed
-activation returns approved/inactive and never reports the Deal as Live.
+Security: the current Deal supplies the server-owned journey and immutable Form 2
+configuration reference. Deployment_Record_ID must remain blank in this profile
+and is never sent. One private Development Connection authenticates both calls.
+Ordering: approval is durable and inactive. Activation is a separate operation;
+the expected no-isolated-route precondition failure reports approved/inactive and
+never reports the Deal as Live. Future full automation retains a separate contract.
 */
 
 result_message = "free_test_control_rejected";
@@ -20,19 +19,19 @@ try
 		query.put("fields","Intake_Submission_ID,Deployment_Record_ID,Configuration_Version");
 		deal = zoho.crm.v8.getRecordById("Deals",deal_id_text.toLong(),query);
 		journey_id = ifnull(deal.get("Intake_Submission_ID"),"").toString().trim();
-		deployment_id = ifnull(deal.get("Deployment_Record_ID"),"").toString().trim();
+		deployment_record_id = ifnull(deal.get("Deployment_Record_ID"),"").toString().trim();
 		configuration_id = ifnull(deal.get("Configuration_Version"),"").toString().trim();
-		identity_pattern = "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$";
-		if(journey_id.matches(identity_pattern) && deployment_id.matches(identity_pattern) && configuration_id.matches(identity_pattern))
+		journey_pattern = "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$";
+		configuration_pattern = "^form2cfgv1:[1-9][0-9]{0,29}:[a-f0-9]{40}$";
+		if(journey_id.matches(journey_pattern) && deployment_record_id == "" && configuration_id.matches(configuration_pattern))
 		{
-			approve_digest = zoho.encryption.sha256("sylvara:route-control:approve:v1:" + deal_id_text + ":" + journey_id + ":" + deployment_id + ":" + configuration_id);
-			activate_digest = zoho.encryption.sha256("sylvara:route-control:activate:v1:" + deal_id_text + ":" + journey_id + ":" + deployment_id + ":" + configuration_id);
+			approve_digest = zoho.encryption.sha256("sylvara:route-control:core:approve:v1:" + deal_id_text + ":" + journey_id + ":" + configuration_id);
+			activate_digest = zoho.encryption.sha256("sylvara:route-control:core:activate:v1:" + deal_id_text + ":" + journey_id + ":" + configuration_id);
 			approve_key = approve_digest.subString(0,8) + "-" + approve_digest.subString(8,12) + "-4" + approve_digest.subString(12,15) + "-8" + approve_digest.subString(15,18) + "-" + approve_digest.subString(18,30);
 			activate_key = activate_digest.subString(0,8) + "-" + activate_digest.subString(8,12) + "-4" + activate_digest.subString(12,15) + "-8" + activate_digest.subString(15,18) + "-" + activate_digest.subString(18,30);
 			body = Map();
 			body.put("dealId",deal_id_text);
 			body.put("journeyId",journey_id);
-			body.put("deploymentId",deployment_id);
 			body.put("configurationVersionId",configuration_id);
 			body.put("idempotencyKey",approve_key);
 			headers = Map();
@@ -51,7 +50,8 @@ try
 			if(approval.get("responseCode").toString() == "200" && approval_text.length() <= 4096)
 			{
 				approval_body = approval_text.toMap();
-				if(approval_body.get("ok") == true && approval_body.get("approved") == true && approval_body.get("active") == false && approval_body.get("state") == "Scheduled")
+				approval_exact = approval_body.get("ok") == true && approval_body.get("action") == "approve" && approval_body.get("approved") == true && approval_body.get("active") == false && approval_body.get("stopped") == false && approval_body.get("state") == "Scheduled" && ifnull(approval_body.get("configurationVersionId"),"").toString() == configuration_id;
+				if(approval_exact)
 				{
 					body.put("idempotencyKey",activate_key);
 					activation = invokeurl
@@ -65,21 +65,13 @@ try
 						response-format : STRING
 					];
 					activation_text = ifnull(activation.get("responseText"),"").toString();
-					if(activation.get("responseCode").toString() == "200" && activation_text.length() <= 4096)
+					if(activation.get("responseCode").toString() == "409" && activation_text.length() <= 4096)
 					{
 						activation_body = activation_text.toMap();
-						if(activation_body.get("ok") == true && activation_body.get("approved") == true && activation_body.get("active") == true && activation_body.get("state") == "Live")
-						{
-							result_message = "free_test_activated";
-						}
-						else
+						if(activation_body.get("ok") == false && activation_body.get("code") == "isolated_retell_test_number_required")
 						{
 							result_message = "free_test_approved_inactive";
 						}
-					}
-					else
-					{
-						result_message = "free_test_approved_inactive";
 					}
 				}
 			}
