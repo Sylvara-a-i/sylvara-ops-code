@@ -45,6 +45,10 @@ const SUBMISSION_KEYS = new Set([
 ]);
 const RECORD_ID_PATTERN = /^[1-9][0-9]{9,29}$/;
 const SUBMISSION_ID_PATTERN = /^[0-9]{1,30}$/;
+const SUBMISSION_RECEIPT_ROW_ID_PATTERN = /^[1-9][0-9]{0,29}$/;
+const SOURCE_REVISION_PATTERN = /^[a-f0-9]{40}$/;
+const REQUIRED_DEAL_PIPELINE = "Revenue Desk Sales";
+const REQUIRED_DEAL_STAGE = "Setup and Authorization";
 const RESPONSE_STAGES = new Set([
   "request",
   "issue",
@@ -126,6 +130,31 @@ function normalizeRecordId(value, name) {
     });
   }
   return value;
+}
+
+function buildConfigurationReference(receipt) {
+  if (typeof receipt?.rowId === "number" && !Number.isSafeInteger(receipt.rowId)) {
+    throw new ControllerError("Submission evidence reference is invalid", {
+      publicCode: "configuration_invalid",
+    });
+  }
+  const rowId = String(receipt?.rowId ?? "");
+  const sourceRevision = receipt?.sourceRevision;
+  if (
+    !SUBMISSION_RECEIPT_ROW_ID_PATTERN.test(rowId) ||
+    !SOURCE_REVISION_PATTERN.test(sourceRevision ?? "")
+  ) {
+    throw new ControllerError("Submission evidence reference is invalid", {
+      publicCode: "configuration_invalid",
+    });
+  }
+  const reference = `form2cfgv1:${rowId}:${sourceRevision}`;
+  if (reference.length > 100) {
+    throw new ControllerError("Submission evidence reference is invalid", {
+      publicCode: "configuration_invalid",
+    });
+  }
+  return reference;
 }
 
 function lookupId(record, key) {
@@ -252,11 +281,28 @@ function sameCrmInstant(left, right) {
     Math.trunc(leftMs / 1000) === Math.trunc(rightMs / 1000);
 }
 
-function requireEligibleContext(existing, config, allowedAccessStatuses) {
+function dealIssueRequestKey(deal) {
+  try {
+    return deriveIssueRequestKey(deal?.Setup_Access_Issue_Request_ID);
+  } catch {
+    return null;
+  }
+}
+
+function requireEligibleContext(
+  existing,
+  config,
+  allowedAccessStatuses,
+  expectedIssueRequestKey,
+) {
   const deal = existing.deal;
   if (
+    deal.Pipeline !== REQUIRED_DEAL_PIPELINE ||
+    deal.Stage !== REQUIRED_DEAL_STAGE ||
+    dealIssueRequestKey(deal) !== expectedIssueRequestKey ||
     deal.Entry_Offer !== config.form2EntryOfferValue ||
     !hasValue(deal.Approved_Test_Route) ||
+    hasValue(deal.Deployment_Record_ID) ||
     hasValue(deal.Setup_Form_Submission_ID) ||
     hasValue(deal.Setup_Form_Submitted_At) ||
     !allowedAccessStatuses.has(deal.Setup_Access_Status)
@@ -600,47 +646,103 @@ async function markSessionReconciliation(sessionStore, session, outcome) {
   return bestEffort(() => sessionStore.markReconciliationRequired(session.rowId, outcome));
 }
 
-function dealMatchesSessionBinding(deal, session) {
+function dealMatchesSessionIdentity(
+  deal,
+  session,
+  { allowSupersededIssueIdentity = false } = {},
+) {
   return Boolean(deal && session) &&
     deal.id === session.crmDealId &&
     deal.Account_Name?.id === session.crmAccountId &&
-    deal.Contact_Name?.id === session.crmContactId;
+    deal.Contact_Name?.id === session.crmContactId &&
+    deal.Pipeline === REQUIRED_DEAL_PIPELINE &&
+    (allowSupersededIssueIdentity ||
+      dealIssueRequestKey(deal) === session.issueRequestKey);
+}
+
+function dealMatchesSessionBinding(deal, session, options) {
+  return dealMatchesSessionIdentity(deal, session, options) &&
+    deal.Stage === REQUIRED_DEAL_STAGE;
+}
+
+function hasTimestamp(value) {
+  return hasValue(value) && Number.isFinite(Date.parse(value));
+}
+
+function dealHasCoherentSucceededSubmissionState(deal, configurationVersion) {
+  const deploymentBlank = !hasValue(deal.Deployment_Record_ID) &&
+    !hasValue(deal.Approved_Deployment_Record_ID);
+  const preApproval =
+    deal.Stage === REQUIRED_DEAL_STAGE &&
+    new Set(["", "Not Ready", "Pending Internal Approval"])
+      .has(hasValue(deal.Go_Live_Approval_Status) ? deal.Go_Live_Approval_Status : "") &&
+    new Set(["", "Not Started", "Setup Pending"])
+      .has(hasValue(deal.Test_Status) ? deal.Test_Status : "") &&
+    !hasValue(deal.Go_Live_Approved_At) &&
+    !hasValue(deal.Approved_Configuration_Version) &&
+    !hasValue(deal.Test_Start_At) &&
+    !hasValue(deal.Test_End_At) &&
+    !hasValue(deal.Test_End_Reason) &&
+    !hasValue(deal.Rollback_Completed_At);
+  const approvedInactive =
+    deal.Stage === "Setup and QA" &&
+    deal.Test_Status === "Scheduled" &&
+    deal.Go_Live_Approval_Status === "Approved" &&
+    hasTimestamp(deal.Go_Live_Approved_At) &&
+    deal.Approved_Configuration_Version === configurationVersion &&
+    !hasValue(deal.Test_Start_At) &&
+    !hasValue(deal.Test_End_At) &&
+    !hasValue(deal.Test_End_Reason) &&
+    !hasValue(deal.Rollback_Completed_At);
+  const stopped =
+    deal.Stage === "Closed Lost" &&
+    deal.Test_Status === "Failed" &&
+    deal.Go_Live_Approval_Status === "Revoked" &&
+    hasTimestamp(deal.Go_Live_Approved_At) &&
+    deal.Approved_Configuration_Version === configurationVersion &&
+    !hasValue(deal.Test_Start_At) &&
+    hasTimestamp(deal.Test_End_At) &&
+    hasTimestamp(deal.Rollback_Completed_At) &&
+    sameInstant(deal.Test_End_At, deal.Rollback_Completed_At) &&
+    hasValue(deal.Test_End_Reason);
+  return deploymentBlank && (preApproval || approvedInactive || stopped);
 }
 
 function dealRemainsSetupEligible(deal, config) {
   return deal.Entry_Offer === config.form2EntryOfferValue &&
     hasValue(deal.Approved_Test_Route) &&
+    !hasValue(deal.Deployment_Record_ID) &&
     !hasValue(deal.Setup_Form_Submission_ID) &&
     !hasValue(deal.Setup_Form_Submitted_At);
 }
 
-function dealMatchesInitialSession(deal, session, config) {
-  return dealMatchesSessionBinding(deal, session) &&
+function dealMatchesInitialSession(deal, session, config, options) {
+  return dealMatchesSessionBinding(deal, session, options) &&
     dealRemainsSetupEligible(deal, config) &&
     deal.Setup_Access_Status === config.form2AccessStatuses.initial &&
     !hasValue(deal.Setup_Access_Issued_At) &&
     !hasValue(deal.Setup_Access_Verified_At);
 }
 
-function dealMatchesIssuedSession(deal, session, config) {
-  return dealMatchesSessionBinding(deal, session) &&
+function dealMatchesIssuedSession(deal, session, config, options) {
+  return dealMatchesSessionBinding(deal, session, options) &&
     dealRemainsSetupEligible(deal, config) &&
     deal.Setup_Access_Status === config.form2AccessStatuses.issued &&
     sameCrmInstant(deal.Setup_Access_Issued_At, session.issuedAt) &&
     !hasValue(deal.Setup_Access_Verified_At);
 }
 
-function dealMatchesVerifiedSession(deal, session, config) {
-  return dealMatchesSessionBinding(deal, session) &&
+function dealMatchesVerifiedSession(deal, session, config, options) {
+  return dealMatchesSessionBinding(deal, session, options) &&
     dealRemainsSetupEligible(deal, config) &&
     deal.Setup_Access_Status === config.form2AccessStatuses.verified &&
     sameCrmInstant(deal.Setup_Access_Issued_At, session.issuedAt) &&
     sameCrmInstant(deal.Setup_Access_Verified_At, session.verifiedAt);
 }
 
-function dealMatchesExpiredSession(deal, session, config) {
+function dealMatchesExpiredSession(deal, session, config, options) {
   const wasVerified = hasValue(session.verifiedAt);
-  return dealMatchesSessionBinding(deal, session) &&
+  return dealMatchesSessionBinding(deal, session, options) &&
     dealRemainsSetupEligible(deal, config) &&
     hasValue(session.expiredAt) &&
     deal.Setup_Access_Status === config.form2AccessStatuses.expired &&
@@ -705,6 +807,11 @@ async function synchronizeExpiredSession(
   session,
   { allowInitialIssuingState = false } = {},
 ) {
+  // An authenticated restart may persist a fresh issue identity before this
+  // call tombstones the elapsed generation. Only expiry reconciliation may
+  // ignore the superseded identity; all active issue, prefill, and submission
+  // paths require the Deal identity to match their exact session.
+  const expiryBindingOptions = { allowSupersededIssueIdentity: true };
   for (let attempt = 0; attempt < 2; attempt += 1) {
     let deal;
     try {
@@ -712,13 +819,18 @@ async function synchronizeExpiredSession(
     } catch {
       break;
     }
-    if (dealMatchesExpiredSession(deal, session, dependencies.config)) return deal;
+    if (dealMatchesExpiredSession(
+      deal,
+      session,
+      dependencies.config,
+      expiryBindingOptions,
+    )) return deal;
 
     const initialIssuingState = allowInitialIssuingState &&
-      dealMatchesInitialSession(deal, session, dependencies.config);
+      dealMatchesInitialSession(deal, session, dependencies.config, expiryBindingOptions);
     const expectedCurrentState = initialIssuingState || (hasValue(session.verifiedAt)
-      ? dealMatchesVerifiedSession(deal, session, dependencies.config)
-      : dealMatchesIssuedSession(deal, session, dependencies.config));
+      ? dealMatchesVerifiedSession(deal, session, dependencies.config, expiryBindingOptions)
+      : dealMatchesIssuedSession(deal, session, dependencies.config, expiryBindingOptions));
     if (!expectedCurrentState) break;
 
     const update = {
@@ -737,7 +849,12 @@ async function synchronizeExpiredSession(
         update,
         { ifUnmodifiedSince: deal.Modified_Time },
       );
-      if (dealMatchesExpiredSession(readback, session, dependencies.config)) {
+      if (dealMatchesExpiredSession(
+        readback,
+        session,
+        dependencies.config,
+        expiryBindingOptions,
+      )) {
         return readback;
       }
     } catch {
@@ -748,7 +865,12 @@ async function synchronizeExpiredSession(
 
   try {
     const observed = await dependencies.crmClient.getRecord("Deals", session.crmDealId);
-    if (dealMatchesExpiredSession(observed, session, dependencies.config)) {
+    if (dealMatchesExpiredSession(
+      observed,
+      session,
+      dependencies.config,
+      expiryBindingOptions,
+    )) {
       return observed;
     }
   } catch {
@@ -847,7 +969,13 @@ async function finalizeIssuedSession(session, dependencies) {
 }
 
 async function expireStaleIssuingSession(session, existing, dependencies) {
-  if (dealMatchesIssuedSession(existing.deal, session, dependencies.config)) {
+  const expiryBindingOptions = { allowSupersededIssueIdentity: true };
+  if (dealMatchesIssuedSession(
+    existing.deal,
+    session,
+    dependencies.config,
+    expiryBindingOptions,
+  )) {
     try {
       const issued = await finalizeIssuedSession(session, dependencies);
       return await expireSession(issued, issued.tokenHash, dependencies);
@@ -865,7 +993,12 @@ async function expireStaleIssuingSession(session, existing, dependencies) {
     }
   }
 
-  if (!dealMatchesInitialSession(existing.deal, session, dependencies.config)) {
+  if (!dealMatchesInitialSession(
+    existing.deal,
+    session,
+    dependencies.config,
+    expiryBindingOptions,
+  )) {
     await markSessionReconciliation(
       dependencies.sessionStore,
       session,
@@ -1008,6 +1141,7 @@ async function handleIssue(body, dependencies, nowMs) {
       existing,
       dependencies.config,
       new Set([statuses.initial, statuses.expired]),
+      issueRequestKey,
     );
     requireNewIssueLock(existing, activeSession, dependencies.config);
   } else {
@@ -1015,6 +1149,7 @@ async function handleIssue(body, dependencies, nowMs) {
       existing,
       dependencies.config,
       new Set([statuses.initial, statuses.issued, statuses.verified, statuses.expired]),
+      issueRequestKey,
     );
     assertActiveDealSession(activeSession, priorSession);
   }
@@ -1169,6 +1304,7 @@ async function preparePrefill(verificationBinding, dependencies, nowMs) {
     existing,
     dependencies.config,
     new Set([statuses.issued, statuses.verified]),
+    candidate.session.issueRequestKey,
   );
   if (prefillSecurityBinding(existing, dependencies.config).journeyBindingDigest !==
       candidate.session.journeyBindingDigest) {
@@ -1245,7 +1381,12 @@ async function preparePrefill(verificationBinding, dependencies, nowMs) {
   }
 
   existing = await fetchSessionContext(dependencies.crmClient, session);
-  requireEligibleContext(existing, dependencies.config, new Set([statuses.verified]));
+  requireEligibleContext(
+    existing,
+    dependencies.config,
+    new Set([statuses.verified]),
+    session.issueRequestKey,
+  );
   if (prefillSecurityBinding(existing, dependencies.config).journeyBindingDigest !==
       session.journeyBindingDigest) {
     throw genericSetupNotFound();
@@ -1317,6 +1458,7 @@ async function handlePrefill(body, dependencies) {
     existing,
     dependencies.config,
     new Set([dependencies.config.form2AccessStatuses.verified]),
+    session.issueRequestKey,
   );
   assertFreshPrefill(existing, selected.revision);
   const prefill = buildPrefillPayload(existing, {
@@ -1478,6 +1620,7 @@ async function verifySucceededDuplicate(
   session,
   namespacedSubmissionId,
   submissionFingerprint,
+  submissionReceipt,
   dependencies,
 ) {
   if (!sessionOwnsSubmission(session, submissionFingerprint)) {
@@ -1510,12 +1653,17 @@ async function verifySucceededDuplicate(
       ambiguous: true,
     });
   }
+  const configurationVersion = buildConfigurationReference(
+    submissionReceipt,
+  );
   if (
-    !dealMatchesSessionBinding(deal, session) ||
+    !dealMatchesSessionIdentity(deal, session) ||
     deal.Setup_Form_Submission_ID !== namespacedSubmissionId ||
+    deal.Configuration_Version !== configurationVersion ||
     deal.Setup_Access_Status !== dependencies.config.form2AccessStatuses.submitted ||
     !hasValue(deal.Setup_Form_Submitted_At) ||
-    !Number.isFinite(Date.parse(deal.Setup_Form_Submitted_At))
+    !Number.isFinite(Date.parse(deal.Setup_Form_Submitted_At)) ||
+    !dealHasCoherentSucceededSubmissionState(deal, configurationVersion)
   ) {
     await terminalizeSucceededReceiptMismatch(session, dependencies);
     throw new ControllerError("Completed submission readback does not match", {
@@ -1722,8 +1870,7 @@ async function handleSubmission(body, dependencies, nowMs) {
     dependencies.config,
     body.submissionId,
   );
-  if (body.configurationRevision !== dependencies.config.sourceRevision ||
-      !/^[a-f0-9]{40}$/.test(body.configurationRevision ?? "")) {
+  if (!/^[a-f0-9]{40}$/.test(body.configurationRevision ?? "")) {
     throw new ControllerError("Configuration revision does not match", {
       status: 409,
       publicCode: "setup_conflict",
@@ -1784,6 +1931,17 @@ async function handleSubmission(body, dependencies, nowMs) {
     }
     throw publicError(error);
   }
+  // A succeeded receipt remains authoritative after a later artifact deploy;
+  // ordinary new submissions must still target the currently running source.
+  if (
+    body.configurationRevision !== dependencies.config.sourceRevision &&
+    existingReceipt?.status !== "succeeded"
+  ) {
+    throw new ControllerError("Configuration revision does not match", {
+      status: 409,
+      publicCode: "setup_conflict",
+    });
+  }
 
   if (session.status === "submitted") {
     if (!existingReceipt || existingReceipt.status !== "succeeded") {
@@ -1796,6 +1954,7 @@ async function handleSubmission(body, dependencies, nowMs) {
       session,
       namespacedSubmissionId,
       submissionFingerprint,
+      existingReceipt,
       dependencies,
     );
   }
@@ -1808,6 +1967,7 @@ async function handleSubmission(body, dependencies, nowMs) {
       session,
       namespacedSubmissionId,
       submissionFingerprint,
+      existingReceipt,
       dependencies,
     );
   }
@@ -1860,6 +2020,7 @@ async function handleSubmission(body, dependencies, nowMs) {
       session,
       namespacedSubmissionId,
       submissionFingerprint,
+      claim.receipt,
       dependencies,
     );
   }
@@ -1890,6 +2051,7 @@ async function handleSubmission(body, dependencies, nowMs) {
       existing,
       dependencies.config,
       new Set([dependencies.config.form2AccessStatuses.verified]),
+      session.issueRequestKey,
     );
     assertFreshPrefill(existing, revision);
     const currentFingerprint = fingerprintSnapshot(
@@ -1911,6 +2073,9 @@ async function handleSubmission(body, dependencies, nowMs) {
       setupFormVersion: dependencies.config.form2FormVersion,
       submissionId: namespacedSubmissionId,
       setupAccessSubmittedStatus: dependencies.config.form2AccessStatuses.submitted,
+      configurationVersion: buildConfigurationReference(
+        claim.receipt,
+      ),
       allowedPhoneSystemProviders: dependencies.config.form2PhoneSystemProviders,
       allowedFieldTeamSizeBands: dependencies.config.form2FieldTeamSizeBands,
     });
@@ -1971,6 +2136,7 @@ async function handleSubmission(body, dependencies, nowMs) {
         session,
         namespacedSubmissionId,
         submissionFingerprint,
+        failedFinalization.receipt,
         dependencies,
       );
     }
@@ -2103,6 +2269,7 @@ module.exports = {
   ControllerError,
   buildFormUrl,
   buildAccessUrl,
+  buildConfigurationReference,
   fetchSessionContext,
   handleForm2Request,
 };

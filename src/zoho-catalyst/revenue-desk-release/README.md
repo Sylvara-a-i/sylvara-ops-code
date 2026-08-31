@@ -1,6 +1,6 @@
 # Revenue Desk Release Boundary
 
-This package creates and verifies immutable release manifests for two closed profiles. The default `canonical-seven` profile preserves the seven canonical Catalyst functions, thirteen tables, and both Function Job pools. The Development-only `setup-journey` profile binds the five setup-critical functions, twelve tables, one Function Job pool, CRM and Forms contracts, Retell's provider-neutral contract, and the intended source installation scope to one Git commit. The scope is desired-state provenance, not provider-observed state. The builder does not trust the caller's `function=path` label: it inspects the artifact's Catalyst target, package and lock identity, and immutable source-revision stamp, then produces a provenance digest that also binds the artifact hash to the exact Git-derived source-tree digest.
+This package creates and verifies immutable release manifests for three closed profiles. The default `canonical-seven` profile preserves the seven canonical Catalyst functions, thirteen tables, and both Function Job pools. The Development-only `setup-journey` profile preserves the original full setup-automation boundary. The current Development installation-acceptance profile, `free-test-journey-core-v1`, binds the five source/artifact-parity functions, twelve existing tables, one existing Function Job pool, the mandatory Form 1 and Form 2 contracts, the three replacement CRM controls plus retained predecessor, and the Catalyst-authoritative Journey-core scope to one Git commit. The scope is desired-state provenance, not provider-observed state. The builder does not trust the caller's `function=path` label: it inspects the artifact's Catalyst target, package and lock identity, and immutable source-revision stamp, then produces a provenance digest that also binds the artifact hash to the exact Git-derived source-tree digest.
 
 The manifest is evidence, not a deployer. It contains no project, organization, route value, Connection, credential, or production record identifier. Build the seven function artifacts with their owning package builders, then run the default profile:
 
@@ -14,7 +14,36 @@ For the bounded setup journey, build only the five selected artifacts and use th
 node scripts/build-release-manifest.js --profile setup-journey --source-revision <exact-head-sha> --environment Development --artifact revenue_leak_test_request_form=<path> --artifact revenue_leak_test_setup_form=<path> --artifact revenue_desk_call_gateway=<path> --artifact revenue_desk_call_worker=<path> --artifact revenue_desk_route_control=<path> --output <outside-repository-path>
 ```
 
-The setup profile selects the exact seventeen-route `setup-journey` API Gateway profile and explicitly defers `CRM_BILLING`. Create those routes while the Development gateway is disabled, read back every exact route and target binding, then enable only the Development API Gateway and verify availability. The private route-creation packet itself never authorizes that enablement. `RETELL_ROUTE_MODE` remains `disabled`; no Retell number, webhook/provider binding, publish, call, or Production gateway activation is authorized. In this state the activation control fails closed with `ISOLATED_RETELL_TEST_NUMBER_REQUIRED`. Verify all five Catalyst artifacts and resource inventory with `verify-release-readback.js --profile setup-journey`; CRM, Forms, Retell, gateway availability, and traffic state still require separate provider-observed evidence. Unknown profiles, arbitrary contract paths, and Production setup-journey manifests fail closed.
+For the current Journey-core installation, build those same five immutable
+source/artifact-parity packages and select the dedicated profile:
+
+```text
+node scripts/build-release-manifest.js --profile free-test-journey-core-v1 --source-revision <exact-head-sha> --environment Development --artifact revenue_leak_test_request_form=<path> --artifact revenue_leak_test_setup_form=<path> --artifact revenue_desk_call_gateway=<path> --artifact revenue_desk_call_worker=<path> --artifact revenue_desk_route_control=<path> --output <outside-repository-path>
+```
+
+The core profile makes secure Form 2 access, OTP proof, dynamic prefill, exact
+submission persistence, replay protection, approval, expected fail-closed
+activation, resume, and rollback mandatory. Catalyst is authoritative. CRM
+workflow execution and Blueprint transitions are not dependencies. The two Form 2
+rules remain inactive, setup-initialization workflows and the full Blueprint are
+deferred, and internal review-task automation is outside current acceptance.
+Billing, Analytics, Retell ingress, call-worker execution, and telephony are also
+outside current acceptance. The gateway and worker packages remain in the
+immutable artifact/readback set only because the canonical call-runtime artifact
+is bundled; neither package may be invoked by the Journey-core acceptance run.
+
+The core profile preserves the authoritative existing eighteen-route Development
+inventory. Its fourteen Journey routes are required, while the three Retell routes
+and `CRM_BILLING` remain present but deferred and uninvoked. When authoritative
+readback already matches, the profile authorizes no route create, edit, delete, or
+reorder operation. Enablement remains a separate Development-only action after
+the exact complete inventory, functions, Forms protections, and security rules are
+read back. Verify source/artifact/resource parity with
+`verify-release-readback.js --profile free-test-journey-core-v1`; live CRM, Forms,
+Gateway, traffic, and failure-path behavior still require their separate sanitized
+provider readbacks.
+
+The setup profile selects the exact seventeen-route `setup-journey` API Gateway profile and explicitly defers `CRM_BILLING`. Create those routes while the Development gateway is disabled, read back every exact route and target binding, then enable only the Development API Gateway and verify availability. The private route-creation packet itself never authorizes that enablement. `RETELL_ROUTE_MODE` remains `disabled`; no Retell number, webhook/provider binding, publish, call, or Production gateway activation is authorized. In this state the internal control reason is `ISOLATED_RETELL_TEST_NUMBER_REQUIRED`, while the authenticated HTTP boundary returns the lowercase wire code `isolated_retell_test_number_required`. Verify all five Catalyst artifacts and resource inventory with `verify-release-readback.js --profile setup-journey`; CRM, Forms, Retell, gateway availability, and traffic state still require separate provider-observed evidence. Unknown profiles, arbitrary contract paths, and Production setup-journey manifests fail closed.
 
 Each artifact path must be its Catalyst project root and contain `catalyst.json` plus `functions/<canonical-name>/package.json` and its lockfile. The checkout must be clean and the output must be outside Git. After deployment, create an allowlisted sanitized readback containing only the fields accepted by `verify-release-readback.js`. Exact function, source, artifact, table, Job-pool, contract, and environment parity is mandatory. Production additionally fails unless traffic, routes, and schedules are all dark.
 

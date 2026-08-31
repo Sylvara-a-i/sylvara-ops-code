@@ -74,7 +74,7 @@ test('builds one manifest containing exactly seven functions at one source revis
   );
 });
 
-test('requires an explicit release kind and rejects the stale canonical-six profile', () => {
+test('requires an explicit release kind and recognizes only the three closed profiles', () => {
   const { artifacts, contractDigests, sourceTrees } = fixture();
   const missingReleaseKind = structuredClone(contract);
   delete missingReleaseKind.release_kind;
@@ -93,13 +93,25 @@ test('requires an explicit release kind and rejects the stale canonical-six prof
       encoding: 'utf8',
     });
     assert.notEqual(stale.status, 0);
-    assert.match(stale.stderr, /canonical-seven or setup-journey/);
+    assert.match(
+      stale.stderr,
+      /canonical-seven, setup-journey, free-test-journey-core-v1/,
+    );
 
-    const current = spawnSync(process.execPath, [scriptPath, '--profile', 'canonical-seven'], {
-      encoding: 'utf8',
-    });
-    assert.notEqual(current.status, 0);
-    assert.doesNotMatch(current.stderr, /canonical-seven or setup-journey/);
+    for (const profile of [
+      'canonical-seven',
+      'setup-journey',
+      'free-test-journey-core-v1',
+    ]) {
+      const current = spawnSync(process.execPath, [scriptPath, '--profile', profile], {
+        encoding: 'utf8',
+      });
+      assert.notEqual(current.status, 0);
+      assert.doesNotMatch(
+        current.stderr,
+        /canonical-seven, setup-journey, free-test-journey-core-v1/,
+      );
+    }
   }
 });
 

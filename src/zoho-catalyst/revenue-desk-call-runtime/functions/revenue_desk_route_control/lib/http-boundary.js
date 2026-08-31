@@ -9,6 +9,9 @@ const { createRouteControlService }
 const { createAuthorizationProvider } = require('./connection');
 const { loadConfig } = require('./config');
 const { createCrmControlClient } = require('./crm-client');
+const { createForm2EvidenceStore } = require('./form2-evidence-store');
+const { createJourneyCoreControlService, isJourneyCoreCommand }
+  = require('./journey-core-service');
 const { createRetellRouteProvider } = require('./retell-route-provider');
 
 function headerValues(request, target) {
@@ -120,10 +123,12 @@ function requestPath(request) {
 function publicCode(error) {
   const allowed = new Set([
     'ACTIVATION_COMPENSATED', 'ACTIVATION_SUPERSEDED_BY_TERMINAL_STATE',
+    'ACTIVATION_SUPERSEDED_BY_ROLLBACK',
     'CONTROL_AUTHENTICATION_FAILED',
     'CONTROL_CAS_CONFLICT', 'CONTROL_IDEMPOTENCY_CONFLICT',
     'CONTROL_PRECONDITION_FAILED', 'INVALID_CONTROL_REQUEST',
     'CRM_MANUAL_CLOSE_REQUIRED',
+    'FORM2_EVIDENCE_INVALID',
     'ISOLATED_RETELL_TEST_NUMBER_REQUIRED', 'PRODUCTION_DARK',
     'ROLLBACK_MANUAL_REQUIRED', 'ROLLBACK_SUPERSEDED_BY_RUNTIME_TERMINAL',
     'ROUTE_VERIFICATION_FAILED',
@@ -133,7 +138,7 @@ function publicCode(error) {
 
 function createRequestListener({
   catalystSdk, environment = process.env, fetchImpl = globalThis.fetch,
-  now = Date.now, artifactSourceRevision,
+  now = Date.now, artifactSourceRevision, factories = {},
 } = {}) {
   return async function listener(request, response) {
     try {
@@ -152,7 +157,7 @@ function createRequestListener({
         && String(app?.config?.projectId || '') === projectId,
       'CONTROL_AUTHENTICATION_FAILED', 'Control runtime identity is invalid.',
       { httpStatus: 503 });
-      const crm = createCrmControlClient(config, {
+      const crm = (factories.crm || createCrmControlClient)(config, {
         readAuthorization: createAuthorizationProvider(app,
           config.crmReadConnectionLinkName, /^Zoho-oauthtoken [A-Za-z0-9._-]{16,4096}$/,
           config.platformTimeoutMs),
@@ -161,15 +166,38 @@ function createRequestListener({
           config.platformTimeoutMs),
         fetchImpl,
       });
-      const provider = createRetellRouteProvider(config, {
+      const store = (factories.store || createCatalystStore)(app, config);
+      if (isJourneyCoreCommand(body)) {
+        // The Journey-core profile has no Retell deployment. Keep provider
+        // construction outside this branch so approval, expected activation
+        // rejection, and rollback cannot acquire a Retell credential or issue
+        // provider I/O.
+        const core = (factories.core || createJourneyCoreControlService)({
+          config, store,
+          evidenceStore: (factories.evidence || createForm2EvidenceStore)(app, {
+            timeoutMs: config.platformTimeoutMs,
+          }),
+          crm, now,
+        });
+        const result = await core[action](body);
+        send(response, 200, {
+          ok: true, action, state: result.state, replayed: result.replayed,
+          approved: result.approved, active: result.active, stopped: result.stopped,
+          configurationVersionId: result.configurationVersionId,
+          rollbackStatus: result.stopped ? 'route_inactive' : null,
+          rollbackInstructions: null,
+        });
+        return;
+      }
+      const provider = (factories.provider || createRetellRouteProvider)(config, {
         authorization: config.retellRouteMode === 'isolated_test'
           ? createAuthorizationProvider(app, config.retellConnectionLinkName,
             /^Bearer [A-Za-z0-9._-]{16,4096}$/, config.platformTimeoutMs)
           : undefined,
         fetchImpl, now,
       });
-      const service = createRouteControlService({
-        config, store: createCatalystStore(app, config), crm, provider, now,
+      const service = (factories.full || createRouteControlService)({
+        config, store, crm, provider, now,
       });
       const result = await service[action](body);
       const state = result.deployment.TEST_STATUS;

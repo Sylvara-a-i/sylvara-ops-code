@@ -103,7 +103,11 @@ test('selects only the setup routes and keeps CRM Billing deferred', () => {
     false,
   );
   assert.equal(
-    contract.installation_scope.retell.activation_failure_code_when_disabled,
+    contract.installation_scope.retell.activation_failure_wire_code_when_disabled,
+    'isolated_retell_test_number_required',
+  );
+  assert.equal(
+    contract.installation_scope.retell.activation_failure_internal_code_when_disabled,
     'ISOLATED_RETELL_TEST_NUMBER_REQUIRED',
   );
   const functions = new Set(contract.functions.map(({ name }) => name));

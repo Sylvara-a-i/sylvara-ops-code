@@ -6,6 +6,8 @@ const test = require('node:test');
 const { loadConfig } = require('../lib/config');
 const { createRequestListener } = require('../lib/http-boundary');
 const { createRetellRouteProvider } = require('../lib/retell-route-provider');
+const { deterministicIdempotencyKey } = require('../lib/journey-core-service');
+const { RevenueDeskError } = require('revenue_desk_call_gateway/lib/errors');
 const { numberLookupKey } = require('revenue_desk_call_gateway/lib/security');
 
 const REVISION = 'a'.repeat(40);
@@ -34,6 +36,8 @@ function environment(overrides = {}) {
     ROUTE_CONTROL_EVENT_HMAC_SECRET: 'e'.repeat(32),
     ROUTE_CONTROL_MAX_BODY_BYTES: '4096', PLATFORM_OPERATION_TIMEOUT_MS: '3000',
     CRM_ORGANIZATION_ID: SYNTHETIC_ORGANIZATION_ID,
+    FORM2_WORKFLOW_HMAC_SECRET: 'w'.repeat(32),
+    FORM2_DESTINATION_SHA256: 'f'.repeat(64), FORM2_FORM_VERSION: 'form2-v1',
     CRM_API_BASE_URL: 'https://www.zohoapis.com/crm/v8',
     CRM_READ_CONNECTION_LINK_NAME: SYNTHETIC_CRM_READ_LINK,
     CRM_WRITE_CONNECTION_LINK_NAME: SYNTHETIC_CRM_WRITE_LINK,
@@ -137,9 +141,154 @@ test('bad private authentication is rejected before body and SDK access', async 
   assert.equal(sdkAccesses, 0);
 });
 
+test('HTTP boundary dispatches a blank-deployment command to Journey-core before provider setup',
+  async () => {
+  let providerConstructions = 0;
+  let fullConstructions = 0;
+  let receivedBody = null;
+  const listener = createRequestListener({
+    environment: environment(), artifactSourceRevision: REVISION,
+    catalystSdk: { initialize() {
+      return { config: { environment: 'development', projectId: PROJECT_ID } };
+    } },
+    factories: {
+      crm: () => ({}), store: () => ({}), evidence: () => ({}),
+      core: () => ({
+        async approve(body) {
+          receivedBody = structuredClone(body);
+          return {
+            state: 'Scheduled', replayed: false, approved: true,
+            active: false, stopped: false,
+            configurationVersionId: `form2cfgv1:8000000000001:${'a'.repeat(40)}`,
+          };
+        },
+      }),
+      provider: () => { providerConstructions += 1; throw new Error('must not run'); },
+      full: () => { fullConstructions += 1; throw new Error('must not run'); },
+    },
+  });
+  const body = {
+    dealId: '400000000000001', journeyId: 'journey_synthetic',
+    configurationVersionId: `form2cfgv1:8000000000001:${'a'.repeat(40)}`,
+    deploymentId: '',
+  };
+  body.idempotencyKey = deterministicIdempotencyKey(
+    'approve', body.dealId, body.journeyId, body.configurationVersionId,
+  );
+  const rawBody = Buffer.from(JSON.stringify(body));
+  const request = {
+    method: 'POST', url: '/internal/revenue-desk/approve-configuration', rawBody,
+    headers: {
+      host: 'route-control.development.catalystserverless.com',
+      'x-zc-environment': 'development', 'x-zc-projectid': PROJECT_ID,
+      'x-synthetic-control': 'h'.repeat(32), 'content-type': 'application/json',
+      'content-length': String(rawBody.length),
+    },
+  };
+  const output = response();
+  await listener(request, output);
+  assert.deepEqual(receivedBody, body);
+  assert.equal(providerConstructions, 0);
+  assert.equal(fullConstructions, 0);
+  assert.equal(output.statusCode, 200);
+  assert.deepEqual(output.body, {
+    ok: true, action: 'approve', state: 'Scheduled', replayed: false,
+    approved: true, active: false, stopped: false,
+    configurationVersionId: body.configurationVersionId,
+    rollbackStatus: null, rollbackInstructions: null,
+  });
+});
+
+test('all Journey-core wire shapes bypass full deployment and Retell provider construction',
+  async () => {
+  const configurationVersionId = `form2cfgv1:8000000000001:${'a'.repeat(40)}`;
+  const cases = [
+    { action: 'approve', path: '/internal/revenue-desk/approve-configuration',
+      deployment: 'omitted', status: 200, expected: {
+        ok: true, action: 'approve', state: 'Scheduled', replayed: false,
+        approved: true, active: false, stopped: false, configurationVersionId,
+        rollbackStatus: null, rollbackInstructions: null,
+      } },
+    { action: 'activate', path: '/internal/revenue-desk/activate-free-test',
+      deployment: null, status: 409, expected: {
+        ok: false, code: 'isolated_retell_test_number_required',
+      } },
+    { action: 'rollback', path: '/internal/revenue-desk/rollback-free-test',
+      deployment: '', status: 200, expected: {
+        ok: true, action: 'rollback', state: 'Stopped', replayed: false,
+        approved: false, active: false, stopped: true, configurationVersionId,
+        rollbackStatus: 'route_inactive', rollbackInstructions: null,
+      } },
+  ];
+  for (const selected of cases) {
+    let providerConstructions = 0;
+    let fullConstructions = 0;
+    const core = {
+      async approve() { return { state: 'Scheduled', replayed: false, approved: true,
+        active: false, stopped: false, configurationVersionId }; },
+      async activate() {
+        throw new RevenueDeskError('ISOLATED_RETELL_TEST_NUMBER_REQUIRED',
+          'Activation remains pre-telephony.', { httpStatus: 409 });
+      },
+      async rollback() { return { state: 'Stopped', replayed: false, approved: false,
+        active: false, stopped: true, configurationVersionId }; },
+    };
+    const listener = createRequestListener({
+      environment: environment(), artifactSourceRevision: REVISION,
+      catalystSdk: { initialize() {
+        return { config: { environment: 'development', projectId: PROJECT_ID } };
+      } },
+      factories: {
+        crm: () => ({}), store: () => ({}), evidence: () => ({}), core: () => core,
+        provider: () => { providerConstructions += 1; throw new Error('must not run'); },
+        full: () => { fullConstructions += 1; throw new Error('must not run'); },
+      },
+    });
+    const body = {
+      dealId: '400000000000001', journeyId: 'journey_synthetic', configurationVersionId,
+      idempotencyKey: deterministicIdempotencyKey(selected.action,
+        '400000000000001', 'journey_synthetic', configurationVersionId),
+      ...(selected.action === 'rollback' ? { reason: 'operator_requested' } : {}),
+    };
+    if (selected.deployment !== 'omitted') body.deploymentId = selected.deployment;
+    const rawBody = Buffer.from(JSON.stringify(body));
+    const output = response();
+    await listener({
+      method: 'POST', url: selected.path, rawBody,
+      headers: {
+        host: 'route-control.development.catalystserverless.com',
+        'x-zc-environment': 'development', 'x-zc-projectid': PROJECT_ID,
+        'x-synthetic-control': 'h'.repeat(32), 'content-type': 'application/json',
+        'content-length': String(rawBody.length),
+      },
+    }, output);
+    assert.equal(output.statusCode, selected.status);
+    assert.deepEqual(output.body, selected.expected);
+    assert.equal(providerConstructions, 0);
+    assert.equal(fullConstructions, 0);
+  }
+});
+
 test('isolated mode rejects incomplete number identity', () => {
   assert.throws(() => loadConfig(environment({ RETELL_ROUTE_MODE: 'isolated_test' }), REVISION),
     { code: 'INVALID_RUNTIME_CONFIGURATION' });
+});
+
+test('route-control requires exact trusted Form 2 binding configuration', () => {
+  const config = loadConfig(environment(), REVISION);
+  assert.equal(config.form2DestinationSha256, 'f'.repeat(64));
+  assert.equal(config.form2FormVersion, 'form2-v1');
+  assert.equal(config.crmOrganizationSha256,
+    crypto.createHash('sha256').update(SYNTHETIC_ORGANIZATION_ID).digest('hex'));
+  for (const overrides of [
+    { FORM2_WORKFLOW_HMAC_SECRET: '' },
+    { FORM2_DESTINATION_SHA256: 'not-a-digest' },
+    { FORM2_FORM_VERSION: 'invalid version' },
+    { FORM2_WORKFLOW_HMAC_SECRET: 'e'.repeat(32) },
+  ]) {
+    assert.throws(() => loadConfig(environment(overrides), REVISION),
+      { code: 'INVALID_RUNTIME_CONFIGURATION' });
+  }
 });
 
 test('rollback never clears an unverified or repurposed Retell number', async () => {

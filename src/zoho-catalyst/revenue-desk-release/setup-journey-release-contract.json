@@ -167,7 +167,8 @@
       "number_binding": "synthetic-or-provider-test-resource-only",
       "installation_number_binding_authorized": false,
       "installation_webhook_provider_binding_authorized": false,
-      "activation_failure_code_when_disabled": "ISOLATED_RETELL_TEST_NUMBER_REQUIRED"
+      "activation_failure_wire_code_when_disabled": "isolated_retell_test_number_required",
+      "activation_failure_internal_code_when_disabled": "ISOLATED_RETELL_TEST_NUMBER_REQUIRED"
     },
     "billing_test": {
       "involved": false

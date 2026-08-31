@@ -357,9 +357,13 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         boundary = blueprint["deployment_boundary"]
         self.assertEqual(
             boundary["status"],
-            "source_candidate_requires_development_installation_and_readback",
+            "deferred_full_automation_contract_separate_authorization_required",
         )
-        self.assertTrue(boundary["live_write_authorized"])
+        self.assertEqual(boundary["deployment_profile_scope"], "full-automation")
+        self.assertEqual(boundary["journey_core_state"], "FULL_BLUEPRINT_DEFERRED")
+        self.assertTrue(boundary["future_full_automation_contract_preserved"])
+        self.assertTrue(boundary["separate_future_authorization_required"])
+        self.assertFalse(boundary["live_write_authorized"])
         self.assertTrue(boundary["writer_or_provider_payload_contract_in_repository"])
         self.assertFalse(boundary["provider_save_readback_proven"])
         self.assertFalse(boundary["runtime_acceptance_proven"])
@@ -835,10 +839,17 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
             form2_rule["criterion_ast_rule_key"], "form2Candidate"
         )
         self.assertTrue(form2_rule["desired_criterion_ast_committed"])
-        self.assertTrue(
+        self.assertEqual(form2_rule["deployment_profile_scope"], "full-automation")
+        self.assertEqual(
+            form2_rule["journey_core_state"],
+            "FORM2_WORKFLOW_DEFERRED_INACTIVE",
+        )
+        self.assertTrue(form2_rule["future_full_automation_contract_preserved"])
+        self.assertTrue(form2_rule["separate_future_authorization_required"])
+        self.assertFalse(
             form2_rule["workflow_repair_candidate_mutation_authorized"]
         )
-        self.assertTrue(
+        self.assertFalse(
             form2_rule["workflow_repair_activation_authorized"]
         )
         self.assertEqual(
@@ -1859,7 +1870,7 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
 
     def test_caller_manifest_is_development_only_and_not_deployment_authority(self) -> None:
         manifest = self.callers
-        self.assertEqual(manifest["schema_version"], 2)
+        self.assertEqual(manifest["schema_version"], 4)
         self.assertEqual(manifest["status"], "bounded_development_installation_candidate")
         self.assertEqual(manifest["environment"], "Development only")
         self.assertFalse(manifest["render_policy"]["commit_rendered_source"])
@@ -1948,13 +1959,17 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
                 "{{FORM2_ACCESS_PUBLIC_URL}}",
             ],
         )
-        uuid_input = next(
-            item for item in form2["function_arguments"] if item["name"] == "issue_request_id"
-        )
         self.assertEqual(
-            uuid_input["provider_binding_status"],
-            "repository_bound_live_function_workflow_button_and_readback_required",
+            [item["name"] for item in form2["function_arguments"]],
+            ["deal_id"],
         )
+        self.assertFalse(
+            form2["deal_initialization"]["issue_identity"][
+                "browser_supplied_identity_accepted"
+            ]
+        )
+        self.assertFalse(form2["deal_initialization"]["workflow_or_blueprint_triggered"])
+        self.assertTrue(form2["deal_initialization"]["authoritative_readback_required"])
         rendered = json.dumps(manifest)
         self.assertNotRegex(rendered, r"https?://")
         self.assertNotRegex(rendered, r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+")
@@ -1962,6 +1977,40 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         self.assertNotRegex(
             rendered,
             r"\b[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b",
+        )
+
+    def test_journey_core_route_control_profile_excludes_deployment_and_retell(self) -> None:
+        core = self.automation["deployment_profiles"]["free-test-journey-core-v1"]
+        route_control = core["route_control_callers"]
+        self.assertEqual(
+            route_control["identity_fields"],
+            ["dealId", "journeyId", "configurationVersionId"],
+        )
+        self.assertEqual(
+            route_control["configuration_version_grammar"],
+            r"^form2cfgv1:[1-9][0-9]{0,29}:[a-f0-9]{40}$",
+        )
+        pattern = re.compile(route_control["configuration_version_grammar"])
+        sha = "a" * 40
+        self.assertRegex(f"form2cfgv1:1:{sha}", pattern)
+        self.assertRegex(f"form2cfgv1:{'9' * 30}:{sha}", pattern)
+        self.assertNotRegex(f"form2cfgv1:0:{sha}", pattern)
+        self.assertNotRegex(f"form2cfgv1:01:{sha}", pattern)
+        self.assertNotRegex(f"form2cfgv1:{'9' * 31}:{sha}", pattern)
+        self.assertEqual(route_control["deployment_record_id_precondition"], "blank")
+        self.assertFalse(route_control["deployment_id_sent"])
+        self.assertEqual(route_control["connection_count"], 1)
+        self.assertFalse(route_control["crm_workflow_dependency"])
+        self.assertFalse(route_control["blueprint_dependency"])
+        self.assertFalse(route_control["retell_execution"])
+        self.assertEqual(
+            route_control["activation_result"],
+            "expected_isolated_retell_test_number_required_approved_inactive",
+        )
+        self.assertTrue(
+            self.automation["deployment_profiles"]["full-automation"][
+                "deployment_bound_route_control_contracts_preserved"
+            ]
         )
 
     def test_lead_scheduled_follow_up_removal_is_browser_only_and_fail_closed(self) -> None:
@@ -2110,19 +2159,27 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
             source,
         )
         puts = [
-            'request_body.put("dealId",input.deal_id.toString());',
-            'request_body.put("issueRequestId",input.issue_request_id.toString());',
+            'request_body.put("dealId",deal_id_text);',
+            'request_body.put("issueRequestId",issue_request_id);',
         ]
         for put in puts:
             self.assertIn(put, source)
         self.assertEqual(source.count("request_body.put("), len(puts))
+        self.assertNotIn("input.issue_request_id", source)
+        self.assertEqual(source.count("zoho.crm.v8.getRecordById"), 3)
+        self.assertEqual(source.count("zoho.crm.v8.updateRecord"), 1)
+        self.assertIn('trigger_options.put("trigger",List());', source)
+        self.assertIn("prewrite_exact", source)
+        self.assertIn("write_safe", source)
+        self.assertIn('pipeline == "Revenue Desk Sales"', source)
+        self.assertIn('stage == "Setup and Authorization"', source)
+        self.assertIn('submission_id == ""', source)
+        self.assertIn("readback_exact", source)
         for response_key in ("ok", "accessUrl", "expiresAt", "requestId"):
             self.assertIn(f'response_body.containKey("{response_key}")', source)
         self.assertIn("response_body.size() == 4", source)
-        self.assertIn(
-            'request_id.matches("^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")',
-            source,
-        )
+        self.assertIn('identity_pattern = "^[0-9a-f]{8}-', source)
+        self.assertIn("request_id.matches(identity_pattern)", source)
         self.assertIn("length() ==", source)
         self.assertIn("+ 43", source)
         token_assignment = "setup_token = "
@@ -2151,14 +2208,75 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         )
         self.assertNotIn("zoho.currenttime", control_source)
         self.assertIn(
-            'activate_digest = zoho.encryption.sha256("sylvara:route-control:activate:v1:" + deal_id_text + ":" + journey_id + ":" + deployment_id + ":" + configuration_id);',
+            'activate_digest = zoho.encryption.sha256("sylvara:route-control:core:activate:v1:" + deal_id_text + ":" + journey_id + ":" + configuration_id);',
+            control_source,
+        )
+        self.assertIn(
+            'approve_digest = zoho.encryption.sha256("sylvara:route-control:core:approve:v1:" + deal_id_text + ":" + journey_id + ":" + configuration_id);',
             control_source,
         )
         self.assertIn('body.put("idempotencyKey",approve_key);', control_source)
         self.assertIn('body.put("idempotencyKey",activate_key);', control_source)
+        self.assertNotIn('body.put("deploymentId"', control_source)
+        self.assertIn('deployment_record_id == ""', control_source)
+        self.assertIn(
+            'configuration_pattern = "^form2cfgv1:[1-9][0-9]{0,29}:[a-f0-9]{40}$";',
+            control_source,
+        )
+        self.assertIn(
+            'activation_body.get("code") == "isolated_retell_test_number_required"',
+            control_source,
+        )
+        self.assertIn('result_message = "free_test_approved_inactive";', control_source)
+        self.assertNotIn("free_test_activated", control_source)
         self.assertNotIn('update_map.put("Stage"', control_source)
         self.assertEqual(rollback_source.lower().count("invokeurl"), 1)
         self.assertIn('body.put("reason","operator_requested");', rollback_source)
+        self.assertIn(
+            'digest = zoho.encryption.sha256("sylvara:route-control:core:rollback:v1:" + deal_id_text + ":" + journey_id + ":" + configuration_id);',
+            rollback_source,
+        )
+        self.assertNotIn('body.put("deploymentId"', rollback_source)
+        self.assertIn('deployment_record_id == ""', rollback_source)
+        self.assertIn(
+            'configuration_pattern = "^form2cfgv1:[1-9][0-9]{0,29}:[a-f0-9]{40}$";',
+            rollback_source,
+        )
+        self.assertIn('rollback_body.get("rollbackStatus") == "route_inactive"', rollback_source)
+        self.assertNotIn("crm_manual_close_required", rollback_source)
+        self.assertNotIn("rollback_manual_required", rollback_source)
+        self.assertEqual(control["deployment_profile"], "free-test-journey-core-v1")
+        self.assertEqual(rollback["deployment_profile"], "free-test-journey-core-v1")
+        self.assertEqual(
+            control["command_contract"]["body_keys"],
+            ["dealId", "journeyId", "configurationVersionId", "idempotencyKey"],
+        )
+        self.assertEqual(
+            rollback["command_contract"]["body_keys"],
+            ["dealId", "journeyId", "configurationVersionId", "idempotencyKey", "reason"],
+        )
+        self.assertFalse(control["command_contract"]["deployment_id_sent"])
+        self.assertFalse(rollback["command_contract"]["deployment_id_sent"])
+        self.assertEqual(
+            control["operations"][1]["expected_code"],
+            "isolated_retell_test_number_required",
+        )
+        self.assertFalse(control["future_full_automation"]["current_caller_path_enabled"])
+        self.assertFalse(rollback["future_full_automation"]["current_caller_path_enabled"])
+        self.assertEqual(
+            control_source.count('connection : "{{ROUTE_CONTROL_CONNECTION_LINK_NAME}}"'),
+            2,
+        )
+        self.assertEqual(
+            rollback_source.count('connection : "{{ROUTE_CONTROL_CONNECTION_LINK_NAME}}"'),
+            1,
+        )
+        self.assertTrue(
+            control["connection"]["shared_by_all_three_core_route_operations"]
+        )
+        self.assertTrue(
+            rollback["connection"]["shared_by_all_three_core_route_operations"]
+        )
         for caller, source in ((control, control_source), (rollback, rollback_source)):
             self.assertEqual(
                 sorted(set(re.findall(r"\{\{[A-Z0-9_]+\}\}", source))),

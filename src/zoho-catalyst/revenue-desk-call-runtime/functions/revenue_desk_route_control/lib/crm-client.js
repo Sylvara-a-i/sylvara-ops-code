@@ -41,14 +41,23 @@ const ROLLBACK_MUTABLE_FIELDS = new Set([
   'Modified_Time', 'Stage', 'Test_Status', 'Test_End_At', 'Test_End_Reason',
   'Rollback_Completed_At', 'Reason_For_Loss__s',
 ]);
+const CORE_ROLLBACK_MUTABLE_FIELDS = new Set([
+  ...ROLLBACK_MUTABLE_FIELDS, 'Go_Live_Approval_Status',
+]);
 const ROLLBACK_INTERLEAVING_MUTABLE_FIELDS = new Set([
   ...ROLLBACK_MUTABLE_FIELDS,
   ...ACTIVATION_MUTABLE_FIELDS,
 ]);
 const LOOKUP_FIELDS = new Set(['Account_Name', 'Contact_Name']);
+const DATETIME_FIELDS = new Set([
+  'Modified_Time', 'Setup_Access_Verified_At', 'Setup_Form_Submitted_At',
+  'Authority_Confirmed_At', 'Test_Scope_Accepted_At', 'Go_Live_Approved_At',
+  'Test_Start_At', 'Test_End_At', 'Rollback_Completed_At',
+]);
 const CRM_ROLLBACK_END_REASONS = new Set([
   'Sylvara Stopped', 'Technical Failure', 'Other',
 ]);
+const CRM_ROLLBACK_LOSS_REASON = 'Other';
 
 function plain(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -61,6 +70,13 @@ function same(actual, expected) {
 }
 
 function sameDealField(field, actual, expected) {
+  if (DATETIME_FIELDS.has(field)) {
+    if (same(actual, expected)) return true;
+    const valid = (value) => typeof value === 'string'
+      && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(value)
+      && Number.isFinite(Date.parse(value));
+    return valid(actual) && valid(expected) && Date.parse(actual) === Date.parse(expected);
+  }
   if (!LOOKUP_FIELDS.has(field)) return same(actual, expected);
   const lookupId = (value) => {
     if (!plain(value) || !/^[1-9][0-9]{7,29}$/.test(String(value.id || ''))) {
@@ -71,6 +87,14 @@ function sameDealField(field, actual, expected) {
   const actualId = lookupId(actual);
   const expectedId = lookupId(expected);
   return actualId !== undefined && expectedId !== undefined && actualId === expectedId;
+}
+
+function toCrmDateTime(value) {
+  invariant(typeof value === 'string' && Number.isFinite(Date.parse(value)),
+    'CRM_WRITE_INVALID', 'CRM DateTime value is invalid.', { httpStatus: 503 });
+  // Zoho CRM documents and reads back DateTime fields as whole seconds with
+  // a numeric offset, rather than JavaScript's millisecond-Z representation.
+  return new Date(value).toISOString().replace(/\.\d{3}Z$/, '+00:00');
 }
 
 function assertDealSnapshot(actual, expected, mutableFields = new Set()) {
@@ -181,6 +205,31 @@ function createCrmControlClient(config, {
     return readback;
   }
 
+  async function updateCoreDeal(dealId, patch, modifiedTime) {
+    invariant(plain(patch) && Object.keys(patch).length > 0
+      && typeof modifiedTime === 'string' && Number.isFinite(Date.parse(modifiedTime)),
+    'CRM_WRITE_INVALID', 'CRM Journey-core patch is invalid.', { httpStatus: 503 });
+    await assertOrganization(true);
+    const json = await request(`/Deals/${dealId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'If-Unmodified-Since': modifiedTime },
+      // Core writes are authoritative and read back below. Deferred workflows
+      // and Blueprint actions must not run as hidden side effects.
+      body: JSON.stringify({ data: [{ id: dealId, ...patch }], trigger: [] }),
+    }, true);
+    const entry = Array.isArray(json.data) ? json.data[0] : null;
+    invariant(entry?.status === 'success' && entry?.code === 'SUCCESS'
+      && String(entry?.details?.id || dealId) === dealId,
+    'CRM_WRITE_ACK_INVALID', 'CRM Journey-core acknowledgement is invalid.',
+    { httpStatus: 503, ambiguous: true });
+    const readback = await getDeal(dealId);
+    invariant(Object.entries(patch)
+      .every(([field, value]) => sameDealField(field, readback[field], value)),
+    'CRM_READBACK_INVALID', 'CRM Journey-core update did not read back exactly.',
+    { httpStatus: 503, ambiguous: true });
+    return readback;
+  }
+
   async function transition(dealId, name, data = {}) {
     await assertOrganization(false);
     const blueprint = await request(`/Deals/${dealId}/actions/blueprint`, { method: 'GET' });
@@ -219,6 +268,58 @@ function createCrmControlClient(config, {
       && !readback.Test_Start_At,
     'CRM_READBACK_INVALID', 'CRM approval transition did not read back exactly.',
     { httpStatus: 503, ambiguous: true });
+    assertDealSnapshot(readback, expectedDeal, APPROVAL_MUTABLE_FIELDS);
+    return readback;
+  }
+
+  async function recordCoreApproval(dealId, {
+    configurationVersionId, approvedAt, expectedDeal,
+  }) {
+    const deal = await getDeal(dealId);
+    assertDealSnapshot(deal, expectedDeal);
+    const desired = {
+      Stage: 'Setup and QA', Test_Status: 'Scheduled',
+      Go_Live_Approval_Status: 'Approved', Go_Live_Approved_At: toCrmDateTime(approvedAt),
+      Approved_Deployment_Record_ID: null,
+      Approved_Configuration_Version: configurationVersionId,
+    };
+    const exactApproved = (value) => Object.entries(desired)
+      .every(([field, expected]) => sameDealField(field, value[field], expected))
+      && value.Configuration_Version === configurationVersionId
+      && !value.Deployment_Record_ID && !value.Billing_Subscription_ID
+      && !value.Test_Start_At && !value.Test_End_At;
+    if (exactApproved(deal)) return deal;
+    invariant(deal.Stage === 'Setup and Authorization'
+      && deal.Setup_Access_Status === 'Submitted'
+      && deal.Configuration_Version === configurationVersionId
+      && !deal.Deployment_Record_ID && !deal.Approved_Deployment_Record_ID
+      && !deal.Approved_Configuration_Version && !deal.Go_Live_Approved_At
+      && !deal.Billing_Subscription_ID
+      // The Journey-core initializer owns `Not Started`; the deferred CRM
+      // workflow is intentionally not required to manufacture `Setup Pending`.
+      && deal.Test_Status === 'Not Started'
+      && deal.Go_Live_Approval_Status === 'Not Ready'
+      && !deal.Test_Start_At && !deal.Test_End_At,
+    'CRM_TRANSITION_PRECONDITION_FAILED',
+    'CRM Deal is not awaiting Journey-core approval.', { httpStatus: 409 });
+    let readback;
+    try {
+      readback = await updateCoreDeal(dealId, desired, deal.Modified_Time);
+    } catch (error) {
+      try { readback = await getDeal(dealId); } catch (readError) {
+        throw new RevenueDeskError('CRM_APPROVAL_RECONCILIATION_REQUIRED',
+          'CRM Journey-core approval outcome requires reconciliation.',
+          { cause: readError, httpStatus: 503, ambiguous: true });
+      }
+      if (!exactApproved(readback)) {
+        throw new RevenueDeskError('CRM_APPROVAL_RECONCILIATION_REQUIRED',
+          'CRM Journey-core approval outcome requires reconciliation.',
+          { cause: error, httpStatus: 503, ambiguous: true });
+      }
+    }
+    invariant(exactApproved(readback), 'CRM_READBACK_INVALID',
+      'CRM Journey-core approval did not read back exactly.',
+      { httpStatus: 503, ambiguous: true });
     assertDealSnapshot(readback, expectedDeal, APPROVAL_MUTABLE_FIELDS);
     return readback;
   }
@@ -462,8 +563,60 @@ function createCrmControlClient(config, {
     });
   }
 
+  async function recordCoreRollback(dealId, {
+    configurationVersionId, stoppedAt, reason, expectedDeal,
+  }) {
+    let deal = await getDeal(dealId);
+    assertDealSnapshot(deal, expectedDeal);
+    invariant(!deal.Billing_Subscription_ID && !deal.Deployment_Record_ID
+      && !deal.Approved_Deployment_Record_ID
+      && deal.Configuration_Version === configurationVersionId
+      && deal.Approved_Configuration_Version === configurationVersionId,
+    'CRM_TRANSITION_PRECONDITION_FAILED',
+    'CRM Deal is not a pre-telephony Journey-core deployment.', { httpStatus: 409 });
+    invariant(CRM_ROLLBACK_END_REASONS.has(reason),
+      'CRM_TRANSITION_PRECONDITION_FAILED',
+      'CRM rollback reason is not an approved picklist value.', { httpStatus: 409 });
+    const desired = {
+      Stage: 'Closed Lost', Test_Status: 'Failed', Go_Live_Approval_Status: 'Revoked',
+      Test_Start_At: null, Test_End_At: toCrmDateTime(stoppedAt), Test_End_Reason: reason,
+      Rollback_Completed_At: toCrmDateTime(stoppedAt),
+      Reason_For_Loss__s: deal.Reason_For_Loss__s || CRM_ROLLBACK_LOSS_REASON,
+    };
+    const exactStopped = (value) => Object.entries(desired)
+      .every(([field, expected]) => sameDealField(field, value[field], expected))
+      && value.Configuration_Version === configurationVersionId
+      && value.Approved_Configuration_Version === configurationVersionId
+      && !value.Deployment_Record_ID && !value.Approved_Deployment_Record_ID;
+    if (exactStopped(deal)) return deal;
+    invariant(deal.Stage === 'Setup and QA' && deal.Test_Status === 'Scheduled'
+      && deal.Go_Live_Approval_Status === 'Approved'
+      && !deal.Test_Start_At && !deal.Test_End_At && !deal.Rollback_Completed_At,
+    'CRM_TRANSITION_PRECONDITION_FAILED',
+    'CRM Deal is not awaiting Journey-core rollback.', { httpStatus: 409 });
+    try {
+      deal = await updateCoreDeal(dealId, desired, deal.Modified_Time);
+    } catch (error) {
+      try { deal = await getDeal(dealId); } catch (readError) {
+        throw new RevenueDeskError('CRM_ROLLBACK_RECONCILIATION_REQUIRED',
+          'CRM Journey-core rollback outcome requires reconciliation.',
+          { cause: readError, httpStatus: 503, ambiguous: true });
+      }
+      if (!exactStopped(deal)) {
+        throw new RevenueDeskError('CRM_ROLLBACK_RECONCILIATION_REQUIRED',
+          'CRM Journey-core rollback outcome requires reconciliation.',
+          { cause: error, httpStatus: 503, ambiguous: true });
+      }
+    }
+    invariant(exactStopped(deal), 'CRM_READBACK_INVALID',
+      'CRM Journey-core rollback did not read back exactly.',
+      { httpStatus: 503, ambiguous: true });
+    assertDealSnapshot(deal, expectedDeal, CORE_ROLLBACK_MUTABLE_FIELDS);
+    return deal;
+  }
+
   return Object.freeze({ getDeal, proveActivationInactive, containActivation,
-    recordApproval, recordActivation, recordRollback });
+    recordApproval, recordActivation, recordRollback, recordCoreApproval, recordCoreRollback });
 }
 
 module.exports = Object.freeze({ DEAL_FIELDS, TRANSITIONS, createCrmControlClient,

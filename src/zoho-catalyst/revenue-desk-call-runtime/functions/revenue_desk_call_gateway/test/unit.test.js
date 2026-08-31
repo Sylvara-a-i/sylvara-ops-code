@@ -446,7 +446,20 @@ test('unit: environment registry permits only minimal Production dark mode and r
   assert.equal(controlNames.length >= 17, true);
   assert.equal(new Set(controlNames).size, controlNames.length);
   const routeControlSet = registry.function_variable_sets.revenue_desk_route_control;
-  assert.equal(routeControlSet.always_required.length, 28);
+  const journeyCoreRouteControlOnlyNames = [
+    'FORM2_WORKFLOW_HMAC_SECRET', 'FORM2_DESTINATION_SHA256', 'FORM2_FORM_VERSION',
+  ];
+  const journeyCoreRouteControlOnlySet = new Set(journeyCoreRouteControlOnlyNames);
+  assert.deepEqual(routeControlSet.always_required
+    .filter((name) => journeyCoreRouteControlOnlySet.has(name)).sort(),
+    [...journeyCoreRouteControlOnlyNames].sort(),
+    'only the exact Journey-core Form 2 variables may be excluded from the gateway projection');
+  const gatewayRouteControlProjection = routeControlSet.always_required
+    .filter((name) => !journeyCoreRouteControlOnlySet.has(name));
+  assert.equal(gatewayRouteControlProjection.length, 28,
+    'unexpected route-control variables must not bypass the gateway registry check');
+  assert.equal(routeControlSet.always_required.length,
+    gatewayRouteControlProjection.length + journeyCoreRouteControlOnlyNames.length);
   assert.equal(routeControlSet.required_when_retell_route_mode_isolated_test.length, 5);
   const routeControlNames = [
     ...routeControlSet.always_required,

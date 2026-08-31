@@ -1,13 +1,18 @@
 /*
 Owning product/workflow: Zoho CRM / Form 2 setup-access issuance.
 Trigger: Administrator-restricted Deals `Open Free-Test Setup` record-details button.
-Inputs: deal_id from the current Deal and its persisted retry-stable
-Setup_Access_Issue_Request_ID value, mapped by the CRM button.
-Authentication: the private Form 2 issue Connection injects all route credentials.
-Idempotency: only the same immutable issue_request_id may identify an exact retry.
-Failure behavior: no automatic retry and no URL open after any non-exact response.
-Logging: coarse outcome names only; never log IDs, bodies, URLs, headers, or errors.
-Rollback: disable the button, revoke the Connection, and preserve session/readback state.
+Input: only the current Deal ID. The function fresh-reads the authoritative Deal,
+initializes only missing Free-Test defaults and its retry-stable issue identity,
+and then passes that read-back identity to Catalyst over the private Connection.
+Security: ordinary browser input is never trusted for the issue identity. CRM
+automation triggers are suppressed, every nonblank governed value must be valid,
+and the exact Development readback must converge before Catalyst is called.
+Idempotency: the deterministic UUID-v4-shaped issue identity and bounded default
+initialization are safe to repeat. Ambiguous writes are never retried.
+Failure behavior: no URL opens after any conflict, incomplete read, failed write,
+readback mismatch, non-exact response, or malformed destination.
+Logging: coarse outcomes only; never log IDs, bodies, URLs, headers, or errors.
+Rollback: disable the button, revoke the Connection, and preserve CRM/session evidence.
 Private setup: replace every {{...}} token outside Git, then save and syntax-check in CRM.
 */
 
@@ -15,49 +20,173 @@ can_open = false;
 destination_url = "";
 try
 {
-	valid_deal_id = input.deal_id != null && input.deal_id.toString().matches("^[1-9][0-9]{9,29}$");
-	valid_issue_request_id = input.issue_request_id != null && input.issue_request_id.toString().matches("^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$");
-	if(valid_deal_id && valid_issue_request_id)
+	deal_id_text = ifnull(input.deal_id,"").toString().trim();
+	valid_deal_id = deal_id_text.matches("^[1-9][0-9]{9,29}$");
+	if(valid_deal_id)
 	{
-		request_body = Map();
-		request_body.put("dealId",input.deal_id.toString());
-		request_body.put("issueRequestId",input.issue_request_id.toString());
-		request_headers = Map();
-		request_headers.put("Content-Type","application/json");
-		issue_response = invokeurl
-		[
-			url : "{{FORM2_ISSUE_URL}}"
-			type : POST
-			body : request_body.toString()
-			headers : request_headers
-			connection : "{{FORM2_ISSUE_CONNECTION_LINK_NAME}}"
-			detailed : true
-			response-format : STRING
-		];
-		if(issue_response != null && issue_response.containKey("responseCode") && issue_response.get("responseCode").toString() == "200" && issue_response.containKey("responseText"))
+		deal_id_long = deal_id_text.toLong();
+		read_query = Map();
+		read_query.put("fields","Entry_Offer,Pipeline,Stage,Setup_Form_Submission_ID,Setup_Access_Issue_Request_ID,Setup_Access_Status,Free_Test_Authorization_Status,Go_Live_Approval_Status,Test_Status,Test_Duration_Days,Test_Call_Limit,Test_Scope_Version,Type");
+		deal_record = zoho.crm.v8.getRecordById("Deals",deal_id_long,read_query);
+		required_fields_present = deal_record != null && deal_record.containKey("Entry_Offer") && deal_record.containKey("Pipeline") && deal_record.containKey("Stage") && deal_record.containKey("Setup_Form_Submission_ID") && deal_record.containKey("Setup_Access_Issue_Request_ID") && deal_record.containKey("Setup_Access_Status") && deal_record.containKey("Free_Test_Authorization_Status") && deal_record.containKey("Go_Live_Approval_Status") && deal_record.containKey("Test_Status") && deal_record.containKey("Test_Duration_Days") && deal_record.containKey("Test_Call_Limit") && deal_record.containKey("Test_Scope_Version") && deal_record.containKey("Type");
+		if(required_fields_present)
 		{
-			response_text = issue_response.get("responseText");
-			if(response_text != null && response_text.toString().length() > 0 && response_text.toString().length() <= 4096)
+			entry_offer = ifnull(deal_record.get("Entry_Offer"),"").toString().trim();
+			pipeline = ifnull(deal_record.get("Pipeline"),"").toString().trim();
+			stage = ifnull(deal_record.get("Stage"),"").toString().trim();
+			submission_id = ifnull(deal_record.get("Setup_Form_Submission_ID"),"").toString().trim();
+			issue_request_id = ifnull(deal_record.get("Setup_Access_Issue_Request_ID"),"").toString().trim();
+			initial_issue_request_id = issue_request_id;
+			setup_access_status = ifnull(deal_record.get("Setup_Access_Status"),"").toString().trim();
+			expected_setup_access_status = setup_access_status;
+			authorization_status = ifnull(deal_record.get("Free_Test_Authorization_Status"),"").toString().trim();
+			go_live_status = ifnull(deal_record.get("Go_Live_Approval_Status"),"").toString().trim();
+			test_status = ifnull(deal_record.get("Test_Status"),"").toString().trim();
+			test_duration = ifnull(deal_record.get("Test_Duration_Days"),"").toString().trim();
+			test_call_limit = ifnull(deal_record.get("Test_Call_Limit"),"").toString().trim();
+			test_scope_version = ifnull(deal_record.get("Test_Scope_Version"),"").toString().trim();
+			deal_type = ifnull(deal_record.get("Type"),"").toString().trim();
+
+			eligible_context = entry_offer == "7-Day Revenue Leak Test" && pipeline == "Revenue Desk Sales" && stage == "Setup and Authorization" && submission_id == "";
+			setup_status_valid = setup_access_status == "" || setup_access_status == "Not Issued" || setup_access_status == "Issued" || setup_access_status == "Verified" || setup_access_status == "Expired";
+			governed_state_valid = setup_status_valid && (authorization_status == "" || authorization_status == "Not Sent") && (go_live_status == "" || go_live_status == "Not Ready") && (test_status == "" || test_status == "Not Started") && (test_duration == "" || test_duration == "7") && (test_call_limit == "" || test_call_limit == "25") && (test_scope_version == "" || test_scope_version == "free-test-scope-v1.0") && (deal_type == "" || deal_type == "Initial Sale");
+			identity_pattern = "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$";
+			identity_valid = (setup_access_status == "Expired" && issue_request_id.matches(identity_pattern)) || (setup_access_status != "Expired" && (issue_request_id == "" || issue_request_id.matches(identity_pattern)));
+			if(eligible_context && governed_state_valid && identity_valid)
 			{
-				response_body = response_text.toString().toMap();
-				if(response_body != null && response_body.size() == 4 && response_body.containKey("ok") && response_body.containKey("accessUrl") && response_body.containKey("expiresAt") && response_body.containKey("requestId") && response_body.get("ok") == true)
+				update_map = Map();
+				if(setup_access_status == "")
 				{
-					access_url = response_body.get("accessUrl");
-					expires_at = response_body.get("expiresAt");
-					request_id = ifnull(response_body.get("requestId"),"").toString();
-					access_prefix = "{{FORM2_ACCESS_PUBLIC_URL}}" + "#setupToken=";
-					if(access_url != null && expires_at != null)
+					update_map.put("Setup_Access_Status","Not Issued");
+					expected_setup_access_status = "Not Issued";
+				}
+				if(authorization_status == "")
+				{
+					update_map.put("Free_Test_Authorization_Status","Not Sent");
+				}
+				if(go_live_status == "")
+				{
+					update_map.put("Go_Live_Approval_Status","Not Ready");
+				}
+				if(test_status == "")
+				{
+					update_map.put("Test_Status","Not Started");
+				}
+				if(test_duration == "")
+				{
+					update_map.put("Test_Duration_Days",7);
+				}
+				if(test_call_limit == "")
+				{
+					update_map.put("Test_Call_Limit",25);
+				}
+				if(test_scope_version == "")
+				{
+					update_map.put("Test_Scope_Version","free-test-scope-v1.0");
+				}
+				if(deal_type == "")
+				{
+					update_map.put("Type","Initial Sale");
+				}
+				if(issue_request_id == "")
+				{
+					identity_digest = zoho.encryption.sha256("sylvara:free-revenue-leak-test:setup-issue:v1:" + deal_id_text);
+					if(identity_digest != null && identity_digest.matches("^[0-9a-f]{64}$"))
 					{
-						access_url_text = access_url.toString();
-						if(access_url_text.startsWith(access_prefix) && access_url_text.length() == access_prefix.length() + 43 && !access_url_text.contains("?") && !access_url_text.contains("&") && !access_url_text.contains(" ") && expires_at.toString().matches("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{3})?Z$") && request_id.matches("^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"))
+						issue_request_id = identity_digest.subString(0,8) + "-" + identity_digest.subString(8,12) + "-4" + identity_digest.subString(12,15) + "-8" + identity_digest.subString(15,18) + "-" + identity_digest.subString(18,30);
+						if(issue_request_id.matches(identity_pattern))
 						{
-							setup_token = access_url_text.right(43);
-							if(setup_token.matches("^[A-Za-z0-9_-]{43}$"))
+							update_map.put("Setup_Access_Issue_Request_ID",issue_request_id);
+						}
+					}
+				}
+				else if(setup_access_status == "Expired")
+				{
+					reissue_digest = zoho.encryption.sha256("sylvara:free-revenue-leak-test:setup-reissue:v1:" + deal_id_text + ":" + issue_request_id);
+					if(reissue_digest != null && reissue_digest.matches("^[0-9a-f]{64}$"))
+					{
+						issue_request_id = reissue_digest.subString(0,8) + "-" + reissue_digest.subString(8,12) + "-4" + reissue_digest.subString(12,15) + "-8" + reissue_digest.subString(15,18) + "-" + reissue_digest.subString(18,30);
+						if(issue_request_id.matches(identity_pattern))
+						{
+							update_map.put("Setup_Access_Issue_Request_ID",issue_request_id);
+							update_map.put("Setup_Access_Status","Not Issued");
+							expected_setup_access_status = "Not Issued";
+						}
+					}
+				}
+
+				if(issue_request_id.matches(identity_pattern))
+				{
+					write_safe = update_map.size() == 0;
+					if(update_map.size() > 0)
+					{
+						prewrite_record = zoho.crm.v8.getRecordById("Deals",deal_id_long,read_query);
+						prewrite_complete = prewrite_record != null && prewrite_record.containKey("Entry_Offer") && prewrite_record.containKey("Pipeline") && prewrite_record.containKey("Stage") && prewrite_record.containKey("Setup_Form_Submission_ID") && prewrite_record.containKey("Setup_Access_Issue_Request_ID") && prewrite_record.containKey("Setup_Access_Status") && prewrite_record.containKey("Free_Test_Authorization_Status") && prewrite_record.containKey("Go_Live_Approval_Status") && prewrite_record.containKey("Test_Status") && prewrite_record.containKey("Test_Duration_Days") && prewrite_record.containKey("Test_Call_Limit") && prewrite_record.containKey("Test_Scope_Version") && prewrite_record.containKey("Type");
+						prewrite_exact = prewrite_complete && ifnull(prewrite_record.get("Entry_Offer"),"").toString().trim() == entry_offer && ifnull(prewrite_record.get("Pipeline"),"").toString().trim() == pipeline && ifnull(prewrite_record.get("Stage"),"").toString().trim() == stage && ifnull(prewrite_record.get("Setup_Form_Submission_ID"),"").toString().trim() == submission_id && ifnull(prewrite_record.get("Setup_Access_Issue_Request_ID"),"").toString().trim() == initial_issue_request_id && ifnull(prewrite_record.get("Setup_Access_Status"),"").toString().trim() == setup_access_status && ifnull(prewrite_record.get("Free_Test_Authorization_Status"),"").toString().trim() == authorization_status && ifnull(prewrite_record.get("Go_Live_Approval_Status"),"").toString().trim() == go_live_status && ifnull(prewrite_record.get("Test_Status"),"").toString().trim() == test_status && ifnull(prewrite_record.get("Test_Duration_Days"),"").toString().trim() == test_duration && ifnull(prewrite_record.get("Test_Call_Limit"),"").toString().trim() == test_call_limit && ifnull(prewrite_record.get("Test_Scope_Version"),"").toString().trim() == test_scope_version && ifnull(prewrite_record.get("Type"),"").toString().trim() == deal_type;
+						if(prewrite_exact)
+						{
+							trigger_options = Map();
+							trigger_options.put("trigger",List());
+							update_response = zoho.crm.v8.updateRecord("Deals",deal_id_long,update_map,trigger_options);
+							write_safe = true;
+						}
+					}
+
+					if(write_safe)
+					{
+					readback_record = zoho.crm.v8.getRecordById("Deals",deal_id_long,read_query);
+					readback_complete = readback_record != null && readback_record.containKey("Entry_Offer") && readback_record.containKey("Pipeline") && readback_record.containKey("Stage") && readback_record.containKey("Setup_Form_Submission_ID") && readback_record.containKey("Setup_Access_Issue_Request_ID") && readback_record.containKey("Setup_Access_Status") && readback_record.containKey("Free_Test_Authorization_Status") && readback_record.containKey("Go_Live_Approval_Status") && readback_record.containKey("Test_Status") && readback_record.containKey("Test_Duration_Days") && readback_record.containKey("Test_Call_Limit") && readback_record.containKey("Test_Scope_Version") && readback_record.containKey("Type");
+					if(readback_complete)
+					{
+						readback_setup_status = ifnull(readback_record.get("Setup_Access_Status"),"").toString().trim();
+						readback_exact = ifnull(readback_record.get("Entry_Offer"),"").toString().trim() == "7-Day Revenue Leak Test" && ifnull(readback_record.get("Pipeline"),"").toString().trim() == "Revenue Desk Sales" && ifnull(readback_record.get("Stage"),"").toString().trim() == "Setup and Authorization" && ifnull(readback_record.get("Setup_Form_Submission_ID"),"").toString().trim() == "" && ifnull(readback_record.get("Setup_Access_Issue_Request_ID"),"").toString().trim() == issue_request_id && readback_setup_status == expected_setup_access_status && ifnull(readback_record.get("Free_Test_Authorization_Status"),"").toString().trim() == "Not Sent" && ifnull(readback_record.get("Go_Live_Approval_Status"),"").toString().trim() == "Not Ready" && ifnull(readback_record.get("Test_Status"),"").toString().trim() == "Not Started" && ifnull(readback_record.get("Test_Duration_Days"),"").toString().trim() == "7" && ifnull(readback_record.get("Test_Call_Limit"),"").toString().trim() == "25" && ifnull(readback_record.get("Test_Scope_Version"),"").toString().trim() == "free-test-scope-v1.0" && ifnull(readback_record.get("Type"),"").toString().trim() == "Initial Sale";
+						if(readback_exact)
+						{
+							request_body = Map();
+							request_body.put("dealId",deal_id_text);
+							request_body.put("issueRequestId",issue_request_id);
+							request_headers = Map();
+							request_headers.put("Content-Type","application/json");
+							issue_response = invokeurl
+							[
+								url : "{{FORM2_ISSUE_URL}}"
+								type : POST
+								body : request_body.toString()
+								headers : request_headers
+								connection : "{{FORM2_ISSUE_CONNECTION_LINK_NAME}}"
+								detailed : true
+								response-format : STRING
+							];
+							if(issue_response != null && issue_response.containKey("responseCode") && issue_response.get("responseCode").toString() == "200" && issue_response.containKey("responseText"))
 							{
-								can_open = true;
-								destination_url = access_url_text;
+								response_text = issue_response.get("responseText");
+								if(response_text != null && response_text.toString().length() > 0 && response_text.toString().length() <= 4096)
+								{
+									response_body = response_text.toString().toMap();
+									if(response_body != null && response_body.size() == 4 && response_body.containKey("ok") && response_body.containKey("accessUrl") && response_body.containKey("expiresAt") && response_body.containKey("requestId") && response_body.get("ok") == true)
+									{
+										access_url = response_body.get("accessUrl");
+										expires_at = response_body.get("expiresAt");
+										request_id = ifnull(response_body.get("requestId"),"").toString();
+										access_prefix = "{{FORM2_ACCESS_PUBLIC_URL}}" + "#setupToken=";
+										if(access_url != null && expires_at != null)
+										{
+											access_url_text = access_url.toString();
+											if(access_url_text.startsWith(access_prefix) && access_url_text.length() == access_prefix.length() + 43 && !access_url_text.contains("?") && !access_url_text.contains("&") && !access_url_text.contains(" ") && expires_at.toString().matches("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{3})?Z$") && request_id.matches(identity_pattern))
+											{
+												setup_token = access_url_text.right(43);
+												if(setup_token.matches("^[A-Za-z0-9_-]{43}$"))
+												{
+													can_open = true;
+													destination_url = access_url_text;
+												}
+											}
+										}
+									}
+								}
 							}
 						}
+					}
 					}
 				}
 			}

@@ -200,6 +200,31 @@ async function submit(selected, prepared, submissionId = "submission_001", extra
   ), selected.dependencies);
 }
 
+function providerSubmissionBody({
+  prefillId = "",
+  configurationRevision = "",
+  submissionId = "provider_submission_001",
+  formOverrides = {},
+  extra = {},
+} = {}) {
+  return {
+    prefillId,
+    configurationRevision,
+    submissionId,
+    ...formData(formOverrides),
+    ...extra,
+  };
+}
+
+async function submitProvider(selected, options = {}) {
+  return handleRequest(post(
+    selected.config.submissionPath,
+    providerSubmissionBody(options),
+    selected.config.submissionHeaderName,
+    selected.config.submissionHeaderSecret,
+  ), selected.dependencies);
+}
+
 test("launch keeps the journey credential in a Catalyst fragment and stores only its digest", async () => {
   const selected = fixture();
   const issue = await launch(selected);
@@ -370,6 +395,7 @@ test("public Form 1 remains tokenless and cannot manufacture assisted binding", 
     selected.config.submissionHeaderName,
     selected.config.submissionHeaderSecret,
   ), selected.dependencies);
+  assert.equal(result.status, 200);
   assert.deepEqual(result.body, { ok: true, binding: "public_unbound" });
   assert.equal(selected.adapter.rows.length, 0);
   await assert.rejects(() => handleRequest(post(
@@ -378,6 +404,99 @@ test("public Form 1 remains tokenless and cannot manufacture assisted binding", 
     selected.config.submissionHeaderName,
     selected.config.submissionHeaderSecret,
   ), selected.dependencies), (error) => error.status === 422);
+});
+
+test("flat Zoho Forms public envelope derives only the canonical public acknowledgment", async () => {
+  const selected = fixture();
+  const result = await submitProvider(selected, {
+    submissionId: "provider_public_001",
+  });
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.body, { ok: true, binding: "public_unbound" });
+  assert.equal(selected.adapter.rows.length, 0);
+  assert.deepEqual(selected.events, []);
+
+  const nullBinding = await submitProvider(selected, {
+    prefillId: null,
+    configurationRevision: null,
+    submissionId: "provider_public_002",
+  });
+  assert.equal(nullBinding.status, 200);
+  assert.deepEqual(nullBinding.body, { ok: true, binding: "public_unbound" });
+  assert.equal(selected.adapter.rows.length, 0);
+  assert.deepEqual(selected.events, []);
+});
+
+test("flat Zoho Forms assisted envelope derives the nested allowlisted submission", async () => {
+  const selected = fixture();
+  const prepared = await prepare(selected);
+  const submission = {
+    prefillId: prepared.prefillId,
+    configurationRevision: prepared.configurationRevision,
+    submissionId: "provider_assisted_001",
+  };
+  const result = await submitProvider(selected, submission);
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.body, { ok: true, replayed: false });
+  assert.equal(selected.records.get(RECORD_ID).Submission_Channel, "CRM Assisted");
+  const updates = selected.events.filter(([name]) => name === "update").length;
+  assert.equal(updates, 1);
+
+  const replay = await submitProvider(selected, submission);
+  assert.equal(replay.status, 200);
+  assert.deepEqual(replay.body, { ok: true, replayed: true });
+  assert.equal(selected.events.filter(([name]) => name === "update").length, updates);
+
+  await assert.rejects(
+    () => submitProvider(selected, {
+      ...submission,
+      formOverrides: { company: "ZZZ SYNTHETIC Different Plumbing" },
+    }),
+    (error) => error.status === 409 && error.publicCode === "submission_conflict",
+  );
+  assert.equal(selected.events.filter(([name]) => name === "update").length, updates);
+});
+
+test("flat Zoho Forms envelope rejects partial assisted binding", async () => {
+  const selected = fixture();
+  const cases = [
+    {
+      prefillId: "00000000-0000-4000-8000-000000000001",
+      configurationRevision: "",
+    },
+    { prefillId: "", configurationRevision: REVISION },
+    {
+      prefillId: "00000000-0000-4000-8000-000000000001",
+      configurationRevision: null,
+    },
+    { prefillId: null, configurationRevision: REVISION },
+  ];
+  for (const binding of cases) {
+    await assert.rejects(
+      () => submitProvider(selected, binding),
+      (error) => error.status === 422 && error.publicCode === "request_invalid",
+    );
+  }
+  assert.equal(selected.adapter.rows.length, 0);
+  assert.deepEqual(selected.events, []);
+});
+
+test("flat Zoho Forms envelope rejects extra identity and non-affirmative consent", async () => {
+  const selected = fixture();
+  await assert.rejects(
+    () => submitProvider(selected, { extra: { recordId: RECORD_ID } }),
+    (error) => error.status === 422 && error.publicCode === "request_invalid",
+  );
+  const prepared = await prepare(selected);
+  await assert.rejects(
+    () => submitProvider(selected, {
+      prefillId: prepared.prefillId,
+      configurationRevision: prepared.configurationRevision,
+      formOverrides: { contactConsent: false },
+    }),
+    (error) => error.status === 422 && error.publicCode === "form_data_invalid",
+  );
+  assert.equal(selected.events.filter(([name]) => name === "update").length, 0);
 });
 
 test("reissue rotates both credentials without duplicating the journey", async () => {

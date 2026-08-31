@@ -70,13 +70,17 @@ function loadConfig(env = process.env, artifactSourceRevision = ARTIFACT_SOURCE_
   const eventChainSecret = required(
     env, 'ROUTE_CONTROL_EVENT_HMAC_SECRET', 32, 4096, false,
   );
+  const form2WorkflowHmacMaterial = required(
+    env, 'FORM2_WORKFLOW_HMAC_SECRET', 32, 4096, false,
+  );
   const numberSecret = required(env, 'NUMBER_LOOKUP_HMAC_SECRET', 32, 4096, false);
   const sharedHeaderValue = required(
     env, 'ROUTE_CONTROL_SHARED_HEADER_VALUE', 32, 4096, false,
   );
   invariant(new Set([
-    operatorVerificationSecret, eventChainSecret, numberSecret, sharedHeaderValue,
-  ]).size === 4, 'INVALID_RUNTIME_CONFIGURATION',
+    operatorVerificationSecret, eventChainSecret, form2WorkflowHmacMaterial,
+    numberSecret, sharedHeaderValue,
+  ]).size === 5, 'INVALID_RUNTIME_CONFIGURATION',
   'Route-control secrets must be distinct.', { httpStatus: 503 });
   const operatorIdentity = required(env, 'ROUTE_CONTROL_OPERATOR_IDENTITY', 3, 256, false);
   const sharedHeaderName = required(env, 'ROUTE_CONTROL_SHARED_HEADER_NAME', 3, 80)
@@ -99,6 +103,13 @@ function loadConfig(env = process.env, artifactSourceRevision = ARTIFACT_SOURCE_
   invariant(/^[1-9][0-9]{0,29}$/.test(crmOrganizationId),
     'INVALID_RUNTIME_CONFIGURATION', 'CRM organization identity is invalid.',
     { httpStatus: 503 });
+  const form2DestinationSha256 = required(env, 'FORM2_DESTINATION_SHA256', 64, 64);
+  invariant(/^[a-f0-9]{64}$/.test(form2DestinationSha256),
+    'INVALID_RUNTIME_CONFIGURATION', 'Form 2 destination identity is invalid.',
+    { httpStatus: 503 });
+  const form2FormVersion = required(env, 'FORM2_FORM_VERSION', 1, 32);
+  invariant(/^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$/.test(form2FormVersion),
+    'INVALID_RUNTIME_CONFIGURATION', 'Form 2 version is invalid.', { httpStatus: 503 });
   const retellRouteMode = required(env, 'RETELL_ROUTE_MODE', 1, 20);
   invariant(new Set(['disabled', 'isolated_test']).has(retellRouteMode),
     'INVALID_RUNTIME_CONFIGURATION', 'Retell route mode is invalid.', { httpStatus: 503 });
@@ -125,7 +136,7 @@ function loadConfig(env = process.env, artifactSourceRevision = ARTIFACT_SOURCE_
   }
   return Object.freeze({
     environment, deploymentMode, sourceRevision, tables: Object.freeze(tables),
-    operatorVerificationSecret, eventChainSecret, numberSecret,
+    operatorVerificationSecret, eventChainSecret, form2WorkflowHmacMaterial, numberSecret,
     operatorIdHash: `operator_${keyedDigest(eventChainSecret,
       'revenue-desk-route-control-operator-v1', [crmOrganizationId, operatorIdentity])}`,
     sharedHeaderName, sharedHeaderValue, controlHost, expectedProjectIdSha256,
@@ -137,6 +148,9 @@ function loadConfig(env = process.env, artifactSourceRevision = ARTIFACT_SOURCE_
       rollback: '/internal/revenue-desk/rollback-free-test',
     }),
     crmOrganizationId,
+    crmOrganizationSha256: crypto.createHash('sha256')
+      .update(crmOrganizationId, 'utf8').digest('hex'),
+    form2DestinationSha256, form2FormVersion,
     crmApiBaseUrl: exactUrl(env, 'CRM_API_BASE_URL', (url) => (
       new Set(['www.zohoapis.com', 'www.zohoapis.eu', 'www.zohoapis.in',
         'www.zohoapis.com.au', 'www.zohoapis.ca']).has(url.hostname)

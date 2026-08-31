@@ -615,8 +615,9 @@ test("the typed Form 2 Issue contract matches the route and CRM caller artifacts
   }
   assert.match(
     source,
-    /request_id\.matches\("\^\[0-9a-f\]\{8\}-\[0-9a-f\]\{4\}-4\[0-9a-f\]\{3\}-\[89ab\]\[0-9a-f\]\{3\}-\[0-9a-f\]\{12\}\$"\)/,
+    /identity_pattern\s*=\s*"\^\[0-9a-f\]\{8\}-\[0-9a-f\]\{4\}-4\[0-9a-f\]\{3\}-\[89ab\]\[0-9a-f\]\{3\}-\[0-9a-f\]\{12\}\$"\s*;/,
   );
+  assert.match(source, /request_id\.matches\(identity_pattern\)/);
   assert.match(
     source,
     /access_prefix\s*=\s*"\{\{FORM2_ACCESS_PUBLIC_URL\}\}"\s*\+\s*"#setupToken="\s*;/,
@@ -651,6 +652,41 @@ test("the Zoho Forms manifest is email-only and matches the runtime client contr
   assert.equal(form2.access.sms_otp, false);
   assert.equal(form2.access.sms_delivery, false);
   assert.equal(form2.access.proof_destination, "current CRM-bound Contact.Email only");
+  assert.deepEqual(form2.approved_public_access_and_accessibility.desired_state, {
+    public_url: "Enabled",
+    enhanced_accessibility: "Yes",
+    respondent_font_size_control: "Disabled",
+    respondent_letter_spacing_control: "Disabled",
+    respondent_themes_control: "Disabled",
+  });
+  assert.deepEqual(
+    form2.approved_public_access_and_accessibility.public_url_enablement_gate,
+    [
+      "Catalyst Form 2 server-side fail-closed validation deployed and read back",
+      "Dynamic Prefill-Webhook saved and read back",
+      "submission webhook saved and read back",
+      "Development protected headers rotated and matched on Forms and Catalyst",
+      "exact prefill and 36-key submission mappings saved and read back",
+    ],
+  );
+  assert.equal(
+    form2.approved_public_access_and_accessibility.authoritative_live_readback
+      .server_protection_gate_passed,
+    null,
+  );
+  assert.equal(
+    form2.approved_public_access_and_accessibility.authoritative_live_readback
+      .source_values_inferred_as_live,
+    false,
+  );
+  assert.equal(
+    form2.approved_public_access_and_accessibility.organization_only_sharing_allowed,
+    false,
+  );
+  assert.equal(
+    form2.approved_public_access_and_accessibility.bare_permalink_distribution_allowed,
+    false,
+  );
   assert.deepEqual(
     form2.controller_hidden_fields,
     ["prefillHandle", "prefillId", "configurationRevision"],

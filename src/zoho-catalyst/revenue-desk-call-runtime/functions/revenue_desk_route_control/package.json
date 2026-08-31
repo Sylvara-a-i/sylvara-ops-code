@@ -9,7 +9,7 @@
     "node": "24.x"
   },
   "scripts": {
-    "check": "node --check index.js && node --check lib/config.js && node --check lib/connection.js && node --check lib/crm-client.js && node --check lib/http-boundary.js && node --check lib/retell-route-provider.js",
+    "check": "node --check index.js && node --check lib/config.js && node --check lib/connection.js && node --check lib/crm-client.js && node --check lib/form2-evidence-store.js && node --check lib/http-boundary.js && node --check lib/journey-core-service.js && node --check lib/retell-route-provider.js",
     "test": "node --test test/*.test.js",
     "ci": "npm run check && npm test"
   },

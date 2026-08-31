@@ -35,6 +35,9 @@
         "ROUTE_CONTROL_MAX_BODY_BYTES",
         "PLATFORM_OPERATION_TIMEOUT_MS",
         "CRM_ORGANIZATION_ID",
+        "FORM2_WORKFLOW_HMAC_SECRET",
+        "FORM2_DESTINATION_SHA256",
+        "FORM2_FORM_VERSION",
         "CRM_API_BASE_URL",
         "CRM_READ_CONNECTION_LINK_NAME",
         "CRM_WRITE_CONNECTION_LINK_NAME",
@@ -445,6 +448,30 @@
       "boundary": "Binds the hashed operator identity and approved CRM Connection to one organization."
     },
     {
+      "name": "FORM2_WORKFLOW_HMAC_SECRET",
+      "consumer": "route_control",
+      "secret": true,
+      "required": true,
+      "format": "32-4096 opaque characters; exact same value as Form 2 WORKFLOW_HMAC_SECRET",
+      "boundary": "Recomputes the immutable Form 2 journey binding from current server-side CRM identity and evidence; it is distinct from every route-control, provider, and header secret."
+    },
+    {
+      "name": "FORM2_DESTINATION_SHA256",
+      "consumer": "route_control",
+      "secret": false,
+      "required": true,
+      "format": "authoritative lowercase SHA-256 digest of the exact live Form 2 destination",
+      "boundary": "Must match the immutable release manifest and the Form 2 controller artifact identity; a shaped stored digest is not accepted as authority."
+    },
+    {
+      "name": "FORM2_FORM_VERSION",
+      "consumer": "route_control",
+      "secret": false,
+      "required": true,
+      "format": "1-32 character immutable Form 2 version",
+      "boundary": "Must match the submitted CRM evidence and the version used in the Form 2 journey-binding HMAC."
+    },
+    {
       "name": "CRM_API_BASE_URL",
       "consumer": "route_control",
       "secret": false,
@@ -522,7 +549,7 @@
   ],
   "secret_rules": [
     "Real secrets, private IDs, hosts, sender addresses, customer data, and provider identifiers stay in Catalyst private configuration.",
-    "Webhook, event-HMAC, Analytics-partition, number-lookup, readiness, API Gateway, and report-caller secrets must be distinct.",
+    "Webhook, Form 2 workflow-HMAC, event-HMAC, Analytics-partition, number-lookup, readiness, API Gateway, and report-caller secrets must be distinct.",
     "Logs contain only safe event names, modes, public correlation IDs, bounded states, and error codes."
   ],
   "production_rules": [

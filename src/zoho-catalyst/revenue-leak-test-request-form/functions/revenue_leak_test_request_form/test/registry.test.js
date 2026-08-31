@@ -4,6 +4,8 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
+const { FORM_KEYS } = require("../lib/form-contract");
+const { ZOHO_FORMS_SUBMISSION_KEYS } = require("../lib/handler");
 
 const functionRoot = path.resolve(__dirname, "..");
 const componentRoot = path.resolve(functionRoot, "../..");
@@ -50,6 +52,13 @@ test("the exact manifest exposes five Development routes with three server calle
   assert.equal(Object.hasOwn(access, "body_keys"), false);
   assert.equal(manifest.routes.filter((route) => route.method === "POST").every((route) =>
     route.content_type === "application/json"), true);
+  const submission = manifest.routes.find((route) => route.id === "FORM1_SUBMISSION");
+  const providerKeys = [
+    "prefillId", "configurationRevision", "submissionId", ...FORM_KEYS,
+  ];
+  assert.deepEqual(submission.zoho_forms_transport_body_keys, providerKeys);
+  assert.deepEqual([...ZOHO_FORMS_SUBMISSION_KEYS], providerKeys);
+  assert.equal(submission.success_status, 200);
 
   const schema = json(path.join(componentRoot, "config/datastore-schema.json"));
   assert.equal(schema.schema_version, 7);
@@ -114,11 +123,32 @@ test("the Forms contract preserves exactly two forms and separates public and as
     form1.assisted_prefill.submission_webhook.assisted_server_keys,
     ["prefillId", "configurationRevision", "submissionId"],
   );
+  assert.deepEqual(
+    form1.assisted_prefill.submission_webhook.provider_transport_keys,
+    ["prefillId", "configurationRevision", "submissionId", ...FORM_KEYS],
+  );
   assert.equal(form1.assisted_prefill.submission_lanes.public.writer,
     "existing native CRM upsert");
   assert.equal(form1.assisted_prefill.submission_lanes.assisted
     .browser_supplied_record_or_journey_identity_accepted, false);
   assert.equal(form1.assisted_prefill.production_enabled, false);
+  assert.deepEqual(form1.approved_public_access_and_accessibility.desired_state, {
+    public_url: "Enabled",
+    enhanced_accessibility: "Yes",
+    respondent_font_size_control: "Disabled",
+    respondent_letter_spacing_control: "Disabled",
+    respondent_themes_control: "Disabled",
+  });
+  const form1Readback = form1.approved_public_access_and_accessibility
+    .authoritative_live_readback;
+  assert.equal(form1Readback.status, "current_provider_readback_required_after_save");
+  assert.equal(form1Readback.source_values_inferred_as_live, false);
+  for (const field of Object.keys(form1.approved_public_access_and_accessibility.desired_state)) {
+    assert.equal(form1Readback[field], null);
+  }
+  assert.deepEqual(form1.preserved_nonblocking_behavior, [
+    "the legacy CRM review task may still be created when its existing workflow runs, but task creation is not a Journey-core acceptance dependency",
+  ]);
   assert.equal(form2.logical_name, "REVENUE_LEAK_TEST_SETUP_FORM");
 });
 
