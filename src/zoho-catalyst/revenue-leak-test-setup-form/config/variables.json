@@ -1,5 +1,5 @@
 {
-  "schema_version": 5,
+  "schema_version": 6,
   "status": "development-active-production-dark",
   "rules": {
     "values": "Any real secret, private endpoint, route, alias, Connection, picklist, project-identity digest, and deployment value must exist only in active Catalyst Development configuration. Reviewed public protocol constants and exact canonical table names may use the declared code defaults. Dark Production requires only deployment mode and source revision.",
@@ -14,6 +14,7 @@
     { "name": "EXPECTED_CATALYST_PROJECT_ID_SHA256", "classification": "private-platform-identifier", "required": true, "example_allowed": false },
     { "name": "CRM_ORGANIZATION_ID_SHA256", "classification": "private-platform-identifier", "required": true, "example_allowed": false },
     { "name": "SOURCE_REVISION", "classification": "public-build-identity", "required": true, "example_allowed": true },
+    { "name": "ZOHO_CATALYST_ZCQL_PARSER", "classification": "safe-enum", "required": true, "example_allowed": true, "safe_default": "V2" },
     { "name": "ISSUE_PATH", "classification": "private-route", "required": true, "example_allowed": false },
     { "name": "FORM2_ACCESS_PATH", "classification": "private-route", "required": true, "example_allowed": false },
     { "name": "FORM2_OTP_REQUEST_PATH", "classification": "private-route", "required": true, "example_allowed": false },

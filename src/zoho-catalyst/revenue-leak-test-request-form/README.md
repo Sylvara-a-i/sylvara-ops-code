@@ -32,7 +32,7 @@ The historical `288a93c` convergence evidence remains preserved in `free-revenue
 
 Install only from the final immutable release. The complete variable-name and classification registry is [`config/variables.json`](config/variables.json); values remain private Catalyst configuration.
 
-- Deployment/source: `DEPLOYMENT_ENVIRONMENT`, `DEPLOYMENT_MODE`, `EXPECTED_CATALYST_PROJECT_ID_SHA256`, `CRM_ORGANIZATION_ID_SHA256`, `SOURCE_REVISION`.
+- Deployment/source: `DEPLOYMENT_ENVIRONMENT`, `DEPLOYMENT_MODE`, `EXPECTED_CATALYST_PROJECT_ID_SHA256`, `CRM_ORGANIZATION_ID_SHA256`, `SOURCE_REVISION`, and the exact `ZOHO_CATALYST_ZCQL_PARSER=V2` provider binding required for conditional ZCQL transitions.
 - Routes/authentication: `ISSUE_PATH`, `ACCESS_PATH`, `EXCHANGE_PATH`, `PREFILL_PATH`, `SUBMISSION_PATH`, the three matching server-caller `*_HEADER_NAME` and `*_HEADER_SECRET` variables, `TOKEN_PEPPER`, `PREFILL_HANDLE_PEPPER`, and `ISSUING_ACTOR_HASH`.
 - Forms/CRM: `FORM1_PUBLIC_URL`, `FORM1_ACCESS_PUBLIC_URL`, `FORM1_PREFILL_HANDLE_FIELD_ALIAS`, `CRM_READ_CONNECTION_LINK_NAME`, `CRM_WRITE_CONNECTION_LINK_NAME`, `SESSION_TABLE_NAME`, `CRM_API_BASE_URL`, and the five `FORM1_*` canonical value/version variables.
 - Bounded operation defaults: `SESSION_TTL_SECONDS`, `PREFILL_HANDLE_TTL_SECONDS`, `MAX_BODY_BYTES`, `INBOUND_BODY_TIMEOUT_MS`, `OUTBOUND_TIMEOUT_MS`, `OUTBOUND_MAX_BYTES`, and `PLATFORM_OPERATION_TIMEOUT_MS`.

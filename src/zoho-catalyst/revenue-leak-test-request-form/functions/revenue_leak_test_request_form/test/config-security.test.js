@@ -30,6 +30,7 @@ test("configuration binds active Development and dark Production to the stamped 
   const dark = loadConfig(environment({
     DEPLOYMENT_ENVIRONMENT: "production",
     DEPLOYMENT_MODE: "dark",
+    ZOHO_CATALYST_ZCQL_PARSER: undefined,
   }), REVISION);
   assert.deepEqual(dark, {
     darkMode: true,
@@ -39,6 +40,12 @@ test("configuration binds active Development and dark Production to the stamped 
   });
   assert.throws(() => loadConfig(environment({ DEPLOYMENT_MODE: "contained" }), REVISION),
     /development\/active/);
+  for (const invalidParser of [undefined, "V1", "v2", "V2 "]) {
+    assert.throws(
+      () => loadConfig(environment({ ZOHO_CATALYST_ZCQL_PARSER: invalidParser }), REVISION),
+      /ZOHO_CATALYST_ZCQL_PARSER/,
+    );
+  }
   assert.throws(() => loadConfig(environment(), "2".repeat(40)), /stamped function artifact/);
   for (const invalidRevision of [
     "a".repeat(39), "a".repeat(41), "a".repeat(80), "A".repeat(40),

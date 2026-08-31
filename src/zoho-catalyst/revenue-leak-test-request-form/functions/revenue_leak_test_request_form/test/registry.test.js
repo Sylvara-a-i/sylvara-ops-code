@@ -17,10 +17,19 @@ function json(selected) {
 
 test("the variable registry and placeholder environment remain in exact lockstep", () => {
   const registry = json(path.join(componentRoot, "config/variables.json"));
-  assert.equal(registry.schema_version, 5);
+  assert.equal(registry.schema_version, 6);
   assert.equal(registry.status, "development-active-production-dark");
   const names = registry.variables.map((entry) => entry.name);
   assert.equal(new Set(names).size, names.length);
+  assert.deepEqual(
+    registry.variables.find((entry) => entry.name === "ZOHO_CATALYST_ZCQL_PARSER"),
+    {
+      name: "ZOHO_CATALYST_ZCQL_PARSER",
+      classification: "safe-enum",
+      required: true,
+      safe_default: "V2",
+    },
+  );
   const example = fs.readFileSync(path.join(functionRoot, ".env.example"), "utf8");
   const exampleNames = example.split(/\r?\n/)
     .filter((line) => line && !line.startsWith("#"))

@@ -1870,7 +1870,7 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
 
     def test_caller_manifest_is_development_only_and_not_deployment_authority(self) -> None:
         manifest = self.callers
-        self.assertEqual(manifest["schema_version"], 4)
+        self.assertEqual(manifest["schema_version"], 5)
         self.assertEqual(manifest["status"], "bounded_development_installation_candidate")
         self.assertEqual(manifest["environment"], "Development only")
         self.assertFalse(manifest["render_policy"]["commit_rendered_source"])
@@ -2118,6 +2118,10 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
             source,
         )
         self.assertNotIn("form_url", source)
+        self.assertEqual(caller["success_response"]["open_target"], "same window")
+        self.assertIn('openUrl(destination_url,"same window");', source)
+        self.assertNotIn('"new window"', source)
+        self.assertNotIn("successive=true", source)
         self.assertLess(source.index("can_open = true;"), source.index("openUrl("))
 
     def test_form2_deluge_template_matches_the_exact_caller_contract(self) -> None:
@@ -2187,6 +2191,10 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         self.assertIn(token_assignment, source)
         self.assertIn(token_guard, source)
         self.assertIn(".right(43);", source)
+        self.assertEqual(caller["success_response"]["open_target"], "same window")
+        self.assertIn('openUrl(destination_url,"same window");', source)
+        self.assertNotIn('"new window"', source)
+        self.assertNotIn("successive=true", source)
         self.assertLess(source.index(token_assignment), source.index(token_guard))
         self.assertLess(source.index(token_guard), source.index("can_open = true;"))
         self.assertLess(source.index("can_open = true;"), source.index("openUrl("))

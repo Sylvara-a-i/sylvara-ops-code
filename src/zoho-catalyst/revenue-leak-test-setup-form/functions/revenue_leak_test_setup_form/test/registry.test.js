@@ -70,6 +70,14 @@ test("the public variable registry and placeholder environment file stay in lock
     },
   );
   const byName = Object.fromEntries(registry.variables.map((entry) => [entry.name, entry]));
+  assert.equal(registry.schema_version, 6);
+  assert.deepEqual(byName.ZOHO_CATALYST_ZCQL_PARSER, {
+    name: "ZOHO_CATALYST_ZCQL_PARSER",
+    classification: "safe-enum",
+    required: true,
+    example_allowed: true,
+    safe_default: "V2",
+  });
   for (const name of [
     "SESSION_TABLE_NAME",
     "PREFILL_TABLE_NAME",
