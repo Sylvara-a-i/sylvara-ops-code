@@ -29,7 +29,7 @@ This contract is desired state, not deployment authorization. The repository top
 [`config/caller-manifest.json`](config/caller-manifest.json) and [`functions/`](functions/) define five bounded Development callers exposed through the unchanged predecessor and exactly three replacement visible labels:
 
 - `Start Free-Test Request` remains the unchanged contained predecessor and rollback fallback.
-- `Open Free-Test Setup` is bound module-specifically without merging caller bodies: Leads invoke the Form 1 assisted launcher, while Deals invoke the controlled Form 2 setup-issuance function. Each uses Zoho CRM's supported new-window disposition to open only its exact authenticated Catalyst access URL; the default named browser window is reused, and no CRM identity or PII enters either URL.
+- `Open Free-Test Setup` is bound module-specifically without merging caller bodies: Leads invoke the Form 1 assisted launcher, while Deals invoke the controlled Form 2 setup-issuance function. Each hands the current CRM tab to only its exact authenticated Catalyst access URL after the backend response validates. This avoids a popup or new-window dependency, and no CRM identity or PII enters either URL.
 - `Approve And Start Free Test` performs approval and activation as two separate backend requests and returns approved/inactive when activation fails.
 - `Stop Or Roll Back Free Test` invokes the exact durable stop/unbind/CRM rollback path and displays approved manual provider instructions when automatic restoration is unavailable.
 
