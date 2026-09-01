@@ -2117,6 +2117,8 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
             'request_id.matches("^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")',
             source,
         )
+        self.assertIn(r'(\.[0-9]{3})?Z$"', source)
+        self.assertNotIn(r'(\\.[0-9]{3})?Z$"', source)
         self.assertNotIn("form_url", source)
         self.assertEqual(caller["success_response"]["open_target"], "same window")
         self.assertIn('openUrl(destination_url,"same window");', source)
@@ -2201,6 +2203,8 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         self.assertIn("response_body.size() == 4", source)
         self.assertIn('identity_pattern = "^[0-9a-f]{8}-', source)
         self.assertIn("request_id.matches(identity_pattern)", source)
+        self.assertIn(r'(\.[0-9]{3})?Z$"', source)
+        self.assertNotIn(r'(\\.[0-9]{3})?Z$"', source)
         self.assertIn("length() ==", source)
         self.assertIn("+ 43", source)
         token_assignment = "setup_token = "
