@@ -65,6 +65,8 @@
     "src/zoho-forms/free-revenue-leak-test/forms-manifest.json",
     "src/zoho-crm/free-revenue-leak-test/config/automation-contract.json",
     "src/zoho-crm/free-revenue-leak-test/config/caller-manifest.json",
+    "src/zoho-crm/free-revenue-leak-test/client-scripts/open_free_test_setup_leads.js",
+    "src/zoho-crm/free-revenue-leak-test/client-scripts/open_free_test_setup_deals.js",
     "src/zoho-crm/free-revenue-leak-test/functions/start_free_revenue_leak_test_request.deluge",
     "src/zoho-crm/free-revenue-leak-test/functions/open_free_test_setup.deluge",
     "src/zoho-crm/free-revenue-leak-test/functions/initialize_setup_access_issue_request_id.deluge",
@@ -92,6 +94,21 @@
         "approve_and_start_free_test",
         "stop_or_rollback_free_test"
       ],
+      "client_scripts": [
+        { "name": "open_free_test_setup_leads", "module": "Leads", "page": "Detail Page (Standard)", "event_type": "Button Event", "event": "onClick", "source": "src/zoho-crm/free-revenue-leak-test/client-scripts/open_free_test_setup_leads.js", "invokes_function": "open_free_test_setup", "function_category": "Button", "function_state": "active", "function_return_type": "string", "function_arguments": [{ "name": "record_id", "type": "string" }, { "name": "crm_module", "type": "string" }], "navigation_api": "$Client.openURL", "development_zdk_execution_canary_required": true },
+        { "name": "open_free_test_setup_deals", "module": "Deals", "page": "Detail Page (Standard)", "event_type": "Button Event", "event": "onClick", "source": "src/zoho-crm/free-revenue-leak-test/client-scripts/open_free_test_setup_deals.js", "invokes_function": "issue_revenue_leak_test_setup", "function_category": "Button", "function_state": "active", "function_return_type": "string", "function_arguments": [{ "name": "deal_id", "type": "string" }], "navigation_api": "$Client.openURL", "development_zdk_execution_canary_required": true }
+      ],
+      "client_script_cutover_order": [
+        "disable_and_read_back_no_direct_function_binding",
+        "publish_and_read_back_url_returning_functions_while_controls_disabled",
+        "publish_and_read_back_module_specific_client_scripts",
+        "bind_disabled_controls_to_exact_client_scripts",
+        "pass_leads_development_zdk_execution_canary",
+        "enable_leads_replacement_control_after_its_exact_readback_and_canary",
+        "pass_deals_development_zdk_execution_canary",
+        "enable_deals_replacement_control_after_its_exact_readback_and_canary"
+      ],
+      "direct_url_returning_function_binding_allowed": false,
       "controls": [
         "Start Free-Test Request",
         "Open Free-Test Setup",
@@ -100,8 +117,8 @@
       ],
       "control_bindings": [
         { "label": "Start Free-Test Request", "module": "Leads", "function": "start_free_revenue_leak_test_request", "replacement": false },
-        { "label": "Open Free-Test Setup", "module": "Leads", "function": "open_free_test_setup", "replacement": true },
-        { "label": "Open Free-Test Setup", "module": "Deals", "function": "issue_revenue_leak_test_setup", "replacement": true },
+        { "label": "Open Free-Test Setup", "module": "Leads", "client_script": "open_free_test_setup_leads", "invokes_function": "open_free_test_setup", "replacement": true },
+        { "label": "Open Free-Test Setup", "module": "Deals", "client_script": "open_free_test_setup_deals", "invokes_function": "issue_revenue_leak_test_setup", "replacement": true },
         { "label": "Approve And Start Free Test", "module": "Deals", "function": "approve_and_start_free_test", "replacement": true },
         { "label": "Stop Or Roll Back Free Test", "module": "Deals", "function": "stop_or_rollback_free_test", "replacement": true }
       ],

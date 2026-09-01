@@ -105,11 +105,14 @@
         "configure and read back Form 1 public and assisted protections",
         "configure and read back controlled Form 2 access, OTP, prefill, protected headers, and submission",
         "enable the exact preserved Development Gateway only after all server protections pass",
-        "install and read back the three replacement CRM controls while retaining the predecessor",
+        "disable both Open Free-Test Setup controls and read back no direct Function binding before publishing either URL-returning CRM Function revision",
+        "publish and read back the exact Button-category Functions and module-specific Client Scripts while the replacement controls remain disabled",
+        "bind the disabled Open controls only to their exact Client Scripts, pass separate Lead and Deal ZZZ SYNTHETIC Development ZDK execution canaries, then enable each Open control only after its own exact readback while retaining the predecessor",
         "run ZZZ SYNTHETIC Form 1, Form 2, approval, expected fail-closed activation, resume, and rollback canaries"
       ],
       "rollback_order": [
-        "disable the replacement CRM controls and Form webhooks",
+        "disable the replacement CRM controls before restoring any predecessor function revision, then read back no direct URL-returning Function binding",
+        "disable the Form webhooks",
         "disable the Development Gateway if route or function readback is not exact",
         "retain the Start Free-Test Request predecessor as the launch fallback",
         "restore only prior verified Development function revisions when required",

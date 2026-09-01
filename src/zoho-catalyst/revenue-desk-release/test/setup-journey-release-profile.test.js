@@ -71,7 +71,7 @@ test('binds the exact Development setup journey to one immutable revision', () =
   ]);
   assert.equal(manifest.job_pools.length, 1);
   assert.equal(manifest.tables.length, 12);
-  assert.equal(Object.keys(manifest.contract_sha256).length, 29);
+  assert.equal(Object.keys(manifest.contract_sha256).length, 31);
   assert.equal(verifyReadback(manifest, readback, contract), true);
 });
 
@@ -125,13 +125,46 @@ test('binds exactly three replacement CRM labels plus the retained predecessor',
     'Approve And Start Free Test',
     'Stop Or Roll Back Free Test',
   ]);
+  assert.deepEqual(crm.client_scripts, [
+    { name: 'open_free_test_setup_leads', module: 'Leads',
+      page: 'Detail Page (Standard)', event_type: 'Button Event', event: 'onClick',
+      source: 'src/zoho-crm/free-revenue-leak-test/client-scripts/open_free_test_setup_leads.js',
+      invokes_function: 'open_free_test_setup', function_category: 'Button',
+      function_state: 'active', function_return_type: 'string',
+      function_arguments: [{ name: 'record_id', type: 'string' },
+        { name: 'crm_module', type: 'string' }], navigation_api: '$Client.openURL',
+      development_zdk_execution_canary_required: true },
+    { name: 'open_free_test_setup_deals', module: 'Deals',
+      page: 'Detail Page (Standard)', event_type: 'Button Event', event: 'onClick',
+      source: 'src/zoho-crm/free-revenue-leak-test/client-scripts/open_free_test_setup_deals.js',
+      invokes_function: 'issue_revenue_leak_test_setup', function_category: 'Button',
+      function_state: 'active', function_return_type: 'string',
+      function_arguments: [{ name: 'deal_id', type: 'string' }],
+      navigation_api: '$Client.openURL', development_zdk_execution_canary_required: true },
+  ]);
+  for (const script of crm.client_scripts) {
+    assert.equal(contract.contract_files.includes(script.source), true);
+  }
+  assert.deepEqual(crm.client_script_cutover_order, [
+    'disable_and_read_back_no_direct_function_binding',
+    'publish_and_read_back_url_returning_functions_while_controls_disabled',
+    'publish_and_read_back_module_specific_client_scripts',
+    'bind_disabled_controls_to_exact_client_scripts',
+    'pass_leads_development_zdk_execution_canary',
+    'enable_leads_replacement_control_after_its_exact_readback_and_canary',
+    'pass_deals_development_zdk_execution_canary',
+    'enable_deals_replacement_control_after_its_exact_readback_and_canary',
+  ]);
+  assert.equal(crm.direct_url_returning_function_binding_allowed, false);
   assert.deepEqual(crm.control_bindings, [
     { label: 'Start Free-Test Request', module: 'Leads',
       function: 'start_free_revenue_leak_test_request', replacement: false },
     { label: 'Open Free-Test Setup', module: 'Leads',
-      function: 'open_free_test_setup', replacement: true },
+      client_script: 'open_free_test_setup_leads',
+      invokes_function: 'open_free_test_setup', replacement: true },
     { label: 'Open Free-Test Setup', module: 'Deals',
-      function: 'issue_revenue_leak_test_setup', replacement: true },
+      client_script: 'open_free_test_setup_deals',
+      invokes_function: 'issue_revenue_leak_test_setup', replacement: true },
     { label: 'Approve And Start Free Test', module: 'Deals',
       function: 'approve_and_start_free_test', replacement: true },
     { label: 'Stop Or Roll Back Free Test', module: 'Deals',
