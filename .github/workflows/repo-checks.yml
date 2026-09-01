@@ -86,9 +86,6 @@ jobs:
       - name: Run regression tests
         run: PYTHONPATH=.ci-deps python3 -m unittest discover -s tools/safety/tests -p 'test_*.py' -v
 
-      - name: Run CRM free Revenue Leak Test contract checks
-        run: python3 -m unittest discover -s src/zoho-crm/free-revenue-leak-test/tests -p 'test_*.py' -v
-
       - name: Install the verified Node.js baseline
         env:
           NODE_ARCHIVE_SHA256: 14b342e71204f811bde6153be8e04b62aef63c236fef92b55f9c83154b409647
@@ -107,6 +104,9 @@ jobs:
           mkdir -p "$install_dir"
           tar -xJf "$archive_path" --strip-components=1 -C "$install_dir"
           printf '%s\n' "$install_dir/bin" >> "$GITHUB_PATH"
+
+      - name: Run CRM free Revenue Leak Test contract checks
+        run: python3 -m unittest discover -s src/zoho-crm/free-revenue-leak-test/tests -p 'test_*.py' -v
 
       - name: Install exact gateway dependencies without lifecycle scripts
         run: >-

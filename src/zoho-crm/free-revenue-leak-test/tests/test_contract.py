@@ -1870,7 +1870,7 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
 
     def test_caller_manifest_is_development_only_and_not_deployment_authority(self) -> None:
         manifest = self.callers
-        self.assertEqual(manifest["schema_version"], 5)
+        self.assertEqual(manifest["schema_version"], 6)
         self.assertEqual(manifest["status"], "bounded_development_installation_candidate")
         self.assertEqual(manifest["environment"], "Development only")
         self.assertFalse(manifest["render_policy"]["commit_rendered_source"])
@@ -1918,6 +1918,88 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
                 "Open Free-Test Setup",
                 "../functions/issue_revenue_leak_test_setup.deluge",
             ),
+        )
+        self.assertEqual(
+            form1["function_arguments"][1]["source"], "fixed Client Script value"
+        )
+        self.assertEqual(
+            form1["client_script"],
+            {
+                "source": "../client-scripts/open_free_test_setup_leads.js",
+                "page": "Detail Page (Standard)",
+                "event_type": "Button Event",
+                "event": "onClick",
+                "function_api_name": "open_free_test_setup",
+                "zdk_response_path": "details.output",
+                "navigation_api": "$Client.openURL",
+                "open_target": "new browser tab/window",
+                "direct_http": False,
+            },
+        )
+        self.assertEqual(
+            form2["client_script"],
+            {
+                "source": "../client-scripts/open_free_test_setup_deals.js",
+                "page": "Detail Page (Standard)",
+                "event_type": "Button Event",
+                "event": "onClick",
+                "function_api_name": "issue_revenue_leak_test_setup",
+                "zdk_response_path": "details.output",
+                "navigation_api": "$Client.openURL",
+                "open_target": "new browser tab/window",
+                "direct_http": False,
+            },
+        )
+        self.assertEqual(
+            form1["source_format"],
+            "Zoho CRM Deluge Button-category function body invoked by CRM Client Script",
+        )
+        self.assertEqual(form2["source_format"], form1["source_format"])
+        self.assertEqual(
+            form1["server_function"],
+            {
+                "api_name": "open_free_test_setup",
+                "category": "Button",
+                "state": "active",
+                "return_type": "string",
+                "arguments": [
+                    {"name": "record_id", "type": "string"},
+                    {"name": "crm_module", "type": "string"},
+                ],
+                "development_zdk_execution_canary_required": True,
+                "category_contract_basis": (
+                    "Use the provider-specific custom-button Client Script flow and "
+                    "require exact Development metadata plus execution readback before "
+                    "enablement; generic association guidance describes Standalone and "
+                    "is not sufficient deployment evidence."
+                ),
+            },
+        )
+        self.assertEqual(
+            form2["server_function"],
+            {
+                "api_name": "issue_revenue_leak_test_setup",
+                "category": "Button",
+                "state": "active",
+                "return_type": "string",
+                "arguments": [{"name": "deal_id", "type": "string"}],
+                "development_zdk_execution_canary_required": True,
+                "category_contract_basis": form1["server_function"][
+                    "category_contract_basis"
+                ],
+            },
+        )
+        self.assertIn(
+            "Disable both existing Open Free-Test Setup controls",
+            self.callers["activation_gates"][2],
+        )
+        self.assertIn(
+            "one ZZZ SYNTHETIC Development ZDK function-execution canary for each",
+            self.callers["activation_gates"][4],
+        )
+        self.assertIn(
+            "before restoring any predecessor function revision",
+            self.callers["rollback"][0],
         )
         self.assertNotIn(
             "Issue Revenue Leak Test Setup",
@@ -2073,7 +2155,7 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
             removal["containment"]["delete_schedule_action_status_flag_authorized"]
         )
 
-    def test_form1_deluge_template_is_record_bound_and_opens_only_token_url(self) -> None:
+    def test_form1_deluge_template_is_record_bound_and_returns_only_token_url(self) -> None:
         caller = next(
             item for item in self.callers["callers"]
             if item["logical_name"] == "FORM1_ASSISTED_ISSUE_CALLER"
@@ -2085,7 +2167,7 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         self.assertIn('valid_module = module_text == "Leads";', source)
         self.assertNotIn('module_text == "Deals"', source)
         self.assertEqual(source.lower().count("invokeurl"), 1)
-        self.assertEqual(source.count("openUrl("), 1)
+        self.assertEqual(source.count("openUrl("), 0)
         self.assertEqual(
             sorted(set(re.findall(r"\{\{[A-Z0-9_]+\}\}", source))),
             sorted(caller["private_placeholders"]),
@@ -2120,11 +2202,37 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         self.assertIn(r'(\.[0-9]{3})?Z$"', source)
         self.assertNotIn(r'(\\.[0-9]{3})?Z$"', source)
         self.assertNotIn("form_url", source)
-        self.assertEqual(caller["success_response"]["open_target"], "same window")
-        self.assertIn('openUrl(destination_url,"same window");', source)
+        self.assertEqual(
+            caller["success_response"]["open_target"], "new browser tab/window"
+        )
+        self.assertEqual(
+            caller["success_response"]["function_return_envelope"],
+            {
+                "exact_keys": ["schemaVersion", "ok", "accessUrl"],
+                "schema_version": "crm-launch-v1",
+            },
+        )
+        self.assertNotIn('openUrl(destination_url,"same window");', source)
         self.assertNotIn('"new window"', source)
         self.assertNotIn("successive=true", source)
-        self.assertLess(source.index("can_open = true;"), source.index("openUrl("))
+        for line in (
+            'navigation_result.put("schemaVersion","crm-launch-v1");',
+            'navigation_result.put("ok",false);',
+            'navigation_result.put("accessUrl","");',
+            'navigation_result.put("ok",true);',
+            'navigation_result.put("accessUrl",destination_url);',
+            "return navigation_result.toString();",
+        ):
+            self.assertIn(line, source)
+        self.assertEqual(source.count("return navigation_result.toString();"), 1)
+        self.assertLess(
+            source.index("can_open = true;"),
+            source.index('navigation_result.put("ok",true);'),
+        )
+        self.assertLess(
+            source.index('navigation_result.put("accessUrl",destination_url);'),
+            source.index("return navigation_result.toString();"),
+        )
         for rejection_code in (
             "request_invalid",
             "transport_envelope",
@@ -2157,7 +2265,7 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         )
 
         self.assertEqual(source.lower().count("invokeurl"), 1)
-        self.assertEqual(source.count("openUrl("), 1)
+        self.assertEqual(source.count("openUrl("), 0)
         self.assertIn("detailed : true", source)
         self.assertIn("response-format : STRING", source)
         self.assertIn('request_headers.put("Content-Type","application/json");', source)
@@ -2212,13 +2320,118 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         self.assertIn(token_assignment, source)
         self.assertIn(token_guard, source)
         self.assertIn(".right(43);", source)
-        self.assertEqual(caller["success_response"]["open_target"], "same window")
-        self.assertIn('openUrl(destination_url,"same window");', source)
+        self.assertEqual(
+            caller["success_response"]["open_target"], "new browser tab/window"
+        )
+        self.assertEqual(
+            caller["success_response"]["function_return_envelope"],
+            {
+                "exact_keys": ["schemaVersion", "ok", "accessUrl"],
+                "schema_version": "crm-launch-v1",
+            },
+        )
+        self.assertNotIn('openUrl(destination_url,"same window");', source)
         self.assertNotIn('"new window"', source)
         self.assertNotIn("successive=true", source)
         self.assertLess(source.index(token_assignment), source.index(token_guard))
         self.assertLess(source.index(token_guard), source.index("can_open = true;"))
-        self.assertLess(source.index("can_open = true;"), source.index("openUrl("))
+        for line in (
+            'navigation_result.put("schemaVersion","crm-launch-v1");',
+            'navigation_result.put("ok",false);',
+            'navigation_result.put("accessUrl","");',
+            'navigation_result.put("ok",true);',
+            'navigation_result.put("accessUrl",destination_url);',
+            "return navigation_result.toString();",
+        ):
+            self.assertIn(line, source)
+        self.assertEqual(source.count("return navigation_result.toString();"), 1)
+        self.assertLess(
+            source.index("can_open = true;"),
+            source.index('navigation_result.put("ok",true);'),
+        )
+        self.assertLess(
+            source.index('navigation_result.put("accessUrl",destination_url);'),
+            source.index("return navigation_result.toString();"),
+        )
+
+    def test_open_setup_client_scripts_use_only_the_supported_navigation_boundary(self) -> None:
+        expected = {
+            "FORM1_ASSISTED_ISSUE_CALLER": {
+                "module": "Leads",
+                "function": "open_free_test_setup",
+                "parameters": [
+                    'parameters.set("record_id", recordId);',
+                    'parameters.set("crm_module", expectedModule);',
+                ],
+                "placeholder": "{{FORM1_ACCESS_PUBLIC_URL}}",
+                "fragment": "#journeyToken=",
+            },
+            "FORM2_SETUP_ISSUE_CALLER": {
+                "module": "Deals",
+                "function": "issue_revenue_leak_test_setup",
+                "parameters": ['parameters.set("deal_id", recordId);'],
+                "placeholder": "{{FORM2_ACCESS_PUBLIC_URL}}",
+                "fragment": "#setupToken=",
+            },
+        }
+        by_name = {caller["logical_name"]: caller for caller in self.callers["callers"]}
+
+        for logical_name, contract in expected.items():
+            caller = by_name[logical_name]
+            client_script = caller["client_script"]
+            source_path = (CALLER_MANIFEST_PATH.parent / client_script["source"]).resolve()
+            self.assertTrue(source_path.is_relative_to(PACKAGE))
+            source = source_path.read_text(encoding="utf-8")
+
+            self.assertEqual(client_script["function_api_name"], contract["function"])
+            self.assertEqual(client_script["zdk_response_path"], "details.output")
+            self.assertEqual(client_script["navigation_api"], "$Client.openURL")
+            self.assertEqual(client_script["open_target"], "new browser tab/window")
+            self.assertFalse(client_script["direct_http"])
+            self.assertIn(f'const expectedModule = "{contract["module"]}";', source)
+            self.assertIn(f'const functionApiName = "{contract["function"]}";', source)
+            self.assertIn("$Page.module", source)
+            self.assertIn("$Page.record_id", source)
+            self.assertIn("/^[1-9][0-9]{9,29}$/", source)
+            self.assertIn("/^[A-Za-z0-9_-]{43}$/", source)
+            self.assertIn(
+                f'const accessUrlPrefix = "{contract["placeholder"]}{contract["fragment"]}";',
+                source,
+            )
+            self.assertEqual(source.count("parameters.set("), len(contract["parameters"]))
+            for parameter in contract["parameters"]:
+                self.assertIn(parameter, source)
+            self.assertEqual(source.count("ZDK.Apps.CRM.Functions.execute("), 1)
+            self.assertIn("response.code !== \"success\"", source)
+            self.assertIn("response.details.output", source)
+            self.assertIn('"output_type"', source)
+            self.assertIn("response.details.output.length > 4096", source)
+            self.assertIn("JSON.parse(response.details.output)", source)
+            self.assertIn(
+                'JSON.stringify(["accessUrl", "ok", "schemaVersion"])', source
+            )
+            self.assertIn('envelope.schemaVersion !== "crm-launch-v1"', source)
+            self.assertIn("envelope.ok !== true", source)
+            self.assertIn("accessUrlPrefix.length + 43", source)
+            self.assertIn('accessUrl.includes("?")', source)
+            self.assertIn('accessUrl.includes("&")', source)
+            self.assertIn("/\\s/.test(accessUrl)", source)
+            self.assertIn("accessUrl.includes(recordId)", source)
+            self.assertEqual(source.count("$Client.openURL("), 1)
+            self.assertLess(source.index("ZDK.Client.hideLoader();"), source.index("$Client.openURL("))
+            self.assertNotIn("window.", source)
+            self.assertNotIn("document.", source)
+            self.assertNotIn("location.", source)
+            self.assertNotIn("fetch(", source)
+            self.assertNotIn("ZDK.HTTP", source)
+            self.assertNotIn("ZDK.Client.navigateTo", source)
+            self.assertNotIn("console.", source)
+            self.assertNotIn("log(", source)
+            self.assertNotRegex(source, r"https?://")
+            self.assertEqual(
+                sorted(set(re.findall(r"\{\{[A-Z0-9_]+\}\}", source))),
+                [contract["placeholder"]],
+            )
 
     def test_split_control_callers_preserve_separate_transitions_and_rollback(self) -> None:
         by_name = {caller["logical_name"]: caller for caller in self.callers["callers"]}

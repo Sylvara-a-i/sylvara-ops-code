@@ -9,9 +9,10 @@ only in its URL fragment. No record ID or PII enters the URL, and the credential
 is never sent to Zoho Forms.
 Idempotency: Catalyst conditionally initializes the journey only when blank and
 rotates or resumes the token session for the authoritative canonical journey.
-Failure: no URL opens unless the exact 201 response and URL grammar verify.
-Navigation: use the current CRM tab so the verified handoff does not depend on
-popup or new-window behavior after the asynchronous Catalyst issue request.
+Failure: no URL is returned unless the exact 201 response and URL grammar verify.
+Navigation: return a versioned three-field envelope to the module-specific CRM
+Client Script. Only that browser-side script may call the provider-supported
+external-navigation API after independently validating this result.
 Logging: coarse outcomes only; never log IDs, tokens, URLs, payloads, or errors.
 Rollback: disable this replacement button and leave the retained containment button.
 */
@@ -82,11 +83,17 @@ catch(failure)
 	rejection_code = "handler_error";
 	info "form1_assisted_issue_failed";
 }
+navigation_result = Map();
+navigation_result.put("schemaVersion","crm-launch-v1");
+navigation_result.put("ok",false);
+navigation_result.put("accessUrl","");
 if(can_open == true)
 {
-	openUrl(destination_url,"same window");
+	navigation_result.put("ok",true);
+	navigation_result.put("accessUrl",destination_url);
 }
 else
 {
 	info "form1_assisted_issue_rejected_" + rejection_code;
 }
+return navigation_result.toString();

@@ -9,10 +9,11 @@ automation triggers are suppressed, every nonblank governed value must be valid,
 and the exact Development readback must converge before Catalyst is called.
 Idempotency: the deterministic UUID-v4-shaped issue identity and bounded default
 initialization are safe to repeat. Ambiguous writes are never retried.
-Failure behavior: no URL opens after any conflict, incomplete read, failed write,
-readback mismatch, non-exact response, or malformed destination.
-Navigation: use the current CRM tab so the verified handoff does not depend on
-popup or new-window behavior after the asynchronous Catalyst issue request.
+Failure behavior: no URL is returned after any conflict, incomplete read, failed
+write, readback mismatch, non-exact response, or malformed destination.
+Navigation: return a versioned three-field envelope to the module-specific CRM
+Client Script. Only that browser-side script may call the provider-supported
+external-navigation API after independently validating this result.
 Logging: coarse outcomes only; never log IDs, bodies, URLs, headers, or errors.
 Rollback: disable the button, revoke the Connection, and preserve CRM/session evidence.
 Private setup: replace every {{...}} token outside Git, then save and syntax-check in CRM.
@@ -199,11 +200,17 @@ catch(failure)
 {
 	info "form2_issue_failed";
 }
+navigation_result = Map();
+navigation_result.put("schemaVersion","crm-launch-v1");
+navigation_result.put("ok",false);
+navigation_result.put("accessUrl","");
 if(can_open == true)
 {
-	openUrl(destination_url,"same window");
+	navigation_result.put("ok",true);
+	navigation_result.put("accessUrl",destination_url);
 }
 else
 {
 	info "form2_issue_rejected";
 }
+return navigation_result.toString();

@@ -29,7 +29,8 @@ This contract is desired state, not deployment authorization. The repository top
 [`config/caller-manifest.json`](config/caller-manifest.json) and [`functions/`](functions/) define five bounded Development callers exposed through the unchanged predecessor and exactly three replacement visible labels:
 
 - `Start Free-Test Request` remains the unchanged contained predecessor and rollback fallback.
-- `Open Free-Test Setup` is bound module-specifically without merging caller bodies: Leads invoke the Form 1 assisted launcher, while Deals invoke the controlled Form 2 setup-issuance function. Each hands the current CRM tab to only its exact authenticated Catalyst access URL after the backend response validates. This avoids a popup or new-window dependency, and no CRM identity or PII enters either URL.
+- `Open Free-Test Setup` is bound module-specifically without merging caller bodies: the Lead and Deal detail-page buttons each run a dedicated CRM Client Script, which invokes the corresponding server-side CRM Function and independently validates its versioned result. Only then does the script call Zoho's supported `$Client.openURL` API. Zoho opens external destinations in a new browser tab/window; same-tab external navigation is not a supported Client Script boundary. No CRM identity or PII enters either URL.
+- Cutover must disable both existing `Open Free-Test Setup` controls and prove that neither control remains directly bound to a URL-returning Function before either Function revision is published. The provider-specific custom-button Client Script flow uses the existing Button-category Functions, while generic association guidance describes Standalone; therefore exact Development metadata readback and a separate ZZZ SYNTHETIC ZDK execution canary for each module-specific script are mandatory. Each control is enabled only after its own canary succeeds. Rollback disables and reads back both controls before any predecessor Function revision is restored.
 - `Approve And Start Free Test` performs approval and activation as two separate backend requests and returns approved/inactive when activation fails.
 - `Stop Or Roll Back Free Test` invokes the exact durable stop/unbind/CRM rollback path and displays approved manual provider instructions when automatic restoration is unavailable.
 
@@ -72,11 +73,11 @@ Live configuration is authoritative only after independent readback. The immutab
 
 ## Local Verification
 
-Run the package-owned contract tests from the repository root:
+Run the package-owned contract and Client Script VM tests from the repository root with the required Node.js 24.19.0 runtime on `PATH`:
 
 ```powershell
-python src/zoho-crm/free-revenue-leak-test/tests/test_contract.py
-python src/zoho-crm/free-revenue-leak-test/tests/test_workflow_repair_packet.py
+node --version
+python -m unittest discover -s src/zoho-crm/free-revenue-leak-test/tests -p 'test_*.py' -v
 ```
 
-Passing tests prove only the checked-in JSON, sanitized Deluge templates, and pure packet-validator behavior. Zoho CRM save/syntax validation, private rendering, Connection behavior, live workflow mutation/readback, route execution, and synthetic acceptance remain separate Development gates.
+Passing tests prove only the checked-in JSON, sanitized Deluge templates, Client Script behavior against the mocked ZDK boundary, and pure packet-validator behavior. Zoho CRM save/syntax validation, private rendering, Connection behavior, live Client Script and Function metadata/readback, separate Lead and Deal ZDK execution canaries, route execution, and synthetic acceptance remain separate Development gates.
