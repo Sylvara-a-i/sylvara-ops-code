@@ -1,7 +1,9 @@
 /*
-Owning workflow: CRM record-bound assisted Form 1 launch.
-Trigger: Administrator-restricted Leads `Open Free-Test Setup` record-details button.
-Inputs: current Lead ID and the exact fixed `Leads` module API name from the button binding.
+Owning workflow: CRM record-bound assisted Form 1 launch through the distinct
+Standalone Function invoked by the module-specific Client Script.
+Trigger: Administrator-restricted Leads `Open Free-Test Setup` record-details
+Button Event Client Script.
+Inputs: current Lead ID and the exact fixed `Leads` module API name from the Client Script.
 Security: Catalyst reads/initializes the canonical CRM journey with a conditional
 server-side write. It receives record identity only over an authenticated private
 request and returns the Catalyst access page with the one-time journey credential
@@ -14,7 +16,8 @@ Navigation: return a versioned three-field envelope to the module-specific CRM
 Client Script. Only that browser-side script may call the provider-supported
 external-navigation API after independently validating this result.
 Logging: coarse outcomes only; never log IDs, tokens, URLs, payloads, or errors.
-Rollback: disable this replacement button and leave the retained containment button.
+Rollback: disable the replacement control and preserve the retained containment
+control, predecessor Button Function, and existing Connection unchanged.
 */
 
 can_open = false;

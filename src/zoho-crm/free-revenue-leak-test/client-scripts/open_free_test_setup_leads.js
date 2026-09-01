@@ -8,7 +8,7 @@
  */
 
 const expectedModule = "Leads";
-const functionApiName = "open_free_test_setup";
+const functionApiName = "open_free_test_setup_zdk";
 const accessUrlPrefix = "{{FORM1_ACCESS_PUBLIC_URL}}#journeyToken=";
 const recordIdPattern = /^[1-9][0-9]{9,29}$/;
 const tokenPattern = /^[A-Za-z0-9_-]{43}$/;
