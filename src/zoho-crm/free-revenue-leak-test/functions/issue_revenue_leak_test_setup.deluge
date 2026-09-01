@@ -174,7 +174,7 @@ try
 										if(access_url != null && expires_at != null)
 										{
 											access_url_text = access_url.toString();
-											if(access_url_text.startsWith(access_prefix) && access_url_text.length() == access_prefix.length() + 43 && !access_url_text.contains("?") && !access_url_text.contains("&") && !access_url_text.contains(" ") && expires_at.toString().matches("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{3})?Z$") && request_id.matches(identity_pattern))
+											if(access_url_text.startsWith(access_prefix) && access_url_text.length() == access_prefix.length() + 43 && !access_url_text.contains("?") && !access_url_text.contains("&") && !access_url_text.contains(" ") && expires_at.toString().matches("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{3})?Z$") && request_id.matches(identity_pattern))
 											{
 												setup_token = access_url_text.right(43);
 												if(setup_token.matches("^[A-Za-z0-9_-]{43}$"))
