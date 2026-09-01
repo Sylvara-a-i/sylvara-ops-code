@@ -15,7 +15,7 @@ const scripts = [
     name: 'Lead assisted Form 1 launcher',
     source: 'open_free_test_setup_leads.js',
     module: 'Leads',
-    functionName: 'open_free_test_setup',
+    functionName: 'open_free_test_setup_zdk',
     prefix: '{{FORM1_ACCESS_PUBLIC_URL}}#journeyToken=',
     parameters: [
       ['record_id', recordId],
@@ -26,7 +26,7 @@ const scripts = [
     name: 'Deal Form 2 launcher',
     source: 'open_free_test_setup_deals.js',
     module: 'Deals',
-    functionName: 'issue_revenue_leak_test_setup',
+    functionName: 'issue_revenue_leak_test_setup_zdk',
     prefix: '{{FORM2_ACCESS_PUBLIC_URL}}#setupToken=',
     parameters: [['deal_id', recordId]],
   },

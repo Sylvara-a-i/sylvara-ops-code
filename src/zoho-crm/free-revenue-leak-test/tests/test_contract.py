@@ -1870,7 +1870,7 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
 
     def test_caller_manifest_is_development_only_and_not_deployment_authority(self) -> None:
         manifest = self.callers
-        self.assertEqual(manifest["schema_version"], 6)
+        self.assertEqual(manifest["schema_version"], 7)
         self.assertEqual(manifest["status"], "bounded_development_installation_candidate")
         self.assertEqual(manifest["environment"], "Development only")
         self.assertFalse(manifest["render_policy"]["commit_rendered_source"])
@@ -1929,7 +1929,7 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
                 "page": "Detail Page (Standard)",
                 "event_type": "Button Event",
                 "event": "onClick",
-                "function_api_name": "open_free_test_setup",
+                "function_api_name": "open_free_test_setup_zdk",
                 "zdk_response_path": "details.output",
                 "navigation_api": "$Client.openURL",
                 "open_target": "new browser tab/window",
@@ -1943,7 +1943,7 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
                 "page": "Detail Page (Standard)",
                 "event_type": "Button Event",
                 "event": "onClick",
-                "function_api_name": "issue_revenue_leak_test_setup",
+                "function_api_name": "issue_revenue_leak_test_setup_zdk",
                 "zdk_response_path": "details.output",
                 "navigation_api": "$Client.openURL",
                 "open_target": "new browser tab/window",
@@ -1952,14 +1952,14 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         )
         self.assertEqual(
             form1["source_format"],
-            "Zoho CRM Deluge Button-category function body invoked by CRM Client Script",
+            "Zoho CRM Deluge Standalone function body invoked by CRM Client Script through ZDK",
         )
         self.assertEqual(form2["source_format"], form1["source_format"])
         self.assertEqual(
             form1["server_function"],
             {
-                "api_name": "open_free_test_setup",
-                "category": "Button",
+                "api_name": "open_free_test_setup_zdk",
+                "category": "Standalone",
                 "state": "active",
                 "return_type": "string",
                 "arguments": [
@@ -1968,18 +1968,28 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
                 ],
                 "development_zdk_execution_canary_required": True,
                 "category_contract_basis": (
-                    "Use the provider-specific custom-button Client Script flow and "
-                    "require exact Development metadata plus execution readback before "
-                    "enablement; generic association guidance describes Standalone and "
-                    "is not sufficient deployment evidence."
+                    "Zoho's current CRM Client Script association contract requires ZDK "
+                    "invocations to target Standalone Functions; the Development "
+                    "Button-category canary produced no CRM Function execution or "
+                    "Catalyst session."
                 ),
+            },
+        )
+        self.assertEqual(
+            form1["preserved_button_function"],
+            {
+                "api_name": "open_free_test_setup",
+                "category": "Button",
+                "state": "active",
+                "purpose": "unchanged rollback asset",
+                "modification_policy": "retain_unchanged_during_standalone_validation",
             },
         )
         self.assertEqual(
             form2["server_function"],
             {
-                "api_name": "issue_revenue_leak_test_setup",
-                "category": "Button",
+                "api_name": "issue_revenue_leak_test_setup_zdk",
+                "category": "Standalone",
                 "state": "active",
                 "return_type": "string",
                 "arguments": [{"name": "deal_id", "type": "string"}],
@@ -1987,6 +1997,16 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
                 "category_contract_basis": form1["server_function"][
                     "category_contract_basis"
                 ],
+            },
+        )
+        self.assertEqual(
+            form2["preserved_button_function"],
+            {
+                "api_name": "issue_revenue_leak_test_setup",
+                "category": "Button",
+                "state": "active",
+                "purpose": "unchanged rollback asset",
+                "modification_policy": "retain_unchanged_during_standalone_validation",
             },
         )
         self.assertIn(
@@ -2358,7 +2378,7 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         expected = {
             "FORM1_ASSISTED_ISSUE_CALLER": {
                 "module": "Leads",
-                "function": "open_free_test_setup",
+                "function": "open_free_test_setup_zdk",
                 "parameters": [
                     "record_id: recordId,",
                     "crm_module: expectedModule,",
@@ -2368,7 +2388,7 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
             },
             "FORM2_SETUP_ISSUE_CALLER": {
                 "module": "Deals",
-                "function": "issue_revenue_leak_test_setup",
+                "function": "issue_revenue_leak_test_setup_zdk",
                 "parameters": ["deal_id: recordId,"],
                 "placeholder": "{{FORM2_ACCESS_PUBLIC_URL}}",
                 "fragment": "#setupToken=",

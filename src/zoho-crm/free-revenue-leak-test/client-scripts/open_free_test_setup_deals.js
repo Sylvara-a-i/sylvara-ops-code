@@ -8,7 +8,7 @@
  */
 
 const expectedModule = "Deals";
-const functionApiName = "issue_revenue_leak_test_setup";
+const functionApiName = "issue_revenue_leak_test_setup_zdk";
 const accessUrlPrefix = "{{FORM2_ACCESS_PUBLIC_URL}}#setupToken=";
 const recordIdPattern = /^[1-9][0-9]{9,29}$/;
 const tokenPattern = /^[A-Za-z0-9_-]{43}$/;

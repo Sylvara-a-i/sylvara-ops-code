@@ -223,21 +223,33 @@ test('binds the exact operator controls and separates approval, activation, and 
     'Approve And Start Free Test',
     'Stop Or Roll Back Free Test',
   ]);
-  assert.deepEqual(crm.journey_core_functions, [
+  assert.deepEqual(crm.functions, [
     'start_free_revenue_leak_test_request',
     'open_free_test_setup',
+    'open_free_test_setup_zdk',
+    'initialize_setup_access_issue_request_id',
     'issue_revenue_leak_test_setup',
+    'issue_revenue_leak_test_setup_zdk',
+    'approve_and_start_free_test',
+    'stop_or_rollback_free_test',
+  ]);
+  assert.deepEqual(crm.journey_core_functions, [
+    'start_free_revenue_leak_test_request',
+    'open_free_test_setup_zdk',
+    'issue_revenue_leak_test_setup_zdk',
     'approve_and_start_free_test',
     'stop_or_rollback_free_test',
   ]);
   assert.deepEqual(crm.preserved_unrequired_functions, [
     'initialize_setup_access_issue_request_id',
+    'open_free_test_setup',
+    'issue_revenue_leak_test_setup',
   ]);
   assert.deepEqual(crm.client_scripts, [
     { name: 'open_free_test_setup_leads', module: 'Leads',
       page: 'Detail Page (Standard)', event_type: 'Button Event', event: 'onClick',
       source: 'src/zoho-crm/free-revenue-leak-test/client-scripts/open_free_test_setup_leads.js',
-      invokes_function: 'open_free_test_setup', function_category: 'Button',
+      invokes_function: 'open_free_test_setup_zdk', function_category: 'Standalone',
       function_state: 'active', function_return_type: 'string',
       function_arguments: [{ name: 'record_id', type: 'string' },
         { name: 'crm_module', type: 'string' }], navigation_api: '$Client.openURL',
@@ -245,7 +257,7 @@ test('binds the exact operator controls and separates approval, activation, and 
     { name: 'open_free_test_setup_deals', module: 'Deals',
       page: 'Detail Page (Standard)', event_type: 'Button Event', event: 'onClick',
       source: 'src/zoho-crm/free-revenue-leak-test/client-scripts/open_free_test_setup_deals.js',
-      invokes_function: 'issue_revenue_leak_test_setup', function_category: 'Button',
+      invokes_function: 'issue_revenue_leak_test_setup_zdk', function_category: 'Standalone',
       function_state: 'active', function_return_type: 'string',
       function_arguments: [{ name: 'deal_id', type: 'string' }],
       navigation_api: '$Client.openURL', development_zdk_execution_canary_required: true },
@@ -255,7 +267,7 @@ test('binds the exact operator controls and separates approval, activation, and 
   }
   assert.deepEqual(crm.client_script_cutover_order, [
     'disable_and_read_back_no_direct_function_binding',
-    'publish_and_read_back_url_returning_functions_while_controls_disabled',
+    'create_and_read_back_distinct_standalone_functions_while_preserving_button_rollbacks',
     'publish_and_read_back_module_specific_client_scripts',
     'bind_disabled_controls_to_exact_client_scripts',
     'pass_leads_development_zdk_execution_canary',
@@ -269,10 +281,10 @@ test('binds the exact operator controls and separates approval, activation, and 
       function: 'start_free_revenue_leak_test_request', replacement: false },
     { label: 'Open Free-Test Setup', module: 'Leads',
       client_script: 'open_free_test_setup_leads',
-      invokes_function: 'open_free_test_setup', replacement: true },
+      invokes_function: 'open_free_test_setup_zdk', replacement: true },
     { label: 'Open Free-Test Setup', module: 'Deals',
       client_script: 'open_free_test_setup_deals',
-      invokes_function: 'issue_revenue_leak_test_setup', replacement: true },
+      invokes_function: 'issue_revenue_leak_test_setup_zdk', replacement: true },
     { label: 'Approve And Start Free Test', module: 'Deals',
       function: 'approve_and_start_free_test', replacement: true },
     { label: 'Stop Or Roll Back Free Test', module: 'Deals',
@@ -297,6 +309,9 @@ test('binds the exact operator controls and separates approval, activation, and 
     blueprint_transition_required: false,
     retell_operation_required: false,
   });
+  assert.equal(contract.installation_scope.retell.mode, 'local-contract-reference-only');
+  assert.equal(contract.installation_scope.retell.provider_access_authorized, false);
+  assert.equal(contract.installation_scope.retell.schema_readback_authorized, false);
   assert.equal(
     contract.installation_scope.retell.activation_failure_wire_code_when_disabled,
     'isolated_retell_test_number_required',

@@ -1,5 +1,5 @@
 {
-  "schema_version": 6,
+  "schema_version": 7,
   "status": "bounded_development_installation_candidate",
   "environment": "Development only",
   "owning_product": "Zoho CRM",
@@ -28,7 +28,7 @@
       "logical_name": "FORM1_ASSISTED_ISSUE_CALLER",
       "source": "../functions/open_free_test_setup.deluge",
       "module": "Leads",
-      "source_format": "Zoho CRM Deluge Button-category function body invoked by CRM Client Script",
+      "source_format": "Zoho CRM Deluge Standalone function body invoked by CRM Client Script through ZDK",
       "button": "Open Free-Test Setup",
       "placement": "record details",
       "profile": "Administrator initially",
@@ -41,15 +41,15 @@
         "page": "Detail Page (Standard)",
         "event_type": "Button Event",
         "event": "onClick",
-        "function_api_name": "open_free_test_setup",
+        "function_api_name": "open_free_test_setup_zdk",
         "zdk_response_path": "details.output",
         "navigation_api": "$Client.openURL",
         "open_target": "new browser tab/window",
         "direct_http": false
       },
       "server_function": {
-        "api_name": "open_free_test_setup",
-        "category": "Button",
+        "api_name": "open_free_test_setup_zdk",
+        "category": "Standalone",
         "state": "active",
         "return_type": "string",
         "arguments": [
@@ -57,7 +57,14 @@
           { "name": "crm_module", "type": "string" }
         ],
         "development_zdk_execution_canary_required": true,
-        "category_contract_basis": "Use the provider-specific custom-button Client Script flow and require exact Development metadata plus execution readback before enablement; generic association guidance describes Standalone and is not sufficient deployment evidence."
+        "category_contract_basis": "Zoho's current CRM Client Script association contract requires ZDK invocations to target Standalone Functions; the Development Button-category canary produced no CRM Function execution or Catalyst session."
+      },
+      "preserved_button_function": {
+        "api_name": "open_free_test_setup",
+        "category": "Button",
+        "state": "active",
+        "purpose": "unchanged rollback asset",
+        "modification_policy": "retain_unchanged_during_standalone_validation"
       },
       "server_side_identity": {
         "field": "Intake_Submission_ID",
@@ -100,7 +107,7 @@
       "logical_name": "FORM2_SETUP_ISSUE_CALLER",
       "source": "../functions/issue_revenue_leak_test_setup.deluge",
       "module": "Deals",
-      "source_format": "Zoho CRM Deluge Button-category function body invoked by CRM Client Script",
+      "source_format": "Zoho CRM Deluge Standalone function body invoked by CRM Client Script through ZDK",
       "button": "Open Free-Test Setup",
       "placement": "record details",
       "profile": "Administrator initially",
@@ -112,22 +119,29 @@
         "page": "Detail Page (Standard)",
         "event_type": "Button Event",
         "event": "onClick",
-        "function_api_name": "issue_revenue_leak_test_setup",
+        "function_api_name": "issue_revenue_leak_test_setup_zdk",
         "zdk_response_path": "details.output",
         "navigation_api": "$Client.openURL",
         "open_target": "new browser tab/window",
         "direct_http": false
       },
       "server_function": {
-        "api_name": "issue_revenue_leak_test_setup",
-        "category": "Button",
+        "api_name": "issue_revenue_leak_test_setup_zdk",
+        "category": "Standalone",
         "state": "active",
         "return_type": "string",
         "arguments": [
           { "name": "deal_id", "type": "string" }
         ],
         "development_zdk_execution_canary_required": true,
-        "category_contract_basis": "Use the provider-specific custom-button Client Script flow and require exact Development metadata plus execution readback before enablement; generic association guidance describes Standalone and is not sufficient deployment evidence."
+        "category_contract_basis": "Zoho's current CRM Client Script association contract requires ZDK invocations to target Standalone Functions; the Development Button-category canary produced no CRM Function execution or Catalyst session."
+      },
+      "preserved_button_function": {
+        "api_name": "issue_revenue_leak_test_setup",
+        "category": "Button",
+        "state": "active",
+        "purpose": "unchanged rollback asset",
+        "modification_policy": "retain_unchanged_during_standalone_validation"
       },
       "deal_initialization": {
         "authority": "the authenticated CRM function fresh-reads the exact Deal before calling Catalyst",
@@ -229,8 +243,8 @@
   "activation_gates": [
     "Verify the exact CRM organization, Development hosts, immutable source SHA, and disabled Production state before rendering any placeholder.",
     "Prove caller-specific Connections expose only the required API Gateway and private authentication headers.",
-    "Disable both existing Open Free-Test Setup controls and independently read back that neither control has a direct CRM Function binding before publishing either URL-returning function revision.",
-    "Publish and read back the exact Button-category function metadata and module-specific Client Scripts while both replacement controls remain disabled; retain the contained predecessor unchanged.",
+    "Disable both existing Open Free-Test Setup controls and independently read back that neither control has a direct CRM Function binding before either distinct Standalone Function is created or published.",
+    "Publish and read back the exact Standalone-function metadata and module-specific Client Scripts while both replacement controls remain disabled; retain the contained predecessor and both Button-category rollback functions unchanged.",
     "Bind each disabled replacement control to only its reviewed module-specific Client Script, prove the exact layout, profile, module, event, source, and no-direct-Function binding, then pass one ZZZ SYNTHETIC Development ZDK function-execution canary for each module-specific Client Script; enable each control only after its own exact function category, state, return type, arguments, details.output response, and navigation readback succeeds.",
     "Run the ZZZ SYNTHETIC Form 1 and mandatory Form 2 journeys, approval, expected fail-closed activation, and idempotent never-active rollback canaries before widening access."
   ],
