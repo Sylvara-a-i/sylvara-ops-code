@@ -22,8 +22,11 @@ try {
     throw new Error("invalid_page_context");
   }
 
-  const parameters = new Map();
-  parameters.set("deal_id", recordId);
+  // ZDK requires a JSON object here. An ES Map serializes as an empty object
+  // at the provider boundary, so the CRM function never receives its inputs.
+  const parameters = {
+    deal_id: recordId,
+  };
   ZDK.Client.showLoader({
     type: "page",
     template: "spinner",

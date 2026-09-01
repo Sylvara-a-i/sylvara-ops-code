@@ -96,9 +96,12 @@ function runClientScript(config, overrides = {}) {
           Functions: {
             execute(functionName, parameters) {
               events.push('execute');
+              if (Object.prototype.toString.call(parameters) !== '[object Object]') {
+                throw new Error('provider_requires_json_object_parameters');
+              }
               calls.execute.push({
                 functionName,
-                parameters: JSON.parse(JSON.stringify(Array.from(parameters.entries()))),
+                parameters: Object.entries(JSON.parse(JSON.stringify(parameters))),
               });
               if (overrides.executeError) {
                 throw new Error('synthetic_execute_error');

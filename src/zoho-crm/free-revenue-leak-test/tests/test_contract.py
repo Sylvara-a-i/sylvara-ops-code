@@ -2360,8 +2360,8 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
                 "module": "Leads",
                 "function": "open_free_test_setup",
                 "parameters": [
-                    'parameters.set("record_id", recordId);',
-                    'parameters.set("crm_module", expectedModule);',
+                    "record_id: recordId,",
+                    "crm_module: expectedModule,",
                 ],
                 "placeholder": "{{FORM1_ACCESS_PUBLIC_URL}}",
                 "fragment": "#journeyToken=",
@@ -2369,7 +2369,7 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
             "FORM2_SETUP_ISSUE_CALLER": {
                 "module": "Deals",
                 "function": "issue_revenue_leak_test_setup",
-                "parameters": ['parameters.set("deal_id", recordId);'],
+                "parameters": ["deal_id: recordId,"],
                 "placeholder": "{{FORM2_ACCESS_PUBLIC_URL}}",
                 "fragment": "#setupToken=",
             },
@@ -2398,7 +2398,9 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
                 f'const accessUrlPrefix = "{contract["placeholder"]}{contract["fragment"]}";',
                 source,
             )
-            self.assertEqual(source.count("parameters.set("), len(contract["parameters"]))
+            self.assertEqual(source.count("const parameters = {"), 1)
+            self.assertNotIn("new Map(", source)
+            self.assertNotIn("parameters.set(", source)
             for parameter in contract["parameters"]:
                 self.assertIn(parameter, source)
             self.assertEqual(source.count("ZDK.Apps.CRM.Functions.execute("), 1)
