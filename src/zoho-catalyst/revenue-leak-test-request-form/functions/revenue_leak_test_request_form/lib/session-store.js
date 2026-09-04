@@ -260,15 +260,34 @@ function createSessionStore(adapter, config, {
     unique(() => adapter.findRowsByJourneyId(table, normalizeJourneyId(journeyId)), true);
   const readByRowId = (rowId) => unique(() => adapter.findRowsByRowId(table, rowId));
 
-  function stableBinding(row, requested) {
+  function stableJourneyBinding(row, requested) {
     return row.recordId === requested.recordId &&
       row.journeyId === requested.journeyId &&
       row.crmModule === requested.crmModule &&
       row.crmOrganizationHash === config.crmOrganizationHash &&
       row.expectedStage === STAGE &&
-      row.formIdentityHash === config.formIdentityHash &&
-      row.sourceRevision === config.sourceRevision &&
-      row.sourceEnvironment === config.deploymentEnvironment;
+      row.sourceEnvironment === config.deploymentEnvironment &&
+      row.issuingActorHash === config.issuingActorHash;
+  }
+
+  function stableRuntimeBinding(row) {
+    return row.formIdentityHash === config.formIdentityHash &&
+      row.sourceRevision === config.sourceRevision;
+  }
+
+  function stableBinding(row, requested) {
+    return stableJourneyBinding(row, requested) && stableRuntimeBinding(row);
+  }
+
+  function isCleanIssuedForBindingMigration(row) {
+    return row.status === "issued" && row.prefillCount === 0 &&
+      row.prefillHandleHash === null && row.prefillHandleIssuedAt === null &&
+      row.prefillHandleExpiresAt === null && row.prefillHandleConsumedAt === null &&
+      row.prefillConsumptionOwner === null && row.prefillId === null &&
+      row.configurationRevision === null && row.lastPrefilledAt === null &&
+      row.revokedAt === null && row.consumedAt === null &&
+      row.submissionFingerprint === null && row.submissionStartedAt === null &&
+      row.submissionClaimId === null && row.crmRecordVersion === null;
   }
 
   function assertRuntimeBinding(session) {
@@ -321,6 +340,7 @@ function createSessionStore(adapter, config, {
             SUBMISSION_STARTED_AT: "submissionStartedAt",
             SUBMISSION_CLAIM_ID: "submissionClaimId",
             CRM_RECORD_VERSION: "crmRecordVersion", SESSION_VERSION: "sessionVersion",
+            SOURCE_REVISION: "sourceRevision", FORM_IDENTITY_HASH: "formIdentityHash",
           }[column];
           return property && same(readback[property], value);
         })) {
@@ -344,7 +364,7 @@ function createSessionStore(adapter, config, {
     const issuedAt = new Date(nowMs).toISOString();
     const expiresAt = new Date(nowMs + config.sessionTtlSeconds * 1000).toISOString();
     if (existing) {
-      if (!stableBinding(existing, requested)) {
+      if (!stableJourneyBinding(existing, requested)) {
         fail("Journey is already bound to different CRM context", {
           publicCode: "session_binding_conflict",
           status: 409,
@@ -365,13 +385,24 @@ function createSessionStore(adapter, config, {
           ambiguous: true,
         });
       }
+      const runtimeBindingChanged = !stableRuntimeBinding(existing);
+      if (runtimeBindingChanged && !isCleanIssuedForBindingMigration(existing)) {
+        // A reviewed release or assisted-form cutover may adopt only a clean
+        // issued row. Any downstream binding remains owned by the runtime that
+        // created it and requires explicit reconciliation.
+        fail("Active journey cannot move to a different runtime binding", {
+          publicCode: "session_binding_conflict",
+          status: 409,
+        });
+      }
       return checkedUpdate(existing, {
         TOKEN_HASH: tokenHash,
         STATUS: "issued",
         ISSUED_AT: issuedAt,
         EXPIRES_AT: expiresAt,
         PREFILL_COUNT: 0,
-        LAST_OUTCOME: "reissued",
+        LAST_OUTCOME: runtimeBindingChanged ?
+          `binding_reissued_from_${existing.sourceRevision}` : "reissued",
         LAST_PREFILLED_AT: null,
         REVOKED_AT: null,
         CONSUMED_AT: null,
@@ -386,6 +417,8 @@ function createSessionStore(adapter, config, {
         PREFILL_CONSUMPTION_OWNER: null,
         PREFILL_ID: null,
         CONFIGURATION_REVISION: null,
+        SOURCE_REVISION: config.sourceRevision,
+        FORM_IDENTITY_HASH: config.formIdentityHash,
         UPDATED_AT: issuedAt,
       });
     }
