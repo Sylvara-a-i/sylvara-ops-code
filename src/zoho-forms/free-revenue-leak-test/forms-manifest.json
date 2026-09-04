@@ -3,6 +3,12 @@
   "status": "development-desired-state",
   "customer_facing_offer": "Free Revenue Leak Test",
   "real_form_ids_or_urls_in_git": false,
+  "surface_inventory": {
+    "logical_stage_count": 2,
+    "physical_surface_count": 3,
+    "form1_physical_surface_count": 2,
+    "rule": "The Journey has two logical stages. Form 1 uses separate public and CRM-assisted physical Forms surfaces; Form 2 remains the second logical stage and third physical surface."
+  },
   "evidence_boundary": {
     "live_readback_date": "2026-08-28",
     "live_readback_mode": "historical authenticated read-only Zoho Forms preflight followed by separately approved bounded Form 2 containment, independent readback, and later no-save Form 1 CRM mapping and field-policy refreshes",
@@ -55,6 +61,117 @@
       "platform_name": "RevenueLeakTestRequestForm",
       "title": "Free Revenue Leak Test Request",
       "purpose": "Public request intake with a separately authenticated record-bound assisted lane",
+      "shared_field_schema": [
+        {"key":"firstName","form_component":"Name - First Name","type":"text","required":true,"maximum_length":100,"validation":"trimmed_control_free_text","classification":"personal","crm_destination":"First_Name","webhook_key":"firstName","alias_reference":"private_provider_alias:firstName","applicable_channels":["public","crm_assisted"]},
+        {"key":"lastName","form_component":"Name - Last Name","type":"text","required":true,"maximum_length":100,"validation":"trimmed_control_free_text","classification":"personal","crm_destination":"Last_Name","webhook_key":"lastName","alias_reference":"private_provider_alias:lastName","applicable_channels":["public","crm_assisted"]},
+        {"key":"company","form_component":"Company","type":"text","required":true,"maximum_length":200,"validation":"trimmed_control_free_text","classification":"business","crm_destination":"Company","webhook_key":"company","alias_reference":"private_provider_alias:company","applicable_channels":["public","crm_assisted"]},
+        {"key":"decisionMakerRole","form_component":"Title","type":"choice","required":true,"maximum_length":120,"validation":"exact_active_choice","classification":"personal","crm_destination":"Decision_Maker_Role","webhook_key":"decisionMakerRole","alias_reference":"private_provider_alias:decisionMakerRole","choices_reference":"fresh_private_forms_and_crm_parity_readback","applicable_channels":["public","crm_assisted"]},
+        {"key":"jobTitle","form_component":"Exact Job Title","type":"text","required":false,"maximum_length":100,"validation":"trimmed_control_free_text","classification":"personal","crm_destination":"Designation","webhook_key":"jobTitle","alias_reference":"private_provider_alias:jobTitle","applicable_channels":["public","crm_assisted"]},
+        {"key":"email","form_component":"Email","type":"email","required":true,"maximum_length":254,"validation":"trimmed_email","classification":"personal","crm_destination":"Email","webhook_key":"email","alias_reference":"private_provider_alias:email","applicable_channels":["public","crm_assisted"]},
+        {"key":"mobilePhone","form_component":"Mobile Phone","type":"phone","required":true,"maximum_length":30,"validation":"trimmed_control_free_text","classification":"personal","crm_destination":"Mobile","webhook_key":"mobilePhone","alias_reference":"private_provider_alias:mobilePhone","applicable_channels":["public","crm_assisted"]},
+        {"key":"companyPhone","form_component":"Company Phone","type":"phone","required":true,"maximum_length":30,"validation":"trimmed_control_free_text","classification":"business","crm_destination":"Main_Business_Phone","webhook_key":"companyPhone","alias_reference":"private_provider_alias:companyPhone","applicable_channels":["public","crm_assisted"]},
+        {"key":"currentCallHandling","form_component":"Current Call Handling","type":"choice","required":true,"maximum_length":120,"validation":"exact_active_choice","classification":"business","crm_destination":"Current_Call_Handling","webhook_key":"currentCallHandling","alias_reference":"private_provider_alias:currentCallHandling","choices_reference":"fresh_private_forms_and_crm_parity_readback","applicable_channels":["public","crm_assisted"]},
+        {"key":"preferredTestRoute","form_component":"Preferred Test Route","type":"choice","required":true,"maximum_length":120,"validation":"exact_active_choice","classification":"business","crm_destination":"Requested_Test_Route","webhook_key":"preferredTestRoute","alias_reference":"private_provider_alias:preferredTestRoute","choices_reference":"fresh_private_forms_and_crm_parity_readback","applicable_channels":["public","crm_assisted"]},
+        {"key":"phoneSystemProvider","form_component":"Phone System Provider","type":"choice","required":false,"maximum_length":150,"validation":"exact_active_choice","classification":"business","crm_destination":"Phone_System_Provider","webhook_key":"phoneSystemProvider","alias_reference":"private_provider_alias:phoneSystemProvider","choices_reference":"fresh_private_forms_and_crm_parity_readback","applicable_channels":["public","crm_assisted"]},
+        {"key":"primaryServiceArea","form_component":"Primary Service Area","type":"multiline_text","required":false,"maximum_length":2000,"validation":"trimmed_control_free_text","classification":"business","crm_destination":"Primary_Service_Area","webhook_key":"primaryServiceArea","alias_reference":"private_provider_alias:primaryServiceArea","applicable_channels":["public","crm_assisted"]},
+        {"key":"fieldTeamSizeBand","form_component":"Approximate Field Team Size","type":"choice","required":false,"maximum_length":120,"validation":"exact_active_choice","classification":"business","crm_destination":"Field_Team_Size_Band","webhook_key":"fieldTeamSizeBand","alias_reference":"private_provider_alias:fieldTeamSizeBand","choices_reference":"fresh_private_forms_and_crm_parity_readback","applicable_channels":["public","crm_assisted"]},
+        {"key":"additionalNotes","form_component":"Additional Notes","type":"multiline_text","required":false,"maximum_length":4000,"validation":"trimmed_control_free_text","classification":"personal","crm_destination":"Free_Test_Request_Notes","webhook_key":"additionalNotes","alias_reference":"private_provider_alias:additionalNotes","applicable_channels":["public","crm_assisted"]},
+        {"key":"leadSource","form_component":"Lead Source","type":"choice","required":false,"maximum_length":100,"validation":"exact_active_choice","classification":"attribution","crm_destination":"Lead_Source","webhook_key":"leadSource","alias_reference":"private_provider_alias:leadSource","choices_reference":"fresh_private_forms_and_crm_parity_readback","applicable_channels":["public","crm_assisted"],"channel_authority":{"public":"trusted native-writer input configured outside respondent authority","crm_assisted":"browser value ignored; server-owned trusted constant"}},
+        {"key":"sourcePage","form_component":"Source Page","type":"text","required":false,"maximum_length":200,"validation":"trimmed_control_free_text","classification":"attribution","crm_destination":"Source_Page","webhook_key":"sourcePage","alias_reference":"private_provider_alias:sourcePage","applicable_channels":["public","crm_assisted"],"channel_authority":{"public":"trusted native-writer input configured outside respondent authority","crm_assisted":"browser value ignored; server-owned trusted constant"}},
+        {"key":"utmSource","form_component":"UTM Source","type":"text","required":false,"maximum_length":255,"validation":"trimmed_control_free_text","classification":"attribution","crm_destination":"UTM_Source","webhook_key":"utmSource","alias_reference":"private_provider_alias:utmSource","applicable_channels":["public","crm_assisted"]},
+        {"key":"utmMedium","form_component":"UTM Medium","type":"text","required":false,"maximum_length":255,"validation":"trimmed_control_free_text","classification":"attribution","crm_destination":"UTM_Medium","webhook_key":"utmMedium","alias_reference":"private_provider_alias:utmMedium","applicable_channels":["public","crm_assisted"]},
+        {"key":"utmCampaign","form_component":"UTM Campaign","type":"text","required":false,"maximum_length":255,"validation":"trimmed_control_free_text","classification":"attribution","crm_destination":"UTM_Campaign","webhook_key":"utmCampaign","alias_reference":"private_provider_alias:utmCampaign","applicable_channels":["public","crm_assisted"]},
+        {"key":"utmTerm","form_component":"UTM Term","type":"text","required":false,"maximum_length":255,"validation":"trimmed_control_free_text","classification":"attribution","crm_destination":"UTM_Term","webhook_key":"utmTerm","alias_reference":"private_provider_alias:utmTerm","applicable_channels":["public","crm_assisted"]},
+        {"key":"utmContent","form_component":"UTM Content","type":"text","required":false,"maximum_length":255,"validation":"trimmed_control_free_text","classification":"attribution","crm_destination":"UTM_Content","webhook_key":"utmContent","alias_reference":"private_provider_alias:utmContent","applicable_channels":["public","crm_assisted"]},
+        {"key":"contactConsent","form_component":"Free Test Contact Consent","type":"boolean","required":true,"maximum_length":null,"validation":"exact_boolean_true_no_prefill","classification":"personal_consent","crm_destination":"Free_Test_Contact_Consent","webhook_key":"contactConsent","alias_reference":"private_provider_alias:contactConsent","applicable_channels":["public","crm_assisted"]}
+      ],
+      "physical_surfaces": {
+        "public": {
+          "purpose": "Unauthenticated prospect request intake",
+          "shared_schema_required": true,
+          "sanitized_live_baseline": {
+            "observed_date": "2026-09-04",
+            "observed_field_count": 34,
+            "field_alias_row_count": 1,
+            "required_visible_field_marker_count": 11,
+            "required_visible_name_counting_rule": "Name is counted once as one Forms builder field",
+            "rules": {
+              "field_rules_active": 1,
+              "choice_rules": 0,
+              "form_rules": 0,
+              "page_rules": 0,
+              "deny_rules": 0
+            },
+            "webhook_count": 1,
+            "submission_webhook": {
+              "payload_key_count": 25,
+              "payload_keys_unique": true,
+              "custom_header_count": 1
+            },
+            "transitional_assisted_prefill": {
+              "state": "existing_public_surface_prestate_only",
+              "method": "POST",
+              "custom_header_count": 2,
+              "mapping_count": 22,
+              "desired_for_public_surface": false,
+              "removal_gate": "remove only after the separate CRM-assisted replacement is installed, independently read back, and cut over"
+            },
+            "thank_you": {
+              "selected_type": "page",
+              "content_type": "rich_text",
+              "redirect_enabled": false,
+              "add_another_entry_enabled": false,
+              "pdf_download_enabled": false,
+              "tracking_enabled": false
+            },
+            "captcha": "Zoho Forms Text",
+            "geolocation_enabled": false,
+            "save_for_later_state": "inactive",
+            "double_opt_in_enabled": false,
+            "public_enabled": true,
+            "sharing": "public",
+            "embed_available": true,
+            "embed_modes_available": ["iframe", "JavaScript"],
+            "crm_module": "Leads",
+            "crm_layout": "Standard",
+            "native_crm_writer": true,
+            "crm_automation_and_process_management": true,
+            "upsert_enabled": true,
+            "upsert_preference_order": ["Intake Submission ID", "Contact Email"],
+            "blank_overwrite": false,
+            "submission_webhook_key_count": 25,
+            "email_notifications": false,
+            "sms_notifications": false,
+            "push_notifications": false
+          },
+          "required_integrations": {"native_crm_writer":true,"catalyst_crm_writer":false,"dynamic_prefill":false},
+          "channel_only_fields": ["Intake Submission ID", "Entry Offer", "Submission Channel", "Lead Status", "Intake Form Version", "Free Test Contact Consent Version", "Free Test Contact Consent At", "Free Test Request Submitted At"]
+        },
+        "crm_assisted": {
+          "purpose": "Authenticated CRM-record-bound assisted intake",
+          "shared_schema_required": true,
+          "required_state": {
+            "native_crm_writer": false,
+            "catalyst_crm_writer": true,
+            "dynamic_prefill": true,
+            "submission_webhook_key_count": 25,
+            "submission_webhook_keys_reference": "assisted_prefill.submission_webhook.provider_transport_keys",
+            "email_notifications": false,
+            "sms_notifications": false,
+            "push_notifications": false
+          },
+          "required_integrations": {"native_crm_writer":false,"catalyst_crm_writer":true,"dynamic_prefill":true},
+          "channel_only_fields": ["Assisted Prefill Handle", "Prefill ID", "Configuration Revision", "Submission ID"]
+        }
+      },
+      "allowed_surface_exceptions": [
+        "writer",
+        "dynamic_prefill",
+        "binding_fields",
+        "trusted_audit_defaults",
+        "submission_identity",
+        "public_sharing"
+      ],
       "approved_public_access_and_accessibility": {
         "desired_state": {
           "public_url": "Enabled",

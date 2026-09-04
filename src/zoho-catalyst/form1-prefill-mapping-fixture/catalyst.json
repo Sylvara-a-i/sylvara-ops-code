@@ -1,0 +1,12 @@
+{
+  "functions": {
+    "source": "functions",
+    "targets": [
+      "form1_prefill_mapping_fixture"
+    ],
+    "ignore": [
+      "test/**",
+      ".env*"
+    ]
+  }
+}

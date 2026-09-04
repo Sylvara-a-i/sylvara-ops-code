@@ -187,6 +187,10 @@
     },
     "forms": {
       "exact_form_count": 2,
+      "count_semantics": "logical Journey stages",
+      "exact_logical_stage_count": 2,
+      "exact_physical_surface_count": 3,
+      "form1_physical_surface_count": 2,
       "logical_names": [
         "REVENUE_LEAK_TEST_REQUEST_FORM",
         "REVENUE_LEAK_TEST_SETUP_FORM"

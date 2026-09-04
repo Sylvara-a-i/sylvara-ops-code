@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "status": "temporary-development-only-default-disabled",
+  "maximum_active_window_seconds": 14400,
+  "variables": [
+    {
+      "name": "FORM1_PREFILL_MAPPING_FIXTURE_MODE",
+      "classification": "safe-enum",
+      "required_when_active": false,
+      "safe_default": "disabled"
+    },
+    {
+      "name": "DEPLOYMENT_ENVIRONMENT",
+      "classification": "safe-enum",
+      "required_when_active": true,
+      "allowed_value": "development"
+    },
+    {
+      "name": "EXPECTED_CATALYST_PROJECT_ID_SHA256",
+      "classification": "private-platform-identifier",
+      "required_when_active": true
+    },
+    {
+      "name": "SOURCE_REVISION",
+      "classification": "public-build-identity",
+      "required_when_active": true
+    },
+    {
+      "name": "FIXTURE_PATH",
+      "classification": "private-route",
+      "required_when_active": true
+    },
+    {
+      "name": "FIXTURE_HEADER_NAME",
+      "classification": "private-auth-metadata",
+      "required_when_active": true
+    },
+    {
+      "name": "FIXTURE_HEADER_SECRET",
+      "classification": "secret",
+      "required_when_active": true
+    },
+    {
+      "name": "FIXTURE_EXPIRES_AT",
+      "classification": "bounded-security-policy",
+      "required_when_active": true
+    }
+  ],
+  "prohibited_capabilities": [
+    "Catalyst SDK initialization",
+    "Data Store access",
+    "CRM access",
+    "Connection access",
+    "outbound network access",
+    "email or SMS",
+    "OTP",
+    "Retell access"
+  ]
+}

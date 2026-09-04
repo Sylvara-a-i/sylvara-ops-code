@@ -1,0 +1,17 @@
+{
+  "name": "form1_prefill_mapping_fixture",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Temporary default-disabled Development-only Zoho Forms prefill mapping fixture.",
+  "main": "index.js",
+  "type": "commonjs",
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "check": "node --check index.js && node --check lib/config.js && node --check lib/handler.js && node --check lib/sample.js && node --check lib/source-revision.js && node --check ../../tools/build-release-artifact.js",
+    "test": "node --test test/*.test.js",
+    "ci": "npm run check && npm test"
+  },
+  "dependencies": {}
+}

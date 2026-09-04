@@ -4,8 +4,12 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
-const { FORM_KEYS } = require("../lib/form-contract");
+const { FIELD_SPECS, FORM_KEYS } = require("../lib/form-contract");
 const { ZOHO_FORMS_SUBMISSION_KEYS } = require("../lib/handler");
+const {
+  verifyCanonicalForm1,
+  verifySurfaceReadback,
+} = require("../../../../../zoho-forms/free-revenue-leak-test/form1-parity");
 
 const functionRoot = path.resolve(__dirname, "..");
 const componentRoot = path.resolve(functionRoot, "../..");
@@ -198,6 +202,97 @@ test("the Forms contract preserves exactly two forms and separates public and as
     "the legacy CRM review task may still be created when its existing workflow runs, but task creation is not a Journey-core acceptance dependency",
   ]);
   assert.equal(form2.logical_name, "REVENUE_LEAK_TEST_SETUP_FORM");
+});
+
+test("the two Form 1 surfaces share one exact executable field contract", () => {
+  const manifest = json(path.join(
+    repositoryRoot,
+    "src/zoho-forms/free-revenue-leak-test/forms-manifest.json",
+  ));
+  const result = verifyCanonicalForm1(manifest, {
+    fieldSpecs: FIELD_SPECS,
+    formKeys: FORM_KEYS,
+    submissionKeys: ZOHO_FORMS_SUBMISSION_KEYS,
+  });
+  assert.deepEqual(result, { ok: true, errors: [] });
+  const form1 = manifest.forms.find(({ logical_name }) =>
+    logical_name === "REVENUE_LEAK_TEST_REQUEST_FORM");
+  for (const key of ["leadSource", "sourcePage"]) {
+    assert.deepEqual(
+      form1.shared_field_schema.find((field) => field.key === key).channel_authority,
+      {
+        public: "trusted native-writer input configured outside respondent authority",
+        crm_assisted: "browser value ignored; server-owned trusted constant",
+      },
+    );
+  }
+  assert.deepEqual(manifest.surface_inventory, {
+    logical_stage_count: 2,
+    physical_surface_count: 3,
+    form1_physical_surface_count: 2,
+    rule: "The Journey has two logical stages. Form 1 uses separate public and CRM-assisted physical Forms surfaces; Form 2 remains the second logical stage and third physical surface.",
+  });
+});
+
+test("Form 1 parity fails closed on incomplete readback, schema drift, and two writers", () => {
+  const manifest = json(path.join(
+    repositoryRoot,
+    "src/zoho-forms/free-revenue-leak-test/forms-manifest.json",
+  ));
+  assert.deepEqual(
+    verifySurfaceReadback(manifest, "public", { readback_complete: false }),
+    {
+      ok: false,
+      errors: [{ code: "READBACK_INCOMPLETE", field: "public", property: null }],
+    },
+  );
+
+  const drifted = structuredClone(manifest);
+  drifted.forms[0].shared_field_schema[0].maximum_length += 1;
+  drifted.forms[0].physical_surfaces.public.required_integrations.catalyst_crm_writer = true;
+  const result = verifyCanonicalForm1(drifted, {
+    fieldSpecs: FIELD_SPECS,
+    formKeys: FORM_KEYS,
+    submissionKeys: ZOHO_FORMS_SUBMISSION_KEYS,
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.errors.some(({ code }) => code === "MAXIMUM_LENGTH_DRIFT"), true);
+  assert.equal(result.errors.some(({ code }) => code === "SINGLE_WRITER_VIOLATION"), true);
+});
+
+test("a complete sanitized Form 1 surface readback proves shared-field parity", () => {
+  const manifest = json(path.join(
+    repositoryRoot,
+    "src/zoho-forms/free-revenue-leak-test/forms-manifest.json",
+  ));
+  const form1 = manifest.forms.find(({ logical_name }) =>
+    logical_name === "REVENUE_LEAK_TEST_REQUEST_FORM");
+  const sharedFields = form1.shared_field_schema.map((field) => ({
+    ...Object.fromEntries([
+      "key", "type", "required", "maximum_length", "validation", "classification",
+      "crm_destination", "webhook_key",
+    ].map((property) => [property, field[property]])),
+    alias_parity: true,
+    ...(field.choices_reference ? { choice_parity: true } : {}),
+  }));
+  const result = verifySurfaceReadback(manifest, "crm_assisted", {
+    readback_complete: true,
+    shared_fields: sharedFields,
+    integrations: { ...form1.physical_surfaces.crm_assisted.required_integrations },
+  });
+  assert.deepEqual(result, { ok: true, errors: [] });
+
+  sharedFields[0].classification = "unexpected";
+  const drift = verifySurfaceReadback(manifest, "crm_assisted", {
+    readback_complete: true,
+    shared_fields: sharedFields,
+    integrations: { ...form1.physical_surfaces.crm_assisted.required_integrations },
+  });
+  assert.deepEqual(drift.errors.find(({ code }) => code === "OBSERVED_FIELD_DRIFT"), {
+    code: "OBSERVED_FIELD_DRIFT",
+    field: "firstName",
+    property: "classification",
+  });
 });
 
 test("the package is a Node 24 Advanced I/O target with the pinned Catalyst SDK only", () => {

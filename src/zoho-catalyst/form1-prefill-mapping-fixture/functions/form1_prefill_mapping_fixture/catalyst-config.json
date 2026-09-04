@@ -1,0 +1,10 @@
+{
+  "deployment": {
+    "name": "form1_prefill_mapping_fixture",
+    "stack": "node24",
+    "type": "advancedio"
+  },
+  "execution": {
+    "main": "index.js"
+  }
+}
