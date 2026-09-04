@@ -112,8 +112,16 @@ function buildCrmPatch(formData, constants, { journeyId, submittedAt }) {
       publicCode: "configuration_invalid",
     });
   }
+  // Acquisition source belongs to CRM, while route provenance belongs to the
+  // server configuration. Keep both submitted fields in the fixed Forms
+  // transport/fingerprint contract, but never grant them write authority.
+  const {
+    Lead_Source: _respondentLeadSource,
+    Source_Page: _respondentSourcePage,
+    ...respondentFields
+  } = normalized;
   const patch = {
-    ...normalized,
+    ...respondentFields,
     Entry_Offer: constants.entryOffer,
     Submission_Channel: constants.submissionChannel,
     Intake_Submission_ID: journeyId,
@@ -123,8 +131,8 @@ function buildCrmPatch(formData, constants, { journeyId, submittedAt }) {
     Free_Test_Request_Submitted_At: submittedAt,
     Intake_Form_Version: constants.intakeFormVersion,
     Lead_Status: constants.leadStatus,
+    Source_Page: constants.sourcePage,
   };
-  if (!patch.Source_Page) patch.Source_Page = constants.sourcePage;
   return Object.freeze(Object.fromEntries(
     Object.entries(patch).filter(([, selected]) => selected !== null),
   ));

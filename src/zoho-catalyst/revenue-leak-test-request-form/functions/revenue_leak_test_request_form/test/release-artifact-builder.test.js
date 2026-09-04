@@ -75,6 +75,14 @@ function createFixture(testContext, mutateBeforeCommit) {
     path.join(repositoryRoot, "src/zoho-forms/free-revenue-leak-test/forms-manifest.json"),
     formsManifest,
   );
+  const formsParityVerifier = path.join(
+    repository,
+    "src/zoho-forms/free-revenue-leak-test/form1-parity.js",
+  );
+  fs.copyFileSync(
+    path.join(repositoryRoot, "src/zoho-forms/free-revenue-leak-test/form1-parity.js"),
+    formsParityVerifier,
+  );
   const releaseContract = path.join(
     repository,
     "docs/product/free-revenue-leak-test-release-contract.json",

@@ -140,6 +140,16 @@ test('builds and verifies the immutable Development Journey-core manifest', () =
 test('makes the complete secure Form 2 path mandatory', () => {
   const form2 = contract.installation_scope.forms.form2;
   assert.equal(contract.installation_scope.forms.exact_form_count, 2);
+  assert.equal(contract.installation_scope.forms.count_semantics, "logical Journey stages");
+  assert.equal(contract.installation_scope.forms.exact_logical_stage_count, 2);
+  assert.equal(contract.installation_scope.forms.exact_physical_surface_count, 3);
+  assert.equal(contract.installation_scope.forms.form1_physical_surface_count, 2);
+  assert.deepEqual(formsManifest.surface_inventory, {
+    logical_stage_count: 2,
+    physical_surface_count: 3,
+    form1_physical_surface_count: 2,
+    rule: "The Journey has two logical stages. Form 1 uses separate public and CRM-assisted physical Forms surfaces; Form 2 remains the second logical stage and third physical surface.",
+  });
   assert.equal(form2.mandatory, true);
   assert.deepEqual(form2.required_controls, [
     'opaque record-bound short-lived handle validation',
