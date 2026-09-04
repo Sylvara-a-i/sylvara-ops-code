@@ -47,6 +47,33 @@ try
 			detailed : true
 			response-format : STRING
 		];
+		if(issue_response == null)
+		{
+			rejection_code = "transport_null";
+		}
+		else if(!issue_response.containKey("responseCode"))
+		{
+			rejection_code = "transport_missing_code";
+		}
+		else
+		{
+			response_code_text = ifnull(issue_response.get("responseCode"),"").toString();
+			if(response_code_text != "201")
+			{
+				if(response_code_text.matches("^[1-5][0-9]{2}$"))
+				{
+					rejection_code = "transport_http_" + response_code_text;
+				}
+				else
+				{
+					rejection_code = "transport_invalid_code";
+				}
+			}
+			else if(!issue_response.containKey("responseText"))
+			{
+				rejection_code = "transport_missing_text";
+			}
+		}
 		if(issue_response != null && issue_response.containKey("responseCode") && issue_response.get("responseCode").toString() == "201" && issue_response.containKey("responseText"))
 		{
 			rejection_code = "response_text";

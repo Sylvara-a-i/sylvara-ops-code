@@ -2256,6 +2256,10 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         for rejection_code in (
             "request_invalid",
             "transport_envelope",
+            "transport_null",
+            "transport_missing_code",
+            "transport_invalid_code",
+            "transport_missing_text",
             "response_text",
             "response_body",
             "access_url_base",
@@ -2266,6 +2270,12 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
             self.assertIn(f'rejection_code = "{rejection_code}";', source)
         self.assertIn(
             'info "form1_assisted_issue_rejected_" + rejection_code;', source
+        )
+        self.assertIn(
+            'rejection_code = "transport_http_" + response_code_text;', source
+        )
+        self.assertIn(
+            'response_code_text.matches("^[1-5][0-9]{2}$")', source
         )
         self.assertNotIn("info issue_response", source)
         self.assertNotIn("info response_text", source)

@@ -601,6 +601,84 @@ test("reissue rotates both credentials without duplicating the journey", async (
   assert.equal((await prefill(selected, secondHandle)).status, 200);
 });
 
+test("clean issued reissue adopts the current release and form without duplication", async () => {
+  const selected = fixture();
+  const first = journeyTokenFrom(await launch(selected));
+  const row = selected.adapter.rows[0];
+  const originalRowId = row.ROWID;
+  const originalCreatedAt = row.CREATED_AT;
+  const originalVersion = row.SESSION_VERSION;
+  row.SOURCE_REVISION = "b".repeat(40);
+  row.FORM_IDENTITY_HASH = "c".repeat(64);
+
+  const second = journeyTokenFrom(await launch(selected));
+  assert.notEqual(first, second);
+  assert.equal(selected.adapter.rows.length, 1);
+  assert.equal(row.ROWID, originalRowId);
+  assert.equal(row.CREATED_AT, originalCreatedAt);
+  assert.equal(row.SESSION_VERSION, originalVersion + 1);
+  assert.equal(row.STATUS, "issued");
+  assert.equal(row.LAST_OUTCOME, `binding_reissued_from_${"b".repeat(40)}`);
+  assert.equal(row.SOURCE_REVISION, REVISION);
+  assert.equal(row.FORM_IDENTITY_HASH, selected.config.formIdentityHash);
+  assert.equal(row.ISSUING_ACTOR_HASH, selected.config.issuingActorHash);
+  await assert.rejects(() => exchange(selected, first), (error) => error.status === 404);
+  assert.equal((await exchange(selected, second)).result.status, 200);
+});
+
+test("active prefill cannot move across runtime bindings", async () => {
+  const selected = fixture();
+  const token = journeyTokenFrom(await launch(selected));
+  await exchange(selected, token);
+  const row = selected.adapter.rows[0];
+  const originalVersion = row.SESSION_VERSION;
+  const originalTokenHash = row.TOKEN_HASH;
+  row.SOURCE_REVISION = "b".repeat(40);
+
+  await assert.rejects(() => launch(selected), (error) =>
+    error.status === 409 && error.publicCode === "session_binding_conflict");
+  assert.equal(selected.adapter.rows.length, 1);
+  assert.equal(row.SESSION_VERSION, originalVersion);
+  assert.equal(row.TOKEN_HASH, originalTokenHash);
+  assert.equal(row.STATUS, "handle_issued");
+});
+
+test("runtime migration rejects dirty issued rows and immutable actor drift", async () => {
+  for (const mutate of [
+    (row) => { row.PREFILL_ID = "00000000-0000-4000-8000-000000000001"; },
+    (row) => { row.ISSUING_ACTOR_HASH = `operator_${"4".repeat(64)}`; },
+  ]) {
+    const selected = fixture();
+    await launch(selected);
+    const row = selected.adapter.rows[0];
+    const originalVersion = row.SESSION_VERSION;
+    const originalTokenHash = row.TOKEN_HASH;
+    row.SOURCE_REVISION = "b".repeat(40);
+    mutate(row);
+
+    await assert.rejects(() => launch(selected), (error) =>
+      error.status === 409 && error.publicCode === "session_binding_conflict");
+    assert.equal(row.SESSION_VERSION, originalVersion);
+    assert.equal(row.TOKEN_HASH, originalTokenHash);
+  }
+});
+
+test("runtime migration rejects expired and revoked rows", async () => {
+  for (const status of ["expired", "revoked"]) {
+    const selected = fixture();
+    await launch(selected);
+    const row = selected.adapter.rows[0];
+    const originalVersion = row.SESSION_VERSION;
+    row.STATUS = status;
+    row.SOURCE_REVISION = "b".repeat(40);
+
+    await assert.rejects(() => launch(selected), (error) =>
+      error.status === 409 && error.publicCode === "session_binding_conflict");
+    assert.equal(row.SESSION_VERSION, originalVersion);
+    assert.equal(row.STATUS, status);
+  }
+});
+
 test("concurrent reissue keeps one version-fenced winner and one durable journey", async () => {
   const selected = fixture();
   await launch(selected);
