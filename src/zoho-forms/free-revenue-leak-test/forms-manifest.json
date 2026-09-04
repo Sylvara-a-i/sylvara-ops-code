@@ -89,6 +89,7 @@
         "public": {
           "purpose": "Unauthenticated prospect request intake",
           "shared_schema_required": true,
+          "field_entry_uniqueness_policy": "preserve_existing_provider_settings",
           "sanitized_live_baseline": {
             "observed_date": "2026-09-04",
             "observed_field_count": 34,
@@ -156,6 +157,8 @@
             "dynamic_prefill": true,
             "submission_webhook_key_count": 25,
             "submission_webhook_keys_reference": "assisted_prefill.submission_webhook.provider_transport_keys",
+            "field_entry_uniqueness": {"email":false,"mobilePhone":false},
+            "duplicate_prevention": "server_bound_session_and_idempotent_crm_update",
             "email_notifications": false,
             "sms_notifications": false,
             "push_notifications": false
@@ -170,7 +173,8 @@
         "binding_fields",
         "trusted_audit_defaults",
         "submission_identity",
-        "public_sharing"
+        "public_sharing",
+        "field_entry_uniqueness"
       ],
       "approved_public_access_and_accessibility": {
         "desired_state": {
