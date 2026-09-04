@@ -522,6 +522,14 @@
           "route_reference": "SUBMISSION_PATH",
           "authentication": ["Catalyst API key", "route-specific protected custom header"],
           "provider_transport_shape": "exact flat JSON parameter map",
+          "provider_consent_transport": {
+            "field": "contactConsent",
+            "decision_box_checked_value": "true",
+            "normalization_boundary": "authenticated flat provider envelope only, before fingerprinting",
+            "internal_type": "boolean",
+            "accepted_affirmative_values": [true, "true"],
+            "coercion": "exact affirmative only; reject false, other strings, arrays, numbers, objects, whitespace, and case variants"
+          },
           "provider_transport_keys": [
             "prefillId",
             "configurationRevision",

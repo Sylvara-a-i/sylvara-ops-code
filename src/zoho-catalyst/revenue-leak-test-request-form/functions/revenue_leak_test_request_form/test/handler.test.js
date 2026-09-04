@@ -492,6 +492,7 @@ test("flat Zoho Forms public envelope derives only the canonical public acknowle
   const selected = fixture();
   const result = await submitProvider(selected, {
     submissionId: "provider_public_001",
+    formOverrides: { contactConsent: "true" },
   });
   assert.equal(result.status, 200);
   assert.deepEqual(result.body, { ok: true, binding: "public_unbound" });
@@ -563,6 +564,66 @@ test("flat Zoho Forms envelope rejects partial assisted binding", async () => {
   assert.deepEqual(selected.events, []);
 });
 
+test("flat Zoho Forms string consent becomes the same typed idempotent command", async () => {
+  const selected = fixture();
+  const prepared = await prepare(selected);
+  const submission = {
+    prefillId: prepared.prefillId,
+    configurationRevision: prepared.configurationRevision,
+    submissionId: "provider_string_consent_001",
+  };
+  const result = await submitProvider(selected, {
+    ...submission,
+    formOverrides: { contactConsent: "true" },
+  });
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.body, { ok: true, replayed: false });
+  assert.equal(selected.records.get(RECORD_ID).Free_Test_Contact_Consent, true);
+  assert.equal(selected.adapter.rows[0].STATUS, "consumed");
+
+  const replay = await submit(selected, prepared, submission.submissionId);
+  assert.deepEqual(replay.body, { ok: true, replayed: true });
+  assert.equal(selected.events.filter(([name]) => name === "update").length, 1);
+});
+
+test("provider consent normalization does not accept internal string consent", async () => {
+  const selected = fixture();
+  const prepared = await prepare(selected);
+  const before = structuredClone(selected.adapter.rows[0]);
+  const eventsBefore = selected.events.length;
+  await assert.rejects(
+    () => submit(selected, prepared, "internal_string_consent_001", {
+      formData: formData({ contactConsent: "true" }),
+    }),
+    (error) => error.status === 422 && error.publicCode === "form_data_invalid",
+  );
+  assert.deepEqual(selected.adapter.rows[0], before);
+  assert.equal(selected.events.length, eventsBefore);
+});
+
+test("flat consent normalization still requires authentication before session access", async () => {
+  const selected = fixture();
+  const prepared = await prepare(selected);
+  const before = structuredClone(selected.adapter.rows[0]);
+  const eventsBefore = selected.events.length;
+  selected.dependencies.sessionStore = {
+    ...selected.dependencies.sessionStore,
+    async readByPrefillId() {
+      assert.fail("unauthenticated submission must not read the session");
+    },
+  };
+  await assert.rejects(
+    () => handleRequest(post(selected.config.submissionPath, providerSubmissionBody({
+      prefillId: prepared.prefillId,
+      configurationRevision: prepared.configurationRevision,
+      formOverrides: { contactConsent: "true" },
+    })), selected.dependencies),
+    (error) => error.status === 401 && error.publicCode === "authentication_failed",
+  );
+  assert.deepEqual(selected.adapter.rows[0], before);
+  assert.equal(selected.events.length, eventsBefore);
+});
+
 test("flat Zoho Forms envelope rejects extra identity and non-affirmative consent", async () => {
   const selected = fixture();
   await assert.rejects(
@@ -570,15 +631,23 @@ test("flat Zoho Forms envelope rejects extra identity and non-affirmative consen
     (error) => error.status === 422 && error.publicCode === "request_invalid",
   );
   const prepared = await prepare(selected);
-  await assert.rejects(
-    () => submitProvider(selected, {
-      prefillId: prepared.prefillId,
-      configurationRevision: prepared.configurationRevision,
-      formOverrides: { contactConsent: false },
-    }),
-    (error) => error.status === 422 && error.publicCode === "form_data_invalid",
-  );
-  assert.equal(selected.events.filter(([name]) => name === "update").length, 0);
+  const before = structuredClone(selected.adapter.rows[0]);
+  const eventsBefore = selected.events.length;
+  for (const contactConsent of [
+    false, "false", "True", "TRUE", " true", "true ", "1", "yes", "I agree", "",
+    1, 0, null, ["true"], [true], { checked: true },
+  ]) {
+    await assert.rejects(
+      () => submitProvider(selected, {
+        prefillId: prepared.prefillId,
+        configurationRevision: prepared.configurationRevision,
+        formOverrides: { contactConsent },
+      }),
+      (error) => error.status === 422 && error.publicCode === "form_data_invalid",
+    );
+    assert.deepEqual(selected.adapter.rows[0], before);
+    assert.equal(selected.events.length, eventsBefore);
+  }
 });
 
 test("reissue rotates both credentials without duplicating the journey", async () => {

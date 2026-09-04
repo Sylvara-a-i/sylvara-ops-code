@@ -123,7 +123,14 @@ function normalizeSubmissionEnvelope(body) {
     configurationRevision: body.configurationRevision,
     submissionId: body.submissionId,
     formData: Object.freeze(Object.fromEntries(
-      [...FORM_KEYS].map((key) => [key, body[key]]),
+      // Zoho Forms serializes a checked Decision Box as the exact string
+      // "true". Normalize only that verified provider representation here;
+      // internal commands still require boolean consent, and every other
+      // value remains subject to the strict form contract before any claim.
+      [...FORM_KEYS].map((key) => [
+        key,
+        key === "contactConsent" && body[key] === "true" ? true : body[key],
+      ]),
     )),
   });
 }

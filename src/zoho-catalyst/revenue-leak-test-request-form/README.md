@@ -25,6 +25,7 @@ The historical `288a93c` convergence evidence remains preserved in `free-revenue
 - Journey credentials and prefill handles are never stored or logged. Route secrets, peppers, Connection authorization, CRM payloads, form data, URLs, identifiers, and private variable values never enter logs.
 - Assisted record identity is resolved server-side. Browser-supplied CRM identity is not part of the submission contract.
 - The provider envelope contains only `submissionId`, `prefillId`, `configurationRevision`, and the exact Form field allowlist. It never accepts a CRM record ID, journey ID, prefill handle, bearer, or arbitrary nested identity.
+- Zoho Forms serializes its Decision Box value as JSON text in the flat webhook map. Only the exact string `"true"` is normalized to boolean `true` at that authenticated transport boundary. The internal form contract still requires boolean consent; labels, arrays, case variants, whitespace, and other truthy values are rejected. Normalization precedes the submission fingerprint so a harmless transport replay cannot create a second CRM write.
 - Session transitions use conditional readback, preserve harmless exact replay, reject changed-payload replay, and fail closed on expiry, tampering, stage drift, cross-record input, ambiguous state, or concurrent ownership.
 - The public lane remains owned by the existing native Forms upsert and cannot manufacture an assisted binding with hidden record fields.
 
@@ -38,6 +39,15 @@ Install only from the final immutable release. The complete variable-name and cl
 - Bounded operation defaults: `SESSION_TTL_SECONDS`, `PREFILL_HANDLE_TTL_SECONDS`, `MAX_BODY_BYTES`, `INBOUND_BODY_TIMEOUT_MS`, `OUTBOUND_TIMEOUT_MS`, `OUTBOUND_MAX_BYTES`, and `PLATFORM_OPERATION_TIMEOUT_MS`.
 
 Install the five routes, session table, two CRM Connections, dedicated Forms prefill-handle alias and webhooks, and the `Open Free-Test Setup` caller together, then read each back immediately. Preserve the predecessor button and all historical session evidence. Rollback disables the replacement caller, webhooks, and five routes and returns operators to the retained contained control; it never restores unsafe pre-containment code.
+
+A Forms thank-you page or redirect proves only that Forms captured the entry. After a failed webhook, reconcile the exact entry, Catalyst session, and CRM record before any re-push. A new release does not authorize replaying an older entry against a changed immutable revision or migrating a downstream session; preserve that entry as failed evidence until an approved recovery path exists.
+
+For a failed, unclaimed submission that needs a new release, the existing issuer can prepare a safe cutover without deleting the session or changing its canonical journey:
+
+1. While the old release remains installed, preserve the exact failed Forms entry and verify one matching `prefilled` session with no submission claim, consumption, fingerprint, or CRM write.
+2. Invoke only the existing server-side Issue function once for that record. Do not open or exchange the returned access credential. Read back the same row and journey in `issued` state, with all prior prefill/submission bindings cleared and the session version incremented once.
+3. Deploy the reviewed immutable release, then use the ordinary CRM launcher. Its existing clean-`issued` migration adopts the new release using a conditional write and preserves the canonical row and journey.
+4. Complete a fresh form entry against the new binding. Retain the old entry as failed evidence; never re-push it or rewrite its revision. Stop on a concurrent submission, changed identity, incomplete clearing, or ambiguous readback.
 
 ## Verification
 
