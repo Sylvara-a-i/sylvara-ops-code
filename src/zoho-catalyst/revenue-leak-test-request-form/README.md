@@ -27,6 +27,7 @@ The historical `288a93c` convergence evidence remains preserved in `free-revenue
 - The provider envelope contains only `submissionId`, `prefillId`, `configurationRevision`, and the exact Form field allowlist. It never accepts a CRM record ID, journey ID, prefill handle, bearer, or arbitrary nested identity.
 - Zoho Forms serializes its Decision Box value as JSON text in the flat webhook map. Only the exact string `"true"` is normalized to boolean `true` at that authenticated transport boundary. The internal form contract still requires boolean consent; labels, arrays, case variants, whitespace, and other truthy values are rejected. Normalization precedes the submission fingerprint so a harmless transport replay cannot create a second CRM write.
 - Session transitions use conditional readback, preserve harmless exact replay, reject changed-payload replay, and fail closed on expiry, tampering, stage drift, cross-record input, ambiguous state, or concurrent ownership.
+- The two CRM receipt datetime fields use whole-second `+00:00` values, following the [Zoho CRM v8 field contract](https://www.zoho.com/crm/developer/docs/api/v8/insert-records.html) verified on 2026-09-04. Readback compares only these two typed fields as valid timestamps for the same instant; malformed dates fail closed. The stored claim timestamp and fingerprint retain their original values, and the raw CRM `Modified_Time` concurrency fence remains exact.
 - The public lane remains owned by the existing native Forms upsert and cannot manufacture an assisted binding with hidden record fields.
 
 ## Development setup
@@ -41,6 +42,8 @@ Install only from the final immutable release. The complete variable-name and cl
 Install the five routes, session table, two CRM Connections, dedicated Forms prefill-handle alias and webhooks, and the `Open Free-Test Setup` caller together, then read each back immediately. Preserve the predecessor button and all historical session evidence. Rollback disables the replacement caller, webhooks, and five routes and returns operators to the retained contained control; it never restores unsafe pre-containment code.
 
 A Forms thank-you page or redirect proves only that Forms captured the entry. After a failed webhook, reconcile the exact entry, Catalyst session, and CRM record before any re-push. A new release does not authorize replaying an older entry against a changed immutable revision or migrating a downstream session; preserve that entry as failed evidence until an approved recovery path exists.
+
+Dependency diagnostics retain only fixed writer-credential, writer-organization, CRM-write, and CRM-readback stages, allowlisted provider codes, and actual HTTP status. Provider messages, arguments, bodies, credentials, and stacks never enter logs. Logging cannot change write/retry behavior. The CRM client's read-only writer preflight performs only credential validation and the existing organization GET; it adds no route or recovery authority, and local CLI behavior does not prove deployed runtime behavior.
 
 For a failed, unclaimed submission that needs a new release, the existing issuer can prepare a safe cutover without deleting the session or changing its canonical journey:
 

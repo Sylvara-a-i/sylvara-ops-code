@@ -580,6 +580,11 @@ test("flat Zoho Forms string consent becomes the same typed idempotent command",
   assert.deepEqual(result.body, { ok: true, replayed: false });
   assert.equal(selected.records.get(RECORD_ID).Free_Test_Contact_Consent, true);
   assert.equal(selected.adapter.rows[0].STATUS, "consumed");
+  assert.equal(selected.adapter.rows[0].SUBMISSION_STARTED_AT, new Date(NOW).toISOString());
+  assert.equal(selected.adapter.rows[0].SUBMISSION_FINGERPRINT, submissionFingerprint(
+    submission.submissionId, prepared.prefillId, prepared.configurationRevision,
+    normalizeFormData(formData()), selected.config.tokenPepper,
+  ));
 
   const replay = await submit(selected, prepared, submission.submissionId);
   assert.deepEqual(replay.body, { ok: true, replayed: true });

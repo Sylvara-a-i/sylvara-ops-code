@@ -182,6 +182,16 @@ function createRequestListener({
           config.platformOperationTimeoutMs,
         ),
         fetchImpl,
+        onDiagnostic(event) {
+          // The CRM boundary supplies only fixed stage/code enums and an HTTP
+          // status. Never attach provider bodies, error messages, or arguments.
+          safeLog(logger, "info", {
+            requestId,
+            stage: event.stage,
+            outcome: `${event.providerCode ?? "unclassified"}_${event.httpStatus ?? "none"}`,
+            elapsedMs: now() - startedAt,
+          });
+        },
       });
       const result = await requestHandler(request, {
         config,

@@ -110,6 +110,45 @@ test("an authenticated Development request initializes only the bound SDK and di
   });
 });
 
+test("dependency diagnostics log only coarse status and allowlisted provider codes", async () => {
+  const logs = [];
+  const privateMarker = "private-provider-payload-must-not-leak";
+  let networkCalls = 0;
+  const app = {
+    config: { environment: "development", projectId: SYNTHETIC_CATALYST_PROJECT_ID },
+    datastore() { return { table() { return {}; } }; },
+    zcql() { return {}; },
+    connections() { return {
+      async getConnectionCredentials() {
+        throw { statusCode: 401, code: "INVALID_TOKEN", message: privateMarker,
+          response: { body: privateMarker }, stack: privateMarker };
+      },
+    }; },
+  };
+  const listener = createRequestListener({
+    artifactSourceRevision: REVISION,
+    catalystSdk: { initialize() { return app; } },
+    environment: environment(),
+    logger: { info(value) { logs.push(value); }, error(value) { logs.push(value); } },
+    now: () => 100,
+    randomUUID: () => "10000000-0000-4000-8000-000000000009",
+    async fetchImpl() { networkCalls += 1; throw new Error("must not fetch"); },
+    async requestHandler(request, { crmClient }) { return crmClient.preflightAssistedWrite(); },
+  });
+  const response = responseStub();
+  await listener({ method: "POST", url: "/form1/issue-test",
+    headers: requestHeaders(), rawBody: Buffer.from("{}") }, response);
+  assert.equal(networkCalls, 0);
+  assert.equal(response.statusCode, 503);
+  assert.equal(logs.length, 2);
+  assert.deepEqual(JSON.parse(logs[0]), {
+    requestId: "10000000-0000-4000-8000-000000000009",
+    stage: "writer_credentials", outcome: "INVALID_TOKEN_401", elapsedMs: 0,
+  });
+  assert.equal(logs.join("").includes(privateMarker), false);
+  assert.equal(response.payload.includes(privateMarker), false);
+});
+
 test("an access-page response preserves exact HTML and security headers", async () => {
   const html = "<!doctype html><title>Continue</title>";
   const headers = {
