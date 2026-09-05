@@ -104,6 +104,33 @@ class SetupIssueIdentityContractTests(unittest.TestCase):
         for line in info_lines:
             self.assertRegex(line, r'^info "setup_issue_identity_[a-z_]+";$')
 
+    def test_form2_eligibility_and_readback_use_the_stored_offer_not_its_display_label(self):
+        values = self.automation["entry_offer_values"]
+        stored_value = values["crm_actual_reference_value"]
+        display_value = values["crm_display_value"]
+        self.assertNotEqual(stored_value, display_value)
+        form2 = next(
+            caller for caller in self.callers["callers"]
+            if caller["logical_name"] == "FORM2_SETUP_ISSUE_CALLER"
+        )
+        self.assertEqual(form2["deal_initialization"]["eligible_entry_offer"], stored_value)
+        self.assertEqual(
+            re.findall(r'^expected_entry_offer = "([^"]+)";$', self.form2, re.MULTILINE),
+            [stored_value],
+        )
+        self.assertIn(
+            'eligible_context = entry_offer == expected_entry_offer && '
+            'pipeline == "Revenue Desk Sales" && stage == "Setup and Authorization" '
+            '&& submission_id == "";',
+            self.form2,
+        )
+        self.assertIn(
+            'readback_exact = ifnull(readback_record.get("Entry_Offer"),"")'
+            '.toString().trim() == expected_entry_offer &&',
+            self.form2,
+        )
+        self.assertNotIn(f'== "{display_value}"', self.form2)
+
     def test_core_button_derives_and_reads_back_identity_without_a_workflow_argument(self):
         form2 = next(
             caller

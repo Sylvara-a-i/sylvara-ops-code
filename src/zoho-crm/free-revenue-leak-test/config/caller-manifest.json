@@ -147,7 +147,7 @@
         "authority": "the authenticated CRM function fresh-reads the exact Deal before calling Catalyst",
         "eligible_pipeline": "Revenue Desk Sales",
         "eligible_stage": "Setup and Authorization",
-        "eligible_entry_offer": "7-Day Revenue Leak Test",
+        "eligible_entry_offer": "Free 7-Day Missed-Call",
         "initialize_only_when_blank": true,
         "conflicting_nonblank_behavior": "fail_closed_no_overwrite",
         "workflow_or_blueprint_triggered": false,

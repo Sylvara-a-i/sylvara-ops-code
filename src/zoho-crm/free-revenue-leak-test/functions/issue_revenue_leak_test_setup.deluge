@@ -24,6 +24,9 @@ Private setup: replace every {{...}} token outside Git, then save and syntax-che
 
 can_open = false;
 destination_url = "";
+// Record APIs return the stored actual/reference value, not the CRM display label.
+// Keep both eligibility and final readback aligned with automation-contract.json.
+expected_entry_offer = "Free 7-Day Missed-Call";
 try
 {
 	deal_id_text = ifnull(input.deal_id,"").toString().trim();
@@ -53,7 +56,7 @@ try
 			test_scope_version = ifnull(deal_record.get("Test_Scope_Version"),"").toString().trim();
 			deal_type = ifnull(deal_record.get("Type"),"").toString().trim();
 
-			eligible_context = entry_offer == "7-Day Revenue Leak Test" && pipeline == "Revenue Desk Sales" && stage == "Setup and Authorization" && submission_id == "";
+			eligible_context = entry_offer == expected_entry_offer && pipeline == "Revenue Desk Sales" && stage == "Setup and Authorization" && submission_id == "";
 			setup_status_valid = setup_access_status == "" || setup_access_status == "Not Issued" || setup_access_status == "Issued" || setup_access_status == "Verified" || setup_access_status == "Expired";
 			governed_state_valid = setup_status_valid && (authorization_status == "" || authorization_status == "Not Sent") && (go_live_status == "" || go_live_status == "Not Ready") && (test_status == "" || test_status == "Not Started") && (test_duration == "" || test_duration == "7") && (test_call_limit == "" || test_call_limit == "25") && (test_scope_version == "" || test_scope_version == "free-test-scope-v1.0") && (deal_type == "" || deal_type == "Initial Sale");
 			identity_pattern = "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$";
@@ -145,7 +148,7 @@ try
 					if(readback_complete)
 					{
 						readback_setup_status = ifnull(readback_record.get("Setup_Access_Status"),"").toString().trim();
-						readback_exact = ifnull(readback_record.get("Entry_Offer"),"").toString().trim() == "7-Day Revenue Leak Test" && ifnull(readback_record.get("Pipeline"),"").toString().trim() == "Revenue Desk Sales" && ifnull(readback_record.get("Stage"),"").toString().trim() == "Setup and Authorization" && ifnull(readback_record.get("Setup_Form_Submission_ID"),"").toString().trim() == "" && ifnull(readback_record.get("Setup_Access_Issue_Request_ID"),"").toString().trim() == issue_request_id && readback_setup_status == expected_setup_access_status && ifnull(readback_record.get("Free_Test_Authorization_Status"),"").toString().trim() == "Not Sent" && ifnull(readback_record.get("Go_Live_Approval_Status"),"").toString().trim() == "Not Ready" && ifnull(readback_record.get("Test_Status"),"").toString().trim() == "Not Started" && ifnull(readback_record.get("Test_Duration_Days"),"").toString().trim() == "7" && ifnull(readback_record.get("Test_Call_Limit"),"").toString().trim() == "25" && ifnull(readback_record.get("Test_Scope_Version"),"").toString().trim() == "free-test-scope-v1.0" && ifnull(readback_record.get("Type"),"").toString().trim() == "Initial Sale";
+						readback_exact = ifnull(readback_record.get("Entry_Offer"),"").toString().trim() == expected_entry_offer && ifnull(readback_record.get("Pipeline"),"").toString().trim() == "Revenue Desk Sales" && ifnull(readback_record.get("Stage"),"").toString().trim() == "Setup and Authorization" && ifnull(readback_record.get("Setup_Form_Submission_ID"),"").toString().trim() == "" && ifnull(readback_record.get("Setup_Access_Issue_Request_ID"),"").toString().trim() == issue_request_id && readback_setup_status == expected_setup_access_status && ifnull(readback_record.get("Free_Test_Authorization_Status"),"").toString().trim() == "Not Sent" && ifnull(readback_record.get("Go_Live_Approval_Status"),"").toString().trim() == "Not Ready" && ifnull(readback_record.get("Test_Status"),"").toString().trim() == "Not Started" && ifnull(readback_record.get("Test_Duration_Days"),"").toString().trim() == "7" && ifnull(readback_record.get("Test_Call_Limit"),"").toString().trim() == "25" && ifnull(readback_record.get("Test_Scope_Version"),"").toString().trim() == "free-test-scope-v1.0" && ifnull(readback_record.get("Type"),"").toString().trim() == "Initial Sale";
 						if(readback_exact)
 						{
 							request_body = Map();
