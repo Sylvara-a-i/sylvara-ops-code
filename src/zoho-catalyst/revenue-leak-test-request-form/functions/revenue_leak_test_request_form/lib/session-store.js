@@ -649,17 +649,24 @@ function createSessionStore(adapter, config, {
     return Object.freeze({ row, replayed: false });
   }
 
-  /** Reserve one recovery write attempt without replacing the original claim. */
-  async function reserveRecoveryAttempt(session, recoveryArtifactSha) {
+  /** Reserve once from the exact approved prestate, preserving the original claim. */
+  async function reserveRecoveryAttempt(session, recoveryArtifactSha, originalLastOutcome = "submission_started") {
     assertRuntimeBinding(session);
-    if (!REVISION_PATTERN.test(recoveryArtifactSha ?? "")) {
+    if (typeof recoveryArtifactSha !== "string" || !REVISION_PATTERN.test(recoveryArtifactSha)) {
       fail("Recovery artifact is invalid", { publicCode: "session_input_invalid", status: 422 });
+    }
+    const prefix = `r1_${recoveryArtifactSha}_`;
+    // Only the caller's exact validated manifest may authorize a predecessor
+    // reservation. Omitting it keeps every other artifact fail-closed.
+    if (originalLastOutcome !== "submission_started" &&
+        !(typeof originalLastOutcome === "string" && RECOVERY_MARKER_PATTERN.test(originalLastOutcome) &&
+          !originalLastOutcome.startsWith(prefix))) {
+      fail("Recovery prestate is invalid", { publicCode: "session_input_invalid", status: 422 });
     }
     if (session.status !== "submitting" || !FINGERPRINT_PATTERN.test(session.submissionFingerprint ?? "") ||
         !CLAIM_ID_PATTERN.test(session.submissionClaimId ?? "")) {
       fail("Recovery claim is unavailable", { publicCode: "session_state_invalid", status: 409 });
     }
-    const prefix = `r1_${recoveryArtifactSha}_`;
     const reserved = (value) => typeof value === "string" && value.startsWith(prefix) &&
       RECOVERY_MARKER_PATTERN.test(value);
     const unchanged = (row) => stableBinding(row, session) &&
@@ -673,7 +680,7 @@ function createSessionStore(adapter, config, {
       }
       return Object.freeze({ row, acquired: false });
     }
-    if (session.lastOutcome !== "submission_started") {
+    if (session.lastOutcome !== originalLastOutcome) {
       fail("Recovery claim has another outcome", { publicCode: "session_state_invalid", status: 409 });
     }
     const owner = randomUUID();

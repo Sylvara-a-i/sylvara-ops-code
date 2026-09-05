@@ -116,6 +116,26 @@ test("recovery is opt-in and its private one-claim manifest is exact", () => {
   assert.equal(dark.recoveryManifest,undefined);
 });
 
+test("follow-on recovery requires an exact predecessor marker from a different artifact", () => {
+  const priorMarker = `r1_${"d".repeat(40)}_00000000000040008000000000000001`;
+  const manifest = { schemaVersion: 1, mode: "inspect", originalSourceRevision: "a".repeat(40),
+    claimBindingSha256: "b".repeat(64), assistedConstantsSha256: "c".repeat(64),
+    originalSessionVersion: 18, originalUpdatedAt: "2026-09-04T12:01:00.000Z",
+    originalLastOutcome: priorMarker };
+  const selected = originalLastOutcome => loadConfig(environment({
+    FORM1_RECOVERY_MANIFEST_JSON: JSON.stringify({ ...manifest, originalLastOutcome }),
+  }), REVISION);
+  assert.deepEqual(selected(priorMarker).recoveryManifest, manifest);
+  assert.equal(Object.keys(selected(priorMarker).recoveryManifest).length, 8);
+  for (const value of [null, [priorMarker], { marker: priorMarker }, "submitted",
+    `${priorMarker} `, priorMarker.toUpperCase(), priorMarker.replace("r1_", "r2_"),
+    `r1_${REVISION}_00000000000040008000000000000001`,
+    `r1_${"d".repeat(40)}_${"0".repeat(32)}`,
+  ]) {
+    assert.throws(() => selected(value), /FORM1_RECOVERY_MANIFEST_JSON is invalid/);
+  }
+});
+
 test("paths, credentials, organization identity, and Connections remain exact and independent", () => {
   assert.throws(
     () => loadConfig(environment({ SUBMISSION_PATH: "/form1/issue-test" }), REVISION),

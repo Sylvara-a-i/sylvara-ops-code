@@ -57,6 +57,12 @@ function isCurrentReservation(value, sourceRevision) {
   ).test(value);
 }
 
+function isApprovedPredecessor(value, sourceRevision) {
+  return value === "submission_started" || (typeof value === "string" &&
+    /^r1_[a-f0-9]{40}_[a-f0-9]{12}4[a-f0-9]{3}[89ab][a-f0-9]{15}$/.test(value) &&
+    !isCurrentReservation(value, sourceRevision));
+}
+
 // Both packets are flat normalized objects. All fields are included; sorting
 // makes key order immaterial without dropping a timestamp, version, or binding.
 function packetSha256(packet) {
@@ -101,7 +107,8 @@ function validateConfiguration(config, store, crm) {
       !/^[a-f0-9]{64}$/.test(manifest.assistedConstantsSha256 ?? "") ||
       !Number.isSafeInteger(manifest.originalSessionVersion) || manifest.originalSessionVersion < 1 ||
       manifest.originalSessionVersion > Number.MAX_SAFE_INTEGER - 2 ||
-      !canonicalTime(manifest.originalUpdatedAt) || manifest.originalLastOutcome !== "submission_started" ||
+      !canonicalTime(manifest.originalUpdatedAt) ||
+      !isApprovedPredecessor(manifest.originalLastOutcome, config.sourceRevision) ||
       !Number.isSafeInteger(config.platformOperationTimeoutMs) || config.platformOperationTimeoutMs < 1 ||
       config.platformOperationTimeoutMs > 30000 ||
       !constantTimeEqual(assistedConstantsSha256(config.assistedConstants), manifest.assistedConstantsSha256) ||
@@ -135,7 +142,9 @@ function assertClaim(session, prefillId, config, store) {
     fail("recovery_binding_mismatch", 409);
   }
   // Only the three reservation fields may differ from the complete approved
-  // original packet. Terminal replay never receives this normalization.
+  // prestate. A separately approved follow-on pins the prior reservation itself
+  // in that packet; it never clears a marker or rewrites the original claim.
+  // Terminal replay never receives this normalization.
   const original = reserved ? { ...session, sessionVersion: manifest.originalSessionVersion,
     updatedAt: manifest.originalUpdatedAt, lastOutcome: manifest.originalLastOutcome } : session;
   if (original.sessionVersion !== manifest.originalSessionVersion ||
@@ -198,7 +207,8 @@ async function recoverAssistedSubmission(body, dependencies) {
       if (reserved) fail("recovery_attempt_reserved", 503, true);
       if (!originalVersionMatches) fail("record_stale", 409);
       await bounded(() => crm.preflightAssistedWrite());
-      const reservation = await bounded(() => store.reserveRecoveryAttempt(session, config.sourceRevision), true);
+      const reservation = await bounded(() => store.reserveRecoveryAttempt(session, config.sourceRevision,
+        manifest.originalLastOutcome), true);
       session = reservation?.row;
       const hasReservation = assertClaim(session, prefillId, config, store);
       if (typeof reservation.acquired !== "boolean" || (reservation.acquired && !hasReservation)) {
@@ -223,8 +233,9 @@ async function recoverAssistedSubmission(body, dependencies) {
     if (!row || !canonicalTime(row.consumedAt) || row.consumedAt < session.updatedAt) {
       fail("reconciliation_required", 503, true);
     }
-    const terminalOutcome = isCurrentReservation(session.lastOutcome, config.sourceRevision)
-      ? session.lastOutcome : "submitted";
+    // A pre-existing exact CRM poststate needs no new reservation. Retain its
+    // approved predecessor marker too, rather than losing prior attempt evidence.
+    const terminalOutcome = session.lastOutcome === "submission_started" ? "submitted" : session.lastOutcome;
     const expected = { ...session, status: "consumed", lastOutcome: terminalOutcome,
       sessionVersion: session.sessionVersion + 1, consumedAt: row.consumedAt, updatedAt: row.consumedAt };
     if (!constantTimeEqual(recoveryClaimBindingSha256(row), recoveryClaimBindingSha256(expected))) {

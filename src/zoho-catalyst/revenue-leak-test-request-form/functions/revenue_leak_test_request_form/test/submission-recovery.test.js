@@ -11,6 +11,7 @@ const { RecoveryError, assistedConstantsSha256, recoveryClaimBindingSha256,
 const { REVISION, environment } = require("./helpers");
 
 const CURRENT_REVISION = "a".repeat(40);
+const PREDECESSOR_REVISION = "b".repeat(40);
 const NOW = Date.parse("2026-09-01T12:00:00.000Z");
 const PREFILL_ID = "11111111-1111-4111-8111-111111111111";
 const RECORD_ID = "4000000001";
@@ -26,7 +27,7 @@ function formData() {
     utmMedium: "", utmCampaign: "", utmTerm: "", utmContent: "" };
 }
 
-async function fixture(mode = "complete") {
+async function fixture(mode = "complete", predecessorRevision = null) {
   const originalConfig = loadConfig(environment(), REVISION);
   let raw;
   let clock = NOW;
@@ -61,8 +62,16 @@ async function fixture(mode = "complete") {
     submissionId: "synthetic-original-entry", formData: formData() };
   const fingerprint = submissionFingerprint(body.submissionId, PREFILL_ID, REVISION,
     normalizeFormData(body.formData), originalConfig.tokenPepper);
-  const { row: original } = await store.beginSubmission(prefilled.row, fingerprint, VERSION);
+  await store.beginSubmission(prefilled.row, fingerprint, VERSION);
+  // Represent the persisted initial recovery checkpoint without changing its claim.
+  raw.SESSION_VERSION = 17;
+  const initialClaim = await store.readByPrefillId(PREFILL_ID);
+  let original = initialClaim;
   clock += 1000;
+  if (predecessorRevision) {
+    original = (await store.reserveRecoveryAttempt(initialClaim, predecessorRevision)).row;
+    clock += 1000;
+  }
   const config = { ...originalConfig, sourceRevision: CURRENT_REVISION, platformOperationTimeoutMs: 100,
     recoveryManifest: { schemaVersion: 1, mode, originalSourceRevision: REVISION,
       claimBindingSha256: recoveryClaimBindingSha256(original),
@@ -108,7 +117,7 @@ async function fixture(mode = "complete") {
     },
   };
   const deps = { config, recoverySessionStore: recoveryStore, crmClient: crm };
-  return { body, config, deps, original, patch, faults, events, store,
+  return { body, config, deps, initialClaim, original, patch, faults, events, store,
     run: () => recoverAssistedSubmission(body, deps),
     raw: () => raw, record: () => record, setRecord: next => { record = next; } };
 }
@@ -260,4 +269,102 @@ test("dependency failures emit only sanitized reusable diagnostics", async () =>
     return true;
   });
   assert.equal(f.events.includes("reserve"), false);
+});
+
+test("approved follow-on pins the full prior reservation and inspects without changing it", async () => {
+  const f = await fixture("inspect", PREDECESSOR_REVISION);
+  const before = { ...f.raw() };
+  assert.equal(f.initialClaim.sessionVersion, 17);
+  assert.equal(f.original.sessionVersion, 18);
+  assert.equal(f.config.recoveryManifest.originalLastOutcome, f.original.lastOutcome);
+  assert.equal(f.config.recoveryManifest.claimBindingSha256, recoveryClaimBindingSha256(f.original));
+  const result = await f.run();
+  assert.equal(result.status, 503); assert.equal(result.body.recoveryReady, true);
+  assert.deepEqual(f.events, ["read", "preflight"]); assert.deepEqual(f.raw(), before);
+});
+
+test("follow-on uses a distinct one-shot reservation and preserves the initial claim", async () => {
+  const f = await fixture("complete", PREDECESSOR_REVISION);
+  const priorPacket = { ...f.config.recoveryManifest };
+  assert.equal((await f.run()).status, 200);
+  const row = await f.store.readByPrefillId(PREFILL_ID);
+  assert.equal(row.sessionVersion, 20);
+  assert.match(row.lastOutcome, new RegExp(`^r1_${CURRENT_REVISION}_`));
+  assert.notEqual(row.lastOutcome, f.original.lastOutcome);
+  assert.deepEqual(f.config.recoveryManifest, priorPacket);
+  for (const [key, value] of Object.entries(f.initialClaim)) {
+    if (!["status", "lastOutcome", "sessionVersion", "updatedAt", "consumedAt"].includes(key)) {
+      assert.deepEqual(row[key], value, key);
+    }
+  }
+  assert.deepEqual(f.events, ["read", "preflight", "reserve", "put", "consume"]);
+  await assert.rejects(f.run(), error => error.publicCode === "recovery_binding_mismatch");
+  assert.equal(f.events.filter(event => event === "put").length, 1);
+});
+
+test("already-written follow-on poststate consumes while preserving its predecessor marker", async () => {
+  const f = await fixture("complete", PREDECESSOR_REVISION);
+  f.setRecord({ ...f.record(), ...f.patch, Modified_Time: "2026-09-01T12:02:00+00:00" });
+  assert.equal((await f.run()).status, 200);
+  assert.equal(f.raw().LAST_OUTCOME, f.original.lastOutcome);
+  assert.equal(f.raw().SESSION_VERSION, 19);
+  assert.deepEqual(f.events, ["read", "consume"]);
+});
+
+test("follow-on refuses malformed, current-artifact, wrong, or altered predecessor packets", async () => {
+  const uuid = "00000000000040008000000000000001";
+  for (const mutate of [
+    f => { f.config.recoveryManifest.originalLastOutcome = `r1_${PREDECESSOR_REVISION}_${"0".repeat(32)}`; },
+    f => { f.config.recoveryManifest.originalLastOutcome = `r1_${CURRENT_REVISION}_${uuid}`; },
+    f => { f.config.recoveryManifest.originalLastOutcome = `r1_${"c".repeat(40)}_${uuid}`; },
+    f => { f.config.recoveryManifest.claimBindingSha256 = recoveryClaimBindingSha256(f.initialClaim); },
+    f => { f.raw().LAST_OUTCOME = `r1_${PREDECESSOR_REVISION}_${uuid}`; },
+    f => { f.raw().SUBMISSION_CLAIM_ID = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"; },
+    f => { f.raw().SUBMISSION_STARTED_AT = "2026-09-01T12:00:00.001Z"; },
+    f => { f.raw().SESSION_VERSION = 19; },
+    f => { f.body.formData.email = "other@example.invalid"; },
+  ]) {
+    const f = await fixture("complete", PREDECESSOR_REVISION);
+    f.setRecord({ ...f.record(), ...f.patch, Modified_Time: "2026-09-01T12:02:00+00:00" });
+    mutate(f);
+    await assert.rejects(f.run());
+    assert.deepEqual(f.events, []);
+  }
+});
+
+test("concurrent follow-on requests at the same clock permit only one conditional PUT", async () => {
+  const f = await fixture("complete", PREDECESSOR_REVISION);
+  await Promise.allSettled([f.run(), f.run(), f.run()]);
+  assert.equal(f.events.filter(event => event === "put").length, 1);
+  assert.equal(f.raw().STATUS, "consumed");
+  assert.equal(f.raw().SESSION_VERSION, 20);
+});
+
+test("ambiguous follow-on reservation never grants a write or erases predecessor evidence", async () => {
+  for (const fault of ["reserveBefore", "reserveAfter"]) {
+    const f = await fixture("complete", PREDECESSOR_REVISION); f.faults[fault] = true;
+    await assert.rejects(f.run());
+    assert.equal(f.events.includes("put"), false); assert.equal(f.events.includes("consume"), false);
+    assert.equal(f.config.recoveryManifest.originalLastOutcome, f.original.lastOutcome);
+    if (fault === "reserveBefore") {
+      assert.equal(f.raw().LAST_OUTCOME, f.original.lastOutcome);
+      assert.equal(f.raw().SESSION_VERSION, 18);
+    } else {
+      f.faults.reserveAfter = false;
+      await assert.rejects(f.run(), error => error.publicCode === "recovery_attempt_reserved");
+      assert.equal(f.raw().SESSION_VERSION, 19);
+      assert.equal(f.events.includes("put"), false);
+    }
+  }
+});
+
+test("follow-on write ambiguity remains permanently no-PUT on restart", async () => {
+  for (const fault of ["reject", "timeout"]) {
+    const f = await fixture("complete", PREDECESSOR_REVISION);
+    f.config.platformOperationTimeoutMs = 5; f.faults.write = fault;
+    await assert.rejects(f.run(), error => error.ambiguous === true);
+    if (fault === "reject") await assert.rejects(f.run(), error => error.publicCode === "recovery_attempt_reserved");
+    else assert.equal((await f.run()).status, 200);
+    assert.equal(f.events.filter(event => event === "put").length, 1);
+  }
 });

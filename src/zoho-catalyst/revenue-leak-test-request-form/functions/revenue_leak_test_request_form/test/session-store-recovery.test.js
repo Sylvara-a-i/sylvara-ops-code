@@ -123,6 +123,76 @@ test("another recovery mode or artifact cannot acquire the original claim", asyn
   }
 });
 
+test("exact separately approved predecessor reserves once without replacing the original claim", async () => {
+  const selected = fixture();
+  const original = await selected.store.readByRowId("1");
+  const prior = (await selected.store.reserveRecoveryAttempt(original, "e".repeat(40))).row;
+  assert.equal(prior.sessionVersion, 18);
+  const results = await Promise.all([
+    selected.store.reserveRecoveryAttempt(prior, RECOVERY_REVISION, prior.lastOutcome),
+    selected.restart().reserveRecoveryAttempt(prior, RECOVERY_REVISION, prior.lastOutcome),
+  ]);
+  assert.equal(results.filter(({ acquired }) => acquired).length, 1);
+  const row = await selected.store.readByRowId("1");
+  assert.equal(row.sessionVersion, 19);
+  assert.equal(row.lastOutcome.startsWith(`r1_${RECOVERY_REVISION}_`), true);
+  assert.notEqual(row.lastOutcome, prior.lastOutcome);
+  for (const [key, value] of Object.entries(original)) {
+    if (!["lastOutcome", "sessionVersion", "updatedAt"].includes(key)) assert.deepEqual(row[key], value);
+  }
+  const updates = selected.updateCount();
+  assert.equal((await selected.restart().reserveRecoveryAttempt(
+    row, RECOVERY_REVISION, prior.lastOutcome,
+  )).acquired, false);
+  assert.equal(selected.updateCount(), updates);
+});
+
+test("follow-on reservation rejects absent, mismatched, malformed, and current-artifact approval", async () => {
+  const selected = fixture();
+  const original = await selected.store.readByRowId("1");
+  const prior = (await selected.store.reserveRecoveryAttempt(original, "e".repeat(40))).row;
+  const updates = selected.updateCount();
+  for (const approved of [undefined, null, [prior.lastOutcome], "submitted", "r1_arbitrary",
+    `r1_${"e".repeat(40)}_${UUID.replaceAll("-", "")}`,
+    `r1_${RECOVERY_REVISION}_${UUID.replaceAll("-", "")}`,
+  ]) {
+    await assert.rejects(() => selected.store.reserveRecoveryAttempt(prior, RECOVERY_REVISION, approved));
+  }
+  assert.equal(selected.updateCount(), updates);
+  assert.deepEqual(await selected.store.readByRowId("1"), prior);
+});
+
+test("follow-on reservation ambiguity never grants a second-artifact write attempt", async () => {
+  for (const mode of ["before_commit", "after_commit", "readback_failure"]) {
+    const selected = fixture();
+    const original = await selected.store.readByRowId("1");
+    const prior = (await selected.store.reserveRecoveryAttempt(original, "e".repeat(40))).row;
+    selected.setMode(mode);
+    if (mode === "readback_failure") {
+      await assert.rejects(() => selected.store.reserveRecoveryAttempt(
+        prior, RECOVERY_REVISION, prior.lastOutcome,
+      ), { ambiguous: true });
+    } else {
+      assert.equal((await selected.store.reserveRecoveryAttempt(
+        prior, RECOVERY_REVISION, prior.lastOutcome,
+      )).acquired, false);
+    }
+    assert.equal(selected.updateCount(), 2);
+    selected.setMode("success");
+    const row = await selected.store.readByRowId("1");
+    assert.equal(row.sessionVersion, mode === "before_commit" ? 18 : 19);
+    if (mode !== "before_commit") {
+      assert.equal((await selected.restart().reserveRecoveryAttempt(
+        row, RECOVERY_REVISION, prior.lastOutcome,
+      )).acquired, false);
+      assert.equal(selected.updateCount(), 2);
+    }
+    for (const [key, value] of Object.entries(original)) {
+      if (!["lastOutcome", "sessionVersion", "updatedAt"].includes(key)) assert.deepEqual(row[key], value);
+    }
+  }
+});
+
 test("consume preserves only a valid recovery marker and its original claim evidence", async () => {
   for (const reserve of [true, false]) {
     const selected = fixture();
