@@ -79,6 +79,7 @@ The read Connection needs only:
 - `ZohoCRM.modules.contacts.READ`
 - `ZohoCRM.modules.accounts.READ`
 - `ZohoCRM.modules.deals.READ`
+- `ZohoCRM.org.READ`
 
 The separate write Connection needs only:
 
@@ -86,8 +87,13 @@ The separate write Connection needs only:
 - `ZohoCRM.modules.accounts.UPDATE`
 - `ZohoCRM.modules.deals.UPDATE`
 - `ZohoCRM.composite_requests.CUSTOM`
+- `ZohoCRM.org.READ`
+
+Both Connections retain their independent organization-hash checks before record access or mutation. The organization READ scope is an existing runtime prerequisite, not permission to replace module-specific grants with broader scopes. This contract documents required capabilities; it does not assert that a live Connection has them or authorize a new grant.
 
 The Catalyst Connection must expose exactly one OAuth `Authorization` header and no query parameters. Raw OAuth client IDs, client secrets, access tokens, and refresh tokens are prohibited in source and function variables.
+
+Deal reads retain all 54 canonical fields using two sequential projections of 50 and 5 fields, each repeating `Modified_Time`, to respect the [CRM V8 50-field parameter limit](https://www.zoho.com/crm/developer/docs/api/v8/get-records.html) (rechecked 2026-09-05). Each response must contain exactly the requested record, a valid identical revision timestamp, and every requested key; explicit null values remain valid. Only projected fields are merged. Missing fields, identity mismatch, revision drift, or either failed request abort the read without retry or a partial result. This adds one bounded CRM GET per Deal read, not an atomic snapshot guarantee; existing conditional writes and independent readback remain required. Contact and Account projections and all organization, authorization, eligibility, and write guards are unchanged.
 
 The exact Development Issue request, 200 response, idempotency field, and no-blind-retry policy are governed by [`config/issue-caller-contract.json`](config/issue-caller-contract.json). Component CI checks that contract against the route manifest, CRM caller manifest, Deluge request and response guards, and the controller's fail-before-side-effects behavior. This closes repository contract drift only; it does not prove the live UUID minter, Connection injection, button binding, route, or runtime response.
 

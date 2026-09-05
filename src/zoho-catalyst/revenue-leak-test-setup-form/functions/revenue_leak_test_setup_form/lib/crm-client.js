@@ -341,9 +341,27 @@ function serializeUpdate(module, update) {
   }));
 }
 
-function recordUrl(boundary, module, recordId) {
+function recordFieldProjections(module) {
+  const fields = READ_FIELDS[validateModule(module)];
+  const maximumFields = 50;
+  if (fields.length <= maximumFields) return [fields];
+
+  // Repeat the CRM revision in each bounded projection. A field-limit repair
+  // must not discard governance fields or combine different observed versions.
+  const remainingFields = fields.filter((field) => field !== "Modified_Time");
+  const projections = [];
+  for (let offset = 0; offset < remainingFields.length; offset += maximumFields - 1) {
+    projections.push([
+      "Modified_Time",
+      ...remainingFields.slice(offset, offset + maximumFields - 1),
+    ]);
+  }
+  return projections;
+}
+
+function recordUrl(boundary, module, recordId, fields) {
   const url = new URL(`${boundary.apiBaseUrl}/${validateModule(module)}/${validateRecordId(recordId)}`);
-  url.searchParams.set("fields", READ_FIELDS[module].join(","));
+  url.searchParams.set("fields", fields.join(","));
   return url.toString();
 }
 
@@ -576,17 +594,32 @@ function createCrmClient(
 
   async function getRecord(module, recordId) {
     await assertOrganization(false);
-    const response = await authorizedRequest(
-      recordUrl(boundary, module, recordId),
-      { method: "GET", headers: { Accept: "application/json" } },
-      { sideEffecting: false, write: false },
-    );
-    if (response.status !== 200) {
-      fail("CRM rejected the record read", classifyRejectedStatus(response.status, {
-        sideEffecting: false,
-      }));
+    const projections = recordFieldProjections(module);
+    const merged = { id: recordId };
+    for (const fields of projections) {
+      const response = await authorizedRequest(
+        recordUrl(boundary, module, recordId, fields),
+        { method: "GET", headers: { Accept: "application/json" } },
+        { sideEffecting: false, write: false },
+      );
+      if (response.status !== 200) {
+        fail("CRM rejected the record read", classifyRejectedStatus(response.status, {
+          sideEffecting: false,
+        }));
+      }
+      const record = parseRecordResponse(response.json, recordId);
+      if (projections.length === 1) return record;
+      if (fields.some((field) => !Object.hasOwn(record, field))) {
+        fail("CRM record projection is incomplete", { publicCode: "crm_dependency_failed" });
+      }
+      if (merged.Modified_Time !== undefined && merged.Modified_Time !== record.Modified_Time) {
+        fail("CRM record changed between projections", { publicCode: "record_stale", status: 409 });
+      }
+      // Provider metadata and unrequested fields cannot fill a missing later
+      // projection or overwrite an already verified part of the record.
+      for (const field of fields) merged[field] = record[field];
     }
-    return parseRecordResponse(response.json, recordId);
+    return merged;
   }
 
   async function updateRecord(module, recordId, update, { ifUnmodifiedSince } = {}) {
