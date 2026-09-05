@@ -7,6 +7,7 @@ const { validateOperatorHash, validateSecret } = require("./security");
 const FORM1_SESSION_TABLE_NAME = "RevenueLeakTestRequestFormSessions";
 const CRM_API_BASE_URL = "https://www.zohoapis.com/crm/v8";
 const SHA256_HEX_PATTERN = /^[a-f0-9]{64}$/;
+const RECOVERY_MARKER_PATTERN = /^r1_[a-f0-9]{40}_[a-f0-9]{12}4[a-f0-9]{3}[89ab][a-f0-9]{15}$/;
 const NUMERIC_LIMITS = Object.freeze({
   SESSION_TTL_SECONDS: Object.freeze({ fallback: 1800, minimum: 300, maximum: 3600 }),
   PREFILL_HANDLE_TTL_SECONDS: Object.freeze({ fallback: 600, minimum: 300, maximum: 900 }),
@@ -112,6 +113,42 @@ function boundedText(environment, name, maximum) {
     throw new ConfigurationError(`${name} is invalid`);
   }
   return value;
+}
+
+function recoveryManifest(environment, sourceRevision) {
+  const raw = environment?.FORM1_RECOVERY_MANIFEST_JSON;
+  if (raw === undefined || raw === "") return null;
+  let value;
+  try {
+    if (typeof raw !== "string" || raw.length > 1536) throw new Error();
+    value = JSON.parse(raw);
+    // Compact exact JSON rejects duplicate keys and ambiguous configuration.
+    // Values identify one approved claim privately; they never enter logs.
+    const keys = ["schemaVersion", "mode", "originalSourceRevision", "claimBindingSha256",
+      "assistedConstantsSha256", "originalSessionVersion", "originalUpdatedAt", "originalLastOutcome"];
+    const priorOutcome = value?.originalLastOutcome;
+    // A separately approved follow-on hashes the complete prior reserved row;
+    // the current artifact's own reservation never becomes fresh write authority.
+    const approvedOutcome = priorOutcome === "submission_started" ||
+      (typeof priorOutcome === "string" && RECOVERY_MARKER_PATTERN.test(priorOutcome) &&
+        !priorOutcome.startsWith(`r1_${sourceRevision}_`));
+    if (!value || Array.isArray(value) || typeof value !== "object" ||
+        JSON.stringify(value) !== raw || Object.keys(value).length !== keys.length ||
+        !keys.every(key => Object.hasOwn(value, key)) || value.schemaVersion !== 1 ||
+        !["inspect", "complete"].includes(value.mode) ||
+        !/^[a-f0-9]{40}$/.test(value.originalSourceRevision) ||
+        value.originalSourceRevision === sourceRevision ||
+        !SHA256_HEX_PATTERN.test(value.claimBindingSha256) ||
+        !SHA256_HEX_PATTERN.test(value.assistedConstantsSha256) ||
+        !Number.isSafeInteger(value.originalSessionVersion) || value.originalSessionVersion < 1 ||
+        value.originalSessionVersion > Number.MAX_SAFE_INTEGER - 2 ||
+        !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value.originalUpdatedAt) ||
+        new Date(value.originalUpdatedAt).toISOString() !== value.originalUpdatedAt ||
+        !approvedOutcome) throw new Error();
+  } catch {
+    throw new ConfigurationError("FORM1_RECOVERY_MANIFEST_JSON is invalid");
+  }
+  return Object.freeze(value);
 }
 
 function loadConfig(environment = process.env, artifactRevision) {
@@ -259,6 +296,7 @@ function loadConfig(environment = process.env, artifactRevision) {
     prefillHandlePepper: secrets.prefillHandlePepper,
     prefillHandleTtlSeconds: boundedInteger(environment, "PREFILL_HANDLE_TTL_SECONDS"),
     prefillPath: paths.prefill,
+    recoveryManifest: recoveryManifest(environment, sourceRevision),
     sessionTableName: selectedTable,
     sessionTtlSeconds: boundedInteger(environment, "SESSION_TTL_SECONDS"),
     sourceRevision,

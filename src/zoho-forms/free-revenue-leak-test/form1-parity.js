@@ -191,6 +191,19 @@ function verifyCanonicalForm1(manifest, executableContract) {
         "assisted_prefill.submission_webhook.provider_transport_keys") {
       add(errors, "ASSISTED_REQUIRED_STATE_DRIFT", "crm_assisted", "required_state");
     }
+    // A preserved failed Forms entry must not block a newly authorized session
+    // for the same contact. Catalyst owns assisted duplicate prevention; the
+    // public form keeps its existing provider field-entry policy.
+    if (surfaces.public?.field_entry_uniqueness_policy !== "preserve_existing_provider_settings" ||
+      !form1.allowed_surface_exceptions?.includes("field_entry_uniqueness")) {
+      add(errors, "FIELD_UNIQUENESS_POLICY_DRIFT", "public", "field_entry_uniqueness_policy");
+    }
+    const assistedUniqueness = assistedState?.field_entry_uniqueness;
+    if (!assistedUniqueness || Object.keys(assistedUniqueness).join("|") !== "email|mobilePhone" ||
+      assistedUniqueness.email !== false || assistedUniqueness.mobilePhone !== false ||
+      assistedState?.duplicate_prevention !== "server_bound_session_and_idempotent_crm_update") {
+      add(errors, "ASSISTED_FIELD_UNIQUENESS_DRIFT", "crm_assisted", "field_entry_uniqueness");
+    }
   }
   if (manifest.surface_inventory?.logical_stage_count !== 2 ||
     manifest.surface_inventory?.physical_surface_count !== 3 ||
@@ -225,6 +238,11 @@ function verifySurfaceReadback(manifest, surfaceName, observed) {
       add(errors, "CHOICE_PARITY_UNPROVEN", key, "choice_parity");
     }
     if (actual.alias_parity !== true) add(errors, "ALIAS_PARITY_UNPROVEN", key, "alias_parity");
+    const requiredUniqueness = expectedSurface.required_state?.field_entry_uniqueness;
+    if (Object.hasOwn(requiredUniqueness ?? {}, key) &&
+      actual.no_duplicates !== requiredUniqueness[key]) {
+      add(errors, "OBSERVED_FIELD_UNIQUENESS_DRIFT", key, "no_duplicates");
+    }
   }
   for (const [property, value] of Object.entries(expectedSurface.required_integrations)) {
     if (observed.integrations?.[property] !== value) {

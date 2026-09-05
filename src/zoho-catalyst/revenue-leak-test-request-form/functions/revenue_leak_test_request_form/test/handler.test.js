@@ -7,6 +7,7 @@ const { normalizeFormData } = require("../lib/form-contract");
 const { ControllerError, buildAccessUrl, handleRequest } = require("../lib/handler");
 const { submissionFingerprint } = require("../lib/security");
 const { createSessionStore } = require("../lib/session-store");
+const { assistedConstantsSha256, recoveryClaimBindingSha256 } = require("../lib/submission-recovery");
 const { REVISION, environment } = require("./helpers");
 
 const RECORD_ID = "4000000001";
@@ -492,6 +493,7 @@ test("flat Zoho Forms public envelope derives only the canonical public acknowle
   const selected = fixture();
   const result = await submitProvider(selected, {
     submissionId: "provider_public_001",
+    formOverrides: { contactConsent: "true" },
   });
   assert.equal(result.status, 200);
   assert.deepEqual(result.body, { ok: true, binding: "public_unbound" });
@@ -563,6 +565,173 @@ test("flat Zoho Forms envelope rejects partial assisted binding", async () => {
   assert.deepEqual(selected.events, []);
 });
 
+test("flat Zoho Forms string consent becomes the same typed idempotent command", async () => {
+  const selected = fixture();
+  const prepared = await prepare(selected);
+  const submission = {
+    prefillId: prepared.prefillId,
+    configurationRevision: prepared.configurationRevision,
+    submissionId: "provider_string_consent_001",
+  };
+  const result = await submitProvider(selected, {
+    ...submission,
+    formOverrides: { contactConsent: "true" },
+  });
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.body, { ok: true, replayed: false });
+  assert.equal(selected.records.get(RECORD_ID).Free_Test_Contact_Consent, true);
+  assert.equal(selected.adapter.rows[0].STATUS, "consumed");
+  assert.equal(selected.adapter.rows[0].SUBMISSION_STARTED_AT, new Date(NOW).toISOString());
+  assert.equal(selected.adapter.rows[0].SUBMISSION_FINGERPRINT, submissionFingerprint(
+    submission.submissionId, prepared.prefillId, prepared.configurationRevision,
+    normalizeFormData(formData()), selected.config.tokenPepper,
+  ));
+
+  const replay = await submit(selected, prepared, submission.submissionId);
+  assert.deepEqual(replay.body, { ok: true, replayed: true });
+  assert.equal(selected.events.filter(([name]) => name === "update").length, 1);
+});
+
+test("flat string-consent claim crosses only the exact approved recovery boundary", async () => {
+  const selected = fixture();
+  const prepared = await prepare(selected);
+  const submission = {
+    prefillId: prepared.prefillId,
+    configurationRevision: prepared.configurationRevision,
+    submissionId: "provider_recovery_consent_001",
+    formOverrides: { contactConsent: "true" },
+  };
+  assert.equal(Object.keys(providerSubmissionBody(submission)).length, 25);
+  const originalStore = selected.dependencies.sessionStore;
+  const originalComplete = selected.dependencies.crmClient.completeAssistedSubmission;
+  // Reproduce a durable original claim whose writer dependency failed before PUT.
+  selected.dependencies.crmClient.completeAssistedSubmission = async () => {
+    throw Object.assign(new Error("Synthetic writer unavailable"), {
+      publicCode: "connection_unavailable", status: 503,
+    });
+  };
+  await assert.rejects(() => submitProvider(selected, submission), (error) =>
+    error.status === 503 && error.publicCode === "service_unavailable");
+  const original = await originalStore.readByPrefillId(prepared.prefillId);
+  assert.equal(original.status, "submitting");
+  assert.equal(original.lastOutcome, "submission_started");
+  assert.equal(original.submissionFingerprint, submissionFingerprint(
+    submission.submissionId, prepared.prefillId, REVISION,
+    normalizeFormData(formData()), selected.config.tokenPepper,
+  ));
+  assert.equal(selected.events.some(([name]) => name === "update"), false);
+  const originalRaw = structuredClone(selected.adapter.rows[0]);
+  selected.events.length = 0;
+
+  const currentRevision = "b".repeat(40);
+  const manifest = {
+    schemaVersion: 1, mode: "inspect", originalSourceRevision: REVISION,
+    claimBindingSha256: recoveryClaimBindingSha256(original),
+    assistedConstantsSha256: assistedConstantsSha256(selected.config.assistedConstants),
+    originalSessionVersion: original.sessionVersion, originalUpdatedAt: original.updatedAt,
+    originalLastOutcome: original.lastOutcome,
+  };
+  const currentConfig = (recoveryManifest = null) => loadConfig(environment({
+    SOURCE_REVISION: currentRevision,
+    FORM1_RECOVERY_MANIFEST_JSON: recoveryManifest ? JSON.stringify(recoveryManifest) : "",
+  }), currentRevision);
+  selected.dependencies.config = currentConfig();
+  selected.dependencies.sessionStore = createSessionStore(selected.adapter,
+    selected.dependencies.config, {
+      now: selected.dependencies.now, randomUUID: selected.dependencies.randomUUID,
+    });
+  // Installing a new runtime alone must not admit or migrate the old submission.
+  await assert.rejects(() => submitProvider(selected, submission), (error) =>
+    error.status === 404 && error.publicCode === "session_not_found");
+  assert.deepEqual(selected.adapter.rows[0], originalRaw);
+  assert.deepEqual(selected.events, []);
+
+  selected.dependencies.crmClient.completeAssistedSubmission = originalComplete;
+  selected.dependencies.crmClient.preflightAssistedWrite = async () => {
+    selected.events.push(["preflight"]);
+    return { ok: true };
+  };
+  selected.dependencies.recoverySessionStore = {
+    ...originalStore,
+    async reserveRecoveryAttempt(...args) {
+      selected.events.push(["reserve"]);
+      return originalStore.reserveRecoveryAttempt(...args);
+    },
+    async consume(...args) {
+      selected.events.push(["consume"]);
+      return originalStore.consume(...args);
+    },
+  };
+  selected.dependencies.config = currentConfig(manifest);
+  const inspected = await submitProvider(selected, submission);
+  assert.equal(inspected.status, 503);
+  assert.equal(inspected.outcome, "recovery_inspected");
+  assert.deepEqual(inspected.body, {
+    ok: false, inspected: true, poststateMatches: false,
+    originalVersionMatches: true, recoveryReady: true,
+  });
+  assert.deepEqual(selected.events.map(([name]) => name), ["get", "preflight"]);
+  assert.deepEqual(selected.adapter.rows[0], originalRaw);
+
+  selected.events.length = 0;
+  selected.setNow(NOW + 1000);
+  selected.dependencies.config = currentConfig({ ...manifest, mode: "complete" });
+  const completed = await submitProvider(selected, submission);
+  assert.equal(completed.status, 200);
+  assert.deepEqual(completed.body, { ok: true, recovered: true, replayed: false });
+  assert.deepEqual(selected.events.map(([name]) => name),
+    ["get", "preflight", "reserve", "update", "consume"]);
+  const consumed = await originalStore.readByPrefillId(prepared.prefillId);
+  assert.equal(consumed.status, "consumed");
+  assert.equal(consumed.sessionVersion, original.sessionVersion + 2);
+  assert.match(consumed.lastOutcome, new RegExp(`^r1_${currentRevision}_[a-f0-9]{32}$`));
+  for (const [key, value] of Object.entries(original)) {
+    if (!["status", "lastOutcome", "sessionVersion", "updatedAt", "consumedAt"].includes(key)) {
+      assert.deepEqual(consumed[key], value, key);
+    }
+  }
+  assert.equal(selected.records.get(RECORD_ID).Free_Test_Contact_Consent, true);
+  assert.equal(selected.records.get(OTHER_RECORD_ID).Submission_Channel, undefined);
+});
+
+test("provider consent normalization does not accept internal string consent", async () => {
+  const selected = fixture();
+  const prepared = await prepare(selected);
+  const before = structuredClone(selected.adapter.rows[0]);
+  const eventsBefore = selected.events.length;
+  await assert.rejects(
+    () => submit(selected, prepared, "internal_string_consent_001", {
+      formData: formData({ contactConsent: "true" }),
+    }),
+    (error) => error.status === 422 && error.publicCode === "form_data_invalid",
+  );
+  assert.deepEqual(selected.adapter.rows[0], before);
+  assert.equal(selected.events.length, eventsBefore);
+});
+
+test("flat consent normalization still requires authentication before session access", async () => {
+  const selected = fixture();
+  const prepared = await prepare(selected);
+  const before = structuredClone(selected.adapter.rows[0]);
+  const eventsBefore = selected.events.length;
+  selected.dependencies.sessionStore = {
+    ...selected.dependencies.sessionStore,
+    async readByPrefillId() {
+      assert.fail("unauthenticated submission must not read the session");
+    },
+  };
+  await assert.rejects(
+    () => handleRequest(post(selected.config.submissionPath, providerSubmissionBody({
+      prefillId: prepared.prefillId,
+      configurationRevision: prepared.configurationRevision,
+      formOverrides: { contactConsent: "true" },
+    })), selected.dependencies),
+    (error) => error.status === 401 && error.publicCode === "authentication_failed",
+  );
+  assert.deepEqual(selected.adapter.rows[0], before);
+  assert.equal(selected.events.length, eventsBefore);
+});
+
 test("flat Zoho Forms envelope rejects extra identity and non-affirmative consent", async () => {
   const selected = fixture();
   await assert.rejects(
@@ -570,15 +739,23 @@ test("flat Zoho Forms envelope rejects extra identity and non-affirmative consen
     (error) => error.status === 422 && error.publicCode === "request_invalid",
   );
   const prepared = await prepare(selected);
-  await assert.rejects(
-    () => submitProvider(selected, {
-      prefillId: prepared.prefillId,
-      configurationRevision: prepared.configurationRevision,
-      formOverrides: { contactConsent: false },
-    }),
-    (error) => error.status === 422 && error.publicCode === "form_data_invalid",
-  );
-  assert.equal(selected.events.filter(([name]) => name === "update").length, 0);
+  const before = structuredClone(selected.adapter.rows[0]);
+  const eventsBefore = selected.events.length;
+  for (const contactConsent of [
+    false, "false", "True", "TRUE", " true", "true ", "1", "yes", "I agree", "",
+    1, 0, null, ["true"], [true], { checked: true },
+  ]) {
+    await assert.rejects(
+      () => submitProvider(selected, {
+        prefillId: prepared.prefillId,
+        configurationRevision: prepared.configurationRevision,
+        formOverrides: { contactConsent },
+      }),
+      (error) => error.status === 422 && error.publicCode === "form_data_invalid",
+    );
+    assert.deepEqual(selected.adapter.rows[0], before);
+    assert.equal(selected.events.length, eventsBefore);
+  }
 });
 
 test("reissue rotates both credentials without duplicating the journey", async () => {

@@ -91,6 +91,35 @@ function buildPrefillPayload(record, constants) {
   return Object.freeze(payload);
 }
 
+/** Parse only CRM's whole-second datetime format, rejecting calendar rollover. */
+function parseCrmReceiptTime(value) {
+  if (typeof value !== "string" ||
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/.test(value) ||
+      Number(value.slice(0, 4)) < 1 || Number(value.slice(20, 22)) > 23 ||
+      Number(value.slice(23, 25)) > 59) return null;
+  const localIso = `${value.slice(0, 19)}.000Z`;
+  const localTime = Date.parse(localIso);
+  if (!Number.isFinite(localTime) || new Date(localTime).toISOString() !== localIso) return null;
+  const instant = Date.parse(value);
+  return Number.isFinite(instant) ? instant : null;
+}
+
+function serializeCrmReceiptTime(submittedAt) {
+  const instant = typeof submittedAt === "string" ? Date.parse(submittedAt) : NaN;
+  if (typeof submittedAt !== "string" ||
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(submittedAt) ||
+      !Number.isFinite(instant) || new Date(instant).toISOString() !== submittedAt ||
+      Number(submittedAt.slice(0, 4)) < 1) {
+    throw new FormContractError("Submission time is invalid", {
+      status: 503,
+      publicCode: "configuration_invalid",
+    });
+  }
+  // The durable claim keeps its original milliseconds. Only the CRM receipt
+  // uses the provider's whole-second format; floor rather than move it forward.
+  return `${submittedAt.slice(0, 19)}+00:00`;
+}
+
 function buildCrmPatch(formData, constants, { journeyId, submittedAt }) {
   const normalized = normalizeFormData(formData);
   if (!constants || typeof constants !== "object" ||
@@ -106,12 +135,7 @@ function buildCrmPatch(formData, constants, { journeyId, submittedAt }) {
       publicCode: "configuration_invalid",
     });
   }
-  if (typeof submittedAt !== "string" || !Number.isFinite(Date.parse(submittedAt))) {
-    throw new FormContractError("Submission time is invalid", {
-      status: 503,
-      publicCode: "configuration_invalid",
-    });
-  }
+  const receiptTime = serializeCrmReceiptTime(submittedAt);
   // Acquisition source belongs to CRM, while route provenance belongs to the
   // server configuration. Keep both submitted fields in the fixed Forms
   // transport/fingerprint contract, but never grant them write authority.
@@ -127,8 +151,8 @@ function buildCrmPatch(formData, constants, { journeyId, submittedAt }) {
     Intake_Submission_ID: journeyId,
     Free_Test_Contact_Consent: true,
     Free_Test_Contact_Consent_Version: "form1-contact-consent-v1",
-    Free_Test_Contact_Consent_At: submittedAt,
-    Free_Test_Request_Submitted_At: submittedAt,
+    Free_Test_Contact_Consent_At: receiptTime,
+    Free_Test_Request_Submitted_At: receiptTime,
     Intake_Form_Version: constants.intakeFormVersion,
     Lead_Status: constants.leadStatus,
     Source_Page: constants.sourcePage,
@@ -145,4 +169,5 @@ module.exports = {
   buildPrefillPayload,
   buildCrmPatch,
   normalizeFormData,
+  parseCrmReceiptTime,
 };

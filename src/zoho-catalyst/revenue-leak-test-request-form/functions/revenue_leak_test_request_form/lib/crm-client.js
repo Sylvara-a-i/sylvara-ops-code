@@ -2,6 +2,8 @@
 
 const crypto = require("node:crypto");
 const { requestJson, HttpBoundaryError } = require("./http");
+const { parseCrmReceiptTime } = require("./form-contract");
+const { sanitizeProviderDiagnostic } = require("./connection-boundary");
 const { normalizeCrmModule, normalizeCrmRecordId, normalizeJourneyId } = require("./security");
 
 const READ_FIELDS = Object.freeze([
@@ -15,15 +17,24 @@ const READ_FIELDS = Object.freeze([
   "Free_Test_Contact_Consent_At", "Free_Test_Request_Submitted_At", "Intake_Form_Version",
   "Lead_Status",
 ]);
+const DIAGNOSTIC_STAGES = new Set([
+  "writer_credentials", "writer_organization", "crm_write", "crm_readback",
+]);
+
+function diagnosticEvent(stage, provider = {}) {
+  if (!DIAGNOSTIC_STAGES.has(stage)) return null;
+  return Object.freeze({ stage, ...sanitizeProviderDiagnostic(provider) });
+}
 
 class CrmClientError extends Error {
   constructor(message, { status = 503, publicCode = "crm_dependency_failed",
-    ambiguous = false } = {}) {
+    ambiguous = false, diagnostic = null } = {}) {
     super(message);
     this.name = "CrmClientError";
     this.status = status;
     this.publicCode = publicCode;
     this.ambiguous = ambiguous;
+    this.diagnostic = diagnosticEvent(diagnostic?.stage, diagnostic ?? {});
   }
 }
 
@@ -35,10 +46,10 @@ function plain(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function modifiedTime(value) {
+function modifiedTime(value, diagnostic = null) {
   if (typeof value !== "string" || !Number.isFinite(Date.parse(value)) ||
       !/(?:Z|[+-]\d{2}:\d{2})$/.test(value)) {
-    fail("CRM record version is invalid", { status: 409, publicCode: "context_conflict" });
+    fail("CRM record version is invalid", { status: 409, publicCode: "context_conflict", diagnostic });
   }
   return value;
 }
@@ -50,7 +61,13 @@ function authorization(value) {
   return value;
 }
 
-function same(actual, expected) {
+function same(actual, expected, field) {
+  // CRM may render receipt timestamps in its user's offset. Compare only
+  // these typed fields by instant; record-version fencing remains exact.
+  if (field === "Free_Test_Contact_Consent_At" || field === "Free_Test_Request_Submitted_At") {
+    const expectedTime = parseCrmReceiptTime(expected);
+    return expectedTime !== null && parseCrmReceiptTime(actual) === expectedTime;
+  }
   if (typeof expected === "boolean") return actual === expected ||
     String(actual).toLowerCase() === String(expected);
   return actual === expected;
@@ -70,7 +87,7 @@ function journeyFromRecord(record) {
 }
 
 function createCrmClient(config, { readAuthorizationProvider, writeAuthorizationProvider,
-  fetchImpl = globalThis.fetch } = {}) {
+  fetchImpl = globalThis.fetch, onDiagnostic } = {}) {
   if (config?.crmApiBaseUrl !== "https://www.zohoapis.com/crm/v8" ||
       !/^[a-f0-9]{64}$/.test(config?.crmOrganizationHash ?? "") ||
       !Number.isSafeInteger(config?.outboundTimeoutMs) ||
@@ -82,18 +99,35 @@ function createCrmClient(config, { readAuthorizationProvider, writeAuthorization
   let readOrganizationVerified = false;
   let writeOrganizationVerified = false;
 
-  async function request(url, options, { write = false, sideEffecting = false } = {}) {
+  function report(stage, provider) {
+    const event = diagnosticEvent(stage, provider);
+    if (event && typeof onDiagnostic === "function") {
+      // Observability is best-effort and must never change write or retry behavior.
+      try { Promise.resolve(onDiagnostic(event)).catch(() => {}); } catch { /* contained */ }
+    }
+    return event;
+  }
+
+  async function request(url, options, {
+    write = false, sideEffecting = false, diagnosticStage = null,
+  } = {}) {
     let credential;
     try {
       credential = authorization(await (write
         ? writeAuthorizationProvider()
         : readAuthorizationProvider()));
     } catch (error) {
-      if (error instanceof CrmClientError) throw error;
-      fail("CRM Connection authorization is unavailable", { publicCode: "connection_unavailable" });
+      const diagnostic = report(write ? "writer_credentials" : diagnosticStage, error?.diagnostic);
+      if (error instanceof CrmClientError) {
+        error.diagnostic = diagnostic;
+        throw error;
+      }
+      fail("CRM Connection authorization is unavailable", {
+        publicCode: "connection_unavailable", diagnostic,
+      });
     }
     try {
-      return await requestJson(url, {
+      const result = await requestJson(url, {
         ...options,
         headers: { ...options.headers, Authorization: credential },
       }, {
@@ -101,23 +135,31 @@ function createCrmClient(config, { readAuthorizationProvider, writeAuthorization
         maximumBytes: config.outboundMaxBytes,
         sideEffecting,
       }, fetchImpl);
+      const diagnostic = report(diagnosticStage, {
+        httpStatus: result.status,
+        providerCode: result.json?.data?.[0]?.code ?? result.json?.code,
+      });
+      return { ...result, diagnostic };
     } catch (error) {
       if (error instanceof HttpBoundaryError) {
+        // Transport failure does not establish a provider HTTP response/status.
+        const diagnostic = report(diagnosticStage, {});
         fail("CRM request did not return an authoritative result", {
           publicCode: sideEffecting ? "reconciliation_required" : "crm_dependency_failed",
           ambiguous: sideEffecting || error.ambiguous,
+          diagnostic,
         });
       }
       throw error;
     }
   }
 
-  async function assertOrganization(write = false) {
+  async function assertOrganization(write = false, diagnosticStage = write ? "writer_organization" : null) {
     if ((write && writeOrganizationVerified) || (!write && readOrganizationVerified)) return;
     const result = await request(`${config.crmApiBaseUrl}/org`, {
       method: "GET",
       headers: { Accept: "application/json" },
-    }, { write });
+    }, { write, diagnosticStage });
     const organizations = result.json?.org;
     const zgid = Array.isArray(organizations) && organizations.length === 1
       ? organizations[0]?.zgid : null;
@@ -130,14 +172,15 @@ function createCrmClient(config, { readAuthorizationProvider, writeAuthorization
       fail("CRM Connection organization does not match", {
         status: 503,
         publicCode: "connection_organization_mismatch",
+        diagnostic: result.diagnostic,
       });
     }
     if (write) writeOrganizationVerified = true;
     else readOrganizationVerified = true;
   }
 
-  async function getRecord(module, recordId) {
-    await assertOrganization(false);
+  async function getRecord(module, recordId, { diagnosticStage = null } = {}) {
+    await assertOrganization(false, diagnosticStage);
     const selectedModule = normalizeCrmModule(module);
     const selectedId = normalizeCrmRecordId(recordId);
     const url = new URL(`${config.crmApiBaseUrl}/${selectedModule}/${selectedId}`);
@@ -145,17 +188,25 @@ function createCrmClient(config, { readAuthorizationProvider, writeAuthorization
     const result = await request(url.toString(), {
       method: "GET",
       headers: { Accept: "application/json" },
-    });
+    }, { diagnosticStage });
     if (result.status !== 200 || !plain(result.json) ||
         !Array.isArray(result.json.data) || result.json.data.length !== 1 ||
         !plain(result.json.data[0]) || result.json.data[0].id !== selectedId) {
       fail("CRM record readback is invalid", {
         status: result.status === 404 ? 404 : 502,
         publicCode: result.status === 404 ? "context_not_found" : "crm_rejected",
+        diagnostic: result.diagnostic,
       });
     }
-    modifiedTime(result.json.data[0].Modified_Time);
+    modifiedTime(result.json.data[0].Modified_Time, result.diagnostic);
     return Object.freeze({ ...result.json.data[0] });
+  }
+
+  async function preflightAssistedWrite() {
+    // Verify only the existing writer's credentials and organization. This
+    // method cannot establish record-update acceptance and never sends PUT.
+    await assertOrganization(true);
+    return Object.freeze({ ok: true });
   }
 
   async function getOrInitializeJourney(module, recordId) {
@@ -192,7 +243,7 @@ function createCrmClient(config, { readAuthorizationProvider, writeAuthorization
           data: [{ id: selectedId, Intake_Submission_ID: candidate }],
           trigger: [],
         }),
-      }, { write: true, sideEffecting: true });
+      }, { write: true, sideEffecting: true, diagnosticStage: "crm_write" });
     } catch (error) {
       if (error?.ambiguous !== true) throw error;
       record = await getRecord(selectedModule, selectedId);
@@ -242,7 +293,7 @@ function createCrmClient(config, { readAuthorizationProvider, writeAuthorization
 
   function recordMatches(record, patch) {
     return plain(record) && Object.entries(patch).every(([field, value]) =>
-      same(record[field], value));
+      same(record[field], value, field));
   }
 
   function recordVersion(record) {
@@ -278,10 +329,10 @@ function createCrmClient(config, { readAuthorizationProvider, writeAuthorization
           data: [{ id: selectedId, ...patch }],
           trigger: ["workflow"],
         }),
-      }, { write: true, sideEffecting: true });
+      }, { write: true, sideEffecting: true, diagnosticStage: "crm_write" });
     } catch (error) {
       if (error?.ambiguous !== true) throw error;
-      const readback = await getRecord(selectedModule, selectedId);
+      const readback = await getRecord(selectedModule, selectedId, { diagnosticStage: "crm_readback" });
       if (!recordMatches(readback, patch)) throw error;
       return Object.freeze({ record: readback, replayed: true });
     }
@@ -289,25 +340,28 @@ function createCrmClient(config, { readAuthorizationProvider, writeAuthorization
       fail("CRM record changed during assisted submission", {
         status: 409,
         publicCode: "record_stale",
+        diagnostic: result.diagnostic,
       });
     }
     const ack = result.json?.data?.[0];
     if (result.status !== 200 || ack?.status !== "success" || ack?.code !== "SUCCESS" ||
         ack?.details?.id !== selectedId) {
-      const readback = await getRecord(selectedModule, selectedId);
+      const readback = await getRecord(selectedModule, selectedId, { diagnosticStage: "crm_readback" });
       if (!recordMatches(readback, patch)) {
         fail("CRM update outcome could not be reconciled", {
           publicCode: "reconciliation_required",
           ambiguous: true,
+          diagnostic: result.diagnostic,
         });
       }
       return Object.freeze({ record: readback, replayed: true });
     }
-    const readback = await getRecord(selectedModule, selectedId);
+    const readback = await getRecord(selectedModule, selectedId, { diagnosticStage: "crm_readback" });
     if (!recordMatches(readback, patch)) {
       fail("CRM assisted submission readback did not match", {
         publicCode: "reconciliation_required",
         ambiguous: true,
+        diagnostic: diagnosticEvent("crm_readback", { httpStatus: 200 }),
       });
     }
     return Object.freeze({ record: readback, replayed: false });
@@ -318,6 +372,7 @@ function createCrmClient(config, { readAuthorizationProvider, writeAuthorization
     completeAssistedSubmission,
     getRecord,
     getOrInitializeJourney,
+    preflightAssistedWrite,
     recordVersion,
     recordMatches,
   });

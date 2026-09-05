@@ -1,6 +1,7 @@
 "use strict";
 
 const { renderAccessPage } = require("./access-page");
+const { recoverAssistedSubmission } = require("./submission-recovery");
 const { normalizeApprovedCatalystDevelopmentGatewayUrl } = require("./destinations");
 const {
   buildCrmPatch,
@@ -123,7 +124,14 @@ function normalizeSubmissionEnvelope(body) {
     configurationRevision: body.configurationRevision,
     submissionId: body.submissionId,
     formData: Object.freeze(Object.fromEntries(
-      [...FORM_KEYS].map((key) => [key, body[key]]),
+      // Zoho Forms serializes a checked Decision Box as the exact string
+      // "true". Normalize only that verified provider representation here;
+      // internal commands still require boolean consent, and every other
+      // value remains subject to the strict form contract before any claim.
+      [...FORM_KEYS].map((key) => [
+        key,
+        key === "contactConsent" && body[key] === "true" ? true : body[key],
+      ]),
     )),
   });
 }
@@ -339,6 +347,11 @@ async function submit(body, dependencies) {
       "submission", "public_unbound");
   }
   requireExact(submission, ASSISTED_SUBMISSION_KEYS);
+  if (dependencies.config.recoveryManifest) {
+    // Public acknowledgments stay above this gate. Recovery admits only one
+    // privately approved original claim and never migrates ordinary sessions.
+    return recoverAssistedSubmission(submission, dependencies);
+  }
   const submissionId = normalizeSubmissionId(submission.submissionId);
   const prefillId = normalizePrefillId(submission.prefillId);
   const configurationRevision = normalizeConfigurationRevision(

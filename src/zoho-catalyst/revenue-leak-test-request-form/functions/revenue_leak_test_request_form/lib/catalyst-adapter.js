@@ -161,7 +161,12 @@ function createRequestListener({
       const projectId = assertCatalystRequestBinding(request, config);
       // Authenticate the exact route before SDK, Data Store, Connection, body,
       // CRM, or outbound access. The controller repeats the check at dispatch.
-      authenticateRequest(request, config);
+      const requestedPath = authenticateRequest(request, config);
+      if (config.recoveryManifest && requestedPath !== config.submissionPath) {
+        // Approved temporary assisted-launch containment prevents new claims
+        // during recovery. The public native CRM writer remains untouched.
+        throw new ConfigurationError("One-claim recovery is in progress");
+      }
       const runtimeSdk = catalystSdk ?? require("zcatalyst-sdk-node");
       const app = runtimeSdk.initialize(request);
       assertCatalystSdkBinding(app, projectId, config);
@@ -170,6 +175,23 @@ function createRequestListener({
         config,
         { now },
       );
+      let recoverySessionStore;
+      if (config.recoveryManifest) {
+        const originalConfig = Object.freeze({
+          ...config, sourceRevision: config.recoveryManifest.originalSourceRevision,
+        });
+        const originalStore = createSessionStore(
+          createCatalystDataStoreAdapter(app, originalConfig), originalConfig, { now, randomUUID },
+        );
+        // No issue, reset, or new submission claim is exposed to recovery.
+        // Its separate digest gate precedes the one-shot reserve and consume.
+        recoverySessionStore = Object.freeze({
+          readByPrefillId: originalStore.readByPrefillId,
+          assertRuntimeBinding: originalStore.assertRuntimeBinding,
+          reserveRecoveryAttempt: originalStore.reserveRecoveryAttempt,
+          consume: originalStore.consume,
+        });
+      }
       const crmClient = createCrmClient(config, {
         readAuthorizationProvider: createConnectionAuthorizationProvider(
           app,
@@ -182,6 +204,16 @@ function createRequestListener({
           config.platformOperationTimeoutMs,
         ),
         fetchImpl,
+        onDiagnostic(event) {
+          // The CRM boundary supplies only fixed stage/code enums and an HTTP
+          // status. Never attach provider bodies, error messages, or arguments.
+          safeLog(logger, "info", {
+            requestId,
+            stage: event.stage,
+            outcome: `${event.providerCode ?? "unclassified"}_${event.httpStatus ?? "none"}`,
+            elapsedMs: now() - startedAt,
+          });
+        },
       });
       const result = await requestHandler(request, {
         config,
@@ -190,6 +222,7 @@ function createRequestListener({
         randomBytes,
         randomUUID,
         sessionStore,
+        recoverySessionStore,
       });
       safeLog(logger, result.status >= 500 ? "error" : "info", {
         requestId, stage: result.stage, outcome: result.outcome, elapsedMs: now() - startedAt,

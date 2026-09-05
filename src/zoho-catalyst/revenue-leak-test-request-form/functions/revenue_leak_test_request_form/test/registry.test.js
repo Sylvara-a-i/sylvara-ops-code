@@ -21,7 +21,7 @@ function json(selected) {
 
 test("the variable registry and placeholder environment remain in exact lockstep", () => {
   const registry = json(path.join(componentRoot, "config/variables.json"));
-  assert.equal(registry.schema_version, 6);
+  assert.equal(registry.schema_version, 7);
   assert.equal(registry.status, "development-active-production-dark");
   const names = registry.variables.map((entry) => entry.name);
   assert.equal(new Set(names).size, names.length);
@@ -274,6 +274,7 @@ test("a complete sanitized Form 1 surface readback proves shared-field parity", 
     ].map((property) => [property, field[property]])),
     alias_parity: true,
     ...(field.choices_reference ? { choice_parity: true } : {}),
+    ...(["email", "mobilePhone"].includes(field.key) ? { no_duplicates: false } : {}),
   }));
   const result = verifySurfaceReadback(manifest, "crm_assisted", {
     readback_complete: true,
@@ -281,6 +282,25 @@ test("a complete sanitized Form 1 surface readback proves shared-field parity", 
     integrations: { ...form1.physical_surfaces.crm_assisted.required_integrations },
   });
   assert.deepEqual(result, { ok: true, errors: [] });
+
+  for (const key of ["email", "mobilePhone"]) {
+    const field = sharedFields.find((candidate) => candidate.key === key);
+    for (const noDuplicates of [true, undefined]) {
+      field.no_duplicates = noDuplicates;
+      const uniquenessDrift = verifySurfaceReadback(manifest, "crm_assisted", {
+        readback_complete: true,
+        shared_fields: sharedFields,
+        integrations: { ...form1.physical_surfaces.crm_assisted.required_integrations },
+      });
+      assert.equal(uniquenessDrift.ok, false);
+      assert.deepEqual(uniquenessDrift.errors, [{
+        code: "OBSERVED_FIELD_UNIQUENESS_DRIFT",
+        field: key,
+        property: "no_duplicates",
+      }]);
+    }
+    field.no_duplicates = false;
+  }
 
   sharedFields[0].classification = "unexpected";
   const drift = verifySurfaceReadback(manifest, "crm_assisted", {
@@ -293,6 +313,35 @@ test("a complete sanitized Form 1 surface readback proves shared-field parity", 
     field: "firstName",
     property: "classification",
   });
+});
+
+test("assisted field-entry uniqueness is a bounded exception to preserved public policy", () => {
+  const manifest = json(path.join(
+    repositoryRoot,
+    "src/zoho-forms/free-revenue-leak-test/forms-manifest.json",
+  ));
+  const executableContract = {
+    fieldSpecs: FIELD_SPECS,
+    formKeys: FORM_KEYS,
+    submissionKeys: ZOHO_FORMS_SUBMISSION_KEYS,
+  };
+  assert.deepEqual(verifyCanonicalForm1(manifest, executableContract), { ok: true, errors: [] });
+  for (const key of ["email", "mobilePhone"]) {
+    for (const noDuplicates of [true, undefined]) {
+      const drifted = structuredClone(manifest);
+      drifted.forms[0].physical_surfaces.crm_assisted.required_state
+        .field_entry_uniqueness[key] = noDuplicates;
+      const result = verifyCanonicalForm1(drifted, executableContract);
+      assert.equal(result.ok, false);
+      assert.equal(result.errors.some(({ code }) =>
+        code === "ASSISTED_FIELD_UNIQUENESS_DRIFT"), true);
+    }
+  }
+  const driftedPublic = structuredClone(manifest);
+  driftedPublic.forms[0].physical_surfaces.public.field_entry_uniqueness_policy = "disable";
+  const publicResult = verifyCanonicalForm1(driftedPublic, executableContract);
+  assert.equal(publicResult.ok, false);
+  assert.equal(publicResult.errors.some(({ code }) => code === "FIELD_UNIQUENESS_POLICY_DRIFT"), true);
 });
 
 test("the package is a Node 24 Advanced I/O target with the pinned Catalyst SDK only", () => {

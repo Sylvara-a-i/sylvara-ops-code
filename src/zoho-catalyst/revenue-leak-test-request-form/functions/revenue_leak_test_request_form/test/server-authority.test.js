@@ -56,7 +56,7 @@ test("assisted patch preserves CRM acquisition source and pins route provenance"
   assert.equal(patch.Submission_Channel, constants.submissionChannel);
   assert.equal(patch.Lead_Status, constants.leadStatus);
   assert.equal(patch.Intake_Submission_ID, "journey_synthetic_authority_001");
-  assert.equal(patch.Free_Test_Contact_Consent_At, NOW);
+  assert.equal(patch.Free_Test_Contact_Consent_At, "2026-08-29T12:00:00+00:00");
 
   const changed = buildCrmPatch(formData({
     leadSource: "Different Respondent Source",
@@ -66,6 +66,24 @@ test("assisted patch preserves CRM acquisition source and pins route provenance"
     submittedAt: NOW,
   });
   assert.deepEqual(changed, patch);
+});
+
+test("CRM receipt timestamps use whole seconds without changing the durable claim time", () => {
+  const constants = loadConfig(environment(), REVISION).assistedConstants;
+  const receipt = { journeyId: "journey_synthetic_time_001", submittedAt: "2026-08-29T23:59:59.999Z" };
+  const patch = buildCrmPatch(formData(), constants, receipt);
+  assert.equal(patch.Free_Test_Contact_Consent_At, "2026-08-29T23:59:59+00:00");
+  assert.equal(patch.Free_Test_Request_Submitted_At, "2026-08-29T23:59:59+00:00");
+  assert.equal(receipt.submittedAt, "2026-08-29T23:59:59.999Z");
+  for (const submittedAt of [
+    null, "", "2026-08-29", "2026-08-29T12:00:00", "2026-08-29T12:00:00+00:00",
+    "2026-08-29T12:00:00.000Z ", "2026-02-29T12:00:00.000Z", "2026-02-30T12:00:00.000Z",
+    "2026-13-01T12:00:00.000Z", "2026-08-29T24:00:00.000Z", "2026-08-29T12:60:00.000Z",
+    "2026-08-29T12:00:60.000Z", "0000-01-01T00:00:00.000Z", "+010000-01-01T00:00:00.000Z",
+  ]) {
+    assert.throws(() => buildCrmPatch(formData(), constants, { ...receipt, submittedAt }),
+      { status: 503, publicCode: "configuration_invalid" });
+  }
 });
 
 test("public flat 25-key transport remains a non-writing acknowledgment", async () => {
