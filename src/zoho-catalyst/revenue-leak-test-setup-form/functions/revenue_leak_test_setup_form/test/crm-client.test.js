@@ -2,7 +2,7 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { CrmClientError, createCrmClient } = require("../lib/crm-client");
+const { CrmClientError, READ_FIELDS, createCrmClient } = require("../lib/crm-client");
 
 const IDS = Object.freeze({
   contact: `${"9".repeat(17)}1`,
@@ -79,6 +79,7 @@ function existingRecords() {
       Other_Service_Details: null,
     },
     deal: {
+      ...Object.fromEntries(READ_FIELDS.Deals.map((field) => [field, null])),
       id: IDS.deal,
       Modified_Time: OLD_TIME,
       Pipeline: "Revenue Desk Sales",
@@ -256,19 +257,169 @@ test("GET is restricted to one approved record endpoint and a fixed field projec
 });
 
 test("Deal reads immutable setup context, signature, go-live, and test-status controls", async () => {
-  let capturedUrl;
+  const capturedUrls = [];
   const record = existingRecords().deal;
   const client = clientWithFetch(async (url) => {
-    capturedUrl = new URL(url);
+    capturedUrls.push(new URL(url));
     return jsonResponse({ data: [record] });
   });
 
   assert.deepEqual(await client.getRecord("Deals", IDS.deal), record);
-  const fields = new Set(capturedUrl.searchParams.get("fields").split(","));
+  const fields = new Set(capturedUrls.flatMap((url) => url.searchParams.get("fields").split(",")));
   for (const field of Object.keys(PROTECTED_DEAL_FIELDS)) {
     assert.equal(fields.has(field), true, field);
   }
   assert.equal(fields.has("Configuration_Version"), true);
+});
+
+function projectedRecord(record, url) {
+  const fields = new URL(url).searchParams.get("fields").split(",");
+  return { id: record.id, ...Object.fromEntries(fields.map((field) => [field, record[field]])) };
+}
+
+test("Deal GET preserves all 54 fields in two bounded complete revision-bound projections", async () => {
+  const calls = [];
+  const record = existingRecords().deal;
+  const client = clientWithFetch(async (url, options) => {
+    calls.push({ url: new URL(url), options });
+    return jsonResponse({ data: [projectedRecord(record, url)] });
+  });
+
+  assert.deepEqual(await client.getRecord("Deals", IDS.deal), record);
+  assert.equal(calls.length, 2);
+  const projections = calls.map(({ url, options }) => {
+    assert.equal(url.pathname, `/crm/v8/Deals/${IDS.deal}`);
+    assert.deepEqual([...url.searchParams.keys()], ["fields"]);
+    assert.equal(options.method, "GET");
+    assert.equal(options.body, undefined);
+    assert.equal(options.headers.Authorization, READ_AUTHORIZATION);
+    assert.equal(options.redirect, "error");
+    const fields = url.searchParams.get("fields").split(",");
+    assert.equal(new Set(fields).size, fields.length);
+    assert.equal(fields.includes("Modified_Time"), true);
+    return fields;
+  });
+  assert.deepEqual(projections.map((fields) => fields.length), [50, 5]);
+  assert.equal(READ_FIELDS.Deals.length, 54);
+  assert.deepEqual(new Set(projections.flat()), new Set(READ_FIELDS.Deals));
+  assert.deepEqual(
+    projections[0].filter((field) => projections[1].includes(field)),
+    ["Modified_Time"],
+  );
+});
+
+test("Deal projections never merge unrequested fields or let later extras overwrite prior fields", async () => {
+  let calls = 0;
+  const record = existingRecords().deal;
+  const client = clientWithFetch(async (url) => {
+    calls += 1;
+    const projection = projectedRecord(record, url);
+    projection.Unrelated_Private_Data = "synthetic-private-value";
+    if (calls === 1) projection.Free_Test_Request_Notes = "wrong-unrequested-notes";
+    else projection.Pipeline = "wrong-unrequested-pipeline";
+    return jsonResponse({ data: [projection] });
+  });
+
+  const result = await client.getRecord("Deals", IDS.deal);
+  assert.deepEqual(result, record);
+  assert.equal(Object.hasOwn(result, "Unrelated_Private_Data"), false);
+});
+
+test("Deal projection failures return no partial result, do not retry, and expose no record data", async () => {
+  const cases = [
+    { name: "missing first field", at: 1, change: (record) => { delete record.Pipeline; } },
+    { name: "missing later field", at: 2, change: (record) => {
+      delete record.Free_Test_Request_Notes;
+    } },
+    { name: "wrong later identity", at: 2, change: (record) => { record.id = IDS.account; } },
+    { name: "missing later identity", at: 2, change: (record) => { delete record.id; } },
+    { name: "missing first revision", at: 1, change: (record) => { delete record.Modified_Time; } },
+    { name: "null later revision", at: 2, change: (record) => { record.Modified_Time = null; } },
+    { name: "invalid later revision", at: 2, change: (record) => {
+      record.Modified_Time = "synthetic-private-invalid-revision";
+    } },
+    { name: "timezone-free later revision", at: 2, change: (record) => {
+      record.Modified_Time = "2026-08-14T12:00:00";
+    } },
+    { name: "changed later revision", at: 2, change: (record) => {
+      record.Modified_Time = NEW_TIME;
+    }, code: "record_stale" },
+  ];
+  for (const scenario of cases) {
+    let calls = 0;
+    const source = existingRecords().deal;
+    const client = clientWithFetch(async (url) => {
+      calls += 1;
+      // Full extra fields in the first response cannot compensate for a
+      // missing requested key in the second response.
+      const record = calls === 1 ? { ...source } : projectedRecord(source, url);
+      if (calls === scenario.at) scenario.change(record);
+      return jsonResponse({ data: [record] });
+    });
+    await assert.rejects(client.getRecord("Deals", IDS.deal), (error) => {
+      assert.equal(error instanceof CrmClientError, true, scenario.name);
+      assert.equal(error.ambiguous, false, scenario.name);
+      if (scenario.code) assert.equal(error.publicCode, scenario.code, scenario.name);
+      for (const privateValue of [IDS.deal, IDS.account, READ_AUTHORIZATION,
+        source.Free_Test_Request_Notes, "synthetic-private-invalid-revision"]) {
+        assert.equal(error.message.includes(privateValue), false, scenario.name);
+      }
+      return true;
+    });
+    assert.equal(calls, scenario.at, scenario.name);
+  }
+});
+
+test("Deal second-projection duplicate records or HTTP failure cannot return the first projection", async () => {
+  for (const failure of ["duplicate", "unavailable"]) {
+    let calls = 0;
+    const client = clientWithFetch(async (url) => {
+      calls += 1;
+      const record = projectedRecord(existingRecords().deal, url);
+      if (calls === 2) {
+        return failure === "duplicate"
+          ? jsonResponse({ data: [record, record] })
+          : jsonResponse({ code: "DEPENDENCY_UNAVAILABLE" }, 503);
+      }
+      return jsonResponse({ data: [record] });
+    });
+    await assert.rejects(client.getRecord("Deals", IDS.deal), CrmClientError);
+    assert.equal(calls, 2);
+  }
+});
+
+test("Deal projection success and failure do not log CRM payloads or authorization", async (context) => {
+  const logged = [];
+  for (const method of ["log", "warn", "error", "info", "debug"]) {
+    context.mock.method(console, method, (...args) => { logged.push(args); });
+  }
+  const client = clientWithFetch(async (url) => jsonResponse({
+    data: [projectedRecord(existingRecords().deal, url)],
+  }));
+  await client.getRecord("Deals", IDS.deal);
+  const rejected = clientWithFetch(async () => jsonResponse({ data: [{
+    id: IDS.deal,
+    Modified_Time: "synthetic-private-invalid-revision",
+    Secret: "synthetic-private-value",
+  }] }));
+  await assert.rejects(rejected.getRecord("Deals", IDS.deal), CrmClientError);
+  assert.deepEqual(logged, []);
+});
+
+test("Contact and Account GETs retain their existing single projections and response behavior", async () => {
+  for (const [module, record] of [
+    ["Contacts", existingRecords().contact],
+    ["Accounts", existingRecords().account],
+  ]) {
+    const calls = [];
+    const client = clientWithFetch(async (url) => {
+      calls.push(new URL(url));
+      return jsonResponse({ data: [record] });
+    });
+    assert.deepEqual(await client.getRecord(module, record.id), record);
+    assert.equal(calls.length, 1);
+    assert.deepEqual(calls[0].searchParams.get("fields").split(","), READ_FIELDS[module]);
+  }
 });
 
 test("uses one ordered rollback composite and verifies all three records by independent GET", async () => {
@@ -290,7 +441,7 @@ test("uses one ordered rollback composite and verifies all three records by inde
   assert.equal(result.deal.Setup_Form_Version, "form2-v1");
   assert.equal(result.deal.Configuration_Version, CONFIGURATION_REFERENCE);
   assert.equal(result.replayed, false);
-  assert.equal(calls.length, 4);
+  assert.equal(calls.length, 5);
   const composite = calls[0];
   const body = JSON.parse(composite.options.body);
   assert.equal(composite.parsed.pathname, "/crm/v8/__composite_requests");
@@ -387,7 +538,7 @@ test("an exact Deal duplicate rollback is a replay only after all-three-record r
   const result = await client.updateForm2Composite(existingRecords(), updates());
   assert.equal(result.replayed, true);
   assert.equal(result.deal.Setup_Form_Submission_ID, "synthetic-submission-0001");
-  assert.equal(calls.length, 4);
+  assert.equal(calls.length, 5);
 });
 
 test("a Deal duplicate rollback with a mismatched readback requires reconciliation", async () => {
