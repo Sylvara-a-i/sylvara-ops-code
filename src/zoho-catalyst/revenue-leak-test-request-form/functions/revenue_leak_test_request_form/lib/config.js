@@ -114,6 +114,36 @@ function boundedText(environment, name, maximum) {
   return value;
 }
 
+function recoveryManifest(environment, sourceRevision) {
+  const raw = environment?.FORM1_RECOVERY_MANIFEST_JSON;
+  if (raw === undefined || raw === "") return null;
+  let value;
+  try {
+    if (typeof raw !== "string" || raw.length > 1536) throw new Error();
+    value = JSON.parse(raw);
+    // Compact exact JSON rejects duplicate keys and ambiguous configuration.
+    // Values identify one approved claim privately; they never enter logs.
+    const keys = ["schemaVersion", "mode", "originalSourceRevision", "claimBindingSha256",
+      "assistedConstantsSha256", "originalSessionVersion", "originalUpdatedAt", "originalLastOutcome"];
+    if (!value || Array.isArray(value) || typeof value !== "object" ||
+        JSON.stringify(value) !== raw || Object.keys(value).length !== keys.length ||
+        !keys.every(key => Object.hasOwn(value, key)) || value.schemaVersion !== 1 ||
+        !["inspect", "complete"].includes(value.mode) ||
+        !/^[a-f0-9]{40}$/.test(value.originalSourceRevision) ||
+        value.originalSourceRevision === sourceRevision ||
+        !SHA256_HEX_PATTERN.test(value.claimBindingSha256) ||
+        !SHA256_HEX_PATTERN.test(value.assistedConstantsSha256) ||
+        !Number.isSafeInteger(value.originalSessionVersion) || value.originalSessionVersion < 1 ||
+        value.originalSessionVersion > Number.MAX_SAFE_INTEGER - 2 ||
+        !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value.originalUpdatedAt) ||
+        new Date(value.originalUpdatedAt).toISOString() !== value.originalUpdatedAt ||
+        value.originalLastOutcome !== "submission_started") throw new Error();
+  } catch {
+    throw new ConfigurationError("FORM1_RECOVERY_MANIFEST_JSON is invalid");
+  }
+  return Object.freeze(value);
+}
+
 function loadConfig(environment = process.env, artifactRevision) {
   const deploymentEnvironment = required(environment, "DEPLOYMENT_ENVIRONMENT");
   const deploymentMode = required(environment, "DEPLOYMENT_MODE");
@@ -259,6 +289,7 @@ function loadConfig(environment = process.env, artifactRevision) {
     prefillHandlePepper: secrets.prefillHandlePepper,
     prefillHandleTtlSeconds: boundedInteger(environment, "PREFILL_HANDLE_TTL_SECONDS"),
     prefillPath: paths.prefill,
+    recoveryManifest: recoveryManifest(environment, sourceRevision),
     sessionTableName: selectedTable,
     sessionTtlSeconds: boundedInteger(environment, "SESSION_TTL_SECONDS"),
     sourceRevision,

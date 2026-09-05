@@ -90,6 +90,32 @@ test("the public access URL is one canonical Development Gateway source endpoint
   }
 });
 
+test("recovery is opt-in and its private one-claim manifest is exact", () => {
+  const manifest = { schemaVersion: 1, mode: "inspect", originalSourceRevision: "a".repeat(40),
+    claimBindingSha256: "b".repeat(64), assistedConstantsSha256: "c".repeat(64),
+    originalSessionVersion: 17, originalUpdatedAt: "2026-09-04T12:00:00.000Z",
+    originalLastOutcome: "submission_started" };
+  const selected = value => loadConfig(environment({ FORM1_RECOVERY_MANIFEST_JSON: value }), REVISION);
+  assert.equal(selected(undefined).recoveryManifest, null);
+  assert.equal(selected("").recoveryManifest, null);
+  assert.deepEqual(selected(JSON.stringify(manifest)).recoveryManifest, manifest);
+  assert.equal(Object.isFrozen(selected(JSON.stringify(manifest)).recoveryManifest), true);
+  for (const value of [null, "{}", "[]", "false", " ",
+    JSON.stringify(manifest, null, 2),
+    JSON.stringify(manifest).replace('"mode":"inspect"', '"mode":"inspect","mode":"complete"'),
+    ...[ {mode:"all"}, {originalSourceRevision:REVISION}, {schemaVersion:2},
+      {extra:true}, {originalSessionVersion:0}, {originalSessionVersion:Number.MAX_SAFE_INTEGER},
+      {originalSessionVersion:"17"}, {originalLastOutcome:"submitted"},
+      {originalUpdatedAt:"2026-02-30T12:00:00.000Z"}, {claimBindingSha256:"b".repeat(63)},
+    ].map(overrides=>JSON.stringify({...manifest,...overrides}))]) {
+    assert.throws(()=>selected(value), /FORM1_RECOVERY_MANIFEST_JSON is invalid/);
+  }
+  const dark = loadConfig(environment({DEPLOYMENT_ENVIRONMENT:"production", DEPLOYMENT_MODE:"dark",
+    FORM1_RECOVERY_MANIFEST_JSON:JSON.stringify({...manifest,mode:"complete"})}), REVISION);
+  assert.equal(dark.darkMode,true);
+  assert.equal(dark.recoveryManifest,undefined);
+});
+
 test("paths, credentials, organization identity, and Connections remain exact and independent", () => {
   assert.throws(
     () => loadConfig(environment({ SUBMISSION_PATH: "/form1/issue-test" }), REVISION),

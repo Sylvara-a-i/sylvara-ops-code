@@ -1,6 +1,7 @@
 "use strict";
 
 const { renderAccessPage } = require("./access-page");
+const { recoverAssistedSubmission } = require("./submission-recovery");
 const { normalizeApprovedCatalystDevelopmentGatewayUrl } = require("./destinations");
 const {
   buildCrmPatch,
@@ -346,6 +347,11 @@ async function submit(body, dependencies) {
       "submission", "public_unbound");
   }
   requireExact(submission, ASSISTED_SUBMISSION_KEYS);
+  if (dependencies.config.recoveryManifest) {
+    // Public acknowledgments stay above this gate. Recovery admits only one
+    // privately approved original claim and never migrates ordinary sessions.
+    return recoverAssistedSubmission(submission, dependencies);
+  }
   const submissionId = normalizeSubmissionId(submission.submissionId);
   const prefillId = normalizePrefillId(submission.prefillId);
   const configurationRevision = normalizeConfigurationRevision(

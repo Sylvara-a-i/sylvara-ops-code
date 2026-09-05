@@ -17,6 +17,7 @@ const REVISION_PATTERN = /^[a-f0-9]{40}$/;
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
 const FINGERPRINT_PATTERN = /^[a-f0-9]{64}$/;
 const CLAIM_ID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
+const RECOVERY_MARKER_PATTERN = /^r1_[a-f0-9]{40}_[a-f0-9]{12}4[a-f0-9]{3}[89ab][a-f0-9]{15}$/;
 const STAGE = "form1";
 const MAX_PREFILLS = 1;
 const ACTIVE_STATUSES = new Set(["issued", "handle_issued", "prefilled"]);
@@ -638,12 +639,79 @@ function createSessionStore(adapter, config, {
     const consumedAt = new Date(timestamp()).toISOString();
     const row = await checkedUpdate(session, {
       STATUS: "consumed",
-      LAST_OUTCOME: "submitted",
+      // Keep exact bounded recovery provenance after terminal consumption.
+      LAST_OUTCOME: RECOVERY_MARKER_PATTERN.test(session.lastOutcome)
+        ? session.lastOutcome : "submitted",
       CONSUMED_AT: consumedAt,
       SUBMISSION_FINGERPRINT: fingerprint,
       UPDATED_AT: consumedAt,
     });
     return Object.freeze({ row, replayed: false });
+  }
+
+  /** Reserve one recovery write attempt without replacing the original claim. */
+  async function reserveRecoveryAttempt(session, recoveryArtifactSha) {
+    assertRuntimeBinding(session);
+    if (!REVISION_PATTERN.test(recoveryArtifactSha ?? "")) {
+      fail("Recovery artifact is invalid", { publicCode: "session_input_invalid", status: 422 });
+    }
+    if (session.status !== "submitting" || !FINGERPRINT_PATTERN.test(session.submissionFingerprint ?? "") ||
+        !CLAIM_ID_PATTERN.test(session.submissionClaimId ?? "")) {
+      fail("Recovery claim is unavailable", { publicCode: "session_state_invalid", status: 409 });
+    }
+    const prefix = `r1_${recoveryArtifactSha}_`;
+    const reserved = (value) => typeof value === "string" && value.startsWith(prefix) &&
+      RECOVERY_MARKER_PATTERN.test(value);
+    const unchanged = (row) => stableBinding(row, session) &&
+      Object.entries(session).every(([key, value]) =>
+        ["lastOutcome", "sessionVersion", "updatedAt"].includes(key) || same(row[key], value));
+    if (reserved(session.lastOutcome)) {
+      const row = await readByRowId(session.rowId);
+      if (!unchanged(row) || row.lastOutcome !== session.lastOutcome ||
+          row.sessionVersion !== session.sessionVersion || row.updatedAt !== session.updatedAt) {
+        fail("Reserved recovery state changed", { ambiguous: true });
+      }
+      return Object.freeze({ row, acquired: false });
+    }
+    if (session.lastOutcome !== "submission_started") {
+      fail("Recovery claim has another outcome", { publicCode: "session_state_invalid", status: 409 });
+    }
+    const owner = randomUUID();
+    if (typeof owner !== "string" || !CLAIM_ID_PATTERN.test(owner)) {
+      fail("Recovery entropy is invalid", { publicCode: "configuration_invalid" });
+    }
+    const marker = `${prefix}${owner.replaceAll("-", "")}`;
+    const updatedAt = new Date(timestamp()).toISOString();
+    const patch = {
+      LAST_OUTCOME: marker,
+      SESSION_VERSION: session.sessionVersion + 1,
+      UPDATED_AT: updatedAt,
+    };
+    let acknowledged = false;
+    try {
+      // Do not use checkedUpdate: it intentionally reconciles a thrown UPDATE.
+      // Recovery must never authorize CRM after any ambiguous reservation write.
+      await adapter.updateRow(table, { ROWID: session.rowId, ...patch }, {
+        SESSION_VERSION: session.sessionVersion,
+        STATUS: session.status,
+        TOKEN_HASH: session.tokenHash,
+        UPDATED_AT: session.updatedAt,
+      });
+      acknowledged = true;
+    } catch { /* read back without retrying; ambiguity never grants write authority */ }
+    let row;
+    try { row = await readByRowId(session.rowId); } catch {
+      fail("Recovery reservation readback is unavailable", { ambiguous: true });
+    }
+    if (!unchanged(row)) fail("Recovery claim changed", { ambiguous: true });
+    const original = row.lastOutcome === session.lastOutcome &&
+      row.sessionVersion === session.sessionVersion && row.updatedAt === session.updatedAt;
+    const reservation = reserved(row.lastOutcome) && row.sessionVersion === patch.SESSION_VERSION;
+    if (!original && !reservation) fail("Recovery reservation did not converge", { ambiguous: true });
+    return Object.freeze({
+      row,
+      acquired: acknowledged && reservation && row.lastOutcome === marker && row.updatedAt === updatedAt,
+    });
   }
 
   return Object.freeze({
@@ -652,6 +720,7 @@ function createSessionStore(adapter, config, {
     beginSubmission,
     consumePrefillHandle,
     consume,
+    reserveRecoveryAttempt,
     issue,
     issuePrefillHandle,
     readByJourneyId,

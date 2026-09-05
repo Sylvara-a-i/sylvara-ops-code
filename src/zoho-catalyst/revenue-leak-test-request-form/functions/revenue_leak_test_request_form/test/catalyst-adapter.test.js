@@ -186,3 +186,43 @@ test("an access-page response preserves exact HTML and security headers", async 
   assert.deepEqual(response.headers, headers);
   assert.doesNotMatch(response.payload, /requestId/);
 });
+
+function recoveryEnvironment() {
+  return environment({FORM1_RECOVERY_MANIFEST_JSON:JSON.stringify({schemaVersion:1,mode:"inspect",
+    originalSourceRevision:"a".repeat(40),claimBindingSha256:"b".repeat(64),
+    assistedConstantsSha256:"c".repeat(64),originalSessionVersion:17,
+    originalUpdatedAt:"2026-09-04T12:00:00.000Z",originalLastOutcome:"submission_started"})});
+}
+
+test("temporary recovery containment rejects assisted launches before SDK or body access", async () => {
+  for (const [method,url] of [["POST","/form1/issue-test"],["GET","/form1/access-test"],
+    ["POST","/form1/exchange-test"],["POST","/form1/prefill-test"]]) {
+    let accesses=0;
+    const listener=createRequestListener({artifactSourceRevision:REVISION,
+      environment:recoveryEnvironment(),logger:{info(){},error(){}},
+      catalystSdk:{initialize(){accesses++;throw new Error("must not initialize");}}});
+    const response=responseStub();
+    await listener({method,url,headers:requestHeaders({"x-sylvara-prefill-test":"p".repeat(43)}),
+      on(){accesses++;throw new Error("must not read body");}},response);
+    assert.equal(response.statusCode,503);
+    assert.equal(accesses,0);
+  }
+});
+
+test("recovery configuration preserves the public non-writing acknowledgment", async () => {
+  let dependenciesAccessed=0;
+  const rejectAccess=()=>{dependenciesAccessed++;throw new Error("must not access data or CRM");};
+  const app={config:{environment:"development",projectId:SYNTHETIC_CATALYST_PROJECT_ID},
+    datastore(){return{table(){return{};}};},
+    zcql(){return{executeZCQLQuery:rejectAccess};},
+    connections(){return{getConnectionCredentials:rejectAccess};}};
+  const listener=createRequestListener({artifactSourceRevision:REVISION,environment:recoveryEnvironment(),
+    catalystSdk:{initialize(){return app;}},logger:{info(){},error(){}},fetchImpl:rejectAccess});
+  const response=responseStub();
+  await listener({method:"POST",url:"/form1/submission-test",
+    headers:requestHeaders({"x-sylvara-submission-test":"s".repeat(43)}),
+    rawBody:Buffer.from(JSON.stringify({submissionId:"synthetic-submit-0001"}))},response);
+  assert.equal(response.statusCode,200);
+  assert.equal(JSON.parse(response.payload).binding,"public_unbound");
+  assert.equal(dependenciesAccessed,0);
+});

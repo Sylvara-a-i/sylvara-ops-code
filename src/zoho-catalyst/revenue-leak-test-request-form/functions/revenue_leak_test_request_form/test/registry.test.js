@@ -21,7 +21,7 @@ function json(selected) {
 
 test("the variable registry and placeholder environment remain in exact lockstep", () => {
   const registry = json(path.join(componentRoot, "config/variables.json"));
-  assert.equal(registry.schema_version, 6);
+  assert.equal(registry.schema_version, 7);
   assert.equal(registry.status, "development-active-production-dark");
   const names = registry.variables.map((entry) => entry.name);
   assert.equal(new Set(names).size, names.length);
