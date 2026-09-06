@@ -9,6 +9,28 @@ const {
 } = require("../functions/revenue_leak_test_setup_form/lib/security");
 
 const FAILURE = "No allowlist generated. Input was invalid, cancelled, or the private terminal was unavailable.";
+const INPUT_MESSAGES = Object.freeze({
+  EMPTY_INPUT: "Nothing was entered. Type or paste one value before pressing Enter.",
+  INVALID_PROOF_FORMAT: "Use the existing saved 32-256 character printable ASCII proof secret, without spaces.",
+  INVALID_EMAIL: "Use the exact approved email address, without spaces or surrounding whitespace.",
+  SECRET_MISMATCH: "The two proof-secret entries did not match.",
+  EMAIL_MISMATCH: "The two email entries did not match.",
+  CANCELLED: "Entry was cancelled. No value was generated.",
+  TIMED_OUT: "The two-minute input deadline expired. Restart when the private inputs are ready.",
+  UNSUPPORTED_INPUT: "An unsupported control or paste sequence arrived. Use the terminal Paste action for one value, then press Enter separately.",
+  MULTILINE_INPUT: "More than one line arrived. Paste one value without line breaks.",
+  INPUT_TOO_LONG: "The input exceeded the field limit.",
+  TERMINAL_UNAVAILABLE: "Use the pinned Node 24 runtime in a private interactive terminal with no arguments or redirection.",
+});
+const PASTE_START = "\x1b[200~";
+const PASTE_END = "\x1b[201~";
+
+class InputError extends Error {
+  constructor(reason) {
+    super(FAILURE);
+    this.reason = Object.hasOwn(INPUT_MESSAGES, reason) ? reason : "TERMINAL_UNAVAILABLE";
+  }
+}
 
 /** Derive one recipient entry with exactly the deployed protocol's normalization. */
 function deriveAllowlist(email, secret) {
@@ -20,13 +42,16 @@ function deriveAllowlist(email, secret) {
   }
 }
 
-/** Read one bounded hidden line; reject extra answers delivered in the same chunk. */
+/** Read one masked line without exposing text or accessing the clipboard. */
 function readHiddenLine(input, output, prompt, maxLength, timeoutMs) {
   return new Promise((resolve, reject) => {
     let value = "";
+    let escapeSequence = "";
+    let inPaste = false;
+    let pasteHintShown = false;
     let settled = false;
     let timer;
-    const finish = (error) => {
+    const finish = (reason) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
@@ -37,40 +62,84 @@ function readHiddenLine(input, output, prompt, maxLength, timeoutMs) {
       output.removeListener("error", onFailure);
       const answer = value;
       value = "";
-      if (error) reject(new Error(FAILURE));
+      escapeSequence = "";
+      if (reason) reject(new InputError(reason));
+      else if (!answer) reject(new InputError("EMPTY_INPUT"));
       else resolve(answer);
     };
-    const onFailure = () => finish(true);
+    const onFailure = () => finish("TERMINAL_UNAVAILABLE");
     const onData = (chunk) => {
       if (settled) return;
-      const text = String(chunk);
-      if (text.length > maxLength + 2) return finish(true);
-      const newline = text.search(/[\r\n]/);
-      // A CRLF is one Enter. Anything after it is a multi-line paste, not consent
-      // to answer another prompt. Escape/control sequences are rejected as well.
-      if (newline !== -1 && !/^(?:\r\n?|\n)$/.test(text.slice(newline))) {
-        return finish(true);
+      try {
+        const text = String(chunk);
+        if (text.length > maxLength + PASTE_START.length + PASTE_END.length + 2) {
+          return finish("INPUT_TOO_LONG");
+        }
+        const characters = Array.from(text);
+        for (let index = 0; index < characters.length; index += 1) {
+          const character = characters[index];
+          if (character === "\x03" || character === "\x04") return finish("CANCELLED");
+          if (escapeSequence || character === "\x1b") {
+            // Accept only the exact six-byte bracketed-paste markers, even when
+            // split across reads. Never strip arbitrary terminal escapes.
+            escapeSequence += character;
+            const expected = inPaste ? PASTE_END : PASTE_START;
+            if (!expected.startsWith(escapeSequence)) return finish("UNSUPPORTED_INPUT");
+            if (escapeSequence === expected) {
+              escapeSequence = "";
+              inPaste = !inPaste;
+              // Pasted text cannot submit its own confirmation or next answer.
+              if (!inPaste && index !== characters.length - 1) return finish("UNSUPPORTED_INPUT");
+            }
+            continue;
+          }
+          if (character === "\r" || character === "\n") {
+            if (inPaste) return finish("MULTILINE_INPUT");
+            const remainder = characters.slice(index).join("");
+            if (!/^(?:\r\n?|\n)$/.test(remainder)) return finish("MULTILINE_INPUT");
+            return finish();
+          }
+          if (!inPaste && character === "\x16") {
+            // Some Windows hosts deliver Ctrl+V as a key instead of clipboard
+            // text. Retain the entry/deadline and let the owner use host Paste.
+            if (!pasteHintShown) {
+              pasteHintShown = true;
+              output.write(
+                "\nPASTE_SHORTCUT: The terminal sent a shortcut, not pasted text.\n" +
+                "Use Shift+Insert or the terminal's Paste action for one value.\n" +
+                "Your current entry is unchanged; the clipboard was not read.\n" +
+                "Continue the current entry -> " + "*".repeat(Array.from(value).length),
+              );
+            }
+            continue;
+          }
+          if (!inPaste && (character === "\b" || character === "\x7f")) {
+            if (value) {
+              value = Array.from(value).slice(0, -1).join("");
+              output.write("\b \b");
+            }
+            continue;
+          }
+          if (/[\x00-\x1f\x7f]/.test(character)) return finish("UNSUPPORTED_INPUT");
+          if (value.length + character.length > maxLength) return finish("INPUT_TOO_LONG");
+          value += character;
+          output.write("*");
+        }
+      } catch {
+        finish("TERMINAL_UNAVAILABLE");
       }
-      const characters = newline === -1 ? text : text.slice(0, newline);
-      for (const character of characters) {
-        if (character === "\b" || character === "\x7f") value = value.slice(0, -1);
-        else if (/[\x00-\x1f]/.test(character)) return finish(true);
-        else value += character;
-        if (value.length > maxLength) return finish(true);
-      }
-      if (newline !== -1) finish(false);
     };
     input.on("data", onData);
     input.on("error", onFailure);
     input.on("end", onFailure);
     input.on("close", onFailure);
     output.on("error", onFailure);
-    timer = setTimeout(onFailure, timeoutMs);
+    timer = setTimeout(() => finish("TIMED_OUT"), timeoutMs);
     try {
       output.write(prompt);
       input.resume();
     } catch {
-      finish(true);
+      finish("TERMINAL_UNAVAILABLE");
     }
   });
 }
@@ -94,8 +163,12 @@ async function run({
   let email = "";
   let emailConfirmation = "";
   let result = "";
-  const reportFailure = () => {
-    try { output.write(`${FAILURE}\n`); } catch { /* Closed terminal: no fallback log. */ }
+  let stage = "START";
+  const reportFailure = (error) => {
+    const reason = error instanceof InputError ? error.reason : "TERMINAL_UNAVAILABLE";
+    try {
+      output.write(`\nNo allowlist generated. ${stage} / ${reason}: ${INPUT_MESSAGES[reason]}\n`);
+    } catch { /* Closed terminal: no fallback log. */ }
   };
   try {
     if (
@@ -113,25 +186,36 @@ async function run({
       "Use a private terminal outside Codex, recording, logging and screen sharing.\n" +
       "Enter the EXISTING saved Development proof secret, not a new key.\n" +
       "Enter only the already-approved CRM-bound QA recipient. This tool cannot verify that approval.\n" +
-      "Input is hidden. Paste one field at a time without a newline, then press Enter. Ctrl+C cancels.\n",
+      "Input characters appear as *. Paste one value without a newline, then press Enter.\n" +
+      "Windows PowerShell: use Shift+Insert to paste. Ctrl+C cancels.\n",
     );
     input.setEncoding("utf8");
     // Node raw mode suppresses terminal echo, including while a prompt changes.
     input.setRawMode(true);
     rawChanged = true;
     if (input.isRaw !== true) throw new Error(FAILURE);
-    secret = await readHiddenLine(input, output, "Saved proof secret (hidden): ", 256, timeoutMs);
+    stage = "PROOF_SECRET";
+    secret = await readHiddenLine(input, output, "Saved proof secret (masked): ", 256, timeoutMs);
+    // This is only an early operator-input check. Final derivation still uses
+    // the controller's canonical validator, normalization and HMAC helper.
+    if (!/^[\x21-\x7e]{32,256}$/.test(secret)) throw new InputError("INVALID_PROOF_FORMAT");
     output.write("\n");
-    secretConfirmation = await readHiddenLine(input, output, "Repeat proof secret (hidden): ", 256, timeoutMs);
+    stage = "PROOF_CONFIRMATION";
+    secretConfirmation = await readHiddenLine(input, output, "Repeat proof secret (masked): ", 256, timeoutMs);
     output.write("\n");
-    if (!constantTimeEqual(secret, secretConfirmation)) throw new Error(FAILURE);
-    email = await readHiddenLine(input, output, "Approved QA email (hidden): ", 254, timeoutMs);
+    if (!constantTimeEqual(secret, secretConfirmation)) throw new InputError("SECRET_MISMATCH");
+    stage = "QA_EMAIL";
+    email = await readHiddenLine(input, output, "Approved QA email (masked): ", 254, timeoutMs);
+    try { normalizeProofEmail(email); } catch { throw new InputError("INVALID_EMAIL"); }
     output.write("\n");
-    emailConfirmation = await readHiddenLine(input, output, "Repeat QA email (hidden): ", 254, timeoutMs);
+    stage = "QA_CONFIRMATION";
+    emailConfirmation = await readHiddenLine(input, output, "Repeat QA email (masked): ", 254, timeoutMs);
+    try { normalizeProofEmail(emailConfirmation); } catch { throw new InputError("INVALID_EMAIL"); }
     output.write("\n");
     if (!constantTimeEqual(normalizeProofEmail(email), normalizeProofEmail(emailConfirmation))) {
-      throw new Error(FAILURE);
+      throw new InputError("EMAIL_MISMATCH");
     }
+    stage = "DERIVATION";
     result = deriveAllowlist(email, secret);
     output.write(
       "Private derived value for FORM2_PROOF_ALLOWED_RECIPIENT_DIGESTS:\n" +
@@ -141,8 +225,8 @@ async function run({
       "No configuration was read or changed. No session, OTP, approval or live test was performed.\n",
     );
     return 0;
-  } catch {
-    reportFailure();
+  } catch (error) {
+    reportFailure(error);
     return 1;
   } finally {
     // Release references; JavaScript/OS memory erasure cannot be guaranteed.

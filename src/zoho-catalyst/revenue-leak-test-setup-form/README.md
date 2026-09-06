@@ -224,10 +224,15 @@ utility. Preserve the intentional `SOURCE_REVISION` hold and every consumed clai
    ```
 
 2. Enter the **existing newly saved** `FORM2_PROOF_HMAC_SECRET` twice, then the
-   exact approved CRM-bound QA email twice. All four inputs are hidden. Paste one
-   field at a time without a newline, then press Enter. Backspace corrects input;
+   exact approved CRM-bound QA email twice. Each received character appears as
+   `*`, never as the entered character. In Windows PowerShell use **Shift+Insert**
+   to paste the copied single value. Do not include a newline in the copied value;
+   press Enter separately after the masks appear. Backspace corrects input;
    Ctrl+C/Ctrl+D cancels. Each prompt times out after two minutes. Do not pass
    values through command arguments, environment variables, files, pipes or chat.
+   If the terminal sends Ctrl+V as a control key instead of pasted text, the
+   `PASTE_SHORTCUT` hint appears once and the current input/deadline are retained.
+   The utility does not read the clipboard or change terminal shortcut settings.
 3. Copy the resulting private JSON array into the **existing Development**
    `FORM2_PROOF_ALLOWED_RECIPIENT_DIGESTS` variable of `revenue_leak_test_setup_form`
    using the protected owner-controlled Catalyst configuration surface. Save once.
@@ -238,12 +243,24 @@ utility. Preserve the intentional `SOURCE_REVISION` hold and every consumed clai
    readback and bounded live acceptance still have to pass before reopening.
 
 The utility refuses non-interactive or redirected input/output, extra arguments,
-unsupported Node major versions, invalid/mismatched input, and extra pasted lines
-delivered in one input chunk. It cannot distinguish every paced paste from typing;
-the one-field-at-a-time instruction remains required.
-It emits only fixed instructions and the derived JSON array, never the entered
-secret/email or dependency exceptions. [Node raw terminal mode](https://nodejs.org/api/tty.html)
-suppresses input echo. A TTY is **not** proof that the terminal is private: terminal
+unsupported Node major versions, and invalid/mismatched input. Empty input fails
+at its own prompt, rather than advancing through empty confirmations. Errors
+contain only a fixed stage, reason code and help text, such as
+`PROOF_SECRET / EMPTY_INPUT`; never an input value or dependency exception.
+Exact [bracketed-paste markers](https://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h2-Bracketed-Paste-Mode)
+are recognized across input chunks. Multiline paste, nested/unmatched markers,
+unrelated escapes, and bytes after a closing marker in the same chunk fail closed;
+Enter must follow a bracketed paste in a separate input event. Ordinary unbracketed
+input cannot distinguish every paced paste from typing, so the one-field-at-a-time
+instruction remains required. [Microsoft's console editing shortcuts](https://learn.microsoft.com/en-us/windows-server/administration/windows-console-changes#editing-text)
+document Shift+Insert as a host paste action; raw-mode shortcut delivery still
+depends on the terminal, so successful synthetic PTY tests are not owner-console
+acceptance.
+
+Output contains only fixed instructions/reasons, local asterisk masks and the
+derived JSON array, never entered secret/email characters. The masks reveal input
+length locally. [Node raw terminal mode](https://nodejs.org/api/tty.html) suppresses
+the terminal's own input echo. A TTY is **not** proof that the terminal is private: terminal
 recorders, an agent-owned terminal, clipboard history, OS memory and screen sharing
 remain operator-controlled risks. JavaScript cannot guarantee memory erasure.
 
@@ -252,6 +269,12 @@ the authorized CRM recipient, equality of the two installed workflow keys, or an
 email/session outcome. A wrong local key still produces a well-formed digest and
 must fail closed in the unchanged runtime. On any uncertainty, preserve the hold;
 do not restore an exposed key, reset a proof, send a test email or clear evidence.
+
+The masked-input correction follows an owner-reported first-prompt paste failure.
+Synthetic regressions reproduce the former raw Ctrl+V rejection, then prove prompt
+retention, masked feedback and bounded paste parsing. The exact owner terminal's
+original input bytes were not captured. This source-only change does not validate
+saved configuration, generate/rotate a secret, install a digest or reopen Form 2.
 
 ## Local Validation
 
