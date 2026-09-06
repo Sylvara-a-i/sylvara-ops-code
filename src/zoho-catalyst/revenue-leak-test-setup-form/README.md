@@ -197,6 +197,62 @@ If Development misbehaves:
 
 Production activation requires a separate source change that removes the hard block, a new security review, isolated Production tables/routes/secrets/Connections, Development evidence, an immutable artifact, explicit approval, monitoring, containment, and independent post-deploy readback. The current dark artifact is installation evidence only.
 
+## Owner-Only Offline Proof Allowlist Preparation
+
+[`scripts/prepare-proof-allowlist.js`](scripts/prepare-proof-allowlist.js) prepares
+the private value for `FORM2_PROOF_ALLOWED_RECIPIENT_DIGESTS` for **one already
+approved Development QA recipient**. It imports the controller's canonical
+`proofDestinationDigest` helper; it does not invent another HMAC or email
+normalization rule. Domain case is normalized; email local-part case is preserved.
+
+This is a local operator utility, not a Catalyst endpoint or a credential reader.
+It makes no network requests, imports no Catalyst SDK, retrieves no configuration,
+writes no files, changes no clipboard, and does not generate or rotate a key.
+Do not deploy it, open a held route, or treat its output as live acceptance.
+
+Before use, verify the approved recipient and the disposition of existing sessions,
+proofs, submissions and approval evidence through secret-safe metadata. Do not
+replace a multi-recipient allowlist or rekey active state using this single-recipient
+utility. Preserve the intentional `SOURCE_REVISION` hold and every consumed claim.
+
+1. Use the reviewed checkout and the repository's pinned Node.js 24 runtime. Open
+   your **own private terminal outside Codex**, recording, logging and screen sharing.
+   From the repository root, run the following command with **no extra arguments**:
+
+   ```powershell
+   node ./src/zoho-catalyst/revenue-leak-test-setup-form/scripts/prepare-proof-allowlist.js
+   ```
+
+2. Enter the **existing newly saved** `FORM2_PROOF_HMAC_SECRET` twice, then the
+   exact approved CRM-bound QA email twice. All four inputs are hidden. Paste one
+   field at a time without a newline, then press Enter. Backspace corrects input;
+   Ctrl+C/Ctrl+D cancels. Each prompt times out after two minutes. Do not pass
+   values through command arguments, environment variables, files, pipes or chat.
+3. Copy the resulting private JSON array into the **existing Development**
+   `FORM2_PROOF_ALLOWED_RECIPIENT_DIGESTS` variable of `revenue_leak_test_setup_form`
+   using the protected owner-controlled Catalyst configuration surface. Save once.
+   Leave `SOURCE_REVISION`, `WORKFLOW_HMAC_SECRET` and the route-control workflow
+   copy unchanged. Close the private terminal and clear the copied value after use;
+   do not send output or screenshots to chat or commit them.
+4. Report only that the setting was saved. The separate approved configuration
+   readback and bounded live acceptance still have to pass before reopening.
+
+The utility refuses non-interactive or redirected input/output, extra arguments,
+unsupported Node major versions, invalid/mismatched input, and extra pasted lines
+delivered in one input chunk. It cannot distinguish every paced paste from typing;
+the one-field-at-a-time instruction remains required.
+It emits only fixed instructions and the derived JSON array, never the entered
+secret/email or dependency exceptions. [Node raw terminal mode](https://nodejs.org/api/tty.html)
+suppresses input echo. A TTY is **not** proof that the terminal is private: terminal
+recorders, an agent-owned terminal, clipboard history, OS memory and screen sharing
+remain operator-controlled risks. JavaScript cannot guarantee memory erasure.
+
+This tool verifies only its local inputs. It cannot prove the saved Catalyst value,
+the authorized CRM recipient, equality of the two installed workflow keys, or an
+email/session outcome. A wrong local key still produces a well-formed digest and
+must fail closed in the unchanged runtime. On any uncertainty, preserve the hold;
+do not restore an exposed key, reset a proof, send a test email or clear evidence.
+
 ## Local Validation
 
 From `functions/revenue_leak_test_setup_form` with Node.js 24:
