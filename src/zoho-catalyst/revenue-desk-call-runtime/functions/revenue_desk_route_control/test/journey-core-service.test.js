@@ -75,7 +75,7 @@ function bundle(overrides = {}) {
 function initialDeal(overrides = {}) {
   return {
     id: DEAL_ID, Modified_Time: CRM_AT, Pipeline: 'Revenue Desk Sales',
-    Stage: 'Setup and Authorization', Entry_Offer: '7-Day Revenue Leak Test',
+    Stage: 'Setup and Authorization', Entry_Offer: 'Free 7-Day Missed-Call',
     Intake_Submission_ID: JOURNEY_ID,
     Account_Name: { id: ACCOUNT_ID }, Contact_Name: { id: CONTACT_ID },
     Setup_Access_Status: 'Submitted', Setup_Access_Verified_At: CRM_AT,
@@ -247,6 +247,22 @@ test('initialized and submitted Deal approves without workflow, deployment, phon
   assert.equal(selected.approvalWrites, 1);
 });
 
+test('display-label, wrong, blank, null, and missing offers fail before control writes', async () => {
+  for (const offer of ['7-Day Revenue Leak Test', 'unrelated-offer', '', null, undefined]) {
+    for (const action of ['approve', 'activate', 'rollback']) {
+      const deal = initialDeal({ Entry_Offer: offer });
+      if (offer === undefined) delete deal.Entry_Offer;
+      const selected = fixture({ deal });
+      await assert.rejects(selected.service[action](command(action)),
+        { code: 'CONTROL_PRECONDITION_FAILED' });
+      assert.equal(selected.approvalWrites, 0);
+      assert.equal(selected.rollbackWrites, 0);
+      assert.deepEqual(selected.store.rows, []);
+      assert.deepEqual(selected.state, deal);
+    }
+  }
+});
+
 test('activation is durably rejected before provider state and preserves approval', async () => {
   const selected = fixture();
   await selected.service.approve(command('approve'));
@@ -369,12 +385,21 @@ test('subsecond runtime clocks produce exact whole-second CRM approval and rollb
     '2026-08-30T12:01:00.000Z');
 });
 
-test('rollback is durable, repeatable, and blocks later activation', async () => {
+test('stored-offer approval resumes after blocked activation and rolls back idempotently', async () => {
   const selected = fixture();
   await selected.service.approve(command('approve'));
   selected.advance();
   await assert.rejects(selected.service.activate(command('activate')),
     { code: 'ISOLATED_RETELL_TEST_NUMBER_REQUIRED' });
+  const resumed = await selected.service.approve(command('approve'));
+  assert.equal(resumed.replayed, true);
+  assert.equal(resumed.approved, true);
+  assert.equal(resumed.active, false);
+  assert.equal(selected.approvalWrites, 1);
+  assert.equal(selected.state.Test_Start_At, null);
+  await assert.rejects(selected.service.activate(command('activate')),
+    { code: 'ISOLATED_RETELL_TEST_NUMBER_REQUIRED' });
+  assert.equal(selected.store.rows.filter((row) => row.EVENT_TYPE === 'activate').length, 1);
   selected.advance();
   const stopped = await selected.service.rollback(command('rollback'));
   assert.equal(stopped.state, 'Stopped');
