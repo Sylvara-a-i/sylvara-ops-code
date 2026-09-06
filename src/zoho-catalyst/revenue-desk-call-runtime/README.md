@@ -77,6 +77,15 @@ The installed Changes connector advertises a full Cron body for status changes, 
 
 ## Private approval, activation, and rollback control
 
+The `free-test-journey-core-v1` path validates CRM record reads against the stored
+`Entry_Offer` value `Free 7-Day Missed-Call`, not the `7-Day Revenue Leak Test`
+display/workflow label. Its synthetic fixture uses that stored value; regression
+coverage rejects the display label, unrelated values, and missing values before
+any control receipt or CRM write. This changes no CRM picklist, workflow criteria,
+or full-automation contract. Approval replay after blocked activation and
+idempotent rollback remain separate from provider execution. Passing these local
+checks does not prove live Form 2 submission or internal approval acceptance.
+
 `revenue_desk_route_control` exposes exactly three authenticated Development `POST` operations: approve configuration, activate free test, and stop or roll back free test. It uses the shared evaluators in [`lib/approval-control.js`](functions/revenue_desk_call_gateway/lib/approval-control.js), while keeping operator controls off the Retell gateway. Every command binds Deal, journey, deployment, configuration, idempotency identity, and rollback reason where applicable. Prepared receipts recover exact CAS poststate after interruption; command drift conflicts. Approval moves only to `Scheduled`; activation requires the exact approval plus fresh authoritative route readback; rollback stops Catalyst before provider unbinding and preserves all evidence.
 
 `RETELL_ROUTE_MODE=disabled` is the install-safe default. It requires no Retell number or Connection, activation fails with `ISOLATED_RETELL_TEST_NUMBER_REQUIRED`, and rollback returns the approved manual instructions. `isolated_test` additionally requires the exact test number, shared agent/version, Development webhook, and Retell Connection. Rollback performs no PATCH unless fresh readback proves the `ZZZ SYNTHETIC` number belongs to the exact deployment and route. Neither mode publishes an agent, buys a number, calls, sends SMS, or permits Production.

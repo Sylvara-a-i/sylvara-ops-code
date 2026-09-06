@@ -166,8 +166,9 @@ function validateEvidence(bundle, command, deal, config) {
     && HASH.test(proof.DESTINATION_DIGEST || '')
     && catalystTimestamp(proof.VERIFIED_AT) && catalystTimestamp(proof.CONSUMED_AT),
   'FORM2_EVIDENCE_INVALID', 'Form 2 access proof is invalid.', { httpStatus: 409 });
+  // CRM record reads use the stored offer value, not its workflow/display label.
   invariant(plain(deal) && String(deal.id) === command.dealId
-    && deal.Pipeline === 'Revenue Desk Sales' && deal.Entry_Offer === '7-Day Revenue Leak Test'
+    && deal.Pipeline === 'Revenue Desk Sales' && deal.Entry_Offer === 'Free 7-Day Missed-Call'
     && deal.Intake_Submission_ID === command.journeyId
     && deal.Setup_Access_Status === 'Submitted'
     && crmTimestamp(deal.Setup_Access_Verified_At)
