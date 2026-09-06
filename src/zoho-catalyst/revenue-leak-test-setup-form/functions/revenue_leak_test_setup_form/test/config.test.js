@@ -128,7 +128,7 @@ test("loads an immutable active Development configuration with bounded defaults"
   assert.equal(config.maxVerificationAttempts, 3);
   assert.equal(config.form2ProofTtlSeconds, 600);
   assert.equal(config.form2ProofMaxAttempts, 5);
-  assert.equal(config.form2ProofMaxSends, 3);
+  assert.equal(config.form2ProofMaxSends, 2);
   assert.equal(config.prefillHandleTtlSeconds, 600);
   assert.equal(config.crmOrganizationHash, SYNTHETIC_CRM_ORGANIZATION_ID_SHA256);
   assert.equal(config.form2PrefillHandleFieldAlias, "prefill_handle");
@@ -158,6 +158,20 @@ test("loads an immutable active Development configuration with bounded defaults"
   });
   assert.ok(Object.isFrozen(config.form2AccessStatuses));
   assert.ok(Object.isFrozen(config));
+});
+
+test("omitting the OTP send cap is equivalent to explicit two without changing explicit bounds", () => {
+  const environment = baseEnvironment();
+  assert.equal(Object.hasOwn(environment, "FORM2_PROOF_MAX_SENDS"), false);
+  assert.deepEqual(load(environment), load({ ...environment, FORM2_PROOF_MAX_SENDS: "2" }));
+  assert.equal(load(environment).form2ProofMaxSends, 2);
+  for (let cap = 1; cap <= 5; cap += 1) {
+    assert.equal(load({ ...environment, FORM2_PROOF_MAX_SENDS: String(cap) })
+      .form2ProofMaxSends, cap);
+  }
+  for (const value of ["0", "6", "-1", "2.5", "02", "two"]) {
+    assert.throws(() => load({ ...environment, FORM2_PROOF_MAX_SENDS: value }), ConfigurationError);
+  }
 });
 
 test("requires one canonical Development Gateway source URL distinct from the runtime path", () => {

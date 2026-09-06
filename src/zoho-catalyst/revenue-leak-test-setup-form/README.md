@@ -55,6 +55,8 @@ The Deal subrequest is last so the canonical setup state is written only after t
 - No CORS header is emitted. Browser calls are same-origin; Issue, Prefill, and Submission are server-to-server.
 - The checked-in Catalyst pipeline cannot invoke the deployment script. Its Development job unconditionally exits with failure until Catalyst's native secret-binding contract is independently verified and a separately reviewed source change restores deployment.
 
+`FORM2_PROOF_MAX_SENDS` defaults to two: one normal code and at most one replacement. Omitting this optional override preserves that ceiling while avoiding unnecessary pressure on Catalyst's environment-variable length limit; explicit integer bounds remain 1–5 and require separately approved delivery scope. The proof store freezes the selected ceiling in each row's `MAX_SENDS` at reservation, so changing the default or configuration does not change existing proofs. Before applying this default, independently verify that no older proof can retain a broader ceiling; unresolved proof state remains contained rather than reset. For the bounded Development journey, permit the one replacement only when the first code expires or delivery fails. That reason-for-replacement rule remains an operator gate: cooldown eligibility alone is not permission to resend, and ambiguous delivery requires reconciliation.
+
 ## Durable State
 
 [`config/datastore-schema.json`](config/datastore-schema.json) defines four new additive Development version-3 tables. Neither existing version-2 store is renamed, updated, deleted, or backfilled.

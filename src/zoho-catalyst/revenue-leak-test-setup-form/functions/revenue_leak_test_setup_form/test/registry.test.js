@@ -103,6 +103,10 @@ test("the public variable registry and placeholder environment file stay in lock
     },
     { required: false, safeDefault: "email-otp-v1" },
   );
+  assert.equal(byName.FORM2_PROOF_MAX_SENDS.required, false);
+  assert.equal(byName.FORM2_PROOF_MAX_SENDS.safe_default, "2");
+  assert.equal(Number(byName.FORM2_PROOF_MAX_SENDS.safe_default),
+    require("../lib/config").NUMERIC_LIMITS.FORM2_PROOF_MAX_SENDS.fallback);
   assert.deepEqual(
     {
       required: byName.FORM2_PROOF_ALLOWED_RECIPIENT_DIGESTS.required,
@@ -122,6 +126,7 @@ test("the public variable registry and placeholder environment file stay in lock
     .map((line) => line.slice(0, line.indexOf("=")));
   assert.deepEqual([...names].sort(), [...exampleNames].sort());
   const example = fs.readFileSync(path.join(functionRoot, ".env.example"), "utf8");
+  assert.match(example, /^FORM2_PROOF_MAX_SENDS=2$/m);
   for (const tableName of [
     "Form2SessionsV3Runtime",
     "Form2PrefillsV3",

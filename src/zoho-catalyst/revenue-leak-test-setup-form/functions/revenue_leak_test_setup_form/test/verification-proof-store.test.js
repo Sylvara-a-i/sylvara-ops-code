@@ -2,11 +2,12 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
+const { NUMERIC_LIMITS } = require("../lib/config");
 const { createVerificationProofStore } = require("../lib/verification-proof-store");
 
 const NOW = Date.parse("2026-08-14T18:00:00.000Z");
 
-function fixture() {
+function fixture(configOverrides = {}) {
   let selectedNow = NOW;
   let row = null;
   let updateFailures = 0;
@@ -49,6 +50,7 @@ function fixture() {
     form2ProofMaxSends: 3,
     form2ProofResendCooldownSeconds: 60,
     form2ProofSendLeaseSeconds: 30,
+    ...configOverrides,
   };
   return {
     get row() { return row; },
@@ -300,4 +302,66 @@ test("an expired OTP at the send ceiling becomes terminal instead of sent-confir
   );
   assert.equal(proof.status, "terminal_failure");
   assert.equal(proof.lastOutcome, "otp_send_limit_exhausted");
+});
+
+test("the real default permits one expired-code replacement and blocks a third send", async () => {
+  const selected = fixture({
+    form2ProofMaxSends: NUMERIC_LIMITS.FORM2_PROOF_MAX_SENDS.fallback,
+  });
+  let proof = await selected.store.reserve(reservation());
+  assert.equal(proof.maxSends, 2);
+  assert.equal(selected.row.MAX_SENDS, 2);
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    if (attempt === 2) {
+      selected.setNow(Date.parse(proof.expiresAt) + 1);
+      proof = await selected.store.prepareResend(
+        proof, "5".repeat(64), reservation().sessionExpiresAt,
+      );
+    }
+    const claim = `claim_${String(attempt).repeat(64)}`;
+    proof = await selected.store.claimSend(proof, claim);
+    proof = await selected.store.markSendInvoking(proof, claim);
+    proof = await selected.store.completeSend(proof, {
+      outcome: "accepted",
+      providerResultReference: `mail_${String(attempt).repeat(64)}`,
+    }, claim);
+  }
+  assert.equal(proof.sendCount, 2);
+  assert.equal(proof.providerAttemptCount, 2);
+  const writesBeforeThirdAttempt = selected.updateCalls.length;
+  proof = await selected.store.prepareResend(
+    proof, "6".repeat(64), reservation().sessionExpiresAt,
+  );
+  proof = await selected.store.claimSend(proof, `claim_${"3".repeat(64)}`);
+  assert.equal(proof.status, "issued");
+  assert.equal(selected.updateCalls.length, writesBeforeThirdAttempt);
+
+  selected.setNow(Date.parse(proof.expiresAt) + 1);
+  proof = await selected.store.prepareResend(
+    proof, "7".repeat(64), reservation().sessionExpiresAt,
+  );
+  proof = await selected.store.claimSend(proof, `claim_${"4".repeat(64)}`);
+  assert.equal(proof.status, "terminal_failure");
+  assert.equal(proof.lastOutcome, "otp_send_limit_exhausted");
+  assert.equal(proof.sendCount, 2);
+  assert.equal(proof.providerAttemptCount, 2);
+  assert.equal(selected.row.MAX_SENDS, 2);
+});
+
+test("the real default also blocks a third provider claim after retryable delivery failures", async () => {
+  const selected = fixture({
+    form2ProofMaxSends: NUMERIC_LIMITS.FORM2_PROOF_MAX_SENDS.fallback,
+  });
+  let proof = await selected.store.reserve(reservation());
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const claim = `claim_${String(attempt).repeat(64)}`;
+    proof = await selected.store.claimSend(proof, claim);
+    proof = await selected.store.markSendInvoking(proof, claim);
+    proof = await selected.store.completeSend(proof, { outcome: "retry_required" }, claim);
+  }
+  proof = await selected.store.claimSend(proof, `claim_${"3".repeat(64)}`);
+  assert.equal(proof.status, "terminal_failure");
+  assert.equal(proof.lastOutcome, "provider_claim_limit_exhausted");
+  assert.equal(proof.sendCount, 2);
+  assert.equal(proof.providerAttemptCount, 2);
 });
