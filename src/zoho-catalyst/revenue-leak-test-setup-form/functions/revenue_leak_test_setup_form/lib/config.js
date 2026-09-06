@@ -58,7 +58,8 @@ const NUMERIC_LIMITS = Object.freeze({
   FORM2_PROOF_TTL_SECONDS: Object.freeze({ fallback: 600, minimum: 300, maximum: 900 }),
   PREFILL_HANDLE_TTL_SECONDS: Object.freeze({ fallback: 600, minimum: 300, maximum: 900 }),
   FORM2_PROOF_MAX_ATTEMPTS: Object.freeze({ fallback: 5, minimum: 2, maximum: 10 }),
-  FORM2_PROOF_MAX_SENDS: Object.freeze({ fallback: 3, minimum: 1, maximum: 5 }),
+  // One normal code plus one bounded replacement without an environment override.
+  FORM2_PROOF_MAX_SENDS: Object.freeze({ fallback: 2, minimum: 1, maximum: 5 }),
   FORM2_PROOF_RESEND_COOLDOWN_SECONDS: Object.freeze({
     fallback: 60,
     minimum: 30,

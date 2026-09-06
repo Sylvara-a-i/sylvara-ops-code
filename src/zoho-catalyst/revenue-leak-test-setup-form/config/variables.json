@@ -58,7 +58,7 @@
     { "name": "FORM2_PROOF_TTL_SECONDS", "classification": "bounded-security-policy", "required": false, "example_allowed": true },
     { "name": "PREFILL_HANDLE_TTL_SECONDS", "classification": "bounded-security-policy", "required": false, "example_allowed": true, "safe_default": "600" },
     { "name": "FORM2_PROOF_MAX_ATTEMPTS", "classification": "bounded-security-policy", "required": false, "example_allowed": true },
-    { "name": "FORM2_PROOF_MAX_SENDS", "classification": "bounded-security-policy", "required": false, "example_allowed": true },
+    { "name": "FORM2_PROOF_MAX_SENDS", "classification": "bounded-security-policy", "required": false, "example_allowed": true, "safe_default": "2" },
     { "name": "FORM2_PROOF_RESEND_COOLDOWN_SECONDS", "classification": "bounded-security-policy", "required": false, "example_allowed": true },
     { "name": "FORM2_PROOF_SEND_LEASE_SECONDS", "classification": "bounded-security-policy", "required": false, "example_allowed": true },
     { "name": "FORM2_MAIL_TIMEOUT_MS", "classification": "bounded-runtime-policy", "required": false, "example_allowed": true },
