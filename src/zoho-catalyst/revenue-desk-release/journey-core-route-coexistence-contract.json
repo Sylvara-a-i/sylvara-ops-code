@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "profile": "free-test-journey-core-v1",
+  "status": "source-contract-requires-independent-development-readback",
+  "environment": "Development",
+  "physical_route_count": 24,
+  "canonical_route_contract": "private-route-packet-contract.json",
+  "canonical_route_profile": "canonical-all",
+  "canonical_route_count": 18,
+  "existing_route_mutation_authorized": false,
+  "gateway_activation_authorized": false,
+  "runtime_reopening_authorized": false,
+  "session_or_email_test_authorized": false,
+  "retell_provider_access_authorized": false,
+  "required_retell_route_mode": "disabled",
+  "compatibility_routes": [
+    { "id": "FORM1_PREFILL_MAPPING_FIXTURE", "canonical_route_id": "FORM1_PREFILL", "source_endpoint_binding": "private_endpoint", "acceptance_required": false, "consumer_evidence": "unresolved", "throttle_override": { "overall_per_minute": 2, "per_ip_per_minute": 2 } },
+    { "id": "FORM2_ISSUE_RUNTIME", "canonical_route_id": "FORM2_ISSUE", "source_endpoint_binding": "runtime_path", "acceptance_required": false, "consumer_evidence": "unresolved" },
+    { "id": "FORM2_OTP_REQUEST_RUNTIME", "canonical_route_id": "FORM2_OTP_REQUEST", "source_endpoint_binding": "runtime_path", "acceptance_required": true, "required_consumer": "form2-access-otp-request" },
+    { "id": "FORM2_OTP_VERIFY_RUNTIME", "canonical_route_id": "FORM2_OTP_VERIFY", "source_endpoint_binding": "runtime_path", "acceptance_required": true, "required_consumer": "form2-access-otp-verify" },
+    { "id": "FORM2_PREFILL_RUNTIME", "canonical_route_id": "FORM2_PREFILL", "source_endpoint_binding": "runtime_path", "acceptance_required": false, "consumer_evidence": "unresolved" },
+    { "id": "FORM2_SUBMISSION_RUNTIME", "canonical_route_id": "FORM2_SUBMISSION", "source_endpoint_binding": "runtime_path", "acceptance_required": true, "required_consumer": "form2-submission-webhook" }
+  ],
+  "security_policy": {
+    "compatibility_attributes": "inherit the exact canonical method, function, numeric target binding, runtime target path, authentication and both one-minute throttle scopes except the explicit stricter Form 1 mapping-alias throttle override",
+    "source_endpoints": "exact independently reviewed private bindings; unique across all 24 routes",
+    "shared_target_endpoints": "only the six explicit canonical-to-compatibility pairs",
+    "unknown_authentication_or_throttling": "fail_closed; omission is not evidence of no authentication",
+    "independent_complete_readback_required": true,
+    "required_consumer_readback_required": true,
+    "maximum_readback_age_minutes": 15,
+    "temporary_mapping_routes_allowed": false,
+    "retirement_authority_inferred": false
+  }
+}

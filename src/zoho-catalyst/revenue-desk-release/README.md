@@ -32,16 +32,89 @@ outside current acceptance. The gateway and worker packages remain in the
 immutable artifact/readback set only because the canonical call-runtime artifact
 is bundled; neither package may be invoked by the Journey-core acceptance run.
 
-The core profile preserves the authoritative existing eighteen-route Development
-inventory. Its fourteen Journey routes are required, while the three Retell routes
-and `CRM_BILLING` remain present but deferred and uninvoked. When authoritative
-readback already matches, the profile authorizes no route create, edit, delete, or
-reorder operation. Enablement remains a separate Development-only action after
+The core profile preserves a closed twenty-four-route Development coexistence
+inventory: fourteen canonical Journey routes, four deferred canonical routes,
+and the six exact compatibility names in
+[`journey-core-route-coexistence-contract.json`](journey-core-route-coexistence-contract.json).
+The OTP request, OTP verification and submission runtime aliases require fresh
+caller-binding evidence. The other three aliases are preserved, not required for
+acceptance; their unresolved consumer evidence grants no retirement authority.
+Every alias must match its paired canonical method, function, numeric target,
+runtime path, authentication and both throttle scopes, except the one explicit
+stricter Form 1 mapping-alias limit of two requests per minute in each scope.
+There is no generic throttle exception. Unknown provider security
+state fails closed; familiar names and historical presence are not proof.
+The three Retell routes and `CRM_BILLING` remain deferred and uninvoked. This
+source correction changes no runtime path or provider resource and authorizes no
+route create, edit, delete, reorder, function reopening, session or email action.
+Enablement remains a separate Development-only action after
 the exact complete inventory, functions, Forms protections, and security rules are
 read back. Verify source/artifact/resource parity with
 `verify-release-readback.js --profile free-test-journey-core-v1`; live CRM, Forms,
 Gateway, traffic, and failure-path behavior still require their separate sanitized
 provider readbacks.
+
+### Read-only coexistence verification
+
+Requirement owner: Journey-Core operator. Status: source/offline boundary;
+independent Development security and consumer readback remains required. This
+closed profile does not change the historical `canonical-all` eighteen-route or
+`setup-journey` seventeen-route creation contracts, including their consumed
+approvals. It adds no profile to their request builder.
+
+```text
+node scripts/verify-journey-core-route-readback.js <absolute-private-binding-packet> <absolute-private-readback>
+```
+
+The private binding packet has exactly `schemaVersion` (1), `profile`
+(`free-test-journey-core-v1`), current `sourceRevision`, `contractSha256`,
+`canonicalBindings`, and `compatibilitySourceEndpoints`. The digest comes from the
+verifier's `CONTRACT_SHA256` and binds both route contracts. `canonicalBindings`
+has exactly `schemaVersion` (1), `kind` (`canonical-route-readonly-bindings-v1`),
+`environment` (`Development`), `organizationId`, `projectId`, `routeProfile`
+(`canonical-all`), `routeContractSha256`, `routes`, `runtimePathBindings` and
+`runtimePathBindingsSha256`. Its canonical contract digest comes from
+`ROUTE_CONTRACT_SHA256` in the existing packet validator. The eighteen ordered
+route identities use only `id`, `sourceEndpoint`, `targetId`; the eighteen ordered
+runtime bindings use only `routeId`, `function`, `pathReference`, `runtimePath`,
+with their existing `digestRuntimePathBindings` digest. All private values must
+come from independently reviewed identity expectations, not the observed
+inventory being checked. Historical identity evidence may support individual
+bindings, but an unavailable historical eighteen-route creation packet is not a
+prerequisite. There is no phase, historical revision, Gateway prestate, rollback
+or approval in this read-only shape, and none may be fabricated internally.
+Preserve actual historical packets and consumed approvals unchanged.
+The wrapper's current revision identifies this read-only verification. Each
+of six ordered alias bindings contains only `routeId` and `sourceEndpoint`.
+The five runtime aliases must use their paired configured runtime path as source;
+the Form 1 mapping alias uses its exact separately reviewed private source path.
+All twenty-four source paths must differ. These inputs and their hashes are not
+authorization or independent evidence merely because a validator accepts them.
+
+The readback has exactly `schemaVersion` (1), `profile`, `bindingPacketSha256`,
+`environment`, `organizationId`, `projectId`, `observedAt`,
+`providerInventoryComplete`, `gatewayEnabled`, `retellRouteMode`, `routes` and
+`consumerBindings`. Use fresh, complete Development readback, canonical UTC no
+older than fifteen minutes, the same private target identity and `disabled`
+Retell mode. Each route uses the existing normalized eight-field route allowlist
+described below, with independently established authentication rather than
+turning an omitted provider field into `[]`. Each of three consumer entries has
+only `consumer`, `routeId`, `sourceEndpoint`, matching the contract's required
+consumer name and exact saved/configured caller endpoint. Reject missing,
+duplicate, unknown or temporary routes, private-binding drift, and any security
+or required-consumer mismatch. Only the six explicit alias pairs may share
+targets. The validator emits no mutation request and no private values.
+
+Both files stay outside every public worktree. Existing approval-consumption
+records remain untouched. Gateway state is reported, not changed: an inventory
+pass with a disabled Gateway does not satisfy the separate enabled-Gateway gate.
+No inventory result proves header values, credential replacement, deployed
+artifact parity, source-hold release, live Form 2 acceptance or readiness to
+invoke Retell. No new recurring cost, service, monitoring system or runtime
+dependency is introduced. Monitor through the existing exact readback and
+failure signals. Rollback of this source-only correction restores the prior
+source contract without deleting routes or reviving any consumed approval; keep
+runtime containment while any mismatch remains unresolved.
 
 The setup profile selects the exact seventeen-route `setup-journey` API Gateway profile and explicitly defers `CRM_BILLING`. Create those routes while the Development gateway is disabled, read back every exact route and target binding, then enable only the Development API Gateway and verify availability. The private route-creation packet itself never authorizes that enablement. `RETELL_ROUTE_MODE` remains `disabled`; no Retell number, webhook/provider binding, publish, call, or Production gateway activation is authorized. In this state the internal control reason is `ISOLATED_RETELL_TEST_NUMBER_REQUIRED`, while the authenticated HTTP boundary returns the lowercase wire code `isolated_retell_test_number_required`. Verify all five Catalyst artifacts and resource inventory with `verify-release-readback.js --profile setup-journey`; CRM, Forms, Retell, gateway availability, and traffic state still require separate provider-observed evidence. Unknown profiles, arbitrary contract paths, and Production setup-journey manifests fail closed.
 

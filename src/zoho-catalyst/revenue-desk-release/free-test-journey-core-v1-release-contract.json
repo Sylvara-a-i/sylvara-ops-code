@@ -49,6 +49,7 @@
   ],
   "contract_files": [
     "src/zoho-catalyst/revenue-desk-release/free-test-journey-core-v1-release-contract.json",
+    "src/zoho-catalyst/revenue-desk-release/journey-core-route-coexistence-contract.json",
     "docs/product/free-revenue-leak-test-release-contract.json",
     "src/zoho-catalyst/development-function-inventory.json",
     "src/zoho-catalyst/revenue-desk-call-runtime/config/datastore-schema.json",
@@ -246,7 +247,9 @@
         "revenue_desk_call_worker"
       ],
       "job_pools_preserved_not_executed": ["RevenueDeskCallJobs"],
-      "route_inventory_policy": "preserve the exact existing 18-route Development inventory; create, edit, delete, or reorder no route when authoritative readback already matches",
+      "route_inventory_policy": "preserve exactly 24 Development routes: 14 canonical Journey routes, four deferred canonical routes and six named compatibility routes; no route mutation, unknown-security waiver or runtime reopening is authorized",
+      "route_readback_contract": "src/zoho-catalyst/revenue-desk-release/journey-core-route-coexistence-contract.json",
+      "physical_route_count": 24,
       "required_journey_route_ids": [
         "ROUTE_CONTROL_APPROVE",
         "ROUTE_CONTROL_ACTIVATE",
@@ -269,6 +272,18 @@
         "RETELL_READINESS",
         "CRM_BILLING"
       ],
+      "required_compatibility_route_ids": [
+        "FORM2_OTP_REQUEST_RUNTIME",
+        "FORM2_OTP_VERIFY_RUNTIME",
+        "FORM2_SUBMISSION_RUNTIME"
+      ],
+      "preserved_nonrequired_compatibility_route_ids": [
+        "FORM1_PREFILL_MAPPING_FIXTURE",
+        "FORM2_ISSUE_RUNTIME",
+        "FORM2_PREFILL_RUNTIME"
+      ],
+      "compatibility_security_readback_required": true,
+      "unresolved_compatibility_consumers_authorize_retirement": false,
       "existing_route_mutation_authorized": false,
       "development_api_gateway_availability_authorized": true,
       "development_api_gateway_required_post_install_state": "enabled",

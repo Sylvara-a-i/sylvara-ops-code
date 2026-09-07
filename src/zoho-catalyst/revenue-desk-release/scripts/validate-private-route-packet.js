@@ -341,6 +341,27 @@ function validateRouteBindings(packet, requireBoundTargets) {
   }
 }
 
+/** Validate identity expectations only, without inventing a historical creation prestate. */
+function validateCanonicalRouteIdentityBindings(bindings) {
+  exactKeys(bindings, [
+    "schemaVersion", "kind", "environment", "organizationId", "projectId", "routeProfile",
+    "routeContractSha256", "routes", "runtimePathBindings", "runtimePathBindingsSha256",
+  ], "canonical identity bindings");
+  if (bindings.schemaVersion !== 1 || bindings.kind !== "canonical-route-readonly-bindings-v1"
+      || bindings.environment !== "Development" || bindings.routeProfile !== "canonical-all") {
+    fail("canonical identity bindings must use the closed read-only Development profile");
+  }
+  if (!digestMatches(bindings.routeContractSha256, ROUTE_CONTRACT_SHA256)) {
+    fail("canonical identity bindings contract drifted");
+  }
+  numericHeaderId(bindings.organizationId, "canonical identity organizationId");
+  numericId(bindings.projectId, "canonical identity projectId");
+  validateRouteBindings(bindings, true);
+  const runtimePathBindingsSha256 = validateRuntimePathBindings(bindings);
+  return Object.freeze({ routeCount: routeProfileRoutes(bindings).length,
+    runtimePathBindingsSha256, requestRouteCount: 0 });
+}
+
 function validateExistingRouteReadback(route, index, collection = "existingRoutePrefix") {
   exactKeys(route, [
     "authentication", "method", "name", "source_endpoint", "target", "target_endpoint",
@@ -1293,11 +1314,14 @@ module.exports = {
   digestRouteContract,
   digestRoutePacket,
   digestRuntimePathBindings,
+  expectedRouteReadback,
   normalizeRouteListReadback,
   readPrivateJson,
   ROUTE_CONTRACT_SHA256,
   run,
   validateAdditiveFinalReadback,
+  validateCanonicalRouteIdentityBindings,
+  validateExistingRouteReadback,
   validateRouteApproval,
   validateRoutePacket,
 };

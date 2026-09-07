@@ -81,6 +81,18 @@
         "Stop Or Roll Back Free Test"
       ],
       "activation_without_separately_verified_number_and_route_evidence": "fail_closed_before_any_Retell_operation_while_preserving_approval_and_inactive_state",
+      "route_inventory": {
+        "readback_contract": "src/zoho-catalyst/revenue-desk-release/journey-core-route-coexistence-contract.json",
+        "physical_route_count": 24,
+        "canonical_journey_routes": 14,
+        "preserved_deferred_routes": 4,
+        "required_compatibility_routes": 3,
+        "preserved_nonrequired_compatibility_routes": 3,
+        "independent_exact_security_readback_required": true,
+        "unknown_security_is_accepted": false,
+        "existing_route_mutation_authorized": false,
+        "runtime_reopening_or_test_authorized": false
+      },
       "route_control_request_contract": {
         "required_fields": ["dealId", "journeyId", "configurationVersionId", "idempotencyKey"],
         "rollback_additional_required_fields": ["reason"],
