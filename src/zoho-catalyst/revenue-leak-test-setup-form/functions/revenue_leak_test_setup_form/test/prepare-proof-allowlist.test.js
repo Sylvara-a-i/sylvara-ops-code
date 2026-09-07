@@ -17,7 +17,7 @@ const STAGES = new Set(["START", "PROOF_SECRET", "PROOF_CONFIRMATION", "QA_EMAIL
   "QA_CONFIRMATION", "DERIVATION"]);
 const REASONS = new Set(["EMPTY_INPUT", "INVALID_PROOF_FORMAT", "INVALID_EMAIL", "SECRET_MISMATCH",
   "EMAIL_MISMATCH", "CANCELLED", "TIMED_OUT", "UNSUPPORTED_INPUT", "MULTILINE_INPUT",
-  "INPUT_TOO_LONG", "TERMINAL_UNAVAILABLE"]);
+  "INPUT_TOO_LONG", "TERMINAL_UNAVAILABLE", "WINDOWS_CONSOLE_UNAVAILABLE"]);
 
 class FakeInput extends EventEmitter {
   constructor({ isTTY = true, isRaw = false } = {}) {
@@ -93,6 +93,8 @@ async function execute(answers, options = {}, runOptions = {}) {
     args: [],
     nodeVersion: "24.19.0",
     timeoutMs: 1000,
+    consoleMode: null,
+    interruptSource: new EventEmitter(),
     ...runOptions,
   });
   return { ...streams, code };
@@ -400,7 +402,8 @@ test("Ctrl+V does not extend the current prompt timeout", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const streams = terminal([]);
   let settled = false;
-  const pending = run({ ...streams, args: [], nodeVersion: "24.19.0", timeoutMs: 20 })
+  const pending = run({ ...streams, args: [], nodeVersion: "24.19.0", timeoutMs: 20,
+    consoleMode: null, interruptSource: new EventEmitter() })
     .then((code) => { settled = true; return code; });
   streams.input.emit("data", "\u0016");
   t.mock.timers.tick(10);
@@ -474,3 +477,235 @@ for (const [name, chunks] of [
     assert.equal(result.output.prompts, 1);
   });
 }
+
+function nativeConsoleFixture(answers, { initiallyRaw = false, originalMode = 0x01f7 } = {}) {
+  const streams = terminal(answers, { isRaw: initiallyRaw });
+  const interruptSource = new EventEmitter();
+  const events = [];
+  const setRawMode = streams.input.setRawMode.bind(streams.input);
+  streams.input.setRawMode = (value) => {
+    events.push(["raw", value]);
+    return setRawMode(value);
+  };
+  const pause = streams.input.pause.bind(streams.input);
+  streams.input.pause = () => {
+    events.push(["pause"]);
+    return pause();
+  };
+  const write = streams.output.write.bind(streams.output);
+  streams.output.write = (value) => {
+    if (String(value).endsWith(": ")) events.push(["prompt"]);
+    return write(value);
+  };
+  const consoleMode = {
+    capture() {
+      events.push(["capture"]);
+      assert.equal(streams.input.isRaw, initiallyRaw);
+      assert.equal(streams.output.prompts, 0);
+      return originalMode;
+    },
+    enablePaste() {
+      events.push(["enable"]);
+      assert.equal(streams.input.isRaw, true);
+      assert.equal(streams.output.prompts, 0);
+    },
+    restore(value) {
+      events.push(["restore", value]);
+      assert.equal(streams.input.isRaw, initiallyRaw);
+      assert.ok(streams.input.pauseCalls > 0);
+      assert.equal(value, originalMode);
+    },
+  };
+  return { ...streams, interruptSource, events, consoleMode, originalMode, initiallyRaw };
+}
+
+async function executeNative(fixture, options = {}) {
+  const code = await run({
+    input: fixture.input,
+    output: fixture.output,
+    consoleMode: fixture.consoleMode,
+    interruptSource: fixture.interruptSource,
+    args: [],
+    nodeVersion: "24.19.0",
+    timeoutMs: 1000,
+    ...options,
+  });
+  assert.equal(fixture.interruptSource.listenerCount("SIGINT"), 0,
+    "The utility must release its signal handler after each attempt");
+  return { ...fixture, code };
+}
+
+for (const initiallyRaw of [false, true]) {
+  test(`native paste mode is established before input and restores exact original mode (raw=${initiallyRaw})`, async () => {
+    const fixture = nativeConsoleFixture(successfulAnswers(), { initiallyRaw, originalMode: 0x06f7 });
+    const result = await executeNative(fixture);
+    assert.equal(result.code, 0);
+    assert.deepEqual(fixture.events.slice(0, 4), [["capture"], ["raw", true], ["enable"], ["prompt"]]);
+    assert.deepEqual(fixture.events.slice(-3), [["pause"], ["raw", initiallyRaw], ["restore", 0x06f7]]);
+    assert.equal(fixture.events.filter(([name]) => name === "restore").length, 1);
+    assert.ok(result.output.text.includes(deriveAllowlist(QA_EMAIL, PROOF_KEY)));
+    assertNoInputs(result.output);
+    assertRestored(result.input, initiallyRaw);
+  });
+}
+
+test("native console capture failure prevents raw mode, protected prompts, and input collection", async () => {
+  const fixture = nativeConsoleFixture(successfulAnswers());
+  fixture.consoleMode.capture = () => {
+    fixture.events.push(["capture"]);
+    throw new Error(`synthetic-native-failure-${PROOF_KEY}`);
+  };
+  const result = await executeNative(fixture);
+  assert.equal(result.code, 1);
+  assertReason(result, "START", "WINDOWS_CONSOLE_UNAVAILABLE");
+  assert.deepEqual(fixture.events, [["capture"]]);
+  assert.equal(result.output.prompts, 0);
+  assert.equal(result.input.resumeCalls, 0);
+  assert.equal(DERIVED_ARRAY.test(result.output.text), false);
+  assertNoInputs(result.output);
+  assert.equal(result.output.text.includes("synthetic-native-failure-"), false);
+});
+
+test("native console enable failure restores the captured mode without accepting protected input", async () => {
+  const fixture = nativeConsoleFixture(successfulAnswers());
+  fixture.consoleMode.enablePaste = () => {
+    fixture.events.push(["enable"]);
+    throw new Error(`synthetic-native-failure-${PROOF_KEY}`);
+  };
+  const result = await executeNative(fixture);
+  assertFailedSafely(result);
+  assertReason(result, "START", "WINDOWS_CONSOLE_UNAVAILABLE");
+  assert.equal(result.output.prompts, 0);
+  assert.equal(result.input.resumeCalls, 0);
+  assert.deepEqual(fixture.events, [["capture"], ["raw", true], ["enable"],
+    ["pause"], ["raw", false], ["restore", fixture.originalMode]]);
+  assert.equal(result.output.text.includes("synthetic-native-failure-"), false);
+});
+
+test("unsupported startup conditions do not call the native console adapter", async () => {
+  const fixture = nativeConsoleFixture(successfulAnswers());
+  const result = await executeNative(fixture, { args: ["--unsupported"] });
+  assert.equal(result.code, 1);
+  assertReason(result, "START", "TERMINAL_UNAVAILABLE");
+  assert.deepEqual(fixture.events, []);
+  assert.equal(result.output.prompts, 0);
+  assertNoInputs(result.output);
+});
+
+for (const [name, answer, reason] of [
+  ["invalid input", "too-short\r", "INVALID_PROOF_FORMAT"],
+  ["raw cancellation", "\u0003", "CANCELLED"],
+  ["unsupported control", "\u001b[2J", "UNSUPPORTED_INPUT"],
+  ["closed input", { event: "close" }, "TERMINAL_UNAVAILABLE"],
+  ["input timeout", undefined, "TIMED_OUT"],
+]) {
+  test(`native console restores its exact original mode after ${name}`, async () => {
+    const fixture = nativeConsoleFixture([answer]);
+    const result = await executeNative(fixture, name === "input timeout" ? { timeoutMs: 10 } : {});
+    assertFailedSafely(result);
+    assertReason(result, "PROOF_SECRET", reason);
+    assert.equal(result.output.prompts, 1);
+    assert.deepEqual(fixture.events.slice(-3), [["pause"], ["raw", false], ["restore", fixture.originalMode]]);
+  });
+}
+
+for (const [promptNumber, stage] of [
+  [1, "PROOF_SECRET"], [2, "PROOF_CONFIRMATION"], [3, "QA_EMAIL"], [4, "QA_CONFIRMATION"],
+]) {
+  test(`processed Windows Ctrl+C cancels at ${stage} and cleans up without another prompt`, async () => {
+    const answers = successfulAnswers();
+    answers[promptNumber - 1] = undefined;
+    const fixture = nativeConsoleFixture(answers);
+    const write = fixture.output.write.bind(fixture.output);
+    fixture.output.write = (value) => {
+      const response = write(value);
+      if (String(value).endsWith(": ") && fixture.output.prompts === promptNumber) {
+        setImmediate(() => fixture.interruptSource.emit("SIGINT", new Error(`synthetic-signal-${PROOF_KEY}`)));
+      }
+      return response;
+    };
+    const result = await executeNative(fixture);
+    assertFailedSafely(result);
+    assertReason(result, stage, "CANCELLED");
+    assert.equal(result.output.prompts, promptNumber);
+    assert.equal(result.output.text.includes("synthetic-signal-"), false);
+    assert.deepEqual(fixture.events.slice(-3), [["pause"], ["raw", false], ["restore", fixture.originalMode]]);
+  });
+}
+
+test("SIGINT during native mode preparation cancels before the first protected prompt", async () => {
+  const fixture = nativeConsoleFixture(successfulAnswers());
+  const enablePaste = fixture.consoleMode.enablePaste;
+  fixture.consoleMode.enablePaste = () => {
+    enablePaste();
+    fixture.interruptSource.emit("SIGINT");
+  };
+  const result = await executeNative(fixture);
+  assertFailedSafely(result);
+  assert.equal(result.output.prompts, 0);
+  assert.equal(result.input.resumeCalls, 0);
+  assert.ok(result.output.text.includes(" / CANCELLED: "));
+  assert.deepEqual(fixture.events.slice(-3), [["pause"], ["raw", false], ["restore", fixture.originalMode]]);
+});
+
+for (const [name, answers] of [
+  ["successful calculation", successfulAnswers()],
+  ["rejected first input", ["too-short\r"]],
+]) {
+  test(`native restore failure after ${name} withholds output and does not retry restoration`, async () => {
+    const fixture = nativeConsoleFixture(answers);
+    fixture.consoleMode.restore = (value) => {
+      fixture.events.push(["restore", value]);
+      assert.equal(value, fixture.originalMode);
+      throw new Error(`synthetic-restore-failure-${PROOF_KEY}`);
+    };
+    const result = await executeNative(fixture);
+    assertFailedSafely(result);
+    assert.ok(result.output.text.includes(" / WINDOWS_CONSOLE_UNAVAILABLE: "));
+    assert.equal(fixture.events.filter(([event]) => event === "restore").length, 1);
+    assert.equal(result.output.text.includes("synthetic-restore-failure-"), false);
+  });
+}
+
+test("raw-mode preparation failure still restores the independently captured native mode", async () => {
+  const fixture = nativeConsoleFixture(successfulAnswers());
+  fixture.input.setRawMode = (value) => {
+    fixture.events.push(["raw", value]);
+    fixture.input.rawHistory.push(value);
+    fixture.input.isRaw = value;
+    if (value) throw new Error(`synthetic-raw-failure-${PROOF_KEY}`);
+    return fixture.input;
+  };
+  const result = await executeNative(fixture);
+  assert.equal(result.code, 1);
+  assert.equal(result.output.prompts, 0);
+  assert.equal(result.input.resumeCalls, 0);
+  assert.equal(DERIVED_ARRAY.test(result.output.text), false);
+  assertNoInputs(result.output);
+  assert.equal(result.output.text.includes("synthetic-raw-failure-"), false);
+  assert.deepEqual(fixture.events.slice(-3), [["pause"], ["raw", false], ["restore", fixture.originalMode]]);
+});
+
+test("raw-mode cleanup failure still attempts exact native restoration and withholds derived output", async () => {
+  const fixture = nativeConsoleFixture(successfulAnswers());
+  const setRawMode = fixture.input.setRawMode;
+  fixture.input.setRawMode = (value) => {
+    if (!value) {
+      fixture.events.push(["raw", false]);
+      throw new Error(`synthetic-raw-restore-${PROOF_KEY}`);
+    }
+    return setRawMode(value);
+  };
+  fixture.consoleMode.restore = (value) => {
+    fixture.events.push(["restore", value]);
+    assert.equal(value, fixture.originalMode);
+  };
+  const result = await executeNative(fixture);
+  assert.equal(result.code, 1);
+  assert.equal(DERIVED_ARRAY.test(result.output.text), false);
+  assert.ok(result.output.text.includes(" / WINDOWS_CONSOLE_UNAVAILABLE: "));
+  assertNoInputs(result.output);
+  assert.equal(result.output.text.includes("synthetic-raw-restore-"), false);
+  assert.deepEqual(fixture.events.slice(-3), [["pause"], ["raw", false], ["restore", fixture.originalMode]]);
+  assert.equal(fixture.events.filter(([event]) => event === "restore").length, 1);
+});

@@ -7,6 +7,7 @@ const {
   normalizeProofEmail,
   proofDestinationDigest,
 } = require("../functions/revenue_leak_test_setup_form/lib/security");
+const { createWindowsConsoleMode } = require("./windows-console-input");
 
 const FAILURE = "No allowlist generated. Input was invalid, cancelled, or the private terminal was unavailable.";
 const INPUT_MESSAGES = Object.freeze({
@@ -21,6 +22,7 @@ const INPUT_MESSAGES = Object.freeze({
   MULTILINE_INPUT: "More than one line arrived. Paste one value without line breaks.",
   INPUT_TOO_LONG: "The input exceeded the field limit.",
   TERMINAL_UNAVAILABLE: "Use the pinned Node 24 runtime in a private interactive terminal with no arguments or redirection.",
+  WINDOWS_CONSOLE_UNAVAILABLE: "The local Windows console adapter is unavailable or could not restore the input mode. Close this window; do not enter a secret.",
 });
 const PASTE_START = "\x1b[200~";
 const PASTE_END = "\x1b[201~";
@@ -43,7 +45,7 @@ function deriveAllowlist(email, secret) {
 }
 
 /** Read one masked line without exposing text or accessing the clipboard. */
-function readHiddenLine(input, output, prompt, maxLength, timeoutMs) {
+function readHiddenLine(input, output, prompt, maxLength, timeoutMs, signal) {
   return new Promise((resolve, reject) => {
     let value = "";
     let escapeSequence = "";
@@ -60,6 +62,7 @@ function readHiddenLine(input, output, prompt, maxLength, timeoutMs) {
       input.removeListener("end", onFailure);
       input.removeListener("close", onFailure);
       output.removeListener("error", onFailure);
+      signal.removeEventListener("abort", onAbort);
       const answer = value;
       value = "";
       escapeSequence = "";
@@ -68,6 +71,7 @@ function readHiddenLine(input, output, prompt, maxLength, timeoutMs) {
       else resolve(answer);
     };
     const onFailure = () => finish("TERMINAL_UNAVAILABLE");
+    const onAbort = () => finish("CANCELLED");
     const onData = (chunk) => {
       if (settled) return;
       try {
@@ -134,7 +138,9 @@ function readHiddenLine(input, output, prompt, maxLength, timeoutMs) {
     input.on("end", onFailure);
     input.on("close", onFailure);
     output.on("error", onFailure);
+    signal.addEventListener("abort", onAbort, { once: true });
     timer = setTimeout(() => finish("TIMED_OUT"), timeoutMs);
+    if (signal.aborted) return finish("CANCELLED");
     try {
       output.write(prompt);
       input.resume();
@@ -155,6 +161,8 @@ async function run({
   args = process.argv.slice(2),
   nodeVersion = process.versions.node,
   timeoutMs = 120000,
+  consoleMode = process.platform === "win32" ? createWindowsConsoleMode() : null,
+  interruptSource = process,
 } = {}) {
   let rawChanged = false;
   const priorRaw = input?.isRaw === true;
@@ -164,6 +172,26 @@ async function run({
   let emailConfirmation = "";
   let result = "";
   let stage = "START";
+  let originalConsoleMode;
+  let cleanupAttempted = false;
+  let cleanupSucceeded = false;
+  const cancellation = new AbortController();
+  const onInterrupt = () => cancellation.abort();
+  // Native processed-input mode delivers Ctrl+C as SIGINT, not a data byte.
+  const restoreTerminal = () => {
+    if (cleanupAttempted) return cleanupSucceeded;
+    cleanupAttempted = true;
+    let success = true;
+    if (rawChanged) {
+      try { input.pause(); } catch { success = false; }
+      try { input.setRawMode(priorRaw); } catch { success = false; }
+    }
+    if (originalConsoleMode !== undefined) {
+      try { consoleMode.restore(originalConsoleMode); } catch { success = false; }
+    }
+    cleanupSucceeded = success;
+    return success;
+  };
   const reportFailure = (error) => {
     const reason = error instanceof InputError ? error.reason : "TERMINAL_UNAVAILABLE";
     try {
@@ -181,35 +209,45 @@ async function run({
       reportFailure();
       return 1;
     }
+    interruptSource.on("SIGINT", onInterrupt);
+    if (consoleMode) {
+      try { originalConsoleMode = consoleMode.capture(); }
+      catch { throw new InputError("WINDOWS_CONSOLE_UNAVAILABLE"); }
+    }
     output.write(
       "OWNER-ONLY OFFLINE FORM 2 ALLOWLIST PREPARATION\n" +
       "Use a private terminal outside Codex, recording, logging and screen sharing.\n" +
       "Enter the EXISTING saved Development proof secret, not a new key.\n" +
       "Enter only the already-approved CRM-bound QA recipient. This tool cannot verify that approval.\n" +
       "Input characters appear as *. Paste one value without a newline, then press Enter.\n" +
-      "Windows PowerShell: use Shift+Insert to paste. Ctrl+C cancels.\n",
+      "Windows: paste with Ctrl+V or Shift+Insert. Ctrl+C cancels.\n",
     );
     input.setEncoding("utf8");
     // Node raw mode suppresses terminal echo, including while a prompt changes.
-    input.setRawMode(true);
+    // An OS call can fail after changing state; cleanup must still be attempted.
     rawChanged = true;
+    input.setRawMode(true);
     if (input.isRaw !== true) throw new Error(FAILURE);
+    if (consoleMode) {
+      try { consoleMode.enablePaste(); }
+      catch { throw new InputError("WINDOWS_CONSOLE_UNAVAILABLE"); }
+    }
     stage = "PROOF_SECRET";
-    secret = await readHiddenLine(input, output, "Saved proof secret (masked): ", 256, timeoutMs);
+    secret = await readHiddenLine(input, output, "Saved proof secret (masked): ", 256, timeoutMs, cancellation.signal);
     // This is only an early operator-input check. Final derivation still uses
     // the controller's canonical validator, normalization and HMAC helper.
     if (!/^[\x21-\x7e]{32,256}$/.test(secret)) throw new InputError("INVALID_PROOF_FORMAT");
     output.write("\n");
     stage = "PROOF_CONFIRMATION";
-    secretConfirmation = await readHiddenLine(input, output, "Repeat proof secret (masked): ", 256, timeoutMs);
+    secretConfirmation = await readHiddenLine(input, output, "Repeat proof secret (masked): ", 256, timeoutMs, cancellation.signal);
     output.write("\n");
     if (!constantTimeEqual(secret, secretConfirmation)) throw new InputError("SECRET_MISMATCH");
     stage = "QA_EMAIL";
-    email = await readHiddenLine(input, output, "Approved QA email (masked): ", 254, timeoutMs);
+    email = await readHiddenLine(input, output, "Approved QA email (masked): ", 254, timeoutMs, cancellation.signal);
     try { normalizeProofEmail(email); } catch { throw new InputError("INVALID_EMAIL"); }
     output.write("\n");
     stage = "QA_CONFIRMATION";
-    emailConfirmation = await readHiddenLine(input, output, "Repeat QA email (masked): ", 254, timeoutMs);
+    emailConfirmation = await readHiddenLine(input, output, "Repeat QA email (masked): ", 254, timeoutMs, cancellation.signal);
     try { normalizeProofEmail(emailConfirmation); } catch { throw new InputError("INVALID_EMAIL"); }
     output.write("\n");
     if (!constantTimeEqual(normalizeProofEmail(email), normalizeProofEmail(emailConfirmation))) {
@@ -217,6 +255,9 @@ async function run({
     }
     stage = "DERIVATION";
     result = deriveAllowlist(email, secret);
+    if (cancellation.signal.aborted) throw new InputError("CANCELLED");
+    // Do not publish success if the owner's exact console state cannot be restored.
+    if (!restoreTerminal()) throw new InputError("WINDOWS_CONSOLE_UNAVAILABLE");
     output.write(
       "Private derived value for FORM2_PROOF_ALLOWED_RECIPIENT_DIGESTS:\n" +
       `${result}\n` +
@@ -231,10 +272,8 @@ async function run({
   } finally {
     // Release references; JavaScript/OS memory erasure cannot be guaranteed.
     secret = secretConfirmation = email = emailConfirmation = result = "";
-    if (rawChanged) {
-      try { input.pause(); } catch { /* Do not expose cleanup errors. */ }
-      try { input.setRawMode(priorRaw); } catch { /* Owner may need to close the terminal. */ }
-    }
+    if (!restoreTerminal()) reportFailure(new InputError("WINDOWS_CONSOLE_UNAVAILABLE"));
+    interruptSource.removeListener("SIGINT", onInterrupt);
   }
 }
 
