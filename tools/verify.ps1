@@ -38,6 +38,9 @@ $RequestFormRoot = Join-PathSegments $RepoRoot @(
 $SetupFormRoot = Join-PathSegments $RepoRoot @(
     "src", "zoho-catalyst", "revenue-leak-test-setup-form", "functions", "revenue_leak_test_setup_form"
 )
+$Form2PrefillMappingFixtureRoot = Join-PathSegments $RepoRoot @(
+    "src", "zoho-catalyst", "form2-prefill-mapping-fixture", "functions", "form2_prefill_mapping_fixture"
+)
 $RevenueDeskCallGatewayRoot = Join-PathSegments $RepoRoot @(
     "src", "zoho-catalyst", "revenue-desk-call-runtime", "functions", "revenue_desk_call_gateway"
 )
@@ -685,6 +688,8 @@ try {
             -Arguments @("run", "ci", "--prefix", $RequestFormRoot)
         Invoke-Native -Label "Revenue Leak Test Setup Form checks and tests" -Executable $npm `
             -Arguments @("run", "ci", "--prefix", $SetupFormRoot)
+        Invoke-Native -Label "Form 2 Prefill Mapping Fixture checks and tests" -Executable $npm `
+            -Arguments @("run", "ci", "--prefix", $Form2PrefillMappingFixtureRoot)
         Invoke-Native -Label "Revenue Desk call-gateway checks and tests" -Executable $npm `
             -Arguments @("run", "ci", "--prefix", $RevenueDeskCallGatewayRoot)
         Invoke-Native -Label "Revenue Desk route-control checks and tests" -Executable $npm `
