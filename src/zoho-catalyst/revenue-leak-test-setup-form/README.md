@@ -207,8 +207,27 @@ normalization rule. Domain case is normalized; email local-part case is preserve
 
 This is a local operator utility, not a Catalyst endpoint or a credential reader.
 It makes no network requests, imports no Catalyst SDK, retrieves no configuration,
-writes no files, changes no clipboard, and does not generate or rotate a key.
+writes no private values, changes no clipboard, and does not generate or rotate a key.
 Do not deploy it, open a held route, or treat its output as live acceptance.
+
+On Windows, build the small local console-mode adapter once from the same reviewed
+checkout **before** owner entry:
+
+```powershell
+node ./src/zoho-catalyst/revenue-leak-test-setup-form/scripts/build-windows-console-mode.js
+```
+
+The build uses Windows' existing .NET Framework C# compiler; it installs no package
+and writes only the ignored `scripts/.local/windows-console-mode.exe`. Rebuild
+after an adapter-source change. The provisioner fails before protected prompts if
+the adapter is missing or unavailable. The executable is local operator support,
+not a Catalyst artifact, and must never be committed or included in a deployment.
+
+The adapter only gets/sets this console's input-mode flags. It never reads input
+or the clipboard. Only bounded numeric mode metadata uses a child-process output
+pipe; no secret, address or derived output crosses that pipe or command arguments.
+It does not change registry defaults, persistent shortcut preferences, access
+permissions or other applications. Native Windows handles the owner's Paste action.
 
 Before use, verify the approved recipient and the disposition of existing sessions,
 proofs, submissions and approval evidence through secret-safe metadata. Do not
@@ -225,14 +244,15 @@ utility. Preserve the intentional `SOURCE_REVISION` hold and every consumed clai
 
 2. Enter the **existing newly saved** `FORM2_PROOF_HMAC_SECRET` twice, then the
    exact approved CRM-bound QA email twice. Each received character appears as
-   `*`, never as the entered character. In Windows PowerShell use **Shift+Insert**
+   `*`, never as the entered character. On Windows use **Ctrl+V** or **Shift+Insert**
    to paste the copied single value. Do not include a newline in the copied value;
    press Enter separately after the masks appear. Backspace corrects input;
    Ctrl+C/Ctrl+D cancels. Each prompt times out after two minutes. Do not pass
    values through command arguments, environment variables, files, pipes or chat.
    If the terminal sends Ctrl+V as a control key instead of pasted text, the
    `PASTE_SHORTCUT` hint appears once and the current input/deadline are retained.
-   The utility does not read the clipboard or change terminal shortcut settings.
+   The utility does not read the clipboard or change persistent shortcut settings.
+   A deliberately disabled host shortcut can still require the host's menu Paste.
 3. Copy the resulting private JSON array into the **existing Development**
    `FORM2_PROOF_ALLOWED_RECIPIENT_DIGESTS` variable of `revenue_leak_test_setup_form`
    using the protected owner-controlled Catalyst configuration surface. Save once.
@@ -252,10 +272,21 @@ are recognized across input chunks. Multiline paste, nested/unmatched markers,
 unrelated escapes, and bytes after a closing marker in the same chunk fail closed;
 Enter must follow a bracketed paste in a separate input event. Ordinary unbracketed
 input cannot distinguish every paced paste from typing, so the one-field-at-a-time
-instruction remains required. [Microsoft's console editing shortcuts](https://learn.microsoft.com/en-us/windows-server/administration/windows-console-changes#editing-text)
-document Shift+Insert as a host paste action; raw-mode shortcut delivery still
-depends on the terminal, so successful synthetic PTY tests are not owner-console
-acceptance.
+instruction remains required.
+
+The Windows failure was at the host boundary, not the HMAC or credential layer:
+[Node 24's raw mode](https://github.com/nodejs/node/blob/v24.19.0/deps/uv/src/win/tty.c)
+turns on VT input and turns off processed input, while
+[classic conhost's paste shortcuts](https://github.com/microsoft/terminal/blob/main/src/interactivity/win32/windowio.cpp)
+require VT input off and processed input on. Merely accepting shortcut bytes does
+not paste clipboard text. The adapter captures the exact native mode before Node
+changes it, clears VT/echo/line input, enables processed input, and verifies those
+flags before any protected prompt. Libuv continues reading character events.
+SIGINT (processed Ctrl+C) cancels just like the existing raw Ctrl+C path. Cleanup
+restores Node's state and then the exact captured native flags on every exit; a
+restoration failure withholds the derived result and tells the owner to close the
+window. Console-mode metadata checks and synthetic stream tests do not establish
+that an owner's physical clipboard gesture has succeeded.
 
 Output contains only fixed instructions/reasons, local asterisk masks and the
 derived JSON array, never entered secret/email characters. The masks reveal input
