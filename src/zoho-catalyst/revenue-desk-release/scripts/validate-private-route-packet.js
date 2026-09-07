@@ -1293,11 +1293,13 @@ module.exports = {
   digestRouteContract,
   digestRoutePacket,
   digestRuntimePathBindings,
+  expectedRouteReadback,
   normalizeRouteListReadback,
   readPrivateJson,
   ROUTE_CONTRACT_SHA256,
   run,
   validateAdditiveFinalReadback,
+  validateExistingRouteReadback,
   validateRouteApproval,
   validateRoutePacket,
 };

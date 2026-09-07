@@ -21,6 +21,7 @@ const {
 const contract = require('../free-test-journey-core-v1-release-contract.json');
 const productContract = require('../../../../docs/product/free-revenue-leak-test-release-contract.json');
 const routeContract = require('../private-route-packet-contract.json');
+const coexistence = require('../journey-core-route-coexistence-contract.json');
 const formsManifest = require('../../../zoho-forms/free-revenue-leak-test/forms-manifest.json');
 
 const revision = 'a'.repeat(40);
@@ -117,7 +118,7 @@ test('builds and verifies the immutable Development Journey-core manifest', () =
   ]);
   assert.equal(manifest.job_pools.length, 1);
   assert.equal(manifest.tables.length, 12);
-  assert.equal(Object.keys(manifest.contract_sha256).length, 31);
+  assert.equal(Object.keys(manifest.contract_sha256).length, 32);
   assert.equal(
     Object.hasOwn(
       manifest.contract_sha256,
@@ -399,6 +400,28 @@ test('requires only Journey routes and preserves excluded provider routes withou
   ]);
   assert.equal(new Set([...required, ...deferred]).size, 18);
   assert.deepEqual([...required, ...deferred].sort(), [...allRouteIds].sort());
+  assert.equal(catalyst.physical_route_count, 24);
+  assert.deepEqual(catalyst.required_compatibility_route_ids,
+    coexistence.compatibility_routes.filter((route) => route.acceptance_required).map(({ id }) => id));
+  assert.deepEqual(catalyst.preserved_nonrequired_compatibility_route_ids,
+    coexistence.compatibility_routes.filter((route) => !route.acceptance_required).map(({ id }) => id));
+  assert.equal(new Set([...required, ...deferred,
+    ...catalyst.required_compatibility_route_ids,
+    ...catalyst.preserved_nonrequired_compatibility_route_ids]).size, 24);
+  assert.equal(catalyst.compatibility_security_readback_required, true);
+  assert.equal(catalyst.unresolved_compatibility_consumers_authorize_retirement, false);
+  assert.ok(contract.contract_files.includes(catalyst.route_readback_contract));
+  const productRoutes = productContract.deployment_profiles['free-test-journey-core-v1'].route_inventory;
+  assert.equal(productRoutes.readback_contract, catalyst.route_readback_contract);
+  assert.equal(productRoutes.physical_route_count, 24);
+  assert.equal(productRoutes.unknown_security_is_accepted, false);
+  assert.equal(productRoutes.runtime_reopening_or_test_authorized, false);
+  assert.equal(coexistence.retell_provider_access_authorized, false);
+  assert.equal(coexistence.runtime_reopening_authorized, false);
+  assert.equal(coexistence.session_or_email_test_authorized, false);
+  assert.equal(coexistence.security_policy.temporary_mapping_routes_allowed, false);
+  assert.ok(coexistence.compatibility_routes.filter((route) => !route.acceptance_required)
+    .every((route) => route.consumer_evidence === 'unresolved'));
   assert.equal(catalyst.existing_route_mutation_authorized, false);
 
   const execution = contract.installation_scope.excluded_from_current_acceptance;
