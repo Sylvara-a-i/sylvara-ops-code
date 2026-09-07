@@ -68,13 +68,23 @@ node scripts/verify-journey-core-route-readback.js <absolute-private-binding-pac
 
 The private binding packet has exactly `schemaVersion` (1), `profile`
 (`free-test-journey-core-v1`), current `sourceRevision`, `contractSha256`,
-`canonicalPacket`, and `compatibilitySourceEndpoints`. The digest comes from the
-verifier's `CONTRACT_SHA256` and binds both route contracts. `canonicalPacket` is
-an independently reviewed exact `canonical-all` schema-v1 bound packet used only
-as endpoint, runtime-path and numeric-function identity evidence. Its schema's
-disabled zero-route prestate is not a fresh or current Gateway observation.
-Preserve its original revision and history; do not rewrite or reuse its creation approval.
-The wrapper's revision identifies this read-only verification separately. Each
+`canonicalBindings`, and `compatibilitySourceEndpoints`. The digest comes from the
+verifier's `CONTRACT_SHA256` and binds both route contracts. `canonicalBindings`
+has exactly `schemaVersion` (1), `kind` (`canonical-route-readonly-bindings-v1`),
+`environment` (`Development`), `organizationId`, `projectId`, `routeProfile`
+(`canonical-all`), `routeContractSha256`, `routes`, `runtimePathBindings` and
+`runtimePathBindingsSha256`. Its canonical contract digest comes from
+`ROUTE_CONTRACT_SHA256` in the existing packet validator. The eighteen ordered
+route identities use only `id`, `sourceEndpoint`, `targetId`; the eighteen ordered
+runtime bindings use only `routeId`, `function`, `pathReference`, `runtimePath`,
+with their existing `digestRuntimePathBindings` digest. All private values must
+come from independently reviewed identity expectations, not the observed
+inventory being checked. Historical identity evidence may support individual
+bindings, but an unavailable historical eighteen-route creation packet is not a
+prerequisite. There is no phase, historical revision, Gateway prestate, rollback
+or approval in this read-only shape, and none may be fabricated internally.
+Preserve actual historical packets and consumed approvals unchanged.
+The wrapper's current revision identifies this read-only verification. Each
 of six ordered alias bindings contains only `routeId` and `sourceEndpoint`.
 The five runtime aliases must use their paired configured runtime path as source;
 the Form 1 mapping alias uses its exact separately reviewed private source path.

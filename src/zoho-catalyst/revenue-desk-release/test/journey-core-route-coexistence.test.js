@@ -6,7 +6,8 @@ const path = require("node:path");
 const test = require("node:test");
 const {
   CONTRACT: CANONICAL, ROUTE_CONTRACT_SHA256, buildRouteRequests,
-  digestRoutePacket, digestRuntimePathBindings, validateRoutePacket,
+  digestRoutePacket, digestRuntimePathBindings, validateCanonicalRouteIdentityBindings,
+  validateRoutePacket,
 } = require("../scripts/validate-private-route-packet");
 const {
   CONTRACT, CONTRACT_SHA256, expectedCoexistenceRoutes, validateJourneyCoreRouteReadback,
@@ -20,13 +21,10 @@ function fixture() {
   const bindings = CANONICAL.routes.map((route) => ({ function: route.function,
     pathReference: route.path_reference, routeId: route.id,
     runtimePath: `/synthetic/${route.id.toLowerCase().replaceAll("_", "-")}` }));
-  const canonicalPacket = {
-    schemaVersion: 1, routeProfile: "canonical-all", phase: "bound",
-    approvedSourceRevision: "a".repeat(40), environment: "Development",
-    gatewayActivationAuthorized: false, gatewayPrestate: { enabled: false, routeCount: 0 },
-    organizationId: 606, projectId: "707", prestateEvidenceSha256: "b".repeat(64),
-    rollback: { preserveLegacyResources: true, restoreCallersBeforeRoutes: true,
-      restoreGlobalGatewayState: "disabled" },
+  const canonicalBindings = {
+    schemaVersion: 1, kind: "canonical-route-readonly-bindings-v1",
+    routeProfile: "canonical-all", environment: "Development",
+    organizationId: 606, projectId: "707",
     routeContractSha256: ROUTE_CONTRACT_SHA256,
     routes: CANONICAL.routes.map((route, index) => ({ id: route.id,
       sourceEndpoint: `/synthetic/${String(index).padStart(2, "0")}${"x".repeat(30)}`,
@@ -34,7 +32,7 @@ function fixture() {
     runtimePathBindings: bindings, runtimePathBindingsSha256: digestRuntimePathBindings(bindings),
   };
   const packet = { schemaVersion: 1, profile: "free-test-journey-core-v1",
-    sourceRevision: "c".repeat(40), contractSha256: CONTRACT_SHA256, canonicalPacket,
+    sourceRevision: "c".repeat(40), contractSha256: CONTRACT_SHA256, canonicalBindings,
     compatibilitySourceEndpoints: CONTRACT.compatibility_routes.map((alias) => ({
       routeId: alias.id, sourceEndpoint: alias.source_endpoint_binding === "runtime_path"
         ? bindings.find((binding) => binding.routeId === alias.canonical_route_id).runtimePath
@@ -63,7 +61,8 @@ test("exact 24-route coexistence verifies with three consumers and grants no act
   }
   assert.equal(Object.isFrozen(result), true);
   assert.equal(Object.isFrozen(CONTRACT.compatibility_routes[0]), true);
-  assert.notEqual(packet.sourceRevision, packet.canonicalPacket.approvedSourceRevision);
+  assert.equal(Object.hasOwn(packet.canonicalBindings, "approvedSourceRevision"), false);
+  assert.equal(Object.hasOwn(packet.canonicalBindings, "gatewayPrestate"), false);
 });
 
 test("provider ordering is retained, and disabled Gateway readback grants no enablement", () => {
@@ -143,17 +142,82 @@ for (const [label, mutate] of [
   ["missing alias binding", (p) => { p.compatibilitySourceEndpoints.pop(); }],
   ["extra alias binding", (p) => { p.compatibilitySourceEndpoints.push(p.compatibilitySourceEndpoints[0]); }],
   ["reordered alias binding", (p) => { p.compatibilitySourceEndpoints.reverse(); }],
-  ["duplicate alias source", (p) => { p.compatibilitySourceEndpoints[0].sourceEndpoint = p.canonicalPacket.routes[0].sourceEndpoint; }],
+  ["duplicate alias source", (p) => { p.compatibilitySourceEndpoints[0].sourceEndpoint = p.canonicalBindings.routes[0].sourceEndpoint; }],
   ["wrong runtime alias source", (p) => { p.compatibilitySourceEndpoints[1].sourceEndpoint = "/synthetic/wrong"; }],
   ["query in alias source", (p) => { p.compatibilitySourceEndpoints[0].sourceEndpoint += "?secret=synthetic"; }],
   ["wildcard alias source", (p) => { p.compatibilitySourceEndpoints[0].sourceEndpoint = "/synthetic/*"; }],
   ["traversal alias source", (p) => { p.compatibilitySourceEndpoints[0].sourceEndpoint = "/synthetic/../other"; }],
   ["new mutation flag", (p) => { p.routeCreationAuthorized = true; }],
-  ["unbound canonical identities", (p) => { p.canonicalPacket.phase = "definition"; }],
+  ["unbound canonical identities", (p) => { p.canonicalBindings.routes[0].targetId = null; }],
 ]) {
   test(`rejects binding packet with ${label}`, () => {
     const { packet } = fixture();
     mutate(packet);
+    assert.throws(() => expectedCoexistenceRoutes(packet));
+  });
+}
+
+test("read-only canonical identities validate without a historical creation packet or prestate", () => {
+  const { packet } = fixture();
+  const before = JSON.stringify(packet.canonicalBindings);
+  const result = validateCanonicalRouteIdentityBindings(packet.canonicalBindings);
+  assert.equal(result.routeCount, 18);
+  assert.equal(result.requestRouteCount, 0);
+  assert.equal(result.runtimePathBindingsSha256, packet.canonicalBindings.runtimePathBindingsSha256);
+  assert.equal(Object.isFrozen(result), true);
+  assert.equal(JSON.stringify(packet.canonicalBindings), before);
+});
+
+for (const field of ["phase", "approvedSourceRevision", "gatewayPrestate", "prestateEvidenceSha256",
+  "rollback", "approval", "gatewayActivationAuthorized", "operationAuthorizationId"]) {
+  test(`read-only canonical identities reject creation-only field ${field}`, () => {
+    const { packet } = fixture();
+    packet.canonicalBindings[field] = "synthetic-creation-metadata";
+    assert.throws(() => validateCanonicalRouteIdentityBindings(packet.canonicalBindings));
+    assert.throws(() => expectedCoexistenceRoutes(packet));
+  });
+}
+
+for (const [label, mutate] of [
+  ["schema", (b) => { b.schemaVersion = 2; }],
+  ["kind", (b) => { b.kind = "bound"; }],
+  ["environment", (b) => { b.environment = "Production"; }],
+  ["canonical profile", (b) => { b.routeProfile = "setup-journey"; }],
+  ["contract digest", (b) => { b.routeContractSha256 = "d".repeat(64); }],
+  ["organization type", (b) => { b.organizationId = "606"; }],
+  ["organization range", (b) => { b.organizationId = Number.MAX_SAFE_INTEGER + 1; }],
+  ["organization zero", (b) => { b.organizationId = 0; }],
+  ["project type", (b) => { b.projectId = 707; }],
+  ["project leading zero", (b) => { b.projectId = "0707"; }],
+  ["missing route", (b) => { b.routes.pop(); }],
+  ["extra route", (b) => { b.routes.push(structuredClone(b.routes[0])); }],
+  ["duplicate route", (b) => { b.routes[1] = structuredClone(b.routes[0]); }],
+  ["route ordering", (b) => { b.routes.reverse(); }],
+  ["route target type", (b) => { b.routes[0].targetId = 900; }],
+  ["route source", (b) => { b.routes[0].sourceEndpoint += "?private=synthetic"; }],
+  ["duplicate route source", (b) => { b.routes[1].sourceEndpoint = b.routes[0].sourceEndpoint; }],
+  ["inconsistent function target", (b) => {
+    const same = CANONICAL.routes.findIndex((route, index) => index > 0 && route.function === CANONICAL.routes[0].function);
+    b.routes[same].targetId = "999";
+  }],
+  ["different functions sharing target", (b) => { b.routes.forEach((route) => { route.targetId = "999"; }); }],
+  ["missing runtime binding", (b) => { b.runtimePathBindings.pop(); }],
+  ["extra runtime binding", (b) => { b.runtimePathBindings.push(structuredClone(b.runtimePathBindings[0])); }],
+  ["runtime binding ordering", (b) => { b.runtimePathBindings.reverse(); }],
+  ["runtime function", (b) => { b.runtimePathBindings[0].function = "synthetic_wrong"; }],
+  ["runtime reference", (b) => { b.runtimePathBindings[0].pathReference = "WRONG_PATH"; }],
+  ["runtime path", (b) => { b.runtimePathBindings[0].runtimePath = "/synthetic/../other"; }],
+  ["runtime digest", (b) => { b.runtimePathBindingsSha256 = "d".repeat(64); }],
+  ["duplicate same-function runtime path", (b) => {
+    const same = CANONICAL.routes.findIndex((route, index) => index > 0 && route.function === CANONICAL.routes[0].function);
+    b.runtimePathBindings[same].runtimePath = b.runtimePathBindings[0].runtimePath;
+    b.runtimePathBindingsSha256 = digestRuntimePathBindings(b.runtimePathBindings);
+  }],
+]) {
+  test(`read-only canonical identities reject ${label}`, () => {
+    const { packet } = fixture();
+    mutate(packet.canonicalBindings);
+    assert.throws(() => validateCanonicalRouteIdentityBindings(packet.canonicalBindings));
     assert.throws(() => expectedCoexistenceRoutes(packet));
   });
 }
@@ -163,15 +227,14 @@ test("historical creation profiles and schemas never accept coexistence packets"
   assert.equal(CANONICAL.routes.length, 18);
   assert.deepEqual(Object.keys(CANONICAL.route_profiles), ["canonical-all", "setup-journey"]);
   const { packet } = fixture();
-  assert.equal(validateRoutePacket(packet.canonicalPacket).routeCount, 18);
+  assert.equal(validateCanonicalRouteIdentityBindings(packet.canonicalBindings).routeCount, 18);
   for (const schemaVersion of [1, 2, 3]) {
     const rejected = { ...structuredClone(packet), schemaVersion };
     assert.throws(() => validateRoutePacket(rejected));
     assert.throws(() => buildRouteRequests(rejected, {}, NOW));
-    const wrongProfile = { ...structuredClone(packet.canonicalPacket), schemaVersion,
-      routeProfile: "free-test-journey-core-v1" };
-    assert.throws(() => validateRoutePacket(wrongProfile));
-    assert.throws(() => buildRouteRequests(wrongProfile, {}, NOW));
+    const readOnlyIdentities = { ...structuredClone(packet.canonicalBindings), schemaVersion };
+    assert.throws(() => validateRoutePacket(readOnlyIdentities));
+    assert.throws(() => buildRouteRequests(readOnlyIdentities, {}, NOW));
   }
 });
 

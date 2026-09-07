@@ -5,7 +5,7 @@ const path = require("node:path");
 const {
   CONTRACT: CANONICAL_CONTRACT, assertPrivatePacketPath, currentRepositoryRevision,
   digestRouteContract, digestRouteInventory, digestRoutePacket, expectedRouteReadback,
-  readPrivateJson, validateExistingRouteReadback, validateRoutePacket,
+  readPrivateJson, validateCanonicalRouteIdentityBindings, validateExistingRouteReadback,
 } = require("./validate-private-route-packet");
 
 function freeze(value) {
@@ -41,17 +41,13 @@ function sourceEndpoint(value) {
 
 /** Derive fixed expectations; this read-only packet is never a creation packet. */
 function expectedCoexistenceRoutes(packet) {
-  exactKeys(packet, ["schemaVersion", "profile", "sourceRevision", "contractSha256", "canonicalPacket",
+  exactKeys(packet, ["schemaVersion", "profile", "sourceRevision", "contractSha256", "canonicalBindings",
     "compatibilitySourceEndpoints"], "binding packet");
   if (packet.schemaVersion !== 1 || packet.profile !== CONTRACT.profile
       || !/^[a-f0-9]{40}$/.test(packet.sourceRevision || "")
       || packet.contractSha256 !== CONTRACT_SHA256) fail("binding contract drifted");
-  const canonical = packet.canonicalPacket;
-  validateRoutePacket(canonical);
-  if (canonical.schemaVersion !== 1 || canonical.phase !== "bound"
-      || canonical.routeProfile !== CONTRACT.canonical_route_profile) {
-    fail("an exact canonical-all bound packet is required as identity evidence only");
-  }
+  const canonical = packet.canonicalBindings;
+  validateCanonicalRouteIdentityBindings(canonical);
   const expected = canonical.routes.map((_, index) => expectedRouteReadback(canonical, index));
   if (expected.length !== CONTRACT.canonical_route_count) fail("canonical count drifted");
   const aliases = packet.compatibilitySourceEndpoints;
@@ -96,8 +92,8 @@ function validateJourneyCoreRouteReadback(packet, readback, nowMs = Date.now()) 
   if (readback.schemaVersion !== 1 || readback.profile !== CONTRACT.profile
       || readback.bindingPacketSha256 !== digestRoutePacket(packet)) fail("readback binding drifted");
   if (readback.environment !== CONTRACT.environment
-      || readback.organizationId !== packet.canonicalPacket.organizationId
-      || readback.projectId !== packet.canonicalPacket.projectId) fail("readback target drifted");
+      || readback.organizationId !== packet.canonicalBindings.organizationId
+      || readback.projectId !== packet.canonicalBindings.projectId) fail("readback target drifted");
   if (readback.providerInventoryComplete !== true
       || typeof readback.gatewayEnabled !== "boolean"
       || readback.retellRouteMode !== CONTRACT.required_retell_route_mode) {
