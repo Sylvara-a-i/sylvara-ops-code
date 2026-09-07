@@ -138,6 +138,7 @@ class VerifyEntrypointTests(unittest.TestCase):
             '"run", "ci", "--prefix", $CrmBillingOrchestratorRoot',
             '"run", "ci", "--prefix", $RequestFormRoot',
             '"run", "ci", "--prefix", $SetupFormRoot',
+            '"run", "ci", "--prefix", $Form2PrefillMappingFixtureRoot',
             '"run", "ci", "--prefix", $RevenueDeskCallGatewayRoot',
             '"run", "ci", "--prefix", $RevenueDeskRouteControlRoot',
             '"run", "ci", "--prefix", $RevenueDeskCallWorkerRoot',
@@ -161,6 +162,7 @@ class VerifyEntrypointTests(unittest.TestCase):
         self.assertIn('$CrmBillingOrchestratorRoot = Join-PathSegments $RepoRoot @(', self.script)
         self.assertIn('$RequestFormRoot = Join-PathSegments $RepoRoot @(', self.script)
         self.assertIn('$SetupFormRoot = Join-PathSegments $RepoRoot @(', self.script)
+        self.assertIn('$Form2PrefillMappingFixtureRoot = Join-PathSegments $RepoRoot @(', self.script)
         self.assertIn('$RevenueDeskCallGatewayRoot = Join-PathSegments $RepoRoot @(', self.script)
         self.assertIn('$RevenueDeskRouteControlRoot = Join-PathSegments $RepoRoot @(', self.script)
         self.assertIn('$RevenueDeskCallWorkerRoot = Join-PathSegments $RepoRoot @(', self.script)
@@ -198,6 +200,35 @@ class VerifyEntrypointTests(unittest.TestCase):
             with self.subTest(fragment=exact_fragment):
                 self.assertIn(exact_fragment, self.script)
         self.assertIn("Assert-RevenueDeskTopology", self.script)
+
+    def test_form2_mapping_fixture_checks_run_in_ci_and_both_local_modes(self) -> None:
+        fixture_path = (
+            "src/zoho-catalyst/form2-prefill-mapping-fixture/functions/"
+            "form2_prefill_mapping_fixture"
+        )
+        self.assertIn(
+            "      - name: Run Form 2 Prefill Mapping Fixture checks and tests\n"
+            f"        run: npm run ci --prefix {fixture_path}\n",
+            self.workflow,
+        )
+        self.assertIn(
+            '$Form2PrefillMappingFixtureRoot = Join-PathSegments $RepoRoot @(\n'
+            '    "src", "zoho-catalyst", "form2-prefill-mapping-fixture", '
+            '"functions", "form2_prefill_mapping_fixture"\n)',
+            self.script,
+        )
+        # Mandatory checks after the All-only audit branch run in both modes.
+        common_checks = self.script[
+            self.script.index('        Invoke-Native -Label "Billing gateway checks and tests"'):
+            self.script.index('        Write-Host "Verification passed ($Mode mode)."')
+        ]
+        self.assertIn(
+            '        Invoke-Native -Label "Form 2 Prefill Mapping Fixture checks and tests" '
+            '-Executable $npm `\n'
+            '            -Arguments @("run", "ci", "--prefix", $Form2PrefillMappingFixtureRoot)',
+            common_checks,
+        )
+        self.assertNotIn("if (", common_checks)
 
     def test_ci_and_dependabot_use_only_the_new_revenue_desk_packages(self) -> None:
         canonical_paths = (

@@ -204,6 +204,9 @@ jobs:
       - name: Run Revenue Leak Test Setup Form checks and tests
         run: npm run ci --prefix src/zoho-catalyst/revenue-leak-test-setup-form/functions/revenue_leak_test_setup_form
 
+      - name: Run Form 2 Prefill Mapping Fixture checks and tests
+        run: npm run ci --prefix src/zoho-catalyst/form2-prefill-mapping-fixture/functions/form2_prefill_mapping_fixture
+
       - name: Run Revenue Desk call-gateway checks and tests
         run: npm run ci --prefix src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_gateway
 
