@@ -57,7 +57,9 @@ const NUMERIC_LIMITS = Object.freeze({
   MAX_VERIFICATION_ATTEMPTS: Object.freeze({ fallback: 3, minimum: 2, maximum: 10 }),
   FORM2_PROOF_TTL_SECONDS: Object.freeze({ fallback: 600, minimum: 300, maximum: 900 }),
   PREFILL_HANDLE_TTL_SECONDS: Object.freeze({ fallback: 600, minimum: 300, maximum: 900 }),
-  FORM2_PROOF_MAX_ATTEMPTS: Object.freeze({ fallback: 5, minimum: 2, maximum: 10 }),
+  // Code-entry attempts are independent of email sends and prefill retries.
+  // The proof store freezes this limit when reserving each new proof.
+  FORM2_PROOF_MAX_ATTEMPTS: Object.freeze({ fallback: 10, minimum: 2, maximum: 10 }),
   // One normal code plus one bounded replacement without an environment override.
   FORM2_PROOF_MAX_SENDS: Object.freeze({ fallback: 2, minimum: 1, maximum: 5 }),
   FORM2_PROOF_RESEND_COOLDOWN_SECONDS: Object.freeze({

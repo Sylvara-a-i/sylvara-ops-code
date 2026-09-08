@@ -127,7 +127,7 @@ test("loads an immutable active Development configuration with bounded defaults"
   assert.equal(config.verifiedSessionTtlSeconds, 1800);
   assert.equal(config.maxVerificationAttempts, 3);
   assert.equal(config.form2ProofTtlSeconds, 600);
-  assert.equal(config.form2ProofMaxAttempts, 5);
+  assert.equal(config.form2ProofMaxAttempts, 10);
   assert.equal(config.form2ProofMaxSends, 2);
   assert.equal(config.prefillHandleTtlSeconds, 600);
   assert.equal(config.crmOrganizationHash, SYNTHETIC_CRM_ORGANIZATION_ID_SHA256);
@@ -449,6 +449,20 @@ test("requires the exact form destination stamped into the artifact", () => {
       environment.SOURCE_REVISION,
       "0".repeat(64),
     ),
+    ConfigurationError,
+  );
+});
+
+test("OTP attempts default to ten without changing sends or prefill retries", () => {
+  for (const value of [undefined, "5", "10"]) {
+    const config = load(baseEnvironment({ FORM2_PROOF_MAX_ATTEMPTS: value }));
+    assert.equal(config.form2ProofMaxAttempts, value === "5" ? 5 : 10);
+    assert.equal(config.form2ProofMaxSends, 2);
+    assert.equal(config.maxVerificationAttempts, 3);
+    assert.equal(config.form2ProofTtlSeconds, 600);
+  }
+  assert.throws(
+    () => load(baseEnvironment({ FORM2_PROOF_MAX_ATTEMPTS: "11" })),
     ConfigurationError,
   );
 });

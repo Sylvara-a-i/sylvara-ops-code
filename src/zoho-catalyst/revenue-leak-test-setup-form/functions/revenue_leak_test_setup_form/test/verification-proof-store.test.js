@@ -57,6 +57,11 @@ function fixture(configOverrides = {}) {
     get updateCalls() { return updateCalls; },
     failUpdates(count) { updateFailures = count; },
     setNow(value) { selectedNow = value; },
+    reopenStore(overrides = {}) {
+      return createVerificationProofStore(adapter, { ...config, ...overrides }, {
+        now: () => selectedNow,
+      });
+    },
     store: createVerificationProofStore(adapter, config, { now: () => selectedNow }),
   };
 }
@@ -112,6 +117,111 @@ test("durably reserves, sends, verifies, consumes, and replays one exact email p
   const serialized = JSON.stringify(selected.row);
   assert.equal(serialized.includes("casey@"), false);
   assert.equal(serialized.includes("12345678"), false);
+});
+
+async function issuedProof(selected) {
+  let proof = await selected.store.reserve(reservation());
+  const owner = `claim_${"a".repeat(64)}`;
+  proof = await selected.store.claimSend(proof, owner);
+  proof = await selected.store.markSendInvoking(proof, owner);
+  return selected.store.completeSend(proof, {
+    outcome: "accepted",
+    providerResultReference: `mail_${"b".repeat(64)}`,
+  }, owner);
+}
+
+test("new default permits a correct tenth entry without increasing sends or expiry", async () => {
+  const selected = fixture({
+    form2ProofMaxAttempts: NUMERIC_LIMITS.FORM2_PROOF_MAX_ATTEMPTS.fallback,
+    form2ProofMaxSends: NUMERIC_LIMITS.FORM2_PROOF_MAX_SENDS.fallback,
+  });
+  let proof = await issuedProof(selected);
+  const expiresAt = proof.expiresAt;
+  assert.equal(selected.row.MAX_ATTEMPTS, 10);
+  assert.equal(selected.row.MAX_SENDS, 2);
+  for (let attempt = 1; attempt <= 9; attempt += 1) {
+    const owner = `verify_${attempt.toString(16).repeat(64)}`;
+    proof = await selected.store.claimVerificationAttempt(proof, owner);
+    proof = await selected.store.recordFailedCode(proof, owner);
+    assert.equal(proof.status, "issued");
+    assert.equal(proof.attemptCount, attempt);
+  }
+  const owner = `verify_${"a".repeat(64)}`;
+  proof = await selected.store.claimVerificationAttempt(proof, owner);
+  proof = await selected.store.markVerified(proof, owner);
+  assert.equal(proof.status, "verified");
+  assert.equal(proof.attemptCount, 9);
+  assert.equal(proof.sendCount, 1);
+  assert.equal(proof.providerAttemptCount, 1);
+  assert.equal(proof.otpGeneration, 1);
+  assert.equal(proof.expiresAt, expiresAt);
+});
+
+test("wrong tenth entry locks once under concurrency and blocks an eleventh", async () => {
+  const selected = fixture({
+    form2ProofMaxAttempts: NUMERIC_LIMITS.FORM2_PROOF_MAX_ATTEMPTS.fallback,
+    form2ProofMaxSends: NUMERIC_LIMITS.FORM2_PROOF_MAX_SENDS.fallback,
+  });
+  let proof = await issuedProof(selected);
+  for (let attempt = 1; attempt <= 9; attempt += 1) {
+    const owner = `verify_${attempt.toString(16).repeat(64)}`;
+    proof = await selected.store.claimVerificationAttempt(proof, owner);
+    proof = await selected.store.recordFailedCode(proof, owner);
+  }
+  const owners = ["a", "b"].map((value) => `verify_${value.repeat(64)}`);
+  const claims = await Promise.all(owners.map((owner) => (
+    selected.store.claimVerificationAttempt(proof, owner)
+  )));
+  const winners = claims.filter((candidate, index) => (
+    candidate.verificationOwner === owners[index]
+  ));
+  assert.equal(winners.length, 1);
+  const winner = winners[0];
+  const loser = owners.find((owner) => owner !== winner.verificationOwner);
+  proof = await selected.store.recordFailedCode(winner, loser);
+  assert.equal(proof.attemptCount, 9);
+  proof = await selected.store.recordFailedCode(winner, winner.verificationOwner);
+  assert.equal(proof.status, "failed");
+  assert.equal(proof.attemptCount, 10);
+  assert.equal(proof.lastOutcome, "otp_attempts_exhausted");
+  const history = { ...selected.row };
+  const writes = selected.updateCalls.length;
+  const eleventhOwner = `verify_${"c".repeat(64)}`;
+  proof = await selected.store.claimVerificationAttempt(proof, eleventhOwner);
+  proof = await selected.store.recordFailedCode(proof, eleventhOwner);
+  await assert.rejects(() => selected.store.markVerified(proof, eleventhOwner));
+  assert.deepEqual(selected.row, history);
+  assert.equal(selected.updateCalls.length, writes);
+  assert.equal(proof.sendCount, 1);
+  assert.equal(proof.providerAttemptCount, 1);
+});
+
+test("reopening with the new default preserves a prior five-attempt proof and history", async () => {
+  const selected = fixture({ form2ProofMaxAttempts: 5, form2ProofMaxSends: 2 });
+  let proof = await issuedProof(selected);
+  const firstOwner = `verify_${"1".repeat(64)}`;
+  proof = await selected.store.claimVerificationAttempt(proof, firstOwner);
+  proof = await selected.store.recordFailedCode(proof, firstOwner);
+  const history = { ...selected.row };
+  const store = selected.reopenStore({
+    form2ProofMaxAttempts: NUMERIC_LIMITS.FORM2_PROOF_MAX_ATTEMPTS.fallback,
+  });
+  proof = await store.reserve(reservation());
+  assert.deepEqual(selected.row, history);
+  assert.equal(proof.maxAttempts, 5);
+  assert.equal(proof.attemptCount, 1);
+  for (let attempt = 2; attempt <= 5; attempt += 1) {
+    const owner = `verify_${attempt.toString(16).repeat(64)}`;
+    proof = await store.claimVerificationAttempt(proof, owner);
+    proof = await store.recordFailedCode(proof, owner);
+  }
+  assert.equal(proof.status, "failed");
+  assert.equal(proof.attemptCount, 5);
+  assert.equal(proof.maxAttempts, 5);
+  assert.equal(proof.sendCount, 1);
+  assert.equal(selected.updateCalls.some(({ candidate }) => (
+    Object.hasOwn(candidate, "MAX_ATTEMPTS")
+  )), false);
 });
 
 test("only one concurrent provider claim owns the send", async () => {
