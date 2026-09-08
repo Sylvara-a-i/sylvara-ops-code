@@ -2299,7 +2299,41 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         self.assertIn("detailed : true", source)
         self.assertIn("response-format : STRING", source)
         self.assertIn('request_headers.put("Content-Type","application/json");', source)
-        self.assertNotIn("for each", source.lower())
+        # Permit only this fixed two-value, local validation loop; never a general
+        # record/transport iteration or a list that can grow with external input.
+        loop_header = "for each history_timestamp in history_timestamps"
+        self.assertEqual(source.lower().count("for each"), 1)
+        self.assertEqual(source.count(loop_header), 1)
+        self.assertEqual(source.count("history_timestamps"), 4)
+        self.assertEqual(
+            re.findall(r'^\s*history_timestamps[^\n]*;', source, re.MULTILINE),
+            [
+                '\t\t\t\thistory_timestamps = List();',
+                '\t\t\t\thistory_timestamps.add(setup_access_issued_at);',
+                '\t\t\t\thistory_timestamps.add(setup_access_verified_at);',
+            ],
+        )
+        loop_start = source.index("{", source.index(loop_header))
+        depth = 1
+        loop_end = loop_start + 1
+        while depth and loop_end < len(source):
+            depth += (source[loop_end] == "{") - (source[loop_end] == "}")
+            loop_end += 1
+        self.assertEqual(depth, 0)
+        validation_loop = source[loop_start + 1:loop_end - 1]
+        self.assertEqual(
+            set(re.findall(r'\b([A-Za-z_]\w*)\s*\(', validation_loop)),
+            {"if", "matches", "subString", "toLong"},
+        )
+        self.assertEqual(
+            set(re.findall(r'^\s*([A-Za-z_]\w*)\s*=(?!=)', validation_loop, re.MULTILINE)),
+            {"history_year", "history_month", "history_day", "maximum_day", "renewal_history_valid"},
+        )
+        for forbidden in (
+            "zoho.", "invokeurl", "update_map", "request_", "sendmail",
+            "insert", "delete", "info ", "return", "break", "continue",
+        ):
+            self.assertNotIn(forbidden, validation_loop.lower())
         self.assertNotIn("while", source.lower())
         self.assertNotIn("ZCFKEY", source)
         self.assertNotIn("HEADER_SECRET", source)

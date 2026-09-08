@@ -169,7 +169,10 @@
           "security_classification": "non-secret idempotency identifier; never an access token",
           "browser_supplied_identity_accepted": false,
           "workflow_dependency": false,
-          "expired_restart": "an Administrator-initiated launcher invocation atomically rotates the canonical identity with a domain-separated digest of the Deal and prior identity and resets Setup_Access_Status to Not Issued so an ambiguous Catalyst response retries the same new identity"
+          "expired_restart": "an Administrator-initiated launcher invocation derives a retry-stable UUID from a v2 domain-separated digest of the Deal and exact validated prior Setup_Access_Issued_At text, writes it only when different, and preserves Setup_Access_Status as Expired and both historical timestamps until Catalyst establishes a new generation",
+          "expired_history_validation": "required issued timestamp and optional verified timestamp: strict bounded ISO datetime, Gregorian calendar date, seconds with optional 1-to-3 fractional digits, Z or a numeric offset bounded to 14:00; no locale parsing, whitespace trimming, or equivalent-offset normalization",
+          "expired_readback_fence": "exact prior status, identity and timestamp text before the single trigger-suppressed write; exact intended identity, preserved status and history before POST; missing, malformed or changed history fails closed without automatic retry",
+          "expired_digest_failure": "fail_closed_without_reusing_the_prior_identity"
         }
       },
       "request": { "method": "POST", "content_type": "application/json", "body_keys": ["dealId", "issueRequestId"], "automatic_retry": false },
