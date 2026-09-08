@@ -82,10 +82,22 @@ function validProof(proof, binding, nowMs) {
     expiresAtMs <= parseInstant(binding.expiresAt);
 }
 
-async function requireEmailOtpVerified(service, binding, destinationEmail, nowMs) {
+function readProofClock(now) {
+  let nowMs;
+  try {
+    nowMs = typeof now === "function" ? now() : NaN;
+  } catch {
+    throw new VerificationProofError();
+  }
+  if (!Number.isSafeInteger(nowMs) || nowMs < 0) throw new VerificationProofError();
+  return nowMs;
+}
+
+async function requireEmailOtpVerified(service, binding, destinationEmail, now) {
+  const beforeConsumptionMs = readProofClock(now);
   if (
     typeof service?.consumeVerifiedProof !== "function" ||
-    !validBinding(binding, nowMs) ||
+    !validBinding(binding, beforeConsumptionMs) ||
     typeof destinationEmail !== "string"
   ) {
     throw new VerificationProofError();
@@ -93,9 +105,17 @@ async function requireEmailOtpVerified(service, binding, destinationEmail, nowMs
   const proof = await service.consumeVerifiedProof(
     Object.freeze({ ...binding }),
     destinationEmail,
-    nowMs,
+    beforeConsumptionMs,
   );
-  if (!validProof(proof, binding, nowMs)) throw new VerificationProofError();
+  // Verification/consumption performs asynchronous durable operations. Validate
+  // their returned timestamps against the fresh trusted clock, never the earlier
+  // request-start time; retain exact future-time and session-expiry rejection.
+  const afterConsumptionMs = readProofClock(now);
+  if (afterConsumptionMs < beforeConsumptionMs ||
+      !validBinding(binding, afterConsumptionMs) ||
+      !validProof(proof, binding, afterConsumptionMs)) {
+    throw new VerificationProofError();
+  }
   return Object.freeze({ ...proof });
 }
 

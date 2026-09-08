@@ -41,7 +41,7 @@ test("accepts one consumed email proof bound to the exact live session", async (
       receivedEmail = email;
       return proof();
     },
-  }, binding, "casey@example.invalid", NOW_MS);
+  }, binding, "casey@example.invalid", () => NOW_MS);
   assert.equal(selected.status, "consumed");
   assert.equal(receivedEmail, "casey@example.invalid");
   assert.equal(Object.hasOwn(selected, "captchaVerifiedAt"), false);
@@ -53,13 +53,13 @@ test("a consumed proof remains replay evidence after its OTP-entry deadline", as
     async consumeVerifiedProof() {
       return proof({ expiresAt: "2026-08-14T18:30:00.000Z" });
     },
-  }, binding, "casey@example.invalid", selectedNow);
+  }, binding, "casey@example.invalid", () => selectedNow);
   assert.equal(selected.status, "consumed");
 });
 
 test("token possession without a durable consumed email proof fails closed", async () => {
   await assert.rejects(
-    requireEmailOtpVerified({}, binding, "casey@example.invalid", NOW_MS),
+    requireEmailOtpVerified({}, binding, "casey@example.invalid", () => NOW_MS),
     (error) => error instanceof VerificationProofError &&
       error.publicCode === "verification_required" &&
       error.status === 403,
@@ -77,8 +77,63 @@ test("rejects missing, impossible, partial, or differently bound proof", async (
     await assert.rejects(
       requireEmailOtpVerified({
         async consumeVerifiedProof() { return invalidProof; },
-      }, binding, "casey@example.invalid", NOW_MS),
+      }, binding, "casey@example.invalid", () => NOW_MS),
       (error) => error instanceof VerificationProofError,
     );
+  }
+});
+
+test("fresh proof validation permits elapsed async work without future-time grace", async () => {
+  let clock = NOW_MS;
+  const service = {
+    async consumeVerifiedProof(receivedBinding, email, selectedNowMs) {
+      assert.equal(selectedNowMs, NOW_MS);
+      clock += 1000;
+      return proof({ verifiedAt: new Date(clock).toISOString() });
+    },
+  };
+  assert.equal((await requireEmailOtpVerified(
+    service, binding, "casey@example.invalid", () => clock,
+  )).status, "consumed");
+  await assert.rejects(requireEmailOtpVerified({
+    async consumeVerifiedProof() {
+      return proof({ verifiedAt: new Date(clock + 1).toISOString() });
+    },
+  }, binding, "casey@example.invalid", () => clock), VerificationProofError);
+});
+
+test("session expiry during proof consumption fails without extending either deadline", async () => {
+  let clock = NOW_MS;
+  const before = { ...binding };
+  let consumed = 0;
+  await assert.rejects(requireEmailOtpVerified({
+    async consumeVerifiedProof() {
+      consumed += 1;
+      clock = Date.parse(binding.expiresAt);
+      return proof();
+    },
+  }, binding, "casey@example.invalid", () => clock), VerificationProofError);
+  assert.equal(consumed, 1);
+  assert.deepEqual(binding, before);
+});
+
+test("invalid or backwards trusted clocks fail closed before and after consumption", async () => {
+  for (const badClock of [() => NaN, () => -1, () => 1.5, () => "0", () => {
+    throw new Error("synthetic private error must not escape");
+  }, NOW_MS]) {
+    let consumed = 0;
+    await assert.rejects(requireEmailOtpVerified({
+      async consumeVerifiedProof() { consumed += 1; return proof(); },
+    }, binding, "casey@example.invalid", badClock), (error) =>
+      error instanceof VerificationProofError && !error.message.includes("synthetic"));
+    assert.equal(consumed, 0);
+  }
+  for (const finalClock of [NaN, -1, 1.5, "0", NOW_MS - 1]) {
+    let clock = NOW_MS;
+    let consumed = 0;
+    await assert.rejects(requireEmailOtpVerified({
+      async consumeVerifiedProof() { consumed += 1; clock = finalClock; return proof(); },
+    }, binding, "casey@example.invalid", () => clock), VerificationProofError);
+    assert.equal(consumed, 1);
   }
 });

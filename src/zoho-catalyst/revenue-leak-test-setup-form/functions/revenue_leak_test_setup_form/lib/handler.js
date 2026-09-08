@@ -1261,6 +1261,17 @@ async function handleIssue(body, dependencies, nowMs) {
 }
 
 async function preparePrefill(verificationBinding, dependencies, nowMs) {
+  let latestNowMs = nowMs;
+  const now = () => {
+    const observed = normalizeNow(typeof dependencies.now === "function" ? dependencies.now : Date.now);
+    if (observed < latestNowMs) {
+      throw new ControllerError("Verification clock moved backwards", {
+        publicCode: "configuration_invalid",
+      });
+    }
+    latestNowMs = observed;
+    return observed;
+  };
   if (!isPlainObject(verificationBinding)) throw genericSetupNotFound();
   let candidateSession;
   try {
@@ -1278,7 +1289,7 @@ async function preparePrefill(verificationBinding, dependencies, nowMs) {
       candidateSession.crmDealId !== verificationBinding.crmDealId ||
       candidateSession.journeyBindingDigest !== verificationBinding.journeyBindingDigest ||
       !new Set(["issued", "verified"]).has(candidateSession.status) ||
-      Date.parse(candidateSession.expiresAt) <= nowMs) {
+      Date.parse(candidateSession.expiresAt) <= now()) {
     throw genericSetupNotFound();
   }
   const candidate = Object.freeze({
@@ -1317,13 +1328,13 @@ async function preparePrefill(verificationBinding, dependencies, nowMs) {
     dependencies.verificationService,
     proofBinding,
     existing.contact.Email,
-    nowMs,
+    now,
   );
   const session = await verifyPrefillSession(
     candidate.session,
     candidate.tokenHash,
     dependencies,
-    nowMs,
+    now(),
   );
 
   const verifiedUpdate = {
@@ -1385,7 +1396,7 @@ async function preparePrefill(verificationBinding, dependencies, nowMs) {
       dependencies.verificationService,
       proofBinding,
       existing.contact.Email,
-      nowMs,
+      now,
     );
   } catch {
     await markSessionReconciliation(
@@ -1492,6 +1503,16 @@ function handleAccessPage(dependencies) {
   return response(200, rendered.html, "access", "served", rendered.headers);
 }
 
+function verifiedSetupPending(error, stage) {
+  // A correct, durably verified code must not be reported as incorrect merely
+  // because the subsequent bound session/CRM/prefill preparation failed.
+  return response(503, {
+    ok: false,
+    state: "verified_setup_pending",
+    code: "setup_preparation_unavailable",
+  }, stage, publicError(error).publicCode);
+}
+
 async function handleOtpRequest(body, dependencies, nowMs) {
   const exchanging = Object.prototype.hasOwnProperty.call(body ?? {}, "setupToken");
   assertExactKeys(
@@ -1516,18 +1537,22 @@ async function handleOtpRequest(body, dependencies, nowMs) {
     });
   }
   if (result.state === "already_verified") {
-    const prepared = await preparePrefill(result.binding, dependencies, nowMs);
-    return response(
-      200,
-      {
-        ok: true,
-        state: result.state,
-        verificationId,
-        formUrl: buildFormUrl(dependencies.config, prepared.prefillHandle),
-      },
-      "otp_request",
-      "already_verified",
-    );
+    try {
+      const prepared = await preparePrefill(result.binding, dependencies, nowMs);
+      return response(
+        200,
+        {
+          ok: true,
+          state: result.state,
+          verificationId,
+          formUrl: buildFormUrl(dependencies.config, prepared.prefillHandle),
+        },
+        "otp_request",
+        "already_verified",
+      );
+    } catch (error) {
+      return verifiedSetupPending(error, "otp_request");
+    }
   }
   if (new Set(["sent_confirmed", "in_flight"]).has(result.state)) {
     return response(
@@ -1556,13 +1581,17 @@ async function handleOtpVerify(body, dependencies, nowMs) {
       publicCode: "service_unavailable",
     });
   }
-  const prepared = await preparePrefill(result.binding, dependencies, nowMs);
-  return response(
-    200,
-    { ok: true, formUrl: buildFormUrl(dependencies.config, prepared.prefillHandle) },
-    "otp_verify",
-    "verified",
-  );
+  try {
+    const prepared = await preparePrefill(result.binding, dependencies, nowMs);
+    return response(
+      200,
+      { ok: true, formUrl: buildFormUrl(dependencies.config, prepared.prefillHandle) },
+      "otp_verify",
+      "verified",
+    );
+  } catch (error) {
+    return verifiedSetupPending(error, "otp_verify");
+  }
 }
 
 function sessionOwnsSubmission(session, submissionFingerprint) {
