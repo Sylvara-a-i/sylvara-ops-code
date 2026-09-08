@@ -1667,6 +1667,157 @@ test("the issue route expires an unused issued generation and requires a fresh U
   assert.equal((await prefill(selected)).status, 404);
 });
 
+async function synchronizedExpiredFixture(verified) {
+  const selected = fixture();
+  assert.equal((await issue(selected)).status, 200);
+  if (verified) assert.equal((await prefill(selected)).status, 200);
+  const oldSession = selected.session;
+  oldSession.issuedAt = "2026-08-14T17:00:00.000Z";
+  oldSession.expiresAt = "2026-08-14T17:59:59.000Z";
+  selected.records.deal.Setup_Access_Issued_At = oldSession.issuedAt;
+  if (verified) {
+    oldSession.verifiedAt = "2026-08-14T17:30:00.000Z";
+    selected.records.deal.Setup_Access_Verified_At = oldSession.verifiedAt;
+  }
+
+  // Create the tombstone through Issue's normal expiry/readback path. A
+  // caller renewal must preserve this history, not manufacture Initial state.
+  assert.equal((await issue(selected)).status, 409);
+  assert.equal(oldSession.status, "expired");
+  assert.equal(oldSession.lastOutcome, "crm_expiry_synced");
+  assert.equal(selected.records.deal.Setup_Access_Status, "Synthetic Expired");
+  assert.equal(await selected.dependencies.sessionStore.readActiveByCrmDealId(IDS.deal), null);
+  selected.events.length = 0;
+  return { selected, oldSession };
+}
+
+for (const verified of [false, true]) {
+  const historyName = verified ? "issued and verified" : "issued";
+
+  test(`expired caller renewal preserves ${historyName} history and safely replays its fresh identity`, async () => {
+    const { selected, oldSession } = await synchronizedExpiredFixture(verified);
+    const tombstone = structuredClone(oldSession);
+    const previousPrefill = structuredClone(selected.prefill);
+    const priorIssuedAt = selected.records.deal.Setup_Access_Issued_At;
+    const priorVerifiedAt = selected.records.deal.Setup_Access_Verified_At;
+    const freshIssueRequestId = "10000000-0000-4000-8000-000000000041";
+    persistIssueIdentity(selected, freshIssueRequestId);
+    const renewalBody = { ...issueBody(), issueRequestId: freshIssueRequestId };
+    const originalUpdate = selected.dependencies.crmClient.updateRecord.bind(
+      selected.dependencies.crmClient,
+    );
+    selected.dependencies.crmClient.updateRecord = async (...argumentsList) => {
+      assert.equal(selected.records.deal.Setup_Access_Status, "Synthetic Expired");
+      assert.equal(selected.records.deal.Setup_Access_Issued_At, priorIssuedAt);
+      assert.equal(selected.records.deal.Setup_Access_Verified_At, priorVerifiedAt);
+      return originalUpdate(...argumentsList);
+    };
+
+    const renewed = await issue(selected, renewalBody);
+
+    assert.equal(renewed.status, 200);
+    assert.equal(selected.sessions.length, 2);
+    const renewedSession = selected.session;
+    assert.notEqual(renewedSession.rowId, tombstone.rowId);
+    assert.notEqual(renewedSession.tokenHash, tombstone.tokenHash);
+    assert.equal(renewedSession.issueRequestKey, deriveIssueRequestKey(freshIssueRequestId));
+    assert.equal(renewedSession.status, "issued");
+    assert.equal(selected.records.deal.Setup_Access_Status, "Synthetic Issued");
+    assert.equal(selected.records.deal.Setup_Access_Issued_At, renewedSession.issuedAt);
+    assert.equal(selected.records.deal.Setup_Access_Verified_At, null);
+    assert.equal(selected.events.filter((event) => event === "crm.update.Deals").length, 1);
+    assert.deepEqual(oldSession, tombstone);
+    assert.deepEqual(selected.prefill, previousPrefill);
+    assert.equal(selected.receipt, null);
+    assert.equal(selected.events.some((event) => event.startsWith("verification.")), false);
+    selected.events.length = 0;
+    const renewedRecords = structuredClone(selected.records);
+
+    const replay = await issue(selected, renewalBody);
+
+    assert.equal(replay.status, 200);
+    assert.deepEqual(replay.body, renewed.body);
+    assert.equal(selected.sessions.length, 2);
+    assert.equal(selected.session.rowId, renewedSession.rowId);
+    assert.deepEqual(selected.records, renewedRecords);
+    assert.deepEqual(oldSession, tombstone);
+    assert.equal(selected.events.includes("crm.update.Deals"), false);
+    assert.equal(selected.events.some((event) => event.startsWith("verification.")), false);
+    assert.equal((await prefill(selected)).status, 404);
+    assert.deepEqual(oldSession, tombstone);
+    assert.deepEqual(selected.prefill, previousPrefill);
+    assert.equal(selected.receipt, null);
+  });
+
+  test(`a caller reset to Initial with ${historyName} history rejects before renewal writes`, async () => {
+    const { selected, oldSession } = await synchronizedExpiredFixture(verified);
+    const tombstone = structuredClone(oldSession);
+    const freshIssueRequestId = "10000000-0000-4000-8000-000000000042";
+    persistIssueIdentity(selected, freshIssueRequestId);
+    selected.records.deal.Setup_Access_Status = selected.dependencies.config.form2AccessStatuses.initial;
+    const before = structuredClone(selected.records);
+
+    const rejected = await issue(selected, {
+      ...issueBody(),
+      issueRequestId: freshIssueRequestId,
+    });
+
+    assert.equal(rejected.status, 409);
+    assert.deepEqual(rejected.body, { ok: false, code: "setup_conflict" });
+    assert.deepEqual(selected.records, before);
+    assert.deepEqual(oldSession, tombstone);
+    assert.equal(selected.sessions.length, 1);
+    assert.equal(selected.events.includes("session.issue"), false);
+    assert.equal(selected.events.includes("crm.update.Deals"), false);
+    assert.equal(selected.events.some((event) => event.startsWith("verification.")), false);
+    assert.equal(selected.receipt, null);
+  });
+
+  test(`renewal cannot release an elapsed ${historyName} generation with mismatched CRM history`, async () => {
+    const selected = fixture();
+    assert.equal((await issue(selected)).status, 200);
+    if (verified) assert.equal((await prefill(selected)).status, 200);
+    const stale = selected.session;
+    stale.expiresAt = "2026-08-14T17:59:59.000Z";
+    const mismatchedField = verified ? "Setup_Access_Verified_At" : "Setup_Access_Issued_At";
+    selected.records.deal[mismatchedField] = "2026-08-14T17:30:00.000Z";
+    const freshIssueRequestId = "10000000-0000-4000-8000-000000000043";
+    persistIssueIdentity(selected, freshIssueRequestId);
+    const before = structuredClone(selected.records);
+    const priorIdentity = {
+      rowId: stale.rowId,
+      issueRequestKey: stale.issueRequestKey,
+      tokenHash: stale.tokenHash,
+      dealIssuanceKey: stale.dealIssuanceKey,
+      issuedAt: stale.issuedAt,
+      verifiedAt: stale.verifiedAt,
+    };
+    selected.events.length = 0;
+
+    const rejected = await issue(selected, {
+      ...issueBody(),
+      issueRequestId: freshIssueRequestId,
+    });
+
+    assert.equal(rejected.status, 503);
+    assert.deepEqual(rejected.body, { ok: false, code: "service_unavailable" });
+    assert.deepEqual(selected.records, before);
+    assert.equal(selected.sessions.length, 1);
+    assert.equal(stale.status, "reconciliation_required");
+    assert.equal(stale.lastOutcome, "crm_expiry_outcome_unknown");
+    for (const [key, value] of Object.entries(priorIdentity)) assert.equal(stale[key], value);
+    assert.equal(
+      (await selected.dependencies.sessionStore.readActiveByCrmDealId(IDS.deal)).rowId,
+      stale.rowId,
+    );
+    assert.equal(selected.events.includes("session.issue"), false);
+    assert.equal(selected.events.includes("session.expiry.synced"), false);
+    assert.equal(selected.events.includes("crm.update.Deals"), false);
+    assert.equal(selected.events.some((event) => event.startsWith("verification.")), false);
+    assert.equal(selected.receipt, null);
+  });
+}
+
 test("pepper rotation cannot reuse an issuance UUID after its tombstone is synchronized", async () => {
   const selected = fixture();
   assert.equal((await issue(selected)).status, 200);
