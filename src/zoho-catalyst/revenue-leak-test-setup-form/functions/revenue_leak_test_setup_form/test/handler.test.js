@@ -4,7 +4,8 @@ const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
 const test = require("node:test");
 const { destinationDigest } = require("../lib/destinations");
-const { CLIENT_KEYS } = require("../lib/form-contract");
+const { CLIENT_KEYS, validateForm2PayloadTypes } = require("../lib/form-contract");
+const { fingerprintSubmission } = require("../lib/snapshot");
 const issueCallerContract = require("../../../config/issue-caller-contract.json");
 const {
   ControllerError,
@@ -2155,6 +2156,179 @@ test("runs claim, one-time consume, atomic CRM composite, receipt, then session 
   assert.equal(selected.records.deal.Free_Test_Authorization_Status, undefined);
   assert.equal(selected.records.deal.Go_Live_Approval_Status, null);
   assert.equal(selected.records.deal.Test_Status, null);
+});
+
+test("Forms checkbox strings and native booleans produce one canonical accepted submission", async () => {
+  for (const firstValue of ["true", true]) {
+    for (const secondValue of ["true", true]) {
+      const selected = fixture();
+      await issue(selected);
+      const prefillResult = await prefill(selected);
+      const body = validSubmission(prefillResult.body, {
+        authorizedRepresentativeConfirmed: firstValue,
+        testScopeAccepted: secondValue,
+      });
+      assert.equal(Object.keys(body).length, 36);
+      selected.events.length = 0;
+      const result = await submit(selected, body);
+      assert.equal(result.status, 200);
+      assert.deepEqual(result.body, { ok: true, accepted: true, duplicate: false });
+      assert.equal(selected.records.deal.Authorized_Representative_Confirmed, true);
+      assert.equal(selected.records.deal.Test_Scope_Accepted, true);
+      assert.equal(selected.records.deal.Setup_Access_Status, "Synthetic Submitted");
+      assert.equal(selected.records.deal.Go_Live_Approval_Status, null);
+      assert.equal(selected.records.deal.Test_Status, null);
+      assert.equal(selected.receipt.status, "succeeded");
+      assert.equal(selected.session.status, "submitted");
+      assert.equal(selected.events.filter((event) => event === "crm.composite").length, 1);
+      assert.equal(body.authorizedRepresentativeConfirmed, firstValue);
+      assert.equal(body.testScopeAccepted, secondValue);
+    }
+  }
+});
+
+test("Forms checkbox false strings, native false and null never affirm consent", async () => {
+  for (const key of ["authorizedRepresentativeConfirmed", "testScopeAccepted"]) {
+    for (const value of ["false", false, null]) {
+      const selected = fixture();
+      await issue(selected);
+      const prefillResult = await prefill(selected);
+      selected.events.length = 0;
+      const result = await submit(selected, validSubmission(prefillResult.body, {
+        authorizedRepresentativeConfirmed: "true", testScopeAccepted: "true", [key]: value,
+      }));
+      assert.equal(result.status, 422);
+      assert.deepEqual(result.body, { ok: false, code: "form_invalid" });
+      assert.equal(selected.receipt.status, "failed");
+      assert.equal(selected.session.status, "verified");
+      assert.equal(selected.events.includes("workflow.prefill.consume"), false);
+      assert.equal(selected.events.includes("crm.composite"), false);
+    }
+  }
+});
+
+test("Forms checkbox decoding rejects non-exact variants before stores or CRM", async () => {
+  for (const key of ["authorizedRepresentativeConfirmed", "testScopeAccepted"]) {
+    const selected = fixture();
+    await issue(selected);
+    const prefillResult = await prefill(selected);
+    for (const value of ["TRUE", "True", "FALSE", "False", " true", "true ", "true\n",
+      " false", "false ", "1", "0", "yes", "on", "", 1, 0, [], ["true"], {}]) {
+      selected.events.length = 0;
+      const result = await submit(selected, validSubmission(prefillResult.body, { [key]: value }));
+      assert.equal(result.status, 422);
+      assert.deepEqual(result.body, { ok: false, code: "form_invalid" });
+      assert.deepEqual(selected.events, []);
+      assert.equal(selected.receipt, null);
+    }
+  }
+  // The business contract must not acquire the Forms-specific wire coercion.
+  for (const key of ["authorizedRepresentativeConfirmed", "testScopeAccepted"]) {
+    assert.throws(() => validateForm2PayloadTypes({ [key]: "true" }));
+    assert.throws(() => validateForm2PayloadTypes({ [key]: "false" }));
+    assert.doesNotThrow(() => validateForm2PayloadTypes({ [key]: true }));
+    assert.doesNotThrow(() => validateForm2PayloadTypes({ [key]: false }));
+  }
+});
+
+test("Forms checkbox decoding preserves exact shape and all other field types", async () => {
+  const selected = fixture();
+  await issue(selected);
+  const prefillResult = await prefill(selected);
+  const base = validSubmission(prefillResult.body, {
+    authorizedRepresentativeConfirmed: "true", testScopeAccepted: "true",
+  });
+  for (const mutate of [
+    (body) => { delete body.authorizedRepresentativeConfirmed; },
+    (body) => { delete body.testScopeAccepted; },
+    (body) => { body.extra = "true"; },
+    (body) => { body.servicesHandled = "Drain Cleaning"; },
+    (body) => { body.submissionId = 10001; },
+    (body) => { body.companyName = true; },
+  ]) {
+    const body = { ...base };
+    mutate(body);
+    selected.events.length = 0;
+    const result = await submit(selected, body);
+    assert.equal(result.status, 422);
+    assert.deepEqual(result.body, { ok: false, code: "form_invalid" });
+    assert.deepEqual(selected.events, []);
+    assert.equal(selected.receipt, null);
+  }
+});
+
+test("Forms checkbox decoding cannot read unauthenticated or oversized submission bodies", async () => {
+  const selected = fixture();
+  let bodyReads = 0;
+  const request = createRequest(config().submissionPath, {
+    authorizedRepresentativeConfirmed: "true", testScopeAccepted: "true",
+  }, "wrong-secret");
+  Object.defineProperty(request, "rawBody", { get() { bodyReads += 1; throw new Error("unreachable"); } });
+  const denied = await handleForm2Request(request, selected.dependencies);
+  assert.equal(denied.status, 401);
+  assert.deepEqual(denied.body, { ok: false, code: "unauthorized_source" });
+  assert.equal(bodyReads, 0);
+  const oversized = await submit(selected, {
+    authorizedRepresentativeConfirmed: "true", testScopeAccepted: "true",
+    businessName: "x".repeat(config().maxBodyBytes),
+  });
+  assert.equal(oversized.status, 413);
+  assert.deepEqual(selected.events, []);
+});
+
+test("Forms checkbox exact replays preserve raw fingerprints and reject changed representations", async () => {
+  for (const initialValue of ["true", true]) {
+    const selected = fixture();
+    await issue(selected);
+    const prefillResult = await prefill(selected);
+    const body = validSubmission(prefillResult.body, {
+      authorizedRepresentativeConfirmed: initialValue, testScopeAccepted: initialValue,
+    });
+    assert.equal((await submit(selected, body)).status, 200);
+    const fingerprint = selected.receipt.submissionFingerprint;
+    assert.equal(fingerprint, fingerprintSubmission({
+      submissionId: "form2-v1:10001",
+      prefillId: body.prefillId,
+      configurationRevision: body.configurationRevision,
+      values: Object.fromEntries(CLIENT_KEYS.map((key) => [key, body[key]])),
+    }, config().workflowKeyMaterial));
+    selected.events.length = 0;
+    const replay = await submit(selected, body);
+    assert.equal(replay.status, 200);
+    assert.deepEqual(replay.body, { ok: true, accepted: true, duplicate: true });
+    assert.equal(selected.receipt.submissionFingerprint, fingerprint);
+    for (const key of ["authorizedRepresentativeConfirmed", "testScopeAccepted"]) {
+      for (const changedValue of [initialValue === true ? "true" : true, "false"]) {
+        const changed = await submit(selected, { ...body, [key]: changedValue });
+        assert.equal(changed.status, 409);
+        assert.deepEqual(changed.body, { ok: false, code: "setup_conflict" });
+      }
+    }
+    assert.equal(selected.events.includes("crm.composite"), false);
+    assert.equal(selected.events.includes("workflow.submission.claim"), false);
+    assert.equal(selected.receipt.submissionFingerprint, fingerprint);
+    assert.equal(selected.receipt.status, "succeeded");
+  }
+});
+
+test("Forms checkbox strings do not bypass expired sessions or stale CRM snapshots", async () => {
+  for (const failure of ["expired", "stale"]) {
+    const selected = fixture();
+    await issue(selected);
+    const prefillResult = await prefill(selected);
+    if (failure === "expired") selected.session.expiresAt = new Date(NOW_MS).toISOString();
+    else selected.records.account.Modified_Time = "2026-08-14T18:00:59.000Z";
+    selected.events.length = 0;
+    const result = await submit(selected, validSubmission(prefillResult.body, {
+      authorizedRepresentativeConfirmed: "true", testScopeAccepted: "true",
+    }));
+    assert.equal(result.status, failure === "expired" ? 404 : 409);
+    assert.deepEqual(result.body, { ok: false,
+      code: failure === "expired" ? "setup_not_found" : "setup_conflict",
+    });
+    assert.equal(selected.events.includes("crm.composite"), false);
+    assert.equal(selected.events.includes("workflow.prefill.consume"), false);
+  }
 });
 
 test("submission rejects a conflicting preexisting Configuration_Version after its durable claim", async () => {

@@ -1728,6 +1728,18 @@ function submissionFormPayload(body) {
   return Object.fromEntries(CLIENT_KEYS.map((key) => [key, body[key]]));
 }
 
+function decodeFormsCheckboxes(formPayload) {
+  const payload = { ...formPayload };
+  // The authenticated Forms webhook serializes these checkboxes as lowercase
+  // strings. Decode only this copy for strict business validation; retain the
+  // original types in the submission fingerprint so replay identity is unchanged.
+  for (const key of ["authorizedRepresentativeConfirmed", "testScopeAccepted"]) {
+    if (payload[key] === "true") payload[key] = true;
+    else if (payload[key] === "false") payload[key] = false;
+  }
+  return payload;
+}
+
 function failedSubmissionReceiptMatches(candidate, readback, expectedOutcome) {
   return Boolean(candidate && readback) &&
     String(readback.rowId) === String(candidate.rowId) &&
@@ -1852,7 +1864,8 @@ async function releaseSubmissionOwnership(session, submissionFingerprint, depend
 async function handleSubmission(body, dependencies, nowMs) {
   assertExactKeys(body, SUBMISSION_KEYS, "Submission request is invalid");
   const formPayload = submissionFormPayload(body);
-  validateForm2PayloadTypes(formPayload);
+  const decodedFormPayload = decodeFormsCheckboxes(formPayload);
+  validateForm2PayloadTypes(decodedFormPayload);
   const namespacedSubmissionId = namespaceSubmissionId(
     dependencies.config,
     body.submissionId,
@@ -2054,7 +2067,7 @@ async function handleSubmission(body, dependencies, nowMs) {
       });
     }
 
-    const updates = validateForm2Payload(formPayload, {
+    const updates = validateForm2Payload(decodedFormPayload, {
       existing,
       trustedNow: new Date(nowMs).toISOString(),
       setupFormVersion: dependencies.config.form2FormVersion,
