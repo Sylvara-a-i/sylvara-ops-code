@@ -34,6 +34,10 @@ One Node.js 24 Advanced I/O function accepts six exact private runtime paths. Th
 
 Possession of the opaque invitation token alone cannot set setup access to Verified. A fresh email OTP must be delivered to the current CRM-bound Contact email, verified within the configured lifetime and attempt ceiling, and durably consumed for the exact session and CRM binding. Destination changes, replay, provider ambiguity, and state conflicts fail closed or enter reconciliation. Native Forms Email OTP and CAPTCHA are not trusted proof for this controller. Do not configure an SMS provider or SMS OTP.
 
+The verification handoff checks asynchronous proof timestamps against a fresh, non-decreasing trusted clock, not the earlier request-start timestamp. Future verification timestamps, backward or invalid clocks, and sessions that expire during consumption still fail closed. Advancing-clock regression tests cover a first correct code without requiring a second comparison or send.
+
+After durable email verification, a failed session/CRM/prefill preparation returns only the coarse `verified_setup_pending` response; it is not reported as an incorrect code. The access page distinguishes sending, verifying, opening setup, incorrect-code, and verified-but-pending states. It serializes button actions, provides keyboard focus and reduced-motion feedback, and disables automatic retry/resend after an ambiguous or verified-but-pending outcome. Operator recovery must preserve the original proof, send ceiling, session, and source binding. An immutable release change does not authorize migration or replay of an unfinished earlier generation; reconcile that generation before an explicitly allocated fresh test.
+
 The Deal subrequest is last so the canonical setup state is written only after the related Contact and Account updates succeed. All three Journey-core subrequests use `trigger: []`; the inactive Form 2 workflow and its ancillary internal review task are deferred and cannot affect submission acceptance.
 
 ## Security Contract

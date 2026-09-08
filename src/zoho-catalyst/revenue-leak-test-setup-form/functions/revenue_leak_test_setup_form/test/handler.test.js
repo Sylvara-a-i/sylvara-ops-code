@@ -218,6 +218,43 @@ test("OTP request and verify need no browser-held shared secret and expose no CR
   assert.equal(JSON.stringify(verified.body).includes(IDS.deal), false);
 });
 
+function assertVerifiedSetupPending(result, outcome, stage = "otp_verify") {
+  assert.equal(result.status, 503);
+  assert.deepEqual(result.body, {
+    ok: false, state: "verified_setup_pending", code: "setup_preparation_unavailable",
+  });
+  assert.equal(result.stage, stage);
+  assert.equal(result.outcome, outcome);
+}
+
+test("the first correct OTP tolerates real elapsed verification time without consuming a retry", async () => {
+  const selected = fixture();
+  let clock = NOW_MS;
+  let verifiedAt = null;
+  selected.dependencies.now = () => clock;
+  const service = selected.dependencies.verificationService;
+  const verify = service.verifyEmailOtp.bind(service);
+  const consume = service.consumeVerifiedProof.bind(service);
+  service.verifyEmailOtp = async (...args) => {
+    const result = await verify(...args);
+    clock += 1000;
+    verifiedAt = new Date(clock).toISOString();
+    return result;
+  };
+  service.consumeVerifiedProof = async (...args) => {
+    const proof = await consume(...args);
+    clock += 1000;
+    return { ...proof, verifiedAt };
+  };
+  assert.equal((await issue(selected)).status, 200);
+  const result = await prefill(selected);
+  assert.equal(result.status, 200);
+  assert.equal(selected.session.status, "verified");
+  assert.equal(selected.session.attemptCount, 1);
+  assert.equal(selected.events.filter((event) => event === "verification.email.verify").length, 1);
+  assert.equal(selected.events.filter((event) => event === "verification.email.request").length, 1);
+});
+
 test("an already verified token resumes at the exact stamped Form without another send", async () => {
   const selected = fixture();
   await issue(selected);
@@ -238,6 +275,102 @@ test("an already verified token resumes at the exact stamped Form without anothe
   assert.equal(result.status, 200);
   assert.equal(result.outcome, "already_verified");
   assert.match(result.body.formUrl, /^https:\/\/forms\.zohopublic\.com\//);
+});
+
+test("verified proof preparation failures remain pending and recover without another email or code", async () => {
+  const selected = fixture();
+  await issue(selected);
+  const request = (route, body) => handleForm2Request(
+    createRequest(route, body), selected.dependencies,
+  );
+  const requested = await request(selected.dependencies.config.otpRequestPath, {
+    setupToken: deriveAccessToken(ISSUE_REQUEST_ID, config().tokenPepper),
+  });
+  assert.equal(requested.status, 202);
+  const verificationId = requested.body.verificationId;
+  let verifiedBinding;
+  const verify = selected.dependencies.verificationService.verifyEmailOtp.bind(
+    selected.dependencies.verificationService,
+  );
+  selected.dependencies.verificationService.verifyEmailOtp = async (...args) => {
+    const result = await verify(...args);
+    verifiedBinding = result.binding;
+    return result;
+  };
+  const failure = new Error("synthetic private session failure must not escape");
+  failure.publicCode = "reconciliation_required";
+  selected.setVerifyError(failure);
+  const failed = await request(selected.dependencies.config.otpVerifyPath, {
+    verificationId, code: "12345678",
+  });
+  assertVerifiedSetupPending(failed, "service_unavailable");
+  assert.equal(selected.session.status, "issued");
+  assert.equal(selected.session.attemptCount, 0);
+  assert.equal(selected.events.filter((event) => event === "verification.proof.consume").length, 1);
+  const eventCount = selected.events.length;
+  selected.dependencies.verificationService.requestEmailOtp = async () => ({
+    state: "already_verified", verificationId, binding: verifiedBinding,
+  });
+  const pendingResume = await request(selected.dependencies.config.otpRequestPath, { verificationId });
+  assertVerifiedSetupPending(pendingResume, "service_unavailable", "otp_request");
+  assert.equal(selected.events.slice(eventCount).includes("verification.email.request"), false);
+  selected.setVerifyError(null);
+  const resumed = await request(selected.dependencies.config.otpRequestPath, { verificationId });
+  assert.equal(resumed.status, 200);
+  assert.equal(resumed.body.state, "already_verified");
+  assert.equal(selected.session.status, "verified");
+  assert.equal(selected.session.attemptCount, 1);
+  assert.equal(selected.session.maxAttempts, config().maxVerificationAttempts);
+  assert.equal(selected.events.filter((event) => event === "verification.email.verify").length, 1);
+  assert.equal(selected.events.filter((event) => event === "verification.email.request").length, 1);
+});
+
+test("future proof time, elapsed session, and invalid clocks cannot reach a session verification write", async () => {
+  for (const failure of ["future", "expired", "invalid", "backwards"]) {
+    const selected = fixture();
+    let clock = NOW_MS;
+    selected.dependencies.now = () => clock;
+    await issue(selected);
+    const service = selected.dependencies.verificationService;
+    const consume = service.consumeVerifiedProof.bind(service);
+    service.consumeVerifiedProof = async (...args) => {
+      const proof = await consume(...args);
+      if (failure === "future") return { ...proof, verifiedAt: new Date(clock + 1).toISOString() };
+      clock = failure === "expired" ? Date.parse(selected.session.expiresAt)
+        : failure === "invalid" ? NaN : NOW_MS - 1;
+      return proof;
+    };
+    selected.events.length = 0;
+    const rejected = await prefill(selected);
+    assertVerifiedSetupPending(rejected, "verification_required");
+    assert.equal(selected.session.status, "issued");
+    assert.equal(selected.session.attemptCount, 0);
+    assert.equal(selected.events.includes("session.verify"), false);
+    assert.equal(selected.events.includes("crm.update.Deals"), false);
+    assert.equal(selected.events.includes("workflow.prefill.mint"), false);
+  }
+});
+
+test("unverified code and generic verification failures never claim verified setup pending", async () => {
+  for (const failure of ["rejected", "not_verified"]) {
+    const selected = fixture();
+    await issue(selected);
+    selected.dependencies.verificationService.verifyEmailOtp = async () => {
+      if (failure === "not_verified") return { verified: false };
+      const error = new Error("synthetic invalid code details must not escape");
+      error.publicCode = "verification_required";
+      throw error;
+    };
+    selected.events.length = 0;
+    const rejected = await prefill(selected);
+    assert.equal(rejected.status, failure === "rejected" ? 403 : 503);
+    assert.deepEqual(rejected.body, { ok: false,
+      code: failure === "rejected" ? "verification_required" : "service_unavailable",
+    });
+    assert.equal(selected.session.status, "issued");
+    assert.equal(selected.events.includes("verification.proof.consume"), false);
+    assert.equal(selected.events.includes("session.verify"), false);
+  }
 });
 
 test("OTP delivery states never imply a send without provider evidence", async () => {
@@ -1488,8 +1621,7 @@ test("prefill rejects a Deal whose persisted issue identity changed after issuan
 
   const result = await prefill(selected);
 
-  assert.equal(result.status, 409);
-  assert.deepEqual(result.body, { ok: false, code: "setup_conflict" });
+  assertVerifiedSetupPending(result, "setup_conflict");
   assert.equal(selected.events.includes("workflow.prefill.mint"), false);
   assert.equal(selected.events.includes("workflow.prefill.consume-handle"), false);
 });
@@ -1502,8 +1634,7 @@ test("a Contact email change after proof consumption blocks prefill minting", as
 
   const result = await prefill(selected);
 
-  assert.equal(result.status, 503);
-  assert.deepEqual(result.body, { ok: false, code: "service_unavailable" });
+  assertVerifiedSetupPending(result, "service_unavailable");
   assert.equal(selected.events.includes("workflow.prefill.mint"), false);
   assert.equal(selected.session.status, "reconciliation_required");
   assert.equal(
@@ -1520,8 +1651,7 @@ test("token possession alone cannot establish verified state", async () => {
 
   const result = await prefill(selected);
 
-  assert.equal(result.status, 403);
-  assert.deepEqual(result.body, { ok: false, code: "verification_required" });
+  assertVerifiedSetupPending(result, "verification_required");
   assert.equal(selected.session.status, "issued");
   assert.equal(selected.records.deal.Setup_Access_Status, "Synthetic Issued");
   assert.equal(selected.events.includes("verification.proof.consume"), true);
@@ -1533,8 +1663,7 @@ test("prefill contract defects do not consume verification state", async () => {
   selected.records.contact.Email = null;
   selected.events.length = 0;
   const result = await prefill(selected);
-  assert.equal(result.status, 409);
-  assert.deepEqual(result.body, { ok: false, code: "setup_conflict" });
+  assertVerifiedSetupPending(result, "setup_conflict");
   assert.equal(selected.session.status, "issued");
   assert.equal(selected.records.deal.Setup_Access_Status, "Synthetic Issued");
   assert.equal(selected.events.includes("session.verify"), false);
@@ -1548,7 +1677,7 @@ test("a post-verification prefill-store failure is recoverable through one bound
   dependencyError.publicCode = "workflow_store_unavailable";
   selected.setMintError(dependencyError);
   const failed = await prefill(selected);
-  assert.equal(failed.status, 503);
+  assertVerifiedSetupPending(failed, "service_unavailable");
   assert.equal(selected.session.status, "verified");
   assert.equal(selected.records.deal.Setup_Access_Status, "Synthetic Verified");
 
@@ -2051,8 +2180,7 @@ test("bounds repeated verified prefill requests with the durable attempt ceiling
 
   selected.events.length = 0;
   const exhausted = await prefill(selected);
-  assert.equal(exhausted.status, 404);
-  assert.deepEqual(exhausted.body, { ok: false, code: "setup_not_found" });
+  assertVerifiedSetupPending(exhausted, "setup_not_found");
   assert.equal(selected.session.status, "failed");
   assert.equal(selected.events.includes("workflow.prefill.mint"), false);
 });
@@ -2069,8 +2197,7 @@ test("does not mint when a failed verified retry did not advance its durable att
   selected.events.length = 0;
   const result = await prefill(selected);
 
-  assert.equal(result.status, 503);
-  assert.deepEqual(result.body, { ok: false, code: "service_unavailable" });
+  assertVerifiedSetupPending(result, "service_unavailable");
   assert.equal(selected.session.attemptCount, 1);
   assert.equal(selected.events.includes("workflow.prefill.mint"), false);
 });
