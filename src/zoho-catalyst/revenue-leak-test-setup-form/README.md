@@ -57,6 +57,14 @@ The Deal subrequest is last so the canonical setup state is written only after t
 
 `FORM2_PROOF_MAX_SENDS` defaults to two: one normal code and at most one replacement. Omitting this optional override preserves that ceiling while avoiding unnecessary pressure on Catalyst's environment-variable length limit; explicit integer bounds remain 1–5 and require separately approved delivery scope. The proof store freezes the selected ceiling in each row's `MAX_SENDS` at reservation, so changing the default or configuration does not change existing proofs. Before applying this default, independently verify that no older proof can retain a broader ceiling; unresolved proof state remains contained rather than reset. For the bounded Development journey, permit the one replacement only when the first code expires or delivery fails. That reason-for-replacement rule remains an operator gate: cooldown eligibility alone is not permission to resend, and ambiguous delivery requires reconciliation.
 
+## Approved Route Reference Values
+
+The CRM `Approved_Test_Route` read boundary supports only these verified reference-to-form mappings: `After-Hours` to `After Hours Only`, `No-Answer/Overflow` to `No Answer / Overflow Only`, and `Both` to `After Hours + Overflow`. Exact canonical form values remain valid. Unknown values fail closed. This is a field-specific mapping backed by Development record and field metadata; it is not a rule that CRM always returns display values. Zoho exposes distinct display, reference, and actual values in its [picklist metadata contract](https://www.zoho.com/crm/developer/docs/api/v8/picklist-values.html).
+
+Decode only for prefill and comparison with the submitted read-only approved route. Do not rewrite the CRM field, change native picklists or Forms choices, or apply these aliases to the requested route. The form snapshot uses canonical presentation values; raw CRM records remain intact for conditional-write guards and independent preserved-field readback. A changed record revision after prefill still invalidates the binding, and raw protected-field drift during persistence still fails independent readback.
+
+The bounded Development launch that identified this mismatch reached the issue handler and returned `409 setup_conflict` before a session or email proof was created. Its allocation remains consumed; source repair is not another live-test approval. Rebuild and verify an immutable artifact before any separately allocated acceptance attempt. Keep the intentional source-revision hold on uncertainty; no credential restoration, evidence deletion, or approval bypass is a rollback. Full provider activation and its route comparisons remain outside this non-Retell repair.
+
 ## Durable State
 
 [`config/datastore-schema.json`](config/datastore-schema.json) defines four new additive Development version-3 tables. Neither existing version-2 store is renamed, updated, deleted, or backfilled.

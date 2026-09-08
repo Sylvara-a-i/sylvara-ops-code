@@ -635,6 +635,60 @@ test("malformed composite success and readback mismatch are ambiguous", async ()
   );
 });
 
+test("approved route references remain raw and unwritten through independent composite readback", async () => {
+  for (const reference of ["After-Hours", "No-Answer/Overflow", "Both"]) {
+    const existing = existingRecords();
+    existing.deal.Approved_Test_Route = reference;
+    const before = structuredClone(existing);
+    const readbacks = afterRecords();
+    readbacks.deal.Approved_Test_Route = reference;
+    const client = clientWithFetch(async (url, options) => {
+      const path = new URL(url).pathname;
+      if (path.endsWith("/__composite_requests")) {
+        const body = JSON.parse(options.body);
+        for (const request of body.__composite_requests) {
+          assert.equal(Object.hasOwn(request.body.data[0], "Approved_Test_Route"), false);
+        }
+        return jsonResponse(compositeAcknowledgment());
+      }
+      if (path.includes("/Contacts/")) return jsonResponse({ data: [readbacks.contact] });
+      if (path.includes("/Accounts/")) return jsonResponse({ data: [readbacks.account] });
+      return jsonResponse({ data: [readbacks.deal] });
+    });
+
+    const result = await client.updateForm2Composite(existing, updates());
+
+    assert.equal(result.deal.Approved_Test_Route, reference);
+    assert.deepEqual(existing, before);
+  }
+});
+
+test("approved route representation drift during composite write requires reconciliation", async () => {
+  for (const [reference, canonical] of [
+    ["After-Hours", "After Hours Only"],
+    ["No-Answer/Overflow", "No Answer / Overflow Only"],
+    ["Both", "After Hours + Overflow"],
+  ]) {
+    const existing = existingRecords();
+    existing.deal.Approved_Test_Route = reference;
+    const readbacks = afterRecords();
+    readbacks.deal.Approved_Test_Route = canonical;
+    const client = clientWithFetch(async (url) => {
+      const path = new URL(url).pathname;
+      if (path.endsWith("/__composite_requests")) return jsonResponse(compositeAcknowledgment());
+      if (path.includes("/Contacts/")) return jsonResponse({ data: [readbacks.contact] });
+      if (path.includes("/Accounts/")) return jsonResponse({ data: [readbacks.account] });
+      return jsonResponse({ data: [readbacks.deal] });
+    });
+
+    await assert.rejects(
+      client.updateForm2Composite(existing, updates()),
+      (error) => error instanceof CrmClientError &&
+        error.ambiguous === true && error.publicCode === "reconciliation_required",
+    );
+  }
+});
+
 test("post-composite readback rejects workflow changes to locked Contact identity", async () => {
   for (const [field, value] of [
     ["Email", "changed@example.invalid"],
