@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const { PRIVATE_CHOICE_LIMITS } = require("../lib/config");
 const {
+  CHOICES,
   CLIENT_KEYS,
   FormContractError,
   buildPrefillPayload,
@@ -449,4 +450,94 @@ test("builds a flat prefill allowlist without record IDs or server-controlled va
   assert.equal(JSON.stringify(prefill).includes(IDS.contact), false);
   assert.equal(JSON.stringify(prefill).includes("Modified_Time"), false);
   assert.equal(Object.isFrozen(prefill.servicesHandled), true);
+});
+
+const APPROVED_ROUTE_CASES = Object.freeze([
+  ["After-Hours", "After Hours Only"],
+  ["No-Answer/Overflow", "No Answer / Overflow Only"],
+  ["Both", "After Hours + Overflow"],
+]);
+
+for (const [reference, canonical] of APPROVED_ROUTE_CASES) {
+  for (const stored of [reference, canonical]) {
+    test(`approved route decodes ${stored} without changing raw CRM or write scope`, () => {
+      const records = existingRecords();
+      records.deal.Approved_Test_Route = stored;
+      const before = structuredClone(records);
+      const prefill = buildPrefillPayload(records, SERVER_OPTIONS);
+      assert.equal(prefill.approvedTestRoute, canonical);
+      assert.equal(prefill.requestedTestRoute, before.deal.Requested_Test_Route);
+      const updates = validateForm2Payload({
+        ...validPayload(),
+        approvedTestRoute: canonical,
+        noAnswerDelay: canonical === "After Hours Only" ? null : "5 Rings",
+      }, { existing: records, ...SERVER_OPTIONS });
+      assert.deepEqual(records, before);
+      for (const update of Object.values(updates)) {
+        assert.equal(Object.hasOwn(update, "Approved_Test_Route"), false);
+        assert.equal(Object.hasOwn(update, "Requested_Test_Route"), false);
+      }
+      assert.deepEqual(CHOICES.testRoute, APPROVED_ROUTE_CASES.map(([, value]) => value));
+    });
+  }
+}
+
+test("approved route decoding rejects unknown and near-match CRM references", () => {
+  for (const stored of ["After Hours", "after-hours", " After-Hours ",
+    "No-Answer / Overflow", "Both ", "__proto__", null, undefined, 1, {}]) {
+    const records = existingRecords();
+    records.deal.Approved_Test_Route = stored;
+    assert.throws(() => buildPrefillPayload(records, SERVER_OPTIONS),
+      (error) => error instanceof FormContractError && error.publicCode === "context_invalid");
+    assert.throws(() => validateForm2Payload(validPayload(), {
+      existing: records, ...SERVER_OPTIONS,
+    }), (error) => error instanceof FormContractError && error.publicCode === "context_mismatch");
+  }
+});
+
+test("approved route references are never accepted as respondent choices", () => {
+  for (const [reference] of APPROVED_ROUTE_CASES) {
+    const records = existingRecords();
+    records.deal.Approved_Test_Route = reference;
+    assert.throws(() => validateForm2Payload({
+      ...validPayload(), approvedTestRoute: reference,
+    }, { existing: records, ...SERVER_OPTIONS }),
+    (error) => error instanceof FormContractError && error.field === "approvedTestRoute");
+  }
+});
+
+test("approved route decoding rejects tampering to another canonical route", () => {
+  for (const [reference, canonical] of APPROVED_ROUTE_CASES) {
+    const records = existingRecords();
+    records.deal.Approved_Test_Route = reference;
+    for (const other of CHOICES.testRoute.filter((value) => value !== canonical)) {
+      assert.throws(() => validateForm2Payload({
+        ...validPayload(), approvedTestRoute: other,
+      }, { existing: records, ...SERVER_OPTIONS }),
+      (error) => error instanceof FormContractError && error.publicCode === "context_mismatch");
+    }
+  }
+});
+
+test("approved route decoding does not alias the requested route field", () => {
+  const records = existingRecords();
+  records.deal.Requested_Test_Route = "No-Answer/Overflow";
+  assert.throws(() => buildPrefillPayload(records, SERVER_OPTIONS),
+    (error) => error instanceof FormContractError && error.publicCode === "context_invalid");
+  assert.throws(() => validateForm2Payload(validPayload(), {
+    existing: records, ...SERVER_OPTIONS,
+  }), (error) => error instanceof FormContractError && error.field === "requestedTestRoute"
+    && error.publicCode === "context_mismatch");
+});
+
+test("approved route references preserve the no-answer delay requirements", () => {
+  for (const [reference, canonical] of APPROVED_ROUTE_CASES) {
+    const records = existingRecords();
+    records.deal.Approved_Test_Route = reference;
+    assert.throws(() => validateForm2Payload({
+      ...validPayload(), approvedTestRoute: canonical,
+      noAnswerDelay: canonical === "After Hours Only" ? "5 Rings" : null,
+    }, { existing: records, ...SERVER_OPTIONS }),
+    (error) => error instanceof FormContractError && error.field === "noAnswerDelay");
+  }
 });

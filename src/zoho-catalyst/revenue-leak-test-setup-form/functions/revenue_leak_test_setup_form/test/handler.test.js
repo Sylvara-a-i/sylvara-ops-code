@@ -2069,6 +2069,64 @@ test("submission rejects cross-record, cross-stage, and issue-identity drift bef
   }
 });
 
+test("approved route references complete the synthetic submission without writing the approved route", async () => {
+  for (const [reference, canonical] of [
+    ["After-Hours", "After Hours Only"],
+    ["No-Answer/Overflow", "No Answer / Overflow Only"],
+    ["Both", "After Hours + Overflow"],
+  ]) {
+    const selected = fixture();
+    selected.records.deal.Approved_Test_Route = reference;
+    const originalComposite = selected.dependencies.crmClient.updateForm2Composite;
+    selected.dependencies.crmClient.updateForm2Composite = async (existing, updates) => {
+      assert.equal(existing.deal.Approved_Test_Route, reference);
+      assert.equal(Object.hasOwn(updates.dealUpdate, "Approved_Test_Route"), false);
+      assert.equal(Object.hasOwn(updates.dealUpdate, "Requested_Test_Route"), false);
+      return originalComposite(existing, updates);
+    };
+    assert.equal((await issue(selected)).status, 200);
+    const prefillResult = await prefill(selected);
+    assert.equal(prefillResult.status, 200);
+    assert.equal(prefillResult.body.approvedTestRoute, canonical);
+
+    const result = await submit(selected, validSubmission(prefillResult.body, {
+      noAnswerDelay: canonical === "After Hours Only" ? null : "5 Rings",
+    }));
+
+    assert.equal(result.status, 200);
+    assert.deepEqual(result.body, { ok: true, accepted: true, duplicate: false });
+    assert.equal(selected.records.deal.Approved_Test_Route, reference);
+    assert.equal(selected.session.status, "submitted");
+    assert.equal(selected.receipt.status, "succeeded");
+    assert.equal(selected.events.filter((event) => event === "crm.composite").length, 1);
+  }
+});
+
+test("approved route representation changes remain fenced by the CRM revision", async () => {
+  for (const [reference, canonical] of [
+    ["After-Hours", "After Hours Only"],
+    ["No-Answer/Overflow", "No Answer / Overflow Only"],
+    ["Both", "After Hours + Overflow"],
+  ]) {
+    const selected = fixture();
+    selected.records.deal.Approved_Test_Route = reference;
+    assert.equal((await issue(selected)).status, 200);
+    const prefillResult = await prefill(selected);
+    assert.equal(prefillResult.status, 200);
+    selected.records.deal.Approved_Test_Route = canonical;
+    selected.records.deal.Modified_Time = "2026-08-14T18:30:00.000Z";
+    selected.events.length = 0;
+
+    const result = await submit(selected, validSubmission(prefillResult.body, {
+      noAnswerDelay: canonical === "After Hours Only" ? null : "5 Rings",
+    }));
+
+    assert.equal(result.status, 409);
+    assert.deepEqual(result.body, { ok: false, code: "setup_conflict" });
+    assert.equal(selected.events.includes("crm.composite"), false);
+  }
+});
+
 test("accepts an exact submission with no requested start date", async () => {
   const selected = fixture();
   selected.records.deal.Target_Start_Date = "2026-08-19";

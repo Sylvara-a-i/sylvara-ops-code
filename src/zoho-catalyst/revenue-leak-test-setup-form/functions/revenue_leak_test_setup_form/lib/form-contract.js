@@ -123,6 +123,11 @@ const NUMBERED_FALLBACKS = new Set([
   "On-Call Mobile",
   "Other",
 ]);
+const CRM_APPROVED_ROUTE_REFERENCES = Object.freeze({
+  "After-Hours": "After Hours Only",
+  "No-Answer/Overflow": "No Answer / Overflow Only",
+  Both: "After Hours + Overflow",
+});
 const CONFIGURATION_REFERENCE_PATTERN = /^form2cfgv1:[1-9][0-9]{0,29}:[a-f0-9]{40}$/;
 
 class FormContractError extends Error {
@@ -435,6 +440,15 @@ function assertReadOnlyMatch(submitted, current, field) {
   }
 }
 
+function decodeCrmApprovedTestRoute(value) {
+  // CRM may return these exact field-specific reference values. Decode only
+  // for Forms presentation/comparison; leave raw CRM records and independent
+  // freshness/preservation checks untouched, and never write this field.
+  return typeof value === "string" && hasOwn(CRM_APPROVED_ROUTE_REFERENCES, value)
+    ? CRM_APPROVED_ROUTE_REFERENCES[value]
+    : value;
+}
+
 function normalizeConfigurationReference(value) {
   const normalized = normalizeServerText(value, "Configuration version", 100);
   if (!CONFIGURATION_REFERENCE_PATTERN.test(normalized)) {
@@ -602,7 +616,8 @@ function validateForm2Payload(payload, options = {}) {
   );
   assertReadOnlyMatch(currentCallHandling, existing.deal.Current_Call_Handling, "currentCallHandling");
   assertReadOnlyMatch(requestedTestRoute, existing.deal.Requested_Test_Route, "requestedTestRoute");
-  assertReadOnlyMatch(approvedTestRoute, existing.deal.Approved_Test_Route, "approvedTestRoute");
+  assertReadOnlyMatch(approvedTestRoute,
+    decodeCrmApprovedTestRoute(existing.deal.Approved_Test_Route), "approvedTestRoute");
 
   // The exact Forms webhook includes this key, but the requested date itself
   // remains optional. Blank or null values must not become fake dates.
@@ -773,7 +788,9 @@ function buildPrefillPayloadUnchecked({ contact, account, deal }, options = {}) 
     "servicesHandled",
     CHOICES.servicesHandled,
   );
-  const approvedTestRoute = prefillChoice(deal, "Approved_Test_Route", CHOICES.testRoute);
+  const approvedTestRoute = prefillChoice({
+    Approved_Test_Route: decodeCrmApprovedTestRoute(deal.Approved_Test_Route),
+  }, "Approved_Test_Route", CHOICES.testRoute);
   if (approvedTestRoute === null) {
     fail("approvedTestRoute", "Approved route is unavailable", {
       publicCode: "context_invalid",
