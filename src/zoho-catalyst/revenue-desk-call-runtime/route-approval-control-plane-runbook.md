@@ -1,8 +1,65 @@
 # Route Approval Control Plane
 
-Status: **private Development source complete; immutable release, installation, and synthetic readback pending**.
+Status: **provider-bound control source and runbook; installation and acceptance are exact-release, profile-specific private evidence, not implied by this document**.
 
 This runbook governs the private `revenue_desk_route_control` target. It adds exactly three authenticated Development operations—approve configuration, activate free test, and stop or roll back—without changing the three-route Retell gateway or four-mode worker. CRM exposes two simple operator controls: `Approve And Start Free Test` calls approval and then activation as separate requests; `Stop Or Roll Back Free Test` calls rollback. No operation is public or customer-controlled.
+
+## Prepare after Journey-core, before metered provider testing
+
+Owner: Sylvara operator. Revision: 2026-09-09. Status: offline preparation only.
+
+The [Journey-core profile](../revenue-desk-release/free-test-journey-core-v1-release-contract.json)
+accepts setup and internal approval without a telephony deployment. Its expected
+blocked activation is not a provider activation or an authorization that can be
+reused here. Keep its accepted evidence, consumed allocations, and any exact
+Development exception unchanged. The full-provider gates below do not authorize
+enabling the deferred commercial CRM Blueprint, workflows, Billing, or Analytics.
+
+The Form 2 receipt is evidence of the durable outcome, not a copy of submitted
+business values. Validate the receipt, submitted session and consumed proof chain,
+then independently read the exact linked CRM Account, Contact and Deal. Do not
+reconstruct answers from a fingerprint or use a prefill snapshot as submitted truth.
+
+Prepare a private, non-deployable draft and list unresolved fields explicitly:
+
+| Input | Safe source | Required preparation; never guess |
+| --- | --- | --- |
+| Relationship, journey and submission identity | Exact linked CRM records and successful controller evidence | Preserve original identities and authority evidence; allocate deployment/configuration identities separately under the provider preparation scope |
+| Company and phone-system provider | Account fields written by Form 2 | Enforce runtime length limits; reject overflow rather than truncate |
+| Business hours | Submitted Account text | Confirm timezone, days and exceptions; Form 2 permits longer text than the runtime's 500-character limit |
+| Services and service area | Submitted Account choices, Other detail and area text | Confirm explicit supported services, cities and ZIPs; do not infer metro coverage, radius, exclusions or the meaning of Other |
+| Coverage and approved route | Exact CRM stored route | Decode only the three canonical stored values; preserve agreement with the canonical coverage mode |
+| No-answer delay | After-hours-only has no delay; other modes retain the exact CRM preference | `4 Rings`, `5 Rings`, `6 Rings`, `Provider Default` and `Not Sure` are not numeric timing evidence. Require separately verified provider value **and unit**; do not use `Number(...)`, assume seconds per ring, overwrite the CRM choice or invent a default |
+| Urgent conditions and callback expectation | Separately approved business rules | Form 2 handling preferences do not define urgency or promise callback timing; require explicit truthful wording |
+| Notification recipient | Exact approved Deal alert fields and existing recipient approval | Keep the approved email-only scope, server-owned recipient identity and dry-run mode; do not infer mobile/SMS authority |
+| Forwarding, fallback and rollback | Exact Deal contacts and preferences | Require verified phone normalization, exact telephone fallback number where required, provider procedure and rollback version; saved preferences do not prove a route |
+| Company description and unsupported services | Explicit optional policy or approved content | Do not manufacture missing business facts |
+| Agent/version, number, source, environment and lifecycle | Fresh server/operator/provider evidence | No respondent-supplied ownership, publication, binding, start time or activation authority |
+
+The current full-provider control still cannot reconcile Form 2 ring-choice
+labels to a verified numeric delay. Non-after-hours preparation remains blocked
+until that explicit binding contract and its tests exist. Merely making the
+coverage enum accept combined coverage does not close this gap. Likewise, exact
+phone comparison remains fail-closed until provider preparation binds the
+submitted phone to verified E.164; no silent normalization is authorized here.
+
+For a zero-metered-use pass, use deterministic local fixtures and configuration
+readback only. Do not invoke a model, playground, text/audio simulation, voice
+preview, test-call widget, call, analysis rerun, provider webhook test or purchase.
+API access being included in a plan does not make every API operation free.
+Do not edit a published flow or move an environment tag as preparation. Live draft
+changes require an exact scoped proposal, prior-state evidence and independent
+readback; never upload the public sanitized Retell snapshots as runtime config.
+
+Check exact stored-value decoding, all three route/mode pairs, missing-number
+rejection, and unresolved delay/phone rejection offline. Retain the explicit
+15-variable conversation projection: private alert/rollback contacts, credentials
+and signed ownership proof must not leak into prompt-visible defaults. Missing
+configuration must remain unavailable, not be replaced with synthetic success
+defaults. Provider speech, extraction, latency, fallback and delivery remain
+unverified until a separately approved metered test. A new source candidate must
+receive a new immutable artifact and manifest before later deployment; never
+relabel an existing accepted release or carry its approval into the new one.
 
 ## Development execution gates
 

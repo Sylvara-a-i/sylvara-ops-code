@@ -10,7 +10,9 @@ const {
   routeFromRows,
 } = require('./approval-control');
 const { validateConfigurationVersionRow } = require('./configuration-version');
-const { ROLLBACK_CONTROL_REASON_TO_CRM, STOP_REASON_TO_CRM } = require('./contracts');
+const {
+  CRM_APPROVED_ROUTE_TO_LABEL, ROLLBACK_CONTROL_REASON_TO_CRM, STOP_REASON_TO_CRM,
+} = require('./contracts');
 const { RevenueDeskError, invariant } = require('./errors');
 const { keyedDigest, numberLookupKey } = require('./security');
 const { E164_PATTERN, validateConfiguration } = require('./validation');
@@ -409,7 +411,8 @@ function dealValueMatchesConfiguration(deal, configuration) {
   const noAnswerMatches = configuration.coverageMode === 'AfterHoursOnly'
     ? deal.No_Answer_Delay === null || deal.No_Answer_Delay === undefined
     : Number(deal.No_Answer_Delay) === configuration.noAnswerDelay;
-  return deal.Approved_Test_Route === configuration.approvedTestRoute
+  return CRM_APPROVED_ROUTE_TO_LABEL.get(deal.Approved_Test_Route)
+      === configuration.approvedTestRoute
     && noAnswerMatches
     && deal.Forwarding_Administrator_Name === configuration.forwardingAdministratorName
     && exactPhone(deal.Forwarding_Administrator_Mobile,
@@ -426,7 +429,7 @@ function dealValueMatchesConfiguration(deal, configuration) {
 function validateDealBinding(deal, command, configurationVersion) {
   invariant(plain(deal) && String(deal.id) === command.dealId
     && deal.Pipeline === 'Revenue Desk Sales'
-    && deal.Entry_Offer === '7-Day Revenue Leak Test'
+    && deal.Entry_Offer === 'Free 7-Day Missed-Call'
     && deal.Intake_Submission_ID === command.journeyId
     && CRM_ID.test(lookupId(deal.Account_Name) || '')
     && CRM_ID.test(lookupId(deal.Contact_Name) || '')

@@ -107,7 +107,7 @@ function deal() {
   return {
     id: IDS.deal, Modified_Time: '2026-08-29T07:00:00-05:00',
     Pipeline: 'Revenue Desk Sales', Stage: 'Setup and QA',
-    Entry_Offer: '7-Day Revenue Leak Test', Intake_Submission_ID: IDS.journey,
+    Entry_Offer: 'Free 7-Day Missed-Call', Intake_Submission_ID: IDS.journey,
     Account_Name: { id: '400000002' }, Contact_Name: { id: '400000003' },
     Setup_Access_Status: 'Submitted', Setup_Access_Verified_At: '2026-08-29T12:02:00Z',
     Setup_Form_Submission_ID: 'setup_submission_synthetic',
@@ -115,7 +115,7 @@ function deal() {
     Authorized_Representative_Confirmed: true, Test_Scope_Accepted: true,
     Authority_Confirmed_At: '2026-08-29T12:00:00Z',
     Test_Scope_Accepted_At: '2026-08-29T12:00:00Z',
-    Approved_Test_Route: 'After Hours Only', No_Answer_Delay: null,
+    Approved_Test_Route: 'After-Hours', No_Answer_Delay: null,
     Forwarding_Administrator_Name: 'ZZZ SYNTHETIC Administrator',
     Forwarding_Administrator_Mobile: '+15550100101',
     Approved_Fallback_Destination: 'On-Call Mobile',
@@ -461,6 +461,102 @@ test('approval rejects the pre-submission Verified access state', async () => {
   const subject = fixture({ dealOverrides: { Setup_Access_Status: 'Verified' } });
   await assert.rejects(subject.service.approve(command('approve')),
     { code: 'CONTROL_PRECONDITION_FAILED' });
+});
+
+test('approval requires the exact stored offer and route, not presentation labels', async () => {
+  for (const dealOverrides of [
+    { Entry_Offer: '7-Day Revenue Leak Test' },
+    { Entry_Offer: 'Free 7-Day Missed-Call ' },
+    { Entry_Offer: null },
+    { Approved_Test_Route: 'After Hours Only' },
+    { Approved_Test_Route: 'AfterHoursOnly' },
+    { Approved_Test_Route: 'After-Hours ' },
+    { Approved_Test_Route: 'after-hours' },
+    { Approved_Test_Route: 'Both' },
+    { Approved_Test_Route: null },
+  ]) {
+    const subject = fixture({ dealOverrides });
+    const crmBefore = copy(subject.crmState);
+    const rowsBefore = copy(subject.store.rows);
+    await assert.rejects(subject.service.approve(command('approve')),
+      { code: 'CONTROL_PRECONDITION_FAILED' });
+    assert.deepEqual(subject.crmState, crmBefore);
+    assert.deepEqual(subject.store.rows, rowsBefore);
+    assert.equal(subject.getProviderVerificationCalls(), 0);
+    assert.equal(subject.getProviderDisableCalls(), 0);
+  }
+});
+
+test('full approval accepts combined coverage only with matching stored route and verified numeric delay', async () => {
+  for (const [stored, label, mode] of [
+    ['No-Answer/Overflow', 'No Answer / Overflow Only', 'NoAnswerOverflowOnly'],
+    ['Both', 'After Hours + Overflow', 'AfterHoursAndOverflow'],
+  ]) {
+    const configured = { ...configuration(), coverageMode: mode,
+      approvedTestRoute: label, noAnswerDelay: 25 };
+    const options = {
+      configOverrides: { CONFIGURATION_JSON: JSON.stringify(configured) },
+      deploymentOverrides: { COVERAGE_MODE: mode },
+      dealOverrides: { Approved_Test_Route: stored, No_Answer_Delay: 25 },
+    };
+    const subject = fixture(options);
+    const result = await subject.service.approve(command('approve'));
+    assert.equal(result.deployment.GO_LIVE_APPROVAL_STATUS, 'Approved');
+    assert.equal(result.deployment.ACTUAL_START_AT, null);
+    assert.equal(subject.getProviderVerificationCalls(), 0);
+    for (const wrongRoute of [label, mode, stored.toLowerCase(), `${stored} `]) {
+      const mismatched = fixture({ ...options,
+        dealOverrides: { ...options.dealOverrides, Approved_Test_Route: wrongRoute } });
+      const before = copy(mismatched.store.rows);
+      const crmBefore = copy(mismatched.crmState);
+      await assert.rejects(mismatched.service.approve(command('approve')),
+        { code: 'CONTROL_PRECONDITION_FAILED' });
+      assert.deepEqual(mismatched.store.rows, before);
+      assert.deepEqual(mismatched.crmState, crmBefore);
+      assert.equal(mismatched.getProviderVerificationCalls(), 0);
+    }
+    for (const delay of [null, '4 Rings', 'Provider Default', 'Not Sure']) {
+      const unresolved = fixture({ ...options,
+        dealOverrides: { ...options.dealOverrides, No_Answer_Delay: delay } });
+      await assert.rejects(unresolved.service.approve(command('approve')),
+        { code: 'CONTROL_PRECONDITION_FAILED' });
+      assert.equal(unresolved.getProviderVerificationCalls(), 0);
+    }
+  }
+});
+
+test('full approval rejects incomplete fallback configuration without mutations or provider work', async () => {
+  for (const [destination, number] of [
+    ['Existing Office Line', null], ['On-Call Mobile', null], ['Other', null],
+    ['Voicemail', '+15550100102'], ['Unknown', '+15550100102'],
+  ]) {
+    const subject = fixture({ configOverrides: { CONFIGURATION_JSON: JSON.stringify({
+      ...configuration(), approvedFallbackDestination: destination,
+      approvedFallbackNumber: number,
+    }) } });
+    const crmBefore = copy(subject.crmState);
+    const rowsBefore = copy(subject.store.rows);
+    await assert.rejects(subject.service.approve(command('approve')),
+      { code: 'INVALID_SCHEMA' });
+    assert.deepEqual(subject.crmState, crmBefore);
+    assert.deepEqual(subject.store.rows, rowsBefore);
+    assert.equal(subject.getProviderVerificationCalls(), 0);
+    assert.equal(subject.getProviderDisableCalls(), 0);
+  }
+});
+
+test('full approval does not silently normalize Form 2 national-format phone values', async () => {
+  for (const field of ['Forwarding_Administrator_Mobile', 'Approved_Fallback_Number',
+    'Rollback_Contact_Mobile']) {
+    const subject = fixture({ dealOverrides: { [field]: '(555) 010-0101' } });
+    const crmBefore = copy(subject.crmState);
+    const rowsBefore = copy(subject.store.rows);
+    await assert.rejects(subject.service.approve(command('approve')),
+      { code: 'CONTROL_PRECONDITION_FAILED' });
+    assert.deepEqual(subject.crmState, crmBefore);
+    assert.deepEqual(subject.store.rows, rowsBefore);
+    assert.equal(subject.getProviderVerificationCalls(), 0);
+  }
 });
 
 test('approval rejects configuration-version mismatch', async () => {
