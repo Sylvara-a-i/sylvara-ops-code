@@ -24,7 +24,7 @@
         "existing_executable_source_parity_required": true
       },
       "module": "Leads",
-      "button": "Legacy Free-Test Request - Contained",
+      "button": "Legacy Free-Test - Contained",
       "placement": "record details",
       "profile": "Administrator",
       "remote_request_enabled": false,
@@ -262,7 +262,7 @@
       {
         "logical_name": "FORM1_CONTAINED_PREDECESSOR",
         "from": "Start Free-Test Request",
-        "to": "Legacy Free-Test Request - Contained",
+        "to": "Legacy Free-Test - Contained",
         "action_type": "Function",
         "action_type_editable": true
       },
@@ -296,7 +296,7 @@
       },
       {
         "logical_name": "FORM1_CONTAINED_PREDECESSOR",
-        "from": "Legacy Free-Test Request - Contained",
+        "from": "Legacy Free-Test - Contained",
         "to": "Start Free-Test Request"
       }
     ],
