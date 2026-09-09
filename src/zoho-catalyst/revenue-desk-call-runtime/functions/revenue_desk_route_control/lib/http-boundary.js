@@ -50,7 +50,10 @@ function safeEqual(left, right) {
 }
 
 function authenticate(request, config) {
-  invariant(oneHeader(request, 'host').toLowerCase() === config.controlHost
+  const host = oneHeader(request, 'host').toLowerCase();
+  // Catalyst can retain HTTPS's explicit default port in the runtime Host.
+  // Accept only that equivalent authority, never another port or forwarded host.
+  invariant((host === config.controlHost || host === `${config.controlHost}:443`)
     && oneHeader(request, 'x-zc-environment').toLowerCase() === 'development'
     && safeEqual(oneHeader(request, config.sharedHeaderName), config.sharedHeaderValue),
   'CONTROL_AUTHENTICATION_FAILED', 'Control authentication failed.', { httpStatus: 401 });

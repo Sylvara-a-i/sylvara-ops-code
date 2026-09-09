@@ -1,5 +1,5 @@
 {
-  "schema_version": 7,
+  "schema_version": 8,
   "status": "bounded_development_installation_candidate",
   "environment": "Development only",
   "owning_product": "Zoho CRM",
@@ -16,20 +16,27 @@
     {
       "logical_name": "FORM1_CONTAINED_PREDECESSOR",
       "source": "../functions/start_free_revenue_leak_test_request.deluge",
+      "source_identity_policy": {
+        "source_role": "executable_body_contract",
+        "provider_identity_source": "independent_native_button_binding_and_published_function_readback",
+        "canonical_filename_is_provider_api_name": false,
+        "rebind_on_filename_difference": false,
+        "existing_executable_source_parity_required": true
+      },
       "module": "Leads",
-      "button": "Start Free-Test Request",
+      "button": "Legacy Free-Test Request (Contained)",
       "placement": "record details",
       "profile": "Administrator",
       "remote_request_enabled": false,
-      "purpose": "Retained fail-closed predecessor and immediate rollback target until replacement E2E acceptance.",
-      "deployment_status": "retain_unchanged_during_replacement_validation"
+      "purpose": "Retained fail-closed predecessor and immediate rollback target; the label-only cutover preserves its Function and button association.",
+      "deployment_status": "retain_function_and_binding_unchanged_label_cutover_pending"
     },
     {
       "logical_name": "FORM1_ASSISTED_ISSUE_CALLER",
       "source": "../functions/open_free_test_setup.deluge",
       "module": "Leads",
       "source_format": "Zoho CRM Deluge Standalone function body invoked by CRM Client Script through ZDK",
-      "button": "Open Free-Test Setup",
+      "button": "Start Free-Test Request",
       "placement": "record details",
       "profile": "Administrator initially",
       "function_arguments": [
@@ -243,6 +250,59 @@
       "deployment_status": "install_after_private_function_readback"
     }
   ],
+  "lead_button_label_cutover": {
+    "status": "source_candidate_provider_label_cutover_pending",
+    "scope": "two_existing_lead_button_labels_only",
+    "prestate_evidence": "independent_read_only_native_button_settings",
+    "module": "Leads",
+    "layout": "Standard",
+    "placement": "record details",
+    "profile": "Administrator",
+    "ordered_renames": [
+      {
+        "logical_name": "FORM1_CONTAINED_PREDECESSOR",
+        "from": "Start Free-Test Request",
+        "to": "Legacy Free-Test Request (Contained)",
+        "action_type": "Function",
+        "action_type_editable": true
+      },
+      {
+        "logical_name": "FORM1_ASSISTED_ISSUE_CALLER",
+        "from": "Open Free-Test Setup",
+        "to": "Start Free-Test Request",
+        "action_type": "Client Script",
+        "action_type_editable": false
+      }
+    ],
+    "preserved": [
+      "button_ids", "action_types", "function_identities_and_source",
+      "client_script_identity_association_and_bytes", "layout_placement_profile",
+      "permissions_and_enabled_states", "connections_and_credentials",
+      "form1_source_revision_hold", "public_form1_native_crm_writer",
+      "assisted_form1_server_bound_writer", "deal_open_free_test_setup_label",
+      "sessions_claims_counters_and_approval_evidence"
+    ],
+    "creates": 0,
+    "deletes": 0,
+    "runtime_changes_authorized": false,
+    "source_revision_rebinding_authorized": false,
+    "new_live_canary_allocation": false,
+    "readback": "Before and after each label save, resolve the same private button identity and require exact label, action type, association, layout, placement, profile and enabled-state parity. Require the destination label to be unused in Leads; stop and reconcile any ambiguous save before another action.",
+    "ordered_rollback": [
+      {
+        "logical_name": "FORM1_ASSISTED_ISSUE_CALLER",
+        "from": "Start Free-Test Request",
+        "to": "Open Free-Test Setup"
+      },
+      {
+        "logical_name": "FORM1_CONTAINED_PREDECESSOR",
+        "from": "Legacy Free-Test Request (Contained)",
+        "to": "Start Free-Test Request"
+      }
+    ],
+    "rollback_policy": "Reverse only completed renames in the recorded reverse order after exact identity and label readback; never reuse a claimed destination label. Preserve the Form 1 hold and every binding. If runtime containment is separately required, disable the replacement by identity and retain the contained predecessor as the only visible fallback; a label rollback does not authorize an enabled-state change."
+  },
+  "activation_gates_scope": "Historical initial replacement installation gates, using the labels at that installation. They remain prerequisites for a new binding or runtime opening; the label-only cutover neither repeats installation nor reuses any consumed canary or approval.",
   "activation_gates": [
     "Verify the exact CRM organization, Development hosts, immutable source SHA, and disabled Production state before rendering any placeholder.",
     "Prove caller-specific Connections expose only the required API Gateway and private authentication headers.",
@@ -252,8 +312,8 @@
     "Run the ZZZ SYNTHETIC Form 1 and mandatory Form 2 journeys, approval, expected fail-closed activation, and idempotent never-active rollback canaries before widening access."
   ],
   "rollback": [
-    "Disable every replacement control instance for the three approved visible labels before restoring any predecessor function revision, and preserve their audit evidence.",
-    "Independently read back that both Open Free-Test Setup controls are disabled and have no direct binding to a URL-returning CRM Function.",
+    "Disable every replacement control instance by its approved module/button identity before restoring any predecessor function revision, and preserve their audit evidence.",
+    "Independently read back that both module-specific Client Script controls are disabled and have no direct binding to a URL-returning CRM Function.",
     "Restore the retained Form 1 predecessor control as the only visible launcher if replacement validation fails.",
     "Keep Catalyst deployment rows stopped and preserve every configuration, receipt, and route readback.",
     "Never delete historical CRM, Form, Catalyst, or Retell evidence as rollback."

@@ -23,6 +23,7 @@ const productContract = require('../../../../docs/product/free-revenue-leak-test
 const routeContract = require('../private-route-packet-contract.json');
 const coexistence = require('../journey-core-route-coexistence-contract.json');
 const formsManifest = require('../../../zoho-forms/free-revenue-leak-test/forms-manifest.json');
+const callerManifest = require('../../../zoho-crm/free-revenue-leak-test/config/caller-manifest.json');
 
 const revision = 'a'.repeat(40);
 const digest = 'b'.repeat(64);
@@ -229,6 +230,7 @@ test('requires no CRM workflow or Blueprint dependency for Journey-core acceptan
 test('binds the exact operator controls and separates approval, activation, and rollback', () => {
   const crm = contract.installation_scope.crm;
   assert.deepEqual(crm.controls, [
+    'Legacy Free-Test Request (Contained)',
     'Start Free-Test Request',
     'Open Free-Test Setup',
     'Approve And Start Free Test',
@@ -288,17 +290,25 @@ test('binds the exact operator controls and separates approval, activation, and 
   ]);
   assert.equal(crm.direct_url_returning_function_binding_allowed, false);
   assert.deepEqual(crm.control_bindings, [
-    { label: 'Start Free-Test Request', module: 'Leads',
-      function: 'start_free_revenue_leak_test_request', replacement: false },
-    { label: 'Open Free-Test Setup', module: 'Leads',
+    { logical_name: 'FORM1_CONTAINED_PREDECESSOR',
+      label: 'Legacy Free-Test Request (Contained)', module: 'Leads',
+      function: 'start_free_revenue_leak_test_request', replacement: false,
+      source_identity_policy: {
+        source_role: 'executable_body_contract',
+        provider_identity_source: 'independent_native_button_binding_and_published_function_readback',
+        canonical_filename_is_provider_api_name: false,
+        rebind_on_filename_difference: false,
+        existing_executable_source_parity_required: true,
+      } },
+    { logical_name: 'FORM1_ASSISTED_ISSUE_CALLER', label: 'Start Free-Test Request', module: 'Leads',
       client_script: 'open_free_test_setup_leads',
       invokes_function: 'open_free_test_setup_zdk', replacement: true },
-    { label: 'Open Free-Test Setup', module: 'Deals',
+    { logical_name: 'FORM2_SETUP_ISSUE_CALLER', label: 'Open Free-Test Setup', module: 'Deals',
       client_script: 'open_free_test_setup_deals',
       invokes_function: 'issue_revenue_leak_test_setup_zdk', replacement: true },
-    { label: 'Approve And Start Free Test', module: 'Deals',
+    { logical_name: 'APPROVE_AND_START_FREE_TEST_CALLER', label: 'Approve And Start Free Test', module: 'Deals',
       function: 'approve_and_start_free_test', replacement: true },
-    { label: 'Stop Or Roll Back Free Test', module: 'Deals',
+    { logical_name: 'STOP_OR_ROLLBACK_FREE_TEST_CALLER', label: 'Stop Or Roll Back Free Test', module: 'Deals',
       function: 'stop_or_rollback_free_test', replacement: true },
   ]);
   assert.deepEqual(
@@ -331,6 +341,56 @@ test('binds the exact operator controls and separates approval, activation, and 
     contract.installation_scope.retell.activation_failure_internal_code_when_disabled,
     'ISOLATED_RETELL_TEST_NUMBER_REQUIRED',
   );
+});
+
+// Compare stable logical bindings, not mutable display labels or a private native
+// Function name. The predecessor's retained identifier is a source contract only.
+function assertCallerBindingParity(crm, callers) {
+  assert.equal(crm.control_bindings.length, 5);
+  assert.equal(new Set(crm.control_bindings.map(({ logical_name: name }) => name)).size, 5);
+  assert.deepEqual(crm.control_bindings.map(({ logical_name: name }) => name).sort(),
+    callers.map(({ logical_name: name }) => name).sort());
+  assert.deepEqual(crm.controls, [...new Set(crm.control_bindings.map(({ label }) => label))]);
+  for (const binding of crm.control_bindings) {
+    const caller = callers.find(({ logical_name: name }) => name === binding.logical_name);
+    assert.equal(binding.label, caller.button);
+    assert.equal(binding.module, caller.module);
+    if (caller.client_script) {
+      assert.equal(binding.client_script, path.posix.basename(caller.client_script.source, '.js'));
+      assert.equal(binding.invokes_function, caller.client_script.function_api_name);
+      assert.equal(binding.invokes_function, caller.server_function.api_name);
+      assert.equal(Object.hasOwn(binding, 'function'), false);
+    } else {
+      assert.equal(binding.function, path.posix.basename(caller.source, '.deluge'));
+      assert.equal(Object.hasOwn(binding, 'client_script'), false);
+    }
+    assert.deepEqual(binding.source_identity_policy, caller.source_identity_policy);
+  }
+}
+
+test('keeps all five Journey-core labels and source identities aligned with the caller manifest', () => {
+  const crm = contract.installation_scope.crm;
+  assertCallerBindingParity(crm, callerManifest.callers);
+  assert.match(crm.function_inventory_semantics, /executable-body contract only, not the native provider API name/);
+  assert.match(crm.client_script_cutover_order_scope, /Historical initial replacement installation only/);
+  assert.match(crm.client_script_cutover_order_scope, /does not repeat installation, reopen the source-revision hold, or reuse a consumed canary/);
+});
+
+test('rejects stale labels, mismatched caller labels, and native-identity inference', () => {
+  for (const [index, label] of [[0, 'Start Free-Test Request'], [1, 'Open Free-Test Setup']]) {
+    const crm = structuredClone(contract.installation_scope.crm);
+    crm.control_bindings[index].label = label;
+    crm.controls = [...new Set(crm.control_bindings.map((binding) => binding.label))];
+    assert.throws(() => assertCallerBindingParity(crm, callerManifest.callers));
+  }
+  const callers = structuredClone(callerManifest.callers);
+  callers[2].button = 'Synthetic mismatched Deal label';
+  assert.throws(() => assertCallerBindingParity(contract.installation_scope.crm, callers));
+  for (const field of ['canonical_filename_is_provider_api_name', 'rebind_on_filename_difference']) {
+    const crm = structuredClone(contract.installation_scope.crm);
+    crm.control_bindings[0].source_identity_policy[field] = true;
+    assert.throws(() => assertCallerBindingParity(crm, callerManifest.callers));
+  }
 });
 
 test('profiles legacy automation separately and pins approved Forms toggles', () => {

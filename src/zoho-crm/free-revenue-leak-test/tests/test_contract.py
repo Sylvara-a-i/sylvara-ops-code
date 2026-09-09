@@ -1871,7 +1871,7 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
 
     def test_caller_manifest_is_development_only_and_not_deployment_authority(self) -> None:
         manifest = self.callers
-        self.assertEqual(manifest["schema_version"], 7)
+        self.assertEqual(manifest["schema_version"], 8)
         self.assertEqual(manifest["status"], "bounded_development_installation_candidate")
         self.assertEqual(manifest["environment"], "Development only")
         self.assertFalse(manifest["render_policy"]["commit_rendered_source"])
@@ -1891,7 +1891,14 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         by_name = {caller["logical_name"]: caller for caller in manifest["callers"]}
         predecessor = by_name["FORM1_CONTAINED_PREDECESSOR"]
         self.assertFalse(predecessor["remote_request_enabled"])
-        self.assertEqual(predecessor["button"], "Start Free-Test Request")
+        self.assertEqual(predecessor["button"], "Legacy Free-Test Request (Contained)")
+        self.assertEqual(predecessor["source_identity_policy"], {
+            "source_role": "executable_body_contract",
+            "provider_identity_source": "independent_native_button_binding_and_published_function_readback",
+            "canonical_filename_is_provider_api_name": False,
+            "rebind_on_filename_difference": False,
+            "existing_executable_source_parity_required": True,
+        })
         form1 = by_name["FORM1_ASSISTED_ISSUE_CALLER"]
         form2 = by_name["FORM2_SETUP_ISSUE_CALLER"]
         self.assertEqual(
@@ -1903,6 +1910,7 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
                 )
             ),
             [
+                "Start Free-Test Request",
                 "Open Free-Test Setup",
                 "Approve And Start Free Test",
                 "Stop Or Roll Back Free Test",
@@ -1910,7 +1918,7 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         )
         self.assertEqual(
             (form1["module"], form1["button"], form1["source"]),
-            ("Leads", "Open Free-Test Setup", "../functions/open_free_test_setup.deluge"),
+            ("Leads", "Start Free-Test Request", "../functions/open_free_test_setup.deluge"),
         )
         self.assertEqual(
             (form2["module"], form2["button"], form2["source"]),
@@ -2435,6 +2443,84 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
                 with patch.object(Path, "read_text", return_value=modified):
                     with self.assertRaisesRegex(AssertionError, "Regex matched.*info"):
                         self.test_form2_deluge_template_matches_the_exact_caller_contract()
+
+    def test_lead_label_cutover_preserves_bindings_hold_and_reverse_order(self) -> None:
+        cutover = self.callers["lead_button_label_cutover"]
+        self.assertEqual(
+            cutover["status"], "source_candidate_provider_label_cutover_pending"
+        )
+        self.assertEqual(cutover["scope"], "two_existing_lead_button_labels_only")
+        self.assertEqual(
+            cutover["prestate_evidence"], "independent_read_only_native_button_settings"
+        )
+        self.assertEqual(
+            [cutover[key] for key in ("module", "layout", "placement", "profile")],
+            ["Leads", "Standard", "record details", "Administrator"],
+        )
+        for flag in (
+            "runtime_changes_authorized",
+            "source_revision_rebinding_authorized", "new_live_canary_allocation",
+        ):
+            self.assertIs(cutover[flag], False)
+        self.assertEqual((cutover["creates"], cutover["deletes"]), (0, 0))
+        self.assertEqual(cutover["preserved"], [
+            "button_ids", "action_types", "function_identities_and_source",
+            "client_script_identity_association_and_bytes", "layout_placement_profile",
+            "permissions_and_enabled_states", "connections_and_credentials",
+            "form1_source_revision_hold", "public_form1_native_crm_writer",
+            "assisted_form1_server_bound_writer", "deal_open_free_test_setup_label",
+            "sessions_claims_counters_and_approval_evidence",
+        ])
+        renames = cutover["ordered_renames"]
+        self.assertEqual(renames, [
+            {
+                "logical_name": "FORM1_CONTAINED_PREDECESSOR",
+                "from": "Start Free-Test Request",
+                "to": "Legacy Free-Test Request (Contained)",
+                "action_type": "Function",
+                "action_type_editable": True,
+            },
+            {
+                "logical_name": "FORM1_ASSISTED_ISSUE_CALLER",
+                "from": "Open Free-Test Setup",
+                "to": "Start Free-Test Request",
+                "action_type": "Client Script",
+                "action_type_editable": False,
+            },
+        ])
+        self.assertEqual(cutover["ordered_rollback"], [
+            {"logical_name": item["logical_name"], "from": item["to"], "to": item["from"]}
+            for item in reversed(renames)
+        ])
+        callers = {item["logical_name"]: item for item in self.callers["callers"]}
+        for rename in renames:
+            self.assertEqual(callers[rename["logical_name"]]["button"], rename["to"])
+        self.assertEqual(callers["FORM2_SETUP_ISSUE_CALLER"]["button"], "Open Free-Test Setup")
+        self.assertFalse(callers["FORM1_CONTAINED_PREDECESSOR"]["remote_request_enabled"])
+        self.assertIn("Historical initial replacement installation gates", self.callers["activation_gates_scope"])
+        self.assertIn("consumed canary or approval", self.callers["activation_gates_scope"])
+        self.assertIn("same private button identity", cutover["readback"])
+        self.assertIn("destination label to be unused in Leads", cutover["readback"])
+        self.assertIn("ambiguous save", cutover["readback"])
+        self.assertIn("Reverse only completed renames", cutover["rollback_policy"])
+        self.assertIn("only visible fallback", cutover["rollback_policy"])
+        self.assertIn("does not authorize an enabled-state change", cutover["rollback_policy"])
+
+        # Simulate the two static label maps, not a provider operation. Both a
+        # first-save-only rollback and a complete rollback must free a label
+        # before reusing it; associations are represented by stable logical keys.
+        original = {item["logical_name"]: item["from"] for item in renames}
+        for completed in range(3):
+            labels = dict(original)
+            for step in renames[:completed]:
+                self.assertEqual(labels[step["logical_name"]], step["from"])
+                self.assertNotIn(step["to"], labels.values())
+                labels[step["logical_name"]] = step["to"]
+            for step in cutover["ordered_rollback"][2 - completed:]:
+                self.assertEqual(labels[step["logical_name"]], step["from"])
+                self.assertNotIn(step["to"], labels.values())
+                labels[step["logical_name"]] = step["to"]
+            self.assertEqual(labels, original)
 
     def test_open_setup_client_scripts_use_only_the_supported_navigation_boundary(self) -> None:
         expected = {

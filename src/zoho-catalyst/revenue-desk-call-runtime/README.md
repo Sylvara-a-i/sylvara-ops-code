@@ -77,6 +77,19 @@ The installed Changes connector advertises a full Cron body for status changes, 
 
 ## Private approval, activation, and rollback control
 
+The control Host guard accepts only the configured Development hostname, matched
+case-insensitively, with either no port or exactly `:443`. This bounded transport
+correction handles Catalyst retaining HTTPS's default port without trusting a
+forwarded host or accepting another authority. Header cardinality/type checks,
+the protected caller credential, project digest, environment, SDK consistency,
+and method/path restrictions remain unchanged and precede business side effects.
+The configured hostname and configuration digest do not change. Offline
+regressions cover both accepted forms, rejected variants, and pre-provider
+Journey-core dispatch; an immutable Development deployment and native approval
+readback remain separate acceptance gates. Roll back to the prior artifact to
+restore the fail-closed rejection; do not relax configuration or reuse a consumed
+diagnostic allocation. No dependency, recurring cost, or Retell scope is added.
+
 The `free-test-journey-core-v1` path validates CRM record reads against the stored
 `Entry_Offer` value `Free 7-Day Missed-Call`, not the `7-Day Revenue Leak Test`
 display/workflow label. Its synthetic fixture uses that stored value; regression

@@ -141,6 +141,85 @@ test('bad private authentication is rejected before body and SDK access', async 
   assert.equal(sdkAccesses, 0);
 });
 
+test('control authentication accepts only the configured host with optional exact HTTPS default port',
+  async () => {
+  const host = environment().ROUTE_CONTROL_HOST;
+  for (const value of [host, host.toUpperCase(), `${host}:443`, `${host.toUpperCase()}:443`]) {
+    let sdkAccesses = 0;
+    const listener = createRequestListener({
+      environment: environment(), artifactSourceRevision: REVISION,
+      catalystSdk: { initialize() {
+        sdkAccesses += 1;
+        throw new Error('Synthetic stop after successful authentication.');
+      } },
+    });
+    const output = response();
+    await listener({
+      method: 'POST', url: '/internal/revenue-desk/approve-configuration',
+      headers: {
+        host: value, 'x-zc-environment': 'development', 'x-zc-projectid': PROJECT_ID,
+        'x-synthetic-control': 'h'.repeat(32), 'content-type': 'application/json',
+      },
+      rawBody: Buffer.from('{}'),
+    }, output);
+    assert.equal(sdkAccesses, 1);
+    assert.equal(output.statusCode, 500);
+    assert.deepEqual(output.body, { ok: false, code: 'control_failed' });
+  }
+});
+
+test('default-port compatibility preserves exact authority, header shape, and caller identity rejection',
+  async () => {
+  const host = environment().ROUTE_CONTROL_HOST;
+  const rejectedHosts = [undefined, null, 443, [host], '', 'other.development.catalystserverless.com',
+    'route-control.catalystserverless.com', `${host}:80`, `${host}:8443`, `${host}:0443`,
+    `${host}:443:443`, `${host}:`, `${host}.`, `${host} `, ` ${host}`, `${host}:443 `,
+    `https://${host}`, `${host}/`, `user@${host}`, `${host}.example.invalid`, `${host},${host}`];
+  const mutations = rejectedHosts.map(value => request => {
+    if (value === undefined) delete request.headers.host;
+    else request.headers.host = value;
+    // A valid forwarded value never substitutes for a rejected Host.
+    request.headers['x-forwarded-host'] = host;
+    request.headers.forwarded = `host=${host};proto=https`;
+  });
+  mutations.push(
+    request => { request.headersDistinct = { host: [`${host}:443`, `${host}:443`] }; },
+    request => { request.headersDistinct = { host: [`${host}:443`], Host: [`${host}:443`] }; },
+    request => { request.headersDistinct = { host: `${host}:443` }; },
+    request => { request.headersDistinct = { host: [] }; },
+    request => { request.headersDistinct = { host: [null] }; },
+    request => { request.rawHeaders = ['Host', `${host}:443`, 'host', `${host}:443`]; },
+    request => { request.headers['x-zc-environment'] = 'production'; },
+    request => { request.headers['x-zc-projectid'] = '101000002'; },
+    request => { request.headers['x-synthetic-control'] = 'h'.repeat(32) + ' '; },
+  );
+  for (const mutate of mutations) {
+    let bodyReads = 0;
+    let sdkAccesses = 0;
+    const listener = createRequestListener({
+      environment: environment(), artifactSourceRevision: REVISION,
+      catalystSdk: { initialize() { sdkAccesses += 1; throw new Error('must not run'); } },
+    });
+    const request = {
+      method: 'POST', url: '/internal/revenue-desk/approve-configuration',
+      headers: {
+        host: `${host}:443`, 'x-zc-environment': 'development', 'x-zc-projectid': PROJECT_ID,
+        'x-synthetic-control': 'h'.repeat(32), 'content-type': 'application/json',
+      },
+    };
+    Object.defineProperty(request, 'rawBody', {
+      get() { bodyReads += 1; throw new Error('must not read'); },
+    });
+    mutate(request);
+    const output = response();
+    await listener(request, output);
+    assert.equal(output.statusCode, 401);
+    assert.deepEqual(output.body, { ok: false, code: 'control_authentication_failed' });
+    assert.equal(bodyReads, 0);
+    assert.equal(sdkAccesses, 0);
+  }
+});
+
 test('HTTP boundary dispatches a blank-deployment command to Journey-core before provider setup',
   async () => {
   let providerConstructions = 0;
@@ -256,7 +335,7 @@ test('all Journey-core wire shapes bypass full deployment and Retell provider co
     await listener({
       method: 'POST', url: selected.path, rawBody,
       headers: {
-        host: 'route-control.development.catalystserverless.com',
+        host: 'ROUTE-CONTROL.DEVELOPMENT.CATALYSTSERVERLESS.COM:443',
         'x-zc-environment': 'development', 'x-zc-projectid': PROJECT_ID,
         'x-synthetic-control': 'h'.repeat(32), 'content-type': 'application/json',
         'content-length': String(rawBody.length),
