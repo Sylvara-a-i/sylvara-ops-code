@@ -230,7 +230,7 @@ test('requires no CRM workflow or Blueprint dependency for Journey-core acceptan
 test('binds the exact operator controls and separates approval, activation, and rollback', () => {
   const crm = contract.installation_scope.crm;
   assert.deepEqual(crm.controls, [
-    'Legacy Free-Test Request (Contained)',
+    'Legacy Free-Test Request - Contained',
     'Start Free-Test Request',
     'Open Free-Test Setup',
     'Approve And Start Free Test',
@@ -291,7 +291,7 @@ test('binds the exact operator controls and separates approval, activation, and 
   assert.equal(crm.direct_url_returning_function_binding_allowed, false);
   assert.deepEqual(crm.control_bindings, [
     { logical_name: 'FORM1_CONTAINED_PREDECESSOR',
-      label: 'Legacy Free-Test Request (Contained)', module: 'Leads',
+      label: 'Legacy Free-Test Request - Contained', module: 'Leads',
       function: 'start_free_revenue_leak_test_request', replacement: false,
       source_identity_policy: {
         source_role: 'executable_body_contract',

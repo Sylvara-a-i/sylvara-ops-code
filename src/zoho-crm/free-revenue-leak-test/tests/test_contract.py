@@ -1891,7 +1891,7 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         by_name = {caller["logical_name"]: caller for caller in manifest["callers"]}
         predecessor = by_name["FORM1_CONTAINED_PREDECESSOR"]
         self.assertFalse(predecessor["remote_request_enabled"])
-        self.assertEqual(predecessor["button"], "Legacy Free-Test Request (Contained)")
+        self.assertEqual(predecessor["button"], "Legacy Free-Test Request - Contained")
         self.assertEqual(predecessor["source_identity_policy"], {
             "source_role": "executable_body_contract",
             "provider_identity_source": "independent_native_button_binding_and_published_function_readback",
@@ -2476,7 +2476,7 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
             {
                 "logical_name": "FORM1_CONTAINED_PREDECESSOR",
                 "from": "Start Free-Test Request",
-                "to": "Legacy Free-Test Request (Contained)",
+                "to": "Legacy Free-Test Request - Contained",
                 "action_type": "Function",
                 "action_type_editable": True,
             },
@@ -2521,6 +2521,15 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
                 self.assertNotIn(step["to"], labels.values())
                 labels[step["logical_name"]] = step["to"]
             self.assertEqual(labels, original)
+
+    def test_lead_label_cutover_rejects_parentheses_in_planned_labels(self) -> None:
+        cutover = self.callers["lead_button_label_cutover"]
+        # The provider rejected parentheses. This checks the bounded candidate,
+        # not an inferred complete grammar for Zoho button names.
+        for direction in ("ordered_renames", "ordered_rollback"):
+            for step in cutover[direction]:
+                for key in ("from", "to"):
+                    self.assertNotRegex(step[key], r"[()]")
 
     def test_open_setup_client_scripts_use_only_the_supported_navigation_boundary(self) -> None:
         expected = {
