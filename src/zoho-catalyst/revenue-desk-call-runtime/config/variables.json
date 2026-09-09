@@ -389,7 +389,7 @@
       "secret": false,
       "required": true,
       "format": "exact private Development Catalyst Advanced I/O host",
-      "boundary": "Must match the request Host and a Development Catalyst domain; value stays outside Git."
+      "boundary": "Exact Development Catalyst hostname; request Host must match case-insensitively with no port or exactly :443. Other ports, authority variants, and forwarded-host fallback are rejected; value stays outside Git."
     },
     {
       "name": "ROUTE_CONTROL_SHARED_HEADER_NAME",
