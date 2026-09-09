@@ -506,7 +506,7 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
 
         request = core["route_control_request_contract"]
         self.assertEqual(request["optional_fields"], ["deploymentId"])
-        self.assertEqual(request["deployment_id_policy"], "omitted_or_empty_string_only")
+        self.assertEqual(request["deployment_id_policy"], "omitted_null_or_empty_string_only")
         self.assertFalse(request["approval_requires_telephony_deployment"])
         configuration_pattern = re.compile(request["configuration_version_grammar"])
         digest = "a" * 40
@@ -539,7 +539,7 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             self.assertEqual(core_request["optional_fields"], ["deploymentId"])
             self.assertEqual(
                 core_request["deployment_id_policy"],
-                "omitted_or_empty_string_only",
+                "omitted_null_or_empty_string_only",
             )
             self.assertEqual(
                 core_request["configuration_version_grammar"],

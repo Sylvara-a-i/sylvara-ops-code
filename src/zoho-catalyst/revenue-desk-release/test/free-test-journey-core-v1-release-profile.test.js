@@ -24,6 +24,8 @@ const routeContract = require('../private-route-packet-contract.json');
 const coexistence = require('../journey-core-route-coexistence-contract.json');
 const formsManifest = require('../../../zoho-forms/free-revenue-leak-test/forms-manifest.json');
 const callerManifest = require('../../../zoho-crm/free-revenue-leak-test/config/caller-manifest.json');
+const { deterministicIdempotencyKey, isJourneyCoreCommand, validateCommand }
+  = require('../../revenue-desk-call-runtime/functions/revenue_desk_route_control/lib/journey-core-service');
 
 const revision = 'a'.repeat(40);
 const digest = 'b'.repeat(64);
@@ -311,7 +313,7 @@ test('binds the exact operator controls and separates approval, activation, and 
     required_fields: ['dealId', 'journeyId', 'configurationVersionId', 'idempotencyKey'],
     rollback_additional_required_fields: ['reason'],
     optional_fields: ['deploymentId'],
-    deployment_id_policy: 'omitted_or_empty_string_only',
+    deployment_id_policy: 'omitted_null_or_empty_string_only',
     configuration_version_grammar: '^form2cfgv1:[1-9][0-9]{0,29}:[a-f0-9]{40}$',
     approval_requires_telephony_deployment: false,
     blueprint_transition_required: false,
@@ -328,6 +330,32 @@ test('binds the exact operator controls and separates approval, activation, and 
     contract.installation_scope.retell.activation_failure_internal_code_when_disabled,
     'ISOLATED_RETELL_TEST_NUMBER_REQUIRED',
   );
+});
+
+test('declared no-deployment values match the unchanged Journey-core validator', () => {
+  // Exercise the authoritative selector/validator without store, CRM or provider
+  // construction so documentation cannot silently invent another empty value.
+  for (const action of ['approve', 'activate', 'rollback']) {
+    const body = {
+      dealId: '400000000000001', journeyId: 'journey_synthetic',
+      configurationVersionId: `form2cfgv1:8000000000001:${'a'.repeat(40)}`,
+      ...(action === 'rollback' ? { reason: 'operator_requested' } : {}),
+    };
+    body.idempotencyKey = deterministicIdempotencyKey(
+      action, body.dealId, body.journeyId, body.configurationVersionId,
+    );
+    const expected = validateCommand(action, body);
+    for (const optional of [{}, { deploymentId: null }, { deploymentId: '' }]) {
+      const candidate = { ...body, ...optional };
+      assert.equal(isJourneyCoreCommand(candidate), true);
+      assert.deepEqual(validateCommand(action, candidate), expected);
+    }
+    for (const deploymentId of ['deployment_synthetic', 'null', ' ', 0, false, {}, [], undefined]) {
+      const candidate = { ...body, deploymentId };
+      assert.equal(isJourneyCoreCommand(candidate), false);
+      assert.throws(() => validateCommand(action, candidate), { code: 'INVALID_CONTROL_REQUEST' });
+    }
+  }
 });
 
 // Compare stable logical bindings, not mutable display labels or a private native
@@ -409,7 +437,7 @@ test('profiles legacy automation separately and pins approved Forms toggles', ()
   assert.equal(core.state_contract.crm_blueprint_transition_required, false);
   assert.equal(core.state_contract.retell_operation_required, false);
   assert.equal(core.route_control_request_contract.approval_requires_telephony_deployment, false);
-  assert.equal(core.route_control_request_contract.deployment_id_policy, 'omitted_or_empty_string_only');
+  assert.equal(core.route_control_request_contract.deployment_id_policy, 'omitted_null_or_empty_string_only');
 
   const exactDesiredState = {
     public_url: 'Enabled',

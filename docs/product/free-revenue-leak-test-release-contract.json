@@ -97,7 +97,7 @@
         "required_fields": ["dealId", "journeyId", "configurationVersionId", "idempotencyKey"],
         "rollback_additional_required_fields": ["reason"],
         "optional_fields": ["deploymentId"],
-        "deployment_id_policy": "omitted_or_empty_string_only",
+        "deployment_id_policy": "omitted_null_or_empty_string_only",
         "configuration_version_grammar": "^form2cfgv1:[1-9][0-9]{0,29}:[a-f0-9]{40}$",
         "approval_requires_telephony_deployment": false,
         "wire_activation_failure_code": "isolated_retell_test_number_required",
@@ -1026,7 +1026,7 @@
       "authentication": "Catalyst project and Development host binding plus independent operator header and CRM Connection",
       "caller": "Administrator-restricted CRM control",
       "request_contracts": {
-        "free-test-journey-core-v1": {"required_fields": ["dealId", "journeyId", "configurationVersionId", "idempotencyKey"], "optional_fields": ["deploymentId"], "deployment_id_policy": "omitted_or_empty_string_only", "configuration_version_grammar": "^form2cfgv1:[1-9][0-9]{0,29}:[a-f0-9]{40}$"},
+        "free-test-journey-core-v1": {"required_fields": ["dealId", "journeyId", "configurationVersionId", "idempotencyKey"], "optional_fields": ["deploymentId"], "deployment_id_policy": "omitted_null_or_empty_string_only", "configuration_version_grammar": "^form2cfgv1:[1-9][0-9]{0,29}:[a-f0-9]{40}$"},
         "full-automation": {"required_fields": ["dealId", "journeyId", "deploymentId", "configurationVersionId", "idempotencyKey"], "status": "deferred_separate_authorization_required"}
       },
       "content_type": "application/json",
@@ -1041,7 +1041,7 @@
       "authentication": "Catalyst project and Development host binding plus independent operator header and CRM Connection",
       "caller": "Administrator-restricted CRM control",
       "request_contracts": {
-        "free-test-journey-core-v1": {"required_fields": ["dealId", "journeyId", "configurationVersionId", "idempotencyKey"], "optional_fields": ["deploymentId"], "deployment_id_policy": "omitted_or_empty_string_only", "configuration_version_grammar": "^form2cfgv1:[1-9][0-9]{0,29}:[a-f0-9]{40}$", "expected_wire_failure_code_without_activation_evidence": "isolated_retell_test_number_required"},
+        "free-test-journey-core-v1": {"required_fields": ["dealId", "journeyId", "configurationVersionId", "idempotencyKey"], "optional_fields": ["deploymentId"], "deployment_id_policy": "omitted_null_or_empty_string_only", "configuration_version_grammar": "^form2cfgv1:[1-9][0-9]{0,29}:[a-f0-9]{40}$", "expected_wire_failure_code_without_activation_evidence": "isolated_retell_test_number_required"},
         "full-automation": {"required_fields": ["dealId", "journeyId", "deploymentId", "configurationVersionId", "idempotencyKey"], "status": "deferred_separate_authorization_required"}
       },
       "content_type": "application/json",
@@ -1056,7 +1056,7 @@
       "authentication": "Catalyst project and Development host binding plus independent operator header and CRM Connection",
       "caller": "Administrator-restricted CRM control",
       "request_contracts": {
-        "free-test-journey-core-v1": {"required_fields": ["dealId", "journeyId", "configurationVersionId", "idempotencyKey", "reason"], "optional_fields": ["deploymentId"], "deployment_id_policy": "omitted_or_empty_string_only", "configuration_version_grammar": "^form2cfgv1:[1-9][0-9]{0,29}:[a-f0-9]{40}$"},
+        "free-test-journey-core-v1": {"required_fields": ["dealId", "journeyId", "configurationVersionId", "idempotencyKey", "reason"], "optional_fields": ["deploymentId"], "deployment_id_policy": "omitted_null_or_empty_string_only", "configuration_version_grammar": "^form2cfgv1:[1-9][0-9]{0,29}:[a-f0-9]{40}$"},
         "full-automation": {"required_fields": ["dealId", "journeyId", "deploymentId", "configurationVersionId", "idempotencyKey", "reason"], "status": "deferred_separate_authorization_required"}
       },
       "content_type": "application/json",

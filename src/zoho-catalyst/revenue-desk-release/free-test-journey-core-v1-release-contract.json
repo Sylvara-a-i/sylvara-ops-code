@@ -310,7 +310,7 @@
         "required_fields": ["dealId", "journeyId", "configurationVersionId", "idempotencyKey"],
         "rollback_additional_required_fields": ["reason"],
         "optional_fields": ["deploymentId"],
-        "deployment_id_policy": "omitted_or_empty_string_only",
+        "deployment_id_policy": "omitted_null_or_empty_string_only",
         "configuration_version_grammar": "^form2cfgv1:[1-9][0-9]{0,29}:[a-f0-9]{40}$",
         "approval_requires_telephony_deployment": false,
         "blueprint_transition_required": false,
