@@ -2,6 +2,7 @@
 
 const {
   COVERAGE_MODES,
+  COVERAGE_LABEL_TO_MODE,
   OUTCOMES,
   RETELL_EVENTS,
 } = require('./contracts');
@@ -14,6 +15,10 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ZIP_PATTERN = /^[0-9]{5}(?:-[0-9]{4})?$/;
 const CALL_STATUSES = new Set(['registered', 'not_connected', 'ongoing', 'ended', 'error']);
 const MAX_RETELL_CALL_DURATION_MS = 86_400_000;
+// Keep the configuration boundary aligned with Form 2's exact choices. A
+// destination label is not free text and cannot imply an unverified number.
+const NUMBERED_FALLBACKS = new Set(['Existing Office Line', 'On-Call Mobile', 'Other']);
+const FALLBACK_DESTINATIONS = new Set([...NUMBERED_FALLBACKS, 'Voicemail']);
 
 function isPlainObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype;
@@ -129,11 +134,9 @@ function validateConfiguration(input) {
   const coverageMode = enumValue(value.coverageMode, COVERAGE_MODES,
     'configuration.coverageMode');
   const approvedTestRoute = enumValue(value.approvedTestRoute,
-    new Set(['After Hours Only', 'No Answer / Overflow Only']),
+    COVERAGE_LABEL_TO_MODE,
     'configuration.approvedTestRoute');
-  invariant((coverageMode === 'AfterHoursOnly' && approvedTestRoute === 'After Hours Only')
-    || (coverageMode === 'NoAnswerOverflowOnly'
-      && approvedTestRoute === 'No Answer / Overflow Only'),
+  invariant(COVERAGE_LABEL_TO_MODE.get(approvedTestRoute) === coverageMode,
   'INVALID_SCHEMA', 'Approved test route does not match coverage mode.');
   const noAnswerDelay = value.noAnswerDelay === null || value.noAnswerDelay === undefined
     ? null : integer(value.noAnswerDelay, 'configuration.noAnswerDelay', 1, 120);
@@ -142,10 +145,11 @@ function validateConfiguration(input) {
   const fallbackNumber = value.approvedFallbackNumber === null
     || value.approvedFallbackNumber === undefined || value.approvedFallbackNumber === ''
     ? null : e164(value.approvedFallbackNumber, 'configuration.approvedFallbackNumber');
-  const fallbackDestination = string(value.approvedFallbackDestination,
-    'configuration.approvedFallbackDestination', { maximum: 120 });
-  invariant(!/phone|number/i.test(fallbackDestination) || fallbackNumber !== null,
-    'INVALID_SCHEMA', 'Telephone fallback destination requires a fallback number.');
+  const fallbackDestination = enumValue(value.approvedFallbackDestination,
+    FALLBACK_DESTINATIONS, 'configuration.approvedFallbackDestination');
+  invariant(NUMBERED_FALLBACKS.has(fallbackDestination)
+    ? fallbackNumber !== null : fallbackNumber === null,
+  'INVALID_SCHEMA', 'Fallback number does not match the approved destination.');
   const authorityConfirmedAt = string(value.authorityConfirmedAt,
     'configuration.authorityConfirmedAt', { maximum: 32, trim: false });
   invariant(Number.isFinite(Date.parse(authorityConfirmedAt)),

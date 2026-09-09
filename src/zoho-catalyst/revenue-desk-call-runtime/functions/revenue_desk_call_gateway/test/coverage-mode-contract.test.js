@@ -7,11 +7,17 @@ const {
   CONTRACT,
   COVERAGE_LABEL_TO_MODE,
   COVERAGE_MODES,
+  CRM_APPROVED_ROUTE_TO_LABEL,
   COVERAGE_TRIGGER_COMPATIBILITY,
   COVERAGE_TRIGGERS,
   UNKNOWN_COVERAGE_TRIGGER_POLICY,
 } = require('../lib/contracts');
 const { triggerAllowedForMode } = require('../lib/analysis');
+const { validateConfiguration } = require('../lib/validation');
+const { configuration } = require('./runtime-fixture');
+const { CHOICES, buildPrefillPayload } = require(
+  '../../../../revenue-leak-test-setup-form/functions/revenue_leak_test_setup_form/lib/form-contract',
+);
 
 const CANONICAL_MODES = Object.freeze([
   'AfterHoursOnly',
@@ -62,6 +68,79 @@ test('approved display labels map exactly while canonical runtime values remain 
   ]) {
     assert.equal(COVERAGE_MODES.has(value), false);
     assert.equal(COVERAGE_LABEL_TO_MODE.has(value), false);
+  }
+});
+
+test('CRM route references agree with Form 2 without accepting labels as stored values', () => {
+  assert.deepEqual([...CRM_APPROVED_ROUTE_TO_LABEL], [
+    ['After-Hours', 'After Hours Only'],
+    ['No-Answer/Overflow', 'No Answer / Overflow Only'],
+    ['Both', 'After Hours + Overflow'],
+  ]);
+  assert.deepEqual([...COVERAGE_LABEL_TO_MODE.keys()], CHOICES.testRoute);
+  const modified = '2026-09-09T12:00:00Z';
+  const records = {
+    contact: { id: '400000001', Modified_Time: modified,
+      Account_Name: { id: '400000002' }, Email: 'qa@example.invalid',
+      Mobile: '+15550100101' },
+    account: { id: '400000002', Modified_Time: modified },
+    deal: { id: '400000003', Modified_Time: modified,
+      Account_Name: { id: '400000002' }, Contact_Name: { id: '400000001' } },
+  };
+  for (const [stored, label] of CRM_APPROVED_ROUTE_TO_LABEL) {
+    records.deal.Approved_Test_Route = stored;
+    assert.equal(buildPrefillPayload(records, {
+      allowedPhoneSystemProviders: ['Synthetic PBX'],
+    }).approvedTestRoute, label);
+    assert.equal(records.deal.Approved_Test_Route, stored);
+    assert.equal(CRM_APPROVED_ROUTE_TO_LABEL.has(label), false);
+    assert.equal(CRM_APPROVED_ROUTE_TO_LABEL.has(` ${stored}`), false);
+    assert.equal(CRM_APPROVED_ROUTE_TO_LABEL.has(stored.toLowerCase()), false);
+  }
+});
+
+test('configuration accepts all three exact route/mode pairs with a verified delay only', () => {
+  for (const [label, mode] of COVERAGE_LABEL_TO_MODE) {
+    const candidate = { ...configuration('A'), coverageMode: mode,
+      approvedTestRoute: label, noAnswerDelay: mode === 'AfterHoursOnly' ? null : 25 };
+    assert.equal(validateConfiguration(candidate).coverageMode, mode);
+    for (const otherMode of COVERAGE_MODES) {
+      if (otherMode !== mode) assert.throws(() => validateConfiguration({
+        ...candidate, coverageMode: otherMode,
+      }), { code: 'INVALID_SCHEMA' });
+    }
+    for (const noAnswerDelay of mode === 'AfterHoursOnly'
+      ? [25, '4 Rings'] : [null, undefined, ...CHOICES.noAnswerDelay, '25', 0, 121]) {
+      assert.throws(() => validateConfiguration({ ...candidate, noAnswerDelay }),
+        { code: 'INVALID_SCHEMA' });
+    }
+  }
+  for (const approvedTestRoute of [null, '', 'Unknown', 'After Hours Only ',
+    ...CRM_APPROVED_ROUTE_TO_LABEL.keys(), ...COVERAGE_MODES]) {
+    assert.throws(() => validateConfiguration({ ...configuration('A'), approvedTestRoute }),
+      { code: 'INVALID_SCHEMA' });
+  }
+});
+
+test('configuration enforces the exact Form 2 fallback choices and number requirement', () => {
+  assert.deepEqual(CHOICES.fallbackDestination,
+    ['Existing Office Line', 'On-Call Mobile', 'Voicemail', 'Other']);
+  for (const destination of CHOICES.fallbackDestination) {
+    const numbered = destination !== 'Voicemail';
+    const candidate = { ...configuration('A'), approvedFallbackDestination: destination,
+      approvedFallbackNumber: numbered ? '+15550100102' : null };
+    assert.equal(validateConfiguration(candidate).approvedFallbackDestination, destination);
+    for (const number of numbered ? [null, undefined, '', '5550100102', 'unknown']
+      : ['+15550100102']) {
+      assert.throws(() => validateConfiguration({ ...candidate, approvedFallbackNumber: number }),
+        { code: 'INVALID_SCHEMA' });
+    }
+  }
+  for (const destination of [null, undefined, '', ' ', 'Unknown', 'Phone',
+    'On-Call Mobile ', 'voicemail', 'Transfer to technician']) {
+    assert.throws(() => validateConfiguration({ ...configuration('A'),
+      approvedFallbackDestination: destination, approvedFallbackNumber: '+15550100102' }),
+    { code: 'INVALID_SCHEMA' });
   }
 });
 

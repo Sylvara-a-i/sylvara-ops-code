@@ -18,6 +18,12 @@ const COVERAGE_LABEL_TO_MODE = freezeMap(
 const COVERAGE_MODE_TO_LABEL = freezeMap(
   contract.display_label_mappings.map(({ display_label: label, coverage_mode: mode }) => [mode, label]),
 );
+// These field-specific CRM values match the Form 2 approved-route decoder.
+// Presentation labels and runtime modes are not interchangeable CRM values.
+const CRM_APPROVED_ROUTE_TO_LABEL = freezeMap(
+  contract.display_label_mappings
+    .map(({ crm_stored_value: stored, display_label: label }) => [stored, label]),
+);
 const CRM_TEST_STATUSES = freezeSet(contract.crm_test_statuses);
 const CRM_APPROVAL_STATUSES = freezeSet(contract.crm_go_live_approval_statuses);
 const STOP_REASON_TO_CRM = freezeMap(
@@ -85,7 +91,10 @@ function assertContract() {
     || contract.legacy_canonical_call_schema_versions[0] !== 1) {
     throw new Error('Unexpected canonical call schema compatibility contract.');
   }
-  if (COVERAGE_MODES.size !== 3 || COVERAGE_LABEL_TO_MODE.size !== 3 || COVERAGE_MODE_TO_LABEL.size !== 3) {
+  if (COVERAGE_MODES.size !== 3 || COVERAGE_LABEL_TO_MODE.size !== 3
+    || COVERAGE_MODE_TO_LABEL.size !== 3 || CRM_APPROVED_ROUTE_TO_LABEL.size !== 3
+    || [...CRM_APPROVED_ROUTE_TO_LABEL.keys()]
+      .some((stored) => typeof stored !== 'string' || stored.length === 0)) {
     throw new Error('Coverage mapping must be one-to-one across exactly three values.');
   }
   for (const mode of COVERAGE_MODES) {
@@ -209,6 +218,7 @@ module.exports = Object.freeze({
   COVERAGE_MODES,
   COVERAGE_LABEL_TO_MODE,
   COVERAGE_MODE_TO_LABEL,
+  CRM_APPROVED_ROUTE_TO_LABEL,
   CRM_TEST_STATUSES,
   CRM_APPROVAL_STATUSES,
   STOP_REASON_TO_CRM,

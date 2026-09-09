@@ -19,14 +19,17 @@
   "display_label_mappings": [
     {
       "display_label": "After Hours Only",
+      "crm_stored_value": "After-Hours",
       "coverage_mode": "AfterHoursOnly"
     },
     {
       "display_label": "No Answer / Overflow Only",
+      "crm_stored_value": "No-Answer/Overflow",
       "coverage_mode": "NoAnswerOverflowOnly"
     },
     {
       "display_label": "After Hours + Overflow",
+      "crm_stored_value": "Both",
       "coverage_mode": "AfterHoursAndOverflow"
     }
   ],
