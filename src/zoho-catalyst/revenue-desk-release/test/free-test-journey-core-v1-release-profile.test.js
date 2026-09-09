@@ -381,6 +381,10 @@ test('all buildable Journey profiles exclude the retired source and legacy bindi
   const form1Routes = require('../../revenue-leak-test-request-form/config/routes.json');
   assert.equal(form1Routes.rollback.preserve.includes('old CRM control'), false);
   assert.match(form1Routes.rollback.preserve.join(' '), /failed active CRM launcher containment/);
+  const form1Cutover = formsManifest.cutover_order.join(' ');
+  assert.doesNotMatch(form1Cutover, /contained predecessor CRM control remains available|restores the retained contained predecessor control/);
+  assert.match(form1Cutover, /keeps the failed current Start Free-Test Request launcher disabled/);
+  assert.match(form1Cutover, /do not recreate the retired local-only predecessor/);
 });
 
 test('rejects stale labels and mismatched caller labels', () => {
