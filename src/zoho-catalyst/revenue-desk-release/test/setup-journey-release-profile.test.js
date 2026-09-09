@@ -71,7 +71,7 @@ test('binds the exact Development setup journey to one immutable revision', () =
   ]);
   assert.equal(manifest.job_pools.length, 1);
   assert.equal(manifest.tables.length, 12);
-  assert.equal(Object.keys(manifest.contract_sha256).length, 31);
+  assert.equal(Object.keys(manifest.contract_sha256).length, 30);
   assert.equal(verifyReadback(manifest, readback, contract), true);
 });
 
@@ -117,7 +117,7 @@ test('selects only the setup routes and keeps CRM Billing deferred', () => {
   assert.equal(functions.has(routeContract.routes.at(-1).function), false);
 });
 
-test('binds exactly three replacement CRM labels plus the retained predecessor', () => {
+test('binds the four current CRM controls without the retired predecessor', () => {
   const crm = contract.installation_scope.crm;
   assert.deepEqual(crm.controls, [
     'Start Free-Test Request',
@@ -126,7 +126,6 @@ test('binds exactly three replacement CRM labels plus the retained predecessor',
     'Stop Or Roll Back Free Test',
   ]);
   assert.deepEqual(crm.functions, [
-    'start_free_revenue_leak_test_request',
     'open_free_test_setup',
     'open_free_test_setup_zdk',
     'initialize_setup_access_issue_request_id',
@@ -172,8 +171,6 @@ test('binds exactly three replacement CRM labels plus the retained predecessor',
   assert.equal(crm.direct_url_returning_function_binding_allowed, false);
   assert.deepEqual(crm.control_bindings, [
     { label: 'Start Free-Test Request', module: 'Leads',
-      function: 'start_free_revenue_leak_test_request', replacement: false },
-    { label: 'Open Free-Test Setup', module: 'Leads',
       client_script: 'open_free_test_setup_leads',
       invokes_function: 'open_free_test_setup_zdk', replacement: true },
     { label: 'Open Free-Test Setup', module: 'Deals',
@@ -188,7 +185,7 @@ test('binds exactly three replacement CRM labels plus the retained predecessor',
     [...new Set(crm.control_bindings
       .filter(({ replacement }) => replacement)
       .map(({ label }) => label))],
-    crm.controls.slice(1),
+    crm.controls,
   );
 });
 

@@ -119,14 +119,14 @@
         "enable the exact preserved Development Gateway only after all server protections pass",
         "disable both Open Free-Test Setup controls and read back no direct Function binding before creating or publishing either distinct Standalone CRM Function",
         "publish and read back the exact Standalone Functions and module-specific Client Scripts while the replacement controls remain disabled and both Button-category rollback Functions remain unchanged",
-        "bind the disabled Open controls only to their exact Client Scripts, pass separate Lead and Deal ZZZ SYNTHETIC Development ZDK execution canaries, then enable each Open control only after its own exact readback while retaining the predecessor",
+        "bind the disabled Open controls only to their exact Client Scripts, pass separate Lead and Deal ZZZ SYNTHETIC Development ZDK execution canaries, then enable each Open control only after its own exact readback; do not recreate the retired local-only Form 1 predecessor",
         "run ZZZ SYNTHETIC Form 1, Form 2, approval, expected fail-closed activation, resume, and rollback canaries"
       ],
       "rollback_order": [
-        "disable the replacement CRM controls before restoring any predecessor function revision, then read back no direct URL-returning Function binding",
+        "disable the replacement CRM controls before restoring any prior verified active function revision, then read back no direct URL-returning Function binding",
         "disable the Form webhooks",
         "disable the Development Gateway if route or function readback is not exact",
-        "retain the Start Free-Test Request predecessor as the launch fallback",
+        "keep a failed Start Free-Test Request launcher disabled; do not recreate the retired local-only Form 1 predecessor",
         "restore only prior verified Development function revisions when required",
         "preserve every journey, Form 2 configuration reference, approval, receipt, and rollback record"
       ],
@@ -262,7 +262,7 @@
       "journey_credential_reaches_zoho_forms": false,
       "crm_record_and_journey_resolution": "digest-bound Catalyst session and immutable prefill revision only",
       "native_crm_integration_condition": "public tokenless lane only",
-      "crm_button_binding_state": "desired Open Free-Test Setup launcher; old control retained until E2E acceptance",
+      "crm_button_binding_state": "desired Start Free-Test Request Client Script launcher; retired local-only predecessor excluded",
       "forms_prefill_webhook_binding_state": "desired exact authenticated Development route",
       "forms_submission_webhook_binding_state": "desired exact authenticated Development route",
       "controller_platform_data_dependencies": "Catalyst Data Store plus distinct CRM read and write Connections",
@@ -277,7 +277,7 @@
       "submission_consumption": "after exact CRM readback only",
       "replay_policy": "same submission is harmless; changed submission conflicts",
       "production_state": "dark",
-      "rollback_target": "unbind new callers and disable exact Development routes while preserving public Form 1, old CRM control, sessions, and audit history"
+      "rollback_target": "unbind new callers and disable exact Development routes while preserving public Form 1, sessions, and audit history; keep failed active CRM launchers disabled"
     },
     "crm_field_mapping": {
       "first_name": "First_Name",
@@ -1159,9 +1159,9 @@
     "analytics_sync": ["ANALYTICS_READ_CONNECTION_LINK_NAME", "ANALYTICS_WRITE_CONNECTION_LINK_NAME"]
   },
   "deployment_order_profile_scope": "full-automation",
-  "deployment_order": ["bounded repository patch and complete tests", "merge the immutable release into main", "build and stamp all artifacts from final main", "fresh Development organization, project, function, route, table, Connection, CRM, Forms, and Retell readback", "install all five Form 1 assisted routes and the dedicated Dynamic Prefill-Webhook handle field while retaining the contained predecessor control", "install Form 2 controlled private routes and handle-only Dynamic Prefill-Webhook", "install revenue_desk_route_control in disabled mode unless an isolated Retell test number is authoritatively proven", "install the three simple CRM controls and exact separate Blueprint transitions", "immediate boundary readback", "ZZZ SYNTHETIC assisted and public Form 1 canaries", "ZZZ SYNTHETIC Form 2, approval, activation-gate, resume, and rollback canaries", "telephony-path proof only if an isolated Retell test number is proven"],
+  "deployment_order": ["bounded repository patch and complete tests", "merge the immutable release into main", "build and stamp all artifacts from final main", "fresh Development organization, project, function, route, table, Connection, CRM, Forms, and Retell readback", "install all five Form 1 assisted routes and the dedicated Dynamic Prefill-Webhook handle field without recreating the retired local-only predecessor control", "install Form 2 controlled private routes and handle-only Dynamic Prefill-Webhook", "install revenue_desk_route_control in disabled mode unless an isolated Retell test number is authoritatively proven", "install the three simple CRM controls and exact separate Blueprint transitions", "immediate boundary readback", "ZZZ SYNTHETIC assisted and public Form 1 canaries", "ZZZ SYNTHETIC Form 2, approval, activation-gate, resume, and rollback canaries", "telephony-path proof only if an isolated Retell test number is proven"],
   "rollback_order_profile_scope": "full-automation",
-  "rollback_order": ["keep Production traffic dark", "stop the exact synthetic Catalyst deployment first", "unbind a Retell route only after exact synthetic number and deployment ownership readback", "disable the replacement CRM controls and Form webhooks", "retain the Start Free-Test Request predecessor as the launch fallback", "restore the prior verified Development function revisions and route definitions", "preserve every journey, configuration, authorization, route-verification, receipt, and rollback record"],
+  "rollback_order": ["keep Production traffic dark", "stop the exact synthetic Catalyst deployment first", "unbind a Retell route only after exact synthetic number and deployment ownership readback", "disable the replacement CRM controls and Form webhooks", "keep a failed Start Free-Test Request launcher disabled; do not recreate the retired local-only Form 1 predecessor", "restore the prior verified Development function revisions and route definitions", "preserve every journey, configuration, authorization, route-verification, receipt, and rollback record"],
   "acceptance_scenarios": ["authenticated CRM launch issues one digest-only journey credential in the Catalyst access fragment, exchanges it once, and gives Zoho Forms only a separate ten-minute digest-only prefill handle bound to the exact CRM record and canonical journey", "invalid, expired, tampered, cross-record, changed-payload, and conflicting replay attempts fail closed", "assisted submissions accept only server-validated prefillId, configurationRevision, and submissionId and never receive a journey credential or prefill handle", "public Form 1 remains tokenless and cannot manufacture an assisted CRM binding", "interrupted Form 1 issuance resumes by safe artifact reissue without a duplicate journey", "Form 2 invalid or replayed proof or prefill handle has no downstream effects", "approval is a durable state that does not activate a route or start time", "activation requires the exact approved configuration and fresh authoritative route readback", "approval success followed by activation failure remains approved and inactive or explicitly requires reconciliation", "Prepared receipt recovery, idempotent activation, repeated rollback, and activation-after-stop fail closed", "configuration, route, fingerprint, source, or conflicting-deployment changes invalidate control", "Development rollback preserves evidence", "telephony activation remains blocked by ISOLATED RETELL TEST NUMBER REQUIRED when no isolated number is proven"],
   "out_of_scope": ["prospect or customer traffic", "real customer data", "contractor forwarding", "real charge", "payment method", "SMS", "Retell call", "Retell native simulation", "conversation-flow tuning", "prompt tuning", "voice, model, interruption, or latency tuning", "booking", "dispatch", "pricing quotes", "payment collection", "outbound marketing", "paid capability activation", "Launch, Growth, or Scale conversation behavior", "client portal product build"]
 }

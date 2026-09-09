@@ -1871,7 +1871,7 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
 
     def test_caller_manifest_is_development_only_and_not_deployment_authority(self) -> None:
         manifest = self.callers
-        self.assertEqual(manifest["schema_version"], 8)
+        self.assertEqual(manifest["schema_version"], 9)
         self.assertEqual(manifest["status"], "bounded_development_installation_candidate")
         self.assertEqual(manifest["environment"], "Development only")
         self.assertFalse(manifest["render_policy"]["commit_rendered_source"])
@@ -1881,7 +1881,6 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         self.assertEqual(
             [caller["logical_name"] for caller in manifest["callers"]],
             [
-                "FORM1_CONTAINED_PREDECESSOR",
                 "FORM1_ASSISTED_ISSUE_CALLER",
                 "FORM2_SETUP_ISSUE_CALLER",
                 "APPROVE_AND_START_FREE_TEST_CALLER",
@@ -1889,16 +1888,6 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
             ],
         )
         by_name = {caller["logical_name"]: caller for caller in manifest["callers"]}
-        predecessor = by_name["FORM1_CONTAINED_PREDECESSOR"]
-        self.assertFalse(predecessor["remote_request_enabled"])
-        self.assertEqual(predecessor["button"], "Legacy Free-Test - Contained")
-        self.assertEqual(predecessor["source_identity_policy"], {
-            "source_role": "executable_body_contract",
-            "provider_identity_source": "independent_native_button_binding_and_published_function_readback",
-            "canonical_filename_is_provider_api_name": False,
-            "rebind_on_filename_difference": False,
-            "existing_executable_source_parity_required": True,
-        })
         form1 = by_name["FORM1_ASSISTED_ISSUE_CALLER"]
         form2 = by_name["FORM2_SETUP_ISSUE_CALLER"]
         self.assertEqual(
@@ -1906,7 +1895,6 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
                 dict.fromkeys(
                     caller["button"]
                     for caller in manifest["callers"]
-                    if caller is not predecessor
                 )
             ),
             [
@@ -2027,7 +2015,7 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
             self.callers["activation_gates"][4],
         )
         self.assertIn(
-            "before restoring any predecessor function revision",
+            "before restoring any prior verified active function revision",
             self.callers["rollback"][0],
         )
         self.assertNotIn(
@@ -2444,111 +2432,86 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
                     with self.assertRaisesRegex(AssertionError, "Regex matched.*info"):
                         self.test_form2_deluge_template_matches_the_exact_caller_contract()
 
-    def test_lead_label_cutover_preserves_bindings_hold_and_reverse_order(self) -> None:
-        cutover = self.callers["lead_button_label_cutover"]
+    def test_legacy_retirement_is_bounded_and_preserves_active_launchers(self) -> None:
+        retirement = self.callers["lead_legacy_retirement"]
+        self.assertEqual(retirement["status"], "approved_desired_retirement_provider_readback_required")
+        self.assertEqual(retirement["scope"], "exact_legacy_lead_button_dedicated_function_and_unused_duplicate_only")
         self.assertEqual(
-            cutover["status"], "source_candidate_provider_label_cutover_pending"
-        )
-        self.assertEqual(cutover["scope"], "two_existing_lead_button_labels_only")
-        self.assertEqual(
-            cutover["prestate_evidence"], "independent_read_only_native_button_settings"
-        )
-        self.assertEqual(
-            [cutover[key] for key in ("module", "layout", "placement", "profile")],
+            [retirement[key] for key in ("module", "layout", "placement", "profile")],
             ["Leads", "Standard", "record details", "Administrator"],
         )
-        for flag in (
-            "runtime_changes_authorized",
-            "source_revision_rebinding_authorized", "new_live_canary_allocation",
-        ):
-            self.assertIs(cutover[flag], False)
-        self.assertEqual((cutover["creates"], cutover["deletes"]), (0, 0))
-        self.assertEqual(cutover["preserved"], [
-            "button_ids", "action_types", "function_identities_and_source",
-            "client_script_identity_association_and_bytes", "layout_placement_profile",
-            "permissions_and_enabled_states", "connections_and_credentials",
-            "form1_source_revision_hold", "public_form1_native_crm_writer",
-            "assisted_form1_server_bound_writer", "deal_open_free_test_setup_label",
+        self.assertEqual(retirement["deletion_limits"], {"buttons": 1, "functions": 2})
+        self.assertEqual(retirement["retired_control"], {
+            "logical_name": "FORM1_CONTAINED_PREDECESSOR",
+            "label": "Legacy Free-Test - Contained",
+            "source_contract": "start_free_revenue_leak_test_request",
+            "canonical_filename_is_provider_api_name": False,
+        })
+        self.assertEqual(retirement["retired_function_roles"], [
+            "exact_button_bound_local_only_function",
+            "exact_separately_approved_unused_local_only_duplicate",
+        ])
+        self.assertEqual(retirement["independent_preparation"], [
+            "make_existing_start_free_test_request_prominent_without_invoking_or_rebinding_it",
+        ])
+        self.assertEqual(retirement["ordered_actions"], [
+            "delete_exact_legacy_button",
+            "independently_read_back_button_absence",
+            "require_zero_remaining_associations_for_exact_dedicated_function",
+            "delete_exact_dedicated_function",
+            "independently_read_back_dedicated_function_absence",
+            "require_zero_remaining_associations_for_exact_unused_duplicate",
+            "delete_exact_unused_duplicate",
+            "independently_read_back_unused_duplicate_absence",
+        ])
+        self.assertEqual(retirement["required_prestate"], [
+            "verified_replacement_native_launch_acceptance_without_reusing_its_consumed_allocation",
+            "exact_native_legacy_button_binding_and_published_function_identity",
+            "dedicated_function_executable_body_parity_with_retained_private_or_git_history",
+            "complete_function_associations_allow_only_the_exact_legacy_button",
+            "separate_exact_unused_duplicate_identity_approval_and_same_local_only_body_parity",
+            "complete_unused_duplicate_function_associations_are_empty",
+            "private_prestate_and_safe_containment_record",
+        ])
+        self.assertEqual(retirement["preserved"], [
+            "active_lead_and_deal_client_script_identities_associations_and_bytes",
+            "active_and_other_preserved_function_identities_and_source",
+            "layout_profile_permissions_and_enabled_states",
+            "connections_credentials_and_source_revision_bindings",
+            "public_form1_native_crm_writer",
+            "assisted_form1_server_bound_writer",
             "sessions_claims_counters_and_approval_evidence",
+            "historical_source_and_acceptance_evidence",
         ])
-        renames = cutover["ordered_renames"]
-        self.assertEqual(renames, [
-            {
-                "logical_name": "FORM1_CONTAINED_PREDECESSOR",
-                "from": "Start Free-Test Request",
-                "to": "Legacy Free-Test - Contained",
-                "action_type": "Function",
-                "action_type_editable": True,
-            },
-            {
-                "logical_name": "FORM1_ASSISTED_ISSUE_CALLER",
-                "from": "Open Free-Test Setup",
-                "to": "Start Free-Test Request",
-                "action_type": "Client Script",
-                "action_type_editable": False,
-            },
-        ])
-        self.assertEqual(cutover["ordered_rollback"], [
-            {"logical_name": item["logical_name"], "from": item["to"], "to": item["from"]}
-            for item in reversed(renames)
-        ])
-        callers = {item["logical_name"]: item for item in self.callers["callers"]}
-        for rename in renames:
-            self.assertEqual(callers[rename["logical_name"]]["button"], rename["to"])
-        self.assertEqual(callers["FORM2_SETUP_ISSUE_CALLER"]["button"], "Open Free-Test Setup")
-        self.assertFalse(callers["FORM1_CONTAINED_PREDECESSOR"]["remote_request_enabled"])
-        self.assertIn("Historical initial replacement installation gates", self.callers["activation_gates_scope"])
+        for flag in (
+            "runtime_changes_authorized", "source_revision_rebinding_authorized",
+            "new_live_canary_allocation",
+        ):
+            self.assertIs(retirement[flag], False)
+        self.assertFalse((PACKAGE / "functions" / "start_free_revenue_leak_test_request.deluge").exists())
+        self.assertNotIn("lead_button_label_cutover", self.callers)
+        callers = {caller["logical_name"]: caller for caller in self.callers["callers"]}
+        self.assertNotIn("FORM1_CONTAINED_PREDECESSOR", callers)
+        prominent = retirement["prominent_control"]
+        self.assertEqual(prominent["logical_name"], "FORM1_ASSISTED_ISSUE_CALLER")
+        self.assertEqual(prominent["label"], callers["FORM1_ASSISTED_ISSUE_CALLER"]["button"])
+        self.assertEqual(prominent["label"], "Start Free-Test Request")
+        self.assertIn("operator pinning", prominent["policy"])
+        self.assertIn("do not invoke", prominent["policy"])
+        self.assertIn("Reconcile any ambiguous delete", retirement["readback"])
+        self.assertIn("both exact independently identified local-only Functions are absent", retirement["readback"])
+        self.assertIn("Permanent deletion has no assumed native undo", retirement["rollback_policy"])
+        self.assertIn("Do not restore or recreate", retirement["rollback_policy"])
+        self.assertIn("replay consumed evidence", retirement["rollback_policy"])
+        self.assertIn("not an executable rollback after retirement", retirement["historical_label_cutover"])
         self.assertIn("consumed canary or approval", self.callers["activation_gates_scope"])
-        self.assertIn("same private button identity", cutover["readback"])
-        self.assertIn("destination label to be unused in Leads", cutover["readback"])
-        self.assertIn("ambiguous save", cutover["readback"])
-        self.assertIn("Reverse only completed renames", cutover["rollback_policy"])
-        self.assertIn("only visible fallback", cutover["rollback_policy"])
-        self.assertIn("does not authorize an enabled-state change", cutover["rollback_policy"])
 
-        # Simulate the two static label maps, not a provider operation. Both a
-        # first-save-only rollback and a complete rollback must free a label
-        # before reusing it; associations are represented by stable logical keys.
-        original = {item["logical_name"]: item["from"] for item in renames}
-        for completed in range(3):
-            labels = dict(original)
-            for step in renames[:completed]:
-                self.assertEqual(labels[step["logical_name"]], step["from"])
-                self.assertNotIn(step["to"], labels.values())
-                labels[step["logical_name"]] = step["to"]
-            for step in cutover["ordered_rollback"][2 - completed:]:
-                self.assertEqual(labels[step["logical_name"]], step["from"])
-                self.assertNotIn(step["to"], labels.values())
-                labels[step["logical_name"]] = step["to"]
-            self.assertEqual(labels, original)
-
-    def test_lead_label_cutover_rejects_parentheses_in_planned_labels(self) -> None:
-        cutover = self.callers["lead_button_label_cutover"]
-        # The provider rejected parentheses. This checks the bounded candidate,
-        # not an inferred complete grammar for Zoho button names.
-        for direction in ("ordered_renames", "ordered_rollback"):
-            for step in cutover[direction]:
-                for key in ("from", "to"):
-                    self.assertNotRegex(step[key], r"[()]")
-
-    def test_lead_label_cutover_rejects_overlength_planned_labels(self) -> None:
-        # Zoho's documented button-name ceiling also applies to rollback labels.
-        cutover = self.callers["lead_button_label_cutover"]
-        for direction in ("ordered_renames", "ordered_rollback"):
-            for step in cutover[direction]:
-                for key in ("from", "to"):
-                    self.assertLessEqual(len(step[key]), 30)
-
-    def test_lead_label_length_guard_accepts_30_and_rejects_31(self) -> None:
-        for length in (30, 31):
-            callers = json.loads(json.dumps(self.callers))
-            callers["lead_button_label_cutover"]["ordered_renames"][0]["to"] = "A" * length
-            with patch.object(self, "callers", callers):
-                if length == 30:
-                    self.test_lead_label_cutover_rejects_overlength_planned_labels()
-                else:
-                    with self.assertRaises(AssertionError):
-                        self.test_lead_label_cutover_rejects_overlength_planned_labels()
+    def test_active_lead_button_labels_preserve_the_provider_length_boundary(self) -> None:
+        # Retiring the obsolete label plan must not relax the existing native
+        # 30-character ceiling for the remaining operator controls.
+        for caller in self.callers["callers"]:
+            self.assertLessEqual(len(caller["button"]), 30)
+            self.assertNotRegex(caller["button"], r"[()]")
 
     def test_open_setup_client_scripts_use_only_the_supported_navigation_boundary(self) -> None:
         expected = {
@@ -2742,8 +2705,6 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
 
     def test_deluge_logging_is_coarse_and_never_emits_runtime_values(self) -> None:
         allowed = {
-            'info "form1_assisted_issue_disabled";',
-            'info "form1_issue_rejected";',
             'info "form1_assisted_issue_failed";',
             'info "form1_assisted_issue_rejected_" + rejection_code;',
             'info "form2_issue_failed";',

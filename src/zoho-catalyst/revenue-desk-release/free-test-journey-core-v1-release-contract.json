@@ -68,7 +68,6 @@
     "src/zoho-crm/free-revenue-leak-test/config/caller-manifest.json",
     "src/zoho-crm/free-revenue-leak-test/client-scripts/open_free_test_setup_leads.js",
     "src/zoho-crm/free-revenue-leak-test/client-scripts/open_free_test_setup_deals.js",
-    "src/zoho-crm/free-revenue-leak-test/functions/start_free_revenue_leak_test_request.deluge",
     "src/zoho-crm/free-revenue-leak-test/functions/open_free_test_setup.deluge",
     "src/zoho-crm/free-revenue-leak-test/functions/initialize_setup_access_issue_request_id.deluge",
     "src/zoho-crm/free-revenue-leak-test/functions/issue_revenue_leak_test_setup.deluge",
@@ -96,9 +95,8 @@
     },
     "crm": {
       "modules": ["Leads", "Deals"],
-      "function_inventory_semantics": "Canonical source contract identifiers retained for compatibility. For FORM1_CONTAINED_PREDECESSOR, every occurrence of start_free_revenue_leak_test_request identifies the executable-body contract only, not the native provider API name. Resolve and preserve the existing private Function identity through the control binding's source_identity_policy; never create or rebind a Function because its native name differs.",
+      "function_inventory_semantics": "Current source contracts only. The permanently retired local-only predecessor is excluded; native identities still require independent provider readback.",
       "functions": [
-        "start_free_revenue_leak_test_request",
         "open_free_test_setup",
         "open_free_test_setup_zdk",
         "initialize_setup_access_issue_request_id",
@@ -108,7 +106,6 @@
         "stop_or_rollback_free_test"
       ],
       "journey_core_functions": [
-        "start_free_revenue_leak_test_request",
         "open_free_test_setup_zdk",
         "issue_revenue_leak_test_setup_zdk",
         "approve_and_start_free_test",
@@ -123,7 +120,7 @@
         { "name": "open_free_test_setup_leads", "module": "Leads", "page": "Detail Page (Standard)", "event_type": "Button Event", "event": "onClick", "source": "src/zoho-crm/free-revenue-leak-test/client-scripts/open_free_test_setup_leads.js", "invokes_function": "open_free_test_setup_zdk", "function_category": "Standalone", "function_state": "active", "function_return_type": "string", "function_arguments": [{ "name": "record_id", "type": "string" }, { "name": "crm_module", "type": "string" }], "navigation_api": "$Client.openURL", "development_zdk_execution_canary_required": true },
         { "name": "open_free_test_setup_deals", "module": "Deals", "page": "Detail Page (Standard)", "event_type": "Button Event", "event": "onClick", "source": "src/zoho-crm/free-revenue-leak-test/client-scripts/open_free_test_setup_deals.js", "invokes_function": "issue_revenue_leak_test_setup_zdk", "function_category": "Standalone", "function_state": "active", "function_return_type": "string", "function_arguments": [{ "name": "deal_id", "type": "string" }], "navigation_api": "$Client.openURL", "development_zdk_execution_canary_required": true }
       ],
-      "client_script_cutover_order_scope": "Historical initial replacement installation only. The current two-label Lead cutover is governed by caller-manifest.json lead_button_label_cutover and does not repeat installation, reopen the source-revision hold, or reuse a consumed canary.",
+      "client_script_cutover_order_scope": "Historical initial replacement installation only. The current legacy retirement is governed by caller-manifest.json lead_legacy_retirement and does not repeat installation, reopen the source-revision hold, or reuse a consumed canary.",
       "client_script_cutover_order": [
         "disable_and_read_back_no_direct_function_binding",
         "create_and_read_back_distinct_standalone_functions_while_preserving_button_rollbacks",
@@ -136,25 +133,12 @@
       ],
       "direct_url_returning_function_binding_allowed": false,
       "controls": [
-        "Legacy Free-Test - Contained",
         "Start Free-Test Request",
         "Open Free-Test Setup",
         "Approve And Start Free Test",
         "Stop Or Roll Back Free Test"
       ],
       "control_bindings": [
-        {
-          "logical_name": "FORM1_CONTAINED_PREDECESSOR",
-          "label": "Legacy Free-Test - Contained", "module": "Leads",
-          "function": "start_free_revenue_leak_test_request", "replacement": false,
-          "source_identity_policy": {
-            "source_role": "executable_body_contract",
-            "provider_identity_source": "independent_native_button_binding_and_published_function_readback",
-            "canonical_filename_is_provider_api_name": false,
-            "rebind_on_filename_difference": false,
-            "existing_executable_source_parity_required": true
-          }
-        },
         { "logical_name": "FORM1_ASSISTED_ISSUE_CALLER", "label": "Start Free-Test Request", "module": "Leads", "client_script": "open_free_test_setup_leads", "invokes_function": "open_free_test_setup_zdk", "replacement": true },
         { "logical_name": "FORM2_SETUP_ISSUE_CALLER", "label": "Open Free-Test Setup", "module": "Deals", "client_script": "open_free_test_setup_deals", "invokes_function": "issue_revenue_leak_test_setup_zdk", "replacement": true },
         { "logical_name": "APPROVE_AND_START_FREE_TEST_CALLER", "label": "Approve And Start Free Test", "module": "Deals", "function": "approve_and_start_free_test", "replacement": true },

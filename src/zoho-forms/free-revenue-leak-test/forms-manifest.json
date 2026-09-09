@@ -1066,11 +1066,11 @@
     "direct controller tests",
     "exact function and route readback",
     "CRM organization and Connection proof",
-    "All five Form 1 assisted routes installed from the immutable release with exact variable, Connection, table, dedicated prefill-handle alias, webhook, and source readback while the contained predecessor CRM control remains available",
+    "All five Form 1 assisted routes installed from the immutable release with exact variable, Connection, table, dedicated prefill-handle alias, webhook, and source readback; the current Start Free-Test Request Client Script stays contained until its installation gates pass, without recreating the retired local-only predecessor",
     "Form 1 public ZZZ SYNTHETIC submission followed by one record-bound assisted ZZZ SYNTHETIC launch, prefill, submission, replay, and cross-record rejection",
     "Form 2 issue and prefill callers",
     "Form 2 submission caller",
     "one controlled internal email proof",
-    "Form 2 legacy-route rollback test; Form 1 rollback disables only the replacement caller and webhooks, restores the retained contained predecessor control, and preserves assisted-session evidence"
+    "Form 2 legacy-route rollback test; Form 1 rollback keeps the failed current Start Free-Test Request launcher disabled, disables its webhooks, and preserves assisted-session evidence; do not recreate the retired local-only predecessor"
   ]
 }

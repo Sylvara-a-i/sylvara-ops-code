@@ -1,5 +1,5 @@
 {
-  "schema_version": 8,
+  "schema_version": 9,
   "status": "bounded_development_installation_candidate",
   "environment": "Development only",
   "owning_product": "Zoho CRM",
@@ -13,24 +13,6 @@
     "placeholders_must_resolve_to_one_reviewed_development_environment": true
   },
   "callers": [
-    {
-      "logical_name": "FORM1_CONTAINED_PREDECESSOR",
-      "source": "../functions/start_free_revenue_leak_test_request.deluge",
-      "source_identity_policy": {
-        "source_role": "executable_body_contract",
-        "provider_identity_source": "independent_native_button_binding_and_published_function_readback",
-        "canonical_filename_is_provider_api_name": false,
-        "rebind_on_filename_difference": false,
-        "existing_executable_source_parity_required": true
-      },
-      "module": "Leads",
-      "button": "Legacy Free-Test - Contained",
-      "placement": "record details",
-      "profile": "Administrator",
-      "remote_request_enabled": false,
-      "purpose": "Retained fail-closed predecessor and immediate rollback target; the label-only cutover preserves its Function and button association.",
-      "deployment_status": "retain_function_and_binding_unchanged_label_cutover_pending"
-    },
     {
       "logical_name": "FORM1_ASSISTED_ISSUE_CALLER",
       "source": "../functions/open_free_test_setup.deluge",
@@ -108,7 +90,7 @@
         "open_target": "new browser tab/window"
       },
       "failure_policy": "Fail closed without opening a URL; never log or automatically retry an ambiguous response.",
-      "deployment_status": "install_in_parallel_with_contained_predecessor"
+      "deployment_status": "preserve_verified_existing_client_script_binding"
     },
     {
       "logical_name": "FORM2_SETUP_ISSUE_CALLER",
@@ -250,71 +232,84 @@
       "deployment_status": "install_after_private_function_readback"
     }
   ],
-  "lead_button_label_cutover": {
-    "status": "source_candidate_provider_label_cutover_pending",
-    "scope": "two_existing_lead_button_labels_only",
-    "prestate_evidence": "independent_read_only_native_button_settings",
+  "lead_legacy_retirement": {
+    "status": "approved_desired_retirement_provider_readback_required",
+    "scope": "exact_legacy_lead_button_dedicated_function_and_unused_duplicate_only",
     "module": "Leads",
     "layout": "Standard",
     "placement": "record details",
     "profile": "Administrator",
-    "ordered_renames": [
-      {
-        "logical_name": "FORM1_CONTAINED_PREDECESSOR",
-        "from": "Start Free-Test Request",
-        "to": "Legacy Free-Test - Contained",
-        "action_type": "Function",
-        "action_type_editable": true
-      },
-      {
-        "logical_name": "FORM1_ASSISTED_ISSUE_CALLER",
-        "from": "Open Free-Test Setup",
-        "to": "Start Free-Test Request",
-        "action_type": "Client Script",
-        "action_type_editable": false
-      }
+    "retired_control": {
+      "logical_name": "FORM1_CONTAINED_PREDECESSOR",
+      "label": "Legacy Free-Test - Contained",
+      "source_contract": "start_free_revenue_leak_test_request",
+      "canonical_filename_is_provider_api_name": false
+    },
+    "retired_function_roles": [
+      "exact_button_bound_local_only_function",
+      "exact_separately_approved_unused_local_only_duplicate"
     ],
+    "required_prestate": [
+      "verified_replacement_native_launch_acceptance_without_reusing_its_consumed_allocation",
+      "exact_native_legacy_button_binding_and_published_function_identity",
+      "dedicated_function_executable_body_parity_with_retained_private_or_git_history",
+      "complete_function_associations_allow_only_the_exact_legacy_button",
+      "separate_exact_unused_duplicate_identity_approval_and_same_local_only_body_parity",
+      "complete_unused_duplicate_function_associations_are_empty",
+      "private_prestate_and_safe_containment_record"
+    ],
+    "independent_preparation": [
+      "make_existing_start_free_test_request_prominent_without_invoking_or_rebinding_it"
+    ],
+    "ordered_actions": [
+      "delete_exact_legacy_button",
+      "independently_read_back_button_absence",
+      "require_zero_remaining_associations_for_exact_dedicated_function",
+      "delete_exact_dedicated_function",
+      "independently_read_back_dedicated_function_absence",
+      "require_zero_remaining_associations_for_exact_unused_duplicate",
+      "delete_exact_unused_duplicate",
+      "independently_read_back_unused_duplicate_absence"
+    ],
+    "deletion_limits": {
+      "buttons": 1,
+      "functions": 2
+    },
     "preserved": [
-      "button_ids", "action_types", "function_identities_and_source",
-      "client_script_identity_association_and_bytes", "layout_placement_profile",
-      "permissions_and_enabled_states", "connections_and_credentials",
-      "form1_source_revision_hold", "public_form1_native_crm_writer",
-      "assisted_form1_server_bound_writer", "deal_open_free_test_setup_label",
-      "sessions_claims_counters_and_approval_evidence"
+      "active_lead_and_deal_client_script_identities_associations_and_bytes",
+      "active_and_other_preserved_function_identities_and_source",
+      "layout_profile_permissions_and_enabled_states",
+      "connections_credentials_and_source_revision_bindings",
+      "public_form1_native_crm_writer",
+      "assisted_form1_server_bound_writer",
+      "sessions_claims_counters_and_approval_evidence",
+      "historical_source_and_acceptance_evidence"
     ],
-    "creates": 0,
-    "deletes": 0,
+    "prominent_control": {
+      "logical_name": "FORM1_ASSISTED_ISSUE_CALLER",
+      "label": "Start Free-Test Request",
+      "policy": "Use only supported button order or operator pinning; record which scope was changed. Preserve every active binding and do not invoke the launcher."
+    },
     "runtime_changes_authorized": false,
     "source_revision_rebinding_authorized": false,
     "new_live_canary_allocation": false,
-    "readback": "Before and after each label save, resolve the same private button identity and require exact label, action type, association, layout, placement, profile and enabled-state parity. Require the destination label to be unused in Leads; stop and reconcile any ambiguous save before another action.",
-    "ordered_rollback": [
-      {
-        "logical_name": "FORM1_ASSISTED_ISSUE_CALLER",
-        "from": "Start Free-Test Request",
-        "to": "Open Free-Test Setup"
-      },
-      {
-        "logical_name": "FORM1_CONTAINED_PREDECESSOR",
-        "from": "Legacy Free-Test - Contained",
-        "to": "Start Free-Test Request"
-      }
-    ],
-    "rollback_policy": "Reverse only completed renames in the recorded reverse order after exact identity and label readback; never reuse a claimed destination label. Preserve the Form 1 hold and every binding. If runtime containment is separately required, disable the replacement by identity and retain the contained predecessor as the only visible fallback; a label rollback does not authorize an enabled-state change."
+    "readback": "Reconcile any ambiguous delete before another action. Verify the retired button and both exact independently identified local-only Functions are absent, the replacement label is prominent in its recorded scope, and its identity, Client Script, Standalone Function, module, layout, profile and enabled state are unchanged.",
+    "rollback_policy": "Permanent deletion has no assumed native undo. Contain a failed replacement by disabling that exact active launcher under existing containment authority and preserving the source-revision hold where active. Do not restore or recreate the retired button or either local-only Function, restore exposed credentials, rebind a direct URL-returning Function, or replay consumed evidence. Reintroduction requires a separate reviewed change.",
+    "historical_label_cutover": "The completed two-label migration and its old reverse-rename plan remain historical Git/private evidence, not an executable rollback after retirement."
   },
-  "activation_gates_scope": "Historical initial replacement installation gates, using the labels at that installation. They remain prerequisites for a new binding or runtime opening; the label-only cutover neither repeats installation nor reuses any consumed canary or approval.",
+  "activation_gates_scope": "Historical initial replacement installation gates, using the labels at that installation. They remain prerequisites for a new binding or runtime opening; the legacy retirement neither repeats installation nor reuses any consumed canary or approval.",
   "activation_gates": [
     "Verify the exact CRM organization, Development hosts, immutable source SHA, and disabled Production state before rendering any placeholder.",
     "Prove caller-specific Connections expose only the required API Gateway and private authentication headers.",
     "Disable both existing Open Free-Test Setup controls and independently read back that neither control has a direct CRM Function binding before either distinct Standalone Function is created or published.",
-    "Publish and read back the exact Standalone-function metadata and module-specific Client Scripts while both replacement controls remain disabled; retain the contained predecessor and both Button-category rollback functions unchanged.",
+    "Publish and read back the exact Standalone-function metadata and module-specific Client Scripts while both replacement controls remain disabled; preserve both other Button-category rollback functions unchanged; the retired local-only predecessor must not be recreated.",
     "Bind each disabled replacement control to only its reviewed module-specific Client Script, prove the exact layout, profile, module, event, source, and no-direct-Function binding, then pass one ZZZ SYNTHETIC Development ZDK function-execution canary for each module-specific Client Script; enable each control only after its own exact function category, state, return type, arguments, details.output response, and navigation readback succeeds.",
     "Run the ZZZ SYNTHETIC Form 1 and mandatory Form 2 journeys, approval, expected fail-closed activation, and idempotent never-active rollback canaries before widening access."
   ],
   "rollback": [
-    "Disable every replacement control instance by its approved module/button identity before restoring any predecessor function revision, and preserve their audit evidence.",
+    "Disable every replacement control instance by its approved module/button identity before restoring any prior verified active function revision, and preserve their audit evidence.",
     "Independently read back that both module-specific Client Script controls are disabled and have no direct binding to a URL-returning CRM Function.",
-    "Restore the retained Form 1 predecessor control as the only visible launcher if replacement validation fails.",
+    "Keep the failed replacement launcher disabled; do not restore or recreate the permanently retired Form 1 button or either exact retired local-only Function.",
     "Keep Catalyst deployment rows stopped and preserve every configuration, receipt, and route readback.",
     "Never delete historical CRM, Form, Catalyst, or Retell evidence as rollback."
   ],
