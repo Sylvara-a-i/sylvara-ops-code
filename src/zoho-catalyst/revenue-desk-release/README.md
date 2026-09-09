@@ -34,6 +34,16 @@ outside current acceptance. The gateway and worker packages remain in the
 immutable artifact/readback set only because the canonical call-runtime artifact
 is bundled; neither package may be invoked by the Journey-core acceptance run.
 
+Journey-core control requests represent no telephony deployment by omitting
+`deploymentId`, setting it to JSON `null`, or using the empty string. These are
+the three forms already accepted by the route-control selector and validator;
+the declaration records existing behavior, not a runtime change. Nonblank IDs
+and other value types are not Journey-core no-deployment values. Record identity,
+Form 2 evidence, deterministic action identity and all other guards still apply.
+Approval remains inactive, and activation stops before provider construction.
+This contract correction does not authorize runtime reopening or redeployment;
+preserve the deployed immutable manifest at its actual revision.
+
 The core profile preserves a closed twenty-four-route Development coexistence
 inventory: fourteen canonical Journey routes, four deferred canonical routes,
 and the six exact compatibility names in
