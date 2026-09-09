@@ -234,7 +234,7 @@
   ],
   "lead_legacy_retirement": {
     "status": "approved_desired_retirement_provider_readback_required",
-    "scope": "exact_legacy_lead_button_and_dedicated_function_only",
+    "scope": "exact_legacy_lead_button_dedicated_function_and_unused_duplicate_only",
     "module": "Leads",
     "layout": "Standard",
     "placement": "record details",
@@ -245,11 +245,17 @@
       "source_contract": "start_free_revenue_leak_test_request",
       "canonical_filename_is_provider_api_name": false
     },
+    "retired_function_roles": [
+      "exact_button_bound_local_only_function",
+      "exact_separately_approved_unused_local_only_duplicate"
+    ],
     "required_prestate": [
       "verified_replacement_native_launch_acceptance_without_reusing_its_consumed_allocation",
       "exact_native_legacy_button_binding_and_published_function_identity",
       "dedicated_function_executable_body_parity_with_retained_private_or_git_history",
       "complete_function_associations_allow_only_the_exact_legacy_button",
+      "separate_exact_unused_duplicate_identity_approval_and_same_local_only_body_parity",
+      "complete_unused_duplicate_function_associations_are_empty",
       "private_prestate_and_safe_containment_record"
     ],
     "independent_preparation": [
@@ -260,11 +266,14 @@
       "independently_read_back_button_absence",
       "require_zero_remaining_associations_for_exact_dedicated_function",
       "delete_exact_dedicated_function",
-      "independently_read_back_function_absence"
+      "independently_read_back_dedicated_function_absence",
+      "require_zero_remaining_associations_for_exact_unused_duplicate",
+      "delete_exact_unused_duplicate",
+      "independently_read_back_unused_duplicate_absence"
     ],
     "deletion_limits": {
       "buttons": 1,
-      "functions": 1
+      "functions": 2
     },
     "preserved": [
       "active_lead_and_deal_client_script_identities_associations_and_bytes",
@@ -284,8 +293,8 @@
     "runtime_changes_authorized": false,
     "source_revision_rebinding_authorized": false,
     "new_live_canary_allocation": false,
-    "readback": "Reconcile any ambiguous delete before another action. Verify the retired button and exact dedicated Function are absent, the replacement label is prominent in its recorded scope, and its identity, Client Script, Standalone Function, module, layout, profile and enabled state are unchanged.",
-    "rollback_policy": "Permanent deletion has no assumed native undo. Contain a failed replacement by disabling that exact active launcher under existing containment authority and preserving the source-revision hold where active. Do not restore or recreate the retired button or Function, restore exposed credentials, rebind a direct URL-returning Function, or replay consumed evidence. Reintroduction requires a separate reviewed change.",
+    "readback": "Reconcile any ambiguous delete before another action. Verify the retired button and both exact independently identified local-only Functions are absent, the replacement label is prominent in its recorded scope, and its identity, Client Script, Standalone Function, module, layout, profile and enabled state are unchanged.",
+    "rollback_policy": "Permanent deletion has no assumed native undo. Contain a failed replacement by disabling that exact active launcher under existing containment authority and preserving the source-revision hold where active. Do not restore or recreate the retired button or either local-only Function, restore exposed credentials, rebind a direct URL-returning Function, or replay consumed evidence. Reintroduction requires a separate reviewed change.",
     "historical_label_cutover": "The completed two-label migration and its old reverse-rename plan remain historical Git/private evidence, not an executable rollback after retirement."
   },
   "activation_gates_scope": "Historical initial replacement installation gates, using the labels at that installation. They remain prerequisites for a new binding or runtime opening; the legacy retirement neither repeats installation nor reuses any consumed canary or approval.",
@@ -300,7 +309,7 @@
   "rollback": [
     "Disable every replacement control instance by its approved module/button identity before restoring any prior verified active function revision, and preserve their audit evidence.",
     "Independently read back that both module-specific Client Script controls are disabled and have no direct binding to a URL-returning CRM Function.",
-    "Keep the failed replacement launcher disabled; do not restore or recreate the permanently retired Form 1 button or its dedicated Function.",
+    "Keep the failed replacement launcher disabled; do not restore or recreate the permanently retired Form 1 button or either exact retired local-only Function.",
     "Keep Catalyst deployment rows stopped and preserve every configuration, receipt, and route readback.",
     "Never delete historical CRM, Form, Catalyst, or Retell evidence as rollback."
   ],

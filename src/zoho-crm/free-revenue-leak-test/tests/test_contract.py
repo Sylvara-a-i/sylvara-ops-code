@@ -2435,18 +2435,22 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
     def test_legacy_retirement_is_bounded_and_preserves_active_launchers(self) -> None:
         retirement = self.callers["lead_legacy_retirement"]
         self.assertEqual(retirement["status"], "approved_desired_retirement_provider_readback_required")
-        self.assertEqual(retirement["scope"], "exact_legacy_lead_button_and_dedicated_function_only")
+        self.assertEqual(retirement["scope"], "exact_legacy_lead_button_dedicated_function_and_unused_duplicate_only")
         self.assertEqual(
             [retirement[key] for key in ("module", "layout", "placement", "profile")],
             ["Leads", "Standard", "record details", "Administrator"],
         )
-        self.assertEqual(retirement["deletion_limits"], {"buttons": 1, "functions": 1})
+        self.assertEqual(retirement["deletion_limits"], {"buttons": 1, "functions": 2})
         self.assertEqual(retirement["retired_control"], {
             "logical_name": "FORM1_CONTAINED_PREDECESSOR",
             "label": "Legacy Free-Test - Contained",
             "source_contract": "start_free_revenue_leak_test_request",
             "canonical_filename_is_provider_api_name": False,
         })
+        self.assertEqual(retirement["retired_function_roles"], [
+            "exact_button_bound_local_only_function",
+            "exact_separately_approved_unused_local_only_duplicate",
+        ])
         self.assertEqual(retirement["independent_preparation"], [
             "make_existing_start_free_test_request_prominent_without_invoking_or_rebinding_it",
         ])
@@ -2455,13 +2459,18 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
             "independently_read_back_button_absence",
             "require_zero_remaining_associations_for_exact_dedicated_function",
             "delete_exact_dedicated_function",
-            "independently_read_back_function_absence",
+            "independently_read_back_dedicated_function_absence",
+            "require_zero_remaining_associations_for_exact_unused_duplicate",
+            "delete_exact_unused_duplicate",
+            "independently_read_back_unused_duplicate_absence",
         ])
         self.assertEqual(retirement["required_prestate"], [
             "verified_replacement_native_launch_acceptance_without_reusing_its_consumed_allocation",
             "exact_native_legacy_button_binding_and_published_function_identity",
             "dedicated_function_executable_body_parity_with_retained_private_or_git_history",
             "complete_function_associations_allow_only_the_exact_legacy_button",
+            "separate_exact_unused_duplicate_identity_approval_and_same_local_only_body_parity",
+            "complete_unused_duplicate_function_associations_are_empty",
             "private_prestate_and_safe_containment_record",
         ])
         self.assertEqual(retirement["preserved"], [
@@ -2490,6 +2499,7 @@ class FreeRevenueLeakTestCrmPackageTests(unittest.TestCase):
         self.assertIn("operator pinning", prominent["policy"])
         self.assertIn("do not invoke", prominent["policy"])
         self.assertIn("Reconcile any ambiguous delete", retirement["readback"])
+        self.assertIn("both exact independently identified local-only Functions are absent", retirement["readback"])
         self.assertIn("Permanent deletion has no assumed native undo", retirement["rollback_policy"])
         self.assertIn("Do not restore or recreate", retirement["rollback_policy"])
         self.assertIn("replay consumed evidence", retirement["rollback_policy"])
