@@ -782,10 +782,21 @@ class FreeRevenueLeakReleaseContractTests(unittest.TestCase):
             "install all five form 1 assisted" in step.lower()
             for step in self.contract["deployment_order"]
         ))
-        self.assertTrue(any(
-            "retain the start free-test request predecessor" in step.lower()
-            for step in self.contract["rollback_order"]
-        ))
+        # Permanent legacy retirement uses containment, not recreation of the
+        # deleted control; both buildable scopes must retain that safe fallback.
+        for rollback in (
+            self.contract["rollback_order"],
+            self.contract["deployment_profiles"]["free-test-journey-core-v1"]["rollback_order"],
+        ):
+            self.assertTrue(any(
+                "keep a failed start free-test request launcher disabled" in step.lower()
+                and "do not recreate the retired local-only form 1 predecessor" in step.lower()
+                for step in rollback
+            ))
+            self.assertFalse(any(
+                "retain the start free-test request predecessor" in step.lower()
+                for step in rollback
+            ))
         release_form1_fields = self.contract["form1"]["hidden_audit_field_contract"]
         self.assertEqual(
             form1_fields["unconditional_hidden_audit_fields"],

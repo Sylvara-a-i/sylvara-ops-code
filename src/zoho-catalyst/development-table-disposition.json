@@ -241,7 +241,7 @@
       "action": "retain_bind_canonical",
       "active_promotion_allowed": false,
       "gate_profile": "retain_bind_empty",
-      "rollback": "Disable and unbind FORM1_ISSUE, FORM1_ACCESS, FORM1_EXCHANGE, FORM1_PREFILL, FORM1_SUBMISSION, the replacement CRM caller, and both Forms server callers; preserve every session row and the retained predecessor CRM control."
+      "rollback": "Disable and unbind FORM1_ISSUE, FORM1_ACCESS, FORM1_EXCHANGE, FORM1_PREFILL, FORM1_SUBMISSION, the replacement CRM caller, and both Forms server callers; preserve every session row and keep failed active CRM launchers disabled; do not recreate the retired local-only predecessor."
     },
     {
       "api_name": "Calls",

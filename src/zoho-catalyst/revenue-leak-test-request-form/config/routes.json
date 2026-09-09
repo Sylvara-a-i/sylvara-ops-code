@@ -117,7 +117,7 @@
   "rollback": {
     "first": "unbind the CRM assisted launcher and both Zoho Forms server-side callers",
     "then": "disable the five exact Development routes or the Development API Gateway",
-    "preserve": ["session rows", "CRM history", "public Form 1 native integration", "old CRM control"],
+    "preserve": ["session rows", "CRM history", "public Form 1 native integration", "failed active CRM launcher containment without recreating the retired local-only control"],
     "delete_history": false
   }
 }
