@@ -59,6 +59,10 @@ function installOfflineGuard() {
     const approvedExamples = ['revenue_desk_call_gateway', 'revenue_desk_route_control',
       'revenue_desk_call_worker'].map((functionName) =>
       path.resolve(canonicalGatewayRoot, functionName, '.env.example'));
+    // Explicit public source example for the report-only adapter boundary test;
+    // populated env files and every other credential path remain denied.
+    approvedExamples.push(path.resolve(__dirname,
+      '../../../crm-billing-orchestrator/functions/crm_billing_orchestrator/.env.example'));
     if (approvedExamples.includes(path.resolve(String(value)))) return false;
     return /(?:^|\/)(?:\.env(?:\.[^/]*)?|credentials?|secrets?|tokens?|\.ssh|\.aws|\.azure|\.catalyst|\.codex)(?:\/|$)/i.test(name);
   };

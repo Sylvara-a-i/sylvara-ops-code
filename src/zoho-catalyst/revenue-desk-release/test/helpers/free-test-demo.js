@@ -18,6 +18,10 @@ function forbiddenAdapter() {
 // protocol. A stale cursor cannot mutate an operation owned by another execution.
 function reportOperationStore(runtime) {
   const rows = runtime.store.rows.get('CRMBillingOperations');
+  const guards = new Map();
+  const guardKey = (binding) => binding.dealId;
+  const exactBinding = (guard, binding) => ['dealId', 'accountId', 'deploymentId',
+    'configurationVersion'].every((key) => guard[key] === binding[key]);
   const read = (key) => rows.find((row) => row.OPERATION_KEY === key);
   const transition = (cursor, patch) => {
     const current = read(cursor.OPERATION_KEY);
@@ -30,6 +34,35 @@ function reportOperationStore(runtime) {
   };
   return {
     async readByKey(key) { return structuredClone(read(key)); },
+    async readReportGuard(binding) {
+      const guard = guards.get(guardKey(binding));
+      assert.ok(!guard || exactBinding(guard, binding), 'Report guard binding cannot change');
+      return structuredClone(guard || null);
+    },
+    async claimReportGuard(binding, operationKey, expectedConfirmedKey) {
+      const key = guardKey(binding);
+      let guard = guards.get(key);
+      if (!guard) {
+        guard = { ...structuredClone(binding), confirmedOperationKey: null,
+          inflightOperationKey: null };
+        guards.set(key, guard);
+      }
+      assert.ok(exactBinding(guard, binding), 'Report guard binding cannot change');
+      const claimed = guard.confirmedOperationKey === expectedConfirmedKey
+        && (guard.inflightOperationKey === null || guard.inflightOperationKey === operationKey);
+      if (claimed) guard.inflightOperationKey = operationKey;
+      return { claimed, guard: structuredClone(guard) };
+    },
+    async completeReportGuard(binding, operationKey) {
+      const guard = guards.get(guardKey(binding));
+      assert.ok(guard && exactBinding(guard, binding), 'Exact report guard is required');
+      const completed = guard.inflightOperationKey === operationKey
+        || (guard.inflightOperationKey === null && guard.confirmedOperationKey === operationKey);
+      if (completed) Object.assign(guard, {
+        confirmedOperationKey: operationKey, inflightOperationKey: null,
+      });
+      return { completed, guard: structuredClone(guard) };
+    },
     async claimReportSummary(cursor, claimToken, at) {
       const result = transition(cursor, {
         STATUS: 'processing', LAST_OUTCOME: claimToken, UPDATED_AT: at,
@@ -63,7 +96,9 @@ function crmBridge(runtime, configurations, inputs, options = {}) {
       Deployment_Record_ID: config.deploymentId, Configuration_Version: config.configurationVersion,
       Stage: 'Test Live', Test_Status: 'Live', Results_Review_At: null,
       Subscription_Acceptance_Status: null, Subscription_Accepted_At: null,
-      Billing_Customer_ID: null, Billing_Subscription_ID: null,
+      Subscription_Acceptance_Version: null, Subscription_Start_Date: null,
+      Subscription_Status: null, Billing_Customer_ID: null, Billing_Subscription_ID: null,
+      Plan: null,
     },
     account: structuredClone(inputs[index].crm.account),
   }]));
@@ -73,6 +108,7 @@ function crmBridge(runtime, configurations, inputs, options = {}) {
     deploymentEnvironment: 'development', sourceRevision: runtime.config.sourceRevision,
     revenueDeskPipelineValue: 'Revenue Desk Sales', freeTestEntryOfferValue: 'Free 7-Day Missed-Call',
     initialSaleTypeValue: 'Initial Sale', testCompletedStatusValue: 'Completed',
+    reportMutableStageValue: 'Test Live',
     enablePaidSubscriptionPreparation: false,
   };
   const operations = reportOperationStore(runtime);
@@ -218,11 +254,6 @@ async function runFreeTestDemo() {
         workflow_failure_text: 'Illustrative missing intake detail requires operator review.' },
     ];
     for (const [index, analysis] of categories.entries()) await h.event('A', entries.A, index, analysis);
-    // One admitted call initially has no analysis. Unknown remains unknown; its
-    // late synthetic analysis revises the terminal report instead of becoming zero.
-    await h.event('A', entries.A, 'late', {}, 'call_ended');
-    const preliminary = await h.report('A');
-    assert.equal(preliminary.bookableOpportunities, null);
     for (let index = 0; index < 25; index += 1) {
       await h.event('B', entries.B, index, { outcome: 'potential_job', bookable_opportunity: true });
     }
@@ -232,17 +263,45 @@ async function runFreeTestDemo() {
     const expiryDenied = await h.inbound('A');
     assert.notEqual(expiryDenied.body?.call_inbound?.metadata?.resolver_status, 'Resolved');
     const beforeLate = await h.report('A');
+    await h.job({ mode: 'rebuild_report', deployment_id: 'deployment_A' });
+    await h.job({ mode: 'rebuild_report', deployment_id: 'deployment_B' });
+    await h.job({ mode: 'retry_scan' });
+    assert.equal(h.crm.effects.writes, 2);
+    assert.equal(h.crm.contexts.get(h.configurations[0].crmDealId).deal.Test_Status, 'Completed');
+    assert.equal(h.crm.contexts.get(h.configurations[0].crmDealId)
+      .deal.Test_Bookable_Opportunities, 2);
+    const originalOperations = h.runtime.store.rows.get('CRMBillingOperations')
+      .filter((row) => row.STATUS === 'completed').map((row) => structuredClone(row));
+    // An already-admitted call ends late and initially has no analysis. Unknown
+    // remains unknown; its first analysis revises the terminal report, not zero.
+    await h.event('A', entries.A, 'late', {}, 'call_ended');
+    const preliminary = await h.report('A');
+    assert.equal(preliminary.bookableOpportunities, null);
+    // A newly versioned source event arrives after terminal CRM completion. The
+    // report guard advances only from the exact previous confirmed summary.
     await h.event('A', entries.A, 'late', { outcome: 'potential_job', bookable_opportunity: true });
     const revised = await h.job({ mode: 'rebuild_report', deployment_id: 'deployment_A' });
     assert.equal(revised.report.bookableOpportunities, 3);
     assert.notEqual(revised.report.sourceModifiedAt, beforeLate.sourceModifiedAt);
-    await h.job({ mode: 'rebuild_report', deployment_id: 'deployment_B' });
     // The actual worker dispatches the report through the production dispatcher
     // into an in-memory HTTP-shaped adapter and actual CRM lifecycle handler.
     await h.job({ mode: 'retry_scan' });
     const operations = h.runtime.store.rows.get('CRMBillingOperations');
-    const latest = operations.filter((row) => row.STATUS === 'completed');
+    const latest = [];
+    for (const configuration of h.configurations) {
+      const guard = await h.crm.operations.readReportGuard({
+        dealId: configuration.crmDealId,
+        accountId: h.crm.contexts.get(configuration.crmDealId).account.id,
+        deploymentId: configuration.deploymentId,
+        configurationVersion: configuration.configurationVersion,
+      });
+      latest.push(operations.find((row) => row.OPERATION_KEY === guard.confirmedOperationKey));
+    }
     assert.equal(latest.length, 2);
+    assert.equal(operations.filter((row) => row.STATUS === 'completed').length, 3);
+    for (const original of originalOperations) {
+      assert.deepEqual(operations.find((row) => row.OPERATION_KEY === original.OPERATION_KEY), original);
+    }
     const writesBeforeReplay = h.crm.effects.writes;
     for (const operation of latest) await h.dispatcher.dispatch(operation.CRM_DEAL_ID, operation.OPERATION_KEY);
     assert.equal(h.crm.effects.writes, writesBeforeReplay);
@@ -283,6 +342,7 @@ async function runFreeTestDemo() {
         reportOnlyCrmReadback: true, replayWithoutSecondWrite: true, sevenDayExpiry: true,
         connectedCallLimit: true,
         absentAnalysisWithheld: true, lateAnalysisReportRevision: true,
+        completedCrmSummaryRevision: true, previousCompletedReceiptPreserved: true,
         actualVoiceOrForwardingProved: false },
       effects: { network: 0, provider: 0, crm: 0, email: 0, sms: 0 },
       simulatedEffects: { ...h.crm.effects,

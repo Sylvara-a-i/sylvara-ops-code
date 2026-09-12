@@ -347,6 +347,10 @@ function loadConfig(environment = process.env, {
     freeTestEntryOfferValue: boundedText(environment, "FREE_TEST_ENTRY_OFFER_VALUE"),
     initialSaleTypeValue: boundedText(environment, "INITIAL_SALE_TYPE_VALUE"),
     subscriptionProposedStageValue: boundedText(environment, "SUBSCRIPTION_PROPOSED_STAGE_VALUE"),
+    // No display-label default: v3 report writes require the tenant's verified
+    // stored pre-review stage value. Historical exact readback remains available.
+    reportMutableStageValue: environment.REPORT_MUTABLE_STAGE_VALUE
+      ? boundedText(environment, "REPORT_MUTABLE_STAGE_VALUE") : null,
     testCompletedStatusValue: boundedText(environment, "TEST_COMPLETED_STATUS_VALUE"),
     maxBodyBytes: integer(environment, "MAX_BODY_BYTES", 2048, 256, 8192),
     outboundTimeoutMs: integer(environment, "OUTBOUND_TIMEOUT_MS", 5000, 250, 10000),

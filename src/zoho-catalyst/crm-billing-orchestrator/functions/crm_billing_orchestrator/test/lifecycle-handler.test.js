@@ -162,6 +162,7 @@ function harness(config, initialContext, options = {}) {
   let current = structuredClone(initialContext);
   let contextReads = 0;
   const calls = [];
+  let reportGuard = structuredClone(options.initialReportGuard ?? null);
   const crmClient = {
     getContext: async () => {
       contextReads += 1;
@@ -217,6 +218,22 @@ function harness(config, initialContext, options = {}) {
     },
   };
   const operationStore = {
+    readReportGuard: async () => structuredClone(reportGuard),
+    claimReportGuard: async (binding, key, expected) => {
+      reportGuard ??= { ...binding, confirmedOperationKey: null, inflightOperationKey: null };
+      if (reportGuard.confirmedOperationKey !== expected
+        || (reportGuard.inflightOperationKey && reportGuard.inflightOperationKey !== key)) {
+        return { claimed: false, guard: structuredClone(reportGuard) };
+      }
+      reportGuard.inflightOperationKey = key;
+      return { claimed: true, guard: structuredClone(reportGuard) };
+    },
+    completeReportGuard: async (_, key) => {
+      if (reportGuard?.inflightOperationKey !== key) return { completed: false };
+      reportGuard.confirmedOperationKey = key;
+      reportGuard.inflightOperationKey = null;
+      return { completed: true, guard: structuredClone(reportGuard) };
+    },
     claim: async (input) => {
       calls.push(["claim", input]);
       if (typeof options.claim === "function") return options.claim(input);
@@ -577,6 +594,24 @@ test("reviewed Deal permits exact report replay but rejects a differing report r
   assert.equal(replay.duplicate, true);
   assert.equal(exact.calls.some(([kind]) => kind === "crm_report_update"), false);
   assert.equal(exact.calls.some(([kind]) => kind === "report_transition"), true);
+});
+
+test("legacy initial reports cannot bypass a v3 confirmed or in-flight writer guard", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const selected = terminalSummary();
+  const row = reportOperation(config, selected);
+  for (const guard of [
+    { confirmedOperationKey: null, inflightOperationKey: "d".repeat(64) },
+    { confirmedOperationKey: "d".repeat(64), inflightOperationKey: null },
+  ]) {
+    const h = harness(config, context(config, unreviewedReportDeal({ Test_Status: "Live" })), {
+      initialReportGuard: guard, readOperation: async () => structuredClone(row),
+    });
+    await assert.rejects(h.lifecycle.handle({ action: "sync_report_summary",
+      dealId: selected.dealId, operationKey: row.OPERATION_KEY }),
+    (error) => error.publicCode === "reconciliation_required");
+    assert.equal(h.calls.some(([kind]) => kind === "crm_report_update" || kind === "claim_report"), false);
+  }
 });
 
 test("report sync permits only Live to Completed and Completed exact replay", async () => {

@@ -43,6 +43,7 @@
     { "name": "FREE_TEST_ENTRY_OFFER_VALUE", "classification": "private-crm-contract", "required": true },
     { "name": "INITIAL_SALE_TYPE_VALUE", "classification": "private-crm-contract", "required": true },
     { "name": "SUBSCRIPTION_PROPOSED_STAGE_VALUE", "classification": "private-crm-contract", "required": true },
+    { "name": "REPORT_MUTABLE_STAGE_VALUE", "classification": "private-crm-contract", "required_when": "schema-v3 terminal report mutations enabled", "constraint": "Exact independently verified stored API value of the pre-review Test Live stage; no display-label default. Missing value contains v3 writes but preserves exact readback." },
     { "name": "CLOSED_WON_STAGE_VALUE", "classification": "private-crm-contract", "required_when": "ENABLE_PAID_SUBSCRIPTION_PREPARATION=true" },
     { "name": "TEST_COMPLETED_STATUS_VALUE", "classification": "private-crm-contract", "required": true },
     { "name": "MAX_BODY_BYTES", "classification": "bounded-runtime-policy", "required": false },

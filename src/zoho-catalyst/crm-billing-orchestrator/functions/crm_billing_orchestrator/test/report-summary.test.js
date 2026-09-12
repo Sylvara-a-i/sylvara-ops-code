@@ -5,6 +5,8 @@ const test = require("node:test");
 const { loadConfig } = require("../lib/config");
 const {
   SUMMARY_FIELDS,
+  REVISION_FIELDS,
+  isNewerReport,
   parseReportSummary,
   reportSummaryIdentity,
   reportSummaryPatch,
@@ -45,7 +47,30 @@ function summary(overrides = {}) {
 }
 
 test("runtime producer and CRM consumer use the same canonical summary fields", () => {
-  assert.deepEqual(PRODUCER_SUMMARY_FIELDS, SUMMARY_FIELDS);
+  assert.deepEqual(PRODUCER_SUMMARY_FIELDS, REVISION_FIELDS);
+  assert.deepEqual(REVISION_FIELDS.slice(0, -1), SUMMARY_FIELDS);
+});
+
+test("v3 revisions require strict same-owner, same-terminal source version dominance", () => {
+  const keyA = `c:${"a".repeat(64)}`;
+  const keyB = `c:${"b".repeat(64)}`;
+  const first = parseReportSummary(summary({ schemaVersion: 3, callsCaptured: 1, sourceVersions: [[keyA, 2]] }));
+  const newer = parseReportSummary(summary({ schemaVersion: 3, callsCaptured: 2, sourceVersions: [[keyA, 3], [keyB, 1]] }));
+  assert.equal(isNewerReport(first, newer), true);
+  assert.equal(isNewerReport(newer, first), false);
+  assert.equal(isNewerReport(first, first), false);
+  assert.equal(isNewerReport(summary(), newer), false);
+  for (const overrides of [
+    { dealId: "100000000000003" }, { deploymentId: "other" }, { configurationVersion: "other" },
+    { testStartAt: "2026-08-20T15:00:00.000Z" }, { testEndAt: "2026-08-23T15:00:00.000Z" },
+    { testEndReason: "Technical Failure" }, { sourceVersions: [[keyB, 3]] },
+    { sourceVersions: [[keyA, 1], [keyB, 3]] },
+  ]) assert.equal(isNewerReport(first, { ...newer, ...overrides }), false);
+  for (const vector of [null, {}, [[keyA, 0]], [[keyA, 1.5]], [[keyA, 1], [keyA, 2]],
+    [[keyB, 1], [keyA, 2]], [["unscoped", 1]], [[keyA, 1, "extra"]], [[`n:${"a".repeat(64)}`, 1]]]) {
+    assert.throws(() => parseReportSummary(summary({ schemaVersion: 3, sourceVersions: vector })));
+  }
+  assert.throws(() => parseReportSummary(summary({ schemaVersion: 3, callsCaptured: 2, sourceVersions: [[keyA, 1]] })));
 });
 
 test("report-summary patch matches verified CRM field families and never fabricates review or Stage", () => {

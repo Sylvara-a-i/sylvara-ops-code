@@ -19,6 +19,7 @@ const {
   validateReportOperation,
 } = require("./report-summary");
 const { CANONICAL_PLAN_BY_CRM_API_VALUE } = require("./crm-client");
+const { syncVersionedReport } = require("./versioned-report");
 
 const PAID_ACTION = "prepare_paid_subscription";
 const PAID_LIFECYCLE_ACTIONS = new Set([PAID_ACTION, "reconcile"]);
@@ -410,6 +411,27 @@ function createLifecycleHandler(
       .has(operation.STATUS)) fail("CRM report-summary operation is unresolved", {
       ambiguous: true, publicCode: "reconciliation_required", status: 503,
     });
+    if (summary.schemaVersion === 3) {
+      return syncVersionedReport({
+        config, state, operation, summary, crmClient, operationStore,
+        validateContext: (context) => validateCommon(context, config), nowIso: lastSyncAt,
+      });
+    }
+    const legacyBinding = {
+      dealId: state.deal.id, accountId: state.accountId,
+      deploymentId: summary.deploymentId, configurationVersion: summary.configurationVersion,
+    };
+    const finishLegacyGuard = async () => {
+      const guard = await operationStore.readReportGuard(legacyBinding);
+      if (!guard) return; // Historical exact readback does not invent a migration cursor.
+      if (guard.inflightOperationKey === operationKey) {
+        const result = await operationStore.completeReportGuard(legacyBinding, operationKey, lastSyncAt());
+        if (result.completed) return;
+      } else if (!guard.inflightOperationKey && guard.confirmedOperationKey === operationKey) return;
+      fail("Legacy report writer requires reconciliation", {
+        ambiguous: true, publicCode: "reconciliation_required", status: 503,
+      });
+    };
     const patch = reportSummaryPatch(config, summary);
     const patchMatches = (deal) => Object.entries(patch).every(([field, expected]) => (
       expected === null
@@ -481,13 +503,26 @@ function createLifecycleHandler(
           "CRM report-summary completion requires fresh Deal readback",
         );
       }
+      const guard = await operationStore.readReportGuard(legacyBinding);
+      if (guard && guard.inflightOperationKey !== operationKey
+        && (guard.inflightOperationKey || guard.confirmedOperationKey !== operationKey)) {
+        fail("Legacy report completion conflicts with the current writer", {
+          ambiguous: true, publicCode: "reconciliation_required", status: 503,
+        });
+      }
       if (cursor?.STATUS === "completed"
-        && cursor?.LAST_OUTCOME === "report_summary_readback_confirmed") return cursor;
+        && cursor?.LAST_OUTCOME === "report_summary_readback_confirmed") {
+        await finishLegacyGuard();
+        return cursor;
+      }
       try {
         const result = await operationStore.transitionReportSummary(
           cursor, "completed", "report_summary_readback_confirmed", lastSyncAt(),
         );
-        if (result.transitioned) return result.row;
+        if (result.transitioned) {
+          await finishLegacyGuard();
+          return result.row;
+        }
       } catch {
         // A failed or semantically conflicting CAS is never retried with a stale cursor.
       }
@@ -526,6 +561,14 @@ function createLifecycleHandler(
         "Deal Test_Status does not permit an automatic terminal report transition",
       );
     }
+    // Retained v1/v2 initial reports share the same per-Deal serialization gate.
+    // They cannot race v3 or bootstrap an automatic Completed-schema migration.
+    const legacyReservation = await operationStore.claimReportGuard(
+      legacyBinding, operationKey, null, lastSyncAt(),
+    );
+    if (!legacyReservation.claimed) fail("Legacy report writer is already reserved", {
+      ambiguous: true, publicCode: "reconciliation_required", status: 503,
+    });
     const claimToken = `report_claim_${crypto.randomBytes(16).toString("hex")}`;
     const claim = await operationStore.claimReportSummary(operation, claimToken, lastSyncAt());
     if (!claim.claimed) {
@@ -576,6 +619,12 @@ function createLifecycleHandler(
       return Object.freeze({ outcome: "report_summary_readback_confirmed", duplicate: true });
     }
 
+    const preWriteGuard = await operationStore.readReportGuard(legacyBinding);
+    if (preWriteGuard?.inflightOperationKey !== operationKey || preWriteGuard.confirmedOperationKey) {
+      fail("Legacy report writer changed before write-start", {
+        ambiguous: true, publicCode: "reconciliation_required", status: 503,
+      });
+    }
     let writeStart;
     try {
       writeStart = await operationStore.beginReportSummaryWrite(

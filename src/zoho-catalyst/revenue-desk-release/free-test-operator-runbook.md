@@ -82,13 +82,16 @@ This limitation does not authorize serving the same file through a workaround.
    summary. Keep the `sync_report_summary` path in `crm_billing_orchestrator`;
    financial actions remain disabled. Review failed/unknown deliveries before
    retry; use existing bounded recovery, not new events to disguise ambiguity.
-   **Terminal report conflict:** the existing CRM contract permits Live → Completed
-   or an exact Completed replay. A changed late revision after CRM completion
-   remains `report_test_status_conflict`, even when the local report correctly
-   includes an admitted 26th call. Preserve both revisions and the pending
-   operation; stop automatic retries. Do not reopen Live, reset the claim, or
-   overwrite a reviewed summary. A separately reviewed operator reconciliation
-   procedure or versioned conditional-update contract is still required.
+   **Late terminal evidence:** the local v3 candidate can revise an unreviewed
+   Completed summary after a verified source-version advance, including an
+   already-admitted 26th call or late analysis. It preserves the original terminal
+   dates, status and receipts. A per-Deal guard serializes writes; ambiguous outcomes
+   remain readback-only. Missing/reviewed/paid state, unrelated or regressed evidence
+   stays contained. This is offline acceptance, not an installed runtime claim.
+   Cutover requires the report-only consumer and shared producer at the intended
+   revision, existing-table guard support and an independently verified stored
+   `REPORT_MUTABLE_STAGE_VALUE`. Retained v1/v2 Completed summaries are not silently
+   migrated. Do not reset a guard, reopen Live or overwrite reviewed results.
 8. **Stop and restore.** Stop/revoke backend admission first for early/customer
    stop, expiry, call limit, wrong binding or ambiguity. Settle already-admitted
    calls and disclose in-flight overshoot. Preserve receipts and late revisions.
@@ -199,9 +202,11 @@ supplemental free-test reporting packet because Journey-core preserves its route
 as deferred. This does not authorize the seven-function commercial profile,
 financial actions, Analytics, or a live worker invocation.
 
-This local candidate changes route decoding/admission safeguards and adds
-preparation/demo tests; it does not change live Forms, CRM records, secrets or
-provider state. The report-only orchestration path is tested, not financially
+The local follow-up also changes report producer/consumer lineage and per-Deal
+serialization. The demo now preserves three confirmed synthetic report receipts,
+uses three simulated CRM writes for 32 calls, and shows post-completion late
+analysis without re-opening a route. It does not change live Forms, CRM records,
+secrets or provider state. The report-only path is tested, not financially
 enabled. The existing accepted release remains installed. Current tests establish
 source behavior only; affected runtime acceptance must be reassessed for the new
 revision. Keep the current hold/disabled-provider posture through cutover.

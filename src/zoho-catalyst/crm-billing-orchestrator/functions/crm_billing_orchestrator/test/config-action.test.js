@@ -254,6 +254,14 @@ test("configuration is immutable active Development or dependency-free dark Prod
   }
 });
 
+test("v3 report stage requires an explicit stored value and never guesses a display label", () => {
+  assert.equal(loadConfig(baseEnvironment(), { artifactRevision: REVISION }).reportMutableStageValue, null);
+  assert.equal(loadConfig(baseEnvironment({ REPORT_MUTABLE_STAGE_VALUE: "synthetic_stored_stage" }),
+    { artifactRevision: REVISION }).reportMutableStageValue, "synthetic_stored_stage");
+  assert.throws(() => loadConfig(baseEnvironment({ REPORT_MUTABLE_STAGE_VALUE: "bad\nvalue" }),
+    { artifactRevision: REVISION }));
+});
+
 test("disabled paid mode accepts no paid catalog while report configuration stays mandatory", () => {
   const config = loadConfig(withoutConditionalPaidVariables(), { artifactRevision: REVISION });
   assert.equal(config.enablePaidSubscriptionPreparation, false);

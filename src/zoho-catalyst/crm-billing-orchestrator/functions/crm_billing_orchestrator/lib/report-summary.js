@@ -3,11 +3,12 @@
 const crypto = require("node:crypto");
 
 const REPORT_SUMMARY_ACTION = "sync_report_summary";
-const REPORT_SUMMARY_DOMAIN = "sylvara.crm-report-summary.v2";
-const REPORT_SUMMARY_SCHEMA_VERSION = 2;
+const REPORT_SUMMARY_DOMAIN = "sylvara.crm-report-summary.v3";
+const REPORT_SUMMARY_SCHEMA_VERSION = 3;
 const REPORT_SUMMARY_DOMAINS = Object.freeze({
   1: "sylvara.crm-report-summary.v1",
-  2: REPORT_SUMMARY_DOMAIN,
+  2: "sylvara.crm-report-summary.v2",
+  3: REPORT_SUMMARY_DOMAIN,
 });
 const HASH = /^[a-f0-9]{64}$/;
 const RECORD_ID = /^[1-9][0-9]{7,29}$/;
@@ -27,6 +28,37 @@ const SUMMARY_FIELDS = Object.freeze([
   "recommendedPaidCoverage", "expectedMonthlyConnectedMinutesMin",
   "expectedMonthlyConnectedMinutesMax", "dataConfidenceNotes",
 ]);
+const REVISION_FIELDS = Object.freeze([...SUMMARY_FIELDS, "sourceVersions"]);
+
+function sourceVersions(value) {
+  if (!Array.isArray(value) || value.length > 100) fail("Report source versions are invalid");
+  let previous = "";
+  for (const entry of value) {
+    if (!Array.isArray(entry) || entry.length !== 2
+      || !/^c:[a-f0-9]{64}$/.test(entry[0]) || entry[0] <= previous
+      || !Number.isSafeInteger(entry[1]) || entry[1] < 1) {
+      fail("Report source versions are invalid");
+    }
+    previous = entry[0];
+  }
+  return value;
+}
+
+// A content hash is not a clock. Only a strict component-wise advance of the
+// exact source snapshot can supersede an already confirmed terminal report.
+function isNewerReport(previous, next) {
+  if (previous.schemaVersion !== 3 || next.schemaVersion !== 3
+    || !["dealId", "deploymentId", "configurationVersion", "reportSchemaVersion",
+      "testStartAt", "testEndAt", "testEndReason"].every((key) => previous[key] === next[key])) {
+    return false;
+  }
+  sourceVersions(previous.sourceVersions);
+  sourceVersions(next.sourceVersions);
+  const versions = new Map(next.sourceVersions);
+  return previous.sourceVersions.every(([key, version]) => versions.get(key) >= version)
+    && (next.sourceVersions.length > previous.sourceVersions.length
+      || previous.sourceVersions.some(([key, version]) => versions.get(key) > version));
+}
 
 class ReportSummaryError extends Error {
   constructor(message, { ambiguous = false, publicCode = "lifecycle_state_invalid", status = 409 } = {}) {
@@ -53,11 +85,12 @@ function hmac(secret, purpose, material, schemaVersion) {
 function canonicalSummary(summary) {
   const keys = summary && typeof summary === "object" && !Array.isArray(summary)
     ? Object.keys(summary) : [];
-  if (keys.length !== SUMMARY_FIELDS.length
-    || !SUMMARY_FIELDS.every((field, index) => keys[index] === field)) {
+  const fields = summary?.schemaVersion === 3 ? REVISION_FIELDS : SUMMARY_FIELDS;
+  if (keys.length !== fields.length
+    || !fields.every((field, index) => keys[index] === field)) {
     fail("CRM report summary fields are invalid");
   }
-  return JSON.stringify(SUMMARY_FIELDS.map((field) => [field, summary[field]]));
+  return JSON.stringify(fields.map((field) => [field, summary[field]]));
 }
 
 function count(value, name) {
@@ -80,6 +113,13 @@ function parseReportSummary(value) {
     fail("CRM report summary payload is invalid");
   }
   canonicalSummary(summary);
+  if (summary.schemaVersion === 3) {
+    sourceVersions(summary.sourceVersions);
+    if (summary.sourceVersions.length !== summary.callsCaptured
+      || Buffer.byteLength(JSON.stringify(summary), "utf8") > 10000) {
+      fail("Report source versions do not match the handled call count");
+    }
+  }
   if (!Number.isSafeInteger(summary.schemaVersion)
     || !Object.hasOwn(REPORT_SUMMARY_DOMAINS, summary.schemaVersion)
     || summary.reportSchemaVersion !== 2
@@ -234,8 +274,10 @@ module.exports = {
   REPORT_SUMMARY_DOMAINS,
   REPORT_SUMMARY_SCHEMA_VERSION,
   SUMMARY_FIELDS,
+  REVISION_FIELDS,
   ReportSummaryError,
   canonicalSummary,
+  isNewerReport,
   parseReportSummary,
   reportSummaryIdentity,
   reportSummaryOperationKey,
