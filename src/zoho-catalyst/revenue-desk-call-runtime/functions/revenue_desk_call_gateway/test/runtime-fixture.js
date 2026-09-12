@@ -61,7 +61,9 @@ function configuration(letter) {
     configurationVersion: `cfg_${letter}_v1`, approved: true,
     companyName: `Synthetic Plumbing ${letter}`, companyDescription: 'Synthetic contractor.',
     businessHours: 'Monday-Friday 08:00-17:00 America/Chicago',
-    coverageMode: letter === 'A' ? 'AfterHoursOnly' : 'NoAnswerOverflowOnly',
+    // Both admissible clients use the timing-independent mode. Separate
+    // regressions construct overflow history and prove the execution hold.
+    coverageMode: 'AfterHoursOnly',
     servicesHandled: letter === 'A' ? ['water heaters'] : ['drains'],
     unsupportedServices: letter === 'A' ? ['septic pumping'] : ['well drilling'],
     serviceArea: letter === 'A' ? { cities: ['Lenexa'], zips: ['66215'] }
@@ -73,8 +75,8 @@ function configuration(letter) {
       channel: 'email', email: `${letter.toLowerCase()}@example.invalid`, mobile: null,
     },
     phoneSystemProvider: 'Synthetic PBX',
-    approvedTestRoute: letter === 'A' ? 'After Hours Only' : 'No Answer / Overflow Only',
-    noAnswerDelay: letter === 'A' ? null : 25,
+    approvedTestRoute: 'After Hours Only',
+    noAnswerDelay: null,
     forwardingAdministratorName: `Synthetic Administrator ${letter}`,
     forwardingAdministratorMobile: letter === 'A' ? '+15550102301' : '+15550102302',
     approvedFallbackDestination: 'Voicemail', approvedFallbackNumber: null,
@@ -100,7 +102,7 @@ function deploymentRow(config, letter, rowId) {
     APPROVED_ROUTE_FINGERPRINT: null, GO_LIVE_APPROVED_AT: null,
     ACTIVATION_EVENT_KEY: null,
     MONITOR_AGENT_ID: config.sharedAgentId, MONITOR_AGENT_VERSION: config.sharedAgentVersion,
-    COVERAGE_MODE: letter === 'A' ? 'AfterHoursOnly' : 'NoAnswerOverflowOnly',
+    COVERAGE_MODE: 'AfterHoursOnly',
     TEST_STATUS: 'Live', GO_LIVE_APPROVAL_STATUS: 'Approved',
     APPROVED_START_AT: '2026-08-20T12:00:00.000Z', ACTUAL_START_AT: '2026-08-20T12:00:00.000Z',
     EXPIRES_AT: '2026-08-27T12:00:00.000Z', CALL_LIMIT: 25, HANDLED_COUNT: 0,
@@ -326,7 +328,7 @@ function eventPayload(event, callId, metadata, letter = 'A', data = {}) {
     // Keep the default fixture identical to the sanitized 11-field live readback.
     // Tests for the expanded runtime contract add those fields explicitly in `data`.
     outcome: 'potential_job',
-    coverage_trigger: letter === 'A' ? 'AfterHours' : 'NoAnswerOverflow',
+    coverage_trigger: 'AfterHours',
     caller_name: `Caller ${letter}`,
     callback_number: letter === 'A' ? '+15551110001' : '+15551110002',
     customer_type: 'new', caller_intent: 'service_request',
@@ -438,4 +440,5 @@ function runtimeFixture(overrides = {}) {
 module.exports = {
   NOW, SOURCE_REVISION, environment, configuration, deploymentRow, configurationRow, RuntimeMemoryStore,
   payloadInbound, eventPayload, signature, retryJobRequest, retryJobContext, invoke, runtimeFixture,
+  authorizationRows,
 };

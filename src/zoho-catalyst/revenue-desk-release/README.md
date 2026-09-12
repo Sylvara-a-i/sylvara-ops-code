@@ -1,5 +1,12 @@
 # Revenue Desk Release Boundary
 
+For the narrower zero-spend preparation sprint, use the
+[local synthetic walkthrough and operator runbook](free-test-operator-runbook.md).
+It exercises the backend and report-only CRM path with fake adapters; it neither
+extends this package's closed live release profiles nor authorizes Retell,
+report-route enablement, or a deployment. Its unresolved provider, terminal-report
+reconciliation and published-entry gates remain separate from accepted Journey-core.
+
 This package creates and verifies immutable release manifests for three closed profiles. The default `canonical-seven` profile preserves the seven canonical Catalyst functions, thirteen tables, and both Function Job pools. The Development-only `setup-journey` profile preserves the original full setup-automation boundary. The current Development installation-acceptance profile, `free-test-journey-core-v1`, binds the five source/artifact-parity functions, twelve existing tables, one existing Function Job pool, the mandatory Form 1 and Form 2 contracts, the four current module-specific CRM controls without the retired local-only predecessor, and the Catalyst-authoritative Journey-core scope to one Git commit. The scope is desired-state provenance, not provider-observed state. The builder does not trust the caller's `function=path` label: it inspects the artifact's Catalyst target, package and lock identity, and immutable source-revision stamp, then produces a provenance digest that also binds the artifact hash to the exact Git-derived source-tree digest.
 
 CRM-only retirement changes the desired contract digest, not the already accepted Catalyst runtime. Both buildable Journey profiles exclude the deleted local-only source. Preserve the prior immutable deployment manifest at its actual revision; do not relabel it or redeploy five unchanged functions solely for this CRM cleanup. A later separately authorized whole-release build must generate a new exact manifest from that revision.

@@ -6,7 +6,7 @@ This runbook governs the private `revenue_desk_route_control` target. It adds ex
 
 ## Prepare after Journey-core, before metered provider testing
 
-Owner: Sylvara operator. Revision: 2026-09-09. Status: offline preparation only.
+Owner: Sylvara operator. Revision: 2026-09-12. Status: offline preparation only.
 
 The [Journey-core profile](../revenue-desk-release/free-test-journey-core-v1-release-contract.json)
 accepts setup and internal approval without a telephony deployment. Its expected
@@ -28,7 +28,7 @@ Prepare a private, non-deployable draft and list unresolved fields explicitly:
 | Company and phone-system provider | Account fields written by Form 2 | Enforce runtime length limits; reject overflow rather than truncate |
 | Business hours | Submitted Account text | Confirm timezone, days and exceptions; Form 2 permits longer text than the runtime's 500-character limit |
 | Services and service area | Submitted Account choices, Other detail and area text | Confirm explicit supported services, cities and ZIPs; do not infer metro coverage, radius, exclusions or the meaning of Other |
-| Coverage and approved route | Exact CRM stored route | Decode only the three canonical stored values; preserve agreement with the canonical coverage mode |
+| Coverage and approved route | Exact CRM stored reference or canonical label | Decode the three exact stored aliases or preserve their three exact canonical labels, matching Form 2; reject case/whitespace variants and runtime mode names |
 | No-answer delay | After-hours-only has no delay; other modes retain the exact CRM preference | `4 Rings`, `5 Rings`, `6 Rings`, `Provider Default` and `Not Sure` are not numeric timing evidence. Require separately verified provider value **and unit**; do not use `Number(...)`, assume seconds per ring, overwrite the CRM choice or invent a default |
 | Urgent conditions and callback expectation | Separately approved business rules | Form 2 handling preferences do not define urgency or promise callback timing; require explicit truthful wording |
 | Notification recipient | Exact approved Deal alert fields and existing recipient approval | Keep the approved email-only scope, server-owned recipient identity and dry-run mode; do not infer mobile/SMS authority |
@@ -36,12 +36,28 @@ Prepare a private, non-deployable draft and list unresolved fields explicitly:
 | Company description and unsupported services | Explicit optional policy or approved content | Do not manufacture missing business facts |
 | Agent/version, number, source, environment and lifecycle | Fresh server/operator/provider evidence | No respondent-supplied ownership, publication, binding, start time or activation authority |
 
-The current full-provider control still cannot reconcile Form 2 ring-choice
-labels to a verified numeric delay. Non-after-hours preparation remains blocked
-until that explicit binding contract and its tests exist. Merely making the
-coverage enum accept combined coverage does not close this gap. Likewise, exact
+The current full-provider control cannot reconcile Form 2 ring-choice labels or
+a bare integer to a provider-verified value, unit and source. It therefore returns
+`PROVIDER_TIMING_UNVERIFIED` for new overflow/combined approval, activation,
+Prepared or Completed control replay, inbound admission, and number-only fallback
+events without prior ownership proof. These modes are not accepted for execution;
+they remain supported schema values for historical evidence. Explicit rollback,
+previously admitted call settlement, reporting and expiry remain available.
+Readiness does not count a timing-blocked deployment as active. Implement and
+review the explicit provider timing binding before reopening either mode; never
+rewrite old receipts or infer seconds from ring labels. Likewise, exact
 phone comparison remains fail-closed until provider preparation binds the
 submitted phone to verified E.164; no silent normalization is authorized here.
+
+This correction replaces PR #84's assumption that any valid numeric delay was
+verified. The regression suite covers exact alias/canonical approval replay,
+unapplied and applied Prepared decisions, Completed decisions, zero new provider
+work for blocked modes, historical settlement and expiry, and explicit rollback.
+The fixtures use in-memory adapters and synthetic signed history only. Existing
+Development artifacts and receipts are unchanged; a later runtime rollout needs
+its own immutable candidate, approval, readback and containment plan. Safe code
+rollback must retain this timing hold rather than restore the known-unsafe
+overflow/combined execution path.
 
 For a zero-metered-use pass, use deterministic local fixtures and configuration
 readback only. Do not invoke a model, playground, text/audio simulation, voice
