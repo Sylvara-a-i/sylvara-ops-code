@@ -10,9 +10,10 @@ const { renderFreeTestDemo } = require('../lib/free-test-demo-view');
 // script must fail the test rather than leave its code outside the assertions.
 function singleInlineScript(html) {
   assert.equal((html.match(/<script\b/gi) || []).length, 1, 'Exactly one script tag is allowed');
-  const scripts = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script\s*>/gi)];
+  const scripts = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script\b[^>]*>/gi)];
   assert.equal(scripts.length, 1, 'Exactly one complete script is required');
   assert.match(scripts[0][0], /^<script>/i, 'The script must have no attributes');
+  assert.ok(scripts[0][0].toLowerCase().endsWith('</script>'), 'The closing script tag must be exact');
   return scripts[0][1];
 }
 
@@ -59,6 +60,9 @@ test('script inspection rejects extra, incomplete, or attributed scripts regardl
   assert.throws(() => singleInlineScript('<script>approved()</script><ScRiPt>unexpected()</ScRiPt>'), /Exactly one script tag/);
   assert.throws(() => singleInlineScript('<script>incomplete()'), /Exactly one complete script/);
   assert.throws(() => singleInlineScript('<script src="https://invalid.example"></script>'), /no attributes/);
+  assert.throws(() => singleInlineScript('<script>unexpected()</script\t\n bar>'), /closing script tag must be exact/);
+  assert.throws(() => singleInlineScript('<script>unexpected()</SCRIPT >'), /closing script tag must be exact/);
+  assert.throws(() => singleInlineScript('<script>unexpected()</script/>'), /closing script tag must be exact/);
 });
 
 test('local step controls and company selection work without network or browser globals', () => {
