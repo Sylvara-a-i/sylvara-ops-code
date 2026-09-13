@@ -8,6 +8,7 @@ const {
 const { loadDeployment, assertCanonicalCallIntegrity } = require('./runtime-service');
 const { assertOutcomeUrgencyConsistency } = require('./analysis');
 const { isPlainObject, E164_PATTERN, MAX_RETELL_CALL_DURATION_MS } = require('./validation');
+const { validateSourceVersions } = require('./crm-report-outbox');
 
 const DAY_MS = 86_400_000;
 const QUALIFIED_OUTCOMES = new Set(['potential_job', 'urgent_potential_job']);
@@ -172,8 +173,14 @@ async function queryClientReport(store, config, clientId, deploymentId, asOfMs =
   invariant(typeof clientId === 'string' && clientId.length > 0
     && deployment.clientId === clientId,
   'REPORT_OWNERSHIP_CONFLICT', 'Report client does not own the deployment.');
-  const callRows = await store.query(config.tables.CANONICAL_CALL_TABLE, 'DEPLOYMENT_ID', deploymentId);
-  const notificationRows = await store.query(config.tables.NOTIFICATION_TABLE, 'DEPLOYMENT_ID', deploymentId);
+  // Copy each returned snapshot before another await. The source version vector
+  // must describe these exact rows, not later re-reads or mutable adapter views.
+  const callRows = structuredClone(await store.query(
+    config.tables.CANONICAL_CALL_TABLE, 'DEPLOYMENT_ID', deploymentId,
+  ));
+  const notificationRows = structuredClone(await store.query(
+    config.tables.NOTIFICATION_TABLE, 'DEPLOYMENT_ID', deploymentId,
+  ));
   for (const row of [...callRows, ...notificationRows]) invariant(row.CLIENT_ID === deployment.clientId
     && row.CONFIGURATION_VERSION_ID === deployment.configurationVersionId
     && row.CONFIGURATION_VERSION === deployment.configurationVersion
@@ -181,6 +188,23 @@ async function queryClientReport(store, config, clientId, deploymentId, asOfMs =
     && row.CAPABILITY_PROFILE === deployment.capabilityProfile
     && row.SOURCE_ENVIRONMENT === config.environment,
   'REPORT_OWNERSHIP_CONFLICT', 'Report row crosses deployment ownership.');
+  const versionEntry = (row) => {
+    invariant(typeof row.CALL_KEY === 'string' && /^call_[a-f0-9]{64}$/.test(row.CALL_KEY),
+    'REPORT_DATA_INVALID', 'Report source identity is invalid.');
+    // Catalyst BigInt fields can read back as canonical decimal strings.
+    // Normalize only that documented scalar shape, never general coercions.
+    const rawVersion = row.CALL_VERSION;
+    const version = typeof rawVersion === 'number' ? rawVersion
+      : typeof rawVersion === 'string' && /^[1-9][0-9]*$/.test(rawVersion)
+        ? Number(rawVersion) : Number.NaN;
+    return [`c:${row.CALL_KEY.slice('call_'.length)}`, version];
+  };
+  // Only handled calls contribute to the CRM summary and its confidence notes.
+  // Keep every attempt/notification in the full report below without letting
+  // unrelated attempts exhaust the bounded CRM revision-evidence vector.
+  const sourceVersions = validateSourceVersions(callRows
+    .filter((row) => row.HANDLED_RECORDED === true).map(versionEntry)
+    .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0));
   const metrics = {
     totalCallsHandled: callRows.filter((row) => row.HANDLED_RECORDED === true).length,
     potentialJobs: 0, urgentPotentialJobs: 0, existingCustomers: 0, spam: 0,
@@ -402,6 +426,7 @@ async function queryClientReport(store, config, clientId, deploymentId, asOfMs =
     testEnd,
     testEndReason,
     sourceModifiedAt,
+    sourceVersions,
     callsRemaining,
     limitReached,
     inFlightOvershoot,

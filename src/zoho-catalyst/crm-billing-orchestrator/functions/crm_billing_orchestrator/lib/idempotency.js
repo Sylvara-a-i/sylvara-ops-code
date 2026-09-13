@@ -3,6 +3,7 @@
 const crypto = require("node:crypto");
 const { ACTIONS } = require("./action-contract");
 const { withOperationTimeout } = require("./operation-timeout");
+const { createReportGuardStore } = require("./report-guard");
 
 const HASH = /^[a-f0-9]{64}$/;
 const ROW_ID = /^[0-9]{1,30}$/;
@@ -393,6 +394,7 @@ function createOperationStore(app, config) {
   }
 
   return Object.freeze({
+    ...createReportGuardStore(app, config, readByKey),
     beginReportSummaryWrite,
     claim,
     claimReportSummary,

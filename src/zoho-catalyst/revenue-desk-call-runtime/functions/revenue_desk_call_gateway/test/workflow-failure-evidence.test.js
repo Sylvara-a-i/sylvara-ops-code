@@ -43,7 +43,7 @@ test('legacy analysis cannot become a false-zero workflow-failure total or CRM c
   );
   const deployment = await loadDeployment(fixture.store, deploymentRow, fixture.config);
   const summary = buildCrmReportSummary(fixture.config, deployment, report);
-  assert.equal(summary.schemaVersion, 2);
+  assert.equal(summary.schemaVersion, 3);
   assert.equal(summary.observedWorkflowFailures, null);
 });
 

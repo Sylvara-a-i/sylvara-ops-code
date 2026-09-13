@@ -10,7 +10,7 @@ const {
   MAX_CONDITIONAL_UPDATE_PREDICATES,
 } = require('../lib/catalyst-store');
 const { createRequestListener } = require('../lib/runtime-boundary');
-const { createRuntimeService } = require('../lib/runtime-service');
+const { createRuntimeService, loadDeployment, resolverMetadata } = require('../lib/runtime-service');
 const { createWorkerJobHandler: createRuntimeWorkerJobHandler } = require('../lib/job-handler');
 const { CatalystMailAdapter } = require('../lib/catalyst-mail');
 const { OUTBOX_IMMUTABLE, canonicalJson, sha256 } = require('../lib/analytics-outbox');
@@ -20,7 +20,7 @@ const { RETELL_CONVERSATION_VARIABLE_FIELDS } = require('../lib/contracts');
 const { parseOutboxRow } = require('../../../../revenue-desk-analytics/functions/analytics_sync/lib/facts');
 const {
   SOURCE_REVISION, environment, payloadInbound, eventPayload,
-  retryJobRequest, retryJobContext, invoke, runtimeFixture,
+  retryJobRequest, retryJobContext, invoke, runtimeFixture, authorizationRows,
 } = require('./runtime-fixture');
 
 const loadConfig = (env) => loadRuntimeConfig(env, { artifactSourceRevision: SOURCE_REVISION });
@@ -389,6 +389,60 @@ test('integration: rollback claims reject unseen number-only events but preserve
     fixture.config.eventSecret, 'rollback_unproven_number_only_A',
   )), false);
   assert.equal(fixture.store.rows.get('RevenueDeskDeployments')[0].HANDLED_COUNT, 2);
+});
+
+test('integration: unresolved provider timing blocks new admission, not historical settlement or expiry', async () => {
+  for (const [mode, route] of [
+    ['NoAnswerOverflowOnly', 'No Answer / Overflow Only'],
+    ['AfterHoursAndOverflow', 'After Hours + Overflow'],
+  ]) {
+    const fixture = runtimeFixture();
+    const row = fixture.store.rows.get('RevenueDeskDeployments')[0];
+    const version = fixture.store.rows.get('RevenueDeskConfigurationVersions')[0];
+    row.COVERAGE_MODE = mode;
+    version.CONFIGURATION_JSON = JSON.stringify({ ...JSON.parse(version.CONFIGURATION_JSON),
+      coverageMode: mode, approvedTestRoute: route, noAnswerDelay: 25 });
+    // These are newly constructed, signed synthetic historical fixtures, not a
+    // current admission or modified real receipt. No execution guard is bypassed.
+    fixture.store.authorizationRows = [
+      ...authorizationRows(row, version, 'A', fixture.config.authorizationEventSecret),
+      ...fixture.store.authorizationRows.filter((item) => item.DEPLOYMENT_ID !== 'deployment_A'),
+    ];
+    const historical = await loadDeployment(fixture.store, row, fixture.config);
+    const metadata = resolverMetadata(fixture.config, historical,
+      `historical_${mode}`, new Date(fixture.clock.value).toISOString());
+    const service = createRuntimeService({ store: fixture.store, mailAdapter: {},
+      config: fixture.config, now: () => fixture.clock.value });
+    const readiness = await service.readiness();
+    assert.equal(readiness.activeDeploymentCount, 1, 'only the after-hours company is admissible');
+    assert.ok(readiness.terminalReconciliationPendingCount >= 1);
+    const blocked = await invoke(fixture.listener, {
+      url: '/retell/inbound', payload: payloadInbound('A'), env: fixture.env,
+    });
+    assert.deepEqual(blocked.body, { call_inbound: { reject: true } });
+    assert.equal(fixture.logs.at(-1).errorCode, 'PROVIDER_TIMING_UNVERIFIED');
+    const unbound = await invoke(fixture.listener, { url: '/retell/events',
+      payload: eventPayload('call_ended', `unbound_${mode}`, undefined), env: fixture.env });
+    assert.equal(unbound.status, 200);
+    assert.equal(fixture.workerErrors.at(-1).code, 'PROVIDER_TIMING_UNVERIFIED');
+    assert.equal(fixture.store.rows.get('RevenueDeskCalls').length, 0);
+    const id = `historical_${mode}`;
+    assert.equal((await invoke(fixture.listener, { url: '/retell/events',
+      payload: eventPayload('call_ended', id, metadata), env: fixture.env })).status, 200);
+    assert.equal(fixture.store.rows.get('RevenueDeskCalls').length, 1);
+    assert.equal(row.HANDLED_COUNT, 1);
+    assert.equal((await invoke(fixture.listener, { url: '/retell/events',
+      payload: eventPayload('call_analyzed', id, undefined, 'A',
+        { coverage_trigger: 'NoAnswerOverflow' }), env: fixture.env })).status, 200);
+    assert.equal(fixture.store.rows.get('RevenueDeskCalls')[0].PROCESSING_STATE, 'Completed');
+    assert.equal(row.HANDLED_COUNT, 1);
+    fixture.clock.value = Date.parse(row.EXPIRES_AT);
+    await service.rebuildReport('deployment_A');
+    assert.equal(row.TEST_STATUS, 'Completed');
+    assert.equal(row.STOP_REASON, 'seven_day_limit_reached');
+    assert.equal(row.HANDLED_COUNT, 1);
+    assert.equal(fixture.mailAccesses, 0);
+  }
 });
 
 test('integration: conflicting lifecycle timestamps are quarantined without rewriting or notifying', async () => {

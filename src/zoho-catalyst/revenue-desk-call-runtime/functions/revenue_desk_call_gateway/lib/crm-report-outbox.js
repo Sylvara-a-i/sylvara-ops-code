@@ -5,8 +5,14 @@ const { invariant } = require('./errors');
 const { MAX_CATALYST_TEXT_BYTES } = require('./catalyst-store');
 
 const REPORT_SUMMARY_ACTION = 'sync_report_summary';
-const REPORT_SUMMARY_SCHEMA_VERSION = 2;
-const REPORT_SUMMARY_DOMAIN = 'sylvara.crm-report-summary.v2';
+const REPORT_SUMMARY_SCHEMA_VERSION = 3;
+const REPORT_SUMMARY_DOMAIN = 'sylvara.crm-report-summary.v3';
+const REPORT_SUMMARY_DOMAINS = Object.freeze({
+  1: 'sylvara.crm-report-summary.v1',
+  2: 'sylvara.crm-report-summary.v2',
+  3: REPORT_SUMMARY_DOMAIN,
+});
+const MAX_REPORT_SOURCE_VERSIONS = 100;
 const CRM_RECORD_ID = /^[1-9][0-9]{7,29}$/;
 const HASH = /^[a-f0-9]{64}$/;
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$/;
@@ -19,22 +25,49 @@ const SUMMARY_FIELDS = Object.freeze([
   'bookableOpportunities', 'officeFollowUpCalls', 'observedWorkflowFailures',
   'recommendedPaidCoverage', 'expectedMonthlyConnectedMinutesMin',
   'expectedMonthlyConnectedMinutesMax', 'dataConfidenceNotes',
+  'sourceVersions',
 ]);
+const LEGACY_SUMMARY_FIELDS = Object.freeze(SUMMARY_FIELDS.slice(0, -1));
 
-function hmac(secret, purpose, material) {
+function validateSourceVersions(value) {
+  invariant(Array.isArray(value) && value.length <= MAX_REPORT_SOURCE_VERSIONS,
+    'REPORT_DATA_INVALID', 'CRM report source version evidence is invalid.');
+  let previous = '';
+  const result = value.map((entry) => {
+    invariant(Array.isArray(entry) && entry.length === 2
+      && typeof entry[0] === 'string' && /^c:[a-f0-9]{64}$/.test(entry[0])
+      && entry[0] > previous && Number.isSafeInteger(entry[1]) && entry[1] > 0,
+    'REPORT_DATA_INVALID', 'CRM report source version evidence is invalid.');
+    previous = entry[0];
+    return Object.freeze([entry[0], entry[1]]);
+  });
+  return Object.freeze(result);
+}
+
+function hmac(secret, purpose, material, schemaVersion = REPORT_SUMMARY_SCHEMA_VERSION) {
+  invariant(Number.isSafeInteger(schemaVersion) && Object.hasOwn(REPORT_SUMMARY_DOMAINS, schemaVersion),
+    'REPORT_DATA_INVALID', 'CRM report summary schema is invalid.');
   return crypto.createHmac('sha256', secret)
-    .update(`${REPORT_SUMMARY_DOMAIN}\0${purpose}\0${material}`)
+    .update(`${REPORT_SUMMARY_DOMAINS[schemaVersion]}\0${purpose}\0${material}`)
     .digest('hex');
 }
 
 function canonicalSummary(summary) {
   invariant(summary && typeof summary === 'object' && !Array.isArray(summary),
     'REPORT_DATA_INVALID', 'CRM report summary is invalid.');
+  invariant(Number.isSafeInteger(summary.schemaVersion)
+    && Object.hasOwn(REPORT_SUMMARY_DOMAINS, summary.schemaVersion),
+  'REPORT_DATA_INVALID', 'CRM report summary schema is invalid.');
+  // Retained v1/v2 operations must keep their original identity for dispatch
+  // and reconciliation. Only the builder below may generate a new summary,
+  // and it always emits v3; legacy identity support is not a migration write.
+  const fields = summary.schemaVersion === 3 ? SUMMARY_FIELDS : LEGACY_SUMMARY_FIELDS;
   const keys = Object.keys(summary);
-  invariant(keys.length === SUMMARY_FIELDS.length
-    && SUMMARY_FIELDS.every((field, index) => keys[index] === field),
+  invariant(keys.length === fields.length
+    && fields.every((field, index) => keys[index] === field),
   'REPORT_DATA_INVALID', 'CRM report summary fields are invalid.');
-  return JSON.stringify(SUMMARY_FIELDS.map((field) => [field, summary[field]]));
+  if (summary.schemaVersion === 3) validateSourceVersions(summary.sourceVersions);
+  return JSON.stringify(fields.map((field) => [field, summary[field]]));
 }
 
 function nullableNumber(value, name) {
@@ -84,6 +117,11 @@ function buildCrmReportSummary(config, deployment, report) {
   invariant((minutesMin === null) === (minutesMax === null)
     && (minutesMin === null || minutesMin <= minutesMax),
   'REPORT_DATA_INVALID', 'Expected monthly connected-minute bounds are invalid.');
+  const sourceVersions = validateSourceVersions(report.sourceVersions);
+  invariant(sourceVersions.length === report.callsCaptured
+    && sourceVersions.length === report.handledCallCount
+    && sourceVersions.every(([key], index) => `call_${key.slice(2)}` === countedCallKeys[index]),
+  'REPORT_RECONCILIATION_REQUIRED', 'CRM report source version evidence is incomplete.');
   return Object.freeze({
     schemaVersion: REPORT_SUMMARY_SCHEMA_VERSION,
     dealId: deployment.crmDealId,
@@ -113,22 +151,30 @@ function buildCrmReportSummary(config, deployment, report) {
     expectedMonthlyConnectedMinutesMin: minutesMin,
     expectedMonthlyConnectedMinutesMax: minutesMax,
     dataConfidenceNotes: confidence,
+    // The CRM projection derives only from handled calls. Its revision vector
+    // binds that exact copied cohort, not unrelated unsuccessful attempts or
+    // notification rows; the full report still validates and includes both.
+    // The consumer can compare revisions without treating a later timestamp or
+    // different HMAC as proof that a report supersedes an earlier report.
+    sourceVersions,
   });
 }
 
 function reportSummaryOperationKey(config, summary) {
   const revisionDigest = hmac(
     config.analyticsPartitionSecret, 'report-revision', canonicalSummary(summary),
+    summary.schemaVersion,
   );
   const stable = [config.environment, summary.dealId, summary.deploymentId,
     summary.configurationVersion, summary.reportSchemaVersion, summary.callSetDigest,
     revisionDigest, REPORT_SUMMARY_ACTION].join('\0');
-  return hmac(config.analyticsPartitionSecret, 'operation', stable);
+  return hmac(config.analyticsPartitionSecret, 'operation', stable, summary.schemaVersion);
 }
 
 function reportSummaryIdentity(config, summary) {
   const canonical = canonicalSummary(summary);
-  const revisionDigest = hmac(config.analyticsPartitionSecret, 'report-revision', canonical);
+  const revisionDigest = hmac(config.analyticsPartitionSecret, 'report-revision', canonical,
+    summary.schemaVersion);
   const stable = [config.environment, summary.dealId, summary.deploymentId,
     summary.configurationVersion, summary.reportSchemaVersion, summary.callSetDigest,
     revisionDigest, REPORT_SUMMARY_ACTION].join('\0');
@@ -139,6 +185,7 @@ function reportSummaryIdentity(config, summary) {
       config.analyticsPartitionSecret,
       'fingerprint',
       `${stable}\0${canonical}`,
+      summary.schemaVersion,
     ),
   });
 }
@@ -179,11 +226,15 @@ async function ensureCrmReportSummary(store, config, deployment, report, created
 module.exports = {
   REPORT_SUMMARY_ACTION,
   REPORT_SUMMARY_DOMAIN,
+  REPORT_SUMMARY_DOMAINS,
   REPORT_SUMMARY_SCHEMA_VERSION,
+  MAX_REPORT_SOURCE_VERSIONS,
   SUMMARY_FIELDS,
+  LEGACY_SUMMARY_FIELDS,
   buildCrmReportSummary,
   canonicalSummary,
   ensureCrmReportSummary,
   reportSummaryIdentity,
   reportSummaryOperationKey,
+  validateSourceVersions,
 };

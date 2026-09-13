@@ -8,12 +8,13 @@ const {
   COVERAGE_LABEL_TO_MODE,
   COVERAGE_MODES,
   CRM_APPROVED_ROUTE_TO_LABEL,
+  decodeCrmApprovedTestRoute,
   COVERAGE_TRIGGER_COMPATIBILITY,
   COVERAGE_TRIGGERS,
   UNKNOWN_COVERAGE_TRIGGER_POLICY,
 } = require('../lib/contracts');
 const { triggerAllowedForMode } = require('../lib/analysis');
-const { validateConfiguration } = require('../lib/validation');
+const { validateConfiguration, assertExecutionTimingSupported } = require('../lib/validation');
 const { configuration } = require('./runtime-fixture');
 const { CHOICES, buildPrefillPayload } = require(
   '../../../../revenue-leak-test-setup-form/functions/revenue_leak_test_setup_form/lib/form-contract',
@@ -71,7 +72,7 @@ test('approved display labels map exactly while canonical runtime values remain 
   }
 });
 
-test('CRM route references agree with Form 2 without accepting labels as stored values', () => {
+test('CRM route decoder agrees with Form 2 for exact stored and canonical values', () => {
   assert.deepEqual([...CRM_APPROVED_ROUTE_TO_LABEL], [
     ['After-Hours', 'After Hours Only'],
     ['No-Answer/Overflow', 'No Answer / Overflow Only'],
@@ -96,14 +97,30 @@ test('CRM route references agree with Form 2 without accepting labels as stored 
     assert.equal(CRM_APPROVED_ROUTE_TO_LABEL.has(label), false);
     assert.equal(CRM_APPROVED_ROUTE_TO_LABEL.has(` ${stored}`), false);
     assert.equal(CRM_APPROVED_ROUTE_TO_LABEL.has(stored.toLowerCase()), false);
+    assert.equal(decodeCrmApprovedTestRoute(stored), label);
+    assert.equal(decodeCrmApprovedTestRoute(label), label);
+    records.deal.Approved_Test_Route = label;
+    assert.equal(buildPrefillPayload(records, {
+      allowedPhoneSystemProviders: ['Synthetic PBX'],
+    }).approvedTestRoute, label);
+  }
+  for (const invalid of [undefined, null, '', 'Unknown', ...CANONICAL_MODES,
+    'after-hours', 'After-Hours ', 'After Hours Only ', ' After Hours Only', 'both']) {
+    assert.equal(decodeCrmApprovedTestRoute(invalid), undefined);
   }
 });
 
-test('configuration accepts all three exact route/mode pairs with a verified delay only', () => {
+test('historical configuration parses exact route/mode pairs without claiming timing verification', () => {
   for (const [label, mode] of COVERAGE_LABEL_TO_MODE) {
     const candidate = { ...configuration('A'), coverageMode: mode,
       approvedTestRoute: label, noAnswerDelay: mode === 'AfterHoursOnly' ? null : 25 };
     assert.equal(validateConfiguration(candidate).coverageMode, mode);
+    if (mode === 'AfterHoursOnly') {
+      assert.doesNotThrow(() => assertExecutionTimingSupported(validateConfiguration(candidate)));
+    } else {
+      assert.throws(() => assertExecutionTimingSupported(validateConfiguration(candidate)),
+        { code: 'PROVIDER_TIMING_UNVERIFIED' });
+    }
     for (const otherMode of COVERAGE_MODES) {
       if (otherMode !== mode) assert.throws(() => validateConfiguration({
         ...candidate, coverageMode: otherMode,

@@ -2,7 +2,9 @@
 
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { routeFingerprint, routeFromRows }
+const { routeFingerprint, routeFromRows, evaluateApprovalTransition,
+  evaluateActivationTransition, approvalIntentSignature, activationIntentSignature,
+  authorizationReceiptRow }
   = require('revenue_desk_call_gateway/lib/approval-control');
 const {
   createRouteControlService,
@@ -12,7 +14,7 @@ const {
   = require('revenue_desk_call_gateway/lib/route-control-service');
 const { RevenueDeskError }
   = require('revenue_desk_call_gateway/lib/errors');
-const { numberLookupKey }
+const { numberLookupKey, keyedDigest }
   = require('revenue_desk_call_gateway/lib/security');
 const { authorizationReceiptFingerprint }
   = require('revenue_desk_call_gateway/lib/authorization-receipt');
@@ -443,6 +445,100 @@ function command(action, overrides = {}) {
   };
 }
 
+// Build historical evidence with the pure transition serializer, not the
+// current execution controller. This models pre-fix receipts without disabling
+// a production guard or editing/resigning an existing stored receipt.
+function seedHistoricalApproval(subject, { status = 'Completed', apply = true } = {}) {
+  const row = subject.store.rows.find((item) => item.__table === 'RevenueDeskDeployments');
+  const version = subject.store.rows.find((item) =>
+    item.__table === 'RevenueDeskConfigurationVersions');
+  const route = routeFingerprint(routeFromRows(row, version));
+  const observedAt = new Date(NOW).toISOString();
+  const intent = {
+    schema_version: 1,
+    event_id: `approval_${keyedDigest(EVENT_CHAIN_SECRET,
+      'revenue-desk-route-control-idempotency-v1', ['approve', KEYS.approve])}`,
+    action: 'approve', deployment_id: IDS.deployment,
+    configuration_version_id: IDS.configuration, route_fingerprint: route,
+    evidence_revision: SOURCE_REVISION, evidence_observed_at: observedAt,
+    requested_at: observedAt, operator_id_hash: `operator_${'4'.repeat(64)}`,
+    expected_deployment_version: Number(row.COUNT_VERSION),
+  };
+  const result = evaluateApprovalTransition({
+    intent, signature: approvalIntentSignature(intent, 'o'.repeat(32)),
+    operatorVerificationSecret: 'o'.repeat(32), eventChainSecret: EVENT_CHAIN_SECRET,
+    deployment: row, configurationVersion: version, existingEvents: [], nowMs: NOW,
+    evidence: { status: 'ready', deployment_id: IDS.deployment,
+      configuration_version_id: IDS.configuration, route_fingerprint: route,
+      source_revision: SOURCE_REVISION, deployment_version: Number(row.COUNT_VERSION),
+      observed_at: observedAt, handled_count: Number(row.HANDLED_COUNT) },
+  });
+  const approval = authorizationReceiptRow(result.event, {
+    sourceRevision: SOURCE_REVISION, environment: 'development',
+    controlBinding: { schemaVersion: 1, action: 'approve', ...command('approve'),
+      reason: null, deploymentControlPrestateDigest: null, deploymentControlPoststateDigest: null },
+    eventChainSecret: EVENT_CHAIN_SECRET,
+  });
+  subject.store.rows.push({ ...approval, ROWID: String(subject.store.nextRow++),
+    __table: 'RevenueDeskEventReceipts', STATUS: status,
+    PROCESSED_AT: status === 'Completed' ? observedAt : null });
+  if (apply) {
+    Object.assign(row, result.deploymentPatch, { COUNT_VERSION: Number(row.COUNT_VERSION) + 1 });
+    if (status === 'Completed') Object.assign(subject.crmState, {
+      Test_Status: 'Scheduled', Go_Live_Approval_Status: 'Approved',
+      Go_Live_Approved_At: row.GO_LIVE_APPROVED_AT,
+      Approved_Deployment_Record_ID: IDS.deployment,
+      Approved_Configuration_Version: IDS.configuration,
+    });
+  }
+  return result.event;
+}
+
+function seedHistoricalActivation(subject, { status, apply }) {
+  const approval = seedHistoricalApproval(subject);
+  const row = subject.store.rows.find((item) => item.__table === 'RevenueDeskDeployments');
+  const version = subject.store.rows.find((item) =>
+    item.__table === 'RevenueDeskConfigurationVersions');
+  const route = routeFingerprint(routeFromRows(row, version));
+  const observedAt = new Date(NOW).toISOString();
+  const readback = `readback_${'6'.repeat(64)}`;
+  const intent = {
+    schema_version: 1,
+    event_id: `activation_${keyedDigest(EVENT_CHAIN_SECRET,
+      'revenue-desk-route-control-idempotency-v1', ['activate', KEYS.activate])}`,
+    action: 'activate', deployment_id: IDS.deployment,
+    configuration_version_id: IDS.configuration, route_fingerprint: route,
+    approval_event_key: row.APPROVAL_EVENT_KEY,
+    route_readback_fingerprint: readback, route_observed_at: observedAt,
+    evidence_revision: SOURCE_REVISION, evidence_observed_at: observedAt,
+    requested_at: observedAt, operator_id_hash: `operator_${'4'.repeat(64)}`,
+    expected_deployment_version: Number(row.COUNT_VERSION),
+  };
+  const result = evaluateActivationTransition({
+    intent, signature: activationIntentSignature(intent, 'o'.repeat(32)),
+    operatorVerificationSecret: 'o'.repeat(32), eventChainSecret: EVENT_CHAIN_SECRET,
+    deployment: row, configurationVersion: version, existingEvents: [approval], nowMs: NOW,
+    evidence: { status: 'route_active', deployment_id: IDS.deployment,
+      configuration_version_id: IDS.configuration, approval_event_key: row.APPROVAL_EVENT_KEY,
+      route_fingerprint: route, route_readback_fingerprint: readback,
+      source_revision: SOURCE_REVISION, deployment_version: Number(row.COUNT_VERSION),
+      observed_at: observedAt },
+  });
+  subject.store.rows.push({ ...authorizationReceiptRow(result.event, {
+    sourceRevision: SOURCE_REVISION, environment: 'development',
+    controlBinding: { schemaVersion: 1, action: 'activate', ...command('activate'),
+      reason: null, deploymentControlPrestateDigest: null, deploymentControlPoststateDigest: null },
+    eventChainSecret: EVENT_CHAIN_SECRET,
+  }), ROWID: String(subject.store.nextRow++), __table: 'RevenueDeskEventReceipts',
+  STATUS: status, PROCESSED_AT: status === 'Completed' ? observedAt : null });
+  if (apply) {
+    Object.assign(row, result.deploymentPatch, { COUNT_VERSION: Number(row.COUNT_VERSION) + 1 });
+    if (status === 'Completed') Object.assign(subject.crmState, {
+      Stage: 'Test Live', Test_Status: 'Live', Test_Start_At: row.ACTUAL_START_AT,
+    });
+  }
+}
+
 test('approval succeeds only after complete Form 2 and exact immutable configuration', async () => {
   const happy = fixture();
   happy.crmState.Test_Phone_Number = null;
@@ -463,12 +559,11 @@ test('approval rejects the pre-submission Verified access state', async () => {
     { code: 'CONTROL_PRECONDITION_FAILED' });
 });
 
-test('approval requires the exact stored offer and route, not presentation labels', async () => {
+test('approval requires the exact stored offer and known field-specific CRM route', async () => {
   for (const dealOverrides of [
     { Entry_Offer: '7-Day Revenue Leak Test' },
     { Entry_Offer: 'Free 7-Day Missed-Call ' },
     { Entry_Offer: null },
-    { Approved_Test_Route: 'After Hours Only' },
     { Approved_Test_Route: 'AfterHoursOnly' },
     { Approved_Test_Route: 'After-Hours ' },
     { Approved_Test_Route: 'after-hours' },
@@ -487,7 +582,23 @@ test('approval requires the exact stored offer and route, not presentation label
   }
 });
 
-test('full approval accepts combined coverage only with matching stored route and verified numeric delay', async () => {
+test('approval and replay preserve exact stored or canonical after-hours CRM routes', async () => {
+  for (const route of ['After-Hours', 'After Hours Only']) {
+    const subject = fixture({ dealOverrides: { Approved_Test_Route: route } });
+    const first = await subject.service.approve(command('approve'));
+    assert.equal(first.deployment.TEST_STATUS, 'Scheduled');
+    subject.crmState.Approved_Test_Route = route === 'After-Hours'
+      ? 'After Hours Only' : 'After-Hours';
+    const replay = await subject.service.approve(command('approve'));
+    assert.equal(replay.replayed, true);
+    assert.equal(replay.deployment.APPROVAL_EVENT_KEY, first.deployment.APPROVAL_EVENT_KEY);
+    assert.equal(replay.deployment.ACTUAL_START_AT, null);
+    assert.equal(subject.store.rows.filter((row) => row.EVENT_TYPE === 'approve').length, 1);
+    assert.equal(subject.getProviderVerificationCalls(), 0);
+  }
+});
+
+test('new overflow and combined approvals fail closed on unverified timing without writes', async () => {
   for (const [stored, label, mode] of [
     ['No-Answer/Overflow', 'No Answer / Overflow Only', 'NoAnswerOverflowOnly'],
     ['Both', 'After Hours + Overflow', 'AfterHoursAndOverflow'],
@@ -499,28 +610,87 @@ test('full approval accepts combined coverage only with matching stored route an
       deploymentOverrides: { COVERAGE_MODE: mode },
       dealOverrides: { Approved_Test_Route: stored, No_Answer_Delay: 25 },
     };
-    const subject = fixture(options);
-    const result = await subject.service.approve(command('approve'));
-    assert.equal(result.deployment.GO_LIVE_APPROVAL_STATUS, 'Approved');
-    assert.equal(result.deployment.ACTUAL_START_AT, null);
-    assert.equal(subject.getProviderVerificationCalls(), 0);
-    for (const wrongRoute of [label, mode, stored.toLowerCase(), `${stored} `]) {
-      const mismatched = fixture({ ...options,
-        dealOverrides: { ...options.dealOverrides, Approved_Test_Route: wrongRoute } });
-      const before = copy(mismatched.store.rows);
-      const crmBefore = copy(mismatched.crmState);
-      await assert.rejects(mismatched.service.approve(command('approve')),
-        { code: 'CONTROL_PRECONDITION_FAILED' });
-      assert.deepEqual(mismatched.store.rows, before);
-      assert.deepEqual(mismatched.crmState, crmBefore);
-      assert.equal(mismatched.getProviderVerificationCalls(), 0);
+    for (const route of [stored, label]) {
+      for (const delay of [25, null, '4 Rings', 'Provider Default', 'Not Sure']) {
+        const subject = fixture({ ...options,
+          dealOverrides: { ...options.dealOverrides,
+            Approved_Test_Route: route, No_Answer_Delay: delay } });
+        const before = copy(subject.store.rows);
+        const crmBefore = copy(subject.crmState);
+        await assert.rejects(subject.service.approve(command('approve')),
+          { code: 'PROVIDER_TIMING_UNVERIFIED' });
+        assert.deepEqual(subject.store.rows, before);
+        assert.deepEqual(subject.crmState, crmBefore);
+        assert.equal(subject.getProviderVerificationCalls(), 0);
+        assert.equal(subject.getProviderDisableCalls(), 0);
+      }
     }
-    for (const delay of [null, '4 Rings', 'Provider Default', 'Not Sure']) {
-      const unresolved = fixture({ ...options,
-        dealOverrides: { ...options.dealOverrides, No_Answer_Delay: delay } });
-      await assert.rejects(unresolved.service.approve(command('approve')),
-        { code: 'CONTROL_PRECONDITION_FAILED' });
-      assert.equal(unresolved.getProviderVerificationCalls(), 0);
+  }
+});
+
+test('historical non-after-hours approval cannot resume CAS, repair CRM, or activate', async () => {
+  for (const [mode, route, label] of [
+    ['NoAnswerOverflowOnly', 'No-Answer/Overflow', 'No Answer / Overflow Only'],
+    ['AfterHoursAndOverflow', 'Both', 'After Hours + Overflow'],
+  ]) {
+    for (const state of [{ status: 'Prepared', apply: false },
+      { status: 'Prepared', apply: true }, { status: 'Completed', apply: true }]) {
+      const subject = fixture({
+        deploymentOverrides: { COVERAGE_MODE: mode },
+        configOverrides: { CONFIGURATION_JSON: JSON.stringify({ ...configuration(),
+          coverageMode: mode, approvedTestRoute: label, noAnswerDelay: 25 }) },
+        dealOverrides: { Approved_Test_Route: route, No_Answer_Delay: 25 },
+      });
+      seedHistoricalApproval(subject, state);
+      const before = copy(subject.store.rows);
+      const crmBefore = copy(subject.crmState);
+      await assert.rejects(subject.service.approve(command('approve')),
+        { code: 'PROVIDER_TIMING_UNVERIFIED' });
+      if (state.status === 'Completed') {
+        await assert.rejects(subject.service.activate(command('activate')),
+          { code: 'PROVIDER_TIMING_UNVERIFIED' });
+      }
+      assert.deepEqual(subject.store.rows, before);
+      assert.deepEqual(subject.crmState, crmBefore);
+      assert.equal(subject.getProviderVerificationCalls(), 0);
+      assert.equal(subject.getProviderDisableCalls(), 0);
+      assert.equal(subject.getCrmActivationCalls(), 0);
+      if (state.status === 'Completed') {
+        const rolledBack = await subject.service.rollback(command('rollback'));
+        assert.equal(rolledBack.deployment.TEST_STATUS, 'Stopped');
+        assert.equal(rolledBack.deployment.GO_LIVE_APPROVAL_STATUS, 'Revoked');
+        assert.equal(subject.getProviderDisableCalls(), 1);
+      }
+    }
+  }
+});
+
+test('historical non-after-hours activation replay cannot apply CAS or reach the provider', async () => {
+  for (const [mode, route, label] of [
+    ['NoAnswerOverflowOnly', 'No-Answer/Overflow', 'No Answer / Overflow Only'],
+    ['AfterHoursAndOverflow', 'Both', 'After Hours + Overflow'],
+  ]) {
+    for (const state of [{ status: 'Prepared', apply: false },
+      { status: 'Prepared', apply: true }, { status: 'Completed', apply: true }]) {
+      const subject = fixture({
+        deploymentOverrides: { COVERAGE_MODE: mode },
+        configOverrides: { CONFIGURATION_JSON: JSON.stringify({ ...configuration(),
+          coverageMode: mode, approvedTestRoute: label, noAnswerDelay: 25 }) },
+        dealOverrides: { Approved_Test_Route: route, No_Answer_Delay: 25 },
+      });
+      seedHistoricalActivation(subject, state);
+      const before = copy(subject.store.rows);
+      const crmBefore = copy(subject.crmState);
+      await assert.rejects(subject.service.activate(command('activate')),
+        { code: 'PROVIDER_TIMING_UNVERIFIED' });
+      assert.deepEqual(subject.store.rows, before);
+      assert.deepEqual(subject.crmState, crmBefore);
+      assert.equal(subject.getProviderVerificationCalls(), 0);
+      assert.equal(subject.getProviderDisableCalls(), 0);
+      assert.equal(subject.getCrmActivationCalls(), 0);
+      const rolledBack = await subject.service.rollback(command('rollback'));
+      assert.equal(rolledBack.deployment.TEST_STATUS, 'Stopped');
+      assert.equal(rolledBack.deployment.GO_LIVE_APPROVAL_STATUS, 'Revoked');
     }
   }
 });

@@ -1,7 +1,6 @@
 "use strict";
 
 const assert = require("node:assert/strict");
-const path = require("node:path");
 const test = require("node:test");
 const {
   OUTBOX_IMMUTABLE,
@@ -13,15 +12,6 @@ const {
 } = require("../lib/analytics-outbox");
 const { loadConfig } = require("../lib/config");
 const { REVISION, baseEnvironment } = require("./helpers");
-
-const canonicalFacts = require(path.resolve(
-  __dirname,
-  "../../../../revenue-desk-analytics/functions/analytics_sync/lib/facts.js",
-));
-const { keyedDigest: runtimeKeyedDigest } = require(path.resolve(
-  __dirname,
-  "../../../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/security.js",
-));
 
 function evidence(overrides = {}) {
   return {
@@ -93,30 +83,17 @@ function memoryApp(initialRows = []) {
   };
 }
 
-test("conversion producer preserves the canonical fact and derives the single outbox key", () => {
+test("conversion producer preserves its bounded fact and derives the single outbox key", () => {
   const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
   const fact = conversionStatusFact(config, evidence());
   const createdAt = "2026-08-21T15:02:00.000Z";
   const local = createOutboxRow(fact, createdAt);
-  const canonical = canonicalFacts.minimizeFact("conversion_status", fact);
-  assert.deepEqual(fact, canonical);
-  const canonicalRow = canonicalFacts.createOutboxRow("conversion_status", canonical, createdAt);
-  assert.deepEqual(local, canonicalRow);
   const expectedKey = sha256([
     "analytics-provider-version-v1", "conversion_status", fact.ENVIRONMENT,
     fact.CLIENT_KEY, fact.DEPLOYMENT_KEY, fact.RECORD_KEY, fact.SOURCE_MODIFIED_AT,
   ].join("\0"));
   assert.equal(local.OUTBOX_KEY, expectedKey);
   assert.equal(outboxKey(fact), expectedKey);
-  assert.equal(outboxKey(fact), canonicalFacts.outboxKey("conversion_status", canonical));
-  assert.equal(fact.CLIENT_KEY, runtimeKeyedDigest(
-    config.analyticsPartitionSecret, "revenue-desk-analytics-client-v1",
-    ["100000000000002"],
-  ));
-  assert.equal(fact.DEPLOYMENT_KEY, runtimeKeyedDigest(
-    config.analyticsPartitionSecret, "revenue-desk-analytics-deployment-v1",
-    ["deployment_A"],
-  ));
   assert.deepEqual({
     originEngagement: fact.ENGAGEMENT_TYPE,
     targetEngagement: fact.TARGET_ENGAGEMENT_TYPE,

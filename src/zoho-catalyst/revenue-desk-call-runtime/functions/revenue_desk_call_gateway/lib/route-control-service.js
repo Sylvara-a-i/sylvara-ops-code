@@ -11,11 +11,11 @@ const {
 } = require('./approval-control');
 const { validateConfigurationVersionRow } = require('./configuration-version');
 const {
-  CRM_APPROVED_ROUTE_TO_LABEL, ROLLBACK_CONTROL_REASON_TO_CRM, STOP_REASON_TO_CRM,
+  decodeCrmApprovedTestRoute, ROLLBACK_CONTROL_REASON_TO_CRM, STOP_REASON_TO_CRM,
 } = require('./contracts');
 const { RevenueDeskError, invariant } = require('./errors');
 const { keyedDigest, numberLookupKey } = require('./security');
-const { E164_PATTERN, validateConfiguration } = require('./validation');
+const { E164_PATTERN, validateConfiguration, assertExecutionTimingSupported } = require('./validation');
 const {
   verifyAuthorizationReceiptIntegrity,
 } = require('./authorization-receipt');
@@ -411,7 +411,7 @@ function dealValueMatchesConfiguration(deal, configuration) {
   const noAnswerMatches = configuration.coverageMode === 'AfterHoursOnly'
     ? deal.No_Answer_Delay === null || deal.No_Answer_Delay === undefined
     : Number(deal.No_Answer_Delay) === configuration.noAnswerDelay;
-  return CRM_APPROVED_ROUTE_TO_LABEL.get(deal.Approved_Test_Route)
+  return decodeCrmApprovedTestRoute(deal.Approved_Test_Route)
       === configuration.approvedTestRoute
     && noAnswerMatches
     && deal.Forwarding_Administrator_Name === configuration.forwardingAdministratorName
@@ -457,6 +457,7 @@ function validateDealBase(deal, command, configurationVersion) {
 }
 
 function validateApprovalDeal(deal, command, configuration) {
+  assertExecutionTimingSupported(configuration);
   validateDealBase(deal, command, configuration);
   invariant(deal.Test_Status === 'Setup Pending'
     && deal.Go_Live_Approval_Status !== 'Approved'
@@ -482,6 +483,7 @@ function validateAssignedTestNumber(deal, deployment, runtimeConfig) {
 }
 
 function validateActivationDeal(deal, command, configuration, deployment, runtimeConfig) {
+  assertExecutionTimingSupported(configuration);
   validateDealBase(deal, command, configuration);
   validateAssignedTestNumber(deal, deployment, runtimeConfig);
   invariant(deal.Test_Status === 'Scheduled'
@@ -1370,6 +1372,10 @@ function createRouteControlService({
     const configuration = parseConfiguration(
       configurationRow, command, config.sourceRevision, deployment,
     );
+    // Replay can apply a Prepared CAS or repair CRM approval/activation. It is
+    // not read-only history. Preserve receipts but do not resume new work for
+    // unverified timing; the explicit rollback path remains available.
+    if (action !== 'rollback') assertExecutionTimingSupported(configuration);
     const runtimeTerminalRollback = action === 'rollback'
       && receipt.STATUS === 'ReconciliationRequired'
       && isRuntimeTerminalRollbackSupersession(deployment, data.controlBinding);

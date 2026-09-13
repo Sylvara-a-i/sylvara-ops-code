@@ -633,7 +633,7 @@ test("disabled Development compatibility probe rejects before SDK or factories",
   assert.equal(JSON.parse(result.body).code, "operation_invalid");
 });
 
-test("disabled paid lifecycle actions reject before SDK or dependency factories", async () => {
+test("report-only mode removes paid credentials and rejects paid actions before SDK or dependency factories", async () => {
   const environment = baseEnvironment({ ENABLE_PAID_SUBSCRIPTION_PREPARATION: "false" });
   for (const name of [
     "PAID_COMMERCIAL_TERMS_JSON",
@@ -674,8 +674,8 @@ test("disabled paid lifecycle actions reject before SDK or dependency factories"
     await createRequestListener(options)(request, response);
     assert.equal(initialized, false);
     assert.equal(factoryCalled, false);
-    assert.equal(result.statusCode, 409);
-    assert.equal(JSON.parse(result.body).code, "operation_invalid");
+    assert.equal(result.statusCode, 401);
+    assert.equal(JSON.parse(result.body).code, "authentication_failed");
   }
 });
 

@@ -11,7 +11,7 @@
       "mandatory": true,
       "unique": true,
       "private": true,
-      "semantics": "Paid/customer rows use the stable sylvara.crm-billing.idempotency.v1 HMAC domain. New sync_report_summary rows use sylvara.crm-report-summary.v2; retained v1 rows remain readable only under the strict legacy contract. Each version binds environment, Deal, deployment, configuration, report schema, canonical call-set digest, full canonical report-revision digest, and action so a changed terminal report creates a new immutable operation."
+      "semantics": "Paid/customer rows retain sylvara.crm-billing.idempotency.v1. New sync_report_summary rows use sylvara.crm-report-summary.v3 including the exact source-version vector; retained v1/v2 identities keep their original domains. Each revision binds environment, Deal, deployment, configuration, report schema, call-set and canonical report digest. report_summary_write_guard uses sylvara.crm-report-writer.v1 keyed only by environment/Deal to prevent a second writer through rebinding."
     },
     {
       "name": "OPERATION_FINGERPRINT",
@@ -20,7 +20,7 @@
       "mandatory": true,
       "unique": false,
       "private": true,
-      "semantics": "Paid/customer rows use sylvara.crm-billing.idempotency.v1 to bind accepted commercial evidence. New sync_report_summary rows use sylvara.crm-report-summary.v2 to bind the full canonical sanitized payload and its revision-specific operation identity; retained v1 rows validate against the original domain."
+      "semantics": "Paid/customer rows retain their accepted-evidence domain. New report rows bind the full canonical schema-v3 payload; retained v1/v2 rows use their original domain. Writer guards permanently bind Account/Deal/deployment/configuration without modifying prior report receipts."
     },
     { "name": "ACTION", "type": "Var Char", "max_length": 40, "mandatory": true, "unique": false, "private": false },
     {
@@ -53,13 +53,14 @@
       "private": true,
       "audit_consent": true,
       "required_for_report_summary_rows": true,
-      "semantics": "Exact sanitized terminal report-summary payload. Raw call data, caller data, Results_Review_At, and paid acceptance are prohibited."
+      "semantics": "Exact sanitized terminal report-summary payload; v3 includes exactly the handled-call cohort, at most 100 sorted call-key/version pairs under the existing 10000-byte bound. Unhandled attempts and notifications remain in the full report, not this CRM projection. Guard rows contain only their immutable binding and confirmed/in-flight operation keys. Raw call/caller data, review and paid acceptance are prohibited."
     },
     { "name": "OPERATION_VERSION", "type": "BigInt", "mandatory": false, "unique": false, "required_for_report_summary_rows": true, "semantics": "Every report claim, write-start, completion, or containment transition increments this cursor. Completion and containment compare ROWID, STATUS, LAST_OUTCOME, and OPERATION_VERSION; a changed semantic state is never overwritten. After the operation cursor is observed, every completion transition and completed replay requires fresh exact Deal account/binding/patch readback. A mismatch CAS-keeps or demotes reconciliation; if stale containment first observes a winning completion, one fresh read and at most one repair CAS may converge it." },
     { "name": "CREATED_AT", "type": "Var Char", "max_length": 32, "mandatory": false, "unique": false, "required_for_report_summary_rows": true },
     { "name": "UPDATED_AT", "type": "Var Char", "max_length": 32, "mandatory": false, "unique": false, "required_for_report_summary_rows": true }
   ],
   "report_summary_outbox": {
+    "writer_guard": "Existing-table ACTION report_summary_write_guard, STATUS processing, LAST_OUTCOME report_writer_idle or report_writer_busy. Five-predicate OPERATION_VERSION CAS serializes all report writes by Deal; encrypted payload retains confirmed/in-flight keys. No new columns, automatic expiry, reset or deletion. Release only after exact CRM readback and completed receipt. Legacy Completed-to-v3 migration is not automatic; preserve old rows. Verify existing Encrypted Text updates and guard readback before a separately authorized deployment/canary.",
     "producer": "revenue_desk_call_worker after terminal call/event/notification reconciliation",
     "consumer": "crm_billing_orchestrator action sync_report_summary on its existing authenticated route",
     "replay": "An exact report revision reuses its OPERATION_KEY and immutable fingerprint/payload. A changed canonical report gets a different revision-specific key. Pending or processing report_claim pre-write rows may be atomically claimed/reclaimed with an OPERATION_VERSION fence. After exact report_write_started readback, processing or reconciliation_required rows never repeat the CRM write and converge only through exact Deal readback. Report completion and containment are compare-and-set transitions over ROWID, STATUS, LAST_OUTCOME, and OPERATION_VERSION; one bounded retry tolerates only a cursor advance with unchanged status/outcome, never a semantic conflict.",

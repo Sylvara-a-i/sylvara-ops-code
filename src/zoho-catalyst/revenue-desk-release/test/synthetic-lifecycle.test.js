@@ -9,6 +9,35 @@ const catalystRoot = path.resolve(__dirname, '..', '..');
 const repositoryRoot = path.resolve(catalystRoot, '..', '..');
 const fromCatalyst = (...parts) => path.join(catalystRoot, ...parts);
 
+// Cross-component parity belongs here, not in the standalone CRM package's
+// tests: its immutable artifact intentionally exports no sibling applications.
+test('CRM conversion fact preserves canonical Analytics and runtime identity contracts', () => {
+  const crmRoot = fromCatalyst('crm-billing-orchestrator', 'functions', 'crm_billing_orchestrator');
+  const { conversionStatusFact, createOutboxRow, outboxKey } = require(path.join(crmRoot, 'lib', 'analytics-outbox'));
+  const { loadConfig } = require(path.join(crmRoot, 'lib', 'config'));
+  const { REVISION, baseEnvironment } = require(path.join(crmRoot, 'test', 'helpers'));
+  const facts = require(fromCatalyst('revenue-desk-analytics', 'functions', 'analytics_sync', 'lib', 'facts'));
+  const { keyedDigest } = require(fromCatalyst('revenue-desk-call-runtime', 'functions',
+    'revenue_desk_call_gateway', 'lib', 'security'));
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const fact = conversionStatusFact(config, {
+    deal: { id: '100000000000001', Modified_Time: '2026-08-21T10:01:00-05:00',
+      Billing_Automation_Status: 'Paid Verified', Subscription_Status: 'Active',
+      Test_Status: 'Completed', Subscription_Acceptance_Status: 'Accepted' },
+    accountId: '100000000000002', deploymentId: 'deployment_A',
+    configurationVersion: 'cfg_A_v1', billingStatus: 'Active',
+  });
+  const at = '2026-08-21T15:02:00.000Z';
+  const canonical = facts.minimizeFact('conversion_status', fact);
+  assert.deepEqual(fact, canonical);
+  assert.deepEqual(createOutboxRow(fact, at), facts.createOutboxRow('conversion_status', canonical, at));
+  assert.equal(outboxKey(fact), facts.outboxKey('conversion_status', canonical));
+  assert.equal(fact.CLIENT_KEY, keyedDigest(config.analyticsPartitionSecret,
+    'revenue-desk-analytics-client-v1', ['100000000000002']));
+  assert.equal(fact.DEPLOYMENT_KEY, keyedDigest(config.analyticsPartitionSecret,
+    'revenue-desk-analytics-deployment-v1', ['deployment_A']));
+});
+
 const contract = require('../release-contract.json');
 const productContract = require(path.join(
   repositoryRoot, 'docs', 'product', 'free-revenue-leak-test-release-contract.json',

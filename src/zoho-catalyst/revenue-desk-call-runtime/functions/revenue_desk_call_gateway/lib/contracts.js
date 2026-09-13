@@ -18,12 +18,18 @@ const COVERAGE_LABEL_TO_MODE = freezeMap(
 const COVERAGE_MODE_TO_LABEL = freezeMap(
   contract.display_label_mappings.map(({ display_label: label, coverage_mode: mode }) => [mode, label]),
 );
-// These field-specific CRM values match the Form 2 approved-route decoder.
-// Presentation labels and runtime modes are not interchangeable CRM values.
+// CRM can return either these exact references or an already-canonical label.
+// Keep decoding field-specific; runtime mode names are never CRM route values.
 const CRM_APPROVED_ROUTE_TO_LABEL = freezeMap(
   contract.display_label_mappings
     .map(({ crm_stored_value: stored, display_label: label }) => [stored, label]),
 );
+
+function decodeCrmApprovedTestRoute(value) {
+  if (typeof value !== 'string') return undefined;
+  return CRM_APPROVED_ROUTE_TO_LABEL.get(value)
+    || (COVERAGE_LABEL_TO_MODE.has(value) ? value : undefined);
+}
 const CRM_TEST_STATUSES = freezeSet(contract.crm_test_statuses);
 const CRM_APPROVAL_STATUSES = freezeSet(contract.crm_go_live_approval_statuses);
 const STOP_REASON_TO_CRM = freezeMap(
@@ -219,6 +225,7 @@ module.exports = Object.freeze({
   COVERAGE_LABEL_TO_MODE,
   COVERAGE_MODE_TO_LABEL,
   CRM_APPROVED_ROUTE_TO_LABEL,
+  decodeCrmApprovedTestRoute,
   CRM_TEST_STATUSES,
   CRM_APPROVAL_STATUSES,
   STOP_REASON_TO_CRM,

@@ -20,7 +20,34 @@ The request body contains only:
 
 For report synchronization the exact body is `{"schemaVersion":"crm-billing-lifecycle-v2","action":"sync_report_summary","dealId":"100000000000001","operationKey":"<64-hex-revision-key>"}`. The runtime worker sends only that binding; it never sends the report body or receives authority for paid actions. `ensure_customer`, `start_evaluation`, and `end_evaluation` are not public actions. Customer provisioning is private to accepted paid conversion. No Billing evaluation subscription is created for the free test.
 
-The report caller uses the API Gateway `ZCFKEY` plus `SHARED_HEADER_NAME: REPORT_SUMMARY_HEADER_VALUE`. That secret is distinct from `SHARED_HEADER_VALUE`: report credentials cannot authorize `prepare_paid_subscription` or `reconcile`, and the paid caller credential cannot authorize `sync_report_summary`. Pending and crashed `report_claim_*` pre-write rows are claimed or reclaimed with an `OPERATION_VERSION` fence. Exact `report_write_started_*` readback is required before CRM PUT; after that boundary, only exact Deal readback may complete the row and the write is never repeated. Completion and containment use a report-specific compare-and-set over the observed row, status, outcome, and version, so a stale completion cannot erase newer containment and stale containment cannot reverse completion. After observing the operation cursor, every transition to completed and every already-completed replay fresh-reads the authoritative Deal account, deployment/configuration binding, and exact patch. Mismatch or unavailable readback CAS-keeps or demotes that cursor in `reconciliation_required`; if a stale containment attempt instead observes that completion won, it fresh-reads the Deal and performs at most one bounded repair CAS when the conflict remains. An exact fresh match remains a no-write replay. Only an unreviewed `Live` test may receive a differing terminal patch; `Completed` is exact-replay-only, while `Failed`, `Rolled Back`, reviewed, or accepted evidence is contained for reconciliation. `Results_Review_At` remains human-only, and the human-controlled **Complete Free Test** Blueprint transition occurs only after report readback.
+The report caller uses the API Gateway `ZCFKEY` plus `SHARED_HEADER_NAME: REPORT_SUMMARY_HEADER_VALUE`. That secret is distinct from `SHARED_HEADER_VALUE`: report credentials cannot authorize paid actions, and the paid credential cannot authorize `sync_report_summary`. Pending and crashed `report_claim_*` pre-write rows use an `OPERATION_VERSION` fence. Exact `report_write_started_*` readback is required before the single conditional CRM PUT. Any possible write makes retries readback-only.
+
+### Free-test report-only configuration
+
+Keep `ENABLE_PAID_SUBSCRIPTION_PREPARATION=false`,
+`ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING=false`, and
+`ENABLE_DEVELOPMENT_COMPATIBILITY_PROBE=false` for the free test. The first two
+flags must agree; reporting must never require enabling a financial capability.
+With paid preparation disabled, the loader does not load the paid caller secret,
+Billing organization/API/Connections, provisioning mode, commercial/catalog
+settings, paid stage mapping, or Analytics outbox table. Existing unused private
+values need not be deleted or rotated to select this mode. Paid requests cannot
+authenticate through the report credential, and no Billing client, Billing
+Connection provider, or Analytics outbox is constructed for a report request,
+even in a separately configured paid-capable installation.
+
+The report still requires the independently bound CRM reader/writer, immutable
+Development project proof, operation store, exact free-test CRM values, report
+credential, and stable operation/partition keys. Despite its name,
+`ANALYTICS_PARTITION_HMAC_SECRET` also binds report identities; keep it unchanged
+and consistent with the producer. It does not enable Analytics. Schema-v3 writes
+add the exact `REPORT_MUTABLE_STAGE_VALUE` prerequisite described below.
+These are source constraints, not evidence that the current tenant has been
+reconfigured. Build/readback and report-only cutover remain separately approved.
+
+Schema-v3 summaries append a bounded source-version vector from the exact handled-call snapshot used in CRM summary arithmetic. All calls and notifications remain validated and available in the full report; unhandled attempts do not consume this vector's capacity. A differing Completed summary requires a strict component-wise advance, the same Account/Deal/deployment/configuration and unchanged terminal start/end/reason. The previous completed operation's full normalized CRM patch must still match. Missing fields are not treated as cleared: review, Plan, acceptance/version/start date, subscription state and Billing references must explicitly be null. `REPORT_MUTABLE_STAGE_VALUE` must be the independently verified stored API value of the pre-review Test Live stage; there is no guessed label default. Missing configuration contains v3 mutations. No Stage, review timestamp, paid field, route or clock is written. The vector is capped at 100 handled calls and the complete payload at 10000 UTF-8 bytes; excessive in-flight overshoot is contained, never truncated or called an accepted report. This storage ceiling does not change the 25-connected-call stop policy.
+
+All initial report writes, including retained v1/v2 operations, share a durable per-Deal `report_summary_write_guard` row in the existing operation table. It binds the authoritative Account/deployment permanently and retains confirmed/in-flight operation keys. Its CAS uses no time-based expiry: an ambiguous write stays reserved until exact CRM readback and durable operation completion agree. A new deployment or changed Account cannot create a second guard for that Deal. Schema-v3 old completed receipts remain unchanged when fresh CRM exactly matches a verified newer report. Different v1/v2 Completed reports are not auto-migrated; historical exact readback remains supported. Disable dispatch/contain the route before rollback; never delete guards, reset claims or run an older unguarded writer alongside this release. The Full Blueprint remains deferred; Results Review remains human-owned.
 
 The temporary `validate_report_summary_contract` action exists only for immutable Development deployment evidence. It accepts exactly one of two built-in synthetic cases: legacy schema v1 with a non-null workflow-failure count, or schema v2 with unavailable workflow-failure evidence represented as null. It requires the report-only credential, the exact artifact-bound Development host/project, and `ENABLE_DEVELOPMENT_COMPATIBILITY_PROBE=true`; it parses and maps the built-in summary, returns only safe schema/mapping enums, and exits before Catalyst SDK, CRM, Billing, Connection, or Data Store initialization. Set the flag back to `false` immediately after both cases and verify the action rejects. It is unavailable in dark Production and is never an authorization path for report synchronization or paid actions.
 

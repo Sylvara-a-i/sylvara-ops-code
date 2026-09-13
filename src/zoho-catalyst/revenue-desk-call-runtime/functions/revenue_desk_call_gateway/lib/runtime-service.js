@@ -9,7 +9,7 @@ const { validateConfigurationVersionRow } = require('./configuration-version');
 const { RevenueDeskError, invariant } = require('./errors');
 const {
   validateInboundPayload, validateEventEnvelope, validateConfiguration, e164, isPlainObject,
-  MAX_RETELL_CALL_DURATION_MS,
+  MAX_RETELL_CALL_DURATION_MS, assertExecutionTimingSupported,
 } = require('./validation');
 const {
   numberLookupKey, eventReceiptKey, callLookupKey, payloadFingerprint,
@@ -555,6 +555,9 @@ async function loadDeployment(store, row, config, {
 }
 
 function activeAt(deployment, timestampMs, { allowRollbackClaim = false } = {}) {
+  // This is the new-admission boundary, not historical event settlement. It
+  // also protects number-only fallback events lacking prior admission proof.
+  assertExecutionTimingSupported(deployment.configuration);
   invariant(deployment.testStatus === CONTRACT.active_test_status
     && deployment.approvalStatus === CONTRACT.approved_go_live_status
     && deployment.approvalEvidenceValidated === true
@@ -2253,6 +2256,9 @@ function createRuntimeService({
           rollbackClaims: claimsByDeployment.get(row.DEPLOYMENT_ID) || [],
           rollbackClaimsComplete,
         });
+        if (deployment.testStatus === CONTRACT.active_test_status) {
+          assertExecutionTimingSupported(deployment.configuration);
+        }
       } catch (error) {
         if (!(error instanceof RevenueDeskError)) throw error;
         terminalReconciliationPendingCount += 1;

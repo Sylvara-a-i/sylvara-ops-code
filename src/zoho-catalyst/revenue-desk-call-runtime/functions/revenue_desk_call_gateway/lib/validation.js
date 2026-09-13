@@ -99,6 +99,8 @@ function enumValue(value, values, name) {
   return result;
 }
 
+// Structural validation also serves historical settlement and rollback. A
+// parseable numeric delay is not evidence that a provider timing rule is known.
 function validateConfiguration(input) {
   const value = object(input, 'configuration');
   exactKeys(value, [
@@ -208,6 +210,16 @@ function validateConfiguration(input) {
   });
 }
 
+function assertExecutionTimingSupported(configuration) {
+  // Only after-hours coverage has no no-answer timing dependency. Keep the
+  // other modes parseable for history, but never authorize new work until an
+  // explicit provider value-and-unit binding contract is implemented.
+  invariant(configuration?.coverageMode === 'AfterHoursOnly'
+    && configuration.noAnswerDelay === null,
+  'PROVIDER_TIMING_UNVERIFIED', 'Provider timing is not verified for this coverage mode.',
+  { httpStatus: 409 });
+}
+
 function validateInboundPayload(input) {
   const value = object(input, 'inbound webhook');
   exactKeys(value, ['event', 'event_timestamp', 'call_inbound'], 'inbound webhook');
@@ -281,6 +293,7 @@ module.exports = {
   stringArray,
   enumValue,
   validateConfiguration,
+  assertExecutionTimingSupported,
   validateInboundPayload,
   validateEventEnvelope,
   validateOutcome,

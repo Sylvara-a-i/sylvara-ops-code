@@ -268,29 +268,31 @@ function createRequestListener({
         config.crmWriteConnectionLinkName,
         config.platformOperationTimeoutMs,
       );
-      const billingRead = createConnectionAuthorizationProvider(
-        app,
-        config.billingReadConnectionLinkName,
-        config.platformOperationTimeoutMs,
-      );
-      const billingWrite = createConnectionAuthorizationProvider(
-        app,
-        config.billingWriteConnectionLinkName,
-        config.platformOperationTimeoutMs,
-      );
       const crmClient = makeCrmClient(config, {
         readAuthorizationProvider: crmRead,
         writeAuthorizationProvider: crmWrite,
         fetchImpl,
       });
       const operationStore = makeOperationStore(app, config);
-      const analyticsOutbox = makeAnalyticsOutboxStore(app, config);
-      const billingClient = makeBillingClient(config, {
-        readAuthorizationProvider: billingRead,
-        writeAuthorizationProvider: billingWrite,
-        operationStore,
-        fetchImpl,
-      });
+      // A report request must not construct paid dependencies even when this
+      // installation separately supports paid actions with another credential.
+      let analyticsOutbox;
+      let billingClient;
+      if (PAID_LIFECYCLE_ACTIONS.has(action)) {
+        const billingRead = createConnectionAuthorizationProvider(
+          app, config.billingReadConnectionLinkName, config.platformOperationTimeoutMs,
+        );
+        const billingWrite = createConnectionAuthorizationProvider(
+          app, config.billingWriteConnectionLinkName, config.platformOperationTimeoutMs,
+        );
+        analyticsOutbox = makeAnalyticsOutboxStore(app, config);
+        billingClient = makeBillingClient(config, {
+          readAuthorizationProvider: billingRead,
+          writeAuthorizationProvider: billingWrite,
+          operationStore,
+          fetchImpl,
+        });
+      }
       const lifecycle = makeLifecycleHandler(config, {
         crmClient,
         billingClient,
