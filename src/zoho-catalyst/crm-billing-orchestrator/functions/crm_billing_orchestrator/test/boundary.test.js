@@ -69,7 +69,10 @@ test("blank environment and reviewed variable registry have the same names", () 
 
 test("public configuration contains no populated live identifiers, secrets, or prices", () => {
   const environment = fs.readFileSync(path.join(functionRoot, ".env.example"), "utf8");
+  const disabledGates = ["ENABLE_PAID_SUBSCRIPTION_PREPARATION",
+    "ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING", "ENABLE_DEVELOPMENT_COMPATIBILITY_PROBE"];
   for (const line of environment.split(/\r?\n/)) {
+    if (disabledGates.some((name) => line === `${name}=false`)) continue;
     if (!line || /^(DEPLOYMENT_ENVIRONMENT|DEPLOYMENT_MODE|CRM_API_BASE_URL|BILLING_API_BASE_URL|OPERATION_TABLE|ANALYTICS_OUTBOX_TABLE|MAX_BODY_BYTES|OUTBOUND_TIMEOUT_MS|OUTBOUND_MAX_BYTES|PLATFORM_OPERATION_TIMEOUT_MS)=/.test(line)) {
       continue;
     }
@@ -77,5 +80,9 @@ test("public configuration contains no populated live identifiers, secrets, or p
   }
   assert.match(environment, /^OPERATION_TABLE=CRMBillingOperations$/m);
   assert.match(environment, /^ANALYTICS_OUTBOX_TABLE=AnalyticsSyncOutbox$/m);
+  for (const name of disabledGates) {
+    assert.equal(environment.split(/\r?\n/).filter((line) => line.startsWith(`${name}=`)).length, 1);
+    assert.match(environment, new RegExp(`^${name}=false$`, "m"));
+  }
   assert.doesNotMatch(environment, /\$\d|[1-9][0-9]{7,}/);
 });

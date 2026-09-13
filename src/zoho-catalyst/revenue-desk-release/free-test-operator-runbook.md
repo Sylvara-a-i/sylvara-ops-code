@@ -202,6 +202,30 @@ supplemental free-test reporting packet because Journey-core preserves its route
 as deferred. This does not authorize the seven-function commercial profile,
 financial actions, Analytics, or a live worker invocation.
 
+The proposed coordinated package is the existing five Journey-core targets at
+one approved revision plus `crm_billing_orchestrator` at that revision: six
+artifacts, not the seven-function commercial profile. The reporting supplement
+must reference the exact Journey-core manifest digest and independently bind
+the report artifact digest, operation-table/CAS evidence, permitted action,
+configuration readback, and bounded acceptance allocation. It is a proposed
+exception for `sync_report_summary` only, not a silent change to the currently
+deferred `CRM_BILLING` route. If a later approval chooses a delta rollout instead,
+its exact cross-revision compatibility must be established first; the current
+five-function validator must not be relabeled or relaxed. Form 1/Form 2 rebuilds
+in the coordinated option serve that immutable revision contract, not a claim
+that their previously accepted business behavior was defective.
+
+For that report-only supplement, explicitly keep
+`ENABLE_PAID_SUBSCRIPTION_PREPARATION`,
+`ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING`, and
+`ENABLE_DEVELOPMENT_COMPATIBILITY_PROBE` false. The corrected consumer omits
+financial configuration and constructs only its CRM and operation-store
+dependencies for reports. Do not enable the TEST customer gate to satisfy an
+older artifact's configuration loader. Its stable partition secret is still
+required for report identity, not Analytics execution. Install and read back the
+report consumer before admitting any new schema-v3 producer dispatch; stop at
+any missing consumer proof, ambiguous artifact identity, or unsupported profile.
+
 The local follow-up also changes report producer/consumer lineage and per-Deal
 serialization. The demo now preserves three confirmed synthetic report receipts,
 uses three simulated CRM writes for 32 calls, and shows post-completion late

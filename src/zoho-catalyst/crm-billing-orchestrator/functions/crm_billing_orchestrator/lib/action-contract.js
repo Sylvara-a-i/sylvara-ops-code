@@ -40,8 +40,11 @@ function getHeader(request, name) {
 }
 
 function safeEqual(left, right) {
-  const a = Buffer.from(String(left), "utf8");
-  const b = Buffer.from(String(right), "utf8");
+  // An absent paid credential in report-only mode cannot authenticate the
+  // literal text "undefined" (or any other string coercion).
+  if (typeof left !== "string" || typeof right !== "string" || !left || !right) return false;
+  const a = Buffer.from(left, "utf8");
+  const b = Buffer.from(right, "utf8");
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 

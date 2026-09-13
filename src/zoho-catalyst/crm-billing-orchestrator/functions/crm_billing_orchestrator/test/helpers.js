@@ -51,7 +51,10 @@ function baseEnvironment(overrides = {}) {
     BILLING_API_BASE_URL: "https://www.zohoapis.com/billing/v1",
     BILLING_ORGANIZATION_ID: "100000000000001",
     CUSTOMER_PROVISIONING_MODE: "test_direct_customer",
-    ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING: "true",
+    // Report-only fixtures keep the financial gate off; an explicit override
+    // still permits regression tests for contradictory configuration.
+    ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING:
+      overrides.ENABLE_PAID_SUBSCRIPTION_PREPARATION === "false" ? "false" : "true",
     CRM_READ_CONNECTION_LINK_NAME: SYNTHETIC_CRM_READ_LINK,
     CRM_WRITE_CONNECTION_LINK_NAME: SYNTHETIC_CRM_WRITE_LINK,
     BILLING_READ_CONNECTION_LINK_NAME: "BillingRead",

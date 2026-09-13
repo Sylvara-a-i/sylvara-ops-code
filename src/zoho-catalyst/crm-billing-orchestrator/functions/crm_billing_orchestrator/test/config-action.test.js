@@ -282,13 +282,11 @@ test("disabled paid mode accepts no paid catalog while report configuration stay
     "CRM_READ_CONNECTION_LINK_NAME",
     "CRM_WRITE_CONNECTION_LINK_NAME",
     "OPERATION_TABLE",
-    "ANALYTICS_OUTBOX_TABLE",
     "DATASTORE_DUPLICATE_ERROR_CODES",
     "ANALYTICS_PARTITION_HMAC_SECRET",
     "REVENUE_DESK_PIPELINE_VALUE",
     "FREE_TEST_ENTRY_OFFER_VALUE",
     "INITIAL_SALE_TYPE_VALUE",
-    "SUBSCRIPTION_PROPOSED_STAGE_VALUE",
     "TEST_COMPLETED_STATUS_VALUE",
   ]) {
     const environment = withoutConditionalPaidVariables();

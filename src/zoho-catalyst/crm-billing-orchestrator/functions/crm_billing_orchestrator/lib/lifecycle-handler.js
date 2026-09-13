@@ -246,7 +246,7 @@ function createLifecycleHandler(
   config,
   { crmClient, billingClient, operationStore, analyticsOutbox, now = Date.now },
 ) {
-  for (const dependency of [crmClient, billingClient, operationStore, analyticsOutbox]) {
+  for (const dependency of [crmClient, operationStore]) {
     if (!dependency || typeof dependency !== "object") {
       fail("Lifecycle dependency is unavailable", { publicCode: "configuration_invalid", status: 503 });
     }
@@ -777,6 +777,15 @@ function createLifecycleHandler(
       publicCode: "operation_invalid",
       status: 409,
     });
+    // Report-only requests have no financial/Analytics adapters. Verify paid
+    // dependencies only for their enabled action, before CRM reads or claims.
+    if (PAID_LIFECYCLE_ACTIONS.has(payload.action)) {
+      for (const dependency of [billingClient, analyticsOutbox]) {
+        if (!dependency || typeof dependency !== "object") {
+          fail("Lifecycle dependency is unavailable", { publicCode: "configuration_invalid", status: 503 });
+        }
+      }
+    }
     const context = await crmClient.getContext(payload.dealId);
     const state = validateCommon(context, config);
     if (payload.action === REPORT_SUMMARY_ACTION) {

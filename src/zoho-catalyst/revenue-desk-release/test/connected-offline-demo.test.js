@@ -10,6 +10,16 @@ async function guarded(callback) {
   try { return await callback(guard); } finally { guard.restore(); }
 }
 
+test('runtime producer and CRM consumer use the same canonical summary fields', () => guarded(async () => {
+  const { SUMMARY_FIELDS: producer } = require(
+    '../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/crm-report-outbox',
+  );
+  const { REVISION_FIELDS: consumer } = require(
+    '../../crm-billing-orchestrator/functions/crm_billing_orchestrator/lib/report-summary',
+  );
+  assert.deepEqual(producer, consumer);
+}));
+
 async function settledOneCall(options = {}) {
   const h = await createOfflineHarness(options);
   const entry = await h.inbound('A');
@@ -33,6 +43,73 @@ async function pendingLateRevision(options = {}) {
   assert.equal(revision.STATUS, 'pending');
   return { h, original, revision };
 }
+
+test('report-only listener executes the actual lifecycle handler without financial dependencies', () => guarded(async () => {
+  const crmRoot = '../../crm-billing-orchestrator/functions/crm_billing_orchestrator';
+  const { createRequestListener } = require(`${crmRoot}/lib/catalyst-adapter`);
+  const { baseEnvironment, REVISION, DEVELOPMENT_ZAID_HMAC_SHA256, SYNTHETIC_DEVELOPMENT_ZAID }
+    = require(`${crmRoot}/test/helpers`);
+  for (const paidEnabled of [false, true]) {
+    const h = await settledOneCall();
+    const operation = h.runtime.store.rows.get('CRMBillingOperations')[0];
+    const environment = baseEnvironment({ ENABLE_PAID_SUBSCRIPTION_PREPARATION: String(paidEnabled),
+      ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING: String(paidEnabled),
+      ANALYTICS_PARTITION_HMAC_SECRET: h.runtime.config.analyticsPartitionSecret,
+      FREE_TEST_ENTRY_OFFER_VALUE: h.crm.config.freeTestEntryOfferValue,
+      REPORT_MUTABLE_STAGE_VALUE: 'Test Live',
+    });
+    if (!paidEnabled) {
+      for (const key of Object.keys(environment)) {
+        if (/^(?:BILLING_|PAID_)/.test(key) || ['SHARED_HEADER_VALUE', 'CUSTOMER_PROVISIONING_MODE',
+          'ANALYTICS_OUTBOX_TABLE', 'SUBSCRIPTION_PROPOSED_STAGE_VALUE', 'CLOSED_WON_STAGE_VALUE'].includes(key)) {
+          delete environment[key];
+        }
+      }
+    }
+    let writes = 0;
+    const listener = createRequestListener({ artifactRevision: REVISION,
+      artifactDevelopmentZaidHmacSha256: DEVELOPMENT_ZAID_HMAC_SHA256, environment,
+      logger: { error() {}, info() {} }, now: () => h.runtime.clock.value,
+      catalystSdk: { initialize() { return {
+        config: { projectKey: SYNTHETIC_DEVELOPMENT_ZAID, environment: 'Development' },
+      }; } },
+      factories: {
+        createCrmClient: () => ({
+          getContext: async (id) => structuredClone(h.crm.contexts.get(id)),
+          updateDealReportSummary: async (before, patch) => {
+            const current = h.crm.contexts.get(before.id).deal;
+            assert.equal(before.Modified_Time, current.Modified_Time);
+            writes += 1;
+            Object.assign(current, patch, { Modified_Time: new Date(h.runtime.clock.value + writes).toISOString() });
+          },
+        }),
+        createOperationStore: () => h.crm.operations,
+        createBillingClient() { throw new Error('Report constructed Billing'); },
+        createAnalyticsOutboxStore() { throw new Error('Report constructed Analytics'); },
+      },
+    });
+    const body = JSON.stringify({ schemaVersion: 'crm-billing-lifecycle-v2', action: 'sync_report_summary',
+      dealId: operation.CRM_DEAL_ID, operationKey: operation.OPERATION_KEY });
+    const input = { method: 'POST', url: environment.ALLOWED_PATH, body, headers: {
+      host: environment.DEVELOPMENT_FUNCTION_HOST, 'x-zc-project-key': SYNTHETIC_DEVELOPMENT_ZAID,
+      'content-type': 'application/json', 'content-length': String(Buffer.byteLength(body)),
+      [environment.SHARED_HEADER_NAME]: environment.REPORT_SUMMARY_HEADER_VALUE,
+    } };
+    const response = { statusCode: null, body: null, status(value) { this.statusCode = value; },
+      setHeader() {}, end(value) { this.body = JSON.parse(value); } };
+    await listener(input, response);
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.body.outcome, 'report_summary_readback_confirmed');
+    assert.equal(response.body.duplicate, false);
+    assert.equal(writes, 1);
+    assert.equal(operation.STATUS, 'completed');
+    assert.equal(h.crm.contexts.get(operation.CRM_DEAL_ID).deal.Test_Calls_Reaching_Route, 1);
+    await listener(input, response);
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.body.duplicate, true);
+    assert.equal(writes, 1);
+  }
+}));
 
 test('repeatable prepared setup to gateway, worker, report and actual CRM summary handler', async () => {
   const result = await runFreeTestDemo();

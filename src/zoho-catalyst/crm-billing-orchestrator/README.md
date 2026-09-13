@@ -22,6 +22,29 @@ For report synchronization the exact body is `{"schemaVersion":"crm-billing-life
 
 The report caller uses the API Gateway `ZCFKEY` plus `SHARED_HEADER_NAME: REPORT_SUMMARY_HEADER_VALUE`. That secret is distinct from `SHARED_HEADER_VALUE`: report credentials cannot authorize paid actions, and the paid credential cannot authorize `sync_report_summary`. Pending and crashed `report_claim_*` pre-write rows use an `OPERATION_VERSION` fence. Exact `report_write_started_*` readback is required before the single conditional CRM PUT. Any possible write makes retries readback-only.
 
+### Free-test report-only configuration
+
+Keep `ENABLE_PAID_SUBSCRIPTION_PREPARATION=false`,
+`ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING=false`, and
+`ENABLE_DEVELOPMENT_COMPATIBILITY_PROBE=false` for the free test. The first two
+flags must agree; reporting must never require enabling a financial capability.
+With paid preparation disabled, the loader does not load the paid caller secret,
+Billing organization/API/Connections, provisioning mode, commercial/catalog
+settings, paid stage mapping, or Analytics outbox table. Existing unused private
+values need not be deleted or rotated to select this mode. Paid requests cannot
+authenticate through the report credential, and no Billing client, Billing
+Connection provider, or Analytics outbox is constructed for a report request,
+even in a separately configured paid-capable installation.
+
+The report still requires the independently bound CRM reader/writer, immutable
+Development project proof, operation store, exact free-test CRM values, report
+credential, and stable operation/partition keys. Despite its name,
+`ANALYTICS_PARTITION_HMAC_SECRET` also binds report identities; keep it unchanged
+and consistent with the producer. It does not enable Analytics. Schema-v3 writes
+add the exact `REPORT_MUTABLE_STAGE_VALUE` prerequisite described below.
+These are source constraints, not evidence that the current tenant has been
+reconfigured. Build/readback and report-only cutover remain separately approved.
+
 Schema-v3 summaries append a bounded source-version vector from the exact handled-call snapshot used in CRM summary arithmetic. All calls and notifications remain validated and available in the full report; unhandled attempts do not consume this vector's capacity. A differing Completed summary requires a strict component-wise advance, the same Account/Deal/deployment/configuration and unchanged terminal start/end/reason. The previous completed operation's full normalized CRM patch must still match. Missing fields are not treated as cleared: review, Plan, acceptance/version/start date, subscription state and Billing references must explicitly be null. `REPORT_MUTABLE_STAGE_VALUE` must be the independently verified stored API value of the pre-review Test Live stage; there is no guessed label default. Missing configuration contains v3 mutations. No Stage, review timestamp, paid field, route or clock is written. The vector is capped at 100 handled calls and the complete payload at 10000 UTF-8 bytes; excessive in-flight overshoot is contained, never truncated or called an accepted report. This storage ceiling does not change the 25-connected-call stop policy.
 
 All initial report writes, including retained v1/v2 operations, share a durable per-Deal `report_summary_write_guard` row in the existing operation table. It binds the authoritative Account/deployment permanently and retains confirmed/in-flight operation keys. Its CAS uses no time-based expiry: an ambiguous write stays reserved until exact CRM readback and durable operation completion agree. A new deployment or changed Account cannot create a second guard for that Deal. Schema-v3 old completed receipts remain unchanged when fresh CRM exactly matches a verified newer report. Different v1/v2 Completed reports are not auto-migrated; historical exact readback remains supported. Disable dispatch/contain the route before rollback; never delete guards, reset claims or run an older unguarded writer alongside this release. The Full Blueprint remains deferred; Results Review remains human-owned.

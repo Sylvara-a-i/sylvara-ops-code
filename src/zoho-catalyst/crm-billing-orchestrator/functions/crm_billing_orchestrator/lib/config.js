@@ -282,10 +282,6 @@ function loadConfig(environment = process.env, {
     !/^x-[a-z0-9][a-z0-9-]{2,61}$/.test(headerName) ||
     new Set(["x-zc-environment", "x-com-zoho-subscriptions-organizationid"]).has(headerName)
   ) throw new ConfigurationError("SHARED_HEADER_NAME is invalid or reserved");
-  const organizationId = required(environment, "BILLING_ORGANIZATION_ID");
-  if (!/^[1-9][0-9]{7,29}$/.test(organizationId)) {
-    throw new ConfigurationError("BILLING_ORGANIZATION_ID is invalid");
-  }
   const enablePaidSubscriptionPreparation = requiredBoolean(
     environment,
     "ENABLE_PAID_SUBSCRIPTION_PREPARATION",
@@ -294,24 +290,38 @@ function loadConfig(environment = process.env, {
     environment,
     "ENABLE_DEVELOPMENT_COMPATIBILITY_PROBE",
   );
-  const selectedCustomerProvisioningMode = customerProvisioningMode(environment);
   const enableTestDirectCustomerProvisioning = requiredBoolean(
     environment,
     "ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING",
   );
-  if (!enableTestDirectCustomerProvisioning) {
+  if (enablePaidSubscriptionPreparation && !enableTestDirectCustomerProvisioning) {
     throw new ConfigurationError(
       "Paid conversion requires the exact Development TEST customer gate",
     );
   }
+  if (!enablePaidSubscriptionPreparation && enableTestDirectCustomerProvisioning) {
+    throw new ConfigurationError("Report-only mode requires the Development TEST customer gate disabled");
+  }
   const idempotencyPepper = secret(environment, "IDEMPOTENCY_PEPPER");
   const analyticsPartitionSecret = secret(environment, "ANALYTICS_PARTITION_HMAC_SECRET");
-  const sharedHeaderValue = secret(environment, "SHARED_HEADER_VALUE");
   const reportSummaryHeaderValue = secret(environment, "REPORT_SUMMARY_HEADER_VALUE");
   if (analyticsPartitionSecret === idempotencyPepper) {
     throw new ConfigurationError("Analytics partition and operation identity secrets must differ");
   }
-  if (sharedHeaderValue === reportSummaryHeaderValue) {
+  // The report writer uses the existing operation table and partition HMAC but
+  // does not require or load a financial credential, catalog or Billing adapter.
+  const paidSettings = enablePaidSubscriptionPreparation ? {
+    sharedHeaderValue: secret(environment, "SHARED_HEADER_VALUE"),
+    billingApiBaseUrl: apiBase(environment, "BILLING_API_BASE_URL", "/billing/v1"),
+    billingOrganizationId: billingRecordId(environment, "BILLING_ORGANIZATION_ID"),
+    customerProvisioningMode: customerProvisioningMode(environment),
+    billingReadConnectionLinkName: identifier(environment, "BILLING_READ_CONNECTION_LINK_NAME"),
+    billingWriteConnectionLinkName: identifier(environment, "BILLING_WRITE_CONNECTION_LINK_NAME"),
+    analyticsOutboxTable: analyticsOutboxTable(environment),
+    subscriptionProposedStageValue: boundedText(environment, "SUBSCRIPTION_PROPOSED_STAGE_VALUE"),
+    ...paidConfiguration(environment),
+  } : {};
+  if (paidSettings.sharedHeaderValue === reportSummaryHeaderValue) {
     throw new ConfigurationError("Paid and report-summary caller secrets must differ");
   }
   return Object.freeze({
@@ -324,29 +334,21 @@ function loadConfig(environment = process.env, {
     developmentRuntimeProof: secret(environment, "DEVELOPMENT_RUNTIME_PROOF"),
     allowedPath: exactPath(environment),
     sharedHeaderName: headerName,
-    sharedHeaderValue,
     reportSummaryHeaderValue,
     crmApiBaseUrl: apiBase(environment, "CRM_API_BASE_URL", "/crm/v8"),
-    billingApiBaseUrl: apiBase(environment, "BILLING_API_BASE_URL", "/billing/v1"),
-    billingOrganizationId: organizationId,
-    customerProvisioningMode: selectedCustomerProvisioningMode,
     enableTestDirectCustomerProvisioning,
     crmReadConnectionLinkName: identifier(environment, "CRM_READ_CONNECTION_LINK_NAME"),
     crmWriteConnectionLinkName: identifier(environment, "CRM_WRITE_CONNECTION_LINK_NAME"),
-    billingReadConnectionLinkName: identifier(environment, "BILLING_READ_CONNECTION_LINK_NAME"),
-    billingWriteConnectionLinkName: identifier(environment, "BILLING_WRITE_CONNECTION_LINK_NAME"),
     operationTable: operationTable(environment),
-    analyticsOutboxTable: analyticsOutboxTable(environment),
     duplicateErrorCodes: duplicateCodes(environment),
     idempotencyPepper,
     analyticsPartitionSecret,
     enablePaidSubscriptionPreparation,
     enableDevelopmentCompatibilityProbe,
-    ...(enablePaidSubscriptionPreparation ? paidConfiguration(environment) : {}),
+    ...paidSettings,
     revenueDeskPipelineValue: boundedText(environment, "REVENUE_DESK_PIPELINE_VALUE"),
     freeTestEntryOfferValue: boundedText(environment, "FREE_TEST_ENTRY_OFFER_VALUE"),
     initialSaleTypeValue: boundedText(environment, "INITIAL_SALE_TYPE_VALUE"),
-    subscriptionProposedStageValue: boundedText(environment, "SUBSCRIPTION_PROPOSED_STAGE_VALUE"),
     // No display-label default: v3 report writes require the tenant's verified
     // stored pre-review stage value. Historical exact readback remains available.
     reportMutableStageValue: environment.REPORT_MUTABLE_STAGE_VALUE

@@ -11,9 +11,6 @@ const {
   reportSummaryIdentity,
   reportSummaryPatch,
 } = require("../lib/report-summary");
-const { SUMMARY_FIELDS: PRODUCER_SUMMARY_FIELDS } = require(
-  "../../../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/crm-report-outbox",
-);
 const { REVISION, baseEnvironment } = require("./helpers");
 
 function summary(overrides = {}) {
@@ -46,8 +43,7 @@ function summary(overrides = {}) {
   };
 }
 
-test("runtime producer and CRM consumer use the same canonical summary fields", () => {
-  assert.deepEqual(PRODUCER_SUMMARY_FIELDS, REVISION_FIELDS);
+test("versioned CRM summary fields preserve the legacy ordered payload", () => {
   assert.deepEqual(REVISION_FIELDS.slice(0, -1), SUMMARY_FIELDS);
 });
 
