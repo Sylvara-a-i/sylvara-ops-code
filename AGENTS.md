@@ -8,12 +8,12 @@ Lead with the recommendation. Make a reasonable assumption and proceed unless an
 
 ## Task Authority
 
-- For a question, audit, review, or status request, inspect and report evidence. Do not edit, publish, deploy, message, or make external writes.
-- For diagnosis, identify the root cause and evidence. Implement a fix only when fixing is part of the request.
-- For an authorized build or change, implement the smallest complete change, test it in proportion to risk, and finish the safe repository workflow.
-- For strategy or architecture, compare the proposal with a smaller workflow-first option and test it against sellability, repeatability, support burden, and kill criteria.
-- Repository permission never authorizes a live tenant write, payment, customer communication, call route, deployment, purchase, publication outside the reviewed repository artifact, or production configuration change. Those actions require approval for the exact target and operation.
-- Stop when a required live contract, authoritative source, private input, rollback, or high-risk decision is unknown. State what evidence or approval would unblock the work.
+- Questions/audits/reviews/status: inspect/report only, no edits or external writes. Diagnose with evidence; fix only on request.
+- For authorized changes, finish the approved outcome. When publication and merge are in scope, complete fixes, tests, commits, PRs, checks, review, and squash merge without repeated confirmation.
+- Honor explicit draft-only, no-merge, exact-revision, attempt, cost, and other user limits; never renew consumed actions.
+- Pause only affected work for protected owner input, material scope/risk changes, new spending, missing authority, or unknown live contracts, identity, evidence, or rollback. Continue independent authorized work and consolidate unavoidable owner requests.
+- For strategy/architecture, test smaller workflows for sellability, repeatability, support burden, and kill criteria.
+- Repository permission does not authorize a live tenant write, payment, customer communication, call route, deployment, purchase, production change, or other publication. Require approval for the exact target and operation.
 
 ## External-System Tool Selection
 

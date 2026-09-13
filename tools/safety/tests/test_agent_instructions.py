@@ -17,6 +17,7 @@ ROOT_VERIFIER = ROOT / "tools" / "verify.cmd"
 DOCUMENT_STANDARD = ROOT / "docs" / "standards" / "document-drafting-standard.md"
 DOCUMENT_PROFILE = ROOT / "docs" / "standards" / "document-style-profile.json"
 CODE_REVIEW = ROOT / "docs" / "standards" / "code-review.md"
+CONNECTOR_STANDARD = ROOT / "docs" / "security" / "connector-access-standard.md"
 STANDARDS_README = ROOT / "docs" / "standards" / "README.md"
 MARKDOWN_LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 
@@ -116,6 +117,29 @@ class AgentInstructionsTests(unittest.TestCase):
                 with self.subTest(path=path, target=target):
                     self.assertTrue(target.is_relative_to(ROOT.resolve()))
                     self.assertTrue(target.is_file())
+
+    def test_repository_followthrough_does_not_renew_live_authority(self) -> None:
+        authority = section(ROOT_AGENTS.read_text(encoding="utf-8"), "Task Authority").lower()
+        for marker in (
+            "approved outcome", "publication and merge are in scope",
+            "without repeated confirmation", "draft-only", "no-merge",
+            "exact-revision", "attempt", "cost", "protected owner input",
+            "continue independent authorized work", "consolidate unavoidable owner requests",
+        ):
+            with self.subTest(authority_marker=marker):
+                self.assertIn(marker, authority)
+
+        github_path = section(
+            CONNECTOR_STANDARD.read_text(encoding="utf-8"), "Required GitHub Path"
+        ).lower()
+        for marker in (
+            "not a new approval checkpoint", "required checks", "independent review",
+            "explicit user limits", "reconcile ambiguous writes",
+            "deployment, credential, provider, spending, destructive, or live-system authorization",
+            "does not renew consumed one-time actions", "required owner handoff",
+        ):
+            with self.subTest(connector_marker=marker):
+                self.assertIn(marker, github_path)
 
     def test_root_defines_one_canonical_verification_command(self) -> None:
         text = ROOT_AGENTS.read_text(encoding="utf-8")
