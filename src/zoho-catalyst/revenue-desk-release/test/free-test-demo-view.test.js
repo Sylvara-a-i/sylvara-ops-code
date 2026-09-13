@@ -6,6 +6,16 @@ const { createHash } = require('node:crypto');
 const vm = require('node:vm');
 const { renderFreeTestDemo } = require('../lib/free-test-demo-view');
 
+// Inspect this renderer's fixed markup, not arbitrary HTML. An unexpected second
+// script must fail the test rather than leave its code outside the assertions.
+function singleInlineScript(html) {
+  assert.equal((html.match(/<script\b/gi) || []).length, 1, 'Exactly one script tag is allowed');
+  const scripts = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script\s*>/gi)];
+  assert.equal(scripts.length, 1, 'Exactly one complete script is required');
+  assert.match(scripts[0][0], /^<script>/i, 'The script must have no attributes');
+  return scripts[0][1];
+}
+
 function fixture() {
   return {
     label: 'SYNTHETIC DEMONSTRATION — NO LIVE CALLS',
@@ -31,21 +41,29 @@ test('renderer requires a two-company synthetic report and preserves unknowns', 
 
 test('all fixture text is escaped and no executable remote assets or forms exist', () => {
   const input = fixture();
-  input.companies[0].key = '<script src="https://invalid.example"></script>';
+  input.companies[0].key = '<ScRiPt src="https://invalid.example"></sCrIpT>';
   input.companies[0].notificationPreviews = { value: '</pre><img src=x onerror=alert(1)>' };
   const html = renderFreeTestDemo(input);
-  assert.match(html, /&lt;script/);
+  assert.match(html, /&lt;ScRiPt/);
   assert.match(html, /&lt;\/pre&gt;&lt;img/);
   assert.doesNotMatch(html, /<(?:img|iframe|form|audio|video|link)\b|<script\s+src=/i);
   assert.match(html, /connect-src 'none'/);
-  const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+  const script = singleInlineScript(html);
   assert.doesNotMatch(script, /fetch|XMLHttpRequest|WebSocket|getUserMedia|window\.open|location\s*=/);
-  assert.match(html, new RegExp(`sha256-${createHash('sha256').update(script).digest('base64').replace(/[+]/g, '\\+')}`));
+  const digest = createHash('sha256').update(script).digest('base64');
+  assert.ok(html.includes(`script-src 'sha256-${digest}';`), 'CSP must allow the exact inline script hash');
+});
+
+test('script inspection rejects extra, incomplete, or attributed scripts regardless of tag case', () => {
+  assert.equal(singleInlineScript('<SCRIPT>approved()</sCrIpT>'), 'approved()');
+  assert.throws(() => singleInlineScript('<script>approved()</script><ScRiPt>unexpected()</ScRiPt>'), /Exactly one script tag/);
+  assert.throws(() => singleInlineScript('<script>incomplete()'), /Exactly one complete script/);
+  assert.throws(() => singleInlineScript('<script src="https://invalid.example"></script>'), /no attributes/);
 });
 
 test('local step controls and company selection work without network or browser globals', () => {
   const html = renderFreeTestDemo(fixture());
-  const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+  const script = singleInlineScript(html);
   const element = data => ({ dataset: data, hidden: false, events: {}, attributes: {},
     addEventListener(name, callback) { this.events[name] = callback; },
     setAttribute(name, value) { this.attributes[name] = value; } });
