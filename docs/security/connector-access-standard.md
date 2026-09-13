@@ -26,6 +26,8 @@ read current main -> create short-lived branch -> make focused change
 
 A connector must not push directly to `main`, bypass required checks, approve its own change where independent approval is required, or treat merge as authorization to deploy.
 
+Apply authorization to the approved repository outcome. The external-system pre-write gate below is not a new approval checkpoint for every in-scope source correction, push, check, review response, or merge. Complete the required checks and independent review without repeatedly asking permission to proceed. Explicit user limits still control; reconcile ambiguous writes before retrying, and never treat repository authorization as deployment, credential, provider, spending, destructive, or live-system authorization. This does not renew consumed one-time actions or bypass a required owner handoff.
+
 ## Pre-Write Gate For External Systems
 
 Before any production, financial, destructive, externally visible, or client-affecting write, record:
