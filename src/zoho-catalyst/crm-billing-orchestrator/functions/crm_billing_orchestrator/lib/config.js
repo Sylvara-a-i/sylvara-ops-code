@@ -302,15 +302,13 @@ function loadConfig(environment = process.env, {
   if (!enablePaidSubscriptionPreparation && enableTestDirectCustomerProvisioning) {
     throw new ConfigurationError("Report-only mode requires the Development TEST customer gate disabled");
   }
-  const idempotencyPepper = secret(environment, "IDEMPOTENCY_PEPPER");
   const analyticsPartitionSecret = secret(environment, "ANALYTICS_PARTITION_HMAC_SECRET");
   const reportSummaryHeaderValue = secret(environment, "REPORT_SUMMARY_HEADER_VALUE");
-  if (analyticsPartitionSecret === idempotencyPepper) {
-    throw new ConfigurationError("Analytics partition and operation identity secrets must differ");
-  }
   // The report writer uses the existing operation table and partition HMAC but
-  // does not require or load a financial credential, catalog or Billing adapter.
+  // not the paid operation pepper. Do not load unused financial identity material
+  // into report-only mode or make its retirement a prerequisite for reporting.
   const paidSettings = enablePaidSubscriptionPreparation ? {
+    idempotencyPepper: secret(environment, "IDEMPOTENCY_PEPPER"),
     sharedHeaderValue: secret(environment, "SHARED_HEADER_VALUE"),
     billingApiBaseUrl: apiBase(environment, "BILLING_API_BASE_URL", "/billing/v1"),
     billingOrganizationId: billingRecordId(environment, "BILLING_ORGANIZATION_ID"),
@@ -321,6 +319,9 @@ function loadConfig(environment = process.env, {
     subscriptionProposedStageValue: boundedText(environment, "SUBSCRIPTION_PROPOSED_STAGE_VALUE"),
     ...paidConfiguration(environment),
   } : {};
+  if (enablePaidSubscriptionPreparation && analyticsPartitionSecret === paidSettings.idempotencyPepper) {
+    throw new ConfigurationError("Analytics partition and operation identity secrets must differ");
+  }
   if (paidSettings.sharedHeaderValue === reportSummaryHeaderValue) {
     throw new ConfigurationError("Paid and report-summary caller secrets must differ");
   }
@@ -341,7 +342,6 @@ function loadConfig(environment = process.env, {
     crmWriteConnectionLinkName: identifier(environment, "CRM_WRITE_CONNECTION_LINK_NAME"),
     operationTable: operationTable(environment),
     duplicateErrorCodes: duplicateCodes(environment),
-    idempotencyPepper,
     analyticsPartitionSecret,
     enablePaidSubscriptionPreparation,
     enableDevelopmentCompatibilityProbe,

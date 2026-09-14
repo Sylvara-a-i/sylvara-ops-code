@@ -195,12 +195,15 @@
         "revenue_desk_call_worker",
         "crm_billing_orchestrator"
       ],
+      "replacement_key_requirements": "Use a fresh owner-generated 64-character ASCII value. The shared executable contract is 32-256 non-whitespace characters and 32-256 UTF-8 bytes. Never derive from, restore, print, or automatically apply an exposed previous value; this contract grants no live rotation, deployment, or activation authority.",
       "domains": [
         "revenue-desk-analytics-client-v1",
         "revenue-desk-analytics-deployment-v1",
         "revenue-desk-analytics-conversion-v2",
         "sylvara.crm-report-summary.v1",
-        "sylvara.crm-report-summary.v2"
+        "sylvara.crm-report-summary.v2",
+        "sylvara.crm-report-summary.v3",
+        "sylvara.crm-report-writer.v1"
       ],
       "durable_outputs": [
         "AnalyticsSyncOutbox.RECORD_KEY for CRM conversion v2 facts with free_test origin and paid_service target",
@@ -209,10 +212,18 @@
         "AnalyticsSyncCheckpoints partition identity for additive v2",
         "CRMBillingOperations.OPERATION_KEY for sync_report_summary",
         "CRMBillingOperations.OPERATION_FINGERPRINT for sync_report_summary",
-        "CRMBillingOperations.OPERATION_PAYLOAD_JSON callSetDigest and canonical report revision binding"
+        "CRMBillingOperations.OPERATION_PAYLOAD_JSON callSetDigest, canonical report revision binding, and v3 sourceVersions for sync_report_summary",
+        "CRMBillingOperations.OPERATION_KEY for report_summary_write_guard under sylvara.crm-report-writer.v1",
+        "CRMBillingOperations.OPERATION_FINGERPRINT for report_summary_write_guard under sylvara.crm-report-writer.v1",
+        "CRMBillingOperations.OPERATION_PAYLOAD_JSON binding, confirmedOperationKey, and inflightOperationKey references for report_summary_write_guard under sylvara.crm-report-writer.v1"
       ],
-      "rotation_gate": "Every call-runtime and CRM/Billing producer, report dispatcher, and analytics_sync consumer is disabled; no unresolved additive-v2 outbox or report-summary operation; v2 checkpoint/target rows and retained report operations are either zero or migrated and independently read back by exact key, fingerprint, payload digest, call-set digest, full report-revision digest, count, environment, watermark, and authoritative CRM summary.",
-      "previous_key_policy": "No mixed Analytics or CRM-report namespace. A previous key is migration-only: read old rows by old identity, write or verify the new operation/fingerprint/payload namespace, reset affected deployment reconciliation markers, reconcile exact Analytics and CRM readback, and remove the old key before any producer, dispatcher, or consumer is active."
+      "independent_acceptance_gates": [
+        "Retained sylvara.crm-report-summary.v1, sylvara.crm-report-summary.v2, and current sylvara.crm-report-summary.v3 operations independently satisfy the report-summary migration and readback gate. A partition-only replacement preserves v3 sourceVersions and their underlying CALL_KEY/CALL_VERSION inputs while rekeying the enclosing report-summary HMAC identities.",
+        "Every retained sylvara.crm-report-writer.v1 guard independently satisfies exact OPERATION_KEY, OPERATION_FINGERPRINT, OPERATION_PAYLOAD_JSON, confirmedOperationKey, inflightOperationKey, version, status, binding, count, and environment migration and readback. Raw CRM binding fields remain unchanged while the enclosing HMAC key/fingerprint and confirmed/inflight summary-operation references are rekeyed.",
+        "Terminal report-summary acceptance does not establish writer-guard acceptance; both gates must pass separately before any producer, dispatcher, or consumer is active."
+      ],
+      "rotation_gate": "Every call-runtime and CRM/Billing producer, report dispatcher, and analytics_sync consumer is disabled; no unresolved additive-v2 outbox, report-summary operation, or report-writer guard; v2 checkpoint/target rows, retained report-summary v1/v2/current v3 operations, and retained writer-guard v1 rows are independently either zero or migrated and read back. Report summaries require exact key, fingerprint, private payload digest, call-set digest, full report-revision digest, preserved v3 sourceVersions where applicable, count, environment, watermark, and authoritative CRM summary. Writer guards separately require exact key, fingerprint, private payload digest, confirmed/inflight operation references, version, status, preserved raw binding, count, and environment; terminal report-summary acceptance does not satisfy that guard gate. A retained guard's permanent STATUS=processing is migration-eligible only when independent readback proves LAST_OUTCOME=report_writer_idle, inflightOperationKey=null, the exact confirmedOperationKey reference state, binding, version, status, count, and environment; a busy, malformed, or ambiguous guard blocks rotation.",
+      "previous_key_policy": "No mixed Analytics, CRM-report, or report-writer namespace. A previous key is migration-only: read old rows by old identity, write or verify the new summary and writer-guard key/fingerprint/payload namespaces, reset affected deployment reconciliation markers, reconcile exact Analytics and CRM readback, and remove the old key before any producer, dispatcher, or consumer is active."
     },
     {
       "id": "crm_billing_idempotency_v1",

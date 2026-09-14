@@ -11,7 +11,7 @@ const {
 } = require("./helpers");
 
 const FINANCIAL_VARIABLES = Object.freeze([
-  "SHARED_HEADER_VALUE", "BILLING_API_BASE_URL", "BILLING_ORGANIZATION_ID",
+  "SHARED_HEADER_VALUE", "IDEMPOTENCY_PEPPER", "BILLING_API_BASE_URL", "BILLING_ORGANIZATION_ID",
   "CUSTOMER_PROVISIONING_MODE", "BILLING_READ_CONNECTION_LINK_NAME", "BILLING_WRITE_CONNECTION_LINK_NAME",
   "ANALYTICS_OUTBOX_TABLE", "SUBSCRIPTION_PROPOSED_STAGE_VALUE", "PAID_COMMERCIAL_TERMS_JSON",
   "PAID_PLAN_CODE_MAP", "PAID_USAGE_ADDON_CODE", "PAID_USAGE_ADDON_UNIT", "PAID_USAGE_ADDON_PRODUCT_ID",
@@ -79,16 +79,27 @@ test("report-only config needs no financial metadata or credential and keeps all
   assert.equal(config.enablePaidSubscriptionPreparation, false);
   assert.equal(config.enableTestDirectCustomerProvisioning, false);
   assert.equal(config.enableDevelopmentCompatibilityProbe, false);
-  for (const key of ["sharedHeaderValue", "billingApiBaseUrl", "billingOrganizationId",
+  for (const key of ["sharedHeaderValue", "idempotencyPepper", "billingApiBaseUrl", "billingOrganizationId",
     "customerProvisioningMode", "billingReadConnectionLinkName", "billingWriteConnectionLinkName",
     "analyticsOutboxTable", "paidPlanCodeMap", "subscriptionProposedStageValue"]) {
     assert.equal(Object.hasOwn(config, key), false, key);
   }
   assert.equal(typeof config.analyticsPartitionSecret, "string");
-  assert.equal(typeof config.idempotencyPepper, "string");
   assert.equal(config.operationTable, "CRMBillingOperations");
   const store = createOperationStore({ datastore: () => ({ table: () => ({}) }), zcql() {} }, config);
   assert.equal(typeof store.readReportGuard, "function");
+});
+
+test("paid-enabled configuration still requires a valid distinct operation pepper", () => {
+  for (const pepper of [undefined, "", "short", "p".repeat(257)]) {
+    assert.throws(() => loadConfig(baseEnvironment({ IDEMPOTENCY_PEPPER: pepper }), PROOF),
+      /IDEMPOTENCY_PEPPER/);
+  }
+  const reused = baseEnvironment();
+  reused.IDEMPOTENCY_PEPPER = reused.ANALYTICS_PARTITION_HMAC_SECRET;
+  assert.throws(() => loadConfig(reused, PROOF), /partition and operation identity secrets must differ/);
+  const environment = baseEnvironment();
+  assert.equal(loadConfig(environment, PROOF).idempotencyPepper, environment.IDEMPOTENCY_PEPPER);
 });
 
 test("report requests construct only CRM and operation dependencies in report-only or paid-enabled installations", async () => {

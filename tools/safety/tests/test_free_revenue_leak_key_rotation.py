@@ -6,6 +6,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 CONTRACT_PATH = ROOT / "docs/product/free-revenue-leak-test-key-rotation-contract.json"
 RUNBOOK_PATH = ROOT / "docs/runbooks/free-revenue-leak-test-key-rotation.md"
+RUNTIME_REGISTRY_PATH = (
+    ROOT / "src/zoho-catalyst/revenue-desk-call-runtime/config/variables.json"
+)
 CLIENT_PORTAL_REGISTRY_PATH = (
     ROOT / "src/zoho-catalyst/billing-webhook-gateway/config/variables.json"
 )
@@ -36,6 +39,9 @@ class SecretRotationContractTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
         cls.runbook = RUNBOOK_PATH.read_text(encoding="utf-8")
+        cls.runtime_registry = json.loads(
+            RUNTIME_REGISTRY_PATH.read_text(encoding="utf-8")
+        )
         cls.client_portal_registry = json.loads(
             CLIENT_PORTAL_REGISTRY_PATH.read_text(encoding="utf-8")
         )
@@ -192,6 +198,60 @@ class SecretRotationContractTests(unittest.TestCase):
         ):
             self.assertIn(output, form2_workflow["durable_outputs"])
 
+    def test_analytics_partition_secret_contract_matches_both_loaders(self) -> None:
+        registry_entry = next(
+            entry for entry in self.runtime_registry["variables"]
+            if entry["name"] == "ANALYTICS_PARTITION_HMAC_SECRET"
+        )
+        self.assertEqual(
+            registry_entry["format"],
+            "32-256 non-whitespace characters and 32-256 UTF-8 bytes; "
+            "use an owner-generated 64-character ASCII value",
+        )
+
+        analytics_partition = next(
+            entry for entry in self.contract["derivation_domains"]
+            if entry["id"] == "revenue_desk_analytics_partition_v1"
+        )
+        key_requirements = analytics_partition["replacement_key_requirements"]
+        for required in (
+            "owner-generated 64-character ASCII value",
+            "32-256 non-whitespace characters",
+            "32-256 UTF-8 bytes",
+            "grants no live rotation, deployment, or activation authority",
+        ):
+            self.assertIn(required, key_requirements)
+
+        runtime_config = (
+            ROOT
+            / "src/zoho-catalyst/revenue-desk-call-runtime/functions"
+            / "revenue_desk_call_gateway/lib/config.js"
+        ).read_text(encoding="utf-8")
+        crm_config = (
+            ROOT
+            / "src/zoho-catalyst/crm-billing-orchestrator/functions"
+            / "crm_billing_orchestrator/lib/config.js"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "runtimeSecret(env, 'ANALYTICS_PARTITION_HMAC_SECRET', "
+            "{ minimum: 32, maximum: 256 })",
+            runtime_config,
+        )
+        self.assertIn(
+            "'ANALYTICS_PARTITION_HMAC_SECRET', /^\\S{32,256}$/",
+            runtime_config,
+        )
+        self.assertIn(
+            'const analyticsPartitionSecret = secret(environment, '
+            '"ANALYTICS_PARTITION_HMAC_SECRET")',
+            crm_config,
+        )
+        self.assertIn(
+            'Buffer.byteLength(result, "utf8") < 32 '
+            '|| Buffer.byteLength(result, "utf8") > 256',
+            crm_config,
+        )
+
     def test_crm_and_runtime_domains_exist_in_executable_source(self) -> None:
         crm_root = ROOT / "src/zoho-catalyst/crm-billing-orchestrator/functions/crm_billing_orchestrator/lib"
         crm_source = (
@@ -199,6 +259,7 @@ class SecretRotationContractTests(unittest.TestCase):
             + (crm_root / "billing-client.js").read_text(encoding="utf-8")
             + (crm_root / "analytics-outbox.js").read_text(encoding="utf-8")
             + (crm_root / "report-summary.js").read_text(encoding="utf-8")
+            + (crm_root / "report-guard.js").read_text(encoding="utf-8")
         )
         runtime_root = ROOT / "src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib"
         runtime_source = "".join(
@@ -234,6 +295,8 @@ class SecretRotationContractTests(unittest.TestCase):
             "revenue-desk-analytics-conversion-v2",
             "sylvara.crm-report-summary.v1",
             "sylvara.crm-report-summary.v2",
+            "sylvara.crm-report-summary.v3",
+            "sylvara.crm-report-writer.v1",
         ]:
             self.assertIn(domain, crm_source)
         for domain in [
@@ -252,7 +315,9 @@ class SecretRotationContractTests(unittest.TestCase):
             "revenue-desk-authorization-receipt-v2",
             "revenue-desk-analytics-client-v1",
             "revenue-desk-analytics-deployment-v1",
+            "sylvara.crm-report-summary.v1",
             "sylvara.crm-report-summary.v2",
+            "sylvara.crm-report-summary.v3",
         ]:
             self.assertIn(domain, runtime_source)
         for domain in [
@@ -279,15 +344,71 @@ class SecretRotationContractTests(unittest.TestCase):
         )
         serialized_outputs = " ".join(analytics_partition["durable_outputs"])
         for required in (
-            "CRMBillingOperations.OPERATION_KEY",
-            "CRMBillingOperations.OPERATION_FINGERPRINT",
+            "CRMBillingOperations.OPERATION_KEY for sync_report_summary",
+            "CRMBillingOperations.OPERATION_FINGERPRINT for sync_report_summary",
             "CRMBillingOperations.OPERATION_PAYLOAD_JSON",
             "callSetDigest",
             "report revision",
+            "sourceVersions",
+            "CRMBillingOperations.OPERATION_KEY for report_summary_write_guard",
+            "CRMBillingOperations.OPERATION_FINGERPRINT for report_summary_write_guard",
+            "confirmedOperationKey",
+            "inflightOperationKey",
         ):
             self.assertIn(required, serialized_outputs)
-        self.assertIn("sylvara.crm-report-summary.v1", analytics_partition["domains"])
-        self.assertIn("sylvara.crm-report-summary.v2", analytics_partition["domains"])
+        self.assertEqual(
+            analytics_partition["domains"],
+            [
+                "revenue-desk-analytics-client-v1",
+                "revenue-desk-analytics-deployment-v1",
+                "revenue-desk-analytics-conversion-v2",
+                "sylvara.crm-report-summary.v1",
+                "sylvara.crm-report-summary.v2",
+                "sylvara.crm-report-summary.v3",
+                "sylvara.crm-report-writer.v1",
+            ],
+        )
+        acceptance_gates = " ".join(
+            analytics_partition["independent_acceptance_gates"]
+        )
+        for required in (
+            "sylvara.crm-report-summary.v1",
+            "sylvara.crm-report-summary.v2",
+            "current sylvara.crm-report-summary.v3",
+            "sylvara.crm-report-writer.v1",
+            "OPERATION_KEY",
+            "OPERATION_FINGERPRINT",
+            "OPERATION_PAYLOAD_JSON",
+            "confirmedOperationKey",
+            "inflightOperationKey",
+            "preserves v3 sourceVersions",
+            "CALL_KEY/CALL_VERSION",
+            "Raw CRM binding fields remain unchanged",
+            "enclosing HMAC key/fingerprint",
+            "Terminal report-summary acceptance does not establish writer-guard acceptance",
+        ):
+            self.assertIn(required, acceptance_gates)
+        for required in (
+            "current v3 (`sylvara.crm-report-summary.v3`)",
+            "writer-guard v1 namespace (`sylvara.crm-report-writer.v1`)",
+            "`confirmedOperationKey`",
+            "`inflightOperationKey`",
+            "private `OPERATION_PAYLOAD_JSON`",
+            "`sourceVersions` vector",
+            "`CALL_KEY` / `CALL_VERSION` inputs",
+            "raw CRM binding fields",
+            "Terminal report-summary acceptance does not establish writer-guard acceptance",
+        ):
+            self.assertIn(required, self.runbook)
+        self.assertNotIn("encrypted `OPERATION_PAYLOAD_JSON`", self.runbook)
+        for required in (
+            "A retained writer guard intentionally keeps `STATUS=processing` while idle",
+            "`LAST_OUTCOME=report_writer_idle`",
+            "`inflightOperationKey=null`",
+            "exact `confirmedOperationKey` reference state",
+            "busy, malformed, or ambiguous guard blocks rotation",
+        ):
+            self.assertIn(required, self.runbook)
         self.assertNotIn(
             "ANALYTICS_CONNECTION_LINK_NAME",
             json.dumps(self.contract),
