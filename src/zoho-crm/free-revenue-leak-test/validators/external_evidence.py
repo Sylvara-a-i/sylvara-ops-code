@@ -214,6 +214,9 @@ _SUMMARY_FIELDS = (
     "expectedMonthlyConnectedMinutesMax",
     "dataConfidenceNotes",
 )
+# This manual Blueprint gate remains on the authoritative release contract's
+# v2 handoff with v1 compatibility. Inventorying current runtime v3 reports for
+# rotation does not authorize widening the deferred completion transition.
 _REPORT_DOMAINS = {
     1: "sylvara.crm-report-summary.v1",
     2: "sylvara.crm-report-summary.v2",

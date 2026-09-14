@@ -28,7 +28,7 @@
     { "name": "OPERATION_TABLE", "classification": "verified-platform-contract", "required": true, "safe_default": "CRMBillingOperations" },
     { "name": "ANALYTICS_OUTBOX_TABLE", "classification": "verified-platform-contract", "required_when": "ENABLE_PAID_SUBSCRIPTION_PREPARATION=true", "safe_default": "AnalyticsSyncOutbox" },
     { "name": "DATASTORE_DUPLICATE_ERROR_CODES", "classification": "verified-platform-contract", "required": true },
-    { "name": "IDEMPOTENCY_PEPPER", "classification": "stable-secret", "required": true },
+    { "name": "IDEMPOTENCY_PEPPER", "classification": "stable-secret", "required_when": "ENABLE_PAID_SUBSCRIPTION_PREPARATION=true", "constraint": "Paid operation/reference identity only; not read in report-only mode. Existing paid rekey and reconciliation gates remain required before paid reactivation." },
     { "name": "ANALYTICS_PARTITION_HMAC_SECRET", "classification": "stable-secret", "required": true },
     { "name": "ENABLE_PAID_SUBSCRIPTION_PREPARATION", "classification": "safe-boolean", "required": true },
     { "name": "ENABLE_DEVELOPMENT_COMPATIBILITY_PROBE", "classification": "safe-boolean", "required": true, "safe_default": "false" },

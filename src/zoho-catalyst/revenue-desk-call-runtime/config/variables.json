@@ -252,7 +252,7 @@
       "consumer": "both",
       "secret": true,
       "required": true,
-      "format": "32-4096 non-whitespace characters",
+      "format": "32-256 non-whitespace characters and 32-256 UTF-8 bytes; use an owner-generated 64-character ASCII value",
       "boundary": "Dedicated shared key for stable opaque Analytics client/deployment partitions across approved producers; distinct from runtime event identity."
     },
     {

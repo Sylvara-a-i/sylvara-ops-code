@@ -455,6 +455,7 @@ def _report_hmac(secret, schema_version, purpose, material):
     domain = {
         1: "sylvara.crm-report-summary.v1",
         2: "sylvara.crm-report-summary.v2",
+        3: "sylvara.crm-report-summary.v3",
     }[schema_version]
     return hmac.new(
         secret.encode(), f"{domain}\0{purpose}\0{material}".encode(), hashlib.sha256
@@ -1323,6 +1324,51 @@ class ExternalEvidenceValidatorTests(unittest.TestCase):
                         secrets,
                         transition_at=transition_at,
                     )
+
+    def test_terminal_report_rejects_current_producer_v3_until_contract_upgrade(self):
+        release = json.loads(
+            (CRM_ROOT.parents[2] / "docs/product/free-revenue-leak-test-release-contract.json")
+            .read_text(encoding="utf-8")
+        )
+        handoff = release["terminal_report_handoff"]
+        self.assertEqual(handoff["schema_version"], 2)
+        self.assertEqual(handoff["identity_domain"], "sylvara.crm-report-summary.v2")
+        evidence, context, secrets, transition_at = _terminal_fixture()
+        summary = json.loads(evidence["operation"]["OPERATION_PAYLOAD_JSON"])
+        summary["schemaVersion"] = 3
+        summary["sourceVersions"] = [
+            [f"c:{character * 64}", version]
+            for character, version in (("a", 1), ("b", 2), ("c", 3), ("d", 4))
+        ]
+        canonical = json.dumps(list(map(list, summary.items())), separators=(",", ":"))
+        _bind_terminal_summary(evidence, context, summary, canonical)
+        # These known vectors come from the current Node report producer. A
+        # valid durable report is not permission to widen the Blueprint gate.
+        self.assertEqual(
+            evidence["operation"]["OPERATION_KEY"],
+            "8010a3159f8516011b71ac497f0e7e68a72c678eb33a8123cc68e051620cf953",
+        )
+        self.assertEqual(
+            evidence["operation"]["OPERATION_FINGERPRINT"],
+            "3058fb2f9cbd591356a3afd2182d8d384d62e801bdb5dac2b72c1c25cc1369f3",
+        )
+        with self.assertRaises(EvidenceValidationError):
+            self._assert_valid(TERMINAL_REPORT, (evidence, context, secrets, transition_at))
+
+    def test_terminal_report_preserves_release_v2_and_legacy_v1_acceptance(self):
+        for schema_version in (1, 2):
+            with self.subTest(schema_version=schema_version):
+                evidence, context, secrets, transition_at = _terminal_fixture()
+                summary = json.loads(evidence["operation"]["OPERATION_PAYLOAD_JSON"])
+                summary["schemaVersion"] = schema_version
+                if schema_version == 1:
+                    summary["observedWorkflowFailures"] = 0
+                    evidence["crm_readback"]["Test_Observed_Workflow_Failures"] = (
+                        "Observed workflow failure count: 0."
+                    )
+                canonical = json.dumps(list(map(list, summary.items())), separators=(",", ":"))
+                _bind_terminal_summary(evidence, context, summary, canonical)
+                self._assert_valid(TERMINAL_REPORT, (evidence, context, secrets, transition_at))
 
     def test_terminal_report_uses_authoritative_javascript_canonical_number_bytes(self):
         cases = ((1e-7, "1e-07", "1e-7"), (1e-6, "1e-06", "0.000001"))
