@@ -386,6 +386,9 @@ class SecretRotationContractTests(unittest.TestCase):
             "Raw CRM binding fields remain unchanged",
             "enclosing HMAC key/fingerprint",
             "Terminal report-summary acceptance does not establish writer-guard acceptance",
+            "Current v3 inventory does not authorize the deferred Complete Free Test Blueprint transition",
+            "the manual external-evidence validator rejects v3",
+            "Zero-row inventory is not completion acceptance",
         ):
             self.assertIn(required, acceptance_gates)
         for required in (
@@ -398,6 +401,8 @@ class SecretRotationContractTests(unittest.TestCase):
             "`CALL_KEY` / `CALL_VERSION` inputs",
             "raw CRM binding fields",
             "Terminal report-summary acceptance does not establish writer-guard acceptance",
+            "manual external-evidence validator rejects v3",
+            "separately reviewed, atomic release-contract and validator upgrade",
         ):
             self.assertIn(required, self.runbook)
         self.assertNotIn("encrypted `OPERATION_PAYLOAD_JSON`", self.runbook)

@@ -1325,8 +1325,38 @@ class ExternalEvidenceValidatorTests(unittest.TestCase):
                         transition_at=transition_at,
                     )
 
-    def test_terminal_report_accepts_current_v3_and_legacy_summaries(self):
-        for schema_version in (1, 2, 3):
+    def test_terminal_report_rejects_current_producer_v3_until_contract_upgrade(self):
+        release = json.loads(
+            (CRM_ROOT.parents[2] / "docs/product/free-revenue-leak-test-release-contract.json")
+            .read_text(encoding="utf-8")
+        )
+        handoff = release["terminal_report_handoff"]
+        self.assertEqual(handoff["schema_version"], 2)
+        self.assertEqual(handoff["identity_domain"], "sylvara.crm-report-summary.v2")
+        evidence, context, secrets, transition_at = _terminal_fixture()
+        summary = json.loads(evidence["operation"]["OPERATION_PAYLOAD_JSON"])
+        summary["schemaVersion"] = 3
+        summary["sourceVersions"] = [
+            [f"c:{character * 64}", version]
+            for character, version in (("a", 1), ("b", 2), ("c", 3), ("d", 4))
+        ]
+        canonical = json.dumps(list(map(list, summary.items())), separators=(",", ":"))
+        _bind_terminal_summary(evidence, context, summary, canonical)
+        # These known vectors come from the current Node report producer. A
+        # valid durable report is not permission to widen the Blueprint gate.
+        self.assertEqual(
+            evidence["operation"]["OPERATION_KEY"],
+            "8010a3159f8516011b71ac497f0e7e68a72c678eb33a8123cc68e051620cf953",
+        )
+        self.assertEqual(
+            evidence["operation"]["OPERATION_FINGERPRINT"],
+            "3058fb2f9cbd591356a3afd2182d8d384d62e801bdb5dac2b72c1c25cc1369f3",
+        )
+        with self.assertRaises(EvidenceValidationError):
+            self._assert_valid(TERMINAL_REPORT, (evidence, context, secrets, transition_at))
+
+    def test_terminal_report_preserves_release_v2_and_legacy_v1_acceptance(self):
+        for schema_version in (1, 2):
             with self.subTest(schema_version=schema_version):
                 evidence, context, secrets, transition_at = _terminal_fixture()
                 summary = json.loads(evidence["operation"]["OPERATION_PAYLOAD_JSON"])
@@ -1336,97 +1366,9 @@ class ExternalEvidenceValidatorTests(unittest.TestCase):
                     evidence["crm_readback"]["Test_Observed_Workflow_Failures"] = (
                         "Observed workflow failure count: 0."
                     )
-                if schema_version == 3:
-                    summary["sourceVersions"] = [
-                        [f"c:{character * 64}", version]
-                        for character, version in (("a", 1), ("b", 2), ("c", 3), ("d", 4))
-                    ]
                 canonical = json.dumps(list(map(list, summary.items())), separators=(",", ":"))
                 _bind_terminal_summary(evidence, context, summary, canonical)
-                if schema_version == 3:
-                    # Known vectors from the current dependency-free Node producer,
-                    # not from the Python identity function under test.
-                    self.assertEqual(
-                        evidence["operation"]["OPERATION_KEY"],
-                        "8010a3159f8516011b71ac497f0e7e68a72c678eb33a8123cc68e051620cf953",
-                    )
-                    self.assertEqual(
-                        evidence["operation"]["OPERATION_FINGERPRINT"],
-                        "3058fb2f9cbd591356a3afd2182d8d384d62e801bdb5dac2b72c1c25cc1369f3",
-                    )
                 self._assert_valid(TERMINAL_REPORT, (evidence, context, secrets, transition_at))
-
-    def test_terminal_report_v3_rejects_noncanonical_source_versions(self):
-        valid = [[f"c:{character * 64}", 1] for character in "abcd"]
-        invalid_cases = {
-            "missing": "missing",
-            "null": None,
-            "object": {"source": 1},
-            "wrong_count": valid[:3],
-            "duplicate": [valid[0], valid[0], *valid[2:]],
-            "out_of_order": [valid[1], valid[0], *valid[2:]],
-            "extra_entry_field": [[valid[0][0], 1, 2], *valid[1:]],
-            "wrong_prefix": [["x:" + "a" * 64, 1], *valid[1:]],
-            "malformed_digest": [["c:" + "a" * 63, 1], *valid[1:]],
-            "numeric_digest": [[123, 1], *valid[1:]],
-            "zero_version": [[valid[0][0], 0], *valid[1:]],
-            "boolean_version": [[valid[0][0], True], *valid[1:]],
-            "fractional_version": [[valid[0][0], 1.5], *valid[1:]],
-            "string_version": [[valid[0][0], "1"], *valid[1:]],
-            "unsafe_version": [[valid[0][0], 9_007_199_254_740_992], *valid[1:]],
-            "too_many": [[f"c:{number:064x}", 1] for number in range(101)],
-        }
-        for label, versions in invalid_cases.items():
-            with self.subTest(source_versions=label):
-                evidence, context, secrets, transition_at = _terminal_fixture()
-                summary = json.loads(evidence["operation"]["OPERATION_PAYLOAD_JSON"])
-                summary["schemaVersion"] = 3
-                if label != "missing":
-                    summary["sourceVersions"] = versions
-                canonical = json.dumps(list(map(list, summary.items())), separators=(",", ":"))
-                _bind_terminal_summary(evidence, context, summary, canonical)
-                with self.assertRaises(EvidenceValidationError):
-                    validate_external_evidence(
-                        TERMINAL_REPORT, evidence, context, secrets, transition_at=transition_at
-                    )
-
-    def test_terminal_report_v3_enforces_runtime_payload_byte_limit(self):
-        for payload_bytes in (10_000, 10_001):
-            with self.subTest(payload_bytes=payload_bytes):
-                evidence, context, secrets, transition_at = _terminal_fixture()
-                summary = json.loads(evidence["operation"]["OPERATION_PAYLOAD_JSON"])
-                summary["schemaVersion"] = 3
-                summary["callsCaptured"] = 100
-                summary["sourceVersions"] = [[f"c:{number:064x}", 1] for number in range(100)]
-                summary["dataConfidenceNotes"] = ""
-                base_size = len(json.dumps(summary, separators=(",", ":")).encode("utf-8"))
-                summary["dataConfidenceNotes"] = "x" * (payload_bytes - base_size)
-                self.assertLessEqual(len(summary["dataConfidenceNotes"]), 2000)
-                canonical = json.dumps(list(map(list, summary.items())), separators=(",", ":"))
-                _bind_terminal_summary(evidence, context, summary, canonical)
-                evidence["crm_readback"]["Test_Calls_Reaching_Route"] = 100
-                evidence["crm_readback"]["Test_Data_Confidence_Notes"] = summary["dataConfidenceNotes"]
-                fixture = (evidence, context, secrets, transition_at)
-                if payload_bytes == 10_000:
-                    self._assert_valid(TERMINAL_REPORT, fixture)
-                else:
-                    with self.assertRaisesRegex(EvidenceValidationError, "terminal_report_payload_invalid"):
-                        self._assert_valid(TERMINAL_REPORT, fixture)
-
-    def test_terminal_report_v3_source_snapshot_is_bound_to_completed_identity(self):
-        evidence, context, secrets, transition_at = _terminal_fixture()
-        summary = json.loads(evidence["operation"]["OPERATION_PAYLOAD_JSON"])
-        summary["schemaVersion"] = 3
-        summary["sourceVersions"] = [[f"c:{character * 64}", 1] for character in "abcd"]
-        canonical = json.dumps(list(map(list, summary.items())), separators=(",", ":"))
-        _bind_terminal_summary(evidence, context, summary, canonical)
-        summary["sourceVersions"][0][1] = 2
-        evidence["operation"]["OPERATION_PAYLOAD_JSON"] = json.dumps(summary, separators=(",", ":"))
-        with self.assertRaisesRegex(EvidenceValidationError, "terminal_report_canonical_summary_invalid"):
-            self._assert_valid(TERMINAL_REPORT, (evidence, context, secrets, transition_at))
-        context["canonical_summary_json"] = json.dumps(list(map(list, summary.items())), separators=(",", ":"))
-        with self.assertRaisesRegex(EvidenceValidationError, "terminal_report_operation_invalid"):
-            self._assert_valid(TERMINAL_REPORT, (evidence, context, secrets, transition_at))
 
     def test_terminal_report_uses_authoritative_javascript_canonical_number_bytes(self):
         cases = ((1e-7, "1e-07", "1e-7"), (1e-6, "1e-06", "0.000001"))

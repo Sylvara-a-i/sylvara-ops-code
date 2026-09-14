@@ -214,11 +214,12 @@ _SUMMARY_FIELDS = (
     "expectedMonthlyConnectedMinutesMax",
     "dataConfidenceNotes",
 )
-_REVISION_SUMMARY_FIELDS = (*_SUMMARY_FIELDS, "sourceVersions")
+# This manual Blueprint gate remains on the authoritative release contract's
+# v2 handoff with v1 compatibility. Inventorying current runtime v3 reports for
+# rotation does not authorize widening the deferred completion transition.
 _REPORT_DOMAINS = {
     1: "sylvara.crm-report-summary.v1",
     2: "sylvara.crm-report-summary.v2",
-    3: "sylvara.crm-report-summary.v3",
 }
 _END_REASONS = frozenset(
     {
@@ -1357,9 +1358,10 @@ def _parse_report_summary(payload: Any) -> Mapping[str, Any]:
         summary = json.loads(payload)
     except (json.JSONDecodeError, TypeError):
         _fail("terminal_report_payload_invalid")
-    _require(isinstance(summary, Mapping), "terminal_report_payload_invalid")
-    fields = _REVISION_SUMMARY_FIELDS if summary.get("schemaVersion") == 3 else _SUMMARY_FIELDS
-    _require(tuple(summary) == fields, "terminal_report_payload_invalid")
+    _require(
+        isinstance(summary, Mapping) and tuple(summary) == _SUMMARY_FIELDS,
+        "terminal_report_payload_invalid",
+    )
     schema_version = summary["schemaVersion"]
     _require(
         isinstance(schema_version, int)
@@ -1402,28 +1404,6 @@ def _parse_report_summary(payload: Any) -> Mapping[str, Any]:
         "urgentRequests",
     ):
         _nonnegative_integer(summary[field], "terminal_report_count_invalid")
-    if schema_version == 3:
-        # The v3 identity binds a canonical source snapshot, not merely counts.
-        # Reject reordered or duplicate keys instead of normalizing private evidence.
-        versions = summary["sourceVersions"]
-        _require(
-            isinstance(versions, list)
-            and len(versions) <= 100
-            and len(versions) == summary["callsCaptured"],
-            "terminal_report_source_versions_invalid",
-        )
-        previous = ""
-        for entry in versions:
-            _require(
-                isinstance(entry, list)
-                and len(entry) == 2
-                and isinstance(entry[0], str)
-                and re.fullmatch(r"c:[a-f0-9]{64}", entry[0]) is not None
-                and entry[0] > previous,
-                "terminal_report_source_versions_invalid",
-            )
-            _integer(entry[1], 1, "terminal_report_source_versions_invalid")
-            previous = entry[0]
     if schema_version == 1:
         _nonnegative_integer(summary["observedWorkflowFailures"], "terminal_report_count_invalid")
     elif summary["observedWorkflowFailures"] is not None:
@@ -1473,20 +1453,11 @@ def _parse_canonical_report_summary(value: Any, summary: Mapping[str, Any]) -> s
         parsed = json.loads(value)
     except (json.JSONDecodeError, TypeError):
         _fail("terminal_report_canonical_summary_invalid")
-    fields = _REVISION_SUMMARY_FIELDS if summary["schemaVersion"] == 3 else _SUMMARY_FIELDS
-    expected = [[field, summary[field]] for field in fields]
+    expected = [[field, summary[field]] for field in _SUMMARY_FIELDS]
     _require(
         _same_json_value(parsed, expected),
         "terminal_report_canonical_summary_invalid",
     )
-    if summary["schemaVersion"] == 3:
-        # JS canonical pairs add exactly two bytes per field versus its compact
-        # object. Use the authenticated producer bytes to preserve JS number
-        # formatting while enforcing the runtime's 10,000-byte v3 payload limit.
-        _require(
-            len(value.encode("utf-8")) - 2 * len(fields) <= 10_000,
-            "terminal_report_payload_invalid",
-        )
     return value
 
 

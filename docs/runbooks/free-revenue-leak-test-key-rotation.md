@@ -36,6 +36,7 @@ A retained writer guard intentionally keeps `STATUS=processing` while idle. A no
 
 ## Special cases
 
+- Current v3 report-summary inventory is not authority for the deferred `Complete Free Test` Blueprint transition. Its authoritative release handoff remains v2 with v1 compatibility, and the manual external-evidence validator rejects v3 even when its producer identity is valid. A separately reviewed, atomic release-contract and validator upgrade is required before v3 can satisfy that transition. Do not treat this rotation inventory or a zero-row readback as completion acceptance.
 - `PAID_COMMERCIAL_TERMS_JSON` is confidential business configuration, not a cryptographic credential. Rebind the exact approved terms and compare a private digest; do not change price or commercial semantics as “rotation.”
 - Form 1 uses independent `TOKEN_PEPPER` and `PREFILL_HANDLE_PEPPER` values. Rotate the journey credential and Dynamic Prefill-Webhook handle namespaces independently while all five Form 1 routes are dark; old handles fail closed and resumable journeys receive new short-lived handles.
 - Form 2 uses `TOKEN_PEPPER` only for journey-credential derivation/hash and the independent `WORKFLOW_HMAC_SECRET` for prefill-handle, journey-binding, prefill, and submission durable identities. Rotating the journey credential must not change workflow keys.

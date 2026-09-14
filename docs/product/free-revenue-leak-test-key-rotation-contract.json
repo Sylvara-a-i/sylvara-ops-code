@@ -218,6 +218,7 @@
         "CRMBillingOperations.OPERATION_PAYLOAD_JSON binding, confirmedOperationKey, and inflightOperationKey references for report_summary_write_guard under sylvara.crm-report-writer.v1"
       ],
       "independent_acceptance_gates": [
+        "Current v3 inventory does not authorize the deferred Complete Free Test Blueprint transition. Its authoritative terminal-report handoff remains v2 with v1 compatibility; the manual external-evidence validator rejects v3 until a separately reviewed atomic release-contract and validator upgrade. Zero-row inventory is not completion acceptance.",
         "Retained sylvara.crm-report-summary.v1, sylvara.crm-report-summary.v2, and current sylvara.crm-report-summary.v3 operations independently satisfy the report-summary migration and readback gate. A partition-only replacement preserves v3 sourceVersions and their underlying CALL_KEY/CALL_VERSION inputs while rekeying the enclosing report-summary HMAC identities.",
         "Every retained sylvara.crm-report-writer.v1 guard independently satisfies exact OPERATION_KEY, OPERATION_FINGERPRINT, OPERATION_PAYLOAD_JSON, confirmedOperationKey, inflightOperationKey, version, status, binding, count, and environment migration and readback. Raw CRM binding fields remain unchanged while the enclosing HMAC key/fingerprint and confirmed/inflight summary-operation references are rekeyed.",
         "Terminal report-summary acceptance does not establish writer-guard acceptance; both gates must pass separately before any producer, dispatcher, or consumer is active."
