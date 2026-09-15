@@ -7,6 +7,7 @@ const {
   RETELL_EVENTS,
 } = require('./contracts');
 const { RevenueDeskError, invariant } = require('./errors');
+const { validateReportBaseline } = require('./report-baseline');
 
 const IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
 const E164_PATTERN = /^\+[1-9][0-9]{7,14}$/;
@@ -112,7 +113,7 @@ function validateConfiguration(input) {
     'approvedFallbackDestination', 'approvedFallbackNumber', 'rollbackContactName',
     'rollbackContactMobile', 'rollbackInstructions', 'rollbackInstructionsVersion',
     'authorizedRepresentativeConfirmed', 'testScopeAccepted', 'authorityConfirmedAt',
-    'setupFormSubmissionId', 'setupFormVersion',
+    'setupFormSubmissionId', 'setupFormVersion', 'reportBaseline',
   ], 'configuration');
   const serviceArea = object(value.serviceArea, 'configuration.serviceArea');
   exactKeys(serviceArea, ['cities', 'zips'], 'configuration.serviceArea');
@@ -207,6 +208,9 @@ function validateConfiguration(input) {
     setupFormSubmissionId: identifier(value.setupFormSubmissionId,
       'configuration.setupFormSubmissionId'),
     setupFormVersion: identifier(value.setupFormVersion, 'configuration.setupFormVersion'),
+    ...(Object.hasOwn(value, 'reportBaseline') ? { reportBaseline: validateReportBaseline(
+      value.reportBaseline, { configurationVersion: value.configurationVersion, coverageMode },
+    ) } : {}),
   });
 }
 

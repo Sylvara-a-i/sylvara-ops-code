@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const { invariant } = require('./errors');
 const { keyedDigest } = require('./security');
 const { CONTRACT, COVERAGE_MODE_TO_LABEL } = require('./contracts');
+const { validateReportBaseline } = require('./report-baseline');
 
 const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/;
 const ROW_ID = /^\d{1,30}$/;
@@ -15,6 +16,14 @@ const OUTBOX_IMMUTABLE = Object.freeze([
   'SOURCE_MODIFIED_AT', 'SOURCE_REVISION',
 ]);
 const ADDITIVE_REPORT_FIELDS = Object.freeze({
+  deployment: Object.freeze([
+    'PRETEST_BASELINE_PRESENT', 'PRETEST_CAPTURED_AT', 'PRETEST_SOURCE_MODIFIED_AT',
+    'PRETEST_PERIOD_START_AT', 'PRETEST_PERIOD_END_AT', 'PRETEST_EVIDENCE_CLASS', 'PRETEST_CURRENCY',
+    'PRETEST_CURRENT_CALL_HANDLING', 'PRETEST_MONTHLY_INBOUND_CALLS', 'PRETEST_MONTHLY_INBOUND_CALL_BAND',
+    'PRETEST_AFTER_HOURS_CALL_BAND', 'PRETEST_AFTER_HOURS_CALL_SHARE_HUNDREDTHS',
+    'PRETEST_ESTIMATED_UNANSWERED_RATE_HUNDREDTHS', 'PRETEST_AVERAGE_JOB_VALUE_MINOR_UNITS',
+    'PRETEST_AVERAGE_JOB_VALUE_BAND', 'PRETEST_MONTHLY_ANSWERING_COST_MINOR_UNITS',
+  ]),
   call: Object.freeze(['DURATION_MILLISECONDS']),
   final_test_result: Object.freeze([
     'ACTUAL_AVERAGE_CALL_DURATION_MILLISECONDS',
@@ -169,6 +178,43 @@ function deploymentFact(config, deployment, row) {
     && deployment.environment === row.SOURCE_ENVIRONMENT,
   'ANALYTICS_FACT_INVALID', 'Immutable deployment configuration is unavailable.');
   const recordKey = opaqueKeys(config, row.CLIENT_ID, row.DEPLOYMENT_ID).DEPLOYMENT_KEY;
+  const baselineFields = {};
+  if (deployment.configuration?.reportBaseline !== undefined) {
+    const keys = opaqueKeys(config, deployment.clientId, deployment.deploymentId);
+    const baseline = validateReportBaseline(deployment.configuration.reportBaseline, {
+      clientKey: keys.CLIENT_KEY, deploymentKey: keys.DEPLOYMENT_KEY,
+      configurationVersionId: deployment.configurationVersionId,
+      configurationVersion: deployment.configurationVersion, coverageMode: deployment.coverageMode,
+    });
+    invariant(deployment.engagementType === 'free_test' && deployment.environment === baseline.environment
+      && row.CLIENT_ID === deployment.clientId && row.DEPLOYMENT_ID === deployment.deploymentId
+      && typeof row.ACTUAL_START_AT === 'string'
+      && Date.parse(baseline.capturedAt) <= Date.parse(row.ACTUAL_START_AT),
+    'ANALYTICS_FACT_INVALID', 'Deployment baseline ownership or timing conflicts.');
+    Object.assign(baselineFields, {
+      PRETEST_BASELINE_PRESENT: true, PRETEST_CAPTURED_AT: baseline.capturedAt,
+      PRETEST_SOURCE_MODIFIED_AT: baseline.sourceModifiedAt,
+      PRETEST_PERIOD_START_AT: baseline.sourcePeriod.start, PRETEST_PERIOD_END_AT: baseline.sourcePeriod.end,
+      PRETEST_EVIDENCE_CLASS: baseline.evidenceClass,
+    });
+    if (baseline.currency !== null) baselineFields.PRETEST_CURRENCY = baseline.currency;
+    for (const [source, target, scale = 1] of [
+      ['currentCallHandling', 'PRETEST_CURRENT_CALL_HANDLING'],
+      ['monthlyInboundCalls', 'PRETEST_MONTHLY_INBOUND_CALLS'],
+      ['monthlyInboundCallBand', 'PRETEST_MONTHLY_INBOUND_CALL_BAND'],
+      ['afterHoursCallBand', 'PRETEST_AFTER_HOURS_CALL_BAND'],
+      ['afterHoursCallShare', 'PRETEST_AFTER_HOURS_CALL_SHARE_HUNDREDTHS', 100],
+      ['estimatedUnansweredCallRate', 'PRETEST_ESTIMATED_UNANSWERED_RATE_HUNDREDTHS', 100],
+      ['averageJobValueMinorUnits', 'PRETEST_AVERAGE_JOB_VALUE_MINOR_UNITS'],
+      ['averageJobValueBand', 'PRETEST_AVERAGE_JOB_VALUE_BAND'],
+      ['currentMonthlyAnsweringCostMinorUnits', 'PRETEST_MONTHLY_ANSWERING_COST_MINOR_UNITS'],
+    ]) {
+      const value = baseline.values[source];
+      // The validator permits at most two percentage decimals; scaling does not
+      // estimate or round new precision. Null remains an omitted unknown field.
+      if (value !== null) baselineFields[target] = scale === 1 ? value : Math.round(value * scale);
+    }
+  }
   return Object.freeze({
     ...commonFact(config, {
       ...row,
@@ -188,6 +234,7 @@ function deploymentFact(config, deployment, row) {
     EXPIRES_AT: row.EXPIRES_AT,
     ...(row.STOPPED_AT ? { STOPPED_AT: row.STOPPED_AT } : {}),
     ...(row.STOP_REASON ? { STOP_REASON: safeEnum(row.STOP_REASON) } : {}),
+    ...baselineFields,
   });
 }
 

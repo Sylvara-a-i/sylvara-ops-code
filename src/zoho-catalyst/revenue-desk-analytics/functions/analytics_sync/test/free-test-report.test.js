@@ -148,8 +148,37 @@ function attachBaseline(f) {
   b.evidence.readAt = '2026-08-24T10:45:00.000Z'; b.evidence.capturedAt = '2026-08-24T10:46:00.000Z';
   b.metadata.observedAt = '2026-08-24T10:44:00.000Z';
   f.crmBaseline = b;
+  f.deployment = { ...f.deployment,
+    PRETEST_BASELINE_PRESENT: true, PRETEST_CAPTURED_AT: b.evidence.capturedAt,
+    PRETEST_SOURCE_MODIFIED_AT: b.context.crmModifiedAt,
+    PRETEST_PERIOD_START_AT: b.context.sourcePeriod.start, PRETEST_PERIOD_END_AT: b.context.sourcePeriod.end,
+    PRETEST_EVIDENCE_CLASS: b.context.evidenceClass, PRETEST_CURRENCY: 'USD',
+    PRETEST_CURRENT_CALL_HANDLING: 'Voicemail', PRETEST_MONTHLY_INBOUND_CALLS: 140,
+    PRETEST_MONTHLY_INBOUND_CALL_BAND: '100-249', PRETEST_AFTER_HOURS_CALL_BAND: '25-49',
+    PRETEST_AFTER_HOURS_CALL_SHARE_HUNDREDTHS: 2025, PRETEST_ESTIMATED_UNANSWERED_RATE_HUNDREDTHS: 1250,
+    PRETEST_AVERAGE_JOB_VALUE_MINOR_UNITS: 35025, PRETEST_AVERAGE_JOB_VALUE_BAND: '$250-$499',
+    PRETEST_MONTHLY_ANSWERING_COST_MINOR_UNITS: 0,
+  };
+  refreshDigests(f);
   return b;
 }
+
+test('attested deployment baseline renders without CRM reads and cannot be enriched from new raw evidence', () => {
+  const f = fixture();
+  const b = attachBaseline(f);
+  const expected = buildFreeTestReport(f, NOW).beforeTest;
+  f.crmBaseline = null;
+  assert.deepEqual(buildFreeTestReport(f, NOW).beforeTest, expected);
+  f.crmBaseline = b;
+  b.deal.Monthly_Inbound_Calls += 1;
+  assert.throws(() => buildFreeTestReport(f, NOW), { code: 'REPORT_BASELINE_EVIDENCE_CONFLICT' });
+  b.deal.Monthly_Inbound_Calls -= 1;
+  for (const field of Object.keys(f.deployment).filter((field) => field.startsWith('PRETEST_'))) delete f.deployment[field];
+  refreshDigests(f);
+  assert.throws(() => buildFreeTestReport(f, NOW), { code: 'REPORT_BASELINE_OWNERSHIP_CONFLICT' });
+  f.crmBaseline = null;
+  assert.equal(buildFreeTestReport(f, NOW).beforeTest.values, null);
+});
 
 test('CRM pre-test snapshot joins the exact test and excludes raw relationship IDs', () => {
   const f = fixture();
@@ -272,5 +301,11 @@ test('actual runtime producers retain controller stop-to-report reason semantics
   baseline.evidence.configurationVersion = deployment.configurationVersion;
   baseline.deal.Configuration_Version = deployment.configurationVersion;
   assert.notEqual(deployment.configurationVersionId, deployment.configurationVersion);
+  const { buildCrmReportBaseline } = require('../lib/crm-report-baseline');
+  deployment.configuration = { reportBaseline: buildCrmReportBaseline(baseline, { now: NOW }) };
+  f.deployment = deploymentFact(config, deployment, row);
+  refreshDigests(f);
+  assert.equal(buildFreeTestReport(f, NOW).beforeTest.values.monthlyInboundCalls, 140);
+  f.crmBaseline = null;
   assert.equal(buildFreeTestReport(f, NOW).beforeTest.values.monthlyInboundCalls, 140);
 });

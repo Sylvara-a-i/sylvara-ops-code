@@ -16,13 +16,35 @@ const COMMON = Object.freeze({
   DEPLOYMENT_KEY: 'hash', CONFIGURATION_VERSION: 'identifier', ENGAGEMENT_TYPE: 'engagement',
   ENVIRONMENT: 'environment', SOURCE_MODIFIED_AT: 'time', SOURCE_REVISION: 'revision',
 });
+const PRETEST_FIELDS = Object.freeze({
+  PRETEST_BASELINE_PRESENT: 'optional_boolean', PRETEST_CAPTURED_AT: 'optional_time',
+  PRETEST_SOURCE_MODIFIED_AT: 'optional_time', PRETEST_PERIOD_START_AT: 'optional_time',
+  PRETEST_PERIOD_END_AT: 'optional_time', PRETEST_EVIDENCE_CLASS: 'optional_baseline_evidence',
+  PRETEST_CURRENCY: 'optional_currency', PRETEST_CURRENT_CALL_HANDLING: 'optional_baseline_handling',
+  PRETEST_MONTHLY_INBOUND_CALLS: 'optional_nonnegative',
+  PRETEST_MONTHLY_INBOUND_CALL_BAND: 'optional_baseline_monthly_band',
+  PRETEST_AFTER_HOURS_CALL_BAND: 'optional_baseline_after_hours_band',
+  PRETEST_AFTER_HOURS_CALL_SHARE_HUNDREDTHS: 'optional_nonnegative',
+  PRETEST_ESTIMATED_UNANSWERED_RATE_HUNDREDTHS: 'optional_nonnegative',
+  PRETEST_AVERAGE_JOB_VALUE_MINOR_UNITS: 'optional_nonnegative',
+  PRETEST_AVERAGE_JOB_VALUE_BAND: 'optional_baseline_job_band',
+  PRETEST_MONTHLY_ANSWERING_COST_MINOR_UNITS: 'optional_nonnegative',
+});
+const BASELINE_CHOICES = Object.freeze({
+  baseline_evidence: new Set(['customer_supplied_estimate', 'verified_business_records']),
+  baseline_handling: new Set(['Office Staff / Dispatcher', 'Owner / Technician Cell', 'Voicemail',
+    'Phone Menu / IVR', 'Human Answering Service', 'Existing AI Receptionist', 'Mixed', 'Unknown']),
+  baseline_monthly_band: new Set(['Under 20', '20-49', '50-99', '100-249', '250+', 'Unknown']),
+  baseline_after_hours_band: new Set(['None', '1-9', '10-24', '25-49', '50+', 'Unknown']),
+  baseline_job_band: new Set(['Under $250', '$250-$499', '$500-$999', '$1,000-$2,499', '$2,500+', 'Unknown']),
+});
 const TYPE_FIELDS = Object.freeze({
   deployment: Object.freeze({
     CAPABILITY_PROFILE: 'enum', PLAN_TIER: 'enum', DEPLOYMENT_STATUS: 'enum',
     GO_LIVE_APPROVAL_STATUS: 'enum', LIMIT_POLICY: 'enum', BILLING_MODE: 'enum',
     COVERAGE_MODE: 'optional_enum', HANDLED_COUNT: 'nonnegative', CALL_LIMIT: 'positive',
     ACTUAL_START_AT: 'time', EXPIRES_AT: 'time', STOPPED_AT: 'optional_time',
-    STOP_REASON: 'optional_enum',
+    STOP_REASON: 'optional_enum', ...PRETEST_FIELDS,
   }),
   call: Object.freeze({
     CALL_KEY: 'hash', STARTED_AT: 'time', ENDED_AT: 'optional_time',
@@ -120,6 +142,8 @@ function validateValue(kind, value, field) {
     'FACT_INVALID', `${field} must be a positive integer.`);
   else if (base === 'currency') invariant(typeof value === 'string' && /^[A-Z]{3}$/.test(value),
     'FACT_INVALID', `${field} must be an ISO currency code.`);
+  else if (Object.hasOwn(BASELINE_CHOICES, base)) invariant(BASELINE_CHOICES[base].has(value),
+    'FACT_INVALID', `${field} is not an approved baseline choice.`);
   else invariant(false, 'FACT_INVALID', `Unknown fact validator for ${field}.`);
   return value;
 }
@@ -136,6 +160,31 @@ function minimizeFact(recordType, candidate) {
   for (const [field, kind] of Object.entries(contract)) {
     const value = validateValue(kind, candidate[field], field);
     if (value !== null) result[field] = value;
+  }
+  if (recordType === 'deployment' && Object.keys(PRETEST_FIELDS).some((field) => present(result[field]))) {
+    invariant(result.PRETEST_BASELINE_PRESENT === true
+      && ['PRETEST_CAPTURED_AT', 'PRETEST_SOURCE_MODIFIED_AT', 'PRETEST_PERIOD_START_AT',
+        'PRETEST_PERIOD_END_AT', 'PRETEST_EVIDENCE_CLASS'].every((field) => present(result[field]))
+      && result.ENGAGEMENT_TYPE === 'free_test' && result.ENVIRONMENT === 'development'
+      && ['after_hours_only', 'no_answer_overflow_only', 'after_hours_and_overflow'].includes(result.COVERAGE_MODE),
+    'FACT_INVALID', 'Deployment baseline metadata is incomplete.');
+    invariant(result.PRETEST_SOURCE_MODIFIED_AT <= result.PRETEST_CAPTURED_AT
+      && result.PRETEST_PERIOD_START_AT < result.PRETEST_PERIOD_END_AT
+      && result.PRETEST_PERIOD_END_AT <= result.PRETEST_CAPTURED_AT
+      && result.PRETEST_CAPTURED_AT <= result.ACTUAL_START_AT,
+    'FACT_INVALID', 'Deployment baseline timing is invalid.');
+    for (const [field, maximum] of [
+      ['PRETEST_MONTHLY_INBOUND_CALLS', 999999999],
+      ['PRETEST_AFTER_HOURS_CALL_SHARE_HUNDREDTHS', 10000],
+      ['PRETEST_ESTIMATED_UNANSWERED_RATE_HUNDREDTHS', 10000],
+      ['PRETEST_AVERAGE_JOB_VALUE_MINOR_UNITS', 99999999999],
+      ['PRETEST_MONTHLY_ANSWERING_COST_MINOR_UNITS', 99999999999],
+    ]) invariant(!present(result[field]) || result[field] <= maximum,
+      'FACT_INVALID', 'Deployment baseline numeric value is invalid.');
+    const hasAmount = present(result.PRETEST_AVERAGE_JOB_VALUE_MINOR_UNITS)
+      || present(result.PRETEST_MONTHLY_ANSWERING_COST_MINOR_UNITS);
+    invariant(hasAmount ? result.PRETEST_CURRENCY === 'USD' : !present(result.PRETEST_CURRENCY),
+      'FACT_INVALID', 'Deployment baseline currency evidence is invalid.');
   }
   if (recordType === 'call') invariant(result.CALL_KEY === result.RECORD_KEY,
     'FACT_INVALID', 'Call record key must equal the opaque call key.');
@@ -307,6 +356,34 @@ function targetRow(parsed) {
   return Object.freeze({ ...parsed.fact, PAYLOAD_HASH: parsed.PAYLOAD_HASH });
 }
 
+/** Reconstruct only client-safe baseline context from an attested deployment fact.
+ * Omitted optional metrics mean unknown; the presence/provenance group is what
+ * distinguishes that state from an older deployment with no captured baseline.
+ */
+function deploymentReportBaseline(candidate) {
+  const fact = minimizeFact('deployment', candidate);
+  if (fact.PRETEST_BASELINE_PRESENT !== true) return null;
+  return Object.freeze({
+    capturedAt: fact.PRETEST_CAPTURED_AT, sourceModifiedAt: fact.PRETEST_SOURCE_MODIFIED_AT,
+    sourcePeriod: Object.freeze({ start: fact.PRETEST_PERIOD_START_AT, end: fact.PRETEST_PERIOD_END_AT }),
+    evidenceClass: fact.PRETEST_EVIDENCE_CLASS, currency: fact.PRETEST_CURRENCY ?? null,
+    comparisonStatus: 'context_only_not_before_after_proof',
+    values: Object.freeze({
+      currentCallHandling: fact.PRETEST_CURRENT_CALL_HANDLING ?? null,
+      monthlyInboundCalls: fact.PRETEST_MONTHLY_INBOUND_CALLS ?? null,
+      monthlyInboundCallBand: fact.PRETEST_MONTHLY_INBOUND_CALL_BAND ?? null,
+      afterHoursCallBand: fact.PRETEST_AFTER_HOURS_CALL_BAND ?? null,
+      afterHoursCallShare: fact.PRETEST_AFTER_HOURS_CALL_SHARE_HUNDREDTHS === undefined
+        ? null : fact.PRETEST_AFTER_HOURS_CALL_SHARE_HUNDREDTHS / 100,
+      estimatedUnansweredCallRate: fact.PRETEST_ESTIMATED_UNANSWERED_RATE_HUNDREDTHS === undefined
+        ? null : fact.PRETEST_ESTIMATED_UNANSWERED_RATE_HUNDREDTHS / 100,
+      averageJobValueMinorUnits: fact.PRETEST_AVERAGE_JOB_VALUE_MINOR_UNITS ?? null,
+      averageJobValueBand: fact.PRETEST_AVERAGE_JOB_VALUE_BAND ?? null,
+      currentMonthlyAnsweringCostMinorUnits: fact.PRETEST_MONTHLY_ANSWERING_COST_MINOR_UNITS ?? null,
+    }),
+  });
+}
+
 function sameLegacyDailyMetricVersion(actual, expected) {
   if (actual?.RECORD_TYPE !== 'daily_metric' || expected?.RECORD_TYPE !== 'daily_metric') return false;
   try {
@@ -375,4 +452,5 @@ module.exports = {
   makeBatchKey, minimizeFact, outboxKey, parseOutboxRow,
   sha256, sourceDateUtc, targetRow,
   sameLegacyDailyMetricVersion,
+  PRETEST_FIELDS, deploymentReportBaseline,
 };

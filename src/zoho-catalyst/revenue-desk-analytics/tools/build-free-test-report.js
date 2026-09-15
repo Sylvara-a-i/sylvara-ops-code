@@ -1,7 +1,7 @@
 'use strict';
 
 const contract = require('../config/free-test-report-contract.json');
-const { minimizeFact, canonicalJson, sha256 } = require('../functions/analytics_sync/lib/facts');
+const { minimizeFact, canonicalJson, sha256, deploymentReportBaseline } = require('../functions/analytics_sync/lib/facts');
 const runtimeContract = require('../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/contracts/revenue-desk-call-contract.json');
 const { deduplicateCalls } = require('../functions/analytics_sync/lib/daily-rollup');
 const { buildCrmReportBaseline } = require('../functions/analytics_sync/lib/crm-report-baseline');
@@ -151,21 +151,29 @@ function buildFreeTestReport(input, now = Date.now()) {
       ? final[target] === handled.filter((call) => call[source]).length
       : !Object.hasOwn(final, target), 'REPORT_OPTIONAL_EVIDENCE_CONFLICT');
   }
-  let baseline = null;
+  // The independently attested deployment row owns the captured baseline.
+  // Optional private CRM evidence may corroborate it, never enrich old history.
+  const baseline = deploymentReportBaseline(deployment);
   if (input.crmBaseline) {
-    baseline = buildCrmReportBaseline(input.crmBaseline, { now });
-    requireCondition(baseline.clientKey === deployment.CLIENT_KEY
-      && baseline.deploymentKey === deployment.DEPLOYMENT_KEY
+    const supplied = buildCrmReportBaseline(input.crmBaseline, { now });
+    requireCondition(baseline !== null && supplied.clientKey === deployment.CLIENT_KEY
+      && supplied.deploymentKey === deployment.DEPLOYMENT_KEY
       // The producer's CONFIGURATION_VERSION is the immutable physical version
       // ID, not CRM's editable/version label. Never conflate the two joins.
-      && baseline.configurationVersionId === deployment.CONFIGURATION_VERSION
-      && baseline.environment === deployment.ENVIRONMENT
+      && supplied.configurationVersionId === deployment.CONFIGURATION_VERSION
+      && supplied.environment === deployment.ENVIRONMENT
       && input.crmBaseline.context.testStartedAt === final.TEST_STARTED_AT
-      && Date.parse(baseline.capturedAt) <= Date.parse(final.TEST_STARTED_AT),
+      && Date.parse(supplied.capturedAt) <= Date.parse(final.TEST_STARTED_AT),
     'REPORT_BASELINE_OWNERSHIP_CONFLICT');
-    requireCondition(COVERAGE_FACT_VALUES.has(baseline.coverageMode)
-      && COVERAGE_FACT_VALUES.get(baseline.coverageMode) === deployment.COVERAGE_MODE,
+    requireCondition(COVERAGE_FACT_VALUES.has(supplied.coverageMode)
+      && COVERAGE_FACT_VALUES.get(supplied.coverageMode) === deployment.COVERAGE_MODE,
     'REPORT_BASELINE_COVERAGE_CONFLICT');
+    requireCondition(['capturedAt', 'sourceModifiedAt', 'evidenceClass', 'currency', 'comparisonStatus']
+      .every((field) => supplied[field] === baseline[field])
+      && supplied.sourcePeriod.start === baseline.sourcePeriod.start
+      && supplied.sourcePeriod.end === baseline.sourcePeriod.end
+      && Object.keys(baseline.values).every((field) => supplied.values[field] === baseline.values[field]),
+    'REPORT_BASELINE_EVIDENCE_CONFLICT');
   }
   const daily = new Map();
   for (const call of handled) {
