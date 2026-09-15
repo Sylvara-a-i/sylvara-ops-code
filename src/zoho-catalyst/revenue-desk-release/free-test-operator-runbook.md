@@ -399,6 +399,34 @@ of already-admitted calls. Installing new code does not authorize filling this
 envelope or creating/promoting an immutable configuration; the pending
 configuration-review/promotion contract remains a separate gate.
 
+The source-only [configuration-review rule](lib/free-test-configuration-review.js)
+now verifies exact content/recipient review against the existing route-control
+operator hash and signed approval-intent primitives. The trusted host must pin
+that operator identity/key to Gabriel; a request-supplied `reviewerName`, email,
+key or `verified` flag is not authentication. The rule re-prepares fresh source
+inputs, requires no unresolved preparation gates, and binds the full draft JSON,
+recipient, target, route and immutable release to the signed intent. Both
+configuration and recipient remain `approved: false`. Draft/Pending here describe
+an **in-memory proposal**, not a new persisted state or an update to an old row.
+
+This closes the local rule-definition/regression gate only. It does **not**
+authenticate exported CRM evidence, assert the live key belongs to Gabriel,
+persist/consume an approval, create/promote a row, or activate a route. Its output
+is a local-only verdict with every execution permission false. A later approved
+integration in the existing sole controller must authenticate fresh source and
+operator identity, claim the exact operation durably, create/read back a new
+immutable configuration, and preserve separate internal approval/activation.
+No second writer, SDK, signer, scheduler or live endpoint was added. Existing
+holds and rows are the rollback/containment state; this rule has no ongoing cloud
+cost or live monitoring side effects. No actual business values were approved.
+
+Reproduce its isolated synthetic checks from the repository root with the pinned
+Node runtime on `PATH`:
+
+```powershell
+node --test src/zoho-catalyst/revenue-desk-release/test/free-test-configuration-review.test.js src/zoho-catalyst/revenue-desk-release/test/free-test-preparation.test.js
+```
+
 Authenticated event → canonical minimized call → durable notification outbox →
 existing Catalyst Mail adapter → report/CRM summary is the single processing
 path. Recipient and business/owner/timezone come from server configuration, not
