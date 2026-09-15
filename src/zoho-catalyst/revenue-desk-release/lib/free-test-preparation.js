@@ -8,12 +8,23 @@ const {
 const {
   decodeCrmApprovedTestRoute, COVERAGE_LABEL_TO_MODE,
 } = require('../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/contracts');
+const {
+  buildCrmPreTestSnapshot,
+} = require('../../revenue-desk-analytics/functions/analytics_sync/lib/crm-report-baseline');
+const {
+  MAX_CATALYST_TEXT_BYTES,
+} = require('../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/catalyst-store');
 
 const CRM_ID = /^[1-9][0-9]{7,29}$/;
 const REVISION = /^[a-f0-9]{40}$/;
 const MAX_READBACK_AGE_MS = 15 * 60 * 1000;
 const WEEKDAYS = Object.freeze(['Monday', 'Tuesday', 'Wednesday', 'Thursday',
   'Friday', 'Saturday', 'Sunday']);
+const BASELINE_SOURCE_FIELDS = Object.freeze([
+  'Current_Call_Handling', 'Monthly_Inbound_Calls', 'Monthly_Inbound_Call_Band',
+  'After_Hours_Call_Band', 'After_Hours_Call_Share', 'Estimated_Unanswered_Call_Rate',
+  'Average_Job_Value', 'Average_Job_Value_Band', 'Current_Monthly_Answering_Cost',
+]);
 
 class PreparationError extends Error {
   constructor(code) { super(code); this.code = code; }
@@ -181,6 +192,39 @@ function validateSubmittedContext(input, now) {
   return { account, contact, deal };
 }
 
+function prepareReportBaseline(input, deal, review, now) {
+  if (!Object.hasOwn(input, 'reportBaseline')) return undefined;
+  const capture = record(input.reportBaseline);
+  const source = record(capture.deal);
+  const context = record(capture.context);
+  const evidence = record(capture.evidence);
+  const relationships = record(context.relationships);
+  // Bind this separately minimized projection to the already verified journey
+  // inputs, not merely to a second self-consistent caller-supplied baseline.
+  requireValue(['leadId', 'accountId', 'contactId', 'dealId', 'intakeSubmissionId']
+    .every((field) => relationships[field] === input.evidence.nativeConversion[field])
+    && source.id === deal.id && source.Account_Name?.id === deal.Account_Name.id
+    && source.Contact_Name?.id === deal.Contact_Name.id
+    && source.Intake_Submission_ID === deal.Intake_Submission_ID
+    && source.Configuration_Version === deal.Configuration_Version
+    && source.Modified_Time === deal.Modified_Time
+    && source.Approved_Test_Route === deal.Approved_Test_Route
+    && evidence.capturedAt === input.evidence.capturedAt
+    && context.configurationVersionId === review.configurationVersionId
+    && context.clientKey === review.analyticsClientKey
+    && context.deploymentKey === review.analyticsDeploymentKey
+    && BASELINE_SOURCE_FIELDS.every((field) => Object.hasOwn(deal, field)
+      && source[field] === deal[field]), 'REPORT_BASELINE_BINDING_CONFLICT');
+  try {
+    return buildCrmPreTestSnapshot(capture, { now });
+  } catch (error) {
+    if (typeof error.code === 'string' && error.code.startsWith('CRM_BASELINE_')) {
+      throw new PreparationError(error.code);
+    }
+    throw error;
+  }
+}
+
 /**
  * Prepare an unapproved in-memory candidate from a supplied private readback.
  * This is not an authenticated evidence reader or a deployment artifact builder.
@@ -231,6 +275,18 @@ function prepareFreeTestConfiguration(input, { now = Date.now() } = {}) {
     requireValue(deal.Urgent_Call_Handling === 'Alert + Capture Callback'
       && existingCustomerHandling === 'Alert + Capture Callback',
     'FREE_TEST_HANDLING_POLICY_UNSUPPORTED');
+    const reportBaseline = prepareReportBaseline(input, deal, review, now);
+    // Form 2 identifies the destination but does not prove someone monitors it.
+    // Accept only a separately supplied review acknowledgment; never fabricate
+    // one from an email address or treat this local copy as authenticated proof.
+    const handoff = review.notificationHandoff;
+    if (handoff !== undefined) {
+      record(handoff);
+      requireValue(handoff.timeZone === hours.zone
+        && Number.isFinite(Date.parse(handoff.acknowledgedAt))
+        && Date.parse(handoff.acknowledgedAt) <= now,
+      'NOTIFICATION_HANDOFF_REVIEW_REQUIRED');
+    }
     const candidate = validateConfiguration({
       clientId: review.clientId, crmDealId: deal.id, deploymentId: review.deploymentId,
       configurationVersion: deal.Configuration_Version, approved: false,
@@ -246,6 +302,7 @@ function prepareFreeTestConfiguration(input, { now = Date.now() } = {}) {
         name: deal.Alert_Recipient_Name, channel: 'email', email: deal.Alert_Recipient_Email,
         mobile: null,
       },
+      ...(handoff === undefined ? {} : { notificationHandoff: handoff }),
       phoneSystemProvider: account.Phone_System_Provider, approvedTestRoute: label, noAnswerDelay: null,
       forwardingAdministratorName: deal.Forwarding_Administrator_Name,
       forwardingAdministratorMobile: usPhone(deal.Forwarding_Administrator_Mobile, country,
@@ -258,7 +315,12 @@ function prepareFreeTestConfiguration(input, { now = Date.now() } = {}) {
       authorizedRepresentativeConfirmed: deal.Authorized_Representative_Confirmed,
       testScopeAccepted: deal.Test_Scope_Accepted, authorityConfirmedAt: deal.Authority_Confirmed_At,
       setupFormSubmissionId: deal.Setup_Form_Submission_ID, setupFormVersion: deal.Setup_Form_Version,
+      ...(reportBaseline === undefined ? {} : { reportBaseline }),
     });
+    // The baseline shares the existing immutable encrypted text column. Check
+    // its complete UTF-8 size here, not after an operator tries to persist it.
+    requireValue(Buffer.byteLength(JSON.stringify(candidate), 'utf8') <= MAX_CATALYST_TEXT_BYTES,
+      'RUNTIME_CONFIGURATION_REVIEW_REQUIRED');
     const phoneReconciliationFields = [
       ['Account.Phone', account.Phone, mainBusinessNumber],
       ['Deal.Forwarding_Administrator_Mobile', deal.Forwarding_Administrator_Mobile,
@@ -268,8 +330,11 @@ function prepareFreeTestConfiguration(input, { now = Date.now() } = {}) {
     ].filter(([, source, normalized]) => source !== normalized).map(([field]) => field);
     return Object.freeze({ ...boundary, classification: input.classification,
       status: 'prepared_local_only', candidate,
-      unresolved: Object.freeze(phoneReconciliationFields.length
-        ? ['CRM_PHONE_FORMAT_RECONCILIATION_REQUIRED'] : []),
+      unresolved: Object.freeze([
+        ...(phoneReconciliationFields.length ? ['CRM_PHONE_FORMAT_RECONCILIATION_REQUIRED'] : []),
+        ...(!candidate.notificationHandoff?.monitored
+          ? ['NOTIFICATION_HANDOFF_ACKNOWLEDGMENT_REQUIRED'] : []),
+      ]),
       reviewContext: Object.freeze({ countryCode: country, timeZone: hours.zone,
         dstPolicy: review.dstPolicy, hoursExceptions: Object.freeze(hours.exceptions),
         weeklyHours: hours.weeklyHours, hoursSourceText: hours.sourceText,

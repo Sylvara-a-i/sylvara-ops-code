@@ -15,7 +15,8 @@ const {
 } = require('./contracts');
 const { RevenueDeskError, invariant } = require('./errors');
 const { keyedDigest, numberLookupKey } = require('./security');
-const { E164_PATTERN, validateConfiguration, assertExecutionTimingSupported } = require('./validation');
+const { E164_PATTERN, validateConfiguration, assertExecutionTimingSupported,
+  assertNotificationHandoffReady } = require('./validation');
 const {
   verifyAuthorizationReceiptIntegrity,
 } = require('./authorization-receipt');
@@ -443,7 +444,7 @@ function validateDealBinding(deal, command, configurationVersion) {
     && hasText(deal.Authority_Confirmed_At)
     && hasText(deal.Test_Scope_Accepted_At)
     && deal.Deployment_Record_ID === command.deploymentId
-    && deal.Configuration_Version === command.configurationVersionId
+    && deal.Configuration_Version === configurationVersion.configurationVersion
     && dealValueMatchesConfiguration(deal, configurationVersion),
   'CONTROL_PRECONDITION_FAILED', 'CRM journey is incomplete or does not match the immutable configuration.',
   { httpStatus: 409 });
@@ -454,6 +455,17 @@ function validateDealBase(deal, command, configurationVersion) {
   invariant(deal.Stage === 'Setup and QA',
     'CONTROL_PRECONDITION_FAILED', 'CRM journey is not at the setup control stage.',
     { httpStatus: 409 });
+}
+
+function assertCurrentFreeTestHandlingPolicy(deal) {
+  // Preparation is not authoritative at activation time. Re-read both saved
+  // preferences before a new decision; this free test cannot silently replace
+  // a requested transfer, dispatch, or suppressed alert with callback capture.
+  invariant(deal.Urgent_Call_Handling === 'Alert + Capture Callback'
+    && deal.Existing_Customer_Call_Handling === 'Alert + Capture Callback',
+  'FREE_TEST_HANDLING_POLICY_UNSUPPORTED',
+  'The saved handling preferences require unsupported free-test actions.',
+  { httpStatus: 409 });
 }
 
 function validateApprovalDeal(deal, command, configuration) {
@@ -572,7 +584,9 @@ function parseConfiguration(row, command, sourceRevision, deployment) {
   invariant(deployment && configuration.clientId === deployment.CLIENT_ID
     && configuration.crmDealId === command.dealId
     && configuration.deploymentId === command.deploymentId
-    && configuration.configurationVersion === command.configurationVersionId
+    // The command selects the physical row above; its immutable label must
+    // separately match the JSON and CRM label, even when their strings differ.
+    && configuration.configurationVersion === version.configurationVersion
     && configuration.approved === true
     && configuration.authorizedRepresentativeConfirmed === true
     && configuration.testScopeAccepted === true,
@@ -2166,6 +2180,8 @@ function createRouteControlService({
     }
     const state = await readState(command);
     validateApprovalDeal(state.deal, command, state.configuration);
+    assertCurrentFreeTestHandlingPolicy(state.deal);
+    assertNotificationHandoffReady(state.configuration, { now: now() });
     await assertNoConflictingDeployment(state.deployment);
     const observedAt = new Date(now()).toISOString();
     const route = routeFingerprint(routeFromRows(state.deployment, state.configurationRow));
@@ -2330,6 +2346,8 @@ function createRouteControlService({
     }
     const state = await readState(command);
     assertNoCompetingActivationReceipt(state, command);
+    assertCurrentFreeTestHandlingPolicy(state.deal);
+    assertNotificationHandoffReady(state.configuration, { now: now() });
     state.routeFingerprint = routeFingerprint(routeFromRows(
       state.deployment, state.configurationRow,
     ));

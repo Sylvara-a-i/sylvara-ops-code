@@ -9,6 +9,9 @@ const ANALYSIS_TYPES = Object.freeze({
   specific_person_requested: 'string', sensitive_data_detected: 'boolean',
   bookable_opportunity: 'boolean', office_follow_up_required: 'boolean',
   workflow_failure_code: 'string', workflow_failure_text: 'string',
+  // Optional proposal: absent means callback unknown, never inferred from a
+  // valid number. Comparing a definition cannot prove live extraction.
+  callback_number_confirmed: 'boolean',
 });
 const ANALYSIS_ENUMS = Object.freeze({
   outcome: Object.freeze(contract.outcomes.map(({ value }) => value)),
@@ -98,6 +101,8 @@ function compareFreeTestProviderMetadata(metadata, reviewedCallerIntentContract)
     unverifiedEnumFields: Object.freeze(unverifiedEnums),
     mismatchedEnumFields: Object.freeze(mismatchedEnums),
     callerIntentValueContract,
+    callbackConfirmationEvidence: names.includes('callback_number_confirmed')
+      ? 'definition_present_extraction_unverified' : 'not_configured_callback_unknown',
     gaps: Object.freeze(gaps),
     metadataMatches: gaps.length === 0,
     liveExecutionVerified: false,

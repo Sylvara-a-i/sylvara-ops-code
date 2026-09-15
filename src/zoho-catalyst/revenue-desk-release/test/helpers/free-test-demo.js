@@ -170,7 +170,12 @@ async function createOfflineHarness(options = {}) {
   const { queryClientReport, reportToCsv } = require(path.join(runtimeRoot, 'lib/reporting'));
   const { syntheticPreparationInputs } = require('../fixtures/free-test-preparation');
   const { prepareFreeTestConfiguration } = require('../../lib/free-test-preparation');
-  const runtime = fixture.runtimeFixture();
+  // Only an explicitly supplied in-memory send function enables the adapter's
+  // delivery branch. The fixture still injects its fake SDK; no provider loads.
+  const runtime = fixture.runtimeFixture(typeof options.mailBehavior === 'function' ? {
+    mailBehavior: options.mailBehavior,
+    environment: { REVENUE_DESK_NOTIFICATION_MODE: 'send_development' },
+  } : {});
   // Align the fictional Journey records with the existing runtime fixture's
   // controlled clock. This touches no accepted evidence or external record.
   const inputs = JSON.parse(JSON.stringify(syntheticPreparationInputs())
@@ -180,6 +185,9 @@ async function createOfflineHarness(options = {}) {
     input.crm.account.Account_Name = `ZZZ ${input.crm.account.Account_Name}`;
     Object.assign(input.review, { clientId: `client_${letter}`, deploymentId: `deployment_${letter}`,
       notificationRecipientId: `recipient_${letter}` });
+    if (input.review.notificationHandoff) {
+      input.review.notificationHandoff.recipientId = input.review.notificationRecipientId;
+    }
     return prepareFreeTestConfiguration(input, { now: Date.parse('2026-08-20T12:00:00.000Z') });
   });
   const configurations = preparations.map((prepared) => {
@@ -378,6 +386,97 @@ async function earlyStopRehearsal() {
       canonicalCalls: store.rows.get('RevenueDeskCalls').length } };
 }
 
+// A separate memory-only rehearsal preserves the accepted two-company report
+// totals. Production event/worker/outbox/Mail logic supplies every durable state;
+// only the external delivery response is simulated. No acknowledgment or callback
+// is inferred from a send response or written into a customer system.
+async function ownerHandoffRehearsal() {
+  const scenarios = [];
+  for (const behavior of ['accepted', 'definite_rejection', 'ambiguous']) {
+    const effects = { sendAttempts: 0, acceptedResponses: 0 };
+    const h = await createOfflineHarness({ mailBehavior: (message) => {
+      effects.sendAttempts += 1;
+      assert.deepEqual(message.to_email, [h.configurations[0].notificationRecipient.email]);
+      assert.ok(message.to_email[0].endsWith('@example.invalid'));
+      if (behavior === 'definite_rejection') {
+        throw Object.assign(new Error('Synthetic pre-send rejection'), { preSend: true, retryable: true });
+      }
+      if (behavior === 'ambiguous') throw new Error('Synthetic unknown outcome after invocation');
+      effects.acceptedResponses += 1;
+      return { isAsync: false, from_email: message.from_email, to_email: message.to_email,
+        project_details: { id: 'synthetic_mail_project' } };
+    } });
+    const admission = await h.inbound('A');
+    assert.equal(admission.body.call_inbound.metadata.resolver_status, 'Resolved');
+    const payload = await h.event('A', admission.body.call_inbound.metadata, `handoff_${behavior}`, {
+      outcome: 'urgent_potential_job', urgency: 'urgent', bookable_opportunity: true,
+      office_follow_up_required: true, callback_number_confirmed: true,
+    });
+    const notifications = h.runtime.store.rows.get('RevenueDeskNotifications');
+    const calls = h.runtime.store.rows.get('RevenueDeskCalls');
+    const snapshot = () => ({ status: notifications[0].STATUS,
+      attempts: Number(notifications[0].ATTEMPT_COUNT),
+      nextAttemptAt: notifications[0].NEXT_ATTEMPT_AT,
+      providerCode: notifications[0].PROVIDER_CODE });
+    const states = [snapshot()];
+    const firstAttempts = effects.sendAttempts;
+    const firstScan = await h.job({ mode: 'retry_scan' });
+    assert.equal(effects.sendAttempts, firstAttempts, 'No retry before due time or after ambiguity');
+    let retryScans = 0;
+    while (notifications[0].STATUS === 'RetryRequired') {
+      assert.ok(retryScans++ < h.runtime.config.notificationMaxAttempts, 'Retry rehearsal must terminate');
+      assert.ok(effects.sendAttempts < h.runtime.config.notificationMaxAttempts);
+      h.runtime.clock.value = Date.parse(notifications[0].NEXT_ATTEMPT_AT);
+      assert.ok(Number.isFinite(h.runtime.clock.value));
+      await h.job({ mode: 'retry_scan' });
+      states.push(snapshot());
+    }
+    const attemptsBeforeReplay = effects.sendAttempts;
+    const replay = await h.invoke('/retell/events', payload);
+    assert.equal(replay.status, 200);
+    while (h.runtime.jobQueue.length) await h.job(h.runtime.jobQueue.shift());
+    h.runtime.clock.value += 60_000;
+    const finalScan = await h.job({ mode: 'retry_scan' });
+    assert.equal(effects.sendAttempts, attemptsBeforeReplay, 'Replay and scan must not resend terminal delivery');
+    assert.equal(notifications.length, 1);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].NOTIFICATION_STATE, notifications[0].STATUS);
+    assert.equal(h.runtime.store.rows.get('RevenueDeskDeployments')[0].HANDLED_COUNT, 1);
+    assert.equal(h.runtime.mailAccesses, effects.sendAttempts);
+    const expectedStatus = { accepted: 'Sent', definite_rejection: 'TerminalFailure', ambiguous: 'Ambiguous' }[behavior];
+    assert.equal(notifications[0].STATUS, expectedStatus);
+    assert.equal(effects.sendAttempts, behavior === 'definite_rejection'
+      ? h.runtime.config.notificationMaxAttempts : 1);
+    if (behavior === 'ambiguous') {
+      assert.equal(firstScan.notifications.reconciliationRequired, 1);
+      assert.equal(finalScan.notifications.reconciliationRequired, 1);
+    }
+    const notificationPayload = JSON.parse(notifications[0].PAYLOAD_JSON);
+    const { messageContent } = require(path.join(runtimeRoot, 'lib/catalyst-mail'));
+    scenarios.push({ scenario: behavior,
+      evidenceClass: 'production_worker_and_mail_adapter_with_memory_delivery',
+      capture: { connectedCalls: calls.length, outcome: calls[0].OUTCOME,
+        officeFollowUpRequired: JSON.parse(calls[0].CANONICAL_CALL_JSON).officeFollowUpRequired,
+        callerName: notificationPayload.callerName, callbackNumber: notificationPayload.callbackNumber,
+        issueSummary: notificationPayload.issueSummary, urgency: notificationPayload.urgency },
+      alert: { recipient: h.configurations[0].notificationRecipient.email,
+        followUpOwner: notificationPayload.followUpOwner, nextAction: notificationPayload.nextAction,
+        timeZone: notificationPayload.timeZone,
+        states, finalStatus: notifications[0].STATUS,
+        htmlPreview: messageContent(notificationPayload),
+        replaySuppressed: true,
+        deliveryToInboxVerified: false,
+        operatorReconciliationRequired: behavior === 'ambiguous',
+        operatorRecoveryRequired: behavior !== 'accepted' },
+      businessFollowUp: { acknowledgment: null, callbackOutcome: null,
+        status: 'Manual business action — not observed or simulated as completed' },
+      simulatedEffects: { ...effects, canonicalCalls: calls.length, notifications: notifications.length },
+    });
+  }
+  return { label: 'Synthetic Demo — No Live Calls', scenarios,
+    effects: { network: 0, provider: 0, crm: 0, email: 0, sms: 0 } };
+}
+
 async function runFreeTestDemo() {
   const guard = installOfflineGuard();
   try {
@@ -479,15 +578,19 @@ async function runFreeTestDemo() {
     }
     assert.equal(h.runtime.mailAccesses, 0);
     const operatorStop = await earlyStopRehearsal();
+    const ownerHandoff = await ownerHandoffRehearsal();
     assert.equal(guard.blocked.length, 0);
     return {
       label: 'SYNTHETIC DEMONSTRATION — NO LIVE CALLS', companies,
       earlyStopRehearsal: operatorStop,
+      ownerHandoffRehearsal: ownerHandoff,
       checks: { distinctCompanyOwnership: true, gatewayWorkerReportConnected: true,
         preparedConfigurationUsed: true, approvalAndActivationExplicitlySimulated: true,
         reportOnlyCrmReadback: true, replayWithoutSecondWrite: true, sevenDayExpiry: true,
         connectedCallLimit: true,
         earlyOperatorStop: true,
+        ownerAlertDeliveryRehearsed: true,
+        acknowledgmentAndCallbackNotAssumed: true,
         absentAnalysisWithheld: true, lateAnalysisReportRevision: true,
         completedCrmSummaryRevision: true, previousCompletedReceiptPreserved: true,
         actualVoiceOrForwardingProved: false },

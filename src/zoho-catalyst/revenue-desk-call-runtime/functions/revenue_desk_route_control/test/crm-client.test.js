@@ -2,7 +2,7 @@
 
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { createCrmControlClient } = require('../lib/crm-client');
+const { createCrmControlClient, DEAL_FIELDS } = require('../lib/crm-client');
 
 const DEAL_ID = '400000001';
 const DEPLOYMENT_ID = 'deployment_synthetic';
@@ -26,6 +26,8 @@ function scheduledDeal() {
     Test_Start_At: null, Test_End_At: null,
     Test_End_Reason: null, Rollback_Completed_At: null,
     Billing_Subscription_ID: null, Reason_For_Loss__s: null,
+    Urgent_Call_Handling: 'Alert + Capture Callback',
+    Existing_Customer_Call_Handling: 'Alert + Capture Callback',
   };
 }
 
@@ -40,7 +42,8 @@ function fixture(transitionOutcome, organizationId = SYNTHETIC_ORGANIZATION_ID) 
   let modified = 0;
   const fetchImpl = async (url, options) => {
     const parsed = new URL(url);
-    requests.push({ method: options.method, pathname: parsed.pathname });
+    requests.push({ method: options.method, pathname: parsed.pathname,
+      fields: parsed.searchParams.get('fields') });
     if (options.method === 'GET' && parsed.pathname.endsWith('/org')) {
       return response(200, { org: [{ zgid: organizationId }] });
     }
@@ -108,6 +111,26 @@ function fixture(transitionOutcome, organizationId = SYNTHETIC_ORGANIZATION_ID) 
   });
   return { client, state, requests, writes, getModifiedCount: () => modified };
 }
+
+test('CRM reader requests both existing handling fields and activation snapshots reject their drift', async () => {
+  const selected = fixture('committed');
+  const before = await selected.client.getDeal(DEAL_ID);
+  const read = selected.requests.find(({ pathname }) => pathname.endsWith(`/Deals/${DEAL_ID}`));
+  assert.deepEqual(read.fields.split(','), DEAL_FIELDS);
+  for (const field of ['Urgent_Call_Handling', 'Existing_Customer_Call_Handling']) {
+    assert.equal(DEAL_FIELDS.filter((name) => name === field).length, 1);
+    assert.equal(before[field], 'Alert + Capture Callback');
+    const changed = fixture('committed');
+    const expectedDeal = structuredClone(changed.state);
+    changed.state[field] = 'Transfer to On-Call';
+    await assert.rejects(changed.client.recordActivation(DEAL_ID, {
+      deploymentId: DEPLOYMENT_ID, configurationVersionId: CONFIGURATION_ID,
+      activatedAt: ACTIVATED_AT, expectedDeal,
+    }), { code: 'CRM_TRANSITION_PRECONDITION_FAILED' });
+    assert.deepEqual(changed.writes, []);
+    assert.equal(changed.requests.some(({ method }) => method === 'PUT'), false);
+  }
+});
 
 test('ambiguous activation acknowledgement accepts exact authoritative Live readback', async () => {
   const selected = fixture('committed');
@@ -229,6 +252,45 @@ test('an exact partial rollback resumes without repeating the field write', asyn
   assert.equal(result.Test_Status, 'Scheduled');
   assert.equal(result.Test_End_At, stoppedAt);
   assert.equal(result.manualCloseRequired.transitionName, 'Close During QA');
+});
+
+test('rollback keeps the exact CRM label separate from its approved physical version ID', async () => {
+  const selected = fixture('committed');
+  selected.state.Configuration_Version = 'form2cfgv1:101:synthetic_label';
+  const expectedDeal = structuredClone(selected.state);
+  const stoppedAt = '2026-08-29T12:20:00.000Z';
+  const request = { deploymentId: DEPLOYMENT_ID, configurationVersionId: CONFIGURATION_ID,
+    stoppedAt, reason: 'Sylvara Stopped', routeInactive: true, expectedDeal };
+  const result = await selected.client.recordRollback(DEAL_ID, request);
+  assert.equal(result.Configuration_Version, expectedDeal.Configuration_Version);
+  assert.equal(result.Approved_Configuration_Version, CONFIGURATION_ID);
+  assert.equal(result.manualCloseRequired.transitionName, 'Close During QA');
+  const writes = selected.writes.length;
+  const resumed = await selected.client.recordRollback(DEAL_ID, {
+    ...request, expectedDeal: structuredClone(selected.state),
+  });
+  assert.equal(resumed.Configuration_Version, expectedDeal.Configuration_Version);
+  assert.equal(selected.writes.length, writes);
+});
+
+test('rollback rejects stale labels and wrong approved physical IDs before any CRM write', async () => {
+  for (const change of ['label-drift', 'physical-id', 'missing-label']) {
+    const selected = fixture('committed');
+    selected.state.Configuration_Version = 'form2cfgv1:101:synthetic_label';
+    const expectedDeal = structuredClone(selected.state);
+    if (change === 'label-drift') selected.state.Configuration_Version = 'another_label';
+    if (change === 'missing-label') {
+      selected.state.Configuration_Version = null;
+      expectedDeal.Configuration_Version = null;
+    }
+    await assert.rejects(selected.client.recordRollback(DEAL_ID, {
+      deploymentId: DEPLOYMENT_ID,
+      configurationVersionId: change === 'physical-id' ? 'different_physical_row' : CONFIGURATION_ID,
+      stoppedAt: '2026-08-29T12:20:00.000Z', reason: 'Sylvara Stopped', routeInactive: true, expectedDeal,
+    }), { code: 'CRM_TRANSITION_PRECONDITION_FAILED' });
+    assert.equal(selected.writes.length, 0);
+    assert.equal(selected.requests.some((request) => request.method === 'PUT'), false);
+  }
 });
 
 test('rollback accepts only the exact concurrent activation and closes CRM non-Live', async () => {

@@ -7,7 +7,7 @@ const contract = require('../../revenue-desk-call-runtime/functions/revenue_desk
 
 function complete() {
   return {
-    analysisFields: Object.entries(ANALYSIS_TYPES).map(([name, type]) => ({ name, type,
+    analysisFields: contract.retell_custom_analysis_fields.map((name) => ({ name, type: ANALYSIS_TYPES[name],
       ...(ANALYSIS_ENUMS[name] ? { choices: [...ANALYSIS_ENUMS[name]] } : {}) })),
     variableNames: [...contract.retell_conversation_variable_fields],
     webhookEvents: ['call_ended', 'call_analyzed'], webhookTimeoutMs: 10000,
@@ -26,6 +26,22 @@ function completeWithReviewedChoices() {
   input.analysisFields.find((field) => field.name === 'caller_intent').choices = [...reviewedContract().choices];
   return input;
 }
+
+test('optional callback confirmation is typed but never proves live confirmation', () => {
+  const input = completeWithReviewedChoices();
+  input.analysisFields.push({ name: 'callback_number_confirmed', type: 'boolean' });
+  let result = compareFreeTestProviderMetadata(input, reviewedContract());
+  assert.equal(result.metadataMatches, true);
+  assert.equal(result.callbackConfirmationEvidence, 'definition_present_extraction_unverified');
+  assert.equal(result.liveExecutionVerified, false);
+  input.analysisFields.find((field) => field.name === 'callback_number_confirmed').type = 'string';
+  assert.ok(compareFreeTestProviderMetadata(input, reviewedContract()).gaps.includes('ANALYSIS_TYPES_MISMATCH'));
+  input.analysisFields = input.analysisFields.filter((field) => field.name !== 'callback_number_confirmed');
+  result = compareFreeTestProviderMetadata(input, reviewedContract());
+  assert.equal(result.metadataMatches, true);
+  assert.equal(result.requiredAnalysisCount, 15);
+  assert.equal(result.callbackConfirmationEvidence, 'not_configured_callback_unknown');
+});
 
 test('fifteen analysis fields are required; historical eleven cannot prove preparation complete', () => {
   const input = complete();

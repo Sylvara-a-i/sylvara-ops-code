@@ -338,6 +338,234 @@ test('integration: ended/analyzed convergence counts once, records one dry-run n
   }
 });
 
+test('integration: new inbound requires monitored handoff but admitted calls can still settle', async () => {
+  for (const missing of [true, false]) {
+    const fixture = runtimeFixture();
+    const row = fixture.store.rows.get('RevenueDeskDeployments')[0];
+    const version = fixture.store.rows.get('RevenueDeskConfigurationVersions')[0];
+    const configuration = JSON.parse(version.CONFIGURATION_JSON);
+    if (missing) delete configuration.notificationHandoff;
+    else configuration.notificationHandoff.monitored = false;
+    version.CONFIGURATION_JSON = JSON.stringify(configuration);
+    // Construct internally consistent historical approval/ownership fixtures,
+    // not a new approval or a mutation under an existing real receipt.
+    fixture.store.authorizationRows = [
+      ...authorizationRows(row, version, 'A', fixture.config.authorizationEventSecret),
+      ...fixture.store.authorizationRows.filter((item) => item.DEPLOYMENT_ID !== 'deployment_A'),
+    ];
+    const historical = await loadDeployment(fixture.store, row, fixture.config);
+    const metadata = resolverMetadata(fixture.config, historical,
+      'historical_handoff_A', new Date(fixture.clock.value).toISOString());
+    const service = createRuntimeService({ store: fixture.store, mailAdapter: {},
+      config: fixture.config, now: () => fixture.clock.value });
+    const readiness = await service.readiness();
+    assert.equal(readiness.activeDeploymentCount, 1, 'only the monitored company is admissible');
+    assert.ok(readiness.terminalReconciliationPendingCount >= 1);
+    const nextInbound = payloadInbound('A');
+    nextInbound.call_inbound.from_number = '+15551119999';
+    const rejected = await invoke(fixture.listener, { url: '/retell/inbound',
+      payload: nextInbound, env: fixture.env });
+    assert.deepEqual(rejected.body, { call_inbound: { reject: true } });
+    const decision = fixture.store.rows.get('RevenueDeskEventReceipts')
+      .find((row) => row.LAST_ERROR_CODE === 'NOTIFICATION_HANDOFF_UNAPPROVED');
+    assert.ok(decision);
+    await invoke(fixture.listener, { url: '/retell/events',
+      payload: eventPayload('call_analyzed', 'unadmitted_handoff_A', undefined, 'A'), env: fixture.env });
+    assert.equal(fixture.store.rows.get('RevenueDeskCalls').length, 0);
+    assert.equal(fixture.store.rows.get('RevenueDeskNotifications').length, 0);
+    await invoke(fixture.listener, { url: '/retell/events',
+      payload: eventPayload('call_analyzed', 'admitted_handoff_A', metadata, 'A'), env: fixture.env });
+    const call = fixture.store.rows.get('RevenueDeskCalls')[0];
+    assert.equal(call.PROCESSING_STATE, 'Completed');
+    assert.equal(call.NOTIFICATION_STATE, 'DryRunRecorded');
+    assert.equal(fixture.mailAccesses, 0);
+  }
+});
+
+test('integration: new notification template keeps callback evidence explicit across ended and analyzed events', async () => {
+  for (const confirmation of [undefined, false, true]) {
+    const fixture = runtimeFixture();
+    const inbound = await invoke(fixture.listener, { url: '/retell/inbound',
+      payload: payloadInbound('A'), env: fixture.env });
+    const metadata = inbound.body.call_inbound.metadata;
+    await invoke(fixture.listener, { url: '/retell/events',
+      payload: eventPayload('call_ended', 'callback_evidence_A', metadata, 'A'), env: fixture.env });
+    const call = fixture.store.rows.get('RevenueDeskCalls')[0];
+    assert.equal(JSON.parse(call.CANONICAL_CALL_JSON).notificationPayloadVersion, 2);
+    await invoke(fixture.listener, { url: '/retell/events',
+      payload: eventPayload('call_analyzed', 'callback_evidence_A', metadata, 'A',
+        { callback_number_confirmed: confirmation }), env: fixture.env });
+    const canonical = JSON.parse(call.CANONICAL_CALL_JSON);
+    assert.equal(canonical.notificationPayloadVersion, 2);
+    assert.equal(canonical.callbackNumberConfirmed, confirmation ?? null);
+    assert.equal(canonical.callbackNumber, confirmation === true ? '+15551110001' : null);
+    const notification = fixture.store.rows.get('RevenueDeskNotifications')[0];
+    const payload = JSON.parse(notification.PAYLOAD_JSON);
+    assert.equal(notification.TEMPLATE_VERSION, 'free_test_call_summary_v2');
+    assert.equal(payload.notificationPayloadVersion, 2);
+    assert.equal(payload.callbackNumberConfirmed, confirmation === true);
+    assert.equal(payload.callbackNumber, confirmation === true ? '+15551110001' : null);
+    assert.equal(fixture.mailAccesses, 0);
+  }
+});
+
+test('integration: unmarked historical call retains its template and unsent legacy content is held without Mail', async () => {
+  for (const status of ['Pending', 'RetryRequired']) {
+    const fixture = runtimeFixture();
+    const inbound = await invoke(fixture.listener, { url: '/retell/inbound',
+      payload: payloadInbound('A'), env: fixture.env });
+    const metadata = inbound.body.call_inbound.metadata;
+    await invoke(fixture.listener, { url: '/retell/events',
+      payload: eventPayload('call_ended', 'legacy_handoff_A', metadata, 'A'), env: fixture.env });
+    const call = fixture.store.rows.get('RevenueDeskCalls')[0];
+    const historical = JSON.parse(call.CANONICAL_CALL_JSON);
+    delete historical.notificationPayloadVersion;
+    delete historical.callbackNumberConfirmed;
+    call.CANONICAL_CALL_JSON = JSON.stringify(historical);
+    const analyzed = eventPayload('call_analyzed', 'legacy_handoff_A', metadata, 'A',
+      { callback_number_confirmed: true });
+    await invoke(fixture.listener, { url: '/retell/events', payload: analyzed, env: fixture.env });
+    assert.equal(Object.hasOwn(JSON.parse(call.CANONICAL_CALL_JSON), 'notificationPayloadVersion'), false);
+    const notification = fixture.store.rows.get('RevenueDeskNotifications')[0];
+    assert.equal(notification.TEMPLATE_VERSION, 'free_test_call_summary_v1');
+    const immutableBefore = [notification.NOTIFICATION_KEY, notification.TEMPLATE_VERSION,
+      notification.PAYLOAD_JSON, notification.RECIPIENT_FINGERPRINT];
+    notification.STATUS = status;
+    notification.NEXT_ATTEMPT_AT = status === 'RetryRequired'
+      ? new Date(fixture.clock.value).toISOString() : null;
+    call.NOTIFICATION_STATE = status;
+    const sendEnvironment = { ...fixture.env, REVENUE_DESK_NOTIFICATION_MODE: 'send_development' };
+    const handler = createWorkerJobHandler({ catalystSdk: fixture.catalystSdk,
+      environment: sendEnvironment, now: () => fixture.clock.value, storeFactory: () => fixture.store });
+    await handler(retryJobRequest(sendEnvironment), retryJobContext());
+    assert.equal(notification.STATUS, 'ReconciliationRequired');
+    assert.equal(call.NOTIFICATION_STATE, 'ReconciliationRequired');
+    assert.equal(notification.PROVIDER_CODE, 'LEGACY_HANDOFF_REVIEW_REQUIRED');
+    assert.equal(notification.PROVIDER_RESULT_REFERENCE, null);
+    assert.equal(notification.ATTEMPT_COUNT, 0);
+    assert.equal(notification.SEND_TOKEN, null);
+    assert.equal(notification.NEXT_ATTEMPT_AT, null);
+    assert.deepEqual([notification.NOTIFICATION_KEY, notification.TEMPLATE_VERSION,
+      notification.PAYLOAD_JSON, notification.RECIPIENT_FINGERPRINT], immutableBefore);
+    await invoke(fixture.listener, { url: '/retell/events', payload: analyzed, env: fixture.env });
+    fixture.clock.value += 60_000;
+    assert.equal((await handler(retryJobRequest(sendEnvironment), retryJobContext())).notifications.examined, 0);
+    assert.equal(fixture.store.rows.get('RevenueDeskNotifications').length, 1);
+    assert.equal(fixture.mailAccesses, 0);
+  }
+});
+
+test('integration: contradictory persisted callback evidence fails settlement and notification retry closed', async () => {
+  for (const patch of [
+    { callbackNumberConfirmed: false, callbackNumber: '+15551110001' },
+    { callbackNumberConfirmed: null, callbackNumber: '+15551110001' },
+    { callbackNumberConfirmed: true, callbackNumber: null },
+    { callbackNumberConfirmed: true, callbackNumber: 'not-a-number' },
+    { callbackNumberConfirmed: undefined, callbackNumber: null },
+  ]) {
+    const fixture = runtimeFixture();
+    const inbound = await invoke(fixture.listener, { url: '/retell/inbound',
+      payload: payloadInbound('A'), env: fixture.env });
+    const metadata = inbound.body.call_inbound.metadata;
+    await invoke(fixture.listener, { url: '/retell/events',
+      payload: eventPayload('call_analyzed', 'invalid_callback_evidence_A', metadata, 'A'), env: fixture.env });
+    const call = fixture.store.rows.get('RevenueDeskCalls')[0];
+    const notification = fixture.store.rows.get('RevenueDeskNotifications')[0];
+    call.CANONICAL_CALL_JSON = JSON.stringify({ ...JSON.parse(call.CANONICAL_CALL_JSON), ...patch });
+    const canonicalBefore = call.CANONICAL_CALL_JSON;
+    notification.STATUS = 'Pending';
+    call.NOTIFICATION_STATE = 'Pending';
+    await invoke(fixture.listener, { url: '/retell/events',
+      payload: eventPayload('call_ended', 'invalid_callback_evidence_A', metadata, 'A'), env: fixture.env });
+    assert.equal(fixture.workerErrors.at(-1).code, 'CALL_OWNERSHIP_UNRESOLVED');
+    const sendEnvironment = { ...fixture.env, REVENUE_DESK_NOTIFICATION_MODE: 'send_development' };
+    const handler = createWorkerJobHandler({ catalystSdk: fixture.catalystSdk,
+      environment: sendEnvironment, now: () => fixture.clock.value, storeFactory: () => fixture.store });
+    await handler(retryJobRequest(sendEnvironment), retryJobContext());
+    assert.equal(notification.STATUS, 'ReconciliationRequired');
+    assert.equal(notification.PROVIDER_CODE, 'NOTIFICATION_RECONCILIATION_REQUIRED');
+    assert.equal(notification.ATTEMPT_COUNT, 0);
+    assert.equal(call.NOTIFICATION_STATE, 'ReconciliationRequired');
+    assert.equal(call.CANONICAL_CALL_JSON, canonicalBefore);
+    assert.equal(fixture.mailAccesses, 0);
+  }
+});
+
+async function historicalCallbackReceiptFixture({ processJobs = true } = {}) {
+  const fixture = runtimeFixture();
+  const inbound = await invoke(fixture.listener, { url: '/retell/inbound',
+    payload: payloadInbound('A'), env: fixture.env });
+  const event = eventPayload('call_analyzed', 'historical_callback_receipt_A',
+    inbound.body.call_inbound.metadata, 'A');
+  await invoke(fixture.listener, { url: '/retell/events', payload: event,
+    env: fixture.env, processJobs });
+  const receipt = fixture.store.rows.get('RevenueDeskEventReceipts')
+    .find((row) => row.RECEIPT_KIND === 'provider_event');
+  // Exact pre-confirmation normalizer projection of the same synthetic raw
+  // body. All other identity, source, lease, and audit fields remain intact.
+  const historical = JSON.parse(receipt.EVENT_DATA_JSON);
+  delete historical.analysis.callbackNumberConfirmed;
+  historical.analysis.callbackNumber = event.call.call_analysis.custom_analysis_data.callback_number;
+  receipt.EVENT_DATA_JSON = JSON.stringify(historical);
+  return { fixture, event, receipt };
+}
+
+test('integration: exact historical callback receipt replay preserves old evidence and cannot duplicate dispatch', async () => {
+  for (const processJobs of [true, false]) {
+    const { fixture, event, receipt } = await historicalCallbackReceiptFixture({ processJobs });
+    const before = structuredClone(receipt);
+    const jobsBefore = fixture.jobQueue.length;
+    const callsBefore = fixture.store.rows.get('RevenueDeskCalls').length;
+    const notificationsBefore = fixture.store.rows.get('RevenueDeskNotifications').length;
+    const replay = await invoke(fixture.listener, { url: '/retell/events', payload: event,
+      env: fixture.env, processJobs: false });
+    assert.equal(replay.status, 200);
+    assert.equal(replay.body.duplicate, true);
+    assert.deepEqual(receipt, before);
+    assert.equal(fixture.jobQueue.length, jobsBefore);
+    assert.equal(fixture.store.rows.get('RevenueDeskCalls').length, callsBefore);
+    assert.equal(fixture.store.rows.get('RevenueDeskNotifications').length, notificationsBefore);
+    assert.equal(fixture.mailAccesses, 0);
+    if (!processJobs) {
+      await fixture.listener.processQueuedJobs();
+      assert.equal(receipt.EVENT_DATA_JSON, before.EVENT_DATA_JSON);
+      assert.equal(receipt.STATUS, 'Completed');
+      const call = JSON.parse(fixture.store.rows.get('RevenueDeskCalls')[0].CANONICAL_CALL_JSON);
+      assert.equal(call.notificationPayloadVersion, 2);
+      assert.equal(call.callbackNumberConfirmed, null);
+      assert.equal(call.callbackNumber, null);
+      assert.equal(fixture.mailAccesses, 0);
+    }
+  }
+});
+
+test('integration: historical callback compatibility never admits changed payload or unrelated durable evidence', async () => {
+  for (const change of [
+    ({ event }) => { event.call.call_analysis.custom_analysis_data.issue_summary = 'Different synthetic issue'; },
+    ({ receipt }) => { const body = JSON.parse(receipt.EVENT_DATA_JSON);
+      body.analysis.issueSummary = 'Changed stored issue'; receipt.EVENT_DATA_JSON = JSON.stringify(body); },
+    ({ receipt }) => { const body = JSON.parse(receipt.EVENT_DATA_JSON);
+      body.analysis.callbackNumber = '+15551119999'; receipt.EVENT_DATA_JSON = JSON.stringify(body); },
+    ({ receipt }) => { const body = JSON.parse(receipt.EVENT_DATA_JSON);
+      body.unreviewedField = true; receipt.EVENT_DATA_JSON = JSON.stringify(body); },
+    ({ receipt }) => { receipt.CALL_KEY = `call_${'f'.repeat(64)}`; },
+    ({ receipt }) => { receipt.SOURCE_ENVIRONMENT = 'production'; },
+    ({ receipt }) => { receipt.SOURCE_REVISION = 'unverified'; },
+  ]) {
+    const state = await historicalCallbackReceiptFixture();
+    change(state);
+    const before = structuredClone(state.receipt);
+    const replay = await invoke(state.fixture.listener, { url: '/retell/events', payload: state.event,
+      env: state.fixture.env, processJobs: false });
+    assert.equal(replay.status, 400);
+    assert.deepEqual(state.receipt, before);
+    assert.equal(state.fixture.jobQueue.length, 0);
+    assert.equal(state.fixture.store.rows.get('RevenueDeskCalls').length, 1);
+    assert.equal(state.fixture.store.rows.get('RevenueDeskNotifications').length, 1);
+    assert.equal(state.fixture.mailAccesses, 0);
+  }
+});
+
 test('integration: rollback claims reject unseen number-only events but preserve proven settlement', async () => {
   const fixture = runtimeFixture();
   const durableInbound = await invoke(fixture.listener, {
@@ -967,6 +1195,54 @@ test('integration: readiness tracks CRM states and retry_scan repairs missing or
   assert.equal((await service.readiness()).terminalReconciliationPendingCount, 0);
 });
 
+test('integration: terminal reconciliation preserves historical final payloads on replay and resume', async () => {
+  for (const status of ['Completed', 'Pending']) {
+    const { fixture, service, finalRow } = await reconciledTerminalAnalyticsFixture();
+    const legacy = JSON.parse(finalRow.PAYLOAD_JSON);
+    for (const field of [
+      'ACTUAL_AVERAGE_CALL_DURATION_MILLISECONDS',
+      'EXPECTED_MONTHLY_CONNECTED_MINUTES_MIN_HUNDREDTHS',
+      'EXPECTED_MONTHLY_CONNECTED_MINUTES_MAX_HUNDREDTHS', 'MONTHLY_MINUTES_METHODOLOGY_ID',
+      'OBSERVED_WORKFLOW_FAILURES', 'WORKFLOW_FAILURE_EVIDENCE_COMPLETE',
+      'DURATION_WITHHELD_CALLS', 'LEGACY_SCHEMA_CALLS_WITHHELD',
+      'RECOMMENDED_COVERAGE_MODE', 'IN_FLIGHT_OVERSHOOT',
+    ]) delete legacy[field];
+    assert.notEqual(canonicalJson(legacy), finalRow.PAYLOAD_JSON);
+    finalRow.PAYLOAD_JSON = canonicalJson(legacy);
+    finalRow.PAYLOAD_HASH = sha256(finalRow.PAYLOAD_JSON);
+    finalRow.SYNC_STATUS = 'Succeeded';
+    const deployment = fixture.store.rows.get('RevenueDeskDeployments')[0];
+    deployment.REPORT_RECONCILIATION_STATUS = status;
+    const originalFinal = structuredClone(finalRow);
+    const finalCount = fixture.store.rows.get('AnalyticsSyncOutbox')
+      .filter((row) => row.RECORD_TYPE === 'final_test_result').length;
+    const operationCount = fixture.store.rows.get('CRMBillingOperations').length;
+
+    await service.reconcileDeployment('deployment_A');
+    const outboxCount = fixture.store.rows.get('AnalyticsSyncOutbox').length;
+    await service.reconcileDeployment('deployment_A');
+    assert.equal(deployment.REPORT_RECONCILIATION_STATUS, 'Completed');
+    assert.deepEqual(fixture.store.rows.get('AnalyticsSyncOutbox')
+      .find((row) => row.ROWID === originalFinal.ROWID), originalFinal,
+    'the actual terminal path must not enrich, repair, or requeue historical evidence');
+    assert.equal(fixture.store.rows.get('AnalyticsSyncOutbox').length, outboxCount);
+    assert.equal(fixture.store.rows.get('AnalyticsSyncOutbox')
+      .filter((row) => row.RECORD_TYPE === 'final_test_result').length, finalCount);
+    assert.equal(fixture.store.rows.get('CRMBillingOperations').length, operationCount);
+
+    legacy.QUALIFIED_OPPORTUNITIES += 1;
+    finalRow.PAYLOAD_JSON = canonicalJson(legacy);
+    finalRow.PAYLOAD_HASH = sha256(finalRow.PAYLOAD_JSON);
+    const conflicting = structuredClone(finalRow);
+    await assert.rejects(service.reconcileDeployment('deployment_A'), {
+      code: 'DURABLE_IDEMPOTENCY_CONFLICT',
+    });
+    assert.deepEqual(fixture.store.rows.get('AnalyticsSyncOutbox')
+      .find((row) => row.ROWID === conflicting.ROWID), conflicting,
+    'legacy compatibility never authorizes a changed original metric');
+  }
+});
+
 test('integration: final artifact reconciliation never overwrites a divergent payload', async () => {
   const { fixture, service, finalRow } = await reconciledTerminalAnalyticsFixture();
   const divergent = JSON.parse(finalRow.PAYLOAD_JSON);
@@ -1226,7 +1502,7 @@ test('integration: Catalyst retry job honors notification backoff and converges 
   assert.equal(result.notifications.examined, 1);
   assert.equal(notification.STATUS, 'Sent');
   assert.equal(notification.ATTEMPT_COUNT, 2);
-  assert.equal(notification.TEMPLATE_VERSION, 'free_test_call_summary_v1');
+  assert.equal(notification.TEMPLATE_VERSION, 'free_test_call_summary_v2');
   assert.match(notification.PROVIDER_RESULT_REFERENCE, /^mail_[a-f0-9]{64}$/);
   assert.equal(sends, 2);
   assert.equal(fixture.store.rows.get('RevenueDeskCalls')[0].NOTIFICATION_STATE, 'Sent');
@@ -1402,6 +1678,53 @@ test('integration: stale Mail invocation becomes ambiguous in notification and c
   assert.equal(notification.SEND_TOKEN, null);
   assert.equal(call.NOTIFICATION_STATE, 'Ambiguous');
   assert.equal(fixture.mailAccesses, 0);
+});
+
+test('integration: a late Mail acceptance cannot override stale-send containment', async () => {
+  let releaseAcceptance;
+  let signalInvoked;
+  let fakeSends = 0;
+  const invoked = new Promise((resolve) => { signalInvoked = resolve; });
+  const fixture = runtimeFixture({
+    environment: { REVENUE_DESK_NOTIFICATION_MODE: 'send_development' },
+    mailBehavior: () => {
+      fakeSends += 1;
+      signalInvoked();
+      return new Promise((resolve) => {
+        releaseAcceptance = () => resolve({ isAsync: false,
+          project_details: { id: 'synthetic-project' },
+          from_email: 'verified-sender@example.invalid', to_email: ['a@example.invalid'] });
+      });
+    },
+  });
+  const inbound = await invoke(fixture.listener, { url: '/retell/inbound',
+    payload: payloadInbound('A'), env: fixture.env });
+  const event = eventPayload('call_analyzed', 'racing_mail_A',
+    inbound.body.call_inbound.metadata, 'A');
+  const processing = invoke(fixture.listener,
+    { url: '/retell/events', payload: event, env: fixture.env });
+  await invoked;
+  const notification = fixture.store.rows.get('RevenueDeskNotifications')[0];
+  assert.equal(notification.STATUS, 'Sending');
+  fixture.clock.value += fixture.config.mailTimeoutMs + 1;
+  const recovery = createRuntimeService({ store: fixture.store, mailAdapter: {},
+    config: fixture.config, now: () => fixture.clock.value });
+  assert.equal((await recovery.retryDueNotifications()).staleSending, 1);
+  assert.equal(notification.STATUS, 'Ambiguous');
+  assert.equal(notification.SEND_TOKEN, null);
+  releaseAcceptance();
+  await processing;
+  assert.equal(notification.STATUS, 'Ambiguous');
+  assert.equal(notification.PROVIDER_RESULT_REFERENCE, null);
+  assert.equal(fixture.store.rows.get('RevenueDeskCalls')[0].NOTIFICATION_STATE, 'Ambiguous');
+  const report = await queryClientReport(fixture.store, fixture.config,
+    'client_A', 'deployment_A', fixture.clock.value);
+  assert.equal(report.notificationStates.Ambiguous, 1);
+  await invoke(fixture.listener, { url: '/retell/events', payload: event, env: fixture.env });
+  fixture.clock.value += 60_000;
+  assert.equal((await recovery.retryDueNotifications()).examined, 0);
+  assert.equal(fakeSends, 1);
+  assert.equal(fixture.store.rows.get('RevenueDeskNotifications').length, 1);
 });
 
 test('integration: Catalyst retry job replays a due minimized event receipt without raw provider payload', async () => {

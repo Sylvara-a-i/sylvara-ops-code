@@ -4,6 +4,9 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createCatalystStore } = require('../lib/catalyst-store');
 const { outboxRow } = require('./helpers');
+const { callFact, MemoryStore, key } = require('./helpers');
+const { createOutboxRow } = require('../lib/facts');
+const { buildDailyMetricFact } = require('../lib/daily-rollup');
 
 const OUTBOX = 'AnalyticsSyncOutbox';
 const CHECKPOINT = 'AnalyticsSyncCheckpoints';
@@ -67,6 +70,33 @@ function candidate(overrides = {}) {
   const { ROWID: _rowId, ...row } = outboxRow(overrides);
   return row;
 }
+
+test('daily rollup rematerialization preserves an existing legacy payload and rejects changed old fields', async () => {
+  const fact = buildDailyMetricFact({ calls: [callFact()], reportingDateUtc: '2026-08-24',
+    clientKey: key('b'), deploymentKey: key('c'), configurationVersion: 'config-v1',
+    engagementType: 'free_test', environment: 'development', metricVersion: 'revenue_desk_metrics_v1',
+    sourceRevision: 'd'.repeat(40) });
+  const legacyFact = { ...fact };
+  delete legacyFact.GENERAL_INQUIRY_CALLS;
+  delete legacyFact.PRIVACY_STOP_CALLS;
+  const oldRow = createOutboxRow('daily_metric', legacyFact, '2026-08-24T12:06:00.000Z');
+  const nextRow = createOutboxRow('daily_metric', fact, '2026-08-24T12:06:00.000Z');
+  const app = fakeApp([oldRow]);
+  for (const durable of [store(app), new MemoryStore([oldRow])]) {
+    const result = await durable.ensureOutbox(nextRow);
+    assert.equal(result.PAYLOAD_JSON, oldRow.PAYLOAD_JSON);
+    assert.equal(result.PAYLOAD_HASH, oldRow.PAYLOAD_HASH);
+    const conflict = createOutboxRow('daily_metric', { ...fact, TOTAL_CALLS_HANDLED: 99 }, oldRow.CREATED_AT);
+    await assert.rejects(() => durable.ensureOutbox(conflict), /conflict/);
+    const correction = createOutboxRow('daily_metric', {
+      ...fact, SOURCE_MODIFIED_AT: '2026-08-24T12:10:00.000Z',
+    }, oldRow.CREATED_AT);
+    const corrected = await durable.ensureOutbox(correction);
+    assert.equal(corrected.PAYLOAD_JSON, correction.PAYLOAD_JSON);
+  }
+  assert.equal(app.rows.length, 2);
+  assert.equal(app.rows[0].PAYLOAD_HASH, oldRow.PAYLOAD_HASH);
+});
 
 test('Catalyst store exact and concurrent replays converge by OUTBOX_KEY', async () => {
   const app = fakeApp();

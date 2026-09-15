@@ -24,6 +24,38 @@ function rows(values) {
   return values.map(([key, value]) => `<tr><th scope="row">${escape(key)}</th><td>${escape(value)}</td></tr>`).join('');
 }
 
+function handoffView(rehearsal) {
+  if (!rehearsal) return '';
+  const labels = { accepted: 'Fake delivery accepted', definite_rejection: 'Definite rejection — retry budget exhausted',
+    ambiguous: 'Unknown delivery — reconciliation required' };
+  return `<h4>Capture → Alert → Business Follow-Up</h4>
+    <p>This separate memory-only rehearsal uses the real worker, notification outbox and Mail adapter with fake delivery responses. Its three calls are not added to the baseline reports. No message leaves this computer.</p>
+    ${rehearsal.scenarios.map((scenario) => `<div class="handoff"><h4>${escape(labels[scenario.scenario])}</h4>
+      <table><tbody>${rows([
+    ['Capture: caller', scenario.capture.callerName], ['Capture: callback number', scenario.capture.callbackNumber],
+    ['Capture: request', scenario.capture.issueSummary], ['Capture: urgency', scenario.capture.urgency],
+    ['Captured connected calls', scenario.capture.connectedCalls],
+    ['Business follow-up required', scenario.capture.officeFollowUpRequired],
+    ['Alert: configured business recipient', scenario.alert.recipient],
+    ['Business follow-up owner', scenario.alert.followUpOwner],
+    ['Business time zone', scenario.alert.timeZone],
+    ['Human next action', scenario.alert.nextAction],
+    ['Alert: durable status sequence', scenario.alert.states.map((state) => `${state.status} (attempt ${state.attempts})`).join(' → ')],
+    ['Fake send attempts', scenario.simulatedEffects.sendAttempts],
+    ['Replay avoids another send', scenario.alert.replaySuppressed],
+    ['Actual inbox delivery', 'Unknown / not established'],
+    ['Business acknowledgment', scenario.businessFollowUp.acknowledgment],
+    ['Business callback outcome', scenario.businessFollowUp.callbackOutcome],
+  ])}</tbody></table>
+      <p>${scenario.scenario === 'accepted'
+    ? 'Sent means the fake adapter returned acceptance. It does not prove inbox arrival, reading, acknowledgment or a callback.'
+    : scenario.scenario === 'ambiguous'
+      ? 'An unknown after-invocation result stays held. Review delivery evidence before deciding recovery; do not resend, clone the event or mark it delivered.'
+      : 'The definite pre-send rejection uses only the existing bounded retry budget, then stops. A Sylvara operator must review the failure; there is no automatic reroute or unlimited retry.'}</p>
+      <details><summary>Actual template preview from this synthetic outbox record</summary><pre>${escape(scenario.alert.htmlPreview)}</pre></details></div>`).join('')}
+    <p class="note">The business, not this free-test agent, owns manual review and any permitted callback. Acknowledgment and callback outcomes remain unknown until separately observed. No callback, appointment, dispatch or recovered revenue is simulated as complete.</p>`;
+}
+
 /** Render only the fixed synthetic harness output. No endpoints or live actions.
  * Derived backend evidence and illustrative journey history remain distinct.
  */
@@ -60,7 +92,8 @@ function renderFreeTestDemo(demo) {
         <p class="note">These are injected synthetic outcomes, not proof that a voice model classified speech correctly.</p></section>
       <section data-step="4"><p class="eyebrow">5 · Alert</p><h3>Notification preview — nothing sent</h3>
         <p>Only the configured business recipient may receive an approved alert. Ambiguous delivery is reconciled before any retry.</p>
-        <pre>${escape(JSON.stringify(company.notificationPreviews, null, 2))}</pre>
+        ${index === 0 ? handoffView(demo.ownerHandoffRehearsal) : ''}
+        <details><summary>Baseline notification previews for this company</summary><pre>${escape(JSON.stringify(company.notificationPreviews, null, 2))}</pre></details>
         <p class="note">All addresses and phone details shown here are fictional. No inbox, email or SMS service is connected.</p></section>
       <section data-step="5"><p class="eyebrow">6 · Results</p><h3>Derived synthetic free-test report</h3>
         <table><tbody>${rows([...FIELDS.map(([field, label]) => [label, report[field]]), ['Spam', report.metrics?.spam], ['Unresolved calls', report.metrics?.unresolvedCalls]])}</tbody></table>

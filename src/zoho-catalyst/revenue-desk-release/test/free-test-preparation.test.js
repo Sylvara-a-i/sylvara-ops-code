@@ -8,6 +8,37 @@ const { installOfflineGuard } = require('./helpers/offline-guard');
 const offlineGuard = installOfflineGuard();
 const { prepareFreeTestConfiguration, MAX_READBACK_AGE_MS } = require('../lib/free-test-preparation');
 const { SYNTHETIC_NOW, syntheticPreparationInputs } = require('./fixtures/free-test-preparation');
+const { crmBaselineFixture } = require('../../revenue-desk-analytics/functions/analytics_sync/test/helpers/crm-baseline-fixture');
+
+function withBaseline(input = syntheticPreparationInputs()[0]) {
+  const baseline = crmBaselineFixture();
+  delete baseline.context.testStartedAt;
+  const deal = input.crm.deal;
+  input.review.configurationVersionId = 'synthetic_config_row_A';
+  input.review.analyticsClientKey = baseline.context.clientKey;
+  input.review.analyticsDeploymentKey = baseline.context.deploymentKey;
+  for (const value of [baseline.context, baseline.evidence]) {
+    value.relationships = { ...input.evidence.nativeConversion };
+    value.configurationVersion = deal.Configuration_Version;
+    value.configurationVersionId = input.review.configurationVersionId;
+    value.crmModifiedAt = deal.Modified_Time;
+  }
+  baseline.context.approvedTestRoute = deal.Approved_Test_Route;
+  baseline.evidence.readAt = input.evidence.capturedAt;
+  baseline.evidence.capturedAt = input.evidence.capturedAt;
+  baseline.metadata.observedAt = input.evidence.capturedAt;
+  for (const field of ['id', 'Account_Name', 'Contact_Name', 'Modified_Time',
+    'Configuration_Version', 'Intake_Submission_ID', 'Approved_Test_Route']) {
+    baseline.deal[field] = structuredClone(deal[field]);
+  }
+  // The selected baseline must be the same source projection as the submitted
+  // CRM readback, not a second independently seeded downstream success object.
+  for (const [field, value] of Object.entries(baseline.deal)) {
+    if (!Object.hasOwn(deal, field)) deal[field] = value;
+  }
+  input.reportBaseline = baseline;
+  return input;
+}
 
 function prepare(input, now = SYNTHETIC_NOW) {
   return prepareFreeTestConfiguration(input, { now });
@@ -44,6 +75,33 @@ test('two distinct synthetic preparations remain unapproved and provider-unverif
   assert.equal(a.reviewContext.mainBusinessNumber, '+19135550101');
   assert.equal(JSON.stringify(inputs), before);
   assert.deepEqual(prepare(inputs[0]), a);
+});
+
+test('preparation never infers monitored-channel acknowledgment from Form 2 recipient fields', () => {
+  const input = syntheticPreparationInputs()[0];
+  const acknowledged = prepare(input);
+  assert.deepEqual(acknowledged.candidate.notificationHandoff, input.review.notificationHandoff);
+  assert.equal(acknowledged.candidate.notificationRecipient.approved, false);
+  delete input.review.notificationHandoff;
+  const missing = prepare(input);
+  assert.equal(missing.status, 'prepared_local_only');
+  assert.equal(Object.hasOwn(missing.candidate, 'notificationHandoff'), false);
+  assert.deepEqual(missing.unresolved, ['NOTIFICATION_HANDOFF_ACKNOWLEDGMENT_REQUIRED']);
+  const unmonitored = syntheticPreparationInputs()[0];
+  unmonitored.review.notificationHandoff.monitored = false;
+  assert.deepEqual(prepare(unmonitored).unresolved, ['NOTIFICATION_HANDOFF_ACKNOWLEDGMENT_REQUIRED']);
+  for (const patch of [{ timeZone: 'America/Denver' },
+    { acknowledgedAt: new Date(SYNTHETIC_NOW + 1).toISOString() }]) {
+    const invalid = syntheticPreparationInputs()[0];
+    Object.assign(invalid.review.notificationHandoff, patch);
+    assert.equal(prepare(invalid).status, 'blocked');
+    assert.deepEqual(prepare(invalid).unresolved, ['NOTIFICATION_HANDOFF_REVIEW_REQUIRED']);
+  }
+  for (const patch of [{ channel: 'mobile' }, { recipientId: 'other_recipient' }]) {
+    const invalid = syntheticPreparationInputs()[0];
+    Object.assign(invalid.review.notificationHandoff, patch);
+    assert.equal(prepare(invalid).status, 'blocked');
+  }
 });
 
 test('bad or unresolved inputs return no usable partial configuration', () => {
@@ -225,4 +283,95 @@ test('bridge has no I/O, SDK, process environment, credentials, or provider exec
   const source = fs.readFileSync(path.join(__dirname, '../lib/free-test-preparation.js'), 'utf8');
   assert.doesNotMatch(source, /require\(['"](?:node:|zcatalyst|https?|net|tls|child_process)/);
   assert.doesNotMatch(source, /\b(?:fetch|XMLHttpRequest|setInterval|setTimeout)\s*\(|process\.env|console\./);
+});
+
+test('optional pre-test capture is minimized inside the unapproved configuration without a start time', () => {
+  const legacy = prepare(syntheticPreparationInputs()[0]);
+  assert.equal(Object.hasOwn(legacy.candidate, 'reportBaseline'), false);
+  const input = withBaseline();
+  const before = structuredClone(input);
+  const result = prepare(input);
+  assert.equal(result.status, 'prepared_local_only');
+  assert.equal(result.deploymentAuthorized, false);
+  assert.equal(result.providerVerified, false);
+  assert.equal(result.candidate.approved, false);
+  const baseline = result.candidate.reportBaseline;
+  assert.equal(baseline.configurationVersionId, input.review.configurationVersionId);
+  assert.equal(baseline.configurationVersion, input.crm.deal.Configuration_Version);
+  assert.equal(baseline.coverageMode, 'AfterHoursOnly');
+  assert.equal(baseline.capturedAt, input.evidence.capturedAt);
+  assert.equal(baseline.provenanceStatus, 'locally_consistent_not_authenticated');
+  assert.equal(baseline.values.averageJobValueMinorUnits, 35025);
+  assert.equal(baseline.values.estimatedUnansweredCallRate, 12.5);
+  assert.equal(Object.hasOwn(baseline, 'relationships'), false);
+  assert.equal(Object.hasOwn(baseline, 'testStartedAt'), false);
+  assert.equal(Object.hasOwn(result.candidate, 'actualStartAt'), false);
+  assert.equal(Object.keys(baseline.values).length, 9);
+  assert.ok(Buffer.byteLength(JSON.stringify(result.candidate)) < 10000);
+  assert.deepEqual(input, before);
+  assert.deepEqual(prepare(input), result);
+});
+
+test('baseline capture cannot substitute another relationship, revision, partition or CRM source value', () => {
+  const cases = [
+    (v) => { v.reportBaseline.context.relationships.leadId = '100000009'; },
+    (v) => { v.reportBaseline.deal.id = '400000009'; },
+    (v) => { v.reportBaseline.deal.Account_Name.id = '200000009'; },
+    (v) => { v.reportBaseline.deal.Contact_Name.id = '300000009'; },
+    (v) => { v.reportBaseline.deal.Intake_Submission_ID = 'another_journey'; },
+    (v) => { v.reportBaseline.deal.Configuration_Version = 'another_label'; },
+    (v) => { v.reportBaseline.deal.Modified_Time = '2026-09-09T11:51:00.000Z'; },
+    (v) => { v.reportBaseline.deal.Approved_Test_Route = 'Both'; },
+    (v) => { v.reportBaseline.evidence.capturedAt = '2026-09-09T11:58:00.000Z'; },
+    (v) => { v.reportBaseline.context.configurationVersionId = 'another_row'; },
+    (v) => { v.reportBaseline.context.clientKey = 'c'.repeat(64); },
+    (v) => { v.reportBaseline.context.deploymentKey = 'd'.repeat(64); },
+    (v) => { delete v.review.configurationVersionId; },
+    (v) => { delete v.review.analyticsClientKey; },
+    (v) => { delete v.review.analyticsDeploymentKey; },
+    (v) => { delete v.crm.deal.Monthly_Inbound_Calls; },
+    (v) => { v.crm.deal.Estimated_Unanswered_Call_Rate += 1; },
+    (v) => { v.reportBaseline.deal.Average_Job_Value += 1; },
+  ];
+  for (const mutate of cases) {
+    const input = withBaseline(); mutate(input);
+    const result = prepare(input);
+    assert.equal(result.status, 'blocked');
+    assert.equal(result.candidate, null);
+    assert.deepEqual(result.unresolved, ['REPORT_BASELINE_BINDING_CONFLICT']);
+  }
+});
+
+test('fresh capture rules, private-field rejection and pre-approval state remain enforced together', () => {
+  const cases = [
+    (v) => { v.reportBaseline.evidence.readAt = '2026-09-09T11:40:00.000Z'; },
+    (v) => { v.reportBaseline.metadata.observedAt = '2026-09-09T11:40:00.000Z'; },
+    (v) => { v.reportBaseline.evidence.readAt = '2026-09-09T12:01:00.000Z'; },
+    (v) => { v.reportBaseline.context.testStartedAt = '2026-09-10T12:00:00.000Z'; },
+    (v) => { v.reportBaseline.deal.Email = 'synthetic@example.invalid'; },
+    (v) => { v.reportBaseline.context.currency = 'EUR'; },
+  ];
+  for (const mutate of cases) {
+    const input = withBaseline(); mutate(input);
+    const result = prepare(input);
+    assert.equal(result.status, 'blocked');
+    assert.equal(result.candidate, null);
+    assert.match(result.unresolved[0], /^CRM_BASELINE_/);
+  }
+  const approved = withBaseline();
+  approved.crm.deal.Go_Live_Approval_Status = 'Approved';
+  assert.deepEqual(prepare(approved).unresolved, ['FREE_TEST_PREPARATION_STATE_REQUIRED']);
+});
+
+test('baseline and configuration must fit the same immutable 10,000-byte column without truncation', () => {
+  const input = withBaseline();
+  input.review.unsupportedServices = Array.from({ length: 30 }, (_, index) =>
+    `${String(index).padStart(2, '0')}${'é'.repeat(118)}`);
+  input.review.urgentConditions = Array.from({ length: 25 }, (_, index) =>
+    `${String(index).padStart(2, '0')}${'é'.repeat(118)}`);
+  const before = structuredClone(input);
+  const result = prepare(input);
+  assert.equal(result.candidate, null);
+  assert.deepEqual(result.unresolved, ['RUNTIME_CONFIGURATION_REVIEW_REQUIRED']);
+  assert.deepEqual(input, before);
 });

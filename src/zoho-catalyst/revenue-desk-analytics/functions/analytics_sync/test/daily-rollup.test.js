@@ -91,3 +91,21 @@ test('an empty UTC day produces zero metrics only with an explicit source waterm
   assert.equal(result.BOOKABLE_OPPORTUNITIES, 0);
   assert.equal(result.OFFICE_FOLLOW_UP_CALLS, 0);
 });
+
+test('every supported handled outcome belongs to exactly one exhaustive call-mix bucket', () => {
+  const outcomes = ['potential_job', 'urgent_potential_job', 'existing_customer', 'spam',
+    'unsupported_service', 'out_of_area', 'other_general_inquiry', 'sensitive_data_ended',
+    'configuration_failure', 'caller_abandoned', 'unresolved'];
+  const calls = outcomes.map((OUTCOME, index) => callFact({
+    OUTCOME, RECORD_KEY: key(index.toString(16)), CALL_KEY: key(index.toString(16)),
+  }));
+  const result = buildDailyMetricFact(options(calls));
+  assert.equal(result.GENERAL_INQUIRY_CALLS, 1);
+  assert.equal(result.PRIVACY_STOP_CALLS, 1);
+  assert.equal(result.UNRESOLVED_CALLS, 3, 'legacy unresolved grouping remains unchanged');
+  const fields = ['QUALIFIED_OPPORTUNITIES', 'EXISTING_CUSTOMER_CALLS', 'WRONG_FIT_CALLS',
+    'SPAM_CALLS', 'UNRESOLVED_CALLS', 'GENERAL_INQUIRY_CALLS', 'PRIVACY_STOP_CALLS'];
+  assert.equal(fields.reduce((total, field) => total + result[field], 0), result.TOTAL_CALLS_HANDLED);
+  assert.throws(() => buildDailyMetricFact(options([callFact({ OUTCOME: 'unknown_new_outcome' })])),
+    /unsupported call outcome/);
+});

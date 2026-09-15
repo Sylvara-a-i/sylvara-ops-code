@@ -9,7 +9,7 @@ const { validateConfigurationVersionRow } = require('./configuration-version');
 const { RevenueDeskError, invariant } = require('./errors');
 const {
   validateInboundPayload, validateEventEnvelope, validateConfiguration, e164, isPlainObject,
-  MAX_RETELL_CALL_DURATION_MS, assertExecutionTimingSupported,
+  MAX_RETELL_CALL_DURATION_MS, E164_PATTERN, assertExecutionTimingSupported, assertNotificationHandoffReady,
 } = require('./validation');
 const {
   numberLookupKey, eventReceiptKey, callLookupKey, payloadFingerprint,
@@ -19,7 +19,7 @@ const { extractAnalysis, triggerAllowedForMode, makeNotificationPayload } = requ
 const { MAX_CATALYST_TEXT_BYTES } = require('./catalyst-store');
 const {
   OUTBOX_IMMUTABLE, callFact, createOutboxRow, deploymentFact, finalTestResultFact,
-  ensureOutboxRow,
+  ensureOutboxRow, sameLegacyReportVersion,
 } = require('./analytics-outbox');
 const {
   buildCrmReportSummary, ensureCrmReportSummary, reportSummaryIdentity,
@@ -679,6 +679,7 @@ function canonicalCallObject(envelope, deployment, callKey, correlationId, analy
   const existing = analysis || {};
   return Object.freeze({
     schemaVersion: 2,
+    notificationPayloadVersion: 2,
     callKey,
     correlationId,
     clientId: deployment.clientId,
@@ -699,7 +700,8 @@ function canonicalCallObject(envelope, deployment, callKey, correlationId, analy
     outcome: existing.outcome || 'unresolved',
     coverageTrigger: existing.coverageTrigger || 'Unknown',
     callerName: existing.callerName ?? null,
-    callbackNumber: existing.callbackNumber ?? null,
+    callbackNumber: existing.callbackNumberConfirmed === true ? existing.callbackNumber ?? null : null,
+    callbackNumberConfirmed: existing.callbackNumberConfirmed ?? null,
     customerType: existing.customerType || 'unknown',
     callerIntent: existing.callerIntent ?? null,
     issueSummary: existing.issueSummary ?? null,
@@ -725,6 +727,11 @@ function assertCanonicalCallIntegrity(row, canonical, deployment = null,
   const durationValid = canonical?.schemaVersion === 1
     || (Number.isSafeInteger(canonical?.durationMs)
       && canonical.durationMs >= 0 && canonical.durationMs <= MAX_RETELL_CALL_DURATION_MS);
+  const callbackEvidenceValid = canonical?.notificationPayloadVersion !== 2
+    || ((canonical.callbackNumberConfirmed === null || typeof canonical.callbackNumberConfirmed === 'boolean')
+      && (canonical.callbackNumberConfirmed === true
+        ? typeof canonical.callbackNumber === 'string' && E164_PATTERN.test(canonical.callbackNumber)
+        : canonical.callbackNumber === null));
   invariant(isPlainObject(row) && isPlainObject(canonical)
     && supportedSchema
     && canonical.callKey === row.CALL_KEY
@@ -738,7 +745,11 @@ function assertCanonicalCallIntegrity(row, canonical, deployment = null,
     && canonical.bindingId === row.BINDING_ID
     && Number.isSafeInteger(bindingVersion)
     && canonical.bindingVersion === bindingVersion
-    && durationValid,
+    && durationValid && callbackEvidenceValid
+    && (canonical.notificationPayloadVersion === undefined
+      || canonical.notificationPayloadVersion === 1 || canonical.notificationPayloadVersion === 2)
+    && (canonical.callbackNumberConfirmed === undefined || canonical.callbackNumberConfirmed === null
+      || typeof canonical.callbackNumberConfirmed === 'boolean'),
   errorCode, 'Canonical call content conflicts with its durable tenant binding.');
   if (deployment) invariant(row.CLIENT_ID === deployment.clientId
     && row.DEPLOYMENT_ID === deployment.deploymentId
@@ -788,6 +799,27 @@ function normalizeEventForReceipt(payload, config) {
   return Object.freeze({ callId: envelope.callId, eventData });
 }
 
+function sameLegacyCallbackReceipt(existing, expected, eventData, payload) {
+  if (!existing || existing.EVENT_TYPE !== 'call_analyzed'
+    || existing.SOURCE_ENVIRONMENT !== expected.SOURCE_ENVIRONMENT
+    || !/^[a-f0-9]{40}$/.test(existing.SOURCE_REVISION)
+    || !RECEIPT_IMMUTABLE.filter((column) => column !== 'EVENT_DATA_JSON')
+      .every((column) => existing[column] === expected[column])
+    || !isPlainObject(eventData.analysis)
+    || eventData.analysis.callbackNumberConfirmed !== null) return false;
+  const supplied = payload.call?.call_analysis?.custom_analysis_data;
+  if (isPlainObject(supplied) && Object.hasOwn(supplied, 'callback_number_confirmed')) return false;
+  // The old normalizer retained a syntactically valid callback without proving
+  // confirmation. Match only that exact old projection of this identical raw
+  // payload; no other field or ownership difference becomes compatible.
+  const legacyAnalysis = { ...eventData.analysis };
+  delete legacyAnalysis.callbackNumberConfirmed;
+  legacyAnalysis.callbackNumber = eventData.analysis.sensitiveDataMinimized
+    || supplied?.callback_number === undefined || supplied?.callback_number === null
+    || supplied?.callback_number === '' ? null : e164(supplied.callback_number, 'callback_number');
+  return existing.EVENT_DATA_JSON === JSON.stringify({ ...eventData, analysis: legacyAnalysis });
+}
+
 function boundedPendingDeployments(rows, limit) {
   return rows.filter((row) => row.REPORT_RECONCILIATION_STATUS === 'Pending')
     .sort((left, right) => String(left.STOPPED_AT).localeCompare(String(right.STOPPED_AT)))
@@ -825,7 +857,10 @@ function createRuntimeService({
       expected,
     );
     invariant(!exactOwner || !identityOwner
-      || String(exactOwner.ROWID) === String(identityOwner.ROWID),
+      || (String(exactOwner.ROWID) === String(identityOwner.ROWID)
+        && OUTBOX_IMMUTABLE.every((column) => (
+          String(exactOwner[column]) === String(identityOwner[column])
+        ))),
     'DURABLE_IDEMPOTENCY_CONFLICT',
     'Final Analytics artifact identities resolve to different durable rows.',
     { httpStatus: 409 });
@@ -840,6 +875,12 @@ function createRuntimeService({
     const existing = await finalTestOutboxOwner(expected);
     if (!existing) {
       return ensureOutboxRow(store, config, 'final_test_result', fact, createdAt);
+    }
+    if (sameLegacyReportVersion(existing, expected)) {
+      // Retain already-durable evidence at this exact source version. Reuse the
+      // strict ownership readbacks; this is not enrichment or corruption repair.
+      const retained = await ensureOutboxRow(store, config, 'final_test_result', fact, createdAt);
+      return Object.freeze({ ...retained, repaired: false });
     }
     if (OUTBOX_IMMUTABLE.every((column) => (
       String(existing[column]) === String(expected[column])
@@ -970,6 +1011,10 @@ function createRuntimeService({
       const deployment = await findByNumber(inbound.toNumber);
       const requestTimestamp = now();
       activeAt(deployment, requestTimestamp);
+      // Only new inbound routing needs a currently acknowledged office handoff.
+      // Already-admitted events and historical reconciliation keep their own
+      // durable ownership path and must remain settleable without this gate.
+      assertNotificationHandoffReady(deployment.configuration, { now: requestTimestamp });
       const resolvedAt = new Date(requestTimestamp).toISOString();
       const correlationId = publicCorrelationId(config.eventSecret, [
         'inbound', deployment.numberLookupHash, context.signatureTimestamp, inbound.fromNumber,
@@ -1070,6 +1115,7 @@ function createRuntimeService({
     // a rollback claim. Treat it as new ingress and fail closed once rollback
     // has been claimed; signed metadata and an existing call are handled above.
     activeAt(deployment, eventData.startTimestamp);
+    assertNotificationHandoffReady(deployment.configuration, { now: eventData.startTimestamp });
     return {
       deployment,
       correlationId: publicCorrelationId(config.eventSecret, ['post-call-number-fallback', callKey, deployment.bindingId]),
@@ -1146,11 +1192,17 @@ function createRuntimeService({
           'DURABLE_IDEMPOTENCY_CONFLICT', 'Analyzed call replay changed the canonical outcome.');
         return null;
       }
-      return {
-        CANONICAL_CALL_JSON: JSON.stringify({ ...canonical,
+      const updatedCanonical = { ...canonical,
           endedAt: canonical.endedAt || prior.endedAt,
           callStatus: canonical.callStatus || prior.callStatus,
-          disconnectionReason: canonical.disconnectionReason || prior.disconnectionReason }),
+          disconnectionReason: canonical.disconnectionReason || prior.disconnectionReason };
+      // Notification template ownership starts when the call is first stored.
+      // A later analysis must not upgrade a historical call or create a second
+      // outbox key merely because the current source has a newer template.
+      if (prior.notificationPayloadVersion === undefined) delete updatedCanonical.notificationPayloadVersion;
+      else updatedCanonical.notificationPayloadVersion = prior.notificationPayloadVersion;
+      return {
+        CANONICAL_CALL_JSON: JSON.stringify(updatedCanonical),
         OUTCOME: canonical.outcome, PROCESSING_STATE: 'Analyzed',
         STARTED_AT: canonical.startedAt, ENDED_AT: canonical.endedAt || prior.endedAt,
         UPDATED_AT: nextMutationTimestamp(current.UPDATED_AT, at),
@@ -1161,7 +1213,7 @@ function createRuntimeService({
   async function ensureNotification(callRow, deployment, at) {
     const call = assertCanonicalCallIntegrity(callRow,
       parseJsonColumn(callRow.CANONICAL_CALL_JSON, 'CANONICAL_CALL_JSON'), deployment);
-    const payload = makeNotificationPayload(call);
+    const payload = makeNotificationPayload(call, deployment.configuration);
     const prepared = mailAdapter.prepare({ recipient: deployment.configuration.notificationRecipient, payload });
     const notificationKey = `notify_${keyedDigest(config.eventSecret, 'revenue-desk-notification-v1', [
       callRow.CALL_KEY, prepared.templateVersion, prepared.recipientFingerprint,
@@ -1186,7 +1238,7 @@ function createRuntimeService({
     invariant(current.SOURCE_ENVIRONMENT === config.environment
       && /^[0-9a-f]{40}$/.test(current.SOURCE_REVISION),
     'NOTIFICATION_STATE_CONFLICT', 'Notification source audit identity is invalid.');
-    if (new Set(['DryRunRecorded', 'Sent', 'Ambiguous', 'TerminalFailure']).has(current.STATUS)) {
+    if (CONTAINED_NOTIFICATION_STATES.has(current.STATUS)) {
       return current.STATUS;
     }
     if (current.STATUS === 'Sending') return 'Sending';
@@ -1198,6 +1250,18 @@ function createRuntimeService({
     let attempt = Number(current.ATTEMPT_COUNT);
     let sendToken = null;
     if (config.mailMode === 'send_development') {
+      if (call.notificationPayloadVersion !== 2) {
+        // Existing v1 content lacks explicit callback-confirmation evidence.
+        // Hold an unsent legacy item without replacing its immutable payload,
+        // consuming a provider attempt, or inventing a confirmed destination.
+        const held = await store.mutate(notificationTable, 'NOTIFICATION_KEY', notificationKey,
+          'NOTIFICATION_VERSION', (candidate) => RETRYABLE_NOTIFICATION_STATES.has(candidate.STATUS) ? {
+            STATUS: 'ReconciliationRequired', PROVIDER_CODE: 'LEGACY_HANDOFF_REVIEW_REQUIRED',
+            PROVIDER_RESULT_REFERENCE: null, SEND_TOKEN: null, NEXT_ATTEMPT_AT: null,
+            LAST_ERROR_CODE: 'LEGACY_HANDOFF_REVIEW_REQUIRED', UPDATED_AT: at,
+          } : null);
+        return held.STATUS;
+      }
       attempt += 1;
       sendToken = crypto.randomBytes(16).toString('hex');
       const claimed = await store.mutate(notificationTable, 'NOTIFICATION_KEY', notificationKey,
@@ -1216,7 +1280,7 @@ function createRuntimeService({
       if (attempt >= config.notificationMaxAttempts) status = 'TerminalFailure';
       else nextAttemptAt = new Date(now() + NOTIFICATION_RETRY_DELAYS_MS[Math.max(0, attempt - 1)]).toISOString();
     }
-    await store.mutate(notificationTable, 'NOTIFICATION_KEY', notificationKey,
+    const settled = await store.mutate(notificationTable, 'NOTIFICATION_KEY', notificationKey,
       'NOTIFICATION_VERSION', (candidate) => {
         if (sendToken && candidate.SEND_TOKEN !== sendToken) return null;
         return {
@@ -1224,12 +1288,15 @@ function createRuntimeService({
           PROVIDER_RESULT_REFERENCE: result.providerResultReference,
           SEND_TOKEN: null,
           NEXT_ATTEMPT_AT: nextAttemptAt,
-          LAST_ERROR_CODE: new Set(['RetryRequired', 'Ambiguous', 'TerminalFailure']).has(status)
+          LAST_ERROR_CODE: new Set(['RetryRequired', 'Ambiguous', 'TerminalFailure', 'ReconciliationRequired']).has(status)
             ? result.providerCode : null,
           UPDATED_AT: at,
         };
       });
-    return status;
+    // A stale-send scan may have cleared our token while Mail was in flight.
+    // Its durable containment decision wins over a late provider response;
+    // returning the local result would incorrectly mark the call as Sent.
+    return settled.STATUS;
   }
 
   async function countHandledCall(callKey, deployment, at) {
@@ -1395,7 +1462,7 @@ function createRuntimeService({
     try {
       prepared = mailAdapter.prepare({
         recipient: deployment.configuration.notificationRecipient,
-        payload: makeNotificationPayload(canonical),
+        payload: makeNotificationPayload(canonical, deployment.configuration),
       });
     } catch (_) {
       settled(false);
@@ -1416,7 +1483,7 @@ function createRuntimeService({
       && notification.CAPABILITY_PROFILE === callRow.CAPABILITY_PROFILE
       && notification.RECIPIENT_FINGERPRINT === prepared.recipientFingerprint
       && notification.TEMPLATE_VERSION === prepared.templateVersion
-      && notification.PAYLOAD_JSON === JSON.stringify(makeNotificationPayload(canonical))
+      && notification.PAYLOAD_JSON === JSON.stringify(makeNotificationPayload(canonical, deployment.configuration))
       && notification.STATUS === notificationState
       && notification.SOURCE_ENVIRONMENT === config.environment
       && /^[0-9a-f]{40}$/.test(notification.SOURCE_REVISION));
@@ -1712,7 +1779,17 @@ function createRuntimeService({
       NEXT_ATTEMPT_AT: null, LAST_ERROR_CODE: null, RECEIVED_AT: at, PROCESSED_AT: null,
       SOURCE_REVISION: config.sourceRevision, SOURCE_ENVIRONMENT: config.environment,
     };
-    const claimed = await store.insertUnique(receiptTable, 'EVENT_KEY', receipt, RECEIPT_IMMUTABLE);
+    let claimed;
+    try {
+      claimed = await store.insertUnique(receiptTable, 'EVENT_KEY', receipt, RECEIPT_IMMUTABLE);
+    } catch (error) {
+      if (error.code !== 'DURABLE_IDEMPOTENCY_CONFLICT') throw error;
+      const existing = await store.unique(receiptTable, 'EVENT_KEY', receiptKey);
+      if (!sameLegacyCallbackReceipt(existing, receipt, eventData, payload)) throw error;
+      // Preserve the exact historical row. Its current status/lease controls
+      // recovery, not the newer normalized projection of the same HTTP body.
+      claimed = { inserted: false, row: existing };
+    }
     if (claimed.inserted) return enqueueReceipt(receiptKey, false);
     if (claimed.row.STATUS === 'Pending') return enqueueReceipt(receiptKey, true);
     // Once the receipt is durable, processing retries belong exclusively to
@@ -2004,9 +2081,9 @@ function createRuntimeService({
     const fact = finalTestResultFact(config, deployment, row, report);
     const expected = createOutboxRow('final_test_result', fact, report.testEnd);
     const analytics = await finalTestOutboxOwner(expected);
-    return Boolean(analytics && OUTBOX_IMMUTABLE.every((column) => (
+    return Boolean(analytics && (OUTBOX_IMMUTABLE.every((column) => (
       String(analytics[column]) === String(expected[column])
-    )));
+    )) || sameLegacyReportVersion(analytics, expected)));
   }
 
   async function reconcileTerminalDeployment(deploymentId) {
@@ -2258,6 +2335,7 @@ function createRuntimeService({
         });
         if (deployment.testStatus === CONTRACT.active_test_status) {
           assertExecutionTimingSupported(deployment.configuration);
+          assertNotificationHandoffReady(deployment.configuration, { now: now() });
         }
       } catch (error) {
         if (!(error instanceof RevenueDeskError)) throw error;

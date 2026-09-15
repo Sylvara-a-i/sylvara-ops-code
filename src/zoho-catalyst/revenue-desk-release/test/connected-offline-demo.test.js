@@ -133,7 +133,8 @@ test('repeatable prepared setup to gateway, worker, report and actual CRM summar
     assert.ok(company.csv.startsWith('recordType,'));
     for (const preview of company.notificationPreviews) {
       assert.equal(preview.recipient, company.preparation.candidate.notificationRecipient.email);
-      assert.match(preview.html, /No appointment or dispatch has been confirmed/);
+      assert.match(preview.html, /not an appointment, dispatch, transfer or guaranteed response/);
+      assert.match(preview.html, /does not prove inbox delivery, acknowledgment or a completed callback/);
     }
   }
   assert.notEqual(a.preparation.candidate.notificationRecipient.email,
@@ -173,6 +174,48 @@ test('demo rehearses early operator rollback through the real control service wi
   assert.deepEqual(stop.effects, { network: 0, provider: 0, crm: 0, email: 0, sms: 0 });
   assert.deepEqual(stop.simulatedEffects, { routeReadbacks: 2, crmRollbackWrites: 1,
     rollbackCommands: 2, canonicalCalls: 2 });
+  assert.equal(result.simulatedEffects.canonicalCalls, 32);
+  assert.equal(result.simulatedEffects.writes, 3);
+});
+
+test('owner handoff uses real delivery transitions while acknowledgment and callback stay unknown', async () => {
+  const result = await runFreeTestDemo();
+  const handoff = result.ownerHandoffRehearsal;
+  assert.equal(handoff.label, 'Synthetic Demo — No Live Calls');
+  assert.deepEqual(handoff.effects, { network: 0, provider: 0, crm: 0, email: 0, sms: 0 });
+  assert.deepEqual(handoff.scenarios.map((scenario) => scenario.scenario),
+    ['accepted', 'definite_rejection', 'ambiguous']);
+  for (const scenario of handoff.scenarios) {
+    assert.equal(scenario.evidenceClass, 'production_worker_and_mail_adapter_with_memory_delivery');
+    assert.equal(scenario.capture.connectedCalls, 1);
+    assert.equal(scenario.capture.outcome, 'urgent_potential_job');
+    assert.equal(scenario.capture.officeFollowUpRequired, true);
+    assert.equal(scenario.capture.callbackNumber, '+15551110001');
+    assert.equal(scenario.alert.recipient, result.companies[0].preparation.candidate.notificationRecipient.email);
+    assert.equal(scenario.alert.deliveryToInboxVerified, false);
+    assert.equal(scenario.alert.replaySuppressed, true);
+    assert.equal(scenario.simulatedEffects.canonicalCalls, 1);
+    assert.equal(scenario.simulatedEffects.notifications, 1);
+    assert.equal(scenario.businessFollowUp.acknowledgment, null);
+    assert.equal(scenario.businessFollowUp.callbackOutcome, null);
+    assert.match(scenario.businessFollowUp.status, /not observed or simulated as completed/);
+  }
+  const [accepted, rejected, ambiguous] = handoff.scenarios;
+  assert.deepEqual(accepted.alert.states.map((state) => state.status), ['Sent']);
+  assert.equal(accepted.simulatedEffects.sendAttempts, 1);
+  assert.equal(accepted.simulatedEffects.acceptedResponses, 1);
+  assert.deepEqual(rejected.alert.states.map((state) => state.status),
+    ['RetryRequired', 'RetryRequired', 'TerminalFailure']);
+  assert.deepEqual(rejected.alert.states.map((state) => state.attempts), [1, 2, 3]);
+  assert.equal(rejected.alert.states.at(-1).nextAttemptAt, null);
+  assert.equal(rejected.simulatedEffects.sendAttempts, 3);
+  assert.equal(rejected.simulatedEffects.acceptedResponses, 0);
+  assert.equal(rejected.alert.operatorRecoveryRequired, true);
+  assert.deepEqual(ambiguous.alert.states.map((state) => state.status), ['Ambiguous']);
+  assert.equal(ambiguous.alert.states[0].nextAttemptAt, null);
+  assert.equal(ambiguous.simulatedEffects.sendAttempts, 1);
+  assert.equal(ambiguous.simulatedEffects.acceptedResponses, 0);
+  assert.equal(ambiguous.alert.operatorReconciliationRequired, true);
   assert.equal(result.simulatedEffects.canonicalCalls, 32);
   assert.equal(result.simulatedEffects.writes, 3);
 });

@@ -7,6 +7,7 @@ const {
   RETELL_EVENTS,
 } = require('./contracts');
 const { RevenueDeskError, invariant } = require('./errors');
+const { validateReportBaseline } = require('./report-baseline');
 
 const IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
 const E164_PATTERN = /^\+[1-9][0-9]{7,14}$/;
@@ -99,6 +100,48 @@ function enumValue(value, values, name) {
   return result;
 }
 
+// This acknowledgment belongs to the immutable server configuration, never to
+// provider analysis. Its evidence reference is not itself authentication or a
+// delivery receipt; the existing configuration approval binds its exact bytes.
+function validateNotificationHandoff(input, recipient) {
+  const value = object(input, 'configuration.notificationHandoff');
+  exactKeys(value, ['schemaVersion', 'timeZone', 'channel', 'recipientId', 'monitored',
+    'acknowledgedAt', 'acknowledgmentReference'], 'configuration.notificationHandoff');
+  integer(value.schemaVersion, 'configuration.notificationHandoff.schemaVersion', 1, 1);
+  const timeZone = string(value.timeZone, 'configuration.notificationHandoff.timeZone',
+    { maximum: 80, trim: false });
+  invariant(/^[A-Za-z_]+(?:\/[A-Za-z0-9_+-]+)*$/.test(timeZone),
+    'INVALID_SCHEMA', 'Notification time zone must be an IANA name.');
+  try { new Intl.DateTimeFormat('en-US', { timeZone }).format(0); } catch (_) {
+    invariant(false, 'INVALID_SCHEMA', 'Notification time zone is unavailable.');
+  }
+  const channel = enumValue(value.channel, new Set(['email']),
+    'configuration.notificationHandoff.channel');
+  const recipientId = identifier(value.recipientId, 'configuration.notificationHandoff.recipientId');
+  invariant(recipientId === recipient.recipientId && channel === recipient.channel,
+    'INVALID_SCHEMA', 'Notification acknowledgment belongs to another destination.');
+  return Object.freeze({ schemaVersion: 1, timeZone, channel, recipientId,
+    monitored: boolean(value.monitored, 'configuration.notificationHandoff.monitored'),
+    acknowledgedAt: timestamp(value.acknowledgedAt, 'configuration.notificationHandoff.acknowledgedAt'),
+    acknowledgmentReference: identifier(value.acknowledgmentReference,
+      'configuration.notificationHandoff.acknowledgmentReference') });
+}
+
+// Admission/approval only. Historical settlement and rollback must still parse
+// immutable configurations that predate this explicit human-monitoring gate.
+function assertNotificationHandoffReady(configuration, { now = Date.now() } = {}) {
+  const recipient = configuration?.notificationRecipient;
+  const handoff = configuration?.notificationHandoff;
+  invariant(recipient?.approved === true && recipient.channel === 'email'
+    && typeof recipient.name === 'string' && recipient.name.trim().length > 0
+    && handoff && Number.isFinite(now), 'NOTIFICATION_HANDOFF_UNAPPROVED',
+  'A named owner and acknowledged monitored email destination are required.');
+  const validated = validateNotificationHandoff(handoff, recipient);
+  invariant(validated.monitored === true && Date.parse(validated.acknowledgedAt) <= now,
+    'NOTIFICATION_HANDOFF_UNAPPROVED', 'Notification monitoring acknowledgment is not current evidence.');
+  return validated;
+}
+
 // Structural validation also serves historical settlement and rollback. A
 // parseable numeric delay is not evidence that a provider timing rule is known.
 function validateConfiguration(input) {
@@ -112,7 +155,7 @@ function validateConfiguration(input) {
     'approvedFallbackDestination', 'approvedFallbackNumber', 'rollbackContactName',
     'rollbackContactMobile', 'rollbackInstructions', 'rollbackInstructionsVersion',
     'authorizedRepresentativeConfirmed', 'testScopeAccepted', 'authorityConfirmedAt',
-    'setupFormSubmissionId', 'setupFormVersion',
+    'setupFormSubmissionId', 'setupFormVersion', 'reportBaseline', 'notificationHandoff',
   ], 'configuration');
   const serviceArea = object(value.serviceArea, 'configuration.serviceArea');
   exactKeys(serviceArea, ['cities', 'zips'], 'configuration.serviceArea');
@@ -182,6 +225,9 @@ function validateConfiguration(input) {
       email,
       mobile,
     }),
+    ...(value.notificationHandoff === undefined ? {} : {
+      notificationHandoff: validateNotificationHandoff(value.notificationHandoff, recipient),
+    }),
     phoneSystemProvider: string(value.phoneSystemProvider,
       'configuration.phoneSystemProvider', { maximum: 120 }),
     approvedTestRoute,
@@ -207,6 +253,9 @@ function validateConfiguration(input) {
     setupFormSubmissionId: identifier(value.setupFormSubmissionId,
       'configuration.setupFormSubmissionId'),
     setupFormVersion: identifier(value.setupFormVersion, 'configuration.setupFormVersion'),
+    ...(Object.hasOwn(value, 'reportBaseline') ? { reportBaseline: validateReportBaseline(
+      value.reportBaseline, { configurationVersion: value.configurationVersion, coverageMode },
+    ) } : {}),
   });
 }
 
@@ -293,6 +342,7 @@ module.exports = {
   stringArray,
   enumValue,
   validateConfiguration,
+  assertNotificationHandoffReady,
   assertExecutionTimingSupported,
   validateInboundPayload,
   validateEventEnvelope,

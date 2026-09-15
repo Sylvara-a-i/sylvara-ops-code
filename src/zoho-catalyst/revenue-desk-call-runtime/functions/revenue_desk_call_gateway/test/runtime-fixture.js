@@ -74,6 +74,12 @@ function configuration(letter) {
       recipientId: `recipient_${letter}`, approved: true, name: `Recipient ${letter}`,
       channel: 'email', email: `${letter.toLowerCase()}@example.invalid`, mobile: null,
     },
+    notificationHandoff: {
+      schemaVersion: 1, timeZone: 'America/Chicago', channel: 'email',
+      recipientId: `recipient_${letter}`, monitored: true,
+      acknowledgedAt: '2026-08-20T11:30:00.000Z',
+      acknowledgmentReference: `synthetic_handoff_${letter}`,
+    },
     phoneSystemProvider: 'Synthetic PBX',
     approvedTestRoute: 'After Hours Only',
     noAnswerDelay: null,

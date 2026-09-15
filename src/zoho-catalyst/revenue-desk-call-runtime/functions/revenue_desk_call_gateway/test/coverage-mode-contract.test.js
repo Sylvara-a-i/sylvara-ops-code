@@ -14,7 +14,8 @@ const {
   UNKNOWN_COVERAGE_TRIGGER_POLICY,
 } = require('../lib/contracts');
 const { triggerAllowedForMode } = require('../lib/analysis');
-const { validateConfiguration, assertExecutionTimingSupported } = require('../lib/validation');
+const { validateConfiguration, assertExecutionTimingSupported,
+  assertNotificationHandoffReady } = require('../lib/validation');
 const { configuration } = require('./runtime-fixture');
 const { CHOICES, buildPrefillPayload } = require(
   '../../../../revenue-leak-test-setup-form/functions/revenue_leak_test_setup_form/lib/form-contract',
@@ -25,6 +26,40 @@ const CANONICAL_MODES = Object.freeze([
   'NoAnswerOverflowOnly',
   'AfterHoursAndOverflow',
 ]);
+
+test('notification monitoring is optional historical structure but mandatory new-admission evidence', () => {
+  const legacy = configuration('A');
+  delete legacy.notificationHandoff;
+  assert.equal(Object.hasOwn(validateConfiguration(legacy), 'notificationHandoff'), false);
+  assert.throws(() => assertNotificationHandoffReady(validateConfiguration(legacy)),
+    { code: 'NOTIFICATION_HANDOFF_UNAPPROVED' });
+  const now = Date.parse('2026-09-15T12:00:00.000Z');
+  const ready = { ...legacy, notificationHandoff: {
+    schemaVersion: 1, timeZone: 'America/Chicago', channel: 'email',
+    recipientId: legacy.notificationRecipient.recipientId, monitored: true,
+    acknowledgedAt: '2026-09-15T11:59:00.000Z', acknowledgmentReference: 'synthetic_monitoring_A',
+  } };
+  assert.equal(assertNotificationHandoffReady(validateConfiguration(ready), { now }).timeZone,
+    'America/Chicago');
+  for (const patch of [{ monitored: false }, { acknowledgedAt: '2026-09-15T12:01:00.000Z' }]) {
+    const input = { ...ready, notificationHandoff: { ...ready.notificationHandoff, ...patch } };
+    assert.doesNotThrow(() => validateConfiguration(input));
+    assert.throws(() => assertNotificationHandoffReady(validateConfiguration(input), { now }),
+      { code: 'NOTIFICATION_HANDOFF_UNAPPROVED' });
+  }
+  for (const patch of [{ schemaVersion: 2 }, { timeZone: '+05:00' }, { timeZone: 'Unknown/Zone' },
+    { channel: 'mobile' }, { recipientId: 'another_recipient' }, { monitored: 'true' },
+    { acknowledgedAt: 'September 15, 2026' }, { acknowledgmentReference: '' }, { email: 'other@example.invalid' }]) {
+    assert.throws(() => validateConfiguration({ ...ready,
+      notificationHandoff: { ...ready.notificationHandoff, ...patch } }), { code: 'INVALID_SCHEMA' });
+  }
+  assert.throws(() => assertNotificationHandoffReady({ ...ready,
+    notificationRecipient: { ...ready.notificationRecipient, name: ' ' } }, { now }),
+  { code: 'NOTIFICATION_HANDOFF_UNAPPROVED' });
+  assert.throws(() => assertNotificationHandoffReady({ ...ready,
+    notificationRecipient: { ...ready.notificationRecipient, approved: false } }, { now }),
+  { code: 'NOTIFICATION_HANDOFF_UNAPPROVED' });
+});
 
 test('coverage contract owns the exact modes, labels, triggers, and compatibility matrix', () => {
   assert.deepEqual([...COVERAGE_MODES], CANONICAL_MODES);

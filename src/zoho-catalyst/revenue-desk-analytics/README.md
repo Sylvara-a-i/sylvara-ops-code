@@ -1,10 +1,292 @@
 # Revenue Desk Analytics Sync
 
+## Scoped Seven-Day Free-Test Report Candidate
+
+The September 2026 reporting continuation is narrower than the historical
+operations/paid-conversion dashboard package below. It is **local source work,
+not a live Analytics installation or customer-delivery acceptance**. Existing
+Journey writers, deployed releases, holds, and old reports stay unchanged.
+Requirement owner: the Sylvara operator.
+
+| Gate | Current evidence | Remaining action | Cost / authorization | Status |
+|---|---|---|---|---|
+| Call categories and required final metrics | Producer, minimized facts, exhaustive rollup regressions | Review and publish candidate | Offline; no provider execution | Source candidate |
+| CRM pre-test context | Selected field metadata and lineage; typed pre-start capture, immutable-config support and 16 minimized deployment columns tested offline | Define configuration-content/recipient review, then authenticated capture/new-row persistence and target readback | Owner decision on review/promotion; exact storage/target authority | Offline verified; review/persistence contract pending |
+| Simple results report | Fixed-test facts, rowset hashes, periods, counts, duration and baseline reconcile locally; printable single-test draft renderer | Bind installed target readbacks; verify one authorized partition and final export | No customer delivery or public access authorized | Source candidate; live/export acceptance pending |
+| Analytics targets and worker | Existing workspace has legacy assets; current target contract differs | Exact schema/access packet, held artifact, Connections, bounded import/readback | Confirm allowance; preserve disabled scheduling and holds | Pending installation |
+| Client delivery | Manual PDF export visible in the Development Free-edition report menu; no export or send performed | Reconcile the new report, verify its filtered output and deliver once to the approved recipient | Manual export, no Analytics email schedule or upgrade | Procedure prepared; final output/delivery pending |
+
+[`config/free-test-report-contract.json`](config/free-test-report-contract.json)
+defines three canonical fact types (deployment, call, terminal result), one
+client/test, six exhaustive display groups, and explicit zero-call evidence.
+The existing five-type dashboard gate remains unchanged: paid conversion is not
+a prerequisite for this distinct free-test report. Daily counts are derived
+from call facts and labeled UTC; no additional query table or dashboard is needed.
+
+`tools/build-free-test-report.js` returns minimized **operator-review data**, not
+an email, import, PDF, authentication result, or publication authorization.
+`tools/render-free-test-report.js` invokes that same gate and renders one private,
+static printable HTML draft. It performs no network request, reads no credential
+files, loads no remote fonts/assets, and sends nothing. It rejects an existing
+output, paths inside a Git checkout, invalid evidence, and cross-test data.
+`readbackRowsetDigest` needs only `RECORD_KEY`, `PAYLOAD_HASH`, and
+`SOURCE_MODIFIED_AT` from the existing bounded readback. Partition, checkpoint,
+single-record, watermark and isolation checks still apply; no raw call export.
+
+CRM remains the baseline owner. `buildCrmReportBaseline` requires the approved
+Deal/Account/Contact/intake/configuration binding, CRM revision, pre-test capture,
+source period and fresh selected-field metadata. Preserve exact picklist actual
+and reference values in that private projection; never substitute labels blindly.
+Fields: current handling, monthly call count/band, after-hours band/share, average
+job value/band, unanswered-call estimate and optional answering cost. Missing stays null; bands are not
+midpoints. Private CRM IDs and arbitrary text are excluded from the reporting
+snapshot. The capture adapter does **not** read CRM or fill missing fields.
+The runtime now validates an optional snapshot in the immutable configuration;
+the deployment producer maps it into 16 optional minimized Analytics columns.
+Authenticated capture/persistence and live sync acceptance remain pending above.
+
+`buildCrmPreTestSnapshot` validates fresh capture before activation without a
+`testStartedAt` field. Its read/capture/metadata must be fresh against the current
+clock. `buildCrmReportBaseline` is the separate historical-validation path: it
+checks capture against the independently evidenced actual start and report time.
+Neither function enforces durable once-only storage or authenticates its caller.
+The physical `configurationVersionId` and CRM `configurationVersion` label are
+separate required bindings. Analytics `CONFIGURATION_VERSION` contains the former;
+matching only the label must never attach a baseline from another version row.
+
+The same distinction now applies to the full deployment approval/rollback path:
+the command selects the physical version row; its immutable label must match the
+stored JSON and CRM `Configuration_Version`, while `Approved_Configuration_Version`
+remains the physical ID. Distinct-value regressions reproduced three defects in
+the old checks and now pass. The accepted Journey-core-only launchers and receipts
+were not changed, and this source correction does not authorize provider activation.
+
+### Baseline field lineage and current readback
+
+| CRM source API field | Report context | Interpretation |
+|---|---|---|
+| `Current_Call_Handling` | How calls are handled today | Preserve the verified stored choice |
+| `Monthly_Inbound_Calls`, `Monthly_Inbound_Call_Band` | Usual monthly call volume | Exact supplied count and/or range; no range midpoint |
+| `Estimated_Unanswered_Call_Rate` | Estimated calls going unanswered | Percentage estimate, not measured improvement |
+| `After_Hours_Call_Band`, `After_Hours_Call_Share` | Calls outside business hours | Supplied range/share, not the new test's count |
+| `Average_Job_Value`, `Average_Job_Value_Band` | Typical gross job value | Context only, never multiplied into recovered revenue |
+| `Current_Monthly_Answering_Cost` | Current answering cost | Optional supplied amount, not proven savings |
+
+Only `Current_Call_Handling` is collected by the accepted Form 1. The reviewed
+native Lead-conversion map also carries `Monthly_Inbound_Call_Band`,
+`After_Hours_Call_Band` and `Average_Job_Value_Band` to the Deal, but those three
+bands come from separate Lead qualification, not either accepted form. The five
+exact count/percentage/currency fields above are Deal-only inputs in that
+snapshot. Their presence in the CRM schema does not prove they are populated.
+See the [conversion map](../../zoho-crm/reference/snapshots/2026-08-14/lead-conversion-mapping.csv)
+and the [accepted Form 1 contract](../revenue-leak-test-request-form/functions/revenue_leak_test_request_form/lib/form-contract.js).
+
+No reviewed form/CRM field records the baseline source period or evidence class.
+The operator must capture these from the business's stated period or records;
+CRM `Modified_Time`, test dates and a guessed prior month are not substitutes.
+Missing values remain unavailable. Do not add mandatory questions to the accepted
+forms or fill a legacy test's baseline retrospectively.
+
+The implemented source persistence format is an optional typed snapshot inside
+the **new** configuration's existing encrypted `CONFIGURATION_JSON`, after Form 2
+readback and before route approval. Existing approval fingerprints cover those
+exact bytes. Runtime validation and local preparation enforce the original
+10,000-byte complete configuration limit without truncation. The deployment fact
+producer independently checks the HMAC-derived client/deployment keys, physical
+configuration ID, CRM label, coverage and capture-before-start relationship.
+The report reconstructs the baseline only from its attested deployment fact;
+optional later CRM input may corroborate it, never enrich an older row. Numeric
+percentages use exact hundredths and amounts use integer minor units. Omitted
+optional values reconstruct as unknown, not zero.
+
+Bounded authenticated capture/insertion wiring still needs acceptance:
+the preparation utility is local-only and is not a cloud writer. Never
+append a baseline to an already approved configuration. No new table, competing
+CRM writer, Retell variable or general provisioning platform was introduced.
+
+The existing preparation contract deliberately returns both configuration and
+notification-recipient approval as false. The full route-approval contract
+requires a previously reviewed immutable configuration before granting separate
+deployment approval. No current operation authenticates that content review or
+creates/promotes its configuration row. This is a real missing contract, not
+permission to flip the flags. The proposed smallest resolution is an explicit
+operator review of the exact prepared content and recipient, followed by one
+authorized new immutable-row creation with readback; it must neither approve the
+deployment nor activate a route. The responsible reviewer/evidence and mutation
+allocation need owner approval before implementing that promotion. Do not insert
+an immutable unapproved draft that the current approval path cannot promote.
+
+The September 15 read-only inspection verified these field definitions in the
+Sylvara CRM tenant. The existing synthetic Form 2 phone-QA Deal showed these
+baseline values blank while its configuration, intake and relationship bindings
+were present. This proves missing baseline evidence on that fixture, **not** a
+conversion-mapping defect or permission to fill it with invented values. The
+field-limited connector request failed argument parsing; the already-authorized
+browser fallback verified only the visible record, without a launch or save.
+
+Current Analytics plan readback: Free, no purchased add-ons, 9,200 unused rows,
+zero remaining query-table slots and zero scheduled-email allowance. Existing
+legacy reporting assets are not the canonical target schema. No new query table,
+upgrade, scheduled import, share, automatic send or customer delivery is part of
+this candidate. Plan capacity must be rechecked before any later installation.
+
+### One final report without an Analytics upgrade
+
+The free test requires one final results review, not recurring customer reporting.
+The Analytics **Free edition** and Sylvara's **free test** are different things.
+Zoho's [report export documentation](https://www.zoho.com/analytics/help/export/exporting-a-report.html)
+supports offline PDF export; the September 15 Development UI also exposed
+**Export → As PDF**. This verifies an available control, not a successful export
+of the new canonical report. No export or email was performed during inspection.
+The existing legacy summary uses a different model and must not be substituted
+for the reconciled free-test report merely because it exports successfully.
+
+Use the following one-time operator procedure after the live wiring is accepted:
+
+1. Confirm the test is terminal and its stop/restoration evidence is present.
+   Finish import and independent readback for the exact client, deployment,
+   configuration and final-result revision. Unknown analysis stays unknown;
+   do not manufacture zero values to finalize the report.
+2. Build the bounded operator-review report using the existing reconciled
+   deployment, call and final-result facts. Check the pre-test snapshot, period,
+   six call groups, overlapping urgency/follow-up flags, failures and limitations.
+   Do not export the old unfiltered multi-client summary.
+3. Render/export only the approved single-test result. Inspect every PDF page for
+   correct client/test scope, readable content and no other client's data. The
+   new local renderer consumes the reconciled evidence directly; it does not
+   require a paid Analytics email schedule or another query table. HTML remains
+   marked as a draft. Final PDF pagination, font, visual and delivery approval
+   remain separate from source tests or the already accepted synthetic demo.
+4. Record the approved revision and document hash in the existing private test
+   closeout. Confirm the authorized recipient privately and send that reviewed
+   attachment once through the existing approved mailbox workflow. Do not create
+   a public link, schedule an email, upgrade Analytics or enable a new service.
+5. Record delivery evidence in the same closeout. If the send outcome is unknown,
+   reconcile mailbox state before any retry. Later analysis may revise internal
+   evidence, but does not automatically send a second client report; a material
+   correction needs an explicit operator decision and a clearly labeled revision.
+
+This is a manual final-delivery path, not automatic reporting and not permission
+to contact a prospect. Recurring paid-plan reports remain outside this sprint.
+
+Local rendering command (replace the two example paths with the exact approved
+private minimized evidence input and a **new** output filename outside Git):
+
+```powershell
+& "C:\Users\Admin\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe" `
+  .\src\zoho-catalyst\revenue-desk-analytics\tools\render-free-test-report.js `
+  "C:\PrivateReportInput\approved-test-evidence.json" "C:\PrivateReports\test-review.html"
+```
+
+Run from the reviewed repository root. `--synthetic` additionally labels the
+draft **Synthetic Demo — No Live Calls**; it does not bypass any report gate.
+The JSON is the minimized existing builder input, not a raw CRM export or an
+environment map. Fresh readback evidence remains required. The renderer does
+not authenticate self-asserted evidence or approve its recipient. Local font
+fallback is explicit; no font file is fetched. Keep the result private and draft
+until the exact final document passes the review procedure above.
+
+The finite integration packet still needs: (1) actual baseline values, an explicit
+source period and estimate/evidence classification for the approved fixture;
+(2) authenticated immutable pre-test capture/persistence; (3) exact
+canonical target schema, Connections and bounded import/readback; and (4) an
+operator-reviewed report and separately approved delivery path. These are real
+non-Retell implementation/deployment gates, not completed by this local adapter.
+Do not add a competing CRM writer or use Analytics as CRM authority.
+
+Publish and build reviewed source before proposing a fresh held installation of
+the changed Analytics package and shared call-runtime packages. Do not reuse the
+consumed earlier three-function installation. Preserve existing holds, disabled
+scheduling and historical rows until the exact cutover and synthetic allocation
+are authorized. On unknown import/delivery outcome, reconcile first; never retry
+blindly or restore a known-defective release as rollback.
+
+The current Job accepts no caller-selected parameters and chooses due rows from
+the Development outbox. One invocation is therefore not inherently limited to
+one synthetic test. Before active acceptance, prove the entire eligible v2 queue
+is within the approved allocation, with Cron and other producers contained, or
+review a separately bounded mechanism. Import submission, import polling,
+export/readback and checkpoint completion are distinct stages; a successful Job
+submission is not end-to-end reporting acceptance.
+
+The September 15 count-only Development query returned **zero** outbox rows
+with `ROW_SCHEMA_VERSION = 2` and `ENVIRONMENT = 'development'`. It did not read
+payloads or claim tokens and did not modify historical rows. This is a point-in-
+time preflight, not a durable queue fence, Cron proof, or import authorization;
+recheck the eligible queue immediately before any approved acceptance allocation.
+
+All eleven outcome codes are unchanged. Six client groups are new job
+opportunities, existing customers, not a fit, spam, general questions, and
+incomplete/needs review. Urgency and follow-up overlap them. Opportunities are not
+bookings, completed jobs, revenue, cost savings, or before/after improvement.
+
+Security/cost: synthetic adapters and outbound-denial tests; no new dependency,
+metered provider call, import, schedule, customer share or send. Producer changes
+require fresh immutable artifacts before later deployment. Historical payloads,
+hashes, watermarks, counters and claims must remain intact. Rollback is existing
+containment, never rewritten evidence. Reuse current checkpoint/failure signals;
+no new monitoring platform. Retell, Production, paid conversion and the broader
+dashboards stay excluded. Focused checks are the existing Analytics tests plus
+`crm-report-baseline.test.js`, `free-test-report.test.js` and
+`free-test-report-facts.test.js`, using pinned Node 24.19.0 and synthetic adapters.
+
+### September 15 local verification
+
+- Latest canonical `tools/verify.ps1 -Mode Quick`: **1,911 passed, zero failed,
+  31 skipped**, including immutable baseline propagation and the narrow five-table
+  mutation phase, distinct configuration-ID checks, and the printable renderer.
+  The same thirty artifact/isolated-deployment checks and one
+  Windows Bash check remain skipped; none count as deployment acceptance.
+- The corrected full route-control/CRM adapter suites passed 97 tests, the
+  unchanged Journey-core suite passed 16, and the report/renderer suites passed
+  23 under outbound-denial checks. Independent review found no actionable
+  defects. These overlap the canonical total; do not add them as unique cases.
+- A local baseline-present synthetic HTML preview was generated and hashed.
+  Browser policy blocked the local-file preview, so no workaround or upload was
+  attempted. HTML/PDF visual, pagination and font acceptance remain unverified;
+  the generated file stays a draft. The earlier accepted offline demo is unchanged.
+- Independent final review found no actionable defects. Exact model/rendered
+  digest pins and all sixteen baseline columns agree; the broad 32-asset bundle
+  and its dashboard fingerprint remain unchanged. `git diff --check` passes.
+- The latest metadata delta used five connector reads and one count-only
+  Development query, plus read-only UI inspection. It performed no imports,
+  cloud saves, deployments, CRM writes, sessions, emails or Retell operations.
+
+Earlier checks on the predecessor local candidate (overlapping, not additive):
+
+- Canonical `tools/verify.ps1 -Mode Quick`: **1,877 passed, zero failed, 31
+  skipped** after correcting the stale local worker dependency and reviewed
+  Analytics model/render fingerprint pins. Thirty artifact/isolated-deployment
+  tests are intentionally skipped in offline Quick mode; one Bash syntax check
+  is unavailable to Python child processes on this Windows host. These skips are
+  not deployment evidence.
+- Separate focused in-process outbound-denial run: **151 passed, zero failed or
+  skipped, zero boundary attempts**. The full local Analytics mutation validator
+  passed **24 tests**; independent review confirmed prior contract digests and
+  approvals remain rejected. The broader dashboard fingerprint is unchanged.
+- After the owner accepted the unchanged local demo, the baseline capture API
+  and physical-ID report join were corrected. The latest targeted outbound-denial
+  run passed **32 tests**, zero failed/skipped/boundary attempts; independent
+  review passed **49 focused tests** with no actionable findings. These overlap
+  the canonical total and must not be added to it as distinct acceptance cases.
+- Local worker and route-control dependency copies were refreshed with
+  `npm ci --offline --ignore-scripts --install-links`; lockfiles did not change.
+- Source remains on `codex/free-test-analytics-reporting`, unpublished and
+  undeployed. Runtime changes invalidate prior package parity for this candidate
+  only; previously accepted deployed Journey evidence is preserved, not relabeled.
+- This continuation performed fourteen connector read attempts (two rejected)
+  plus read-only browser inspection; zero live imports, saves, deployments, CRM
+  writes, sessions, emails, Retell/provider operations or purchases.
+
 `analytics_sync` is the one private Zoho Catalyst Job target for Revenue Desk-to-Zoho Analytics synchronization. It has no HTTP route, accepts no caller-selected Job parameters, and targets the shared Revenue Desk Catalyst project through the dedicated `RevenueDeskAnalyticsJobs` Function Job pool.
 
-## Status
+## Historical August 28 Development Installation
 
-- Repository candidate: **implemented, synthetic-testable, and installed in Development at the reviewed source revision with no operator invocation performed and runtime acceptance pending**
+This section records the earlier installed baseline, not deployment of the
+September reporting candidate above. Do not infer current artifact parity or
+runtime acceptance from this historical installation.
+
+- Historical installed baseline: **implemented, synthetic-testable, and installed in Development at the reviewed source revision with no operator invocation performed and runtime acceptance pending**
 - Development definition readback: **Node 24, 256 MB, an exact minimized seven-variable approved private map, exact source-revision stamp, disabled-mode configuration readback, and archive-pullback byte parity to the exact upload; the operator did not execute runtime `DisabledNoOp`**
 - Development submitter contract: **one repository-defined `RevenueAnalytics1m` Cron whose exact `Sylvara Catalyst Changes` `create_cron_job` argument template targets `analytics_sync` through `RevenueDeskAnalyticsJobs`, with empty parameters, zero platform retries, and initial status disabled; all provider IDs are fresh private bindings, and the Cron is not deployed or active**
 - Development activation: **blocked pending private fixture differential results, Connection and Analytics target proof, version-2 write/readback, Job binding, invocation acceptance, and migration reconciliation**
@@ -111,7 +393,12 @@ node tools\validate-private-analytics-mutation-packet.js <absolute-private-packe
 
 The validator performs no network, Browser, Analytics, Catalyst, Retell, or filesystem write. It reads only the two supplied private JSON files, the package's public contracts, and the current Git revision/package status; Git inspection disables optional locks. The CLI rejects duplicate JSON object keys before parser last-key-wins behavior, rejects hard-linked private inputs, rejects an uncommitted or dirty Analytics package, rejects tracked package files hidden by `assume-unchanged` or `skip-worktree`, and requires `approvedSourceRevision` to equal the current committed `HEAD`. Every phase pins the reviewed contract and rule digests, the undisclosed organization/workspace IDs, a complete fresh post/prestate window of at most 15 minutes, a lowercase UUIDv4 operation-authorization ID, the exact operation count, and separate packet, operation-set, and consumption SHA-256 values. One phase-global provider asset-ID registry prevents a folder, table, query, report, or dashboard identity from being reused across otherwise separate inventory lists.
 
-The three phases are deliberately independent:
+The scoped free-test phase is separate from the unchanged broader dashboard workflow:
+
+- `free_test_tables` inventories exactly the five canonical tables as `existing` or `missing`, in the same table order and with the same reviewed payloads as `asset_creation`. Use `inventoryKind=fresh_free_test_tables_inventory` and null `phaseLineage`. Only missing tables become operations; a fully complete inventory authorizes no mutation. The phase explicitly excludes folder, query-table, report and dashboard creation and folder placement, in addition to the shared exclusions below. It does not consume query-table capacity or authorize a paid-plan upgrade, import, scheduled job, report publication or Retell action. Fresh plan/capacity and zero-incremental-charge evidence are still required before a separately approved live operation; validator success is not cost evidence.
+- This narrow phase preserves the reviewed workspace baseline and requires a fresh complete inventory, exact empty-table readback and the same stable-authority consumption and ambiguity rules. Its phase-bound payload and packet digests cannot reuse broad-phase approval. It cannot serve as `asset_creation` lineage for dashboard assembly. The local final-results report requires neither dashboard assembly nor a query table.
+
+The three broader phases remain deliberately independent and deferred from the table-only free-test scope:
 
 1. `asset_creation` inventories all three folders, five tables, four query tables, and 20 reports as exact `existing` or `missing` assets. Its operations contain only the missing assets, in canonical order. A fresh continuation packet therefore omits every independently read-back asset already created.
 2. `dashboard_assembly` is valid only after all three folder IDs and all 20 report IDs are concrete, unique, and evidence-bound. Its `phaseLineage` records the separately approved operator attestation to the prior `asset_creation` operation-authorization ID and packet digest, and binds that attestation to the current authoritative prestate evidence. It assembles only dashboards still missing. These are the only Browser fallback operations because the approved Analytics Changes connector has no dashboard-create capability.

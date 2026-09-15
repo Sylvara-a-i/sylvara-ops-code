@@ -51,6 +51,9 @@ function configuration() {
       name: 'ZZZ SYNTHETIC Alert Recipient', channel: 'email',
       email: 'alerts@example.invalid', mobile: null,
     },
+    notificationHandoff: { schemaVersion: 1, timeZone: 'America/Chicago', channel: 'email',
+      recipientId: 'recipient_synthetic', monitored: true,
+      acknowledgedAt: '2026-08-29T12:00:00.000Z', acknowledgmentReference: 'synthetic_monitoring_v1' },
     phoneSystemProvider: 'Synthetic PBX', approvedTestRoute: 'After Hours Only',
     noAnswerDelay: null,
     forwardingAdministratorName: 'ZZZ SYNTHETIC Administrator',
@@ -126,6 +129,8 @@ function deal() {
     Rollback_Contact_Mobile: '+15550100103',
     Alert_Recipient_Name: 'ZZZ SYNTHETIC Alert Recipient',
     Alert_Recipient_Email: 'alerts@example.invalid', Alert_Recipient_Mobile: null,
+    Urgent_Call_Handling: 'Alert + Capture Callback',
+    Existing_Customer_Call_Handling: 'Alert + Capture Callback',
     Test_Phone_Number: '+15550100104',
     Deployment_Record_ID: IDS.deployment, Configuration_Version: IDS.configuration,
     Test_Status: 'Setup Pending', Go_Live_Approval_Status: 'Not Ready',
@@ -551,6 +556,129 @@ test('approval succeeds only after complete Form 2 and exact immutable configura
   const incomplete = fixture({ dealOverrides: { Setup_Form_Submission_ID: null } });
   await assert.rejects(incomplete.service.approve(command('approve')),
     { code: 'CONTROL_PRECONDITION_FAILED' });
+});
+
+test('new approval and activation reject unacknowledged monitoring without writes or provider access', async () => {
+  for (const mode of ['missing', 'unmonitored', 'future']) {
+    const body = configuration();
+    if (mode === 'missing') delete body.notificationHandoff;
+    if (mode === 'unmonitored') body.notificationHandoff.monitored = false;
+    if (mode === 'future') body.notificationHandoff.acknowledgedAt = new Date(NOW + 60_000).toISOString();
+    const subject = fixture({ configOverrides: { CONFIGURATION_JSON: JSON.stringify(body) } });
+    const before = structuredClone(subject.store.rows);
+    await assert.rejects(subject.service.approve(command('approve')),
+      { code: 'NOTIFICATION_HANDOFF_UNAPPROVED' });
+    assert.deepEqual(subject.store.rows, before);
+    assert.equal(subject.getProviderVerificationCalls(), 0);
+    seedHistoricalApproval(subject);
+    const approved = structuredClone(subject.store.rows);
+    await assert.rejects(subject.service.activate(command('activate')),
+      { code: 'NOTIFICATION_HANDOFF_UNAPPROVED' });
+    assert.deepEqual(subject.store.rows, approved);
+    assert.equal(subject.getProviderVerificationCalls(), 0);
+    assert.equal(subject.getCrmActivationCalls(), 0);
+  }
+});
+
+test('historical monitoring absence permits exact approval replay, activation replay and rollback', async () => {
+  const body = configuration();
+  delete body.notificationHandoff;
+  const approval = fixture({ configOverrides: { CONFIGURATION_JSON: JSON.stringify(body) } });
+  seedHistoricalApproval(approval);
+  assert.equal((await approval.service.approve(command('approve'))).replayed, true);
+
+  const active = fixture({ configOverrides: { CONFIGURATION_JSON: JSON.stringify(body) } });
+  seedHistoricalActivation(active, { status: 'Completed', apply: true });
+  const beforeConfig = active.store.rows.find((row) => row.__table === 'RevenueDeskConfigurationVersions').CONFIGURATION_JSON;
+  assert.equal((await active.service.activate(command('activate'))).replayed, true);
+  active.setClock(NOW + 600_000);
+  assert.equal((await active.service.rollback(command('rollback'))).replayed, false);
+  assert.equal((await active.service.rollback(command('rollback'))).replayed, true);
+  assert.equal(active.store.rows.find((row) => row.__table === 'RevenueDeskConfigurationVersions').CONFIGURATION_JSON,
+    beforeConfig);
+});
+
+test('new approval and activation recheck both authoritative CRM handling preferences', async () => {
+  for (const field of ['Urgent_Call_Handling', 'Existing_Customer_Call_Handling']) {
+    for (const value of [undefined, null, '', 'Transfer to On-Call', 'Do Not Notify']) {
+      const subject = fixture({ dealOverrides: { [field]: value } });
+      const before = structuredClone(subject.store.rows);
+      await assert.rejects(subject.service.approve(command('approve')),
+        { code: 'FREE_TEST_HANDLING_POLICY_UNSUPPORTED' });
+      assert.deepEqual(subject.store.rows, before);
+      assert.equal(subject.getProviderVerificationCalls(), 0);
+      seedHistoricalApproval(subject);
+      const approved = structuredClone(subject.store.rows);
+      await assert.rejects(subject.service.activate(command('activate')),
+        { code: 'FREE_TEST_HANDLING_POLICY_UNSUPPORTED' });
+      assert.deepEqual(subject.store.rows, approved);
+      assert.equal(subject.getProviderVerificationCalls(), 0);
+      assert.equal(subject.getCrmActivationCalls(), 0);
+    }
+    const changed = fixture();
+    await changed.service.approve(command('approve'));
+    changed.crmState[field] = 'Transfer to On-Call';
+    await assert.rejects(changed.service.activate(command('activate')),
+      { code: 'FREE_TEST_HANDLING_POLICY_UNSUPPORTED' });
+    assert.equal(changed.getProviderVerificationCalls(), 0);
+    assert.equal(changed.getCrmActivationCalls(), 0);
+  }
+});
+
+test('historical handling preferences do not prevent exact replay or safe rollback', async () => {
+  for (const value of [undefined, 'Transfer to On-Call']) {
+    const subject = fixture({ dealOverrides: {
+      Urgent_Call_Handling: value, Existing_Customer_Call_Handling: value,
+    } });
+    seedHistoricalActivation(subject, { status: 'Completed', apply: true });
+    assert.equal((await subject.service.approve(command('approve'))).replayed, true);
+    assert.equal((await subject.service.activate(command('activate'))).replayed, true);
+    subject.setClock(NOW + 600_000);
+    assert.equal((await subject.service.rollback(command('rollback'))).replayed, false);
+    assert.equal((await subject.service.rollback(command('rollback'))).replayed, true);
+  }
+});
+
+test('distinct CRM labels and physical version IDs preserve approval, activation, rollback and replay', async () => {
+  const label = 'form2cfgv1:101:synthetic_label';
+  const subject = fixture({
+    dealOverrides: { Configuration_Version: label },
+    configOverrides: { CONFIGURATION_VERSION: label,
+      CONFIGURATION_JSON: JSON.stringify({ ...configuration(), configurationVersion: label }) },
+  });
+  assert.notEqual(label, command('approve').configurationVersionId);
+  const approved = await subject.service.approve(command('approve'));
+  assert.equal(approved.deployment.APPROVED_CONFIGURATION_VERSION_ID, IDS.configuration);
+  assert.equal(subject.crmState.Configuration_Version, label);
+  assert.equal(subject.crmState.Approved_Configuration_Version, IDS.configuration);
+  assert.equal(approved.deployment.ACTUAL_START_AT, null);
+  assert.equal(subject.getProviderVerificationCalls(), 0);
+  assert.equal((await subject.service.approve(command('approve'))).replayed, true);
+  subject.setClock(NOW + 300_000);
+  const activated = await subject.service.activate(command('activate'));
+  assert.equal(activated.deployment.TEST_STATUS, 'Live');
+  assert.equal((await subject.service.activate(command('activate'))).replayed, true);
+  subject.setClock(NOW + 600_000);
+  await subject.service.rollback(command('rollback'));
+  assert.equal(subject.crmState.Configuration_Version, label);
+  assert.equal(subject.crmState.Approved_Configuration_Version, IDS.configuration);
+  assert.equal((await subject.service.rollback(command('rollback'))).replayed, true);
+});
+
+test('configuration label joins use the loaded immutable row, never a matching caller ID alone', async () => {
+  for (const [recordLabel, jsonLabel, crmLabel] of [
+    ['label_one', IDS.configuration, IDS.configuration],
+    ['label_one', 'label_two', 'label_two'],
+    ['label_one', 'label_one', 'label_two'],
+  ]) {
+    const subject = fixture({ dealOverrides: { Configuration_Version: crmLabel },
+      configOverrides: { CONFIGURATION_VERSION: recordLabel,
+        CONFIGURATION_JSON: JSON.stringify({ ...configuration(), configurationVersion: jsonLabel }) } });
+    const before = structuredClone(subject.store.rows);
+    await assert.rejects(subject.service.approve(command('approve')), { code: 'CONTROL_PRECONDITION_FAILED' });
+    assert.deepEqual(subject.store.rows, before);
+    assert.equal(subject.getProviderVerificationCalls(), 0);
+  }
 });
 
 test('approval rejects the pre-submission Verified access state', async () => {

@@ -25,13 +25,14 @@ const READBACK_RULES_DIGEST_DOMAIN = "sylvara.analytics.readback-rules.v3";
 const CONTAINMENT_RULES_DIGEST_DOMAIN = "sylvara.analytics.containment-rules.v3";
 
 const EXPECTED_CONTRACT_DIGESTS = Object.freeze({
-  analyticsModel: "4987603d86ee9b3c6b441fecf734709a283e73ce7f06f3334a37a6008fa93e47",
+  analyticsModel: "77195d397a209f7f4f123a833dc293118ba744cfe441d0e5b2007b7f267d0d0d",
   dashboard: "3b98fd48f203dc86f8e4bab5a546878ed5f544c28cbdc7004444e52c12941a2c",
-  rendered: "b2b48c8cac2ac96b982316c826f06191761a06c07b493dd3f0db53f1e7548dad",
+  rendered: "3ea2691275688c427f950fc603952f80180caf18e3cdb90c7837bb9d22ae801c",
 });
 
 const PHASES = Object.freeze({
   assetCreation: "asset_creation",
+  freeTestTables: "free_test_tables",
   dashboardAssembly: "dashboard_assembly",
   folderPlacement: "folder_placement",
 });
@@ -86,6 +87,14 @@ const FORBIDDEN_ACTIONS = Object.freeze([
   "deletion",
   "rename",
   "legacy asset movement",
+]);
+const FREE_TEST_TABLES_FORBIDDEN_ACTIONS = Object.freeze([
+  ...FORBIDDEN_ACTIONS,
+  "folder creation",
+  "query table creation",
+  "report creation",
+  "dashboard assembly",
+  "folder placement",
 ]);
 
 const TOOLS = Object.freeze({
@@ -402,6 +411,7 @@ function canonicalDefinitions(contractState = currentContractState()) {
     folders: Object.freeze(folders),
     placements: Object.freeze(placements),
     reports: Object.freeze(reports),
+    tables: Object.freeze(tables),
   });
 }
 
@@ -546,22 +556,29 @@ function folderPlacementDefinition(entry) {
   };
 }
 
-function deriveAssetCreationState(target, inventory, definitions) {
+function deriveCreationState(phase, target, inventory, definitions) {
   exactKeys(inventory, ["assets", "inventoryKind"], "inventory");
-  if (inventory.inventoryKind !== "fresh_existing_missing_inventory") {
-    fail("asset_creation inventory kind is not exact");
+  const tablesOnly = phase === PHASES.freeTestTables;
+  const inventoryKind = tablesOnly
+    ? "fresh_free_test_tables_inventory"
+    : "fresh_existing_missing_inventory";
+  if (inventory.inventoryKind !== inventoryKind) {
+    fail(`${phase} inventory kind is not exact`);
   }
-  const counts = validateExistingMissingList(inventory.assets, definitions.creation, "inventory.assets");
-  const missing = definitions.creation.filter((definition, index) =>
+  // The free-test phase reuses the exact reviewed table payloads, not a reduced
+  // broad-phase approval. Hashing the phase prevents cross-scope replay.
+  const creationDefinitions = tablesOnly ? definitions.tables : definitions.creation;
+  const counts = validateExistingMissingList(inventory.assets, creationDefinitions, "inventory.assets");
+  const missing = creationDefinitions.filter((definition, index) =>
     inventory.assets[index].state === "missing");
   const operations = missing.map((definition, index) => operation(
     index + 1,
     definition,
-    PHASES.assetCreation,
+    phase,
     assetCreationPayload(definition, target),
   ));
-  const existingFolderCount = inventory.assets.slice(0, FOLDER_KEYS.length)
-    .filter(({ state }) => state === "existing").length;
+  const existingFolderCount = inventory.assets
+    .filter(({ assetType, state }) => assetType === "folder" && state === "existing").length;
   return {
     counts: {
       canonicalFolderCount: existingFolderCount,
@@ -571,7 +588,7 @@ function deriveAssetCreationState(target, inventory, definitions) {
       targetViewCount: 30 + counts.existingCount - existingFolderCount,
     },
     operations,
-    resolutionEntries: new Map(definitions.creation.map((definition, index) => [
+    resolutionEntries: new Map(creationDefinitions.map((definition, index) => [
       definition.assetKey,
       {
         action: definition.action,
@@ -580,7 +597,7 @@ function deriveAssetCreationState(target, inventory, definitions) {
         payloadSha256: operation(
           1,
           definition,
-          PHASES.assetCreation,
+          phase,
           assetCreationPayload(definition, target),
         ).payloadSha256,
       },
@@ -706,8 +723,8 @@ function deriveFolderPlacementState(target, inventory, definitions) {
 function derivePhaseState(phase, target, inventory, contractState = currentContractState()) {
   validateTarget(target);
   const definitions = canonicalDefinitions(contractState);
-  if (phase === PHASES.assetCreation) {
-    return deriveAssetCreationState(target, inventory, definitions);
+  if ([PHASES.assetCreation, PHASES.freeTestTables].includes(phase)) {
+    return deriveCreationState(phase, target, inventory, definitions);
   }
   if (phase === PHASES.dashboardAssembly) {
     return deriveDashboardAssemblyState(target, inventory, definitions);
@@ -760,8 +777,8 @@ function validatePrestate(prestate, phaseState, nowMs) {
 }
 
 function validatePhaseLineage(lineage, packet) {
-  if (packet.phase === PHASES.assetCreation) {
-    if (lineage !== null) fail("asset_creation must not claim a prior phase lineage");
+  if ([PHASES.assetCreation, PHASES.freeTestTables].includes(packet.phase)) {
+    if (lineage !== null) fail(`${packet.phase} must not claim a prior phase lineage`);
     return;
   }
   exactKeys(lineage, [
@@ -872,7 +889,7 @@ function validateAmbiguityResolution(value, packet, phaseState) {
     return;
   }
 
-  if (![PHASES.assetCreation, PHASES.dashboardAssembly].includes(packet.phase)) {
+  if (![PHASES.assetCreation, PHASES.freeTestTables, PHASES.dashboardAssembly].includes(packet.phase)) {
     fail("creation ambiguityResolution phase is invalid");
   }
   if (![AMBIGUITY_STATES.creationAbsent, AMBIGUITY_STATES.creationExisting]
@@ -985,7 +1002,9 @@ function validateMutationPacket(packet, approval, nowMs = Date.now(), repository
   if (packet.retryAuthorized !== false) fail("packet must not authorize retry or resume");
   packetId(packet.operationAuthorizationId, "packet.operationAuthorizationId");
   revision(packet.approvedSourceRevision, "packet.approvedSourceRevision");
-  exactArray(packet.forbiddenActions, FORBIDDEN_ACTIONS, "forbiddenActions");
+  exactArray(packet.forbiddenActions, packet.phase === PHASES.freeTestTables
+    ? FREE_TEST_TABLES_FORBIDDEN_ACTIONS
+    : FORBIDDEN_ACTIONS, "forbiddenActions");
   validateTarget(packet.target);
   const contractState = currentContractState();
   validateContractDigests(packet.contractDigests, contractState.digests);
@@ -1288,6 +1307,7 @@ module.exports = {
   CONTAINMENT_RULES,
   EXPECTED_CONTRACT_DIGESTS,
   FORBIDDEN_ACTIONS,
+  FREE_TEST_TABLES_FORBIDDEN_ACTIONS,
   PHASES,
   READBACK_RULES,
   REPOSITORY_ROOT,

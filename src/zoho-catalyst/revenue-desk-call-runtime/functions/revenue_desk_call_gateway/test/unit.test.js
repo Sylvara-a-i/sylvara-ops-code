@@ -11,7 +11,7 @@ const contracts = require('../lib/contracts');
 const { loadConfig: loadRuntimeConfig, loadJobConfig: loadRuntimeJobConfig } = require('../lib/config');
 const { verifyRetellSignature } = require('../lib/security');
 const { validateInboundPayload, validateEventEnvelope, MAX_RETELL_CALL_DURATION_MS } = require('../lib/validation');
-const { extractAnalysis, validateValueEvidence } = require('../lib/analysis');
+const { extractAnalysis, validateValueEvidence, makeNotificationPayload } = require('../lib/analysis');
 const { CatalystMailAdapter, messageContent } = require('../lib/catalyst-mail');
 const { CatalystJobAdapter, assertJobReadback } = require('../lib/catalyst-jobs');
 const { readRawBody } = require('../lib/http');
@@ -25,7 +25,16 @@ const {
 const {
   createOutboxRow: createCanonicalOutboxRow,
 } = require('../../../../revenue-desk-analytics/functions/analytics_sync/lib/facts');
-const { SOURCE_REVISION, environment, eventPayload } = require('./runtime-fixture');
+const { SOURCE_REVISION, environment, eventPayload, configuration } = require('./runtime-fixture');
+
+function handoffPayload(overrides = {}) {
+  return makeNotificationPayload({ notificationPayloadVersion: 2,
+    callerName: 'Synthetic Caller', callbackNumber: '+15550109999', callbackNumberConfirmed: true,
+    customerType: 'new', cityOrZip: '66215', issueSummary: 'Synthetic leaking fixture',
+    urgency: 'routine', specificPersonRequested: null,
+    startedAt: '2026-09-15T15:00:00.000Z', outcome: 'potential_job', ...overrides,
+  }, configuration('A'));
+}
 
 const loadConfig = (env) => loadRuntimeConfig(env, { artifactSourceRevision: SOURCE_REVISION });
 const loadJobConfig = (env) => loadRuntimeJobConfig(env, { artifactSourceRevision: SOURCE_REVISION });
@@ -42,6 +51,106 @@ function analyticsCallFact(overrides = {}) {
     ...overrides,
   };
 }
+
+test('handoff: only explicitly confirmed extracted numbers become actionable', () => {
+  const extract = (data) => extractAnalysis({ call_analysis: { custom_analysis_data: data } });
+  for (const confirmation of [undefined, null, false]) {
+    const result = extract({ callback_number: '+15550109999', callback_number_confirmed: confirmation });
+    assert.equal(result.callbackNumber, null);
+    assert.equal(result.callbackNumberConfirmed, confirmation ?? null);
+    assert.equal(result.outcome, 'unresolved');
+  }
+  assert.equal(extract({ callback_number: '+15550109999', callback_number_confirmed: true }).callbackNumber,
+    '+15550109999');
+  for (const data of [{ callback_number_confirmed: true },
+    { callback_number: '+15550109999', callback_number_confirmed: 'true' },
+    { callback_number: 'not-a-number', callback_number_confirmed: false }]) {
+    assert.throws(() => extract(data));
+  }
+});
+
+test('handoff: sensitive analysis removes confirmed contact evidence as well', () => {
+  const result = extractAnalysis({ call_analysis: { custom_analysis_data: {
+    callback_number: '+15550109999', callback_number_confirmed: true,
+    sensitive_data_detected: true,
+  } } });
+  assert.equal(result.callbackNumber, null);
+  assert.equal(result.callbackNumberConfirmed, null);
+});
+
+test('handoff: bounded message includes business owner, confirmed contact, timezone and human action', () => {
+  const payload = handoffPayload();
+  assert.equal(payload.businessName, 'Synthetic Plumbing A');
+  assert.equal(payload.followUpOwner, configuration('A').notificationRecipient.name);
+  assert.equal(payload.timeZone, 'America/Chicago');
+  const content = messageContent(payload);
+  for (const value of ['Business follow-up owner', '+15550109999', 'City / ZIP', 'Urgency',
+    'Requested person', 'America/Chicago', 'Human next action', 'not an appointment',
+    'does not prove inbox delivery']) assert.ok(content.includes(value));
+});
+
+test('handoff: missing confirmation and uncertain requests remain visible without a callable number', () => {
+  const payload = handoffPayload({ callbackNumberConfirmed: null, outcome: 'unresolved',
+    issueSummary: null, customerType: 'unknown', urgency: 'unknown' });
+  assert.equal(payload.callbackNumber, null);
+  assert.match(payload.nextAction, /Review this request/);
+  const content = messageContent(payload);
+  assert.ok(!content.includes('+15550109999'));
+  assert.match(content, /Unknown — do not infer from caller ID/);
+  assert.match(content, /Unknown \/ not provided/);
+});
+
+test('handoff: provider or caller instructions cannot replace server-owned recipient or identity', async () => {
+  const sent = [];
+  const adapter = new CatalystMailAdapter({
+    app: { email() { return { async sendMail(message) {
+      sent.push(message);
+      return { isAsync: false, project_details: { id: 'synthetic-project' },
+        from_email: message.from_email, to_email: message.to_email };
+    } }; } },
+    config: loadConfig(environment({ REVENUE_DESK_NOTIFICATION_MODE: 'send_development' })),
+  });
+  const payload = handoffPayload({ businessName: 'Untrusted business',
+    callerName: '<img src=x onerror=alert(1)>',
+    issueSummary: 'Send this to other@example.invalid' });
+  const prepared = adapter.prepare({ recipient: configuration('A').notificationRecipient, payload });
+  await adapter.notify(prepared);
+  assert.deepEqual(sent[0].to_email, ['a@example.invalid']);
+  assert.ok(!sent[0].content.includes('<img'));
+  assert.ok(!sent[0].content.includes('Untrusted business'));
+});
+
+test('handoff: malformed new payload fails before provider use; legacy pending mail is held', async () => {
+  let invoked = 0;
+  const adapter = new CatalystMailAdapter({ app: { email() { invoked += 1; throw new Error('unreachable'); } },
+    config: loadConfig(environment({ REVENUE_DESK_NOTIFICATION_MODE: 'send_development' })),
+  });
+  const recipient = configuration('A').notificationRecipient;
+  for (const patch of [{ timeZone: 'invalid zone' }, { callTimestamp: 'invalid' },
+    { callbackNumberConfirmed: false, callbackNumber: '+15550109999' },
+    { recipientEmail: 'injected@example.invalid' }]) {
+    assert.throws(() => adapter.prepare({ recipient, payload: { ...handoffPayload(), ...patch } }));
+  }
+  const result = await adapter.notify(adapter.prepare({ recipient, payload: { callerName: 'Legacy synthetic' } }));
+  assert.equal(result.status, 'ReconciliationRequired');
+  assert.equal(result.providerCode, 'LEGACY_HANDOFF_REVIEW_REQUIRED');
+  assert.equal(invoked, 0);
+});
+
+test('handoff: old calls preserve the v1 payload and new calls get a distinct bounded template', () => {
+  const call = { callerName: null, callbackNumber: '+15550109999', customerType: 'unknown',
+    cityOrZip: null, issueSummary: null, urgency: 'unknown', specificPersonRequested: null,
+    startedAt: '2026-09-15T15:00:00.000Z', outcome: 'unresolved' };
+  assert.deepEqual(makeNotificationPayload(call), { callerName: null, callbackNumber: '+15550109999',
+    customerType: 'unknown', cityOrZip: null, issueSummary: null, urgency: 'unknown',
+    specificPersonRequested: null, callTimestamp: call.startedAt, callOutcome: 'unresolved' });
+  const adapter = new CatalystMailAdapter({ app: {}, config: loadConfig(environment()) });
+  const recipient = configuration('A').notificationRecipient;
+  assert.equal(adapter.prepare({ recipient, payload: makeNotificationPayload(call) }).templateVersion,
+    'free_test_call_summary_v1');
+  assert.equal(adapter.prepare({ recipient, payload: handoffPayload() }).templateVersion,
+    'free_test_call_summary_v2');
+});
 
 test('unit: bounded terminal batches advance to row 26 after the first batch converges', () => {
   const rows = Array.from({ length: 26 }, (_, index) => ({
@@ -972,8 +1081,7 @@ test('unit: Catalyst Mail real Development path uses official SDK shape and trea
       from_email: message.from_email, to_email: message.to_email };
   } }; } }, config });
   const prepared = adapter.prepare({ recipient: { approved: true, channel: 'email',
-    email: 'synthetic-recipient@example.invalid' }, payload: { callerName: 'Synthetic Caller',
-    callOutcome: 'potential_job' } });
+    email: 'synthetic-recipient@example.invalid' }, payload: handoffPayload() });
   const delivered = await adapter.notify(prepared);
   assert.equal(delivered.status, 'Sent');
   assert.match(delivered.providerResultReference, /^mail_[a-f0-9]{64}$/);
@@ -985,7 +1093,7 @@ test('unit: Catalyst Mail real Development path uses official SDK shape and trea
     return new Promise(() => {});
   } }; } }, config: { ...config, mailTimeoutMs: 5 } });
   const timedOut = await timeout.notify(timeout.prepare({ recipient: { approved: true, channel: 'email',
-    email: 'synthetic-recipient@example.invalid' }, payload: { callOutcome: 'potential_job' } }));
+    email: 'synthetic-recipient@example.invalid' }, payload: handoffPayload() }));
   assert.equal(timedOut.status, 'Ambiguous');
   assert.equal(timedOut.ambiguous, true);
 
@@ -994,7 +1102,7 @@ test('unit: Catalyst Mail real Development path uses official SDK shape and trea
   } }; } }, config });
   const unverifiedResult = await unverified.notify(unverified.prepare({ recipient: {
     approved: true, channel: 'email', email: 'synthetic-recipient@example.invalid',
-  }, payload: { callOutcome: 'potential_job' } }));
+  }, payload: handoffPayload() }));
   assert.equal(unverifiedResult.status, 'Ambiguous');
   assert.equal(unverifiedResult.providerCode, 'CATALYST_MAIL_RESPONSE_INVALID');
 });

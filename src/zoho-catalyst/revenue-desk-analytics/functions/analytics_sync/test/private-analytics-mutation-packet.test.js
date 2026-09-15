@@ -12,6 +12,7 @@ const {
   AMBIGUITY_STATES,
   EXPECTED_CONTRACT_DIGESTS,
   FORBIDDEN_ACTIONS,
+  FREE_TEST_TABLES_FORBIDDEN_ACTIONS,
   PHASES,
   REPOSITORY_ROOT,
   assertPrivatePacketPath,
@@ -101,6 +102,16 @@ function assetCreationInventory(existingKeys = []) {
   };
 }
 
+function freeTestTablesInventory(existingKeys = []) {
+  const existing = new Set(existingKeys);
+  return {
+    assets: DEFINITIONS.tables.map((definition, index) => existing.has(definition.assetKey)
+      ? existingEntry(definition, 1000 + index, `table-${definition.assetKey}`)
+      : missingEntry(definition)),
+    inventoryKind: "fresh_free_test_tables_inventory",
+  };
+}
+
 function folderBindings() {
   return DEFINITIONS.folders.map((definition, index) =>
     bindingEntry(definition, 2000 + index, `folder-${definition.assetKey}`));
@@ -143,7 +154,7 @@ function folderPlacementInventory(placedKeys = []) {
 }
 
 function phaseCounts(phase, inventory) {
-  if (phase === PHASES.assetCreation) {
+  if ([PHASES.assetCreation, PHASES.freeTestTables].includes(phase)) {
     const existing = inventory.assets.filter(({ state }) => state === "existing");
     const existingFolderCount = existing.filter(({ assetType }) => assetType === "folder").length;
     return {
@@ -206,7 +217,8 @@ function packet(phase = PHASES.assetCreation, inventory = assetCreationInventory
     approvedSourceRevision: SOURCE_REVISION,
     contractDigests: { ...currentContractState().digests },
     environment: "Development",
-    forbiddenActions: [...FORBIDDEN_ACTIONS],
+    forbiddenActions: [...(phase === PHASES.freeTestTables
+      ? FREE_TEST_TABLES_FORBIDDEN_ACTIONS : FORBIDDEN_ACTIONS)],
     inventory,
     operationAuthorizationId: "123e4567-e89b-42d3-a456-426614174000",
     operations: [],
@@ -219,7 +231,7 @@ function packet(phase = PHASES.assetCreation, inventory = assetCreationInventory
     schemaVersion: 3,
     target: { ...TARGET },
   };
-  if (phase !== PHASES.assetCreation) {
+  if (![PHASES.assetCreation, PHASES.freeTestTables].includes(phase)) {
     value.phaseLineage = {
       authoritativeEvidenceSha256: value.prestate.privateEvidenceSha256,
       bindingKind: "approval_bound_operator_attestation",
@@ -334,6 +346,162 @@ test("asset creation derives only continuation-safe missing operations from fres
     () => validate(staleRemainingSet, approval(staleRemainingSet)),
     /exactly the non-complete operations from fresh inventory|exact remaining phase operation/,
   );
+});
+
+test("free-test tables uses the exact five canonical tables without authorizing broader assets", () => {
+  const value = packet(PHASES.freeTestTables, freeTestTablesInventory());
+  const result = validate(value);
+  assert.equal(result.phase, "free_test_tables");
+  assert.equal(result.operationCount, 5);
+  assert.equal(result.connectorOperationCount, 5);
+  assert.equal(result.browserOperationCount, 0);
+  assert.equal(value.phaseLineage, null);
+  assert.deepEqual(value.operations.map(({ assetKey }) => assetKey), [
+    "deployment", "call", "daily_metric", "final_test_result", "conversion_status",
+  ]);
+  assert.ok(value.operations.every(({ action, assetType, readbackRule }) =>
+    action === "create_table" && assetType === "table" && readbackRule === "table_exact_empty"));
+  assert.deepEqual(DEFINITIONS.tables,
+    DEFINITIONS.creation.filter(({ assetType }) => assetType === "table"));
+  const broad = packet();
+  for (const entry of value.operations) {
+    assert.notEqual(entry.payloadSha256,
+      broad.operations.find(({ assetKey }) => assetKey === entry.assetKey).payloadSha256);
+  }
+  assert.equal(validate(broad).operationCount, 32);
+});
+
+test("free-test table continuation omits existing tables and refuses a complete phase", () => {
+  const value = packet(PHASES.freeTestTables, freeTestTablesInventory(["deployment", "call"]));
+  assert.equal(validate(value).operationCount, 3);
+  assert.deepEqual(value.operations.map(({ assetKey }) => assetKey), [
+    "daily_metric", "final_test_result", "conversion_status",
+  ]);
+  assert.equal(value.prestate.canonicalFolderCount, 0);
+  assert.equal(value.prestate.targetFolderCount, 6);
+  assert.equal(value.prestate.canonicalViewCount, 2);
+  assert.equal(value.prestate.targetViewCount, 32);
+  const complete = packet(PHASES.freeTestTables,
+    freeTestTablesInventory(DEFINITIONS.tables.map(({ assetKey }) => assetKey)));
+  assert.equal(complete.operations.length, 0);
+  assert.throws(() => validate(complete), /exactly the non-complete operations/);
+});
+
+test("free-test table inventory rejects missing, additional, reordered and mistyped assets", () => {
+  const mutations = [
+    (value) => value.inventory.assets.pop(),
+    (value) => value.inventory.assets.push(missingEntry(DEFINITIONS.folders[0])),
+    (value) => value.inventory.assets.reverse(),
+    (value) => { value.inventory.assets[0].assetType = "query_table"; },
+    (value) => { value.inventory.assets[0].assetName = "Noncanonical Table"; },
+    (value) => { value.inventory.folders = []; },
+    (value) => { value.inventory.inventoryKind = "fresh_existing_missing_inventory"; },
+  ];
+  for (const mutate of mutations) {
+    const value = packet(PHASES.freeTestTables, freeTestTablesInventory());
+    mutate(value);
+    assert.throws(() => validate(value), /canonical asset|identity is not exact|fields are not exact|inventory kind/);
+  }
+});
+
+test("free-test tables rejects every out-of-scope operation even with newly bound approval", () => {
+  for (const action of ["create_folder", "create_query_table", "create_report",
+    "assemble_dashboard", "move_view_to_folder", "import_data", "share", "Retell"]) {
+    const value = packet(PHASES.freeTestTables, freeTestTablesInventory());
+    value.operations[0].action = action;
+    assert.throws(() => validate(value), /exact remaining phase operation/);
+  }
+  const changedPayload = packet(PHASES.freeTestTables, freeTestTablesInventory());
+  changedPayload.operations[0].payloadSha256 = "0".repeat(64);
+  assert.throws(() => validate(changedPayload), /exact remaining phase operation/);
+  const broadened = packet(PHASES.freeTestTables, freeTestTablesInventory());
+  broadened.forbiddenActions = [...FORBIDDEN_ACTIONS];
+  assert.throws(() => validate(broadened), /forbiddenActions is not exact/);
+});
+
+test("free-test table approval cannot cross phases or satisfy dashboard lineage", () => {
+  const value = packet(PHASES.freeTestTables, freeTestTablesInventory());
+  const broad = packet();
+  assert.equal(value.operationAuthorizationId, broad.operationAuthorizationId);
+  assert.notEqual(digestOperationAuthorization(value), digestOperationAuthorization(broad));
+  assert.throws(() => validate(value, approval(broad)), /does not bind the exact/);
+  assert.throws(() => validate(broad, approval(value)), /does not bind the exact/);
+  const dashboard = packet(PHASES.dashboardAssembly, dashboardAssemblyInventory());
+  dashboard.phaseLineage.sourcePhase = PHASES.freeTestTables;
+  assert.throws(() => validate(dashboard), /source phase is not the exact prior phase/);
+  value.phaseLineage = structuredClone(dashboard.phaseLineage);
+  assert.throws(() => validate(value), /must not claim a prior phase lineage/);
+});
+
+test("free-test tables preserves fresh target evidence, source, approval and containment gates", () => {
+  const mutations = [
+    [(value) => { value.target.workspaceId = "203"; }, /exact remaining phase operation/],
+    [(value) => { value.prestate.paginationComplete = false; }, /pagination is not complete/],
+    [(value) => { value.prestate.targetViewCount += 1; }, /fresh phase inventory/],
+    [(value) => { value.prestate.expiresAt = "2026-08-28T18:04:00.000Z"; }, /has expired/],
+    [(value) => { value.approvedSourceRevision = "b".repeat(40); }, /current committed revision/],
+    [(value) => { value.retryAuthorized = true; }, /must not authorize retry/],
+    [(value) => { value.ruleDigests.containment = "0".repeat(64); }, /reviewed rules/],
+    [(value) => { value.productionAuthorized = true; }, /confined to Development/],
+  ];
+  for (const [mutate, expected] of mutations) {
+    const value = packet(PHASES.freeTestTables, freeTestTablesInventory());
+    mutate(value);
+    assert.throws(() => validate(value), expected);
+  }
+  const value = packet(PHASES.freeTestTables, freeTestTablesInventory());
+  for (const overrides of [
+    { durableConsumptionRequired: false }, { browserFallbackAuthorized: true },
+    { consumptionSha256: "0".repeat(64) }, { retryAuthorized: true },
+  ]) assert.throws(() => validate(value, approval(value, overrides)), /does not bind the exact/);
+  const refreshed = structuredClone(value);
+  refreshed.prestate.privateEvidenceSha256 = evidence("different-current-evidence");
+  assert.notEqual(digestOperationAuthorization(value), digestOperationAuthorization(refreshed));
+  assert.throws(() => validate(refreshed, approval(value)), /does not bind the exact/);
+});
+
+test("free-test table ambiguity requires exact resolved outcome and new consumed authority", () => {
+  const prior = packet(PHASES.freeTestTables, freeTestTablesInventory());
+  const absent = packet(PHASES.freeTestTables, freeTestTablesInventory());
+  absent.operationAuthorizationId = "223e4567-e89b-42d3-a456-426614174000";
+  absent.ambiguityResolution = {
+    authoritativeEvidenceSha256: absent.prestate.privateEvidenceSha256,
+    bindingKind: "approval_bound_operator_attestation",
+    priorOperation: {
+      action: prior.operations[0].action,
+      assetKey: prior.operations[0].assetKey,
+      payloadSha256: prior.operations[0].payloadSha256,
+      priorFolderId: null,
+    },
+    priorOperationAuthorizationId: prior.operationAuthorizationId,
+    priorPacketSha256: digestMutationPacket(prior),
+    state: AMBIGUITY_STATES.creationAbsent,
+  };
+  assert.equal(validate(absent).operationCount, 5);
+  const existing = packet(PHASES.freeTestTables, freeTestTablesInventory(["deployment"]));
+  existing.operationAuthorizationId = absent.operationAuthorizationId;
+  existing.ambiguityResolution = {
+    ...structuredClone(absent.ambiguityResolution),
+    state: AMBIGUITY_STATES.creationExisting,
+  };
+  assert.equal(validate(existing).operationCount, 4);
+  assert.ok(existing.operations.every(({ assetKey }) => assetKey !== "deployment"));
+  const mutations = [
+    [(value) => { value.operationAuthorizationId = prior.operationAuthorizationId; }, /new operation authorization/],
+    [(value) => { value.ambiguityResolution.state = "unresolved"; }, /state is invalid/],
+    [(value) => { value.ambiguityResolution.state = AMBIGUITY_STATES.creationExisting; }, /declared resolution/],
+    [(value) => { value.ambiguityResolution.authoritativeEvidenceSha256 = "0".repeat(64); }, /current authoritative prestate/],
+    [(value) => { value.ambiguityResolution.priorOperation.assetKey = "data_model"; }, /exact phase/],
+    [(value) => {
+      value.ambiguityResolution.priorOperation.payloadSha256 = packet().operations
+        .find(({ assetKey }) => assetKey === "deployment").payloadSha256;
+    }, /exact prior creation operation/],
+  ];
+  for (const [mutate, expected] of mutations) {
+    const value = structuredClone(absent);
+    mutate(value);
+    assert.throws(() => validate(value), expected);
+  }
 });
 
 test("dashboard assembly binds every concrete folder and report dependency before approval", () => {
@@ -601,6 +769,31 @@ test("pins the reviewed model, dashboard, rendered contract, and phase rule dige
       /does not match the reviewed rules/,
     );
   }
+});
+
+test("pre-reporting contract digests cannot carry old or freshly reissued approval across the schema change", () => {
+  const priorDigests = {
+    analyticsModel: "4987603d86ee9b3c6b441fecf734709a283e73ce7f06f3334a37a6008fa93e47",
+    rendered: "b2b48c8cac2ac96b982316c826f06191761a06c07b493dd3f0db53f1e7548dad",
+  };
+  for (const field of Object.keys(priorDigests)) {
+    const stale = packet();
+    stale.contractDigests[field] = priorDigests[field];
+    const freshlyBoundApproval = approval(stale);
+    assert.equal(freshlyBoundApproval.packetSha256, digestMutationPacket(stale));
+    assert.equal(freshlyBoundApproval.consumptionSha256, digestOperationAuthorization(stale));
+    assert.throws(() => validate(stale, freshlyBoundApproval),
+      /does not match the reviewed contract/);
+  }
+  const current = packet();
+  const previous = structuredClone(current);
+  Object.assign(previous.contractDigests, priorDigests);
+  const priorApproval = approval(previous);
+  assert.equal(previous.operationAuthorizationId, current.operationAuthorizationId);
+  assert.notEqual(digestMutationPacket(previous), digestMutationPacket(current));
+  assert.notEqual(digestOperationAuthorization(previous), digestOperationAuthorization(current));
+  assert.throws(() => validate(current, priorApproval),
+    /does not bind the exact private Development Analytics phase packet/);
 });
 
 test("prestate and approval are fresh canonical UTC windows no longer than 15 minutes", () => {
