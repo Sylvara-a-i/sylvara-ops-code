@@ -603,6 +603,31 @@ test("pins the reviewed model, dashboard, rendered contract, and phase rule dige
   }
 });
 
+test("pre-reporting contract digests cannot carry old or freshly reissued approval across the schema change", () => {
+  const priorDigests = {
+    analyticsModel: "4987603d86ee9b3c6b441fecf734709a283e73ce7f06f3334a37a6008fa93e47",
+    rendered: "b2b48c8cac2ac96b982316c826f06191761a06c07b493dd3f0db53f1e7548dad",
+  };
+  for (const field of Object.keys(priorDigests)) {
+    const stale = packet();
+    stale.contractDigests[field] = priorDigests[field];
+    const freshlyBoundApproval = approval(stale);
+    assert.equal(freshlyBoundApproval.packetSha256, digestMutationPacket(stale));
+    assert.equal(freshlyBoundApproval.consumptionSha256, digestOperationAuthorization(stale));
+    assert.throws(() => validate(stale, freshlyBoundApproval),
+      /does not match the reviewed contract/);
+  }
+  const current = packet();
+  const previous = structuredClone(current);
+  Object.assign(previous.contractDigests, priorDigests);
+  const priorApproval = approval(previous);
+  assert.equal(previous.operationAuthorizationId, current.operationAuthorizationId);
+  assert.notEqual(digestMutationPacket(previous), digestMutationPacket(current));
+  assert.notEqual(digestOperationAuthorization(previous), digestOperationAuthorization(current));
+  assert.throws(() => validate(current, priorApproval),
+    /does not bind the exact private Development Analytics phase packet/);
+});
+
 test("prestate and approval are fresh canonical UTC windows no longer than 15 minutes", () => {
   const stale = packet();
   stale.prestate.capturedAt = "2026-08-28T17:49:59.999Z";

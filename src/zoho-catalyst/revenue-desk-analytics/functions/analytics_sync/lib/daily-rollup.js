@@ -9,6 +9,10 @@ const UNRESOLVED_OUTCOMES = new Set([
   'unresolved', 'configuration_failure', 'caller_abandoned',
 ]);
 const URGENT_CLASSES = new Set(['urgent', 'immediate_danger']);
+const OUTCOMES = new Set([
+  ...QUALIFIED_OUTCOMES, ...WRONG_FIT_OUTCOMES, ...UNRESOLVED_OUTCOMES,
+  'existing_customer', 'spam', 'other_general_inquiry', 'sensitive_data_ended',
+]);
 
 function sameOwnership(left, right) {
   return left.CLIENT_KEY === right.CLIENT_KEY
@@ -63,6 +67,8 @@ function buildDailyMetricFact(options) {
       'ROLLUP_DATE_CONFLICT', 'Daily rollup contains a call from another UTC date.');
   }
   const handled = unique.filter((call) => call.HANDLED_RECORDED);
+  invariant(handled.every((call) => OUTCOMES.has(call.OUTCOME)),
+    'ROLLUP_OUTCOME_INVALID', 'Daily rollup contains an unsupported call outcome.');
   const latestCallWatermark = unique.reduce((latest, call) => (
     call.SOURCE_MODIFIED_AT > latest ? call.SOURCE_MODIFIED_AT : latest
   ), '');
@@ -97,6 +103,10 @@ function buildDailyMetricFact(options) {
     WRONG_FIT_CALLS: handled.filter((call) => WRONG_FIT_OUTCOMES.has(call.OUTCOME)).length,
     SPAM_CALLS: handled.filter((call) => call.OUTCOME === 'spam').length,
     UNRESOLVED_CALLS: handled.filter((call) => UNRESOLVED_OUTCOMES.has(call.OUTCOME)).length,
+    // Additive buckets complete the call mix without changing historical
+    // UNRESOLVED_CALLS semantics or treating older missing columns as zero.
+    GENERAL_INQUIRY_CALLS: handled.filter((call) => call.OUTCOME === 'other_general_inquiry').length,
+    PRIVACY_STOP_CALLS: handled.filter((call) => call.OUTCOME === 'sensitive_data_ended').length,
     ...(bookableComplete ? {
       BOOKABLE_OPPORTUNITIES: handled.filter((call) => call.BOOKABLE_OPPORTUNITY).length,
     } : {}),

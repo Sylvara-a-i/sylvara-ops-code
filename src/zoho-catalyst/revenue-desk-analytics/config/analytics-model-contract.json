@@ -124,6 +124,7 @@
       { "COLUMNNAME": "STARTED_AT", "DATATYPE": "DATE", "MANDATORY": true, "PII": false, "source_format": "UTC ISO-8601 timestamp" },
       { "COLUMNNAME": "ENDED_AT", "DATATYPE": "DATE", "MANDATORY": false, "PII": false, "source_format": "UTC ISO-8601 timestamp" },
       { "COLUMNNAME": "DURATION_SECONDS", "DATATYPE": "NUMBER", "MANDATORY": false, "PII": false },
+      { "COLUMNNAME": "DURATION_MILLISECONDS", "DATATYPE": "NUMBER", "MANDATORY": false, "PII": false, "source_format": "Exact nonnegative integer provider milliseconds; legacy missing values remain unknown." },
       { "COLUMNNAME": "CALL_STATUS", "DATATYPE": "PLAIN", "MANDATORY": true, "PII": false },
       { "COLUMNNAME": "OUTCOME", "DATATYPE": "PLAIN", "MANDATORY": true, "PII": false },
       { "COLUMNNAME": "URGENCY_CLASS", "DATATYPE": "PLAIN", "MANDATORY": false, "PII": false },
@@ -146,6 +147,8 @@
       { "COLUMNNAME": "WRONG_FIT_CALLS", "DATATYPE": "NUMBER", "MANDATORY": true, "PII": false },
       { "COLUMNNAME": "SPAM_CALLS", "DATATYPE": "NUMBER", "MANDATORY": true, "PII": false },
       { "COLUMNNAME": "UNRESOLVED_CALLS", "DATATYPE": "NUMBER", "MANDATORY": true, "PII": false },
+      { "COLUMNNAME": "GENERAL_INQUIRY_CALLS", "DATATYPE": "NUMBER", "MANDATORY": false, "PII": false },
+      { "COLUMNNAME": "PRIVACY_STOP_CALLS", "DATATYPE": "NUMBER", "MANDATORY": false, "PII": false },
       { "COLUMNNAME": "BOOKABLE_OPPORTUNITIES", "DATATYPE": "NUMBER", "MANDATORY": false, "PII": false },
       { "COLUMNNAME": "OFFICE_FOLLOW_UP_CALLS", "DATATYPE": "NUMBER", "MANDATORY": false, "PII": false }
     ],
@@ -162,7 +165,17 @@
       { "COLUMNNAME": "BOOKABLE_OPPORTUNITIES", "DATATYPE": "NUMBER", "MANDATORY": false, "PII": false },
       { "COLUMNNAME": "OFFICE_FOLLOW_UP_CALLS", "DATATYPE": "NUMBER", "MANDATORY": false, "PII": false },
       { "COLUMNNAME": "DURATION_EVIDENCE_COMPLETE", "DATATYPE": "BOOLEAN", "MANDATORY": true, "PII": false },
-      { "COLUMNNAME": "ANALYSIS_EVIDENCE_COMPLETE", "DATATYPE": "BOOLEAN", "MANDATORY": true, "PII": false }
+      { "COLUMNNAME": "ANALYSIS_EVIDENCE_COMPLETE", "DATATYPE": "BOOLEAN", "MANDATORY": true, "PII": false },
+      { "COLUMNNAME": "ACTUAL_AVERAGE_CALL_DURATION_MILLISECONDS", "DATATYPE": "NUMBER", "MANDATORY": false, "PII": false, "source_format": "Existing report average seconds multiplied by 1000; display divided by 1000 as seconds." },
+      { "COLUMNNAME": "EXPECTED_MONTHLY_CONNECTED_MINUTES_MIN_HUNDREDTHS", "DATATYPE": "NUMBER", "MANDATORY": false, "PII": false, "source_format": "Existing two-decimal lower minute projection multiplied by 100; display divided by 100 as minutes." },
+      { "COLUMNNAME": "EXPECTED_MONTHLY_CONNECTED_MINUTES_MAX_HUNDREDTHS", "DATATYPE": "NUMBER", "MANDATORY": false, "PII": false, "source_format": "Existing two-decimal upper minute projection multiplied by 100; display divided by 100 as minutes." },
+      { "COLUMNNAME": "MONTHLY_MINUTES_METHODOLOGY_ID", "DATATYPE": "PLAIN", "MANDATORY": false, "PII": false },
+      { "COLUMNNAME": "OBSERVED_WORKFLOW_FAILURES", "DATATYPE": "NUMBER", "MANDATORY": false, "PII": false },
+      { "COLUMNNAME": "WORKFLOW_FAILURE_EVIDENCE_COMPLETE", "DATATYPE": "BOOLEAN", "MANDATORY": false, "PII": false },
+      { "COLUMNNAME": "DURATION_WITHHELD_CALLS", "DATATYPE": "NUMBER", "MANDATORY": false, "PII": false },
+      { "COLUMNNAME": "LEGACY_SCHEMA_CALLS_WITHHELD", "DATATYPE": "NUMBER", "MANDATORY": false, "PII": false },
+      { "COLUMNNAME": "RECOMMENDED_COVERAGE_MODE", "DATATYPE": "PLAIN", "MANDATORY": false, "PII": false, "source_format": "Canonical tested coverage enum only; never a paid-plan recommendation." },
+      { "COLUMNNAME": "IN_FLIGHT_OVERSHOOT", "DATATYPE": "NUMBER", "MANDATORY": false, "PII": false }
     ],
     "conversion_status": [
       { "COLUMNNAME": "CRM_CONVERSION_STATUS", "DATATYPE": "PLAIN", "MANDATORY": true, "PII": false },
@@ -339,8 +352,8 @@
     },
     "customer_call_mix": {
       "dashboard": "customer", "widget_title": "Call Mix", "private_view_id_binding": "PRIVATE_ANALYTICS_REPORT_VIEW_IDS_JSON.customer_call_mix", "filter_profile": "free_test",
-      "create_config": { "baseTableName": "RevenueDeskAnalyticsDailyMetricFacts", "title": "Customer Results - Call Mix", "reportType": "chart", "chartType": "stacked bar", "axisColumns": [{ "type": "xAxis", "columnName": "REPORTING_DATE_UTC", "operation": "fullDate" }, { "type": "yAxis", "columnName": "QUALIFIED_OPPORTUNITIES", "operation": "sum" }, { "type": "yAxis", "columnName": "EXISTING_CUSTOMER_CALLS", "operation": "sum" }, { "type": "yAxis", "columnName": "WRONG_FIT_CALLS", "operation": "sum" }, { "type": "yAxis", "columnName": "SPAM_CALLS", "operation": "sum" }, { "type": "yAxis", "columnName": "UNRESOLVED_CALLS", "operation": "sum" }] },
-      "null_behavior": "Every plotted classification is mandatory and mutually reported; null blocks publication authorization."
+      "create_config": { "baseTableName": "RevenueDeskAnalyticsDailyMetricFacts", "title": "Customer Results - Call Mix", "reportType": "chart", "chartType": "stacked bar", "axisColumns": [{ "type": "xAxis", "columnName": "REPORTING_DATE_UTC", "operation": "fullDate" }, { "type": "yAxis", "columnName": "QUALIFIED_OPPORTUNITIES", "operation": "sum" }, { "type": "yAxis", "columnName": "EXISTING_CUSTOMER_CALLS", "operation": "sum" }, { "type": "yAxis", "columnName": "WRONG_FIT_CALLS", "operation": "sum" }, { "type": "yAxis", "columnName": "SPAM_CALLS", "operation": "sum" }, { "type": "yAxis", "columnName": "UNRESOLVED_CALLS", "operation": "sum" }, { "type": "yAxis", "columnName": "GENERAL_INQUIRY_CALLS", "operation": "sum" }, { "type": "yAxis", "columnName": "PRIVACY_STOP_CALLS", "operation": "sum" }] },
+      "null_behavior": "Every plotted classification must be present and the complete mix must reconcile to handled calls; legacy missing GENERAL_INQUIRY_CALLS or PRIVACY_STOP_CALLS is unknown, never zero, and blocks a complete-mix claim."
     },
     "customer_bookable_evidence": {
       "dashboard": "customer", "widget_title": "Bookable Evidence", "private_view_id_binding": "PRIVATE_ANALYTICS_REPORT_VIEW_IDS_JSON.customer_bookable_evidence", "filter_profile": "free_test",

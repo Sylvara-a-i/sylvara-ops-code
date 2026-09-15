@@ -3,6 +3,7 @@
 const crypto = require('node:crypto');
 const { invariant } = require('./errors');
 const { keyedDigest } = require('./security');
+const { CONTRACT, COVERAGE_MODE_TO_LABEL } = require('./contracts');
 
 const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/;
 const ROW_ID = /^\d{1,30}$/;
@@ -13,6 +14,17 @@ const OUTBOX_IMMUTABLE = Object.freeze([
   'SOURCE_DATE_UTC', 'PAYLOAD_JSON', 'PAYLOAD_HASH', 'METRIC_VERSION',
   'SOURCE_MODIFIED_AT', 'SOURCE_REVISION',
 ]);
+const ADDITIVE_REPORT_FIELDS = Object.freeze({
+  call: Object.freeze(['DURATION_MILLISECONDS']),
+  final_test_result: Object.freeze([
+    'ACTUAL_AVERAGE_CALL_DURATION_MILLISECONDS',
+    'EXPECTED_MONTHLY_CONNECTED_MINUTES_MIN_HUNDREDTHS',
+    'EXPECTED_MONTHLY_CONNECTED_MINUTES_MAX_HUNDREDTHS', 'MONTHLY_MINUTES_METHODOLOGY_ID',
+    'OBSERVED_WORKFLOW_FAILURES', 'WORKFLOW_FAILURE_EVIDENCE_COMPLETE',
+    'DURATION_WITHHELD_CALLS', 'LEGACY_SCHEMA_CALLS_WITHHELD',
+    'RECOMMENDED_COVERAGE_MODE', 'IN_FLIGHT_OVERSHOOT',
+  ]),
+});
 
 const FACT_TIMESTAMP_FIELDS = Object.freeze({
   call: Object.freeze({
@@ -122,8 +134,11 @@ function callFact(config, row, canonical) {
     HANDLED_RECORDED: row.HANDLED_RECORDED === true,
   };
   if (canonical.endedAt) fact.ENDED_AT = canonical.endedAt;
-  if (Number.isSafeInteger(canonical.durationMs) && canonical.durationMs % 1000 === 0) {
-    fact.DURATION_SECONDS = canonical.durationMs / 1000;
+  if (Number.isSafeInteger(canonical.durationMs) && canonical.durationMs >= 0) {
+    // Provider milliseconds are authoritative. Keep the older whole-second field
+    // unchanged while preserving sub-second precision in the additive field.
+    fact.DURATION_MILLISECONDS = canonical.durationMs;
+    if (canonical.durationMs % 1000 === 0) fact.DURATION_SECONDS = canonical.durationMs / 1000;
   }
   for (const [field, value] of [
     ['URGENCY_CLASS', canonical.urgency],
@@ -216,6 +231,50 @@ function finalTestResultFact(config, deployment, row, report) {
   if (Number.isSafeInteger(report.officeFollowUpCalls)) {
     fact.OFFICE_FOLLOW_UP_CALLS = report.officeFollowUpCalls;
   }
+  // The existing report rounds these measures to two decimals. Scaled integers
+  // preserve that result without assuming an unverified Analytics decimal type.
+  const scaledMetric = (field, value, scale) => {
+    if (value === null || value === undefined) return;
+    const scaled = Math.round(value * scale);
+    invariant(typeof value === 'number' && Number.isFinite(value) && value >= 0
+      && Number.isSafeInteger(scaled) && scaled / scale === value,
+    'ANALYTICS_FACT_INVALID', `Final test report ${field} is invalid.`);
+    fact[field] = scaled;
+  };
+  scaledMetric('ACTUAL_AVERAGE_CALL_DURATION_MILLISECONDS', report.actualAverageCallDurationSeconds, 1000);
+  scaledMetric('EXPECTED_MONTHLY_CONNECTED_MINUTES_MIN_HUNDREDTHS', report.expectedMonthlyConnectedMinutesMin, 100);
+  scaledMetric('EXPECTED_MONTHLY_CONNECTED_MINUTES_MAX_HUNDREDTHS', report.expectedMonthlyConnectedMinutesMax, 100);
+  const hasMinimum = Object.hasOwn(fact, 'EXPECTED_MONTHLY_CONNECTED_MINUTES_MIN_HUNDREDTHS');
+  const hasMaximum = Object.hasOwn(fact, 'EXPECTED_MONTHLY_CONNECTED_MINUTES_MAX_HUNDREDTHS');
+  invariant(hasMinimum === hasMaximum, 'ANALYTICS_FACT_INVALID',
+    'Final test report minute projection is incomplete.');
+  if (hasMinimum) {
+    invariant(report.durationEvidenceComplete === true
+      && report.expectedMonthlyConnectedMinutesMethodology === CONTRACT.reporting.monthly_connected_minutes_methodology
+      && fact.EXPECTED_MONTHLY_CONNECTED_MINUTES_MIN_HUNDREDTHS <= fact.EXPECTED_MONTHLY_CONNECTED_MINUTES_MAX_HUNDREDTHS,
+    'ANALYTICS_FACT_INVALID', 'Final test report minute projection lacks authoritative evidence.');
+    fact.MONTHLY_MINUTES_METHODOLOGY_ID = CONTRACT.reporting.monthly_connected_minutes_methodology_id;
+  }
+  invariant(!Object.hasOwn(fact, 'ACTUAL_AVERAGE_CALL_DURATION_MILLISECONDS')
+    || report.durationEvidenceComplete === true,
+  'ANALYTICS_FACT_INVALID', 'Final test report duration evidence is incomplete.');
+  for (const [field, value] of [
+    ['OBSERVED_WORKFLOW_FAILURES', report.observedWorkflowFailures],
+    ['DURATION_WITHHELD_CALLS', report.durationWithheldCalls],
+    ['LEGACY_SCHEMA_CALLS_WITHHELD', report.legacySchemaCallsWithheld],
+    ['IN_FLIGHT_OVERSHOOT', report.inFlightOvershoot],
+  ]) scaledMetric(field, value, 1);
+  if (typeof report.workflowFailureEvidenceComplete === 'boolean') {
+    fact.WORKFLOW_FAILURE_EVIDENCE_COMPLETE = report.workflowFailureEvidenceComplete;
+  }
+  invariant(!Object.hasOwn(fact, 'OBSERVED_WORKFLOW_FAILURES')
+    || report.workflowFailureEvidenceComplete === true,
+  'ANALYTICS_FACT_INVALID', 'Final test report workflow-failure evidence is incomplete.');
+  if (report.recommendedPaidCoverage !== null && report.recommendedPaidCoverage !== undefined) {
+    invariant(report.recommendedPaidCoverage === COVERAGE_MODE_TO_LABEL.get(deployment.coverageMode),
+      'ANALYTICS_FACT_INVALID', 'Final test report coverage recommendation conflicts with its route.');
+    fact.RECOMMENDED_COVERAGE_MODE = safeEnum(deployment.coverageMode);
+  }
   return Object.freeze(fact);
 }
 
@@ -255,6 +314,31 @@ function sameImmutable(actual, expected) {
   ));
 }
 
+function sameLegacyReportVersion(actual, expected) {
+  const added = ADDITIVE_REPORT_FIELDS[expected.RECORD_TYPE];
+  if (!added || !OUTBOX_IMMUTABLE.filter((column) => !['PAYLOAD_JSON', 'PAYLOAD_HASH'].includes(column))
+    .every((column) => String(actual?.[column]) === String(expected[column]))) return false;
+  try {
+    const oldFact = JSON.parse(actual.PAYLOAD_JSON);
+    const nextFact = JSON.parse(expected.PAYLOAD_JSON);
+    if (!oldFact || !nextFact || Array.isArray(oldFact) || Array.isArray(nextFact)
+      || canonicalJson(oldFact) !== actual.PAYLOAD_JSON
+      || canonicalJson(nextFact) !== expected.PAYLOAD_JSON
+      || sha256(actual.PAYLOAD_JSON) !== actual.PAYLOAD_HASH
+      || sha256(expected.PAYLOAD_JSON) !== expected.PAYLOAD_HASH) return false;
+    const missing = added.filter((field) => !Object.hasOwn(oldFact, field) && Object.hasOwn(nextFact, field));
+    if (missing.length === 0) return false;
+    for (const field of missing) delete nextFact[field];
+    // A terminal report rematerializes historical calls. Returning their original
+    // fact is safe only when every original byte/owner/version is unchanged and
+    // the candidate merely knows additional optional fields. Never enrich the
+    // durable row, rewrite its hash, or hide a changed original field.
+    return canonicalJson(nextFact) === actual.PAYLOAD_JSON;
+  } catch {
+    return false;
+  }
+}
+
 function sameRowId(left, right) {
   return ROW_ID.test(String(left?.ROWID))
     && ROW_ID.test(String(right?.ROWID))
@@ -271,11 +355,12 @@ async function readOutboxOwnership(store, table, expected) {
     if (!identityOwner) identityOwner = await store.uniqueOutboxProviderIdentity(table, expected);
   }
   for (const owner of [exactOwner, identityOwner].filter(Boolean)) {
-    invariant(sameImmutable(owner, expected), 'DURABLE_IDEMPOTENCY_CONFLICT',
+    invariant(sameImmutable(owner, expected) || sameLegacyReportVersion(owner, expected), 'DURABLE_IDEMPOTENCY_CONFLICT',
       'Analytics outbox durable binding conflicts.', { httpStatus: 409 });
   }
   if (!exactOwner && !identityOwner) return null;
-  invariant(exactOwner && identityOwner && sameRowId(exactOwner, identityOwner),
+  invariant(exactOwner && identityOwner && sameRowId(exactOwner, identityOwner)
+    && sameImmutable(exactOwner, identityOwner),
     'DURABLE_IDEMPOTENCY_CONFLICT',
     'Analytics outbox identities resolve to different durable rows.', { httpStatus: 409 });
   return exactOwner;
@@ -302,12 +387,12 @@ async function ensureOutboxRow(store, config, recordType, fact, createdAt) {
   }
   return Object.freeze({
     row: readback,
-    inserted: insertError === null && insertResult?.inserted === true,
+    inserted: insertError === null && insertResult?.inserted === true && sameImmutable(readback, expected),
   });
 }
 
 module.exports = Object.freeze({
   OUTBOX_IMMUTABLE, canonicalJson, createOutboxRow, callFact, deploymentFact,
-  finalTestResultFact,
+  finalTestResultFact, sameLegacyReportVersion,
   ensureOutboxRow, normalizeFactTimestamps, outboxKey, sha256,
 });

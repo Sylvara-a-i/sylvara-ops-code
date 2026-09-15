@@ -13,6 +13,7 @@ const REQUIRED_RECORD_TYPES = Object.freeze([
   'final_test_result',
   'conversion_status',
 ]);
+const FREE_TEST_RECORD_TYPES = Object.freeze(['deployment', 'call', 'final_test_result']);
 const EVIDENCE_KEYS = Object.freeze([
   'schema_version',
   'evaluated_at',
@@ -53,9 +54,11 @@ function scopeInventoryDigest(scopes) {
     .digest('hex');
 }
 
-function gateContractIsValid(gate) {
+function gateContractIsValid(gate, freeTestReport = false) {
+  const requiredTypes = freeTestReport ? FREE_TEST_RECORD_TYPES : REQUIRED_RECORD_TYPES;
   return Boolean(gate)
-    && gate.gate_key === 'catalyst-checkpoint-and-analytics-readback-v1'
+    && gate.gate_key === (freeTestReport
+      ? 'free-test-report-checkpoint-and-readback-v1' : 'catalyst-checkpoint-and-analytics-readback-v1')
     && gate.mode === 'fail_closed'
     && gate.evidence_schema_version === 1
     && gate.required_environment === 'development'
@@ -63,24 +66,25 @@ function gateContractIsValid(gate) {
     && Array.isArray(gate.required_record_types)
     && exactKeys(
       Object.fromEntries((gate.required_record_types || []).map((value) => [value, true])),
-      REQUIRED_RECORD_TYPES,
+      requiredTypes,
     )
-    && gate.required_record_types.length === REQUIRED_RECORD_TYPES.length
+    && gate.required_record_types.length === requiredTypes.length
     && gate.required_checkpoint_status === 'Healthy'
     && gate.maximum_evidence_age_seconds === 300
     && gate.ready_verdict === 'ready'
     && gate.blocked_verdict === 'blocked';
 }
 
-function evaluatePreRenderGate(
+function evaluateScopedGate(
   gate,
   evidence,
   nowMs = Date.now(),
   renderApproval = null,
+  freeTestReport = false,
 ) {
   const reasons = new Set();
   const block = (reason) => reasons.add(reason);
-  const gateValid = gateContractIsValid(gate);
+  const gateValid = gateContractIsValid(gate, freeTestReport);
 
   if (!gateValid) block('GATE_CONTRACT_INVALID');
   if (!exactKeys(evidence, EVIDENCE_KEYS)
@@ -114,6 +118,7 @@ function evaluatePreRenderGate(
   }
 
   const scopes = Array.isArray(evidence?.scopes) ? evidence.scopes : [];
+  if (freeTestReport && scopes.length !== 1) block('SINGLE_CLIENT_REPORT_REQUIRED');
   const inventory = evidence?.scope_inventory;
   const scopesArePlain = scopes.length > 0 && scopes.every(plain);
   const computedScopeKeys = scopesArePlain ? scopes.map(scopeKey) : [];
@@ -129,7 +134,7 @@ function evaluatePreRenderGate(
     block('SCOPE_INVENTORY_MISMATCH');
   }
 
-  const recordTypes = REQUIRED_RECORD_TYPES;
+  const recordTypes = freeTestReport ? FREE_TEST_RECORD_TYPES : REQUIRED_RECORD_TYPES;
   for (const scope of scopes) {
     if (!scope || scope.ENVIRONMENT !== 'development'
       || scope.ENGAGEMENT_TYPE !== 'free_test'
@@ -155,6 +160,26 @@ function evaluatePreRenderGate(
     for (const recordType of recordTypes) {
       const checkpoint = checkpoints?.[recordType];
       const provider = readback?.record_types?.[recordType];
+      if (freeTestReport && !OPAQUE_KEY.test(provider?.rowset_digest || '')) {
+        block('ANALYTICS_ROWSET_DIGEST_MISSING');
+      }
+      if (freeTestReport && recordType !== 'call' && provider?.row_count !== 1) {
+        block('SINGLE_TEST_RECORD_REQUIRED');
+      }
+      // A completed test with no calls has no call checkpoint to invent. It needs
+      // independent, fresh zero-row evidence on both sides, not an empty chart.
+      if (freeTestReport && recordType === 'call' && scope.source_call_count === 0) {
+        if (checkpoint !== null || provider?.row_count !== 0
+          || provider?.duplicate_record_key_count !== 0
+          || provider?.payload_hash_mismatch_count !== 0
+          || provider?.source_revision !== approvedSourceRevision
+          || provider?.empty_source_verified !== true
+          || isoMillis(provider?.verified_at) !== evaluatedAt) block('EMPTY_CALL_SOURCE_UNVERIFIED');
+        continue;
+      }
+      if (freeTestReport && recordType === 'call'
+        && (!Number.isSafeInteger(scope.source_call_count) || scope.source_call_count < 1
+          || provider?.row_count !== scope.source_call_count)) block('CALL_SOURCE_COUNT_MISMATCH');
       if (!checkpoint || checkpoint.status !== 'Healthy') {
         block('CHECKPOINT_NOT_HEALTHY');
       }
@@ -204,6 +229,16 @@ function evaluatePreRenderGate(
     verdict: reasonCodes.length === 0 ? 'ready' : 'blocked',
     reason_codes: Object.freeze(reasonCodes),
   });
+}
+
+// Keep the broader dashboard contract intact. The narrower report has its own
+// explicit entry point; callers cannot waive paid-conversion evidence for it.
+function evaluatePreRenderGate(gate, evidence, nowMs = Date.now(), renderApproval = null) {
+  return evaluateScopedGate(gate, evidence, nowMs, renderApproval, false);
+}
+
+function evaluateFreeTestReportGate(gate, evidence, nowMs = Date.now(), renderApproval = null) {
+  return evaluateScopedGate(gate, evidence, nowMs, renderApproval, true);
 }
 
 function isWithin(parent, candidate) {
@@ -283,6 +318,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  evaluateFreeTestReportGate,
   evaluatePreRenderGate,
   parseCliArguments,
   readPrivateJson,

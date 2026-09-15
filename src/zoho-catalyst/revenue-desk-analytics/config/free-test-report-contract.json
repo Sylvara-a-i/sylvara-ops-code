@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "status": "source-candidate-live-installation-and-delivery-pending",
+  "title": "Seven-Day Free Test Results",
+  "purpose": "One simple, fixed-business, fixed-test results report; not the broader operations or paid-conversion dashboards.",
+  "publication_authorized": false,
+  "pre_render_gate": {
+    "gate_key": "free-test-report-checkpoint-and-readback-v1",
+    "mode": "fail_closed",
+    "evidence_schema_version": 1,
+    "required_environment": "development",
+    "required_engagement_type": "free_test",
+    "required_record_types": ["deployment", "call", "final_test_result"],
+    "required_checkpoint_status": "Healthy",
+    "maximum_evidence_age_seconds": 300,
+    "ready_verdict": "ready",
+    "blocked_verdict": "blocked"
+  },
+  "outcome_groups": [
+    {"key": "new_job_opportunities", "label": "New job opportunities", "outcomes": ["potential_job", "urgent_potential_job"]},
+    {"key": "existing_customers", "label": "Existing customers", "outcomes": ["existing_customer"]},
+    {"key": "not_a_fit", "label": "Not a fit", "outcomes": ["unsupported_service", "out_of_area"]},
+    {"key": "spam", "label": "Spam / unwanted calls", "outcomes": ["spam"]},
+    {"key": "general_questions", "label": "General questions", "outcomes": ["other_general_inquiry"]},
+    {"key": "needs_review", "label": "Incomplete / needs review", "outcomes": ["unresolved", "caller_abandoned", "configuration_failure", "sensitive_data_ended"]}
+  ],
+  "sections": ["Before the test", "Test period and coverage", "Call results", "Follow-up and exceptions", "Evidence and limitations", "Next steps"],
+  "rules": {
+    "crm_baseline": "Verified field metadata plus an immutable, server-bound pre-test CRM snapshot; business-supplied values remain context, not measured improvement.",
+    "unknown": "Missing evidence stays Not available. Do not turn absent analysis or baseline values into zero.",
+    "call_mix": "Six exhaustive groups sum to unique handled calls. Urgency and follow-up are overlapping flags, not additional slices.",
+    "time_zone": "Daily source trend is explicitly UTC; no unverified local-time relabeling.",
+    "value": "No recovered revenue, bookings, cost savings, or before/after uplift is inferred from call counts or average job value.",
+    "delivery": "Operator reviews the reconciled report and exact owner-approved recipient; no automatic email, public link, embed, or schedule is enabled.",
+    "legacy": "Do not modify the broader dashboard contract, legacy tables, paid-conversion gates, historical rows, or consumed approvals.",
+    "cost": "Reuse canonical facts without query tables or new dashboards. Live target capacity, schema, access, sync binding, and cost still require readback."
+  }
+}

@@ -2,7 +2,7 @@
 
 const { AnalyticsSyncError, invariant } = require('./errors');
 const { withTimeout } = require('./connection-boundary');
-const { compareWatermark, parseOutboxRow } = require('./facts');
+const { compareWatermark, parseOutboxRow, sameLegacyDailyMetricVersion } = require('./facts');
 
 const ROW_ID_PATTERN = /^\d{1,30}$/;
 const COLUMN_PATTERN = /^[A-Z][A-Z0-9_]{0,63}$/;
@@ -222,6 +222,7 @@ function createCatalystStore(app, config) {
   }
 
   async function ensureOutbox(candidate) {
+    parseOutboxRow(candidate, config.environment);
     let current = await unique(outbox, 'OUTBOX_KEY', candidate.OUTBOX_KEY);
     if (!current) {
       const owners = await providerIdentityRows(candidate);
@@ -245,7 +246,8 @@ function createCatalystStore(app, config) {
     invariant(current, 'OUTBOX_WRITE_AMBIGUOUS',
       'Analytics outbox insert could not be read back.', { ambiguous: true });
     parseOutboxRow(current, config.environment);
-    invariant(OUTBOX_IMMUTABLE.every((column) => same(current[column], candidate[column])),
+    invariant(OUTBOX_IMMUTABLE.every((column) => same(current[column], candidate[column]))
+      || sameLegacyDailyMetricVersion(current, candidate),
       'DURABLE_IDEMPOTENCY_CONFLICT', 'Analytics outbox insert readback conflicts.');
     invariant(!(await hasOutboxOwnershipConflict(current)), 'DURABLE_OWNERSHIP_AMBIGUOUS',
       'Analytics outbox ownership is ambiguous.');

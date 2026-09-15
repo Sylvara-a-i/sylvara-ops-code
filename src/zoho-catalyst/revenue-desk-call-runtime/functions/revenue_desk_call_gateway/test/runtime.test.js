@@ -967,6 +967,54 @@ test('integration: readiness tracks CRM states and retry_scan repairs missing or
   assert.equal((await service.readiness()).terminalReconciliationPendingCount, 0);
 });
 
+test('integration: terminal reconciliation preserves historical final payloads on replay and resume', async () => {
+  for (const status of ['Completed', 'Pending']) {
+    const { fixture, service, finalRow } = await reconciledTerminalAnalyticsFixture();
+    const legacy = JSON.parse(finalRow.PAYLOAD_JSON);
+    for (const field of [
+      'ACTUAL_AVERAGE_CALL_DURATION_MILLISECONDS',
+      'EXPECTED_MONTHLY_CONNECTED_MINUTES_MIN_HUNDREDTHS',
+      'EXPECTED_MONTHLY_CONNECTED_MINUTES_MAX_HUNDREDTHS', 'MONTHLY_MINUTES_METHODOLOGY_ID',
+      'OBSERVED_WORKFLOW_FAILURES', 'WORKFLOW_FAILURE_EVIDENCE_COMPLETE',
+      'DURATION_WITHHELD_CALLS', 'LEGACY_SCHEMA_CALLS_WITHHELD',
+      'RECOMMENDED_COVERAGE_MODE', 'IN_FLIGHT_OVERSHOOT',
+    ]) delete legacy[field];
+    assert.notEqual(canonicalJson(legacy), finalRow.PAYLOAD_JSON);
+    finalRow.PAYLOAD_JSON = canonicalJson(legacy);
+    finalRow.PAYLOAD_HASH = sha256(finalRow.PAYLOAD_JSON);
+    finalRow.SYNC_STATUS = 'Succeeded';
+    const deployment = fixture.store.rows.get('RevenueDeskDeployments')[0];
+    deployment.REPORT_RECONCILIATION_STATUS = status;
+    const originalFinal = structuredClone(finalRow);
+    const finalCount = fixture.store.rows.get('AnalyticsSyncOutbox')
+      .filter((row) => row.RECORD_TYPE === 'final_test_result').length;
+    const operationCount = fixture.store.rows.get('CRMBillingOperations').length;
+
+    await service.reconcileDeployment('deployment_A');
+    const outboxCount = fixture.store.rows.get('AnalyticsSyncOutbox').length;
+    await service.reconcileDeployment('deployment_A');
+    assert.equal(deployment.REPORT_RECONCILIATION_STATUS, 'Completed');
+    assert.deepEqual(fixture.store.rows.get('AnalyticsSyncOutbox')
+      .find((row) => row.ROWID === originalFinal.ROWID), originalFinal,
+    'the actual terminal path must not enrich, repair, or requeue historical evidence');
+    assert.equal(fixture.store.rows.get('AnalyticsSyncOutbox').length, outboxCount);
+    assert.equal(fixture.store.rows.get('AnalyticsSyncOutbox')
+      .filter((row) => row.RECORD_TYPE === 'final_test_result').length, finalCount);
+    assert.equal(fixture.store.rows.get('CRMBillingOperations').length, operationCount);
+
+    legacy.QUALIFIED_OPPORTUNITIES += 1;
+    finalRow.PAYLOAD_JSON = canonicalJson(legacy);
+    finalRow.PAYLOAD_HASH = sha256(finalRow.PAYLOAD_JSON);
+    const conflicting = structuredClone(finalRow);
+    await assert.rejects(service.reconcileDeployment('deployment_A'), {
+      code: 'DURABLE_IDEMPOTENCY_CONFLICT',
+    });
+    assert.deepEqual(fixture.store.rows.get('AnalyticsSyncOutbox')
+      .find((row) => row.ROWID === conflicting.ROWID), conflicting,
+    'legacy compatibility never authorizes a changed original metric');
+  }
+});
+
 test('integration: final artifact reconciliation never overwrites a divergent payload', async () => {
   const { fixture, service, finalRow } = await reconciledTerminalAnalyticsFixture();
   const divergent = JSON.parse(finalRow.PAYLOAD_JSON);

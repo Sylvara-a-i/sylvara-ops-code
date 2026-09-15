@@ -1,6 +1,6 @@
 'use strict';
 
-const { compareWatermark, createOutboxRow } = require('../lib/facts');
+const { compareWatermark, createOutboxRow, sameLegacyDailyMetricVersion } = require('../lib/facts');
 const LEASE_PROOF_COLUMN = 'LEASE_' + 'TOKEN';
 const OUTBOX_IMMUTABLE = Object.freeze([
   'OUTBOX_KEY', 'ROW_SCHEMA_VERSION', 'RECORD_TYPE',
@@ -114,7 +114,7 @@ class MemoryStore {
       current = ownerRows[0] || null;
     }
     if (current) {
-      if (!sameImmutable(current, candidate)) {
+      if (!sameImmutable(current, candidate) && !sameLegacyDailyMetricVersion(current, candidate)) {
         throw new Error('Synthetic durable idempotency conflict.');
       }
       if (await this.hasOutboxOwnershipConflict(current)) {

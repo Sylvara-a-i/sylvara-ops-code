@@ -1,5 +1,157 @@
 # Revenue Desk Analytics Sync
 
+## Scoped Seven-Day Free-Test Report Candidate
+
+The September 2026 reporting continuation is narrower than the historical
+operations/paid-conversion dashboard package below. It is **local source work,
+not a live Analytics installation or customer-delivery acceptance**. Existing
+Journey writers, deployed releases, holds, and old reports stay unchanged.
+Requirement owner: the Sylvara operator.
+
+| Gate | Current evidence | Remaining action | Cost / authorization | Status |
+|---|---|---|---|---|
+| Call categories and required final metrics | Producer, minimized facts, exhaustive rollup regressions | Review and publish candidate | Offline; no provider execution | Source candidate |
+| CRM pre-test context | Current selected field metadata; typed, relationship-bound local adapter; original field lineage traced | Capture/preserve approved pre-test snapshot and install minimized Analytics mapping | Selected CRM read, storage and target mutation packet required | Not wired live |
+| Simple results report | Fixed-test facts, rowset hashes, periods, counts, duration and baseline reconcile locally | Bind installed target readbacks; verify one authorized synthetic partition | No customer delivery or public access authorized | Offline verified; live pending |
+| Analytics targets and worker | Existing workspace has legacy assets; current target contract differs | Exact schema/access packet, held artifact, Connections, bounded import/readback | Confirm allowance; preserve disabled scheduling and holds | Pending installation |
+| Client delivery | No send performed | Operator review, exact recipient and approved delivery mechanism | Current Free-plan scheduled email unavailable; do not upgrade | Pending delivery setup |
+
+[`config/free-test-report-contract.json`](config/free-test-report-contract.json)
+defines three canonical fact types (deployment, call, terminal result), one
+client/test, six exhaustive display groups, and explicit zero-call evidence.
+The existing five-type dashboard gate remains unchanged: paid conversion is not
+a prerequisite for this distinct free-test report. Daily counts are derived
+from call facts and labeled UTC; no additional query table or dashboard is needed.
+
+`tools/build-free-test-report.js` returns minimized **operator-review data**, not
+an email, import, PDF, authentication result, or publication authorization.
+`readbackRowsetDigest` needs only `RECORD_KEY`, `PAYLOAD_HASH`, and
+`SOURCE_MODIFIED_AT` from the existing bounded readback. Partition, checkpoint,
+single-record, watermark and isolation checks still apply; no raw call export.
+
+CRM remains the baseline owner. `buildCrmReportBaseline` requires the approved
+Deal/Account/Contact/intake/configuration binding, CRM revision, pre-test capture,
+source period and fresh selected-field metadata. Preserve exact picklist actual
+and reference values in that private projection; never substitute labels blindly.
+Fields: current handling, monthly call count/band, after-hours band/share, average
+job value/band, unanswered-call estimate and optional answering cost. Missing stays null; bands are not
+midpoints. Private IDs and arbitrary text are excluded. The adapter does **not**
+read CRM, fill missing fields, persist a snapshot, or sync it to Analytics: those
+integration boundaries remain pending above.
+
+`buildCrmPreTestSnapshot` validates fresh capture before activation without a
+`testStartedAt` field. Its read/capture/metadata must be fresh against the current
+clock. `buildCrmReportBaseline` is the separate historical-validation path: it
+checks capture against the independently evidenced actual start and report time.
+Neither function enforces durable once-only storage or authenticates its caller.
+The physical `configurationVersionId` and CRM `configurationVersion` label are
+separate required bindings. Analytics `CONFIGURATION_VERSION` contains the former;
+matching only the label must never attach a baseline from another version row.
+
+### Baseline field lineage and current readback
+
+| CRM source API field | Report context | Interpretation |
+|---|---|---|
+| `Current_Call_Handling` | How calls are handled today | Preserve the verified stored choice |
+| `Monthly_Inbound_Calls`, `Monthly_Inbound_Call_Band` | Usual monthly call volume | Exact supplied count and/or range; no range midpoint |
+| `Estimated_Unanswered_Call_Rate` | Estimated calls going unanswered | Percentage estimate, not measured improvement |
+| `After_Hours_Call_Band`, `After_Hours_Call_Share` | Calls outside business hours | Supplied range/share, not the new test's count |
+| `Average_Job_Value`, `Average_Job_Value_Band` | Typical gross job value | Context only, never multiplied into recovered revenue |
+| `Current_Monthly_Answering_Cost` | Current answering cost | Optional supplied amount, not proven savings |
+
+Only `Current_Call_Handling` is collected by the accepted Form 1. The reviewed
+native Lead-conversion map also carries `Monthly_Inbound_Call_Band`,
+`After_Hours_Call_Band` and `Average_Job_Value_Band` to the Deal, but those three
+bands come from separate Lead qualification, not either accepted form. The five
+exact count/percentage/currency fields above are Deal-only inputs in that
+snapshot. Their presence in the CRM schema does not prove they are populated.
+See the [conversion map](../../zoho-crm/reference/snapshots/2026-08-14/lead-conversion-mapping.csv)
+and the [accepted Form 1 contract](../revenue-leak-test-request-form/functions/revenue_leak_test_request_form/lib/form-contract.js).
+
+No reviewed form/CRM field records the baseline source period or evidence class.
+The operator must capture these from the business's stated period or records;
+CRM `Modified_Time`, test dates and a guessed prior month are not substitutes.
+Missing values remain unavailable. Do not add mandatory questions to the accepted
+forms or fill a legacy test's baseline retrospectively.
+
+The smallest proposed persistence boundary is an optional typed snapshot inside
+the **new** configuration's existing encrypted `CONFIGURATION_JSON`, after Form 2
+readback and before route approval. Existing approval fingerprints cover those
+exact bytes. This needs runtime validation and bounded capture/insertion wiring;
+the current preparation utility is local-only and is not a cloud writer. Never
+append a baseline to an already approved configuration. No new table, competing
+CRM writer, Retell variable or general provisioning platform is proposed.
+
+The September 15 read-only inspection verified these field definitions in the
+Sylvara CRM tenant. The existing synthetic Form 2 phone-QA Deal showed these
+baseline values blank while its configuration, intake and relationship bindings
+were present. This proves missing baseline evidence on that fixture, **not** a
+conversion-mapping defect or permission to fill it with invented values. The
+field-limited connector request failed argument parsing; the already-authorized
+browser fallback verified only the visible record, without a launch or save.
+
+Current Analytics plan readback: Free, no purchased add-ons, 9,200 unused rows,
+zero remaining query-table slots and zero scheduled-email allowance. Existing
+legacy reporting assets are not the canonical target schema. No new query table,
+upgrade, scheduled import, share, automatic send or customer delivery is part of
+this candidate. Plan capacity must be rechecked before any later installation.
+
+The finite integration packet still needs: (1) verified Lead-to-Deal baseline
+lineage, a source period and estimate/evidence classification; (2) immutable
+pre-test capture/persistence and the minimized Analytics mapping; (3) exact
+canonical target schema, Connections and bounded import/readback; and (4) an
+operator-reviewed report and separately approved delivery path. These are real
+non-Retell implementation/deployment gates, not completed by this local adapter.
+Do not add a competing CRM writer or use Analytics as CRM authority.
+
+Publish and build reviewed source before proposing a fresh held installation of
+the changed Analytics package and shared call-runtime packages. Do not reuse the
+consumed earlier three-function installation. Preserve existing holds, disabled
+scheduling and historical rows until the exact cutover and synthetic allocation
+are authorized. On unknown import/delivery outcome, reconcile first; never retry
+blindly or restore a known-defective release as rollback.
+
+All eleven outcome codes are unchanged. Six client groups are new job
+opportunities, existing customers, not a fit, spam, general questions, and
+incomplete/needs review. Urgency and follow-up overlap them. Opportunities are not
+bookings, completed jobs, revenue, cost savings, or before/after improvement.
+
+Security/cost: synthetic adapters and outbound-denial tests; no new dependency,
+metered provider call, import, schedule, customer share or send. Producer changes
+require fresh immutable artifacts before later deployment. Historical payloads,
+hashes, watermarks, counters and claims must remain intact. Rollback is existing
+containment, never rewritten evidence. Reuse current checkpoint/failure signals;
+no new monitoring platform. Retell, Production, paid conversion and the broader
+dashboards stay excluded. Focused checks are the existing Analytics tests plus
+`crm-report-baseline.test.js`, `free-test-report.test.js` and
+`free-test-report-facts.test.js`, using pinned Node 24.19.0 and synthetic adapters.
+
+### September 15 local verification
+
+- Canonical `tools/verify.ps1 -Mode Quick`: **1,877 passed, zero failed, 31
+  skipped** after correcting the stale local worker dependency and reviewed
+  Analytics model/render fingerprint pins. Thirty artifact/isolated-deployment
+  tests are intentionally skipped in offline Quick mode; one Bash syntax check
+  is unavailable to Python child processes on this Windows host. These skips are
+  not deployment evidence.
+- Separate focused in-process outbound-denial run: **151 passed, zero failed or
+  skipped, zero boundary attempts**. The full local Analytics mutation validator
+  passed **24 tests**; independent review confirmed prior contract digests and
+  approvals remain rejected. The broader dashboard fingerprint is unchanged.
+- After the owner accepted the unchanged local demo, the baseline capture API
+  and physical-ID report join were corrected. The latest targeted outbound-denial
+  run passed **32 tests**, zero failed/skipped/boundary attempts; independent
+  review passed **49 focused tests** with no actionable findings. These overlap
+  the canonical total and must not be added to it as distinct acceptance cases.
+- Local worker and route-control dependency copies were refreshed with
+  `npm ci --offline --ignore-scripts --install-links`; lockfiles did not change.
+- Source remains on `codex/free-test-analytics-reporting`, unpublished and
+  undeployed. Runtime changes invalidate prior package parity for this candidate
+  only; previously accepted deployed Journey evidence is preserved, not relabeled.
+- This continuation performed fourteen connector read attempts (two rejected)
+  plus read-only browser inspection; zero live imports, saves, deployments, CRM
+  writes, sessions, emails, Retell/provider operations or purchases.
+
 `analytics_sync` is the one private Zoho Catalyst Job target for Revenue Desk-to-Zoho Analytics synchronization. It has no HTTP route, accepts no caller-selected Job parameters, and targets the shared Revenue Desk Catalyst project through the dedicated `RevenueDeskAnalyticsJobs` Function Job pool.
 
 ## Status

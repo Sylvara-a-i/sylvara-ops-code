@@ -26,7 +26,8 @@ const TYPE_FIELDS = Object.freeze({
   }),
   call: Object.freeze({
     CALL_KEY: 'hash', STARTED_AT: 'time', ENDED_AT: 'optional_time',
-    DURATION_SECONDS: 'optional_nonnegative', CALL_STATUS: 'enum', OUTCOME: 'enum',
+    DURATION_SECONDS: 'optional_nonnegative', DURATION_MILLISECONDS: 'optional_nonnegative',
+    CALL_STATUS: 'enum', OUTCOME: 'enum',
     URGENCY_CLASS: 'optional_enum', COVERAGE_MODE: 'optional_enum', HANDLED_RECORDED: 'boolean',
     BOOKABLE_OPPORTUNITY: 'optional_boolean', OFFICE_FOLLOW_UP_REQUIRED: 'optional_boolean',
     WORKFLOW_FAILURE_CODE: 'optional_enum', NOTIFICATION_STATE: 'optional_enum',
@@ -38,6 +39,7 @@ const TYPE_FIELDS = Object.freeze({
     QUALIFIED_OPPORTUNITIES: 'nonnegative', URGENT_REQUESTS: 'nonnegative',
     EXISTING_CUSTOMER_CALLS: 'nonnegative', WRONG_FIT_CALLS: 'nonnegative',
     SPAM_CALLS: 'nonnegative', UNRESOLVED_CALLS: 'nonnegative',
+    GENERAL_INQUIRY_CALLS: 'optional_nonnegative', PRIVACY_STOP_CALLS: 'optional_nonnegative',
     BOOKABLE_OPPORTUNITIES: 'optional_nonnegative', OFFICE_FOLLOW_UP_CALLS: 'optional_nonnegative',
   }),
   final_test_result: Object.freeze({
@@ -47,6 +49,15 @@ const TYPE_FIELDS = Object.freeze({
     WRONG_FIT_CALLS: 'nonnegative', BOOKABLE_OPPORTUNITIES: 'optional_nonnegative',
     OFFICE_FOLLOW_UP_CALLS: 'optional_nonnegative', DURATION_EVIDENCE_COMPLETE: 'boolean',
     ANALYSIS_EVIDENCE_COMPLETE: 'boolean',
+    ACTUAL_AVERAGE_CALL_DURATION_MILLISECONDS: 'optional_nonnegative',
+    EXPECTED_MONTHLY_CONNECTED_MINUTES_MIN_HUNDREDTHS: 'optional_nonnegative',
+    EXPECTED_MONTHLY_CONNECTED_MINUTES_MAX_HUNDREDTHS: 'optional_nonnegative',
+    MONTHLY_MINUTES_METHODOLOGY_ID: 'optional_identifier',
+    OBSERVED_WORKFLOW_FAILURES: 'optional_nonnegative',
+    WORKFLOW_FAILURE_EVIDENCE_COMPLETE: 'optional_boolean',
+    DURATION_WITHHELD_CALLS: 'optional_nonnegative',
+    LEGACY_SCHEMA_CALLS_WITHHELD: 'optional_nonnegative',
+    RECOMMENDED_COVERAGE_MODE: 'optional_enum', IN_FLIGHT_OVERSHOOT: 'optional_nonnegative',
   }),
   conversion_status: Object.freeze({
     CRM_CONVERSION_STATUS: 'enum', BILLING_CONVERSION_STATUS: 'enum',
@@ -128,6 +139,33 @@ function minimizeFact(recordType, candidate) {
   }
   if (recordType === 'call') invariant(result.CALL_KEY === result.RECORD_KEY,
     'FACT_INVALID', 'Call record key must equal the opaque call key.');
+  if (recordType === 'call' && present(result.DURATION_SECONDS)
+    && present(result.DURATION_MILLISECONDS)) {
+    invariant(result.DURATION_SECONDS * 1000 === result.DURATION_MILLISECONDS,
+      'FACT_INVALID', 'Call duration units conflict.');
+  }
+  if (recordType === 'final_test_result') {
+    // These fields are additive: old immutable rows stay valid and are never
+    // enriched on read. New evidence may not manufacture availability.
+    invariant(!present(result.ACTUAL_AVERAGE_CALL_DURATION_MILLISECONDS)
+      || result.DURATION_EVIDENCE_COMPLETE === true,
+    'FACT_INVALID', 'Final duration evidence is incomplete.');
+    invariant(!present(result.OBSERVED_WORKFLOW_FAILURES)
+      || result.WORKFLOW_FAILURE_EVIDENCE_COMPLETE === true,
+    'FACT_INVALID', 'Final workflow-failure evidence is incomplete.');
+    const hasMinimum = present(result.EXPECTED_MONTHLY_CONNECTED_MINUTES_MIN_HUNDREDTHS);
+    const hasMaximum = present(result.EXPECTED_MONTHLY_CONNECTED_MINUTES_MAX_HUNDREDTHS);
+    const hasMethod = present(result.MONTHLY_MINUTES_METHODOLOGY_ID);
+    invariant(hasMinimum === hasMaximum && hasMaximum === hasMethod,
+      'FACT_INVALID', 'Final minute projection is incomplete.');
+    if (hasMinimum) invariant(result.DURATION_EVIDENCE_COMPLETE === true
+      && result.EXPECTED_MONTHLY_CONNECTED_MINUTES_MIN_HUNDREDTHS <= result.EXPECTED_MONTHLY_CONNECTED_MINUTES_MAX_HUNDREDTHS
+      && result.MONTHLY_MINUTES_METHODOLOGY_ID === 'retell_duration_elapsed_calendar_run_rate_v1',
+    'FACT_INVALID', 'Final minute projection evidence is invalid.');
+    if (present(result.RECOMMENDED_COVERAGE_MODE)) invariant(
+      ['after_hours_only', 'no_answer_overflow_only', 'after_hours_and_overflow'].includes(result.RECOMMENDED_COVERAGE_MODE),
+      'FACT_INVALID', 'Final coverage recommendation is not a supported route.');
+  }
   if (recordType === 'conversion_status') invariant(
     result.ENGAGEMENT_TYPE === 'free_test' && result.TARGET_ENGAGEMENT_TYPE === 'paid_service',
     'FACT_INVALID',
@@ -269,6 +307,24 @@ function targetRow(parsed) {
   return Object.freeze({ ...parsed.fact, PAYLOAD_HASH: parsed.PAYLOAD_HASH });
 }
 
+function sameLegacyDailyMetricVersion(actual, expected) {
+  if (actual?.RECORD_TYPE !== 'daily_metric' || expected?.RECORD_TYPE !== 'daily_metric') return false;
+  try {
+    const oldFact = parseOutboxRow(actual, 'development').fact;
+    const nextFact = { ...parseOutboxRow(expected, 'development').fact };
+    const missing = ['GENERAL_INQUIRY_CALLS', 'PRIVACY_STOP_CALLS']
+      .filter((field) => !Object.hasOwn(oldFact, field) && Object.hasOwn(nextFact, field));
+    if (missing.length === 0) return false;
+    for (const field of missing) delete nextFact[field];
+    // A crash may resume after a previous release already inserted this day.
+    // Preserve its exact historical shape; additions are not a correction to
+    // an existing immutable source watermark and must not trigger another import.
+    return canonicalJson(nextFact) === actual.PAYLOAD_JSON;
+  } catch {
+    return false;
+  }
+}
+
 function makeBatchKey(rows) {
   invariant(Array.isArray(rows) && rows.length > 0, 'OUTBOX_INVALID', 'Analytics batch is empty.');
   const first = rows[0];
@@ -318,4 +374,5 @@ module.exports = {
   canonicalJson, checkpointKey, checkpointRow, compareWatermark, createOutboxRow,
   makeBatchKey, minimizeFact, outboxKey, parseOutboxRow,
   sha256, sourceDateUtc, targetRow,
+  sameLegacyDailyMetricVersion,
 };

@@ -19,7 +19,7 @@ const { extractAnalysis, triggerAllowedForMode, makeNotificationPayload } = requ
 const { MAX_CATALYST_TEXT_BYTES } = require('./catalyst-store');
 const {
   OUTBOX_IMMUTABLE, callFact, createOutboxRow, deploymentFact, finalTestResultFact,
-  ensureOutboxRow,
+  ensureOutboxRow, sameLegacyReportVersion,
 } = require('./analytics-outbox');
 const {
   buildCrmReportSummary, ensureCrmReportSummary, reportSummaryIdentity,
@@ -825,7 +825,10 @@ function createRuntimeService({
       expected,
     );
     invariant(!exactOwner || !identityOwner
-      || String(exactOwner.ROWID) === String(identityOwner.ROWID),
+      || (String(exactOwner.ROWID) === String(identityOwner.ROWID)
+        && OUTBOX_IMMUTABLE.every((column) => (
+          String(exactOwner[column]) === String(identityOwner[column])
+        ))),
     'DURABLE_IDEMPOTENCY_CONFLICT',
     'Final Analytics artifact identities resolve to different durable rows.',
     { httpStatus: 409 });
@@ -840,6 +843,12 @@ function createRuntimeService({
     const existing = await finalTestOutboxOwner(expected);
     if (!existing) {
       return ensureOutboxRow(store, config, 'final_test_result', fact, createdAt);
+    }
+    if (sameLegacyReportVersion(existing, expected)) {
+      // Retain already-durable evidence at this exact source version. Reuse the
+      // strict ownership readbacks; this is not enrichment or corruption repair.
+      const retained = await ensureOutboxRow(store, config, 'final_test_result', fact, createdAt);
+      return Object.freeze({ ...retained, repaired: false });
     }
     if (OUTBOX_IMMUTABLE.every((column) => (
       String(existing[column]) === String(expected[column])
@@ -2004,9 +2013,9 @@ function createRuntimeService({
     const fact = finalTestResultFact(config, deployment, row, report);
     const expected = createOutboxRow('final_test_result', fact, report.testEnd);
     const analytics = await finalTestOutboxOwner(expected);
-    return Boolean(analytics && OUTBOX_IMMUTABLE.every((column) => (
+    return Boolean(analytics && (OUTBOX_IMMUTABLE.every((column) => (
       String(analytics[column]) === String(expected[column])
-    )));
+    )) || sameLegacyReportVersion(analytics, expected)));
   }
 
   async function reconcileTerminalDeployment(deploymentId) {
