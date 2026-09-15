@@ -23,7 +23,7 @@ function fixture(empty = false) {
     return callFact({ RECORD_KEY: key, CALL_KEY: key, OUTCOME: outcome,
       URGENCY_CLASS: outcome === 'urgent_potential_job' ? 'urgent' : 'routine',
       BOOKABLE_OPPORTUNITY: outcome === 'potential_job' || outcome === 'urgent_potential_job',
-      OFFICE_FOLLOW_UP_REQUIRED: false, NOTIFICATION_STATE: 'dry_run', SOURCE_MODIFIED_AT: WATERMARK,
+      OFFICE_FOLLOW_UP_REQUIRED: false, NOTIFICATION_STATE: 'dry_run_recorded', SOURCE_MODIFIED_AT: WATERMARK,
       COVERAGE_MODE: 'after_hours_only' });
   });
   const common = { SCHEMA_VERSION: 1, METRIC_VERSION: 'revenue_desk_metrics_v1',

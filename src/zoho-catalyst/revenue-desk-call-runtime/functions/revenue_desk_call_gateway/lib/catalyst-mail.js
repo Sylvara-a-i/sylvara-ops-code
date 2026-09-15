@@ -2,8 +2,32 @@
 
 const { RevenueDeskError, invariant } = require('./errors');
 const { keyedDigest } = require('./security');
+const { exactKeys, string, e164 } = require('./validation');
 
 const TEMPLATE_VERSION = 'free_test_call_summary_v1';
+const HANDOFF_TEMPLATE_VERSION = 'free_test_call_summary_v2';
+
+function validateHandoffPayload(payload) {
+  exactKeys(payload, ['notificationPayloadVersion', 'businessName', 'followUpOwner',
+    'timeZone', 'callerName', 'callbackNumber', 'callbackNumberConfirmed', 'customerType',
+    'cityOrZip', 'issueSummary', 'urgency', 'specificPersonRequested', 'callTimestamp',
+    'callOutcome', 'nextAction'], 'notification');
+  string(payload.businessName, 'notification.businessName', { maximum: 120 });
+  string(payload.followUpOwner, 'notification.followUpOwner', { maximum: 120 });
+  string(payload.nextAction, 'notification.nextAction', { maximum: 600 });
+  invariant(typeof payload.callbackNumberConfirmed === 'boolean'
+    && (payload.callbackNumberConfirmed ? typeof payload.callbackNumber === 'string'
+      : payload.callbackNumber === null),
+  'INVALID_NOTIFICATION', 'Callback confirmation evidence is inconsistent.');
+  if (payload.callbackNumberConfirmed) e164(payload.callbackNumber, 'notification.callbackNumber');
+  let validTime = false;
+  try {
+    validTime = typeof payload.timeZone === 'string' && payload.timeZone.length <= 100
+      && new Date(payload.callTimestamp).toISOString() === payload.callTimestamp;
+    new Intl.DateTimeFormat('en-US', { timeZone: payload.timeZone }).format(new Date(payload.callTimestamp));
+  } catch (_) { validTime = false; }
+  invariant(validTime, 'INVALID_NOTIFICATION', 'Call time or timezone is invalid.');
+}
 
 function html(value) {
   return String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;')
@@ -11,6 +35,25 @@ function html(value) {
 }
 
 function messageContent(payload) {
+  if (payload.notificationPayloadVersion === 2) {
+    const localTime = new Intl.DateTimeFormat('en-US', {
+      timeZone: payload.timeZone, dateStyle: 'medium', timeStyle: 'long',
+    }).format(new Date(payload.callTimestamp));
+    const rows = [
+      ['Business', payload.businessName], ['Business follow-up owner', payload.followUpOwner],
+      ['Caller name', payload.callerName],
+      ['Confirmed callback number', payload.callbackNumberConfirmed === true
+        ? payload.callbackNumber : 'Unknown — do not infer from caller ID'],
+      ['New / existing customer', payload.customerType], ['City / ZIP', payload.cityOrZip],
+      ['Issue', payload.issueSummary], ['Urgency', payload.urgency],
+      ['Requested person', payload.specificPersonRequested],
+      ['Call time', `${localTime} (${payload.timeZone}); UTC: ${payload.callTimestamp}`],
+      ['Classification', payload.callOutcome], ['Human next action', payload.nextAction],
+    ];
+    return `<p>Seven-Day Free Test — Development callback request.</p><table>${rows.map(([label, value]) => (
+      `<tr><th align="left">${html(label)}</th><td>${html(value || 'Unknown / not provided')}</td></tr>`
+    )).join('')}</table><p>This is a request for human review, not an appointment, dispatch, transfer or guaranteed response. Mail-provider acceptance does not prove inbox delivery, acknowledgment or a completed callback.</p>`;
+  }
   const rows = [
     ['Caller Name', payload.callerName], ['Callback Number', payload.callbackNumber],
     ['New / Existing Customer', payload.customerType], ['City / ZIP', payload.cityOrZip],
@@ -42,10 +85,11 @@ class CatalystMailAdapter {
     'NOTIFICATION_DESTINATION_UNAVAILABLE', 'Approved email destination is unavailable.');
     invariant(payload && typeof payload === 'object', 'INVALID_NOTIFICATION',
       'Notification payload is unavailable.');
+    if (payload.notificationPayloadVersion === 2) validateHandoffPayload(payload);
     return Object.freeze({
       recipientFingerprint: keyedDigest(this.config.eventSecret, 'free-test-mail-recipient-v1', [recipient.email]),
       recipientEmail: recipient.email,
-      templateVersion: TEMPLATE_VERSION,
+      templateVersion: payload.notificationPayloadVersion === 2 ? HANDOFF_TEMPLATE_VERSION : TEMPLATE_VERSION,
       payload: Object.freeze({ ...payload }),
     });
   }
@@ -55,6 +99,12 @@ class CatalystMailAdapter {
       'INVALID_NOTIFICATION', 'Prepared notification is unavailable.');
     if (this.config.mailMode === 'dry_run') return Object.freeze({
       status: 'DryRunRecorded', providerCode: 'CATALYST_MAIL_DRY_RUN',
+      providerResultReference: null, ambiguous: false,
+    });
+    // Old outbox evidence is immutable. Do not turn an old, unconfirmed number
+    // into a newly sent callback instruction or silently migrate its template.
+    if (prepared.templateVersion !== HANDOFF_TEMPLATE_VERSION) return Object.freeze({
+      status: 'ReconciliationRequired', providerCode: 'LEGACY_HANDOFF_REVIEW_REQUIRED',
       providerResultReference: null, ambiguous: false,
     });
     let timer;
@@ -115,4 +165,4 @@ class CatalystMailAdapter {
   }
 }
 
-module.exports = { CatalystMailAdapter, messageContent, TEMPLATE_VERSION };
+module.exports = { CatalystMailAdapter, messageContent, TEMPLATE_VERSION, HANDOFF_TEMPLATE_VERSION };

@@ -62,6 +62,10 @@ function syntheticPreparationInputs() {
       },
       review: { clientId: `synthetic_client_${letter}`, deploymentId: `synthetic_deployment_${letter}`,
         notificationRecipientId: `synthetic_recipient_${letter}`, countryCode: 'US',
+        notificationHandoff: { schemaVersion: 1,
+          timeZone: index === 0 ? 'America/Chicago' : 'America/Denver', channel: 'email',
+          recipientId: `synthetic_recipient_${letter}`, monitored: true,
+          acknowledgedAt: CAPTURED, acknowledgmentReference: `synthetic_monitoring_${letter}` },
         timeZone: index === 0 ? 'America/Chicago' : 'America/Denver', dstPolicy: 'iana_time_zone',
         hoursSourceText: index === 0 ? 'Monday-Friday 08:00-17:00' : 'Tuesday-Saturday 09:00-18:00',
         weeklyHours: index === 0

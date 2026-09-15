@@ -28,6 +28,8 @@ const STOP_REASONS = new Map([...runtimeContract.stop_reason_mappings,
 // CRM baseline must describe the same observed route, not a proposed next route.
 const COVERAGE_FACT_VALUES = new Map(runtimeContract.canonical_coverage_modes
   .map((mode) => [mode, mode.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase()]));
+const NOTIFICATION_FACT_VALUES = new Map(runtimeContract.notification_states
+  .map((state) => [state.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase(), state]));
 
 function factRowsetDigest(recordType, facts) {
   return readbackRowsetDigest(recordType, facts.map((fact) => {
@@ -100,6 +102,8 @@ function buildFreeTestReport(input, now = Date.now()) {
   }
   for (const call of calls) {
     requireCondition(supportedOutcomes.has(call.OUTCOME), 'REPORT_UNKNOWN_OUTCOME');
+    requireCondition(!Object.hasOwn(call, 'NOTIFICATION_STATE')
+      || NOTIFICATION_FACT_VALUES.has(call.NOTIFICATION_STATE), 'REPORT_UNKNOWN_NOTIFICATION_STATE');
     requireCondition(!Object.hasOwn(call, 'COVERAGE_MODE')
       || call.COVERAGE_MODE === deployment.COVERAGE_MODE, 'REPORT_CALL_COVERAGE_CONFLICT');
     requireCondition(call.STARTED_AT >= final.TEST_STARTED_AT
@@ -180,6 +184,16 @@ function buildFreeTestReport(input, now = Date.now()) {
     const date = call.STARTED_AT.slice(0, 10);
     daily.set(date, (daily.get(date) || 0) + 1);
   }
+  // This is a projection of the attested call facts, not a delivery receipt or
+  // a new owner-action record. Missing states cannot become unsent/sent claims.
+  const handoff = {
+    scope: 'unique_connected_calls',
+    notificationStates: [...NOTIFICATION_FACT_VALUES].map(([factValue, state]) => ({
+      state, calls: handled.filter((call) => call.NOTIFICATION_STATE === factValue).length,
+    })),
+    missingNotificationEvidenceCalls: handled.filter((call) => !Object.hasOwn(call, 'NOTIFICATION_STATE')).length,
+    inboxDeliveryVerifiedCalls: null, businessAcknowledgmentCalls: null, completedCallbackCalls: null,
+  };
   return Object.freeze({
     schemaVersion: 1,
     title: contract.title,
@@ -206,6 +220,7 @@ function buildFreeTestReport(input, now = Date.now()) {
       averageCallDurationSeconds: ratio(final.ACTUAL_AVERAGE_CALL_DURATION_MILLISECONDS, 1000),
       dailyCallsUtc: [...daily].sort(([a], [b]) => a.localeCompare(b))
         .map(([dateUtc, count]) => ({ dateUtc, calls: count })),
+      handoff,
     },
     nextSteps: {
       supportedCoverage: final.RECOMMENDED_COVERAGE_MODE ?? null,

@@ -15,7 +15,8 @@ const {
 } = require('./contracts');
 const { RevenueDeskError, invariant } = require('./errors');
 const { keyedDigest, numberLookupKey } = require('./security');
-const { E164_PATTERN, validateConfiguration, assertExecutionTimingSupported } = require('./validation');
+const { E164_PATTERN, validateConfiguration, assertExecutionTimingSupported,
+  assertNotificationHandoffReady } = require('./validation');
 const {
   verifyAuthorizationReceiptIntegrity,
 } = require('./authorization-receipt');
@@ -454,6 +455,17 @@ function validateDealBase(deal, command, configurationVersion) {
   invariant(deal.Stage === 'Setup and QA',
     'CONTROL_PRECONDITION_FAILED', 'CRM journey is not at the setup control stage.',
     { httpStatus: 409 });
+}
+
+function assertCurrentFreeTestHandlingPolicy(deal) {
+  // Preparation is not authoritative at activation time. Re-read both saved
+  // preferences before a new decision; this free test cannot silently replace
+  // a requested transfer, dispatch, or suppressed alert with callback capture.
+  invariant(deal.Urgent_Call_Handling === 'Alert + Capture Callback'
+    && deal.Existing_Customer_Call_Handling === 'Alert + Capture Callback',
+  'FREE_TEST_HANDLING_POLICY_UNSUPPORTED',
+  'The saved handling preferences require unsupported free-test actions.',
+  { httpStatus: 409 });
 }
 
 function validateApprovalDeal(deal, command, configuration) {
@@ -2168,6 +2180,8 @@ function createRouteControlService({
     }
     const state = await readState(command);
     validateApprovalDeal(state.deal, command, state.configuration);
+    assertCurrentFreeTestHandlingPolicy(state.deal);
+    assertNotificationHandoffReady(state.configuration, { now: now() });
     await assertNoConflictingDeployment(state.deployment);
     const observedAt = new Date(now()).toISOString();
     const route = routeFingerprint(routeFromRows(state.deployment, state.configurationRow));
@@ -2332,6 +2346,8 @@ function createRouteControlService({
     }
     const state = await readState(command);
     assertNoCompetingActivationReceipt(state, command);
+    assertCurrentFreeTestHandlingPolicy(state.deal);
+    assertNotificationHandoffReady(state.configuration, { now: now() });
     state.routeFingerprint = routeFingerprint(routeFromRows(
       state.deployment, state.configurationRow,
     ));

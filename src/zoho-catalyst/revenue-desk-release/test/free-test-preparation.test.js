@@ -77,6 +77,33 @@ test('two distinct synthetic preparations remain unapproved and provider-unverif
   assert.deepEqual(prepare(inputs[0]), a);
 });
 
+test('preparation never infers monitored-channel acknowledgment from Form 2 recipient fields', () => {
+  const input = syntheticPreparationInputs()[0];
+  const acknowledged = prepare(input);
+  assert.deepEqual(acknowledged.candidate.notificationHandoff, input.review.notificationHandoff);
+  assert.equal(acknowledged.candidate.notificationRecipient.approved, false);
+  delete input.review.notificationHandoff;
+  const missing = prepare(input);
+  assert.equal(missing.status, 'prepared_local_only');
+  assert.equal(Object.hasOwn(missing.candidate, 'notificationHandoff'), false);
+  assert.deepEqual(missing.unresolved, ['NOTIFICATION_HANDOFF_ACKNOWLEDGMENT_REQUIRED']);
+  const unmonitored = syntheticPreparationInputs()[0];
+  unmonitored.review.notificationHandoff.monitored = false;
+  assert.deepEqual(prepare(unmonitored).unresolved, ['NOTIFICATION_HANDOFF_ACKNOWLEDGMENT_REQUIRED']);
+  for (const patch of [{ timeZone: 'America/Denver' },
+    { acknowledgedAt: new Date(SYNTHETIC_NOW + 1).toISOString() }]) {
+    const invalid = syntheticPreparationInputs()[0];
+    Object.assign(invalid.review.notificationHandoff, patch);
+    assert.equal(prepare(invalid).status, 'blocked');
+    assert.deepEqual(prepare(invalid).unresolved, ['NOTIFICATION_HANDOFF_REVIEW_REQUIRED']);
+  }
+  for (const patch of [{ channel: 'mobile' }, { recipientId: 'other_recipient' }]) {
+    const invalid = syntheticPreparationInputs()[0];
+    Object.assign(invalid.review.notificationHandoff, patch);
+    assert.equal(prepare(invalid).status, 'blocked');
+  }
+});
+
 test('bad or unresolved inputs return no usable partial configuration', () => {
   const cases = [
     ['unknown country', (v) => { v.review.countryCode = 'Unknown'; }, 'PHONE_COUNTRY_UNRESOLVED'],

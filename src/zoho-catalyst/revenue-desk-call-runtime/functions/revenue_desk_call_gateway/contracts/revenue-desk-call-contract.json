@@ -162,6 +162,14 @@
     "urgency",
     "sensitive_data_detected"
   ],
+  "optional_handoff_analysis": {
+    "callback_number_confirmed": {
+      "type": "boolean_or_null",
+      "meaning": "Caller explicitly confirmed the extracted callback number in this conversation; not caller ID or format validation.",
+      "absent_or_false": "Callback number is unknown for human follow-up.",
+      "provider_configuration_status": "Proposal only; separate review and live provider evidence required."
+    }
+  },
   "retell_conversation_variable_fields": [
     "configuration_version",
     "company_description",

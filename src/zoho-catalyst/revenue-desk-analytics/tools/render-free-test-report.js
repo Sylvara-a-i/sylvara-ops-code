@@ -13,6 +13,15 @@ const COVERAGE = Object.freeze({
   after_hours_only: 'After-hours only', no_answer_overflow_only: 'No-answer / overflow only',
   after_hours_and_overflow: 'After-hours and overflow',
 });
+const NOTIFICATION_LABELS = Object.freeze({
+  Pending: 'Pending — not yet attempted', Sending: 'Sending — outcome unresolved',
+  RetryRequired: 'Retry required — bounded retry pending',
+  DryRunRecorded: 'Dry run recorded — nothing sent', Sent: 'Provider accepted — inbox delivery not verified',
+  Ambiguous: 'Ambiguous — reconcile before any resend',
+  ReconciliationRequired: 'Reconciliation required — operator review',
+  Succeeded: 'Legacy succeeded state — delivery not verified',
+  TerminalFailure: 'Terminal failure — automatic retries stopped',
+});
 
 function fail(code) { const error = new Error(code); error.code = code; throw error; }
 
@@ -79,8 +88,8 @@ function renderFreeTestReport(input, options = {}) {
 * { box-sizing: border-box; }
 body { margin: 0 auto; padding: .5in; max-width: 8.5in; color: #161616; background: white;
   font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif; font-size: 10pt; line-height: 1.3; }
-h1 { font-size: 18pt; } h2 { font-size: 15pt; margin-top: 18pt; }
-h1, h2, caption { break-after: avoid; } p, li { orphans: 3; widows: 3; }
+h1 { font-size: 18pt; } h2 { font-size: 15pt; margin-top: 18pt; } h3 { font-size: 12pt; }
+h1, h2, h3, caption { break-after: avoid; } p, li { orphans: 3; widows: 3; }
 p { margin: 0 0 5pt; } header { border-bottom: 2px solid; padding-bottom: 10pt; }
 .status { font-size: 9pt; font-weight: bold; } .synthetic { border: 2px solid; padding: 8pt; font-weight: bold; }
 table { border-collapse: collapse; width: 100%; margin: 10pt 0; font-size: 8.8pt; table-layout: fixed; }
@@ -119,7 +128,21 @@ ${table('Overlapping flags and observed failures', ['Measure', 'Calls'], [
     ['Bookable opportunities (not confirmed bookings)', count(during.bookableOpportunities)],
     ['Calls requiring office follow-up', count(during.officeFollowUpCalls)],
     ['Observed workflow failures', count(during.observedWorkflowFailures)],
-  ])}</section>
+  ])}
+<h3 id="handoff">Call-to-business handoff</h3>
+<p>These states describe the same unique connected calls, not additional calls or completed business work. Missing notification evidence stays separate from every known state.</p>
+${table('Recorded alert states — connected calls only', ['State', 'Calls'], [
+    ...during.handoff.notificationStates.map(({ state, calls }) => [NOTIFICATION_LABELS[state], calls]),
+    ['Notification evidence not available', during.handoff.missingNotificationEvidenceCalls],
+  ])}
+${table('Delivery and human follow-up evidence', ['Evidence', 'Calls / state'], [
+    ['Inbox delivery verified', count(during.handoff.inboxDeliveryVerifiedCalls)],
+    ['Business acknowledgment', count(during.handoff.businessAcknowledgmentCalls)],
+    ['Completed business callbacks', count(during.handoff.completedCallbackCalls)],
+    ['Structured analysis completion', evidence.analysisComplete ? 'Complete' : 'Incomplete / Not available'],
+  ])}
+<p>DryRunRecorded is a preview, not a send. Sent records provider acceptance only; it does not prove inbox arrival, reading, acknowledgment or a callback. Per-call missing-analysis counts are not available in this minimized report.</p>
+<p>The business owns manual follow-up. A Sylvara operator reviews failed or uncertain delivery before recovery; this report triggers no retry, message or callback. Existing report readiness and reconciliation gates still apply.</p></section>
 <section aria-labelledby="limitations"><h2 id="limitations">Evidence and limitations</h2>
 ${table('Evidence completeness', ['Evidence', 'State'], [
     ['Structured call analysis', evidence.analysisComplete ? 'Complete' : 'Incomplete / Not available'],

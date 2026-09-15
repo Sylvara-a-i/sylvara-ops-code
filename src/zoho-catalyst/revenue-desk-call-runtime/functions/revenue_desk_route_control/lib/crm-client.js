@@ -11,7 +11,7 @@ const DEAL_FIELDS = Object.freeze([
   'Forwarding_Administrator_Name', 'Forwarding_Administrator_Mobile',
   'Approved_Fallback_Destination', 'Approved_Fallback_Number', 'Rollback_Contact_Name',
   'Rollback_Contact_Mobile', 'Alert_Recipient_Name', 'Alert_Recipient_Email',
-  'Alert_Recipient_Mobile',
+  'Alert_Recipient_Mobile', 'Urgent_Call_Handling', 'Existing_Customer_Call_Handling',
   'Test_Phone_Number', 'Deployment_Record_ID', 'Configuration_Version', 'Test_Status',
   'Go_Live_Approval_Status', 'Go_Live_Approved_At', 'Approved_Deployment_Record_ID',
   'Approved_Configuration_Version', 'Test_Start_At', 'Test_End_At', 'Test_End_Reason',

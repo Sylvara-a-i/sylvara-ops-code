@@ -62,6 +62,33 @@ test('early-stop rehearsal is labeled separately and never claims carrier restor
   assert.doesNotMatch(html, /Original carrier handling restored<\/th><td>Verified/);
 });
 
+test('owner handoff separates durable alert state from manual acknowledgment and callback', () => {
+  const input = fixture();
+  input.ownerHandoffRehearsal = { scenarios: ['accepted', 'definite_rejection', 'ambiguous'].map((scenario) => ({
+    scenario, capture: { callerName: 'Synthetic Caller', callbackNumber: '+15551110001',
+      issueSummary: '</td><script>neverExecute()</script>', urgency: 'urgent',
+      connectedCalls: 1, officeFollowUpRequired: true },
+    alert: { recipient: 'synthetic@example.invalid', replaySuppressed: true,
+      states: [{ status: scenario === 'accepted' ? 'Sent' : scenario === 'ambiguous' ? 'Ambiguous' : 'TerminalFailure', attempts: 1 }],
+      htmlPreview: '<table><tr><td>Escaped preview</td></tr></table>' },
+    simulatedEffects: { sendAttempts: 1 },
+    businessFollowUp: { acknowledgment: null, callbackOutcome: null },
+  })) };
+  const html = renderFreeTestDemo(input);
+  assert.equal((html.match(/Capture → Alert → Business Follow-Up/g) || []).length, 1);
+  assert.equal((html.match(/class="handoff"/g) || []).length, 3);
+  assert.match(html, /three calls are not added to the baseline reports/);
+  assert.match(html, /Business acknowledgment<\/th><td>Unknown \/ not established/);
+  assert.match(html, /Business callback outcome<\/th><td>Unknown \/ not established/);
+  assert.match(html, /does not prove inbox arrival, reading, acknowledgment or a callback/);
+  assert.match(html, /do not resend, clone the event or mark it delivered/);
+  assert.match(html, /existing bounded retry budget, then stops/);
+  assert.match(html, /&lt;script&gt;neverExecute\(\)&lt;\/script&gt;/);
+  assert.match(html, /&lt;table&gt;/);
+  assert.equal((html.match(/data-step="/g) || []).length, 14);
+  singleInlineScript(html);
+});
+
 test('all fixture text is escaped and no executable remote assets or forms exist', () => {
   const input = fixture();
   input.companies[0].key = '<ScRiPt src="https://invalid.example"></sCrIpT>';

@@ -68,6 +68,32 @@ test('synthetic baseline is prominent and clearly separates estimates, zero, unk
   assert.match(html, /All displayed outcomes are illustrative synthetic data/);
 });
 
+test('handoff section preserves actual state meaning and never invents delivery or callbacks', () => {
+  const input = fixture();
+  input.calls[0].NOTIFICATION_STATE = 'sent';
+  input.calls[1].NOTIFICATION_STATE = 'ambiguous';
+  input.calls[2].NOTIFICATION_STATE = 'pending';
+  input.calls[3].NOTIFICATION_STATE = 'terminal_failure';
+  delete input.calls[4].NOTIFICATION_STATE;
+  input.finalResult.ANALYSIS_EVIDENCE_COMPLETE = false;
+  refreshDigests(input);
+  const html = renderFreeTestReport(input, { now: NOW, synthetic: true });
+  assert.match(html, /<h3 id="handoff">Call-to-business handoff<\/h3>/);
+  assert.match(html, /Dry run recorded — nothing sent<\/th><td>6/);
+  assert.match(html, /Provider accepted — inbox delivery not verified<\/th><td>1/);
+  assert.match(html, /Ambiguous — reconcile before any resend<\/th><td>1/);
+  assert.match(html, /Pending — not yet attempted<\/th><td>1/);
+  assert.match(html, /Terminal failure — automatic retries stopped<\/th><td>1/);
+  assert.match(html, /Notification evidence not available<\/th><td>1/);
+  assert.match(html, /Business acknowledgment<\/th><td>Not available/);
+  assert.match(html, /Completed business callbacks<\/th><td>Not available/);
+  assert.match(html, /Structured analysis completion<\/th><td>Incomplete \/ Not available/);
+  assert.match(html, /Per-call missing-analysis counts are not available/);
+  assert.match(html, /Existing report readiness and reconciliation gates still apply/);
+  input.evidence.scopes[0].unresolved_v2_outbox_rows = 1;
+  assert.throws(() => renderFreeTestReport(input, { now: NOW }), { code: 'REPORT_RECONCILIATION_REQUIRED' });
+});
+
 test('verified zero is displayed as zero, while unknown optional evidence stays unavailable', () => {
   const empty = renderFreeTestReport(fixture(true), { now: NOW, synthetic: true });
   assert.match(empty, /Unique connected calls captured<\/th><td>0/);

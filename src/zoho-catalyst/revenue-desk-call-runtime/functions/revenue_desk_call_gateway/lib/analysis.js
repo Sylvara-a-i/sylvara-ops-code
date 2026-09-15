@@ -109,7 +109,8 @@ function extractAnalysis(call, documentedMethods = new Set()) {
   if (sensitive) return Object.freeze({
     outcome: 'sensitive_data_ended',
     coverageTrigger: COVERAGE_TRIGGERS.has(data.coverage_trigger) ? data.coverage_trigger : 'Unknown',
-    callerName: null, callbackNumber: null, customerType: 'unknown', callerIntent: null,
+    callerName: null, callbackNumber: null, callbackNumberConfirmed: null,
+    customerType: 'unknown', callerIntent: null,
     issueSummary: null, cityOrZip: null, urgency: 'unknown', specificPersonRequested: null,
     // Privacy minimization deliberately withholds these provider assertions.
     // Null prevents downstream reporting from turning erased true values into
@@ -121,8 +122,17 @@ function extractAnalysis(call, documentedMethods = new Set()) {
     sensitiveDataMinimized: true, configuredAnalysisComplete,
     workflowFailureEvidenceComplete: false,
   });
-  const callbackNumber = data.callback_number === undefined || data.callback_number === null
+  const suppliedCallbackNumber = data.callback_number === undefined || data.callback_number === null
     || data.callback_number === '' ? null : e164(data.callback_number, 'callback_number');
+  const callbackNumberConfirmed = data.callback_number_confirmed === undefined
+    || data.callback_number_confirmed === null ? null
+    : boolean(data.callback_number_confirmed, 'callback_number_confirmed');
+  invariant(callbackNumberConfirmed !== true || suppliedCallbackNumber !== null,
+    'INVALID_ANALYSIS', 'Confirmed callback evidence requires a callback number.');
+  // Caller ID and a well-formed extraction are not confirmation. Until the
+  // separately reviewed provider field exists, omit the unconfirmed number
+  // from durable actionable content instead of presenting it as callable.
+  const callbackNumber = callbackNumberConfirmed === true ? suppliedCallbackNumber : null;
   const bookableOpportunity = data.bookable_opportunity === undefined
     || data.bookable_opportunity === null ? null
     : boolean(data.bookable_opportunity, 'bookable_opportunity');
@@ -140,6 +150,7 @@ function extractAnalysis(call, documentedMethods = new Set()) {
   assertOutcomeUrgencyConsistency(outcome, urgency);
   return Object.freeze({
     outcome, coverageTrigger, callerName: text(data.caller_name, 'caller_name', 120), callbackNumber,
+    callbackNumberConfirmed,
     customerType, callerIntent: text(data.caller_intent, 'caller_intent', 160),
     issueSummary: text(data.issue_summary, 'issue_summary', 500),
     cityOrZip: text(data.city_or_zip, 'city_or_zip', 120), urgency,
@@ -159,14 +170,40 @@ function triggerAllowedForMode(trigger, coverageMode) {
   return compatible.has(trigger);
 }
 
-function makeNotificationPayload(call) {
-  return Object.freeze({
+function makeNotificationPayload(call, configuration) {
+  const legacy = {
     callerName: call.callerName, callbackNumber: call.callbackNumber,
     customerType: call.customerType, cityOrZip: call.cityOrZip,
     issueSummary: call.issueSummary, urgency: call.urgency,
     specificPersonRequested: call.specificPersonRequested,
     callTimestamp: call.startedAt,
     callOutcome: call.outcome,
+  };
+  // The durable call selects the template generation. Omission means the old
+  // payload exactly: upgrades must not change an existing notification key.
+  if (call.notificationPayloadVersion !== 2) return Object.freeze(legacy);
+  invariant(configuration && configuration.notificationRecipient,
+    'INVALID_NOTIFICATION', 'Server-owned notification configuration is required.');
+  const confirmed = call.callbackNumberConfirmed === true && call.callbackNumber !== null;
+  let nextAction = confirmed
+    ? 'Review this request and arrange human follow-up using the confirmed callback number.'
+    : 'Review this request. No confirmed callback number is available; verify contact details through an approved source before calling.';
+  if (call.outcome === 'spam' || call.outcome === 'unsupported_service' || call.outcome === 'out_of_area') {
+    nextAction = 'Review the classification before closing the request. Do not discard an uncertain or incomplete service request as spam.';
+  }
+  if (call.sensitiveDataMinimized) nextAction = 'Sensitive details were withheld. Review the safe status under the approved handling procedure; do not recover a recording or transcript.';
+  if (call.urgency === 'urgent' || call.urgency === 'immediate_danger') {
+    nextAction = `Review the urgency under the business\'s approved procedure. ${nextAction} No dispatch or emergency response is arranged.`;
+  }
+  return Object.freeze({
+    notificationPayloadVersion: 2,
+    businessName: configuration.companyName,
+    followUpOwner: configuration.notificationRecipient.name,
+    timeZone: configuration.notificationHandoff?.timeZone || 'UTC',
+    ...legacy,
+    callbackNumber: confirmed ? call.callbackNumber : null,
+    callbackNumberConfirmed: confirmed,
+    nextAction,
   });
 }
 

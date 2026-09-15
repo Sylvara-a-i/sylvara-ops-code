@@ -276,6 +276,17 @@ function prepareFreeTestConfiguration(input, { now = Date.now() } = {}) {
       && existingCustomerHandling === 'Alert + Capture Callback',
     'FREE_TEST_HANDLING_POLICY_UNSUPPORTED');
     const reportBaseline = prepareReportBaseline(input, deal, review, now);
+    // Form 2 identifies the destination but does not prove someone monitors it.
+    // Accept only a separately supplied review acknowledgment; never fabricate
+    // one from an email address or treat this local copy as authenticated proof.
+    const handoff = review.notificationHandoff;
+    if (handoff !== undefined) {
+      record(handoff);
+      requireValue(handoff.timeZone === hours.zone
+        && Number.isFinite(Date.parse(handoff.acknowledgedAt))
+        && Date.parse(handoff.acknowledgedAt) <= now,
+      'NOTIFICATION_HANDOFF_REVIEW_REQUIRED');
+    }
     const candidate = validateConfiguration({
       clientId: review.clientId, crmDealId: deal.id, deploymentId: review.deploymentId,
       configurationVersion: deal.Configuration_Version, approved: false,
@@ -291,6 +302,7 @@ function prepareFreeTestConfiguration(input, { now = Date.now() } = {}) {
         name: deal.Alert_Recipient_Name, channel: 'email', email: deal.Alert_Recipient_Email,
         mobile: null,
       },
+      ...(handoff === undefined ? {} : { notificationHandoff: handoff }),
       phoneSystemProvider: account.Phone_System_Provider, approvedTestRoute: label, noAnswerDelay: null,
       forwardingAdministratorName: deal.Forwarding_Administrator_Name,
       forwardingAdministratorMobile: usPhone(deal.Forwarding_Administrator_Mobile, country,
@@ -318,8 +330,11 @@ function prepareFreeTestConfiguration(input, { now = Date.now() } = {}) {
     ].filter(([, source, normalized]) => source !== normalized).map(([field]) => field);
     return Object.freeze({ ...boundary, classification: input.classification,
       status: 'prepared_local_only', candidate,
-      unresolved: Object.freeze(phoneReconciliationFields.length
-        ? ['CRM_PHONE_FORMAT_RECONCILIATION_REQUIRED'] : []),
+      unresolved: Object.freeze([
+        ...(phoneReconciliationFields.length ? ['CRM_PHONE_FORMAT_RECONCILIATION_REQUIRED'] : []),
+        ...(!candidate.notificationHandoff?.monitored
+          ? ['NOTIFICATION_HANDOFF_ACKNOWLEDGMENT_REQUIRED'] : []),
+      ]),
       reviewContext: Object.freeze({ countryCode: country, timeZone: hours.zone,
         dstPolicy: review.dstPolicy, hoursExceptions: Object.freeze(hours.exceptions),
         weeklyHours: hours.weeklyHours, hoursSourceText: hours.sourceText,

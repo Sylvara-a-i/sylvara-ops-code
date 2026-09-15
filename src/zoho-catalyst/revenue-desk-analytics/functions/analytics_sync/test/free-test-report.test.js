@@ -34,6 +34,53 @@ test('free-test gate does not require paid conversion; broad dashboard contract 
   assert.equal(evaluatePreRenderGate(profile.pre_render_gate, f.evidence, NOW, f.approval).verdict, 'blocked');
 });
 
+test('handoff states derive from attested unique calls without claiming delivery or human work', () => {
+  const f = fixture();
+  const { notification_states: states } = require('../../../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/contracts/revenue-desk-call-contract.json');
+  const { callFact: producer } = require('../../../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/analytics-outbox');
+  for (const [index, call] of f.calls.entries()) {
+    delete call.NOTIFICATION_STATE;
+    if (index < states.length) {
+      // Use the actual producer's enum serialization, not a second guessed map.
+      call.NOTIFICATION_STATE = producer({ analyticsPartitionSecret: 'synthetic-handoff-only'.padEnd(32, 'x') }, {
+        CALL_KEY: `call_${call.CALL_KEY}`, CLIENT_ID: 'ZZZ-client', DEPLOYMENT_ID: 'ZZZ-deployment',
+        CONFIGURATION_VERSION_ID: call.CONFIGURATION_VERSION, ENGAGEMENT_TYPE: 'free_test',
+        SOURCE_ENVIRONMENT: 'development', SOURCE_REVISION: REVISION, UPDATED_AT: WATERMARK,
+        HANDLED_RECORDED: true, NOTIFICATION_STATE: states[index],
+      }, { startedAt: call.STARTED_AT, callStatus: 'ended', outcome: call.OUTCOME }).NOTIFICATION_STATE;
+    }
+  }
+  refreshDigests(f);
+  const report = buildFreeTestReport(f, NOW);
+  const handoff = report.duringTest.handoff;
+  assert.equal(handoff.scope, 'unique_connected_calls');
+  assert.deepEqual(handoff.notificationStates, states.map((state) => ({ state, calls: 1 })));
+  assert.equal(handoff.missingNotificationEvidenceCalls, 2);
+  assert.equal(handoff.notificationStates.reduce((sum, state) => sum + state.calls, 0)
+    + handoff.missingNotificationEvidenceCalls, report.duringTest.callsCaptured);
+  assert.equal(handoff.inboxDeliveryVerifiedCalls, null);
+  assert.equal(handoff.businessAcknowledgmentCalls, null);
+  assert.equal(handoff.completedCallbackCalls, null);
+  f.calls.push({ ...f.calls[0], SOURCE_MODIFIED_AT: '2026-08-24T12:05:00.000Z' });
+  assert.deepEqual(buildFreeTestReport(f, NOW).duringTest.handoff, handoff);
+  f.evidence.scopes[0].unresolved_v2_outbox_rows = 1;
+  assert.throws(() => buildFreeTestReport(f, NOW), { code: 'REPORT_RECONCILIATION_REQUIRED' });
+});
+
+test('missing notification state is unknown, unsupported state blocks, and zero stays evidence-based', () => {
+  const f = fixture();
+  f.calls.forEach((call) => { delete call.NOTIFICATION_STATE; });
+  refreshDigests(f);
+  assert.equal(buildFreeTestReport(f, NOW).duringTest.handoff.missingNotificationEvidenceCalls, 11);
+  f.calls[0].NOTIFICATION_STATE = 'invented_delivered';
+  refreshDigests(f);
+  assert.throws(() => buildFreeTestReport(f, NOW), { code: 'REPORT_UNKNOWN_NOTIFICATION_STATE' });
+  const empty = buildFreeTestReport(fixture(true), NOW).duringTest.handoff;
+  assert.equal(empty.missingNotificationEvidenceCalls, 0);
+  assert.equal(empty.notificationStates.every((state) => state.calls === 0), true);
+  assert.equal(empty.businessAcknowledgmentCalls, null);
+});
+
 test('zero-call report requires explicit fresh zero evidence, never an invented checkpoint', () => {
   const f = fixture(true);
   assert.equal(buildFreeTestReport(f, NOW).duringTest.callsCaptured, 0);
