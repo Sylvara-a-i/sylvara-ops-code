@@ -443,7 +443,7 @@ function validateDealBinding(deal, command, configurationVersion) {
     && hasText(deal.Authority_Confirmed_At)
     && hasText(deal.Test_Scope_Accepted_At)
     && deal.Deployment_Record_ID === command.deploymentId
-    && deal.Configuration_Version === command.configurationVersionId
+    && deal.Configuration_Version === configurationVersion.configurationVersion
     && dealValueMatchesConfiguration(deal, configurationVersion),
   'CONTROL_PRECONDITION_FAILED', 'CRM journey is incomplete or does not match the immutable configuration.',
   { httpStatus: 409 });
@@ -572,7 +572,9 @@ function parseConfiguration(row, command, sourceRevision, deployment) {
   invariant(deployment && configuration.clientId === deployment.CLIENT_ID
     && configuration.crmDealId === command.dealId
     && configuration.deploymentId === command.deploymentId
-    && configuration.configurationVersion === command.configurationVersionId
+    // The command selects the physical row above; its immutable label must
+    // separately match the JSON and CRM label, even when their strings differ.
+    && configuration.configurationVersion === version.configurationVersion
     && configuration.approved === true
     && configuration.authorizedRepresentativeConfirmed === true
     && configuration.testScopeAccepted === true,

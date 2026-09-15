@@ -473,7 +473,14 @@ function createCrmControlClient(config, {
     // must remain byte-for-byte equal to the prevalidated snapshot.
     assertDealSnapshot(deal, expectedDeal, ROLLBACK_INTERLEAVING_MUTABLE_FIELDS);
     invariant(deal.Deployment_Record_ID === deploymentId
-      && deal.Configuration_Version === configurationVersionId,
+      // The prevalidated snapshot owns the CRM label. The approved version is
+      // the physical immutable row ID; neither may substitute for the other.
+      && typeof expectedDeal.Configuration_Version === 'string'
+      && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$/.test(expectedDeal.Configuration_Version)
+      && deal.Configuration_Version === expectedDeal.Configuration_Version
+      && typeof configurationVersionId === 'string'
+      && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(configurationVersionId)
+      && deal.Approved_Configuration_Version === configurationVersionId,
     'CRM_TRANSITION_PRECONDITION_FAILED', 'CRM rollback identity is invalid.',
     { httpStatus: 409 });
     invariant(!deal.Billing_Subscription_ID,

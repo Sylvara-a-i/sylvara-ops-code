@@ -553,6 +553,48 @@ test('approval succeeds only after complete Form 2 and exact immutable configura
     { code: 'CONTROL_PRECONDITION_FAILED' });
 });
 
+test('distinct CRM labels and physical version IDs preserve approval, activation, rollback and replay', async () => {
+  const label = 'form2cfgv1:101:synthetic_label';
+  const subject = fixture({
+    dealOverrides: { Configuration_Version: label },
+    configOverrides: { CONFIGURATION_VERSION: label,
+      CONFIGURATION_JSON: JSON.stringify({ ...configuration(), configurationVersion: label }) },
+  });
+  assert.notEqual(label, command('approve').configurationVersionId);
+  const approved = await subject.service.approve(command('approve'));
+  assert.equal(approved.deployment.APPROVED_CONFIGURATION_VERSION_ID, IDS.configuration);
+  assert.equal(subject.crmState.Configuration_Version, label);
+  assert.equal(subject.crmState.Approved_Configuration_Version, IDS.configuration);
+  assert.equal(approved.deployment.ACTUAL_START_AT, null);
+  assert.equal(subject.getProviderVerificationCalls(), 0);
+  assert.equal((await subject.service.approve(command('approve'))).replayed, true);
+  subject.setClock(NOW + 300_000);
+  const activated = await subject.service.activate(command('activate'));
+  assert.equal(activated.deployment.TEST_STATUS, 'Live');
+  assert.equal((await subject.service.activate(command('activate'))).replayed, true);
+  subject.setClock(NOW + 600_000);
+  await subject.service.rollback(command('rollback'));
+  assert.equal(subject.crmState.Configuration_Version, label);
+  assert.equal(subject.crmState.Approved_Configuration_Version, IDS.configuration);
+  assert.equal((await subject.service.rollback(command('rollback'))).replayed, true);
+});
+
+test('configuration label joins use the loaded immutable row, never a matching caller ID alone', async () => {
+  for (const [recordLabel, jsonLabel, crmLabel] of [
+    ['label_one', IDS.configuration, IDS.configuration],
+    ['label_one', 'label_two', 'label_two'],
+    ['label_one', 'label_one', 'label_two'],
+  ]) {
+    const subject = fixture({ dealOverrides: { Configuration_Version: crmLabel },
+      configOverrides: { CONFIGURATION_VERSION: recordLabel,
+        CONFIGURATION_JSON: JSON.stringify({ ...configuration(), configurationVersion: jsonLabel }) } });
+    const before = structuredClone(subject.store.rows);
+    await assert.rejects(subject.service.approve(command('approve')), { code: 'CONTROL_PRECONDITION_FAILED' });
+    assert.deepEqual(subject.store.rows, before);
+    assert.equal(subject.getProviderVerificationCalls(), 0);
+  }
+});
+
 test('approval rejects the pre-submission Verified access state', async () => {
   const subject = fixture({ dealOverrides: { Setup_Access_Status: 'Verified' } });
   await assert.rejects(subject.service.approve(command('approve')),

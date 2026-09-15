@@ -231,6 +231,45 @@ test('an exact partial rollback resumes without repeating the field write', asyn
   assert.equal(result.manualCloseRequired.transitionName, 'Close During QA');
 });
 
+test('rollback keeps the exact CRM label separate from its approved physical version ID', async () => {
+  const selected = fixture('committed');
+  selected.state.Configuration_Version = 'form2cfgv1:101:synthetic_label';
+  const expectedDeal = structuredClone(selected.state);
+  const stoppedAt = '2026-08-29T12:20:00.000Z';
+  const request = { deploymentId: DEPLOYMENT_ID, configurationVersionId: CONFIGURATION_ID,
+    stoppedAt, reason: 'Sylvara Stopped', routeInactive: true, expectedDeal };
+  const result = await selected.client.recordRollback(DEAL_ID, request);
+  assert.equal(result.Configuration_Version, expectedDeal.Configuration_Version);
+  assert.equal(result.Approved_Configuration_Version, CONFIGURATION_ID);
+  assert.equal(result.manualCloseRequired.transitionName, 'Close During QA');
+  const writes = selected.writes.length;
+  const resumed = await selected.client.recordRollback(DEAL_ID, {
+    ...request, expectedDeal: structuredClone(selected.state),
+  });
+  assert.equal(resumed.Configuration_Version, expectedDeal.Configuration_Version);
+  assert.equal(selected.writes.length, writes);
+});
+
+test('rollback rejects stale labels and wrong approved physical IDs before any CRM write', async () => {
+  for (const change of ['label-drift', 'physical-id', 'missing-label']) {
+    const selected = fixture('committed');
+    selected.state.Configuration_Version = 'form2cfgv1:101:synthetic_label';
+    const expectedDeal = structuredClone(selected.state);
+    if (change === 'label-drift') selected.state.Configuration_Version = 'another_label';
+    if (change === 'missing-label') {
+      selected.state.Configuration_Version = null;
+      expectedDeal.Configuration_Version = null;
+    }
+    await assert.rejects(selected.client.recordRollback(DEAL_ID, {
+      deploymentId: DEPLOYMENT_ID,
+      configurationVersionId: change === 'physical-id' ? 'different_physical_row' : CONFIGURATION_ID,
+      stoppedAt: '2026-08-29T12:20:00.000Z', reason: 'Sylvara Stopped', routeInactive: true, expectedDeal,
+    }), { code: 'CRM_TRANSITION_PRECONDITION_FAILED' });
+    assert.equal(selected.writes.length, 0);
+    assert.equal(selected.requests.some((request) => request.method === 'PUT'), false);
+  }
+});
+
 test('rollback accepts only the exact concurrent activation and closes CRM non-Live', async () => {
   const selected = fixture('committed');
   const expectedDeal = structuredClone(selected.state);
