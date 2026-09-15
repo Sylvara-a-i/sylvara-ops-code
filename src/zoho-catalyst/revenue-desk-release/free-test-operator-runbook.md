@@ -113,12 +113,23 @@ the completion contract. No raw provider export is accepted by the demo.
 | Required result | Last verified observation | Unapplied next action |
 | --- | --- | --- |
 | Fifteen supported analysis definitions | Historical shared agent has eleven | Freshly verify, then propose adding `bookable_opportunity`/`office_follow_up_required` as booleans and `workflow_failure_code`/`workflow_failure_text` as bounded strings |
-| Exact analysis value schema | Four canonical enum sets are checked locally; `caller_intent` is bounded text in the backend, but historically an enum in the provider | Resolve the provider's exact caller-intent value contract without inventing choices; unknown stays unverified |
+| Exact analysis value schema | Four canonical enum sets are checked locally; `caller_intent` remains bounded text in the backend | Compare provider choices against a separately reviewed private export contract; absent or malformed expected evidence remains unknown |
 | Missing evidence remains unknown | Backend preserves null and failure-field presence | Never add false/zero defaults to fill absent analysis; no-failure needs explicit field-presence evidence |
 | Canonical event binding | Historical event path differs | Bind an approved isolated draft to the exact current events endpoint, using private configuration only |
 | Exact number/version/resolver/fallback binding | Prior UI disabled inbound/outbound; API projection incomplete | Obtain complete machine readback and isolated-number ownership; do not infer omitted fields as empty |
 | Approved data-handling scope | Earlier UI retained content with PII exclusion for 30 days | Reconcile against the exact controlled-test scope before any voice; do not silently alter policy |
 | Fifteen prompt-visible variables only | Prior projection matched | Freshly recheck names/types/defaults/gate; exclude contacts, credentials and signed ownership evidence |
+
+The local comparator optionally takes a separate `reviewedCallerIntentContract`
+argument with exactly `schemaVersion: 1`, `evidenceClass: reviewed_export_snapshot`,
+a lowercase 64-character `sourceSha256`, and unique, nonempty `choices` of at most
+160 characters each, without surrounding whitespace or control characters. Keep
+the reviewed choices, export and hash-linked review record private; do not copy
+them into the runtime contract. The comparator does not read an export or verify
+the hash against a file: the hash identifies the source reviewed by the operator.
+It never infers an expected set from the observed metadata. A match only compares
+the supplied projection to that snapshot; it is not current provider readback,
+model acceptance or permission to execute. Other binding and privacy gates remain.
 
 These are proposals, not a deployable Retell payload or permission to edit a
 published version. Keep private identifiers, endpoints, prompt text and secrets

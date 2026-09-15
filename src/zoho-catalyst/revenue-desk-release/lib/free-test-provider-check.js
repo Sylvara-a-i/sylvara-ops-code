@@ -23,11 +23,28 @@ function exactChoices(actual, expected) {
     && expected.every((value) => actual.includes(value));
 }
 
+function reviewedCallerIntentChoices(reviewed) {
+  if (!reviewed || typeof reviewed !== 'object' || Array.isArray(reviewed)
+    || ![Object.prototype, null].includes(Object.getPrototypeOf(reviewed))) return null;
+  const keys = ['schemaVersion', 'evidenceClass', 'sourceSha256', 'choices'];
+  if (!exactChoices(Reflect.ownKeys(reviewed), keys) || reviewed.schemaVersion !== 1
+    || reviewed.evidenceClass !== 'reviewed_export_snapshot'
+    || typeof reviewed.sourceSha256 !== 'string' || !/^[a-f0-9]{64}$/.test(reviewed.sourceSha256)
+    || !Array.isArray(reviewed.choices) || reviewed.choices.length === 0
+    || new Set(reviewed.choices).size !== reviewed.choices.length
+    || Array.from(reviewed.choices).some((value) => typeof value !== 'string' || value.length === 0
+      || value.length > 160 || value !== value.trim() || /[\u0000-\u001f\u007f]/.test(value))) return null;
+  return reviewed.choices;
+}
+
 /** Compare an already-minimized metadata projection, never a raw provider export.
  * This is preparation evidence only: matching names/types cannot prove model
  * extraction, webhook delivery, privacy enforcement or telephone handling.
+ * The optional expected caller-intent contract must be reviewed separately and
+ * kept private. Its hash links that review to an export; this pure comparison
+ * does not read the export, authenticate the review or prove live freshness.
  */
-function compareFreeTestProviderMetadata(metadata) {
+function compareFreeTestProviderMetadata(metadata, reviewedCallerIntentContract) {
   const gaps = [];
   const input = metadata && typeof metadata === 'object' ? metadata : {};
   const fields = Array.isArray(input.analysisFields) ? input.analysisFields : [];
@@ -40,18 +57,25 @@ function compareFreeTestProviderMetadata(metadata) {
   if (fields.some((field) => field?.type !== ANALYSIS_TYPES[field?.name])) gaps.push('ANALYSIS_TYPES_MISMATCH');
   const unverifiedEnums = [];
   const mismatchedEnums = [];
-  for (const [name, expected] of Object.entries(ANALYSIS_ENUMS)) {
+  const callerIntentChoices = reviewedCallerIntentChoices(reviewedCallerIntentContract);
+  const enumContracts = { ...ANALYSIS_ENUMS,
+    ...(callerIntentChoices ? { caller_intent: callerIntentChoices } : {}) };
+  for (const [name, expected] of Object.entries(enumContracts)) {
     const field = fields.find((candidate) => candidate?.name === name);
     if (!field || !Array.isArray(field.choices)) unverifiedEnums.push(name);
     else if (!exactChoices(field.choices, expected)) mismatchedEnums.push(name);
   }
   if (unverifiedEnums.length) gaps.push('ANALYSIS_ENUM_VALUES_UNVERIFIED');
   if (mismatchedEnums.length) gaps.push('ANALYSIS_ENUM_VALUES_MISMATCH');
-  // The canonical runtime accepts bounded caller-intent text, but the
-  // historical provider field was an enum with no authoritative complete
-  // choice set. Do not invent that set or turn matching field names into a
-  // claim that the complete provider schema has been verified.
-  gaps.push('CALLER_INTENT_VALUE_CONTRACT_UNVERIFIED');
+  // Do not infer an expected set from the very metadata being checked or turn
+  // a provider's reviewed enum into a new closed backend text contract.
+  let callerIntentValueContract = 'bounded_text_runtime_only_provider_enum_unverified';
+  if (!callerIntentChoices) gaps.push('CALLER_INTENT_VALUE_CONTRACT_UNVERIFIED');
+  else if (unverifiedEnums.includes('caller_intent')) {
+    callerIntentValueContract = 'reviewed_export_enum_provider_choices_unverified';
+  } else if (mismatchedEnums.includes('caller_intent')) {
+    callerIntentValueContract = 'reviewed_export_enum_mismatch';
+  } else callerIntentValueContract = 'reviewed_export_enum_match';
   if (variables.length !== contract.retell_conversation_variable_fields.length
     || new Set(variables).size !== variables.length
     || contract.retell_conversation_variable_fields.some((name) => !variables.includes(name))) {
@@ -73,7 +97,7 @@ function compareFreeTestProviderMetadata(metadata) {
     missingAnalysisFields: Object.freeze(missing),
     unverifiedEnumFields: Object.freeze(unverifiedEnums),
     mismatchedEnumFields: Object.freeze(mismatchedEnums),
-    callerIntentValueContract: 'bounded_text_runtime_only_provider_enum_unverified',
+    callerIntentValueContract,
     gaps: Object.freeze(gaps),
     metadataMatches: gaps.length === 0,
     liveExecutionVerified: false,
