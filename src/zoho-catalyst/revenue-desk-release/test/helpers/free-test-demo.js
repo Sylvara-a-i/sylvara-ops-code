@@ -194,6 +194,12 @@ async function createOfflineHarness(options = {}) {
   runtime.store.authorizationRows = configurations.flatMap((config, index) => {
     Object.assign(configRows[index], { CONFIGURATION_VERSION: config.configurationVersion,
       CONFIGURATION_JSON: JSON.stringify(config) });
+    if (options.controlVersionIdentity) {
+      // The control service uses one immutable version identity. Establish that
+      // fixture identity before generating its simulated authorization history.
+      configRows[index].CONFIGURATION_VERSION_ID = config.configurationVersion;
+      deploymentRows[index].ACTIVE_CONFIGURATION_VERSION_ID = config.configurationVersion;
+    }
     return fixture.authorizationRows(deploymentRows[index], configRows[index], ['A', 'B'][index],
       runtime.config.authorizationEventSecret);
   });
@@ -214,7 +220,7 @@ async function createOfflineHarness(options = {}) {
     url, payload, headers, env: runtime.env, processJobs: false,
     signatureTimestamp: runtime.clock.value,
   });
-  const inbound = (letter) => invoke('/retell/inbound', fixture.payloadInbound(letter));
+  const inbound = (letter, timestamp) => invoke('/retell/inbound', fixture.payloadInbound(letter, timestamp));
   const event = async (letter, metadata, id, analysis = {}, eventName = 'call_analyzed') => {
     // Existing event fixtures share a synthetic one-minute connected interval;
     // delivery occurs after its end, with a distinct durable update watermark.
@@ -232,6 +238,144 @@ async function createOfflineHarness(options = {}) {
     `client_${letter}`, `deployment_${letter}`, runtime.clock.value);
   return { fixture, runtime, crm, dispatcher, preparations, configurations,
     inbound, invoke, event, job, report, reportToCsv };
+}
+
+// Reuse the same fictional setup in a separate memory-only rehearsal so the
+// original expiry/call-limit reports remain immutable. The production control
+// service owns the revoke claim, decision, persistence and replay; only storage,
+// CRM and the route readback are fakes. No live provider adapter is constructed.
+async function earlyStopRehearsal() {
+  const h = await createOfflineHarness({ controlVersionIdentity: true });
+  const { createRouteControlService } = require(path.join(runtimeRoot, 'lib/route-control-service'));
+  const { verifyAuthorizationReceiptIntegrity } = require(path.join(runtimeRoot, 'lib/authorization-receipt'));
+  const store = h.runtime.store;
+  const tables = h.runtime.config.tables;
+  const deployment = () => store.unique(tables.DEPLOYMENT_TABLE, 'DEPLOYMENT_ID', 'deployment_A');
+  const original = await deployment();
+  const originalReceipts = structuredClone(store.authorizationRows);
+  const activation = originalReceipts.find((row) => row.EVENT_KEY === original.ACTIVATION_EVENT_KEY);
+  const binding = verifyAuthorizationReceiptIntegrity(activation,
+    h.runtime.config.authorizationEventSecret).data.controlBinding;
+  const crmState = structuredClone(h.crm.contexts.get(h.configurations[0].crmDealId).deal);
+  // The existing runtime fixture supplies simulated approval/activation facts;
+  // this is not a new claim about the accepted live Form 1/Form 2 lineage.
+  Object.assign(crmState, { Intake_Submission_ID: binding.journeyId,
+    Go_Live_Approval_Status: 'Approved', Go_Live_Approved_At: original.GO_LIVE_APPROVED_AT,
+    Approved_Deployment_Record_ID: original.DEPLOYMENT_ID,
+    Approved_Configuration_Version: original.ACTIVE_CONFIGURATION_VERSION_ID,
+    Test_Start_At: original.ACTUAL_START_AT, Test_End_At: null });
+  const effects = { routeReadbacks: 0, crmRollbackWrites: 0 };
+  const memoryControlStore = {
+    unique: (...args) => store.unique(...args),
+    insertUnique: (...args) => store.insertUnique(...args),
+    mutate: (...args) => store.mutate(...args),
+    async queryBounded(table, column, value, order, limit, additional = {}) {
+      const rows = [...store.rows.get(table),
+        ...(table === tables.EVENT_RECEIPT_TABLE ? store.authorizationRows : [])];
+      return structuredClone(rows.filter((row) => String(row[column]) === String(value)
+        && Object.entries(additional).every(([key, expected]) => String(row[key]) === String(expected)))
+        .sort((a, b) => String(a[order]).localeCompare(String(b[order]))).slice(0, limit));
+    },
+    async conditionalUpdate(table, rowId, patch, expected) {
+      assert.ok(Object.keys(expected).length <= 4);
+      const row = store.rows.get(table).find((candidate) => String(candidate.ROWID) === String(rowId));
+      assert.ok(row, 'Control writes require an existing synthetic row');
+      if (Object.entries(expected).every(([key, value]) => (row[key] ?? null) === value)) {
+        Object.assign(row, structuredClone(patch));
+      }
+      return structuredClone(row);
+    },
+  };
+  const service = createRouteControlService({
+    config: { environment: 'development', deploymentMode: 'active',
+      sourceRevision: h.runtime.config.sourceRevision, tables,
+      operatorVerificationSecret: 'synthetic_operator_only_'.padEnd(32, 'x'),
+      eventChainSecret: h.runtime.config.authorizationEventSecret,
+      operatorIdHash: `operator_${'e'.repeat(64)}` },
+    store: memoryControlStore, now: () => h.runtime.clock.value,
+    crm: {
+      async getDeal(id) { assert.equal(id, crmState.id); return structuredClone(crmState); },
+      async recordRollback(id, value) {
+        assert.equal(id, crmState.id);
+        assert.equal(value.routeInactive, true);
+        const patch = { Stage: 'Closed Lost', Test_Status: 'Rolled Back',
+          Test_End_At: value.stoppedAt, Test_End_Reason: value.reason,
+          Rollback_Completed_At: value.stoppedAt };
+        if (Object.entries(patch).some(([key, expected]) => crmState[key] !== expected)) {
+          effects.crmRollbackWrites += 1;
+          Object.assign(crmState, patch);
+        }
+        return structuredClone(crmState);
+      },
+    },
+    provider: { async disableRoute({ deployment: row }) {
+      assert.equal(row.DEPLOYMENT_ID, original.DEPLOYMENT_ID);
+      assert.equal((await deployment()).TEST_STATUS, 'Stopped', 'Contain admission before route work');
+      effects.routeReadbacks += 1;
+      return { status: 'route_inactive', instructions: 'SIMULATED ONLY: original handling is not verified.' };
+    } },
+  });
+  const firstAdmission = await h.inbound('A', h.runtime.clock.value);
+  assert.equal(firstAdmission.status, 200);
+  h.runtime.clock.value += 1;
+  const secondAdmission = await h.inbound('A', h.runtime.clock.value);
+  assert.equal(secondAdmission.status, 200);
+  const firstMetadata = firstAdmission.body.call_inbound.metadata;
+  const secondMetadata = secondAdmission.body.call_inbound.metadata;
+  assert.notEqual(firstMetadata.correlation_id, secondMetadata.correlation_id);
+  assert.equal(firstMetadata.resolver_status, 'Resolved');
+  assert.equal(secondMetadata.resolver_status, 'Resolved');
+  await h.event('A', firstMetadata, 'before_operator_stop');
+  const before = await deployment();
+  h.runtime.clock.value += 1000;
+  const command = { dealId: binding.dealId, journeyId: binding.journeyId,
+    deploymentId: original.DEPLOYMENT_ID,
+    configurationVersionId: original.ACTIVE_CONFIGURATION_VERSION_ID,
+    idempotencyKey: '00000000-0000-4000-8000-000000000009', reason: 'operator_requested' };
+  const stopped = await service.rollback(command);
+  assert.equal(stopped.deployment.TEST_STATUS, 'Stopped');
+  assert.equal(stopped.deployment.GO_LIVE_APPROVAL_STATUS, 'Revoked');
+  assert.notEqual((await h.inbound('A')).body?.call_inbound?.metadata?.resolver_status, 'Resolved');
+  // Admission ended, but a previously admitted call retains its immutable
+  // interval and may settle. Late evidence must not restart the route or clock.
+  await h.event('A', secondMetadata, 'already_admitted_after_stop');
+  const settled = await deployment();
+  for (const key of ['TEST_STATUS', 'GO_LIVE_APPROVAL_STATUS', 'STOP_REASON',
+    'STOPPED_AT', 'ACTUAL_START_AT', 'EXPIRES_AT']) {
+    assert.equal(settled[key], stopped.deployment[key]);
+  }
+  const receiptsBeforeReplay = structuredClone(store.rows.get(tables.EVENT_RECEIPT_TABLE));
+  const replay = await service.rollback(command);
+  assert.equal(replay.replayed, true);
+  assert.deepEqual(await deployment(), settled);
+  assert.deepEqual(store.rows.get(tables.EVENT_RECEIPT_TABLE), receiptsBeforeReplay);
+  assert.deepEqual(store.authorizationRows, originalReceipts);
+  assert.equal(effects.crmRollbackWrites, 1);
+  assert.equal(h.runtime.mailAccesses, 0);
+  const report = await h.report('A');
+  assert.equal(report.callsCaptured, 2);
+  assert.equal(report.testEndReason, 'Sylvara Stopped');
+  assert.equal(report.testEnd, settled.STOPPED_AT);
+  assert.ok(Date.parse(report.sourceModifiedAt) >= Date.parse(settled.STOPPED_AT));
+  assert.ok(Date.parse(report.sourceModifiedAt) >= Math.max(...store.rows.get('RevenueDeskCalls')
+    .map((row) => Date.parse(row.UPDATED_AT))));
+  const receipts = store.rows.get(tables.EVENT_RECEIPT_TABLE);
+  return { evidenceClass: 'production_control_service_with_memory_adapters',
+    before: { testStatus: before.TEST_STATUS, callsCaptured: Number(before.HANDLED_COUNT) },
+    after: { testStatus: settled.TEST_STATUS, approvalStatus: settled.GO_LIVE_APPROVAL_STATUS,
+      stopReason: settled.STOP_REASON, stoppedAt: settled.STOPPED_AT,
+      callsCaptured: Number(settled.HANDLED_COUNT) },
+    report: { callsCaptured: report.callsCaptured, testEndReason: report.testEndReason,
+      testEnd: report.testEnd, sourceModifiedAt: report.sourceModifiedAt },
+    newAdmissionRejected: true, alreadyAdmittedCallSettled: Number(settled.HANDLED_COUNT) === 2,
+    terminalEvidencePreserved: true, sameCommandReplay: replay.replayed,
+    revocationReceiptCount: receipts.filter((row) => row.EVENT_TYPE === 'revoke').length,
+    rollbackClaimStatus: receipts.find((row) => row.EVENT_TYPE === 'rollback_claim').STATUS,
+    crmRollbackReadback: crmState.Test_Status === 'Rolled Back',
+    originalHandlingRestorationVerified: false,
+    effects: { network: 0, provider: 0, crm: 0, email: 0, sms: 0 },
+    simulatedEffects: { ...effects, rollbackCommands: 2,
+      canonicalCalls: store.rows.get('RevenueDeskCalls').length } };
 }
 
 async function runFreeTestDemo() {
@@ -334,13 +478,16 @@ async function runFreeTestDemo() {
       });
     }
     assert.equal(h.runtime.mailAccesses, 0);
+    const operatorStop = await earlyStopRehearsal();
     assert.equal(guard.blocked.length, 0);
     return {
       label: 'SYNTHETIC DEMONSTRATION — NO LIVE CALLS', companies,
+      earlyStopRehearsal: operatorStop,
       checks: { distinctCompanyOwnership: true, gatewayWorkerReportConnected: true,
         preparedConfigurationUsed: true, approvalAndActivationExplicitlySimulated: true,
         reportOnlyCrmReadback: true, replayWithoutSecondWrite: true, sevenDayExpiry: true,
         connectedCallLimit: true,
+        earlyOperatorStop: true,
         absentAnalysisWithheld: true, lateAnalysisReportRevision: true,
         completedCrmSummaryRevision: true, previousCompletedReceiptPreserved: true,
         actualVoiceOrForwardingProved: false },

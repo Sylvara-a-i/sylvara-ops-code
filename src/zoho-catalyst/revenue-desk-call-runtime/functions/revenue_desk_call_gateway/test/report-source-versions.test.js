@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const { installOfflineGuard } = require('../../../../revenue-desk-release/test/helpers/offline-guard');
 const guard = installOfflineGuard();
 const { queryClientReport } = require('../lib/reporting');
+const { CONTRACT } = require('../lib/contracts');
 const { loadDeployment } = require('../lib/runtime-service');
 const { buildCrmReportSummary, canonicalSummary, ensureCrmReportSummary,
   reportSummaryIdentity, validateSourceVersions, SUMMARY_FIELDS,
@@ -30,6 +31,35 @@ async function fixtureWithCall() {
     fixture.store.rows.get('RevenueDeskDeployments')[0], fixture.config);
   return { fixture, report, deployment };
 }
+
+test('terminal reports preserve every approved stop reason, including operator rollback and client stop', async () => {
+  const { fixture } = await fixtureWithCall();
+  const row = fixture.store.rows.get('RevenueDeskDeployments')[0];
+  const stoppedAt = '2026-08-22T12:02:00.000Z';
+  for (const reason of [...CONTRACT.stop_reason_mappings, ...CONTRACT.rollback_control_reason_mappings]) {
+    Object.assign(row, { TEST_STATUS: 'Stopped', STOP_REASON: reason.internal, STOPPED_AT: stoppedAt });
+    const report = await queryClientReport(fixture.store, fixture.config,
+      'client_A', 'deployment_A', TERMINAL_AS_OF);
+    assert.equal(report.testEndReason, reason.crm_test_end_reason, reason.internal);
+    assert.equal(report.testEnd, stoppedAt);
+    assert.equal(report.callsCaptured, 1);
+    assert.ok(Date.parse(report.sourceModifiedAt) >= Date.parse(stoppedAt));
+    const deployment = await loadDeployment(fixture.store, row, fixture.config);
+    assert.equal(buildCrmReportSummary(fixture.config, deployment, report).testEndReason,
+      reason.crm_test_end_reason);
+  }
+});
+
+test('unknown durable stop reasons fail closed before generating a terminal report', async () => {
+  const { fixture } = await fixtureWithCall();
+  const row = fixture.store.rows.get('RevenueDeskDeployments')[0];
+  Object.assign(row, { TEST_STATUS: 'Stopped', STOPPED_AT: '2026-08-22T12:02:00.000Z' });
+  for (const reason of ['unsupported_reason', 'operator_requested ', 'toString']) {
+    row.STOP_REASON = reason;
+    await assert.rejects(queryClientReport(fixture.store, fixture.config,
+      'client_A', 'deployment_A', TERMINAL_AS_OF), { code: 'CONFIGURATION_UNAVAILABLE' });
+  }
+});
 
 test('schema 3 appends only sorted sourceVersions and binds its exact vector to the HMAC', async () => {
   const { fixture, report, deployment } = await fixtureWithCall();

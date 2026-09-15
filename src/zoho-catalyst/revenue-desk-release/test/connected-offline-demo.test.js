@@ -148,6 +148,35 @@ test('repeatable prepared setup to gateway, worker, report and actual CRM summar
   assert.equal(b.report.callsCaptured, 25);
 });
 
+test('demo rehearses early operator rollback through the real control service without changing baseline reports', async () => {
+  const result = await runFreeTestDemo();
+  const stop = result.earlyStopRehearsal;
+  assert.equal(stop.evidenceClass, 'production_control_service_with_memory_adapters');
+  assert.equal(stop.before.testStatus, 'Live');
+  assert.equal(stop.before.callsCaptured, 1);
+  assert.equal(stop.after.testStatus, 'Stopped');
+  assert.equal(stop.after.approvalStatus, 'Revoked');
+  assert.equal(stop.after.stopReason, 'operator_requested');
+  assert.equal(stop.after.callsCaptured, 2);
+  assert.equal(stop.report.callsCaptured, 2);
+  assert.equal(stop.report.testEndReason, 'Sylvara Stopped');
+  assert.equal(stop.report.testEnd, stop.after.stoppedAt);
+  assert.ok(Date.parse(stop.report.sourceModifiedAt) >= Date.parse(stop.report.testEnd));
+  assert.equal(stop.newAdmissionRejected, true);
+  assert.equal(stop.alreadyAdmittedCallSettled, true);
+  assert.equal(stop.terminalEvidencePreserved, true);
+  assert.equal(stop.sameCommandReplay, true);
+  assert.equal(stop.revocationReceiptCount, 1);
+  assert.equal(stop.rollbackClaimStatus, 'Completed');
+  assert.equal(stop.crmRollbackReadback, true);
+  assert.equal(stop.originalHandlingRestorationVerified, false);
+  assert.deepEqual(stop.effects, { network: 0, provider: 0, crm: 0, email: 0, sms: 0 });
+  assert.deepEqual(stop.simulatedEffects, { routeReadbacks: 2, crmRollbackWrites: 1,
+    rollbackCommands: 2, canonicalCalls: 2 });
+  assert.equal(result.simulatedEffects.canonicalCalls, 32);
+  assert.equal(result.simulatedEffects.writes, 3);
+});
+
 test('missing, invalid and expired authentication creates no receipt or call', () => guarded(async () => {
   const h = await createOfflineHarness();
   const payload = h.fixture.payloadInbound('A');
