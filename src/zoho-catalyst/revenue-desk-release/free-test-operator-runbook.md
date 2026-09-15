@@ -1,7 +1,24 @@
 # Free-test preparation and operator walkthrough
 
-Owner: Sylvara operator (Gabriel). Updated: 2026-09-12. Status: local preparation;
+Owner: Sylvara operator (Gabriel). Updated: 2026-09-14. Status: local preparation;
 not a customer launch, provider change, or spending authorization.
+
+## Current execution boundary
+
+The current continuation is **local-only, with no Retell access**, including
+read-only dashboard, API, MCP or SDK access. Older provider observations and the
+future packet below are retained evidence, not current permission. Do not open a
+provider page, save the prepared draft, test an agent, invoke a live webhook/queue,
+or change a binding. Local synthetic adapters are the only execution path here.
+The demo builder installs its deny guard before importing the harness; missing
+dependencies or unexpected outbound access fail instead of falling back to a
+provider. No populated environment file or real credential is an input.
+
+Keep **Code Complete**, **Development Verified**, **Deployed**, and **Live Verified**
+separate. Retained acceptance carries forward only for unchanged executable
+behavior. A local demo is neither new CRM acceptance nor telephone evidence.
+Preserve current holds and consumed allocations. Publication, deployment and
+runtime admission still require their exact outstanding approvals.
 
 ## Safe local demonstration
 
@@ -21,6 +38,17 @@ Switch between the two fictional businesses to show isolation. Read an unknown
 report value as **unknown**, not zero. The synthetic JSON beside the page retains
 the derived report and reconciliation evidence. Do not upload private exports
 into the demo or present its examples as customer results.
+
+At **Stop**, inspect the separate early/operator-stop rehearsal. It reuses one
+fictional setup in fresh memory without changing the two baseline expiry and
+call-limit examples. The existing control service performs the revoke claim and
+durable transition through fake storage/CRM/route adapters. A previously admitted
+call can settle; a new admission is rejected; replay preserves the terminal
+evidence. The derived report must still reconcile both independently admitted
+calls and show the original stop time and `Sylvara Stopped` reason. This proves
+backend containment, report reconciliation and replay behavior only, not actual
+carrier restoration. The report JSON separates this rehearsal's simulated
+effects from the baseline report scenario; neither is real activity.
 
 The preparation history is illustrative. The connected backend harness executes
 real repository logic with fake adapters and an explicitly simulated activation
@@ -104,21 +132,33 @@ This limitation does not authorize serving the same file through a workaround.
    not appointments, invoices, confirmed revenue or recovered revenue. Paid
    conversion is a different, deferred scope.
 
-## Unapplied provider correction proposal
+## Deferred — Retell configuration proposal
 
-Compare fresh secret-safe metadata to `free-test-provider-check.js`. This check
+Only after a later explicit change of scope may an operator compare fresh
+secret-safe metadata to `free-test-provider-check.js`. This local check
 uses all fifteen supported fields; the historical eleven-field snapshot is not
 the completion contract. No raw provider export is accepted by the demo.
 
 | Required result | Last verified observation | Unapplied next action |
 | --- | --- | --- |
 | Fifteen supported analysis definitions | Historical shared agent has eleven | Freshly verify, then propose adding `bookable_opportunity`/`office_follow_up_required` as booleans and `workflow_failure_code`/`workflow_failure_text` as bounded strings |
-| Exact analysis value schema | Four canonical enum sets are checked locally; `caller_intent` is bounded text in the backend, but historically an enum in the provider | Resolve the provider's exact caller-intent value contract without inventing choices; unknown stays unverified |
+| Exact analysis value schema | Four canonical enum sets are checked locally; `caller_intent` remains bounded text in the backend | Compare provider choices against a separately reviewed private export contract; absent or malformed expected evidence remains unknown |
 | Missing evidence remains unknown | Backend preserves null and failure-field presence | Never add false/zero defaults to fill absent analysis; no-failure needs explicit field-presence evidence |
 | Canonical event binding | Historical event path differs | Bind an approved isolated draft to the exact current events endpoint, using private configuration only |
 | Exact number/version/resolver/fallback binding | Prior UI disabled inbound/outbound; API projection incomplete | Obtain complete machine readback and isolated-number ownership; do not infer omitted fields as empty |
 | Approved data-handling scope | Earlier UI retained content with PII exclusion for 30 days | Reconcile against the exact controlled-test scope before any voice; do not silently alter policy |
 | Fifteen prompt-visible variables only | Prior projection matched | Freshly recheck names/types/defaults/gate; exclude contacts, credentials and signed ownership evidence |
+
+The local comparator optionally takes a separate `reviewedCallerIntentContract`
+argument with exactly `schemaVersion: 1`, `evidenceClass: reviewed_export_snapshot`,
+a lowercase 64-character `sourceSha256`, and unique, nonempty `choices` of at most
+160 characters each, without surrounding whitespace or control characters. Keep
+the reviewed choices, export and hash-linked review record private; do not copy
+them into the runtime contract. The comparator does not read an export or verify
+the hash against a file: the hash identifies the source reviewed by the operator.
+It never infers an expected set from the observed metadata. A match only compares
+the supplied projection to that snapshot; it is not current provider readback,
+model acceptance or permission to execute. Other binding and privacy gates remain.
 
 These are proposals, not a deployable Retell payload or permission to edit a
 published version. Keep private identifiers, endpoints, prompt text and secrets
@@ -135,8 +175,11 @@ appointments map to CRM Events. No Sync, Save, appointment, email or record acti
 was performed. This metadata is not proof of a successful deduplicated booking.
 
 The service-specific match keys, notification recipients/content and exact
-Journey next-action association have not all been read back. Keep that entry
-gate pending; do not add another writer or a new automation as a shortcut.
+Journey next-action association have not all been read back. Optional public
+scheduling acceptance remains deferred; it is not a prerequisite for the
+mandatory public/assisted Form 1 → native conversion → Form 2 Journey. Keep the
+assisted form's booking detour removed. Do not add another writer or automation
+as a shortcut or silently represent the optional scheduling entry as verified.
 The public free-test CTA resolves to the existing intake entry. Its short
 "25 calls" wording should be clarified, under separate website publication
 approval, to "25 unique connected calls or seven days, whichever comes first;
@@ -144,16 +187,19 @@ already-admitted calls may finish." Paid-plan pages remain outside this sprint.
 
 ## Finite future live-acceptance packet — NOT AUTHORIZED
 
-Release target: the exact reviewed successor to the PR #84 candidate, with its
-new immutable manifest; **not** the unchanged accepted Journey-core label. The
+Release target: the exact reviewed runtime delta recorded below, with its
+retained immutable manifests; **not** an operator-utility commit relabeled as a
+runtime deployment. The
 private packet must name the exact existing isolated agent, number, configuration,
 approved testers and owner-controlled destinations. Missing identity, complete
 machine readback or cost confirmation blocks execution; it does not justify
 buying a number or borrowing a customer route.
 
-Prerequisites: close both source findings and independent review; install/read
-back only the specifically approved artifacts; reconcile report-only CRM runtime
-parity; obtain fresh metadata through an approved secret-safe path; approve any
+Prerequisites: preserve the closed source findings, independent review, verified
+CRM artifact parity and spent pre-SDK binding proof. At a later authorized
+admission, freshly read back the exact hold/nonsecret configuration and prove
+runtime report outcomes in the controlled provider packet. Obtain fresh metadata
+only under a later approved secret-safe path; approve any
 isolated draft edits/publication/binding separately; confirm data handling and
 tester participation; preserve original routing and verify the stop procedure.
 Resolve the historical account-standing warning privately without inferring its
@@ -166,7 +212,7 @@ does not transfer automatically to a new release or customer traffic.
 | Overflow and combined follow-up | Four calls, three minutes each | Only after timing-binding code/evidence exists: answered-first suppression and no-answer behavior for each mode; exact unit/value, correct trigger and safe fallback |
 | Total ceiling | Ten calls / thirty connected minutes | No automatic retries, extras, simulations, previews, analysis reruns or customer traffic |
 
-Current public rates checked 2026-09-12: standard voice pricing is roughly
+Historical public rates checked 2026-09-12: standard voice pricing was roughly
 $0.07–$0.31/minute, plus the displayed $0.015/minute telephone rate where applicable.
 Thirty minutes at that illustrative upper subtotal is $9.75. Add-ons, the actual
 model/voice/country/carrier, existing rental, taxes and account terms may differ.
@@ -183,7 +229,51 @@ admission and restore original handling with fresh readback. A failed test does
 not authorize another attempt. Separate approval remains mandatory before any
 prospect/customer traffic, even if this internal packet later passes.
 
-## Change and rollback boundary
+## Current release and rollback boundary
+
+The private 2026-09-14 checkpoint supersedes the older coordinated-rebuild
+proposal: five Journey-core artifacts at `7dd3491` and the report-only CRM
+consumer at `8b7dd31` were installed and independently compared. All 1,145 core
+manifest entries and 222 report-consumer entries matched. The report protocol
+and guard semantics are unchanged across that delta. This is artifact evidence,
+not successful live SDK, notification, report/CAS or telephone acceptance.
+
+Form 1 has a consumed, bounded launcher-to-prefill acceptance allocation at its
+installed revision. Form 2's prior functional acceptance carries forward: its
+executable source is identical to the accepted version, and the retained artifact
+comparison found only the generated revision stamp changed. Its intentional
+admission hold is not grounds for another OTP or submission. Other runtime holds
+remain in place, and the report consumer's one-shot pre-SDK binding check is spent.
+
+The current early-stop regression exposed one additional shared-runtime defect:
+the controller stores rollback reasons such as `operator_requested`, but the
+report mapper recognized only ordinary test-end reasons. A valid stopped
+deployment could therefore fail report generation. The local correction uses
+the existing rollback-reason mapping as a fallback and still rejects unknown
+values. It changes reporting behavior, not the report protocol, Form 1/Form 2,
+the CRM consumer, or the approval/activation boundary. Previously accepted form
+behavior and installed artifact parity remain valid; early-stop report acceptance
+must be established for the corrected runtime before operational use.
+
+Prepare the corrected shared runtime with the existing three-target builder
+(gateway, route control, worker). Its source manifest is not a dependency-complete
+upload package and is not the closed five-function Journey-core manifest. Keep
+the source-only candidate separate from installed artifacts. A future exact delta
+rollout must approve dependency-complete packaging and cross-revision compatibility
+with the retained Form 1/Form 2 and report consumer. Do not relax the five-target
+validator or change revision labels to imply a coordinated deployment.
+
+Do not rebuild or redeploy unchanged functions merely because the local demo,
+comparator or runbook changes. Local source commits do not move runtime
+revision labels. Any future cutover must name the actual artifact digests,
+compatible producer/consumer revisions, target holds, allowed invocation count,
+readback and rollback. Restore containment on ambiguity; never restore exposed
+credentials, consumed claims, retired controls or a known unsafe timing path.
+
+### Historical alternatives — not current required work
+
+This subsection is historical rationale only. None of its build/cutover steps
+is current required work or authority; the verified delta above supersedes them.
 
 The smallest offline package is the shared runtime's three-target candidate
 (gateway, route control, worker), with exact source and full dependency hashes.

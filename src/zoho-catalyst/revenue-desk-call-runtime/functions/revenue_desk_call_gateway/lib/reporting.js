@@ -2,7 +2,8 @@
 
 const { invariant } = require('./errors');
 const {
-  CONTRACT, COVERAGE_MODE_TO_LABEL, STOP_REASON_TO_CRM, OUTCOMES, COVERAGE_TRIGGERS,
+  CONTRACT, COVERAGE_MODE_TO_LABEL, STOP_REASON_TO_CRM, ROLLBACK_CONTROL_REASON_TO_CRM,
+  OUTCOMES, COVERAGE_TRIGGERS,
   MVP_REPORT_VALUE_EVIDENCE_CLASSES, MVP_REPORT_VALUE_EVIDENCE_SOURCES,
 } = require('./contracts');
 const { loadDeployment, assertCanonicalCallIntegrity } = require('./runtime-service');
@@ -346,8 +347,11 @@ async function queryClientReport(store, config, clientId, deploymentId, asOfMs =
   const expiredAtAsOf = asOfMs >= scheduledEnd;
   const testEndReasonInternal = deployment.stopReason
     || (expiredAtAsOf ? 'seven_day_limit_reached' : null);
+  // The control service preserves its exact rollback reason in durable state.
+  // Both accepted reason sets map to the existing CRM/report labels.
   const testEndReason = testEndReasonInternal === null
-    ? null : STOP_REASON_TO_CRM.get(testEndReasonInternal);
+    ? null : STOP_REASON_TO_CRM.get(testEndReasonInternal)
+      || ROLLBACK_CONTROL_REASON_TO_CRM.get(testEndReasonInternal);
   invariant(testEndReasonInternal === null || testEndReason,
     'REPORT_DATA_INVALID', 'Test end reason mapping is unavailable.');
   const testEnd = deployment.stoppedAt || (expiredAtAsOf ? deployment.expiresAt : null);

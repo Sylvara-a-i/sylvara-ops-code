@@ -37,6 +37,7 @@ function renderFreeTestDemo(demo) {
     }
     const config = company.preparation?.candidate || company.preparation?.configuration
       || company.preparation || {};
+    const earlyStop = index === 0 ? demo.earlyStopRehearsal : null;
     return `<article class="company" data-company="${index}">
       <h2>Fictional plumbing company ${escape(company.key || index + 1)}</h2>
       <section data-step="0"><p class="eyebrow">1 · Request</p><h3>One customer relationship, not competing writers</h3>
@@ -69,6 +70,22 @@ function renderFreeTestDemo(demo) {
       <section data-step="6"><p class="eyebrow">7 · Stop</p><h3>A bounded test, with restoration still to prove live</h3>
         <table><tbody>${rows([['Call ceiling', report.callLimit], ['Calls remaining', report.callsRemaining], ['Stop reason', report.testEndReason], ['Synthetic state', JSON.stringify(company.state)]])}</tbody></table>
         <p>Stop at seven days or 25 unique connected calls, whichever comes first. Already-admitted calls settle and any overshoot is disclosed. An operator or customer may stop earlier.</p>
+        ${earlyStop ? `<h4>Early operator stop — separate synthetic rehearsal</h4>
+        <p>The actual backend control service stops a separate in-memory copy of Company A before either limit. Its fake route and CRM adapters do not connect to external systems. These rehearsal calls are not added to the two reports above.</p>
+        <table><tbody>${rows([
+    ['Before operator stop', `${earlyStop.before.testStatus} · ${earlyStop.before.callsCaptured} connected call`],
+    ['After backend rollback', `${earlyStop.after.testStatus} / ${earlyStop.after.approvalStatus}`],
+    ['New admission rejected', earlyStop.newAdmissionRejected],
+    ['Already-admitted call settled afterward', earlyStop.alreadyAdmittedCallSettled],
+    ['Stop evidence preserved after late event', earlyStop.terminalEvidencePreserved],
+    ['Same stop command replayed without another state change', earlyStop.sameCommandReplay],
+    ['Durable revocation receipts', earlyStop.revocationReceiptCount],
+    ['Rehearsal report connected calls', earlyStop.report.callsCaptured],
+    ['Rehearsal report end reason', earlyStop.report.testEndReason],
+    ['Rehearsal report ended at', earlyStop.report.testEnd],
+    ['Rehearsal report source updated at', earlyStop.report.sourceModifiedAt],
+    ['Original carrier handling restored', earlyStop.originalHandlingRestorationVerified ? 'Verified' : 'Unknown / not established'],
+  ])}</tbody></table>` : ''}
         <p>Backend containment is separate from restoring original carrier handling. The latter requires the approved provider-specific procedure and a later real readback/test.</p>
         <p class="note">No live stop or route action exists in this page.</p></section>
     </article>`;
