@@ -661,6 +661,66 @@ class ApprovalConsumptionTests(unittest.TestCase):
             self.assertEqual(expected, stdout)
             self.assertEqual("", stderr)
 
+    def test_journal_removed_during_inspection_preserves_exact_replay(self) -> None:
+        ledger_tool.claim_approval_consumption(self.ledger, DIGEST, AUTHORITY_ID)
+        before = self.rows()
+        journal = self.ledger / (ledger_tool.DATABASE_NAME + "-journal")
+        phases = ["lstat", "acl"] if os.name == "nt" else ["lstat"]
+        for phase in phases:
+            with self.subTest(phase=phase), contextlib.closing(
+                sqlite3.connect(self.database, isolation_level=None)
+            ) as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                connection.execute(
+                    "INSERT INTO claims(authority_id, digest, claimed_at) VALUES (?, ?, ?)",
+                    (OTHER_AUTHORITY_ID, OTHER_DIGEST, "2026-08-28T12:34:56.789Z"),
+                )
+                self.assertTrue(journal.is_file())
+                inspected = []
+                target = os if phase == "lstat" else ledger_tool
+                method = "lstat" if phase == "lstat" else "_validate_windows_acl"
+                original = getattr(target, method)
+
+                def finish_writer(path: Path, *args: object, **kwargs: object) -> object:
+                    if Path(path) == journal:
+                        inspected.append(phase)
+                        connection.execute("ROLLBACK")
+                    return original(path, *args, **kwargs)
+
+                with mock.patch.object(target, method, side_effect=finish_writer):
+                    with self.assertRaises(ledger_tool.ApprovalAlreadyConsumed):
+                        ledger_tool.claim_approval_consumption(
+                            self.ledger, DIGEST, AUTHORITY_ID
+                        )
+                self.assertEqual([phase], inspected)
+                self.assertFalse(journal.exists())
+                self.assertEqual(before, self.rows())
+
+    def test_optional_journal_disappearance_does_not_allow_other_storage_errors(self) -> None:
+        journal = self.ledger / (ledger_tool.DATABASE_NAME + "-journal")
+        with self.assertRaises(ledger_tool.UnsafeLedger):
+            ledger_tool._validate_storage_file(self.database, allow_empty=True)
+        with mock.patch.object(os, "lstat", side_effect=PermissionError):
+            with self.assertRaises(ledger_tool.UnsafeLedger):
+                ledger_tool._validate_storage_file(
+                    journal, allow_empty=False, allow_missing=True
+                )
+        # Existing empty or non-file journals remain ambiguous, not disposable
+        # race artifacts. The checker never repairs or removes either one.
+        journal.touch(mode=0o600)
+        with self.assertRaises(ledger_tool.UnsafeLedger):
+            ledger_tool._validate_storage_file(
+                journal, allow_empty=False, allow_missing=True
+            )
+        self.assertTrue(journal.is_file())
+        journal.unlink()
+        journal.mkdir()
+        with self.assertRaises(ledger_tool.UnsafeLedger):
+            ledger_tool._validate_storage_file(
+                journal, allow_empty=False, allow_missing=True
+            )
+        self.assertTrue(journal.is_dir())
+
     def test_committed_claim_survives_immediate_process_crash(self) -> None:
         child = (
             "import os,sys; "
