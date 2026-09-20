@@ -231,6 +231,7 @@ class MemoryStore {
 }
 
 function fixture({ dealOverrides = {}, deploymentOverrides = {}, configOverrides = {},
+  configurationStaging, beforeCrmApproval = async () => {},
   providerMode = 'active', failCrmActivation = false,
   ambiguousCrmActivation = false, mutateDealDuringRouteVerification = null,
   providerModeAfterFirstVerification = null, failProviderDisable = false,
@@ -263,6 +264,7 @@ function fixture({ dealOverrides = {}, deploymentOverrides = {}, configOverrides
       return copy(crmState);
     },
     async recordApproval(_id, value) {
+      await beforeCrmApproval(value, crmState);
       Object.assign(crmState, {
         Test_Status: 'Scheduled', Go_Live_Approval_Status: 'Approved',
         Go_Live_Approved_At: value.approvedAt,
@@ -415,7 +417,7 @@ function fixture({ dealOverrides = {}, deploymentOverrides = {}, configOverrides
     authorizationEventSecret: EVENT_CHAIN_SECRET,
   };
   const service = createRouteControlService({
-    config, store, crm, provider, now: () => clock,
+    config, store, crm, provider, configurationStaging, now: () => clock,
     onActivationCheckpoint: (name, payload) => onActivationCheckpoint({
       name, payload, store, tables, runtimeConfig, now: clock,
     }),
@@ -449,6 +451,112 @@ function command(action, overrides = {}) {
     ...overrides,
   };
 }
+
+function coreApprovedFixture(options = {}) {
+  const label = 'form2_core_approved_v1';
+  const approvedAt = '2026-08-29T12:05:00.000Z';
+  return fixture({
+    configOverrides: { CONFIGURATION_VERSION: label,
+      CONFIGURATION_JSON: JSON.stringify({ ...configuration(), configurationVersion: label }) },
+    dealOverrides: { Configuration_Version: label, Test_Status: 'Scheduled',
+      Go_Live_Approval_Status: 'Approved', Go_Live_Approved_At: approvedAt,
+      Approved_Configuration_Version: label },
+    ...options,
+  });
+}
+
+test('full approval requires server-verified staging before superseding retained core approval', async () => {
+  const absent = coreApprovedFixture();
+  await assert.rejects(absent.service.approve(command('approve')),
+    { code: 'CONTROL_PRECONDITION_FAILED' });
+  assert.equal(absent.store.rows.length, 2);
+  const calls = [];
+  const subject = coreApprovedFixture({ configurationStaging: {
+    async assertApprovalSource(value, state) {
+      calls.push(value);
+      assert.equal(state.deal.Approved_Configuration_Version, 'form2_core_approved_v1');
+      assert.equal(state.deployment.TEST_STATUS, 'Ready for Approval');
+      return { configurationStaged: true, priorCoreApproval: { configurationVersionId: 'form2_core_approved_v1',
+        approvedAt: '2026-08-29T12:05:00.000Z' } };
+    },
+  } });
+  const result = await subject.service.approve(command('approve'));
+  assert.equal(calls.length, 1);
+  assert.equal(result.replayed, false);
+  assert.equal(subject.crmState.Approved_Configuration_Version, IDS.configuration);
+  assert.equal(subject.crmState.Approved_Deployment_Record_ID, IDS.deployment);
+  assert.equal(subject.crmState.Configuration_Version, 'form2_core_approved_v1');
+  assert.equal(result.deployment.TEST_STATUS, 'Scheduled');
+  assert.equal(result.deployment.ACTUAL_START_AT, null);
+  assert.equal(result.deployment.ACTIVATION_EVENT_KEY, null);
+  assert.equal(subject.getProviderVerificationCalls(), 0);
+  assert.equal(subject.getProviderDisableCalls(), 0);
+});
+
+test('wrong retained approval, stopped CRM and unverified staging cannot create approval evidence', async () => {
+  for (const proof of [null, {},
+    { configurationVersionId: 'wrong_label', approvedAt: '2026-08-29T12:05:00.000Z' },
+    { configurationVersionId: 'form2_core_approved_v1', approvedAt: '2026-08-29T12:04:00.000Z' },
+  ]) {
+    const subject = coreApprovedFixture({ configurationStaging: {
+      async assertApprovalSource() { return { configurationStaged: true, priorCoreApproval: proof }; },
+    } });
+    await assert.rejects(subject.service.approve(command('approve')),
+      { code: 'CONTROL_PRECONDITION_FAILED' });
+    assert.equal(subject.store.rows.length, 2);
+  }
+  for (const patch of [{ Test_Start_At: '2026-08-29T12:06:00.000Z' },
+    { Test_End_At: '2026-08-29T12:06:00.000Z' },
+    { Approved_Deployment_Record_ID: 'another_deployment' }]) {
+    const subject = coreApprovedFixture({ configurationStaging: {
+      async assertApprovalSource() { return { configurationStaged: true,
+        priorCoreApproval: { configurationVersionId: 'form2_core_approved_v1',
+          approvedAt: '2026-08-29T12:05:00.000Z' } }; },
+    } });
+    Object.assign(subject.crmState, patch);
+    await assert.rejects(subject.service.approve(command('approve')),
+      { code: 'CONTROL_PRECONDITION_FAILED' });
+    assert.equal(subject.store.rows.length, 2);
+  }
+  const unavailable = coreApprovedFixture({ configurationStaging: {
+    async assertApprovalSource() { throw new RevenueDeskError('STAGING_SOURCE_UNVERIFIED',
+      'Synthetic source unavailable'); },
+  } });
+  await assert.rejects(unavailable.service.approve(command('approve')),
+    { code: 'STAGING_SOURCE_UNVERIFIED' });
+  assert.equal(unavailable.store.rows.length, 2);
+});
+
+test('interrupted CRM supersession reconciles the same approval receipt without clearing old evidence', async () => {
+  let attempts = 0;
+  let verifications = 0;
+  const subject = coreApprovedFixture({
+    configurationStaging: { async assertApprovalSource() {
+      verifications += 1;
+      return { configurationStaged: true, priorCoreApproval: { configurationVersionId: 'form2_core_approved_v1',
+        approvedAt: '2026-08-29T12:05:00.000Z' } };
+    } },
+    async beforeCrmApproval(value, current) {
+      attempts += 1;
+      assert.equal(current.Approved_Configuration_Version, 'form2_core_approved_v1');
+      assert.equal(value.expectedDeal.Approved_Configuration_Version, 'form2_core_approved_v1');
+      if (attempts === 1) throw new RevenueDeskError('CRM_APPROVAL_RECONCILIATION_REQUIRED',
+        'Synthetic interruption before CRM write', { ambiguous: true });
+    },
+  });
+  await assert.rejects(subject.service.approve(command('approve')),
+    { code: 'CRM_APPROVAL_RECONCILIATION_REQUIRED' });
+  const persisted = copy(subject.store.rows);
+  assert.equal(subject.crmState.Go_Live_Approved_At, '2026-08-29T12:05:00.000Z');
+  const resumed = await subject.service.approve(command('approve'));
+  assert.equal(resumed.replayed, true);
+  assert.equal(attempts, 2);
+  assert.equal(verifications, 2);
+  assert.deepEqual(subject.store.rows, persisted);
+  assert.equal(subject.crmState.Approved_Configuration_Version, IDS.configuration);
+  assert.equal(subject.crmState.Test_Start_At, null);
+  assert.equal(subject.getProviderVerificationCalls(), 0);
+});
 
 // Build historical evidence with the pure transition serializer, not the
 // current execution controller. This models pre-fix receipts without disabling

@@ -13,6 +13,10 @@ const { createForm2EvidenceStore } = require('./form2-evidence-store');
 const { createJourneyCoreControlService, isJourneyCoreCommand }
   = require('./journey-core-service');
 const { createRetellRouteProvider } = require('./retell-route-provider');
+const { createConfigurationStagingService, configurationClaimKey, PROFILE } = require('./configuration-staging-service');
+const { createConfigurationSourceReader } = require('./configuration-source-reader');
+const { createConfigurationConversionReader } = require('./configuration-conversion-reader');
+const { createConfigurationMetadataReader } = require('./configuration-metadata-reader');
 
 function headerValues(request, target) {
   const name = target.toLowerCase();
@@ -130,6 +134,9 @@ function publicCode(error) {
     'CONTROL_AUTHENTICATION_FAILED',
     'CONTROL_CAS_CONFLICT', 'CONTROL_IDEMPOTENCY_CONFLICT',
     'CONTROL_PRECONDITION_FAILED', 'INVALID_CONTROL_REQUEST',
+    'CONFIGURATION_STAGING_CONFLICT', 'CONFIGURATION_STAGING_STATE_ADVANCED',
+    'CONFIGURATION_STAGING_RECONCILIATION_REQUIRED', 'CONFIGURATION_STAGING_REVIEW_INVALID',
+    'CONFIGURATION_STAGING_UNAVAILABLE', 'CONFIGURATION_NATIVE_CONVERSION_UNVERIFIED',
     'CRM_MANUAL_CLOSE_REQUIRED',
     'FORM2_EVIDENCE_INVALID',
     'ISOLATED_RETELL_TEST_NUMBER_REQUIRED', 'PRODUCTION_DARK',
@@ -170,6 +177,26 @@ function createRequestListener({
         fetchImpl,
       });
       const store = (factories.store || createCatalystStore)(app, config);
+      const stagingService = () => (factories.staging || createConfigurationStagingService)({
+        config, store, crm, now,
+        core: (factories.core || createJourneyCoreControlService)({ config, store, crm, now,
+          evidenceStore: (factories.evidence || createForm2EvidenceStore)(app, { timeoutMs: config.platformTimeoutMs }) }),
+        sourceReader: (factories.configurationSource || createConfigurationSourceReader)(app, config, { now }),
+        conversionReader: (factories.configurationConversion || createConfigurationConversionReader)({ crm, now }),
+        metadataReader: (factories.configurationMetadata || createConfigurationMetadataReader)({ crm, now,
+          timeoutMs: config.platformTimeoutMs }),
+      });
+      if (body.profile === PROFILE) {
+        invariant(action === 'approve', 'INVALID_CONTROL_REQUEST',
+          'Configuration staging uses the approval control route.', { httpStatus: 400 });
+        // This controller-owned branch is deliberately before provider
+        // construction. Approved content is not approval to activate a route.
+        const result = await stagingService().stage(body);
+        send(response, 200, { ok: true, action: 'stage_configuration', state: result.state,
+          replayed: result.replayed, approved: false, active: false,
+          configurationVersionId: result.configurationVersionId, deploymentId: result.deploymentId });
+        return;
+      }
       if (isJourneyCoreCommand(body)) {
         // The Journey-core profile has no Retell deployment. Keep provider
         // construction outside this branch so approval, expected activation
@@ -201,6 +228,15 @@ function createRequestListener({
       });
       const service = (factories.full || createRouteControlService)({
         config, store, crm, provider, now,
+        // Legacy accepted rows do not acquire new reader/env dependencies.
+        // Newly staged rows must keep their authenticated source provenance.
+        configurationStaging: { async assertApprovalSource(command, state) {
+          const receipt = await store.unique(config.tables.EVENT_RECEIPT_TABLE,
+            'EVENT_KEY', configurationClaimKey(config, command));
+          if (!receipt && !String(state.deployment?.DEPLOYMENT_KEY || '').startsWith('cfgdeployment_')
+            && !String(state.deployment?.DEPLOYMENT_ID || '').startsWith('cfgdeploy_')) return null;
+          return stagingService().assertApprovalSource(command, state);
+        } },
       });
       const result = await service[action](body);
       const state = result.deployment.TEST_STATUS;

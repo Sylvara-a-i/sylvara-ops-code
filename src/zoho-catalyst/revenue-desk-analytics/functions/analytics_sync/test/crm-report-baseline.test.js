@@ -10,7 +10,7 @@ function withOfflineGuard(action) {
   const originalLoad = Module._load;
   Module._load = function offlineOnly(request, ...rest) {
     if (/^(?:node:)?(?:http|https|http2|net|tls|dns|child_process)$/.test(request)
-      || /(?:catalyst|retell|axios|undici)/i.test(request)) {
+      || /^(?:zcatalyst-sdk-node|retell-sdk|axios|undici)(?:\/|$)/i.test(request)) {
       throw new Error('Outbound dependency forbidden in baseline tests.');
     }
     return originalLoad.call(this, request, ...rest);
@@ -22,7 +22,7 @@ function withOfflineGuard(action) {
   }
 }
 const { buildCrmReportBaseline, buildCrmPreTestSnapshot, MAX_READBACK_AGE_MS } =
-  withOfflineGuard(() => require('../lib/crm-report-baseline'));
+  withOfflineGuard(() => require('../../../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/crm-report-baseline'));
 const { crmBaselineFixture: fixture } = require('./helpers/crm-baseline-fixture');
 const NOW = Date.parse('2026-09-08T12:00:00.000Z');
 
@@ -70,6 +70,39 @@ test('fresh capture is deterministic but stale replay or historical backfill is 
   assert.throws(() => capture(input, NOW), { code: 'CRM_BASELINE_TIMING_INVALID' });
   // A later report validates history, not fresh capture. It must still work.
   assert.deepEqual(build(fixture()), capture(input));
+});
+
+test('fresh independent metadata read may follow capture, but cannot recapture historical evidence', () => {
+  const input = captureFixture();
+  const capturedAt = Date.parse(input.evidence.capturedAt);
+  const original = capture(input, capturedAt);
+  input.metadata.observedAt = new Date(capturedAt + 1000).toISOString();
+  assert.deepEqual(capture(input, capturedAt + 1000), original);
+  assert.throws(() => capture(input, capturedAt), { code: 'CRM_BASELINE_METADATA_UNVERIFIED' });
+  const historical = fixture();
+  historical.metadata.observedAt = new Date(Date.parse(historical.evidence.capturedAt) + 1000)
+    .toISOString();
+  assert.throws(() => build(historical), { code: 'CRM_BASELINE_METADATA_UNVERIFIED' });
+  input.metadata.observedAt = new Date(capturedAt - MAX_READBACK_AGE_MS - 1).toISOString();
+  assert.throws(() => capture(input, capturedAt + 1000),
+    { code: 'CRM_BASELINE_METADATA_UNVERIFIED' });
+});
+
+test('fresh source revalidation uses its actual time and rejects post-review source edits', () => {
+  const input = captureFixture();
+  const capturedAt = Date.parse(input.evidence.capturedAt);
+  const original = capture(input, capturedAt);
+  input.evidence.readAt = new Date(capturedAt + 1000).toISOString();
+  assert.deepEqual(capture(input, capturedAt + 1000), original);
+  assert.throws(() => capture(input, capturedAt), { code: 'CRM_BASELINE_TIMING_INVALID' });
+  for (const target of [input.deal, input.context, input.evidence]) {
+    target[target === input.deal ? 'Modified_Time' : 'crmModifiedAt'] = input.evidence.readAt;
+  }
+  assert.throws(() => capture(input, capturedAt + 1000), { code: 'CRM_BASELINE_TIMING_INVALID' });
+  const historical = fixture();
+  historical.evidence.readAt = new Date(Date.parse(historical.evidence.capturedAt) + 1000)
+    .toISOString();
+  assert.throws(() => build(historical), { code: 'CRM_BASELINE_TIMING_INVALID' });
 });
 
 test('capture freshness measures reads and metadata against now, not a backdated capture label', () => {

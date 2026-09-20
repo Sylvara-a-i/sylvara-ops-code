@@ -1,6 +1,7 @@
 'use strict';
 
 const { RevenueDeskError, invariant } = require('revenue_desk_call_gateway/lib/errors');
+const { NATIVE_CONVERSION_FIELDS } = require('./configuration-conversion-reader');
 
 const DEAL_FIELDS = Object.freeze([
   'id', 'Modified_Time', 'Pipeline', 'Stage', 'Entry_Offer', 'Intake_Submission_ID',
@@ -44,6 +45,14 @@ const ROLLBACK_MUTABLE_FIELDS = new Set([
 const CORE_ROLLBACK_MUTABLE_FIELDS = new Set([
   ...ROLLBACK_MUTABLE_FIELDS, 'Go_Live_Approval_Status',
 ]);
+const STAGING_MUTABLE_FIELDS = new Set(['Modified_Time', 'Stage', 'Test_Status', 'Deployment_Record_ID']);
+const PREPARATION_ACCOUNT_FIELDS = Object.freeze(['id', 'Modified_Time', 'Account_Name',
+  'Phone', 'Phone_System_Provider', 'Normal_Business_Hours', 'Primary_Service_Area', 'Services_Handled']);
+const PREPARATION_CONTACT_FIELDS = Object.freeze(['id', 'Modified_Time', 'Account_Name']);
+const PREPARATION_BASELINE_FIELDS = Object.freeze(['id', 'Modified_Time', 'Current_Call_Handling',
+  'Monthly_Inbound_Calls', 'Monthly_Inbound_Call_Band', 'After_Hours_Call_Band',
+  'After_Hours_Call_Share', 'Estimated_Unanswered_Call_Rate', 'Average_Job_Value',
+  'Average_Job_Value_Band', 'Current_Monthly_Answering_Cost']);
 const ROLLBACK_INTERLEAVING_MUTABLE_FIELDS = new Set([
   ...ROLLBACK_MUTABLE_FIELDS,
   ...ACTIVATION_MUTABLE_FIELDS,
@@ -183,6 +192,96 @@ function createCrmControlClient(config, {
     return parseRecord(await request(`/Deals/${dealId}?${query}`, { method: 'GET' }), dealId);
   }
 
+  async function getPreparationFieldMetadata() {
+    await assertOrganization(false);
+    // CRM v8 documents one module-wide used-fields read, not a field-name
+    // filter or pagination contract. The metadata reader projects ten fields
+    // in memory; no raw provider metadata reaches a route response or log.
+    return request('/settings/fields?module=Deals', { method: 'GET' });
+  }
+
+  async function getNativeConversion(originalLeadId) {
+    invariant(typeof originalLeadId === 'string' && /^[1-9][0-9]{9,29}$/.test(originalLeadId),
+      'CONFIGURATION_CONVERSION_INVALID', 'Original Lead identity is invalid.', { httpStatus: 409 });
+    await assertOrganization(false);
+    const query = new URLSearchParams({ ids: originalLeadId, converted: 'true',
+      fields: NATIVE_CONVERSION_FIELDS.join(','), per_page: '2' });
+    // Exactly one historical Lead, never a broad search or record conversion.
+    // The conversion reader validates the derived evidence and drops all other
+    // provider fields before it is used by the configuration staging service.
+    return request(`/Leads?${query}`, { method: 'GET' });
+  }
+
+  async function getPreparationRecords(dealId) {
+    invariant(/^[1-9][0-9]{7,29}$/.test(dealId || ''), 'CRM_READ_REJECTED',
+      'Preparation identity is invalid.', { httpStatus: 409 });
+    const deal = await getDeal(dealId);
+    const accountId = String(deal.Account_Name?.id || '');
+    const contactId = String(deal.Contact_Name?.id || '');
+    invariant([accountId, contactId].every((id) => /^[1-9][0-9]{7,29}$/.test(id)),
+      'CRM_READBACK_INVALID', 'Preparation relationships are missing.', { httpStatus: 409 });
+    async function projection(module, id, fields) {
+      const query = new URLSearchParams({ fields: fields.join(',') });
+      return parseRecord(await request(`/${module}/${id}?${query}`, { method: 'GET' }), id);
+    }
+    const [account, contact, baseline] = await Promise.all([
+      projection('Accounts', accountId, PREPARATION_ACCOUNT_FIELDS),
+      projection('Contacts', contactId, PREPARATION_CONTACT_FIELDS),
+      projection('Deals', dealId, PREPARATION_BASELINE_FIELDS),
+    ]);
+    invariant(sameDealField('Modified_Time', baseline.Modified_Time, deal.Modified_Time)
+      && String(contact.Account_Name?.id || '') === accountId,
+    'CRM_READBACK_INVALID', 'Preparation changed across its bounded reads.', { httpStatus: 409 });
+    // The second Deal projection keeps each read below the API field ceiling.
+    const project = (record, fields) => Object.fromEntries(fields.map((field) => [field,
+      LOOKUP_FIELDS.has(field) && plain(record[field]) ? { id: String(record[field].id) }
+        : record[field]]));
+    // Derived API capabilities, labels and layout hints are not source truth.
+    // Drop them before hashing or returning a private preparation projection.
+    return { account: project(account, PREPARATION_ACCOUNT_FIELDS),
+      contact: project(contact, PREPARATION_CONTACT_FIELDS), deal: { ...project(deal, DEAL_FIELDS), ...Object.fromEntries(
+      PREPARATION_BASELINE_FIELDS.filter((field) => !['id', 'Modified_Time'].includes(field))
+        .map((field) => [field, baseline[field] === undefined ? null : baseline[field]]),
+    ) } };
+  }
+
+  async function recordConfigurationStaging(dealId, { deploymentId, expectedDeal, priorApproval }) {
+    const deal = await getDeal(dealId);
+    assertDealSnapshot(deal, expectedDeal, STAGING_MUTABLE_FIELDS);
+    invariant(/^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/.test(deploymentId || '')
+      && !deal.Test_Start_At && !deal.Test_End_At && !deal.Rollback_Completed_At
+      && !deal.Billing_Subscription_ID && !deal.Approved_Deployment_Record_ID,
+    'CRM_TRANSITION_PRECONDITION_FAILED', 'Configuration staging is not inactive.', { httpStatus: 409 });
+    const desired = { Deployment_Record_ID: deploymentId, Stage: 'Setup and QA',
+      Test_Status: priorApproval ? 'Scheduled' : 'Setup Pending' };
+    if (priorApproval) invariant(deal.Go_Live_Approval_Status === 'Approved'
+      && deal.Approved_Configuration_Version === priorApproval.configurationVersionId
+      && sameDealField('Go_Live_Approved_At', deal.Go_Live_Approved_At, priorApproval.approvedAt),
+    'CRM_TRANSITION_PRECONDITION_FAILED', 'Prior inactive approval changed.', { httpStatus: 409 });
+    else invariant(deal.Go_Live_Approval_Status === 'Not Ready'
+      && !deal.Approved_Configuration_Version && !deal.Go_Live_Approved_At,
+    'CRM_TRANSITION_PRECONDITION_FAILED', 'Fresh staging has unexpected approval.', { httpStatus: 409 });
+    const matches = (row) => Object.entries(desired).every(([key, value]) => same(row[key], value));
+    if (matches(deal)) return deal;
+    invariant(!deal.Deployment_Record_ID && (priorApproval
+      ? deal.Stage === 'Setup and QA' && deal.Test_Status === 'Scheduled'
+      : deal.Stage === 'Setup and Authorization' && deal.Test_Status === 'Not Started'),
+    'CRM_TRANSITION_PRECONDITION_FAILED', 'Configuration staging source changed.', { httpStatus: 409 });
+    let result;
+    try { result = await updateCoreDeal(dealId, desired, deal.Modified_Time); }
+    catch (error) {
+      try { result = await getDeal(dealId); } catch (_) {
+        throw new RevenueDeskError('CONFIGURATION_STAGING_RECONCILIATION_REQUIRED',
+          'Configuration staging write needs independent readback.', { httpStatus: 503, ambiguous: true });
+      }
+      if (!matches(result)) throw error;
+    }
+    invariant(matches(result), 'CRM_READBACK_INVALID', 'Configuration staging did not read back.',
+      { httpStatus: 503, ambiguous: true });
+    assertDealSnapshot(result, expectedDeal, STAGING_MUTABLE_FIELDS);
+    return result;
+  }
+
   async function updateDeal(dealId, patch, modifiedTime) {
     invariant(plain(patch) && Object.keys(patch).length > 0,
       'CRM_WRITE_INVALID', 'CRM control patch is invalid.', { httpStatus: 503 });
@@ -247,10 +346,73 @@ function createCrmControlClient(config, {
   }
 
   async function recordApproval(dealId, {
-    deploymentId, configurationVersionId, approvedAt, expectedDeal,
+    deploymentId, configurationVersionId, approvedAt, expectedDeal, priorCoreApproval, configurationStaged,
   }) {
     const deal = await getDeal(dealId);
     assertDealSnapshot(deal, expectedDeal);
+    const hasPriorApproval = priorCoreApproval !== undefined && priorCoreApproval !== null;
+    invariant(!hasPriorApproval || configurationStaged === true,
+      'CRM_TRANSITION_PRECONDITION_FAILED', 'Core approval supersession requires authenticated staging.',
+      { httpStatus: 409 });
+    if (configurationStaged === true) {
+      // Only the server-side staging verifier supplies this authority. Both
+      // fresh approval and old inactive core-approval supersession belong to
+      // this controller, never the deferred commercial Blueprint. Historical
+      // receipts and the Form 2 configuration label remain unchanged.
+      if (hasPriorApproval) invariant(plain(priorCoreApproval)
+        && Object.keys(priorCoreApproval).sort().join(',') === 'approvedAt,configurationVersionId'
+        && typeof priorCoreApproval.configurationVersionId === 'string'
+        && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(priorCoreApproval.configurationVersionId)
+        && typeof priorCoreApproval.approvedAt === 'string'
+        && Number.isFinite(Date.parse(priorCoreApproval.approvedAt))
+        && new Date(priorCoreApproval.approvedAt).toISOString() === priorCoreApproval.approvedAt
+        && configurationVersionId !== priorCoreApproval.configurationVersionId
+        && deal.Configuration_Version === priorCoreApproval.configurationVersionId,
+      'CRM_TRANSITION_PRECONDITION_FAILED', 'Retained core approval proof is invalid.', { httpStatus: 409 });
+      invariant(/^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/.test(deploymentId || '')
+        && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(configurationVersionId || '')
+        && deal.Deployment_Record_ID === deploymentId
+        && deal.Stage === 'Setup and QA'
+        && !deal.Test_Start_At && !deal.Test_End_At && !deal.Test_End_Reason
+        && !deal.Rollback_Completed_At && !deal.Billing_Subscription_ID,
+      'CRM_TRANSITION_PRECONDITION_FAILED', 'Staged configuration is not eligible for inactive approval.',
+      { httpStatus: 409 });
+      const desired = {
+        ...(!hasPriorApproval ? { Test_Status: 'Scheduled' } : {}),
+        Go_Live_Approval_Status: 'Approved', Go_Live_Approved_At: toCrmDateTime(approvedAt),
+        Approved_Deployment_Record_ID: deploymentId,
+        Approved_Configuration_Version: configurationVersionId,
+      };
+      const matches = (value) => value.Stage === 'Setup and QA' && value.Test_Status === 'Scheduled'
+        && !value.Test_Start_At && !value.Test_End_At && !value.Test_End_Reason
+        && !value.Rollback_Completed_At && !value.Billing_Subscription_ID
+        && Object.entries(desired).every(([field, expected]) => sameDealField(field, value[field], expected));
+      if (matches(deal)) return deal;
+      invariant(!deal.Approved_Deployment_Record_ID
+        && (hasPriorApproval
+          ? deal.Test_Status === 'Scheduled' && deal.Go_Live_Approval_Status === 'Approved'
+            && deal.Approved_Configuration_Version === priorCoreApproval.configurationVersionId
+            && sameDealField('Go_Live_Approved_At', deal.Go_Live_Approved_At, priorCoreApproval.approvedAt)
+          : deal.Test_Status === 'Setup Pending' && deal.Go_Live_Approval_Status === 'Not Ready'
+            && !deal.Approved_Configuration_Version && !deal.Go_Live_Approved_At),
+      'CRM_TRANSITION_PRECONDITION_FAILED', 'Staged approval source changed before its conditional write.',
+      { httpStatus: 409 });
+      let readback;
+      try { readback = await updateCoreDeal(dealId, desired, deal.Modified_Time); }
+      catch (_) {
+        try { readback = await getDeal(dealId); } catch (_) { readback = null; }
+        // Reconcile one potentially committed write. This method never retries
+        // a mutation when the authoritative outcome is absent or ambiguous.
+        invariant(readback && matches(readback), 'CRM_APPROVAL_RECONCILIATION_REQUIRED',
+          'Staged configuration approval needs independent reconciliation.',
+          { httpStatus: 503, ambiguous: true });
+      }
+      invariant(matches(readback), 'CRM_READBACK_INVALID',
+        'Staged configuration approval did not read back exactly.',
+        { httpStatus: 503, ambiguous: true });
+      assertDealSnapshot(readback, expectedDeal, APPROVAL_MUTABLE_FIELDS);
+      return readback;
+    }
     const desired = {
       Go_Live_Approval_Status: 'Approved', Go_Live_Approved_At: approvedAt,
       Approved_Deployment_Record_ID: deploymentId,
@@ -623,7 +785,8 @@ function createCrmControlClient(config, {
   }
 
   return Object.freeze({ getDeal, proveActivationInactive, containActivation,
-    recordApproval, recordActivation, recordRollback, recordCoreApproval, recordCoreRollback });
+    recordApproval, recordActivation, recordRollback, recordCoreApproval, recordCoreRollback,
+    getPreparationRecords, getPreparationFieldMetadata, getNativeConversion, recordConfigurationStaging });
 }
 
 module.exports = Object.freeze({ DEAL_FIELDS, TRANSITIONS, createCrmControlClient,

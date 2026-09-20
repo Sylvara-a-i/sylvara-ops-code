@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const { validateConfiguration } = require('../lib/validation');
 const { validateReportBaseline } = require('../lib/report-baseline');
 const { configurationSnapshotFingerprint } = require('../lib/approval-control');
-const { buildCrmPreTestSnapshot } = require('../../../../revenue-desk-analytics/functions/analytics_sync/lib/crm-report-baseline');
+const { buildCrmPreTestSnapshot } = require('../lib/crm-report-baseline');
 const { crmBaselineFixture } = require('../../../../revenue-desk-analytics/functions/analytics_sync/test/helpers/crm-baseline-fixture');
 const { configuration, configurationRow, runtimeFixture, authorizationRows, invoke, payloadInbound } = require('./runtime-fixture');
 
