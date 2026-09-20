@@ -100,7 +100,7 @@ function createConfigurationSourceReader(app, config, { now = Date.now } = {}) {
     form1DestinationSha256: config.form1DestinationSha256 });
   const timeoutMs = config.platformTimeoutMs;
 
-  async function readAssistedLineage(journeyId) {
+  async function findAssistedLineage(journeyId) {
     invariant(typeof journeyId === 'string' && JOURNEY.test(journeyId),
       'CONFIGURATION_SOURCE_LINEAGE_INVALID', 'Journey identity is invalid.', { httpStatus: 409 });
     const query = `SELECT ${FIELDS.join(', ')} FROM ${TABLE}`
@@ -119,14 +119,22 @@ function createConfigurationSourceReader(app, config, { now = Date.now } = {}) {
       throw new RevenueDeskError('CONFIGURATION_SOURCE_READ_UNAVAILABLE',
         'Configuration source read is unavailable.', { httpStatus: 503, retryable: true });
     } finally { clearTimeout(timer); }
-    invariant(Array.isArray(result) && result.length === 1,
+    invariant(Array.isArray(result) && result.length <= 1,
       'CONFIGURATION_SOURCE_LINEAGE_UNAVAILABLE',
-      'Exactly one completed assisted Form 1 lineage is required.', { httpStatus: 409 });
+      'Assisted Form 1 lineage is ambiguous.', { httpStatus: 409 });
+    if (result.length === 0) return null;
     const entry = result[0];
     const row = plain(entry?.[TABLE]) ? entry[TABLE] : entry;
     return validateLineage(row, journeyId, binding, now());
   }
-  return Object.freeze({ readAssistedLineage });
+
+  async function readAssistedLineage(journeyId) {
+    const lineage = await findAssistedLineage(journeyId);
+    invariant(lineage !== null, 'CONFIGURATION_SOURCE_LINEAGE_UNAVAILABLE',
+      'Exactly one completed assisted Form 1 lineage is required.', { httpStatus: 409 });
+    return lineage;
+  }
+  return Object.freeze({ findAssistedLineage, readAssistedLineage });
 }
 
 module.exports = Object.freeze({ TABLE, FIELDS, createConfigurationSourceReader });

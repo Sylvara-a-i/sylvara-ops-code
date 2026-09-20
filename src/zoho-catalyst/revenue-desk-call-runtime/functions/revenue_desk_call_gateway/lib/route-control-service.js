@@ -409,9 +409,14 @@ function exactPhone(value, expected) {
 }
 
 function dealValueMatchesConfiguration(deal, configuration) {
+  // A reviewed provider setting is distinct from the submitted CRM ring
+  // preference. Never coerce either into seconds. Numeric comparison is kept
+  // only for historical configurations so their settlement/rollback survives.
   const noAnswerMatches = configuration.coverageMode === 'AfterHoursOnly'
     ? deal.No_Answer_Delay === null || deal.No_Answer_Delay === undefined
-    : Number(deal.No_Answer_Delay) === configuration.noAnswerDelay;
+    : configuration.providerTiming
+      ? deal.No_Answer_Delay === configuration.providerTiming.submittedPreference
+      : Number(deal.No_Answer_Delay) === configuration.noAnswerDelay;
   return decodeCrmApprovedTestRoute(deal.Approved_Test_Route)
       === configuration.approvedTestRoute
     && noAnswerMatches

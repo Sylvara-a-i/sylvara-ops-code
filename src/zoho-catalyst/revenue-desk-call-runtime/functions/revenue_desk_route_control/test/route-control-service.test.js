@@ -20,6 +20,8 @@ const { authorizationReceiptFingerprint }
   = require('revenue_desk_call_gateway/lib/authorization-receipt');
 const { activeAt, loadDeployment }
   = require('revenue_desk_call_gateway/lib/runtime-service');
+const { providerTimingFixture }
+  = require('../../revenue_desk_call_gateway/test/provider-timing-fixture');
 
 const SOURCE_REVISION = 'a'.repeat(40);
 const NOW = Date.parse('2026-08-29T12:10:00.000Z');
@@ -897,6 +899,53 @@ test('historical non-after-hours approval cannot resume CAS, repair CRM, or acti
         assert.equal(rolledBack.deployment.GO_LIVE_APPROVAL_STATUS, 'Revoked');
         assert.equal(subject.getProviderDisableCalls(), 1);
       }
+    }
+  }
+});
+
+test('owner-attested timing retains execution hold and exact CRM preference during rollback', async () => {
+  for (const [mode, stored, label] of [
+    ['NoAnswerOverflowOnly', 'No-Answer/Overflow', 'No Answer / Overflow Only'],
+    ['AfterHoursAndOverflow', 'Both', 'After Hours + Overflow'],
+  ]) {
+    const configured = { ...configuration(), coverageMode: mode,
+      approvedTestRoute: label, noAnswerDelay: null };
+    configured.providerTiming = providerTimingFixture(configured, {
+      observedAt: '2026-08-29T12:08:00.000Z', ownerAcceptedAt: '2026-08-29T12:09:00.000Z',
+    });
+    const options = {
+      deploymentOverrides: { COVERAGE_MODE: mode },
+      configOverrides: { CONFIGURATION_JSON: JSON.stringify(configured) },
+      dealOverrides: { Approved_Test_Route: stored, No_Answer_Delay: '5 Rings' },
+    };
+    const fresh = fixture(options);
+    const original = copy(fresh.store.rows);
+    await assert.rejects(fresh.service.approve(command('approve')),
+      { code: 'PROVIDER_TIMING_UNVERIFIED' });
+    assert.deepEqual(fresh.store.rows, original);
+    assert.equal(fresh.getProviderVerificationCalls(), 0);
+
+    // Fabricated history is an isolated regression fixture, never a live
+    // activation or permission to bypass the production timing hold.
+    for (const preference of ['5 Rings', '4 Rings', 27.5, '27.5', 'Provider Default']) {
+      const historical = fixture(options);
+      seedHistoricalApproval(historical);
+      historical.crmState.No_Answer_Delay = preference;
+      const rows = copy(historical.store.rows);
+      const crm = copy(historical.crmState);
+      await assert.rejects(historical.service.activate(command('activate')),
+        { code: 'PROVIDER_TIMING_UNVERIFIED' });
+      if (preference === '5 Rings') {
+        const stopped = await historical.service.rollback(command('rollback'));
+        assert.equal(stopped.deployment.TEST_STATUS, 'Stopped');
+      } else {
+        await assert.rejects(historical.service.rollback(command('rollback')),
+          { code: 'CONTROL_PRECONDITION_FAILED' });
+        assert.deepEqual(historical.store.rows, rows);
+        assert.deepEqual(historical.crmState, crm);
+        assert.equal(historical.getProviderDisableCalls(), 0);
+      }
+      assert.equal(historical.getProviderVerificationCalls(), 0);
     }
   }
 });

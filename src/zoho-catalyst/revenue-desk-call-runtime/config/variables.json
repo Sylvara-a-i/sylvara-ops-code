@@ -65,6 +65,9 @@
         "RETELL_TEST_PHONE_NUMBER",
         "RETELL_SHARED_AGENT_ID",
         "RETELL_SHARED_AGENT_VERSION"
+      ],
+      "required_for_public_configuration_staging": [
+        "FORM1_PUBLIC_SUBMISSION_CHANNEL"
       ]
     }
   },
@@ -468,6 +471,14 @@
       "required": false,
       "format": "authoritative lowercase SHA-256 digest of the accepted assisted Form 1 destination",
       "boundary": "Required only by configuration staging's read-only historical session lineage check. Existing Journey-core routes remain unchanged when absent; public/native-only intake is not inferred from assisted sessions."
+    },
+    {
+      "name": "FORM1_PUBLIC_SUBMISSION_CHANNEL",
+      "consumer": "route_control",
+      "secret": false,
+      "required": false,
+      "format": "1-100 character exact CRM Submission_Channel value from fresh public Form 1 native-writer readback",
+      "boundary": "Unset disables only public/native lineage fallback. Never infer this value from picklist membership; configure it only after the hidden native Forms mapping and CRM result are independently verified."
     },
     {
       "name": "FORM2_DESTINATION_SHA256",

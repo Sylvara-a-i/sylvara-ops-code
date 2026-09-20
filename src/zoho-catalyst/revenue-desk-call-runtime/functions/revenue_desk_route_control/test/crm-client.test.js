@@ -2,7 +2,7 @@
 
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { createCrmControlClient, DEAL_FIELDS } = require('../lib/crm-client');
+const { createCrmControlClient, DEAL_FIELDS, PUBLIC_LINEAGE_FIELDS } = require('../lib/crm-client');
 
 const DEAL_ID = '400000001';
 const DEPLOYMENT_ID = 'deployment_synthetic';
@@ -11,6 +11,38 @@ const ACTIVATED_AT = '2026-08-29T12:15:00.000Z';
 const CORE_APPROVED_AT = '2026-08-29T12:10:00.789Z';
 const CORE_STOPPED_AT = '2026-08-29T12:20:00.789Z';
 const SYNTHETIC_ORGANIZATION_ID = '606';
+const PUBLIC_JOURNEY = 'synthetic_public_journey';
+
+function publicLead(overrides = {}) {
+  return { id: '7100000000001', Intake_Submission_ID: PUBLIC_JOURNEY,
+    Submission_Channel: 'Synthetic Public Form',
+    Free_Test_Request_Submitted_At: '2026-09-01T07:05:06-05:00',
+    Entry_Offer: 'Free 7-Day Missed-Call', Free_Test_Contact_Consent: true,
+    Free_Test_Contact_Consent_At: '2026-09-01T07:04:06-05:00',
+    Free_Test_Contact_Consent_Version: 'form1-contact-consent-v1',
+    Intake_Form_Version: 'revenue-leak-test-request-v1', ...overrides };
+}
+
+function publicLineageFixture({ channel = 'Synthetic Public Form', searchResponse } = {}) {
+  const requests = [];
+  const client = createCrmControlClient({ crmApiBaseUrl: 'https://www.zohoapis.com/crm/v8',
+    crmOrganizationId: SYNTHETIC_ORGANIZATION_ID, platformTimeoutMs: 500,
+    form1PublicSubmissionChannel: channel }, {
+    readAuthorization: async () => 'Zoho-oauthtoken synthetic-read',
+    writeAuthorization: async () => { throw new Error('write credential prohibited'); },
+    fetchImpl: async (url, options) => {
+      const parsed = new URL(url); requests.push({ parsed, options });
+      assert.equal(options.method, 'GET');
+      if (parsed.pathname.endsWith('/org')) {
+        return response(200, { org: [{ zgid: SYNTHETIC_ORGANIZATION_ID }] });
+      }
+      assert.equal(parsed.pathname, '/crm/v8/Leads/search');
+      return response(200, searchResponse || { data: [publicLead()],
+        info: { count: 1, page: 1, more_records: false } });
+    },
+  });
+  return { client, requests };
+}
 
 function scheduledDeal() {
   return {
@@ -719,4 +751,102 @@ test('fresh staged native approval requires trusted staging and exact inactive s
   await assert.rejects(after.client.recordApproval(DEAL_ID, after.argumentsFor()),
     { code: 'CRM_TRANSITION_PRECONDITION_FAILED' });
   assert.equal(after.writes.length, 1);
+});
+
+test('public Form 1 lineage uses a bounded exact converted-Lead search and minimizes output', async () => {
+  const selected = publicLineageFixture();
+  assert.deepEqual(await selected.client.getPublicOriginalLead(PUBLIC_JOURNEY), {
+    lineageType: 'public_native', originalLeadId: '7100000000001', journeyId: PUBLIC_JOURNEY,
+    submittedAt: '2026-09-01T12:05:06.000Z', submissionChannel: 'Synthetic Public Form',
+    consentAt: '2026-09-01T12:04:06.000Z', intakeFormVersion: 'revenue-leak-test-request-v1',
+  });
+  assert.equal(selected.requests.length, 2);
+  const search = selected.requests[1].parsed;
+  assert.equal(search.searchParams.get('criteria'), `(Intake_Submission_ID:equals:${PUBLIC_JOURNEY})`);
+  assert.equal(search.searchParams.get('converted'), 'true');
+  assert.equal(search.searchParams.get('page'), '1');
+  assert.equal(search.searchParams.get('per_page'), '2');
+  assert.equal(search.searchParams.get('fields'), PUBLIC_LINEAGE_FIELDS.join(','));
+});
+
+test('public Form 1 lineage rejects fuzzy, ambiguous, incomplete, or noncanonical evidence', async () => {
+  const cases = [
+    { data: [publicLead({ Intake_Submission_ID: `${PUBLIC_JOURNEY}-similar` })],
+      info: { count: 1, page: 1, more_records: false } },
+    { data: [publicLead(), publicLead({ id: '7100000000002' })],
+      info: { count: 2, page: 1, more_records: false } },
+    { data: [publicLead()], info: { count: 2, page: 1, more_records: false } },
+    { data: [publicLead()], info: { count: 1, page: 1, more_records: true } },
+    { data: [publicLead()], info: { count: 1, page: 2, more_records: false } },
+    { data: [publicLead()], info: { count: 1, page: 1, more_records: false, next_page_token: 'opaque' } },
+    { data: [publicLead({ Submission_Channel: 'Synthetic Public Form ' })],
+      info: { count: 1, page: 1, more_records: false } },
+    { data: [publicLead({ Free_Test_Request_Submitted_At: '2026-02-30T12:00:00+00:00' })],
+      info: { count: 1, page: 1, more_records: false } },
+    { data: [publicLead({ Entry_Offer: 'Other' })], info: { count: 1, page: 1, more_records: false } },
+    { data: [publicLead({ Free_Test_Contact_Consent: 'true' })],
+      info: { count: 1, page: 1, more_records: false } },
+    { data: [publicLead({ Free_Test_Contact_Consent_At: undefined })],
+      info: { count: 1, page: 1, more_records: false } },
+    { data: [publicLead({ Free_Test_Contact_Consent_At: 'not-a-date' })],
+      info: { count: 1, page: 1, more_records: false } },
+    { data: [publicLead({ Free_Test_Contact_Consent_At: '2026-02-30T12:00:00+00:00' })],
+      info: { count: 1, page: 1, more_records: false } },
+    { data: [publicLead({ Free_Test_Contact_Consent_At: '2099-01-01T12:00:00+00:00' })],
+      info: { count: 1, page: 1, more_records: false } },
+    { data: [publicLead({ Free_Test_Contact_Consent_At: '2026-09-01T07:06:06-05:00' })],
+      info: { count: 1, page: 1, more_records: false } },
+  ];
+  for (const searchResponse of cases) {
+    const selected = publicLineageFixture({ searchResponse });
+    await assert.rejects(selected.client.getPublicOriginalLead(PUBLIC_JOURNEY),
+      { code: 'CONFIGURATION_SOURCE_LINEAGE_INVALID' });
+  }
+});
+
+test('public Form 1 accepts consent captured at or before the canonical submission time', async () => {
+  for (const consent of ['2026-09-01T07:04:06-05:00', '2026-09-01T07:05:06-05:00']) {
+    const selected = publicLineageFixture({ searchResponse: { data: [publicLead({
+      Free_Test_Contact_Consent_At: consent })], info: { count: 1, page: 1, more_records: false } } });
+    const lineage = await selected.client.getPublicOriginalLead(PUBLIC_JOURNEY);
+    assert.equal(Date.parse(lineage.consentAt) <= Date.parse(lineage.submittedAt), true);
+  }
+});
+
+test('public Form 1 fallback requires explicit safe server configuration and valid journey bytes', async () => {
+  for (const channel of [null, '', 'CRM Assisted', ' crm   assisted ', 'unknown', 'PENDING',
+    'default', '<verified-channel>', 'bad\nchannel']) {
+    const selected = publicLineageFixture({ channel });
+    await assert.rejects(selected.client.getPublicOriginalLead(PUBLIC_JOURNEY),
+      { code: 'CONFIGURATION_PUBLIC_SOURCE_UNAVAILABLE' });
+    assert.equal(selected.requests.length, 0);
+  }
+  const selected = publicLineageFixture();
+  await assert.rejects(selected.client.getPublicOriginalLead("x' OR 1=1"),
+    { code: 'CONFIGURATION_SOURCE_LINEAGE_INVALID' });
+  assert.equal(selected.requests.length, 0);
+});
+
+test('public Form 1 search body timeout is bounded, sanitized, and never retried', async () => {
+  let searches = 0;
+  const client = createCrmControlClient({ crmApiBaseUrl: 'https://www.zohoapis.com/crm/v8',
+    crmOrganizationId: SYNTHETIC_ORGANIZATION_ID, platformTimeoutMs: 250,
+    form1PublicSubmissionChannel: 'Synthetic Public Form' }, {
+    readAuthorization: async () => 'Zoho-oauthtoken synthetic-read',
+    writeAuthorization: async () => { throw new Error('write credential prohibited'); },
+    fetchImpl: async (url) => {
+      if (new URL(url).pathname.endsWith('/org')) {
+        return response(200, { org: [{ zgid: SYNTHETIC_ORGANIZATION_ID }] });
+      }
+      searches += 1;
+      return { status: 200, async json() { return new Promise(() => {}); } };
+    },
+  });
+  await assert.rejects(client.getPublicOriginalLead(PUBLIC_JOURNEY), (error) => {
+    assert.equal(error.code, 'CONFIGURATION_PUBLIC_SOURCE_UNAVAILABLE');
+    assert.equal(error.cause, undefined);
+    assert.doesNotMatch(error.message + JSON.stringify(error), /synthetic-read/);
+    return true;
+  });
+  assert.equal(searches, 1);
 });

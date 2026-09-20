@@ -20,6 +20,17 @@ const MAX_RETELL_CALL_DURATION_MS = 86_400_000;
 // destination label is not free text and cannot imply an unverified number.
 const NUMBERED_FALLBACKS = new Set(['Existing Office Line', 'On-Call Mobile', 'Other']);
 const FALLBACK_DESTINATIONS = new Set([...NUMBERED_FALLBACKS, 'Voicemail']);
+const SUBMITTED_NO_ANSWER_PREFERENCES = new Set([
+  '4 Rings', '5 Rings', '6 Rings', 'Provider Default', 'Not Sure',
+]);
+const PROVIDER_TIMING_FIELDS = Object.freeze([
+  'schemaVersion', 'evidenceClass', 'clientId', 'crmDealId', 'deploymentId',
+  'configurationVersion', 'businessNumber', 'phoneSystemProvider', 'coverageMode',
+  'submittedPreference', 'settingName', 'value', 'unit', 'observedAt',
+  'ownerDecision', 'ownerAcceptedAt', 'evidenceReference', 'evidenceSha256',
+  'documentationReference', 'documentationSha256',
+]);
+const MAX_TIMING_READBACK_AGE_MS = 15 * 60 * 1000;
 
 function isPlainObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype;
@@ -142,6 +153,55 @@ function assertNotificationHandoffReady(configuration, { now = Date.now() } = {}
   return validated;
 }
 
+/**
+ * An exact owner-reviewed snapshot, not an API capability or carrier proof.
+ * The normal staging signature binds these bytes through CONFIGURATION_JSON;
+ * local validation never authenticates an export or authorizes activation.
+ * Provider-native setting/value/unit stay verbatim: no ring conversion or
+ * universal carrier range is inferred. Freshness applies to new preparation,
+ * not immutable historical settlement or a completed read-only staging replay.
+ */
+function validateProviderTimingBinding(input, configuration, { now, capturedAt } = {}) {
+  const code = 'PROVIDER_TIMING_UNVERIFIED';
+  const valid = (condition) => invariant(condition, code,
+    'Provider timing requires an exact owner-reviewed source binding.', { httpStatus: 409 });
+  valid(isPlainObject(configuration) && isPlainObject(input) && Object.keys(input).sort().join(',')
+    === [...PROVIDER_TIMING_FIELDS].sort().join(','));
+  const boundedText = (value, maximum) => typeof value === 'string'
+    && value.length > 0 && value.length <= maximum && value === value.trim()
+    && !/[\x00-\x1f\x7f]/.test(value);
+  const knownText = (value, maximum) => boundedText(value, maximum)
+    && !/^(?:unknown|not sure|provider default|default|n\/a|none|unavailable|unverified|pending|-+)$/i.test(value);
+  const canonicalTime = (value) => boundedText(value, 32) && Number.isFinite(Date.parse(value))
+    && new Date(Date.parse(value)).toISOString() === value;
+  valid(input.schemaVersion === 1 && input.evidenceClass === 'owner_attested_provider_readback'
+    && input.ownerDecision === 'accept_exact_provider_setting'
+    && ['clientId', 'crmDealId', 'deploymentId', 'configurationVersion',
+      'phoneSystemProvider', 'coverageMode'].every((field) => input[field] === configuration[field])
+    && ['clientId', 'deploymentId', 'configurationVersion'].every((field) =>
+      typeof input[field] === 'string' && IDENTIFIER_PATTERN.test(input[field]))
+    && typeof input.crmDealId === 'string' && /^[1-9][0-9]{7,29}$/.test(input.crmDealId)
+    && ['NoAnswerOverflowOnly', 'AfterHoursAndOverflow'].includes(input.coverageMode)
+    && E164_PATTERN.test(input.businessNumber || '')
+    && knownText(input.phoneSystemProvider, 120)
+    && SUBMITTED_NO_ANSWER_PREFERENCES.has(input.submittedPreference)
+    && knownText(input.settingName, 120) && knownText(input.value, 120)
+    && knownText(input.unit, 80)
+    && canonicalTime(input.observedAt) && canonicalTime(input.ownerAcceptedAt)
+    && Date.parse(input.observedAt) <= Date.parse(input.ownerAcceptedAt)
+    && ['evidenceReference', 'documentationReference'].every((field) =>
+      typeof input[field] === 'string' && IDENTIFIER_PATTERN.test(input[field]))
+    && ['evidenceSha256', 'documentationSha256'].every((field) =>
+      typeof input[field] === 'string' && /^[a-f0-9]{64}$/.test(input[field])));
+  if (now !== undefined || capturedAt !== undefined) {
+    valid(Number.isSafeInteger(now) && canonicalTime(capturedAt));
+    const captured = Date.parse(capturedAt); const observed = Date.parse(input.observedAt);
+    valid(observed <= captured && Date.parse(input.ownerAcceptedAt) <= captured
+      && captured <= now && now - observed <= MAX_TIMING_READBACK_AGE_MS);
+  }
+  return Object.freeze(Object.fromEntries(PROVIDER_TIMING_FIELDS.map((field) => [field, input[field]])));
+}
+
 // Structural validation also serves historical settlement and rollback. A
 // parseable numeric delay is not evidence that a provider timing rule is known.
 function validateConfiguration(input) {
@@ -155,7 +215,7 @@ function validateConfiguration(input) {
     'approvedFallbackDestination', 'approvedFallbackNumber', 'rollbackContactName',
     'rollbackContactMobile', 'rollbackInstructions', 'rollbackInstructionsVersion',
     'authorizedRepresentativeConfirmed', 'testScopeAccepted', 'authorityConfirmedAt',
-    'setupFormSubmissionId', 'setupFormVersion', 'reportBaseline', 'notificationHandoff',
+    'setupFormSubmissionId', 'setupFormVersion', 'reportBaseline', 'notificationHandoff', 'providerTiming',
   ], 'configuration');
   const serviceArea = object(value.serviceArea, 'configuration.serviceArea');
   exactKeys(serviceArea, ['cities', 'zips'], 'configuration.serviceArea');
@@ -185,7 +245,9 @@ function validateConfiguration(input) {
   'INVALID_SCHEMA', 'Approved test route does not match coverage mode.');
   const noAnswerDelay = value.noAnswerDelay === null || value.noAnswerDelay === undefined
     ? null : integer(value.noAnswerDelay, 'configuration.noAnswerDelay', 1, 120);
-  invariant(coverageMode === 'AfterHoursOnly' ? noAnswerDelay === null : noAnswerDelay !== null,
+  const hasProviderTiming = value.providerTiming !== undefined;
+  invariant(coverageMode === 'AfterHoursOnly' ? noAnswerDelay === null && !hasProviderTiming
+    : hasProviderTiming ? noAnswerDelay === null : noAnswerDelay !== null,
     'INVALID_SCHEMA', 'No-answer delay does not match the approved route.');
   const fallbackNumber = value.approvedFallbackNumber === null
     || value.approvedFallbackNumber === undefined || value.approvedFallbackNumber === ''
@@ -199,7 +261,7 @@ function validateConfiguration(input) {
     'configuration.authorityConfirmedAt', { maximum: 32, trim: false });
   invariant(Number.isFinite(Date.parse(authorityConfirmedAt)),
     'INVALID_SCHEMA', 'Authority confirmation timestamp is invalid.');
-  return Object.freeze({
+  const configuration = {
     clientId: identifier(value.clientId, 'configuration.clientId'),
     crmDealId,
     // These values are copied to verified CRM text fields capped at 100 characters.
@@ -256,13 +318,17 @@ function validateConfiguration(input) {
     ...(Object.hasOwn(value, 'reportBaseline') ? { reportBaseline: validateReportBaseline(
       value.reportBaseline, { configurationVersion: value.configurationVersion, coverageMode },
     ) } : {}),
-  });
+  };
+  return Object.freeze({ ...configuration, ...(hasProviderTiming ? {
+    providerTiming: validateProviderTimingBinding(value.providerTiming, configuration),
+  } : {}) });
 }
 
 function assertExecutionTimingSupported(configuration) {
   // Only after-hours coverage has no no-answer timing dependency. Keep the
-  // other modes parseable for history, but never authorize new work until an
-  // explicit provider value-and-unit binding contract is implemented.
+  // other modes parseable for history and owner-attested staging, but that
+  // attestation alone never substitutes for actual originating-provider
+  // configuration/activation evidence. New call execution remains contained.
   invariant(configuration?.coverageMode === 'AfterHoursOnly'
     && configuration.noAnswerDelay === null,
   'PROVIDER_TIMING_UNVERIFIED', 'Provider timing is not verified for this coverage mode.',
@@ -342,6 +408,7 @@ module.exports = {
   stringArray,
   enumValue,
   validateConfiguration,
+  validateProviderTimingBinding,
   assertNotificationHandoffReady,
   assertExecutionTimingSupported,
   validateInboundPayload,

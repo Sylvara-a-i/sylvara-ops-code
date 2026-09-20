@@ -4,6 +4,7 @@
 // receipt, verify telephone ownership, or issue provider/activation authority.
 const {
   validateConfiguration,
+  validateProviderTimingBinding,
 } = require('./validation');
 const {
   decodeCrmApprovedTestRoute, COVERAGE_LABEL_TO_MODE,
@@ -251,14 +252,27 @@ function prepareFreeTestConfiguration(input, {
     const review = record(input.review);
     const label = decodeCrmApprovedTestRoute(deal.Approved_Test_Route);
     requireValue(label !== undefined, 'APPROVED_ROUTE_UNRESOLVED');
-    // No public authenticated timing-evidence contract exists yet. Even a
-    // plausible numeric delay cannot make overflow executable in this bridge.
-    requireValue(label === 'After Hours Only', 'PROVIDER_TIMING_UNVERIFIED');
-    requireValue(deal.No_Answer_Delay === null || deal.No_Answer_Delay === undefined,
-      'AFTER_HOURS_DELAY_CONFLICT');
+    if (label === 'After Hours Only') {
+      requireValue(deal.No_Answer_Delay === null || deal.No_Answer_Delay === undefined,
+        'AFTER_HOURS_DELAY_CONFLICT');
+      requireValue(review.providerTiming === undefined, 'PROVIDER_TIMING_UNVERIFIED');
+    }
     const hours = reviewedHours(account, review);
     const country = review.countryCode;
     const mainBusinessNumber = usPhone(account.Phone, country, 'BUSINESS_PHONE_UNRESOLVED');
+    // Keep the original ring preference distinct from the provider's actual
+    // native setting. An owner-attested snapshot can be reviewed and staged;
+    // it does not assert that forwarding or live provider behavior was tested.
+    const providerTiming = label === 'After Hours Only' ? undefined
+      : validateProviderTimingBinding(review.providerTiming, {
+        clientId: review.clientId, crmDealId: deal.id, deploymentId: review.deploymentId,
+        configurationVersion: deal.Configuration_Version,
+        phoneSystemProvider: account.Phone_System_Provider,
+        coverageMode: COVERAGE_LABEL_TO_MODE.get(label),
+      }, { now, capturedAt: input.evidence.capturedAt });
+    if (providerTiming) requireValue(providerTiming.businessNumber === mainBusinessNumber
+      && providerTiming.submittedPreference === deal.No_Answer_Delay,
+    'PROVIDER_TIMING_SOURCE_MISMATCH');
     const fallback = deal.Approved_Fallback_Number === null
       || deal.Approved_Fallback_Number === undefined || deal.Approved_Fallback_Number === ''
       ? null : usPhone(deal.Approved_Fallback_Number, country, 'FALLBACK_PHONE_UNRESOLVED');
@@ -312,6 +326,7 @@ function prepareFreeTestConfiguration(input, {
       },
       ...(handoff === undefined ? {} : { notificationHandoff: handoff }),
       phoneSystemProvider: account.Phone_System_Provider, approvedTestRoute: label, noAnswerDelay: null,
+      ...(providerTiming === undefined ? {} : { providerTiming }),
       forwardingAdministratorName: deal.Forwarding_Administrator_Name,
       forwardingAdministratorMobile: usPhone(deal.Forwarding_Administrator_Mobile, country,
         'ADMINISTRATOR_PHONE_UNRESOLVED'),
@@ -354,9 +369,10 @@ function prepareFreeTestConfiguration(input, {
         mainBusinessNumber, numberOwnershipVerified: false, forwardingVerified: false }),
     });
   } catch (error) {
-    if (!(error instanceof PreparationError) && error.code !== 'INVALID_SCHEMA') throw error;
+    if (!(error instanceof PreparationError)
+      && !['INVALID_SCHEMA', 'PROVIDER_TIMING_UNVERIFIED'].includes(error.code)) throw error;
     return Object.freeze({ ...boundary, status: 'blocked', candidate: null,
-      unresolved: Object.freeze([error instanceof PreparationError
+      unresolved: Object.freeze([error instanceof PreparationError || error.code === 'PROVIDER_TIMING_UNVERIFIED'
         ? error.code : 'RUNTIME_CONFIGURATION_REVIEW_REQUIRED']), reviewContext: null });
   }
 }

@@ -3,6 +3,14 @@
 const { RevenueDeskError, invariant } = require('revenue_desk_call_gateway/lib/errors');
 const { NATIVE_CONVERSION_FIELDS } = require('./configuration-conversion-reader');
 
+const PUBLIC_LINEAGE_FIELDS = Object.freeze([
+  'id', 'Intake_Submission_ID', 'Submission_Channel', 'Free_Test_Request_Submitted_At',
+  'Entry_Offer', 'Free_Test_Contact_Consent', 'Free_Test_Contact_Consent_At',
+  'Free_Test_Contact_Consent_Version', 'Intake_Form_Version',
+]);
+const JOURNEY = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/;
+const PUBLIC_CHANNEL_SENTINELS = new Set(['crm assisted', 'unknown', 'pending', 'default']);
+
 const DEAL_FIELDS = Object.freeze([
   'id', 'Modified_Time', 'Pipeline', 'Stage', 'Entry_Offer', 'Intake_Submission_ID',
   'Account_Name', 'Contact_Name', 'Setup_Access_Status', 'Setup_Access_Verified_At',
@@ -76,6 +84,16 @@ function same(actual, expected) {
   if (typeof expected === 'boolean') return actual === expected
     || String(actual).toLowerCase() === String(expected);
   return actual === expected;
+}
+
+function crmTimestamp(value) {
+  if (typeof value !== 'string'
+    || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(value)) return null;
+  const epoch = Date.parse(value);
+  const local = value.slice(0, 19);
+  if (!Number.isFinite(epoch)
+    || new Date(Date.parse(`${local}.000Z`)).toISOString() !== `${local}.000Z`) return null;
+  return epoch;
 }
 
 function sameDealField(field, actual, expected) {
@@ -210,6 +228,69 @@ function createCrmControlClient(config, {
     // The conversion reader validates the derived evidence and drops all other
     // provider fields before it is used by the configuration staging service.
     return request(`/Leads?${query}`, { method: 'GET' });
+  }
+
+  async function getPublicOriginalLead(journeyId) {
+    invariant(typeof journeyId === 'string' && JOURNEY.test(journeyId),
+      'CONFIGURATION_SOURCE_LINEAGE_INVALID', 'Journey identity is invalid.', { httpStatus: 409 });
+    const channel = config.form1PublicSubmissionChannel;
+    const normalizedChannel = typeof channel === 'string'
+      ? channel.replace(/\s+/g, ' ').trim().toLowerCase() : null;
+    invariant(typeof channel === 'string' && channel.length >= 1 && channel.length <= 100
+      && channel.trim().length >= 1 && !/[\u0000-\u001f\u007f]/.test(channel)
+      && !/^<.*>$/.test(channel) && !PUBLIC_CHANNEL_SENTINELS.has(normalizedChannel),
+    'CONFIGURATION_PUBLIC_SOURCE_UNAVAILABLE',
+    'Public Form 1 lineage is disabled until its native channel is verified.', { httpStatus: 409 });
+    const query = new URLSearchParams({
+      criteria: `(Intake_Submission_ID:equals:${journeyId})`,
+      converted: 'true',
+      fields: PUBLIC_LINEAGE_FIELDS.join(','),
+      page: '1',
+      per_page: '2',
+    });
+    let response;
+    let timer;
+    try {
+      response = await Promise.race([
+        (async () => {
+          await assertOrganization(false);
+          return request(`/Leads/search?${query}`, { method: 'GET' });
+        })(),
+        new Promise((_, reject) => {
+          timer = setTimeout(() => reject(new Error('public lineage timeout')), config.platformTimeoutMs);
+        }),
+      ]);
+    } catch (_) {
+      throw new RevenueDeskError('CONFIGURATION_PUBLIC_SOURCE_UNAVAILABLE',
+        'Public Form 1 lineage read is unavailable.', { httpStatus: 503, retryable: true });
+    } finally { clearTimeout(timer); }
+    const row = Array.isArray(response?.data) && response.data.length === 1
+      ? response.data[0] : null;
+    const info = response?.info;
+    // Zoho's equals search can behave as a contains match for punctuation.
+    // Pagination alone therefore cannot prove identity; require the returned
+    // unique field to match the signed journey byte for byte.
+    const submittedAt = crmTimestamp(row?.Free_Test_Request_Submitted_At);
+    const consentAt = crmTimestamp(row?.Free_Test_Contact_Consent_At);
+    invariant(plain(row) && plain(info) && response.data.length === 1
+      && info.count === 1 && info.page === 1 && info.more_records === false
+      && (info.next_page_token === null || info.next_page_token === undefined)
+      && typeof row.id === 'string' && /^[1-9][0-9]{9,29}$/.test(row.id)
+      && row.Intake_Submission_ID === journeyId
+      && row.Submission_Channel === channel
+      && row.Entry_Offer === 'Free 7-Day Missed-Call'
+      && row.Free_Test_Contact_Consent === true
+      && row.Free_Test_Contact_Consent_Version === 'form1-contact-consent-v1'
+      && row.Intake_Form_Version === 'revenue-leak-test-request-v1'
+      && consentAt !== null && submittedAt !== null
+      && consentAt <= submittedAt && submittedAt <= Date.now(),
+    'CONFIGURATION_SOURCE_LINEAGE_INVALID',
+    'Public Form 1 lineage is incomplete or ambiguous.', { httpStatus: 409 });
+    return Object.freeze({ lineageType: 'public_native', originalLeadId: row.id, journeyId,
+      submittedAt: new Date(submittedAt).toISOString(),
+      consentAt: new Date(consentAt).toISOString(),
+      submissionChannel: row.Submission_Channel,
+      intakeFormVersion: row.Intake_Form_Version });
   }
 
   async function getPreparationRecords(dealId) {
@@ -786,8 +867,9 @@ function createCrmControlClient(config, {
 
   return Object.freeze({ getDeal, proveActivationInactive, containActivation,
     recordApproval, recordActivation, recordRollback, recordCoreApproval, recordCoreRollback,
-    getPreparationRecords, getPreparationFieldMetadata, getNativeConversion, recordConfigurationStaging });
+    getPreparationRecords, getPreparationFieldMetadata, getNativeConversion, getPublicOriginalLead,
+    recordConfigurationStaging });
 }
 
-module.exports = Object.freeze({ DEAL_FIELDS, TRANSITIONS, createCrmControlClient,
+module.exports = Object.freeze({ DEAL_FIELDS, PUBLIC_LINEAGE_FIELDS, TRANSITIONS, createCrmControlClient,
   parseTransitionId });

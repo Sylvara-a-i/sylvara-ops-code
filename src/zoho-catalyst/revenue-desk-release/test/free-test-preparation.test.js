@@ -9,6 +9,7 @@ const offlineGuard = installOfflineGuard();
 const { prepareFreeTestConfiguration, MAX_READBACK_AGE_MS } = require('../lib/free-test-preparation');
 const { SYNTHETIC_NOW, syntheticPreparationInputs } = require('./fixtures/free-test-preparation');
 const { crmBaselineFixture } = require('../../revenue-desk-analytics/functions/analytics_sync/test/helpers/crm-baseline-fixture');
+const { providerTimingFixture } = require('../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/test/provider-timing-fixture');
 
 function withBaseline(input = syntheticPreparationInputs()[0]) {
   const baseline = crmBaselineFixture();
@@ -240,6 +241,92 @@ test('overflow and combined remain blocked with numeric, ring or fabricated timi
   const invalid = syntheticPreparationInputs()[0];
   invalid.crm.deal.Approved_Test_Route = 'after hours only';
   assert.deepEqual(prepare(invalid).unresolved, ['APPROVED_ROUTE_UNRESOLVED']);
+});
+
+function preparationWithTiming(index = 0, route = 'No-Answer/Overflow') {
+  const input = syntheticPreparationInputs()[index];
+  input.crm.deal.Approved_Test_Route = route;
+  input.crm.deal.No_Answer_Delay = '5 Rings';
+  input.review.providerTiming = providerTimingFixture({
+    clientId: input.review.clientId, crmDealId: input.crm.deal.id,
+    deploymentId: input.review.deploymentId,
+    configurationVersion: input.crm.deal.Configuration_Version,
+    phoneSystemProvider: input.crm.account.Phone_System_Provider,
+    coverageMode: ['Both', 'After Hours + Overflow'].includes(route)
+      ? 'AfterHoursAndOverflow' : 'NoAnswerOverflowOnly',
+  }, { businessNumber: input.crm.account.Phone });
+  return input;
+}
+
+test('explicit owner-attested timing prepares overflow and combined without changing CRM or execution authority', () => {
+  for (const route of ['No-Answer/Overflow', 'No Answer / Overflow Only', 'Both', 'After Hours + Overflow']) {
+    for (const index of [0, 1]) {
+      const input = preparationWithTiming(index, route);
+      const before = structuredClone(input); const result = prepare(input);
+      assert.equal(result.status, 'prepared_local_only'); assert.deepEqual(result.unresolved, []);
+      assert.equal(result.providerVerified, false); assert.equal(result.deploymentAuthorized, false);
+      assert.equal(result.candidate.approved, false);
+      assert.equal(result.candidate.notificationRecipient.approved, false);
+      assert.equal(result.candidate.noAnswerDelay, null);
+      assert.deepEqual(result.candidate.providerTiming, input.review.providerTiming);
+      assert.equal(result.candidate.providerTiming.submittedPreference, '5 Rings');
+      assert.equal(result.candidate.providerTiming.value, '27.5', 'no ring-to-second calculation');
+      assert.deepEqual(input, before); assert.deepEqual(prepare(input), result);
+    }
+  }
+});
+
+test('a default or uncertain submitted preference needs a separate explicit accepted setting, never an inferred delay', () => {
+  for (const preference of ['Provider Default', 'Not Sure']) {
+    const input = preparationWithTiming();
+    input.crm.deal.No_Answer_Delay = preference;
+    input.review.providerTiming.submittedPreference = preference;
+    assert.equal(prepare(input).status, 'prepared_local_only');
+    input.review.providerTiming.value = preference;
+    assert.deepEqual(prepare(input).unresolved, ['PROVIDER_TIMING_UNVERIFIED']);
+  }
+});
+
+test('new timing preparation rejects absent evidence, stale review and unknown provider data', () => {
+  const cases = [
+    (input) => { delete input.review.providerTiming; },
+    (input) => { input.review.providerTiming.verified = true; },
+    (input) => { input.review.providerTiming.unit = 'Unknown'; },
+    (input) => { input.review.providerTiming.value = 'Provider Default'; },
+    (input) => { input.review.providerTiming.observedAt = '2026-09-09T11:44:59.999Z'; },
+    (input) => { input.review.providerTiming.observedAt = '2026-09-09T12:01:00.000Z'; },
+    (input) => { input.review.providerTiming.ownerAcceptedAt = '2026-09-09T12:01:00.000Z'; },
+    (input) => { input.review.providerTiming.evidenceSha256 = ''; },
+    (input) => { input.review.providerTiming.documentationReference = ''; },
+    (input) => { input.review.providerTiming.ownerDecision = 'pending'; },
+  ];
+  for (const mutate of cases) {
+    const input = preparationWithTiming(); mutate(input);
+    assert.deepEqual(prepare(input).unresolved, ['PROVIDER_TIMING_UNVERIFIED']);
+    assert.equal(prepare(input).candidate, null);
+  }
+});
+
+test('timing preparation binds exact current phone/provider/route/preference and rejects cross-business reuse', () => {
+  for (const mutate of [
+    (input) => { input.crm.account.Phone = '+19135550999'; },
+    (input) => { input.crm.deal.No_Answer_Delay = '6 Rings'; },
+  ]) {
+    const input = preparationWithTiming(); mutate(input);
+    assert.deepEqual(prepare(input).unresolved, ['PROVIDER_TIMING_SOURCE_MISMATCH']);
+  }
+  for (const mutate of [
+    (input) => { input.crm.account.Phone_System_Provider = 'Different synthetic PBX'; },
+    (input) => { input.crm.deal.Approved_Test_Route = 'Both'; },
+    (input) => { input.review.deploymentId = 'different_synthetic_deployment'; },
+    (input) => { input.review.providerTiming = preparationWithTiming(1).review.providerTiming; },
+  ]) {
+    const input = preparationWithTiming(); mutate(input);
+    assert.deepEqual(prepare(input).unresolved, ['PROVIDER_TIMING_UNVERIFIED']);
+  }
+  const afterHours = syntheticPreparationInputs()[0];
+  afterHours.review.providerTiming = preparationWithTiming().review.providerTiming;
+  assert.deepEqual(prepare(afterHours).unresolved, ['PROVIDER_TIMING_UNVERIFIED']);
 });
 
 test('readback age is bounded and future or stale metadata cannot be prepared', () => {

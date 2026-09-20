@@ -15,8 +15,11 @@ const {
 } = require('../lib/contracts');
 const { triggerAllowedForMode } = require('../lib/analysis');
 const { validateConfiguration, assertExecutionTimingSupported,
-  assertNotificationHandoffReady } = require('../lib/validation');
-const { configuration } = require('./runtime-fixture');
+  assertNotificationHandoffReady, validateProviderTimingBinding } = require('../lib/validation');
+const { configuration, runtimeFixture } = require('./runtime-fixture');
+const { providerTimingFixture } = require('./provider-timing-fixture');
+const { routeFingerprint, routeFromRows, configurationSnapshotFingerprint }
+  = require('../lib/approval-control');
 const { CHOICES, buildPrefillPayload } = require(
   '../../../../revenue-leak-test-setup-form/functions/revenue_leak_test_setup_form/lib/form-contract',
 );
@@ -171,6 +174,110 @@ test('historical configuration parses exact route/mode pairs without claiming ti
     ...CRM_APPROVED_ROUTE_TO_LABEL.keys(), ...COVERAGE_MODES]) {
     assert.throws(() => validateConfiguration({ ...configuration('A'), approvedTestRoute }),
       { code: 'INVALID_SCHEMA' });
+  }
+});
+
+function boundTimingConfiguration(mode = 'NoAnswerOverflowOnly') {
+  const candidate = { ...configuration('A'), coverageMode: mode,
+    approvedTestRoute: mode === 'NoAnswerOverflowOnly'
+      ? 'No Answer / Overflow Only' : 'After Hours + Overflow', noAnswerDelay: null };
+  candidate.providerTiming = providerTimingFixture(candidate);
+  return candidate;
+}
+
+test('owner-attested timing preserves native values but never grants live execution', () => {
+  for (const mode of ['NoAnswerOverflowOnly', 'AfterHoursAndOverflow']) {
+    for (const [value, unit] of [['27.5', 'seconds'], ['27500', 'milliseconds'], ['5', 'rings']]) {
+      const candidate = boundTimingConfiguration(mode);
+      Object.assign(candidate.providerTiming, { value, unit });
+      const result = validateConfiguration(candidate);
+      assert.deepEqual(result.providerTiming, candidate.providerTiming);
+      assert.equal(result.noAnswerDelay, null, 'never converts a ring preference to a numeric delay');
+      assert.ok(Object.isFrozen(result.providerTiming));
+      assert.throws(() => assertExecutionTimingSupported(result), { code: 'PROVIDER_TIMING_UNVERIFIED' });
+    }
+  }
+  const afterHours = configuration('A');
+  assert.doesNotThrow(() => assertExecutionTimingSupported(validateConfiguration(afterHours)));
+  assert.throws(() => validateConfiguration({ ...afterHours,
+    providerTiming: providerTimingFixture(afterHours) }), { code: 'INVALID_SCHEMA' });
+  assert.throws(() => validateConfiguration({ ...boundTimingConfiguration(), noAnswerDelay: 25 }),
+    { code: 'INVALID_SCHEMA' });
+});
+
+test('timing binding rejects missing, unknown, malformed or self-declared verification evidence', () => {
+  const mutations = [
+    (v) => { delete v.evidenceSha256; }, (v) => { v.verified = true; },
+    (v) => { v.evidenceClass = 'provider_verified'; }, (v) => { v.schemaVersion = 2; },
+    (v) => { v.ownerDecision = 'pending'; }, (v) => { v.value = 25; },
+    (v) => { v.value = 'Unknown'; }, (v) => { v.unit = 'Not Sure'; },
+    (v) => { v.value = 'Provider Default'; }, (v) => { v.settingName = ''; },
+    (v) => { v.value = '25\n'; }, (v) => { v.unit = ' seconds'; },
+    (v) => { v.evidenceSha256 = 'not-a-digest'; },
+    (v) => { v.documentationSha256 = 'not-a-digest'; },
+    (v) => { v.evidenceReference = 'https://private.invalid/secret'; },
+    (v) => { v.documentationReference = ''; }, (v) => { v.businessNumber = '9135550101'; },
+    (v) => { v.observedAt = '2026-09-09T11:58:00Z'; },
+    (v) => { v.ownerAcceptedAt = '2026-09-09T11:57:00.000Z'; },
+    (v) => { v.submittedPreference = '25 seconds'; },
+  ];
+  for (const mutate of mutations) {
+    const candidate = boundTimingConfiguration(); mutate(candidate.providerTiming);
+    assert.throws(() => validateConfiguration(candidate), { code: 'PROVIDER_TIMING_UNVERIFIED' });
+  }
+  const candidate = boundTimingConfiguration();
+  for (const missing of [null, undefined, {}, []]) {
+    assert.throws(() => validateProviderTimingBinding(missing, candidate),
+      { code: 'PROVIDER_TIMING_UNVERIFIED' });
+  }
+});
+
+test('timing snapshot freshness is checked for new preparation without expiring historical parsing', () => {
+  const candidate = boundTimingConfiguration();
+  const capturedAt = '2026-09-09T11:59:00.000Z';
+  const now = Date.parse('2026-09-09T12:00:00.000Z');
+  assert.deepEqual(validateProviderTimingBinding(candidate.providerTiming, candidate, { now, capturedAt }),
+    candidate.providerTiming);
+  for (const options of [
+    { now: now + 15 * 60 * 1000, capturedAt },
+    { now, capturedAt: '2026-09-09T12:01:00.000Z' },
+    { now, capturedAt: '2026-09-09T11:58:30.000Z' },
+    { now: NaN, capturedAt }, { now }, { capturedAt },
+  ]) assert.throws(() => validateProviderTimingBinding(candidate.providerTiming, candidate, options),
+    { code: 'PROVIDER_TIMING_UNVERIFIED' });
+  assert.doesNotThrow(() => validateConfiguration(candidate), 'historical parsing has no wall-clock freshness gate');
+});
+
+test('timing evidence cannot be transplanted across configuration ownership or route context', () => {
+  for (const field of ['clientId', 'crmDealId', 'deploymentId', 'configurationVersion',
+    'phoneSystemProvider', 'coverageMode']) {
+    const candidate = boundTimingConfiguration();
+    candidate.providerTiming[field] = 'other_synthetic_context';
+    assert.throws(() => validateConfiguration(candidate), { code: 'PROVIDER_TIMING_UNVERIFIED' });
+  }
+  const first = boundTimingConfiguration();
+  const second = { ...configuration('B'), coverageMode: first.coverageMode,
+    approvedTestRoute: first.approvedTestRoute, noAnswerDelay: null, providerTiming: first.providerTiming };
+  assert.throws(() => validateConfiguration(second), { code: 'PROVIDER_TIMING_UNVERIFIED' });
+});
+
+test('every timing field is covered by the existing immutable configuration and signed route fingerprint', () => {
+  const fixture = runtimeFixture();
+  const deployment = { ...fixture.store.rows.get('RevenueDeskDeployments')[0], COVERAGE_MODE: 'NoAnswerOverflowOnly' };
+  const candidate = boundTimingConfiguration();
+  const row = { ...fixture.store.rows.get('RevenueDeskConfigurationVersions')[0],
+    CONFIGURATION_JSON: JSON.stringify(candidate) };
+  const snapshot = configurationSnapshotFingerprint(row);
+  const fingerprint = routeFingerprint(routeFromRows(deployment, row));
+  assert.equal(routeFingerprint(routeFromRows(deployment, structuredClone(row))), fingerprint,
+    'exact replay has the same authorization binding');
+  for (const field of Object.keys(candidate.providerTiming)) {
+    const changed = structuredClone(candidate);
+    changed.providerTiming[field] = typeof changed.providerTiming[field] === 'number'
+      ? changed.providerTiming[field] + 1 : `${changed.providerTiming[field]}_changed`;
+    const changedRow = { ...row, CONFIGURATION_JSON: JSON.stringify(changed) };
+    assert.notEqual(configurationSnapshotFingerprint(changedRow), snapshot, field);
+    assert.notEqual(routeFingerprint(routeFromRows(deployment, changedRow)), fingerprint, field);
   }
 });
 

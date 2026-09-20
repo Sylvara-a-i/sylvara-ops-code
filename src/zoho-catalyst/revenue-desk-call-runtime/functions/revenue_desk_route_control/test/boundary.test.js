@@ -398,6 +398,19 @@ test('route-control requires exact trusted Form 2 binding configuration', () => 
   }
 });
 
+test('public Form 1 channel is optional, exact, and rejects assisted or placeholder configuration', () => {
+  assert.equal(loadConfig(environment(), REVISION).form1PublicSubmissionChannel, null);
+  assert.equal(loadConfig(environment({ FORM1_PUBLIC_SUBMISSION_CHANNEL: '' }), REVISION)
+    .form1PublicSubmissionChannel, null);
+  assert.equal(loadConfig(environment({ FORM1_PUBLIC_SUBMISSION_CHANNEL: ' Synthetic Public Form ' }), REVISION)
+    .form1PublicSubmissionChannel, ' Synthetic Public Form ');
+  for (const value of ['CRM Assisted', ' crm   assisted ', 'unknown', 'PENDING', 'default',
+    '<verified-channel>', '   ', 'bad\nchannel', 'x'.repeat(101)]) {
+    assert.throws(() => loadConfig(environment({ FORM1_PUBLIC_SUBMISSION_CHANNEL: value }), REVISION),
+      { code: 'INVALID_RUNTIME_CONFIGURATION' });
+  }
+});
+
 test('rollback never clears an unverified or repurposed Retell number', async () => {
   const config = isolatedConfig();
   let patches = 0;
