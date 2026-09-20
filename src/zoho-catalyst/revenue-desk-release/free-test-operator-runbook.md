@@ -1,6 +1,6 @@
 # Free-test preparation and operator walkthrough
 
-Owner: Sylvara operator (Gabriel). Updated: 2026-09-19. Status: local preparation;
+Owner: Sylvara operator (Gabriel). Updated: 2026-09-20. Status: local preparation;
 not a customer launch, provider change, or spending authorization.
 
 ## Current execution boundary
@@ -332,17 +332,22 @@ this table is the sanitized operating view, not a new release contract.
 
 | Gate | Current evidence and revision | Remaining action | Cost class | Approval needed | Status |
 | --- | --- | --- | --- | --- | --- |
-| G1 Public/assisted entry and native relationships | Accepted assisted Forms/conversion evidence retained; public reader is a local delta after `c28affd` | Confirm native fixed mapping, identity/retry evidence and read grant; accept the affected public continuation | Offline now; cloud allowance must be confirmed | Exact readback/fixture allocation; no reused canary | Public continuation unverified; assisted evidence retained |
-| G2 Authenticated configuration review/staging | Assisted bridge merged `c28affd`; later local delta independently reviewed and offline tested | Publish reviewed delta, install held, verify exact signed staging and independent readback | Offline now; contained Development later | Exact configuration and staging allocation | Source evidence; not installed/Development verified |
+| G1 Public/assisted entry and native relationships | Accepted assisted Forms/conversion retained; `5227abe` installed held; public native mapping read back | Complete narrow read grant and affected public identity/retry acceptance | Offline now; cloud allowance must be confirmed | Owner grant; exact readback/fixture allocation; no reused canary | Public runtime continuation unverified; assisted evidence retained |
+| G2 Authenticated configuration review/staging | `5227abe` controller installed held; owner packet tooling is source-only; reviewed 4,096-byte body limit is smaller than the 6,024-byte synthetic packet | Fresh nonsecret body-limit readback and exact approved limit migration if needed; complete private preparation, protected signing, staging/readback | Offline now; contained Development later | Owner values/key entry; exact configuration/staging allocation | Installed under hold; packet-size/configuration prerequisite and runtime acceptance pending |
 | G3 Coverage and restoration preparation | After-hours fixtures; new owner-attested overflow/combined snapshot contract | Actual originating-provider setting/unit/evidence and later execution binding; preserve original handling | Local preparation only | Owner evidence; separate provider phase for live behavior | Preparation only; overflow/combined execution held |
 | G4 Call-to-owner handoff | H1–H10 source at `c28affd`, separate dry-run/acceptance/delivery meanings | Named monitored owner, actual alert adapter/inbox proof and bounded recovery readback | No real sending now | Exact owner-only email and runtime allocation | Source complete; Development 0/10 |
-| G5 Clock, limit, stop and settlement | Offline limits/races/reports; early-stop correction installed under hold at `570638f` | Scoped installed-runtime containment and report reconciliation | Offline passed; cloud later | Exact synthetic acceptance allocation | Installed evidence is not runtime proof |
-| G6 Baseline, Analytics and final report | Five empty targets/141 columns installed; source adapters and report path tested | Install importer disabled; verify bindings, approved baseline, import/UTC roundtrip and CRM/report reconciliation | Local build now; confirm account allowance before imports/jobs | Exact rows/jobs/import/readback allocation | Schema only live; wiring unverified |
+| G5 Clock, limit, stop and settlement | Offline limits/races/reports; early-stop correction retained in `5227abe` held installation | Scoped installed-runtime containment and report reconciliation | Offline passed; cloud later | Exact synthetic acceptance allocation | Installed evidence is not runtime proof |
+| G6 Baseline, Analytics and final report | Five empty targets/141 columns and `5227abe` importer installed; Analytics disabled | Verify bindings, approved baseline, import/UTC roundtrip and CRM/report reconciliation | Confirm account allowance before imports/jobs | Exact rows/jobs/import/readback allocation | Schema and held artifact verified; functional wiring unverified |
 | G7 Operator demo | Original owner acceptance retained; new panels exercise fake adapters | New handoff/staging panels' visual acceptance | Local only | Owner visual input, not a deployment approval | New-panel visual check pending |
-| G8 Held release and non-Retell acceptance | PR #90 packages verified, not installed; retained runtime remains held | Review/merge final delta, build four exact packages, approved held rollout and bounded QA | Local now; external cost must remain confirmed zero | One consolidated final-revision packet | Pending; no prospect launch |
+| G8 Held release and non-Retell acceptance | PR #91 merged `5227abe`; four uploaded artifacts match all 927 downloaded entries; holds preserved | Bounded functional QA after protected prerequisites; do not redeploy for an operator-tool-only change | External cost must remain confirmed zero | Four-upload/four-readback allocation consumed; new invocation allocation required | Installation verified; functional acceptance pending; no prospect launch |
 
 No row asserts that only Retell testing remains. Optional scheduling, paid
 conversion, Full Blueprint and customer traffic remain outside this goal.
+
+The eight-row whole-goal numerator remains **0/8 fully accepted**: every row
+still has an unpassed required subgate. This does not erase the retained Forms,
+source/offline or artifact evidence. The separate handoff source result remains
+10/10 and its Development acceptance remains 0/10; neither is a whole-goal score.
 
 ### Historical alternatives — not current required work
 
@@ -474,6 +479,87 @@ integration is now implemented source-only in the existing sole controller's
 It separately requires an externally owner-signed **final** content/recipient
 snapshot; the Draft/Pending review above cannot authorize creation. Its distinct
 signature domain cannot be reflected into normal approval or activation.
+
+### Owner-only offline staging packet
+
+The missing owner entry point is separate from the installed controller. The
+[packet validator/signer](lib/free-test-staging-packet.js) and
+[private Windows entry wrapper](scripts/sign-free-test-staging-packet-private.ps1)
+prepare one signed packet locally; they do not read live systems or submit it.
+Owner: Gabriel for exact content review and protected key entry. The operator
+assembles fresh evidence through the existing governed readback process. This is
+not a new credential store, service, scheduler, configuration authority or writer.
+
+Input is an exact private JSON envelope with `schemaVersion: 1`, `preparation`,
+`preservedCoreApproval` (null or the retained core receipt projection), and
+`request` (the complete unsigned staging request, with no `signature` field).
+The assembler writes compact UTF-8 bytes exactly equal to `JSON.stringify` of
+the envelope: no BOM, pretty-print whitespace or trailing newline. Duplicate
+members or alternate encodings reject before any secret is consumed.
+The canonical preparation, target, revision, route fingerprint, freshness and
+immutable content must match. This tool does not export or authenticate CRM
+evidence, derive a number ownership hash, repair missing fields, refresh stale
+timestamps, invent provider timing or manufacture a monitoring acknowledgment.
+If the exact unsigned packet cannot be assembled from approved fresh readback,
+the operation is blocked before signing. Never adapt the synthetic fixture for
+live use. The historical generic review signature has the wrong domain here.
+
+Use only the reviewed Windows wrapper for real owner input. It requires the
+SHA-pinned PowerShell 7.6.5 runtime in STA mode, SHA-pinned Node 24.19.0, a clean reviewed
+utility commit, and existing private NTFS locations
+outside any Git checkout. It checks access without changing ACLs, holds the input
+read-only during review, and asks the owner to review the exact packet before
+pasting the **existing** `ROUTE_CONTROL_OPERATOR_HMAC_SECRET` from Development
+`revenue_desk_route_control` into a masked PasswordBox. Do not copy that value to
+chat, screenshots, command arguments, environment variables or an input file.
+The owner types or pastes privately; the agent must not retrieve or enter it.
+
+The operator supplies these nonsecret parameters for the exact reviewed build;
+the placeholders below are not a runnable live allocation:
+
+```powershell
+pwsh -NoProfile -STA -File src/zoho-catalyst/revenue-desk-release/scripts/sign-free-test-staging-packet-private.ps1 -InputPath '<PRIVATE_UNSIGNED_PACKET>' -OutputPath '<NEW_PRIVATE_SIGNED_PACKET>' -NodePath '<PINNED_NODE_24_19_0>' -UtilityRevision '<REVIEWED_UTILITY_COMMIT>' -ExpectedRevision '<INSTALLED_CONTROLLER_REVISION>' -ExpectedOperatorHash '<BOUND_OPERATOR_HASH>' -MaxBodyBytes '<VERIFIED_ROUTE_CONTROL_MAX_BODY_BYTES>'
+```
+
+`UtilityRevision` pins the tool checkout; `ExpectedRevision` pins the intended
+installed controller. They need not be identical, and the tool must never change
+a runtime revision label to make them match. `MaxBodyBytes` must come from fresh
+secret-safe readback of Development `ROUTE_CONTROL_MAX_BODY_BYTES`; it has no
+default. The 16,384-byte supported ceiling is not proof of the deployed setting.
+The reviewed configuration value is 4,096, while the normal synthetic packet is
+6,024 bytes. That combination deliberately rejects **before key entry**. Do not
+truncate evidence or silently raise the parameter. An exact contained runtime
+configuration migration and independent readback are prerequisites when the real
+packet exceeds the installed limit; no migration is performed by this utility.
+Both interpreters are verified before use, and the Node file is held against
+replacement through signing. The child inherits no credential or
+Node-option environment; the secret passes through bounded UTF-8 stdin without
+trimming or narrowing the runtime's accepted character set, not a terminal
+prompt. It creates a new private packet exclusively, never overwrites one, and
+returns only a coarse result/digest. Buffers are cleared where possible; this is
+not a claim that a managed runtime guarantees memory erasure. No HTTP client,
+provider SDK, automatic submission, retry, email or billing path is provided.
+
+Success means **signed packet ready, nothing submitted**. The packet itself is
+sensitive and short-lived; keep it outside Git, logs and chat. A failed/ambiguous
+file result is preserved for reconciliation, not deleted or blindly regenerated.
+Signing grants no new test allocation, does not prove source authenticity or
+provider behavior, and does not replace server-side revalidation. Later bounded
+submission still needs the exact private packet, valid allocation and fresh
+prestate. It must produce `StagedInactive`, a durable receipt, independent row/CRM
+readback, and no approval, activation, clock, message or provider effect.
+
+Security/cost: local-only and zero external usage; no runtime code/dependency or
+installed artifact change. Rollback is to stop using the utility and preserve the
+current holds and evidence. Monitor its coarse failure status plus the existing
+controller reconciliation receipt after any separately authorized submission.
+The CLI invokes only the fixed local read-only PowerShell ACL helper before key
+consumption and after file creation. No execution-policy override is provided;
+a blocked interpreter or changed binary fails closed rather than changing host
+security settings.
+Offline tests use synthetic secrets, clocks and fake adapters only. Private UI
+paste/consent, actual packet assembly and Development acceptance remain separate
+owner/live checks, not inferred from source tests.
 
 The bridge reads the consumed assisted Form 1 session, original Lead's native
 conversion details, exact current Account/Contact/Deal projections and HMAC-bound
