@@ -109,8 +109,7 @@ function createConfigurationStagingService({ config, store, crm, core, sourceRea
     const observed = Date.parse(intent.evidence_observed_at);
     requireState(intent.action === 'approve' && intent.operator_id_hash === config.operatorIdHash
       && intent.evidence_revision === config.sourceRevision && intent.expected_deployment_version === 0
-      && Number.isSafeInteger(at) && observed <= requested && requested <= at
-      && at - requested <= 300_000 && at - observed <= 900_000,
+      && Number.isSafeInteger(at) && observed <= requested && requested <= at,
     'CONFIGURATION_STAGING_REVIEW_INVALID');
     requireState(/^v1=[a-f0-9]{64}$/.test(request.signature || ''), 'INVALID_APPROVAL_SIGNATURE');
     const expected = crypto.createHmac('sha256', config.operatorVerificationSecret)
@@ -274,6 +273,16 @@ function createConfigurationStagingService({ config, store, crm, core, sourceRea
       return Object.freeze({ state: 'StagedInactive', replayed: true, approved: false, active: false,
         configurationVersionId: data.configurationVersionId, deploymentId: data.deploymentId });
     }
+    // Expiry limits new authorization, not recovery of an exact completed
+    // response. That read-only replay above still verifies the owner signature,
+    // immutable receipt/request, current source and inactive deployment. A
+    // partial claim never resumes here, and a fresh signature is a different
+    // request rather than a way to replace the durable original authorization.
+    const at = now(); const requested = Date.parse(request.intent.requested_at);
+    const observed = Date.parse(request.intent.evidence_observed_at);
+    requireState(Number.isSafeInteger(at) && requested <= at
+      && at - requested <= 300_000 && at - observed <= 900_000,
+    'CONFIGURATION_STAGING_REVIEW_INVALID');
     const sources = await readSources(request);
     const input = await preparedInput(request, sources);
     const prepared = prepareFreeTestConfiguration(input, { now: now(),

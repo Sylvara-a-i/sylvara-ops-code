@@ -457,6 +457,11 @@ blocks that approval. No clock starts, provider is constructed, or message sends
 An incomplete multi-table claim stays visibly reconciliation-required; do not
 delete it, blindly retry writes, or reuse the owner signature for another target.
 An advanced deployment cannot replay staging as if it were inactive.
+An authenticated exact completed receipt can recover its read-only response after
+the original intent expires; new claims still require fresh intent/evidence.
+Signature, immutable content, current source and inactive-state checks still
+apply, and a partial claim never resumes writes. The conversion and metadata
+readers both inherit the configured platform deadline, including a stalled body.
 
 Owner: Gabriel for exact values/recipient monitoring and release; controller owns
 immutable configuration/claims, CRM remains relationship truth, Analytics remains
@@ -498,8 +503,8 @@ environment contract test. The corrected assertion checks the exact staging
 bindings and the union of all supported profiles against the installation example;
 it also proves Form 1 provenance is not mandatory for existing Journey-core routes.
 No runtime guard, required secret, live variable or existing acceptance allocation
-was changed to obtain that result. The current bridge remains source-only until
-its separate publication and held-installation packet is approved.
+was changed to obtain that result. Source publication is tracked in PR #90;
+the current bridge remains undeployed pending its exact held-installation packet.
 
 2026-09-19 verification: independent source review found no actionable remaining
 defect. The canonical `tools/verify.ps1 -Mode Quick` passed with pinned Node
@@ -509,6 +514,17 @@ mode; one Git Bash syntax test was unavailable in the Windows child-process
 sandbox. Skips are not passes. Safety/workflow checks and local demo generation
 passed. No hosted CI, cloud execution, deployment, CRM write, send or provider
 operation was part of these checks. New-panel visual acceptance remains open.
+
+The PR #90 publication checks subsequently exposed a local approval-ledger race:
+SQLite can remove its optional rollback journal after directory enumeration but
+before metadata/ACL inspection. The narrow correction accepts only confirmed
+journal disappearance, retaining required database, ACL, type, empty-file,
+schema/integrity and exact replay guards. Synthetic regression and repeated
+ten-process checks preserve one winner and nine replays; no real ledger or claim
+is repaired, deleted or consumed. Late review also reproduced the completed-replay
+expiry and reader-deadline issues described above. Their regressions preserve
+new-claim expiry, partial-claim reconciliation and pre-provider dispatch. These
+are source corrections, not Development acceptance or a new live allocation.
 
 Reproduce its isolated synthetic checks from the repository root with the pinned
 Node runtime on `PATH`:

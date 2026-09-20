@@ -182,7 +182,8 @@ function createRequestListener({
         core: (factories.core || createJourneyCoreControlService)({ config, store, crm, now,
           evidenceStore: (factories.evidence || createForm2EvidenceStore)(app, { timeoutMs: config.platformTimeoutMs }) }),
         sourceReader: (factories.configurationSource || createConfigurationSourceReader)(app, config, { now }),
-        conversionReader: (factories.configurationConversion || createConfigurationConversionReader)({ crm, now }),
+        conversionReader: (factories.configurationConversion || createConfigurationConversionReader)({ crm, now,
+          timeoutMs: config.platformTimeoutMs }),
         metadataReader: (factories.configurationMetadata || createConfigurationMetadataReader)({ crm, now,
           timeoutMs: config.platformTimeoutMs }),
       });

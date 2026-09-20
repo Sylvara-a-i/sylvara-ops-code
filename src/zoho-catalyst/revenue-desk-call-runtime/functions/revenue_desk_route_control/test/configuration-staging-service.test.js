@@ -57,6 +57,60 @@ test('prior core approval remains immutable and needs separate final configurati
   assert.equal(deployment.APPROVAL_EVENT_KEY, null); assert.equal(deployment.ACTUAL_START_AT, null);
 });
 
+test('expired exact completed staging replays read-only after request and evidence freshness windows', async () => {
+  for (const priorCoreApproval of [false, true]) {
+    const f = createStagingFixture();
+    if (priorCoreApproval) await f.core.approve(f.coreApprovalCommand);
+    const result = await f.service.stage(f.request);
+    const before = structuredClone([...f.store.rows.entries()]);
+    const writes = f.store.writes.length; const crmWrites = f.stagingWrites;
+    f.advance(900001);
+    assert.deepEqual(await f.service.stage(f.request), { ...result, replayed: true });
+    assert.equal(f.store.writes.length, writes); assert.equal(f.stagingWrites, crmWrites);
+    assert.deepEqual([...f.store.rows.entries()], before);
+  }
+});
+
+test('expired new staging cannot claim or write state', async () => {
+  const f = createStagingFixture(); f.advance(300001);
+  await assert.rejects(f.service.stage(f.request), { code: 'CONFIGURATION_STAGING_REVIEW_INVALID' });
+  assert.equal(f.store.writes.length, 0); assert.equal(f.stagingWrites, 0);
+});
+
+test('expired completed replay still authenticates the exact owner request and rejects current drift', async () => {
+  for (const mutate of [
+    (f) => { f.request.signature = `v1=${'0'.repeat(64)}`; },
+    (f) => { f.request.intent.operator_id_hash = `operator_${'9'.repeat(64)}`; f.sign(); },
+    (f) => { f.request.intent.requested_at = new Date(f.now()).toISOString(); f.sign(); },
+    (f) => { f.records.deal.Alert_Recipient_Email = 'changed@example.invalid'; },
+    (f) => { f.records.account.Normal_Business_Hours = 'Changed schedule'; },
+    (f) => { f.bundle.session.JOURNEY_BINDING_DIGEST = '0'.repeat(64); },
+    (f) => { f.store.rowsFor(f.config.tables.CONFIGURATION_VERSION_TABLE)[0].CONFIGURATION_JSON += ' '; },
+    (f) => { f.store.rowsFor(f.config.tables.DEPLOYMENT_TABLE)[0].TEST_STATUS = 'Live'; },
+  ]) {
+    const f = createStagingFixture(); await f.service.stage(f.request); f.advance(900001); mutate(f);
+    const before = structuredClone([...f.store.rows.entries()]);
+    const writes = f.store.writes.length; const crmWrites = f.stagingWrites;
+    await assert.rejects(f.service.stage(f.request));
+    assert.equal(f.store.writes.length, writes); assert.equal(f.stagingWrites, crmWrites);
+    assert.deepEqual([...f.store.rows.entries()], before);
+  }
+});
+
+test('expired partial staging requires reconciliation and never resumes writes', async () => {
+  const f = createStagingFixture(); const insert = f.store.insertUnique.bind(f.store);
+  f.store.insertUnique = async (table, ...args) => {
+    if (table === f.config.tables.DEPLOYMENT_TABLE) throw new Error('synthetic interruption');
+    return insert(table, ...args);
+  };
+  await assert.rejects(f.service.stage(f.request));
+  const before = structuredClone([...f.store.rows.entries()]);
+  const writes = f.store.writes.length; f.advance(900001);
+  await assert.rejects(f.service.stage(f.request), { code: 'CONFIGURATION_STAGING_RECONCILIATION_REQUIRED' });
+  assert.equal(f.store.writes.length, writes); assert.equal(f.stagingWrites, 0);
+  assert.deepEqual([...f.store.rows.entries()], before);
+});
+
 test('ordinary approval and activation signature domains do not authorize content creation', async () => {
   for (const domain of ['revenue-desk-approval-intent-v1\0', 'revenue-desk-activation-intent-v1\0']) {
     const f = createStagingFixture(); f.sign(domain);

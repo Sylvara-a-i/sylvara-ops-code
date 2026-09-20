@@ -64,12 +64,15 @@ function response() {
   };
 }
 
-test('authenticated configuration staging dispatches before provider construction and rejects other actions', async () => {
+test('authenticated configuration staging binds reader deadlines before dispatch and rejects other actions', async () => {
   let providers = 0; let stages = 0;
+  const readerTimeouts = [];
   const listener = createRequestListener({ environment: environment(), artifactSourceRevision: REVISION,
     catalystSdk: { initialize() { return { config: { environment: 'development', projectId: PROJECT_ID } }; } },
     factories: { crm: () => ({}), store: () => ({}), core: () => ({}), evidence: () => ({}),
-      configurationSource: () => ({}), configurationConversion: () => ({}), configurationMetadata: () => ({}),
+      configurationSource: () => ({}),
+      configurationConversion: ({ timeoutMs }) => { readerTimeouts.push(['conversion', timeoutMs]); return {}; },
+      configurationMetadata: ({ timeoutMs }) => { readerTimeouts.push(['metadata', timeoutMs]); return {}; },
       staging: () => ({ async stage() { stages += 1; return { state: 'StagedInactive', replayed: false,
         configurationVersionId: 'synthetic_configuration', deploymentId: 'synthetic_deployment' }; } }),
       provider: () => { providers += 1; throw new Error('Provider construction prohibited'); } } });
@@ -85,6 +88,7 @@ test('authenticated configuration staging dispatches before provider constructio
       { active: false, approved: false });
   }
   assert.equal(stages, 1); assert.equal(providers, 0);
+  assert.deepEqual(readerTimeouts, [['conversion', 3000], ['metadata', 3000]]);
 });
 
 function isolatedConfig() {
