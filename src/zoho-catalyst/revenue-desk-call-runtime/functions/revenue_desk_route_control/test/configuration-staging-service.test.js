@@ -38,6 +38,40 @@ test('authenticated submitted setup creates immutable reviewed content and inact
   assert.ok(!receipt.EVENT_DATA_JSON.includes(f.config.operatorVerificationSecret));
 });
 
+test('authoritative absence of assisted lineage uses exact public/native lineage through conversion and staging', async () => {
+  const f = createStagingFixture(0, { publicNative: true });
+  const result = await f.service.stage(f.request);
+  assert.equal(result.state, 'StagedInactive');
+  assert.equal(f.store.rowsFor(f.config.tables.CONFIGURATION_VERSION_TABLE).length, 1);
+  assert.equal(f.stagingWrites, 1);
+  const receipt = f.store.rowsFor(f.config.tables.EVENT_RECEIPT_TABLE)
+    .find((row) => row.RECEIPT_KIND === RECEIPT_KIND);
+  const data = JSON.parse(receipt.EVENT_DATA_JSON);
+  assert.match(data.sourceFingerprint, /^[a-f0-9]{64}$/);
+  assert.doesNotMatch(receipt.EVENT_DATA_JSON, /CRM Assisted|synthetic_public_journey/);
+});
+
+test('invalid assisted lineage never downgrades into public fallback or writes state', async () => {
+  const f = createStagingFixture(); let publicReads = 0;
+  f.sourceReader.findAssistedLineage = async () => {
+    const error = new Error('synthetic malformed assisted lineage');
+    error.code = 'CONFIGURATION_SOURCE_LINEAGE_INVALID';
+    throw error;
+  };
+  f.crm.getPublicOriginalLead = async () => { publicReads += 1; return null; };
+  await assert.rejects(f.service.stage(f.request), { code: 'CONFIGURATION_SOURCE_LINEAGE_INVALID' });
+  assert.equal(publicReads, 0); assert.equal(f.store.writes.length, 0); assert.equal(f.stagingWrites, 0);
+});
+
+test('public lineage consent chronology is rechecked before immutable staging writes', async () => {
+  const f = createStagingFixture(0, { publicNative: true });
+  const read = f.crm.getPublicOriginalLead;
+  f.crm.getPublicOriginalLead = async (...args) => ({ ...(await read(...args)),
+    consentAt: '2026-09-09T11:41:00.000Z' });
+  await assert.rejects(f.service.stage(f.request), { code: 'CONFIGURATION_SOURCE_LINEAGE_INVALID' });
+  assert.equal(f.store.writes.length, 0); assert.equal(f.stagingWrites, 0);
+});
+
 test('prior core approval remains immutable and needs separate final configuration approval', async () => {
   const f = createStagingFixture();
   await f.core.approve(f.coreApprovalCommand);

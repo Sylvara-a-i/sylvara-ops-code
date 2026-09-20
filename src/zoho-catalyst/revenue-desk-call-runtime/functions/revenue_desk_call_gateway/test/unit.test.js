@@ -582,10 +582,18 @@ test('unit: environment registry permits only minimal Production dark mode and r
   ], 'staging must pin original Form 1 provenance and the exact dedicated number/agent version');
   assert.equal(routeControlSet.always_required.includes('FORM1_DESTINATION_SHA256'), false,
     'staging provenance must not become a new prerequisite for accepted Journey-core routes');
+  assert.deepEqual(routeControlSet.required_for_public_configuration_staging,
+    ['FORM1_PUBLIC_SUBMISSION_CHANNEL'], 'public fallback needs an exact server-owned channel binding');
+  assert.equal(routeControlSet.always_required.includes('FORM1_PUBLIC_SUBMISSION_CHANNEL'), false,
+    'public fallback must not add a prerequisite to accepted assisted or Journey-core routes');
+  assert.equal(routeControlSet.required_for_configuration_staging
+    .includes('FORM1_PUBLIC_SUBMISSION_CHANNEL'), false,
+  'assisted staging must not require an unverified public-form setting');
   // Conditional profiles legitimately share provider bindings. Validate their
   // exact sets above, then compare the union against the installation example.
   const allRouteControlNames = [...new Set([
     ...routeControlNames, ...routeControlSet.required_for_configuration_staging,
+    ...routeControlSet.required_for_public_configuration_staging,
   ])];
   const registryNames = new Set(registry.variables.map(({ name }) => name));
   assert.equal(allRouteControlNames.every((name) => registryNames.has(name)), true,

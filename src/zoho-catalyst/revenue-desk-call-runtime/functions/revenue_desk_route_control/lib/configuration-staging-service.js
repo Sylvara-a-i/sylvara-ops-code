@@ -87,9 +87,10 @@ function createConfigurationStagingService({ config, store, crm, core, sourceRea
     && /^operator_[a-f0-9]{64}$/.test(config.operatorIdHash || '')
     && typeof config.operatorVerificationSecret === 'string' && config.operatorVerificationSecret.length >= 32
     && typeof crm?.getPreparationRecords === 'function'
+    && typeof crm.getPublicOriginalLead === 'function'
     && typeof crm.recordConfigurationStaging === 'function'
     && typeof core?.readStagingSource === 'function'
-    && typeof sourceReader?.readAssistedLineage === 'function'
+    && typeof sourceReader?.findAssistedLineage === 'function'
     && typeof conversionReader?.readConversion === 'function', 'CONFIGURATION_STAGING_UNAVAILABLE');
   const tables = config.tables;
   const claimKey = (request) => configurationClaimKey(config, request);
@@ -97,6 +98,26 @@ function createConfigurationStagingService({ config, store, crm, core, sourceRea
     'revenue-desk-configuration-deployment-v1', [config.environment, request.dealId, request.journeyId])}`;
   const digest = (data) => keyedDigest(config.eventChainSecret, 'revenue-desk-configuration-receipt-v1',
     [JSON.stringify(canonical(data))]);
+
+  async function readLineage(journeyId) {
+    // Only an authoritative absence may cross from the assisted path into the
+    // public/native lookup. Invalid, ambiguous, or unavailable assisted state
+    // rejects in the reader and can never be downgraded into a public match.
+    const assisted = await sourceReader.findAssistedLineage(journeyId);
+    return assisted === null ? crm.getPublicOriginalLead(journeyId) : assisted;
+  }
+
+  function lineageEvidenceAt(lineage) {
+    const value = lineage?.submittedAt || lineage?.consumedAt;
+    requireState(typeof value === 'string' && Number.isFinite(Date.parse(value)),
+      'CONFIGURATION_SOURCE_LINEAGE_INVALID');
+    if (lineage?.lineageType === 'public_native') {
+      requireState(typeof lineage.consentAt === 'string' && Number.isFinite(Date.parse(lineage.consentAt))
+        && Date.parse(lineage.consentAt) <= Date.parse(value) && Date.parse(value) <= now(),
+      'CONFIGURATION_SOURCE_LINEAGE_INVALID');
+    }
+    return value;
+  }
 
   function validateRequest(request) {
     requireState(exact(request, ['profile', 'dealId', 'journeyId', 'form2ConfigurationVersion',
@@ -159,11 +180,12 @@ function createConfigurationStagingService({ config, store, crm, core, sourceRea
     const readAt = new Date(now()).toISOString();
     const [source, records, lineage] = await Promise.all([
       core.readStagingSource(coreCommand(request), { expectedDeploymentId }),
-      crm.getPreparationRecords(request.dealId), sourceReader.readAssistedLineage(request.journeyId),
+      crm.getPreparationRecords(request.dealId), readLineage(request.journeyId),
     ]);
+    const evidenceAt = lineageEvidenceAt(lineage);
     requireState(source.deal.Modified_Time === records.deal.Modified_Time
       && records.deal.Intake_Submission_ID === lineage.journeyId
-      && Date.parse(lineage.consumedAt) <= Date.parse(source.bundle.session.VERIFIED_AT));
+      && Date.parse(evidenceAt) <= Date.parse(source.bundle.session.VERIFIED_AT));
     const conversion = await readConversion(records, lineage);
     requireState(Date.parse(conversion.convertedAt) <= Date.parse(source.bundle.session.VERIFIED_AT),
       'CONFIGURATION_NATIVE_CONVERSION_UNVERIFIED');
@@ -175,7 +197,7 @@ function createConfigurationStagingService({ config, store, crm, core, sourceRea
     requireState(conversion.originalLeadId === lineage.originalLeadId
       && conversion.journeyId === lineage.journeyId && conversion.accountId === records.account.id
       && conversion.contactId === records.contact.id && conversion.dealId === records.deal.id
-      && Date.parse(conversion.convertedAt) >= Date.parse(lineage.consumedAt)
+      && Date.parse(conversion.convertedAt) >= Date.parse(lineageEvidenceAt(lineage))
       && Date.parse(conversion.observedAt) <= now() && now() - Date.parse(conversion.observedAt) <= 900_000,
     'CONFIGURATION_NATIVE_CONVERSION_UNVERIFIED');
     return conversion;
@@ -184,9 +206,9 @@ function createConfigurationStagingService({ config, store, crm, core, sourceRea
   async function preparedInput(request, sources) {
     const { source, records, lineage } = sources;
     const capturedAt = request.intent.evidence_observed_at;
-    // These relationships require the consumed assisted writer, an independent
-    // native-converted Lead readback, and authenticated Form 2 evidence. Public
-    // intake still needs its own original-Lead reader; never fabricate its link.
+    // These relationships require either the consumed assisted writer or the
+    // exact public/native Lead readback, followed by an independent native
+    // conversion read and authenticated Form 2 evidence. Never fabricate links.
     const relationships = { leadId: lineage.originalLeadId, accountId: records.account.id,
       contactId: records.contact.id, dealId: records.deal.id, intakeSubmissionId: lineage.journeyId };
     const input = { classification: 'private-preparation', crm: records, review: request.review,
@@ -240,7 +262,7 @@ function createConfigurationStagingService({ config, store, crm, core, sourceRea
       && data.deploymentId === command.deploymentId && data.configurationVersionId === command.configurationVersionId);
     await readRows(data);
     const [records, lineage] = await Promise.all([
-      crm.getPreparationRecords(command.dealId), sourceReader.readAssistedLineage(command.journeyId),
+      crm.getPreparationRecords(command.dealId), readLineage(command.journeyId),
     ]);
     const conversion = await readConversion(records, lineage);
     requireState(sourceFingerprint(config, records, lineage, conversion) === data.sourceFingerprint

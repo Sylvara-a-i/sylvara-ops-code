@@ -60,9 +60,17 @@ for (const nested of [false, true]) {
     assert.equal(selected.statements[0], `SELECT ${FIELDS.join(', ')} FROM ${TABLE}`
       + ` WHERE INTAKE_SUBMISSION_ID = '${JOURNEY}' LIMIT 2`);
     assert.doesNotMatch(selected.statements[0], /SELECT \*|TOKEN_HASH|PREFILL_HANDLE_HASH|PREFILL_ID/);
-    assert.deepEqual(Object.keys(selected.reader), ['readAssistedLineage']);
+    assert.deepEqual(Object.keys(selected.reader), ['findAssistedLineage', 'readAssistedLineage']);
   });
 }
+
+test('authoritative empty assisted lookup is distinguishable from invalid assisted state', async () => {
+  const selected = fixture({ rows: [] });
+  assert.equal(await selected.reader.findAssistedLineage(JOURNEY), null);
+  await assert.rejects(selected.reader.readAssistedLineage(JOURNEY),
+    { code: 'CONFIGURATION_SOURCE_LINEAGE_UNAVAILABLE' });
+  assert.equal(selected.statements.length, 2);
+});
 
 test('retains consumed recovery provenance and provider numeric representations', async () => {
   const selected = row();
@@ -79,6 +87,11 @@ test('missing, ambiguous, malformed and injection-shaped lineage fail closed', a
     const selected = fixture({ execute: () => rows });
     await assert.rejects(selected.reader.readAssistedLineage(JOURNEY));
     assert.equal(selected.statements.length, 1);
+  }
+  for (const rows of [[row(), row()], null, [null], [{}]]) {
+    await assert.rejects(fixture({ execute: () => rows }).reader.findAssistedLineage(JOURNEY),
+      (error) => ['CONFIGURATION_SOURCE_LINEAGE_UNAVAILABLE',
+        'CONFIGURATION_SOURCE_LINEAGE_INVALID'].includes(error.code));
   }
   for (const invalid of ["x' OR 1=1", '', 'x'.repeat(101), null, { verified: true }]) {
     const selected = fixture();

@@ -1,6 +1,6 @@
 # Free-test preparation and operator walkthrough
 
-Owner: Sylvara operator (Gabriel). Updated: 2026-09-15. Status: local preparation;
+Owner: Sylvara operator (Gabriel). Updated: 2026-09-19. Status: local preparation;
 not a customer launch, provider change, or spending authorization.
 
 ## Current execution boundary
@@ -101,9 +101,11 @@ visual acceptance remains separate from its passed executable assertions.
    owner access for the specific after-hours/no-answer behavior. For overflow or
    combined coverage, retain the submitted ring preference and obtain the actual
    provider value, explicit unit and evidence source. Never convert rings to
-   seconds by assumption. These modes remain execution-blocked until a reviewed
-   timing-binding implementation and evidence exist; their advertised scope is
-   not deleted merely because after-hours is tested first.
+   seconds by assumption. The local preparation/staging contract below preserves
+   those separate values; it is not actual provider verification. These modes
+   remain execution-blocked until the separately reviewed originating-provider
+   evidence and execution binding exist. Their advertised scope is not deleted
+   merely because after-hours is tested first.
 5. **Pre-activation gate.** Bind immutable release/configuration, exact isolated
    number/agent/version, current resolver/event endpoints, complete machine
    readback and approved data-handling scope. Review the required fifteen
@@ -263,8 +265,12 @@ early-stop correction is **installed under hold, not Development-runtime verifie
 The later reporting-baseline, call-to-owner and local Gabriel review-rule changes
 merged in PR #89 (`18d255e`, tested tree from `7336725`). They are **source merged,
 not installed**. Its eight checks and completed review do not expand runtime
-acceptance. The subsequent configuration-staging bridge is a separate local
-candidate on `codex/free-test-configuration-bridge`, not an approved cutover.
+acceptance. The subsequent assisted configuration-staging bridge merged in
+PR #90 (`c28affd`). Its three dependency-complete packages were independently
+compared across 711 members, but were not installed. The current public-lineage
+and timing-preparation delta is local on `codex/free-test-remaining-source-gates`.
+The earlier three-target installation proposal is held until this delta settles;
+it is not permission to install a different revision or an additional target.
 Do not relabel or redeploy unchanged Forms or the report-only consumer.
 
 The separate approved Analytics packet created all five derived Development fact
@@ -299,12 +305,15 @@ behavior and installed artifact parity remain valid; early-stop report acceptanc
 must be established for the corrected runtime before operational use.
 
 Prepare the corrected shared runtime with the existing three-target builder
-(gateway, route control, worker). Its source manifest is not a dependency-complete
-upload package and is not the closed five-function Journey-core manifest. Keep
-the source-only candidate separate from installed artifacts. A future exact delta
-rollout must approve dependency-complete packaging and cross-revision compatibility
-with the retained Form 1/Form 2 and report consumer. Do not relax the five-target
-validator or change revision labels to imply a coordinated deployment.
+(gateway, route control, worker), plus the separate canonical `analytics_sync`
+builder for the approved reporting scope. The smallest current rollout is four
+changed targets, not a new five-function Journey-core release. Source manifests
+are not dependency-complete upload packages. Fresh final-revision packages must
+be independently compared and cross-version compatibility with retained Form
+1/Form 2 and the report-only consumer verified. Keep Analytics disabled/Cron off,
+worker dry-run, provider mode disabled and revision holds intact. An installation
+packet authorizes no runtime invocation, import, email or record creation. Do not
+relax the five-target validator or relabel artifacts to imply coordinated parity.
 
 Do not rebuild or redeploy unchanged functions merely because the local demo,
 comparator or runbook changes. Local source commits do not move runtime
@@ -312,6 +321,28 @@ revision labels. Any future cutover must name the actual artifact digests,
 compatible producer/consumer revisions, target holds, allowed invocation count,
 readback and rollback. Restore containment on ambiguity; never restore exposed
 credentials, consumed claims, retired controls or a known unsafe timing path.
+
+### Fixed whole-goal acceptance ledger
+
+These eight rows are the goal's fixed denominator, separate from handoff H1–H10.
+Each row needs its own source, installed and Development evidence. A partial row,
+unknown dependency or intentional hold is not a passed whole-goal gate. The
+private checkpoint pins exact test logs, immutable revisions and live receipts;
+this table is the sanitized operating view, not a new release contract.
+
+| Gate | Current evidence and revision | Remaining action | Cost class | Approval needed | Status |
+| --- | --- | --- | --- | --- | --- |
+| G1 Public/assisted entry and native relationships | Accepted assisted Forms/conversion evidence retained; public reader is a local delta after `c28affd` | Confirm native fixed mapping, identity/retry evidence and read grant; accept the affected public continuation | Offline now; cloud allowance must be confirmed | Exact readback/fixture allocation; no reused canary | Public continuation unverified; assisted evidence retained |
+| G2 Authenticated configuration review/staging | Assisted bridge merged `c28affd`; later local delta independently reviewed and offline tested | Publish reviewed delta, install held, verify exact signed staging and independent readback | Offline now; contained Development later | Exact configuration and staging allocation | Source evidence; not installed/Development verified |
+| G3 Coverage and restoration preparation | After-hours fixtures; new owner-attested overflow/combined snapshot contract | Actual originating-provider setting/unit/evidence and later execution binding; preserve original handling | Local preparation only | Owner evidence; separate provider phase for live behavior | Preparation only; overflow/combined execution held |
+| G4 Call-to-owner handoff | H1–H10 source at `c28affd`, separate dry-run/acceptance/delivery meanings | Named monitored owner, actual alert adapter/inbox proof and bounded recovery readback | No real sending now | Exact owner-only email and runtime allocation | Source complete; Development 0/10 |
+| G5 Clock, limit, stop and settlement | Offline limits/races/reports; early-stop correction installed under hold at `570638f` | Scoped installed-runtime containment and report reconciliation | Offline passed; cloud later | Exact synthetic acceptance allocation | Installed evidence is not runtime proof |
+| G6 Baseline, Analytics and final report | Five empty targets/141 columns installed; source adapters and report path tested | Install importer disabled; verify bindings, approved baseline, import/UTC roundtrip and CRM/report reconciliation | Local build now; confirm account allowance before imports/jobs | Exact rows/jobs/import/readback allocation | Schema only live; wiring unverified |
+| G7 Operator demo | Original owner acceptance retained; new panels exercise fake adapters | New handoff/staging panels' visual acceptance | Local only | Owner visual input, not a deployment approval | New-panel visual check pending |
+| G8 Held release and non-Retell acceptance | PR #90 packages verified, not installed; retained runtime remains held | Review/merge final delta, build four exact packages, approved held rollout and bounded QA | Local now; external cost must remain confirmed zero | One consolidated final-revision packet | Pending; no prospect launch |
+
+No row asserts that only Retell testing remains. Optional scheduling, paid
+conversion, Full Blueprint and customer traffic remain outside this goal.
 
 ### Historical alternatives — not current required work
 
@@ -468,9 +499,9 @@ immutable configuration/claims, CRM remains relationship truth, Analytics remain
 derived. Local fake adapters test this boundary without cloud cost. Live gates
 remain: native-conversion derived-field visibility/read scope, field-metadata
 scope, original assisted form digest, pinned number/agent/version metadata, owner
-key binding, exact signed content and authorized cutover. Public/native-only
-Form 1 needs an independently authenticated original-Lead reader and is **not**
-certified by the assisted lane. Overflow timing remains unresolved. No actual
+key binding, exact signed content and authorized cutover. The public/native-only
+reader described below is a later source delta and is **not** certified by the
+assisted lane. Actual overflow timing remains unresolved. No actual
 business values, live row or new invocation budget were approved by source work.
 The existing body limit must fit the exact staged request (maximum 16,384 bytes);
 any required nonsecret limit change belongs in the later deployment packet.
@@ -503,12 +534,14 @@ environment contract test. The corrected assertion checks the exact staging
 bindings and the union of all supported profiles against the installation example;
 it also proves Form 1 provenance is not mandatory for existing Journey-core routes.
 No runtime guard, required secret, live variable or existing acceptance allocation
-was changed to obtain that result. Source publication is tracked in PR #90;
-the current bridge remains undeployed pending its exact held-installation packet.
+was changed to obtain that result. PR #90 merged at `c28affd`; the bridge remains
+undeployed. Its prepared three-target installation waits for the subsequent
+public-lineage/timing delta and the separate Analytics target to be reconciled.
 
 2026-09-19 verification: independent source review found no actionable remaining
 defect. The canonical `tools/verify.ps1 -Mode Quick` passed with pinned Node
-24.19.0 and CPython 3.12: 1,562 Node and 445 Python tests passed, zero failed.
+24.19.0 and CPython 3.12.14: the final PR #90 run passed 1,566 Node and 447 Python
+tests, zero failed.
 Thirty dependency-installing artifact tests were intentionally skipped in offline
 mode; one Git Bash syntax test was unavailable in the Windows child-process
 sandbox. Skips are not passes. Safety/workflow checks and local demo generation
@@ -525,6 +558,62 @@ is repaired, deleted or consumed. Late review also reproduced the completed-repl
 expiry and reader-deadline issues described above. Their regressions preserve
 new-claim expiry, partial-claim reconciliation and pre-provider dispatch. These
 are source corrections, not Development acceptance or a new live allocation.
+
+### Public lineage and provider-timing delta — local only
+
+Public Form 1 retains its native CRM writer. Only an authoritative zero-row
+assisted-session lookup may enter the public lineage reader; invalid, partial,
+ambiguous or unavailable assisted evidence never falls back. Public discovery
+uses an authenticated organization-bound converted-Lead search by the signed
+journey identity, with a minimal projection and a two-row ceiling. One exact
+identity match, complete single-page metadata and the approved fixed fields are
+required, followed by the existing independent native-conversion join. No name,
+email or caller-supplied Lead identifier may manufacture the relationship.
+Consent must have its own valid timestamp no later than submission; submission
+must precede native conversion and the verified Form 2 session. Missing consent
+time is not replaced with submission time. Public lineage binds both timestamps;
+the accepted assisted fingerprint shape remains unchanged.
+
+`FORM1_PUBLIC_SUBMISSION_CHANNEL` is a nonsecret optional server binding with no
+default. Leave it unset until the actual public form's fixed native mapping is
+read back; a picklist label is not evidence of that mapping. It cannot designate
+the assisted lane. Existing assisted processing does not require the new binding.
+The [CRM Search API](https://www.zoho.com/crm/developer/docs/api/v8/search-records.html)
+supports converted-record filtering but uses non-exact text search and may lag
+indexing; neither fuzzy results nor HTTP 204 can prove lineage. It also requires
+the separate `ZohoSearch.securesearch.READ` scope in addition to module read.
+Its presence on the existing Connection is unverified; do not expand access or
+change a grant under source-work authority. No automatic search retry is added.
+
+For overflow/combined preparation, optional `providerTiming` binds the exact
+client/Deal/deployment/configuration, originating business E.164 number, current
+phone provider, canonical coverage and unchanged CRM ring preference. It records
+an explicit native setting/value/unit, owner acceptance, fresh observation, and
+opaque evidence/documentation references plus digests. Evidence class is
+`owner_attested_provider_readback`, not an authenticated provider API result.
+The existing owner staging signature covers the entire configuration bytes.
+Local preparation neither signs nor approves itself. New configurations keep
+legacy `noAnswerDelay` null; historical numeric rows are not rewritten.
+
+The fifteen-minute freshness requirement applies to new preparation, not to
+historical settlement or an exact completed staging replay. Actual carrier
+semantics/range and current readback must still be established before a later
+execution adapter is approved. Approval/activation/new admission remain held by
+`PROVIDER_TIMING_UNVERIFIED`; this delta does not claim overflow live-ready.
+Original handling, fallback, restoration and all existing no-Retell restrictions
+remain unchanged. Monitor explicit lineage/timing conflicts; rollback is the
+unchanged hold, not deletion of source evidence or a rewritten immutable row.
+
+2026-09-19 local-delta verification: the canonical offline Quick run passed
+1,588 Node and 447 Python tests, zero failed; 30 dependency-installing artifact
+tests and one unavailable Git Bash child-process test were skipped, not passed.
+The first run caught an omitted conditional variable-set entry; the registry and
+exact environment-example regression were corrected without making the public
+binding mandatory for assisted routes. Independent review also required the
+public consent timestamp and an actual timing-staging/replay regression; both
+were added and rechecked. No actionable finding remains in these two source
+changes. The synthetic demo rebuilt and executable/render checks passed; its new
+panels still lack visual acceptance. These results authorize no external action.
 
 Reproduce its isolated synthetic checks from the repository root with the pinned
 Node runtime on `PATH`:

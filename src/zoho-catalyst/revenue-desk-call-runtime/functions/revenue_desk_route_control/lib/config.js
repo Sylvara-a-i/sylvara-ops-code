@@ -154,6 +154,23 @@ function loadConfig(env = process.env, artifactSourceRevision = ARTIFACT_SOURCE_
     // Additional nonsecret provenance/binding is required only by staging;
     // historical Journey-core routes and held deployments remain unchanged.
     form1DestinationSha256: optional(env, 'FORM1_DESTINATION_SHA256'),
+    // Public/native lineage remains disabled until fresh Forms/CRM readback
+    // supplies the exact server-owned channel value. Never infer a default from
+    // the CRM picklist or from a caller-provided lane selector.
+    form1PublicSubmissionChannel: (() => {
+      const raw = env.FORM1_PUBLIC_SUBMISSION_CHANNEL;
+      const value = raw === undefined || raw === '' ? null : raw;
+      const normalized = typeof value === 'string'
+        ? value.replace(/\s+/g, ' ').trim().toLowerCase() : null;
+      invariant(value === null || (typeof value === 'string' && value.length <= 100
+        && value.trim().length >= 1
+        && !/[\u0000-\u001f\u007f]/.test(value)
+        && !/^<.*>$/.test(value)
+        && !new Set(['crm assisted', 'unknown', 'pending', 'default']).has(normalized)),
+        'INVALID_RUNTIME_CONFIGURATION', 'FORM1_PUBLIC_SUBMISSION_CHANNEL is invalid.',
+        { httpStatus: 503 });
+      return value;
+    })(),
     stagingAgentVersion: sharedAgentVersionRaw && /^(?:0|[1-9][0-9]{0,5})$/.test(sharedAgentVersionRaw)
       ? Number(sharedAgentVersionRaw) : null,
     crmApiBaseUrl: exactUrl(env, 'CRM_API_BASE_URL', (url) => (

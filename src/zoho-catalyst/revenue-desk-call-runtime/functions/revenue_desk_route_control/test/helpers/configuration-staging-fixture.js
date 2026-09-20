@@ -47,7 +47,7 @@ class SyntheticStore {
   }
 }
 
-function createStagingFixture(index = 0, { store = new SyntheticStore() } = {}) {
+function createStagingFixture(index = 0, { store = new SyntheticStore(), publicNative = false } = {}) {
   const input = syntheticPreparationInputs()[index];
   input.review.deploymentId = configurationDeploymentId(input.crm.deal.id, input.crm.deal.Intake_Submission_ID);
   let clock = SYNTHETIC_NOW;
@@ -83,6 +83,13 @@ function createStagingFixture(index = 0, { store = new SyntheticStore() } = {}) 
   let stagingWrites = 0;
   const crm = { async getDeal() { return clone(records.deal); },
     async getPreparationRecords() { return clone(records); },
+    async getPublicOriginalLead() {
+      assert.equal(publicNative, true);
+      return { lineageType: 'public_native', originalLeadId: evidence.nativeConversion.leadId,
+        journeyId: records.deal.Intake_Submission_ID, submittedAt: '2026-09-09T11:40:00.000Z',
+        consentAt: '2026-09-09T11:39:00.000Z',
+        submissionChannel: 'Synthetic Public Form', intakeFormVersion: 'revenue-leak-test-request-v1' };
+    },
     async recordCoreApproval(_id, value) {
       Object.assign(records.deal, { Stage: 'Setup and QA', Test_Status: 'Scheduled',
         Go_Live_Approval_Status: 'Approved', Go_Live_Approved_At: value.approvedAt,
@@ -98,7 +105,7 @@ function createStagingFixture(index = 0, { store = new SyntheticStore() } = {}) 
   const lineage = { originalLeadId: evidence.nativeConversion.leadId,
     journeyId: records.deal.Intake_Submission_ID, consumedAt: '2026-09-09T11:40:00.000Z',
     sourceRevision: 'c'.repeat(40), form1RowId: String(401 + index), submissionFingerprint: 'b'.repeat(64) };
-  const sourceReader = { async readAssistedLineage() { return clone(lineage); } };
+  const sourceReader = { async findAssistedLineage() { return publicNative ? null : clone(lineage); } };
   const nativeConversion = { originalLeadId: lineage.originalLeadId, journeyId: lineage.journeyId,
     accountId: records.account.id, contactId: records.contact.id, dealId: records.deal.id,
     convertedAt: '2026-09-09T11:42:00.000Z' };
