@@ -110,7 +110,7 @@ function nullable(value) {
   return value === null || value === undefined || value === '';
 }
 
-function validateEvidence(bundle, command, deal, config) {
+function validateEvidence(bundle, command, deal, config, expectedDeploymentId) {
   const { submission, prefill, session, proof } = bundle;
   // The configuration pointer names the immutable Form 2 artifact that
   // produced the evidence. It deliberately survives later route-control
@@ -183,7 +183,9 @@ function validateEvidence(bundle, command, deal, config) {
     && lookupId(deal.Contact_Name) === session.CRM_CONTACT_ID
     && session.CRM_DEAL_ID === command.dealId
     && deal.Configuration_Version === command.configurationVersionId
-    && nullable(deal.Deployment_Record_ID) && nullable(deal.Approved_Deployment_Record_ID)
+    && (expectedDeploymentId === undefined ? nullable(deal.Deployment_Record_ID)
+      : deal.Deployment_Record_ID === expectedDeploymentId)
+    && nullable(deal.Approved_Deployment_Record_ID)
     && nullable(deal.Billing_Subscription_ID),
   'CONTROL_PRECONDITION_FAILED', 'CRM Deal does not match completed Form 2 evidence.',
   { httpStatus: 409 });
@@ -325,7 +327,7 @@ function createJourneyCoreControlService({ config, store, evidenceStore, crm, no
   { httpStatus: 503 });
   const receiptTable = config.tables.EVENT_RECEIPT_TABLE;
 
-  async function readContext(action, raw) {
+  async function readContext(action, raw, expectedDeploymentId) {
     const command = validateCommand(action, raw);
     const [bundle, deal, receipts] = await Promise.all([
       evidenceStore.readBundle(command.submissionRowId),
@@ -335,7 +337,7 @@ function createJourneyCoreControlService({ config, store, evidenceStore, crm, no
     ]);
     invariant(receipts.length < 100, 'CONTROL_AUDIT_INVALID',
       'Journey-core receipt history exceeded its bounded read.', { httpStatus: 503 });
-    const evidenceFingerprint = validateEvidence(bundle, command, deal, config);
+    const evidenceFingerprint = validateEvidence(bundle, command, deal, config, expectedDeploymentId);
     const parsed = receipts.map((receipt) => ({ receipt, data: parseReceipt(receipt, config) }));
     for (const item of parsed) {
       invariant(item.data.configurationVersionId === command.configurationVersionId
@@ -615,7 +617,43 @@ function createJourneyCoreControlService({ config, store, evidenceStore, crm, no
     }
   }
 
-  return Object.freeze({ approve, activate, rollback });
+  async function readStagingSource(raw, { expectedDeploymentId } = {}) {
+    const context = await readContext('approve', raw, expectedDeploymentId);
+    invariant(!completedRollback(context)
+      && context.receipts.every(({ receipt }) => receipt.STATUS === 'Completed'),
+    'CONTROL_PRECONDITION_FAILED', 'Journey-core source has unresolved or revoked state.',
+    { httpStatus: 409 });
+    const prior = completed(context, 'approve');
+    if (expectedDeploymentId !== undefined) {
+      // Only the staging controller supplies this stored identity. Existing
+      // Journey-core commands retain their strict no-deployment boundary.
+      invariant(context.deal.Stage === 'Setup and QA'
+        && !context.deal.Test_Start_At && !context.deal.Test_End_At
+        && !context.deal.Rollback_Completed_At
+        && (prior ? context.deal.Test_Status === 'Scheduled'
+          && context.deal.Go_Live_Approval_Status === 'Approved'
+          && context.deal.Approved_Configuration_Version === context.command.configurationVersionId
+          && Date.parse(context.deal.Go_Live_Approved_At) === Date.parse(prior.data.decidedAt)
+          : context.deal.Test_Status === 'Setup Pending'
+          && context.deal.Go_Live_Approval_Status === 'Not Ready'
+          && !context.deal.Go_Live_Approved_At && !context.deal.Approved_Configuration_Version),
+      'CONTROL_PRECONDITION_FAILED', 'Staged Journey source changed.', { httpStatus: 409 });
+    } else if (prior) assertApprovedDeal(context.deal, context.command, prior.data.decidedAt);
+    else invariant(context.deal.Stage === 'Setup and Authorization'
+      && context.deal.Test_Status === 'Not Started'
+      && context.deal.Go_Live_Approval_Status === 'Not Ready'
+      && !context.deal.Approved_Configuration_Version && !context.deal.Go_Live_Approved_At
+      && !context.deal.Test_Start_At && !context.deal.Test_End_At,
+    'CONTROL_PRECONDITION_FAILED', 'Journey-core source is not awaiting setup.',
+    { httpStatus: 409 });
+    return Object.freeze({ bundle: context.bundle, deal: context.deal,
+      evidenceFingerprint: context.evidenceFingerprint,
+      priorApproval: prior ? Object.freeze({ eventKey: prior.receipt.EVENT_KEY,
+        configurationVersionId: context.command.configurationVersionId,
+        approvedAt: prior.data.decidedAt }) : null });
+  }
+
+  return Object.freeze({ approve, activate, rollback, readStagingSource });
 }
 
 function isJourneyCoreCommand(body) {

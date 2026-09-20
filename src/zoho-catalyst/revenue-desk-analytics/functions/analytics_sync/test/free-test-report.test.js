@@ -259,7 +259,7 @@ test('actual runtime producers retain controller stop-to-report reason semantics
   baseline.evidence.configurationVersion = deployment.configurationVersion;
   baseline.deal.Configuration_Version = deployment.configurationVersion;
   assert.notEqual(deployment.configurationVersionId, deployment.configurationVersion);
-  const { buildCrmReportBaseline } = require('../lib/crm-report-baseline');
+  const { buildCrmReportBaseline } = require('../../../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/crm-report-baseline');
   deployment.configuration = { reportBaseline: buildCrmReportBaseline(baseline, { now: NOW }) };
   f.deployment = deploymentFact(config, deployment, row);
   refreshDigests(f);

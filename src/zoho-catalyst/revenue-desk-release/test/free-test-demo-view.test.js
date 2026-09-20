@@ -89,6 +89,25 @@ test('owner handoff separates durable alert state from manual acknowledgment and
   singleInlineScript(html);
 });
 
+test('configuration creation and approval are separate from activation and baseline calls', () => {
+  const input = fixture();
+  input.configurationStagingRehearsal = { scenarios: [{ recipient: '<script>untrusted()</script>',
+    followUpOwner: 'Synthetic Owner', oldReceiptsPreserved: true, advancedStagingReplayRejected: true,
+    staged: { testStatus: 'Ready for Approval', approvalStatus: 'Pending Internal Approval', duplicateWrites: 0 },
+    approved: { testStatus: 'Scheduled', approvalStatus: 'Approved', replayed: true, crmPointerMatches: true,
+      startedAt: null, expiresAt: null, providerActivated: false } }] };
+  const html = renderFreeTestDemo(input);
+  assert.equal((html.match(/Submitted setup → reviewed configuration → internal approval/g) || []).length, 1);
+  assert.match(html, /Ready for Approval \/ Pending Internal Approval/);
+  assert.match(html, /Scheduled \/ Approved/);
+  assert.match(html, /do not backfill the baseline call reports/);
+  assert.match(html, /Internal approval is not Live/);
+  assert.match(html, /Actual test start<\/th><td>Unknown \/ not established/);
+  assert.match(html, /Provider activation performed<\/th><td>false/);
+  assert.match(html, /&lt;script&gt;untrusted\(\)&lt;\/script&gt;/);
+  singleInlineScript(html);
+});
+
 test('all fixture text is escaped and no executable remote assets or forms exist', () => {
   const input = fixture();
   input.companies[0].key = '<ScRiPt src="https://invalid.example"></sCrIpT>';

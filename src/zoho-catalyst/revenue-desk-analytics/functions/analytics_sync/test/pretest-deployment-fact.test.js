@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { deploymentFact, ensureOutboxRow, createOutboxRow: runtimeOutboxRow } =
   require('../../../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/analytics-outbox');
-const { buildCrmReportBaseline } = require('../lib/crm-report-baseline');
+const { buildCrmReportBaseline } = require('../../../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/crm-report-baseline');
 const { PRETEST_FIELDS, createOutboxRow, minimizeFact, parseOutboxRow, deploymentReportBaseline } = require('../lib/facts');
 const { crmBaselineFixture } = require('./helpers/crm-baseline-fixture');
 

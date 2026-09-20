@@ -151,6 +151,11 @@ function loadConfig(env = process.env, artifactSourceRevision = ARTIFACT_SOURCE_
     crmOrganizationSha256: crypto.createHash('sha256')
       .update(crmOrganizationId, 'utf8').digest('hex'),
     form2DestinationSha256, form2FormVersion,
+    // Additional nonsecret provenance/binding is required only by staging;
+    // historical Journey-core routes and held deployments remain unchanged.
+    form1DestinationSha256: optional(env, 'FORM1_DESTINATION_SHA256'),
+    stagingAgentVersion: sharedAgentVersionRaw && /^(?:0|[1-9][0-9]{0,5})$/.test(sharedAgentVersionRaw)
+      ? Number(sharedAgentVersionRaw) : null,
     crmApiBaseUrl: exactUrl(env, 'CRM_API_BASE_URL', (url) => (
       new Set(['www.zohoapis.com', 'www.zohoapis.eu', 'www.zohoapis.in',
         'www.zohoapis.com.au', 'www.zohoapis.ca']).has(url.hostname)

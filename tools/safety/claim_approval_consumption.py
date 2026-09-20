@@ -455,7 +455,9 @@ def _windows_current_user_sid() -> str:
         kernel32.CloseHandle(token)
 
 
-def _validate_windows_acl(path: Path, *, require_protected: bool) -> None:
+def _validate_windows_acl(
+    path: Path, *, require_protected: bool, allow_missing: bool = False
+) -> None:
     from ctypes import wintypes
 
     advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
@@ -498,6 +500,11 @@ def _validate_windows_acl(path: Path, *, require_protected: bool) -> None:
         None,
         ctypes.byref(descriptor),
     )
+    # SQLite can delete its optional rollback journal between lstat and this
+    # native ACL read. Only ERROR_FILE_NOT_FOUND is an admissible disappearance;
+    # access denial, missing parent directories and malformed ACLs remain fatal.
+    if result == 2 and allow_missing:
+        return
     if result != 0 or not descriptor.value:
         _fail(UnsafeLedger)
     try:
@@ -929,9 +936,15 @@ def _verify_directory_identity(path: Path, anchor: _DirectoryAnchor) -> None:
             _fail(UnsafeLedger)
 
 
-def _validate_storage_file(path: Path, *, allow_empty: bool) -> None:
+def _validate_storage_file(
+    path: Path, *, allow_empty: bool, allow_missing: bool = False
+) -> None:
     try:
         metadata = os.lstat(path)
+    except FileNotFoundError:
+        if allow_missing:
+            return
+        _fail(UnsafeLedger)
     except OSError:
         _fail(UnsafeLedger)
     reparse_flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
@@ -944,7 +957,9 @@ def _validate_storage_file(path: Path, *, allow_empty: bool) -> None:
     ):
         _fail(UnsafeLedger)
     if os.name == "nt":
-        _validate_windows_acl(path, require_protected=False)
+        _validate_windows_acl(
+            path, require_protected=False, allow_missing=allow_missing
+        )
     else:
         getuid = getattr(os, "geteuid", None)
         if (
@@ -971,7 +986,12 @@ def _validate_ledger_contents(ledger: Path, *, database_required: bool) -> None:
     elif database_required or DATABASE_NAME + "-journal" in entries_by_name:
         _fail(UnsafeLedger)
     if DATABASE_NAME + "-journal" in entries_by_name:
-        _validate_storage_file(journal, allow_empty=False)
+        # Directory enumeration is not a SQLite transaction snapshot. Another
+        # legitimate claimant can remove this journal on commit/rollback before
+        # metadata inspection. An absent journal is normal; a missing database,
+        # unreadable journal or unsafe file is not. The claim still requires the
+        # normal SQLite lock, exact schema and integrity checks afterward.
+        _validate_storage_file(journal, allow_empty=False, allow_missing=True)
 
 
 def _ensure_database_file(

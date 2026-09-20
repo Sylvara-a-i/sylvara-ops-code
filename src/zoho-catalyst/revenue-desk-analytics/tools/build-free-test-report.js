@@ -4,7 +4,7 @@ const contract = require('../config/free-test-report-contract.json');
 const { minimizeFact, canonicalJson, sha256, deploymentReportBaseline } = require('../functions/analytics_sync/lib/facts');
 const runtimeContract = require('../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/contracts/revenue-desk-call-contract.json');
 const { deduplicateCalls } = require('../functions/analytics_sync/lib/daily-rollup');
-const { buildCrmReportBaseline } = require('../functions/analytics_sync/lib/crm-report-baseline');
+const { buildCrmReportBaseline } = require('../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/crm-report-baseline');
 const { evaluateFreeTestReportGate } = require('./evaluate-dashboard-pre-render-gate');
 
 function requireCondition(condition, code) {

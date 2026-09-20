@@ -280,7 +280,8 @@ test('business input is never silently truncated to satisfy runtime limits', () 
 });
 
 test('bridge has no I/O, SDK, process environment, credentials, or provider execution imports', () => {
-  const source = fs.readFileSync(path.join(__dirname, '../lib/free-test-preparation.js'), 'utf8');
+  const source = fs.readFileSync(path.join(__dirname,
+    '../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/free-test-preparation.js'), 'utf8');
   assert.doesNotMatch(source, /require\(['"](?:node:|zcatalyst|https?|net|tls|child_process)/);
   assert.doesNotMatch(source, /\b(?:fetch|XMLHttpRequest|setInterval|setTimeout)\s*\(|process\.env|console\./);
 });

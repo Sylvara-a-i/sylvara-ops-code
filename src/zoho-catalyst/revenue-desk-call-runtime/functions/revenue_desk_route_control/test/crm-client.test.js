@@ -489,3 +489,234 @@ test('Journey-core approval rejects workflow-shaped and conflicting prestates', 
     assert.equal(selected.writes.length, 0);
   }
 });
+
+function supersessionFixture({ outcome = 'committed', afterCommit = () => {} } = {}) {
+  const priorCoreApproval = { configurationVersionId: 'form2cfgv1:7000000000001:' + 'a'.repeat(40),
+    approvedAt: '2026-08-29T12:05:00.000Z' };
+  const state = { ...scheduledDeal(), Configuration_Version: priorCoreApproval.configurationVersionId,
+    Approved_Configuration_Version: priorCoreApproval.configurationVersionId,
+    Approved_Deployment_Record_ID: null, Go_Live_Approved_At: '2026-08-29T12:05:00+00:00' };
+  const writes = [];
+  const requests = [];
+  const client = createCrmControlClient({ crmApiBaseUrl: 'https://synthetic-crm.invalid/crm/v8',
+    crmOrganizationId: SYNTHETIC_ORGANIZATION_ID, platformTimeoutMs: 500 }, {
+    readAuthorization: async () => 'Zoho-oauthtoken synthetic-read',
+    writeAuthorization: async () => 'Zoho-oauthtoken synthetic-write',
+    async fetchImpl(url, options) {
+      const pathname = new URL(url).pathname;
+      requests.push({ method: options.method, pathname });
+      assert.equal(pathname.includes('blueprint'), false);
+      if (pathname.endsWith('/org')) return response(200, { org: [{ zgid: SYNTHETIC_ORGANIZATION_ID }] });
+      assert.equal(pathname, `/crm/v8/Deals/${DEAL_ID}`);
+      if (options.method === 'GET') {
+        if (outcome === 'readback-unknown' && writes.length) throw new Error('synthetic private readback');
+        return response(200, { data: [state] });
+      }
+      assert.equal(options.method, 'PUT');
+      const body = JSON.parse(options.body);
+      const [{ id, ...patch }] = body.data;
+      assert.equal(id, DEAL_ID);
+      writes.push({ patch, trigger: body.trigger, conditional: options.headers['If-Unmodified-Since'] });
+      if (outcome === 'before-commit') throw new Error('synthetic private precommit');
+      Object.assign(state, patch, { Modified_Time: '2026-08-29T12:15:01+00:00' });
+      afterCommit(state);
+      if (outcome === 'after-commit') throw new Error('synthetic private postcommit');
+      return response(200, { data: [{ status: 'success', code: 'SUCCESS', details: { id: DEAL_ID } }] });
+    },
+  });
+  const argumentsFor = () => ({ deploymentId: DEPLOYMENT_ID, configurationVersionId: CONFIGURATION_ID,
+    approvedAt: ACTIVATED_AT, expectedDeal: structuredClone(state), priorCoreApproval, configurationStaged: true });
+  return { client, state, writes, requests, argumentsFor, priorCoreApproval };
+}
+
+test('server-proven core approval supersession uses one conditional controller write with no workflow', async () => {
+  const selected = supersessionFixture();
+  const previous = structuredClone(selected.state);
+  const result = await selected.client.recordApproval(DEAL_ID, selected.argumentsFor());
+  assert.equal(result.Approved_Configuration_Version, CONFIGURATION_ID);
+  assert.equal(result.Configuration_Version, selected.priorCoreApproval.configurationVersionId);
+  assert.equal(result.Go_Live_Approved_At, '2026-08-29T12:15:00+00:00');
+  assert.equal(result.Approved_Deployment_Record_ID, DEPLOYMENT_ID);
+  assert.equal(result.Test_Status, 'Scheduled');
+  assert.equal(result.Test_Start_At, null);
+  assert.equal(result.Test_End_At, null);
+  assert.deepEqual(selected.writes, [{ patch: {
+    Go_Live_Approval_Status: 'Approved', Go_Live_Approved_At: '2026-08-29T12:15:00+00:00',
+    Approved_Deployment_Record_ID: DEPLOYMENT_ID, Approved_Configuration_Version: CONFIGURATION_ID,
+  }, trigger: [], conditional: previous.Modified_Time }]);
+  await selected.client.recordApproval(DEAL_ID, selected.argumentsFor());
+  assert.equal(selected.writes.length, 1);
+});
+
+test('ambiguous core supersession reconciles committed state but never blindly resends', async () => {
+  const committed = supersessionFixture({ outcome: 'after-commit' });
+  const result = await committed.client.recordApproval(DEAL_ID, committed.argumentsFor());
+  assert.equal(result.Approved_Configuration_Version, CONFIGURATION_ID);
+  assert.equal(committed.writes.length, 1);
+  for (const outcome of ['before-commit', 'readback-unknown']) {
+    const selected = supersessionFixture({ outcome });
+    await assert.rejects(selected.client.recordApproval(DEAL_ID, selected.argumentsFor()), (error) => {
+      assert.equal(error.code, 'CRM_APPROVAL_RECONCILIATION_REQUIRED');
+      assert.equal(error.ambiguous, true);
+      assert.doesNotMatch(error.message + JSON.stringify(error), /synthetic private/);
+      return true;
+    });
+    assert.equal(selected.writes.length, 1);
+  }
+});
+
+test('core supersession rejects missing/mismatched proof and changed target or stopped state before write', async () => {
+  for (const patch of [
+    { priorCoreApproval: undefined }, { priorCoreApproval: {} },
+    { priorCoreApproval: { configurationVersionId: 'wrong', approvedAt: '2026-08-29T12:05:00.000Z' } },
+    { priorCoreApproval: { configurationVersionId: 'form2cfgv1:7000000000001:' + 'a'.repeat(40),
+      approvedAt: '2026-08-29T12:04:00.000Z' } },
+    { deploymentId: 'another_deployment' },
+  ]) {
+    const selected = supersessionFixture();
+    await assert.rejects(selected.client.recordApproval(DEAL_ID, { ...selected.argumentsFor(), ...patch }),
+      { code: 'CRM_TRANSITION_PRECONDITION_FAILED' });
+    assert.equal(selected.writes.length, 0);
+  }
+  for (const patch of [{ Approved_Deployment_Record_ID: 'other_deployment' },
+    { Test_Start_At: ACTIVATED_AT }, { Test_End_At: ACTIVATED_AT },
+    { Test_End_Reason: 'Other' }, { Rollback_Completed_At: ACTIVATED_AT },
+    { Billing_Subscription_ID: 'synthetic_subscription' }]) {
+    const selected = supersessionFixture();
+    Object.assign(selected.state, patch);
+    await assert.rejects(selected.client.recordApproval(DEAL_ID, selected.argumentsFor()),
+      { code: 'CRM_TRANSITION_PRECONDITION_FAILED' });
+    assert.equal(selected.writes.length, 0);
+  }
+});
+
+test('core supersession rejects source drift before commit and unrelated drift after commit', async () => {
+  const before = supersessionFixture();
+  const command = before.argumentsFor();
+  before.state.Alert_Recipient_Email = 'different-synthetic@example.invalid';
+  await assert.rejects(before.client.recordApproval(DEAL_ID, command),
+    { code: 'CRM_TRANSITION_PRECONDITION_FAILED' });
+  assert.equal(before.writes.length, 0);
+  const after = supersessionFixture({ afterCommit(state) {
+    state.Contact_Name = { id: '400000004', name: 'Different synthetic contact' };
+  } });
+  await assert.rejects(after.client.recordApproval(DEAL_ID, after.argumentsFor()),
+    { code: 'CRM_TRANSITION_PRECONDITION_FAILED' });
+  assert.equal(after.writes.length, 1);
+});
+
+test('preparation projects only approved source fields and canonical lookup IDs across bounded reads', async () => {
+  const deal = scheduledDeal(); deal.$editable = true; deal.private_unselected = 'must-not-return';
+  const requests = [];
+  const client = createCrmControlClient({ crmApiBaseUrl: 'https://www.zohoapis.com/crm/v8',
+    platformTimeoutMs: 3000, crmOrganizationId: SYNTHETIC_ORGANIZATION_ID }, {
+    readAuthorization: async () => 'Zoho-oauthtoken synthetic-read',
+    writeAuthorization: async () => { throw new Error('No write credential may be used'); },
+    fetchImpl: async (url, options) => {
+      assert.equal(options.method, 'GET'); const parsed = new URL(url); requests.push(parsed);
+      if (parsed.pathname.endsWith('/org')) return response(200, { org: [{ zgid: SYNTHETIC_ORGANIZATION_ID }] });
+      const fields = parsed.searchParams.get('fields').split(','); assert.ok(fields.length <= 50);
+      if (parsed.pathname.endsWith(`/Deals/${DEAL_ID}`)) return response(200, { data: [deal] });
+      if (parsed.pathname.endsWith('/Accounts/400000002')) return response(200, { data: [{
+        id: '400000002', Modified_Time: deal.Modified_Time, Account_Name: 'Synthetic Company',
+        Phone: '+19135550101', $editable: true, private_unselected: 'must-not-return' }] });
+      if (parsed.pathname.endsWith('/Contacts/400000003')) return response(200, { data: [{
+        id: '400000003', Modified_Time: deal.Modified_Time, Account_Name: { id: '400000002', name: 'ignored label' },
+        Email: 'unselected@example.invalid' }] });
+      throw new Error('Unexpected source projection');
+    },
+  });
+  const first = await client.getPreparationRecords(DEAL_ID);
+  deal.$editable = false;
+  const second = await client.getPreparationRecords(DEAL_ID);
+  assert.deepEqual(first, second);
+  assert.deepEqual(first.deal.Account_Name, { id: '400000002' });
+  assert.deepEqual(first.contact.Account_Name, { id: '400000002' });
+  assert.equal(first.account.Account_Name, 'Synthetic Company');
+  assert.equal(first.deal.Monthly_Inbound_Calls, null);
+  assert.doesNotMatch(JSON.stringify(first), /must-not-return|\$editable|unselected@example/);
+  assert.ok(requests.filter((url) => url.pathname.includes('/Deals/')).length === 4);
+});
+
+test('fresh and core-approved staging use one conditional no-workflow link write, retaining prior evidence', async () => {
+  for (const prior of [false, true]) {
+    const f = fixture('committed');
+    Object.assign(f.state, { Stage: prior ? 'Setup and QA' : 'Setup and Authorization',
+      Test_Status: prior ? 'Scheduled' : 'Not Started', Deployment_Record_ID: null,
+      Approved_Deployment_Record_ID: null, Approved_Configuration_Version: prior ? 'form2_label' : null,
+      Go_Live_Approval_Status: prior ? 'Approved' : 'Not Ready',
+      Go_Live_Approved_At: prior ? '2026-08-29T12:00:00.000Z' : null });
+    const before = structuredClone(f.state);
+    const priorApproval = prior ? { configurationVersionId: 'form2_label', approvedAt: before.Go_Live_Approved_At } : null;
+    const result = await f.client.recordConfigurationStaging(DEAL_ID, {
+      deploymentId: DEPLOYMENT_ID, expectedDeal: before, priorApproval });
+    assert.equal(result.Deployment_Record_ID, DEPLOYMENT_ID);
+    assert.equal(result.Approved_Configuration_Version, before.Approved_Configuration_Version);
+    assert.equal(result.Go_Live_Approved_At, before.Go_Live_Approved_At);
+    assert.equal(result.Test_Start_At, null); assert.equal(result.Test_End_At, null);
+    assert.equal(f.writes.length, 1); assert.deepEqual(f.writes[0].trigger, []);
+    assert.equal(f.requests.some((r) => r.pathname.includes('blueprint')), false);
+    await f.client.recordConfigurationStaging(DEAL_ID, { deploymentId: DEPLOYMENT_ID,
+      expectedDeal: result, priorApproval });
+    assert.equal(f.writes.length, 1);
+  }
+});
+
+function freshStagedApprovalFixture(options) {
+  const f = supersessionFixture(options);
+  Object.assign(f.state, { Test_Status: 'Setup Pending', Go_Live_Approval_Status: 'Not Ready',
+    Go_Live_Approved_At: null, Approved_Configuration_Version: null });
+  return { ...f, argumentsFor: () => ({ ...f.argumentsFor(), priorCoreApproval: null }) };
+}
+
+test('fresh staged internal approval is conditional and replay-safe without the deferred Blueprint', async () => {
+  const f = freshStagedApprovalFixture(); const before = structuredClone(f.state);
+  const result = await f.client.recordApproval(DEAL_ID, f.argumentsFor());
+  assert.equal(result.Stage, 'Setup and QA'); assert.equal(result.Test_Status, 'Scheduled');
+  assert.equal(result.Approved_Configuration_Version, CONFIGURATION_ID);
+  assert.equal(result.Configuration_Version, before.Configuration_Version);
+  assert.equal(result.Approved_Deployment_Record_ID, DEPLOYMENT_ID);
+  assert.equal(result.Test_Start_At, null); assert.equal(result.Test_End_At, null);
+  assert.deepEqual(f.writes, [{ patch: { Test_Status: 'Scheduled', Go_Live_Approval_Status: 'Approved',
+    Go_Live_Approved_At: '2026-08-29T12:15:00+00:00', Approved_Deployment_Record_ID: DEPLOYMENT_ID,
+    Approved_Configuration_Version: CONFIGURATION_ID }, trigger: [], conditional: before.Modified_Time }]);
+  await f.client.recordApproval(DEAL_ID, f.argumentsFor());
+  assert.equal(f.writes.length, 1);
+  assert.equal(f.requests.some(({ pathname }) => pathname.includes('blueprint')), false);
+});
+
+test('fresh staged ambiguous approval reconciles once and never repeats a mutation', async () => {
+  const committed = freshStagedApprovalFixture({ outcome: 'after-commit' });
+  assert.equal((await committed.client.recordApproval(DEAL_ID, committed.argumentsFor())).Test_Status, 'Scheduled');
+  assert.equal(committed.writes.length, 1);
+  for (const outcome of ['before-commit', 'readback-unknown']) {
+    const f = freshStagedApprovalFixture({ outcome });
+    await assert.rejects(f.client.recordApproval(DEAL_ID, f.argumentsFor()),
+      { code: 'CRM_APPROVAL_RECONCILIATION_REQUIRED', ambiguous: true });
+    assert.equal(f.writes.length, 1);
+  }
+});
+
+test('fresh staged native approval requires trusted staging and exact inactive source and readback', async () => {
+  for (const patch of [{ Test_Status: 'Scheduled' }, { Go_Live_Approval_Status: 'Approved' },
+    { Go_Live_Approved_At: ACTIVATED_AT }, { Approved_Deployment_Record_ID: 'other_deployment' },
+    { Approved_Configuration_Version: 'other_configuration' }, { Deployment_Record_ID: 'wrong_deployment' },
+    { Test_Start_At: ACTIVATED_AT }, { Test_End_Reason: 'Other' },
+    { Billing_Subscription_ID: 'synthetic_subscription' }]) {
+    const f = freshStagedApprovalFixture(); Object.assign(f.state, patch);
+    await assert.rejects(f.client.recordApproval(DEAL_ID, f.argumentsFor()),
+      { code: 'CRM_TRANSITION_PRECONDITION_FAILED' });
+    assert.equal(f.writes.length, 0);
+  }
+  const withoutProof = supersessionFixture();
+  await assert.rejects(withoutProof.client.recordApproval(DEAL_ID,
+    { ...withoutProof.argumentsFor(), configurationStaged: false }),
+  { code: 'CRM_TRANSITION_PRECONDITION_FAILED' });
+  assert.equal(withoutProof.writes.length, 0);
+  const after = freshStagedApprovalFixture({ afterCommit(state) {
+    state.Contact_Name = { id: '400000004' };
+  } });
+  await assert.rejects(after.client.recordApproval(DEAL_ID, after.argumentsFor()),
+    { code: 'CRM_TRANSITION_PRECONDITION_FAILED' });
+  assert.equal(after.writes.length, 1);
+});

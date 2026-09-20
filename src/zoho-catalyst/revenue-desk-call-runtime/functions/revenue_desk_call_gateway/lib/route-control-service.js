@@ -468,14 +468,31 @@ function assertCurrentFreeTestHandlingPolicy(deal) {
   { httpStatus: 409 });
 }
 
-function validateApprovalDeal(deal, command, configuration) {
+function matchesPreservedCoreApproval(deal, configuration, preservedCoreApproval) {
+  // This proof is returned by the server-side staging verifier, never accepted
+  // in a command. Preserve the older Form 2 approval until a new durable full
+  // configuration approval can supersede it; do not reset historical evidence.
+  return Boolean(preservedCoreApproval
+    && preservedCoreApproval.configurationVersionId === configuration.configurationVersion
+    && exactTimestamp(preservedCoreApproval.approvedAt)
+    && deal.Test_Status === 'Scheduled'
+    && deal.Go_Live_Approval_Status === 'Approved'
+    && hasText(deal.Go_Live_Approved_At)
+    && Date.parse(deal.Go_Live_Approved_At) === Date.parse(preservedCoreApproval.approvedAt)
+    && deal.Approved_Configuration_Version === preservedCoreApproval.configurationVersionId
+    && !deal.Approved_Deployment_Record_ID && !deal.Test_Start_At && !deal.Test_End_At);
+}
+
+function validateApprovalDeal(deal, command, configuration, preservedCoreApproval) {
   assertExecutionTimingSupported(configuration);
   validateDealBase(deal, command, configuration);
-  invariant(deal.Test_Status === 'Setup Pending'
+  const awaitingFirstApproval = deal.Test_Status === 'Setup Pending'
     && deal.Go_Live_Approval_Status !== 'Approved'
     && !deal.Go_Live_Approved_At
     && !deal.Approved_Deployment_Record_ID
-    && !deal.Approved_Configuration_Version
+    && !deal.Approved_Configuration_Version;
+  invariant((awaitingFirstApproval
+    || matchesPreservedCoreApproval(deal, configuration, preservedCoreApproval))
     && !deal.Test_Start_At && !deal.Test_End_At,
   'CONTROL_PRECONDITION_FAILED', 'CRM journey is not awaiting configuration approval.',
   { httpStatus: 409 });
@@ -508,7 +525,8 @@ function validateActivationDeal(deal, command, configuration, deployment, runtim
   { httpStatus: 409 });
 }
 
-function validateReplayDeal(action, deal, command, configuration, deployment, runtimeConfig) {
+function validateReplayDeal(action, deal, command, configuration, deployment, runtimeConfig,
+  preservedCoreApproval) {
   validateDealBinding(deal, command, configuration);
   if (action === 'activate' && deployment.TEST_STATUS !== 'Stopped') {
     validateAssignedTestNumber(deal, deployment, runtimeConfig);
@@ -539,8 +557,10 @@ function validateReplayDeal(action, deal, command, configuration, deployment, ru
     && deal.Test_End_At === deployment.STOPPED_AT
     && deal.Test_End_Reason === crmEndReason(deployment.STOP_REASON)
     && (action !== 'rollback' || deployment.STOP_REASON === command.reason);
+  const awaitingCoreSupersession = deal.Stage === 'Setup and QA'
+    && matchesPreservedCoreApproval(deal, configuration, preservedCoreApproval);
   const valid = action === 'approve'
-    ? awaitingApproval || awaitingActivation || active || stopped
+    ? awaitingApproval || awaitingCoreSupersession || awaitingActivation || active || stopped
     : action === 'activate'
       ? awaitingActivation || active || stopped
       : awaitingActivation || active || partialRollback || stopped;
@@ -596,7 +616,7 @@ function parseConfiguration(row, command, sourceRevision, deployment) {
 }
 
 function createRouteControlService({
-  config, store, crm, provider, now = Date.now,
+  config, store, crm, provider, configurationStaging, now = Date.now,
   onActivationCheckpoint = async () => {},
   onActivationContainmentCheckpoint = async () => {},
   onRollbackCheckpoint = async () => {},
@@ -605,6 +625,10 @@ function createRouteControlService({
     'PRODUCTION_DARK', 'Route control is Development-only.', { httpStatus: 503 });
   invariant(store && crm && provider, 'INVALID_RUNTIME_CONFIGURATION',
     'Route-control dependencies are unavailable.', { httpStatus: 503 });
+  invariant(configurationStaging === undefined
+    || typeof configurationStaging?.assertApprovalSource === 'function',
+  'INVALID_RUNTIME_CONFIGURATION', 'Configuration staging verifier is unavailable.',
+  { httpStatus: 503 });
   const tables = config.tables;
 
   function rollbackClaimKey(deploymentId) {
@@ -1405,6 +1429,8 @@ function createRouteControlService({
       && receipt.STATUS === 'ReconciliationRequired'
       && (locallyContainedActivation
         || activationBindingIsLive(deployment, receipt, data, command));
+    let stagingEvidence = null;
+    let preservedCoreApproval = null;
     if (runtimeTerminalRollback) {
       validateRuntimeTerminalReplayDeal(
         deal, command, configuration, deployment,
@@ -1425,7 +1451,13 @@ function createRouteControlService({
         'CRM activation containment no longer matches the control receipt.',
         { httpStatus: 409 });
     } else {
-      validateReplayDeal(action, deal, command, configuration, deployment, config);
+      stagingEvidence = action === 'approve' && configurationStaging
+        ? await configurationStaging.assertApprovalSource(command, {
+          deployment, configurationRow, configuration, deal,
+        }) : null;
+      preservedCoreApproval = stagingEvidence?.priorCoreApproval ?? null;
+      validateReplayDeal(action, deal, command, configuration, deployment, config,
+        preservedCoreApproval);
     }
     const route = routeFingerprint(routeFromRows(deployment, configurationRow));
     invariant(route === receipt.ROUTE_FINGERPRINT && route === data.routeFingerprint,
@@ -1501,11 +1533,13 @@ function createRouteControlService({
       if (action !== 'activate') await finalizePreparedReceipt(receipt, data.decidedAt);
       return Object.freeze({ action, replayed: true, resumed: true,
         receipt, receiptData: data, deployment: poststate,
-        configurationRow, routeFingerprint: route, deal });
+        configurationRow, routeFingerprint: route, deal, preservedCoreApproval,
+        configurationStaged: stagingEvidence?.configurationStaged === true });
     }
     return Object.freeze({ action, replayed: true, resumed: false,
       receipt, receiptData: data, deployment, configurationRow,
-      routeFingerprint: route, deal });
+      routeFingerprint: route, deal, preservedCoreApproval,
+      configurationStaged: stagingEvidence?.configurationStaged === true });
   }
 
   async function assertNoConflictingDeployment(selected) {
@@ -2175,11 +2209,16 @@ function createRouteControlService({
         configurationVersionId: command.configurationVersionId,
         approvedAt: replay.deployment.GO_LIVE_APPROVED_AT,
         expectedDeal: replay.deal,
+        priorCoreApproval: replay.preservedCoreApproval,
+        configurationStaged: replay.configurationStaged,
       });
       return replay;
     }
     const state = await readState(command);
-    validateApprovalDeal(state.deal, command, state.configuration);
+    const stagingEvidence = configurationStaging
+      ? await configurationStaging.assertApprovalSource(command, state) : null;
+    const preservedCoreApproval = stagingEvidence?.priorCoreApproval ?? null;
+    validateApprovalDeal(state.deal, command, state.configuration, preservedCoreApproval);
     assertCurrentFreeTestHandlingPolicy(state.deal);
     assertNotificationHandoffReady(state.configuration, { now: now() });
     await assertNoConflictingDeployment(state.deployment);
@@ -2222,6 +2261,8 @@ function createRouteControlService({
       configurationVersionId: command.configurationVersionId,
       approvedAt: deployment.GO_LIVE_APPROVED_AT,
       expectedDeal: state.deal,
+      priorCoreApproval: preservedCoreApproval,
+      configurationStaged: stagingEvidence?.configurationStaged === true,
     });
     return Object.freeze({ action: 'approve', replayed: false, deployment });
   }

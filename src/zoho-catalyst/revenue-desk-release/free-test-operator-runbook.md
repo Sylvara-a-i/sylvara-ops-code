@@ -34,6 +34,12 @@ credential, external font, email or provider connection is needed. The command
 accepts no input files and fails rather than falling back to live services.
 
 Walk through Request → Setup → Authorization → Capture → Alert → Results → Stop.
+Within **Authorization**, inspect the separate configuration-staging rehearsal:
+empty memory tables → exact signed configuration → inactive deployment → separate
+internal approval. Company A preserves its older core receipt; Company B starts
+without one. The real controller code runs against synthetic source readers and
+a fake CRM boundary. Both replays reuse evidence, the clock stays unset and no
+provider is accessed. These rows do not supply the baseline call reports.
 Within **Alert**, follow Capture → Alert → Business Follow-Up. The separate
 memory-only rehearsal shows provider acceptance, exhausted definite rejection,
 and an ambiguous send held for reconciliation. Each uses the existing worker,
@@ -62,7 +68,7 @@ prove model extraction, or prove carrier forwarding and restoration.
 
 Gabriel accepted the previous `570638f` demo as readable and working. That
 acceptance remains valid for its unchanged sections; it does not cover the new
-handoff panel. HTML safety, escaping and navigation are tested offline. The
+handoff and configuration-staging panels. HTML safety, escaping and navigation are tested offline. The
 desktop browser policy blocks agent-opened local-file visual inspection; this
 does not authorize serving the same file through a workaround. The new panel's
 visual acceptance remains separate from its passed executable assertions.
@@ -238,6 +244,15 @@ prospect/customer traffic, even if this internal packet later passes.
 
 ## Current release and rollback boundary
 
+**2026-09-19 review correction:** the saved Lead Client Script was independently
+read back unchanged, with no pending saved delta. The earlier missing-`await`
+diagnosis confused the Widget SDK with Client Script ZDK. The documented
+`ZDK.Apps.CRM.Functions.execute` contract returns `CRMResponses`; that evidence
+does not establish a Promise defect. No speculative asynchronous wrapper was
+saved, and no launcher/canary allocation was spent. Preserve the existing
+admission hold; this readback does not certify a new successful launch. Exact
+contract: [ZDK Functions](https://www.zohocrm.dev/explore/client-script/webapi/Functions).
+
 **2026-09-15 installed-state correction:** the private held-installation record
 supersedes the older local-only early-stop paragraphs below. The existing gateway,
 route control and worker received the reviewed `570638f` PR #88 packages under
@@ -245,9 +260,19 @@ containment. Independent pullback compared all 698 members (229/238/231), includ
 exact paths and uncompressed contents. Source-revision holds and disabled provider
 mode remained in place; no functional invocation occurred. Therefore the
 early-stop correction is **installed under hold, not Development-runtime verified**.
-The later reporting-baseline and call-to-owner changes on
-`codex/free-test-analytics-reporting` are local candidates, not those installed
-packages. Do not relabel or redeploy unchanged Forms or the report-only consumer.
+The later reporting-baseline, call-to-owner and local Gabriel review-rule changes
+merged in PR #89 (`18d255e`, tested tree from `7336725`). They are **source merged,
+not installed**. Its eight checks and completed review do not expand runtime
+acceptance. The subsequent configuration-staging bridge is a separate local
+candidate on `codex/free-test-configuration-bridge`, not an approved cutover.
+Do not relabel or redeploy unchanged Forms or the report-only consumer.
+
+The separate approved Analytics packet created all five derived Development fact
+tables. Independent metadata readback matched 141 ordered columns; each table
+was empty, the original inventory was preserved, and no native share or public
+view was added. This proves schema installation only: no import, schedule, row,
+report delivery or CRM baseline readback was performed. Date/time round-trip
+through the eventual import remains an explicit acceptance gate.
 
 The private 2026-09-14 checkpoint supersedes the older coordinated-rebuild
 proposal: five Journey-core artifacts at `7dd3491` and the report-only CRM
@@ -413,18 +438,100 @@ This closes the local rule-definition/regression gate only. It does **not**
 authenticate exported CRM evidence, assert the live key belongs to Gabriel,
 persist/consume an approval, create/promote a row, or activate a route. Its output
 is a local-only verdict with every execution permission false. A later approved
-integration in the existing sole controller must authenticate fresh source and
-operator identity, claim the exact operation durably, create/read back a new
-immutable configuration, and preserve separate internal approval/activation.
-No second writer, SDK, signer, scheduler or live endpoint was added. Existing
-holds and rows are the rollback/containment state; this rule has no ongoing cloud
-cost or live monitoring side effects. No actual business values were approved.
+integration is now implemented source-only in the existing sole controller's
+`free-test-configuration-staging-v1` profile on its existing approval route.
+It separately requires an externally owner-signed **final** content/recipient
+snapshot; the Draft/Pending review above cannot authorize creation. Its distinct
+signature domain cannot be reflected into normal approval or activation.
+
+The bridge reads the consumed assisted Form 1 session, original Lead's native
+conversion details, exact current Account/Contact/Deal projections and HMAC-bound
+Form 2 evidence. Optional pre-test reporting uses fresh field metadata, never a
+caller `verified` flag. A durable workflow-owned claim creates new immutable
+content and a deterministic, inactive deployment. It conditionally links CRM,
+preserves any earlier core approval receipt/pointer, and requires a **new** full
+configuration approval before separate activation. Both fresh and retained-core
+staged approvals use the existing conditional native CRM update and independent
+readback; neither invokes the deferred commercial Blueprint. New business-source drift
+blocks that approval. No clock starts, provider is constructed, or message sends.
+An incomplete multi-table claim stays visibly reconciliation-required; do not
+delete it, blindly retry writes, or reuse the owner signature for another target.
+An advanced deployment cannot replay staging as if it were inactive.
+An authenticated exact completed receipt can recover its read-only response after
+the original intent expires; new claims still require fresh intent/evidence.
+Signature, immutable content, current source and inactive-state checks still
+apply, and a partial claim never resumes writes. The conversion and metadata
+readers both inherit the configured platform deadline, including a stalled body.
+
+Owner: Gabriel for exact values/recipient monitoring and release; controller owns
+immutable configuration/claims, CRM remains relationship truth, Analytics remains
+derived. Local fake adapters test this boundary without cloud cost. Live gates
+remain: native-conversion derived-field visibility/read scope, field-metadata
+scope, original assisted form digest, pinned number/agent/version metadata, owner
+key binding, exact signed content and authorized cutover. Public/native-only
+Form 1 needs an independently authenticated original-Lead reader and is **not**
+certified by the assisted lane. Overflow timing remains unresolved. No actual
+business values, live row or new invocation budget were approved by source work.
+The existing body limit must fit the exact staged request (maximum 16,384 bytes);
+any required nonsecret limit change belongs in the later deployment packet.
+Rollback keeps existing holds and old rows; newly staged rows remain inactive.
+Monitor incomplete staging receipts and explicit source/state conflicts.
+
+The source moves the pure preparation and pre-test baseline validators into the
+canonical gateway package already shared by controller and worker. Existing local
+preparation imports delegate to that same implementation; Analytics report tools
+also reuse it. No second CRM truth or new dependency is added. Fresh server reads
+may finish after the reviewed capture within the existing freshness window, but
+business edits after capture reject and historical report rules stay unchanged.
+Previously accepted runtime evidence is not invalidated for unchanged deployed
+code; it does not certify these new bridge paths or the new artifact bytes.
+
+Later bridge cutover must identify the reviewed immutable source/artifact, retain
+the current hold, verify assisted lineage/conversion/metadata read scopes and
+the owner-bound signature, and approve one exact staging action separately from
+the later internal approval. Finalize and independently verify `Test_Phone_Number`
+before signing/staging: it is part of the captured business-source fingerprint,
+so a later edit must not be treated as harmless replay. The two synthetic signed bodies are about 6 KiB,
+above the common 4 KiB route limit; use an exact request-size check and, only if
+needed and approved, the existing 16 KiB maximum. Do not increase it blindly.
+Unknown reads, source conflicts or partial receipts stop before further writes.
+Table creation approval does not authorize importing rows or configuring a
+schedule. A later report import must verify UTC timestamp round-trip separately.
+
+The full offline verifier found an omitted conditional-variable group in the
+environment contract test. The corrected assertion checks the exact staging
+bindings and the union of all supported profiles against the installation example;
+it also proves Form 1 provenance is not mandatory for existing Journey-core routes.
+No runtime guard, required secret, live variable or existing acceptance allocation
+was changed to obtain that result. Source publication is tracked in PR #90;
+the current bridge remains undeployed pending its exact held-installation packet.
+
+2026-09-19 verification: independent source review found no actionable remaining
+defect. The canonical `tools/verify.ps1 -Mode Quick` passed with pinned Node
+24.19.0 and CPython 3.12: 1,562 Node and 445 Python tests passed, zero failed.
+Thirty dependency-installing artifact tests were intentionally skipped in offline
+mode; one Git Bash syntax test was unavailable in the Windows child-process
+sandbox. Skips are not passes. Safety/workflow checks and local demo generation
+passed. No hosted CI, cloud execution, deployment, CRM write, send or provider
+operation was part of these checks. New-panel visual acceptance remains open.
+
+The PR #90 publication checks subsequently exposed a local approval-ledger race:
+SQLite can remove its optional rollback journal after directory enumeration but
+before metadata/ACL inspection. The narrow correction accepts only confirmed
+journal disappearance, retaining required database, ACL, type, empty-file,
+schema/integrity and exact replay guards. Synthetic regression and repeated
+ten-process checks preserve one winner and nine replays; no real ledger or claim
+is repaired, deleted or consumed. Late review also reproduced the completed-replay
+expiry and reader-deadline issues described above. Their regressions preserve
+new-claim expiry, partial-claim reconciliation and pre-provider dispatch. These
+are source corrections, not Development acceptance or a new live allocation.
 
 Reproduce its isolated synthetic checks from the repository root with the pinned
 Node runtime on `PATH`:
 
 ```powershell
 node --test src/zoho-catalyst/revenue-desk-release/test/free-test-configuration-review.test.js src/zoho-catalyst/revenue-desk-release/test/free-test-preparation.test.js
+node --require ./src/zoho-catalyst/revenue-desk-release/test/helpers/offline-test-bootstrap.js --test src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_route_control/test/configuration-staging-service.test.js
 ```
 
 Authenticated event → canonical minimized call → durable notification outbox →

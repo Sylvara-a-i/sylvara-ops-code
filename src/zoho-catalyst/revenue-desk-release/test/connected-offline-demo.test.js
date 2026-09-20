@@ -149,6 +149,33 @@ test('repeatable prepared setup to gateway, worker, report and actual CRM summar
   assert.equal(b.report.callsCaptured, 25);
 });
 
+test('configuration rehearsal creates exact rows then approves without activation or duplicate effects', async () => {
+  const result = await runFreeTestDemo();
+  const rehearsal = result.configurationStagingRehearsal;
+  assert.equal(rehearsal.label, 'Synthetic Demo — No Live Calls');
+  assert.deepEqual(rehearsal.effects, { network: 0, provider: 0, crm: 0, email: 0, sms: 0 });
+  assert.equal(rehearsal.scenarios.length, 2);
+  assert.deepEqual(rehearsal.scenarios.map((row) => row.retainedCoreApproval), [true, false]);
+  assert.notEqual(rehearsal.scenarios[0].recipient, rehearsal.scenarios[1].recipient);
+  for (const row of rehearsal.scenarios) {
+    assert.equal(row.evidenceClass, 'production_staging_and_approval_with_memory_adapters');
+    assert.equal(row.staged.testStatus, 'Ready for Approval');
+    assert.equal(row.staged.approvalStatus, 'Pending Internal Approval');
+    assert.equal(row.staged.replayed, true);
+    assert.equal(row.approved.testStatus, 'Scheduled');
+    assert.equal(row.approved.approvalStatus, 'Approved');
+    assert.equal(row.approved.replayed, true);
+    assert.equal(row.approved.startedAt, null); assert.equal(row.approved.expiresAt, null);
+    assert.equal(row.approved.providerActivated, false);
+    assert.equal(row.approved.crmPointerMatches, true);
+    assert.equal(row.oldReceiptsPreserved, true);
+    assert.equal(row.advancedStagingReplayRejected, true);
+    assert.deepEqual(row.simulatedEffects, { configurationsCreated: 1, deploymentsCreated: 1,
+      stagingCrmWrites: 1, approvalCrmWrites: 1 });
+  }
+  assert.equal(result.simulatedEffects.canonicalCalls, 32);
+});
+
 test('demo rehearses early operator rollback through the real control service without changing baseline reports', async () => {
   const result = await runFreeTestDemo();
   const stop = result.earlyStopRehearsal;

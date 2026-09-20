@@ -1,7 +1,9 @@
 'use strict';
 
-// Report-only local adapter. It never reads CRM, authenticates supplied evidence,
-// changes a record, or promotes a customer's estimate to verified revenue.
+// Shared pure mapping for controller-owned pre-test capture and local reports.
+// It never reads CRM, authenticates supplied evidence, changes a record, or
+// promotes a customer's estimate to verified revenue. Runtime callers must
+// obtain the projected inputs from their authenticated, bounded adapters.
 const { invariant } = require('./errors');
 
 const MAX_READBACK_AGE_MS = 15 * 60 * 1000;
@@ -163,23 +165,35 @@ function buildBaseline(input, now, freshCapture) {
   const modified = timestamp(deal.Modified_Time);
   const readAt = timestamp(evidence.readAt);
   const captured = timestamp(evidence.capturedAt);
-  requireBaseline(Number.isSafeInteger(now) && modified <= readAt && readAt <= captured
-    && captured - readAt <= MAX_READBACK_AGE_MS && captured <= now
+  requireBaseline(Number.isSafeInteger(now) && modified <= readAt && modified <= captured
+    && captured <= now
     && sourcePeriod.end <= captured,
   'CRM_BASELINE_TIMING_INVALID');
   if (freshCapture) {
-    requireBaseline(now - captured <= MAX_READBACK_AGE_MS
-      && now - readAt <= MAX_READBACK_AGE_MS, 'CRM_BASELINE_TIMING_INVALID');
+    // Revalidation records the actual server read time, never a fabricated
+    // earlier time. The source must still predate the reviewed capture; later
+    // edits cannot be treated as the same immutable baseline.
+    requireBaseline(readAt <= now && now - captured <= MAX_READBACK_AGE_MS
+      && now - readAt <= MAX_READBACK_AGE_MS
+      && Math.abs(captured - readAt) <= MAX_READBACK_AGE_MS, 'CRM_BASELINE_TIMING_INVALID');
   } else {
     const testStarted = timestamp(context.testStartedAt);
-    requireBaseline(captured <= testStarted && testStarted <= now, 'CRM_BASELINE_TIMING_INVALID');
+    requireBaseline(readAt <= captured && captured - readAt <= MAX_READBACK_AGE_MS
+      && captured <= testStarted && testStarted <= now, 'CRM_BASELINE_TIMING_INVALID');
   }
   requireBaseline(exactObject(metadata, ['source', 'observedAt', 'fields'])
     && metadata.source === 'crm_field_metadata_readback'
     && exactObject(metadata.fields, Object.keys(METADATA_FIELDS)), 'CRM_BASELINE_METADATA_UNVERIFIED');
   const observed = timestamp(metadata.observedAt);
-  requireBaseline(observed <= captured && captured - observed <= MAX_READBACK_AGE_MS
-    && (!freshCapture || now - observed <= MAX_READBACK_AGE_MS),
+  // The configuration writer independently re-reads metadata after the owner
+  // reviews an exact fresh capture. That later observation can validate the
+  // same immutable values, but may not be future-dated or outside the capture's
+  // bounded window. Historical reports still require original pre-capture
+  // metadata: they cannot repair old provenance with today's field choices.
+  requireBaseline(freshCapture
+    ? observed <= now && now - observed <= MAX_READBACK_AGE_MS
+      && Math.abs(captured - observed) <= MAX_READBACK_AGE_MS
+    : observed <= captured && captured - observed <= MAX_READBACK_AGE_MS,
     'CRM_BASELINE_METADATA_UNVERIFIED');
   for (const [field, dataType] of Object.entries(METADATA_FIELDS)) {
     const spec = metadata.fields[field];

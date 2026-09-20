@@ -477,6 +477,85 @@ async function ownerHandoffRehearsal() {
     effects: { network: 0, provider: 0, crm: 0, email: 0, sms: 0 } };
 }
 
+// This is a separate rehearsal, not retroactive evidence for the baseline call
+// reports. Real staging/approval code starts with empty in-memory configuration
+// tables; Form/CRM/conversion facts are explicitly synthetic boundary fixtures.
+async function configurationStagingRehearsal() {
+  const { createStagingFixture, SyntheticStore } = require(path.join(catalystRoot,
+    'revenue-desk-call-runtime/functions/revenue_desk_route_control/test/helpers/configuration-staging-fixture'));
+  const { createRouteControlService } = require(path.join(runtimeRoot, 'lib/route-control-service'));
+  const store = new SyntheticStore();
+  const scenarios = [];
+  for (const index of [0, 1]) {
+    const f = createStagingFixture(index, { store });
+    const tables = f.config.tables;
+    const before = { configurations: store.rowsFor(tables.CONFIGURATION_VERSION_TABLE).length,
+      deployments: store.rowsFor(tables.DEPLOYMENT_TABLE).length };
+    if (index === 0) await f.core.approve(f.coreApprovalCommand);
+    const priorReceipts = structuredClone(store.rowsFor(tables.EVENT_RECEIPT_TABLE));
+    const priorConfiguration = f.records.deal.Approved_Configuration_Version ?? null;
+    const staged = await f.service.stage(f.request);
+    const writesBeforeReplay = store.writes.length;
+    const stagedReplay = await f.service.stage(f.request);
+    assert.equal(store.writes.length, writesBeforeReplay);
+    const deploymentId = f.request.deployment.DEPLOYMENT_ID;
+    const configurationVersionId = f.request.configurationRow.CONFIGURATION_VERSION_ID;
+    const stagedDeployment = await store.unique(tables.DEPLOYMENT_TABLE, 'DEPLOYMENT_ID', deploymentId);
+    let approvalWrites = 0;
+    let providerAccesses = 0;
+    // The production CRM CAS adapter is tested independently. This fake boundary
+    // makes the exact approval patch observable without ever importing an SDK.
+    const crm = { ...f.crm, async recordApproval(dealId, value) {
+      assert.equal(dealId, f.request.dealId);
+      assert.deepEqual(f.records.deal, value.expectedDeal);
+      assert.equal(value.configurationStaged, true);
+      if (f.records.deal.Approved_Deployment_Record_ID === deploymentId
+        && f.records.deal.Approved_Configuration_Version === configurationVersionId) return;
+      if (priorConfiguration) assert.equal(value.priorCoreApproval.configurationVersionId, priorConfiguration);
+      approvalWrites += 1;
+      Object.assign(f.records.deal, { Test_Status: 'Scheduled', Go_Live_Approval_Status: 'Approved',
+        Approved_Configuration_Version: configurationVersionId,
+        Approved_Deployment_Record_ID: deploymentId, Go_Live_Approved_At: value.approvedAt });
+    } };
+    const control = createRouteControlService({ config: f.config, store, crm,
+      configurationStaging: f.service, now: f.now,
+      provider: new Proxy({}, { get() { providerAccesses += 1; throw new Error('OFFLINE_PROVIDER_FORBIDDEN'); } }) });
+    const command = { dealId: f.request.dealId, journeyId: f.request.journeyId,
+      deploymentId, configurationVersionId,
+      idempotencyKey: `00000000-0000-4000-8000-00000000000${index + 1}` };
+    const approval = await control.approve(command);
+    const writesBeforeApprovalReplay = store.writes.length;
+    const approvalReplay = await control.approve(command);
+    assert.equal(store.writes.length, writesBeforeApprovalReplay);
+    await assert.rejects(f.service.stage(f.request), { code: 'CONFIGURATION_STAGING_STATE_ADVANCED' });
+    const after = await store.unique(tables.DEPLOYMENT_TABLE, 'DEPLOYMENT_ID', deploymentId);
+    assert.equal(after.ACTUAL_START_AT, null); assert.equal(after.EXPIRES_AT, null);
+    assert.equal(after.ACTIVATION_EVENT_KEY, null); assert.equal(providerAccesses, 0);
+    for (const prior of priorReceipts) assert.deepEqual(
+      store.rowsFor(tables.EVENT_RECEIPT_TABLE).find((row) => row.ROWID === prior.ROWID), prior);
+    const configuration = JSON.parse(f.request.configurationRow.CONFIGURATION_JSON);
+    scenarios.push({ company: index === 0 ? 'A' : 'B',
+      evidenceClass: 'production_staging_and_approval_with_memory_adapters',
+      retainedCoreApproval: index === 0,
+      staged: { state: staged.state, testStatus: stagedDeployment.TEST_STATUS,
+        approvalStatus: stagedDeployment.GO_LIVE_APPROVAL_STATUS,
+        replayed: stagedReplay.replayed, duplicateWrites: 0 },
+      approved: { testStatus: approval.deployment.TEST_STATUS,
+        approvalStatus: after.GO_LIVE_APPROVAL_STATUS, replayed: approvalReplay.replayed,
+        startedAt: after.ACTUAL_START_AT, expiresAt: after.EXPIRES_AT,
+        providerActivated: false, crmPointerMatches: f.records.deal.Approved_Configuration_Version === configurationVersionId },
+      recipient: configuration.notificationRecipient.email,
+      followUpOwner: configuration.notificationRecipient.name,
+      oldReceiptsPreserved: true, advancedStagingReplayRejected: true,
+      simulatedEffects: { configurationsCreated: store.rowsFor(tables.CONFIGURATION_VERSION_TABLE).length - before.configurations,
+        deploymentsCreated: store.rowsFor(tables.DEPLOYMENT_TABLE).length - before.deployments,
+        stagingCrmWrites: f.stagingWrites, approvalCrmWrites: approvalWrites } });
+  }
+  assert.notEqual(scenarios[0].recipient, scenarios[1].recipient);
+  return { label: 'Synthetic Demo — No Live Calls', scenarios,
+    effects: { network: 0, provider: 0, crm: 0, email: 0, sms: 0 } };
+}
+
 async function runFreeTestDemo() {
   const guard = installOfflineGuard();
   try {
@@ -579,11 +658,13 @@ async function runFreeTestDemo() {
     assert.equal(h.runtime.mailAccesses, 0);
     const operatorStop = await earlyStopRehearsal();
     const ownerHandoff = await ownerHandoffRehearsal();
+    const configurationStaging = await configurationStagingRehearsal();
     assert.equal(guard.blocked.length, 0);
     return {
       label: 'SYNTHETIC DEMONSTRATION — NO LIVE CALLS', companies,
       earlyStopRehearsal: operatorStop,
       ownerHandoffRehearsal: ownerHandoff,
+      configurationStagingRehearsal: configurationStaging,
       checks: { distinctCompanyOwnership: true, gatewayWorkerReportConnected: true,
         preparedConfigurationUsed: true, approvalAndActivationExplicitlySimulated: true,
         reportOnlyCrmReadback: true, replayWithoutSecondWrite: true, sevenDayExpiry: true,
@@ -591,6 +672,7 @@ async function runFreeTestDemo() {
         earlyOperatorStop: true,
         ownerAlertDeliveryRehearsed: true,
         acknowledgmentAndCallbackNotAssumed: true,
+        authenticatedConfigurationStagingRehearsed: true,
         absentAnalysisWithheld: true, lateAnalysisReportRevision: true,
         completedCrmSummaryRevision: true, previousCompletedReceiptPreserved: true,
         actualVoiceOrForwardingProved: false },

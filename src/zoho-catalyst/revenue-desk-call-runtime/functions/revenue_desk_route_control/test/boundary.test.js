@@ -9,6 +9,7 @@ const { createRetellRouteProvider } = require('../lib/retell-route-provider');
 const { deterministicIdempotencyKey } = require('../lib/journey-core-service');
 const { RevenueDeskError } = require('revenue_desk_call_gateway/lib/errors');
 const { numberLookupKey } = require('revenue_desk_call_gateway/lib/security');
+const { PROFILE } = require('../lib/configuration-staging-service');
 
 const REVISION = 'a'.repeat(40);
 const PROJECT_ID = '101000001';
@@ -62,6 +63,33 @@ function response() {
     end(value) { this.body = JSON.parse(value); },
   };
 }
+
+test('authenticated configuration staging binds reader deadlines before dispatch and rejects other actions', async () => {
+  let providers = 0; let stages = 0;
+  const readerTimeouts = [];
+  const listener = createRequestListener({ environment: environment(), artifactSourceRevision: REVISION,
+    catalystSdk: { initialize() { return { config: { environment: 'development', projectId: PROJECT_ID } }; } },
+    factories: { crm: () => ({}), store: () => ({}), core: () => ({}), evidence: () => ({}),
+      configurationSource: () => ({}),
+      configurationConversion: ({ timeoutMs }) => { readerTimeouts.push(['conversion', timeoutMs]); return {}; },
+      configurationMetadata: ({ timeoutMs }) => { readerTimeouts.push(['metadata', timeoutMs]); return {}; },
+      staging: () => ({ async stage() { stages += 1; return { state: 'StagedInactive', replayed: false,
+        configurationVersionId: 'synthetic_configuration', deploymentId: 'synthetic_deployment' }; } }),
+      provider: () => { providers += 1; throw new Error('Provider construction prohibited'); } } });
+  for (const action of ['approve-configuration', 'activate-free-test']) {
+    const output = response();
+    await listener({ method: 'POST', url: `/internal/revenue-desk/${action}`,
+      headers: { host: 'route-control.development.catalystserverless.com',
+        'x-zc-environment': 'development', 'x-zc-projectid': PROJECT_ID,
+        'x-synthetic-control': 'h'.repeat(32), 'content-type': 'application/json' },
+      rawBody: Buffer.from(JSON.stringify({ profile: PROFILE })) }, output);
+    assert.equal(output.statusCode, action === 'approve-configuration' ? 200 : 400);
+    if (output.statusCode === 200) assert.deepEqual({ active: output.body.active, approved: output.body.approved },
+      { active: false, approved: false });
+  }
+  assert.equal(stages, 1); assert.equal(providers, 0);
+  assert.deepEqual(readerTimeouts, [['conversion', 3000], ['metadata', 3000]]);
+});
 
 function isolatedConfig() {
   return loadConfig(environment({

@@ -59,6 +59,25 @@ function handoffView(rehearsal) {
 /** Render only the fixed synthetic harness output. No endpoints or live actions.
  * Derived backend evidence and illustrative journey history remain distinct.
  */
+function configurationStagingView(scenario) {
+  if (!scenario) return '';
+  return `<h4>Submitted setup → reviewed configuration → internal approval</h4>
+    <p>Separate synthetic rehearsal: actual staging and approval code, with fake Form/CRM/conversion inputs and in-memory tables. No configuration is created in Development, and no provider is contacted. These rows do not backfill the baseline call reports.</p>
+    <table><tbody>${rows([
+    ['Reviewed recipient', scenario.recipient], ['Named follow-up owner', scenario.followUpOwner],
+    ['After configuration creation', `${scenario.staged.testStatus} / ${scenario.staged.approvalStatus}`],
+    ['After separate internal approval', `${scenario.approved.testStatus} / ${scenario.approved.approvalStatus}`],
+    ['Duplicate staging writes', scenario.staged.duplicateWrites],
+    ['Approval replay reuses its receipt', scenario.approved.replayed],
+    ['CRM approval points to exact configuration', scenario.approved.crmPointerMatches],
+    ['Old receipts preserved', scenario.oldReceiptsPreserved],
+    ['Old staging action rejects advanced state', scenario.advancedStagingReplayRejected],
+    ['Actual test start', scenario.approved.startedAt], ['Actual expiry', scenario.approved.expiresAt],
+    ['Provider activation performed', scenario.approved.providerActivated],
+  ])}</tbody></table>
+    <p class="note">Internal approval is not Live. Source lineage, current metadata, private review signatures and the real CRM write/readback still require their bounded Development acceptance; these synthetic facts do not certify them.</p>`;
+}
+
 function renderFreeTestDemo(demo) {
   if (!demo || !Array.isArray(demo.companies) || demo.companies.length !== 2
     || !demo.label?.startsWith('SYNTHETIC DEMONSTRATION')) throw new Error('SYNTHETIC_DEMO_REQUIRED');
@@ -85,7 +104,8 @@ function renderFreeTestDemo(demo) {
         <p class="note">Phone formatting does not prove ownership or forwarding. Overflow and combined coverage remain blocked until provider timing has a verified value, unit and source.</p></section>
       <section data-step="2"><p class="eyebrow">3 · Authorization</p><h3>Approval does not start the test</h3>
         <ol><li>Representative verification and scope acceptance.</li><li>Successful Form 2 receipt and exact CRM relationships.</li><li>Internal configuration review and approval.</li><li>Separate provider activation and independent readback — later, not performed here.</li></ol>
-        <p>The seven-day clock begins only after verified activation. The local harness uses explicitly simulated activation facts, not live approval or telephone evidence.</p></section>
+        <p>The seven-day clock begins only after verified activation. The local harness uses explicitly simulated activation facts, not live approval or telephone evidence.</p>
+        ${configurationStagingView(demo.configurationStagingRehearsal?.scenarios[index])}</section>
       <section data-step="3"><p class="eyebrow">4 · Capture</p><h3>What an intake call would capture</h3>
         <p>Name, callback number, new or existing customer, service request, city/ZIP, urgency, and any requested person. No booking, dispatch, transfer, payment or SMS.</p>
         <div class="table-wrap"><table><thead><tr><th>Illustrative outcome</th><th>Customer</th><th>Urgency</th><th>Evidence</th></tr></thead><tbody>${report.calls.map((call) => `<tr><td>${escape(call.outcome)}</td><td>${escape(call.customerType)}</td><td>${escape(call.urgency)}</td><td>${call.analysisEvidenceComplete ? 'Synthetic fields complete' : 'Incomplete / unknown preserved'}</td></tr>`).join('')}</tbody></table></div>

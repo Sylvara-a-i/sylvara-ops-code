@@ -576,8 +576,19 @@ test('unit: environment registry permits only minimal Production dark mode and r
   ];
   assert.equal(new Set(routeControlNames).size, routeControlNames.length,
     'route-control variable ownership must not duplicate a variable');
+  assert.deepEqual(routeControlSet.required_for_configuration_staging, [
+    'FORM1_DESTINATION_SHA256', 'RETELL_TEST_PHONE_NUMBER',
+    'RETELL_SHARED_AGENT_ID', 'RETELL_SHARED_AGENT_VERSION',
+  ], 'staging must pin original Form 1 provenance and the exact dedicated number/agent version');
+  assert.equal(routeControlSet.always_required.includes('FORM1_DESTINATION_SHA256'), false,
+    'staging provenance must not become a new prerequisite for accepted Journey-core routes');
+  // Conditional profiles legitimately share provider bindings. Validate their
+  // exact sets above, then compare the union against the installation example.
+  const allRouteControlNames = [...new Set([
+    ...routeControlNames, ...routeControlSet.required_for_configuration_staging,
+  ])];
   const registryNames = new Set(registry.variables.map(({ name }) => name));
-  assert.equal(routeControlNames.every((name) => registryNames.has(name)), true,
+  assert.equal(allRouteControlNames.every((name) => registryNames.has(name)), true,
     'every route-control variable must be documented in the shared registry');
   const routeControlExample = fs.readFileSync(path.join(
     __dirname, '..', '..', 'revenue_desk_route_control', '.env.example',
@@ -587,7 +598,7 @@ test('unit: environment registry permits only minimal Production dark mode and r
     .map((line) => line.slice(0, line.indexOf('=')));
   assert.equal(new Set(routeControlExampleNames).size, routeControlExampleNames.length,
     'route-control environment example must not duplicate a variable');
-  assert.deepEqual(routeControlExampleNames.sort(), routeControlNames.sort(),
+  assert.deepEqual(routeControlExampleNames.sort(), allRouteControlNames.sort(),
     'route-control install ownership must exactly match its environment example');
   const workerExample = fs.readFileSync(path.join(
     __dirname, '..', '..', 'revenue_desk_call_worker', '.env.example',
