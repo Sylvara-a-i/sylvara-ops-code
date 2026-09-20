@@ -11,9 +11,11 @@ const {
 } = require('../lib/free-test-staging-packet');
 
 const MAX_INPUT_BYTES = 1024 * 1024;
-const MAX_SECRET_BYTES = 4096;
+// A valid 4,096-code-unit JavaScript string can require at most 12,288 UTF-8
+// bytes (three bytes per BMP code unit). The library enforces code-unit length.
+const MAX_SECRET_BYTES = 12_288;
 const BASE_ARGUMENTS = Object.freeze([
-  '--input', '--output', '--expected-revision', '--expected-operator-hash',
+  '--input', '--output', '--expected-revision', '--expected-operator-hash', '--max-body-bytes',
 ]);
 const WINDOWS_PRIVATE_PATH_HELPER = path.resolve(__dirname,
   'sign-free-test-staging-packet-private.ps1');
@@ -31,12 +33,15 @@ function fail(condition, code) {
 function parseArguments(argv) {
   const expectedArguments = process.platform === 'win32'
     ? [...BASE_ARGUMENTS, '--powershell-path'] : [...BASE_ARGUMENTS];
-  fail(Array.isArray(argv) && argv.length === expectedArguments.length * 2,
-    'INVALID_ARGUMENTS');
+  fail(Array.isArray(argv), 'INVALID_ARGUMENTS');
+  const validateOnlyCount = argv.filter((value) => value === '--validate-only').length;
+  fail(validateOnlyCount <= 1, 'INVALID_ARGUMENTS');
+  const pairedArguments = argv.filter((value) => value !== '--validate-only');
+  fail(pairedArguments.length === expectedArguments.length * 2, 'INVALID_ARGUMENTS');
   const values = {};
-  for (let index = 0; index < argv.length; index += 2) {
-    const name = argv[index];
-    const value = argv[index + 1];
+  for (let index = 0; index < pairedArguments.length; index += 2) {
+    const name = pairedArguments[index];
+    const value = pairedArguments[index + 1];
     fail(expectedArguments.includes(name) && !Object.hasOwn(values, name)
       && typeof value === 'string' && value.length > 0,
     'INVALID_ARGUMENTS');
@@ -45,12 +50,15 @@ function parseArguments(argv) {
   fail(expectedArguments.every((name) => Object.hasOwn(values, name)), 'INVALID_ARGUMENTS');
   fail(path.isAbsolute(values['--input']) && path.isAbsolute(values['--output']),
     'ABSOLUTE_PRIVATE_PATHS_REQUIRED');
+  fail(/^[1-9][0-9]{2,4}$/.test(values['--max-body-bytes']), 'INVALID_ARGUMENTS');
   return Object.freeze({
     input: path.resolve(values['--input']),
     output: path.resolve(values['--output']),
     expectedRevision: values['--expected-revision'],
     expectedOperatorHash: values['--expected-operator-hash'],
+    maxBodyBytes: Number(values['--max-body-bytes']),
     powershellPath: values['--powershell-path'] || null,
+    validateOnly: validateOnlyCount === 1,
   });
 }
 
@@ -165,12 +173,7 @@ function readSecret() {
       if (count === 0) break;
       length += count;
     }
-    fail(length >= 32 && length <= MAX_SECRET_BYTES,
-      'INVALID_STAGING_SIGNING_SECRET');
-    for (let index = 0; index < length; index += 1) {
-      fail(bytes[index] >= 0x21 && bytes[index] <= 0x7e,
-        'INVALID_STAGING_SIGNING_SECRET');
-    }
+    fail(length <= MAX_SECRET_BYTES, 'INVALID_STAGING_SIGNING_SECRET');
     return { allocation: bytes, secret: bytes.subarray(0, length) };
   } catch (error) {
     bytes.fill(0);
@@ -227,14 +230,30 @@ function main() {
   validateUnsignedStagingEnvelope(envelope, {
     expectedRevision: args.expectedRevision,
     expectedOperatorHash: args.expectedOperatorHash,
+    maxBodyBytes: args.maxBodyBytes,
     now,
   });
+  if (args.validateOnly) {
+    // The owner wrapper must learn about stale/oversized/incomplete input
+    // before opening its protected key-entry dialog. This mode never signs,
+    // reads stdin, creates an output file or attempts any submission.
+    process.stdout.write(`${JSON.stringify({
+      status: 'VALIDATED_UNSIGNED_PACKET_NO_SIGNATURE',
+      sourceRevision: args.expectedRevision,
+      maxBodyBytes: args.maxBodyBytes,
+      profile: PROFILE,
+      signaturePresent: false,
+      submitted: false,
+    })}\n`);
+    return;
+  }
   const protectedInput = readSecret();
   try {
     const signed = signFreeTestStagingPacket(envelope, {
       secret: protectedInput.secret,
       expectedRevision: args.expectedRevision,
       expectedOperatorHash: args.expectedOperatorHash,
+      maxBodyBytes: args.maxBodyBytes,
       // Owner review can remain open. Re-evaluate freshness at the actual
       // signing boundary rather than relying on the earlier no-secret check.
       now: Date.now(),
@@ -246,6 +265,7 @@ function main() {
     process.stdout.write(`${JSON.stringify({
       status: 'SIGNED_PACKET_READY_NO_SUBMISSION',
       sourceRevision: signed.sourceRevision,
+      maxBodyBytes: signed.maxBodyBytes,
       profile: PROFILE,
       byteLength: signed.byteLength,
       sha256: signed.sha256,

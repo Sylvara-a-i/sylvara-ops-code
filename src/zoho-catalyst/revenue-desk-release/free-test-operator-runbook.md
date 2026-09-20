@@ -333,7 +333,7 @@ this table is the sanitized operating view, not a new release contract.
 | Gate | Current evidence and revision | Remaining action | Cost class | Approval needed | Status |
 | --- | --- | --- | --- | --- | --- |
 | G1 Public/assisted entry and native relationships | Accepted assisted Forms/conversion retained; `5227abe` installed held; public native mapping read back | Complete narrow read grant and affected public identity/retry acceptance | Offline now; cloud allowance must be confirmed | Owner grant; exact readback/fixture allocation; no reused canary | Public runtime continuation unverified; assisted evidence retained |
-| G2 Authenticated configuration review/staging | `5227abe` controller installed held; owner packet tooling remains a separate local source change | Fresh complete private preparation, protected owner signing, exact staging and independent readback | Offline now; contained Development later | Owner values/key entry; exact staging allocation | Installed under hold; no authenticated staging acceptance |
+| G2 Authenticated configuration review/staging | `5227abe` controller installed held; owner packet tooling is source-only; reviewed 4,096-byte body limit is smaller than the 6,024-byte synthetic packet | Fresh nonsecret body-limit readback and exact approved limit migration if needed; complete private preparation, protected signing, staging/readback | Offline now; contained Development later | Owner values/key entry; exact configuration/staging allocation | Installed under hold; packet-size/configuration prerequisite and runtime acceptance pending |
 | G3 Coverage and restoration preparation | After-hours fixtures; new owner-attested overflow/combined snapshot contract | Actual originating-provider setting/unit/evidence and later execution binding; preserve original handling | Local preparation only | Owner evidence; separate provider phase for live behavior | Preparation only; overflow/combined execution held |
 | G4 Call-to-owner handoff | H1–H10 source at `c28affd`, separate dry-run/acceptance/delivery meanings | Named monitored owner, actual alert adapter/inbox proof and bounded recovery readback | No real sending now | Exact owner-only email and runtime allocation | Source complete; Development 0/10 |
 | G5 Clock, limit, stop and settlement | Offline limits/races/reports; early-stop correction retained in `5227abe` held installation | Scoped installed-runtime containment and report reconciliation | Offline passed; cloud later | Exact synthetic acceptance allocation | Installed evidence is not runtime proof |
@@ -505,7 +505,7 @@ the operation is blocked before signing. Never adapt the synthetic fixture for
 live use. The historical generic review signature has the wrong domain here.
 
 Use only the reviewed Windows wrapper for real owner input. It requires the
-SHA-pinned PowerShell 7.6.5 runtime in STA mode, Node 24.19.0, a clean reviewed
+SHA-pinned PowerShell 7.6.5 runtime in STA mode, SHA-pinned Node 24.19.0, a clean reviewed
 utility commit, and existing private NTFS locations
 outside any Git checkout. It checks access without changing ACLs, holds the input
 read-only during review, and asks the owner to review the exact packet before
@@ -518,13 +518,23 @@ The operator supplies these nonsecret parameters for the exact reviewed build;
 the placeholders below are not a runnable live allocation:
 
 ```powershell
-pwsh -NoProfile -STA -File src/zoho-catalyst/revenue-desk-release/scripts/sign-free-test-staging-packet-private.ps1 -InputPath '<PRIVATE_UNSIGNED_PACKET>' -OutputPath '<NEW_PRIVATE_SIGNED_PACKET>' -NodePath '<PINNED_NODE_24_19_0>' -UtilityRevision '<REVIEWED_UTILITY_COMMIT>' -ExpectedRevision '<INSTALLED_CONTROLLER_REVISION>' -ExpectedOperatorHash '<BOUND_OPERATOR_HASH>'
+pwsh -NoProfile -STA -File src/zoho-catalyst/revenue-desk-release/scripts/sign-free-test-staging-packet-private.ps1 -InputPath '<PRIVATE_UNSIGNED_PACKET>' -OutputPath '<NEW_PRIVATE_SIGNED_PACKET>' -NodePath '<PINNED_NODE_24_19_0>' -UtilityRevision '<REVIEWED_UTILITY_COMMIT>' -ExpectedRevision '<INSTALLED_CONTROLLER_REVISION>' -ExpectedOperatorHash '<BOUND_OPERATOR_HASH>' -MaxBodyBytes '<VERIFIED_ROUTE_CONTROL_MAX_BODY_BYTES>'
 ```
 
 `UtilityRevision` pins the tool checkout; `ExpectedRevision` pins the intended
 installed controller. They need not be identical, and the tool must never change
-a runtime revision label to make them match. The child inherits no credential or
-Node-option environment; the secret passes through bounded stdin, not a terminal
+a runtime revision label to make them match. `MaxBodyBytes` must come from fresh
+secret-safe readback of Development `ROUTE_CONTROL_MAX_BODY_BYTES`; it has no
+default. The 16,384-byte supported ceiling is not proof of the deployed setting.
+The reviewed configuration value is 4,096, while the normal synthetic packet is
+6,024 bytes. That combination deliberately rejects **before key entry**. Do not
+truncate evidence or silently raise the parameter. An exact contained runtime
+configuration migration and independent readback are prerequisites when the real
+packet exceeds the installed limit; no migration is performed by this utility.
+Both interpreters are verified before use, and the Node file is held against
+replacement through signing. The child inherits no credential or
+Node-option environment; the secret passes through bounded UTF-8 stdin without
+trimming or narrowing the runtime's accepted character set, not a terminal
 prompt. It creates a new private packet exclusively, never overwrites one, and
 returns only a coarse result/digest. Buffers are cleared where possible; this is
 not a claim that a managed runtime guarantees memory erasure. No HTTP client,

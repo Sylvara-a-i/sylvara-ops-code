@@ -7,6 +7,7 @@ param(
     [Parameter(Mandatory, ParameterSetName = 'Sign')][ValidatePattern('^[a-f0-9]{40}$')][string]$UtilityRevision,
     [Parameter(Mandatory, ParameterSetName = 'Sign')][ValidatePattern('^[a-f0-9]{40}$')][string]$ExpectedRevision,
     [Parameter(Mandatory, ParameterSetName = 'Sign')][ValidatePattern('^operator_[a-f0-9]{64}$')][string]$ExpectedOperatorHash,
+    [Parameter(Mandatory, ParameterSetName = 'Sign')][ValidateRange(512, 16384)][int]$MaxBodyBytes,
     [Parameter(Mandatory, ParameterSetName = 'Check')][switch]$CheckPrivatePaths,
     [Parameter(ParameterSetName = 'Check')][switch]$OutputExists
 )
@@ -15,7 +16,9 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $taskProcess = $null
 $taskInputLock = $null
+$taskNodeLock = $null
 $taskBytes = $null
+$taskChars = $null
 $taskBox = $null
 $taskWindow = $null
 $taskSecretPointer = [IntPtr]::Zero
@@ -62,6 +65,32 @@ function Assert-PrivatePath([string]$Path, [bool]$Directory) {
     return $taskItem.FullName
 }
 
+function Open-TrustedNode([string]$Path) {
+    # A version string is not executable identity. Authenticate the reviewed
+    # Windows Node artifact before executing it or accepting an owner key.
+    Assert-LocalPathName $Path
+    $taskRuntime = Get-Item -LiteralPath $Path -Force
+    if ($taskRuntime.PSIsContainer -or $taskRuntime.Name -ine 'node.exe' -or
+        ($taskRuntime.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Runtime rejected' }
+    $taskAncestor = $taskRuntime.Directory
+    while ($null -ne $taskAncestor) {
+        if ($taskAncestor.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Runtime rejected' }
+        $taskAncestor = $taskAncestor.Parent
+    }
+    $taskRuntimeLock = [IO.File]::Open($taskRuntime.FullName, [IO.FileMode]::Open,
+        [IO.FileAccess]::Read, [IO.FileShare]::Read)
+    try {
+        $taskDigest = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($taskRuntimeLock)).ToLowerInvariant()
+        if ($taskDigest -cne '3602f2bb1a10f2cbab4c36886218a33c1ab3db87290e73b033c46c77147d0237') { throw 'Runtime rejected' }
+        # Retain this read-only handle until signing exits so the checked bytes
+        # cannot be replaced or modified during private owner review.
+        return [pscustomobject]@{ Path = $taskRuntime.FullName; Stream = $taskRuntimeLock }
+    } catch {
+        $taskRuntimeLock.Dispose()
+        throw
+    }
+}
+
 # The Node CLI calls this fixed read-only branch before consuming owner stdin,
 # and again after writing, so direct Windows CLI use cannot bypass ACL checks.
 # It runs on Windows PowerShell 5.1 without loading WPF or executing a child.
@@ -96,14 +125,14 @@ function New-PrivateProcess([string]$Executable, [string[]]$Arguments) {
     return $taskChild
 }
 
-function Read-LocalCheck([string]$Executable, [string[]]$Arguments) {
+function Read-LocalCheck([string]$Executable, [string[]]$Arguments, [int]$TimeoutMs = 15000) {
     $taskChild = New-PrivateProcess $Executable $Arguments
     try {
         if (-not $taskChild.Start()) { throw 'Check stopped' }
         $taskChild.StandardInput.Close()
         $taskOutput = $taskChild.StandardOutput.ReadToEndAsync()
         $taskErrors = $taskChild.StandardError.ReadToEndAsync()
-        if (-not $taskChild.WaitForExit(15000)) { throw 'Check stopped' }
+        if (-not $taskChild.WaitForExit($TimeoutMs)) { throw 'Check stopped' }
         if ($taskChild.ExitCode -ne 0 -or $taskErrors.GetAwaiter().GetResult().Length -ne 0) { throw 'Check stopped' }
         return $taskOutput.GetAwaiter().GetResult().Trim()
     } finally {
@@ -120,7 +149,9 @@ try {
     if (Test-Path -LiteralPath $OutputPath) { throw 'Output rejected' }
     $taskOutputParent = Assert-PrivatePath ([IO.Path]::GetDirectoryName($OutputPath)) $true
     $taskOutputPath = Join-Path $taskOutputParent ([IO.Path]::GetFileName($OutputPath))
-    $taskNode = (Get-Item -LiteralPath $NodePath -Force).FullName
+    $taskTrustedNode = Open-TrustedNode $NodePath
+    $taskNode = $taskTrustedNode.Path
+    $taskNodeLock = $taskTrustedNode.Stream
     if ((Read-LocalCheck $taskNode @('--version')) -cne 'v24.19.0') { throw 'Runtime rejected' }
     $taskRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../../..'))
     $taskGit = (Get-Command git -CommandType Application -ErrorAction Stop).Source
@@ -133,6 +164,16 @@ try {
     $taskInputLock = [IO.File]::Open($taskInput, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
     if ($taskInputLock.Length -gt 262144) { throw 'Input rejected' }
     $taskInputHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($taskInputLock)).ToLowerInvariant()
+    $taskHelper = Join-Path $PSScriptRoot 'sign-free-test-staging-packet.js'
+    $taskSignerArguments = @($taskHelper, '--input', $taskInput, '--output', $taskOutputPath,
+        '--expected-revision', $ExpectedRevision, '--expected-operator-hash', $ExpectedOperatorHash,
+        '--max-body-bytes', [string]$MaxBodyBytes, '--powershell-path', (Join-Path $PSHOME 'pwsh.exe'))
+    # Validate this locked input and its actual route limit before asking for
+    # protected entry. Allow the inner read-only ACL check its bounded 15s.
+    $taskPreflight = (Read-LocalCheck $taskNode ($taskSignerArguments + @('--validate-only')) 20000) | ConvertFrom-Json
+    if ($taskPreflight.status -cne 'VALIDATED_UNSIGNED_PACKET_NO_SIGNATURE' -or
+        $taskPreflight.sourceRevision -cne $ExpectedRevision -or $taskPreflight.maxBodyBytes -ne $MaxBodyBytes -or
+        $taskPreflight.signaturePresent -ne $false -or $taskPreflight.submitted -ne $false) { throw 'Preflight rejected' }
     Add-Type -AssemblyName PresentationFramework
     [xml]$taskXaml = @'
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -156,26 +197,39 @@ try {
     try { $taskWindow = [Windows.Markup.XamlReader]::Load($taskReader) } finally { $taskReader.Dispose() }
     $taskBox = $taskWindow.FindName('KeyBox')
     $taskReviewed = $taskWindow.FindName('Reviewed')
-    $taskWindow.FindName('ReviewDetails').Text = "Review file privately: $taskInput`nInput SHA-256: $taskInputHash`nTarget release: $ExpectedRevision"
+    $taskWindow.FindName('ReviewDetails').Text = "Review file privately: $taskInput`nInput SHA-256: $taskInputHash`nTarget release: $ExpectedRevision`nVerified route body limit: $MaxBodyBytes bytes"
     $taskWindow.FindName('SignButton').Add_Click({
         if ($taskReviewed.IsChecked -eq $true -and $taskBox.SecurePassword.Length -ge 32) { $taskWindow.DialogResult = $true }
     })
     if ($taskWindow.ShowDialog() -ne $true) { throw 'Cancelled' }
     if ((Read-LocalCheck $taskGit @('-C', $taskRoot, 'rev-parse', 'HEAD')) -cne $UtilityRevision -or
         (Read-LocalCheck $taskGit $taskStatusArgs).Length -ne 0) { throw 'Source rejected' }
+    $taskNodeRecheck = Open-TrustedNode $NodePath
+    try {
+        if ($taskNodeRecheck.Path -cne $taskNode) { throw 'Runtime rejected' }
+    } finally { $taskNodeRecheck.Stream.Dispose() }
     $taskSecure = $taskBox.SecurePassword
+    if ($taskSecure.Length -lt 32 -or $taskSecure.Length -gt 4096) { throw 'Secret format rejected' }
     $taskSecretPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($taskSecure)
-    $taskBytes = [byte[]]::new($taskSecure.Length)
-    for ($taskIndex = 0; $taskIndex -lt $taskBytes.Length; $taskIndex++) {
-        $taskCode = [Runtime.InteropServices.Marshal]::ReadInt16($taskSecretPointer, $taskIndex * 2)
-        if ($taskCode -lt 33 -or $taskCode -gt 126) { throw 'Secret format rejected' }
-        $taskBytes[$taskIndex] = [byte]$taskCode
+    $taskChars = [char[]]::new($taskSecure.Length)
+    try {
+        for ($taskIndex = 0; $taskIndex -lt $taskChars.Length; $taskIndex++) {
+            $taskCodeUnit = [Runtime.InteropServices.Marshal]::ReadInt16(
+                $taskSecretPointer, $taskIndex * 2)
+            $taskChars[$taskIndex] = [char]($taskCodeUnit -band 0xffff)
+        }
+        # Preserve exact runtime string content without trimming. Node encodes
+        # valid surrogate pairs normally and replaces lone UTF-16 surrogates
+        # with U+FFFD before HMAC; the replacement fallback matches that rule.
+        $taskUtf8 = [Text.UTF8Encoding]::new($false, $false)
+        $taskBytes = $taskUtf8.GetBytes($taskChars)
+        if ($taskBytes.Length -gt 12288) { throw 'Secret format rejected' }
+    } finally {
+        if ($taskChars) { [Array]::Clear($taskChars, 0, $taskChars.Length) }
+        $taskChars = $null
     }
     $taskBox.Clear()
-    $taskHelper = Join-Path $PSScriptRoot 'sign-free-test-staging-packet.js'
-    $taskProcess = New-PrivateProcess $taskNode @($taskHelper, '--input', $taskInput, '--output', $taskOutputPath,
-        '--expected-revision', $ExpectedRevision, '--expected-operator-hash', $ExpectedOperatorHash,
-        '--powershell-path', (Join-Path $PSHOME 'pwsh.exe'))
+    $taskProcess = New-PrivateProcess $taskNode $taskSignerArguments
     if (-not $taskProcess.Start()) { throw 'Signer stopped' }
     $taskOutput = $taskProcess.StandardOutput.ReadToEndAsync()
     $taskErrors = $taskProcess.StandardError.ReadToEndAsync()
@@ -187,6 +241,7 @@ try {
     $taskResult = $taskOutput.GetAwaiter().GetResult() | ConvertFrom-Json
     if ($taskResult.status -cne 'SIGNED_PACKET_READY_NO_SUBMISSION' -or $taskResult.submitted -ne $false -or
         $taskResult.retryAllowed -ne $false -or $taskResult.sourceRevision -cne $ExpectedRevision -or
+        $taskResult.maxBodyBytes -ne $MaxBodyBytes -or
         $taskResult.sha256 -cnotmatch '^[a-f0-9]{64}$') { throw 'Result rejected' }
     $null = Assert-PrivatePath $taskOutputPath $false
     if ((Get-FileHash -LiteralPath $taskOutputPath -Algorithm SHA256).Hash.ToLowerInvariant() -cne $taskResult.sha256) { throw 'Readback rejected' }
@@ -199,6 +254,7 @@ try {
     Write-Host 'OFFLINE SIGNING STOPPED. Nothing was submitted. Preserve any output; do not retry or share secrets/screenshots.'
 } finally {
     if ($taskBytes) { [Array]::Clear($taskBytes, 0, $taskBytes.Length) }
+    if ($taskChars) { [Array]::Clear($taskChars, 0, $taskChars.Length) }
     if ($taskSecretPointer -ne [IntPtr]::Zero) { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($taskSecretPointer) }
     if ($taskSecure) { $taskSecure.Dispose() }
     if ($taskBox) { $taskBox.Clear() }
@@ -207,5 +263,6 @@ try {
         try { if (-not $taskProcess.HasExited) { $taskProcess.Kill(); $taskProcess.WaitForExit() } } catch {}
         $taskProcess.Dispose()
     }
+    if ($taskNodeLock) { $taskNodeLock.Dispose() }
 }
 exit $taskExit

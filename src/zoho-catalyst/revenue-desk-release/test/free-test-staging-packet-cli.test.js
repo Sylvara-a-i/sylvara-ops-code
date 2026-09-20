@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const crypto = require('node:crypto');
 // Only this explicit test harness can launch the reviewed local CLI. The child
 // is preloaded with the same SDK/network/process-denial guard as the demo.
 const { spawnSync } = require('node:child_process');
@@ -17,6 +18,7 @@ const SCRIPT = path.resolve(__dirname, '../scripts/sign-free-test-staging-packet
 const GUARD = path.resolve(__dirname, 'helpers/offline-guard.js');
 const WINDOWS_HELPER = path.resolve(__dirname, '../scripts/sign-free-test-staging-packet-private.ps1');
 const POWERSHELL = path.resolve(path.dirname(process.execPath), '../../native/powershell/pwsh.exe');
+const { MAX_SECRET_UTF8_BYTES } = require('../lib/free-test-staging-packet');
 
 function protectSyntheticDirectory(directory, { publicRead = false } = {}) {
   if (process.platform !== 'win32') { fs.chmodSync(directory, publicRead ? 0o755 : 0o700); return; }
@@ -112,6 +114,7 @@ function run(value, extraArgs = [], overrides = {}) {
   const args = ['--require', value.preload, SCRIPT, '--input', value.input, '--output', value.output,
     '--expected-revision', value.f.config.sourceRevision,
     '--expected-operator-hash', value.f.config.operatorIdHash,
+    ...(value.omitBodyLimit ? [] : ['--max-body-bytes', String(value.maxBodyBytes || 16384)]),
     ...(process.platform === 'win32' ? ['--powershell-path', POWERSHELL] : []), ...extraArgs];
   return spawnSync(process.execPath, args, {
     cwd: value.directory, input: Buffer.from(value.f.config.operatorVerificationSecret, 'ascii'),
@@ -142,10 +145,64 @@ test('CLI consumes fake stdin only and writes one signed private file without ou
   const bytes = fs.readFileSync(value.output);
   assert.ok(bytes.byteLength <= 16384);
   const packet = JSON.parse(bytes.toString('utf8'));
+  assert.equal(JSON.parse(result.stdout).maxBodyBytes, 16384);
   assert.match(packet.signature, /^v1=[a-f0-9]{64}$/);
   assert.equal(Object.hasOwn(packet, 'preparation'), false);
   assert.equal(Object.hasOwn(packet, 'operatorVerificationSecret'), false);
   assert.deepEqual(guard.blocked, []);
+});
+
+test('CLI preserves runtime-compatible Unicode and whitespace key bytes without trimming', (t) => {
+  const value = files(t); const text = ' 漢😀 '.repeat(8);
+  const input = Buffer.from(text, 'utf8');
+  try {
+    const result = run(value, [], { input });
+    assert.equal(result.status, 0); assertSafeOutput(result, value);
+    const packet = JSON.parse(fs.readFileSync(value.output, 'utf8'));
+    const { canonicalApprovalIntent }
+      = require('../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/approval-control');
+    const expected = `v1=${crypto.createHmac('sha256', text)
+      .update('revenue-desk-configuration-staging-intent-v1\0')
+      .update(canonicalApprovalIntent(packet.intent)).digest('hex')}`;
+    assert.equal(packet.signature, expected);
+    assert.equal(`${result.stdout}${result.stderr}`.includes(text), false);
+  } finally { input.fill(0); }
+});
+
+test('validate-only mode checks a complete unsigned packet without reading a key or creating output', (t) => {
+  const value = files(t);
+  fs.appendFileSync(value.preload, "const before = require('node:fs').readSync; require('node:fs').readSync = function(fd, ...args) { "
+    + "if (fd === 0) { process.stderr.write('UNEXPECTED_KEY_READ\\n'); throw new Error('No stdin allowed'); } return before.call(this, fd, ...args); };\n");
+  const result = run(value, ['--validate-only'], { input: '' });
+  assert.equal(result.status, 0); assertSafeOutput(result, value);
+  const verdict = JSON.parse(result.stdout);
+  assert.equal(verdict.status, 'VALIDATED_UNSIGNED_PACKET_NO_SIGNATURE');
+  assert.equal(verdict.maxBodyBytes, 16384); assert.equal(verdict.sourceRevision, value.f.config.sourceRevision);
+  assert.equal(verdict.signaturePresent, false); assert.equal(verdict.submitted, false);
+  assert.doesNotMatch(result.stderr, /UNEXPECTED_KEY_READ/); assert.equal(fs.existsSync(value.output), false);
+});
+
+test('validate-only mode rejects a packet above the observed 4096-byte route limit before protected entry', (t) => {
+  const value = files(t); value.maxBodyBytes = 4096;
+  assert.ok(Buffer.byteLength(JSON.stringify(value.envelope.request), 'utf8') > 4096);
+  fs.appendFileSync(value.preload, "const before = require('node:fs').readSync; require('node:fs').readSync = function(fd, ...args) { "
+    + "if (fd === 0) { process.stderr.write('UNEXPECTED_KEY_READ\\n'); throw new Error('No stdin allowed'); } return before.call(this, fd, ...args); };\n");
+  const result = run(value, ['--validate-only'], { input: '' });
+  assert.equal(result.status, 1); assertSafeOutput(result, value);
+  assert.doesNotMatch(result.stderr, /UNEXPECTED_KEY_READ/); assert.equal(fs.existsSync(value.output), false);
+  assert.doesNotMatch(result.stdout, /VALIDATED_UNSIGNED_PACKET/);
+});
+
+test('validate-only parsing rejects duplicate flags or missing limits and omission still requires a signing key', (t) => {
+  for (const mode of ['duplicate', 'missing_limit', 'omitted']) {
+    const value = files(t); value.omitBodyLimit = mode === 'missing_limit';
+    const args = mode === 'duplicate' ? ['--validate-only', '--validate-only']
+      : mode === 'missing_limit' ? ['--validate-only'] : [];
+    const result = run(value, args, { input: '' });
+    assert.equal(result.status, 1); assertSafeOutput(result, value);
+    assert.equal(fs.existsSync(value.output), false);
+    assert.doesNotMatch(result.stdout, /VALIDATED_UNSIGNED_PACKET|SIGNED_PACKET_READY/);
+  }
 });
 
 test('CLI refuses existing output and leaves the original evidence unchanged', (t) => {
@@ -184,7 +241,7 @@ test('protected stdin allocation is cleared after success and after an output er
     const value = files(t);
     fs.appendFileSync(value.preload, "const savedAlloc = Buffer.alloc; const sensitiveBuffers = [];\n"
       + "Buffer.alloc = function(size, ...args) { const value = savedAlloc.call(this, size, ...args); "
-      + "if (size === 4097) sensitiveBuffers.push(value); return value; };\n"
+      + `if (size === ${MAX_SECRET_UTF8_BYTES + 1}) sensitiveBuffers.push(value); return value; };\n`
       + "process.on('exit', () => { if (sensitiveBuffers.length !== 1 || !sensitiveBuffers.every(value => value.every(byte => byte === 0))) { "
       + "process.stderr.write('SYNTHETIC_BUFFER_NOT_CLEARED\\n'); process.exitCode = 91; } "
       + "else process.stdout.write('SYNTHETIC_BUFFER_CLEARED\\n'); });\n"
@@ -311,6 +368,16 @@ test('private owner wrapper pins source on both sides of review and sends protec
   assert.match(source.slice(dialog), /'rev-parse', 'HEAD'/);
   assert.match(source.slice(0, dialog), /Read-LocalCheck \$taskGit \$taskStatusArgs/);
   assert.match(source.slice(dialog), /Read-LocalCheck \$taskGit \$taskStatusArgs/);
+  assert.ok(source.indexOf('$taskTrustedNode = Open-TrustedNode $NodePath')
+    < source.indexOf("Read-LocalCheck $taskNode @('--version')"));
+  assert.ok(source.indexOf('$taskTrustedNode = Open-TrustedNode $NodePath') < dialog);
+  assert.ok(source.indexOf('$taskNodeRecheck = Open-TrustedNode $NodePath') > dialog);
+  assert.ok(source.indexOf('$taskNodeRecheck = Open-TrustedNode $NodePath')
+    < source.indexOf('$taskSecure = $taskBox.SecurePassword'));
+  assert.ok(source.indexOf('$taskPreflight = (Read-LocalCheck') > source.indexOf('$taskInputLock = [IO.File]::Open'));
+  assert.ok(source.indexOf('$taskPreflight = (Read-LocalCheck') < source.indexOf('Add-Type -AssemblyName PresentationFramework'));
+  assert.ok(source.indexOf('$taskPreflight = (Read-LocalCheck') < dialog);
+  assert.match(source, /\$taskSignerArguments \+ @\('--validate-only'\)\) 20000/);
   assert.match(source, /StandardInput\.BaseStream\.Write\(\$taskBytes, 0, \$taskBytes\.Length\)/);
   assert.match(source, /Environment\.Clear\(\)/);
   assert.match(source, /ZeroFreeBSTR\(\$taskSecretPointer\)/);
@@ -319,6 +386,103 @@ test('private owner wrapper pins source on both sides of review and sends protec
   assert.doesNotMatch(source, /ArgumentList\.Add\(\$task(?:Bytes|Secure|SecretPointer)\)/);
   assert.doesNotMatch(source, /Environment\[[^\]]+\]\s*=\s*\$task(?:Bytes|Secure|SecretPointer)/);
 });
+
+test('private wrapper rejects a changed executable that still reports the approved Node version before owner UI',
+  { skip: process.platform !== 'win32' }, (t) => {
+    const value = files(t); const alternate = path.join(value.directory, 'node.exe');
+    // Appending inert bytes preserves the reviewed Node PE's --version behavior,
+    // but creates a different executable identity. No private key is supplied.
+    fs.copyFileSync(process.execPath, alternate);
+    fs.appendFileSync(alternate, '\nSYNTHETIC_CHANGED_EXECUTABLE_NOT_AUTHORIZED\n');
+    const version = spawnSync(alternate, ['--version'], { encoding: 'utf8', timeout: 15000,
+      windowsHide: true, env: { SystemRoot: process.env.SystemRoot || '' }, input: '' });
+    assert.equal(version.status, 0); assert.equal(version.stdout.trim(), 'v24.19.0');
+    const checked = spawnSync(POWERSHELL, ['-NoLogo', '-NoProfile', '-NonInteractive', '-STA', '-File', WINDOWS_HELPER,
+      '-InputPath', value.input, '-OutputPath', value.output, '-NodePath', alternate,
+      '-UtilityRevision', 'a'.repeat(40), '-ExpectedRevision', value.f.config.sourceRevision,
+      '-ExpectedOperatorHash', value.f.config.operatorIdHash, '-MaxBodyBytes', '16384'], {
+      encoding: 'utf8', timeout: 15000, windowsHide: true,
+      env: { SystemRoot: process.env.SystemRoot || '' }, input: '',
+    });
+    assert.equal(checked.status, 1);
+    assert.match(checked.stdout, /OFFLINE SIGNING STOPPED/);
+    assert.equal(checked.stderr, ''); assert.equal(fs.existsSync(value.output), false);
+  });
+
+test('trusted Node verifier accepts pinned bytes, rejects changed bytes and holds checked executable read-only',
+  { skip: process.platform !== 'win32' }, (t) => {
+    const value = files(t); const alternate = path.join(value.directory, 'node.exe');
+    fs.copyFileSync(process.execPath, alternate);
+    const driver = path.join(value.directory, 'check-runtime-pin.ps1');
+    fs.writeFileSync(driver, `param([string]$Wrapper, [string]$Runtime)
+$ErrorActionPreference = 'Stop'
+$tokens = $null; $parseErrors = $null
+$tree = [Management.Automation.Language.Parser]::ParseFile($Wrapper, [ref]$tokens, [ref]$parseErrors)
+if ($parseErrors.Count -ne 0) { throw 'Wrapper parse failed' }
+foreach ($name in @('Assert-LocalPathName', 'Open-TrustedNode')) {
+  $function = $tree.Find({ param($item) $item -is [Management.Automation.Language.FunctionDefinitionAst] -and $item.Name -eq $name }, $true)
+  . ([scriptblock]::Create($function.Extent.Text))
+}
+$checked = Open-TrustedNode $Runtime
+try {
+  $denied = $false
+  try { $writer = [IO.File]::Open($Runtime, 'Open', 'Write', 'ReadWrite'); $writer.Dispose() }
+  catch [IO.IOException] { $denied = $true }
+  if (-not $denied) { throw 'Runtime bytes are mutable during review' }
+} finally { $checked.Stream.Dispose() }
+[IO.File]::AppendAllText($Runtime, 'SYNTHETIC_CHANGED_BYTES')
+$rejected = $false
+try { $wrong = Open-TrustedNode $Runtime; $wrong.Stream.Dispose() } catch { $rejected = $true }
+if (-not $rejected) { throw 'Changed executable was accepted' }
+[Console]::Out.WriteLine('PINNED_NODE_AND_LOCK_VERIFIED')
+`, { flag: 'wx' });
+    const checked = spawnSync(POWERSHELL, ['-NoLogo', '-NoProfile', '-NonInteractive', '-File', driver,
+      '-Wrapper', WINDOWS_HELPER, '-Runtime', alternate], {
+      encoding: 'utf8', timeout: 15000, windowsHide: true,
+      env: { SystemRoot: process.env.SystemRoot || '' }, input: '',
+    });
+    assert.equal(checked.status, 0); assert.equal(checked.stdout.trim(), 'PINNED_NODE_AND_LOCK_VERIFIED');
+    assert.equal(checked.stderr, '');
+  });
+
+test('private wrapper UTF-8 encoding exactly matches Node including unpaired UTF-16 replacement',
+  { skip: process.platform !== 'win32' }, (t) => {
+    const value = files(t); const driver = path.join(value.directory, 'check-synthetic-encoding.ps1');
+    const texts = [' ' + 'x'.repeat(30) + ' ', '漢'.repeat(32), '😀'.repeat(16), 'x'.repeat(31) + '\n',
+      '\ud800' + 'x'.repeat(31), 'x'.repeat(31) + '\udc00', '\ud800\ud800' + 'x'.repeat(30),
+      '\udc00\udc00' + 'x'.repeat(30), '\ud800😀' + 'x'.repeat(29)];
+    const vectors = texts.map((text) => ({ codeUnits: Array.from({ length: text.length }, (_, i) => text.charCodeAt(i)),
+      expectedHex: Buffer.from(text, 'utf8').toString('hex').toUpperCase() }));
+    fs.writeFileSync(driver, `param([string]$Wrapper)
+$ErrorActionPreference = 'Stop'
+$source = [IO.File]::ReadAllText($Wrapper)
+$start = $source.IndexOf('$taskSecretPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($taskSecure)')
+$end = $source.IndexOf('$taskBox.Clear()', $start)
+if ($start -lt 0 -or $end -lt $start) { throw 'Encoding block unavailable' }
+$conversion = [scriptblock]::Create($source.Substring($start, $end - $start))
+$vectors = '${JSON.stringify(vectors)}' | ConvertFrom-Json
+foreach ($vector in $vectors) {
+  $taskSecure = [Security.SecureString]::new()
+  foreach ($unit in $vector.codeUnits) { $taskSecure.AppendChar([char]$unit) }
+  $taskSecretPointer = [IntPtr]::Zero; $taskChars = $null; $taskBytes = $null
+  try {
+    . $conversion
+    if ([Convert]::ToHexString($taskBytes) -cne $vector.expectedHex) { throw 'Key bytes differ from Node runtime' }
+    if ($null -ne $taskChars) { throw 'Intermediate character buffer retained' }
+  } finally {
+    if ($taskBytes) { [Array]::Clear($taskBytes, 0, $taskBytes.Length) }
+    if ($taskSecretPointer -ne [IntPtr]::Zero) { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($taskSecretPointer) }
+    $taskSecure.Dispose()
+  }
+}
+[Console]::Out.WriteLine('SYNTHETIC_UTF8_ENCODING_VERIFIED')
+`, { flag: 'wx' });
+    const checked = spawnSync(POWERSHELL, ['-NoLogo', '-NoProfile', '-NonInteractive', '-File', driver,
+      '-Wrapper', WINDOWS_HELPER], { encoding: 'utf8', timeout: 15000, windowsHide: true,
+      env: { SystemRoot: process.env.SystemRoot || '' }, input: '' });
+    assert.equal(checked.status, 0); assert.equal(checked.stdout.trim(), 'SYNTHETIC_UTF8_ENCODING_VERIFIED');
+    assert.equal(checked.stderr, '');
+  });
 
 test('CLI rejects ambiguous duplicate object fields rather than signing last-key-wins JSON', (t) => {
   const value = files(t);
@@ -334,7 +498,8 @@ test('CLI rejects key arguments, invalid key bytes and evidence time overrides',
     { args: ['--secret', 'SYNTHETIC_SECRET_ARGUMENT'] },
     { args: ['--now', String(SYNTHETIC_NOW)] },
     { input: Buffer.from('short') },
-    { input: Buffer.from('A'.repeat(32) + '\n') },
+    { input: Buffer.from([0xed, 0xa0, 0x80]) },
+    { input: Buffer.alloc(MAX_SECRET_UTF8_BYTES + 1, 65) },
     { input: Buffer.alloc(4097, 65) },
   ]) {
     const value = files(t); const options = setup.input ? { input: setup.input } : {};

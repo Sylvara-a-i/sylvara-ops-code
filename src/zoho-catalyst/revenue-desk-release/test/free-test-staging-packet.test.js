@@ -12,7 +12,7 @@ const { createStagingFixture }
 const { syntheticPreparationInputs } = require('./fixtures/free-test-preparation');
 const { canonicalApprovalIntent, routeFingerprint, routeFromRows }
   = require('../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/approval-control');
-const { PROFILE, SIGNATURE_DOMAIN, MAX_STAGING_PACKET_BYTES,
+const { PROFILE, SIGNATURE_DOMAIN, MAX_STAGING_PACKET_BYTES, MAX_SECRET_UTF8_BYTES,
   validateUnsignedStagingEnvelope, signFreeTestStagingPacket }
   = require('../lib/free-test-staging-packet');
 
@@ -27,7 +27,7 @@ function fixture(index = 0) {
   delete request.signature;
   return { liveShape, envelope: { schemaVersion: 1, preparation, preservedCoreApproval: null, request },
     options: { expectedRevision: liveShape.config.sourceRevision,
-      expectedOperatorHash: liveShape.config.operatorIdHash, now: liveShape.now() } };
+      expectedOperatorHash: liveShape.config.operatorIdHash, now: liveShape.now(), maxBodyBytes: 16384 } };
 }
 
 function sign(f) {
@@ -244,11 +244,11 @@ test('internally consistent route cannot sign a journey identifier rejected by t
   assert.throws(() => sign(f));
 });
 
-test('secret requires a bounded printable buffer and never enters returned packet or error text', () => {
+test('secret requires a bounded valid UTF-8 buffer and never enters returned packet or error text', () => {
   const f = fixture();
   for (const secret of [null, 'synthetic-text-is-not-a-buffer', Buffer.alloc(31, 65),
-    Buffer.alloc(4097, 65), Buffer.from('A'.repeat(32) + '\n'), Buffer.alloc(32),
-    Buffer.alloc(32, 128), Buffer.alloc(32, 0xe1)]) {
+    Buffer.alloc(4097, 65), Buffer.alloc(MAX_SECRET_UTF8_BYTES + 1, 65),
+    Buffer.from([0xed, 0xa0, 0x80]), Buffer.alloc(32, 128), Buffer.alloc(32, 0xe1)]) {
     try {
       assert.throws(() => signFreeTestStagingPacket(f.envelope, { ...f.options, secret }),
         (error) => { assertNoSyntheticPrivateValues(error, f); return true; });
@@ -261,6 +261,27 @@ test('secret requires a bounded printable buffer and never enters returned packe
       assert.equal(result.serialized.includes('A'.repeat(32)), false);
       assert.equal(result.serialized.includes(f.liveShape.config.operatorVerificationSecret), false);
     } finally { secret.fill(0); }
+  }
+});
+
+test('runtime-supported whitespace, BMP and supplementary secrets produce the exact runtime HMAC', async () => {
+  for (const text of [' ' + 'x'.repeat(30) + ' ', 'x'.repeat(16) + '\t' + 'y'.repeat(16),
+    'x'.repeat(31) + '\n', 'é'.repeat(32), '漢'.repeat(4096), '😀'.repeat(16), '😀'.repeat(2048)]) {
+    const f = fixture(); const secret = Buffer.from(text, 'utf8');
+    const runtimeSignature = `v1=${crypto.createHmac('sha256', text)
+      .update(SIGNATURE_DOMAIN).update(canonicalApprovalIntent(f.envelope.request.intent)).digest('hex')}`;
+    try {
+      const result = signFreeTestStagingPacket(f.envelope, { ...f.options, secret });
+      assert.equal(result.packet.signature, runtimeSignature);
+      assert.equal(result.serialized.includes(text), false);
+      f.liveShape.config.operatorVerificationSecret = text;
+      assert.equal((await f.liveShape.service.stage(result.packet)).state, 'StagedInactive');
+    } finally { secret.fill(0); }
+  }
+  for (const text of ['😀'.repeat(15), '漢'.repeat(4097), '😀'.repeat(2049)]) {
+    const f = fixture(); const secret = Buffer.from(text, 'utf8');
+    try { assert.throws(() => signFreeTestStagingPacket(f.envelope, { ...f.options, secret })); }
+    finally { secret.fill(0); }
   }
 });
 
@@ -305,4 +326,54 @@ test('module has no live client, file access, environment key loading or diagnos
   assert.doesNotMatch(source, /require\(['"](?:node:)?(?:fs|https?|net|tls|child_process|zcatalyst|retell)/);
   assert.doesNotMatch(source, /\b(?:fetch|XMLHttpRequest|setInterval)\s*\(|process\.env|console\./);
   assert.deepEqual(guard.blocked, []);
+});
+test('owner packet rejects the reviewed 4096-byte limit before key entry for a larger valid request', () => {
+  const f = fixture();
+  const projected = Buffer.byteLength(`${JSON.stringify({
+    ...f.envelope.request, signature: `v1=${'0'.repeat(64)}`,
+  })}\n`, 'utf8');
+  assert.ok(projected > 4096);
+  assert.throws(() => validateUnsignedStagingEnvelope(f.envelope, {
+    ...f.options, maxBodyBytes: 4096,
+  }), { code: 'STAGING_PACKET_TOO_LARGE' });
+  assert.equal(f.liveShape.store.writes.length, 0);
+});
+
+test('owner packet requires an explicit valid observed body limit instead of assuming the ceiling', () => {
+  const f = fixture();
+  for (const maxBodyBytes of [undefined, null, 511, 16385, 6000.5, '16384']) {
+    assert.throws(() => validateUnsignedStagingEnvelope(f.envelope, {
+      ...f.options, maxBodyBytes,
+    }), { code: 'INVALID_STAGING_SIGNING_CONTEXT' });
+  }
+});
+
+test('owner packet obeys exact UTF-8 body-byte boundaries including signature and newline', () => {
+  const f = fixture();
+  const signed = sign(f);
+  assert.equal(validateUnsignedStagingEnvelope(f.envelope, {
+    ...f.options, maxBodyBytes: signed.byteLength,
+  }).maxBodyBytes, signed.byteLength);
+  assert.throws(() => validateUnsignedStagingEnvelope(f.envelope, {
+    ...f.options, maxBodyBytes: signed.byteLength - 1,
+  }), { code: 'STAGING_PACKET_TOO_LARGE' });
+  const secret = Buffer.from(f.liveShape.config.operatorVerificationSecret, 'utf8');
+  try {
+    assert.equal(signFreeTestStagingPacket(f.envelope, {
+      ...f.options, secret, maxBodyBytes: signed.byteLength,
+    }).maxBodyBytes, signed.byteLength);
+  } finally { secret.fill(0); }
+});
+
+test('synthetic controller HTTP boundary and signer enforce the same selected byte budget', async () => {
+  const { readBody } = require('../../revenue-desk-call-runtime/functions/revenue_desk_route_control/lib/http-boundary');
+  const f = fixture(); const signed = sign(f);
+  const request = { headers: { 'content-type': 'application/json',
+    'content-length': String(signed.byteLength) }, rawBody: Buffer.from(signed.serialized) };
+  await assert.rejects(readBody(request, 4096), (error) => error.httpStatus === 413);
+  assert.deepEqual(await readBody(request, signed.byteLength), signed.packet);
+  assert.throws(() => validateUnsignedStagingEnvelope(f.envelope, {
+    ...f.options, maxBodyBytes: 4096,
+  }), { code: 'STAGING_PACKET_TOO_LARGE' });
+  assert.equal(f.liveShape.store.writes.length, 0);
 });

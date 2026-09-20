@@ -17,6 +17,9 @@ const { prepareFreeTestConfiguration, MAX_READBACK_AGE_MS } = require('./free-te
 const PROFILE = 'free-test-configuration-staging-v1';
 const SIGNATURE_DOMAIN = 'revenue-desk-configuration-staging-intent-v1\0';
 const MAX_STAGING_PACKET_BYTES = 16_384;
+const MIN_SECRET_CODE_UNITS = 32;
+const MAX_SECRET_CODE_UNITS = 4096;
+const MAX_SECRET_UTF8_BYTES = MAX_SECRET_CODE_UNITS * 3;
 const MAX_INTENT_AGE_MS = 5 * 60 * 1000;
 const ENVELOPE_FIELDS = Object.freeze([
   'schemaVersion', 'preparation', 'preservedCoreApproval', 'request',
@@ -107,10 +110,12 @@ function validatePreservedCoreApproval(value) {
   return Object.freeze({ ...value });
 }
 
-function validateContext({ expectedRevision, expectedOperatorHash, now }) {
+function validateContext({ expectedRevision, expectedOperatorHash, maxBodyBytes, now }) {
   invariant(typeof expectedRevision === 'string' && SHA_PATTERN.test(expectedRevision)
     && typeof expectedOperatorHash === 'string' && OPERATOR_PATTERN.test(expectedOperatorHash)
-    && Number.isSafeInteger(now) && now >= 0,
+    && Number.isSafeInteger(now) && now >= 0
+    && Number.isSafeInteger(maxBodyBytes) && maxBodyBytes >= 512
+    && maxBodyBytes <= MAX_STAGING_PACKET_BYTES,
   'INVALID_STAGING_SIGNING_CONTEXT', 'Staging signing context is invalid.');
 }
 
@@ -120,9 +125,9 @@ function validateContext({ expectedRevision, expectedOperatorHash, now }) {
  * re-read and authenticate every source before it creates any durable state.
  */
 function validateUnsignedStagingEnvelope(envelope, {
-  expectedRevision, expectedOperatorHash, now = Date.now(),
+  expectedRevision, expectedOperatorHash, maxBodyBytes, now = Date.now(),
 }) {
-  validateContext({ expectedRevision, expectedOperatorHash, now });
+  validateContext({ expectedRevision, expectedOperatorHash, maxBodyBytes, now });
   exactObject(envelope, ENVELOPE_FIELDS, 'INVALID_UNSIGNED_STAGING_ENVELOPE');
   invariant(envelope.schemaVersion === 1, 'INVALID_UNSIGNED_STAGING_ENVELOPE',
     'Unsigned staging envelope version is invalid.');
@@ -229,36 +234,58 @@ function validateUnsignedStagingEnvelope(envelope, {
   invariant(intent.route_fingerprint === expectedRouteFingerprint,
     'STAGING_CONTENT_MISMATCH', 'Staging intent does not bind the exact route.');
 
+  // The runtime accepts a configurable limit below its hard ceiling. Project
+  // the exact signature width before owner key entry; never assume the maximum
+  // supported setting is the value installed in Development.
+  const projectedBytes = Buffer.byteLength(`${JSON.stringify({
+    ...request, signature: `v1=${'0'.repeat(64)}`,
+  })}\n`, 'utf8');
+  invariant(projectedBytes <= maxBodyBytes, 'STAGING_PACKET_TOO_LARGE',
+    'Signed staging packet exceeds the verified route body limit.');
+
   return deepFreeze({
     packet: structuredClone(request),
     canonicalIntent,
     sourceRevision: expectedRevision,
+    maxBodyBytes,
     profile: PROFILE,
   });
 }
 
 function signFreeTestStagingPacket(envelope, {
-  secret, expectedRevision, expectedOperatorHash, now = Date.now(),
+  secret, expectedRevision, expectedOperatorHash, maxBodyBytes, now = Date.now(),
 }) {
-  invariant(Buffer.isBuffer(secret) && secret.length >= 32 && secret.length <= 4096
-    && secret.every((byte) => byte >= 0x21 && byte <= 0x7e),
+  invariant(Buffer.isBuffer(secret) && secret.length <= MAX_SECRET_UTF8_BYTES,
+    'INVALID_STAGING_SIGNING_SECRET', 'Owner signing key is invalid.');
+  let secretText;
+  try {
+    // Preserve a leading U+FEFF as secret content and reject malformed UTF-8;
+    // Node's runtime HMAC encodes the resulting JavaScript string as UTF-8.
+    secretText = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(secret);
+  } catch (_) {
+    invariant(false, 'INVALID_STAGING_SIGNING_SECRET', 'Owner signing key is invalid.');
+  }
+  invariant(secretText.length >= MIN_SECRET_CODE_UNITS
+    && secretText.length <= MAX_SECRET_CODE_UNITS
+    && !/^<.*>$/.test(secretText),
   'INVALID_STAGING_SIGNING_SECRET', 'Owner signing key is invalid.');
   const validated = validateUnsignedStagingEnvelope(envelope, {
-    expectedRevision, expectedOperatorHash, now,
+    expectedRevision, expectedOperatorHash, maxBodyBytes, now,
   });
-  const signature = `v1=${crypto.createHmac('sha256', secret)
+  const signature = `v1=${crypto.createHmac('sha256', secretText)
     .update(SIGNATURE_DOMAIN, 'utf8').update(validated.canonicalIntent, 'utf8').digest('hex')}`;
   const packet = deepFreeze({ ...validated.packet, signature });
   const serialized = `${JSON.stringify(packet)}\n`;
   const byteLength = Buffer.byteLength(serialized, 'utf8');
-  invariant(byteLength <= MAX_STAGING_PACKET_BYTES,
-    'STAGING_PACKET_TOO_LARGE', 'Signed staging packet exceeds the route body limit.');
+  invariant(byteLength <= validated.maxBodyBytes,
+    'STAGING_PACKET_TOO_LARGE', 'Signed staging packet exceeds the verified route body limit.');
   return deepFreeze({
     packet,
     serialized,
     byteLength,
     sha256: crypto.createHash('sha256').update(serialized, 'utf8').digest('hex'),
     sourceRevision: expectedRevision,
+    maxBodyBytes: validated.maxBodyBytes,
     profile: PROFILE,
   });
 }
@@ -267,6 +294,9 @@ module.exports = Object.freeze({
   PROFILE,
   SIGNATURE_DOMAIN,
   MAX_STAGING_PACKET_BYTES,
+  MIN_SECRET_CODE_UNITS,
+  MAX_SECRET_CODE_UNITS,
+  MAX_SECRET_UTF8_BYTES,
   validateUnsignedStagingEnvelope,
   signFreeTestStagingPacket,
 });
