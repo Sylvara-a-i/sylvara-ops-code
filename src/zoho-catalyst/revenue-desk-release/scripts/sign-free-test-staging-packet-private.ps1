@@ -156,7 +156,9 @@ try {
     $taskNodeLock = $taskTrustedNode.Stream
     if ((Read-LocalCheck $taskNode @('--version')) -cne 'v24.19.0') { throw 'Runtime rejected' }
     $taskRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../../..'))
-    $taskGit = (Get-Command git -CommandType Application -ErrorAction Stop).Source
+    # Several installed Git applications may match. Preserve PATH precedence
+    # and pass one executable, never a string made by joining multiple paths.
+    $taskGit = (Get-Command git -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
     if ((Read-LocalCheck $taskGit @('-C', $taskRoot, 'rev-parse', 'HEAD')) -cne $UtilityRevision) { throw 'Source rejected' }
     $taskSourcePaths = @('src/zoho-catalyst/revenue-desk-release', 'src/zoho-catalyst/revenue-desk-call-runtime')
     $taskStatusArgs = @('--no-optional-locks', '-C', $taskRoot, '-c', 'core.fsmonitor=false', 'status', '--porcelain', '--untracked-files=all', '--') + $taskSourcePaths

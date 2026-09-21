@@ -507,6 +507,48 @@ test('private owner wrapper pins source on both sides of review and sends protec
   assert.doesNotMatch(source, /Environment\[[^\]]+\]\s*=\s*\$task(?:Bytes|Secure|SecretPointer)/);
 });
 
+test('private wrapper selects one Git application when PATH contains multiple installations',
+  { skip: process.platform !== 'win32' }, (t) => {
+    const value = files(t);
+    const first = path.join(value.directory, 'first');
+    const second = path.join(value.directory, 'second');
+    fs.mkdirSync(first); fs.mkdirSync(second);
+    // Synthetic local executables exercise command resolution, not Git access.
+    fs.copyFileSync(process.execPath, path.join(first, 'git.exe'));
+    fs.copyFileSync(process.execPath, path.join(second, 'git.exe'));
+    const driver = path.join(value.directory, 'check-git-resolution.ps1');
+    fs.writeFileSync(driver, `param([string]$Wrapper, [string]$First, [string]$Second)
+$ErrorActionPreference = 'Stop'
+$tokens = $null; $parseErrors = $null
+$tree = [Management.Automation.Language.Parser]::ParseFile($Wrapper, [ref]$tokens, [ref]$parseErrors)
+if ($parseErrors.Count -ne 0) { throw 'Wrapper parse failed' }
+$assignment = $tree.Find({ param($item) $item -is [Management.Automation.Language.AssignmentStatementAst] -and $item.Left.Extent.Text -eq '$taskGit' }, $true)
+if ($null -eq $assignment) { throw 'Git selection unavailable' }
+$resolve = [scriptblock]::Create($assignment.Extent.Text)
+$env:PATHEXT = '.EXE'
+foreach ($order in @(@($First, $Second), @($Second, $First))) {
+  $env:PATH = $order -join [IO.Path]::PathSeparator
+  if (@(Get-Command git -CommandType Application).Count -ne 2) { throw 'Multiple applications not reproduced' }
+  . $resolve
+  if ($taskGit -isnot [string] -or $taskGit -cne (Join-Path $order[0] 'git.exe')) { throw 'One application in PATH order required' }
+  if ((& $taskGit --version) -cne 'v24.19.0' -or $LASTEXITCODE -ne 0) { throw 'Selected application did not execute' }
+}
+$env:PATH = ''
+$rejected = $false
+try { . $resolve } catch { $rejected = $true }
+if (-not $rejected) { throw 'Missing Git must fail before owner input' }
+[Console]::Out.WriteLine('SINGLE_GIT_APPLICATION_VERIFIED')
+`, { flag: 'wx' });
+    const checked = spawnSync(POWERSHELL, ['-NoLogo', '-NoProfile', '-NonInteractive', '-File', driver,
+      '-Wrapper', WINDOWS_HELPER, '-First', first, '-Second', second], {
+      encoding: 'utf8', timeout: 15000, windowsHide: true,
+      env: { SystemRoot: process.env.SystemRoot || '' }, input: '',
+    });
+    assert.equal(checked.status, 0, checked.stderr);
+    assert.equal(checked.stdout.trim(), 'SINGLE_GIT_APPLICATION_VERIFIED');
+    assert.equal(checked.stderr, '');
+  });
+
 test('private wrapper rejects a changed executable that still reports the approved Node version before owner UI',
   { skip: process.platform !== 'win32' }, (t) => {
     const value = files(t); const alternate = path.join(value.directory, 'node.exe');
