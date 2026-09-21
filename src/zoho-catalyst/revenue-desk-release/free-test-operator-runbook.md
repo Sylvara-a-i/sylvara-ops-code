@@ -333,7 +333,7 @@ this table is the sanitized operating view, not a new release contract.
 | Gate | Current evidence and revision | Remaining action | Cost class | Approval needed | Status |
 | --- | --- | --- | --- | --- | --- |
 | G1 Public/assisted entry and native relationships | Accepted assisted Forms/conversion retained; `5227abe` installed held; public native mapping read back | Complete narrow read grant and affected public identity/retry acceptance | Offline now; cloud allowance must be confirmed | Owner grant; exact readback/fixture allocation; no reused canary | Public runtime continuation unverified; assisted evidence retained |
-| G2 Authenticated configuration review/staging | `5227abe` controller installed held; owner packet tooling is source-only; reviewed 4,096-byte body limit is smaller than the 6,024-byte synthetic packet | Fresh nonsecret body-limit readback and exact approved limit migration if needed; complete private preparation, protected signing, staging/readback | Offline now; contained Development later | Owner values/key entry; exact configuration/staging allocation | Installed under hold; packet-size/configuration prerequisite and runtime acceptance pending |
+| G2 Authenticated configuration review/staging | `f9989a8` preview installed under hold; accepted native joins and corrected synthetic Account read back; 4,096-byte body limit freshly confirmed, complete baseline-bearing packet not yet ready | Complete protected identity preparation and baseline context; validate exact unsigned packet before approved limit migration, signing and staging/readback | Offline now; contained Development later | Owner values/key entry; exact configuration/staging allocation | Installed under hold; packet-size/configuration prerequisite and runtime acceptance pending |
 | G3 Coverage and restoration preparation | After-hours fixtures; new owner-attested overflow/combined snapshot contract | Actual originating-provider setting/unit/evidence and later execution binding; preserve original handling | Local preparation only | Owner evidence; separate provider phase for live behavior | Preparation only; overflow/combined execution held |
 | G4 Call-to-owner handoff | H1–H10 source at `c28affd`, separate dry-run/acceptance/delivery meanings | Named monitored owner, actual alert adapter/inbox proof and bounded recovery readback | No real sending now | Exact owner-only email and runtime allocation | Source complete; Development 0/10 |
 | G5 Clock, limit, stop and settlement | Offline limits/races/reports; early-stop correction retained in `5227abe` held installation | Scoped installed-runtime containment and report reconciliation | Offline passed; cloud later | Exact synthetic acceptance allocation | Installed evidence is not runtime proof |
@@ -511,7 +511,7 @@ the envelope: no BOM, pretty-print whitespace or trailing newline. Duplicate
 members or alternate encodings reject before any secret is consumed.
 The canonical preparation, target, revision, route fingerprint, freshness and
 immutable content must match. This tool does not export or authenticate CRM
-evidence, derive a number ownership hash, repair missing fields, refresh stale
+evidence, prove number ownership, repair missing fields, refresh stale
 timestamps, invent provider timing or manufacture a monitoring acknowledgment.
 If the exact unsigned packet cannot be assembled from approved fresh readback,
 the operation is blocked before signing. Never adapt the synthetic fixture for
@@ -539,8 +539,10 @@ installed controller. They need not be identical, and the tool must never change
 a runtime revision label to make them match. `MaxBodyBytes` must come from fresh
 secret-safe readback of Development `ROUTE_CONTROL_MAX_BODY_BYTES`; it has no
 default. The 16,384-byte supported ceiling is not proof of the deployed setting.
-The reviewed configuration value is 4,096, while the normal synthetic packet is
-6,024 bytes. That combination deliberately rejects **before key entry**. Do not
+The latest reviewed configuration value is 4,096. The historical 6,024-byte
+packet and the larger current preparation both exceed it. Recalculate the exact
+complete packet, including its reporting baseline, rather than reusing an old
+size estimate. An oversized packet rejects **before signing-key entry**. Do not
 truncate evidence or silently raise the parameter. An exact contained runtime
 configuration migration and independent readback are prerequisites when the real
 packet exceeds the installed limit; no migration is performed by this utility.
@@ -561,6 +563,24 @@ provider behavior, and does not replace server-side revalidation. Later bounded
 submission still needs the exact private packet, valid allocation and fresh
 prestate. It must produce `StagedInactive`, a durable receipt, independent row/CRM
 readback, and no approval, activation, clock, message or provider effect.
+
+When the required derived identities are absent, the same wrapper's
+`-PrepareBindings` mode accepts only a reviewed Development identity input:
+`schemaVersion`, `environment`, `crmOrganizationId`, `operatorIdentity`,
+`testPhoneNumber`, `clientId`, and `deploymentId`. It obtains the existing
+number/event/Analytics partition keys through three protected owner fields and
+uses the runtime's exact hash domains. Output contains private derived identities,
+not the keys or a signature. This does not prove number ownership, authenticate
+source data, validate a final request size, or permit submission. The owner must
+use the matching current configuration keys; later independent server-side
+readback remains necessary. No credential retrieval or rotation is added.
+
+The first immutable staging input must include the reviewed pre-test baseline
+and reporting context. Missing metrics remain unknown, not zero. Baseline period
+dates require an approved source or an explicitly approved synthetic rehearsal
+period; do not invent them. A baseline-less successful staging cannot be repaired
+by an ordinary replay: the durable claim binds the exact request fingerprint.
+Do not clear a claim or create a replacement journey to bypass that constraint.
 
 Security/cost: local-only and zero external usage; no runtime code/dependency or
 installed artifact change. Rollback is to stop using the utility and preserve the

@@ -13,6 +13,7 @@ const { syntheticPreparationInputs } = require('./fixtures/free-test-preparation
 const { canonicalApprovalIntent, routeFingerprint, routeFromRows }
   = require('../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/approval-control');
 const { PROFILE, SIGNATURE_DOMAIN, MAX_STAGING_PACKET_BYTES, MAX_SECRET_UTF8_BYTES,
+  BINDINGS_PROFILE, MAX_BINDING_SECRET_BYTES, validateStagingBindingInput, deriveStagingBindings,
   validateUnsignedStagingEnvelope, signFreeTestStagingPacket }
   = require('../lib/free-test-staging-packet');
 
@@ -45,6 +46,116 @@ function assertNoSyntheticPrivateValues(error, f) {
     assert.equal(exposed.includes(value), false);
   }
 }
+
+function bindingFixture() {
+  return { input: { schemaVersion: 1, environment: 'development', crmOrganizationId: '900000001',
+    operatorIdentity: 'synthetic_operator', testPhoneNumber: '+12025550101',
+    clientId: 'synthetic_client_a', deploymentId: `cfgdeploy_${'a'.repeat(64)}` },
+  secrets: { numberSecret: 'synthetic_number_'.repeat(3), eventChainSecret: 'synthetic_event_'.repeat(3),
+    analyticsPartitionSecret: 'synthetic_analytics_'.repeat(3) } };
+}
+
+function deriveFixture(f, serialized = JSON.stringify(f.secrets)) {
+  const protectedInput = Buffer.from(serialized, 'utf8');
+  try { return deriveStagingBindings(f.input, { protectedInput }); }
+  finally { protectedInput.fill(0); }
+}
+
+test('private bindings reproduce installed domain contracts without signing or credentials in output', () => {
+  const { keyedDigest, numberLookupKey }
+    = require('../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/security');
+  const f = bindingFixture(); const before = structuredClone(f); const result = deriveFixture(f);
+  assert.equal(result.profile, BINDINGS_PROFILE);
+  assert.deepEqual(result.bindings.input, f.input);
+  assert.equal(result.bindings.inputSha256,
+    crypto.createHash('sha256').update(JSON.stringify(f.input)).digest('hex'));
+  assert.equal(result.bindings.NUMBER_LOOKUP_HASH, numberLookupKey(f.secrets.numberSecret, f.input.testPhoneNumber));
+  assert.equal(result.bindings.expectedOperatorHash, `operator_${keyedDigest(f.secrets.eventChainSecret,
+    'revenue-desk-route-control-operator-v1', [f.input.crmOrganizationId, f.input.operatorIdentity])}`);
+  assert.equal(result.bindings.analyticsClientKey, keyedDigest(f.secrets.analyticsPartitionSecret,
+    'revenue-desk-analytics-client-v1', [f.input.clientId]));
+  assert.equal(result.bindings.analyticsDeploymentKey, keyedDigest(f.secrets.analyticsPartitionSecret,
+    'revenue-desk-analytics-deployment-v1', [f.input.deploymentId]));
+  assert.equal(result.sha256, crypto.createHash('sha256').update(result.serialized).digest('hex'));
+  assert.equal(result.byteLength, Buffer.byteLength(result.serialized, 'utf8'));
+  assert.equal(result.serialized, `${JSON.stringify(result.bindings)}\n`);
+  assert.equal(Object.isFrozen(result.bindings.input), true); assert.deepEqual(f, before);
+  assert.deepEqual(Object.keys(result.bindings), ['schemaVersion', 'profile', 'input', 'inputSha256',
+    'NUMBER_LOOKUP_HASH', 'expectedOperatorHash', 'analyticsClientKey', 'analyticsDeploymentKey']);
+  for (const secret of Object.values(f.secrets)) assert.equal(result.serialized.includes(secret), false);
+});
+
+test('binding preflight rejects invalid or expanded targets without protected input', () => {
+  for (const patch of [{ schemaVersion: 2 }, { environment: 'production' }, { crmOrganizationId: 900000001 },
+    { crmOrganizationId: '0900000001' }, { operatorIdentity: 'ab' }, { operatorIdentity: '<operator>' },
+    { operatorIdentity: 'a'.repeat(257) }, { testPhoneNumber: '(202) 555-0101' },
+    { testPhoneNumber: '+4402025550101' }, { testPhoneNumber: '+12021550101' },
+    { clientId: 'invalid client' }, { deploymentId: 'caller_selected' }, { extra: true }]) {
+    const f = bindingFixture(); Object.assign(f.input, patch);
+    assert.throws(() => validateStagingBindingInput(f.input), { code: 'INVALID_STAGING_BINDING_INPUT' });
+  }
+  for (const key of Object.keys(bindingFixture().input)) {
+    const f = bindingFixture(); delete f.input[key];
+    assert.throws(() => validateStagingBindingInput(f.input));
+  }
+});
+
+test('binding keys are isolated by exact number, organization, operator, client and deployment inputs', () => {
+  const base = bindingFixture(); const original = deriveFixture(base).bindings;
+  const cases = [['testPhoneNumber', '+12025550102', 'NUMBER_LOOKUP_HASH'],
+    ['crmOrganizationId', '900000002', 'expectedOperatorHash'],
+    ['operatorIdentity', 'synthetic_operator_b', 'expectedOperatorHash'],
+    ['clientId', 'synthetic_client_b', 'analyticsClientKey'],
+    ['deploymentId', `cfgdeploy_${'b'.repeat(64)}`, 'analyticsDeploymentKey']];
+  for (const [field, value, binding] of cases) {
+    const f = bindingFixture(); f.input[field] = value;
+    const changed = deriveFixture(f).bindings;
+    assert.notEqual(changed.inputSha256, original.inputSha256);
+    for (const key of ['NUMBER_LOOKUP_HASH', 'expectedOperatorHash', 'analyticsClientKey', 'analyticsDeploymentKey']) {
+      if (key === binding) assert.notEqual(changed[key], original[key]);
+      else assert.equal(changed[key], original[key]);
+    }
+  }
+});
+
+test('protected binding envelope accepts serializer escapes and runtime-supported exact key bytes', () => {
+  for (const text of [' ' + 'x'.repeat(30) + ' ', 'x'.repeat(31) + '\n',
+    '\ufeff' + 'x'.repeat(31), '漢'.repeat(4096), '😀'.repeat(2048), '"\\'.repeat(16)]) {
+    const f = bindingFixture(); f.secrets.numberSecret = text;
+    const ordinary = deriveFixture(f);
+    const escaped = JSON.stringify(f.secrets, null, 2).replaceAll('x', '\\u0078').replaceAll('/', '\\/');
+    assert.deepEqual(deriveFixture(f, escaped), ordinary);
+  }
+  const f = bindingFixture(); f.input.operatorIdentity = ' synthetic_operator ';
+  assert.notEqual(deriveFixture(f).bindings.expectedOperatorHash,
+    deriveFixture(bindingFixture()).bindings.expectedOperatorHash);
+});
+
+test('binding secret envelopes reject invalid, duplicated, reused and oversized keys with coarse diagnostics', () => {
+  const f = bindingFixture(); const valid = JSON.stringify(f.secrets);
+  const inputs = [null, valid, Buffer.alloc(MAX_BINDING_SECRET_BYTES + 1), Buffer.from([0xff]),
+    Buffer.from('\ufeff' + valid), Buffer.from(valid + ' trailing'),
+    Buffer.from(valid.replace('"numberSecret":', '"numberSecret":0,"numberSecret":')),
+    Buffer.from(valid.replace('"numberSecret":', '"numberSecret":"SYNTHETIC_PRIVATE_SENTINEL","numberSecret":'))];
+  for (const patch of [{ numberSecret: 'a'.repeat(31) }, { numberSecret: 'a'.repeat(4097) },
+    { eventChainSecret: '<' + 'x'.repeat(32) + '>' }, { eventChainSecret: f.secrets.numberSecret },
+    { analyticsPartitionSecret: f.secrets.eventChainSecret }, { analyticsPartitionSecret: 'a'.repeat(257) },
+    { analyticsPartitionSecret: ' ' + 'a'.repeat(31) }, { extra: 'SYNTHETIC_PRIVATE_SENTINEL' },
+    { numberSecret: { nested: 'SYNTHETIC_PRIVATE_SENTINEL' } }]) {
+    inputs.push(Buffer.from(JSON.stringify({ ...f.secrets, ...patch })));
+  }
+  for (const protectedInput of inputs) {
+    try {
+      assert.throws(() => deriveStagingBindings(f.input, { protectedInput }), (error) => {
+        assert.equal(error.code, 'INVALID_STAGING_BINDING_SECRETS');
+        for (const value of [...Object.values(f.secrets), 'SYNTHETIC_PRIVATE_SENTINEL']) {
+          assert.equal(`${error.message}${error.stack}`.includes(value), false);
+        }
+        return true;
+      });
+    } finally { if (Buffer.isBuffer(protectedInput)) protectedInput.fill(0); }
+  }
+});
 
 test('owner packet signs the exact existing staging domain and stages inactive through fake adapters', async () => {
   const f = fixture(); const before = structuredClone(f.envelope);

@@ -12,6 +12,8 @@ const {
 } = require('../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/configuration-version');
 const { invariant }
   = require('../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/errors');
+const { keyedDigest, numberLookupKey }
+  = require('../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/security');
 const { prepareFreeTestConfiguration, MAX_READBACK_AGE_MS } = require('./free-test-preparation');
 
 const PROFILE = 'free-test-configuration-staging-v1';
@@ -20,6 +22,17 @@ const MAX_STAGING_PACKET_BYTES = 16_384;
 const MIN_SECRET_CODE_UNITS = 32;
 const MAX_SECRET_CODE_UNITS = 4096;
 const MAX_SECRET_UTF8_BYTES = MAX_SECRET_CODE_UNITS * 3;
+const BINDINGS_PROFILE = 'free-test-staging-bindings-v1';
+// JSON escaping can use six bytes per secret code unit. Keep the protected
+// three-key envelope bounded without excluding runtime-supported key bytes.
+const MAX_BINDING_SECRET_BYTES = 65_536;
+const BINDING_INPUT_FIELDS = Object.freeze([
+  'schemaVersion', 'environment', 'crmOrganizationId', 'operatorIdentity',
+  'testPhoneNumber', 'clientId', 'deploymentId',
+]);
+const BINDING_SECRET_FIELDS = Object.freeze([
+  'numberSecret', 'eventChainSecret', 'analyticsPartitionSecret',
+]);
 const MAX_INTENT_AGE_MS = 5 * 60 * 1000;
 const ENVELOPE_FIELDS = Object.freeze([
   'schemaVersion', 'preparation', 'preservedCoreApproval', 'request',
@@ -85,6 +98,71 @@ function deepFreeze(value) {
     for (const child of Object.values(value)) deepFreeze(child);
   }
   return value;
+}
+
+function validateStagingBindingInput(input) {
+  const code = 'INVALID_STAGING_BINDING_INPUT';
+  exactObject(input, BINDING_INPUT_FIELDS, code);
+  invariant(input.schemaVersion === 1 && input.environment === 'development'
+    && typeof input.crmOrganizationId === 'string' && /^[1-9][0-9]{0,29}$/.test(input.crmOrganizationId)
+    && typeof input.operatorIdentity === 'string' && input.operatorIdentity.length >= 3
+    && input.operatorIdentity.length <= 256 && !/^<.*>$/.test(input.operatorIdentity)
+    && typeof input.testPhoneNumber === 'string' && /^\+1[2-9][0-9]{2}[2-9][0-9]{6}$/.test(input.testPhoneNumber)
+    && typeof input.clientId === 'string' && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(input.clientId)
+    && typeof input.deploymentId === 'string' && /^cfgdeploy_[a-f0-9]{64}$/.test(input.deploymentId),
+  code, 'Staging binding context is invalid.');
+  // Bind every derived value to the exact reviewed nonsecret inputs. No source
+  // record, credential, authenticated readback or approval is created here.
+  const boundInput = Object.fromEntries(BINDING_INPUT_FIELDS.map((key) => [key, input[key]]));
+  return deepFreeze({ input: boundInput,
+    inputSha256: crypto.createHash('sha256').update(JSON.stringify(boundInput), 'utf8').digest('hex') });
+}
+
+function deriveStagingBindings(input, { protectedInput } = {}) {
+  const validated = validateStagingBindingInput(input);
+  const code = 'INVALID_STAGING_BINDING_SECRETS';
+  invariant(Buffer.isBuffer(protectedInput) && protectedInput.length > 0
+    && protectedInput.length <= MAX_BINDING_SECRET_BYTES, code, 'Protected binding input is invalid.');
+  let secrets;
+  try {
+    const text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(protectedInput);
+    secrets = JSON.parse(text);
+    // The accepted object has exactly three string values: six JSON string
+    // tokens total (keys plus values). Any duplicate member necessarily adds
+    // another key token, including an overwritten nonstring value. This keeps
+    // PowerShell's valid escaping while refusing last-key-wins ambiguity.
+    invariant((text.match(/"(?:[^"\\]|\\.)*"/gs) || []).length === 6,
+      code, 'Protected binding input is invalid.');
+  } catch (_) {
+    invariant(false, code, 'Protected binding input is invalid.');
+  }
+  exactObject(secrets, BINDING_SECRET_FIELDS, code);
+  for (const key of ['numberSecret', 'eventChainSecret']) {
+    invariant(typeof secrets[key] === 'string' && secrets[key].length >= MIN_SECRET_CODE_UNITS
+      && secrets[key].length <= MAX_SECRET_CODE_UNITS && !/^<.*>$/.test(secrets[key]),
+    code, 'Protected binding input is invalid.');
+  }
+  invariant(typeof secrets.analyticsPartitionSecret === 'string'
+    && /^\S{32,256}$/.test(secrets.analyticsPartitionSecret)
+    && !/^<.*>$/.test(secrets.analyticsPartitionSecret)
+    && new Set(BINDING_SECRET_FIELDS.map((key) => secrets[key])).size === BINDING_SECRET_FIELDS.length,
+  code, 'Protected binding input is invalid.');
+  const context = validated.input;
+  // These domains/part ordering are the installed gateway, route-control and
+  // analytics-outbox contracts. This is preparation, never a signing intent.
+  const bindings = deepFreeze({ schemaVersion: 1, profile: BINDINGS_PROFILE,
+    input: context, inputSha256: validated.inputSha256,
+    NUMBER_LOOKUP_HASH: numberLookupKey(secrets.numberSecret, context.testPhoneNumber),
+    expectedOperatorHash: `operator_${keyedDigest(secrets.eventChainSecret,
+      'revenue-desk-route-control-operator-v1', [context.crmOrganizationId, context.operatorIdentity])}`,
+    analyticsClientKey: keyedDigest(secrets.analyticsPartitionSecret,
+      'revenue-desk-analytics-client-v1', [context.clientId]),
+    analyticsDeploymentKey: keyedDigest(secrets.analyticsPartitionSecret,
+      'revenue-desk-analytics-deployment-v1', [context.deploymentId]),
+  });
+  const serialized = `${JSON.stringify(bindings)}\n`;
+  return deepFreeze({ bindings, serialized, byteLength: Buffer.byteLength(serialized, 'utf8'),
+    sha256: crypto.createHash('sha256').update(serialized, 'utf8').digest('hex'), profile: BINDINGS_PROFILE });
 }
 
 function canonicalTimestamp(value, code) {
@@ -297,6 +375,10 @@ module.exports = Object.freeze({
   MIN_SECRET_CODE_UNITS,
   MAX_SECRET_CODE_UNITS,
   MAX_SECRET_UTF8_BYTES,
+  BINDINGS_PROFILE,
+  MAX_BINDING_SECRET_BYTES,
+  validateStagingBindingInput,
+  deriveStagingBindings,
   validateUnsignedStagingEnvelope,
   signFreeTestStagingPacket,
 });

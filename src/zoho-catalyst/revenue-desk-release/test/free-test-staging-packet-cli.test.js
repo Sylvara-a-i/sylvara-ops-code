@@ -18,7 +18,8 @@ const SCRIPT = path.resolve(__dirname, '../scripts/sign-free-test-staging-packet
 const GUARD = path.resolve(__dirname, 'helpers/offline-guard.js');
 const WINDOWS_HELPER = path.resolve(__dirname, '../scripts/sign-free-test-staging-packet-private.ps1');
 const POWERSHELL = path.resolve(path.dirname(process.execPath), '../../native/powershell/pwsh.exe');
-const { MAX_SECRET_UTF8_BYTES } = require('../lib/free-test-staging-packet');
+const { MAX_SECRET_UTF8_BYTES, MAX_BINDING_SECRET_BYTES, deriveStagingBindings }
+  = require('../lib/free-test-staging-packet');
 
 function protectSyntheticDirectory(directory, { publicRead = false } = {}) {
   if (process.platform !== 'win32') { fs.chmodSync(directory, publicRead ? 0o755 : 0o700); return; }
@@ -137,6 +138,125 @@ function assertSafeOutput(result, value) {
   }
   assert.equal(output.includes('v1='), false);
 }
+
+function bindingFiles(t) {
+  const value = files(t);
+  value.bindingInput = { schemaVersion: 1, environment: 'development', crmOrganizationId: '900000001',
+    operatorIdentity: 'synthetic_operator', testPhoneNumber: '+12025550101',
+    clientId: 'synthetic_client', deploymentId: `cfgdeploy_${'a'.repeat(64)}` };
+  value.bindingSecrets = { numberSecret: 'synthetic_number_'.repeat(3), eventChainSecret: 'synthetic_event_'.repeat(3),
+    analyticsPartitionSecret: 'synthetic_analytics_'.repeat(3) };
+  fs.writeFileSync(value.input, JSON.stringify(value.bindingInput));
+  return value;
+}
+
+function runBindings(value, extraArgs = [], overrides = {}) {
+  const protectedInput = Buffer.from(JSON.stringify(value.bindingSecrets), 'utf8');
+  try {
+    return spawnSync(process.execPath, ['--require', value.preload, SCRIPT, '--derive-bindings',
+      '--input', value.input, '--output', value.output,
+      ...(process.platform === 'win32' ? ['--powershell-path', POWERSHELL] : []), ...extraArgs], {
+      cwd: value.directory, input: protectedInput, encoding: 'utf8',
+      timeout: process.platform === 'win32' ? 45000 : 10000, windowsHide: true,
+      env: { SystemRoot: process.env.SystemRoot || '', TEMP: value.directory, TMP: value.directory }, ...overrides,
+    });
+  } finally { protectedInput.fill(0); }
+}
+
+function forbidProtectedInput(value) {
+  fs.appendFileSync(value.preload, "const before = require('node:fs').readSync; require('node:fs').readSync = function(fd, ...args) { "
+    + "if (fd === 0) { process.stderr.write('UNEXPECTED_KEY_READ\\n'); throw new Error('No stdin allowed'); } return before.call(this, fd, ...args); };\n");
+}
+
+test('binding CLI exclusively writes runtime-compatible private bindings, never a signed packet', (t) => {
+  const value = bindingFiles(t); const result = runBindings(value);
+  assert.equal(result.status, 0, result.stderr); assertSafeOutput(result, value);
+  const verdict = JSON.parse(result.stdout); const bytes = fs.readFileSync(value.output);
+  const input = Buffer.from(JSON.stringify(value.bindingSecrets), 'utf8');
+  try { assert.equal(bytes.toString('utf8'), deriveStagingBindings(value.bindingInput, { protectedInput: input }).serialized); }
+  finally { input.fill(0); }
+  assert.equal(verdict.status, 'DERIVED_PRIVATE_BINDINGS_NOT_SIGNED');
+  assert.equal(verdict.sha256, crypto.createHash('sha256').update(bytes).digest('hex'));
+  assert.equal(verdict.byteLength, bytes.length); assert.equal(verdict.signaturePresent, false);
+  assert.equal(verdict.submitted, false); assert.equal(verdict.retryAllowed, false);
+  for (const secret of Object.values(value.bindingSecrets)) {
+    assert.equal(`${result.stdout}${result.stderr}${bytes.toString('utf8')}`.includes(secret), false);
+  }
+  const again = runBindings(value);
+  assert.equal(again.status, 1); assertSafeOutput(again, value);
+  assert.deepEqual(fs.readFileSync(value.output), bytes);
+});
+
+test('binding validate-only performs nonsecret preflight without stdin or output', (t) => {
+  const value = bindingFiles(t); forbidProtectedInput(value);
+  const result = runBindings(value, ['--validate-only'], { input: '' });
+  assert.equal(result.status, 0); assertSafeOutput(result, value);
+  const verdict = JSON.parse(result.stdout);
+  assert.equal(verdict.status, 'VALIDATED_BINDING_INPUT_NO_SECRET');
+  assert.equal(verdict.signaturePresent, false); assert.equal(verdict.submitted, false);
+  assert.equal(verdict.retryAllowed, false); assert.equal(fs.existsSync(value.output), false);
+  assert.doesNotMatch(result.stderr, /UNEXPECTED_KEY_READ/);
+});
+
+test('binding mode rejects invalid input and signing-only arguments before protected entry', (t) => {
+  for (const mode of ['wrong_environment', 'extra_field', 'duplicate_key', 'existing_output', 'signing_args', 'duplicate_mode']) {
+    const value = bindingFiles(t); forbidProtectedInput(value);
+    let args = [];
+    if (mode === 'wrong_environment') value.bindingInput.environment = 'production';
+    if (mode === 'extra_field') value.bindingInput.expectedRevision = 'a'.repeat(40);
+    fs.writeFileSync(value.input, JSON.stringify(value.bindingInput));
+    if (mode === 'duplicate_key') fs.writeFileSync(value.input,
+      JSON.stringify(value.bindingInput).replace('"schemaVersion":1', '"schemaVersion":2,"schemaVersion":1'));
+    if (mode === 'existing_output') fs.writeFileSync(value.output, 'SYNTHETIC EXISTING EVIDENCE');
+    if (mode === 'signing_args') args = ['--max-body-bytes', '16384'];
+    if (mode === 'duplicate_mode') args = ['--derive-bindings'];
+    const result = runBindings(value, args);
+    assert.equal(result.status, 1); assertSafeOutput(result, value);
+    assert.doesNotMatch(result.stderr, /UNEXPECTED_KEY_READ/);
+    assert.equal(fs.existsSync(value.output), mode === 'existing_output');
+  }
+});
+
+test('binding CLI rejects malformed or oversized protected JSON without exposing it or writing output', (t) => {
+  const value = bindingFiles(t); const valid = JSON.stringify(value.bindingSecrets);
+  for (const input of [Buffer.from('SYNTHETIC_PRIVATE_SENTINEL'), Buffer.from(valid + ' extra'),
+    Buffer.from(valid.replace('"numberSecret":', '"numberSecret":0,"numberSecret":')),
+    Buffer.alloc(MAX_BINDING_SECRET_BYTES + 1, 65), Buffer.from([0xff])]) {
+    try {
+      const result = runBindings(value, [], { input });
+      assert.equal(result.status, 1); assertSafeOutput(result, value);
+      assert.equal(fs.existsSync(value.output), false);
+      assert.doesNotMatch(`${result.stdout}${result.stderr}`, /SYNTHETIC_PRIVATE_SENTINEL|numberSecret/);
+    } finally { input.fill(0); }
+  }
+});
+
+test('binding CLI verifies exact output bytes and preserves a mismatched local result for reconciliation', (t) => {
+  const value = bindingFiles(t);
+  fs.appendFileSync(value.preload, "const io = require('node:fs'); const write = io.writeFileSync;\n"
+    + "io.writeFileSync = function(target, data, options) { return write.call(this, target, "
+    + "typeof target === 'number' ? String(data).replace('synthetic_operator', 'synthetic_operatoX') : data, options); };\n");
+  const result = runBindings(value);
+  assert.equal(result.status, 1); assertSafeOutput(result, value);
+  assert.ok(fs.existsSync(value.output)); assert.doesNotMatch(result.stdout, /DERIVED_PRIVATE_BINDINGS/);
+  assert.match(fs.readFileSync(value.output, 'utf8'), /synthetic_operatoX/);
+});
+
+test('binding protected stdin allocation is cleared on success and on derivation failure', (t) => {
+  for (const failing of [false, true]) {
+    const value = bindingFiles(t);
+    fs.appendFileSync(value.preload, "const savedAlloc = Buffer.alloc; const sensitiveBuffers = [];\n"
+      + "Buffer.alloc = function(size, ...args) { const value = savedAlloc.call(this, size, ...args); "
+      + `if (size === ${MAX_BINDING_SECRET_BYTES + 1}) sensitiveBuffers.push(value); return value; };\n`
+      + "process.on('exit', () => { if (sensitiveBuffers.length !== 1 || !sensitiveBuffers.every(value => value.every(byte => byte === 0))) { "
+      + "process.stderr.write('SYNTHETIC_BUFFER_NOT_CLEARED\\n'); process.exitCode = 91; } "
+      + "else process.stdout.write('SYNTHETIC_BUFFER_CLEARED\\n'); });\n");
+    const result = runBindings(value, [], failing ? { input: '{}' } : {});
+    assert.equal(result.status, failing ? 1 : 0); assertSafeOutput(result, value);
+    assert.match(result.stdout, /SYNTHETIC_BUFFER_CLEARED/);
+    assert.doesNotMatch(result.stderr, /SYNTHETIC_BUFFER_NOT_CLEARED/);
+  }
+});
 
 test('CLI consumes fake stdin only and writes one signed private file without outbound access', (t) => {
   const value = files(t); const result = run(value);
@@ -456,7 +576,8 @@ test('private wrapper UTF-8 encoding exactly matches Node including unpaired UTF
     fs.writeFileSync(driver, `param([string]$Wrapper)
 $ErrorActionPreference = 'Stop'
 $source = [IO.File]::ReadAllText($Wrapper)
-$start = $source.IndexOf('$taskSecretPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($taskSecure)')
+$signing = $source.IndexOf('$taskSecure = $taskBox.SecurePassword')
+$start = $source.IndexOf('$taskSecretPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($taskSecure)', $signing)
 $end = $source.IndexOf('$taskBox.Clear()', $start)
 if ($start -lt 0 -or $end -lt $start) { throw 'Encoding block unavailable' }
 $conversion = [scriptblock]::Create($source.Substring($start, $end - $start))
@@ -482,6 +603,57 @@ foreach ($vector in $vectors) {
       env: { SystemRoot: process.env.SystemRoot || '' }, input: '' });
     assert.equal(checked.status, 0); assert.equal(checked.stdout.trim(), 'SYNTHETIC_UTF8_ENCODING_VERIFIED');
     assert.equal(checked.stderr, '');
+  });
+
+test('private binding wrapper JSON encoding preserves runtime-derived values for synthetic Unicode and controls',
+  { skip: process.platform !== 'win32' }, (t) => {
+    const value = bindingFiles(t); const driver = path.join(value.directory, 'check-synthetic-binding-encoding.ps1');
+    const texts = [' ' + 'x'.repeat(30) + ' ', '漢'.repeat(32), '😀'.repeat(16),
+      'x'.repeat(31) + '\n', '"\\\t'.repeat(12), '\ud800' + 'x'.repeat(31), '\udc00' + 'x'.repeat(31)];
+    const vectors = texts.map((text) => ({ codeUnits: Array.from({ length: text.length }, (_, i) => text.charCodeAt(i)) }));
+    fs.writeFileSync(driver, `param([string]$Wrapper)
+$ErrorActionPreference = 'Stop'
+$source = [IO.File]::ReadAllText($Wrapper)
+$start = $source.IndexOf('$taskBindingValues = [ordered]@{}')
+$end = $source.IndexOf('    } else {', $start)
+if ($start -lt 0 -or $end -lt $start) { throw 'Binding encoding block unavailable' }
+$conversion = [scriptblock]::Create($source.Substring($start, $end - $start))
+$vectors = '${JSON.stringify(vectors)}' | ConvertFrom-Json
+$outputs = @()
+foreach ($vector in $vectors) {
+  $taskBindingBoxes = @()
+  foreach ($units in @($vector.codeUnits, @(${Array.from(value.bindingSecrets.eventChainSecret, (c) => c.charCodeAt(0)).join(',')}), @(${Array.from(value.bindingSecrets.analyticsPartitionSecret, (c) => c.charCodeAt(0)).join(',')}))) {
+    $secure = [Security.SecureString]::new()
+    foreach ($unit in $units) { $secure.AppendChar([char]$unit) }
+    $box = [pscustomobject]@{ SecurePassword = $secure }
+    $box | Add-Member -MemberType ScriptMethod -Name Clear -Value { }
+    $taskBindingBoxes += $box
+  }
+  $taskSecretPointer = [IntPtr]::Zero; $taskBytes = $null; $taskSecure = $null
+  try {
+    . $conversion
+    $outputs += [Convert]::ToBase64String($taskBytes)
+    if ($taskBindingValues.Count -ne 0 -or $null -ne $taskBindingJson -or $null -ne $taskSecure -or $taskSecretPointer -ne [IntPtr]::Zero) { throw 'Protected references retained' }
+  } finally {
+    if ($taskBytes) { [Array]::Clear($taskBytes, 0, $taskBytes.Length) }
+    foreach ($box in $taskBindingBoxes) { $box.SecurePassword.Dispose() }
+  }
+}
+[Console]::Out.WriteLine((ConvertTo-Json -InputObject $outputs -Compress))
+`, { flag: 'wx' });
+    const checked = spawnSync(POWERSHELL, ['-NoLogo', '-NoProfile', '-NonInteractive', '-File', driver,
+      '-Wrapper', WINDOWS_HELPER], { encoding: 'utf8', timeout: 15000, windowsHide: true,
+      env: { SystemRoot: process.env.SystemRoot || '' }, input: '' });
+    assert.equal(checked.status, 0); assert.equal(checked.stderr, '');
+    const encoded = JSON.parse(checked.stdout); assert.equal(encoded.length, texts.length);
+    for (let index = 0; index < texts.length; index++) {
+      const actual = Buffer.from(encoded[index], 'base64');
+      const expected = Buffer.from(JSON.stringify({ ...value.bindingSecrets, numberSecret: texts[index] }), 'utf8');
+      try {
+        assert.deepEqual(deriveStagingBindings(value.bindingInput, { protectedInput: actual }),
+          deriveStagingBindings(value.bindingInput, { protectedInput: expected }));
+      } finally { actual.fill(0); expected.fill(0); }
+    }
   });
 
 test('CLI rejects ambiguous duplicate object fields rather than signing last-key-wins JSON', (t) => {

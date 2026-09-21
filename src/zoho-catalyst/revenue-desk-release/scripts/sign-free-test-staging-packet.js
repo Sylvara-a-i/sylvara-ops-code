@@ -6,6 +6,10 @@ const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 const {
   PROFILE,
+  BINDINGS_PROFILE,
+  MAX_BINDING_SECRET_BYTES,
+  validateStagingBindingInput,
+  deriveStagingBindings,
   validateUnsignedStagingEnvelope,
   signFreeTestStagingPacket,
 } = require('../lib/free-test-staging-packet');
@@ -31,12 +35,14 @@ function fail(condition, code) {
 }
 
 function parseArguments(argv) {
-  const expectedArguments = process.platform === 'win32'
-    ? [...BASE_ARGUMENTS, '--powershell-path'] : [...BASE_ARGUMENTS];
   fail(Array.isArray(argv), 'INVALID_ARGUMENTS');
+  const deriveBindingsCount = argv.filter((value) => value === '--derive-bindings').length;
   const validateOnlyCount = argv.filter((value) => value === '--validate-only').length;
-  fail(validateOnlyCount <= 1, 'INVALID_ARGUMENTS');
-  const pairedArguments = argv.filter((value) => value !== '--validate-only');
+  fail(validateOnlyCount <= 1 && deriveBindingsCount <= 1, 'INVALID_ARGUMENTS');
+  const modeArguments = deriveBindingsCount === 1 ? ['--input', '--output'] : BASE_ARGUMENTS;
+  const expectedArguments = process.platform === 'win32'
+    ? [...modeArguments, '--powershell-path'] : [...modeArguments];
+  const pairedArguments = argv.filter((value) => !['--validate-only', '--derive-bindings'].includes(value));
   fail(pairedArguments.length === expectedArguments.length * 2, 'INVALID_ARGUMENTS');
   const values = {};
   for (let index = 0; index < pairedArguments.length; index += 2) {
@@ -50,15 +56,16 @@ function parseArguments(argv) {
   fail(expectedArguments.every((name) => Object.hasOwn(values, name)), 'INVALID_ARGUMENTS');
   fail(path.isAbsolute(values['--input']) && path.isAbsolute(values['--output']),
     'ABSOLUTE_PRIVATE_PATHS_REQUIRED');
-  fail(/^[1-9][0-9]{2,4}$/.test(values['--max-body-bytes']), 'INVALID_ARGUMENTS');
+  if (!deriveBindingsCount) fail(/^[1-9][0-9]{2,4}$/.test(values['--max-body-bytes']), 'INVALID_ARGUMENTS');
   return Object.freeze({
     input: path.resolve(values['--input']),
     output: path.resolve(values['--output']),
     expectedRevision: values['--expected-revision'],
     expectedOperatorHash: values['--expected-operator-hash'],
-    maxBodyBytes: Number(values['--max-body-bytes']),
+    maxBodyBytes: deriveBindingsCount ? undefined : Number(values['--max-body-bytes']),
     powershellPath: values['--powershell-path'] || null,
     validateOnly: validateOnlyCount === 1,
+    deriveBindings: deriveBindingsCount === 1,
   });
 }
 
@@ -163,9 +170,9 @@ function readEnvelope(inputPath) {
   }
 }
 
-function readSecret() {
+function readSecret(maximumBytes = MAX_SECRET_BYTES, errorCode = 'INVALID_STAGING_SIGNING_SECRET') {
   fail(process.stdin.isTTY !== true, 'INTERACTIVE_STDIN_PROHIBITED');
-  const bytes = Buffer.alloc(MAX_SECRET_BYTES + 1);
+  const bytes = Buffer.alloc(maximumBytes + 1);
   let length = 0;
   try {
     while (length < bytes.length) {
@@ -173,7 +180,7 @@ function readSecret() {
       if (count === 0) break;
       length += count;
     }
-    fail(length <= MAX_SECRET_BYTES, 'INVALID_STAGING_SIGNING_SECRET');
+    fail(length <= maximumBytes, errorCode);
     return { allocation: bytes, secret: bytes.subarray(0, length) };
   } catch (error) {
     bytes.fill(0);
@@ -181,7 +188,7 @@ function readSecret() {
   }
 }
 
-function writeExclusivePrivateFile(outputPath, serialized) {
+function assertNewPrivateOutput(outputPath) {
   const parent = path.dirname(outputPath);
   assertExistingPrivatePath(parent, { file: false });
   fail(comparablePath(outputPath) !== comparablePath(parent), 'UNSAFE_PRIVATE_PATH');
@@ -191,6 +198,10 @@ function writeExclusivePrivateFile(outputPath, serialized) {
   } catch (error) {
     if (error?.code !== 'ENOENT') throw error;
   }
+}
+
+function writeExclusivePrivateFile(outputPath, serialized) {
+  assertNewPrivateOutput(outputPath);
   let descriptor;
   try {
     descriptor = fs.openSync(outputPath, 'wx', 0o600);
@@ -219,12 +230,41 @@ function writeExclusivePrivateFile(outputPath, serialized) {
   if (process.platform !== 'win32') fs.chmodSync(outputPath, 0o600);
 }
 
+function preparePrivateBindings(input, args) {
+  validateStagingBindingInput(input);
+  // Including POSIX, reject unsafe or existing output before any protected
+  // input. Exclusive creation and the normal path checks still run afterward.
+  assertNewPrivateOutput(args.output);
+  if (args.validateOnly) {
+    process.stdout.write(`${JSON.stringify({ status: 'VALIDATED_BINDING_INPUT_NO_SECRET',
+      profile: BINDINGS_PROFILE, signaturePresent: false, submitted: false, retryAllowed: false })}\n`);
+    return;
+  }
+  const protectedInput = readSecret(MAX_BINDING_SECRET_BYTES, 'INVALID_STAGING_BINDING_SECRETS');
+  try {
+    const derived = deriveStagingBindings(input, { protectedInput: protectedInput.secret });
+    writeExclusivePrivateFile(args.output, derived.serialized);
+    verifyWindowsPrivatePaths(args, true);
+    assertExistingPrivatePath(args.output, { file: true });
+    fail(sha256File(args.output) === derived.sha256, 'OUTPUT_READBACK_FAILED');
+    process.stdout.write(`${JSON.stringify({ status: 'DERIVED_PRIVATE_BINDINGS_NOT_SIGNED',
+      profile: BINDINGS_PROFILE, byteLength: derived.byteLength, sha256: derived.sha256,
+      signaturePresent: false, submitted: false, retryAllowed: false })}\n`);
+  } finally {
+    protectedInput.allocation.fill(0);
+  }
+}
+
 function main() {
   fail(process.versions.node === '24.19.0', 'PINNED_NODE_REQUIRED');
   const args = parseArguments(process.argv.slice(2));
   fail(args.input !== args.output, 'UNSAFE_PRIVATE_PATH');
   verifyWindowsPrivatePaths(args, false);
   const envelope = readEnvelope(args.input);
+  if (args.deriveBindings) {
+    preparePrivateBindings(envelope, args);
+    return;
+  }
   const now = Date.now();
   // Complete all packet/evidence validation before consuming protected stdin.
   validateUnsignedStagingEnvelope(envelope, {
