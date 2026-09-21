@@ -480,6 +480,19 @@ It separately requires an externally owner-signed **final** content/recipient
 snapshot; the Draft/Pending review above cannot authorize creation. Its distinct
 signature domain cannot be reflected into normal approval or activation.
 
+Form 2's durable verification steps have separate timestamps: proof verification,
+proof consumption, then session verification. Staging accepts that ordered
+sequence, including equal timestamps from a fixed clock; it must not require
+proof and session verification to happen at the same instant. CRM verification
+must match the session at CRM's whole-second precision and must not follow the
+submitted authorization/scope time. Receipt success, session submission and
+capture must retain their existing order. Never rewrite accepted evidence to
+satisfy the validator. Session verification must also precede receipt success at
+full Catalyst precision, even when both fall within the same CRM second. Never
+round durable timestamps to hide a reversed sequence. A correction requires the affected runtime
+artifact to be reviewed, installed under hold and accepted separately; passing
+the local signer or changing its utility revision does not update the controller.
+
 ### Owner-only offline staging packet
 
 The missing owner entry point is separate from the installed controller. The

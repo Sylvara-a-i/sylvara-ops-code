@@ -7,6 +7,8 @@ const SOURCE = 'd'.repeat(40);
 const CAPTURED = '2026-09-09T11:59:00.000Z';
 const SUBMITTED = '2026-09-09T11:50:00.000Z';
 const VERIFIED = '2026-09-09T11:45:00.000Z';
+const PROOF_VERIFIED = '2026-09-09T11:44:59.100Z';
+const PROOF_CONSUMED = '2026-09-09T11:44:59.900Z';
 
 function syntheticPreparationInputs() {
   return ['A', 'B'].map((letter, index) => {
@@ -25,8 +27,8 @@ function syntheticPreparationInputs() {
           CRM_CONTACT_ID: ids.contactId, CRM_DEAL_ID: ids.dealId,
           VERIFIED_AT: VERIFIED, SUBMITTED_AT: SUBMITTED,
           SOURCE_REVISION: SOURCE, SOURCE_ENVIRONMENT: 'development' },
-        proof: { SESSION_ROW_ID: String(201 + index), STATUS: 'consumed', CONSUMED_AT: SUBMITTED,
-          VERIFIED_AT: VERIFIED,
+        proof: { SESSION_ROW_ID: String(201 + index), STATUS: 'consumed', CONSUMED_AT: PROOF_CONSUMED,
+          VERIFIED_AT: PROOF_VERIFIED,
           SOURCE_REVISION: SOURCE, SOURCE_ENVIRONMENT: 'development' },
       },
       crm: {
