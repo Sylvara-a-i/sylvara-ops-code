@@ -2,6 +2,8 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { installOfflineGuard } = require('../../../../revenue-desk-release/test/helpers/offline-guard');
+const guard = installOfflineGuard();
 const { createStagingFixture, SyntheticStore } = require('./helpers/configuration-staging-fixture');
 const { RECEIPT_KIND } = require('../lib/configuration-staging-service');
 const { createConfigurationStagingService } = require('../lib/configuration-staging-service');
@@ -9,6 +11,111 @@ const { validateConfiguration } = require('revenue_desk_call_gateway/lib/validat
 const { buildCrmPreTestSnapshot } = require('revenue_desk_call_gateway/lib/crm-report-baseline');
 const { crmBaselineFixture }
   = require('../../../../revenue-desk-analytics/functions/analytics_sync/test/helpers/crm-baseline-fixture');
+const { syntheticPreparationInputs } = require('../../../../revenue-desk-release/test/fixtures/free-test-preparation');
+const { createConfigurationConversionReader } = require('../lib/configuration-conversion-reader');
+const { createCrmControlClient } = require('../lib/crm-client');
+
+function connectedNativeFixture({ publicNative = false } = {}) {
+  const source = syntheticPreparationInputs()[0];
+  // The offline demo's short IDs are not valid CRM transport IDs. Extend the
+  // synthetic relationship graph before bindings/signatures are constructed;
+  // do not relax the actual reader's ID validation to accommodate the test.
+  const ids = Object.fromEntries(['leadId', 'accountId', 'contactId', 'dealId']
+    .map((field) => [source.evidence.nativeConversion[field], `${source.evidence.nativeConversion[field]}00`]));
+  function withTransportIds(value) {
+    if (Array.isArray(value)) return value.map(withTransportIds);
+    if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value)
+      .map(([key, child]) => [key, withTransportIds(child)]));
+    return typeof value === 'string' && Object.hasOwn(ids, value) ? ids[value] : value;
+  }
+  const f = createStagingFixture(0, { publicNative, preparationInput: withTransportIds(source) });
+  const nativeRow = { id: f.lineage.originalLeadId, Intake_Submission_ID: f.lineage.journeyId,
+    Modified_Time: '2026-09-09T11:43:00.000Z', Converted__s: true,
+    Converted_Date_Time: '2026-09-09T06:42:00-05:00',
+    Converted_Account: { id: f.records.account.id, name: 'SYNTHETIC PRIVATE NAME' },
+    Converted_Contact: { id: f.records.contact.id, name: 'SYNTHETIC PRIVATE NAME' },
+    Converted_Deal: { id: f.records.deal.id, name: 'SYNTHETIC PRIVATE NAME' },
+    $converted_detail: { convert_date: '2026-09-09T04:42:00.000Z' } };
+  const requests = []; let writeAuthorizationReads = 0;
+  const crm = createCrmControlClient({ crmApiBaseUrl: 'https://www.zohoapis.com/crm/v8',
+    platformTimeoutMs: 250, crmOrganizationId: '606' }, {
+    readAuthorization: async () => 'Zoho-oauthtoken synthetic-read-only',
+    writeAuthorization: async () => { writeAuthorizationReads += 1; throw new Error('No real writes'); },
+    fetchImpl: async (url, options) => {
+      const parsed = new URL(url);
+      requests.push({ method: options.method, path: parsed.pathname,
+        query: Object.fromEntries(parsed.searchParams.entries()) });
+      assert.equal(options.method, 'GET'); assert.equal(options.body, undefined);
+      if (parsed.pathname === '/crm/v8/org') return { status: 200,
+        json: async () => ({ org: [{ zgid: '606' }] }) };
+      assert.equal(parsed.pathname, '/crm/v8/Leads');
+      assert.equal(parsed.searchParams.get('ids'), f.lineage.originalLeadId);
+      assert.equal(parsed.searchParams.get('converted'), 'true');
+      const fields = parsed.searchParams.get('fields').split(',');
+      return { status: 200, json: async () => ({ data: [Object.fromEntries(Object.entries(nativeRow)
+        .filter(([key]) => fields.includes(key)))], info: { count: 1, more_records: false, next_page_token: null } }) };
+    },
+  });
+  const conversionReader = createConfigurationConversionReader({ crm, now: f.now });
+  const service = createConfigurationStagingService({ config: f.config, store: f.store, crm: f.crm,
+    core: f.core, sourceReader: f.sourceReader, conversionReader, now: f.now });
+  return { f, nativeRow, requests, service, writes: () => writeAuthorizationReads };
+}
+
+test('real conversion reader and CRM field selection connect accepted setup to inactive staging and exact replay', async () => {
+  for (const publicNative of [false, true]) {
+    const selected = connectedNativeFixture({ publicNative }); const { f, service } = selected;
+    const result = await service.stage(f.request);
+    assert.equal(result.state, 'StagedInactive'); assert.equal(result.active, false); assert.equal(result.approved, false);
+    const [deployment] = f.store.rowsFor(f.config.tables.DEPLOYMENT_TABLE);
+    assert.equal(deployment.TEST_STATUS, 'Ready for Approval');
+    assert.equal(deployment.GO_LIVE_APPROVAL_STATUS, 'Pending Internal Approval');
+    assert.equal(deployment.ACTUAL_START_AT, null); assert.equal(deployment.EXPIRES_AT, null);
+    assert.equal(deployment.APPROVAL_EVENT_KEY, null); assert.equal(f.stagingWrites, 1);
+    const before = structuredClone([...f.store.rows.entries()]); const writes = f.store.writes.length;
+    assert.deepEqual(await service.stage(f.request), { ...result, replayed: true });
+    assert.equal(f.store.writes.length, writes); assert.equal(f.stagingWrites, 1);
+    assert.deepEqual([...f.store.rows.entries()], before); assert.equal(selected.writes(), 0);
+    const reads = selected.requests.filter(({ path }) => path === '/crm/v8/Leads');
+    assert.ok(reads.length >= 2);
+    for (const read of reads) assert.equal(read.query.fields,
+      'id,Intake_Submission_ID,Modified_Time,Converted__s,Converted_Date_Time,Converted_Account,Converted_Contact,Converted_Deal');
+    const [receipt] = f.store.rowsFor(f.config.tables.EVENT_RECEIPT_TABLE);
+    assert.equal(receipt.STATUS, 'Completed');
+    assert.doesNotMatch(receipt.EVENT_DATA_JSON, /SYNTHETIC PRIVATE NAME|converted_detail/);
+  }
+});
+
+test('real native reader rejects wrong joins and chronology before staging consumes any write', async () => {
+  for (const mutate of [
+    (row) => { row.Converted_Account.id = '900000000001'; },
+    (row) => { row.Converted_Contact.id = '900000000001'; },
+    (row) => { row.Converted_Deal.id = '900000000001'; },
+    (row) => { row.Intake_Submission_ID = 'synthetic_other_journey'; },
+    (row) => { row.Converted_Date_Time = '2026-09-09T11:39:00.000Z'; },
+    (row) => { row.Converted_Date_Time = '2026-09-09T11:46:00.000Z'; row.Modified_Time = row.Converted_Date_Time; },
+    (row) => { row.Converted_Date_Time = '2026-09-09T11:44:00.000Z'; },
+    (row) => { delete row.Converted_Contact; },
+  ]) {
+    const selected = connectedNativeFixture(); mutate(selected.nativeRow);
+    await assert.rejects(selected.service.stage(selected.f.request), (error) => {
+      assert.ok(['CONFIGURATION_CONVERSION_INVALID', 'CONFIGURATION_NATIVE_CONVERSION_UNVERIFIED'].includes(error.code));
+      return true;
+    });
+    assert.equal(selected.f.store.writes.length, 0); assert.equal(selected.f.stagingWrites, 0);
+    assert.equal(selected.writes(), 0);
+  }
+});
+
+test('real native conversion drift blocks completed replay without additional writes', async () => {
+  const selected = connectedNativeFixture(); const { f, service, nativeRow } = selected;
+  await service.stage(f.request);
+  const before = structuredClone([...f.store.rows.entries()]); const writes = f.store.writes.length;
+  nativeRow.Converted_Contact.id = '900000000001';
+  await assert.rejects(service.stage(f.request), { code: 'CONFIGURATION_NATIVE_CONVERSION_UNVERIFIED' });
+  assert.equal(f.store.writes.length, writes); assert.equal(f.stagingWrites, 1);
+  assert.deepEqual([...f.store.rows.entries()], before); assert.equal(selected.writes(), 0);
+});
 
 test('authenticated submitted setup creates immutable reviewed content and inactive deployment exactly once', async () => {
   const f = createStagingFixture();
@@ -300,4 +407,9 @@ test('fresh authenticated baseline metadata and exact CRM values enter the revie
   assert.equal(stored.values.estimatedUnansweredCallRate, null);
   assert.equal(stored.evidenceClass, 'customer_supplied_estimate');
   assert.equal(stored.provenanceStatus, 'locally_consistent_not_authenticated');
+});
+
+test.after(() => {
+  assert.deepEqual(guard.blocked, []);
+  guard.restore();
 });

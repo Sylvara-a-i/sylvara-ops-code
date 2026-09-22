@@ -4,6 +4,7 @@ const { RevenueDeskError, invariant } = require('revenue_desk_call_gateway/lib/e
 
 const NATIVE_CONVERSION_FIELDS = Object.freeze([
   'id', 'Intake_Submission_ID', 'Modified_Time', 'Converted__s', 'Converted_Date_Time',
+  'Converted_Account', 'Converted_Contact', 'Converted_Deal',
 ]);
 const CRM_ID = /^[1-9][0-9]{9,29}$/;
 const JOURNEY = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/;
@@ -38,30 +39,31 @@ function projectConversion(response, originalLeadId, observedAt) {
   requireConversion(row.Converted__s === true
     && (!Object.hasOwn(row, '$converted') || row.$converted === true)
     && typeof row.Intake_Submission_ID === 'string' && JOURNEY.test(row.Intake_Submission_ID));
-  const detail = row.$converted_detail;
-  requireConversion(plain(detail));
-  const ids = [originalLeadId, detail.account, detail.contact, detail.deal];
+  const targets = [row.Converted_Account, row.Converted_Contact, row.Converted_Deal];
+  requireConversion(targets.every(plain));
+  const [accountId, contactId, dealId] = targets.map((target) => target.id);
+  const ids = [originalLeadId, accountId, contactId, dealId];
   requireConversion(ids.every((id) => typeof id === 'string' && CRM_ID.test(id))
     && new Set(ids).size === ids.length);
   const convertedAt = timestamp(row.Converted_Date_Time);
-  requireConversion(convertedAt === timestamp(detail.convert_date) && convertedAt <= observedAt
-    && timestamp(row.Modified_Time) <= observedAt);
-  // No lookup/name inference: all three targets come from native conversion
-  // details, not from today's Deal links. Staging must independently join these
-  // exact IDs/journey to its authenticated Form 1, Form 2 and CRM source reads.
+  const modifiedAt = timestamp(row.Modified_Time);
+  requireConversion(convertedAt <= modifiedAt && modifiedAt <= observedAt);
+  // These are the original Lead's built-in, API-nonwritable conversion targets,
+  // not today's mutable Deal links. Explicitly select them: the legacy derived
+  // $converted_detail may be omitted and its date can disagree with the native
+  // timestamp. Never infer a timezone correction or fall back to legacy data.
+  // Staging separately joins these IDs/journey to authenticated Form 1/Form 2.
   return Object.freeze({ originalLeadId, journeyId: row.Intake_Submission_ID,
-    accountId: detail.account, contactId: detail.contact, dealId: detail.deal,
+    accountId, contactId, dealId,
     convertedAt: new Date(convertedAt).toISOString(), observedAt: new Date(observedAt).toISOString() });
 }
 
 /**
- * Read-only server adapter. Missing derived conversion details remain a live
- * capability gap; neither matching lookup IDs nor a request flag can replace it.
- * Official contracts checked 2026-09-15:
+ * Read-only server adapter. Missing native conversion fields fail closed;
+ * present-day relationship lookups or a request flag cannot replace them.
+ * v8 field-selected GET and native field metadata checked 2026-09-22:
  * https://www.zoho.com/crm/developer/docs/api/v8/get-records.html
- * https://help.zoho.com/portal/en/community/topic/kaizen-11-the-properties-in-zoho-crm-api
- * The latter documents $converted_detail on GET; its return with the selected
- * v8 fields and the tenant's read scope still require authorized live readback.
+ * https://www.zoho.com/crm/developer/docs/api/v8/field-meta.html
  */
 function createConfigurationConversionReader({ crm, now = Date.now, timeoutMs = 10000 } = {}) {
   invariant(typeof crm?.getNativeConversion === 'function' && typeof now === 'function'

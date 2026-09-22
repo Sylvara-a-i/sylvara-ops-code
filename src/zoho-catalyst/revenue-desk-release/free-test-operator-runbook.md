@@ -333,7 +333,7 @@ this table is the sanitized operating view, not a new release contract.
 | Gate | Current evidence and revision | Remaining action | Cost class | Approval needed | Status |
 | --- | --- | --- | --- | --- | --- |
 | G1 Public/assisted entry and native relationships | Accepted assisted Forms/conversion retained; `5227abe` installed held; public native mapping read back | Complete narrow read grant and affected public identity/retry acceptance | Offline now; cloud allowance must be confirmed | Owner grant; exact readback/fixture allocation; no reused canary | Public runtime continuation unverified; assisted evidence retained |
-| G2 Authenticated configuration review/staging | `f9989a8` preview installed under hold; accepted native joins and corrected synthetic Account read back; 4,096-byte body limit freshly confirmed, complete baseline-bearing packet not yet ready | Complete protected identity preparation and baseline context; validate exact unsigned packet before approved limit migration, signing and staging/readback | Offline now; contained Development later | Owner values/key entry; exact configuration/staging allocation | Installed under hold; packet-size/configuration prerequisite and runtime acceptance pending |
+| G2 Authenticated configuration review/staging | `f9989a8` preview remains installed under restored hold; protected identity preparation and baseline packet complete; approved 10,240-byte limit read back and packet fits. One allocated staging POST returned 409; independent reads found no receipt, configuration or deployment. Exact v8 GET reproduced a native-conversion reader defect | Review/test the narrow native-field reader correction; obtain exact controller-only installation and staging acceptance allocation; preserve accepted Forms and relationships | Local correction now; Development execution only within verified allowance | Prior POST and hold cycle consumed; no blind retry or new timed owner handoff | Installed under hold; G2 runtime acceptance still unpassed |
 | G3 Coverage and restoration preparation | After-hours fixtures; new owner-attested overflow/combined snapshot contract | Actual originating-provider setting/unit/evidence and later execution binding; preserve original handling | Local preparation only | Owner evidence; separate provider phase for live behavior | Preparation only; overflow/combined execution held |
 | G4 Call-to-owner handoff | H1–H10 source at `c28affd`, separate dry-run/acceptance/delivery meanings | Named monitored owner, actual alert adapter/inbox proof and bounded recovery readback | No real sending now | Exact owner-only email and runtime allocation | Source complete; Development 0/10 |
 | G5 Clock, limit, stop and settlement | Offline limits/races/reports; early-stop correction retained in `5227abe` held installation | Scoped installed-runtime containment and report reconciliation | Offline passed; cloud later | Exact synthetic acceptance allocation | Installed evidence is not runtime proof |
@@ -539,10 +539,11 @@ installed controller. They need not be identical, and the tool must never change
 a runtime revision label to make them match. `MaxBodyBytes` must come from fresh
 secret-safe readback of Development `ROUTE_CONTROL_MAX_BODY_BYTES`; it has no
 default. The 16,384-byte supported ceiling is not proof of the deployed setting.
-The latest reviewed configuration value is 4,096. The historical 6,024-byte
-packet and the larger current preparation both exceed it. Recalculate the exact
-complete packet, including its reporting baseline, rather than reusing an old
-size estimate. An oversized packet rejects **before signing-key entry**. Do not
+The approved Development value was raised from 4,096 to 10,240 and independently
+read back; the complete baseline-bearing packet fits. The old size blocker is
+historical, not the current acceptance blocker. Recalculate the exact complete
+packet for each authorized operation rather than reusing an old size estimate.
+An oversized packet rejects **before signing-key entry**. Do not
 truncate evidence or silently raise the parameter. An exact contained runtime
 configuration migration and independent readback are prerequisites when the real
 packet exceeds the installed limit; no migration is performed by this utility.
@@ -563,6 +564,35 @@ provider behavior, and does not replace server-side revalidation. Later bounded
 submission still needs the exact private packet, valid allocation and fresh
 prestate. It must produce `StagedInactive`, a durable receipt, independent row/CRM
 readback, and no approval, activation, clock, message or provider effect.
+
+### Native conversion readback correction — 2026-09-22 UTC
+
+Owner: Gabriel (acceptance authority); controller (sole configuration writer).
+The allocated staging attempt returned `control_failed`/409. Its private record
+preserves the request digest, restored hold and independent zero-row readback;
+no retry is implied. This is not successful staging or proof of which internal
+branch rejected that request.
+
+An exact field-selected CRM v8 GET independently reproduced a blocking reader
+defect: the old five-field projection omitted `$converted_detail`, which the
+reader nevertheless required. Explicitly selecting that legacy property exposed
+a date inconsistent with `Converted_Date_Time`. No timezone adjustment is valid.
+Fresh native field metadata and GET readback instead established
+`Converted_Account`, `Converted_Contact` and `Converted_Deal` as built-in,
+API-nonwritable conversion targets on the original Lead. The correction selects
+these exact fields and uses `Converted_Date_Time`, never mutable relationship
+lookups, names, request claims or legacy fallback. It preserves exact single-Lead
+readback, complete pagination, distinct string IDs, conversion/modified-time
+ordering, and independent Form 1 → conversion → Form 2 joins.
+
+Only the controller reader changes; no grant, writer, schema, route, provider,
+mail, reporting or customer data change is required. Field-filtered fake CRM
+responses must exercise the real CRM client and reader through staging/replay,
+with zero writes on missing fields, wrong relationships or invalid chronology.
+Source verification does not pass G2: a reviewed controller delta, authorized
+installation/readback and separately allocated authenticated staging with durable
+receipt and inactive-row readback remain necessary. Keep the restored hold as
+rollback; do not rerun Forms, reactivate a route or infer a retry from zero rows.
 
 When the required derived identities are absent, the same wrapper's
 `-PrepareBindings` mode accepts only a reviewed Development identity input:
