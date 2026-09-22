@@ -7,11 +7,12 @@ const { installOfflineGuard } = require('../../../../revenue-desk-release/test/h
 const guard = installOfflineGuard();
 const { createStagingFixture } = require('./helpers/configuration-staging-fixture');
 const { syntheticPreparationInputs } = require('../../../../revenue-desk-release/test/fixtures/free-test-preparation');
-const { createConfigurationStagingService, RECEIPT_KIND, RECONCILIATION_RECEIPT_KIND, COMPLETION_RECEIPT_KIND }
+const { createConfigurationStagingService, RECEIPT_KIND, RECONCILIATION_RECEIPT_KIND, COMPLETION_RECEIPT_KIND, TRANSITION_RECEIPT_KIND }
   = require('../lib/configuration-staging-service');
 const { RECONCILIATION_PROFILE, RECONCILIATION_SIGNATURE_DOMAIN, canonicalReconciliationIntent,
   successorConfigurationRow, successorDeployment, COMPLETION_PROFILE, COMPLETION_SIGNATURE_DOMAIN,
-  canonicalCompletionIntent, completionConfigurationRow, completionDeployment, inactiveDeploymentFingerprint }
+  canonicalCompletionIntent, completionConfigurationRow, completionDeployment, inactiveDeploymentFingerprint,
+  TRANSITION_PROFILE, TRANSITION_SIGNATURE_DOMAIN, canonicalTransitionIntent, transitionConfigurationRow, transitionDeployment }
   = require('revenue_desk_call_gateway/lib/configuration-reconciliation');
 const { configurationSnapshotFingerprint, routeFingerprint, routeFromRows } = require('revenue_desk_call_gateway/lib/approval-control');
 const { loadDeployment, activeAt } = require('revenue_desk_call_gateway/lib/runtime-service');
@@ -305,6 +306,207 @@ test('concurrent intents and later revisions cannot create a second completion s
   const before = clone([...v.f.store.rows]); const writes = v.f.store.writes.length;
   await assert.rejects(v.serviceFor(config).complete(next));
   assert.deepEqual([...v.f.store.rows], before); assert.equal(v.f.store.writes.length, writes); assertHistory(v);
+});
+
+async function transitionFixture() {
+  const v = await fixture(); const { f } = v; await v.service.complete(v.envelope);
+  const receipt = f.store.rowsFor(f.config.tables.EVENT_RECEIPT_TABLE).find((row) => row.RECEIPT_KIND === COMPLETION_RECEIPT_KIND);
+  const completedRow = f.store.rowsFor(f.config.tables.CONFIGURATION_VERSION_TABLE)[2];
+  const transitionConfig = { ...v.config, sourceRevision: 'b'.repeat(40) };
+  const projectedRow = transitionConfigurationRow(completedRow, receipt.EVENT_KEY, transitionConfig.sourceRevision);
+  const projected = transitionDeployment(v.deployment, completedRow, receipt.EVENT_KEY, transitionConfig.sourceRevision);
+  const transitionRequest = { profile: TRANSITION_PROFILE, intent: { schema_version: 1, action: 'transition_configuration',
+    completion_claim_key: receipt.EVENT_KEY, completion_claim_fingerprint: receipt.PAYLOAD_FINGERPRINT,
+    completed_source_revision: v.config.sourceRevision, target_source_revision: transitionConfig.sourceRevision,
+    completed_configuration_version_id: completedRow.CONFIGURATION_VERSION_ID,
+    completed_configuration_fingerprint: configurationSnapshotFingerprint(completedRow), deployment_id: v.deployment.DEPLOYMENT_ID,
+    expected_deployment_fingerprint: inactiveDeploymentFingerprint(v.deployment), expected_deployment_version: 0,
+    expected_receipt_version: 1, configuration_version_id: projectedRow.CONFIGURATION_VERSION_ID,
+    configuration_fingerprint: configurationSnapshotFingerprint(projectedRow), route_fingerprint: routeFingerprint(routeFromRows(projected, projectedRow)),
+    operator_id_hash: transitionConfig.operatorIdHash, evidence_observed_at: new Date(f.now()).toISOString(),
+    requested_at: new Date(f.now()).toISOString() }, signature: '' };
+  const signTransition = (request = transitionRequest) => {
+    request.signature = `v1=${crypto.createHmac('sha256', transitionConfig.operatorVerificationSecret)
+      .update(TRANSITION_SIGNATURE_DOMAIN).update(canonicalTransitionIntent(request.intent)).digest('hex')}`;
+    return request;
+  };
+  signTransition();
+  return { ...v, transitionConfig, transitionService: v.serviceFor(transitionConfig), transitionRequest, signTransition,
+    completedReceipt: receipt, completedRow, preTransitionRows: clone([...f.store.rows]) };
+}
+
+function assertCompletedHistory(v) {
+  assertHistory(v);
+  assert.deepEqual(v.f.store.rowsFor(v.config.tables.CONFIGURATION_VERSION_TABLE).slice(0, 3),
+    new Map(v.preTransitionRows).get(v.config.tables.CONFIGURATION_VERSION_TABLE));
+  assert.deepEqual(v.f.store.rowsFor(v.config.tables.EVENT_RECEIPT_TABLE)
+    .filter((row) => row.RECEIPT_KIND !== TRANSITION_RECEIPT_KIND && row.RECEIPT_KIND !== 'authorization_event'),
+  new Map(v.preTransitionRows).get(v.config.tables.EVENT_RECEIPT_TABLE));
+}
+
+test('completed release transitions once with stored BigInt strings and then approves separately without a clock', async () => {
+  const v = await transitionFixture(); const { f, transitionConfig: config, transitionService: service } = v;
+  const unique = f.store.unique.bind(f.store); const update = f.store.conditionalUpdate.bind(f.store);
+  const storedReadback = (row) => {
+    if (row) for (const field of ['BINDING_VERSION', 'MONITOR_AGENT_VERSION', 'CALL_LIMIT', 'COUNT_VERSION',
+      'HANDLED_COUNT', 'REPORT_RECONCILIATION_VERSION', 'ATTEMPT_COUNT', 'RECEIPT_VERSION']) {
+      if (Object.hasOwn(row, field)) row[field] = String(row[field]);
+    }
+    return row;
+  };
+  f.store.unique = async (...args) => storedReadback(await unique(...args));
+  f.store.conditionalUpdate = async (...args) => storedReadback(await update(...args));
+  const writes = f.store.writes.length; const crmBefore = clone(f.records);
+  const result = await service.transition(v.transitionRequest);
+  assert.deepEqual(result, { state: 'StagedInactive', transitioned: true, replayed: false, approved: false, active: false,
+    configurationVersionId: v.transitionRequest.intent.configuration_version_id, deploymentId: v.deployment.DEPLOYMENT_ID });
+  assert.equal(f.store.writes.length - writes, 4); assert.equal(f.stagingWrites, 1);
+  assert.deepEqual(f.records, crmBefore); assertCompletedHistory(v);
+  const nextRow = f.store.rowsFor(config.tables.CONFIGURATION_VERSION_TABLE)[3];
+  const expected = JSON.parse(v.completedRow.CONFIGURATION_JSON);
+  if (expected.reportBaseline) expected.reportBaseline.configurationVersionId = nextRow.CONFIGURATION_VERSION_ID;
+  assert.deepEqual(JSON.parse(nextRow.CONFIGURATION_JSON), expected);
+  assert.equal(nextRow.SOURCE_REVISION, config.sourceRevision);
+  f.advance(900_001); const beforeReplay = clone([...f.store.rows]); const replayWrites = f.store.writes.length;
+  assert.equal((await service.transition(v.transitionRequest)).replayed, true);
+  assert.deepEqual([...f.store.rows], beforeReplay); assert.equal(f.store.writes.length, replayWrites);
+  let approvals = 0; let providerCalls = 0;
+  f.crm.recordApproval = async (_id, input) => {
+    assert.equal(input.configurationStaged, true); assert.equal(input.priorCoreApproval, null); approvals += 1;
+    Object.assign(f.records.deal, { Test_Status: 'Scheduled', Go_Live_Approval_Status: 'Approved',
+      Go_Live_Approved_At: input.approvedAt, Approved_Deployment_Record_ID: input.deploymentId,
+      Approved_Configuration_Version: input.configurationVersionId }); return clone(f.records.deal);
+  };
+  const control = createRouteControlService({ config, store: f.store, crm: f.crm, configurationStaging: service,
+    provider: new Proxy({}, { get() { return async () => { providerCalls += 1; throw new Error('No provider execution'); }; } }), now: f.now });
+  await control.approve({ dealId: f.records.deal.id, journeyId: f.lineage.journeyId, deploymentId: result.deploymentId,
+    configurationVersionId: result.configurationVersionId, idempotencyKey: '00000000-0000-4000-8000-000000000002' });
+  assert.equal(approvals, 1); assert.equal(providerCalls, 0);
+  const deployment = await f.store.unique(config.tables.DEPLOYMENT_TABLE, 'DEPLOYMENT_ID', result.deploymentId);
+  assert.equal(deployment.TEST_STATUS, 'Scheduled'); assert.equal(deployment.COUNT_VERSION, '1');
+  for (const field of ['APPROVED_START_AT', 'ACTUAL_START_AT', 'EXPIRES_AT', 'ACTIVATION_EVENT_KEY']) assert.equal(deployment[field], null);
+  const loaded = await loadDeployment(f.store, deployment, { ...config, sharedAgentVersion: config.stagingAgentVersion,
+    authorizationEventSecret: config.eventChainSecret });
+  assert.equal(loaded.approvalEvidenceValidated, true); assert.equal(loaded.activationEvidenceValidated, false);
+  assert.throws(() => activeAt(loaded, f.now()), { code: 'CONFIGURATION_UNAVAILABLE' });
+  await assert.rejects(service.transition(v.transitionRequest), { code: 'CONFIGURATION_STAGING_STATE_ADVANCED' });
+  assertCompletedHistory(v);
+});
+
+test('transition rejects unauthenticated, stale, changed-source, advanced and foreign evidence before writes', async () => {
+  for (const mutate of [
+    (v) => { v.transitionRequest.signature = v.envelope.signature; },
+    (v) => { v.transitionRequest.intent.completion_claim_fingerprint = '0'.repeat(64); v.signTransition(); },
+    (v) => { v.transitionRequest.intent.completed_configuration_fingerprint = `config_${'0'.repeat(64)}`; v.signTransition(); },
+    (v) => { v.transitionRequest.intent.configuration_fingerprint = `config_${'0'.repeat(64)}`; v.signTransition(); },
+    (v) => { v.transitionRequest.intent.route_fingerprint = `route_${'0'.repeat(64)}`; v.signTransition(); },
+    (v) => { v.transitionRequest.intent.expected_deployment_fingerprint = `deployment_${'0'.repeat(64)}`; v.signTransition(); },
+    (v) => { v.transitionRequest.intent.operator_id_hash = `operator_${'0'.repeat(64)}`; v.signTransition(); },
+    (v) => { v.transitionRequest.intent.completed_source_revision = 'd'.repeat(40); v.signTransition(); },
+    (v) => { v.transitionRequest.intent.target_source_revision = 'd'.repeat(40); v.signTransition(); },
+    (v) => { v.f.advance(300_001); },
+    (v) => { v.transitionRequest.intent.requested_at = new Date(v.f.now() + 1).toISOString(); v.signTransition(); },
+    (v) => { v.completedReceipt.STATUS = 'Processing'; v.completedReceipt.RECEIPT_VERSION = 0; v.completedReceipt.PROCESSED_AT = null; },
+    (v) => { v.completedReceipt.PAYLOAD_FINGERPRINT = '0'.repeat(64); },
+    (v) => { v.recoveryReceipt.STATUS = 'Completed'; },
+    (v) => { v.originalReceipt.EVENT_DATA_JSON += ' '; },
+    (v) => { v.completedRow.CONFIGURATION_JSON += ' '; },
+    (v) => { v.completedRow.ACTIVATED_AT = new Date(v.f.now()).toISOString(); },
+    (v) => { v.f.records.deal.Alert_Recipient_Email = 'different@example.invalid'; },
+    (v) => { v.f.records.account.Phone = '+15555550123'; },
+    (v) => { v.f.nativeConversion.contactId = '99999999999'; },
+    (v) => { v.f.bundle.session.JOURNEY_BINDING_DIGEST = '0'.repeat(64); },
+    ...['COUNT_VERSION', 'HANDLED_COUNT', 'REPORT_RECONCILIATION_VERSION'].map((field) => (v) => { v.deployment[field] = 1; }),
+    ...['APPROVED_CONFIGURATION_VERSION_ID', 'APPROVAL_EVENT_KEY', 'APPROVED_ROUTE_FINGERPRINT', 'GO_LIVE_APPROVED_AT',
+      'ACTIVATION_EVENT_KEY', 'APPROVED_START_AT', 'ACTUAL_START_AT', 'EXPIRES_AT', 'STOP_REASON', 'STOPPED_AT']
+      .map((field) => (v) => { v.deployment[field] = 'unexpected'; }),
+    (v) => { v.deployment.COUNTED_CALL_KEYS_JSON = '["synthetic_call"]'; },
+    (v) => { v.deployment.REPORT_RECONCILIATION_STATUS = 'Pending'; },
+    (v) => { v.f.store.rowsFor(v.config.tables.EVENT_RECEIPT_TABLE).push({ EVENT_KEY: 'synthetic_old_approval',
+      DEPLOYMENT_ID: v.deployment.DEPLOYMENT_ID, RECEIPT_KIND: 'authorization_event' }); },
+  ]) {
+    const v = await transitionFixture(); mutate(v); const before = clone([...v.f.store.rows]); const writes = v.f.store.writes.length;
+    await assert.rejects(v.transitionService.transition(v.transitionRequest));
+    assert.deepEqual([...v.f.store.rows], before); assert.equal(v.f.store.writes.length, writes); assert.equal(v.f.stagingWrites, 1);
+  }
+});
+
+test('interrupted transition stays claimed at every write boundary and never retries the partial state', async () => {
+  for (const boundary of ['claim_after', 'configuration_before', 'configuration_after', 'deployment_before', 'deployment_after', 'receipt_before']) {
+    const v = await transitionFixture(); const { f, transitionService: service, transitionConfig: config } = v;
+    const insert = f.store.insertUnique.bind(f.store); const update = f.store.conditionalUpdate.bind(f.store);
+    f.store.insertUnique = async (table, ...args) => {
+      const kind = table === config.tables.CONFIGURATION_VERSION_TABLE ? 'configuration' : 'claim';
+      if (boundary === `${kind}_before`) throw new Error('Synthetic definite insert failure');
+      const result = await insert(table, ...args); if (boundary === `${kind}_after`) throw new Error('Synthetic ambiguous insert'); return result;
+    };
+    f.store.conditionalUpdate = async (table, ...args) => {
+      const kind = table === config.tables.DEPLOYMENT_TABLE ? 'deployment' : 'receipt';
+      if (boundary === `${kind}_before`) throw new Error('Synthetic CAS failure');
+      const result = await update(table, ...args); if (boundary === `${kind}_after`) throw new Error('Synthetic ambiguous CAS'); return result;
+    };
+    await assert.rejects(service.transition(v.transitionRequest));
+    const receipt = f.store.rowsFor(config.tables.EVENT_RECEIPT_TABLE).find((row) => row.RECEIPT_KIND === TRANSITION_RECEIPT_KIND);
+    assert.equal(receipt.STATUS, 'Processing'); assert.equal(receipt.RECEIPT_VERSION, 0);
+    const before = clone([...f.store.rows]); const writes = f.store.writes.length;
+    await assert.rejects(service.transition(v.transitionRequest), { code: 'CONFIGURATION_STAGING_RECONCILIATION_REQUIRED' });
+    assert.deepEqual([...f.store.rows], before); assert.equal(f.store.writes.length, writes); assert.equal(f.stagingWrites, 1); assertCompletedHistory(v);
+  }
+});
+
+test('transition lost final response reconciles read-only but racing and later-release claims cannot duplicate effects', async () => {
+  const v = await transitionFixture(); const { f, transitionConfig: config, transitionService: service } = v;
+  const update = f.store.conditionalUpdate.bind(f.store);
+  f.store.conditionalUpdate = async (table, ...args) => {
+    const result = await update(table, ...args);
+    if (table === config.tables.EVENT_RECEIPT_TABLE) throw new Error('Synthetic lost final response'); return result;
+  };
+  await assert.rejects(service.transition(v.transitionRequest));
+  const before = clone([...f.store.rows]); const writes = f.store.writes.length;
+  assert.equal((await service.transition(v.transitionRequest)).replayed, true);
+  assert.deepEqual([...f.store.rows], before); assert.equal(f.store.writes.length, writes); assertCompletedHistory(v);
+  const other = clone(v.transitionRequest); other.intent.target_source_revision = 'c'.repeat(40);
+  const row = transitionConfigurationRow(v.completedRow, v.completedReceipt.EVENT_KEY, other.intent.target_source_revision);
+  other.intent.configuration_fingerprint = configurationSnapshotFingerprint(row);
+  other.intent.route_fingerprint = routeFingerprint(routeFromRows({ ...v.deployment, SOURCE_REVISION: 'c'.repeat(40) }, row));
+  v.signTransition(other);
+  await assert.rejects(v.serviceFor({ ...config, sourceRevision: 'c'.repeat(40) }).transition(other));
+  assert.equal(f.store.writes.length, writes);
+  const race = await transitionFixture(); const originalUpdate = race.f.store.conditionalUpdate.bind(race.f.store);
+  race.f.store.conditionalUpdate = async (table, ...args) => {
+    if (table === race.config.tables.DEPLOYMENT_TABLE) race.deployment.COUNT_VERSION = 1;
+    return originalUpdate(table, ...args);
+  };
+  await assert.rejects(race.transitionService.transition(race.transitionRequest));
+  assert.equal(race.deployment.ACTIVE_CONFIGURATION_VERSION_ID, race.completedRow.CONFIGURATION_VERSION_ID);
+  const raceWrites = race.f.store.writes.length;
+  await assert.rejects(race.transitionService.transition(race.transitionRequest));
+  assert.equal(race.f.store.writes.length, raceWrites); assert.equal(race.f.stagingWrites, 1); assertCompletedHistory(race);
+  const concurrent = await transitionFixture(); const second = clone(concurrent.transitionRequest); concurrent.f.advance(1);
+  second.intent.requested_at = new Date(concurrent.f.now()).toISOString(); concurrent.signTransition(second);
+  const insert = concurrent.f.store.insertUnique.bind(concurrent.f.store); let pending = Promise.resolve();
+  concurrent.f.store.insertUnique = (...args) => { const result = pending.then(() => insert(...args)); pending = result.catch(() => {}); return result; };
+  const results = await Promise.allSettled([concurrent.transitionService.transition(concurrent.transitionRequest), concurrent.transitionService.transition(second)]);
+  assert.equal(results.filter((entry) => entry.status === 'fulfilled').length, 1);
+  assert.equal(concurrent.f.store.rowsFor(concurrent.config.tables.CONFIGURATION_VERSION_TABLE).length, 4);
+  assert.equal(concurrent.f.store.rowsFor(concurrent.config.tables.DEPLOYMENT_TABLE).length, 1); assertCompletedHistory(concurrent);
+});
+
+test('transition replay and approval provenance reject active-pointer or deployment-key drift without writes', async () => {
+  for (const mutate of [
+    (v) => { v.deployment.ACTIVE_CONFIGURATION_VERSION_ID = v.completedRow.CONFIGURATION_VERSION_ID; },
+    (v) => { v.deployment.DEPLOYMENT_KEY = `cfgdeployment_${'0'.repeat(64)}`; },
+  ]) {
+    const v = await transitionFixture(); const result = await v.transitionService.transition(v.transitionRequest);
+    mutate(v); const before = clone([...v.f.store.rows]); const writes = v.f.store.writes.length;
+    const state = { deployment: v.deployment, deal: v.f.records.deal,
+      configurationRow: v.f.store.rowsFor(v.config.tables.CONFIGURATION_VERSION_TABLE)[3] };
+    await assert.rejects(v.transitionService.transition(v.transitionRequest));
+    await assert.rejects(v.transitionService.assertApprovalSource({ dealId: v.f.records.deal.id,
+      journeyId: v.f.lineage.journeyId, deploymentId: result.deploymentId, configurationVersionId: result.configurationVersionId }, state));
+    assert.deepEqual([...v.f.store.rows], before); assert.equal(v.f.store.writes.length, writes);
+    assert.equal(v.f.stagingWrites, 1); assertCompletedHistory(v);
+  }
 });
 
 test.after(() => { assert.deepEqual(guard.blocked, []); guard.restore(); });

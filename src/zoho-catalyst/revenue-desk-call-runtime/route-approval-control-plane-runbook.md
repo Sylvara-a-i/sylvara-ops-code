@@ -120,6 +120,13 @@ Read the deployment by its private key and the configuration by `ACTIVE_CONFIGUR
 - `APPROVED_CONFIGURATION_VERSION_ID`, `APPROVAL_EVENT_KEY`, `APPROVED_ROUTE_FINGERPRINT`, `GO_LIVE_APPROVED_AT`, `ACTIVATION_EVENT_KEY`, `ACTUAL_START_AT`, and `EXPIRES_AT` are null;
 - the observed row `COUNT_VERSION`, `HANDLED_COUNT`, configuration ID, source revision, binding, agent/version, coverage, call limit, number hash, and route fingerprint exactly match the signed intent and fresh readiness evidence.
 
+Catalyst may return integer columns as canonical decimal strings. Normalize only
+those stored row values before comparing approval counters and remaining
+capacity. Signed intent and evidence still require safe integer numbers; reject
+noncanonical strings, unsafe values, stale counters and changed row ownership.
+This storage representation rule does not relax revision matching or authorize
+a new configuration transition.
+
 ### Mutation and readback
 
 1. Insert one immutable `authorization_event` receipt whose key is the signed `approval_…` event key, action is `approve`, decision is `Approved`, and configuration/route/source fields match the prestate. Read it back by exact `EVENT_KEY` through the audit boundary and compare every immutable field plus the decrypted allowlisted event projection.

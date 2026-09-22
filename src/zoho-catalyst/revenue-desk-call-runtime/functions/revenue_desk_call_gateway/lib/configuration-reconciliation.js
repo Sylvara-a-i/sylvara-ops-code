@@ -7,6 +7,15 @@ const RECONCILIATION_PROFILE = 'free-test-configuration-reconciliation-v1';
 const RECONCILIATION_SIGNATURE_DOMAIN = 'revenue-desk-configuration-reconciliation-intent-v1\0';
 const COMPLETION_PROFILE = 'free-test-configuration-completion-v1';
 const COMPLETION_SIGNATURE_DOMAIN = 'revenue-desk-configuration-completion-intent-v1\0';
+const TRANSITION_PROFILE = 'free-test-configuration-transition-v1';
+const TRANSITION_SIGNATURE_DOMAIN = 'revenue-desk-configuration-transition-intent-v1\0';
+const TRANSITION_INTENT_FIELDS = Object.freeze([
+  'schema_version', 'action', 'completion_claim_key', 'completion_claim_fingerprint',
+  'completed_source_revision', 'target_source_revision', 'completed_configuration_version_id',
+  'completed_configuration_fingerprint', 'deployment_id', 'expected_deployment_fingerprint',
+  'expected_deployment_version', 'expected_receipt_version', 'configuration_version_id',
+  'configuration_fingerprint', 'route_fingerprint', 'operator_id_hash', 'evidence_observed_at', 'requested_at',
+]);
 const COMPLETION_INTENT_FIELDS = Object.freeze([
   'schema_version', 'action', 'original_claim_key', 'original_claim_fingerprint',
   'reconciliation_claim_key', 'reconciliation_claim_fingerprint',
@@ -178,6 +187,69 @@ function completionDeployment(reconciliationRequest, reconciliationClaimKey, tar
   ACTIVE_CONFIGURATION_VERSION_ID: row.CONFIGURATION_VERSION_ID, SOURCE_REVISION: targetRevision });
 }
 
+/** One release transition belongs to a completed chain, never a new retry/release slot. */
+function transitionConfigurationVersionId(completionClaimKey, completedConfigurationVersionId) {
+  requireValid(/^cfgcomplete_[a-f0-9]{64}$/.test(completionClaimKey || '')
+    && /^cfgcompleted_[a-f0-9]{64}$/.test(completedConfigurationVersionId || ''));
+  return `cfgtransitioned_${crypto.createHash('sha256').update(JSON.stringify([
+    TRANSITION_PROFILE, completionClaimKey, completedConfigurationVersionId,
+  ])).digest('hex')}`;
+}
+
+function canonicalTransitionIntent(intent) {
+  requireValid(plain(intent) && Object.keys(intent).sort().join(',') === [...TRANSITION_INTENT_FIELDS].sort().join(','));
+  requireValid(TRANSITION_INTENT_FIELDS.filter((field) => !['schema_version', 'expected_receipt_version',
+    'expected_deployment_version'].includes(field)).every((field) => typeof intent[field] === 'string')
+    && intent.schema_version === 1 && intent.action === 'transition_configuration'
+    && /^cfgcomplete_[a-f0-9]{64}$/.test(intent.completion_claim_key)
+    && HASH.test(intent.completion_claim_fingerprint)
+    && REVISION.test(intent.completed_source_revision) && REVISION.test(intent.target_source_revision)
+    && intent.completed_source_revision !== intent.target_source_revision
+    && /^cfgcompleted_[a-f0-9]{64}$/.test(intent.completed_configuration_version_id)
+    && ['completed_configuration_fingerprint', 'configuration_fingerprint']
+      .every((field) => /^config_[a-f0-9]{64}$/.test(intent[field]))
+    && /^cfgdeploy_[a-f0-9]{64}$/.test(intent.deployment_id)
+    && /^deployment_[a-f0-9]{64}$/.test(intent.expected_deployment_fingerprint)
+    && intent.expected_deployment_version === 0 && intent.expected_receipt_version === 1
+    && intent.configuration_version_id === transitionConfigurationVersionId(
+      intent.completion_claim_key, intent.completed_configuration_version_id)
+    && /^route_[a-f0-9]{64}$/.test(intent.route_fingerprint)
+    && /^operator_[a-f0-9]{64}$/.test(intent.operator_id_hash)
+    && timestamp(intent.evidence_observed_at) && timestamp(intent.requested_at)
+    && Date.parse(intent.evidence_observed_at) <= Date.parse(intent.requested_at));
+  return JSON.stringify(Object.fromEntries(TRANSITION_INTENT_FIELDS.map((field) => [field, intent[field]])));
+}
+
+/** Preserve business/source evidence; only physical version references and truthful source change. */
+function transitionConfigurationRow(completedRow, completionClaimKey, targetRevision) {
+  requireValid(plain(completedRow) && REVISION.test(completedRow.SOURCE_REVISION || '')
+    && REVISION.test(targetRevision || '') && targetRevision !== completedRow.SOURCE_REVISION
+    && typeof completedRow.CONFIGURATION_JSON === 'string'
+    && Buffer.byteLength(completedRow.CONFIGURATION_JSON, 'utf8') <= 10_000);
+  const id = transitionConfigurationVersionId(completionClaimKey, completedRow.CONFIGURATION_VERSION_ID);
+  let candidate;
+  try { candidate = JSON.parse(completedRow.CONFIGURATION_JSON); } catch (_) { requireValid(false); }
+  requireValid(plain(candidate) && JSON.stringify(candidate) === completedRow.CONFIGURATION_JSON);
+  if (Object.hasOwn(candidate, 'reportBaseline')) {
+    requireValid(plain(candidate.reportBaseline)
+      && candidate.reportBaseline.configurationVersionId === completedRow.CONFIGURATION_VERSION_ID);
+    candidate.reportBaseline.configurationVersionId = id;
+  }
+  const serialized = JSON.stringify(candidate);
+  requireValid(Buffer.byteLength(serialized, 'utf8') <= 10_000);
+  return Object.freeze({ ...completedRow, CONFIGURATION_VERSION_ID: id,
+    CONFIGURATION_JSON: serialized, SOURCE_REVISION: targetRevision });
+}
+
+function transitionDeployment(completedDeployment, completedRow, completionClaimKey, targetRevision) {
+  const row = transitionConfigurationRow(completedRow, completionClaimKey, targetRevision);
+  requireValid(plain(completedDeployment) && completedDeployment.DEPLOYMENT_ID === completedRow.DEPLOYMENT_ID
+    && completedDeployment.ACTIVE_CONFIGURATION_VERSION_ID === completedRow.CONFIGURATION_VERSION_ID
+    && completedDeployment.SOURCE_REVISION === completedRow.SOURCE_REVISION);
+  return Object.freeze({ ...completedDeployment, ACTIVE_CONFIGURATION_VERSION_ID: row.CONFIGURATION_VERSION_ID,
+    SOURCE_REVISION: targetRevision });
+}
+
 /** Bind every governed prestate field, normalizing only actual Catalyst integer storage. */
 function inactiveDeploymentFingerprint(deployment) {
   requireValid(plain(deployment));
@@ -199,4 +271,6 @@ module.exports = Object.freeze({
   successorConfigurationVersionId, successorConfigurationRow, successorDeployment,
   COMPLETION_PROFILE, COMPLETION_SIGNATURE_DOMAIN, canonicalCompletionIntent,
   completionConfigurationVersionId, completionConfigurationRow, completionDeployment, inactiveDeploymentFingerprint,
+  TRANSITION_PROFILE, TRANSITION_SIGNATURE_DOMAIN, canonicalTransitionIntent,
+  transitionConfigurationVersionId, transitionConfigurationRow, transitionDeployment,
 });

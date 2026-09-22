@@ -259,15 +259,14 @@ function routeFingerprint(route) {
     .update(canonical, 'utf8').digest('hex')}`;
 }
 
-function storedRouteInteger(value, label) {
-  const code = 'INVALID_ROUTE_FINGERPRINT_INPUT';
+function storedRouteInteger(value, label, minimum = 1, code = 'INVALID_ROUTE_FINGERPRINT_INPUT') {
   // Catalyst BigInt readback uses decimal strings. Normalize only this row
   // boundary; signed intents and public route objects retain strict numbers.
   if (typeof value === 'string') {
     invariant(/^(?:0|[1-9][0-9]{0,15})$/.test(value), code, `${label} is invalid.`);
     value = Number(value);
   }
-  return canonicalInteger(value, 1, code, label);
+  return canonicalInteger(value, minimum, code, label);
 }
 
 function routeFromRows(deployment, configurationVersion) {
@@ -347,7 +346,9 @@ function validateApprovalRows(deployment, configurationVersion, intent, expected
   invariant(deployment.SOURCE_REVISION === configurationVersion.SOURCE_REVISION
     && deployment.SOURCE_REVISION === intent.evidence_revision,
   'APPROVAL_PRECONDITION_FAILED', 'Approval source revision is inconsistent.');
-  invariant(deployment.COUNT_VERSION === intent.expected_deployment_version,
+  const deploymentVersion = storedRouteInteger(deployment.COUNT_VERSION,
+    'Deployment version', 0, 'APPROVAL_PRECONDITION_FAILED');
+  invariant(deploymentVersion === intent.expected_deployment_version,
     'APPROVAL_CONCURRENT_CHANGE', 'Deployment changed after operator review.');
   const profile = version.profile;
   invariant(version.engagementType === 'free_test'
@@ -428,6 +429,8 @@ function evaluateApprovalTransition({
     'ROUTE_FINGERPRINT_MISMATCH', 'Approved route does not match current deployment state.');
   validateApprovalRows(deployment, configurationVersion, approvedIntent, route);
   const approvedEvidence = validateEvidence(evidence);
+  const handledCount = storedRouteInteger(deployment.HANDLED_COUNT,
+    'Handled count', 0, 'APPROVAL_PRECONDITION_FAILED');
   canonicalInteger(maxEvidenceAgeMs, 1, 'INVALID_APPROVAL_CONFIGURATION',
     'Evidence freshness window');
   invariant(maxEvidenceAgeMs <= 3_600_000, 'INVALID_APPROVAL_CONFIGURATION',
@@ -442,9 +445,9 @@ function evaluateApprovalTransition({
     && approvedEvidence.route_fingerprint === expectedRouteFingerprint
     && approvedEvidence.source_revision === approvedIntent.evidence_revision
     && approvedEvidence.deployment_version === approvedIntent.expected_deployment_version
-    && approvedEvidence.handled_count === deployment.HANDLED_COUNT,
+    && approvedEvidence.handled_count === handledCount,
   'APPROVAL_PRECONDITION_FAILED', 'Approval evidence does not match current route state.');
-  const remaining = deployment.CALL_LIMIT - approvedEvidence.handled_count;
+  const remaining = route.call_limit - approvedEvidence.handled_count;
   invariant(approvedIntent.action === 'revoke' || remaining > 0,
     'CAPACITY_UNAVAILABLE', 'No route capacity remains for approval.');
 
@@ -574,6 +577,8 @@ function evaluateActivationTransition({
   const replay = existingApprovalEvent(existingEvents, activationIntent, fingerprint);
   if (replay) return Object.freeze({ replayed: true, event: Object.freeze({ ...replay }),
     deploymentPatch: null });
+  const deploymentVersion = storedRouteInteger(deployment.COUNT_VERSION,
+    'Deployment version', 0, 'ACTIVATION_PRECONDITION_FAILED');
   invariant(deployment.DEPLOYMENT_ID === activationIntent.deployment_id
     && deployment.ACTIVE_CONFIGURATION_VERSION_ID === activationIntent.configuration_version_id
     && deployment.APPROVED_CONFIGURATION_VERSION_ID === activationIntent.configuration_version_id
@@ -587,7 +592,7 @@ function evaluateActivationTransition({
     && (deployment.EXPIRES_AT === null || deployment.EXPIRES_AT === undefined)
     && deployment.SOURCE_REVISION === activationIntent.evidence_revision
     && configurationVersion.SOURCE_REVISION === activationIntent.evidence_revision
-    && deployment.COUNT_VERSION === activationIntent.expected_deployment_version,
+    && deploymentVersion === activationIntent.expected_deployment_version,
   'ACTIVATION_PRECONDITION_FAILED',
   'Activation is not bound to the currently approved deployment and configuration version.');
   const version = validateConfigurationVersionRow(configurationVersion, {
@@ -637,7 +642,9 @@ function evaluateActivationTransition({
     && activationEvidence.source_revision === activationIntent.evidence_revision
     && activationEvidence.deployment_version === activationIntent.expected_deployment_version,
   'ACTIVATION_PRECONDITION_FAILED', 'Activation evidence does not match the approved route.');
-  invariant(deployment.HANDLED_COUNT < deployment.CALL_LIMIT,
+  const handledCount = storedRouteInteger(deployment.HANDLED_COUNT,
+    'Handled count', 0, 'ACTIVATION_PRECONDITION_FAILED');
+  invariant(handledCount < route.call_limit,
     'CAPACITY_UNAVAILABLE', 'No route capacity remains for activation.');
 
   const decidedAt = new Date(nowMs).toISOString();

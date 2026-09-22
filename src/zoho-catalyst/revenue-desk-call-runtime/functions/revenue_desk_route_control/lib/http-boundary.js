@@ -6,7 +6,7 @@ const { createCatalystStore }
 const { RevenueDeskError, invariant } = require('revenue_desk_call_gateway/lib/errors');
 const { createRouteControlService }
   = require('revenue_desk_call_gateway/lib/route-control-service');
-const { RECONCILIATION_PROFILE, COMPLETION_PROFILE }
+const { RECONCILIATION_PROFILE, COMPLETION_PROFILE, TRANSITION_PROFILE }
   = require('revenue_desk_call_gateway/lib/configuration-reconciliation');
 const { createAuthorizationProvider } = require('./connection');
 const { loadConfig } = require('./config');
@@ -165,7 +165,8 @@ function createRequestListener({
       const body = await readBody(request, config.maxBodyBytes);
       const reconciliation = body.profile === RECONCILIATION_PROFILE;
       const completion = body.profile === COMPLETION_PROFILE;
-      if (reconciliation || completion) invariant(action === 'approve', 'INVALID_CONTROL_REQUEST',
+      const transition = body.profile === TRANSITION_PROFILE;
+      if (reconciliation || completion || transition) invariant(action === 'approve', 'INVALID_CONTROL_REQUEST',
         'Configuration reconciliation uses the approval control route.', { httpStatus: 400 });
       const runtime = catalystSdk || require('zcatalyst-sdk-node');
       const app = runtime.initialize(request);
@@ -193,16 +194,16 @@ function createRequestListener({
         metadataReader: (factories.configurationMetadata || createConfigurationMetadataReader)({ crm, now,
           timeoutMs: config.platformTimeoutMs }),
       });
-      if (body.profile === PROFILE || reconciliation || completion) {
+      if (body.profile === PROFILE || reconciliation || completion || transition) {
         invariant(action === 'approve', 'INVALID_CONTROL_REQUEST',
           'Configuration staging uses the approval control route.', { httpStatus: 400 });
         // This controller-owned branch is deliberately before provider
         // construction. Approved content is not approval to activate a route.
         const service = stagingService();
-        const result = completion ? await service.complete(body)
+        const result = transition ? await service.transition(body) : completion ? await service.complete(body)
           : reconciliation ? await service.reconcile(body) : await service.stage(body);
         send(response, 200, { ok: true,
-          action: completion ? 'complete_configuration'
+          action: transition ? 'transition_configuration' : completion ? 'complete_configuration'
             : reconciliation ? 'reconcile_configuration' : 'stage_configuration', state: result.state,
           replayed: result.replayed, approved: false, active: false,
           configurationVersionId: result.configurationVersionId, deploymentId: result.deploymentId });

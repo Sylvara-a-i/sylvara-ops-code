@@ -20,7 +20,7 @@ const WINDOWS_HELPER = path.resolve(__dirname, '../scripts/sign-free-test-stagin
 const POWERSHELL = path.resolve(path.dirname(process.execPath), '../../native/powershell/pwsh.exe');
 const { MAX_SECRET_UTF8_BYTES, MAX_BINDING_SECRET_BYTES, deriveStagingBindings,
   signFreeTestStagingPacket, RECONCILIATION_PROFILE, signFreeTestReconciliationPacket,
-  COMPLETION_PROFILE, signFreeTestCompletionPacket }
+  COMPLETION_PROFILE, signFreeTestCompletionPacket, TRANSITION_PROFILE, signFreeTestTransitionPacket }
   = require('../lib/free-test-staging-packet');
 
 function protectSyntheticDirectory(directory, { publicRead = false } = {}) {
@@ -131,7 +131,7 @@ function run(value, extraArgs = [], overrides = {}) {
 
 function assertSafeOutput(result, value) {
   const output = `${result.stdout || ''}${result.stderr || ''}`;
-  const original = value.envelope.reconciliationEnvelope?.originalEnvelope || value.envelope.originalEnvelope || value.envelope;
+  const original = value.originalEnvelope || value.envelope.reconciliationEnvelope?.originalEnvelope || value.envelope.originalEnvelope || value.envelope;
   for (const sensitive of [value.f.config.operatorVerificationSecret,
     original.request.intent.operator_id_hash,
     original.preparation.crm.deal.Alert_Recipient_Email,
@@ -242,6 +242,71 @@ function completionFiles(t) {
   fs.writeFileSync(value.input, JSON.stringify(value.envelope));
   return value;
 }
+
+function transitionFiles(t) {
+  const value = completionFiles(t);
+  value.originalEnvelope = value.envelope.reconciliationEnvelope.originalEnvelope;
+  const { completionConfigurationRow, completionDeployment, transitionConfigurationRow,
+    transitionDeployment, inactiveDeploymentFingerprint }
+    = require('../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/configuration-reconciliation');
+  const { configurationSnapshotFingerprint, routeFingerprint, routeFromRows }
+    = require('../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/approval-control');
+  const prior = value.envelope.request; const at = new Date().toISOString();
+  const completedConfigurationRow = { ...completionConfigurationRow(prior.reconciliationRequest,
+    prior.intent.reconciliation_claim_key, value.expectedRevision), CREATED_AT: at, ACTIVATED_AT: null };
+  const completedDeployment = { ...completionDeployment(prior.reconciliationRequest,
+    prior.intent.reconciliation_claim_key, value.expectedRevision), ROWID: '101', DEPLOYMENT_KEY: 'synthetic_key',
+  TEST_STATUS: 'Ready for Approval', GO_LIVE_APPROVAL_STATUS: 'Pending Internal Approval',
+  APPROVED_CONFIGURATION_VERSION_ID: null, APPROVAL_EVENT_KEY: null, APPROVED_ROUTE_FINGERPRINT: null,
+  GO_LIVE_APPROVED_AT: null, ACTIVATION_EVENT_KEY: null, APPROVED_START_AT: null, ACTUAL_START_AT: null,
+  EXPIRES_AT: null, STOP_REASON: null, STOPPED_AT: null, COUNTED_CALL_KEYS_JSON: '[]',
+  REPORT_RECONCILIATION_STATUS: 'NotRequired', REPORT_RECONCILIATION_VERSION: 0, UPDATED_AT: at };
+  const completionKey = `cfgcomplete_${'6'.repeat(64)}`;
+  const completedRevision = value.expectedRevision; value.expectedRevision = 'c'.repeat(40);
+  const row = transitionConfigurationRow(completedConfigurationRow, completionKey, value.expectedRevision);
+  const deployment = transitionDeployment(completedDeployment, completedConfigurationRow, completionKey, value.expectedRevision);
+  const intent = { schema_version: 1, action: 'transition_configuration', completion_claim_key: completionKey,
+    completion_claim_fingerprint: '7'.repeat(64), completed_source_revision: completedRevision,
+    target_source_revision: value.expectedRevision, completed_configuration_version_id: completedConfigurationRow.CONFIGURATION_VERSION_ID,
+    completed_configuration_fingerprint: configurationSnapshotFingerprint(completedConfigurationRow),
+    deployment_id: completedDeployment.DEPLOYMENT_ID, expected_deployment_fingerprint: inactiveDeploymentFingerprint(completedDeployment),
+    expected_deployment_version: 0, expected_receipt_version: 1, configuration_version_id: row.CONFIGURATION_VERSION_ID,
+    configuration_fingerprint: configurationSnapshotFingerprint(row), route_fingerprint: routeFingerprint(routeFromRows(deployment, row)),
+    operator_id_hash: value.f.config.operatorIdHash, evidence_observed_at: at, requested_at: at };
+  value.envelope = { schemaVersion: 1, completedConfigurationRow, completedDeployment,
+    request: { profile: TRANSITION_PROFILE, intent } };
+  fs.writeFileSync(value.input, JSON.stringify(value.envelope));
+  return value;
+}
+
+test('transition CLI preflight reads no key and signing creates only the exact private transition request', (t) => {
+  const value = transitionFiles(t); forbidProtectedInput(value);
+  const preflight = run(value, ['--validate-only'], { input: '' });
+  assert.equal(preflight.status, 0, preflight.stderr); assertSafeOutput(preflight, value);
+  assert.equal(JSON.parse(preflight.stdout).profile, TRANSITION_PROFILE);
+  assert.doesNotMatch(preflight.stderr, /UNEXPECTED_KEY_READ/); assert.equal(fs.existsSync(value.output), false);
+  fs.writeFileSync(value.preload, childGuard(value));
+  const result = run(value); assert.equal(result.status, 0, result.stderr); assertSafeOutput(result, value);
+  const bytes = fs.readFileSync(value.output); const packet = JSON.parse(bytes.toString('utf8'));
+  assert.deepEqual(Object.keys(packet), ['profile', 'intent', 'signature']);
+  const secret = Buffer.from(value.f.config.operatorVerificationSecret, 'utf8');
+  try { assert.equal(bytes.toString('utf8'), signFreeTestTransitionPacket(value.envelope, { secret,
+    expectedRevision: value.expectedRevision, expectedOperatorHash: value.f.config.operatorIdHash,
+    maxBodyBytes: 16384, now: Date.now() }).serialized); }
+  finally { secret.fill(0); }
+  assert.equal(JSON.parse(result.stdout).submitted, false);
+  forbidProtectedInput(value); const again = run(value);
+  assert.equal(again.status, 1); assert.doesNotMatch(again.stderr, /UNEXPECTED_KEY_READ/);
+  assert.deepEqual(fs.readFileSync(value.output), bytes);
+});
+
+test('transition CLI rejects an undersized actual body limit before consuming stdin', (t) => {
+  const value = transitionFiles(t); forbidProtectedInput(value);
+  value.maxBodyBytes = Buffer.byteLength(`${JSON.stringify({ ...value.envelope.request,
+    signature: `v1=${'0'.repeat(64)}` })}\n`) - 1;
+  const result = run(value); assert.equal(result.status, 1); assertSafeOutput(result, value);
+  assert.doesNotMatch(result.stderr, /UNEXPECTED_KEY_READ/); assert.equal(fs.existsSync(value.output), false);
+});
 
 test('completion CLI validates without stdin and preserves historical packets in one exclusive output', (t) => {
   const value = completionFiles(t); forbidProtectedInput(value);

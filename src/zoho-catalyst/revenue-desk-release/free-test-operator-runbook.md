@@ -333,7 +333,7 @@ this table is the sanitized operating view, not a new release contract.
 | Gate | Current evidence and revision | Remaining action | Cost class | Approval needed | Status |
 | --- | --- | --- | --- | --- | --- |
 | G1 Public/assisted entry and native relationships | Accepted assisted Forms/conversion retained; `5227abe` installed held; public native mapping read back | Complete narrow read grant and affected public identity/retry acceptance | Offline now; cloud allowance must be confirmed | Owner grant; exact readback/fixture allocation; no reused canary | Public runtime continuation unverified; assisted evidence retained |
-| G2 Authenticated configuration review/staging | `b080706` controller installed and all 246 downloaded entries verified; original hold restored. Allocated reconciliation authenticated and created a linked receipt, immutable successor configuration and inactive deployment, then returned 400 before the CRM update. Independent readback: recovery Processing/version 0, selected Deal unchanged, approval/activation/start fields null and counts zero. Persisted-integer correction and exact-state completion have focused offline regressions and independent review; neither is installed | Finish canonical verification and freeze the minimal controller delta. Obtain one bounded installation, temporary body-limit/revision change and completion request with independent readback. Preserve both incomplete receipts and configurations, the same inactive deployment, accepted Forms and relationships; ordinary retries and replacement journeys are not recovery | Confirmed no-cost Development/included CRM for the consumed block; candidate tests are offline. Fresh allowance check required before execution | One upload, two archive readbacks, two revision saves and one recovery POST consumed. New exact allocation required; no resend or further deployment authorized | Inactive storage boundary verified; CRM staging and receipt completion unpassed. G2 remains unpassed |
+| G2 Authenticated configuration review/staging | `ba1e3a0` controller installed and all 246 downloaded entries verified. One allocated completion produced a Completed/version-1 receipt, immutable configuration, same inactive deployment and conditional CRM staging update; all independently read back. Original hold/body limit restored; historical receipts/configurations preserved; counts zero and approval/activation/start/expiry null | Separate approval remains unpassed. Correct canonical stored-counter comparisons and verify the completed-inactive release transition before freezing a candidate. Preserve accepted Forms/native relationships; never repeat completed staging or relabel historical rows | Consumed block confirmed no-cost Development/included CRM; candidate tests offline. Fresh allowance check required before another execution | One upload, two archive readbacks, four settings saves and one completion POST consumed. New exact installation/transition/approve-only allocation required; no automatic replay | Authenticated staging/readback subgate passed at `ba1e3a0`; separate internal approval and full G2 remain unpassed |
 | G3 Coverage and restoration preparation | After-hours fixtures; new owner-attested overflow/combined snapshot contract | Actual originating-provider setting/unit/evidence and later execution binding; preserve original handling | Local preparation only | Owner evidence; separate provider phase for live behavior | Preparation only; overflow/combined execution held |
 | G4 Call-to-owner handoff | H1–H10 source at `c28affd`, separate dry-run/acceptance/delivery meanings | Named monitored owner, actual alert adapter/inbox proof and bounded recovery readback | No real sending now | Exact owner-only email and runtime allocation | Source complete; Development 0/10 |
 | G5 Clock, limit, stop and settlement | Offline limits/races/reports; early-stop correction retained in `5227abe` held installation | Scoped installed-runtime containment and report reconciliation | Offline passed; cloud later | Exact synthetic acceptance allocation | Installed evidence is not runtime proof |
@@ -712,6 +712,44 @@ an earlier request's successful size check does not cover completion. Reuse the
 approved owner-private handoff, not a new signer or credential collection flow.
 Persisted canonical decimal integer strings are normalized only at the storage
 boundary; signed incoming deployment versions still require actual integers.
+
+The completion operation above passed its allocated Development acceptance at
+`ba1e3a0`; the private record holds exact artifact, receipt, configuration,
+deployment and CRM readbacks. A new offline regression then reproduced rejection
+of canonical stored `COUNT_VERSION` and `HANDLED_COUNT` strings during separate
+approval. The candidate normalizes those stored counters without accepting
+numeric strings in signed intent/evidence or changing stale-state/CAS guards.
+
+### Completed-inactive release transition candidate
+
+A code correction cannot masquerade as the installed revision or silently
+relabel the completed snapshot. The candidate adds one bounded
+`free-test-configuration-transition-v1` operation to the existing sole
+controller. It authenticates the completed receipt and full historical chain,
+revalidates current CRM/Form 2/native evidence, and requires the same deployment
+to remain never approved, never active, zero-count and unstopped. It appends one
+immutable current-release configuration and linked transition receipt, then
+conditionally replaces only the same deployment's active-configuration pointer
+and source revision. Business values, logical Form 2 version, source timestamps,
+recipient and unknown baseline values remain unchanged; the baseline's physical
+configuration reference follows the new immutable version.
+
+One deterministic transition slot belongs to the completed chain, not each
+timestamp or release. A partial claim remains held; only the exact completed
+request may replay read-only. There is no general mixed-revision exception,
+new journey, competing CRM writer, new signer or provider operation. The
+existing private signer validates size and unsigned projections before using
+protected input; stored receipt authentication remains the controller's duty.
+Maximum transition writes are two inserts and two conditional Catalyst updates,
+with no CRM write. Internal approval remains a separate request and must leave
+activation, actual start and expiry null. The compound CRM Approve And Start
+action is not suitable for this non-Retell acceptance.
+
+This is source-only preparation, not installation or transition evidence.
+Independent review, a frozen exact artifact, a new bounded operation allocation,
+fresh allowance/prestate checks and independent readback are required before
+cloud execution. Existing completed staging evidence and all holds survive
+while this candidate is prepared. Do not reuse consumed completion requests.
 
 Rollback is containment: restore/preserve the controller hold and provider-disabled
 state; do not delete either claim or configuration. Any interrupted recovery

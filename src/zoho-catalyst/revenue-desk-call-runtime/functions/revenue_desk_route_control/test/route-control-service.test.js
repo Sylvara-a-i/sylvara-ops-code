@@ -145,6 +145,23 @@ function deal() {
 
 function copy(value) { return structuredClone(value); }
 
+function useCatalystDeploymentBigintReadback(subject) {
+  const fields = ['BINDING_VERSION', 'MONITOR_AGENT_VERSION', 'CALL_LIMIT',
+    'HANDLED_COUNT', 'COUNT_VERSION', 'REPORT_RECONCILIATION_VERSION'];
+  // Keep the synthetic database numeric, but return the actual Catalyst BigInt
+  // representation on every fresh read, including post-CAS and exact replay.
+  const storedReadback = (row) => {
+    if (row?.__table === 'RevenueDeskDeployments') {
+      for (const field of fields) row[field] = String(row[field]);
+    }
+    return row;
+  };
+  for (const method of ['unique', 'conditionalUpdate']) {
+    const original = subject.store[method].bind(subject.store);
+    subject.store[method] = async (...args) => storedReadback(await original(...args));
+  }
+}
+
 test('deployment CAS readback rejects non-versioned governed drift', () => {
   const prestate = deployment();
   const patch = {
@@ -666,6 +683,79 @@ test('approval succeeds only after complete Form 2 and exact immutable configura
   const incomplete = fixture({ dealOverrides: { Setup_Form_Submission_ID: null } });
   await assert.rejects(incomplete.service.approve(command('approve')),
     { code: 'CONTROL_PRECONDITION_FAILED' });
+});
+
+test('approval and simulated activation accept Catalyst bigint readback and preserve exact replay', async () => {
+  const subject = fixture({ providerMode: 'disabled' });
+  useCatalystDeploymentBigintReadback(subject);
+  const result = await subject.service.approve(command('approve'));
+  assert.equal(result.replayed, false);
+  const approved = copy(subject.store.rows);
+  const replay = await subject.service.approve(command('approve'));
+  assert.equal(replay.replayed, true);
+  assert.deepEqual(subject.store.rows, approved);
+  assert.equal(subject.store.rows.filter((row) => row.EVENT_TYPE === 'approve').length, 1);
+  const stored = await subject.store.unique('RevenueDeskDeployments', 'DEPLOYMENT_ID', IDS.deployment);
+  assert.equal(stored.COUNT_VERSION, '1');
+  assert.equal(stored.TEST_STATUS, 'Scheduled');
+  assert.equal(stored.GO_LIVE_APPROVAL_STATUS, 'Approved');
+  assert.equal(stored.ACTUAL_START_AT, null);
+  assert.equal(stored.EXPIRES_AT, null);
+  assert.equal(subject.crmState.Test_Status, 'Scheduled');
+  assert.equal(subject.getProviderVerificationCalls(), 0);
+  assert.equal(subject.getProviderDisableCalls(), 0);
+  assert.equal(subject.getCrmActivationCalls(), 0);
+
+  // Only the existing injected fake provider supplies activation evidence;
+  // this is not evidence of an actual telephone route or provider operation.
+  subject.setProviderMode('active');
+  subject.setClock(NOW + 300_000);
+  const activated = await subject.service.activate(command('activate'));
+  assert.equal(activated.deployment.TEST_STATUS, 'Live');
+  assert.equal(activated.deployment.COUNT_VERSION, '2');
+  assert.equal(activated.deployment.ACTUAL_START_AT, new Date(NOW + 300_000).toISOString());
+  assert.equal(Date.parse(activated.deployment.EXPIRES_AT)
+    - Date.parse(activated.deployment.ACTUAL_START_AT), 7 * 86_400_000);
+  assert.ok(subject.getProviderVerificationCalls() > 0);
+  assert.equal(subject.getProviderDisableCalls(), 0);
+  const liveState = copy({ rows: subject.store.rows, crm: subject.crmState });
+  const activationReplay = await subject.service.activate(command('activate'));
+  assert.equal(activationReplay.replayed, true);
+  assert.deepEqual({ rows: subject.store.rows, crm: subject.crmState }, liveState);
+  assert.equal(subject.store.rows.filter((row) => row.EVENT_TYPE === 'activate').length, 1);
+});
+
+test('Catalyst bigint activation still requires fresh simulated route evidence before writes or clock start', async () => {
+  for (const providerMode of ['missing', 'stale']) {
+    const subject = fixture({ providerMode });
+    useCatalystDeploymentBigintReadback(subject);
+    await subject.service.approve(command('approve'));
+    subject.setClock(NOW + 300_000);
+    const before = copy({ rows: subject.store.rows, crm: subject.crmState });
+    await assert.rejects(subject.service.activate(command('activate')),
+      { code: providerMode === 'missing' ? 'ROUTE_VERIFICATION_FAILED' : 'STALE_ACTIVATION_EVIDENCE' });
+    assert.deepEqual({ rows: subject.store.rows, crm: subject.crmState }, before);
+    assert.equal(subject.getCrmActivationCalls(), 0);
+    assert.equal(subject.getProviderDisableCalls(), 0);
+    const stored = await subject.store.unique('RevenueDeskDeployments', 'DEPLOYMENT_ID', IDS.deployment);
+    assert.equal(stored.ACTUAL_START_AT, null);
+    assert.equal(stored.EXPIRES_AT, null);
+  }
+});
+
+test('malformed stored approval counters fail before any durable or CRM effect', async () => {
+  for (const field of ['COUNT_VERSION', 'HANDLED_COUNT']) {
+    for (const value of [null, '', '00', ' 0', '0.0', '-1', true,
+      String(Number.MAX_SAFE_INTEGER + 1)]) {
+      const subject = fixture({ providerMode: 'disabled', deploymentOverrides: { [field]: value } });
+      const before = copy({ rows: subject.store.rows, crm: subject.crmState });
+      await assert.rejects(subject.service.approve(command('approve')));
+      assert.deepEqual({ rows: subject.store.rows, crm: subject.crmState }, before);
+      assert.equal(subject.getProviderVerificationCalls(), 0);
+      assert.equal(subject.getProviderDisableCalls(), 0);
+      assert.equal(subject.getCrmActivationCalls(), 0);
+    }
+  }
 });
 
 test('new approval and activation reject unacknowledged monitoring without writes or provider access', async () => {

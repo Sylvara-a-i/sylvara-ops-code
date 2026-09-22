@@ -7,6 +7,8 @@ const {
   successorConfigurationVersionId, successorConfigurationRow, successorDeployment,
   COMPLETION_PROFILE, COMPLETION_SIGNATURE_DOMAIN, canonicalCompletionIntent,
   completionConfigurationVersionId, completionConfigurationRow, completionDeployment,
+  TRANSITION_PROFILE, TRANSITION_SIGNATURE_DOMAIN, canonicalTransitionIntent,
+  transitionConfigurationVersionId, transitionConfigurationRow, transitionDeployment,
 } = require('../lib/configuration-reconciliation');
 
 const originalClaim = `cfgstage_${'a'.repeat(64)}`;
@@ -153,4 +155,40 @@ test('completion intent rejects coercion, missing chain evidence, wrong identity
     const next = structuredClone(value); mutate(next);
     assert.throws(() => canonicalCompletionIntent(next), { code: 'CONFIGURATION_STAGING_REVIEW_INVALID' });
   }
+});
+
+test('completed release transition preserves all business and baseline source values and has one slot', () => {
+  const recovery = { profile: RECONCILIATION_PROFILE, originalRequest: originalRequest(), intent: intent() };
+  const recoveryKey = `cfgreconcile_${'4'.repeat(64)}`; const completedKey = `cfgcomplete_${'5'.repeat(64)}`;
+  const completedRow = completionConfigurationRow(recovery, recoveryKey, '6'.repeat(40));
+  const deployment = completionDeployment(recovery, recoveryKey, '6'.repeat(40));
+  const before = structuredClone({ completedRow, deployment });
+  const row = transitionConfigurationRow(completedRow, completedKey, '7'.repeat(40));
+  assert.equal(row.CONFIGURATION_VERSION_ID, transitionConfigurationVersionId(completedKey, completedRow.CONFIGURATION_VERSION_ID));
+  assert.equal(row.CONFIGURATION_VERSION_ID, transitionConfigurationRow(completedRow, completedKey, '8'.repeat(40)).CONFIGURATION_VERSION_ID);
+  const expected = JSON.parse(completedRow.CONFIGURATION_JSON); expected.reportBaseline.configurationVersionId = row.CONFIGURATION_VERSION_ID;
+  assert.deepEqual(JSON.parse(row.CONFIGURATION_JSON), expected);
+  assert.deepEqual(transitionDeployment(deployment, completedRow, completedKey, '7'.repeat(40)),
+    { ...deployment, ACTIVE_CONFIGURATION_VERSION_ID: row.CONFIGURATION_VERSION_ID, SOURCE_REVISION: '7'.repeat(40) });
+  assert.deepEqual({ completedRow, deployment }, before);
+  assert.throws(() => transitionConfigurationRow(row, completedKey, '8'.repeat(40)));
+  assert.throws(() => transitionConfigurationRow(completedRow, completedKey, completedRow.SOURCE_REVISION));
+  const value = { schema_version: 1, action: 'transition_configuration', completion_claim_key: completedKey,
+    completion_claim_fingerprint: '1'.repeat(64), completed_source_revision: completedRow.SOURCE_REVISION,
+    target_source_revision: row.SOURCE_REVISION, completed_configuration_version_id: completedRow.CONFIGURATION_VERSION_ID,
+    completed_configuration_fingerprint: `config_${'2'.repeat(64)}`, deployment_id: deployment.DEPLOYMENT_ID,
+    expected_deployment_fingerprint: `deployment_${'3'.repeat(64)}`, expected_deployment_version: 0,
+    expected_receipt_version: 1, configuration_version_id: row.CONFIGURATION_VERSION_ID,
+    configuration_fingerprint: `config_${'4'.repeat(64)}`, route_fingerprint: `route_${'5'.repeat(64)}`,
+    operator_id_hash: `operator_${'6'.repeat(64)}`, evidence_observed_at: '2026-09-02T12:00:00.000Z', requested_at: '2026-09-02T12:00:00.000Z' };
+  assert.equal(TRANSITION_PROFILE, 'free-test-configuration-transition-v1');
+  assert.notEqual(TRANSITION_SIGNATURE_DOMAIN, COMPLETION_SIGNATURE_DOMAIN);
+  assert.equal(canonicalTransitionIntent(value), canonicalTransitionIntent(Object.fromEntries(Object.entries(value).reverse())));
+  for (const mutate of [
+    (v) => { v.extra = true; }, (v) => { delete v.completion_claim_fingerprint; },
+    (v) => { v.action = 'approve'; }, (v) => { v.target_source_revision = v.completed_source_revision; },
+    (v) => { v.expected_deployment_version = '0'; }, (v) => { v.expected_receipt_version = 0; },
+    (v) => { v.configuration_version_id = completedRow.CONFIGURATION_VERSION_ID; },
+    (v) => { v.requested_at = '2026-09-02T11:59:00.000Z'; },
+  ]) { const next = structuredClone(value); mutate(next); assert.throws(() => canonicalTransitionIntent(next)); }
 });

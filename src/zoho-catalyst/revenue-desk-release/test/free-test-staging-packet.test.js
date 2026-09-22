@@ -16,11 +16,13 @@ const { PROFILE, SIGNATURE_DOMAIN, MAX_STAGING_PACKET_BYTES, MAX_SECRET_UTF8_BYT
   BINDINGS_PROFILE, MAX_BINDING_SECRET_BYTES, validateStagingBindingInput, deriveStagingBindings,
   validateUnsignedStagingEnvelope, signFreeTestStagingPacket,
   RECONCILIATION_PROFILE, validateUnsignedReconciliationEnvelope, signFreeTestReconciliationPacket,
-  COMPLETION_PROFILE, validateUnsignedCompletionEnvelope, signFreeTestCompletionPacket }
+  COMPLETION_PROFILE, validateUnsignedCompletionEnvelope, signFreeTestCompletionPacket,
+  TRANSITION_PROFILE, validateUnsignedTransitionEnvelope, signFreeTestTransitionPacket }
   = require('../lib/free-test-staging-packet');
 const { canonicalReconciliationIntent, RECONCILIATION_SIGNATURE_DOMAIN,
   successorConfigurationRow, successorDeployment, COMPLETION_SIGNATURE_DOMAIN, canonicalCompletionIntent,
-  completionConfigurationRow, completionDeployment, inactiveDeploymentFingerprint }
+  completionConfigurationRow, completionDeployment, inactiveDeploymentFingerprint,
+  TRANSITION_SIGNATURE_DOMAIN, canonicalTransitionIntent, transitionConfigurationRow, transitionDeployment }
   = require('../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/configuration-reconciliation');
 
 // Only synthetic fixtures and fake keys enter this suite. A signed packet is
@@ -125,6 +127,121 @@ function signCompletion(f, secretText = f.runtime.config.operatorVerificationSec
   try { return signFreeTestCompletionPacket(f.envelope, { ...f.options, secret }); }
   finally { secret.fill(0); }
 }
+
+async function transitionFixture() {
+  const prior = await completionFixture();
+  prior.runtime.advance(prior.options.now - prior.runtime.now());
+  await prior.service.complete(signCompletion(prior).packet);
+  const runtime = prior.runtime;
+  const { createConfigurationStagingService, COMPLETION_RECEIPT_KIND }
+    = require('../../revenue-desk-call-runtime/functions/revenue_desk_route_control/lib/configuration-staging-service');
+  const completion = runtime.store.rowsFor(runtime.config.tables.EVENT_RECEIPT_TABLE)
+    .find((row) => row.RECEIPT_KIND === COMPLETION_RECEIPT_KIND);
+  const completedConfigurationRow = structuredClone(runtime.store.rowsFor(runtime.config.tables.CONFIGURATION_VERSION_TABLE)
+    .find((row) => row.CONFIGURATION_VERSION_ID === completion.CONFIGURATION_VERSION_ID));
+  const completedDeployment = structuredClone(runtime.store.rowsFor(runtime.config.tables.DEPLOYMENT_TABLE)[0]);
+  const targetRevision = 'c'.repeat(40); const now = runtime.now() + 86_400_000;
+  const row = transitionConfigurationRow(completedConfigurationRow, completion.EVENT_KEY, targetRevision);
+  const deployment = transitionDeployment(completedDeployment, completedConfigurationRow, completion.EVENT_KEY, targetRevision);
+  const intent = { schema_version: 1, action: 'transition_configuration',
+    completion_claim_key: completion.EVENT_KEY, completion_claim_fingerprint: completion.PAYLOAD_FINGERPRINT,
+    completed_source_revision: prior.options.expectedRevision, target_source_revision: targetRevision,
+    completed_configuration_version_id: completedConfigurationRow.CONFIGURATION_VERSION_ID,
+    completed_configuration_fingerprint: configurationSnapshotFingerprint(completedConfigurationRow),
+    deployment_id: completedDeployment.DEPLOYMENT_ID,
+    expected_deployment_fingerprint: inactiveDeploymentFingerprint(completedDeployment),
+    expected_deployment_version: 0, expected_receipt_version: 1,
+    configuration_version_id: row.CONFIGURATION_VERSION_ID,
+    configuration_fingerprint: configurationSnapshotFingerprint(row),
+    route_fingerprint: routeFingerprint(routeFromRows(deployment, row)),
+    operator_id_hash: prior.options.expectedOperatorHash,
+    evidence_observed_at: new Date(now).toISOString(), requested_at: new Date(now).toISOString() };
+  return { prior, runtime, service: createConfigurationStagingService({
+    config: { ...runtime.config, sourceRevision: targetRevision }, store: runtime.store, crm: runtime.crm,
+    core: runtime.core, sourceReader: runtime.sourceReader, conversionReader: runtime.conversionReader, now: runtime.now }),
+  envelope: { schemaVersion: 1, completedConfigurationRow, completedDeployment,
+    request: { profile: TRANSITION_PROFILE, intent } }, options: { ...prior.options, expectedRevision: targetRevision, now } };
+}
+
+function signTransition(f, secretText = f.runtime.config.operatorVerificationSecret) {
+  const secret = Buffer.from(secretText, 'utf8');
+  try { return signFreeTestTransitionPacket(f.envelope, { ...f.options, secret }); }
+  finally { secret.fill(0); }
+}
+
+test('transition signs a bounded new intent without embedding historical payloads or claiming stored authentication', async () => {
+  const f = await transitionFixture(); const before = structuredClone(f.envelope);
+  assert.equal(validateUnsignedTransitionEnvelope(f.envelope, f.options).durableEvidenceAuthenticated, false);
+  const signed = signTransition(f);
+  assert.deepEqual(f.envelope, before);
+  assert.deepEqual(Object.keys(signed.packet), ['profile', 'intent', 'signature']);
+  assert.equal(signed.packet.signature, `v1=${crypto.createHmac('sha256', f.runtime.config.operatorVerificationSecret)
+    .update(TRANSITION_SIGNATURE_DOMAIN).update(canonicalTransitionIntent(before.request.intent)).digest('hex')}`);
+  assert.equal(signed.byteLength, Buffer.byteLength(signed.serialized));
+  assert.equal(signed.serialized.includes(f.runtime.config.operatorVerificationSecret), false);
+  assert.equal(signed.sha256, crypto.createHash('sha256').update(signed.serialized).digest('hex'));
+  assert.equal(validateUnsignedTransitionEnvelope(f.envelope,
+    { ...f.options, maxBodyBytes: signed.byteLength }).maxBodyBytes, signed.byteLength);
+  assert.throws(() => validateUnsignedTransitionEnvelope(f.envelope,
+    { ...f.options, maxBodyBytes: signed.byteLength - 1 }), { code: 'STAGING_PACKET_TOO_LARGE' });
+});
+
+test('transition rejects invalid targets, non-inactive storage, stale evidence and signed numeric strings before signing', async () => {
+  for (const mutate of [
+    (f) => { f.envelope.extra = true; },
+    (f) => { f.envelope.request.signature = 'already signed'; },
+    (f) => { f.options.expectedRevision = 'b'.repeat(40); },
+    (f) => { f.options.expectedOperatorHash = `operator_${'9'.repeat(64)}`; },
+    (f) => { f.envelope.request.intent.expected_deployment_version = '0'; },
+    (f) => { f.envelope.request.intent.expected_receipt_version = 0; },
+    (f) => { f.envelope.request.intent.route_fingerprint = `route_${'0'.repeat(64)}`; },
+    (f) => { f.envelope.request.intent.configuration_fingerprint = `config_${'0'.repeat(64)}`; },
+    (f) => { f.envelope.completedConfigurationRow.ACTIVATED_AT = new Date(f.options.now).toISOString(); },
+    (f) => { f.envelope.completedConfigurationRow.CONFIGURATION_JSON = '{}'; },
+    (f) => { f.envelope.completedDeployment.COUNT_VERSION = '01'; },
+    (f) => { f.envelope.completedDeployment.HANDLED_COUNT = '1'; },
+    (f) => { f.envelope.completedDeployment.GO_LIVE_APPROVAL_STATUS = 'Approved'; },
+    (f) => { f.envelope.completedDeployment.ACTUAL_START_AT = new Date(f.options.now).toISOString(); },
+    (f) => { f.options.now += 300001; },
+    (f) => { f.envelope.request.intent.evidence_observed_at = new Date(f.options.now - 900001).toISOString(); },
+    (f) => { f.envelope.request.intent.requested_at = new Date(f.options.now + 1).toISOString(); },
+  ]) {
+    const f = await transitionFixture(); mutate(f);
+    assert.throws(() => validateUnsignedTransitionEnvelope(f.envelope, f.options));
+  }
+});
+
+test('transition signer and controller preserve history, do not rewrite CRM, and replay without effects', async () => {
+  const f = await transitionFixture(); const runtime = f.runtime;
+  const historical = structuredClone({ receipts: runtime.store.rowsFor(runtime.config.tables.EVENT_RECEIPT_TABLE),
+    configurations: runtime.store.rowsFor(runtime.config.tables.CONFIGURATION_VERSION_TABLE) });
+  const signed = signTransition(f); runtime.advance(f.options.now - runtime.now());
+  const beforeCrmWrites = runtime.stagingWrites;
+  const result = await f.service.transition(signed.packet);
+  assert.equal(result.state, 'StagedInactive'); assert.equal(result.transitioned, true);
+  assert.equal(result.approved, false); assert.equal(result.active, false);
+  assert.deepEqual(runtime.store.rowsFor(runtime.config.tables.EVENT_RECEIPT_TABLE).slice(0, 3), historical.receipts);
+  assert.deepEqual(runtime.store.rowsFor(runtime.config.tables.CONFIGURATION_VERSION_TABLE).slice(0, 3), historical.configurations);
+  assert.equal(runtime.stagingWrites, beforeCrmWrites);
+  const rows = structuredClone([...runtime.store.rows.entries()]); const writes = runtime.store.writes.length;
+  runtime.advance(86_400_000);
+  assert.deepEqual(await f.service.transition(signed.packet), { ...result, replayed: true });
+  assert.deepEqual([...runtime.store.rows.entries()], rows);
+  assert.equal(runtime.store.writes.length, writes); assert.equal(runtime.stagingWrites, beforeCrmWrites);
+});
+
+test('transition controller rejects an unverified claimed receipt or wrong signing key without writes', async () => {
+  for (const wrong of ['receipt', 'key']) {
+    const f = await transitionFixture();
+    if (wrong === 'receipt') f.envelope.request.intent.completion_claim_fingerprint = '0'.repeat(64);
+    const signed = signTransition(f, wrong === 'key' ? 'synthetic_wrong_key_'.repeat(3) : undefined);
+    f.runtime.advance(f.options.now - f.runtime.now());
+    const before = structuredClone([...f.runtime.store.rows.entries()]); const writes = f.runtime.store.writes.length;
+    await assert.rejects(f.service.transition(signed.packet));
+    assert.deepEqual([...f.runtime.store.rows.entries()], before);
+    assert.equal(f.runtime.store.writes.length, writes);
+  }
+});
 
 test('completion signs only fresh intent and preserves both historical signed requests', async () => {
   const f = await completionFixture(); const before = structuredClone(f.envelope);

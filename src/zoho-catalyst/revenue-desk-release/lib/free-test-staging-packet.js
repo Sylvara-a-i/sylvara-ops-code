@@ -9,7 +9,9 @@ const {
 } = require('../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/approval-control');
 const { RECONCILIATION_PROFILE, RECONCILIATION_SIGNATURE_DOMAIN, canonicalReconciliationIntent,
   successorConfigurationRow, successorDeployment, COMPLETION_PROFILE, COMPLETION_SIGNATURE_DOMAIN,
-  canonicalCompletionIntent, completionConfigurationRow, completionDeployment }
+  canonicalCompletionIntent, completionConfigurationRow, completionDeployment,
+  TRANSITION_PROFILE, TRANSITION_SIGNATURE_DOMAIN, canonicalTransitionIntent,
+  transitionConfigurationRow, transitionDeployment, inactiveDeploymentFingerprint }
   = require('../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/configuration-reconciliation');
 const {
   REQUIRED_CONFIGURATION_FIELDS,
@@ -526,6 +528,84 @@ function signFreeTestCompletionPacket(envelope, {
     sourceRevision: expectedRevision, maxBodyBytes, profile: COMPLETION_PROFILE });
 }
 
+/**
+ * Review one completed, never-active configuration's explicit release transition.
+ * Local row/fingerprint agreement is not authentication of a stored receipt:
+ * the controller must verify its HMAC, complete history and fresh source data.
+ */
+function validateUnsignedTransitionEnvelope(envelope, {
+  expectedRevision, expectedOperatorHash, maxBodyBytes, now = Date.now(),
+}) {
+  validateContext({ expectedRevision, expectedOperatorHash, maxBodyBytes, now });
+  exactObject(envelope, ['schemaVersion', 'completedConfigurationRow', 'completedDeployment', 'request'],
+    'INVALID_UNSIGNED_TRANSITION_ENVELOPE');
+  invariant(envelope.schemaVersion === 1, 'INVALID_UNSIGNED_TRANSITION_ENVELOPE',
+    'Unsigned transition envelope version is invalid.');
+  const request = envelope.request;
+  exactObject(request, ['profile', 'intent'], 'INVALID_UNSIGNED_TRANSITION_REQUEST');
+  invariant(request.profile === TRANSITION_PROFILE, 'INVALID_UNSIGNED_TRANSITION_REQUEST',
+    'Unsigned transition request is invalid.');
+  const intent = request.intent;
+  const canonicalIntent = canonicalTransitionIntent(intent);
+  const previous = envelope.completedConfigurationRow;
+  const before = envelope.completedDeployment;
+  validateConfigurationVersionRow(previous, { expectedDeploymentId: intent.deployment_id,
+    expectedSourceRevision: intent.completed_source_revision, expectedEnvironment: 'development' });
+  const beforeFingerprint = inactiveDeploymentFingerprint(before);
+  invariant(previous.ACTIVATED_AT === null && before.SOURCE_ENVIRONMENT === 'development'
+    && before.TEST_STATUS === 'Ready for Approval'
+    && before.GO_LIVE_APPROVAL_STATUS === 'Pending Internal Approval'
+    && ['COUNT_VERSION', 'HANDLED_COUNT', 'REPORT_RECONCILIATION_VERSION']
+      .every((field) => before[field] === 0 || before[field] === '0')
+    && before.COUNTED_CALL_KEYS_JSON === '[]' && before.REPORT_RECONCILIATION_STATUS === 'NotRequired'
+    && ['APPROVED_CONFIGURATION_VERSION_ID', 'APPROVAL_EVENT_KEY', 'APPROVED_ROUTE_FINGERPRINT',
+      'GO_LIVE_APPROVED_AT', 'ACTIVATION_EVENT_KEY', 'APPROVED_START_AT', 'ACTUAL_START_AT',
+      'EXPIRES_AT', 'STOP_REASON', 'STOPPED_AT'].every((field) => before[field] === null),
+  'INVALID_STAGING_INTENT', 'Only a completed, never-active configuration can transition.');
+  const row = transitionConfigurationRow(previous, intent.completion_claim_key, expectedRevision);
+  const deployment = transitionDeployment(before, previous, intent.completion_claim_key, expectedRevision);
+  const requestedAt = canonicalTimestamp(intent.requested_at, 'INVALID_STAGING_INTENT');
+  const observedAt = canonicalTimestamp(intent.evidence_observed_at, 'INVALID_STAGING_INTENT');
+  invariant(intent.operator_id_hash === expectedOperatorHash
+    && intent.target_source_revision === expectedRevision
+    && previous.CONFIGURATION_VERSION_ID === intent.completed_configuration_version_id
+    && configurationSnapshotFingerprint(previous) === intent.completed_configuration_fingerprint
+    && beforeFingerprint === intent.expected_deployment_fingerprint
+    && row.CONFIGURATION_VERSION_ID === intent.configuration_version_id
+    && configurationSnapshotFingerprint(row) === intent.configuration_fingerprint
+    && routeFingerprint(routeFromRows(deployment, row)) === intent.route_fingerprint
+    && observedAt <= requestedAt && requestedAt <= now
+    && now - requestedAt <= MAX_INTENT_AGE_MS && now - observedAt <= MAX_READBACK_AGE_MS,
+  'INVALID_STAGING_INTENT', 'Transition intent is stale or does not match its target.');
+  const projectedBytes = Buffer.byteLength(`${JSON.stringify({
+    ...request, signature: `v1=${'0'.repeat(64)}`,
+  })}\n`, 'utf8');
+  invariant(projectedBytes <= maxBodyBytes, 'STAGING_PACKET_TOO_LARGE',
+    'Signed transition packet exceeds the verified route body limit.');
+  return deepFreeze({ packet: structuredClone(request), canonicalIntent,
+    sourceRevision: expectedRevision, maxBodyBytes, profile: TRANSITION_PROFILE,
+    durableEvidenceAuthenticated: false });
+}
+
+function signFreeTestTransitionPacket(envelope, {
+  secret, expectedRevision, expectedOperatorHash, maxBodyBytes, now = Date.now(),
+}) {
+  const validated = validateUnsignedTransitionEnvelope(envelope, {
+    expectedRevision, expectedOperatorHash, maxBodyBytes, now,
+  });
+  const secretText = decodeSigningSecret(secret);
+  const signature = `v1=${crypto.createHmac('sha256', secretText)
+    .update(TRANSITION_SIGNATURE_DOMAIN, 'utf8').update(validated.canonicalIntent, 'utf8').digest('hex')}`;
+  const packet = deepFreeze({ ...validated.packet, signature });
+  const serialized = `${JSON.stringify(packet)}\n`;
+  const byteLength = Buffer.byteLength(serialized, 'utf8');
+  invariant(byteLength <= maxBodyBytes, 'STAGING_PACKET_TOO_LARGE',
+    'Signed transition packet exceeds the verified route body limit.');
+  return deepFreeze({ packet, serialized, byteLength,
+    sha256: crypto.createHash('sha256').update(serialized, 'utf8').digest('hex'),
+    sourceRevision: expectedRevision, maxBodyBytes, profile: TRANSITION_PROFILE });
+}
+
 function signFreeTestStagingPacket(envelope, {
   secret, expectedRevision, expectedOperatorHash, maxBodyBytes, now = Date.now(),
 }) {
@@ -570,4 +650,7 @@ module.exports = Object.freeze({
   COMPLETION_PROFILE,
   validateUnsignedCompletionEnvelope,
   signFreeTestCompletionPacket,
+  TRANSITION_PROFILE,
+  validateUnsignedTransitionEnvelope,
+  signFreeTestTransitionPacket,
 });
