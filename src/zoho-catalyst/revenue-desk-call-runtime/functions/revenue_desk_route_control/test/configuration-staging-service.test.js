@@ -14,6 +14,25 @@ const { crmBaselineFixture }
 const { syntheticPreparationInputs } = require('../../../../revenue-desk-release/test/fixtures/free-test-preparation');
 const { createConfigurationConversionReader } = require('../lib/configuration-conversion-reader');
 const { createCrmControlClient } = require('../lib/crm-client');
+const { loadDeployment, activeAt } = require('revenue_desk_call_gateway/lib/runtime-service');
+const { runtimeFixture } = require('revenue_desk_call_gateway/test/runtime-fixture');
+const datastoreSchema = require('../../../config/datastore-schema.json');
+
+function enforceDeploymentMandatoryColumns(f, columns) {
+  const insert = f.store.insertUnique.bind(f.store);
+  f.store.insertUnique = async (table, key, row, immutable) => {
+    if (table === f.config.tables.DEPLOYMENT_TABLE) {
+      // The ordinary fake has no provider schema. Enforce this real insertion
+      // constraint so an inactive deployment cannot depend on a fake timestamp.
+      const missing = columns.find((column) => column.mandatory
+        && (row[column.api_name] === null || row[column.api_name] === undefined));
+      if (missing) throw Object.assign(new Error('Synthetic required-column rejection'), {
+        code: 'SYNTHETIC_MANDATORY_COLUMN', column: missing.api_name,
+      });
+    }
+    return insert(table, key, row, immutable);
+  };
+}
 
 function connectedNativeFixture({ publicNative = false } = {}) {
   const source = syntheticPreparationInputs()[0];
@@ -107,6 +126,68 @@ test('real native reader rejects wrong joins and chronology before staging consu
   }
 });
 
+test('real staged deployment loads for inspection without a planned start but cannot admit calls', async () => {
+  const { f, service } = connectedNativeFixture();
+  await service.stage(f.request);
+  const [row] = f.store.rowsFor(f.config.tables.DEPLOYMENT_TABLE);
+  const before = structuredClone([...f.store.rows.entries()]);
+  const writes = f.store.writes.length;
+  const deployment = await loadDeployment(f.store, row, {
+    ...f.config, sharedAgentVersion: f.config.stagingAgentVersion,
+    authorizationEventSecret: f.config.eventChainSecret,
+  });
+  assert.equal(deployment.approvedStartAt, null);
+  assert.equal(deployment.actualStartAt, null); assert.equal(deployment.expiresAt, null);
+  assert.equal(deployment.approvalEvidenceValidated, false);
+  assert.equal(deployment.activationEvidenceValidated, false);
+  assert.throws(() => activeAt(deployment, f.now()), { code: 'CONFIGURATION_UNAVAILABLE' });
+  assert.equal(f.store.writes.length, writes);
+  assert.deepEqual([...f.store.rows.entries()], before);
+});
+
+test('nullable planned start preserves actual activation timing and authorization guards', async () => {
+  for (const plannedStart of [null, undefined, '2026-08-20T12:00:00.000Z']) {
+    const f = runtimeFixture();
+    const row = f.store.rows.get(f.config.tables.DEPLOYMENT_TABLE)[0];
+    row.APPROVED_START_AT = plannedStart;
+    const deployment = await loadDeployment(f.store, row, f.config);
+    assert.equal(deployment.approvedStartAt, plannedStart ?? null);
+    assert.equal(deployment.actualStartAt, '2026-08-20T12:00:00.000Z');
+    assert.equal(deployment.expiresAt, '2026-08-27T12:00:00.000Z');
+    assert.doesNotThrow(() => activeAt(deployment, f.clock.value));
+    assert.throws(() => activeAt(deployment, Date.parse(deployment.actualStartAt) - 1),
+      { code: 'CONFIGURATION_UNAVAILABLE' });
+    assert.throws(() => activeAt(deployment, Date.parse(deployment.expiresAt)),
+      { code: 'CONFIGURATION_UNAVAILABLE' });
+  }
+  const scheduled = runtimeFixture();
+  const scheduledRow = scheduled.store.rows.get(scheduled.config.tables.DEPLOYMENT_TABLE)[0];
+  Object.assign(scheduledRow, { TEST_STATUS: 'Scheduled', APPROVED_START_AT: null,
+    ACTIVATION_EVENT_KEY: null, ACTUAL_START_AT: null, EXPIRES_AT: null });
+  const approved = await loadDeployment(scheduled.store, scheduledRow, scheduled.config);
+  assert.equal(approved.approvalEvidenceValidated, true);
+  assert.equal(approved.activationEvidenceValidated, false);
+  assert.equal(approved.actualStartAt, null); assert.equal(approved.expiresAt, null);
+  assert.throws(() => activeAt(approved, scheduled.clock.value), { code: 'CONFIGURATION_UNAVAILABLE' });
+  for (const mutate of [
+    (row) => { row.APPROVED_START_AT = ''; },
+    (row) => { row.APPROVED_START_AT = 'not-a-time'; },
+    (row) => { row.APPROVED_START_AT = 0; },
+    (row) => { row.APPROVED_START_AT = '2026-08-20T12:00:00Z'; },
+    (row) => { row.ACTUAL_START_AT = null; },
+    (row) => { row.EXPIRES_AT = '2026-08-28T12:00:00.000Z'; },
+    (row) => { row.ACTUAL_START_AT = '2026-08-20T11:00:00.000Z'; },
+    (row) => { row.APPROVAL_EVENT_KEY = null; },
+    (row) => { row.ACTIVATION_EVENT_KEY = null; },
+    (_row, f) => { f.store.authorizationRows = []; },
+  ]) {
+    const f = runtimeFixture();
+    const row = f.store.rows.get(f.config.tables.DEPLOYMENT_TABLE)[0];
+    row.APPROVED_START_AT = null; mutate(row, f);
+    await assert.rejects(loadDeployment(f.store, row, f.config), { code: 'CONFIGURATION_UNAVAILABLE' });
+  }
+});
+
 test('real native conversion drift blocks completed replay without additional writes', async () => {
   const selected = connectedNativeFixture(); const { f, service, nativeRow } = selected;
   await service.stage(f.request);
@@ -143,6 +224,49 @@ test('authenticated submitted setup creates immutable reviewed content and inact
   assert.equal(receipt.STATUS, 'Completed');
   assert.ok(!receipt.EVENT_DATA_JSON.includes('example.invalid'));
   assert.ok(!receipt.EVENT_DATA_JSON.includes(f.config.operatorVerificationSecret));
+});
+
+test('canonical Data Store requirements permit inactive staging without approval or start timestamps', async () => {
+  const f = createStagingFixture();
+  const columns = datastoreSchema.tables.find((table) => table.api_name === f.config.tables.DEPLOYMENT_TABLE).columns;
+  enforceDeploymentMandatoryColumns(f, columns);
+  const result = await f.service.stage(f.request);
+  assert.equal(result.state, 'StagedInactive');
+  assert.equal(result.approved, false); assert.equal(result.active, false);
+  const [deployment] = f.store.rowsFor(f.config.tables.DEPLOYMENT_TABLE);
+  for (const field of ['APPROVED_START_AT', 'ACTUAL_START_AT', 'EXPIRES_AT',
+    'GO_LIVE_APPROVED_AT', 'APPROVAL_EVENT_KEY', 'ACTIVATION_EVENT_KEY']) {
+    assert.equal(deployment[field], null, field);
+  }
+  assert.equal(deployment.TEST_STATUS, 'Ready for Approval');
+  assert.equal(deployment.GO_LIVE_APPROVAL_STATUS, 'Pending Internal Approval');
+  assert.equal(f.store.rowsFor(f.config.tables.EVENT_RECEIPT_TABLE)[0].STATUS, 'Completed');
+  assert.equal(f.stagingWrites, 1);
+});
+
+test('required approved start reproduces blocked partial staging; schema correction never resumes the claim', async () => {
+  const f = createStagingFixture();
+  const columns = structuredClone(datastoreSchema.tables
+    .find((table) => table.api_name === f.config.tables.DEPLOYMENT_TABLE).columns);
+  const approvedStart = columns.find((column) => column.api_name === 'APPROVED_START_AT');
+  approvedStart.mandatory = true;
+  enforceDeploymentMandatoryColumns(f, columns);
+  await assert.rejects(f.service.stage(f.request), {
+    code: 'SYNTHETIC_MANDATORY_COLUMN', column: 'APPROVED_START_AT',
+  });
+  const [receipt] = f.store.rowsFor(f.config.tables.EVENT_RECEIPT_TABLE);
+  assert.equal(receipt.STATUS, 'Processing'); assert.equal(receipt.RECEIPT_VERSION, 0);
+  assert.equal(receipt.ATTEMPT_COUNT, 1); assert.equal(receipt.PROCESSED_AT, null);
+  assert.equal(f.store.rowsFor(f.config.tables.CONFIGURATION_VERSION_TABLE).length, 1);
+  assert.equal(f.store.rowsFor(f.config.tables.DEPLOYMENT_TABLE).length, 0);
+  assert.equal(f.stagingWrites, 0);
+  const before = structuredClone([...f.store.rows.entries()]);
+  const writes = f.store.writes.length;
+  // Correcting provider metadata is not permission to replay partial writes.
+  approvedStart.mandatory = false;
+  await assert.rejects(f.service.stage(f.request), { code: 'CONFIGURATION_STAGING_RECONCILIATION_REQUIRED' });
+  assert.deepEqual([...f.store.rows.entries()], before);
+  assert.equal(f.store.writes.length, writes); assert.equal(f.stagingWrites, 0);
 });
 
 test('authoritative absence of assisted lineage uses exact public/native lineage through conversion and staging', async () => {
