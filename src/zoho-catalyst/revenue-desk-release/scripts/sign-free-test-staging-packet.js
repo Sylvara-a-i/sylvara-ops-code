@@ -15,6 +15,9 @@ const {
   RECONCILIATION_PROFILE,
   validateUnsignedReconciliationEnvelope,
   signFreeTestReconciliationPacket,
+  COMPLETION_PROFILE,
+  validateUnsignedCompletionEnvelope,
+  signFreeTestCompletionPacket,
 } = require('../lib/free-test-staging-packet');
 
 const MAX_INPUT_BYTES = 1024 * 1024;
@@ -270,9 +273,11 @@ function main() {
   }
   const now = Date.now();
   const profile = envelope?.request?.profile;
-  fail(profile === PROFILE || profile === RECONCILIATION_PROFILE, 'INVALID_SIGNING_PROFILE');
-  const validate = profile === PROFILE ? validateUnsignedStagingEnvelope : validateUnsignedReconciliationEnvelope;
-  const sign = profile === PROFILE ? signFreeTestStagingPacket : signFreeTestReconciliationPacket;
+  fail([PROFILE, RECONCILIATION_PROFILE, COMPLETION_PROFILE].includes(profile), 'INVALID_SIGNING_PROFILE');
+  const validate = profile === PROFILE ? validateUnsignedStagingEnvelope
+    : profile === RECONCILIATION_PROFILE ? validateUnsignedReconciliationEnvelope : validateUnsignedCompletionEnvelope;
+  const sign = profile === PROFILE ? signFreeTestStagingPacket
+    : profile === RECONCILIATION_PROFILE ? signFreeTestReconciliationPacket : signFreeTestCompletionPacket;
   // Complete all packet/evidence validation before consuming protected stdin.
   validate(envelope, {
     expectedRevision: args.expectedRevision,

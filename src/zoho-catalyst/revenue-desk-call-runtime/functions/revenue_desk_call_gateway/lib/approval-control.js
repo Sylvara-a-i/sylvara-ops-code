@@ -259,6 +259,17 @@ function routeFingerprint(route) {
     .update(canonical, 'utf8').digest('hex')}`;
 }
 
+function storedRouteInteger(value, label) {
+  const code = 'INVALID_ROUTE_FINGERPRINT_INPUT';
+  // Catalyst BigInt readback uses decimal strings. Normalize only this row
+  // boundary; signed intents and public route objects retain strict numbers.
+  if (typeof value === 'string') {
+    invariant(/^(?:0|[1-9][0-9]{0,15})$/.test(value), code, `${label} is invalid.`);
+    value = Number(value);
+  }
+  return canonicalInteger(value, 1, code, label);
+}
+
 function routeFromRows(deployment, configurationVersion) {
   invariant(isPlainObject(deployment) && isPlainObject(configurationVersion),
     'APPROVAL_PRECONDITION_FAILED', 'Deployment and configuration version are required.');
@@ -269,11 +280,11 @@ function routeFromRows(deployment, configurationVersion) {
     configuration_snapshot_fingerprint: configurationSnapshotFingerprint(configurationVersion),
     number_lookup_hash: deployment.NUMBER_LOOKUP_HASH,
     binding_id: deployment.BINDING_ID,
-    binding_version: deployment.BINDING_VERSION,
+    binding_version: storedRouteInteger(deployment.BINDING_VERSION, 'Binding version'),
     monitor_agent_id: deployment.MONITOR_AGENT_ID,
-    monitor_agent_version: deployment.MONITOR_AGENT_VERSION,
+    monitor_agent_version: storedRouteInteger(deployment.MONITOR_AGENT_VERSION, 'Monitor-agent version'),
     coverage_mode: deployment.COVERAGE_MODE,
-    call_limit: deployment.CALL_LIMIT,
+    call_limit: storedRouteInteger(deployment.CALL_LIMIT, 'Call limit'),
     source_revision: deployment.SOURCE_REVISION,
     environment: deployment.SOURCE_ENVIRONMENT,
   };

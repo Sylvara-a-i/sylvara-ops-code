@@ -333,7 +333,7 @@ this table is the sanitized operating view, not a new release contract.
 | Gate | Current evidence and revision | Remaining action | Cost class | Approval needed | Status |
 | --- | --- | --- | --- | --- | --- |
 | G1 Public/assisted entry and native relationships | Accepted assisted Forms/conversion retained; `5227abe` installed held; public native mapping read back | Complete narrow read grant and affected public identity/retry acceptance | Offline now; cloud allowance must be confirmed | Owner grant; exact readback/fixture allocation; no reused canary | Public runtime continuation unverified; assisted evidence retained |
-| G2 Authenticated configuration review/staging | `04ff949` controller installed; hold restored. Latest allocated staging returned 503: Processing receipt and immutable configuration present, selected Deal unchanged. Approved Development `APPROVED_START_AT` nullable correction saved/read back; bounded query confirms no deployment. Local parser correction and linked-successor reconciliation address this exact partial boundary; source checks are not live acceptance | Install only the reviewed compatible controller delta under hold, then separately allocate reconciliation/readback. Preserve receipt, configuration, accepted Forms and relationships; ordinary retries and replacement journeys cannot resume partial claims | Local correction and approved metadata/readback only; further Development execution requires verified allowance | Schema/readback block complete; no resend authorized. Runtime delta and partial-claim recovery need exact scoped allocations | Schema corrected live; parser/reconciliation candidate remains local. G2 staging acceptance unpassed |
+| G2 Authenticated configuration review/staging | `b080706` controller installed and all 246 downloaded entries verified; original hold restored. Allocated reconciliation authenticated and created a linked receipt, immutable successor configuration and inactive deployment, then returned 400 before the CRM update. Independent readback: recovery Processing/version 0, selected Deal unchanged, approval/activation/start fields null and counts zero. Persisted-integer correction and exact-state completion have focused offline regressions and independent review; neither is installed | Finish canonical verification and freeze the minimal controller delta. Obtain one bounded installation, temporary body-limit/revision change and completion request with independent readback. Preserve both incomplete receipts and configurations, the same inactive deployment, accepted Forms and relationships; ordinary retries and replacement journeys are not recovery | Confirmed no-cost Development/included CRM for the consumed block; candidate tests are offline. Fresh allowance check required before execution | One upload, two archive readbacks, two revision saves and one recovery POST consumed. New exact allocation required; no resend or further deployment authorized | Inactive storage boundary verified; CRM staging and receipt completion unpassed. G2 remains unpassed |
 | G3 Coverage and restoration preparation | After-hours fixtures; new owner-attested overflow/combined snapshot contract | Actual originating-provider setting/unit/evidence and later execution binding; preserve original handling | Local preparation only | Owner evidence; separate provider phase for live behavior | Preparation only; overflow/combined execution held |
 | G4 Call-to-owner handoff | H1–H10 source at `c28affd`, separate dry-run/acceptance/delivery meanings | Named monitored owner, actual alert adapter/inbox proof and bounded recovery readback | No real sending now | Exact owner-only email and runtime allocation | Source complete; Development 0/10 |
 | G5 Clock, limit, stop and settlement | Offline limits/races/reports; early-stop correction retained in `5227abe` held installation | Scoped installed-runtime containment and report reconciliation | Offline passed; cloud later | Exact synthetic acceptance allocation | Installed evidence is not runtime proof |
@@ -683,6 +683,35 @@ validated at its original signing time, the recovery intent must be fresh, and
 the full nested packet must fit the freshly verified body limit **before protected
 input is consumed**. The controller, not a local checksum or signer, authenticates
 the durable receipt. No new credential collection method or transport is added.
+
+For the specifically observed interruption **after** the recovery configuration
+and inactive deployment were inserted but **before** CRM staging, ordinary
+reconciliation remains blocked. The separate
+`free-test-configuration-completion-v1` intent binds both preserved requests and
+receipts, both historical configurations, and every governed inactive-deployment
+field. It rejects prior approval, any call count, an activation/start/stop, changed
+relationships or business evidence, and any earlier incomplete completion claim.
+The original staging and recovery receipts remain Processing; neither is reset.
+
+Completion has one deterministic identity for that recovery, not a fresh slot per
+release. It appends one truthful current-release configuration and completion
+receipt, conditionally changes only the same deployment's configuration pointer
+and source revision, then uses the existing conditional CRM staging writer. The
+receipt completes only after source and stored-state checks. Internal approval
+must validate the entire linked chain; completing staging does not approve or
+activate it. Maximum writes are two inserts, two conditional Catalyst updates,
+and one conditional selected-Deal update. An interrupted completion stays held;
+only an exact already-completed request can be read-only replayed.
+
+The existing signer takes a private completion envelope with `schemaVersion`,
+the preserved unsigned `reconciliationEnvelope`, and `request` containing the
+preserved signed `reconciliationRequest` plus fresh completion intent. It verifies
+both historical HMACs without re-signing or retiming them. Measure this larger
+packet against the actual installed limit before reading the protected cache;
+an earlier request's successful size check does not cover completion. Reuse the
+approved owner-private handoff, not a new signer or credential collection flow.
+Persisted canonical decimal integer strings are normalized only at the storage
+boundary; signed incoming deployment versions still require actual integers.
 
 Rollback is containment: restore/preserve the controller hold and provider-disabled
 state; do not delete either claim or configuration. Any interrupted recovery

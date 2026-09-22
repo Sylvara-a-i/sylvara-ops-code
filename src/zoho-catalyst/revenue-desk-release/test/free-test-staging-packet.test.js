@@ -15,10 +15,12 @@ const { canonicalApprovalIntent, configurationSnapshotFingerprint, routeFingerpr
 const { PROFILE, SIGNATURE_DOMAIN, MAX_STAGING_PACKET_BYTES, MAX_SECRET_UTF8_BYTES,
   BINDINGS_PROFILE, MAX_BINDING_SECRET_BYTES, validateStagingBindingInput, deriveStagingBindings,
   validateUnsignedStagingEnvelope, signFreeTestStagingPacket,
-  RECONCILIATION_PROFILE, validateUnsignedReconciliationEnvelope, signFreeTestReconciliationPacket }
+  RECONCILIATION_PROFILE, validateUnsignedReconciliationEnvelope, signFreeTestReconciliationPacket,
+  COMPLETION_PROFILE, validateUnsignedCompletionEnvelope, signFreeTestCompletionPacket }
   = require('../lib/free-test-staging-packet');
 const { canonicalReconciliationIntent, RECONCILIATION_SIGNATURE_DOMAIN,
-  successorConfigurationRow, successorDeployment }
+  successorConfigurationRow, successorDeployment, COMPLETION_SIGNATURE_DOMAIN, canonicalCompletionIntent,
+  completionConfigurationRow, completionDeployment, inactiveDeploymentFingerprint }
   = require('../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/configuration-reconciliation');
 
 // Only synthetic fixtures and fake keys enter this suite. A signed packet is
@@ -77,6 +79,154 @@ function signReconciliation(f, secretText = f.original.liveShape.config.operator
   try { return signFreeTestReconciliationPacket(f.envelope, { ...f.options, secret }); }
   finally { secret.fill(0); }
 }
+
+async function completionFixture() {
+  const prior = await reconciliationFixture(); const runtime = prior.original.liveShape;
+  const { createConfigurationStagingService, RECONCILIATION_RECEIPT_KIND }
+    = require('../../revenue-desk-call-runtime/functions/revenue_desk_route_control/lib/configuration-staging-service');
+  const reconciliationRequest = structuredClone(signReconciliation(prior).packet);
+  runtime.advance(prior.options.now - runtime.now());
+  const serviceAt = (sourceRevision) => createConfigurationStagingService({
+    config: { ...runtime.config, sourceRevision }, store: runtime.store, crm: runtime.crm,
+    core: runtime.core, sourceReader: runtime.sourceReader, conversionReader: runtime.conversionReader, now: runtime.now });
+  const record = runtime.crm.recordConfigurationStaging;
+  runtime.crm.recordConfigurationStaging = async () => { throw new Error('Synthetic interrupted recovery before CRM'); };
+  await assert.rejects(serviceAt(prior.options.expectedRevision).reconcile(reconciliationRequest));
+  runtime.crm.recordConfigurationStaging = record;
+  const receipt = runtime.store.rowsFor(runtime.config.tables.EVENT_RECEIPT_TABLE)
+    .find((row) => row.RECEIPT_KIND === RECONCILIATION_RECEIPT_KIND);
+  const data = JSON.parse(receipt.EVENT_DATA_JSON);
+  const deployment = runtime.store.rowsFor(runtime.config.tables.DEPLOYMENT_TABLE)[0];
+  const targetRevision = 'd'.repeat(40); const now = runtime.now() + 86_400_000;
+  const row = completionConfigurationRow(reconciliationRequest, receipt.EVENT_KEY, targetRevision);
+  const projected = completionDeployment(reconciliationRequest, receipt.EVENT_KEY, targetRevision);
+  const previous = reconciliationRequest.intent;
+  const intent = { schema_version: 1, action: 'complete_configuration',
+    original_claim_key: previous.original_claim_key, original_claim_fingerprint: previous.original_claim_fingerprint,
+    reconciliation_claim_key: receipt.EVENT_KEY, reconciliation_claim_fingerprint: receipt.PAYLOAD_FINGERPRINT,
+    original_source_revision: previous.original_source_revision,
+    reconciliation_source_revision: previous.target_source_revision, target_source_revision: targetRevision,
+    original_configuration_fingerprint: previous.original_configuration_fingerprint,
+    reconciled_configuration_version_id: previous.configuration_version_id,
+    reconciled_configuration_fingerprint: data.configurationFingerprint, deployment_id: previous.deployment_id,
+    expected_deployment_fingerprint: inactiveDeploymentFingerprint(deployment), expected_deployment_version: 0,
+    expected_receipt_version: 0, configuration_version_id: row.CONFIGURATION_VERSION_ID,
+    configuration_fingerprint: configurationSnapshotFingerprint(row),
+    route_fingerprint: routeFingerprint(routeFromRows(projected, row)), operator_id_hash: prior.options.expectedOperatorHash,
+    evidence_observed_at: new Date(now).toISOString(), requested_at: new Date(now).toISOString() };
+  return { prior, runtime, service: serviceAt(targetRevision),
+    envelope: { schemaVersion: 1, reconciliationEnvelope: structuredClone(prior.envelope),
+      request: { profile: COMPLETION_PROFILE, reconciliationRequest, intent } },
+    options: { ...prior.options, expectedRevision: targetRevision, now } };
+}
+
+function signCompletion(f, secretText = f.runtime.config.operatorVerificationSecret) {
+  const secret = Buffer.from(secretText, 'utf8');
+  try { return signFreeTestCompletionPacket(f.envelope, { ...f.options, secret }); }
+  finally { secret.fill(0); }
+}
+
+test('completion signs only fresh intent and preserves both historical signed requests', async () => {
+  const f = await completionFixture(); const before = structuredClone(f.envelope);
+  const validated = validateUnsignedCompletionEnvelope(f.envelope, f.options);
+  assert.equal(validated.profile, COMPLETION_PROFILE); assert.equal(validated.durableEvidenceAuthenticated, false);
+  const signed = signCompletion(f);
+  assert.deepEqual(signed.packet.reconciliationRequest, before.request.reconciliationRequest);
+  assert.deepEqual(f.envelope, before);
+  assert.equal(Object.isFrozen(signed.packet.reconciliationRequest.originalRequest), true);
+  assert.equal(signed.packet.signature, `v1=${crypto.createHmac('sha256', f.runtime.config.operatorVerificationSecret)
+    .update(COMPLETION_SIGNATURE_DOMAIN).update(canonicalCompletionIntent(before.request.intent)).digest('hex')}`);
+  assert.equal(signed.profile, COMPLETION_PROFILE); assert.equal(signed.sourceRevision, f.options.expectedRevision);
+  assert.equal(signed.byteLength, Buffer.byteLength(signed.serialized));
+  assert.equal(signed.sha256, crypto.createHash('sha256').update(signed.serialized).digest('hex'));
+  assert.equal(signed.serialized.includes(f.runtime.config.operatorVerificationSecret), false);
+  assert.equal(Object.hasOwn(signed.packet, 'reconciliationEnvelope'), false);
+});
+
+test('completion signer verifies both historical HMACs and their distinct domains', async () => {
+  for (const layer of ['original', 'reconciliation']) {
+    for (const wrong of ['key', 'domain']) {
+      const f = await completionFixture(); const request = f.envelope.request.reconciliationRequest;
+      const selected = layer === 'original' ? request.originalRequest : request;
+      const intent = layer === 'original' ? canonicalApprovalIntent(selected.intent) : canonicalReconciliationIntent(selected.intent);
+      const correctDomain = layer === 'original' ? SIGNATURE_DOMAIN : RECONCILIATION_SIGNATURE_DOMAIN;
+      selected.signature = `v1=${crypto.createHmac('sha256', wrong === 'key'
+        ? 'synthetic_wrong_key_'.repeat(3) : f.runtime.config.operatorVerificationSecret)
+        .update(wrong === 'domain' ? COMPLETION_SIGNATURE_DOMAIN : correctDomain).update(intent).digest('hex')}`;
+      if (layer === 'original') f.envelope.reconciliationEnvelope.request.originalRequest.signature = selected.signature;
+      assert.equal(validateUnsignedCompletionEnvelope(f.envelope, f.options).durableEvidenceAuthenticated, false);
+      assert.throws(() => signCompletion(f), { code: 'INVALID_APPROVAL_SIGNATURE' });
+    }
+  }
+  const f = await completionFixture();
+  assert.throws(() => signCompletion(f, 'synthetic_wrong_key_'.repeat(3)), { code: 'INVALID_APPROVAL_SIGNATURE' });
+});
+
+test('completion rejects historical drift, wrong revision, malformed counters and stale intent before signing', async () => {
+  for (const mutate of [
+    (f) => { f.envelope.extra = true; },
+    (f) => { f.envelope.request.signature = 'not unsigned'; },
+    (f) => { f.envelope.request.reconciliationRequest.originalRequest.review.callbackExpectation = 'Changed'; },
+    (f) => { f.envelope.request.reconciliationRequest.intent.requested_at = new Date(f.options.now).toISOString(); },
+    (f) => { f.options.expectedRevision = 'c'.repeat(40); },
+    (f) => { f.options.expectedOperatorHash = `operator_${'9'.repeat(64)}`; },
+    (f) => { f.envelope.request.intent.target_source_revision = f.envelope.request.intent.reconciliation_source_revision; },
+    (f) => { f.envelope.request.intent.expected_receipt_version = '0'; },
+    (f) => { f.envelope.request.intent.expected_deployment_version = 1; },
+    (f) => { f.envelope.request.intent.route_fingerprint = `route_${'0'.repeat(64)}`; },
+    (f) => { f.envelope.request.intent.configuration_fingerprint = `config_${'0'.repeat(64)}`; },
+    (f) => { f.envelope.request.intent.configuration_version_id = 'replacement_identity'; },
+    (f) => { f.options.now += 300001; },
+    (f) => { f.envelope.request.intent.evidence_observed_at = new Date(f.options.now - 900001).toISOString(); },
+    (f) => { f.envelope.request.intent.requested_at = new Date(f.options.now + 1).toISOString(); },
+  ]) {
+    const f = await completionFixture(); mutate(f);
+    assert.throws(() => validateUnsignedCompletionEnvelope(f.envelope, f.options));
+  }
+});
+
+test('completion counts both preserved signatures in the exact pre-key size bound', async () => {
+  const f = await completionFixture(); const signed = signCompletion(f);
+  assert.ok(signed.byteLength > signReconciliation(f.prior).byteLength);
+  assert.equal(validateUnsignedCompletionEnvelope(f.envelope,
+    { ...f.options, maxBodyBytes: signed.byteLength }).maxBodyBytes, signed.byteLength);
+  assert.throws(() => validateUnsignedCompletionEnvelope(f.envelope,
+    { ...f.options, maxBodyBytes: signed.byteLength - 1 }), { code: 'STAGING_PACKET_TOO_LARGE' });
+  f.options.now += 300000; assert.equal(signCompletion(f).profile, COMPLETION_PROFILE);
+  f.options.now += 1; assert.throws(() => signCompletion(f), { code: 'INVALID_STAGING_INTENT' });
+});
+
+test('completion signature roundtrips through the real controller with historical preservation and no replay effects', async () => {
+  const f = await completionFixture(); const runtime = f.runtime;
+  const historical = structuredClone({ receipts: runtime.store.rowsFor(runtime.config.tables.EVENT_RECEIPT_TABLE),
+    configurations: runtime.store.rowsFor(runtime.config.tables.CONFIGURATION_VERSION_TABLE) });
+  const signed = signCompletion(f); runtime.advance(f.options.now - runtime.now());
+  const result = await f.service.complete(signed.packet);
+  assert.equal(result.state, 'StagedInactive'); assert.equal(result.completed, true);
+  assert.equal(result.approved, false); assert.equal(result.active, false);
+  assert.deepEqual(runtime.store.rowsFor(runtime.config.tables.EVENT_RECEIPT_TABLE).slice(0, 2), historical.receipts);
+  assert.deepEqual(runtime.store.rowsFor(runtime.config.tables.CONFIGURATION_VERSION_TABLE).slice(0, 2), historical.configurations);
+  const [deployment] = runtime.store.rowsFor(runtime.config.tables.DEPLOYMENT_TABLE);
+  assert.equal(deployment.SOURCE_REVISION, f.options.expectedRevision);
+  assert.equal(deployment.ACTUAL_START_AT, null); assert.equal(deployment.APPROVAL_EVENT_KEY, null);
+  assert.equal(runtime.stagingWrites, 1);
+  const before = structuredClone([...runtime.store.rows.entries()]); const writes = runtime.store.writes.length;
+  runtime.advance(86_400_000);
+  assert.deepEqual(await f.service.complete(signed.packet), { ...result, replayed: true });
+  assert.deepEqual([...runtime.store.rows.entries()], before);
+  assert.equal(runtime.store.writes.length, writes); assert.equal(runtime.stagingWrites, 1);
+});
+
+test('completion signer does not authenticate operator-supplied durable fingerprints', async () => {
+  const f = await completionFixture();
+  f.envelope.request.intent.reconciliation_claim_fingerprint = '0'.repeat(64);
+  assert.equal(validateUnsignedCompletionEnvelope(f.envelope, f.options).durableEvidenceAuthenticated, false);
+  const signed = signCompletion(f); f.runtime.advance(f.options.now - f.runtime.now());
+  const before = structuredClone([...f.runtime.store.rows.entries()]); const writes = f.runtime.store.writes.length;
+  await assert.rejects(f.service.complete(signed.packet));
+  assert.deepEqual([...f.runtime.store.rows.entries()], before);
+  assert.equal(f.runtime.store.writes.length, writes); assert.equal(f.runtime.stagingWrites, 0);
+});
 
 test('reconciliation signs fresh owner intent while preserving historical preparation and original signature', async () => {
   const f = await reconciliationFixture(); const before = structuredClone(f.envelope);

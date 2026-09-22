@@ -19,7 +19,8 @@ const GUARD = path.resolve(__dirname, 'helpers/offline-guard.js');
 const WINDOWS_HELPER = path.resolve(__dirname, '../scripts/sign-free-test-staging-packet-private.ps1');
 const POWERSHELL = path.resolve(path.dirname(process.execPath), '../../native/powershell/pwsh.exe');
 const { MAX_SECRET_UTF8_BYTES, MAX_BINDING_SECRET_BYTES, deriveStagingBindings,
-  signFreeTestStagingPacket, RECONCILIATION_PROFILE, signFreeTestReconciliationPacket }
+  signFreeTestStagingPacket, RECONCILIATION_PROFILE, signFreeTestReconciliationPacket,
+  COMPLETION_PROFILE, signFreeTestCompletionPacket }
   = require('../lib/free-test-staging-packet');
 
 function protectSyntheticDirectory(directory, { publicRead = false } = {}) {
@@ -130,7 +131,7 @@ function run(value, extraArgs = [], overrides = {}) {
 
 function assertSafeOutput(result, value) {
   const output = `${result.stdout || ''}${result.stderr || ''}`;
-  const original = value.envelope.originalEnvelope || value.envelope;
+  const original = value.envelope.reconciliationEnvelope?.originalEnvelope || value.envelope.originalEnvelope || value.envelope;
   for (const sensitive of [value.f.config.operatorVerificationSecret,
     original.request.intent.operator_id_hash,
     original.preparation.crm.deal.Alert_Recipient_Email,
@@ -200,6 +201,104 @@ function reconciliationFiles(t) {
   fs.writeFileSync(value.input, JSON.stringify(value.envelope));
   return value;
 }
+
+function completionFiles(t) {
+  const value = reconciliationFiles(t);
+  const secret = Buffer.from(value.f.config.operatorVerificationSecret, 'utf8');
+  let reconciliationRequest;
+  try { reconciliationRequest = signFreeTestReconciliationPacket(value.envelope, { secret,
+    expectedRevision: value.expectedRevision, expectedOperatorHash: value.f.config.operatorIdHash,
+    maxBodyBytes: 16384, now: Date.now() }).packet; }
+  finally { secret.fill(0); }
+  const { configurationSnapshotFingerprint, routeFingerprint, routeFromRows }
+    = require('../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/approval-control');
+  const { successorConfigurationRow, completionConfigurationRow, completionDeployment }
+    = require('../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/configuration-reconciliation');
+  const previous = reconciliationRequest.intent;
+  const recoveryKey = `cfgreconcile_${'4'.repeat(64)}`;
+  value.expectedRevision = 'd'.repeat(40);
+  const reconciled = successorConfigurationRow(reconciliationRequest.originalRequest,
+    previous.original_claim_key, previous.target_source_revision);
+  const row = completionConfigurationRow(reconciliationRequest, recoveryKey, value.expectedRevision);
+  const deployment = completionDeployment(reconciliationRequest, recoveryKey, value.expectedRevision);
+  const at = new Date().toISOString();
+  // These durable-row fingerprints are synthetic, unverified evidence. Only
+  // the controller may authenticate persisted claims; CLI preflight cannot.
+  const intent = { schema_version: 1, action: 'complete_configuration',
+    original_claim_key: previous.original_claim_key, original_claim_fingerprint: previous.original_claim_fingerprint,
+    reconciliation_claim_key: recoveryKey, reconciliation_claim_fingerprint: '5'.repeat(64),
+    original_source_revision: previous.original_source_revision,
+    reconciliation_source_revision: previous.target_source_revision, target_source_revision: value.expectedRevision,
+    original_configuration_fingerprint: previous.original_configuration_fingerprint,
+    reconciled_configuration_version_id: reconciled.CONFIGURATION_VERSION_ID,
+    reconciled_configuration_fingerprint: configurationSnapshotFingerprint(reconciled),
+    deployment_id: previous.deployment_id, expected_deployment_fingerprint: `deployment_${'7'.repeat(64)}`,
+    expected_deployment_version: 0, expected_receipt_version: 0, configuration_version_id: row.CONFIGURATION_VERSION_ID,
+    configuration_fingerprint: configurationSnapshotFingerprint(row),
+    route_fingerprint: routeFingerprint(routeFromRows(deployment, row)), operator_id_hash: value.f.config.operatorIdHash,
+    evidence_observed_at: at, requested_at: at };
+  value.envelope = { schemaVersion: 1, reconciliationEnvelope: value.envelope,
+    request: { profile: COMPLETION_PROFILE, reconciliationRequest, intent } };
+  fs.writeFileSync(value.input, JSON.stringify(value.envelope));
+  return value;
+}
+
+test('completion CLI validates without stdin and preserves historical packets in one exclusive output', (t) => {
+  const value = completionFiles(t); forbidProtectedInput(value);
+  const preflight = run(value, ['--validate-only'], { input: '' });
+  assert.equal(preflight.status, 0, preflight.stderr); assertSafeOutput(preflight, value);
+  assert.equal(JSON.parse(preflight.stdout).profile, COMPLETION_PROFILE);
+  assert.equal(JSON.parse(preflight.stdout).signaturePresent, false);
+  assert.doesNotMatch(preflight.stderr, /UNEXPECTED_KEY_READ/); assert.equal(fs.existsSync(value.output), false);
+  fs.writeFileSync(value.preload, childGuard(value));
+  const result = run(value); assert.equal(result.status, 0, result.stderr); assertSafeOutput(result, value);
+  const verdict = JSON.parse(result.stdout); const bytes = fs.readFileSync(value.output);
+  const packet = JSON.parse(bytes.toString('utf8'));
+  assert.deepEqual(packet.reconciliationRequest, value.envelope.request.reconciliationRequest);
+  const secret = Buffer.from(value.f.config.operatorVerificationSecret, 'utf8');
+  try { assert.equal(bytes.toString('utf8'), signFreeTestCompletionPacket(value.envelope, { secret,
+    expectedRevision: value.expectedRevision, expectedOperatorHash: value.f.config.operatorIdHash,
+    maxBodyBytes: 16384, now: Date.now() }).serialized); }
+  finally { secret.fill(0); }
+  assert.equal(verdict.profile, COMPLETION_PROFILE);
+  assert.equal(verdict.sha256, crypto.createHash('sha256').update(bytes).digest('hex'));
+  assert.equal(verdict.submitted, false); assert.equal(verdict.retryAllowed, false);
+  forbidProtectedInput(value);
+  const again = run(value); assert.equal(again.status, 1);
+  assert.doesNotMatch(again.stderr, /UNEXPECTED_KEY_READ/); assertSafeOutput(again, value);
+  assert.deepEqual(fs.readFileSync(value.output), bytes);
+});
+
+test('completion CLI rejects malformed, stale and oversized requests before key entry', (t) => {
+  for (const mutate of [
+    (value) => { value.envelope.request.profile = 'unapproved-profile'; },
+    (value) => { value.expectedRevision = 'c'.repeat(40); },
+    (value) => { value.envelope.request.intent.expected_deployment_version = '0'; },
+    (value) => { value.envelope.request.intent.requested_at = '2020-01-01T00:00:00.000Z'; },
+    (value) => { value.maxBodyBytes = Buffer.byteLength(`${JSON.stringify({
+      ...value.envelope.request, signature: `v1=${'0'.repeat(64)}`,
+    })}\n`) - 1; },
+  ]) {
+    const value = completionFiles(t); mutate(value);
+    fs.writeFileSync(value.input, JSON.stringify(value.envelope)); forbidProtectedInput(value);
+    const result = run(value, [], { input: '' });
+    assert.equal(result.status, 1); assertSafeOutput(result, value);
+    assert.doesNotMatch(result.stderr, /UNEXPECTED_KEY_READ/); assert.equal(fs.existsSync(value.output), false);
+  }
+});
+
+test('completion CLI rejects either invalid historical HMAC without creating output', (t) => {
+  for (const layer of ['original', 'reconciliation']) {
+    const value = completionFiles(t); value.envelope = structuredClone(value.envelope);
+    if (layer === 'original') {
+      value.envelope.request.reconciliationRequest.originalRequest.signature = `v1=${'0'.repeat(64)}`;
+      value.envelope.reconciliationEnvelope.request.originalRequest.signature = `v1=${'0'.repeat(64)}`;
+    } else value.envelope.request.reconciliationRequest.signature = `v1=${'0'.repeat(64)}`;
+    fs.writeFileSync(value.input, JSON.stringify(value.envelope));
+    const result = run(value); assert.equal(result.status, 1); assertSafeOutput(result, value);
+    assert.equal(fs.existsSync(value.output), false);
+  }
+});
 
 test('reconciliation CLI validates without stdin and exclusively signs without exposing either signature', (t) => {
   const value = reconciliationFiles(t); forbidProtectedInput(value);

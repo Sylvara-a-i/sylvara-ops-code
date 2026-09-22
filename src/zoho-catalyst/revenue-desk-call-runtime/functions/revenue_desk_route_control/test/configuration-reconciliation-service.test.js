@@ -122,6 +122,38 @@ function assertOriginalPreserved(value) {
   assert.deepEqual(value.originalRow, value.preserved.configuration);
 }
 
+test('reconciliation consumes Catalyst bigint-string readback through the real route boundary', async () => {
+  const fields = ['BINDING_VERSION', 'MONITOR_AGENT_VERSION', 'CALL_LIMIT'];
+  for (const selected of [[], ...fields.map((field) => [field]), fields]) {
+    const value = await partialFixture(); const { f, service, envelope, config } = value;
+    const unique = f.store.unique.bind(f.store);
+    // Fake persistence serializes selected BigInt columns as Catalyst does;
+    // the staging service and route parser remain the real implementation.
+    f.store.unique = async (...args) => {
+      const row = await unique(...args);
+      if (row && args[0] === config.tables.DEPLOYMENT_TABLE) {
+        for (const field of [...selected, 'COUNT_VERSION', 'HANDLED_COUNT']) row[field] = String(row[field]);
+      }
+      return row;
+    };
+    const writes = f.store.writes.length;
+    const result = await service.reconcile(envelope);
+    assert.equal(result.state, 'StagedInactive'); assert.equal(result.active, false);
+    assert.equal(f.store.writes.length - writes, 4); assert.equal(f.stagingWrites, 1);
+    const recovery = f.store.rowsFor(config.tables.EVENT_RECEIPT_TABLE)
+      .find((row) => row.RECEIPT_KIND === RECONCILIATION_RECEIPT_KIND);
+    assert.equal(recovery.STATUS, 'Completed'); assert.equal(recovery.RECEIPT_VERSION, 1);
+    const deployment = await f.store.unique(config.tables.DEPLOYMENT_TABLE, 'DEPLOYMENT_ID', result.deploymentId);
+    for (const field of selected) assert.equal(typeof deployment[field], 'string');
+    assert.equal(deployment.ACTUAL_START_AT, null); assert.equal(deployment.ACTIVATION_EVENT_KEY, null);
+    const beforeReplay = clone([...f.store.rows.entries()]); const beforeWrites = f.store.writes.length;
+    assert.equal((await service.reconcile(envelope)).replayed, true);
+    assert.deepEqual([...f.store.rows.entries()], beforeReplay);
+    assert.equal(f.store.writes.length, beforeWrites); assert.equal(f.stagingWrites, 1);
+    assertOriginalPreserved(value);
+  }
+});
+
 test('partial staging reconciles once to an inactive current-release successor and approval source', async () => {
   for (const priorApproval of [false, true]) {
     const value = await partialFixture({ priorApproval }); const { f, service, envelope, config } = value;

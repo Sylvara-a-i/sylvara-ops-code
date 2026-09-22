@@ -8,7 +8,8 @@ const {
   routeFromRows,
 } = require('../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/approval-control');
 const { RECONCILIATION_PROFILE, RECONCILIATION_SIGNATURE_DOMAIN, canonicalReconciliationIntent,
-  successorConfigurationRow, successorDeployment }
+  successorConfigurationRow, successorDeployment, COMPLETION_PROFILE, COMPLETION_SIGNATURE_DOMAIN,
+  canonicalCompletionIntent, completionConfigurationRow, completionDeployment }
   = require('../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/configuration-reconciliation');
 const {
   REQUIRED_CONFIGURATION_FIELDS,
@@ -431,6 +432,100 @@ function signFreeTestReconciliationPacket(envelope, {
     sourceRevision: expectedRevision, maxBodyBytes, profile: RECONCILIATION_PROFILE });
 }
 
+/**
+ * Preserve the two signed historical requests while binding one completion to
+ * the freshly observed inactive deployment. Durable receipt/deployment hashes
+ * remain unverified until the sole controller independently reads those rows.
+ */
+function validateUnsignedCompletionEnvelope(envelope, {
+  expectedRevision, expectedOperatorHash, maxBodyBytes, now = Date.now(),
+}) {
+  validateContext({ expectedRevision, expectedOperatorHash, maxBodyBytes, now });
+  exactObject(envelope, ['schemaVersion', 'reconciliationEnvelope', 'request'],
+    'INVALID_UNSIGNED_COMPLETION_ENVELOPE');
+  invariant(envelope.schemaVersion === 1, 'INVALID_UNSIGNED_COMPLETION_ENVELOPE',
+    'Unsigned completion envelope version is invalid.');
+  const request = envelope.request;
+  exactObject(request, ['profile', 'reconciliationRequest', 'intent'], 'INVALID_UNSIGNED_COMPLETION_REQUEST');
+  invariant(request.profile === COMPLETION_PROFILE, 'INVALID_UNSIGNED_COMPLETION_REQUEST',
+    'Unsigned completion request is invalid.');
+  const reconciliation = request.reconciliationRequest;
+  exactObject(reconciliation, ['profile', 'originalRequest', 'intent', 'signature'],
+    'INVALID_UNSIGNED_COMPLETION_REQUEST');
+  invariant(typeof reconciliation.signature === 'string' && /^v1=[a-f0-9]{64}$/.test(reconciliation.signature),
+    'INVALID_APPROVAL_SIGNATURE', 'Preserved reconciliation signature is invalid.');
+  const historicalAt = canonicalTimestamp(reconciliation.intent?.requested_at, 'INVALID_STAGING_INTENT');
+  const reconciliationRevision = reconciliation.intent?.target_source_revision;
+  const historical = validateUnsignedReconciliationEnvelope(envelope.reconciliationEnvelope, {
+    expectedRevision: reconciliationRevision, expectedOperatorHash, maxBodyBytes, now: historicalAt,
+  });
+  const unsignedReconciliation = Object.fromEntries(Object.entries(reconciliation)
+    .filter(([key]) => key !== 'signature'));
+  invariant(same(unsignedReconciliation, historical.packet), 'STAGING_PREPARATION_MISMATCH',
+    'Preserved reconciliation does not match its historical preparation.');
+  const intent = request.intent;
+  const canonicalIntent = canonicalCompletionIntent(intent);
+  const requestedAt = canonicalTimestamp(intent.requested_at, 'INVALID_STAGING_INTENT');
+  const observedAt = canonicalTimestamp(intent.evidence_observed_at, 'INVALID_STAGING_INTENT');
+  const reconciledRow = successorConfigurationRow(reconciliation.originalRequest,
+    reconciliation.intent.original_claim_key, reconciliationRevision);
+  const row = completionConfigurationRow(reconciliation, intent.reconciliation_claim_key, expectedRevision);
+  const deployment = completionDeployment(reconciliation, intent.reconciliation_claim_key, expectedRevision);
+  invariant(intent.operator_id_hash === expectedOperatorHash
+    && intent.target_source_revision === expectedRevision
+    && intent.original_claim_key === reconciliation.intent.original_claim_key
+    && intent.original_claim_fingerprint === reconciliation.intent.original_claim_fingerprint
+    && intent.original_source_revision === reconciliation.intent.original_source_revision
+    && intent.original_configuration_fingerprint === reconciliation.intent.original_configuration_fingerprint
+    && intent.reconciliation_source_revision === reconciliationRevision
+    && intent.reconciled_configuration_version_id === reconciledRow.CONFIGURATION_VERSION_ID
+    && intent.reconciled_configuration_fingerprint === configurationSnapshotFingerprint(reconciledRow)
+    && intent.deployment_id === deployment.DEPLOYMENT_ID
+    && intent.configuration_version_id === row.CONFIGURATION_VERSION_ID
+    && intent.configuration_fingerprint === configurationSnapshotFingerprint(row)
+    && intent.route_fingerprint === routeFingerprint(routeFromRows(deployment, row))
+    && historicalAt <= observedAt && observedAt <= requestedAt && requestedAt <= now
+    && now - requestedAt <= MAX_INTENT_AGE_MS && now - observedAt <= MAX_READBACK_AGE_MS,
+  'INVALID_STAGING_INTENT', 'Completion intent is stale or does not match its target.');
+  const projectedBytes = Buffer.byteLength(`${JSON.stringify({
+    ...request, signature: `v1=${'0'.repeat(64)}`,
+  })}\n`, 'utf8');
+  invariant(projectedBytes <= maxBodyBytes, 'STAGING_PACKET_TOO_LARGE',
+    'Signed completion packet exceeds the verified route body limit.');
+  return deepFreeze({ packet: structuredClone(request), canonicalIntent,
+    originalCanonicalIntent: historical.originalCanonicalIntent,
+    reconciliationCanonicalIntent: historical.canonicalIntent, sourceRevision: expectedRevision,
+    maxBodyBytes, profile: COMPLETION_PROFILE, durableEvidenceAuthenticated: false });
+}
+
+function signFreeTestCompletionPacket(envelope, {
+  secret, expectedRevision, expectedOperatorHash, maxBodyBytes, now = Date.now(),
+}) {
+  const secretText = decodeSigningSecret(secret);
+  const validated = validateUnsignedCompletionEnvelope(envelope, {
+    expectedRevision, expectedOperatorHash, maxBodyBytes, now,
+  });
+  const reconciliation = validated.packet.reconciliationRequest;
+  for (const [domain, intent, signature] of [
+    [SIGNATURE_DOMAIN, validated.originalCanonicalIntent, reconciliation.originalRequest.signature],
+    [RECONCILIATION_SIGNATURE_DOMAIN, validated.reconciliationCanonicalIntent, reconciliation.signature],
+  ]) {
+    const expected = crypto.createHmac('sha256', secretText).update(domain, 'utf8').update(intent, 'utf8').digest();
+    invariant(crypto.timingSafeEqual(expected, Buffer.from(signature.slice(3), 'hex')),
+      'INVALID_APPROVAL_SIGNATURE', 'Preserved request signature could not be verified.');
+  }
+  const signature = `v1=${crypto.createHmac('sha256', secretText)
+    .update(COMPLETION_SIGNATURE_DOMAIN, 'utf8').update(validated.canonicalIntent, 'utf8').digest('hex')}`;
+  const packet = deepFreeze({ ...validated.packet, signature });
+  const serialized = `${JSON.stringify(packet)}\n`;
+  const byteLength = Buffer.byteLength(serialized, 'utf8');
+  invariant(byteLength <= maxBodyBytes, 'STAGING_PACKET_TOO_LARGE',
+    'Signed completion packet exceeds the verified route body limit.');
+  return deepFreeze({ packet, serialized, byteLength,
+    sha256: crypto.createHash('sha256').update(serialized, 'utf8').digest('hex'),
+    sourceRevision: expectedRevision, maxBodyBytes, profile: COMPLETION_PROFILE });
+}
+
 function signFreeTestStagingPacket(envelope, {
   secret, expectedRevision, expectedOperatorHash, maxBodyBytes, now = Date.now(),
 }) {
@@ -472,4 +567,7 @@ module.exports = Object.freeze({
   RECONCILIATION_PROFILE,
   validateUnsignedReconciliationEnvelope,
   signFreeTestReconciliationPacket,
+  COMPLETION_PROFILE,
+  validateUnsignedCompletionEnvelope,
+  signFreeTestCompletionPacket,
 });

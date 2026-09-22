@@ -5,6 +5,8 @@ const assert = require('node:assert/strict');
 const {
   RECONCILIATION_PROFILE, RECONCILIATION_SIGNATURE_DOMAIN, canonicalReconciliationIntent,
   successorConfigurationVersionId, successorConfigurationRow, successorDeployment,
+  COMPLETION_PROFILE, COMPLETION_SIGNATURE_DOMAIN, canonicalCompletionIntent,
+  completionConfigurationVersionId, completionConfigurationRow, completionDeployment,
 } = require('../lib/configuration-reconciliation');
 
 const originalClaim = `cfgstage_${'a'.repeat(64)}`;
@@ -101,5 +103,54 @@ test('reconciliation intent has a separate action/domain and one exact canonical
   ]) {
     const next = structuredClone(value); mutate(next);
     assert.throws(() => canonicalReconciliationIntent(next), { code: 'CONFIGURATION_STAGING_REVIEW_INVALID' });
+  }
+});
+
+test('completion preserves both historical snapshots and uses one release-independent successor identity', () => {
+  const recovery = { profile: RECONCILIATION_PROFILE, originalRequest: originalRequest(), intent: intent() };
+  const before = structuredClone(recovery); const key = `cfgreconcile_${'4'.repeat(64)}`;
+  const row = completionConfigurationRow(recovery, key, '5'.repeat(40));
+  const projected = completionDeployment(recovery, key, '5'.repeat(40));
+  assert.equal(COMPLETION_PROFILE, 'free-test-configuration-completion-v1');
+  assert.notEqual(COMPLETION_SIGNATURE_DOMAIN, RECONCILIATION_SIGNATURE_DOMAIN);
+  assert.equal(row.CONFIGURATION_VERSION_ID,
+    completionConfigurationRow(recovery, key, '6'.repeat(40)).CONFIGURATION_VERSION_ID);
+  assert.equal(row.CONFIGURATION_VERSION_ID, completionConfigurationVersionId(key, recovery.intent.configuration_version_id));
+  assert.notEqual(row.CONFIGURATION_VERSION_ID,
+    completionConfigurationVersionId(`cfgreconcile_${'7'.repeat(64)}`, recovery.intent.configuration_version_id));
+  const expected = JSON.parse(recovery.originalRequest.configurationRow.CONFIGURATION_JSON);
+  expected.reportBaseline.configurationVersionId = row.CONFIGURATION_VERSION_ID;
+  assert.deepEqual(JSON.parse(row.CONFIGURATION_JSON), expected);
+  assert.equal(projected.ACTIVE_CONFIGURATION_VERSION_ID, row.CONFIGURATION_VERSION_ID);
+  assert.equal(projected.SOURCE_REVISION, '5'.repeat(40));
+  assert.equal(projected.DEPLOYMENT_ID, recovery.originalRequest.deployment.DEPLOYMENT_ID);
+  assert.deepEqual(recovery, before);
+});
+
+test('completion intent rejects coercion, missing chain evidence, wrong identity and ambiguous timestamps', () => {
+  const recovery = intent(); const key = `cfgreconcile_${'4'.repeat(64)}`;
+  const value = { schema_version: 1, action: 'complete_configuration', original_claim_key: originalClaim,
+    original_claim_fingerprint: '1'.repeat(64), reconciliation_claim_key: key,
+    reconciliation_claim_fingerprint: '2'.repeat(64),
+    original_source_revision: oldRevision, reconciliation_source_revision: newRevision, target_source_revision: '5'.repeat(40),
+    original_configuration_fingerprint: `config_${'6'.repeat(64)}`,
+    reconciled_configuration_version_id: recovery.configuration_version_id,
+    reconciled_configuration_fingerprint: `config_${'7'.repeat(64)}`, deployment_id: recovery.deployment_id,
+    expected_deployment_fingerprint: `deployment_${'8'.repeat(64)}`, expected_deployment_version: 0,
+    expected_receipt_version: 0, configuration_version_id: completionConfigurationVersionId(key, recovery.configuration_version_id),
+    configuration_fingerprint: `config_${'9'.repeat(64)}`, route_fingerprint: recovery.route_fingerprint,
+    operator_id_hash: recovery.operator_id_hash, evidence_observed_at: recovery.evidence_observed_at,
+    requested_at: recovery.requested_at };
+  assert.equal(canonicalCompletionIntent(value), canonicalCompletionIntent(Object.fromEntries(Object.entries(value).reverse())));
+  for (const mutate of [
+    (next) => { next.extra = true; }, (next) => { delete next.reconciliation_claim_fingerprint; },
+    (next) => { next.expected_deployment_version = '0'; }, (next) => { next.expected_receipt_version = 1; },
+    (next) => { next.target_source_revision = newRevision; }, (next) => { next.action = 'approve'; },
+    (next) => { next.configuration_version_id = recovery.configuration_version_id; },
+    (next) => { next.requested_at = '2026-09-02T11:59:00.000Z'; },
+    (next) => { next.evidence_observed_at = '2026-09-02T12:00:00Z'; },
+  ]) {
+    const next = structuredClone(value); mutate(next);
+    assert.throws(() => canonicalCompletionIntent(next), { code: 'CONFIGURATION_STAGING_REVIEW_INVALID' });
   }
 });

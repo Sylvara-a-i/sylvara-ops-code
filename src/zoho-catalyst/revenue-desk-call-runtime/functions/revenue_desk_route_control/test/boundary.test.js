@@ -10,7 +10,7 @@ const { deterministicIdempotencyKey } = require('../lib/journey-core-service');
 const { RevenueDeskError } = require('revenue_desk_call_gateway/lib/errors');
 const { numberLookupKey } = require('revenue_desk_call_gateway/lib/security');
 const { PROFILE } = require('../lib/configuration-staging-service');
-const { RECONCILIATION_PROFILE } = require('revenue_desk_call_gateway/lib/configuration-reconciliation');
+const { RECONCILIATION_PROFILE, COMPLETION_PROFILE } = require('revenue_desk_call_gateway/lib/configuration-reconciliation');
 
 const REVISION = 'a'.repeat(40);
 const PROJECT_ID = '101000001';
@@ -92,10 +92,11 @@ test('authenticated configuration staging binds reader deadlines before dispatch
   assert.deepEqual(readerTimeouts, [['conversion', 3000], ['metadata', 3000]]);
 });
 
-test('configuration reconciliation dispatches only to the staging owner and never constructs provider or mail paths', async () => {
-  for (const replayed of [false, true]) {
-    const calls = { reconcile: 0, provider: 0, full: 0, stage: 0, connections: 0, mail: 0, fetch: 0 };
-    const body = { profile: RECONCILIATION_PROFILE, syntheticMarker: 'owner-reviewed-recovery' };
+test('configuration reconciliation and completion dispatch only to the staging owner without provider or mail paths', async () => {
+  for (const profile of [RECONCILIATION_PROFILE, COMPLETION_PROFILE]) for (const replayed of [false, true]) {
+    const method = profile === COMPLETION_PROFILE ? 'complete' : 'reconcile';
+    const calls = { reconcile: 0, complete: 0, provider: 0, full: 0, stage: 0, connections: 0, mail: 0, fetch: 0 };
+    const body = { profile, syntheticMarker: 'owner-reviewed-recovery' };
     const listener = createRequestListener({ environment: environment(), artifactSourceRevision: REVISION,
       fetchImpl: async () => { calls.fetch += 1; throw new Error('Outbound access prohibited'); },
       catalystSdk: { initialize() { return {
@@ -107,8 +108,8 @@ test('configuration reconciliation dispatches only to the staging owner and neve
         configurationSource: () => ({}), configurationConversion: () => ({}), configurationMetadata: () => ({}),
         staging: () => ({
           async stage() { calls.stage += 1; throw new Error('Ordinary staging is not reconciliation'); },
-          async reconcile(value) {
-            calls.reconcile += 1; assert.deepEqual(value, body);
+          async [method](value) {
+            calls[method] += 1; assert.deepEqual(value, body);
             return { state: 'StagedInactive', replayed, approved: true, active: true,
               configurationVersionId: 'synthetic_successor_configuration', deploymentId: 'synthetic_deployment' };
           },
@@ -123,15 +124,16 @@ test('configuration reconciliation dispatches only to the staging owner and neve
         'x-synthetic-control': 'h'.repeat(32), 'content-type': 'application/json' },
       rawBody: Buffer.from(JSON.stringify(body)) }, output);
     assert.equal(output.statusCode, 200);
-    assert.deepEqual(output.body, { ok: true, action: 'reconcile_configuration', state: 'StagedInactive',
+    assert.deepEqual(output.body, { ok: true, action: `${method}_configuration`, state: 'StagedInactive',
       replayed, approved: false, active: false,
       configurationVersionId: 'synthetic_successor_configuration', deploymentId: 'synthetic_deployment' });
-    assert.deepEqual(calls, { reconcile: 1, provider: 0, full: 0, stage: 0, connections: 0, mail: 0, fetch: 0 });
+    assert.deepEqual(calls, { reconcile: method === 'reconcile' ? 1 : 0, complete: method === 'complete' ? 1 : 0,
+      provider: 0, full: 0, stage: 0, connections: 0, mail: 0, fetch: 0 });
     assert.equal(output.headers['cache-control'], 'no-store, max-age=0');
   }
 });
 
-test('reconciliation wrong route, missing authentication and oversized input reject before SDK or factories', async () => {
+test('reconciliation and completion wrong route, missing authentication and oversized input reject before SDK or factories', async () => {
   const cases = [
     { status: 400, mutate: (request) => { request.url = '/internal/revenue-desk/activate-free-test'; } },
     { status: 400, mutate: (request) => { request.url = '/internal/revenue-desk/rollback-free-test'; } },
@@ -139,10 +141,10 @@ test('reconciliation wrong route, missing authentication and oversized input rej
     { status: 401, mutate: (request) => { request.headers['x-synthetic-control'] = 'wrong'; } },
     { status: 413, mutate: (request) => { request.headers['content-length'] = '4097'; } },
     { status: 400, mutate: (request) => { request.rawBody = Buffer.from(JSON.stringify({
-      profile: RECONCILIATION_PROFILE, padding: 'x'.repeat(4096),
+      profile: JSON.parse(request.rawBody).profile, padding: 'x'.repeat(4096),
     })); } },
   ];
-  for (const selected of cases) {
+  for (const profile of [RECONCILIATION_PROFILE, COMPLETION_PROFILE]) for (const selected of cases) {
     let initialized = 0; let factories = 0;
     const forbiddenFactory = () => { factories += 1; throw new Error('Factory access prohibited'); };
     const listener = createRequestListener({ environment: environment(), artifactSourceRevision: REVISION,
@@ -154,7 +156,7 @@ test('reconciliation wrong route, missing authentication and oversized input rej
       headers: { host: 'route-control.development.catalystserverless.com',
         'x-zc-environment': 'development', 'x-zc-projectid': PROJECT_ID,
         'x-synthetic-control': 'h'.repeat(32), 'content-type': 'application/json' },
-      rawBody: Buffer.from(JSON.stringify({ profile: RECONCILIATION_PROFILE })) };
+      rawBody: Buffer.from(JSON.stringify({ profile })) };
     selected.mutate(request);
     const output = response(); await listener(request, output);
     assert.equal(output.statusCode, selected.status);

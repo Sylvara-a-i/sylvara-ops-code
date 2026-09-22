@@ -201,6 +201,58 @@ function activationFixture(overrides = {}) {
   };
 }
 
+test('stored route integers preserve the canonical numeric route without mutating rows', () => {
+  const fields = ['BINDING_VERSION', 'MONITOR_AGENT_VERSION', 'CALL_LIMIT'];
+  const { deployment, configurationVersion } = rows();
+  const expected = routeFromRows(deployment, configurationVersion);
+  const fingerprint = routeFingerprint(expected);
+  for (const selected of [[], ...fields.map((field) => [field]), fields]) {
+    const stored = { ...deployment };
+    for (const field of selected) stored[field] = String(stored[field]);
+    const before = structuredClone({ stored, configurationVersion });
+    const actual = routeFromRows(stored, configurationVersion);
+    assert.deepEqual(actual, expected);
+    assert.equal(routeFingerprint(actual), fingerprint);
+    assert.deepEqual({ stored, configurationVersion }, before);
+  }
+});
+
+test('stored route integers reject noncanonical, missing, nonpositive and unsafe values', () => {
+  const invalid = [undefined, null, true, false, [], {}, 1n, '', ' ', ' 1', '1 ',
+    '01', '+1', '-1', '-0', '1.0', '1e0', '0x1', '1\n', '0', 0, -1, 1.5,
+    NaN, Infinity, String(Number.MAX_SAFE_INTEGER + 1), Number.MAX_SAFE_INTEGER + 1, '1'.repeat(100)];
+  for (const field of ['BINDING_VERSION', 'MONITOR_AGENT_VERSION', 'CALL_LIMIT']) {
+    for (const value of invalid) {
+      const { deployment, configurationVersion } = rows({ deployment: { [field]: value } });
+      assert.throws(() => routeFromRows(deployment, configurationVersion),
+        { code: 'INVALID_ROUTE_FINGERPRINT_INPUT' }, `${field}: ${String(value)}`);
+    }
+    const { deployment, configurationVersion } = rows({ deployment: {
+      [field]: String(Number.MAX_SAFE_INTEGER),
+    } });
+    const route = routeFromRows(deployment, configurationVersion);
+    assert.equal(route[{ BINDING_VERSION: 'binding_version', MONITOR_AGENT_VERSION: 'monitor_agent_version',
+      CALL_LIMIT: 'call_limit' }[field]], Number.MAX_SAFE_INTEGER);
+  }
+});
+
+test('public route fingerprints and signed intents still reject numeric strings', () => {
+  const { deployment, configurationVersion } = rows();
+  const route = routeFromRows(deployment, configurationVersion);
+  for (const field of ['binding_version', 'monitor_agent_version', 'call_limit']) {
+    assert.throws(() => routeFingerprint({ ...route, [field]: String(route[field]) }),
+      { code: 'INVALID_ROUTE_FINGERPRINT_INPUT' });
+  }
+  const approval = approvalFixture();
+  const activation = activationFixture();
+  for (const field of ['schema_version', 'expected_deployment_version']) {
+    assert.throws(() => canonicalApprovalIntent({ ...approval.intent, [field]: String(approval.intent[field]) }),
+      { code: 'INVALID_APPROVAL_INTENT' });
+    assert.throws(() => canonicalActivationIntent({ ...activation.intent, [field]: String(activation.intent[field]) }),
+      { code: 'INVALID_ACTIVATION_INTENT' });
+  }
+});
+
 test('approval binds the reviewed version and route without activating or starting the clock', () => {
   const fixture = approvalFixture();
   assert.equal(canonicalApprovalIntent(fixture.intent), JSON.stringify(fixture.intent));

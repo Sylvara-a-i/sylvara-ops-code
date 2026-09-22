@@ -198,6 +198,24 @@ test('real native conversion drift blocks completed replay without additional wr
   assert.deepEqual([...f.store.rows.entries()], before); assert.equal(selected.writes(), 0);
 });
 
+test('post-sign binding-version string coercion rejects before any staging write', async () => {
+  const numeric = createStagingFixture();
+  assert.equal(numeric.request.deployment.BINDING_VERSION, 1);
+  assert.equal((await numeric.service.stage(numeric.request)).state, 'StagedInactive');
+  assert.equal(numeric.stagingWrites, 1);
+
+  const changed = createStagingFixture();
+  const signature = changed.request.signature;
+  const before = structuredClone([...changed.store.rows.entries()]);
+  // Storage normalization must not authorize an altered incoming packet with
+  // the original numeric route signature. Deliberately do not sign again.
+  changed.request.deployment.BINDING_VERSION = '1';
+  await assert.rejects(changed.service.stage(changed.request), { code: 'CONFIGURATION_STAGING_CONFLICT' });
+  assert.equal(changed.request.signature, signature);
+  assert.equal(changed.store.writes.length, 0); assert.equal(changed.stagingWrites, 0);
+  assert.deepEqual([...changed.store.rows.entries()], before);
+});
+
 test('authenticated submitted setup creates immutable reviewed content and inactive deployment exactly once', async () => {
   const f = createStagingFixture();
   assert.equal(f.store.rowsFor(f.config.tables.DEPLOYMENT_TABLE).length, 0);
