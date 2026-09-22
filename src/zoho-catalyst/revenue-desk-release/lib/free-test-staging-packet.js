@@ -3,9 +3,13 @@
 const crypto = require('node:crypto');
 const {
   canonicalApprovalIntent,
+  configurationSnapshotFingerprint,
   routeFingerprint,
   routeFromRows,
 } = require('../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/approval-control');
+const { RECONCILIATION_PROFILE, RECONCILIATION_SIGNATURE_DOMAIN, canonicalReconciliationIntent,
+  successorConfigurationRow, successorDeployment }
+  = require('../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/configuration-reconciliation');
 const {
   REQUIRED_CONFIGURATION_FIELDS,
   validateConfigurationVersionRow,
@@ -330,9 +334,7 @@ function validateUnsignedStagingEnvelope(envelope, {
   });
 }
 
-function signFreeTestStagingPacket(envelope, {
-  secret, expectedRevision, expectedOperatorHash, maxBodyBytes, now = Date.now(),
-}) {
+function decodeSigningSecret(secret) {
   invariant(Buffer.isBuffer(secret) && secret.length <= MAX_SECRET_UTF8_BYTES,
     'INVALID_STAGING_SIGNING_SECRET', 'Owner signing key is invalid.');
   let secretText;
@@ -347,6 +349,92 @@ function signFreeTestStagingPacket(envelope, {
     && secretText.length <= MAX_SECRET_CODE_UNITS
     && !/^<.*>$/.test(secretText),
   'INVALID_STAGING_SIGNING_SECRET', 'Owner signing key is invalid.');
+  return secretText;
+}
+
+/**
+ * Validate preserved historical staging separately from fresh recovery intent.
+ * Claim/request HMAC fingerprints are only shape-checked here: the sole live
+ * controller must authenticate the durable receipt and exact reconciled state.
+ */
+function validateUnsignedReconciliationEnvelope(envelope, {
+  expectedRevision, expectedOperatorHash, maxBodyBytes, now = Date.now(),
+}) {
+  validateContext({ expectedRevision, expectedOperatorHash, maxBodyBytes, now });
+  exactObject(envelope, ['schemaVersion', 'originalEnvelope', 'request'],
+    'INVALID_UNSIGNED_RECONCILIATION_ENVELOPE');
+  invariant(envelope.schemaVersion === 1, 'INVALID_UNSIGNED_RECONCILIATION_ENVELOPE',
+    'Unsigned reconciliation envelope version is invalid.');
+  const request = envelope.request;
+  exactObject(request, ['profile', 'originalRequest', 'intent'], 'INVALID_UNSIGNED_RECONCILIATION_REQUEST');
+  invariant(request.profile === RECONCILIATION_PROFILE, 'INVALID_UNSIGNED_RECONCILIATION_REQUEST',
+    'Unsigned reconciliation request is invalid.');
+  const original = request.originalRequest;
+  exactObject(original, [...REQUEST_FIELDS, 'signature'], 'INVALID_UNSIGNED_RECONCILIATION_REQUEST');
+  invariant(typeof original.signature === 'string' && /^v1=[a-f0-9]{64}$/.test(original.signature),
+    'INVALID_APPROVAL_SIGNATURE', 'Original staging signature is invalid.');
+  const historicalAt = canonicalTimestamp(original.intent?.requested_at, 'INVALID_STAGING_INTENT');
+  const originalRevision = original.intent?.evidence_revision;
+  const historical = validateUnsignedStagingEnvelope(envelope.originalEnvelope, {
+    expectedRevision: originalRevision, expectedOperatorHash, maxBodyBytes, now: historicalAt,
+  });
+  const unsignedOriginal = Object.fromEntries(Object.entries(original).filter(([key]) => key !== 'signature'));
+  invariant(same(unsignedOriginal, historical.packet), 'STAGING_PREPARATION_MISMATCH',
+    'Original request does not match its historical preparation.');
+  const intent = request.intent;
+  const canonicalIntent = canonicalReconciliationIntent(intent);
+  const requestedAt = canonicalTimestamp(intent.requested_at, 'INVALID_STAGING_INTENT');
+  const observedAt = canonicalTimestamp(intent.evidence_observed_at, 'INVALID_STAGING_INTENT');
+  const row = successorConfigurationRow(original, intent.original_claim_key, expectedRevision);
+  const deployment = successorDeployment(original, intent.original_claim_key, expectedRevision);
+  invariant(intent.operator_id_hash === expectedOperatorHash
+    && intent.target_source_revision === expectedRevision && intent.original_source_revision === originalRevision
+    && intent.original_configuration_version_id === original.configurationRow.CONFIGURATION_VERSION_ID
+    && intent.original_configuration_fingerprint === configurationSnapshotFingerprint(original.configurationRow)
+    && intent.deployment_id === original.deployment.DEPLOYMENT_ID
+    && intent.configuration_version_id === row.CONFIGURATION_VERSION_ID
+    && intent.route_fingerprint === routeFingerprint(routeFromRows(deployment, row))
+    && historicalAt <= observedAt && observedAt <= requestedAt && requestedAt <= now
+    && now - requestedAt <= MAX_INTENT_AGE_MS && now - observedAt <= MAX_READBACK_AGE_MS,
+  'INVALID_STAGING_INTENT', 'Reconciliation intent is stale or does not match its target.');
+  const projectedBytes = Buffer.byteLength(`${JSON.stringify({
+    ...request, signature: `v1=${'0'.repeat(64)}`,
+  })}\n`, 'utf8');
+  invariant(projectedBytes <= maxBodyBytes, 'STAGING_PACKET_TOO_LARGE',
+    'Signed reconciliation packet exceeds the verified route body limit.');
+  return deepFreeze({ packet: structuredClone(request), canonicalIntent,
+    originalCanonicalIntent: historical.canonicalIntent, sourceRevision: expectedRevision,
+    maxBodyBytes, profile: RECONCILIATION_PROFILE, durableEvidenceAuthenticated: false });
+}
+
+function signFreeTestReconciliationPacket(envelope, {
+  secret, expectedRevision, expectedOperatorHash, maxBodyBytes, now = Date.now(),
+}) {
+  const secretText = decodeSigningSecret(secret);
+  const validated = validateUnsignedReconciliationEnvelope(envelope, {
+    expectedRevision, expectedOperatorHash, maxBodyBytes, now,
+  });
+  const expectedOriginal = crypto.createHmac('sha256', secretText).update(SIGNATURE_DOMAIN, 'utf8')
+    .update(validated.originalCanonicalIntent, 'utf8').digest();
+  invariant(crypto.timingSafeEqual(expectedOriginal,
+    Buffer.from(validated.packet.originalRequest.signature.slice(3), 'hex')),
+  'INVALID_APPROVAL_SIGNATURE', 'Original staging signature could not be verified.');
+  const signature = `v1=${crypto.createHmac('sha256', secretText)
+    .update(RECONCILIATION_SIGNATURE_DOMAIN, 'utf8').update(validated.canonicalIntent, 'utf8').digest('hex')}`;
+  const packet = deepFreeze({ ...validated.packet, signature });
+  const serialized = `${JSON.stringify(packet)}\n`;
+  const byteLength = Buffer.byteLength(serialized, 'utf8');
+  invariant(byteLength <= maxBodyBytes, 'STAGING_PACKET_TOO_LARGE',
+    'Signed reconciliation packet exceeds the verified route body limit.');
+  return deepFreeze({ packet, serialized, byteLength,
+    sha256: crypto.createHash('sha256').update(serialized, 'utf8').digest('hex'),
+    sourceRevision: expectedRevision, maxBodyBytes, profile: RECONCILIATION_PROFILE });
+}
+
+function signFreeTestStagingPacket(envelope, {
+  secret, expectedRevision, expectedOperatorHash, maxBodyBytes, now = Date.now(),
+}) {
+  const secretText = decodeSigningSecret(secret);
   const validated = validateUnsignedStagingEnvelope(envelope, {
     expectedRevision, expectedOperatorHash, maxBodyBytes, now,
   });
@@ -381,4 +469,7 @@ module.exports = Object.freeze({
   deriveStagingBindings,
   validateUnsignedStagingEnvelope,
   signFreeTestStagingPacket,
+  RECONCILIATION_PROFILE,
+  validateUnsignedReconciliationEnvelope,
+  signFreeTestReconciliationPacket,
 });

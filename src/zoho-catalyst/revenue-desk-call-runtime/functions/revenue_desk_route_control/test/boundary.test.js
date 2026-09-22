@@ -10,6 +10,7 @@ const { deterministicIdempotencyKey } = require('../lib/journey-core-service');
 const { RevenueDeskError } = require('revenue_desk_call_gateway/lib/errors');
 const { numberLookupKey } = require('revenue_desk_call_gateway/lib/security');
 const { PROFILE } = require('../lib/configuration-staging-service');
+const { RECONCILIATION_PROFILE } = require('revenue_desk_call_gateway/lib/configuration-reconciliation');
 
 const REVISION = 'a'.repeat(40);
 const PROJECT_ID = '101000001';
@@ -89,6 +90,78 @@ test('authenticated configuration staging binds reader deadlines before dispatch
   }
   assert.equal(stages, 1); assert.equal(providers, 0);
   assert.deepEqual(readerTimeouts, [['conversion', 3000], ['metadata', 3000]]);
+});
+
+test('configuration reconciliation dispatches only to the staging owner and never constructs provider or mail paths', async () => {
+  for (const replayed of [false, true]) {
+    const calls = { reconcile: 0, provider: 0, full: 0, stage: 0, connections: 0, mail: 0, fetch: 0 };
+    const body = { profile: RECONCILIATION_PROFILE, syntheticMarker: 'owner-reviewed-recovery' };
+    const listener = createRequestListener({ environment: environment(), artifactSourceRevision: REVISION,
+      fetchImpl: async () => { calls.fetch += 1; throw new Error('Outbound access prohibited'); },
+      catalystSdk: { initialize() { return {
+        config: { environment: 'development', projectId: PROJECT_ID },
+        connections() { calls.connections += 1; throw new Error('Credential access prohibited'); },
+        email() { calls.mail += 1; throw new Error('Mail access prohibited'); },
+      }; } },
+      factories: { crm: () => ({}), store: () => ({}), core: () => ({}), evidence: () => ({}),
+        configurationSource: () => ({}), configurationConversion: () => ({}), configurationMetadata: () => ({}),
+        staging: () => ({
+          async stage() { calls.stage += 1; throw new Error('Ordinary staging is not reconciliation'); },
+          async reconcile(value) {
+            calls.reconcile += 1; assert.deepEqual(value, body);
+            return { state: 'StagedInactive', replayed, approved: true, active: true,
+              configurationVersionId: 'synthetic_successor_configuration', deploymentId: 'synthetic_deployment' };
+          },
+        }),
+        provider: () => { calls.provider += 1; throw new Error('Provider construction prohibited'); },
+        full: () => { calls.full += 1; throw new Error('Full control construction prohibited'); },
+      } });
+    const output = response();
+    await listener({ method: 'POST', url: '/internal/revenue-desk/approve-configuration',
+      headers: { host: 'route-control.development.catalystserverless.com',
+        'x-zc-environment': 'development', 'x-zc-projectid': PROJECT_ID,
+        'x-synthetic-control': 'h'.repeat(32), 'content-type': 'application/json' },
+      rawBody: Buffer.from(JSON.stringify(body)) }, output);
+    assert.equal(output.statusCode, 200);
+    assert.deepEqual(output.body, { ok: true, action: 'reconcile_configuration', state: 'StagedInactive',
+      replayed, approved: false, active: false,
+      configurationVersionId: 'synthetic_successor_configuration', deploymentId: 'synthetic_deployment' });
+    assert.deepEqual(calls, { reconcile: 1, provider: 0, full: 0, stage: 0, connections: 0, mail: 0, fetch: 0 });
+    assert.equal(output.headers['cache-control'], 'no-store, max-age=0');
+  }
+});
+
+test('reconciliation wrong route, missing authentication and oversized input reject before SDK or factories', async () => {
+  const cases = [
+    { status: 400, mutate: (request) => { request.url = '/internal/revenue-desk/activate-free-test'; } },
+    { status: 400, mutate: (request) => { request.url = '/internal/revenue-desk/rollback-free-test'; } },
+    { status: 401, mutate: (request) => { delete request.headers['x-synthetic-control']; } },
+    { status: 401, mutate: (request) => { request.headers['x-synthetic-control'] = 'wrong'; } },
+    { status: 413, mutate: (request) => { request.headers['content-length'] = '4097'; } },
+    { status: 400, mutate: (request) => { request.rawBody = Buffer.from(JSON.stringify({
+      profile: RECONCILIATION_PROFILE, padding: 'x'.repeat(4096),
+    })); } },
+  ];
+  for (const selected of cases) {
+    let initialized = 0; let factories = 0;
+    const forbiddenFactory = () => { factories += 1; throw new Error('Factory access prohibited'); };
+    const listener = createRequestListener({ environment: environment(), artifactSourceRevision: REVISION,
+      catalystSdk: { initialize() { initialized += 1; throw new Error('SDK access prohibited'); } },
+      factories: Object.fromEntries(['crm', 'store', 'core', 'evidence', 'configurationSource',
+        'configurationConversion', 'configurationMetadata', 'staging', 'provider', 'full']
+        .map((name) => [name, forbiddenFactory])) });
+    const request = { method: 'POST', url: '/internal/revenue-desk/approve-configuration',
+      headers: { host: 'route-control.development.catalystserverless.com',
+        'x-zc-environment': 'development', 'x-zc-projectid': PROJECT_ID,
+        'x-synthetic-control': 'h'.repeat(32), 'content-type': 'application/json' },
+      rawBody: Buffer.from(JSON.stringify({ profile: RECONCILIATION_PROFILE })) };
+    selected.mutate(request);
+    const output = response(); await listener(request, output);
+    assert.equal(output.statusCode, selected.status);
+    assert.deepEqual(output.body, { ok: false,
+      code: selected.status === 401 ? 'control_authentication_failed' : 'invalid_control_request' });
+    assert.equal(initialized, 0); assert.equal(factories, 0);
+  }
 });
 
 function isolatedConfig() {

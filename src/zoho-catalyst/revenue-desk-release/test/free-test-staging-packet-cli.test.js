@@ -18,7 +18,8 @@ const SCRIPT = path.resolve(__dirname, '../scripts/sign-free-test-staging-packet
 const GUARD = path.resolve(__dirname, 'helpers/offline-guard.js');
 const WINDOWS_HELPER = path.resolve(__dirname, '../scripts/sign-free-test-staging-packet-private.ps1');
 const POWERSHELL = path.resolve(path.dirname(process.execPath), '../../native/powershell/pwsh.exe');
-const { MAX_SECRET_UTF8_BYTES, MAX_BINDING_SECRET_BYTES, deriveStagingBindings }
+const { MAX_SECRET_UTF8_BYTES, MAX_BINDING_SECRET_BYTES, deriveStagingBindings,
+  signFreeTestStagingPacket, RECONCILIATION_PROFILE, signFreeTestReconciliationPacket }
   = require('../lib/free-test-staging-packet');
 
 function protectSyntheticDirectory(directory, { publicRead = false } = {}) {
@@ -113,7 +114,7 @@ function files(t, { publicRead = false } = {}) {
 
 function run(value, extraArgs = [], overrides = {}) {
   const args = ['--require', value.preload, SCRIPT, '--input', value.input, '--output', value.output,
-    '--expected-revision', value.f.config.sourceRevision,
+    '--expected-revision', value.expectedRevision || value.f.config.sourceRevision,
     '--expected-operator-hash', value.f.config.operatorIdHash,
     ...(value.omitBodyLimit ? [] : ['--max-body-bytes', String(value.maxBodyBytes || 16384)]),
     ...(process.platform === 'win32' ? ['--powershell-path', POWERSHELL] : []), ...extraArgs];
@@ -129,10 +130,11 @@ function run(value, extraArgs = [], overrides = {}) {
 
 function assertSafeOutput(result, value) {
   const output = `${result.stdout || ''}${result.stderr || ''}`;
+  const original = value.envelope.originalEnvelope || value.envelope;
   for (const sensitive of [value.f.config.operatorVerificationSecret,
-    value.envelope.request.intent.operator_id_hash,
-    value.envelope.preparation.crm.deal.Alert_Recipient_Email,
-    value.envelope.preparation.crm.account.Account_Name,
+    original.request.intent.operator_id_hash,
+    original.preparation.crm.deal.Alert_Recipient_Email,
+    original.preparation.crm.account.Account_Name,
     value.input, value.output]) {
     assert.equal(output.includes(sensitive), false);
   }
@@ -167,6 +169,84 @@ function forbidProtectedInput(value) {
   fs.appendFileSync(value.preload, "const before = require('node:fs').readSync; require('node:fs').readSync = function(fd, ...args) { "
     + "if (fd === 0) { process.stderr.write('UNEXPECTED_KEY_READ\\n'); throw new Error('No stdin allowed'); } return before.call(this, fd, ...args); };\n");
 }
+
+function reconciliationFiles(t) {
+  const value = files(t);
+  const secret = Buffer.from(value.f.config.operatorVerificationSecret, 'utf8');
+  let original;
+  try { original = signFreeTestStagingPacket(value.envelope, { secret,
+    expectedRevision: value.f.config.sourceRevision, expectedOperatorHash: value.f.config.operatorIdHash,
+    maxBodyBytes: 16384, now: Date.now() }).packet; }
+  finally { secret.fill(0); }
+  const { configurationSnapshotFingerprint, routeFingerprint, routeFromRows }
+    = require('../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/approval-control');
+  const { successorConfigurationRow, successorDeployment }
+    = require('../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/configuration-reconciliation');
+  const claimKey = `cfgstage_${'1'.repeat(64)}`;
+  value.expectedRevision = 'f'.repeat(40);
+  const row = successorConfigurationRow(original, claimKey, value.expectedRevision);
+  const deployment = successorDeployment(original, claimKey, value.expectedRevision);
+  const at = new Date().toISOString();
+  const intent = { schema_version: 1, action: 'reconcile_configuration', original_claim_key: claimKey,
+    original_claim_fingerprint: '2'.repeat(64), original_request_fingerprint: '3'.repeat(64),
+    original_configuration_version_id: original.configurationRow.CONFIGURATION_VERSION_ID,
+    original_configuration_fingerprint: configurationSnapshotFingerprint(original.configurationRow),
+    original_source_revision: value.f.config.sourceRevision, target_source_revision: value.expectedRevision,
+    deployment_id: original.deployment.DEPLOYMENT_ID, configuration_version_id: row.CONFIGURATION_VERSION_ID,
+    route_fingerprint: routeFingerprint(routeFromRows(deployment, row)), expected_receipt_version: 0,
+    operator_id_hash: value.f.config.operatorIdHash, evidence_observed_at: at, requested_at: at };
+  value.envelope = { schemaVersion: 1, originalEnvelope: value.envelope,
+    request: { profile: RECONCILIATION_PROFILE, originalRequest: original, intent } };
+  fs.writeFileSync(value.input, JSON.stringify(value.envelope));
+  return value;
+}
+
+test('reconciliation CLI validates without stdin and exclusively signs without exposing either signature', (t) => {
+  const value = reconciliationFiles(t); forbidProtectedInput(value);
+  const preflight = run(value, ['--validate-only'], { input: '' });
+  assert.equal(preflight.status, 0, preflight.stderr); assertSafeOutput(preflight, value);
+  assert.equal(JSON.parse(preflight.stdout).profile, RECONCILIATION_PROFILE);
+  assert.equal(JSON.parse(preflight.stdout).signaturePresent, false);
+  assert.equal(fs.existsSync(value.output), false);
+  assert.doesNotMatch(preflight.stderr, /UNEXPECTED_KEY_READ/);
+  fs.writeFileSync(value.preload, childGuard(value));
+  const result = run(value); assert.equal(result.status, 0, result.stderr); assertSafeOutput(result, value);
+  const verdict = JSON.parse(result.stdout); const bytes = fs.readFileSync(value.output);
+  const secret = Buffer.from(value.f.config.operatorVerificationSecret, 'utf8');
+  try { assert.equal(bytes.toString('utf8'), signFreeTestReconciliationPacket(value.envelope, { secret,
+    expectedRevision: value.expectedRevision, expectedOperatorHash: value.f.config.operatorIdHash,
+    maxBodyBytes: 16384, now: Date.now() }).serialized); }
+  finally { secret.fill(0); }
+  assert.equal(verdict.profile, RECONCILIATION_PROFILE);
+  assert.equal(verdict.sha256, crypto.createHash('sha256').update(bytes).digest('hex'));
+  assert.equal(verdict.submitted, false); assert.equal(verdict.retryAllowed, false);
+  assert.equal(run(value).status, 1); assert.deepEqual(fs.readFileSync(value.output), bytes);
+});
+
+test('reconciliation CLI rejects wrong profiles, stale intent and over-budget nested packets before key entry', (t) => {
+  for (const mutate of [
+    (value) => { value.envelope.request.profile = 'unapproved-profile'; },
+    (value) => { value.envelope.request.intent.requested_at = '2020-01-01T00:00:00.000Z'; },
+    (value) => { value.maxBodyBytes = Buffer.byteLength(`${JSON.stringify({
+      ...value.envelope.request, signature: `v1=${'0'.repeat(64)}`,
+    })}\n`) - 1; },
+  ]) {
+    const value = reconciliationFiles(t); mutate(value);
+    fs.writeFileSync(value.input, JSON.stringify(value.envelope)); forbidProtectedInput(value);
+    const result = run(value); assert.equal(result.status, 1); assertSafeOutput(result, value);
+    assert.doesNotMatch(result.stderr, /UNEXPECTED_KEY_READ/);
+    assert.equal(fs.existsSync(value.output), false);
+  }
+});
+
+test('reconciliation CLI rejects an unverified original signature without creating output', (t) => {
+  const value = reconciliationFiles(t);
+  value.envelope = structuredClone(value.envelope);
+  value.envelope.request.originalRequest.signature = `v1=${'0'.repeat(64)}`;
+  fs.writeFileSync(value.input, JSON.stringify(value.envelope));
+  const result = run(value); assert.equal(result.status, 1); assertSafeOutput(result, value);
+  assert.equal(fs.existsSync(value.output), false);
+});
 
 test('binding CLI exclusively writes runtime-compatible private bindings, never a signed packet', (t) => {
   const value = bindingFiles(t); const result = runBindings(value);

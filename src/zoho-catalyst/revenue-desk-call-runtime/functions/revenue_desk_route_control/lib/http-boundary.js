@@ -6,6 +6,8 @@ const { createCatalystStore }
 const { RevenueDeskError, invariant } = require('revenue_desk_call_gateway/lib/errors');
 const { createRouteControlService }
   = require('revenue_desk_call_gateway/lib/route-control-service');
+const { RECONCILIATION_PROFILE }
+  = require('revenue_desk_call_gateway/lib/configuration-reconciliation');
 const { createAuthorizationProvider } = require('./connection');
 const { loadConfig } = require('./config');
 const { createCrmControlClient } = require('./crm-client');
@@ -161,6 +163,9 @@ function createRequestListener({
         { httpStatus: 404 });
       const projectId = authenticate(request, config);
       const body = await readBody(request, config.maxBodyBytes);
+      const reconciliation = body.profile === RECONCILIATION_PROFILE;
+      if (reconciliation) invariant(action === 'approve', 'INVALID_CONTROL_REQUEST',
+        'Configuration reconciliation uses the approval control route.', { httpStatus: 400 });
       const runtime = catalystSdk || require('zcatalyst-sdk-node');
       const app = runtime.initialize(request);
       invariant(String(app?.config?.environment || '').toLowerCase() === 'development'
@@ -187,13 +192,15 @@ function createRequestListener({
         metadataReader: (factories.configurationMetadata || createConfigurationMetadataReader)({ crm, now,
           timeoutMs: config.platformTimeoutMs }),
       });
-      if (body.profile === PROFILE) {
+      if (body.profile === PROFILE || reconciliation) {
         invariant(action === 'approve', 'INVALID_CONTROL_REQUEST',
           'Configuration staging uses the approval control route.', { httpStatus: 400 });
         // This controller-owned branch is deliberately before provider
         // construction. Approved content is not approval to activate a route.
-        const result = await stagingService().stage(body);
-        send(response, 200, { ok: true, action: 'stage_configuration', state: result.state,
+        const service = stagingService();
+        const result = reconciliation ? await service.reconcile(body) : await service.stage(body);
+        send(response, 200, { ok: true,
+          action: reconciliation ? 'reconcile_configuration' : 'stage_configuration', state: result.state,
           replayed: result.replayed, approved: false, active: false,
           configurationVersionId: result.configurationVersionId, deploymentId: result.deploymentId });
         return;

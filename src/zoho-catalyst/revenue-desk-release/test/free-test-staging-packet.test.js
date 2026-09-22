@@ -10,12 +10,16 @@ const guard = installOfflineGuard();
 const { createStagingFixture }
   = require('../../revenue-desk-call-runtime/functions/revenue_desk_route_control/test/helpers/configuration-staging-fixture');
 const { syntheticPreparationInputs } = require('./fixtures/free-test-preparation');
-const { canonicalApprovalIntent, routeFingerprint, routeFromRows }
+const { canonicalApprovalIntent, configurationSnapshotFingerprint, routeFingerprint, routeFromRows }
   = require('../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/approval-control');
 const { PROFILE, SIGNATURE_DOMAIN, MAX_STAGING_PACKET_BYTES, MAX_SECRET_UTF8_BYTES,
   BINDINGS_PROFILE, MAX_BINDING_SECRET_BYTES, validateStagingBindingInput, deriveStagingBindings,
-  validateUnsignedStagingEnvelope, signFreeTestStagingPacket }
+  validateUnsignedStagingEnvelope, signFreeTestStagingPacket,
+  RECONCILIATION_PROFILE, validateUnsignedReconciliationEnvelope, signFreeTestReconciliationPacket }
   = require('../lib/free-test-staging-packet');
+const { canonicalReconciliationIntent, RECONCILIATION_SIGNATURE_DOMAIN,
+  successorConfigurationRow, successorDeployment }
+  = require('../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/configuration-reconciliation');
 
 // Only synthetic fixtures and fake keys enter this suite. A signed packet is
 // exercised against the existing controller with in-memory adapters, never I/O.
@@ -36,6 +40,162 @@ function sign(f) {
   try { return signFreeTestStagingPacket(f.envelope, { ...f.options, secret }); }
   finally { secret.fill(0); }
 }
+
+async function reconciliationFixture() {
+  const f = fixture(); const originalRequest = structuredClone(sign(f).packet);
+  const insert = f.liveShape.store.insertUnique.bind(f.liveShape.store);
+  f.liveShape.store.insertUnique = async (table, ...args) => {
+    if (table === f.liveShape.config.tables.DEPLOYMENT_TABLE) throw new Error('Synthetic schema interruption');
+    return insert(table, ...args);
+  };
+  await assert.rejects(f.liveShape.service.stage(originalRequest));
+  f.liveShape.store.insertUnique = insert;
+  const [receipt] = f.liveShape.store.rowsFor(f.liveShape.config.tables.EVENT_RECEIPT_TABLE);
+  const data = JSON.parse(receipt.EVENT_DATA_JSON);
+  const targetRevision = 'f'.repeat(40);
+  const now = f.options.now + 86_400_000;
+  const row = successorConfigurationRow(originalRequest, receipt.EVENT_KEY, targetRevision);
+  const deployment = successorDeployment(originalRequest, receipt.EVENT_KEY, targetRevision);
+  const intent = { schema_version: 1, action: 'reconcile_configuration',
+    original_claim_key: receipt.EVENT_KEY, original_claim_fingerprint: receipt.PAYLOAD_FINGERPRINT,
+    original_request_fingerprint: data.requestFingerprint,
+    original_configuration_version_id: originalRequest.configurationRow.CONFIGURATION_VERSION_ID,
+    original_configuration_fingerprint: configurationSnapshotFingerprint(originalRequest.configurationRow),
+    original_source_revision: f.options.expectedRevision, target_source_revision: targetRevision,
+    deployment_id: originalRequest.deployment.DEPLOYMENT_ID,
+    configuration_version_id: row.CONFIGURATION_VERSION_ID,
+    route_fingerprint: routeFingerprint(routeFromRows(deployment, row)), expected_receipt_version: 0,
+    operator_id_hash: f.options.expectedOperatorHash,
+    evidence_observed_at: new Date(now).toISOString(), requested_at: new Date(now).toISOString() };
+  return { original: f, envelope: { schemaVersion: 1, originalEnvelope: structuredClone(f.envelope),
+    request: { profile: RECONCILIATION_PROFILE, originalRequest, intent } },
+  options: { ...f.options, expectedRevision: targetRevision, now } };
+}
+
+function signReconciliation(f, secretText = f.original.liveShape.config.operatorVerificationSecret) {
+  const secret = Buffer.from(secretText, 'utf8');
+  try { return signFreeTestReconciliationPacket(f.envelope, { ...f.options, secret }); }
+  finally { secret.fill(0); }
+}
+
+test('reconciliation signs fresh owner intent while preserving historical preparation and original signature', async () => {
+  const f = await reconciliationFixture(); const before = structuredClone(f.envelope);
+  const validated = validateUnsignedReconciliationEnvelope(f.envelope, f.options);
+  assert.equal(validated.durableEvidenceAuthenticated, false);
+  assert.equal(validated.profile, RECONCILIATION_PROFILE);
+  const signed = signReconciliation(f);
+  assert.equal(signed.profile, RECONCILIATION_PROFILE);
+  assert.deepEqual(signed.packet.originalRequest, before.request.originalRequest);
+  assert.deepEqual(f.envelope, before); assert.equal(Object.isFrozen(signed.packet.originalRequest), true);
+  assert.equal(signed.packet.signature, `v1=${crypto.createHmac('sha256',
+    f.original.liveShape.config.operatorVerificationSecret).update(RECONCILIATION_SIGNATURE_DOMAIN)
+    .update(canonicalReconciliationIntent(f.envelope.request.intent)).digest('hex')}`);
+  assert.equal(signed.byteLength, Buffer.byteLength(signed.serialized));
+  assert.equal(signed.sha256, crypto.createHash('sha256').update(signed.serialized).digest('hex'));
+  assert.equal(Object.hasOwn(signed.packet, 'originalEnvelope'), false);
+  assert.equal(signed.serialized.includes(f.original.liveShape.config.operatorVerificationSecret), false);
+  assert.throws(() => validateUnsignedStagingEnvelope(f.envelope.originalEnvelope,
+    { ...f.original.options, now: f.options.now }), { code: 'STAGING_PREPARATION_BLOCKED' });
+});
+
+test('private reconciliation signer roundtrips through the real service without approving or starting the test', async () => {
+  const { createConfigurationStagingService }
+    = require('../../revenue-desk-call-runtime/functions/revenue_desk_route_control/lib/configuration-staging-service');
+  const { loadDeployment, activeAt }
+    = require('../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/runtime-service');
+  const f = await reconciliationFixture(); const runtime = f.original.liveShape;
+  const config = { ...runtime.config, sourceRevision: f.options.expectedRevision };
+  runtime.advance(f.options.now - runtime.now());
+  const service = createConfigurationStagingService({ config, store: runtime.store, crm: runtime.crm,
+    core: runtime.core, sourceReader: runtime.sourceReader, conversionReader: runtime.conversionReader,
+    now: runtime.now });
+  const [originalReceipt] = runtime.store.rowsFor(config.tables.EVENT_RECEIPT_TABLE);
+  const [originalConfiguration] = runtime.store.rowsFor(config.tables.CONFIGURATION_VERSION_TABLE);
+  const preserved = structuredClone({ originalReceipt, originalConfiguration });
+  const signed = signReconciliation(f);
+  const result = await service.reconcile(signed.packet);
+  assert.equal(result.state, 'StagedInactive'); assert.equal(result.reconciled, true);
+  assert.equal(result.approved, false); assert.equal(result.active, false); assert.equal(result.replayed, false);
+  assert.deepEqual({ originalReceipt, originalConfiguration }, preserved);
+  const [deployment] = runtime.store.rowsFor(config.tables.DEPLOYMENT_TABLE);
+  assert.equal(deployment.TEST_STATUS, 'Ready for Approval');
+  assert.equal(deployment.APPROVED_START_AT, null); assert.equal(deployment.ACTUAL_START_AT, null);
+  const loaded = await loadDeployment(runtime.store, deployment, { ...config,
+    sharedAgentVersion: config.stagingAgentVersion, authorizationEventSecret: config.eventChainSecret });
+  assert.equal(loaded.approvalEvidenceValidated, false); assert.equal(loaded.activationEvidenceValidated, false);
+  assert.throws(() => activeAt(loaded, runtime.now()), { code: 'CONFIGURATION_UNAVAILABLE' });
+  const writes = runtime.store.writes.length;
+  runtime.advance(86_400_000);
+  assert.deepEqual(await service.reconcile(signed.packet), { ...result, replayed: true });
+  assert.equal(runtime.store.writes.length, writes); assert.equal(runtime.stagingWrites, 1);
+  assert.deepEqual({ originalReceipt, originalConfiguration }, preserved);
+});
+
+test('offline signature cannot substitute for server authentication of the preserved durable claim', async () => {
+  const { createConfigurationStagingService }
+    = require('../../revenue-desk-call-runtime/functions/revenue_desk_route_control/lib/configuration-staging-service');
+  const f = await reconciliationFixture(); const runtime = f.original.liveShape;
+  runtime.advance(f.options.now - runtime.now());
+  const service = createConfigurationStagingService({
+    config: { ...runtime.config, sourceRevision: f.options.expectedRevision },
+    store: runtime.store, crm: runtime.crm, core: runtime.core, sourceReader: runtime.sourceReader,
+    conversionReader: runtime.conversionReader, now: runtime.now });
+  f.envelope.request.intent.original_claim_fingerprint = '0'.repeat(64);
+  assert.equal(validateUnsignedReconciliationEnvelope(f.envelope, f.options).durableEvidenceAuthenticated, false);
+  const signed = signReconciliation(f); const writes = runtime.store.writes.length;
+  await assert.rejects(service.reconcile(signed.packet));
+  assert.equal(runtime.store.writes.length, writes); assert.equal(runtime.stagingWrites, 0);
+  assert.equal(runtime.store.rowsFor(runtime.config.tables.DEPLOYMENT_TABLE).length, 0);
+});
+
+test('reconciliation rejects historical-content drift, wrong current owner/revision and stale new intent', async () => {
+  for (const mutate of [
+    (f) => { f.envelope.extra = true; },
+    (f) => { f.envelope.request.signature = 'not unsigned'; },
+    (f) => { f.envelope.request.originalRequest.signature = 'invalid'; },
+    (f) => { f.envelope.request.originalRequest.review.callbackExpectation = 'Changed promise'; },
+    (f) => { f.envelope.originalEnvelope.request.profile = RECONCILIATION_PROFILE; },
+    (f) => { f.options.expectedRevision = 'd'.repeat(40); },
+    (f) => { f.options.expectedOperatorHash = `operator_${'9'.repeat(64)}`; },
+    (f) => { f.options.now += 300001; },
+    (f) => { f.envelope.request.intent.evidence_observed_at = new Date(f.options.now - 900001).toISOString(); },
+    (f) => { f.envelope.request.intent.requested_at = new Date(f.options.now + 1).toISOString(); },
+    (f) => { f.envelope.request.intent.original_configuration_fingerprint = `config_${'0'.repeat(64)}`; },
+    (f) => { f.envelope.request.intent.deployment_id = `cfgdeploy_${'0'.repeat(64)}`; },
+    (f) => { f.envelope.request.intent.route_fingerprint = `route_${'0'.repeat(64)}`; },
+    (f) => { f.envelope.request.intent.configuration_version_id = 'replacement_identity'; },
+  ]) {
+    const f = await reconciliationFixture(); mutate(f);
+    assert.throws(() => validateUnsignedReconciliationEnvelope(f.envelope, f.options));
+  }
+});
+
+test('reconciliation checks original HMAC only with private key and rejects wrong key or foreign signature domain', async () => {
+  for (const domain of [SIGNATURE_DOMAIN, RECONCILIATION_SIGNATURE_DOMAIN,
+    'revenue-desk-approval-intent-v1\0']) {
+    const f = await reconciliationFixture();
+    f.envelope.request.originalRequest.signature = `v1=${crypto.createHmac('sha256', domain === SIGNATURE_DOMAIN
+      ? 'synthetic_wrong_key_'.repeat(3) : f.original.liveShape.config.operatorVerificationSecret)
+      .update(domain).update(canonicalApprovalIntent(f.envelope.request.originalRequest.intent)).digest('hex')}`;
+    assert.equal(validateUnsignedReconciliationEnvelope(f.envelope, f.options).durableEvidenceAuthenticated, false);
+    assert.throws(() => signReconciliation(f), { code: 'INVALID_APPROVAL_SIGNATURE' });
+  }
+  const f = await reconciliationFixture();
+  assert.throws(() => signReconciliation(f, 'synthetic_wrong_key_'.repeat(3)), { code: 'INVALID_APPROVAL_SIGNATURE' });
+});
+
+test('reconciliation includes nested original signature in exact pre-key byte limit without truncation', async () => {
+  const f = await reconciliationFixture(); const signed = signReconciliation(f);
+  assert.ok(signed.byteLength > sign(f.original).byteLength);
+  assert.equal(validateUnsignedReconciliationEnvelope(f.envelope,
+    { ...f.options, maxBodyBytes: signed.byteLength }).maxBodyBytes, signed.byteLength);
+  assert.throws(() => validateUnsignedReconciliationEnvelope(f.envelope,
+    { ...f.options, maxBodyBytes: signed.byteLength - 1 }), { code: 'STAGING_PACKET_TOO_LARGE' });
+  f.options.now += 300000;
+  assert.equal(signReconciliation(f).profile, RECONCILIATION_PROFILE);
+  f.options.now += 1;
+  assert.throws(() => signReconciliation(f), { code: 'INVALID_STAGING_INTENT' });
+});
 
 function assertNoSyntheticPrivateValues(error, f) {
   const exposed = `${error?.message || ''}\n${error?.stack || ''}`;

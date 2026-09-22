@@ -12,6 +12,9 @@ const {
   deriveStagingBindings,
   validateUnsignedStagingEnvelope,
   signFreeTestStagingPacket,
+  RECONCILIATION_PROFILE,
+  validateUnsignedReconciliationEnvelope,
+  signFreeTestReconciliationPacket,
 } = require('../lib/free-test-staging-packet');
 
 const MAX_INPUT_BYTES = 1024 * 1024;
@@ -266,8 +269,12 @@ function main() {
     return;
   }
   const now = Date.now();
+  const profile = envelope?.request?.profile;
+  fail(profile === PROFILE || profile === RECONCILIATION_PROFILE, 'INVALID_SIGNING_PROFILE');
+  const validate = profile === PROFILE ? validateUnsignedStagingEnvelope : validateUnsignedReconciliationEnvelope;
+  const sign = profile === PROFILE ? signFreeTestStagingPacket : signFreeTestReconciliationPacket;
   // Complete all packet/evidence validation before consuming protected stdin.
-  validateUnsignedStagingEnvelope(envelope, {
+  validate(envelope, {
     expectedRevision: args.expectedRevision,
     expectedOperatorHash: args.expectedOperatorHash,
     maxBodyBytes: args.maxBodyBytes,
@@ -281,7 +288,7 @@ function main() {
       status: 'VALIDATED_UNSIGNED_PACKET_NO_SIGNATURE',
       sourceRevision: args.expectedRevision,
       maxBodyBytes: args.maxBodyBytes,
-      profile: PROFILE,
+      profile,
       signaturePresent: false,
       submitted: false,
     })}\n`);
@@ -289,7 +296,7 @@ function main() {
   }
   const protectedInput = readSecret();
   try {
-    const signed = signFreeTestStagingPacket(envelope, {
+    const signed = sign(envelope, {
       secret: protectedInput.secret,
       expectedRevision: args.expectedRevision,
       expectedOperatorHash: args.expectedOperatorHash,
@@ -306,7 +313,7 @@ function main() {
       status: 'SIGNED_PACKET_READY_NO_SUBMISSION',
       sourceRevision: signed.sourceRevision,
       maxBodyBytes: signed.maxBodyBytes,
-      profile: PROFILE,
+      profile: signed.profile,
       byteLength: signed.byteLength,
       sha256: signed.sha256,
       signaturePresent: true,

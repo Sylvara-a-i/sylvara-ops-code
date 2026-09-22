@@ -1,6 +1,6 @@
 # Free-test preparation and operator walkthrough
 
-Owner: Sylvara operator (Gabriel). Updated: 2026-09-20. Status: local preparation;
+Owner: Sylvara operator (Gabriel). Updated: 2026-09-22. Status: local preparation;
 not a customer launch, provider change, or spending authorization.
 
 ## Current execution boundary
@@ -333,7 +333,7 @@ this table is the sanitized operating view, not a new release contract.
 | Gate | Current evidence and revision | Remaining action | Cost class | Approval needed | Status |
 | --- | --- | --- | --- | --- | --- |
 | G1 Public/assisted entry and native relationships | Accepted assisted Forms/conversion retained; `5227abe` installed held; public native mapping read back | Complete narrow read grant and affected public identity/retry acceptance | Offline now; cloud allowance must be confirmed | Owner grant; exact readback/fixture allocation; no reused canary | Public runtime continuation unverified; assisted evidence retained |
-| G2 Authenticated configuration review/staging | `04ff949` controller installed; hold restored. Latest allocated staging returned 503: Processing receipt and immutable configuration present, selected Deal unchanged. Approved Development `APPROVED_START_AT` nullable correction saved/read back; bounded query confirms no deployment. Matching source/schema parser regression independently reviewed; canonical offline checks pass with declared skips | Reconcile the preserved partial claim through the sole controller; establish reviewed release compatibility before any runtime cutover. Preserve receipt, configuration, accepted Forms and relationships; ordinary staging retries and replacement identities cannot resume partial claims | Local correction and approved metadata/readback only; further Development execution requires verified allowance | Schema/readback block complete; no resend authorized. Runtime delta and partial-claim recovery need exact scoped allocations | Schema corrected live; runtime parser candidate remains local. G2 staging acceptance unpassed |
+| G2 Authenticated configuration review/staging | `04ff949` controller installed; hold restored. Latest allocated staging returned 503: Processing receipt and immutable configuration present, selected Deal unchanged. Approved Development `APPROVED_START_AT` nullable correction saved/read back; bounded query confirms no deployment. Local parser correction and linked-successor reconciliation address this exact partial boundary; source checks are not live acceptance | Install only the reviewed compatible controller delta under hold, then separately allocate reconciliation/readback. Preserve receipt, configuration, accepted Forms and relationships; ordinary retries and replacement journeys cannot resume partial claims | Local correction and approved metadata/readback only; further Development execution requires verified allowance | Schema/readback block complete; no resend authorized. Runtime delta and partial-claim recovery need exact scoped allocations | Schema corrected live; parser/reconciliation candidate remains local. G2 staging acceptance unpassed |
 | G3 Coverage and restoration preparation | After-hours fixtures; new owner-attested overflow/combined snapshot contract | Actual originating-provider setting/unit/evidence and later execution binding; preserve original handling | Local preparation only | Owner evidence; separate provider phase for live behavior | Preparation only; overflow/combined execution held |
 | G4 Call-to-owner handoff | H1–H10 source at `c28affd`, separate dry-run/acceptance/delivery meanings | Named monitored owner, actual alert adapter/inbox proof and bounded recovery readback | No real sending now | Exact owner-only email and runtime allocation | Source complete; Development 0/10 |
 | G5 Clock, limit, stop and settlement | Offline limits/races/reports; early-stop correction retained in `5227abe` held installation | Scoped installed-runtime containment and report reconciliation | Offline passed; cloud later | Exact synthetic acceptance allocation | Installed evidence is not runtime proof |
@@ -642,6 +642,56 @@ the original intent expires; new claims still require fresh intent/evidence.
 Signature, immutable content, current source and inactive-state checks still
 apply, and a partial claim never resumes writes. The conversion and metadata
 readers both inherit the configured platform deadline, including a stalled body.
+
+### Partial-staging reconciliation candidate — 2026-09-22 UTC
+
+This local correction addresses only an authenticated original claim plus its
+exact immutable configuration, with **no deployment and no CRM staging link**.
+The nullable start-time schema correction alone cannot finish that interrupted
+operation. A reviewed runtime cutover and a new bounded reconciliation allocation
+are still required; the original submission allocation is consumed.
+
+Freeze one exact release before recovery and retain its matching gateway/worker
+artifacts. G2 can use a controller-only held cutover, but the older gateway/worker
+must remain held until their separately approved installation of that same release.
+A different later revision cannot silently rebind the immutable successor or mint
+another recovery identity. Source publication and any approved Development preview
+must preserve this release identity; a merged commit is not interchangeable merely
+because its code looks equivalent.
+
+The existing approval route accepts the separate
+`free-test-configuration-reconciliation-v1` profile. It authenticates a fresh,
+domain-separated owner intent, the preserved signed original request, original
+receipt and current CRM/Form 2/native-conversion evidence. It appends one linked
+current-release configuration and the same inactive deployment, then conditionally
+links CRM and completes its own durable recovery receipt. The old receipt remains
+Processing and the old configuration remains byte-for-byte unchanged. Operators
+resolve its status through the linked recovery receipt, not by relabeling it.
+
+The successor ID and recovery allocation depend on the original workflow, not a
+new timestamp, signature or release. Only the immutable physical configuration
+ID, truthful source revision and baseline's matching configuration reference
+change. Business rules, recipients, source dates, metrics and unknown values do
+not. Ordinary staging, runtime, approval and settlement keep their strict revision
+checks; there is no general mixed-release exception. Internal approval remains a
+separate action, and no activation or test clock follows from reconciliation.
+
+Use the existing signer with a private reconciliation envelope containing
+`schemaVersion`, the preserved `originalEnvelope`, and unsigned recovery `request`.
+Its normal revision, ACL and interpreter checks still apply. Historical input is
+validated at its original signing time, the recovery intent must be fresh, and
+the full nested packet must fit the freshly verified body limit **before protected
+input is consumed**. The controller, not a local checksum or signer, authenticates
+the durable receipt. No new credential collection method or transport is added.
+
+Rollback is containment: restore/preserve the controller hold and provider-disabled
+state; do not delete either claim or configuration. Any interrupted recovery
+stays held for independent reconciliation, not automatic retry. An exact completed
+recovery may return a read-only replay, even after intent expiry, only while its
+linked evidence, current source and inactive state still match. Monitor the two
+linked receipts, single deployment and CRM pointer together. A success response
+without independent stored-state readback does not pass G2. These source changes
+make no live request, mail send, provider call, import or billing operation.
 
 Owner: Gabriel for exact values/recipient monitoring and release; controller owns
 immutable configuration/claims, CRM remains relationship truth, Analytics remains
