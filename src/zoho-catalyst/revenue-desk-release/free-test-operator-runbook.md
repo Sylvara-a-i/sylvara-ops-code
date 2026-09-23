@@ -5,11 +5,14 @@ not a customer launch, provider change, or spending authorization.
 
 ## Current execution boundary
 
-The current continuation is **local-only, with no Retell access**, including
-read-only dashboard, API, MCP or SDK access. Older provider observations and the
-future packet below are retained evidence, not current permission. Do not open a
-provider page, save the prepared draft, test an agent, invoke a live webhook/queue,
-or change a binding. Local synthetic adapters are the only execution path here.
+The current continuation permits **local work and supported read-only non-Retell
+inspection, with no Retell access**, including read-only Retell dashboard, API,
+MCP or SDK access. Older provider observations and the future packet below are
+retained evidence, not current permission. Do not open a Retell page, save its
+prepared draft, test an agent or invoke a live webhook/queue. Non-Retell saves or
+fixture effects require an exact unconsumed allocation and confirmed zero
+incremental cost; this document grants neither. Local synthetic adapters remain
+the only call-evidence execution path in this phase.
 The demo builder installs its deny guard before importing the harness; missing
 dependencies or unexpected outbound access fail instead of falling back to a
 provider. No populated environment file or real credential is an input.
@@ -36,8 +39,9 @@ internal approval at controller `20bf11c`. Stored receipt/configuration/route
 fingerprints, the inactive deployment and CRM readbacks agree. The original
 revision hold was restored. Counts remain zero and activation/start/expiry are
 unset. Preserve that evidence; stale descriptions do not authorize repeating
-Forms, signing, staging or approval. Gateway and worker are still recorded at
-held `f9989a8`; do not assert coordinated `20bf11c` installation.
+Forms, signing, staging or approval. Gateway and worker now have matching held
+`20bf11c` installation and downloaded-content verification. PR #93 merged as
+repository revision `6bbbf27`; it does not relabel the installed artifacts.
 
 Only after all independent preparation and affected demo checks pass may this
 phase report **PRE-CALL PREPARATION COMPLETE — CALL-DEPENDENT RUNTIME ACCEPTANCE
@@ -54,7 +58,7 @@ customer-launch readiness. Keep the fixed G1–G8 and H1–H10 denominators unch
 | Stop, settlement and restoration | Activated fixture; genuine prior admission for late settlement | Existing offline early-stop/expiry/25-call/race matrix; no 25-call batch or seven-day wait | Backend stop and rejection of new admission, bounded settlement and late report revision; separately verify carrier restoration |
 | Overflow/combined behavior | Originating-provider value, explicit unit, source and execution binding | Local preparation preserves source ring preference without conversion | Complete missing binding before exercising each mode; after-hours success does not pass them |
 | Changed demo panels | None | Original acceptance retained; owner accepted both added staging/handoff panels as readable and working on 2026-09-23 | Complete for the existing offline demo; preserve the accepted artifact and do not repeat the visual check without a relevant change |
-| Release/configuration freeze | None | Exact controller artifact verified; compatible sibling packages retained | Resolve source publication/checks and exact held sibling/configuration allocations; do not redeploy unchanged Forms, Analytics or CRM for documents/rendering |
+| Release/configuration freeze | None | PR #93 merged; exact matching controller/gateway/worker artifacts and inactive Analytics bindings verified | Preserve accepted release and consumed allocations. Resolve only the remaining G1 preparation/configuration issue; no unchanged runtime redeploy for documents |
 
 Preserve each private evidence identity and consumed allocation. The call packet
 does not supply missing configuration approval, source review, export authority,
@@ -399,14 +403,14 @@ this table is the sanitized operating view, not a new release contract.
 
 | Gate | Current evidence and revision | Remaining action | Cost class | Approval needed | Status |
 | --- | --- | --- | --- | --- | --- |
-| G1 Public/assisted entry and native relationships | Accepted assisted Forms/conversion and native joins retained; required CRM reader connected; public native mapping read back | Affected public identity/retry acceptance remains independent of calls; preserve accepted assisted evidence | Offline now; cloud allowance must be confirmed | Exact public fixture/readback allocation; no reused canary | Public runtime continuation unverified; assisted evidence retained |
-| G2 Authenticated configuration review/staging | `20bf11c` controller installed; all 246 downloaded entries verified. Prior staging retained; approved immutable transition and separate internal approval completed with independent storage/CRM readback. Original hold restored; Scheduled/Approved, zero calls, no activation/start/expiry | Preserve exact receipts and configuration. Do not repeat staging or approval; publication and sibling rollout remain G8, not another G2 test | Consumed execution used confirmed Development/included CRM allowance | Completed block consumed; no automatic replay | Passed for the accepted assisted lineage at `20bf11c` |
+| G1 Public/assisted entry and native relationships | Accepted assisted Forms/conversion retained. Public native entry and original unconverted Lead reconciled; conversion options identify an email collision with a different synthetic company's Contact. Native failed-entry recovery is documented; successful-entry redelivery is not supported | Resolve the email-fallback isolation risk, then allocate collision-free native conversion and eligible failed-entry recovery/readback; see the bounded G1 procedure below | Read-only/local preparation now; execution allowance must be confirmed | Exact Forms configuration and fixture/effect allocation; no reused canary | Public G1 incomplete; no mutation of retained relationships; assisted evidence retained |
+| G2 Authenticated configuration review/staging | `20bf11c` controller installed; all 246 downloaded entries verified. Prior staging retained; approved immutable transition and separate internal approval completed with independent storage/CRM readback. Original hold restored; Scheduled/Approved, zero calls, no activation/start/expiry | Preserve exact receipts and configuration. Do not repeat staging or approval for a documentation or utility revision | Consumed execution used confirmed Development/included CRM allowance | Completed block consumed; no automatic replay | Passed for the accepted assisted lineage at `20bf11c` |
 | G3 Coverage and restoration preparation | After-hours fixtures; new owner-attested overflow/combined snapshot contract | Actual originating-provider setting/unit/evidence and later execution binding; preserve original handling | Local preparation only | Owner evidence; separate provider phase for live behavior | Preparation only; overflow/combined execution held |
 | G4 Call-to-owner handoff | H1–H10 source at `c28affd`; Gabriel owns monitoring of the privately approved QA mailbox; separate dry-run/acceptance/delivery meanings | Actual alert adapter/inbox proof and bounded recovery readback in first controlled-call path | No real sending now | Exact owner-only email and controlled-call runtime allocation | Source complete; Development 0/10 |
 | G5 Clock, limit, stop and settlement | Offline limits/races/reports; early-stop correction retained in held runtime ancestry | Scoped installed-runtime containment and report reconciliation using genuine admitted work | Offline passed; cloud later | Exact controlled-call/stop/settlement allocation | Installed evidence is not runtime proof |
 | G6 Baseline, Analytics and final report | Approved baseline persisted in immutable G2 configuration; five empty targets/141 columns and `5227abe` importer installed. Six approved nonsecret bindings saved on 2026-09-23; a fresh provider-UI reload matched all six while mode remained disabled and the original revision hold unchanged | Actual migration evidence digest, import/UTC roundtrip and CRM/report reconciliation depend on controlled-call source facts; no target-map hash substitution | Configuration-only Development saves completed at no incremental cost; confirm allowance before imports/jobs | Six-save allocation consumed; later rows/jobs/import/readback allocation still required | Inactive importer binding preparation verified; functional acceptance pending |
 | G7 Operator demo | Original owner acceptance plus 2026-09-23 acceptance of both added handoff/staging panels; retained 23 focused tests and exact artifact parity | None for the unchanged existing offline demo | Local only | Owner visual check completed; no live-action permission | Passed for the existing synthetic offline demo |
-| G8 Held release and acceptance | Historical PR #91 `5227abe` four-target/927-entry proof retained; current controller `20bf11c` verified separately, gateway/worker `f9989a8`; PR #93 still draft at `f9989a8`, remote main `2654c4a` on 2026-09-23 | Complete source publication/review safeguards and matching held sibling delta; call-dependent acceptance follows only the approved sequencing decision. No runtime redeploy for renderer/docs | External cost must remain confirmed zero | Existing source authority subject to review-cost boundary; exact new sibling-install allocation | Partial held installation verified; release and functional acceptance pending; no prospect launch |
+| G8 Held release and acceptance | PR #93 merged as `6bbbf27`; controller/gateway/worker `20bf11c` downloaded content verified against the exact artifact manifest (246/233/235 entries). Historical PR #91 four-target evidence retained. Repository and installed revisions remain distinct | Preserve holds and immutable artifacts; affected call-dependent functional acceptance follows the approved later controlled-call sequence. No runtime redeploy for these documentation changes | Completed held installations used confirmed Development allowance; later execution must remain explicitly bounded | Installation allocations consumed; controlled-call acceptance and customer launch remain separately unapproved | Source release and matching held installation complete; required runtime acceptance pending |
 
 No row asserts that only Retell testing remains. Optional scheduling, paid
 conversion, Full Blueprint and customer traffic remain outside this goal.
@@ -415,6 +419,68 @@ The eight-row whole-goal numerator is **2/8 fully accepted**: G2 and G7 passed; 
 rows retain their unpassed required subgates. This does not erase the retained Forms,
 source/offline or artifact evidence. The separate handoff source result remains
 10/10 and its Development acceptance remains 0/10; neither is a whole-goal score.
+
+### G1 native recovery and identity reconciliation
+
+Owner: Gabriel for the native integration contract and exact execution allocation.
+The 2026-09-23 private readback distinguishes a successful public Forms push from
+a later native conversion collision. The original entry still says record added;
+the exact original Lead is not converted. Its email also belongs to a retained
+Contact under a different synthetic Account with existing Deals. Preserve those
+records: the conversion candidate is evidence of a conflict, not authority to
+select it. The failed-integration filter currently has no eligible entries.
+
+| Case | Supported operator action | Evidence required / current disposition |
+| --- | --- | --- |
+| Successful original entry | Reconcile its exact original Lead and any native conversion result; do not resend, edit, delete its destination or toggle integration to force a retry | Original entry ID, generated intake ID, timestamps and Lead agree. Successful push reconciled; new-business conversion remains incomplete because of the distinct-company Contact collision |
+| Genuinely failed integration | Reconcile any prior effects and fix the actual cause first; use All Entries → Integration - Failed Entries → select only the exact entry → Re-push, when that native control is available | Preserve entry/intake identity and original consent/submission timestamps; read back status, exact CRM relationships, changed fields and repeated effects. Documented support is not tenant acceptance; no eligible current failure has been executed |
+| Ambiguous or partially applied operation | Hold and reconcile Forms status, exact Lead, native conversion relationships and emitted effects before deciding whether anything remains to retry | A missing search result or timeout cannot authorize another write. Never reset claims, invent a new identity or blindly repeat conversion |
+| New entry with repeated business details | Treat it as a new Forms submission, not a retry of the original entry; check business ownership independently | New entry/intake identity is not same-entry recovery evidence. Same email or phone alone cannot establish company ownership |
+| Existing relationship / native conversion | Read conversion options and, if already converted, its recorded result; use an existing record only for the verified same person and business | The current cross-company QA identity is a preserved negative case. No merge, reparenting, overwrite, duplicate Contact or extra Deal is authorized |
+
+Zoho's [failed-entry Re-push procedure](https://help.zoho.com/portal/en/kb/forms/faqs-frequently-asked-questions/integrations/articles/how-to-re-push-values-after-fixing-the-cause-of-integration-failure)
+includes CRM. The private support answer confirms that successful entries are
+excluded and that editing an entry does not retrigger its CRM integration. G1
+requires safe recovery and no duplicate effects, not an unsupported successful
+redelivery experiment. This clarification does not pass the failed-recovery or
+legitimate-existing-relationship subgates without their own evidence.
+
+The current [Forms Upsert order](https://help.zoho.com/portal/en/kb/forms/integrations/zoho-crm/articles/adding-a-new-record-to-a-zoho-crm-module)
+is sequential, not a joint identity condition: generated intake ID, then Email.
+A new ID can miss while Email selects an existing Lead and updates nonblank
+mapped Company, intake identity and consent/request fields. Blank overwrite No
+does not prevent that. This is a documented configuration-level isolation risk;
+no destructive tenant experiment or observed corruption is claimed. The
+manifest's immutable-identity invariant remains a requirement, not proof that
+this fallback enforces it.
+
+The smallest proposed correction is intake-ID-only native matching, retaining
+Email mapping, actual CRM unique fields, blank policy and writer boundaries.
+It changes automatic same-email updates into expected duplicate-conflict
+reconciliation. Exact approval is required before saving; saved-state readback
+and controlled acceptance must then pass before public use.
+Current metadata marks Leads Email and Intake_Submission_ID, and Contacts Email,
+case-insensitive unique. Nevertheless, the actual Forms adapter outcome still
+requires readback: [CRM Upsert](https://www.zoho.com/crm/developer/docs/api/v8/upsert-records.html)
+distinguishes match keys from unique-field rejection. Do not assume protection
+from a system duplicate field or conversion preference alone. Do not change
+native duplicate preferences or unique enforcement to make the fixture succeed.
+
+Before any allocated submission or Re-push, inventory Forms integrations and
+notifications plus CRM immediate/scheduled actions. Native automation is enabled;
+one CRM row is not proof of one task, notification or webhook effect. Remaining
+provider questions are failed-entry identity/timestamp preservation, use of
+current mappings, repeated side effects and supported ambiguous-result recovery.
+Use the existing support thread only under its communication allocation. Keep a
+permanent duplicate conflict held until its real cause can be resolved safely.
+
+A fresh new-business fixture needs distinct, preflighted owner-controlled
+identity and its own exact submission/conversion/effect allocation. It cannot
+replace original-entry retry evidence or hide the public fallback risk. Public
+G1 stays unaccepted; accepted assisted controls are not public-launch approval.
+No new writer, retry platform, cloud rehearsal, credential or runtime deployment
+is required by this preparation. Rollback is containment and preserved evidence,
+not restoration of unsafe matching or rewriting accepted Contacts.
 
 ### Historical alternatives — not current required work
 

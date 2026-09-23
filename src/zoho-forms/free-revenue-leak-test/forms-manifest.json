@@ -598,7 +598,9 @@
         "immutable intake-submission identity is supplied before CRM upsert",
         "contact consent, consent version, and consent time are retained",
         "source and UTM attribution are retained",
-        "duplicate submission updates one Lead",
+        "supported failed-integration recovery preserves the original entry and reconciles one intended CRM result without duplicate effects",
+        "an already successful entry is reconciled without a needless second write; successful redelivery is not a required test method",
+        "a new submission with repeated business information is a new entry, not same-entry retry evidence, and must not overwrite another company's identity or consent",
         "no Billing, routing, SMS, or paid-service action"
       ],
       "preserved_nonblocking_behavior": [
