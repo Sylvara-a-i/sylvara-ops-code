@@ -49,11 +49,11 @@ customer-launch readiness. Keep the fixed G1–G8 and H1–H10 denominators unch
 | Public entry identity/retry | None; this is not call-dependent | Source and fixed native mapping retained; narrow reader grant complete | Separately allocated public/native fixture and readback; do not rerun the accepted assisted lane |
 | Genuine call ownership, count and late analysis | Verified activation plus admitted provider call and ended/analyzed events | Existing deterministic authentication, isolation, deduplication and late-event tests | Signed provider ingress → durable receipt → existing worker → canonical call/outbox; no inserted success rows |
 | Actionable alert and actual inbox receipt | Canonical actionable call, approved recipient and outbox claim | Existing minimized template, named monitored owner, bounded recovery tests | Actual call-alert adapter; read durable send state and mailbox independently. Acceptance is not inbox delivery or completed callback |
-| Analytics import/UTC roundtrip | Worker-produced v2 facts and actual source watermark | Five tables/141 columns installed; mappings and typed local tests retained. Six active bindings plus the migration evidence digest remain explicit configuration dependencies | Scoped importer → import-job outcome → independent exact partition/UTC readback → checkpoint; no scheduler or extra dashboard |
+| Analytics import/UTC roundtrip | Worker-produced v2 facts and actual source watermark | Five tables/141 columns installed; mappings and typed local tests retained. Six nonsecret connection/target bindings saved and freshly read back on 2026-09-23 with Analytics disabled and its revision hold unchanged. Migration evidence digest remains absent | Scoped importer → import-job outcome → independent exact partition/UTC readback → checkpoint; no scheduler or extra dashboard |
 | Reconciled final results and CRM summary | Actual admitted calls and valid terminal/source watermark | Existing baseline capture, immutable version binding, report-only consumer, per-Deal guards, renderer and synthetic fixtures | Stop first fixture safely; reconcile canonical/outbox/facts → Analytics export/readback → fixed-test report and conditional CRM summary; preserve unknown baseline values |
 | Stop, settlement and restoration | Activated fixture; genuine prior admission for late settlement | Existing offline early-stop/expiry/25-call/race matrix; no 25-call batch or seven-day wait | Backend stop and rejection of new admission, bounded settlement and late report revision; separately verify carrier restoration |
 | Overflow/combined behavior | Originating-provider value, explicit unit, source and execution binding | Local preparation preserves source ring preference without conversion | Complete missing binding before exercising each mode; after-hours success does not pass them |
-| Changed demo panels | None | Existing synthetic builder and original visual acceptance retained | Owner-opened local file; check new staging/handoff panels and affected touch navigation only |
+| Changed demo panels | None | Original acceptance retained; owner accepted both added staging/handoff panels as readable and working on 2026-09-23 | Complete for the existing offline demo; preserve the accepted artifact and do not repeat the visual check without a relevant change |
 | Release/configuration freeze | None | Exact controller artifact verified; compatible sibling packages retained | Resolve source publication/checks and exact held sibling/configuration allocations; do not redeploy unchanged Forms, Analytics or CRM for documents/rendering |
 
 Preserve each private evidence identity and consumed allocation. The call packet
@@ -107,12 +107,12 @@ real repository logic with fake adapters and an explicitly simulated activation
 state. It does not recreate the accepted live Lead/Form 1/conversion/Form 2 chain,
 prove model extraction, or prove carrier forwarding and restoration.
 
-Gabriel accepted the previous `570638f` demo as readable and working. That
-acceptance remains valid for its unchanged sections; it does not cover the new
-handoff and configuration-staging panels. HTML safety, escaping and navigation are tested offline. The
-desktop browser policy blocks agent-opened local-file visual inspection; this
-does not authorize serving the same file through a workaround. The new panel's
-visual acceptance remains separate from its passed executable assertions.
+Gabriel accepted the previous `570638f` demo as readable and working and, on
+2026-09-23, separately accepted both added handoff and configuration-staging
+panels. Retained HTML safety, escaping, navigation and byte-parity checks cover
+the same existing artifact. No rebuild, hosting or browser-policy workaround was
+needed. This closes the offline demo's visual acceptance, not actual call, mail,
+Analytics or carrier acceptance.
 
 ## First-client operating checklist
 
@@ -404,14 +404,14 @@ this table is the sanitized operating view, not a new release contract.
 | G3 Coverage and restoration preparation | After-hours fixtures; new owner-attested overflow/combined snapshot contract | Actual originating-provider setting/unit/evidence and later execution binding; preserve original handling | Local preparation only | Owner evidence; separate provider phase for live behavior | Preparation only; overflow/combined execution held |
 | G4 Call-to-owner handoff | H1–H10 source at `c28affd`; Gabriel owns monitoring of the privately approved QA mailbox; separate dry-run/acceptance/delivery meanings | Actual alert adapter/inbox proof and bounded recovery readback in first controlled-call path | No real sending now | Exact owner-only email and controlled-call runtime allocation | Source complete; Development 0/10 |
 | G5 Clock, limit, stop and settlement | Offline limits/races/reports; early-stop correction retained in held runtime ancestry | Scoped installed-runtime containment and report reconciliation using genuine admitted work | Offline passed; cloud later | Exact controlled-call/stop/settlement allocation | Installed evidence is not runtime proof |
-| G6 Baseline, Analytics and final report | Approved baseline persisted in immutable G2 configuration; five empty targets/141 columns and `5227abe` importer installed; fresh 2026-09-23 readback still disabled with seven active bindings absent | Six nonsecret target/connection bindings are independent configuration work. Actual migration evidence digest, import/UTC roundtrip and CRM/report reconciliation depend on controlled-call source facts; no target-map hash substitution | Confirm account allowance before imports/jobs | Exact inert binding block, then later rows/jobs/import/readback allocation | Schema/configuration-source evidence verified; importer wiring and functional acceptance unpassed |
-| G7 Operator demo | Original owner acceptance retained; new panels exercise fake adapters | New handoff/staging panels' visual acceptance | Local only | Owner visual input, not a deployment approval | New-panel visual check pending |
+| G6 Baseline, Analytics and final report | Approved baseline persisted in immutable G2 configuration; five empty targets/141 columns and `5227abe` importer installed. Six approved nonsecret bindings saved on 2026-09-23; a fresh provider-UI reload matched all six while mode remained disabled and the original revision hold unchanged | Actual migration evidence digest, import/UTC roundtrip and CRM/report reconciliation depend on controlled-call source facts; no target-map hash substitution | Configuration-only Development saves completed at no incremental cost; confirm allowance before imports/jobs | Six-save allocation consumed; later rows/jobs/import/readback allocation still required | Inactive importer binding preparation verified; functional acceptance pending |
+| G7 Operator demo | Original owner acceptance plus 2026-09-23 acceptance of both added handoff/staging panels; retained 23 focused tests and exact artifact parity | None for the unchanged existing offline demo | Local only | Owner visual check completed; no live-action permission | Passed for the existing synthetic offline demo |
 | G8 Held release and acceptance | Historical PR #91 `5227abe` four-target/927-entry proof retained; current controller `20bf11c` verified separately, gateway/worker `f9989a8`; PR #93 still draft at `f9989a8`, remote main `2654c4a` on 2026-09-23 | Complete source publication/review safeguards and matching held sibling delta; call-dependent acceptance follows only the approved sequencing decision. No runtime redeploy for renderer/docs | External cost must remain confirmed zero | Existing source authority subject to review-cost boundary; exact new sibling-install allocation | Partial held installation verified; release and functional acceptance pending; no prospect launch |
 
 No row asserts that only Retell testing remains. Optional scheduling, paid
 conversion, Full Blueprint and customer traffic remain outside this goal.
 
-The eight-row whole-goal numerator is **1/8 fully accepted**: G2 passed; the other
+The eight-row whole-goal numerator is **2/8 fully accepted**: G2 and G7 passed; the other
 rows retain their unpassed required subgates. This does not erase the retained Forms,
 source/offline or artifact evidence. The separate handoff source result remains
 10/10 and its Development acceptance remains 0/10; neither is a whole-goal score.
@@ -501,7 +501,7 @@ Required unknowns remain unpassed. Do not substitute test/file counts for gates.
 | H7 Bounded recovery | Definite pre-send rejection retries bounded; ambiguous/legacy unsent state held; no blind resend | Authorized safe failure/reconciliation evidence and operator recovery ownership |
 | H8 Isolation/authentication | Two-business fixtures, signed ownership, invalid authentication and wrong-recipient tests | Exact isolated QA target and sender/recipient bindings |
 | H9 Honest reporting | Canonical call/outbox reconciliation; missing analysis unknown; demo separates acceptance/inbox/acknowledgment/callback | Runtime report and CRM summary match durable evidence; mailbox evidence separate |
-| H10 Operator handoff/demo/release | Existing demo extended with failure, caller-close draft and finite packet below | New-panel visual review, runtime operator checklist and approved rollback readback |
+| H10 Operator handoff/demo/release | Existing demo extended with failure, caller-close draft and finite packet below; new-panel owner visual review accepted on 2026-09-23 | Runtime operator checklist and approved rollback readback; visual acceptance alone does not pass H10 Development |
 
 ### Configuration and data lineage
 
@@ -879,7 +879,8 @@ Thirty dependency-installing artifact tests were intentionally skipped in offlin
 mode; one Git Bash syntax test was unavailable in the Windows child-process
 sandbox. Skips are not passes. Safety/workflow checks and local demo generation
 passed. No hosted CI, cloud execution, deployment, CRM write, send or provider
-operation was part of these checks. New-panel visual acceptance remains open.
+operation was part of these checks. New-panel visual acceptance was still open
+at that checkpoint; the later 2026-09-23 owner acceptance above supersedes it.
 
 The PR #90 publication checks subsequently exposed a local approval-ledger race:
 SQLite can remove its optional rollback journal after directory enumeration but
@@ -946,7 +947,8 @@ binding mandatory for assisted routes. Independent review also required the
 public consent timestamp and an actual timing-staging/replay regression; both
 were added and rechecked. No actionable finding remains in these two source
 changes. The synthetic demo rebuilt and executable/render checks passed; its new
-panels still lack visual acceptance. These results authorize no external action.
+panels lacked visual acceptance at that checkpoint, since supplied by the owner
+on 2026-09-23. These source-test results authorize no external action.
 
 Reproduce its isolated synthetic checks from the repository root with the pinned
 Node runtime on `PATH`:
