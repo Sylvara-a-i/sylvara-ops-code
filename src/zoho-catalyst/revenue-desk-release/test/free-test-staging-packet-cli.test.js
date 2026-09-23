@@ -171,6 +171,57 @@ function forbidProtectedInput(value) {
     + "if (fd === 0) { process.stderr.write('UNEXPECTED_KEY_READ\\n'); throw new Error('No stdin allowed'); } return before.call(this, fd, ...args); };\n");
 }
 
+test('signing preflight rejects existing or nonprivate POSIX output before protected stdin on every host', (t) => {
+  const value = files(t);
+  const source = fs.readFileSync(SCRIPT, 'utf8');
+  const scriptRequire = require('node:module').createRequire(SCRIPT);
+  // Exercise the real CLI's POSIX branch on Windows too. This virtual file
+  // boundary has synthetic metadata only; no OS permission claim is inferred.
+  for (const { existingOutput, privateParent } of [
+    { existingOutput: true, privateParent: true },
+    { existingOutput: false, privateParent: false },
+    { existingOutput: false, privateParent: true },
+  ]) {
+    let protectedReads = 0; let writes = 0; let stdout = ''; let stderr = '';
+    const input = Buffer.from(JSON.stringify(value.envelope));
+    const fakeFs = {
+      lstatSync(file) {
+        const directory = file === '/synthetic';
+        if (!directory && file !== '/synthetic/input.json'
+          && !(existingOutput && file === '/synthetic/signed.json')) {
+          const error = new Error('Synthetic absent path'); error.code = 'ENOENT'; throw error;
+        }
+        return { uid: 42, mode: directory ? (privateParent ? 0o700 : 0o755) : 0o600,
+          nlink: 1, size: input.length, isSymbolicLink: () => false,
+          isFile: () => !directory, isDirectory: () => directory };
+      },
+      realpathSync: { native: (file) => file },
+      readFileSync(file) { assert.equal(file, '/synthetic/input.json'); return Buffer.from(input); },
+      readSync(fd) { assert.equal(fd, 0); protectedReads += 1; throw new Error('Unexpected protected stdin'); },
+      openSync() { writes += 1; throw new Error('Unexpected file creation'); },
+    };
+    const moduleValue = {};
+    const localRequire = (name) => name === 'node:fs' ? fakeFs
+      : name === 'node:path' ? path.posix : scriptRequire(name);
+    localRequire.main = moduleValue;
+    const syntheticProcess = { platform: 'linux', versions: { node: '24.19.0' }, getuid: () => 42,
+      argv: ['node', SCRIPT, '--input', '/synthetic/input.json', '--output', '/synthetic/signed.json',
+        '--expected-revision', value.f.config.sourceRevision,
+        '--expected-operator-hash', value.f.config.operatorIdHash, '--max-body-bytes', '16384'],
+      stdin: { isTTY: false }, stdout: { write: (text) => { stdout += text; } },
+      stderr: { write: (text) => { stderr += text; } } };
+    require('node:vm').runInNewContext(source, { require: localRequire, module: moduleValue,
+      process: syntheticProcess, Buffer, TextDecoder, JSON, __dirname: path.dirname(SCRIPT) });
+    assert.equal(syntheticProcess.exitCode, 1);
+    // The safe-output control must reach stdin, proving that packet validation
+    // did not reject every VM case before the safety boundary under review.
+    assert.equal(protectedReads, !existingOutput && privateParent ? 1 : 0,
+      'Unsafe output must be rejected before protected input; the safe control must reach it');
+    assert.equal(writes, 0); assert.equal(stdout, '');
+    assert.equal(stderr, 'Staging packet signing failed. No submission was attempted.\n');
+  }
+});
+
 function reconciliationFiles(t) {
   const value = files(t);
   const secret = Buffer.from(value.f.config.operatorVerificationSecret, 'utf8');

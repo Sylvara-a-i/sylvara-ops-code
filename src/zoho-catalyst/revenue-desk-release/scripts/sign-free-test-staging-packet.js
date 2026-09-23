@@ -269,6 +269,9 @@ function main() {
   const args = parseArguments(process.argv.slice(2));
   fail(args.input !== args.output, 'UNSAFE_PRIVATE_PATH');
   verifyWindowsPrivatePaths(args, false);
+  // Windows ACL validation also checks output existence; POSIX needs this
+  // same pre-key boundary. Exclusive creation still rechecks it at write time.
+  assertNewPrivateOutput(args.output);
   const envelope = readEnvelope(args.input);
   if (args.deriveBindings) {
     preparePrivateBindings(envelope, args);
