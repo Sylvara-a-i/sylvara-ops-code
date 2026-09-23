@@ -69,7 +69,10 @@ void automation.normalize_time_zone_iana_v4e2(string module_api_name, string rec
 		upd.put(targetField,tz);
 		if(auditField != "")
 		{
-			upd.put(auditField,zoho.currenttime.toString("yyyy-MM-dd'T'HH:mm:ssXXX"));
+			// Native acceptance observed a future audit instant. Bind the wall time
+			// and offset explicitly rather than compensating with time arithmetic.
+			// Convert to UTC before adding the CRM-compatible numeric offset.
+			upd.put(auditField,zoho.currenttime.toString("yyyy-MM-dd'T'HH:mm:ss'+00:00'","UTC"));
 		}
 		// Keep the existing three-argument task and its trigger defaults. Changing
 		// those defaults would be a separate workflow decision, not a retry fix.

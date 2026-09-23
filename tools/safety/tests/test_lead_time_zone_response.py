@@ -2,6 +2,7 @@
 
 import re
 import unittest
+from datetime import datetime
 from pathlib import Path
 
 
@@ -91,6 +92,22 @@ class LeadTimeZoneResponseTests(unittest.TestCase):
         self.assertIn('if(responseId == recId.toString() && responseStatus == "" && responseCode == "")', self.code)
         self.assertIn('if(resp != null)', self.code)
         self.assertIn('catch(failure)', self.code)
+
+    def test_audit_format_converts_to_explicit_utc_before_numeric_offset(self):
+        # A source guard, not execution of Deluge's formatter or CRM's parser.
+        calls = re.findall(r"zoho\.currenttime\.toString\((.*?)\)", self.code)
+        self.assertEqual(calls, ['"yyyy-MM-dd\'T\'HH:mm:ss\'+00:00\'","UTC"'])
+        self.assertNotRegex(self.code, r"\.(addHour|subHour|addMinutes|subMinutes)\(")
+
+    def test_runtime_acceptance_compares_instants_not_wall_time_labels(self):
+        # Synthetic chronology reproduces the observed skew. Native acceptance
+        # must perform this comparison on its real readback before the next save.
+        updated = datetime.fromisoformat("2026-01-15T12:00:00-06:00")
+        equivalent = datetime.fromisoformat("2026-01-15T18:00:00+00:00")
+        future = datetime.fromisoformat("2026-01-15T14:00:00-06:00")
+        self.assertEqual((equivalent - updated).total_seconds(), 0)
+        self.assertEqual((future - updated).total_seconds(), 7200)
+        self.assertNotEqual(future, updated)
 
     def test_logs_are_constant_and_do_not_claim_readback(self):
         logs = [line.strip() for line in self.code.splitlines() if "info " in line]
