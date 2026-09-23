@@ -108,6 +108,16 @@ class LeadTimeZoneResponseTests(unittest.TestCase):
             "string audit_field_api",
         ])
 
+    def test_import_envelope_starts_with_declaration_and_contains_header(self):
+        # The native CRM editor rejects a file-level header before the declaration.
+        self.assertRegex(
+            self.source.lstrip(),
+            r"\Avoid automation\.normalize_time_zone_iana_v4e2\([^\n]+\)\s*\{\s*/\*",
+        )
+        self.assertLess(self.source.index("{"), self.source.index("/*"))
+        self.assertLess(self.source.index("*/"), self.source.index("\ttry"))
+        self.assertIn("the declaration above corresponds to the create function.", self.source)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -460,11 +460,15 @@ approved that exact change, but the fresh native dialog exposed only ordering,
 not removal/deselection of the Email key. The dialog was cancelled without a
 save; pre/post mappings and flags were unchanged. Do not weaken Email uniqueness,
 reverse-engineer an endpoint or silently substitute a different operation.
-An allocated sanitized reply in the existing support thread asks whether a
-supported subset exists and, if not, whether disabling native Upsert is the
-supported non-overwriting alternative. That alternative is **not applied or
-approved**. Either supported correction still needs exact saved-state readback
-and controlled acceptance before public use.
+The later same-day support answer confirms that every CRM unique field remains
+an Upsert match candidate; only its order can change. Intake-ID-only matching is
+therefore unavailable under this native mode while Email remains unique. The
+answer describes Upsert-off New Record as non-overwriting but also says it may
+create duplicates, without explaining enforcement of the verified unique fields.
+Do not treat that as a safe duplicate-rejection contract. Upsert-off is **not
+applied or approved**; resolve its unique-field behavior before allocating the
+configuration change or a fixture. Any supported alternative still needs exact
+saved-state readback and controlled acceptance before public use.
 Current metadata marks Leads Email and Intake_Submission_ID, and Contacts Email,
 case-insensitive unique. Nevertheless, the actual Forms adapter outcome still
 requires readback: [CRM Upsert](https://www.zoho.com/crm/developer/docs/api/v8/upsert-records.html)
@@ -475,11 +479,16 @@ native duplicate preferences or unique enforcement to make the fixture succeed.
 Before any allocated submission or Re-push, inventory Forms integrations and
 notifications plus CRM immediate/scheduled actions. Native automation is enabled;
 one CRM row is not proof of one task, notification or webhook effect. Remaining
-provider questions are failed-entry identity/timestamp preservation, use of
-current mappings, repeated side effects and supported ambiguous-result recovery.
-Those questions and the key-selection limitation were sent in one approved
-support follow-up; its sent receipt was independently read back. That allocation
-is consumed. No entry, record, configuration or integration was replayed or saved.
+provider evidence now confirms retained original failed-entry data/mappings,
+workflows after a successful push, and reconciliation before retrying an unclear
+result. This supports the operator procedure, not exactly-once effects or a
+tenant recovery pass. The answer does not settle whether a re-push after a
+mapping change uses the current mapping, or which immediate/scheduled actions
+and other integrations can repeat. Preserve the captured timestamps and verify
+them in the eventual allocated same-entry readback. The one approved support
+follow-up allocation is consumed. A further clarification needs communication
+authority; do not send another message or create a duplicate ticket. No entry,
+record, configuration or integration was replayed or saved.
 Keep a permanent duplicate conflict held until its real cause can be resolved
 safely; the support message is not permission for tenant access or modification.
 
@@ -490,13 +499,19 @@ even for that success shape or an ambiguous response, and logs raw values. The
 [focused replacement source and acceptance procedure](../../zoho-crm/lead-time-zone/README.md)
 preserve normalization and trigger defaults, use one update attempt and sanitized
 outcomes, and require operator reconciliation instead of retry. This candidate
-has **not been installed**; Deluge import and actual CRM behavior remain unverified.
+has **not been installed**. A native editor pre-save check rejected the initial
+leading comment before the declaration. The corrected artifact starts with the
+existing declaration and keeps that comment inside its body; executable logic
+is unchanged. The unsaved buffer was cancelled. Editor acceptance, published
+readback and actual CRM behavior remain separate, unpassed checks.
 No Catalyst revision or accepted Form/staging/demo evidence changes because of it.
 Before another allocated native submission, resolve this function correction and
 inventory its default approval/Blueprint/orchestration effects as well as the
 existing immediate and scheduled intake-review tasks. Public Form new/updated
-record emails, SMS and WhatsApp were unconfigured in the narrow readback; push
-notifications and all downstream effects are not certified by that observation.
+record emails, SMS, WhatsApp and push notifications were unconfigured in the
+narrow readback; the stored webhook was disabled. No Leads Blueprint, approval
+process or active CommandCenter journey was observed. These configuration reads
+do not certify the later runtime effects of a successful native push.
 
 A fresh new-business fixture needs distinct, preflighted owner-controlled
 identity and its own exact submission/conversion/effect allocation. It cannot
