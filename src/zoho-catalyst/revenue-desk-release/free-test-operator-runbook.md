@@ -498,12 +498,16 @@ has an `id`, not `status: success`. Their old check retries without the audit fi
 even for that success shape or an ambiguous response, and logs raw values. The
 [focused replacement source and acceptance procedure](../../zoho-crm/lead-time-zone/README.md)
 preserve normalization and trigger defaults, use one update attempt and sanitized
-outcomes, and require operator reconciliation instead of retry. This candidate
-has **not been installed**. A native editor pre-save check rejected the initial
-leading comment before the declaration. The corrected artifact starts with the
-existing declaration and keeps that comment inside its body; executable logic
-is unchanged. The unsaved buffer was cancelled. Editor acceptance, published
-readback and actual CRM behavior remain separate, unpassed checks.
+outcomes, and require operator reconciliation instead of retry. The initial
+declaration-envelope rejection was corrected; both receipt-correction functions
+were subsequently published and independently read back with mappings unchanged.
+The separately approved native create then produced one correlated invocation
+and one committed canonical/audit update, but its audit instant was two hours
+ahead of the authoritative change time. The other two fixture saves stopped;
+the synthetic record remains preserved, with no queued action observed.
+The explicit-UTC formatting correction is **source-only**, not installed or
+runtime accepted. Keep publication, invocation, update and chronology evidence
+separate; do not replay the failed fixture or claim the G1 gate passed.
 No Catalyst revision or accepted Form/staging/demo evidence changes because of it.
 Before another allocated native submission, resolve this function correction and
 inventory its default approval/Blueprint/orchestration effects as well as the
