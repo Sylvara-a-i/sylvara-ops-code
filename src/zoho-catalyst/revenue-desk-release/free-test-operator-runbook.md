@@ -505,12 +505,20 @@ The separately approved native create then produced one correlated invocation
 and one committed canonical/audit update, but its audit instant was two hours
 ahead of the authoritative change time. The other two fixture saves stopped;
 the synthetic record remains preserved, with no queued action observed.
-The explicit-UTC formatting correction is **source-only**, not installed or
-runtime accepted. Keep publication, invocation, update and chronology evidence
-separate; do not replay the failed fixture or claim the G1 gate passed.
+The subsequent explicit-UTC correction at PR #97 / `3417de4` was published to
+both existing functions and independently read back with mappings unchanged.
+Its separately allocated non-intake synthetic create, clear and changed-zone
+sequence passed: three invocations, three committed normalizer updates and
+correct canonical values/audit chronology. Timeline and delayed function logs
+were reconciled through at least five minutes after each save; no related
+activity or upcoming automated action was observed. The three initiating saves
+plus three normalizer updates are six record writes, not nine Timeline events.
+Private receipts retain the exact evidence. No-op/error branches remain offline
+only. Both publication saves and all three fixture saves are consumed. Preserve
+the earlier failed fixture; this bounded acceptance does not pass public G1.
 No Catalyst revision or accepted Form/staging/demo evidence changes because of it.
-Before another allocated native submission, resolve this function correction and
-inventory its default approval/Blueprint/orchestration effects as well as the
+Before another allocated native submission, retain this function evidence and
+reconcile its default approval/Blueprint/orchestration effects as well as the
 existing immediate and scheduled intake-review tasks. Public Form new/updated
 record emails, SMS, WhatsApp and push notifications were unconfigured in the
 narrow readback; the stored webhook was disabled. No Leads Blueprint, approval
@@ -522,8 +530,13 @@ identity and its own exact submission/conversion/effect allocation. It cannot
 replace original-entry retry evidence or hide the public fallback risk. Public
 G1 stays unaccepted; accepted assisted controls are not public-launch approval.
 No new writer, retry platform, cloud rehearsal or credential is required. The
-existing CRM function correction needs its own installation/acceptance allocation;
-unchanged Catalyst artifacts do not need redeployment. Rollback is containment
+CRM function correction is installed and accepted within the bounded sequence;
+do not repeat it or redeploy unchanged Catalyst artifacts. The remaining native
+New Record / Upsert Off contract clarification must establish unique-field and
+Contact-conflict handling, repeated/queued effects, and supported failed-entry
+and ambiguous-result recovery before the exact frozen-mapping acceptance block.
+That clarification was sent under its separate allocation; no further send or
+public configuration/fixture execution is currently allocated. Rollback is containment
 and preserved evidence, not restoration of unsafe matching or rewriting accepted
 Contacts.
 
