@@ -1,0 +1,98 @@
+/*
+Owner: CRM / existing Lead create and Time_Zone-edit normalization workflows.
+Source-only replacement body, not a new function or deployment instruction.
+Preserve each existing function declaration and all seven argument mappings;
+the declaration below corresponds to the create function. See README.md.
+Inputs: workflow-bound module/record/field API names and source/target values.
+Uses the existing CRM integration task; no Connection, secret or external URL.
+Duplicate behavior: an already-matching target produces no update. This is not
+an atomic concurrency guarantee: workflow values are snapshots, not a lock.
+No dry-run mode: if installed and triggered, this can update one CRM record.
+Failure: at most one update attempt; never retry or silently remove audit data.
+Logs: fixed outcomes only, never record IDs, inputs, responses or exceptions.
+Containment: hold intake/retry execution; never clear or rewrite intake claims.
+Import, execution, independent readback and rollback require separate approval.
+*/
+void automation.normalize_time_zone_iana_v4e2(string module_api_name, string record_id, string source_field_api, string target_field_api, string source_value, string target_value, string audit_field_api)
+{
+	try
+	{
+		moduleName = ifnull(module_api_name,"").toString().trim();
+		recIdStr = ifnull(record_id,"").toString().trim();
+		targetField = ifnull(target_field_api,"").toString().trim();
+		auditField = ifnull(audit_field_api,"").toString().trim();
+		rawTz = ifnull(source_value,"").toString().trim();
+		existing = ifnull(target_value,"").toString().trim();
+		// source_field_api remains in the interface for existing workflow mappings.
+		if(moduleName == "" || recIdStr == "" || targetField == "")
+		{
+			info "tz_arguments_rejected";
+			return;
+		}
+		recId = recIdStr.toLong();
+		if(recId <= 0)
+		{
+			info "tz_arguments_rejected";
+			return;
+		}
+
+		// Retain the existing normalization/clear behavior. A region/city shape
+		// is not proof of a real IANA zone or provider-ready schedule.
+		tz = rawTz;
+		if(tz.contains(" ("))
+		{
+			tz = tz.getPrefix(" (").toString().trim();
+		}
+		tzLower = tz.toLowerCase();
+		if(tzLower == "utc" || tzLower == "z" || tzLower == "gmt" || tzLower == "etc/utc")
+		{
+			tz = "UTC";
+		}
+		if(tz.contains("/") && tz.contains(" "))
+		{
+			tz = tz.replaceAll(" ","_");
+		}
+		if(tz == "Etc/UTC")
+		{
+			tz = "UTC";
+		}
+		if(!(tz == "UTC" || tz.contains("/")))
+		{
+			tz = "";
+		}
+		if(existing == tz)
+		{
+			info "tz_no_change";
+			return;
+		}
+		upd = Map();
+		upd.put(targetField,tz);
+		if(auditField != "")
+		{
+			upd.put(auditField,zoho.currenttime.toString("yyyy-MM-dd'T'HH:mm:ssXXX"));
+		}
+		// Keep the existing three-argument task and its trigger defaults. Changing
+		// those defaults would be a separate workflow decision, not a retry fix.
+		resp = zoho.crm.updateRecord(moduleName,recId,upd);
+		// This Deluge task returns the record id on success, not status=success.
+		// A receipt is not independent readback or proof of downstream effects.
+		if(resp != null)
+		{
+			responseId = ifnull(resp.get("id"),"").toString();
+			responseStatus = ifnull(resp.get("status"),"").toString().toLowerCase();
+			responseCode = ifnull(resp.get("code"),"").toString();
+			if(responseId == recId.toString() && responseStatus == "" && responseCode == "")
+			{
+				info "tz_update_accepted_readback_required";
+				return;
+			}
+		}
+		// Null, errors, mismatched IDs and unexpected responses all require
+		// operator reconciliation. Never replay or drop the audit field here.
+		info "tz_update_reconciliation_required";
+	}
+	catch(failure)
+	{
+		info "tz_exception_reconciliation_required";
+	}
+}

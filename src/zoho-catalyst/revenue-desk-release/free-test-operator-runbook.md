@@ -454,11 +454,17 @@ no destructive tenant experiment or observed corruption is claimed. The
 manifest's immutable-identity invariant remains a requirement, not proof that
 this fallback enforces it.
 
-The smallest proposed correction is intake-ID-only native matching, retaining
-Email mapping, actual CRM unique fields, blank policy and writer boundaries.
-It changes automatic same-email updates into expected duplicate-conflict
-reconciliation. Exact approval is required before saving; saved-state readback
-and controlled acceptance must then pass before public use.
+The preferred correction is intake-ID-only native matching, retaining Email
+mapping, actual CRM unique fields, blank policy and writer boundaries. The owner
+approved that exact change, but the fresh native dialog exposed only ordering,
+not removal/deselection of the Email key. The dialog was cancelled without a
+save; pre/post mappings and flags were unchanged. Do not weaken Email uniqueness,
+reverse-engineer an endpoint or silently substitute a different operation.
+An allocated sanitized reply in the existing support thread asks whether a
+supported subset exists and, if not, whether disabling native Upsert is the
+supported non-overwriting alternative. That alternative is **not applied or
+approved**. Either supported correction still needs exact saved-state readback
+and controlled acceptance before public use.
 Current metadata marks Leads Email and Intake_Submission_ID, and Contacts Email,
 case-insensitive unique. Nevertheless, the actual Forms adapter outcome still
 requires readback: [CRM Upsert](https://www.zoho.com/crm/developer/docs/api/v8/upsert-records.html)
@@ -471,16 +477,36 @@ notifications plus CRM immediate/scheduled actions. Native automation is enabled
 one CRM row is not proof of one task, notification or webhook effect. Remaining
 provider questions are failed-entry identity/timestamp preservation, use of
 current mappings, repeated side effects and supported ambiguous-result recovery.
-Use the existing support thread only under its communication allocation. Keep a
-permanent duplicate conflict held until its real cause can be resolved safely.
+Those questions and the key-selection limitation were sent in one approved
+support follow-up; its sent receipt was independently read back. That allocation
+is consumed. No entry, record, configuration or integration was replayed or saved.
+Keep a permanent duplicate conflict held until its real cause can be resolved
+safely; the support message is not permission for tenant access or modification.
+
+The effects inventory found an independent source defect in both published Lead
+time-zone normalization functions: the documented successful CRM update receipt
+has an `id`, not `status: success`. Their old check retries without the audit field
+even for that success shape or an ambiguous response, and logs raw values. The
+[focused replacement source and acceptance procedure](../../zoho-crm/lead-time-zone/README.md)
+preserve normalization and trigger defaults, use one update attempt and sanitized
+outcomes, and require operator reconciliation instead of retry. This candidate
+has **not been installed**; Deluge import and actual CRM behavior remain unverified.
+No Catalyst revision or accepted Form/staging/demo evidence changes because of it.
+Before another allocated native submission, resolve this function correction and
+inventory its default approval/Blueprint/orchestration effects as well as the
+existing immediate and scheduled intake-review tasks. Public Form new/updated
+record emails, SMS and WhatsApp were unconfigured in the narrow readback; push
+notifications and all downstream effects are not certified by that observation.
 
 A fresh new-business fixture needs distinct, preflighted owner-controlled
 identity and its own exact submission/conversion/effect allocation. It cannot
 replace original-entry retry evidence or hide the public fallback risk. Public
 G1 stays unaccepted; accepted assisted controls are not public-launch approval.
-No new writer, retry platform, cloud rehearsal, credential or runtime deployment
-is required by this preparation. Rollback is containment and preserved evidence,
-not restoration of unsafe matching or rewriting accepted Contacts.
+No new writer, retry platform, cloud rehearsal or credential is required. The
+existing CRM function correction needs its own installation/acceptance allocation;
+unchanged Catalyst artifacts do not need redeployment. Rollback is containment
+and preserved evidence, not restoration of unsafe matching or rewriting accepted
+Contacts.
 
 ### Historical alternatives — not current required work
 
