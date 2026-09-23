@@ -42,6 +42,13 @@ functions. Retain each original declaration: create uses
 `automation.normalize_time_zone_iana_v4e`. Only the declaration differs; do not
 create a new function or alter either workflow association.
 
+The native CRM editor's pre-save format check rejected the earlier file-level
+header comment before the function declaration. The declaration must be the
+first nonblank line; the preserved header now sits immediately inside its opening
+brace. No Save was pressed during that reproduction. This establishes the
+observed editor-format defect, not successful server compilation, publication or
+runtime acceptance of this corrected candidate.
+
 Keep these existing mappings and seven argument positions unchanged:
 
 | Argument | Authoritative binding |
