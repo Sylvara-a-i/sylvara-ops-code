@@ -113,6 +113,11 @@ function buildFreeTestReport(input, now = Date.now()) {
   requireCondition(handled.length === final.CALLS_CAPTURED
     && handled.length === deployment.HANDLED_COUNT
     && final.CALL_LIMIT === deployment.CALL_LIMIT, 'REPORT_TOTALS_CONFLICT');
+  // Reconcile supplied overshoot evidence, but do not enrich historical facts
+  // that predate this optional field from the displayed totals alone.
+  if (Object.hasOwn(final, 'IN_FLIGHT_OVERSHOOT')) requireCondition(
+    final.IN_FLIGHT_OVERSHOOT === Math.max(0, handled.length - final.CALL_LIMIT),
+    'REPORT_OVERSHOOT_CONFLICT');
   const callMix = contract.outcome_groups.map((group) => ({
     category: group.key, label: group.label,
     calls: handled.filter((call) => group.outcomes.includes(call.OUTCOME)).length,
@@ -209,7 +214,7 @@ function buildFreeTestReport(input, now = Date.now()) {
       startedAtUtc: final.TEST_STARTED_AT, endedAtUtc: final.TEST_ENDED_AT,
       endReason: final.TEST_END_REASON, coverage: deployment.COVERAGE_MODE || null,
       callsCaptured: handled.length, unhandledAttempts: calls.length - handled.length,
-      callLimit: final.CALL_LIMIT, callMix,
+      callLimit: final.CALL_LIMIT, inFlightOvershoot: final.IN_FLIGHT_OVERSHOOT ?? null, callMix,
       outcomeDetail: [...supportedOutcomes].map((outcome) => ({
         outcome, calls: handled.filter((call) => call.OUTCOME === outcome).length,
       })),

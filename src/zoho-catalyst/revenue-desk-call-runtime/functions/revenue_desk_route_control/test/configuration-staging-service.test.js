@@ -2,6 +2,8 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { installOfflineGuard } = require('../../../../revenue-desk-release/test/helpers/offline-guard');
+const guard = installOfflineGuard();
 const { createStagingFixture, SyntheticStore } = require('./helpers/configuration-staging-fixture');
 const { RECEIPT_KIND } = require('../lib/configuration-staging-service');
 const { createConfigurationStagingService } = require('../lib/configuration-staging-service');
@@ -9,6 +11,210 @@ const { validateConfiguration } = require('revenue_desk_call_gateway/lib/validat
 const { buildCrmPreTestSnapshot } = require('revenue_desk_call_gateway/lib/crm-report-baseline');
 const { crmBaselineFixture }
   = require('../../../../revenue-desk-analytics/functions/analytics_sync/test/helpers/crm-baseline-fixture');
+const { syntheticPreparationInputs } = require('../../../../revenue-desk-release/test/fixtures/free-test-preparation');
+const { createConfigurationConversionReader } = require('../lib/configuration-conversion-reader');
+const { createCrmControlClient } = require('../lib/crm-client');
+const { loadDeployment, activeAt } = require('revenue_desk_call_gateway/lib/runtime-service');
+const { runtimeFixture } = require('revenue_desk_call_gateway/test/runtime-fixture');
+const datastoreSchema = require('../../../config/datastore-schema.json');
+
+function enforceDeploymentMandatoryColumns(f, columns) {
+  const insert = f.store.insertUnique.bind(f.store);
+  f.store.insertUnique = async (table, key, row, immutable) => {
+    if (table === f.config.tables.DEPLOYMENT_TABLE) {
+      // The ordinary fake has no provider schema. Enforce this real insertion
+      // constraint so an inactive deployment cannot depend on a fake timestamp.
+      const missing = columns.find((column) => column.mandatory
+        && (row[column.api_name] === null || row[column.api_name] === undefined));
+      if (missing) throw Object.assign(new Error('Synthetic required-column rejection'), {
+        code: 'SYNTHETIC_MANDATORY_COLUMN', column: missing.api_name,
+      });
+    }
+    return insert(table, key, row, immutable);
+  };
+}
+
+function connectedNativeFixture({ publicNative = false } = {}) {
+  const source = syntheticPreparationInputs()[0];
+  // The offline demo's short IDs are not valid CRM transport IDs. Extend the
+  // synthetic relationship graph before bindings/signatures are constructed;
+  // do not relax the actual reader's ID validation to accommodate the test.
+  const ids = Object.fromEntries(['leadId', 'accountId', 'contactId', 'dealId']
+    .map((field) => [source.evidence.nativeConversion[field], `${source.evidence.nativeConversion[field]}00`]));
+  function withTransportIds(value) {
+    if (Array.isArray(value)) return value.map(withTransportIds);
+    if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value)
+      .map(([key, child]) => [key, withTransportIds(child)]));
+    return typeof value === 'string' && Object.hasOwn(ids, value) ? ids[value] : value;
+  }
+  const f = createStagingFixture(0, { publicNative, preparationInput: withTransportIds(source) });
+  const nativeRow = { id: f.lineage.originalLeadId, Intake_Submission_ID: f.lineage.journeyId,
+    Modified_Time: '2026-09-09T11:43:00.000Z', Converted__s: true,
+    Converted_Date_Time: '2026-09-09T06:42:00-05:00',
+    Converted_Account: { id: f.records.account.id, name: 'SYNTHETIC PRIVATE NAME' },
+    Converted_Contact: { id: f.records.contact.id, name: 'SYNTHETIC PRIVATE NAME' },
+    Converted_Deal: { id: f.records.deal.id, name: 'SYNTHETIC PRIVATE NAME' },
+    $converted_detail: { convert_date: '2026-09-09T04:42:00.000Z' } };
+  const requests = []; let writeAuthorizationReads = 0;
+  const crm = createCrmControlClient({ crmApiBaseUrl: 'https://www.zohoapis.com/crm/v8',
+    platformTimeoutMs: 250, crmOrganizationId: '606' }, {
+    readAuthorization: async () => 'Zoho-oauthtoken synthetic-read-only',
+    writeAuthorization: async () => { writeAuthorizationReads += 1; throw new Error('No real writes'); },
+    fetchImpl: async (url, options) => {
+      const parsed = new URL(url);
+      requests.push({ method: options.method, path: parsed.pathname,
+        query: Object.fromEntries(parsed.searchParams.entries()) });
+      assert.equal(options.method, 'GET'); assert.equal(options.body, undefined);
+      if (parsed.pathname === '/crm/v8/org') return { status: 200,
+        json: async () => ({ org: [{ zgid: '606' }] }) };
+      assert.equal(parsed.pathname, '/crm/v8/Leads');
+      assert.equal(parsed.searchParams.get('ids'), f.lineage.originalLeadId);
+      assert.equal(parsed.searchParams.get('converted'), 'true');
+      const fields = parsed.searchParams.get('fields').split(',');
+      return { status: 200, json: async () => ({ data: [Object.fromEntries(Object.entries(nativeRow)
+        .filter(([key]) => fields.includes(key)))], info: { count: 1, more_records: false, next_page_token: null } }) };
+    },
+  });
+  const conversionReader = createConfigurationConversionReader({ crm, now: f.now });
+  const service = createConfigurationStagingService({ config: f.config, store: f.store, crm: f.crm,
+    core: f.core, sourceReader: f.sourceReader, conversionReader, now: f.now });
+  return { f, nativeRow, requests, service, writes: () => writeAuthorizationReads };
+}
+
+test('real conversion reader and CRM field selection connect accepted setup to inactive staging and exact replay', async () => {
+  for (const publicNative of [false, true]) {
+    const selected = connectedNativeFixture({ publicNative }); const { f, service } = selected;
+    const result = await service.stage(f.request);
+    assert.equal(result.state, 'StagedInactive'); assert.equal(result.active, false); assert.equal(result.approved, false);
+    const [deployment] = f.store.rowsFor(f.config.tables.DEPLOYMENT_TABLE);
+    assert.equal(deployment.TEST_STATUS, 'Ready for Approval');
+    assert.equal(deployment.GO_LIVE_APPROVAL_STATUS, 'Pending Internal Approval');
+    assert.equal(deployment.ACTUAL_START_AT, null); assert.equal(deployment.EXPIRES_AT, null);
+    assert.equal(deployment.APPROVAL_EVENT_KEY, null); assert.equal(f.stagingWrites, 1);
+    const before = structuredClone([...f.store.rows.entries()]); const writes = f.store.writes.length;
+    assert.deepEqual(await service.stage(f.request), { ...result, replayed: true });
+    assert.equal(f.store.writes.length, writes); assert.equal(f.stagingWrites, 1);
+    assert.deepEqual([...f.store.rows.entries()], before); assert.equal(selected.writes(), 0);
+    const reads = selected.requests.filter(({ path }) => path === '/crm/v8/Leads');
+    assert.ok(reads.length >= 2);
+    for (const read of reads) assert.equal(read.query.fields,
+      'id,Intake_Submission_ID,Modified_Time,Converted__s,Converted_Date_Time,Converted_Account,Converted_Contact,Converted_Deal');
+    const [receipt] = f.store.rowsFor(f.config.tables.EVENT_RECEIPT_TABLE);
+    assert.equal(receipt.STATUS, 'Completed');
+    assert.doesNotMatch(receipt.EVENT_DATA_JSON, /SYNTHETIC PRIVATE NAME|converted_detail/);
+  }
+});
+
+test('real native reader rejects wrong joins and chronology before staging consumes any write', async () => {
+  for (const mutate of [
+    (row) => { row.Converted_Account.id = '900000000001'; },
+    (row) => { row.Converted_Contact.id = '900000000001'; },
+    (row) => { row.Converted_Deal.id = '900000000001'; },
+    (row) => { row.Intake_Submission_ID = 'synthetic_other_journey'; },
+    (row) => { row.Converted_Date_Time = '2026-09-09T11:39:00.000Z'; },
+    (row) => { row.Converted_Date_Time = '2026-09-09T11:46:00.000Z'; row.Modified_Time = row.Converted_Date_Time; },
+    (row) => { row.Converted_Date_Time = '2026-09-09T11:44:00.000Z'; },
+    (row) => { delete row.Converted_Contact; },
+  ]) {
+    const selected = connectedNativeFixture(); mutate(selected.nativeRow);
+    await assert.rejects(selected.service.stage(selected.f.request), (error) => {
+      assert.ok(['CONFIGURATION_CONVERSION_INVALID', 'CONFIGURATION_NATIVE_CONVERSION_UNVERIFIED'].includes(error.code));
+      return true;
+    });
+    assert.equal(selected.f.store.writes.length, 0); assert.equal(selected.f.stagingWrites, 0);
+    assert.equal(selected.writes(), 0);
+  }
+});
+
+test('real staged deployment loads for inspection without a planned start but cannot admit calls', async () => {
+  const { f, service } = connectedNativeFixture();
+  await service.stage(f.request);
+  const [row] = f.store.rowsFor(f.config.tables.DEPLOYMENT_TABLE);
+  const before = structuredClone([...f.store.rows.entries()]);
+  const writes = f.store.writes.length;
+  const deployment = await loadDeployment(f.store, row, {
+    ...f.config, sharedAgentVersion: f.config.stagingAgentVersion,
+    authorizationEventSecret: f.config.eventChainSecret,
+  });
+  assert.equal(deployment.approvedStartAt, null);
+  assert.equal(deployment.actualStartAt, null); assert.equal(deployment.expiresAt, null);
+  assert.equal(deployment.approvalEvidenceValidated, false);
+  assert.equal(deployment.activationEvidenceValidated, false);
+  assert.throws(() => activeAt(deployment, f.now()), { code: 'CONFIGURATION_UNAVAILABLE' });
+  assert.equal(f.store.writes.length, writes);
+  assert.deepEqual([...f.store.rows.entries()], before);
+});
+
+test('nullable planned start preserves actual activation timing and authorization guards', async () => {
+  for (const plannedStart of [null, undefined, '2026-08-20T12:00:00.000Z']) {
+    const f = runtimeFixture();
+    const row = f.store.rows.get(f.config.tables.DEPLOYMENT_TABLE)[0];
+    row.APPROVED_START_AT = plannedStart;
+    const deployment = await loadDeployment(f.store, row, f.config);
+    assert.equal(deployment.approvedStartAt, plannedStart ?? null);
+    assert.equal(deployment.actualStartAt, '2026-08-20T12:00:00.000Z');
+    assert.equal(deployment.expiresAt, '2026-08-27T12:00:00.000Z');
+    assert.doesNotThrow(() => activeAt(deployment, f.clock.value));
+    assert.throws(() => activeAt(deployment, Date.parse(deployment.actualStartAt) - 1),
+      { code: 'CONFIGURATION_UNAVAILABLE' });
+    assert.throws(() => activeAt(deployment, Date.parse(deployment.expiresAt)),
+      { code: 'CONFIGURATION_UNAVAILABLE' });
+  }
+  const scheduled = runtimeFixture();
+  const scheduledRow = scheduled.store.rows.get(scheduled.config.tables.DEPLOYMENT_TABLE)[0];
+  Object.assign(scheduledRow, { TEST_STATUS: 'Scheduled', APPROVED_START_AT: null,
+    ACTIVATION_EVENT_KEY: null, ACTUAL_START_AT: null, EXPIRES_AT: null });
+  const approved = await loadDeployment(scheduled.store, scheduledRow, scheduled.config);
+  assert.equal(approved.approvalEvidenceValidated, true);
+  assert.equal(approved.activationEvidenceValidated, false);
+  assert.equal(approved.actualStartAt, null); assert.equal(approved.expiresAt, null);
+  assert.throws(() => activeAt(approved, scheduled.clock.value), { code: 'CONFIGURATION_UNAVAILABLE' });
+  for (const mutate of [
+    (row) => { row.APPROVED_START_AT = ''; },
+    (row) => { row.APPROVED_START_AT = 'not-a-time'; },
+    (row) => { row.APPROVED_START_AT = 0; },
+    (row) => { row.APPROVED_START_AT = '2026-08-20T12:00:00Z'; },
+    (row) => { row.ACTUAL_START_AT = null; },
+    (row) => { row.EXPIRES_AT = '2026-08-28T12:00:00.000Z'; },
+    (row) => { row.ACTUAL_START_AT = '2026-08-20T11:00:00.000Z'; },
+    (row) => { row.APPROVAL_EVENT_KEY = null; },
+    (row) => { row.ACTIVATION_EVENT_KEY = null; },
+    (_row, f) => { f.store.authorizationRows = []; },
+  ]) {
+    const f = runtimeFixture();
+    const row = f.store.rows.get(f.config.tables.DEPLOYMENT_TABLE)[0];
+    row.APPROVED_START_AT = null; mutate(row, f);
+    await assert.rejects(loadDeployment(f.store, row, f.config), { code: 'CONFIGURATION_UNAVAILABLE' });
+  }
+});
+
+test('real native conversion drift blocks completed replay without additional writes', async () => {
+  const selected = connectedNativeFixture(); const { f, service, nativeRow } = selected;
+  await service.stage(f.request);
+  const before = structuredClone([...f.store.rows.entries()]); const writes = f.store.writes.length;
+  nativeRow.Converted_Contact.id = '900000000001';
+  await assert.rejects(service.stage(f.request), { code: 'CONFIGURATION_NATIVE_CONVERSION_UNVERIFIED' });
+  assert.equal(f.store.writes.length, writes); assert.equal(f.stagingWrites, 1);
+  assert.deepEqual([...f.store.rows.entries()], before); assert.equal(selected.writes(), 0);
+});
+
+test('post-sign binding-version string coercion rejects before any staging write', async () => {
+  const numeric = createStagingFixture();
+  assert.equal(numeric.request.deployment.BINDING_VERSION, 1);
+  assert.equal((await numeric.service.stage(numeric.request)).state, 'StagedInactive');
+  assert.equal(numeric.stagingWrites, 1);
+
+  const changed = createStagingFixture();
+  const signature = changed.request.signature;
+  const before = structuredClone([...changed.store.rows.entries()]);
+  // Storage normalization must not authorize an altered incoming packet with
+  // the original numeric route signature. Deliberately do not sign again.
+  changed.request.deployment.BINDING_VERSION = '1';
+  await assert.rejects(changed.service.stage(changed.request), { code: 'CONFIGURATION_STAGING_CONFLICT' });
+  assert.equal(changed.request.signature, signature);
+  assert.equal(changed.store.writes.length, 0); assert.equal(changed.stagingWrites, 0);
+  assert.deepEqual([...changed.store.rows.entries()], before);
+});
 
 test('authenticated submitted setup creates immutable reviewed content and inactive deployment exactly once', async () => {
   const f = createStagingFixture();
@@ -36,6 +242,49 @@ test('authenticated submitted setup creates immutable reviewed content and inact
   assert.equal(receipt.STATUS, 'Completed');
   assert.ok(!receipt.EVENT_DATA_JSON.includes('example.invalid'));
   assert.ok(!receipt.EVENT_DATA_JSON.includes(f.config.operatorVerificationSecret));
+});
+
+test('canonical Data Store requirements permit inactive staging without approval or start timestamps', async () => {
+  const f = createStagingFixture();
+  const columns = datastoreSchema.tables.find((table) => table.api_name === f.config.tables.DEPLOYMENT_TABLE).columns;
+  enforceDeploymentMandatoryColumns(f, columns);
+  const result = await f.service.stage(f.request);
+  assert.equal(result.state, 'StagedInactive');
+  assert.equal(result.approved, false); assert.equal(result.active, false);
+  const [deployment] = f.store.rowsFor(f.config.tables.DEPLOYMENT_TABLE);
+  for (const field of ['APPROVED_START_AT', 'ACTUAL_START_AT', 'EXPIRES_AT',
+    'GO_LIVE_APPROVED_AT', 'APPROVAL_EVENT_KEY', 'ACTIVATION_EVENT_KEY']) {
+    assert.equal(deployment[field], null, field);
+  }
+  assert.equal(deployment.TEST_STATUS, 'Ready for Approval');
+  assert.equal(deployment.GO_LIVE_APPROVAL_STATUS, 'Pending Internal Approval');
+  assert.equal(f.store.rowsFor(f.config.tables.EVENT_RECEIPT_TABLE)[0].STATUS, 'Completed');
+  assert.equal(f.stagingWrites, 1);
+});
+
+test('required approved start reproduces blocked partial staging; schema correction never resumes the claim', async () => {
+  const f = createStagingFixture();
+  const columns = structuredClone(datastoreSchema.tables
+    .find((table) => table.api_name === f.config.tables.DEPLOYMENT_TABLE).columns);
+  const approvedStart = columns.find((column) => column.api_name === 'APPROVED_START_AT');
+  approvedStart.mandatory = true;
+  enforceDeploymentMandatoryColumns(f, columns);
+  await assert.rejects(f.service.stage(f.request), {
+    code: 'SYNTHETIC_MANDATORY_COLUMN', column: 'APPROVED_START_AT',
+  });
+  const [receipt] = f.store.rowsFor(f.config.tables.EVENT_RECEIPT_TABLE);
+  assert.equal(receipt.STATUS, 'Processing'); assert.equal(receipt.RECEIPT_VERSION, 0);
+  assert.equal(receipt.ATTEMPT_COUNT, 1); assert.equal(receipt.PROCESSED_AT, null);
+  assert.equal(f.store.rowsFor(f.config.tables.CONFIGURATION_VERSION_TABLE).length, 1);
+  assert.equal(f.store.rowsFor(f.config.tables.DEPLOYMENT_TABLE).length, 0);
+  assert.equal(f.stagingWrites, 0);
+  const before = structuredClone([...f.store.rows.entries()]);
+  const writes = f.store.writes.length;
+  // Correcting provider metadata is not permission to replay partial writes.
+  approvedStart.mandatory = false;
+  await assert.rejects(f.service.stage(f.request), { code: 'CONFIGURATION_STAGING_RECONCILIATION_REQUIRED' });
+  assert.deepEqual([...f.store.rows.entries()], before);
+  assert.equal(f.store.writes.length, writes); assert.equal(f.stagingWrites, 0);
 });
 
 test('authoritative absence of assisted lineage uses exact public/native lineage through conversion and staging', async () => {
@@ -300,4 +549,9 @@ test('fresh authenticated baseline metadata and exact CRM values enter the revie
   assert.equal(stored.values.estimatedUnansweredCallRate, null);
   assert.equal(stored.evidenceClass, 'customer_supplied_estimate');
   assert.equal(stored.provenanceStatus, 'locally_consistent_not_authenticated');
+});
+
+test.after(() => {
+  assert.deepEqual(guard.blocked, []);
+  guard.restore();
 });

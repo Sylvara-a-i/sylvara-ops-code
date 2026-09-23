@@ -109,10 +109,13 @@ ${table('Terminal test summary', ['Measure', 'Result'], [
     ['Started', instant(during.startedAtUtc)], ['Ended', instant(during.endedAtUtc)],
     ['Stop reason', titleCase(during.endReason)], ['Coverage', COVERAGE[during.coverage] || 'Not available'],
     ['Unique connected calls captured', count(during.callsCaptured)], ['Connected-call limit', count(during.callLimit)],
+    ['In-flight calls above the limit', count(during.inFlightOvershoot)],
     ['Unconnected / unhandled attempts', count(during.unhandledAttempts)],
     ['Average connected call duration', available(during.averageCallDurationSeconds)
       ? `${during.averageCallDurationSeconds} seconds` : 'Not available'],
   ])}
+${during.inFlightOvershoot > 0 ? '<p>In-flight overshoot records calls already admitted before the stored call-limit threshold became visible. It is not proof of an exact concurrency cap.</p>'
+    : during.inFlightOvershoot === null ? '<p>In-flight overshoot evidence is not available; it has not been inferred from the displayed totals.</p>' : ''}
 <p>The stop reason is recorded workflow evidence, not proof that carrier forwarding or original handling was restored. Restoration evidence requires separate operator review.</p></section>
 <section aria-labelledby="baseline"><h2 id="baseline">Before the test</h2>${baseline}
 <p>Baseline values and observed route calls are context, not a like-for-like before-and-after comparison.</p></section>

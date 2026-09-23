@@ -201,6 +201,58 @@ function activationFixture(overrides = {}) {
   };
 }
 
+test('stored route integers preserve the canonical numeric route without mutating rows', () => {
+  const fields = ['BINDING_VERSION', 'MONITOR_AGENT_VERSION', 'CALL_LIMIT'];
+  const { deployment, configurationVersion } = rows();
+  const expected = routeFromRows(deployment, configurationVersion);
+  const fingerprint = routeFingerprint(expected);
+  for (const selected of [[], ...fields.map((field) => [field]), fields]) {
+    const stored = { ...deployment };
+    for (const field of selected) stored[field] = String(stored[field]);
+    const before = structuredClone({ stored, configurationVersion });
+    const actual = routeFromRows(stored, configurationVersion);
+    assert.deepEqual(actual, expected);
+    assert.equal(routeFingerprint(actual), fingerprint);
+    assert.deepEqual({ stored, configurationVersion }, before);
+  }
+});
+
+test('stored route integers reject noncanonical, missing, nonpositive and unsafe values', () => {
+  const invalid = [undefined, null, true, false, [], {}, 1n, '', ' ', ' 1', '1 ',
+    '01', '+1', '-1', '-0', '1.0', '1e0', '0x1', '1\n', '0', 0, -1, 1.5,
+    NaN, Infinity, String(Number.MAX_SAFE_INTEGER + 1), Number.MAX_SAFE_INTEGER + 1, '1'.repeat(100)];
+  for (const field of ['BINDING_VERSION', 'MONITOR_AGENT_VERSION', 'CALL_LIMIT']) {
+    for (const value of invalid) {
+      const { deployment, configurationVersion } = rows({ deployment: { [field]: value } });
+      assert.throws(() => routeFromRows(deployment, configurationVersion),
+        { code: 'INVALID_ROUTE_FINGERPRINT_INPUT' }, `${field}: ${String(value)}`);
+    }
+    const { deployment, configurationVersion } = rows({ deployment: {
+      [field]: String(Number.MAX_SAFE_INTEGER),
+    } });
+    const route = routeFromRows(deployment, configurationVersion);
+    assert.equal(route[{ BINDING_VERSION: 'binding_version', MONITOR_AGENT_VERSION: 'monitor_agent_version',
+      CALL_LIMIT: 'call_limit' }[field]], Number.MAX_SAFE_INTEGER);
+  }
+});
+
+test('public route fingerprints and signed intents still reject numeric strings', () => {
+  const { deployment, configurationVersion } = rows();
+  const route = routeFromRows(deployment, configurationVersion);
+  for (const field of ['binding_version', 'monitor_agent_version', 'call_limit']) {
+    assert.throws(() => routeFingerprint({ ...route, [field]: String(route[field]) }),
+      { code: 'INVALID_ROUTE_FINGERPRINT_INPUT' });
+  }
+  const approval = approvalFixture();
+  const activation = activationFixture();
+  for (const field of ['schema_version', 'expected_deployment_version']) {
+    assert.throws(() => canonicalApprovalIntent({ ...approval.intent, [field]: String(approval.intent[field]) }),
+      { code: 'INVALID_APPROVAL_INTENT' });
+    assert.throws(() => canonicalActivationIntent({ ...activation.intent, [field]: String(activation.intent[field]) }),
+      { code: 'INVALID_ACTIVATION_INTENT' });
+  }
+});
+
 test('approval binds the reviewed version and route without activating or starting the clock', () => {
   const fixture = approvalFixture();
   assert.equal(canonicalApprovalIntent(fixture.intent), JSON.stringify(fixture.intent));
@@ -236,6 +288,57 @@ test('approval binds the reviewed version and route without activating or starti
   assert.equal(receipt.RELATED_EVENT_KEY, null);
 });
 
+for (const field of ['COUNT_VERSION', 'HANDLED_COUNT']) {
+  test(`approval accepts the canonical stored ${field} decimal string`, () => {
+    const fixture = approvalFixture();
+    const expected = evaluateApprovalTransition(fixture);
+    fixture.deployment[field] = String(fixture.deployment[field]);
+    const before = structuredClone(fixture);
+    assert.deepEqual(evaluateApprovalTransition(fixture), expected);
+    assert.deepEqual(fixture, before);
+  });
+}
+
+test('approval counters accept stored zero without relaxing signed or evidence numeric types', () => {
+  const fixture = approvalFixture('approve', { deployment: { COUNT_VERSION: 0, HANDLED_COUNT: 0 } });
+  const expected = evaluateApprovalTransition(fixture);
+  fixture.deployment.COUNT_VERSION = '0';
+  fixture.deployment.HANDLED_COUNT = '0';
+  assert.deepEqual(evaluateApprovalTransition(fixture), expected);
+  for (const field of ['deployment_version', 'handled_count']) {
+    assert.throws(() => evaluateApprovalTransition({ ...fixture,
+      evidence: { ...fixture.evidence, [field]: String(fixture.evidence[field]) },
+    }), { code: 'INVALID_APPROVAL_EVIDENCE' });
+  }
+  assert.throws(() => evaluateApprovalTransition({ ...fixture,
+    intent: { ...fixture.intent, expected_deployment_version: '0' },
+  }), { code: 'INVALID_APPROVAL_INTENT' });
+});
+
+test('approval counters reject malformed readback and real concurrent or count changes', () => {
+  const invalid = [undefined, null, true, false, [], {}, 1n, '', ' ', ' 0', '0 ',
+    '00', '+0', '-0', '-1', '0.0', '0e0', '0x0', '0\n', -1, 0.5, NaN, Infinity,
+    String(Number.MAX_SAFE_INTEGER + 1), Number.MAX_SAFE_INTEGER + 1, '1'.repeat(100)];
+  for (const field of ['COUNT_VERSION', 'HANDLED_COUNT']) {
+    for (const value of invalid) {
+      const fixture = approvalFixture();
+      fixture.deployment[field] = value;
+      assert.throws(() => evaluateApprovalTransition(fixture),
+        { code: 'APPROVAL_PRECONDITION_FAILED' }, `${field}: ${String(value)}`);
+    }
+  }
+  const fixture = approvalFixture();
+  assert.throws(() => evaluateApprovalTransition({ ...fixture,
+    deployment: { ...fixture.deployment, COUNT_VERSION: '5' },
+  }), { code: 'APPROVAL_CONCURRENT_CHANGE' });
+  assert.throws(() => evaluateApprovalTransition({ ...fixture,
+    deployment: { ...fixture.deployment, HANDLED_COUNT: '3' },
+  }), { code: 'APPROVAL_PRECONDITION_FAILED' });
+  const full = approvalFixture('approve', { deployment: { HANDLED_COUNT: 25 } });
+  full.deployment.HANDLED_COUNT = '25';
+  assert.throws(() => evaluateApprovalTransition(full), { code: 'CAPACITY_UNAVAILABLE' });
+});
+
 test('activation requires route readback and starts an exact seven-day interval at activation', () => {
   const fixture = activationFixture();
   assert.equal(canonicalActivationIntent(fixture.intent), JSON.stringify(fixture.intent));
@@ -265,6 +368,64 @@ test('activation requires route readback and starts an exact seven-day interval 
   assert.equal(receipt.RELATED_EVENT_KEY, fixture.deployment.APPROVAL_EVENT_KEY);
   assert.equal(JSON.parse(receipt.EVENT_DATA_JSON).actualStartAt,
     result.deploymentPatch.ACTUAL_START_AT);
+});
+
+test('activation accepts the canonical stored deployment version', () => {
+  const fixture = activationFixture();
+  const expected = evaluateActivationTransition(fixture);
+  fixture.deployment.COUNT_VERSION = String(fixture.deployment.COUNT_VERSION);
+  const before = structuredClone(fixture);
+  assert.deepEqual(evaluateActivationTransition(fixture), expected);
+  assert.deepEqual(fixture, before);
+});
+
+test('activation compares stored capacity numerically, not lexicographically', () => {
+  const fixture = activationFixture({ deployment: { HANDLED_COUNT: 9 } });
+  const expected = evaluateActivationTransition(fixture);
+  fixture.deployment.HANDLED_COUNT = '9';
+  fixture.deployment.CALL_LIMIT = '25';
+  const before = structuredClone(fixture);
+  assert.deepEqual(evaluateActivationTransition(fixture), expected);
+  assert.deepEqual(fixture, before);
+});
+
+test('activation counter parsing preserves malformed, stale, cap and signed evidence rejection', () => {
+  const invalid = [undefined, null, true, false, [], {}, 1n, '', ' ', ' 0', '0 ',
+    '00', '+0', '-0', '-1', '0.0', '0e0', '0x0', '0\n', -1, 0.5, NaN, Infinity,
+    String(Number.MAX_SAFE_INTEGER + 1), Number.MAX_SAFE_INTEGER + 1, '1'.repeat(100)];
+  for (const field of ['COUNT_VERSION', 'HANDLED_COUNT']) {
+    for (const value of invalid) {
+      const fixture = activationFixture();
+      fixture.deployment[field] = value;
+      assert.throws(() => evaluateActivationTransition(fixture),
+        { code: 'ACTIVATION_PRECONDITION_FAILED' }, `${field}: ${String(value)}`);
+    }
+  }
+  for (const handled of ['25', '26', '100']) {
+    const fixture = activationFixture();
+    fixture.deployment.COUNT_VERSION = String(fixture.deployment.COUNT_VERSION);
+    fixture.deployment.HANDLED_COUNT = handled;
+    fixture.deployment.CALL_LIMIT = '25';
+    assert.throws(() => evaluateActivationTransition(fixture), { code: 'CAPACITY_UNAVAILABLE' });
+  }
+  const fixture = activationFixture();
+  fixture.deployment.COUNT_VERSION = String(fixture.deployment.COUNT_VERSION);
+  fixture.deployment.HANDLED_COUNT = '0';
+  assert.doesNotThrow(() => evaluateActivationTransition(fixture));
+  assert.throws(() => evaluateActivationTransition({ ...fixture,
+    deployment: { ...fixture.deployment, COUNT_VERSION: '6' },
+  }), { code: 'ACTIVATION_PRECONDITION_FAILED' });
+  assert.throws(() => evaluateActivationTransition({ ...fixture,
+    intent: { ...fixture.intent, expected_deployment_version: fixture.deployment.COUNT_VERSION },
+  }), { code: 'INVALID_ACTIVATION_INTENT' });
+  assert.throws(() => evaluateActivationTransition({ ...fixture,
+    evidence: { ...fixture.evidence, deployment_version: fixture.deployment.COUNT_VERSION },
+  }), { code: 'INVALID_ACTIVATION_EVIDENCE' });
+  assert.throws(() => evaluateActivationTransition({ ...fixture, existingEvents: [] }),
+    { code: 'ACTIVATION_PRECONDITION_FAILED' });
+  assert.throws(() => evaluateActivationTransition({ ...fixture,
+    evidence: { ...fixture.evidence, route_readback_fingerprint: `readback_${'7'.repeat(64)}` },
+  }), { code: 'ACTIVATION_PRECONDITION_FAILED' });
 });
 
 test('approve, activate, and revoke events replay exactly and reject event-key reuse', () => {

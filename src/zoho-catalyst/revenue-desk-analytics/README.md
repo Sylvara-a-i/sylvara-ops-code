@@ -3,17 +3,21 @@
 ## Scoped Seven-Day Free-Test Report Candidate
 
 The September 2026 reporting continuation is narrower than the historical
-operations/paid-conversion dashboard package below. It is **local source work,
-not a live Analytics installation or customer-delivery acceptance**. Existing
-Journey writers, deployed releases, holds, and old reports stay unchanged.
+operations/paid-conversion dashboard package below. The existing
+[operator acceptance record](../revenue-desk-release/free-test-operator-runbook.md)
+records five empty Development targets and the held `5227abe` importer, plus
+accepted assisted-lineage configuration staging/approval at `20bf11c`. These are
+installation and bounded configuration evidence, **not successful Analytics
+import, call-dependent reporting or customer-delivery acceptance**. The local
+renderer correction below changes none of those deployed artifacts or holds.
 Requirement owner: the Sylvara operator.
 
 | Gate | Current evidence | Remaining action | Cost / authorization | Status |
 |---|---|---|---|---|
-| Call categories and required final metrics | Producer, minimized facts, exhaustive rollup regressions | Review and publish candidate | Offline; no provider execution | Source candidate |
-| CRM pre-test context | Selected field metadata and lineage; typed pre-start capture, immutable-config support and 16 minimized deployment columns tested offline | Define configuration-content/recipient review, then authenticated capture/new-row persistence and target readback | Owner decision on review/promotion; exact storage/target authority | Offline verified; review/persistence contract pending |
-| Simple results report | Fixed-test facts, rowset hashes, periods, counts, duration and baseline reconcile locally; printable single-test draft renderer | Bind installed target readbacks; verify one authorized partition and final export | No customer delivery or public access authorized | Source candidate; live/export acceptance pending |
-| Analytics targets and worker | Existing workspace has legacy assets; current target contract differs | Exact schema/access packet, held artifact, Connections, bounded import/readback | Confirm allowance; preserve disabled scheduling and holds | Pending installation |
+| Call categories and required final metrics | Producer, minimized facts and exhaustive rollup regressions retained; local overshoot presentation correction | Review and publish the local report delta; keep installed runtime unchanged for this correction | Offline; no provider execution | Source verified; renderer delta awaiting review/publication |
+| CRM pre-test context | Typed capture, immutable configuration and 16 minimized deployment columns tested; assisted-lineage staging/approval accepted at `20bf11c` | Preserve accepted configuration; supply only genuine business baseline/period evidence for each new test, leaving missing metrics unknown | New customer/configuration scope needs its exact authority; no repeat of consumed G2 acceptance | Accepted bounded staging; actual company report evidence remains test-specific |
+| Simple results report | Fixed-test facts, rowset hashes, periods, counts, duration and baseline reconcile locally; printable single-test draft renderer | Verify one actual authorized partition and final export after call-dependent evidence exists | No customer delivery or public access authorized | Source verified; live/export acceptance pending |
+| Analytics targets and worker | Five empty canonical targets / 141 columns and `5227abe` importer recorded installed; Analytics disabled | Verify active provider bindings, migration evidence and bounded import/UTC roundtrip/readback | Confirm allowance and exact execution allocation; preserve disabled scheduling and holds | Installation verified in acceptance record; functional wiring unverified |
 | Client delivery | Manual PDF export visible in the Development Free-edition report menu; no export or send performed | Reconcile the new report, verify its filtered output and deliver once to the approved recipient | Manual export, no Analytics email schedule or upgrade | Procedure prepared; final output/delivery pending |
 
 [`config/free-test-report-contract.json`](config/free-test-report-contract.json)
@@ -22,6 +26,12 @@ client/test, six exhaustive display groups, and explicit zero-call evidence.
 The existing five-type dashboard gate remains unchanged: paid conversion is not
 a prerequisite for this distinct free-test report. Daily counts are derived
 from call facts and labeled UTC; no additional query table or dashboard is needed.
+
+The report also reconciles a recorded `IN_FLIGHT_OVERSHOOT` to unique connected
+calls above the stored limit and explains that those calls were already admitted
+before the threshold became visible. It makes no exact concurrency-cap claim.
+An inconsistent supplied value blocks rendering; an absent historical value stays
+**Not available**, not an inferred zero or a retroactively enriched fact.
 
 `tools/build-free-test-report.js` returns minimized **operator-review data**, not
 an email, import, PDF, authentication result, or publication authorization.
@@ -43,7 +53,8 @@ midpoints. Private CRM IDs and arbitrary text are excluded from the reporting
 snapshot. The capture adapter does **not** read CRM or fill missing fields.
 The runtime now validates an optional snapshot in the immutable configuration;
 the deployment producer maps it into 16 optional minimized Analytics columns.
-Authenticated capture/persistence and live sync acceptance remain pending above.
+The accepted assisted-lineage staging is recorded separately from still-pending
+live sync acceptance; a source helper alone is not new capture authority.
 
 `buildCrmPreTestSnapshot` validates fresh capture before activation without a
 `testStartedAt` field. Its read/capture/metadata must be fresh against the current
@@ -99,22 +110,16 @@ optional later CRM input may corroborate it, never enrich an older row. Numeric
 percentages use exact hundredths and amounts use integer minor units. Omitted
 optional values reconstruct as unknown, not zero.
 
-Bounded authenticated capture/insertion wiring still needs acceptance:
-the preparation utility is local-only and is not a cloud writer. Never
-append a baseline to an already approved configuration. No new table, competing
-CRM writer, Retell variable or general provisioning platform was introduced.
-
-The existing preparation contract deliberately returns both configuration and
-notification-recipient approval as false. The full route-approval contract
-requires a previously reviewed immutable configuration before granting separate
-deployment approval. No current operation authenticates that content review or
-creates/promotes its configuration row. This is a real missing contract, not
-permission to flip the flags. The proposed smallest resolution is an explicit
-operator review of the exact prepared content and recipient, followed by one
-authorized new immutable-row creation with readback; it must neither approve the
-deployment nor activate a route. The responsible reviewer/evidence and mutation
-allocation need owner approval before implementing that promotion. Do not insert
-an immutable unapproved draft that the current approval path cannot promote.
+The pure preparation utility remains local-only and deliberately returns
+configuration and notification-recipient approval as false. The authenticated
+controller's separate content/recipient review and immutable staging flow is now
+implemented and accepted for the exact assisted lineage recorded under G2 in the
+operator runbook. Staging, internal deployment approval, provider activation and
+test start remain separate; the accepted G2 readback has zero calls and no start
+or expiry. Do not repeat that consumed acceptance or treat it as approval for a
+different business configuration. Never append a baseline to an already approved
+configuration. No new table, competing CRM writer, Retell variable or general
+provisioning platform is required.
 
 The September 15 read-only inspection verified these field definitions in the
 Sylvara CRM tenant. The existing synthetic Form 2 phone-QA Deal showed these
@@ -186,19 +191,23 @@ not authenticate self-asserted evidence or approve its recipient. Local font
 fallback is explicit; no font file is fetched. Keep the result private and draft
 until the exact final document passes the review procedure above.
 
-The finite integration packet still needs: (1) actual baseline values, an explicit
-source period and estimate/evidence classification for the approved fixture;
-(2) authenticated immutable pre-test capture/persistence; (3) exact
-canonical target schema, Connections and bounded import/readback; and (4) an
-operator-reviewed report and separately approved delivery path. These are real
-non-Retell implementation/deployment gates, not completed by this local adapter.
-Do not add a competing CRM writer or use Analytics as CRM authority.
+The remaining integration packet separates (1) genuine business baseline/period
+context for any new test, with unknown metrics preserved and no historical
+backfill; (2) active target/Connection bindings and migration evidence against the
+already installed schema; and (3) bounded import/UTC readback, reconciled final
+facts and CRM summary, followed by operator-reviewed export and separately
+approved delivery. Actual call-dependent runtime acceptance belongs to the later
+controlled-call packet, not a new synthetic execution mode or endpoint. Preserve
+completed G2 staging and the held installation; no unchanged redeployment is
+needed for this local renderer correction. Do not add a competing CRM writer or
+use Analytics as CRM authority.
 
-Publish and build reviewed source before proposing a fresh held installation of
-the changed Analytics package and shared call-runtime packages. Do not reuse the
-consumed earlier three-function installation. Preserve existing holds, disabled
-scheduling and historical rows until the exact cutover and synthetic allocation
-are authorized. On unknown import/delivery outcome, reconcile first; never retry
+For any future runtime change only, publish and build the reviewed source before
+proposing a fresh held installation of the affected package. This local report
+renderer change requires no runtime deployment. Do not reuse consumed installation
+allocations. Preserve existing holds, disabled scheduling and historical rows
+until the exact cutover and current controlled-acceptance allocation are
+authorized. On unknown import/delivery outcome, reconcile first; never retry
 blindly or restore a known-defective release as rollback.
 
 The current Job accepts no caller-selected parameters and chooses due rows from

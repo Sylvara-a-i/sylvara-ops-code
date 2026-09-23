@@ -200,32 +200,80 @@ test('submitted handling preferences cannot silently enable transfer, fallback o
 
 test('verification, CRM attestation, receipt, and session chronology must agree', () => {
   const cases = [
-    (v) => { delete v.evidence.session.VERIFIED_AT; },
-    (v) => { v.evidence.session.ROWID = undefined; v.evidence.submission.SESSION_ROW_ID = undefined;
-      v.evidence.proof.SESSION_ROW_ID = undefined; },
-    (v) => { v.evidence.proof.VERIFIED_AT = '2026-09-09T11:44:00Z'; },
-    (v) => { v.crm.deal.Setup_Access_Verified_At = '2026-09-09T11:44:00Z'; },
-    (v) => { v.evidence.proof.CONSUMED_AT = '2026-09-09T11:44:00Z'; },
-    (v) => { v.crm.deal.Test_Scope_Accepted_At = '2026-09-09T11:49:00Z'; },
-    (v) => { v.evidence.submission.SUCCEEDED_AT = '2026-09-09T11:49:00Z'; },
-    (v) => { v.evidence.session.SUBMITTED_AT = '2026-09-09T12:01:00Z'; },
+    ['missing session verification', (v) => { delete v.evidence.session.VERIFIED_AT; }],
+    ['missing session linkage', (v) => { v.evidence.session.ROWID = undefined;
+      v.evidence.submission.SESSION_ROW_ID = undefined; v.evidence.proof.SESSION_ROW_ID = undefined; }],
+    ['proof for another session', (v) => { v.evidence.proof.SESSION_ROW_ID = '999'; }],
+    ['proof from another revision', (v) => { v.evidence.proof.SOURCE_REVISION = 'e'.repeat(40); }],
+    ['proof verified after consumption', (v) => {
+      v.evidence.proof.VERIFIED_AT = '2026-09-09T11:44:59.901Z'; }],
+    ['CRM verification second differs', (v) => {
+      v.crm.deal.Setup_Access_Verified_At = '2026-09-09T11:44:00Z'; }],
+    ['proof consumed before verification', (v) => {
+      v.evidence.proof.CONSUMED_AT = '2026-09-09T11:44:59.099Z'; }],
+    ['proof consumed after session verification', (v) => {
+      v.evidence.proof.CONSUMED_AT = '2026-09-09T11:45:00.001Z'; }],
+    ['session verified after submission', (v) => {
+      v.evidence.session.VERIFIED_AT = '2026-09-09T11:50:01.001Z';
+      v.crm.deal.Setup_Access_Verified_At = '2026-09-09T11:50:01Z'; }],
+    ['session verified after receipt within the same CRM second', (v) => {
+      v.evidence.session.VERIFIED_AT = '2026-09-09T11:50:00.900Z';
+      v.crm.deal.Setup_Access_Verified_At = '2026-09-09T11:50:00Z';
+      v.evidence.submission.SUCCEEDED_AT = '2026-09-09T11:50:00.550Z';
+      v.evidence.session.SUBMITTED_AT = '2026-09-09T11:50:00.660Z'; }],
+    ['scope attestation differs', (v) => { v.crm.deal.Test_Scope_Accepted_At = '2026-09-09T11:49:00Z'; }],
+    ['receipt predates submission', (v) => { v.evidence.submission.SUCCEEDED_AT = '2026-09-09T11:49:00Z'; }],
+    ['session submission predates receipt', (v) => {
+      v.evidence.session.SUBMITTED_AT = '2026-09-09T11:49:59.999Z'; }],
+    ['session submission is in the future', (v) => { v.evidence.session.SUBMITTED_AT = '2026-09-09T12:01:00Z'; }],
   ];
-  for (const mutate of cases) {
+  for (const [label, mutate] of cases) {
     const input = syntheticPreparationInputs()[0]; mutate(input);
-    assert.deepEqual(prepare(input).unresolved, ['SUBMISSION_EVIDENCE_INCOMPLETE']);
+    const before = structuredClone(input); const result = prepare(input);
+    assert.equal(result.status, 'blocked', label);
+    assert.equal(result.candidate, null, label);
+    assert.deepEqual(result.unresolved, ['SUBMISSION_EVIDENCE_INCOMPLETE'], label);
+    assert.deepEqual(input, before, label);
   }
 });
 
-test('CRM whole-second verification and submitted stamps preserve Catalyst millisecond evidence', () => {
+test('equal proof and session timestamps remain valid without changing the evidence', () => {
   const input = syntheticPreparationInputs()[0];
-  input.evidence.session.VERIFIED_AT = '2026-09-09T11:45:00.654Z';
   input.evidence.proof.VERIFIED_AT = input.evidence.session.VERIFIED_AT;
-  input.evidence.proof.CONSUMED_AT = '2026-09-09T11:50:00.123Z';
+  input.evidence.proof.CONSUMED_AT = input.evidence.session.VERIFIED_AT;
+  const before = structuredClone(input); const result = prepare(input);
+  assert.equal(result.status, 'prepared_local_only');
+  assert.deepEqual(result.unresolved, []);
+  assert.deepEqual(input, before);
+});
+
+test('sequential proof and session writes cross seconds while preserving CRM whole-second stamps', () => {
+  const input = syntheticPreparationInputs()[0];
+  input.evidence.proof.VERIFIED_AT = '2026-09-09T11:44:59.875Z';
+  input.evidence.proof.CONSUMED_AT = '2026-09-09T11:45:00.125Z';
+  input.evidence.session.VERIFIED_AT = '2026-09-09T11:45:00.250Z';
   input.evidence.submission.SUCCEEDED_AT = '2026-09-09T11:50:00.550Z';
   input.evidence.session.SUBMITTED_AT = '2026-09-09T11:50:00.660Z';
-  assert.equal(prepare(input).status, 'prepared_local_only');
+  const before = structuredClone(input); const result = prepare(input);
+  assert.equal(result.status, 'prepared_local_only');
+  assert.deepEqual(result.unresolved, []);
+  assert.deepEqual(input, before);
   input.crm.deal.Setup_Access_Verified_At = '2026-09-09T11:45:01Z';
   assert.deepEqual(prepare(input).unresolved, ['SUBMISSION_EVIDENCE_INCOMPLETE']);
+});
+
+test('session verification can share the CRM submission second without discarding milliseconds', () => {
+  const input = syntheticPreparationInputs()[0];
+  input.evidence.proof.VERIFIED_AT = '2026-09-09T11:49:59.900Z';
+  input.evidence.proof.CONSUMED_AT = '2026-09-09T11:50:00.050Z';
+  input.evidence.session.VERIFIED_AT = '2026-09-09T11:50:00.100Z';
+  input.crm.deal.Setup_Access_Verified_At = '2026-09-09T11:50:00Z';
+  input.evidence.submission.SUCCEEDED_AT = '2026-09-09T11:50:00.550Z';
+  input.evidence.session.SUBMITTED_AT = '2026-09-09T11:50:00.660Z';
+  const before = structuredClone(input); const result = prepare(input);
+  assert.equal(result.status, 'prepared_local_only');
+  assert.deepEqual(result.unresolved, []);
+  assert.deepEqual(input, before);
 });
 
 test('overflow and combined remain blocked with numeric, ring or fabricated timing evidence', () => {

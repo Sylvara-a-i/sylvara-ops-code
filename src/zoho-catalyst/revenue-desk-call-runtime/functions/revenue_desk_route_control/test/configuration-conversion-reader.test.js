@@ -20,14 +20,15 @@ function providerEvidence() {
   return { data: [{ id: LEAD, Intake_Submission_ID: JOURNEY,
     Modified_Time: '2026-09-14T10:00:00-05:00', Converted__s: true,
     Converted_Date_Time: '2026-09-14T10:00:00-05:00', $converted: true,
-    $converted_detail: { account: ACCOUNT, contact: CONTACT, deal: DEAL,
-      convert_date: '2026-09-14T15:00:00.000Z', converted_by: SENTINEL },
+    Converted_Account: { id: ACCOUNT, name: SENTINEL },
+    Converted_Contact: { id: CONTACT, name: SENTINEL },
+    Converted_Deal: { id: DEAL, name: SENTINEL },
     Last_Name: SENTINEL, Email: 'synthetic-private@example.invalid',
   }], info: { count: 1, per_page: 2, page: 1, more_records: false, next_page_token: null } };
 }
 
 function fixture({ response = providerEvidence(), organizationId = '606', status = 200,
-  failure, clock = () => NOW, json, timeoutMs = 10000 } = {}) {
+  failure, clock = () => NOW, json, timeoutMs = 10000, respectFields = true } = {}) {
   const requests = [];
   let readAuthCount = 0;
   let writeAuthCount = 0;
@@ -45,7 +46,15 @@ function fixture({ response = providerEvidence(), organizationId = '606', status
       };
       assert.equal(parsed.pathname, '/crm/v8/Leads');
       if (failure) throw new Error(SENTINEL);
-      return { status, json: json || (async () => structuredClone(response)) };
+      return { status, json: json || (async () => {
+        const selected = structuredClone(response);
+        if (respectFields && Array.isArray(selected?.data)) {
+          const fields = parsed.searchParams.get('fields').split(',');
+          selected.data = selected.data.map((row) => row && typeof row === 'object'
+            ? Object.fromEntries(Object.entries(row).filter(([key]) => fields.includes(key) || key === '$converted')) : row);
+        }
+        return selected;
+      }) };
     },
   });
   return { requests, crm,
@@ -53,16 +62,26 @@ function fixture({ response = providerEvidence(), organizationId = '606', status
     counts: () => ({ readAuthCount, writeAuthCount }) };
 }
 
+test('field-aware v8 native conversion read works without an unrequested legacy detail', async () => {
+  const response = providerEvidence();
+  const selected = fixture({ response, respectFields: true });
+  const result = await selected.reader.readConversion(LEAD);
+  assert.deepEqual([result.accountId, result.contactId, result.dealId], [ACCOUNT, CONTACT, DEAL]);
+  assert.equal(result.convertedAt, '2026-09-14T15:00:00.000Z');
+  assert.doesNotMatch(selected.requests[1].query.fields, /\$converted_detail/);
+});
+
 test('native conversion uses the existing organization-bound exact-ID read only', async () => {
   const selected = fixture();
   const result = await selected.reader.readConversion(LEAD);
   assert.deepEqual(selected.requests, [
     { method: 'GET', path: '/crm/v8/org', query: {} },
     { method: 'GET', path: '/crm/v8/Leads', query: { ids: LEAD, converted: 'true',
-      fields: 'id,Intake_Submission_ID,Modified_Time,Converted__s,Converted_Date_Time', per_page: '2' } },
+      fields: 'id,Intake_Submission_ID,Modified_Time,Converted__s,Converted_Date_Time,Converted_Account,Converted_Contact,Converted_Deal', per_page: '2' } },
   ]);
   assert.deepEqual(NATIVE_CONVERSION_FIELDS,
-    ['id', 'Intake_Submission_ID', 'Modified_Time', 'Converted__s', 'Converted_Date_Time']);
+    ['id', 'Intake_Submission_ID', 'Modified_Time', 'Converted__s', 'Converted_Date_Time',
+      'Converted_Account', 'Converted_Contact', 'Converted_Deal']);
   assert.deepEqual(selected.counts(), { readAuthCount: 2, writeAuthCount: 0 });
   assert.deepEqual(result, { originalLeadId: LEAD, journeyId: JOURNEY, accountId: ACCOUNT,
     contactId: CONTACT, dealId: DEAL, convertedAt: '2026-09-14T15:00:00.000Z',
@@ -100,55 +119,85 @@ test('empty, ambiguous, wrong-ID, partial and malformed responses fail closed', 
   for (const response of variants) await assert.rejects(fixture({ response }).reader.readConversion(LEAD));
 });
 
-test('converted state and native details cannot be replaced by matching present-day lookups', async () => {
+test('native conversion state cannot be replaced by a request or legacy verification flag', async () => {
   const mutations = [
     (row) => { row.Converted__s = false; },
     (row) => { row.Converted__s = 'true'; },
     (row) => { delete row.Converted__s; },
     (row) => { row.$converted = false; },
     (row) => { row.$converted = 'true'; },
-    (row) => { delete row.$converted_detail; },
-    (row) => { row.$converted_detail = {}; },
-    (row) => { row.$converted_detail = { verified: true, account: ACCOUNT, contact: CONTACT, deal: DEAL }; },
-    (row) => { row.$converted_detail.deal = null; },
-    (row) => { row.$converted_detail.account = { id: ACCOUNT }; },
-    (row) => { row.$converted_detail.contact = LEAD; },
-    (row) => { row.$converted_detail.contact = ACCOUNT; },
     (row) => { row.Intake_Submission_ID = ''; },
     (row) => { row.Intake_Submission_ID = 'x'.repeat(101); },
   ];
   for (const mutate of mutations) {
     const response = providerEvidence(); mutate(response.data[0]);
-    response.data[0].Converted_Contact = { id: CONTACT };
-    response.data[0].Converted_Account = { id: ACCOUNT };
-    response.data[0].Converted_Deal = { id: DEAL };
+    response.data[0].verified = true;
     await assert.rejects(fixture({ response }).reader.readConversion(LEAD),
       { code: 'CONFIGURATION_CONVERSION_INVALID' });
   }
 });
 
-test('missing, contradictory, impossible and future conversion times are rejected', async () => {
+test('each native lookup requires a distinct valid ID and ordinary links or legacy details are not substitutes', async () => {
+  for (const field of ['Converted_Account', 'Converted_Contact', 'Converted_Deal']) {
+    for (const value of [undefined, null, {}, [], ACCOUNT, { name: SENTINEL }, { id: null },
+      { id: '' }, { id: Number(ACCOUNT) }, { id: '100000000' }, { id: LEAD }, { id: '1'.repeat(31) }]) {
+      const response = providerEvidence();
+      if (value === undefined) delete response.data[0][field]; else response.data[0][field] = value;
+      Object.assign(response.data[0], { Account_Name: { id: ACCOUNT }, Contact_Name: { id: CONTACT },
+        Deal_Name: { id: DEAL }, $converted_detail: { account: ACCOUNT, contact: CONTACT, deal: DEAL,
+          convert_date: response.data[0].Converted_Date_Time }, verified: true });
+      await assert.rejects(fixture({ response, respectFields: false }).reader.readConversion(LEAD),
+        { code: 'CONFIGURATION_CONVERSION_INVALID' });
+    }
+  }
+  for (const [field, duplicate] of [['Converted_Account', CONTACT], ['Converted_Contact', DEAL],
+    ['Converted_Deal', ACCOUNT]]) {
+    const response = providerEvidence(); response.data[0][field].id = duplicate;
+    await assert.rejects(fixture({ response }).reader.readConversion(LEAD),
+      { code: 'CONFIGURATION_CONVERSION_INVALID' });
+  }
+});
+
+test('missing, impossible, noncanonical, contradictory and future canonical times are rejected', async () => {
   const mutations = [
     (row) => { delete row.Converted_Date_Time; },
-    (row) => { row.$converted_detail.convert_date = '2026-09-14T15:00:01.000Z'; },
+    (row) => { row.Converted_Date_Time = null; },
     (row) => { row.Converted_Date_Time = '2026-02-30T12:00:00.000Z'; },
     (row) => { row.Converted_Date_Time = '2026-09-14T15:00:00'; },
-    (row) => { row.Converted_Date_Time = '2026-09-16T15:00:00.000Z';
-      row.$converted_detail.convert_date = row.Converted_Date_Time; },
+    (row) => { row.Converted_Date_Time = '2026-09-16T15:00:00.000Z'; },
+    (row) => { row.Converted_Date_Time = '2026-09-14T15:00:01.000Z'; },
     (row) => { row.Modified_Time = '2026-09-16T15:00:00.000Z'; },
     (row) => { delete row.Modified_Time; },
+    (row) => { row.Modified_Time = '2026-02-30T12:00:00.000Z'; },
+    (row) => { row.Modified_Time = '2026-09-14T15:00:00'; },
+    (row) => { row.Modified_Time = 1789398000000; },
   ];
   for (const mutate of mutations) {
     const response = providerEvidence(); mutate(response.data[0]);
-    await assert.rejects(fixture({ response }).reader.readConversion(LEAD),
+    response.data[0].$converted_detail = { account: ACCOUNT, contact: CONTACT, deal: DEAL,
+      convert_date: '2026-09-14T15:00:00.000Z' };
+    await assert.rejects(fixture({ response, respectFields: false }).reader.readConversion(LEAD),
       { code: 'CONFIGURATION_CONVERSION_INVALID' });
+  }
+});
+
+test('canonical time with an explicit offset wins over ignored legacy detail without timezone repair', async () => {
+  for (const detail of [null, {}, { convert_date: '2026-09-14T08:00:00.000Z' },
+    { account: DEAL, contact: ACCOUNT, deal: CONTACT, convert_date: 'not-a-time', converted_by: SENTINEL }]) {
+    const response = providerEvidence(); response.data[0].$converted_detail = detail;
+    response.data[0].Converted_Date_Time = '2026-09-14T10:00:00.125-05:00';
+    response.data[0].Modified_Time = '2026-09-14T15:01:00.000Z';
+    const result = await fixture({ response, respectFields: false }).reader.readConversion(LEAD);
+    assert.equal(result.convertedAt, '2026-09-14T15:00:00.125Z');
+    assert.deepEqual([result.accountId, result.contactId, result.dealId], [ACCOUNT, CONTACT, DEAL]);
+    assert.doesNotMatch(JSON.stringify(result), /synthetic-private|converted_detail|converted_by|Email|name/);
   }
 });
 
 test('different native relationships and journey are preserved for staging comparison, never overwritten', async () => {
   const response = providerEvidence();
   response.data[0].Intake_Submission_ID = 'synthetic_other_journey';
-  response.data[0].$converted_detail.deal = '7000000000005';
+  response.data[0].Converted_Deal.id = '7000000000005';
   const result = await fixture({ response }).reader.readConversion(LEAD);
   assert.notEqual(result.journeyId, JOURNEY);
   assert.notEqual(result.dealId, DEAL);

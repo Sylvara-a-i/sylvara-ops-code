@@ -175,10 +175,13 @@ function validateSubmittedContext(input, now, preservedCoreApproval) {
   // CRM DateTime values preserve whole seconds; Catalyst proof/session values
   // preserve milliseconds. Do not reject a valid CRM round trip for that loss.
   const crmSecond = (value) => Math.trunc(value / 1000);
-  requireValue(times.verified === times.proofVerified
+  // Form 2 durably verifies and consumes the email proof before verifying the
+  // session. Those separate writes use fresh clocks, not one shared timestamp.
+  requireValue(times.proofVerified <= times.proofConsumed
+    && times.proofConsumed <= times.verified
     && crmSecond(times.verified) === crmSecond(times.crmVerified)
-    && times.verified <= times.proofConsumed
-    && crmSecond(times.proofConsumed) <= crmSecond(times.crmSubmitted)
+    && crmSecond(times.verified) <= crmSecond(times.crmSubmitted)
+    && times.verified <= times.succeeded
     && times.crmSubmitted === times.authority && times.crmSubmitted === times.scope
     && times.crmSubmitted <= times.succeeded && times.succeeded <= times.sessionSubmitted
     && times.sessionSubmitted <= capturedAt, 'SUBMISSION_EVIDENCE_INCOMPLETE');

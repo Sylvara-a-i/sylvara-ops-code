@@ -47,8 +47,9 @@ class SyntheticStore {
   }
 }
 
-function createStagingFixture(index = 0, { store = new SyntheticStore(), publicNative = false } = {}) {
-  const input = syntheticPreparationInputs()[index];
+function createStagingFixture(index = 0, { store = new SyntheticStore(), publicNative = false,
+  preparationInput } = {}) {
+  const input = clone(preparationInput || syntheticPreparationInputs()[index]);
   input.review.deploymentId = configurationDeploymentId(input.crm.deal.id, input.crm.deal.Intake_Submission_ID);
   let clock = SYNTHETIC_NOW;
   const config = { environment: 'development', deploymentMode: 'active', sourceRevision: 'e'.repeat(40),

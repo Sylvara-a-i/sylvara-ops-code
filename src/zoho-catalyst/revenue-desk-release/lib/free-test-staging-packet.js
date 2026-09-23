@@ -3,15 +3,24 @@
 const crypto = require('node:crypto');
 const {
   canonicalApprovalIntent,
+  configurationSnapshotFingerprint,
   routeFingerprint,
   routeFromRows,
 } = require('../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/approval-control');
+const { RECONCILIATION_PROFILE, RECONCILIATION_SIGNATURE_DOMAIN, canonicalReconciliationIntent,
+  successorConfigurationRow, successorDeployment, COMPLETION_PROFILE, COMPLETION_SIGNATURE_DOMAIN,
+  canonicalCompletionIntent, completionConfigurationRow, completionDeployment,
+  TRANSITION_PROFILE, TRANSITION_SIGNATURE_DOMAIN, canonicalTransitionIntent,
+  transitionConfigurationRow, transitionDeployment, inactiveDeploymentFingerprint }
+  = require('../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/configuration-reconciliation');
 const {
   REQUIRED_CONFIGURATION_FIELDS,
   validateConfigurationVersionRow,
 } = require('../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/configuration-version');
 const { invariant }
   = require('../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/errors');
+const { keyedDigest, numberLookupKey }
+  = require('../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/security');
 const { prepareFreeTestConfiguration, MAX_READBACK_AGE_MS } = require('./free-test-preparation');
 
 const PROFILE = 'free-test-configuration-staging-v1';
@@ -20,6 +29,17 @@ const MAX_STAGING_PACKET_BYTES = 16_384;
 const MIN_SECRET_CODE_UNITS = 32;
 const MAX_SECRET_CODE_UNITS = 4096;
 const MAX_SECRET_UTF8_BYTES = MAX_SECRET_CODE_UNITS * 3;
+const BINDINGS_PROFILE = 'free-test-staging-bindings-v1';
+// JSON escaping can use six bytes per secret code unit. Keep the protected
+// three-key envelope bounded without excluding runtime-supported key bytes.
+const MAX_BINDING_SECRET_BYTES = 65_536;
+const BINDING_INPUT_FIELDS = Object.freeze([
+  'schemaVersion', 'environment', 'crmOrganizationId', 'operatorIdentity',
+  'testPhoneNumber', 'clientId', 'deploymentId',
+]);
+const BINDING_SECRET_FIELDS = Object.freeze([
+  'numberSecret', 'eventChainSecret', 'analyticsPartitionSecret',
+]);
 const MAX_INTENT_AGE_MS = 5 * 60 * 1000;
 const ENVELOPE_FIELDS = Object.freeze([
   'schemaVersion', 'preparation', 'preservedCoreApproval', 'request',
@@ -85,6 +105,71 @@ function deepFreeze(value) {
     for (const child of Object.values(value)) deepFreeze(child);
   }
   return value;
+}
+
+function validateStagingBindingInput(input) {
+  const code = 'INVALID_STAGING_BINDING_INPUT';
+  exactObject(input, BINDING_INPUT_FIELDS, code);
+  invariant(input.schemaVersion === 1 && input.environment === 'development'
+    && typeof input.crmOrganizationId === 'string' && /^[1-9][0-9]{0,29}$/.test(input.crmOrganizationId)
+    && typeof input.operatorIdentity === 'string' && input.operatorIdentity.length >= 3
+    && input.operatorIdentity.length <= 256 && !/^<.*>$/.test(input.operatorIdentity)
+    && typeof input.testPhoneNumber === 'string' && /^\+1[2-9][0-9]{2}[2-9][0-9]{6}$/.test(input.testPhoneNumber)
+    && typeof input.clientId === 'string' && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(input.clientId)
+    && typeof input.deploymentId === 'string' && /^cfgdeploy_[a-f0-9]{64}$/.test(input.deploymentId),
+  code, 'Staging binding context is invalid.');
+  // Bind every derived value to the exact reviewed nonsecret inputs. No source
+  // record, credential, authenticated readback or approval is created here.
+  const boundInput = Object.fromEntries(BINDING_INPUT_FIELDS.map((key) => [key, input[key]]));
+  return deepFreeze({ input: boundInput,
+    inputSha256: crypto.createHash('sha256').update(JSON.stringify(boundInput), 'utf8').digest('hex') });
+}
+
+function deriveStagingBindings(input, { protectedInput } = {}) {
+  const validated = validateStagingBindingInput(input);
+  const code = 'INVALID_STAGING_BINDING_SECRETS';
+  invariant(Buffer.isBuffer(protectedInput) && protectedInput.length > 0
+    && protectedInput.length <= MAX_BINDING_SECRET_BYTES, code, 'Protected binding input is invalid.');
+  let secrets;
+  try {
+    const text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(protectedInput);
+    secrets = JSON.parse(text);
+    // The accepted object has exactly three string values: six JSON string
+    // tokens total (keys plus values). Any duplicate member necessarily adds
+    // another key token, including an overwritten nonstring value. This keeps
+    // PowerShell's valid escaping while refusing last-key-wins ambiguity.
+    invariant((text.match(/"(?:[^"\\]|\\.)*"/gs) || []).length === 6,
+      code, 'Protected binding input is invalid.');
+  } catch (_) {
+    invariant(false, code, 'Protected binding input is invalid.');
+  }
+  exactObject(secrets, BINDING_SECRET_FIELDS, code);
+  for (const key of ['numberSecret', 'eventChainSecret']) {
+    invariant(typeof secrets[key] === 'string' && secrets[key].length >= MIN_SECRET_CODE_UNITS
+      && secrets[key].length <= MAX_SECRET_CODE_UNITS && !/^<.*>$/.test(secrets[key]),
+    code, 'Protected binding input is invalid.');
+  }
+  invariant(typeof secrets.analyticsPartitionSecret === 'string'
+    && /^\S{32,256}$/.test(secrets.analyticsPartitionSecret)
+    && !/^<.*>$/.test(secrets.analyticsPartitionSecret)
+    && new Set(BINDING_SECRET_FIELDS.map((key) => secrets[key])).size === BINDING_SECRET_FIELDS.length,
+  code, 'Protected binding input is invalid.');
+  const context = validated.input;
+  // These domains/part ordering are the installed gateway, route-control and
+  // analytics-outbox contracts. This is preparation, never a signing intent.
+  const bindings = deepFreeze({ schemaVersion: 1, profile: BINDINGS_PROFILE,
+    input: context, inputSha256: validated.inputSha256,
+    NUMBER_LOOKUP_HASH: numberLookupKey(secrets.numberSecret, context.testPhoneNumber),
+    expectedOperatorHash: `operator_${keyedDigest(secrets.eventChainSecret,
+      'revenue-desk-route-control-operator-v1', [context.crmOrganizationId, context.operatorIdentity])}`,
+    analyticsClientKey: keyedDigest(secrets.analyticsPartitionSecret,
+      'revenue-desk-analytics-client-v1', [context.clientId]),
+    analyticsDeploymentKey: keyedDigest(secrets.analyticsPartitionSecret,
+      'revenue-desk-analytics-deployment-v1', [context.deploymentId]),
+  });
+  const serialized = `${JSON.stringify(bindings)}\n`;
+  return deepFreeze({ bindings, serialized, byteLength: Buffer.byteLength(serialized, 'utf8'),
+    sha256: crypto.createHash('sha256').update(serialized, 'utf8').digest('hex'), profile: BINDINGS_PROFILE });
 }
 
 function canonicalTimestamp(value, code) {
@@ -252,9 +337,7 @@ function validateUnsignedStagingEnvelope(envelope, {
   });
 }
 
-function signFreeTestStagingPacket(envelope, {
-  secret, expectedRevision, expectedOperatorHash, maxBodyBytes, now = Date.now(),
-}) {
+function decodeSigningSecret(secret) {
   invariant(Buffer.isBuffer(secret) && secret.length <= MAX_SECRET_UTF8_BYTES,
     'INVALID_STAGING_SIGNING_SECRET', 'Owner signing key is invalid.');
   let secretText;
@@ -269,6 +352,264 @@ function signFreeTestStagingPacket(envelope, {
     && secretText.length <= MAX_SECRET_CODE_UNITS
     && !/^<.*>$/.test(secretText),
   'INVALID_STAGING_SIGNING_SECRET', 'Owner signing key is invalid.');
+  return secretText;
+}
+
+/**
+ * Validate preserved historical staging separately from fresh recovery intent.
+ * Claim/request HMAC fingerprints are only shape-checked here: the sole live
+ * controller must authenticate the durable receipt and exact reconciled state.
+ */
+function validateUnsignedReconciliationEnvelope(envelope, {
+  expectedRevision, expectedOperatorHash, maxBodyBytes, now = Date.now(),
+}) {
+  validateContext({ expectedRevision, expectedOperatorHash, maxBodyBytes, now });
+  exactObject(envelope, ['schemaVersion', 'originalEnvelope', 'request'],
+    'INVALID_UNSIGNED_RECONCILIATION_ENVELOPE');
+  invariant(envelope.schemaVersion === 1, 'INVALID_UNSIGNED_RECONCILIATION_ENVELOPE',
+    'Unsigned reconciliation envelope version is invalid.');
+  const request = envelope.request;
+  exactObject(request, ['profile', 'originalRequest', 'intent'], 'INVALID_UNSIGNED_RECONCILIATION_REQUEST');
+  invariant(request.profile === RECONCILIATION_PROFILE, 'INVALID_UNSIGNED_RECONCILIATION_REQUEST',
+    'Unsigned reconciliation request is invalid.');
+  const original = request.originalRequest;
+  exactObject(original, [...REQUEST_FIELDS, 'signature'], 'INVALID_UNSIGNED_RECONCILIATION_REQUEST');
+  invariant(typeof original.signature === 'string' && /^v1=[a-f0-9]{64}$/.test(original.signature),
+    'INVALID_APPROVAL_SIGNATURE', 'Original staging signature is invalid.');
+  const historicalAt = canonicalTimestamp(original.intent?.requested_at, 'INVALID_STAGING_INTENT');
+  const originalRevision = original.intent?.evidence_revision;
+  const historical = validateUnsignedStagingEnvelope(envelope.originalEnvelope, {
+    expectedRevision: originalRevision, expectedOperatorHash, maxBodyBytes, now: historicalAt,
+  });
+  const unsignedOriginal = Object.fromEntries(Object.entries(original).filter(([key]) => key !== 'signature'));
+  invariant(same(unsignedOriginal, historical.packet), 'STAGING_PREPARATION_MISMATCH',
+    'Original request does not match its historical preparation.');
+  const intent = request.intent;
+  const canonicalIntent = canonicalReconciliationIntent(intent);
+  const requestedAt = canonicalTimestamp(intent.requested_at, 'INVALID_STAGING_INTENT');
+  const observedAt = canonicalTimestamp(intent.evidence_observed_at, 'INVALID_STAGING_INTENT');
+  const row = successorConfigurationRow(original, intent.original_claim_key, expectedRevision);
+  const deployment = successorDeployment(original, intent.original_claim_key, expectedRevision);
+  invariant(intent.operator_id_hash === expectedOperatorHash
+    && intent.target_source_revision === expectedRevision && intent.original_source_revision === originalRevision
+    && intent.original_configuration_version_id === original.configurationRow.CONFIGURATION_VERSION_ID
+    && intent.original_configuration_fingerprint === configurationSnapshotFingerprint(original.configurationRow)
+    && intent.deployment_id === original.deployment.DEPLOYMENT_ID
+    && intent.configuration_version_id === row.CONFIGURATION_VERSION_ID
+    && intent.route_fingerprint === routeFingerprint(routeFromRows(deployment, row))
+    && historicalAt <= observedAt && observedAt <= requestedAt && requestedAt <= now
+    && now - requestedAt <= MAX_INTENT_AGE_MS && now - observedAt <= MAX_READBACK_AGE_MS,
+  'INVALID_STAGING_INTENT', 'Reconciliation intent is stale or does not match its target.');
+  const projectedBytes = Buffer.byteLength(`${JSON.stringify({
+    ...request, signature: `v1=${'0'.repeat(64)}`,
+  })}\n`, 'utf8');
+  invariant(projectedBytes <= maxBodyBytes, 'STAGING_PACKET_TOO_LARGE',
+    'Signed reconciliation packet exceeds the verified route body limit.');
+  return deepFreeze({ packet: structuredClone(request), canonicalIntent,
+    originalCanonicalIntent: historical.canonicalIntent, sourceRevision: expectedRevision,
+    maxBodyBytes, profile: RECONCILIATION_PROFILE, durableEvidenceAuthenticated: false });
+}
+
+function signFreeTestReconciliationPacket(envelope, {
+  secret, expectedRevision, expectedOperatorHash, maxBodyBytes, now = Date.now(),
+}) {
+  const secretText = decodeSigningSecret(secret);
+  const validated = validateUnsignedReconciliationEnvelope(envelope, {
+    expectedRevision, expectedOperatorHash, maxBodyBytes, now,
+  });
+  const expectedOriginal = crypto.createHmac('sha256', secretText).update(SIGNATURE_DOMAIN, 'utf8')
+    .update(validated.originalCanonicalIntent, 'utf8').digest();
+  invariant(crypto.timingSafeEqual(expectedOriginal,
+    Buffer.from(validated.packet.originalRequest.signature.slice(3), 'hex')),
+  'INVALID_APPROVAL_SIGNATURE', 'Original staging signature could not be verified.');
+  const signature = `v1=${crypto.createHmac('sha256', secretText)
+    .update(RECONCILIATION_SIGNATURE_DOMAIN, 'utf8').update(validated.canonicalIntent, 'utf8').digest('hex')}`;
+  const packet = deepFreeze({ ...validated.packet, signature });
+  const serialized = `${JSON.stringify(packet)}\n`;
+  const byteLength = Buffer.byteLength(serialized, 'utf8');
+  invariant(byteLength <= maxBodyBytes, 'STAGING_PACKET_TOO_LARGE',
+    'Signed reconciliation packet exceeds the verified route body limit.');
+  return deepFreeze({ packet, serialized, byteLength,
+    sha256: crypto.createHash('sha256').update(serialized, 'utf8').digest('hex'),
+    sourceRevision: expectedRevision, maxBodyBytes, profile: RECONCILIATION_PROFILE });
+}
+
+/**
+ * Preserve the two signed historical requests while binding one completion to
+ * the freshly observed inactive deployment. Durable receipt/deployment hashes
+ * remain unverified until the sole controller independently reads those rows.
+ */
+function validateUnsignedCompletionEnvelope(envelope, {
+  expectedRevision, expectedOperatorHash, maxBodyBytes, now = Date.now(),
+}) {
+  validateContext({ expectedRevision, expectedOperatorHash, maxBodyBytes, now });
+  exactObject(envelope, ['schemaVersion', 'reconciliationEnvelope', 'request'],
+    'INVALID_UNSIGNED_COMPLETION_ENVELOPE');
+  invariant(envelope.schemaVersion === 1, 'INVALID_UNSIGNED_COMPLETION_ENVELOPE',
+    'Unsigned completion envelope version is invalid.');
+  const request = envelope.request;
+  exactObject(request, ['profile', 'reconciliationRequest', 'intent'], 'INVALID_UNSIGNED_COMPLETION_REQUEST');
+  invariant(request.profile === COMPLETION_PROFILE, 'INVALID_UNSIGNED_COMPLETION_REQUEST',
+    'Unsigned completion request is invalid.');
+  const reconciliation = request.reconciliationRequest;
+  exactObject(reconciliation, ['profile', 'originalRequest', 'intent', 'signature'],
+    'INVALID_UNSIGNED_COMPLETION_REQUEST');
+  invariant(typeof reconciliation.signature === 'string' && /^v1=[a-f0-9]{64}$/.test(reconciliation.signature),
+    'INVALID_APPROVAL_SIGNATURE', 'Preserved reconciliation signature is invalid.');
+  const historicalAt = canonicalTimestamp(reconciliation.intent?.requested_at, 'INVALID_STAGING_INTENT');
+  const reconciliationRevision = reconciliation.intent?.target_source_revision;
+  const historical = validateUnsignedReconciliationEnvelope(envelope.reconciliationEnvelope, {
+    expectedRevision: reconciliationRevision, expectedOperatorHash, maxBodyBytes, now: historicalAt,
+  });
+  const unsignedReconciliation = Object.fromEntries(Object.entries(reconciliation)
+    .filter(([key]) => key !== 'signature'));
+  invariant(same(unsignedReconciliation, historical.packet), 'STAGING_PREPARATION_MISMATCH',
+    'Preserved reconciliation does not match its historical preparation.');
+  const intent = request.intent;
+  const canonicalIntent = canonicalCompletionIntent(intent);
+  const requestedAt = canonicalTimestamp(intent.requested_at, 'INVALID_STAGING_INTENT');
+  const observedAt = canonicalTimestamp(intent.evidence_observed_at, 'INVALID_STAGING_INTENT');
+  const reconciledRow = successorConfigurationRow(reconciliation.originalRequest,
+    reconciliation.intent.original_claim_key, reconciliationRevision);
+  const row = completionConfigurationRow(reconciliation, intent.reconciliation_claim_key, expectedRevision);
+  const deployment = completionDeployment(reconciliation, intent.reconciliation_claim_key, expectedRevision);
+  invariant(intent.operator_id_hash === expectedOperatorHash
+    && intent.target_source_revision === expectedRevision
+    && intent.original_claim_key === reconciliation.intent.original_claim_key
+    && intent.original_claim_fingerprint === reconciliation.intent.original_claim_fingerprint
+    && intent.original_source_revision === reconciliation.intent.original_source_revision
+    && intent.original_configuration_fingerprint === reconciliation.intent.original_configuration_fingerprint
+    && intent.reconciliation_source_revision === reconciliationRevision
+    && intent.reconciled_configuration_version_id === reconciledRow.CONFIGURATION_VERSION_ID
+    && intent.reconciled_configuration_fingerprint === configurationSnapshotFingerprint(reconciledRow)
+    && intent.deployment_id === deployment.DEPLOYMENT_ID
+    && intent.configuration_version_id === row.CONFIGURATION_VERSION_ID
+    && intent.configuration_fingerprint === configurationSnapshotFingerprint(row)
+    && intent.route_fingerprint === routeFingerprint(routeFromRows(deployment, row))
+    && historicalAt <= observedAt && observedAt <= requestedAt && requestedAt <= now
+    && now - requestedAt <= MAX_INTENT_AGE_MS && now - observedAt <= MAX_READBACK_AGE_MS,
+  'INVALID_STAGING_INTENT', 'Completion intent is stale or does not match its target.');
+  const projectedBytes = Buffer.byteLength(`${JSON.stringify({
+    ...request, signature: `v1=${'0'.repeat(64)}`,
+  })}\n`, 'utf8');
+  invariant(projectedBytes <= maxBodyBytes, 'STAGING_PACKET_TOO_LARGE',
+    'Signed completion packet exceeds the verified route body limit.');
+  return deepFreeze({ packet: structuredClone(request), canonicalIntent,
+    originalCanonicalIntent: historical.originalCanonicalIntent,
+    reconciliationCanonicalIntent: historical.canonicalIntent, sourceRevision: expectedRevision,
+    maxBodyBytes, profile: COMPLETION_PROFILE, durableEvidenceAuthenticated: false });
+}
+
+function signFreeTestCompletionPacket(envelope, {
+  secret, expectedRevision, expectedOperatorHash, maxBodyBytes, now = Date.now(),
+}) {
+  const secretText = decodeSigningSecret(secret);
+  const validated = validateUnsignedCompletionEnvelope(envelope, {
+    expectedRevision, expectedOperatorHash, maxBodyBytes, now,
+  });
+  const reconciliation = validated.packet.reconciliationRequest;
+  for (const [domain, intent, signature] of [
+    [SIGNATURE_DOMAIN, validated.originalCanonicalIntent, reconciliation.originalRequest.signature],
+    [RECONCILIATION_SIGNATURE_DOMAIN, validated.reconciliationCanonicalIntent, reconciliation.signature],
+  ]) {
+    const expected = crypto.createHmac('sha256', secretText).update(domain, 'utf8').update(intent, 'utf8').digest();
+    invariant(crypto.timingSafeEqual(expected, Buffer.from(signature.slice(3), 'hex')),
+      'INVALID_APPROVAL_SIGNATURE', 'Preserved request signature could not be verified.');
+  }
+  const signature = `v1=${crypto.createHmac('sha256', secretText)
+    .update(COMPLETION_SIGNATURE_DOMAIN, 'utf8').update(validated.canonicalIntent, 'utf8').digest('hex')}`;
+  const packet = deepFreeze({ ...validated.packet, signature });
+  const serialized = `${JSON.stringify(packet)}\n`;
+  const byteLength = Buffer.byteLength(serialized, 'utf8');
+  invariant(byteLength <= maxBodyBytes, 'STAGING_PACKET_TOO_LARGE',
+    'Signed completion packet exceeds the verified route body limit.');
+  return deepFreeze({ packet, serialized, byteLength,
+    sha256: crypto.createHash('sha256').update(serialized, 'utf8').digest('hex'),
+    sourceRevision: expectedRevision, maxBodyBytes, profile: COMPLETION_PROFILE });
+}
+
+/**
+ * Review one completed, never-active configuration's explicit release transition.
+ * Local row/fingerprint agreement is not authentication of a stored receipt:
+ * the controller must verify its HMAC, complete history and fresh source data.
+ */
+function validateUnsignedTransitionEnvelope(envelope, {
+  expectedRevision, expectedOperatorHash, maxBodyBytes, now = Date.now(),
+}) {
+  validateContext({ expectedRevision, expectedOperatorHash, maxBodyBytes, now });
+  exactObject(envelope, ['schemaVersion', 'completedConfigurationRow', 'completedDeployment', 'request'],
+    'INVALID_UNSIGNED_TRANSITION_ENVELOPE');
+  invariant(envelope.schemaVersion === 1, 'INVALID_UNSIGNED_TRANSITION_ENVELOPE',
+    'Unsigned transition envelope version is invalid.');
+  const request = envelope.request;
+  exactObject(request, ['profile', 'intent'], 'INVALID_UNSIGNED_TRANSITION_REQUEST');
+  invariant(request.profile === TRANSITION_PROFILE, 'INVALID_UNSIGNED_TRANSITION_REQUEST',
+    'Unsigned transition request is invalid.');
+  const intent = request.intent;
+  const canonicalIntent = canonicalTransitionIntent(intent);
+  const previous = envelope.completedConfigurationRow;
+  const before = envelope.completedDeployment;
+  validateConfigurationVersionRow(previous, { expectedDeploymentId: intent.deployment_id,
+    expectedSourceRevision: intent.completed_source_revision, expectedEnvironment: 'development' });
+  const beforeFingerprint = inactiveDeploymentFingerprint(before);
+  invariant(previous.ACTIVATED_AT === null && before.SOURCE_ENVIRONMENT === 'development'
+    && before.TEST_STATUS === 'Ready for Approval'
+    && before.GO_LIVE_APPROVAL_STATUS === 'Pending Internal Approval'
+    && ['COUNT_VERSION', 'HANDLED_COUNT', 'REPORT_RECONCILIATION_VERSION']
+      .every((field) => before[field] === 0 || before[field] === '0')
+    && before.COUNTED_CALL_KEYS_JSON === '[]' && before.REPORT_RECONCILIATION_STATUS === 'NotRequired'
+    && ['APPROVED_CONFIGURATION_VERSION_ID', 'APPROVAL_EVENT_KEY', 'APPROVED_ROUTE_FINGERPRINT',
+      'GO_LIVE_APPROVED_AT', 'ACTIVATION_EVENT_KEY', 'APPROVED_START_AT', 'ACTUAL_START_AT',
+      'EXPIRES_AT', 'STOP_REASON', 'STOPPED_AT'].every((field) => before[field] === null),
+  'INVALID_STAGING_INTENT', 'Only a completed, never-active configuration can transition.');
+  const row = transitionConfigurationRow(previous, intent.completion_claim_key, expectedRevision);
+  const deployment = transitionDeployment(before, previous, intent.completion_claim_key, expectedRevision);
+  const requestedAt = canonicalTimestamp(intent.requested_at, 'INVALID_STAGING_INTENT');
+  const observedAt = canonicalTimestamp(intent.evidence_observed_at, 'INVALID_STAGING_INTENT');
+  invariant(intent.operator_id_hash === expectedOperatorHash
+    && intent.target_source_revision === expectedRevision
+    && previous.CONFIGURATION_VERSION_ID === intent.completed_configuration_version_id
+    && configurationSnapshotFingerprint(previous) === intent.completed_configuration_fingerprint
+    && beforeFingerprint === intent.expected_deployment_fingerprint
+    && row.CONFIGURATION_VERSION_ID === intent.configuration_version_id
+    && configurationSnapshotFingerprint(row) === intent.configuration_fingerprint
+    && routeFingerprint(routeFromRows(deployment, row)) === intent.route_fingerprint
+    && observedAt <= requestedAt && requestedAt <= now
+    && now - requestedAt <= MAX_INTENT_AGE_MS && now - observedAt <= MAX_READBACK_AGE_MS,
+  'INVALID_STAGING_INTENT', 'Transition intent is stale or does not match its target.');
+  const projectedBytes = Buffer.byteLength(`${JSON.stringify({
+    ...request, signature: `v1=${'0'.repeat(64)}`,
+  })}\n`, 'utf8');
+  invariant(projectedBytes <= maxBodyBytes, 'STAGING_PACKET_TOO_LARGE',
+    'Signed transition packet exceeds the verified route body limit.');
+  return deepFreeze({ packet: structuredClone(request), canonicalIntent,
+    sourceRevision: expectedRevision, maxBodyBytes, profile: TRANSITION_PROFILE,
+    durableEvidenceAuthenticated: false });
+}
+
+function signFreeTestTransitionPacket(envelope, {
+  secret, expectedRevision, expectedOperatorHash, maxBodyBytes, now = Date.now(),
+}) {
+  const validated = validateUnsignedTransitionEnvelope(envelope, {
+    expectedRevision, expectedOperatorHash, maxBodyBytes, now,
+  });
+  const secretText = decodeSigningSecret(secret);
+  const signature = `v1=${crypto.createHmac('sha256', secretText)
+    .update(TRANSITION_SIGNATURE_DOMAIN, 'utf8').update(validated.canonicalIntent, 'utf8').digest('hex')}`;
+  const packet = deepFreeze({ ...validated.packet, signature });
+  const serialized = `${JSON.stringify(packet)}\n`;
+  const byteLength = Buffer.byteLength(serialized, 'utf8');
+  invariant(byteLength <= maxBodyBytes, 'STAGING_PACKET_TOO_LARGE',
+    'Signed transition packet exceeds the verified route body limit.');
+  return deepFreeze({ packet, serialized, byteLength,
+    sha256: crypto.createHash('sha256').update(serialized, 'utf8').digest('hex'),
+    sourceRevision: expectedRevision, maxBodyBytes, profile: TRANSITION_PROFILE });
+}
+
+function signFreeTestStagingPacket(envelope, {
+  secret, expectedRevision, expectedOperatorHash, maxBodyBytes, now = Date.now(),
+}) {
+  const secretText = decodeSigningSecret(secret);
   const validated = validateUnsignedStagingEnvelope(envelope, {
     expectedRevision, expectedOperatorHash, maxBodyBytes, now,
   });
@@ -297,6 +638,19 @@ module.exports = Object.freeze({
   MIN_SECRET_CODE_UNITS,
   MAX_SECRET_CODE_UNITS,
   MAX_SECRET_UTF8_BYTES,
+  BINDINGS_PROFILE,
+  MAX_BINDING_SECRET_BYTES,
+  validateStagingBindingInput,
+  deriveStagingBindings,
   validateUnsignedStagingEnvelope,
   signFreeTestStagingPacket,
+  RECONCILIATION_PROFILE,
+  validateUnsignedReconciliationEnvelope,
+  signFreeTestReconciliationPacket,
+  COMPLETION_PROFILE,
+  validateUnsignedCompletionEnvelope,
+  signFreeTestCompletionPacket,
+  TRANSITION_PROFILE,
+  validateUnsignedTransitionEnvelope,
+  signFreeTestTransitionPacket,
 });

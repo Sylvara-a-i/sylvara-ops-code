@@ -1,6 +1,6 @@
 # Free-test preparation and operator walkthrough
 
-Owner: Sylvara operator (Gabriel). Updated: 2026-09-20. Status: local preparation;
+Owner: Sylvara operator (Gabriel). Updated: 2026-09-23. Status: pre-call preparation;
 not a customer launch, provider change, or spending authorization.
 
 ## Current execution boundary
@@ -19,6 +19,47 @@ separate. Retained acceptance carries forward only for unchanged executable
 behavior. A local demo is neither new CRM acceptance nor telephone evidence.
 Preserve current holds and consumed allocations. Publication, deployment and
 runtime admission still require their exact outstanding approvals.
+
+### Settled sequencing decision — 2026-09-23
+
+The owner selected the existing backend and offline demo. Do **not** create a
+cloud simulator, synthetic ingestion mode, test endpoint, activation bypass,
+replacement demo or fabricated success records. No Retell access or spending is
+authorized. Call-dependent installed acceptance moves to the controlled-call
+packet below; it is still required and launch-blocking, not passed or removed.
+This decision does not defer unfinished source, schema or configuration work.
+The Analytics-backed free-test results report remains in this phase's scope;
+subscriptions, paid capabilities and automatic conversion remain excluded.
+
+The private acceptance record now proves configuration staging and separate
+internal approval at controller `20bf11c`. Stored receipt/configuration/route
+fingerprints, the inactive deployment and CRM readbacks agree. The original
+revision hold was restored. Counts remain zero and activation/start/expiry are
+unset. Preserve that evidence; stale descriptions do not authorize repeating
+Forms, signing, staging or approval. Gateway and worker are still recorded at
+held `f9989a8`; do not assert coordinated `20bf11c` installation.
+
+Only after all independent preparation and affected demo checks pass may this
+phase report **PRE-CALL PREPARATION COMPLETE — CALL-DEPENDENT RUNTIME ACCEPTANCE
+PENDING.** That label is not complete-service acceptance, permission to call, or
+customer-launch readiness. Keep the fixed G1–G8 and H1–H10 denominators unchanged.
+
+| Pending outcome | Required call/activation evidence | Independent preparation | Existing acceptance path |
+| --- | --- | --- | --- |
+| Public entry identity/retry | None; this is not call-dependent | Source and fixed native mapping retained; narrow reader grant complete | Separately allocated public/native fixture and readback; do not rerun the accepted assisted lane |
+| Genuine call ownership, count and late analysis | Verified activation plus admitted provider call and ended/analyzed events | Existing deterministic authentication, isolation, deduplication and late-event tests | Signed provider ingress → durable receipt → existing worker → canonical call/outbox; no inserted success rows |
+| Actionable alert and actual inbox receipt | Canonical actionable call, approved recipient and outbox claim | Existing minimized template, named monitored owner, bounded recovery tests | Actual call-alert adapter; read durable send state and mailbox independently. Acceptance is not inbox delivery or completed callback |
+| Analytics import/UTC roundtrip | Worker-produced v2 facts and actual source watermark | Five tables/141 columns installed; mappings and typed local tests retained. Six nonsecret connection/target bindings saved and freshly read back on 2026-09-23 with Analytics disabled and its revision hold unchanged. Migration evidence digest remains absent | Scoped importer → import-job outcome → independent exact partition/UTC readback → checkpoint; no scheduler or extra dashboard |
+| Reconciled final results and CRM summary | Actual admitted calls and valid terminal/source watermark | Existing baseline capture, immutable version binding, report-only consumer, per-Deal guards, renderer and synthetic fixtures | Stop first fixture safely; reconcile canonical/outbox/facts → Analytics export/readback → fixed-test report and conditional CRM summary; preserve unknown baseline values |
+| Stop, settlement and restoration | Activated fixture; genuine prior admission for late settlement | Existing offline early-stop/expiry/25-call/race matrix; no 25-call batch or seven-day wait | Backend stop and rejection of new admission, bounded settlement and late report revision; separately verify carrier restoration |
+| Overflow/combined behavior | Originating-provider value, explicit unit, source and execution binding | Local preparation preserves source ring preference without conversion | Complete missing binding before exercising each mode; after-hours success does not pass them |
+| Changed demo panels | None | Original acceptance retained; owner accepted both added staging/handoff panels as readable and working on 2026-09-23 | Complete for the existing offline demo; preserve the accepted artifact and do not repeat the visual check without a relevant change |
+| Release/configuration freeze | None | Exact controller artifact verified; compatible sibling packages retained | Resolve source publication/checks and exact held sibling/configuration allocations; do not redeploy unchanged Forms, Analytics or CRM for documents/rendering |
+
+Preserve each private evidence identity and consumed allocation. The call packet
+does not supply missing configuration approval, source review, export authority,
+privacy decisions or current price verification. An independent preparation gap
+must be named and closed, not relabeled as dependent on a call.
 
 ## Safe local demonstration
 
@@ -66,12 +107,12 @@ real repository logic with fake adapters and an explicitly simulated activation
 state. It does not recreate the accepted live Lead/Form 1/conversion/Form 2 chain,
 prove model extraction, or prove carrier forwarding and restoration.
 
-Gabriel accepted the previous `570638f` demo as readable and working. That
-acceptance remains valid for its unchanged sections; it does not cover the new
-handoff and configuration-staging panels. HTML safety, escaping and navigation are tested offline. The
-desktop browser policy blocks agent-opened local-file visual inspection; this
-does not authorize serving the same file through a workaround. The new panel's
-visual acceptance remains separate from its passed executable assertions.
+Gabriel accepted the previous `570638f` demo as readable and working and, on
+2026-09-23, separately accepted both added handoff and configuration-staging
+panels. Retained HTML safety, escaping, navigation and byte-parity checks cover
+the same existing artifact. No rebuild, hosting or browser-policy workaround was
+needed. This closes the offline demo's visual acceptance, not actual call, mail,
+Analytics or carrier acceptance.
 
 ## First-client operating checklist
 
@@ -202,9 +243,13 @@ already-admitted calls may finish." Paid-plan pages remain outside this sprint.
 
 ## Finite future live-acceptance packet — NOT AUTHORIZED
 
-Release target: the exact reviewed runtime delta recorded below, with its
-retained immutable manifests; **not** an operator-utility commit relabeled as a
-runtime deployment. The
+Release target: reviewed runtime `20bf11c844d7b691cd5e2808134b030520c6282a`, with
+its retained immutable manifests; **not** the later report-renderer/operator
+documentation commit relabeled as a runtime deployment. The controller has exact
+246-entry readback; gateway/worker remain at held `f9989a8` until their matching
+delta has separately approved installation/readback. Unchanged Analytics
+`5227abe`, CRM report consumer `8b7dd31` and Forms `7dd3491` retain their own
+artifact identities and compatibility evidence. The
 private packet must name the exact existing isolated agent, number, configuration,
 approved testers and owner-controlled destinations. Missing identity, complete
 machine readback or cost confirmation blocks execution; it does not justify
@@ -223,16 +268,31 @@ does not transfer automatically to a new release or customer traffic.
 
 | Allocation | Maximum | Observable pass criteria |
 | --- | --- | --- |
-| Initial after-hours rehearsal | Six calls, three minutes each | Routine new request; existing customer; urgent/uncertain request; wrong-fit/spam; resolver rejection/fallback; early-stop/restoration. Check correct company/number, truthful close, exact structured output, recipient, durable report and safe original handling |
+| First-call downstream gate | One normal new-request call, at most three minutes; included in the six below | Use the approved isolated after-hours configuration. Prove real event authenticity → durable canonical call/outbox → actual approved alert/inbox → typed Analytics import/readback. Safely stop this fixture, settle admitted work, then reconcile the terminal Analytics-backed results export and CRM summary. Verify backend stop separately from carrier restoration. **No second call until this complete path passes.** |
+| Remaining after-hours rehearsal | Up to five further calls, three minutes each; six total including the first | Existing customer; urgent/uncertain request; wrong-fit/spam; resolver rejection/fallback; safe stop/restoration and admitted-work settlement as applicable. A second explicitly allocated isolated fixture is required after the first terminates; do not reset the completed fixture or invent activation evidence. Check correct company/number, truthful close, exact structured output, recipient, durable report and original handling |
 | Overflow and combined follow-up | Four calls, three minutes each | Only after timing-binding code/evidence exists: answered-first suppression and no-answer behavior for each mode; exact unit/value, correct trigger and safe fallback |
 | Total ceiling | Ten calls / thirty connected minutes | No automatic retries, extras, simulations, previews, analysis reruns or customer traffic |
+
+The private execution allocation must also name the exact authenticated event
+receipts, maximum legitimate jobs/import rows/readbacks, one initial actionable
+QA alert to the already approved monitored recipient, and any bounded report-only
+CRM writes. No recurring scheduler, report sharing, extra email or inbox resend is
+implicit in a call allocation. Pre-import source/legacy/target evidence must pass
+before installing its real migration digest and temporarily admitting the
+importer. If the first path fails or delivery is ambiguous, stop the batch,
+reconcile the same evidence and obtain any necessary correction/retest allocation
+before spending further. Broader expiry/cap/concurrency/failure permutations stay
+in the existing deterministic offline matrix; live checks prove the provider
+boundary and connected installed path, not 25 calls or a seven-day wait.
 
 Historical public rates checked 2026-09-12: standard voice pricing was roughly
 $0.07–$0.31/minute, plus the displayed $0.015/minute telephone rate where applicable.
 Thirty minutes at that illustrative upper subtotal is $9.75. Add-ons, the actual
 model/voice/country/carrier, existing rental, taxes and account terms may differ.
 Proposed **all-in incremental ceiling: $15**, not authorized and not a quotation.
-Before approval, establish every applicable component and demonstrate it fits
+These historical figures are **not current cost verification**; no provider
+access was performed for this sequencing decision. Before approval, establish
+every applicable component from current official rates/account terms and demonstrate it fits
 that ceiling. Unknown cost means stop; do not consume credits as a workaround.
 See [Retell pricing](https://www.retellai.com/pricing) and
 [testing charges](https://docs.retellai.com/test/testing-pricing).
@@ -254,6 +314,13 @@ does not establish a Promise defect. No speculative asynchronous wrapper was
 saved, and no launcher/canary allocation was spent. Preserve the existing
 admission hold; this readback does not certify a new successful launch. Exact
 contract: [ZDK Functions](https://www.zohocrm.dev/explore/client-script/webapi/Functions).
+
+### Historical rollout evidence — superseded, not a current instruction
+
+The dated installation/source narrative in this subsection records earlier states.
+The settled sequencing decision and G8 below own the current release: controller
+`20bf11c` verified, matching gateway/worker delta pending, unchanged Analytics
+`5227abe` held. Do not execute the older four-target rollout again.
 
 **2026-09-15 installed-state correction:** the private held-installation record
 supersedes the older local-only early-stop paragraphs below. The existing gateway,
@@ -304,16 +371,16 @@ the CRM consumer, or the approval/activation boundary. Previously accepted form
 behavior and installed artifact parity remain valid; early-stop report acceptance
 must be established for the corrected runtime before operational use.
 
-Prepare the corrected shared runtime with the existing three-target builder
-(gateway, route control, worker), plus the separate canonical `analytics_sync`
-builder for the approved reporting scope. The smallest current rollout is four
-changed targets, not a new five-function Journey-core release. Source manifests
-are not dependency-complete upload packages. Fresh final-revision packages must
-be independently compared and cross-version compatibility with retained Form
-1/Form 2 and the report-only consumer verified. Keep Analytics disabled/Cron off,
-worker dry-run, provider mode disabled and revision holds intact. An installation
-packet authorizes no runtime invocation, import, email or record creation. Do not
-relax the five-target validator or relabel artifacts to imply coordinated parity.
+The subsequent four-target `5227abe` rollout completed with 927-entry readback;
+that allocation is consumed. The remaining current runtime delta is only the
+gateway and worker package pair matching the already verified `20bf11c`
+controller. Use retained dependency-complete manifests and independent pullback,
+not a source-file manifest as upload proof. Preserve cross-version compatibility
+with unchanged Form 1/Form 2, Analytics and the report-only consumer. Keep
+Analytics disabled/Cron off, worker dry-run, provider mode disabled and revision
+holds intact. No sibling upload is authorized here; an exact future installation
+block grants no invocation, import, email or record creation. Do not relax the
+five-target validator or relabel artifacts to imply coordinated parity.
 
 Do not rebuild or redeploy unchanged functions merely because the local demo,
 comparator or runbook changes. Local source commits do not move runtime
@@ -332,20 +399,20 @@ this table is the sanitized operating view, not a new release contract.
 
 | Gate | Current evidence and revision | Remaining action | Cost class | Approval needed | Status |
 | --- | --- | --- | --- | --- | --- |
-| G1 Public/assisted entry and native relationships | Accepted assisted Forms/conversion retained; `5227abe` installed held; public native mapping read back | Complete narrow read grant and affected public identity/retry acceptance | Offline now; cloud allowance must be confirmed | Owner grant; exact readback/fixture allocation; no reused canary | Public runtime continuation unverified; assisted evidence retained |
-| G2 Authenticated configuration review/staging | `5227abe` controller installed held; owner packet tooling is source-only; reviewed 4,096-byte body limit is smaller than the 6,024-byte synthetic packet | Fresh nonsecret body-limit readback and exact approved limit migration if needed; complete private preparation, protected signing, staging/readback | Offline now; contained Development later | Owner values/key entry; exact configuration/staging allocation | Installed under hold; packet-size/configuration prerequisite and runtime acceptance pending |
+| G1 Public/assisted entry and native relationships | Accepted assisted Forms/conversion and native joins retained; required CRM reader connected; public native mapping read back | Affected public identity/retry acceptance remains independent of calls; preserve accepted assisted evidence | Offline now; cloud allowance must be confirmed | Exact public fixture/readback allocation; no reused canary | Public runtime continuation unverified; assisted evidence retained |
+| G2 Authenticated configuration review/staging | `20bf11c` controller installed; all 246 downloaded entries verified. Prior staging retained; approved immutable transition and separate internal approval completed with independent storage/CRM readback. Original hold restored; Scheduled/Approved, zero calls, no activation/start/expiry | Preserve exact receipts and configuration. Do not repeat staging or approval; publication and sibling rollout remain G8, not another G2 test | Consumed execution used confirmed Development/included CRM allowance | Completed block consumed; no automatic replay | Passed for the accepted assisted lineage at `20bf11c` |
 | G3 Coverage and restoration preparation | After-hours fixtures; new owner-attested overflow/combined snapshot contract | Actual originating-provider setting/unit/evidence and later execution binding; preserve original handling | Local preparation only | Owner evidence; separate provider phase for live behavior | Preparation only; overflow/combined execution held |
-| G4 Call-to-owner handoff | H1–H10 source at `c28affd`, separate dry-run/acceptance/delivery meanings | Named monitored owner, actual alert adapter/inbox proof and bounded recovery readback | No real sending now | Exact owner-only email and runtime allocation | Source complete; Development 0/10 |
-| G5 Clock, limit, stop and settlement | Offline limits/races/reports; early-stop correction retained in `5227abe` held installation | Scoped installed-runtime containment and report reconciliation | Offline passed; cloud later | Exact synthetic acceptance allocation | Installed evidence is not runtime proof |
-| G6 Baseline, Analytics and final report | Five empty targets/141 columns and `5227abe` importer installed; Analytics disabled | Verify bindings, approved baseline, import/UTC roundtrip and CRM/report reconciliation | Confirm account allowance before imports/jobs | Exact rows/jobs/import/readback allocation | Schema and held artifact verified; functional wiring unverified |
-| G7 Operator demo | Original owner acceptance retained; new panels exercise fake adapters | New handoff/staging panels' visual acceptance | Local only | Owner visual input, not a deployment approval | New-panel visual check pending |
-| G8 Held release and non-Retell acceptance | PR #91 merged `5227abe`; four uploaded artifacts match all 927 downloaded entries; holds preserved | Bounded functional QA after protected prerequisites; do not redeploy for an operator-tool-only change | External cost must remain confirmed zero | Four-upload/four-readback allocation consumed; new invocation allocation required | Installation verified; functional acceptance pending; no prospect launch |
+| G4 Call-to-owner handoff | H1–H10 source at `c28affd`; Gabriel owns monitoring of the privately approved QA mailbox; separate dry-run/acceptance/delivery meanings | Actual alert adapter/inbox proof and bounded recovery readback in first controlled-call path | No real sending now | Exact owner-only email and controlled-call runtime allocation | Source complete; Development 0/10 |
+| G5 Clock, limit, stop and settlement | Offline limits/races/reports; early-stop correction retained in held runtime ancestry | Scoped installed-runtime containment and report reconciliation using genuine admitted work | Offline passed; cloud later | Exact controlled-call/stop/settlement allocation | Installed evidence is not runtime proof |
+| G6 Baseline, Analytics and final report | Approved baseline persisted in immutable G2 configuration; five empty targets/141 columns and `5227abe` importer installed. Six approved nonsecret bindings saved on 2026-09-23; a fresh provider-UI reload matched all six while mode remained disabled and the original revision hold unchanged | Actual migration evidence digest, import/UTC roundtrip and CRM/report reconciliation depend on controlled-call source facts; no target-map hash substitution | Configuration-only Development saves completed at no incremental cost; confirm allowance before imports/jobs | Six-save allocation consumed; later rows/jobs/import/readback allocation still required | Inactive importer binding preparation verified; functional acceptance pending |
+| G7 Operator demo | Original owner acceptance plus 2026-09-23 acceptance of both added handoff/staging panels; retained 23 focused tests and exact artifact parity | None for the unchanged existing offline demo | Local only | Owner visual check completed; no live-action permission | Passed for the existing synthetic offline demo |
+| G8 Held release and acceptance | Historical PR #91 `5227abe` four-target/927-entry proof retained; current controller `20bf11c` verified separately, gateway/worker `f9989a8`; PR #93 still draft at `f9989a8`, remote main `2654c4a` on 2026-09-23 | Complete source publication/review safeguards and matching held sibling delta; call-dependent acceptance follows only the approved sequencing decision. No runtime redeploy for renderer/docs | External cost must remain confirmed zero | Existing source authority subject to review-cost boundary; exact new sibling-install allocation | Partial held installation verified; release and functional acceptance pending; no prospect launch |
 
 No row asserts that only Retell testing remains. Optional scheduling, paid
 conversion, Full Blueprint and customer traffic remain outside this goal.
 
-The eight-row whole-goal numerator remains **0/8 fully accepted**: every row
-still has an unpassed required subgate. This does not erase the retained Forms,
+The eight-row whole-goal numerator is **2/8 fully accepted**: G2 and G7 passed; the other
+rows retain their unpassed required subgates. This does not erase the retained Forms,
 source/offline or artifact evidence. The separate handoff source result remains
 10/10 and its Development acceptance remains 0/10; neither is a whole-goal score.
 
@@ -434,7 +501,7 @@ Required unknowns remain unpassed. Do not substitute test/file counts for gates.
 | H7 Bounded recovery | Definite pre-send rejection retries bounded; ambiguous/legacy unsent state held; no blind resend | Authorized safe failure/reconciliation evidence and operator recovery ownership |
 | H8 Isolation/authentication | Two-business fixtures, signed ownership, invalid authentication and wrong-recipient tests | Exact isolated QA target and sender/recipient bindings |
 | H9 Honest reporting | Canonical call/outbox reconciliation; missing analysis unknown; demo separates acceptance/inbox/acknowledgment/callback | Runtime report and CRM summary match durable evidence; mailbox evidence separate |
-| H10 Operator handoff/demo/release | Existing demo extended with failure, caller-close draft and finite packet below | New-panel visual review, runtime operator checklist and approved rollback readback |
+| H10 Operator handoff/demo/release | Existing demo extended with failure, caller-close draft and finite packet below; new-panel owner visual review accepted on 2026-09-23 | Runtime operator checklist and approved rollback readback; visual acceptance alone does not pass H10 Development |
 
 ### Configuration and data lineage
 
@@ -480,6 +547,19 @@ It separately requires an externally owner-signed **final** content/recipient
 snapshot; the Draft/Pending review above cannot authorize creation. Its distinct
 signature domain cannot be reflected into normal approval or activation.
 
+Form 2's durable verification steps have separate timestamps: proof verification,
+proof consumption, then session verification. Staging accepts that ordered
+sequence, including equal timestamps from a fixed clock; it must not require
+proof and session verification to happen at the same instant. CRM verification
+must match the session at CRM's whole-second precision and must not follow the
+submitted authorization/scope time. Receipt success, session submission and
+capture must retain their existing order. Never rewrite accepted evidence to
+satisfy the validator. Session verification must also precede receipt success at
+full Catalyst precision, even when both fall within the same CRM second. Never
+round durable timestamps to hide a reversed sequence. A correction requires the affected runtime
+artifact to be reviewed, installed under hold and accepted separately; passing
+the local signer or changing its utility revision does not update the controller.
+
 ### Owner-only offline staging packet
 
 The missing owner entry point is separate from the installed controller. The
@@ -498,7 +578,7 @@ the envelope: no BOM, pretty-print whitespace or trailing newline. Duplicate
 members or alternate encodings reject before any secret is consumed.
 The canonical preparation, target, revision, route fingerprint, freshness and
 immutable content must match. This tool does not export or authenticate CRM
-evidence, derive a number ownership hash, repair missing fields, refresh stale
+evidence, prove number ownership, repair missing fields, refresh stale
 timestamps, invent provider timing or manufacture a monitoring acknowledgment.
 If the exact unsigned packet cannot be assembled from approved fresh readback,
 the operation is blocked before signing. Never adapt the synthetic fixture for
@@ -526,8 +606,11 @@ installed controller. They need not be identical, and the tool must never change
 a runtime revision label to make them match. `MaxBodyBytes` must come from fresh
 secret-safe readback of Development `ROUTE_CONTROL_MAX_BODY_BYTES`; it has no
 default. The 16,384-byte supported ceiling is not proof of the deployed setting.
-The reviewed configuration value is 4,096, while the normal synthetic packet is
-6,024 bytes. That combination deliberately rejects **before key entry**. Do not
+The approved Development value was raised from 4,096 to 10,240 and independently
+read back; the complete baseline-bearing packet fits. The old size blocker is
+historical, not the current acceptance blocker. Recalculate the exact complete
+packet for each authorized operation rather than reusing an old size estimate.
+An oversized packet rejects **before signing-key entry**. Do not
 truncate evidence or silently raise the parameter. An exact contained runtime
 configuration migration and independent readback are prerequisites when the real
 packet exceeds the installed limit; no migration is performed by this utility.
@@ -548,6 +631,53 @@ provider behavior, and does not replace server-side revalidation. Later bounded
 submission still needs the exact private packet, valid allocation and fresh
 prestate. It must produce `StagedInactive`, a durable receipt, independent row/CRM
 readback, and no approval, activation, clock, message or provider effect.
+
+### Native conversion readback correction — 2026-09-22 UTC
+
+Owner: Gabriel (acceptance authority); controller (sole configuration writer).
+The allocated staging attempt returned `control_failed`/409. Its private record
+preserves the request digest, restored hold and independent zero-row readback;
+no retry is implied. This is not successful staging or proof of which internal
+branch rejected that request.
+
+An exact field-selected CRM v8 GET independently reproduced a blocking reader
+defect: the old five-field projection omitted `$converted_detail`, which the
+reader nevertheless required. Explicitly selecting that legacy property exposed
+a date inconsistent with `Converted_Date_Time`. No timezone adjustment is valid.
+Fresh native field metadata and GET readback instead established
+`Converted_Account`, `Converted_Contact` and `Converted_Deal` as built-in,
+API-nonwritable conversion targets on the original Lead. The correction selects
+these exact fields and uses `Converted_Date_Time`, never mutable relationship
+lookups, names, request claims or legacy fallback. It preserves exact single-Lead
+readback, complete pagination, distinct string IDs, conversion/modified-time
+ordering, and independent Form 1 → conversion → Form 2 joins.
+
+Only the controller reader changes; no grant, writer, schema, route, provider,
+mail, reporting or customer data change is required. Field-filtered fake CRM
+responses must exercise the real CRM client and reader through staging/replay,
+with zero writes on missing fields, wrong relationships or invalid chronology.
+Source verification does not pass G2: a reviewed controller delta, authorized
+installation/readback and separately allocated authenticated staging with durable
+receipt and inactive-row readback remain necessary. Keep the restored hold as
+rollback; do not rerun Forms, reactivate a route or infer a retry from zero rows.
+
+When the required derived identities are absent, the same wrapper's
+`-PrepareBindings` mode accepts only a reviewed Development identity input:
+`schemaVersion`, `environment`, `crmOrganizationId`, `operatorIdentity`,
+`testPhoneNumber`, `clientId`, and `deploymentId`. It obtains the existing
+number/event/Analytics partition keys through three protected owner fields and
+uses the runtime's exact hash domains. Output contains private derived identities,
+not the keys or a signature. This does not prove number ownership, authenticate
+source data, validate a final request size, or permit submission. The owner must
+use the matching current configuration keys; later independent server-side
+readback remains necessary. No credential retrieval or rotation is added.
+
+The first immutable staging input must include the reviewed pre-test baseline
+and reporting context. Missing metrics remain unknown, not zero. Baseline period
+dates require an approved source or an explicitly approved synthetic rehearsal
+period; do not invent them. A baseline-less successful staging cannot be repaired
+by an ordinary replay: the durable claim binds the exact request fingerprint.
+Do not clear a claim or create a replacement journey to bypass that constraint.
 
 Security/cost: local-only and zero external usage; no runtime code/dependency or
 installed artifact change. Rollback is to stop using the utility and preserve the
@@ -579,6 +709,123 @@ the original intent expires; new claims still require fresh intent/evidence.
 Signature, immutable content, current source and inactive-state checks still
 apply, and a partial claim never resumes writes. The conversion and metadata
 readers both inherit the configured platform deadline, including a stalled body.
+
+### Partial-staging reconciliation candidate — 2026-09-22 UTC
+
+This local correction addresses only an authenticated original claim plus its
+exact immutable configuration, with **no deployment and no CRM staging link**.
+The nullable start-time schema correction alone cannot finish that interrupted
+operation. A reviewed runtime cutover and a new bounded reconciliation allocation
+are still required; the original submission allocation is consumed.
+
+Freeze one exact release before recovery and retain its matching gateway/worker
+artifacts. G2 can use a controller-only held cutover, but the older gateway/worker
+must remain held until their separately approved installation of that same release.
+A different later revision cannot silently rebind the immutable successor or mint
+another recovery identity. Source publication and any approved Development preview
+must preserve this release identity; a merged commit is not interchangeable merely
+because its code looks equivalent.
+
+The existing approval route accepts the separate
+`free-test-configuration-reconciliation-v1` profile. It authenticates a fresh,
+domain-separated owner intent, the preserved signed original request, original
+receipt and current CRM/Form 2/native-conversion evidence. It appends one linked
+current-release configuration and the same inactive deployment, then conditionally
+links CRM and completes its own durable recovery receipt. The old receipt remains
+Processing and the old configuration remains byte-for-byte unchanged. Operators
+resolve its status through the linked recovery receipt, not by relabeling it.
+
+The successor ID and recovery allocation depend on the original workflow, not a
+new timestamp, signature or release. Only the immutable physical configuration
+ID, truthful source revision and baseline's matching configuration reference
+change. Business rules, recipients, source dates, metrics and unknown values do
+not. Ordinary staging, runtime, approval and settlement keep their strict revision
+checks; there is no general mixed-release exception. Internal approval remains a
+separate action, and no activation or test clock follows from reconciliation.
+
+Use the existing signer with a private reconciliation envelope containing
+`schemaVersion`, the preserved `originalEnvelope`, and unsigned recovery `request`.
+Its normal revision, ACL and interpreter checks still apply. Historical input is
+validated at its original signing time, the recovery intent must be fresh, and
+the full nested packet must fit the freshly verified body limit **before protected
+input is consumed**. The controller, not a local checksum or signer, authenticates
+the durable receipt. No new credential collection method or transport is added.
+
+For the specifically observed interruption **after** the recovery configuration
+and inactive deployment were inserted but **before** CRM staging, ordinary
+reconciliation remains blocked. The separate
+`free-test-configuration-completion-v1` intent binds both preserved requests and
+receipts, both historical configurations, and every governed inactive-deployment
+field. It rejects prior approval, any call count, an activation/start/stop, changed
+relationships or business evidence, and any earlier incomplete completion claim.
+The original staging and recovery receipts remain Processing; neither is reset.
+
+Completion has one deterministic identity for that recovery, not a fresh slot per
+release. It appends one truthful current-release configuration and completion
+receipt, conditionally changes only the same deployment's configuration pointer
+and source revision, then uses the existing conditional CRM staging writer. The
+receipt completes only after source and stored-state checks. Internal approval
+must validate the entire linked chain; completing staging does not approve or
+activate it. Maximum writes are two inserts, two conditional Catalyst updates,
+and one conditional selected-Deal update. An interrupted completion stays held;
+only an exact already-completed request can be read-only replayed.
+
+The existing signer takes a private completion envelope with `schemaVersion`,
+the preserved unsigned `reconciliationEnvelope`, and `request` containing the
+preserved signed `reconciliationRequest` plus fresh completion intent. It verifies
+both historical HMACs without re-signing or retiming them. Measure this larger
+packet against the actual installed limit before reading the protected cache;
+an earlier request's successful size check does not cover completion. Reuse the
+approved owner-private handoff, not a new signer or credential collection flow.
+Persisted canonical decimal integer strings are normalized only at the storage
+boundary; signed incoming deployment versions still require actual integers.
+
+The completion operation above passed its allocated Development acceptance at
+`ba1e3a0`; the private record holds exact artifact, receipt, configuration,
+deployment and CRM readbacks. A new offline regression then reproduced rejection
+of canonical stored `COUNT_VERSION` and `HANDLED_COUNT` strings during separate
+approval. The candidate normalizes those stored counters without accepting
+numeric strings in signed intent/evidence or changing stale-state/CAS guards.
+
+### Completed-inactive release transition candidate
+
+A code correction cannot masquerade as the installed revision or silently
+relabel the completed snapshot. The candidate adds one bounded
+`free-test-configuration-transition-v1` operation to the existing sole
+controller. It authenticates the completed receipt and full historical chain,
+revalidates current CRM/Form 2/native evidence, and requires the same deployment
+to remain never approved, never active, zero-count and unstopped. It appends one
+immutable current-release configuration and linked transition receipt, then
+conditionally replaces only the same deployment's active-configuration pointer
+and source revision. Business values, logical Form 2 version, source timestamps,
+recipient and unknown baseline values remain unchanged; the baseline's physical
+configuration reference follows the new immutable version.
+
+One deterministic transition slot belongs to the completed chain, not each
+timestamp or release. A partial claim remains held; only the exact completed
+request may replay read-only. There is no general mixed-revision exception,
+new journey, competing CRM writer, new signer or provider operation. The
+existing private signer validates size and unsigned projections before using
+protected input; stored receipt authentication remains the controller's duty.
+Maximum transition writes are two inserts and two conditional Catalyst updates,
+with no CRM write. Internal approval remains a separate request and must leave
+activation, actual start and expiry null. The compound CRM Approve And Start
+action is not suitable for this non-Retell acceptance.
+
+This is source-only preparation, not installation or transition evidence.
+Independent review, a frozen exact artifact, a new bounded operation allocation,
+fresh allowance/prestate checks and independent readback are required before
+cloud execution. Existing completed staging evidence and all holds survive
+while this candidate is prepared. Do not reuse consumed completion requests.
+
+Rollback is containment: restore/preserve the controller hold and provider-disabled
+state; do not delete either claim or configuration. Any interrupted recovery
+stays held for independent reconciliation, not automatic retry. An exact completed
+recovery may return a read-only replay, even after intent expiry, only while its
+linked evidence, current source and inactive state still match. Monitor the two
+linked receipts, single deployment and CRM pointer together. A success response
+without independent stored-state readback does not pass G2. These source changes
+make no live request, mail send, provider call, import or billing operation.
 
 Owner: Gabriel for exact values/recipient monitoring and release; controller owns
 immutable configuration/claims, CRM remains relationship truth, Analytics remains
@@ -632,7 +879,8 @@ Thirty dependency-installing artifact tests were intentionally skipped in offlin
 mode; one Git Bash syntax test was unavailable in the Windows child-process
 sandbox. Skips are not passes. Safety/workflow checks and local demo generation
 passed. No hosted CI, cloud execution, deployment, CRM write, send or provider
-operation was part of these checks. New-panel visual acceptance remains open.
+operation was part of these checks. New-panel visual acceptance was still open
+at that checkpoint; the later 2026-09-23 owner acceptance above supersedes it.
 
 The PR #90 publication checks subsequently exposed a local approval-ledger race:
 SQLite can remove its optional rollback journal after directory enumeration but
@@ -699,7 +947,8 @@ binding mandatory for assisted routes. Independent review also required the
 public consent timestamp and an actual timing-staging/replay regression; both
 were added and rechecked. No actionable finding remains in these two source
 changes. The synthetic demo rebuilt and executable/render checks passed; its new
-panels still lack visual acceptance. These results authorize no external action.
+panels lacked visual acceptance at that checkpoint, since supplied by the owner
+on 2026-09-23. These source-test results authorize no external action.
 
 Reproduce its isolated synthetic checks from the repository root with the pinned
 Node runtime on `PATH`:
@@ -763,24 +1012,27 @@ while the conversation is still running, promise a callback time, or imply a
 booking, dispatch or emergency response. This draft does not override approved
 notice/safety wording. The existing published agent is untouched.
 
-### Smallest later mail/inbox packet — prepared only, NOT AUTHORIZED
+### First controlled-call mail/inbox check — prepared only, NOT AUTHORIZED
 
 1. Review and merge the exact source candidate; prepare dependency-complete
    gateway/control/worker artifacts, retain hashes and compatibility evidence with
    unchanged accepted Forms/report consumer. Approve a held Development delta
    installation separately. Restore the existing hold on any mismatch.
-2. Privately bind one approved synthetic configuration and its exact owner-controlled
-   mailbox, verified sender and named monitor; approve the missing configuration
-   review/promotion operation before any record is created. Verify allowance and
+2. Preserve the already staged/approved isolated configuration and its exact
+   owner-controlled mailbox and named monitor. Verify the sender and current
+   unchanged bindings; do not repeat accepted staging/approval. Verify allowance and
    incremental cost for the precise invocation chain. Unknown cost stops execution.
-3. Allocate **one call-alert email maximum**, zero Retell calls/sessions/inference,
-   zero SMS and zero customer mail. Use the supported authenticated synthetic
-   event/worker path with exact isolated identity and a fresh allocation. This is
-   injected mail-path acceptance, not live voice or complete Journey acceptance.
-   The exact method/target must be verified in the private packet before approval.
+3. The first separately approved controlled call above may allocate **one
+   call-alert email maximum**, zero SMS and zero customer mail. Its genuine
+   authenticated provider event uses the existing gateway/worker path and isolated
+   identity. The installed runtime has no approved synthetic event entry: do not
+   spoof a signature, add a rehearsal endpoint/mode, seed success, bypass
+   activation or invent a receipt. Call authority and mail authority must both
+   exist in the same later packet; neither is granted by this document.
 4. Read back one receipt, canonical call, outbox, matching report and CRM summary
-   only within that allocation. One exact replay may prove no second intended mail;
-   no replacement send is authorized. Gabriel privately verifies inbox arrival,
+   only within that allocation. Preserve offline duplicate/replay evidence; any
+   actual provider redelivery must retain one intended mail effect. No replacement
+   send is authorized. Gabriel privately verifies inbox arrival,
    correct content/recipient and timestamps without sharing caller data or secrets.
    Inbox arrival, human acknowledgment and a completed callback stay separate facts.
 5. Keep failure/timeout/concurrency tests offline. If the live result is ambiguous,

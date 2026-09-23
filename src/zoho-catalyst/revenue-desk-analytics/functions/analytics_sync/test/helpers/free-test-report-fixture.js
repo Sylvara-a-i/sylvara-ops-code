@@ -99,5 +99,20 @@ function attachBaseline(f) {
   return b;
 }
 
+function overshootFixture() {
+  const f = fixture();
+  for (let index = 0; index < 16; index += 1) {
+    const key = crypto.createHash('sha256').update(`synthetic-overshoot-${index}`).digest('hex');
+    f.calls.push({ ...f.calls[0], CALL_KEY: key, RECORD_KEY: key });
+  }
+  Object.assign(f.deployment, { HANDLED_COUNT: 27, STOP_REASON: 'call_limit_reached' });
+  Object.assign(f.finalResult, { CALLS_CAPTURED: 27, QUALIFIED_OPPORTUNITIES: 18,
+    BOOKABLE_OPPORTUNITIES: 18, TEST_END_REASON: 'call_limit_reached', IN_FLIGHT_OVERSHOOT: 2 });
+  f.evidence.scopes[0].source_call_count = 27;
+  f.evidence.scopes[0].analytics_readback.record_types.call.row_count = 27;
+  refreshDigests(f);
+  return f;
+}
 
-module.exports = { NOW, START, END, WATERMARK, REVISION, fixture, refreshDigests, attachBaseline };
+module.exports = { NOW, START, END, WATERMARK, REVISION, fixture, refreshDigests, attachBaseline,
+  overshootFixture };

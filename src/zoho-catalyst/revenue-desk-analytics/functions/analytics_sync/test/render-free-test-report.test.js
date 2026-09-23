@@ -8,7 +8,7 @@ const test = require('node:test');
 const { installOfflineGuard } = require('../../../../revenue-desk-release/test/helpers/offline-guard');
 const offlineGuard = installOfflineGuard();
 const { escapeHtml, renderFreeTestReport, run } = require('../../../tools/render-free-test-report');
-const { NOW, fixture, attachBaseline, refreshDigests } = require('./helpers/free-test-report-fixture');
+const { NOW, fixture, attachBaseline, refreshDigests, overshootFixture } = require('./helpers/free-test-report-fixture');
 
 test.after(() => {
   offlineGuard.restore();
@@ -105,6 +105,30 @@ test('verified zero is displayed as zero, while unknown optional evidence stays 
   const html = renderFreeTestReport(input, { now: NOW });
   assert.match(html, /Bookable opportunities \(not confirmed bookings\)<\/th><td>Not available/);
   assert.match(html, /Calls requiring office follow-up<\/th><td>0/);
+});
+
+test('draft explains verified in-flight overshoot while preserving zero and unavailable evidence', () => {
+  const input = overshootFixture();
+  const html = renderFreeTestReport(input, { now: NOW, synthetic: true });
+  assert.match(html, /Unique connected calls captured<\/th><td>27/);
+  assert.match(html, /Connected-call limit<\/th><td>25/);
+  assert.match(html, /In-flight calls above the limit<\/th><td>2/);
+  assert.match(html, /already admitted before the stored call-limit threshold became visible/);
+  assert.match(html, /not proof of an exact concurrency cap/);
+  delete input.finalResult.IN_FLIGHT_OVERSHOOT;
+  refreshDigests(input);
+  const historical = renderFreeTestReport(input, { now: NOW });
+  assert.match(historical, /In-flight calls above the limit<\/th><td>Not available/);
+  assert.match(historical, /has not been inferred from the displayed totals/);
+  assert.doesNotMatch(historical, /already admitted before/);
+  const zero = fixture(); zero.finalResult.IN_FLIGHT_OVERSHOOT = 0;
+  refreshDigests(zero);
+  const withoutOvershoot = renderFreeTestReport(zero, { now: NOW });
+  assert.match(withoutOvershoot, /In-flight calls above the limit<\/th><td>0/);
+  assert.doesNotMatch(withoutOvershoot, /already admitted before|overshoot evidence is not available/);
+  input.finalResult.IN_FLIGHT_OVERSHOOT = 999;
+  refreshDigests(input);
+  assert.throws(() => renderFreeTestReport(input, { now: NOW }), { code: 'REPORT_OVERSHOOT_CONFLICT' });
 });
 
 test('all interpolated text is escaped and raw extra inputs cannot enter static HTML', () => {

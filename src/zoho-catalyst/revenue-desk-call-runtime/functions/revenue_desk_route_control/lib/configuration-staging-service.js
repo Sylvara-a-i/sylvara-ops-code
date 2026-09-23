@@ -8,11 +8,20 @@ const { canonicalApprovalIntent, configurationSnapshotFingerprint, routeFromRows
 const { validateConfigurationVersionRow, REQUIRED_CONFIGURATION_FIELDS }
   = require('revenue_desk_call_gateway/lib/configuration-version');
 const { prepareFreeTestConfiguration } = require('revenue_desk_call_gateway/lib/free-test-preparation');
+const { RECONCILIATION_PROFILE, RECONCILIATION_SIGNATURE_DOMAIN, canonicalReconciliationIntent,
+  successorConfigurationRow, successorDeployment, COMPLETION_PROFILE, COMPLETION_SIGNATURE_DOMAIN,
+  canonicalCompletionIntent, completionConfigurationRow, completionDeployment, inactiveDeploymentFingerprint,
+  TRANSITION_PROFILE, TRANSITION_SIGNATURE_DOMAIN, canonicalTransitionIntent,
+  transitionConfigurationRow, transitionDeployment }
+  = require('revenue_desk_call_gateway/lib/configuration-reconciliation');
 const { deterministicIdempotencyKey, validateCommand } = require('./journey-core-service');
 
 const PROFILE = 'free-test-configuration-staging-v1';
 const SIGNATURE_DOMAIN = 'revenue-desk-configuration-staging-intent-v1\0';
 const RECEIPT_KIND = 'configuration_staging';
+const RECONCILIATION_RECEIPT_KIND = 'configuration_reconciliation';
+const COMPLETION_RECEIPT_KIND = 'configuration_completion';
+const TRANSITION_RECEIPT_KIND = 'configuration_transition';
 const ROW_FIELDS = [...REQUIRED_CONFIGURATION_FIELDS, 'CONFIGURATION_VERSION_ID',
   'DEPLOYMENT_ID', 'CONFIGURATION_JSON', 'STATUS', 'APPROVAL_STATUS', 'SOURCE_ENVIRONMENT'];
 const DEPLOYMENT_FIELDS = ['CLIENT_ID', 'DEPLOYMENT_ID', 'ACTIVE_CONFIGURATION_VERSION_ID',
@@ -72,6 +81,15 @@ function assertStagedInactive(deployment) {
     && !deployment.STOPPED_AT && !deployment.STOP_REASON,
   'CONFIGURATION_STAGING_STATE_ADVANCED');
 }
+function inactiveDeployment(deployment, key, createdAt) {
+  return { ...deployment, DEPLOYMENT_KEY: key,
+    APPROVED_CONFIGURATION_VERSION_ID: null, APPROVAL_EVENT_KEY: null,
+    APPROVED_ROUTE_FINGERPRINT: null, GO_LIVE_APPROVED_AT: null, ACTIVATION_EVENT_KEY: null,
+    TEST_STATUS: 'Ready for Approval', GO_LIVE_APPROVAL_STATUS: 'Pending Internal Approval',
+    APPROVED_START_AT: null, ACTUAL_START_AT: null, EXPIRES_AT: null,
+    COUNTED_CALL_KEYS_JSON: '[]', STOP_REASON: null, STOPPED_AT: null,
+    REPORT_RECONCILIATION_STATUS: 'NotRequired', REPORT_RECONCILIATION_VERSION: 0, UPDATED_AT: createdAt };
+}
 
 /**
  * Sole-controller staging, never a provider or mail operation. Exact final
@@ -98,6 +116,14 @@ function createConfigurationStagingService({ config, store, crm, core, sourceRea
     'revenue-desk-configuration-deployment-v1', [config.environment, request.dealId, request.journeyId])}`;
   const digest = (data) => keyedDigest(config.eventChainSecret, 'revenue-desk-configuration-receipt-v1',
     [JSON.stringify(canonical(data))]);
+  // One recovery allocation belongs to the original claim, never to a release,
+  // new signature, or caller-selected identity. Partial recovery cannot resume.
+  const reconciliationKey = (originalClaimKey) => `cfgreconcile_${keyedDigest(config.eventChainSecret,
+    RECONCILIATION_PROFILE, [config.environment, originalClaimKey])}`;
+  const completionKey = (recoveryKey) => `cfgcomplete_${keyedDigest(config.eventChainSecret,
+    COMPLETION_PROFILE, [config.environment, recoveryKey])}`;
+  const transitionKey = (completedKey) => `cfgtransition_${keyedDigest(config.eventChainSecret,
+    TRANSITION_PROFILE, [config.environment, completedKey])}`;
 
   async function readLineage(journeyId) {
     // Only an authoritative absence may cross from the assisted path into the
@@ -119,7 +145,7 @@ function createConfigurationStagingService({ config, store, crm, core, sourceRea
     return value;
   }
 
-  function validateRequest(request) {
+  function validateRequest(request, expectedRevision = config.sourceRevision) {
     requireState(exact(request, ['profile', 'dealId', 'journeyId', 'form2ConfigurationVersion',
       'review', 'configurationRow', 'deployment', 'intent', 'signature']) && request.profile === PROFILE,
     'INVALID_CONFIGURATION_STAGING_REQUEST');
@@ -129,7 +155,7 @@ function createConfigurationStagingService({ config, store, crm, core, sourceRea
     const at = now(); const requested = Date.parse(intent.requested_at);
     const observed = Date.parse(intent.evidence_observed_at);
     requireState(intent.action === 'approve' && intent.operator_id_hash === config.operatorIdHash
-      && intent.evidence_revision === config.sourceRevision && intent.expected_deployment_version === 0
+      && intent.evidence_revision === expectedRevision && intent.expected_deployment_version === 0
       && Number.isSafeInteger(at) && observed <= requested && requested <= at,
     'CONFIGURATION_STAGING_REVIEW_INVALID');
     requireState(/^v1=[a-f0-9]{64}$/.test(request.signature || ''), 'INVALID_APPROVAL_SIGNATURE');
@@ -140,7 +166,7 @@ function createConfigurationStagingService({ config, store, crm, core, sourceRea
     const row = request.configurationRow; const deployment = request.deployment;
     requireState(exact(row, ROW_FIELDS) && exact(deployment, DEPLOYMENT_FIELDS));
     validateConfigurationVersionRow(row, { expectedEnvironment: config.environment,
-      expectedSourceRevision: config.sourceRevision, expectedDeploymentId: intent.deployment_id });
+      expectedSourceRevision: expectedRevision, expectedDeploymentId: intent.deployment_id });
     requireState(row.STATUS === 'Active' && row.APPROVAL_STATUS === 'Approved'
       && row.DEPLOYMENT_STATUS === 'Live' && row.GO_LIVE_APPROVAL_STATUS === 'Approved'
       && row.ENGAGEMENT_TYPE === 'free_test' && row.NUMBER_OWNERSHIP === 'dedicated_deployment'
@@ -148,9 +174,10 @@ function createConfigurationStagingService({ config, store, crm, core, sourceRea
       && intent.deployment_id === configurationDeploymentId(request.dealId, request.journeyId)
       && deployment.DEPLOYMENT_ID === intent.deployment_id
       && deployment.ACTIVE_CONFIGURATION_VERSION_ID === intent.configuration_version_id
-      && deployment.SOURCE_REVISION === config.sourceRevision
+      && deployment.SOURCE_REVISION === expectedRevision
       && deployment.SOURCE_ENVIRONMENT === config.environment
       && deployment.CALL_LIMIT === 25 && deployment.COUNT_VERSION === 0 && deployment.HANDLED_COUNT === 0
+      && Number.isSafeInteger(deployment.BINDING_VERSION) && deployment.BINDING_VERSION >= 1
       && deployment.MONITOR_AGENT_ID === config.sharedAgentId
       && deployment.MONITOR_AGENT_VERSION === config.stagingAgentVersion
       && /^\+1[2-9][0-9]{2}[2-9][0-9]{6}$/.test(config.retellPhoneNumber || '')
@@ -159,9 +186,9 @@ function createConfigurationStagingService({ config, store, crm, core, sourceRea
     return digest({ request });
   }
 
-  function parseClaim(row) {
+  function parseClaim(row, expectedRevision = config.sourceRevision) {
     requireState(row && row.RECEIPT_KIND === RECEIPT_KIND && row.EVENT_TYPE === 'configuration_stage'
-      && row.SOURCE_REVISION === config.sourceRevision && row.SOURCE_ENVIRONMENT === config.environment);
+      && row.SOURCE_REVISION === expectedRevision && row.SOURCE_ENVIRONMENT === config.environment);
     let data; try { data = JSON.parse(row.EVENT_DATA_JSON); } catch (_) { requireState(false); }
     requireState(data?.profile === PROFILE && JSON.stringify(data) === row.EVENT_DATA_JSON
       && row.EVENT_KEY === claimKey(data)
@@ -251,15 +278,103 @@ function createConfigurationStagingService({ config, store, crm, core, sourceRea
     return { configurationRow, deployment };
   }
 
+  async function readOriginalConfiguration(receipt, data) {
+    requireState(receipt.STATUS === 'Processing' && Number(receipt.RECEIPT_VERSION) === 0,
+      'CONFIGURATION_STAGING_RECONCILIATION_REQUIRED');
+    const row = await store.unique(tables.CONFIGURATION_VERSION_TABLE,
+      'CONFIGURATION_VERSION_ID', data.configurationVersionId);
+    validateConfigurationVersionRow(row, { expectedDeploymentId: data.deploymentId,
+      expectedEnvironment: config.environment, expectedSourceRevision: receipt.SOURCE_REVISION });
+    requireState(row.CONFIGURATION_VERSION_ID === data.configurationVersionId
+      && configurationSnapshotFingerprint(row) === data.configurationFingerprint
+      && row.CREATED_AT === data.createdAt && row.ACTIVATED_AT === null);
+    return row;
+  }
+
+  function parseReconciliationClaim(row, expectedRevision = config.sourceRevision) {
+    requireState(row?.RECEIPT_KIND === RECONCILIATION_RECEIPT_KIND
+      && row.EVENT_TYPE === 'configuration_reconcile' && row.SOURCE_REVISION === expectedRevision
+      && row.SOURCE_ENVIRONMENT === config.environment);
+    let data; try { data = JSON.parse(row.EVENT_DATA_JSON); } catch (_) { requireState(false); }
+    const intent = data?.intent;
+    canonicalReconciliationIntent(intent);
+    requireState(data.profile === RECONCILIATION_PROFILE && JSON.stringify(data) === row.EVENT_DATA_JSON
+      && row.EVENT_KEY === reconciliationKey(data.originalClaimKey)
+      && row.PAYLOAD_FINGERPRINT === digest(data)
+      && row.RELATED_EVENT_KEY === data.originalClaimKey
+      && row.CONFIGURATION_VERSION_ID === data.configurationVersionId
+      && row.DEPLOYMENT_ID === data.deploymentId && row.ROUTE_FINGERPRINT === data.routeFingerprint
+      && row.RECEIVED_AT === data.createdAt && Number(row.ATTEMPT_COUNT) === 1
+      && row.LAST_ERROR_CODE === null
+      && (row.STATUS === 'Completed' ? Number(row.RECEIPT_VERSION) === 1 && row.PROCESSED_AT === data.createdAt
+        : row.STATUS === 'Processing' && Number(row.RECEIPT_VERSION) === 0 && row.PROCESSED_AT === null)
+      && intent.original_claim_key === data.originalClaimKey
+      && intent.original_claim_fingerprint === data.originalClaimFingerprint
+      && intent.original_request_fingerprint === data.originalRequestFingerprint
+      && intent.original_configuration_version_id === data.originalConfigurationVersionId
+      && intent.original_configuration_fingerprint === data.originalConfigurationFingerprint
+      && intent.original_source_revision === data.originalSourceRevision
+      && intent.target_source_revision === expectedRevision
+      && intent.operator_id_hash === config.operatorIdHash && intent.expected_receipt_version === 0
+      && intent.deployment_id === data.deploymentId
+      && intent.configuration_version_id === data.configurationVersionId
+      && intent.route_fingerprint === data.routeFingerprint
+      && Date.parse(intent.evidence_observed_at) <= Date.parse(intent.requested_at)
+      && Date.parse(intent.requested_at) <= Date.parse(data.createdAt)
+      && Date.parse(data.createdAt) - Date.parse(intent.requested_at) <= 300_000
+      && Date.parse(data.createdAt) - Date.parse(intent.evidence_observed_at) <= 900_000);
+    return data;
+  }
+
+  async function readReconciliationChain(receipt, originalReceipt) {
+    const data = parseReconciliationClaim(receipt);
+    requireState(receipt.STATUS === 'Completed', 'CONFIGURATION_STAGING_RECONCILIATION_REQUIRED');
+    // Old-revision authority is accepted only inside this explicit, current-
+    // revision recovery chain; ordinary staging and runtime guards stay strict.
+    const original = parseClaim(originalReceipt, data.originalSourceRevision);
+    requireState(originalReceipt.EVENT_KEY === data.originalClaimKey
+      && originalReceipt.PAYLOAD_FINGERPRINT === data.originalClaimFingerprint
+      && original.requestFingerprint === data.originalRequestFingerprint
+      && original.configurationVersionId === data.originalConfigurationVersionId
+      && original.configurationFingerprint === data.originalConfigurationFingerprint
+      && ['dealId', 'journeyId', 'form2ConfigurationVersion', 'deploymentId', 'deploymentKey',
+        'sourceFingerprint', 'form2EvidenceFingerprint', 'priorApproval']
+        .every((field) => same(original[field], data[field])));
+    const originalRow = await readOriginalConfiguration(originalReceipt, original);
+    const expected = successorConfigurationRow({ configurationRow: Object.fromEntries(
+      ROW_FIELDS.map((field) => [field, originalRow[field]])) }, data.originalClaimKey, config.sourceRevision);
+    const state = await readRows(data);
+    requireState(same(Object.fromEntries(ROW_FIELDS.map((field) => [field, state.configurationRow[field]])), expected)
+      && state.configurationRow.CREATED_AT === data.createdAt
+      && state.deployment.DEPLOYMENT_KEY === data.deploymentKey
+      && state.deployment.ACTIVE_CONFIGURATION_VERSION_ID === data.configurationVersionId
+      && state.deployment.SOURCE_REVISION === config.sourceRevision
+      && state.deployment.SOURCE_ENVIRONMENT === config.environment);
+    return { data, state };
+  }
+
   async function assertApprovalSource(command, state) {
     const receipt = await store.unique(tables.EVENT_RECEIPT_TABLE, 'EVENT_KEY', claimKey(command));
     // Only staging-owned rows require this new chain. Existing accepted rows
     // retain their previous approval contract and are not silently migrated.
     if (!receipt && !String(state.deployment?.DEPLOYMENT_KEY || '').startsWith('cfgdeployment_')
       && !String(state.deployment?.DEPLOYMENT_ID || '').startsWith('cfgdeploy_')) return null;
-    const data = parseClaim(receipt);
-    requireState(receipt.STATUS === 'Completed' && Number(receipt.RECEIPT_VERSION) === 1
-      && data.deploymentId === command.deploymentId && data.configurationVersionId === command.configurationVersionId);
+    let data;
+    if (receipt?.STATUS === 'Processing') {
+      const recovery = await store.unique(tables.EVENT_RECEIPT_TABLE, 'EVENT_KEY', reconciliationKey(receipt.EVENT_KEY));
+      if (recovery?.STATUS === 'Processing') {
+        const completion = await store.unique(tables.EVENT_RECEIPT_TABLE, 'EVENT_KEY', completionKey(recovery.EVENT_KEY));
+        if (completion?.SOURCE_REVISION === config.sourceRevision) ({ data } = await readCompletionChain(completion));
+        else {
+          const transition = await store.unique(tables.EVENT_RECEIPT_TABLE, 'EVENT_KEY', transitionKey(completion?.EVENT_KEY));
+          ({ data } = await readTransitionChain(transition));
+        }
+      } else ({ data } = await readReconciliationChain(recovery, receipt));
+    } else {
+      data = parseClaim(receipt);
+      requireState(receipt.STATUS === 'Completed' && Number(receipt.RECEIPT_VERSION) === 1);
+    }
+    requireState(data.deploymentId === command.deploymentId && data.configurationVersionId === command.configurationVersionId);
     await readRows(data);
     const [records, lineage] = await Promise.all([
       crm.getPreparationRecords(command.dealId), readLineage(command.journeyId),
@@ -278,6 +393,476 @@ function createConfigurationStagingService({ config, store, crm, core, sourceRea
       priorCoreApproval: data.priorApproval ? Object.freeze({
         configurationVersionId: data.priorApproval.configurationVersionId,
         approvedAt: data.priorApproval.approvedAt }) : null });
+  }
+
+  function parseCompletionClaim(row, expectedRevision = config.sourceRevision) {
+    requireState(row?.RECEIPT_KIND === COMPLETION_RECEIPT_KIND && row.EVENT_TYPE === 'configuration_complete'
+      && row.SOURCE_REVISION === expectedRevision && row.SOURCE_ENVIRONMENT === config.environment);
+    let data; try { data = JSON.parse(row.EVENT_DATA_JSON); } catch (_) { requireState(false); }
+    const intent = data?.intent; canonicalCompletionIntent(intent);
+    requireState(data.profile === COMPLETION_PROFILE && JSON.stringify(data) === row.EVENT_DATA_JSON
+      && row.EVENT_KEY === completionKey(intent.reconciliation_claim_key) && row.PAYLOAD_FINGERPRINT === digest(data)
+      && row.RELATED_EVENT_KEY === intent.reconciliation_claim_key
+      && row.CONFIGURATION_VERSION_ID === data.configurationVersionId && row.DEPLOYMENT_ID === data.deploymentId
+      && row.ROUTE_FINGERPRINT === data.routeFingerprint && row.RECEIVED_AT === data.createdAt
+      && Number(row.ATTEMPT_COUNT) === 1 && row.LAST_ERROR_CODE === null
+      && (row.STATUS === 'Completed' ? Number(row.RECEIPT_VERSION) === 1 && row.PROCESSED_AT === data.createdAt
+        : row.STATUS === 'Processing' && Number(row.RECEIPT_VERSION) === 0 && row.PROCESSED_AT === null)
+      && intent.target_source_revision === expectedRevision && intent.operator_id_hash === config.operatorIdHash
+      && intent.configuration_version_id === data.configurationVersionId
+      && intent.configuration_fingerprint === data.configurationFingerprint
+      && intent.deployment_id === data.deploymentId && intent.route_fingerprint === data.routeFingerprint
+      && Date.parse(intent.requested_at) <= Date.parse(data.createdAt)
+      && Date.parse(data.createdAt) - Date.parse(intent.requested_at) <= 300_000
+      && Date.parse(data.createdAt) - Date.parse(intent.evidence_observed_at) <= 900_000);
+    return data;
+  }
+
+  // Historical revisions are authenticated only inside this explicit completion
+  // chain. Neither immutable snapshot nor its failed receipt is relabeled.
+  async function readCompletionHistory(intent) {
+    const originalReceipt = await store.unique(tables.EVENT_RECEIPT_TABLE, 'EVENT_KEY', intent.original_claim_key);
+    const original = parseClaim(originalReceipt, intent.original_source_revision);
+    const recoveryReceipt = await store.unique(tables.EVENT_RECEIPT_TABLE, 'EVENT_KEY', intent.reconciliation_claim_key);
+    const recovery = parseReconciliationClaim(recoveryReceipt, intent.reconciliation_source_revision);
+    requireState(originalReceipt.STATUS === 'Processing' && Number(originalReceipt.RECEIPT_VERSION) === 0
+      && recoveryReceipt.STATUS === 'Processing' && Number(recoveryReceipt.RECEIPT_VERSION) === 0
+      && original.priorApproval === null && recovery.priorApproval === null
+      && recoveryReceipt.EVENT_KEY === reconciliationKey(originalReceipt.EVENT_KEY)
+      && originalReceipt.PAYLOAD_FINGERPRINT === intent.original_claim_fingerprint
+      && recoveryReceipt.PAYLOAD_FINGERPRINT === intent.reconciliation_claim_fingerprint
+      && original.configurationFingerprint === intent.original_configuration_fingerprint
+      && recovery.configurationFingerprint === intent.reconciled_configuration_fingerprint
+      && recovery.configurationVersionId === intent.reconciled_configuration_version_id
+      && recovery.deploymentId === intent.deployment_id
+      && recovery.originalClaimKey === originalReceipt.EVENT_KEY
+      && recovery.originalClaimFingerprint === originalReceipt.PAYLOAD_FINGERPRINT
+      && recovery.originalRequestFingerprint === original.requestFingerprint
+      && recovery.originalConfigurationVersionId === original.configurationVersionId
+      && recovery.originalConfigurationFingerprint === original.configurationFingerprint
+      && recovery.originalSourceRevision === intent.original_source_revision
+      && ['dealId', 'journeyId', 'form2ConfigurationVersion', 'deploymentId', 'deploymentKey',
+        'sourceFingerprint', 'form2EvidenceFingerprint', 'priorApproval']
+        .every((field) => same(original[field], recovery[field]))
+      && Date.parse(recovery.createdAt) <= Date.parse(intent.evidence_observed_at));
+    const originalRow = await readOriginalConfiguration(originalReceipt, original);
+    const recoveryRow = await store.unique(tables.CONFIGURATION_VERSION_TABLE,
+      'CONFIGURATION_VERSION_ID', recovery.configurationVersionId);
+    const historicalRequest = { profile: RECONCILIATION_PROFILE, intent: recovery.intent,
+      originalRequest: { configurationRow: Object.fromEntries(ROW_FIELDS.map((field) => [field, originalRow[field]])) } };
+    const expectedRecovery = successorConfigurationRow(historicalRequest.originalRequest,
+      originalReceipt.EVENT_KEY, intent.reconciliation_source_revision);
+    requireState(same(Object.fromEntries(ROW_FIELDS.map((field) => [field, recoveryRow?.[field]])), expectedRecovery)
+      && configurationSnapshotFingerprint(recoveryRow) === recovery.configurationFingerprint
+      && recoveryRow.CREATED_AT === recovery.createdAt && recoveryRow.ACTIVATED_AT === null);
+    return { originalReceipt, original, originalRow, recoveryReceipt, recovery, recoveryRow, historicalRequest };
+  }
+
+  async function readCompletionChain(receipt) {
+    const { data } = await readCompletedSnapshot(receipt, config.sourceRevision);
+    const state = await readRows(data);
+    requireState(state.deployment.ACTIVE_CONFIGURATION_VERSION_ID === data.configurationVersionId
+      && state.deployment.SOURCE_REVISION === config.sourceRevision
+      && state.deployment.SOURCE_ENVIRONMENT === config.environment);
+    return { data, state };
+  }
+
+  // A historical revision is accepted only inside this authenticated immutable
+  // chain. Ordinary approval, runtime and the active snapshot remain current-only.
+  async function readCompletedSnapshot(receipt, expectedRevision) {
+    const data = parseCompletionClaim(receipt, expectedRevision);
+    requireState(receipt.STATUS === 'Completed', 'CONFIGURATION_STAGING_RECONCILIATION_REQUIRED');
+    const history = await readCompletionHistory(data.intent);
+    requireState(['dealId', 'journeyId', 'form2ConfigurationVersion', 'deploymentId', 'deploymentKey',
+      'sourceFingerprint', 'form2EvidenceFingerprint', 'priorApproval']
+      .every((field) => same(history.original[field], data[field])));
+    const expected = completionConfigurationRow(history.historicalRequest,
+      history.recoveryReceipt.EVENT_KEY, expectedRevision);
+    const configurationRow = await store.unique(tables.CONFIGURATION_VERSION_TABLE,
+      'CONFIGURATION_VERSION_ID', data.configurationVersionId);
+    requireState(configurationRow && same(Object.fromEntries(ROW_FIELDS.map((field) => [field, configurationRow[field]])), expected)
+      && configurationSnapshotFingerprint(configurationRow) === data.configurationFingerprint
+      && configurationRow.CREATED_AT === data.createdAt && configurationRow.ACTIVATED_AT === null);
+    return { data, configurationRow, history };
+  }
+
+  function parseTransitionClaim(row) {
+    requireState(row?.RECEIPT_KIND === TRANSITION_RECEIPT_KIND && row.EVENT_TYPE === 'configuration_transition'
+      && row.SOURCE_REVISION === config.sourceRevision && row.SOURCE_ENVIRONMENT === config.environment);
+    let data; try { data = JSON.parse(row.EVENT_DATA_JSON); } catch (_) { requireState(false); }
+    const intent = data?.intent; canonicalTransitionIntent(intent);
+    requireState(data.profile === TRANSITION_PROFILE && JSON.stringify(data) === row.EVENT_DATA_JSON
+      && row.EVENT_KEY === transitionKey(intent.completion_claim_key) && row.PAYLOAD_FINGERPRINT === digest(data)
+      && row.RELATED_EVENT_KEY === intent.completion_claim_key
+      && row.CONFIGURATION_VERSION_ID === data.configurationVersionId && row.DEPLOYMENT_ID === data.deploymentId
+      && row.ROUTE_FINGERPRINT === data.routeFingerprint && row.RECEIVED_AT === data.createdAt
+      && Number(row.ATTEMPT_COUNT) === 1 && row.LAST_ERROR_CODE === null
+      && (row.STATUS === 'Completed' ? Number(row.RECEIPT_VERSION) === 1 && row.PROCESSED_AT === data.createdAt
+        : row.STATUS === 'Processing' && Number(row.RECEIPT_VERSION) === 0 && row.PROCESSED_AT === null)
+      && intent.target_source_revision === config.sourceRevision && intent.operator_id_hash === config.operatorIdHash
+      && intent.configuration_version_id === data.configurationVersionId
+      && intent.configuration_fingerprint === data.configurationFingerprint
+      && intent.deployment_id === data.deploymentId && intent.route_fingerprint === data.routeFingerprint
+      && data.priorApproval === null && Date.parse(intent.requested_at) <= Date.parse(data.createdAt)
+      && Date.parse(data.createdAt) - Date.parse(intent.requested_at) <= 300_000
+      && Date.parse(data.createdAt) - Date.parse(intent.evidence_observed_at) <= 900_000);
+    return data;
+  }
+
+  async function readTransitionHistory(intent) {
+    const receipt = await store.unique(tables.EVENT_RECEIPT_TABLE, 'EVENT_KEY', intent.completion_claim_key);
+    const completed = await readCompletedSnapshot(receipt, intent.completed_source_revision);
+    requireState(receipt.PAYLOAD_FINGERPRINT === intent.completion_claim_fingerprint
+      && completed.data.configurationVersionId === intent.completed_configuration_version_id
+      && completed.data.configurationFingerprint === intent.completed_configuration_fingerprint
+      && completed.data.deploymentId === intent.deployment_id && completed.data.priorApproval === null
+      && Date.parse(completed.data.createdAt) <= Date.parse(intent.evidence_observed_at));
+    return { ...completed, receipt };
+  }
+
+  async function readTransitionChain(receipt) {
+    const data = parseTransitionClaim(receipt);
+    requireState(receipt.STATUS === 'Completed', 'CONFIGURATION_STAGING_RECONCILIATION_REQUIRED');
+    const completed = await readTransitionHistory(data.intent);
+    requireState(['dealId', 'journeyId', 'form2ConfigurationVersion', 'deploymentId', 'deploymentKey',
+      'sourceFingerprint', 'form2EvidenceFingerprint', 'priorApproval']
+      .every((field) => same(completed.data[field], data[field])));
+    const expected = transitionConfigurationRow(Object.fromEntries(ROW_FIELDS.map((field) => [field, completed.configurationRow[field]])),
+      completed.receipt.EVENT_KEY, config.sourceRevision);
+    const state = await readRows(data);
+    requireState(same(Object.fromEntries(ROW_FIELDS.map((field) => [field, state.configurationRow[field]])), expected)
+      && state.configurationRow.CREATED_AT === data.createdAt && state.configurationRow.ACTIVATED_AT === null
+      && state.deployment.ACTIVE_CONFIGURATION_VERSION_ID === data.configurationVersionId
+      && state.deployment.DEPLOYMENT_KEY === data.deploymentKey
+      && state.deployment.SOURCE_REVISION === config.sourceRevision
+      && state.deployment.SOURCE_ENVIRONMENT === config.environment);
+    return { data, state };
+  }
+
+  function assertNeverActive(deployment) {
+    assertStagedInactive(deployment);
+    requireState(['APPROVED_CONFIGURATION_VERSION_ID', 'APPROVAL_EVENT_KEY', 'APPROVED_ROUTE_FINGERPRINT',
+      'GO_LIVE_APPROVED_AT', 'ACTIVATION_EVENT_KEY', 'APPROVED_START_AT', 'ACTUAL_START_AT', 'EXPIRES_AT',
+      'STOP_REASON', 'STOPPED_AT'].every((field) => deployment[field] === null)
+      && Number(deployment.REPORT_RECONCILIATION_VERSION) === 0
+      && deployment.REPORT_RECONCILIATION_STATUS === 'NotRequired' && deployment.COUNTED_CALL_KEYS_JSON === '[]',
+    'CONFIGURATION_STAGING_STATE_ADVANCED');
+  }
+
+  async function assertNoExecutionHistory(completed, addedKey = null) {
+    const allowed = [completed.history.originalReceipt.EVENT_KEY, completed.history.recoveryReceipt.EVENT_KEY,
+      completed.receipt.EVENT_KEY, ...(addedKey ? [addedKey] : [])];
+    const rows = await store.queryBounded(tables.EVENT_RECEIPT_TABLE, 'DEPLOYMENT_ID',
+      completed.data.deploymentId, 'RECEIVED_AT', 100, {});
+    requireState(rows.length === allowed.length && new Set(rows.map((row) => row.EVENT_KEY)).size === rows.length
+      && rows.every((row) => allowed.includes(row.EVENT_KEY)), 'CONFIGURATION_STAGING_STATE_ADVANCED');
+  }
+
+  /** One inactive release transition, not recovery, approval, or a general migration service. */
+  async function transition(envelope) {
+    requireState(exact(envelope, ['profile', 'intent', 'signature']) && envelope.profile === TRANSITION_PROFILE,
+      'INVALID_CONFIGURATION_STAGING_REQUEST');
+    const { intent } = envelope; const serialized = canonicalTransitionIntent(intent);
+    requireState(intent.target_source_revision === config.sourceRevision && intent.operator_id_hash === config.operatorIdHash);
+    requireState(/^v1=[a-f0-9]{64}$/.test(envelope.signature || ''), 'INVALID_APPROVAL_SIGNATURE');
+    const expectedSignature = crypto.createHmac('sha256', config.operatorVerificationSecret)
+      .update(TRANSITION_SIGNATURE_DOMAIN).update(serialized).digest();
+    requireState(crypto.timingSafeEqual(expectedSignature, Buffer.from(envelope.signature.slice(3), 'hex')),
+      'INVALID_APPROVAL_SIGNATURE');
+    const completed = await readTransitionHistory(intent);
+    const row = Object.fromEntries(ROW_FIELDS.map((field) => [field, completed.configurationRow[field]]));
+    const configurationRow = transitionConfigurationRow(row, completed.receipt.EVENT_KEY, config.sourceRevision);
+    requireState(configurationRow.CONFIGURATION_VERSION_ID === intent.configuration_version_id
+      && configurationSnapshotFingerprint(configurationRow) === intent.configuration_fingerprint);
+    const key = transitionKey(completed.receipt.EVENT_KEY); const fingerprint = digest({ transition: envelope });
+    const result = (replayed) => Object.freeze({ state: 'StagedInactive', transitioned: true, replayed,
+      approved: false, active: false, configurationVersionId: configurationRow.CONFIGURATION_VERSION_ID,
+      deploymentId: completed.data.deploymentId });
+    const existing = await store.unique(tables.EVENT_RECEIPT_TABLE, 'EVENT_KEY', key);
+    if (existing) {
+      const data = parseTransitionClaim(existing); requireState(data.transitionFingerprint === fingerprint);
+      const { state } = await readTransitionChain(existing); assertNeverActive(state.deployment);
+      await assertNoExecutionHistory(completed, key);
+      state.deal = await crm.getDeal(data.dealId); await assertApprovalSource(data, state);
+      return result(true);
+    }
+    const at = now(); requireState(Number.isSafeInteger(at) && Date.parse(intent.requested_at) <= at
+      && at - Date.parse(intent.requested_at) <= 300_000 && at - Date.parse(intent.evidence_observed_at) <= 900_000,
+    'CONFIGURATION_STAGING_REVIEW_INVALID');
+    const deployment = await store.unique(tables.DEPLOYMENT_TABLE, 'DEPLOYMENT_KEY', completed.data.deploymentKey);
+    requireState(deployment && /^[1-9][0-9]{0,29}$/.test(deployment.ROWID || ''));
+    assertNeverActive(deployment);
+    const prestate = inactiveDeploymentFingerprint(deployment);
+    requireState(prestate === intent.expected_deployment_fingerprint
+      && deployment.DEPLOYMENT_ID === intent.deployment_id
+      && routeFingerprint(routeFromRows(deployment, row)) === completed.data.routeFingerprint);
+    const projected = transitionDeployment(deployment, row, completed.receipt.EVENT_KEY, config.sourceRevision);
+    requireState(routeFingerprint(routeFromRows(projected, configurationRow)) === intent.route_fingerprint);
+    for (const [field, value] of [['DEPLOYMENT_ID', deployment.DEPLOYMENT_ID], ['NUMBER_LOOKUP_HASH', deployment.NUMBER_LOOKUP_HASH]]) {
+      requireState((await store.unique(tables.DEPLOYMENT_TABLE, field, value))?.ROWID === deployment.ROWID);
+    }
+    await assertNoExecutionHistory(completed);
+    requireState(!(await store.unique(tables.CONFIGURATION_VERSION_TABLE, 'CONFIGURATION_VERSION_ID', configurationRow.CONFIGURATION_VERSION_ID)));
+    const assertSource = (sources) => requireState(sourceFingerprint(config, sources.records, sources.lineage, sources.conversion)
+      === completed.data.sourceFingerprint && sources.source.evidenceFingerprint === completed.data.form2EvidenceFingerprint
+      && sources.source.priorApproval === null && sources.records.deal.Deployment_Record_ID === completed.data.deploymentId);
+    assertSource(await readSources(completed.data, completed.data.deploymentId));
+    const createdAt = new Date(now()).toISOString();
+    const data = { ...completed.data, profile: TRANSITION_PROFILE, intent, createdAt,
+      configurationVersionId: configurationRow.CONFIGURATION_VERSION_ID,
+      configurationFingerprint: intent.configuration_fingerprint, routeFingerprint: intent.route_fingerprint,
+      transitionFingerprint: fingerprint };
+    const receipt = { EVENT_KEY: key, RECEIPT_KIND: TRANSITION_RECEIPT_KIND, EVENT_TYPE: 'configuration_transition',
+      EVENT_DATA_JSON: JSON.stringify(data), PAYLOAD_FINGERPRINT: digest(data), DEPLOYMENT_ID: data.deploymentId,
+      CONFIGURATION_VERSION_ID: data.configurationVersionId, ROUTE_FINGERPRINT: data.routeFingerprint,
+      RELATED_EVENT_KEY: completed.receipt.EVENT_KEY, STATUS: 'Processing', RECEIPT_VERSION: 0,
+      ATTEMPT_COUNT: 1, LAST_ERROR_CODE: null, RECEIVED_AT: createdAt, PROCESSED_AT: null,
+      SOURCE_REVISION: config.sourceRevision, SOURCE_ENVIRONMENT: config.environment };
+    const claimed = await store.insertUnique(tables.EVENT_RECEIPT_TABLE, 'EVENT_KEY', receipt,
+      Object.keys(receipt).filter((field) => !['STATUS', 'RECEIPT_VERSION', 'PROCESSED_AT', 'LAST_ERROR_CODE'].includes(field)));
+    parseTransitionClaim(claimed.row); requireState(claimed.inserted === true, 'CONFIGURATION_STAGING_RECONCILIATION_REQUIRED');
+    const inserted = await store.insertUnique(tables.CONFIGURATION_VERSION_TABLE, 'CONFIGURATION_VERSION_ID',
+      { ...configurationRow, CREATED_AT: createdAt, ACTIVATED_AT: null }, [...ROW_FIELDS, 'CREATED_AT', 'ACTIVATED_AT']);
+    requireState(inserted.inserted === true, 'CONFIGURATION_STAGING_RECONCILIATION_REQUIRED');
+    await readTransitionHistory(intent); await assertNoExecutionHistory(completed, key);
+    requireState(inactiveDeploymentFingerprint(await store.unique(tables.DEPLOYMENT_TABLE,
+      'DEPLOYMENT_KEY', completed.data.deploymentKey)) === prestate);
+    const patch = { ACTIVE_CONFIGURATION_VERSION_ID: data.configurationVersionId, SOURCE_REVISION: config.sourceRevision };
+    const changed = await store.conditionalUpdate(tables.DEPLOYMENT_TABLE, deployment.ROWID, patch, {
+      COUNT_VERSION: 0, ACTIVE_CONFIGURATION_VERSION_ID: deployment.ACTIVE_CONFIGURATION_VERSION_ID,
+      SOURCE_REVISION: deployment.SOURCE_REVISION, UPDATED_AT: deployment.UPDATED_AT });
+    const poststate = inactiveDeploymentFingerprint(projected);
+    requireState(inactiveDeploymentFingerprint(changed) === poststate);
+    assertSource(await readSources(completed.data, completed.data.deploymentId));
+    await readTransitionHistory(intent); await assertNoExecutionHistory(completed, key);
+    requireState(inactiveDeploymentFingerprint((await readRows(data)).deployment) === poststate);
+    const finalized = await store.conditionalUpdate(tables.EVENT_RECEIPT_TABLE, claimed.row.ROWID,
+      { STATUS: 'Completed', RECEIPT_VERSION: 1, PROCESSED_AT: createdAt, LAST_ERROR_CODE: null },
+      { STATUS: 'Processing', RECEIPT_VERSION: 0, PAYLOAD_FINGERPRINT: receipt.PAYLOAD_FINGERPRINT });
+    requireState(same(parseTransitionClaim(finalized), data) && finalized.STATUS === 'Completed');
+    await readTransitionChain(finalized);
+    return result(false);
+  }
+
+  async function complete(envelope) {
+    requireState(exact(envelope, ['profile', 'reconciliationRequest', 'intent', 'signature'])
+      && envelope.profile === COMPLETION_PROFILE, 'INVALID_CONFIGURATION_STAGING_REQUEST');
+    const { reconciliationRequest: recoveryRequest, intent } = envelope;
+    const serialized = canonicalCompletionIntent(intent);
+    requireState(intent.target_source_revision === config.sourceRevision && intent.operator_id_hash === config.operatorIdHash);
+    function verifySignature(value, domain, canonicalIntent) {
+      requireState(/^v1=[a-f0-9]{64}$/.test(value.signature || ''), 'INVALID_APPROVAL_SIGNATURE');
+      const expected = crypto.createHmac('sha256', config.operatorVerificationSecret).update(domain)
+        .update(canonicalIntent).digest();
+      requireState(crypto.timingSafeEqual(expected, Buffer.from(value.signature.slice(3), 'hex')), 'INVALID_APPROVAL_SIGNATURE');
+    }
+    verifySignature(envelope, COMPLETION_SIGNATURE_DOMAIN, serialized);
+    requireState(exact(recoveryRequest, ['profile', 'originalRequest', 'intent', 'signature'])
+      && recoveryRequest.profile === RECONCILIATION_PROFILE);
+    verifySignature(recoveryRequest, RECONCILIATION_SIGNATURE_DOMAIN, canonicalReconciliationIntent(recoveryRequest.intent));
+    const request = recoveryRequest.originalRequest;
+    const originalFingerprint = validateRequest(request, intent.original_source_revision);
+    const history = await readCompletionHistory(intent);
+    // The owner binds the flat receipt fingerprint; its HMAC authenticates the
+    // stored request digest. Recompute that digest server-side instead of
+    // requiring an owner to export private receipt JSON or another key.
+    requireState(history.original.requestFingerprint === originalFingerprint
+      && history.recovery.reconciliationFingerprint === digest({ reconciliation: recoveryRequest })
+      && same(recoveryRequest.intent, history.recovery.intent)
+      && same(Object.fromEntries(ROW_FIELDS.map((field) => [field, history.originalRow[field]])), request.configurationRow)
+      && history.originalReceipt.EVENT_KEY === claimKey(request)
+      && history.original.deploymentKey === deploymentKey(request));
+    const configurationRow = completionConfigurationRow(recoveryRequest, history.recoveryReceipt.EVENT_KEY, config.sourceRevision);
+    const projected = completionDeployment(recoveryRequest, history.recoveryReceipt.EVENT_KEY, config.sourceRevision);
+    requireState(intent.configuration_version_id === configurationRow.CONFIGURATION_VERSION_ID
+      && intent.configuration_fingerprint === configurationSnapshotFingerprint(configurationRow)
+      && intent.route_fingerprint === routeFingerprint(routeFromRows(projected, configurationRow)));
+    const key = completionKey(history.recoveryReceipt.EVENT_KEY); const fingerprint = digest({ completion: envelope });
+    const existing = await store.unique(tables.EVENT_RECEIPT_TABLE, 'EVENT_KEY', key);
+    const result = (replayed) => Object.freeze({ state: 'StagedInactive', completed: true, replayed,
+      approved: false, active: false, configurationVersionId: configurationRow.CONFIGURATION_VERSION_ID,
+      deploymentId: history.original.deploymentId });
+    if (existing) {
+      const data = parseCompletionClaim(existing); requireState(data.completionFingerprint === fingerprint);
+      const { state } = await readCompletionChain(existing);
+      assertStagedInactive(state.deployment); requireState(state.configurationRow.ACTIVATED_AT === null);
+      state.deal = await crm.getDeal(data.dealId);
+      await assertApprovalSource(data, state);
+      return result(true);
+    }
+    const at = now(); requireState(Number.isSafeInteger(at) && Date.parse(intent.requested_at) <= at
+      && at - Date.parse(intent.requested_at) <= 300_000 && at - Date.parse(intent.evidence_observed_at) <= 900_000,
+    'CONFIGURATION_STAGING_REVIEW_INVALID');
+    const deployment = await store.unique(tables.DEPLOYMENT_TABLE, 'DEPLOYMENT_KEY', history.original.deploymentKey);
+    requireState(deployment && /^[1-9][0-9]{0,29}$/.test(deployment.ROWID || ''));
+    const historicalDeployment = { ...inactiveDeployment(successorDeployment(request,
+      history.originalReceipt.EVENT_KEY, intent.reconciliation_source_revision), history.original.deploymentKey,
+    history.recovery.createdAt), ROWID: deployment.ROWID };
+    const prestate = inactiveDeploymentFingerprint(deployment);
+    requireState(prestate === intent.expected_deployment_fingerprint
+      && prestate === inactiveDeploymentFingerprint(historicalDeployment));
+    for (const [field, value] of [['DEPLOYMENT_ID', deployment.DEPLOYMENT_ID], ['NUMBER_LOOKUP_HASH', deployment.NUMBER_LOOKUP_HASH]]) {
+      requireState((await store.unique(tables.DEPLOYMENT_TABLE, field, value))?.ROWID === deployment.ROWID);
+    }
+    requireState(!(await store.unique(tables.CONFIGURATION_VERSION_TABLE, 'CONFIGURATION_VERSION_ID', configurationRow.CONFIGURATION_VERSION_ID)));
+    const assertSource = (sources) => requireState(sourceFingerprint(config, sources.records, sources.lineage, sources.conversion)
+      === history.original.sourceFingerprint && sources.source.evidenceFingerprint === history.original.form2EvidenceFingerprint
+      && sources.source.priorApproval === null);
+    assertSource(await readSources(request));
+    const createdAt = new Date(now()).toISOString();
+    const data = { ...history.original, profile: COMPLETION_PROFILE, intent, createdAt,
+      configurationVersionId: configurationRow.CONFIGURATION_VERSION_ID,
+      configurationFingerprint: intent.configuration_fingerprint, routeFingerprint: intent.route_fingerprint,
+      completionFingerprint: fingerprint };
+    const row = { EVENT_KEY: key, RECEIPT_KIND: COMPLETION_RECEIPT_KIND, EVENT_TYPE: 'configuration_complete',
+      EVENT_DATA_JSON: JSON.stringify(data), PAYLOAD_FINGERPRINT: digest(data), DEPLOYMENT_ID: data.deploymentId,
+      CONFIGURATION_VERSION_ID: data.configurationVersionId, ROUTE_FINGERPRINT: data.routeFingerprint,
+      RELATED_EVENT_KEY: history.recoveryReceipt.EVENT_KEY, STATUS: 'Processing', RECEIPT_VERSION: 0,
+      ATTEMPT_COUNT: 1, LAST_ERROR_CODE: null, RECEIVED_AT: createdAt, PROCESSED_AT: null,
+      SOURCE_REVISION: config.sourceRevision, SOURCE_ENVIRONMENT: config.environment };
+    const claimed = await store.insertUnique(tables.EVENT_RECEIPT_TABLE, 'EVENT_KEY', row,
+      Object.keys(row).filter((field) => !['STATUS', 'RECEIPT_VERSION', 'PROCESSED_AT', 'LAST_ERROR_CODE'].includes(field)));
+    parseCompletionClaim(claimed.row); requireState(claimed.inserted === true, 'CONFIGURATION_STAGING_RECONCILIATION_REQUIRED');
+    const inserted = await store.insertUnique(tables.CONFIGURATION_VERSION_TABLE, 'CONFIGURATION_VERSION_ID',
+      { ...configurationRow, CREATED_AT: createdAt, ACTIVATED_AT: null }, [...ROW_FIELDS, 'CREATED_AT', 'ACTIVATED_AT']);
+    requireState(inserted.inserted === true, 'CONFIGURATION_STAGING_RECONCILIATION_REQUIRED');
+    await readCompletionHistory(intent);
+    requireState(inactiveDeploymentFingerprint(await store.unique(tables.DEPLOYMENT_TABLE,
+      'DEPLOYMENT_KEY', history.original.deploymentKey)) === prestate);
+    const patch = { ACTIVE_CONFIGURATION_VERSION_ID: data.configurationVersionId, SOURCE_REVISION: config.sourceRevision };
+    const updated = await store.conditionalUpdate(tables.DEPLOYMENT_TABLE, deployment.ROWID, patch, {
+      COUNT_VERSION: 0, ACTIVE_CONFIGURATION_VERSION_ID: deployment.ACTIVE_CONFIGURATION_VERSION_ID,
+      SOURCE_REVISION: deployment.SOURCE_REVISION, UPDATED_AT: deployment.UPDATED_AT });
+    const afterFingerprint = inactiveDeploymentFingerprint({ ...deployment, ...patch });
+    requireState(inactiveDeploymentFingerprint(updated) === afterFingerprint);
+    const fresh = await readSources(request); assertSource(fresh);
+    await crm.recordConfigurationStaging(data.dealId, { deploymentId: data.deploymentId,
+      expectedDeal: fresh.records.deal, priorApproval: null });
+    assertSource(await readSources(request, data.deploymentId));
+    await readCompletionHistory(intent);
+    const poststate = await readRows(data);
+    requireState(inactiveDeploymentFingerprint(poststate.deployment) === afterFingerprint);
+    const completed = await store.conditionalUpdate(tables.EVENT_RECEIPT_TABLE, claimed.row.ROWID,
+      { STATUS: 'Completed', RECEIPT_VERSION: 1, PROCESSED_AT: createdAt, LAST_ERROR_CODE: null },
+      { STATUS: 'Processing', RECEIPT_VERSION: 0, PAYLOAD_FINGERPRINT: row.PAYLOAD_FINGERPRINT });
+    requireState(same(parseCompletionClaim(completed), data) && completed.STATUS === 'Completed');
+    await readCompletionChain(completed);
+    return result(false);
+  }
+
+  async function reconcile(envelope) {
+    requireState(exact(envelope, ['profile', 'originalRequest', 'intent', 'signature'])
+      && envelope.profile === RECONCILIATION_PROFILE, 'INVALID_CONFIGURATION_STAGING_REQUEST');
+    const { originalRequest: request, intent } = envelope;
+    const serialized = canonicalReconciliationIntent(intent);
+    requireState(intent.operator_id_hash === config.operatorIdHash
+      && intent.target_source_revision === config.sourceRevision,
+    'CONFIGURATION_STAGING_REVIEW_INVALID');
+    requireState(/^v1=[a-f0-9]{64}$/.test(envelope.signature || ''), 'INVALID_APPROVAL_SIGNATURE');
+    const expectedSignature = crypto.createHmac('sha256', config.operatorVerificationSecret)
+      .update(RECONCILIATION_SIGNATURE_DOMAIN).update(serialized).digest();
+    requireState(crypto.timingSafeEqual(expectedSignature, Buffer.from(envelope.signature.slice(3), 'hex')),
+      'INVALID_APPROVAL_SIGNATURE');
+    const originalRequestFingerprint = validateRequest(request, intent.original_source_revision);
+    const originalKey = claimKey(request);
+    requireState(intent.original_claim_key === originalKey
+      && intent.original_request_fingerprint === originalRequestFingerprint);
+    const originalReceipt = await store.unique(tables.EVENT_RECEIPT_TABLE, 'EVENT_KEY', originalKey);
+    const original = parseClaim(originalReceipt, intent.original_source_revision);
+    requireState(originalReceipt.PAYLOAD_FINGERPRINT === intent.original_claim_fingerprint
+      && original.requestFingerprint === originalRequestFingerprint
+      && original.configurationVersionId === intent.original_configuration_version_id
+      && original.configurationFingerprint === intent.original_configuration_fingerprint
+      && original.deploymentKey === deploymentKey(request)
+      && original.deploymentId === request.deployment.DEPLOYMENT_ID
+      && original.routeFingerprint === request.intent.route_fingerprint
+      && Date.parse(request.intent.requested_at) <= Date.parse(original.createdAt)
+      && Date.parse(original.createdAt) - Date.parse(request.intent.requested_at) <= 300_000
+      && Date.parse(original.createdAt) - Date.parse(request.intent.evidence_observed_at) <= 900_000);
+    const originalRow = await readOriginalConfiguration(originalReceipt, original);
+    requireState(same(Object.fromEntries(ROW_FIELDS.map((field) => [field, originalRow[field]])), request.configurationRow));
+    const configurationRow = successorConfigurationRow(request, originalKey, config.sourceRevision);
+    const deploymentInput = successorDeployment(request, originalKey, config.sourceRevision);
+    requireState(intent.configuration_version_id === configurationRow.CONFIGURATION_VERSION_ID
+      && intent.deployment_id === original.deploymentId
+      && intent.route_fingerprint === routeFingerprint(routeFromRows(deploymentInput, configurationRow)));
+    const key = reconciliationKey(originalKey);
+    const reconciliationFingerprint = digest({ reconciliation: envelope });
+    const existing = await store.unique(tables.EVENT_RECEIPT_TABLE, 'EVENT_KEY', key);
+    const result = (replayed) => Object.freeze({ state: 'StagedInactive', reconciled: true,
+      replayed, approved: false, active: false,
+      configurationVersionId: configurationRow.CONFIGURATION_VERSION_ID, deploymentId: original.deploymentId });
+    if (existing) {
+      const data = parseReconciliationClaim(existing);
+      requireState(data.reconciliationFingerprint === reconciliationFingerprint);
+      const { state } = await readReconciliationChain(existing, originalReceipt);
+      assertStagedInactive(state.deployment);
+      requireState(state.configurationRow.ACTIVATED_AT === null);
+      state.deal = await crm.getDeal(original.dealId);
+      await assertApprovalSource({ ...data, configurationVersionId: data.configurationVersionId }, state);
+      return result(true);
+    }
+    const at = now(); const requested = Date.parse(intent.requested_at);
+    const observed = Date.parse(intent.evidence_observed_at);
+    requireState(Number.isSafeInteger(at) && observed <= requested && requested <= at
+      && at - requested <= 300_000 && at - observed <= 900_000,
+    'CONFIGURATION_STAGING_REVIEW_INVALID');
+    const assertSource = (sources) => requireState(
+      sourceFingerprint(config, sources.records, sources.lineage, sources.conversion) === original.sourceFingerprint
+      && sources.source.evidenceFingerprint === original.form2EvidenceFingerprint
+      && same(sources.source.priorApproval, original.priorApproval));
+    assertSource(await readSources(request));
+    // Reconciliation is limited to the observed pre-deployment boundary. It
+    // never adopts an existing deployment, another successor, or advanced CRM.
+    requireState(!(await store.unique(tables.DEPLOYMENT_TABLE, 'DEPLOYMENT_KEY', original.deploymentKey))
+      && !(await store.unique(tables.DEPLOYMENT_TABLE, 'DEPLOYMENT_ID', original.deploymentId))
+      && !(await store.unique(tables.DEPLOYMENT_TABLE, 'NUMBER_LOOKUP_HASH', deploymentInput.NUMBER_LOOKUP_HASH))
+      && !(await store.unique(tables.CONFIGURATION_VERSION_TABLE, 'CONFIGURATION_VERSION_ID', configurationRow.CONFIGURATION_VERSION_ID)));
+    const createdAt = new Date(now()).toISOString();
+    const data = { ...original, profile: RECONCILIATION_PROFILE,
+      configurationVersionId: configurationRow.CONFIGURATION_VERSION_ID,
+      configurationFingerprint: configurationSnapshotFingerprint(configurationRow),
+      routeFingerprint: intent.route_fingerprint, createdAt, intent,
+      originalClaimKey: originalKey, originalClaimFingerprint: originalReceipt.PAYLOAD_FINGERPRINT,
+      originalRequestFingerprint, originalConfigurationVersionId: original.configurationVersionId,
+      originalConfigurationFingerprint: original.configurationFingerprint,
+      originalSourceRevision: intent.original_source_revision, reconciliationFingerprint };
+    const row = { EVENT_KEY: key, RECEIPT_KIND: RECONCILIATION_RECEIPT_KIND, EVENT_TYPE: 'configuration_reconcile',
+      EVENT_DATA_JSON: JSON.stringify(data), PAYLOAD_FINGERPRINT: digest(data),
+      DEPLOYMENT_ID: data.deploymentId, CONFIGURATION_VERSION_ID: data.configurationVersionId,
+      ROUTE_FINGERPRINT: data.routeFingerprint, RELATED_EVENT_KEY: originalKey,
+      STATUS: 'Processing', RECEIPT_VERSION: 0, ATTEMPT_COUNT: 1, LAST_ERROR_CODE: null,
+      RECEIVED_AT: createdAt, PROCESSED_AT: null, SOURCE_REVISION: config.sourceRevision,
+      SOURCE_ENVIRONMENT: config.environment };
+    const claimed = await store.insertUnique(tables.EVENT_RECEIPT_TABLE, 'EVENT_KEY', row,
+      Object.keys(row).filter((field) => !['STATUS', 'RECEIPT_VERSION', 'PROCESSED_AT', 'LAST_ERROR_CODE'].includes(field)));
+    parseReconciliationClaim(claimed.row);
+    requireState(claimed.inserted === true, 'CONFIGURATION_STAGING_RECONCILIATION_REQUIRED');
+    const configurationInsert = await store.insertUnique(tables.CONFIGURATION_VERSION_TABLE, 'CONFIGURATION_VERSION_ID',
+      { ...configurationRow, CREATED_AT: createdAt, ACTIVATED_AT: null }, [...ROW_FIELDS, 'CREATED_AT', 'ACTIVATED_AT']);
+    requireState(configurationInsert.inserted === true, 'CONFIGURATION_STAGING_RECONCILIATION_REQUIRED');
+    const deployment = inactiveDeployment(deploymentInput, original.deploymentKey, createdAt);
+    const deploymentInsert = await store.insertUnique(tables.DEPLOYMENT_TABLE, 'DEPLOYMENT_KEY', deployment, Object.keys(deployment));
+    requireState(deploymentInsert.inserted === true, 'CONFIGURATION_STAGING_RECONCILIATION_REQUIRED');
+    const fresh = await readSources(request); assertSource(fresh);
+    const preservedReceipt = await store.unique(tables.EVENT_RECEIPT_TABLE, 'EVENT_KEY', originalKey);
+    requireState(same(preservedReceipt, originalReceipt));
+    await readOriginalConfiguration(preservedReceipt, original);
+    assertStagedInactive((await readRows(data)).deployment);
+    await crm.recordConfigurationStaging(data.dealId, { deploymentId: data.deploymentId,
+      expectedDeal: fresh.records.deal, priorApproval: original.priorApproval });
+    assertSource(await readSources(request, data.deploymentId));
+    requireState(same(await store.unique(tables.EVENT_RECEIPT_TABLE, 'EVENT_KEY', originalKey), originalReceipt));
+    await readOriginalConfiguration(originalReceipt, original);
+    const patch = { STATUS: 'Completed', RECEIPT_VERSION: 1, PROCESSED_AT: createdAt, LAST_ERROR_CODE: null };
+    const completed = await store.conditionalUpdate(tables.EVENT_RECEIPT_TABLE, claimed.row.ROWID, patch,
+      { STATUS: 'Processing', RECEIPT_VERSION: 0, PAYLOAD_FINGERPRINT: row.PAYLOAD_FINGERPRINT });
+    requireState(same(parseReconciliationClaim(completed), data)
+      && Object.entries(patch).every(([field, value]) => typeof value === 'number'
+        ? Number(completed[field]) === value : completed[field] === value),
+    'CONFIGURATION_STAGING_RECONCILIATION_REQUIRED');
+    await readReconciliationChain(completed, originalReceipt);
+    return result(false);
   }
 
   async function stage(request) {
@@ -347,13 +932,7 @@ function createConfigurationStagingService({ config, store, crm, core, sourceRea
     // claim and inactive rows. Readback never interprets a partial write as Live.
     await store.insertUnique(tables.CONFIGURATION_VERSION_TABLE, 'CONFIGURATION_VERSION_ID',
       { ...request.configurationRow, CREATED_AT: createdAt, ACTIVATED_AT: null }, [...ROW_FIELDS, 'CREATED_AT', 'ACTIVATED_AT']);
-    const deployment = { ...request.deployment, DEPLOYMENT_KEY: data.deploymentKey,
-      APPROVED_CONFIGURATION_VERSION_ID: null, APPROVAL_EVENT_KEY: null,
-      APPROVED_ROUTE_FINGERPRINT: null, GO_LIVE_APPROVED_AT: null, ACTIVATION_EVENT_KEY: null,
-      TEST_STATUS: 'Ready for Approval', GO_LIVE_APPROVAL_STATUS: 'Pending Internal Approval',
-      APPROVED_START_AT: null, ACTUAL_START_AT: null, EXPIRES_AT: null,
-      COUNTED_CALL_KEYS_JSON: '[]', STOP_REASON: null, STOPPED_AT: null,
-      REPORT_RECONCILIATION_STATUS: 'NotRequired', REPORT_RECONCILIATION_VERSION: 0, UPDATED_AT: createdAt };
+    const deployment = inactiveDeployment(request.deployment, data.deploymentKey, createdAt);
     await store.insertUnique(tables.DEPLOYMENT_TABLE, 'DEPLOYMENT_KEY', deployment, Object.keys(deployment));
     const fresh = await readSources(request);
     requireState(sourceFingerprint(config, fresh.records, fresh.lineage, fresh.conversion) === data.sourceFingerprint
@@ -374,8 +953,8 @@ function createConfigurationStagingService({ config, store, crm, core, sourceRea
     return Object.freeze({ state: 'StagedInactive', replayed: false, approved: false, active: false,
       configurationVersionId: data.configurationVersionId, deploymentId: data.deploymentId });
   }
-  return Object.freeze({ stage, assertApprovalSource });
+  return Object.freeze({ stage, reconcile, complete, transition, assertApprovalSource });
 }
 
-module.exports = Object.freeze({ PROFILE, SIGNATURE_DOMAIN, RECEIPT_KIND,
+module.exports = Object.freeze({ PROFILE, SIGNATURE_DOMAIN, RECEIPT_KIND, RECONCILIATION_RECEIPT_KIND, COMPLETION_RECEIPT_KIND, TRANSITION_RECEIPT_KIND,
   configurationClaimKey, configurationDeploymentId, createConfigurationStagingService });

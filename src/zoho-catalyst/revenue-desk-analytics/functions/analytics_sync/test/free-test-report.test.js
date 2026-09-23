@@ -8,7 +8,7 @@ const { buildFreeTestReport } = require('../../../tools/build-free-test-report')
 const { evaluateFreeTestReportGate, evaluatePreRenderGate, scopeInventoryDigest } =
   require('../../../tools/evaluate-dashboard-pre-render-gate');
 
-const { NOW, START, END, WATERMARK, REVISION, fixture, refreshDigests, attachBaseline } =
+const { NOW, START, END, WATERMARK, REVISION, fixture, refreshDigests, attachBaseline, overshootFixture } =
   require('./helpers/free-test-report-fixture');
 
 test('six report groups include every canonical outcome exactly once and reconcile', () => {
@@ -86,6 +86,36 @@ test('zero-call report requires explicit fresh zero evidence, never an invented 
   assert.equal(buildFreeTestReport(f, NOW).duringTest.callsCaptured, 0);
   delete f.evidence.scopes[0].analytics_readback.record_types.call.empty_source_verified;
   assert.throws(() => buildFreeTestReport(f, NOW), { code: 'REPORT_RECONCILIATION_REQUIRED' });
+});
+
+test('in-flight overshoot reconciles to unique connected calls without filling absent history', () => {
+  const f = overshootFixture();
+  assert.equal(buildFreeTestReport(f, NOW).duringTest.inFlightOvershoot, 2);
+  f.calls.push({ ...f.calls[0], SOURCE_MODIFIED_AT: '2026-08-24T12:05:00.000Z' });
+  assert.equal(buildFreeTestReport(f, NOW).duringTest.inFlightOvershoot, 2);
+  f.calls.pop();
+  for (const value of [0, 1, 3, 999]) {
+    f.finalResult.IN_FLIGHT_OVERSHOOT = value;
+    refreshDigests(f);
+    assert.throws(() => buildFreeTestReport(f, NOW), { code: 'REPORT_OVERSHOOT_CONFLICT' });
+  }
+  for (const value of [null, undefined]) {
+    f.finalResult.IN_FLIGHT_OVERSHOOT = value;
+    refreshDigests(f);
+    assert.equal(buildFreeTestReport(f, NOW).duringTest.inFlightOvershoot, null);
+  }
+  delete f.finalResult.IN_FLIGHT_OVERSHOOT;
+  refreshDigests(f);
+  assert.equal(buildFreeTestReport(f, NOW).duringTest.inFlightOvershoot, null);
+  for (const empty of [false, true]) {
+    const underLimit = fixture(empty);
+    underLimit.finalResult.IN_FLIGHT_OVERSHOOT = 0;
+    refreshDigests(underLimit);
+    assert.equal(buildFreeTestReport(underLimit, NOW).duringTest.inFlightOvershoot, 0);
+    underLimit.finalResult.IN_FLIGHT_OVERSHOOT = 1;
+    refreshDigests(underLimit);
+    assert.throws(() => buildFreeTestReport(underLimit, NOW), { code: 'REPORT_OVERSHOOT_CONFLICT' });
+  }
 });
 
 test('duplicates reconcile once and stale corrected copies cannot inflate counts', () => {

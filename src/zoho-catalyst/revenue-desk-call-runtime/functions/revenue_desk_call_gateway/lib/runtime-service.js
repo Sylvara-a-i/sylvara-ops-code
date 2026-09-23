@@ -225,7 +225,9 @@ function deploymentFromRow(row, configurationRow, config) {
   const configuration = validateConfiguration(
     parseJsonColumn(version.configurationJson, 'CONFIGURATION_JSON'),
   );
-  const approvedStartAt = canonicalTimestamp(row.APPROVED_START_AT, 'APPROVED_START_AT');
+  // Staging and approval do not invent a planned start. Only the separately
+  // authenticated activation's actual start and expiry govern call admission.
+  const approvedStartAt = optionalTimestamp(row.APPROVED_START_AT, 'APPROVED_START_AT');
   const actualStartAt = optionalTimestamp(row.ACTUAL_START_AT, 'ACTUAL_START_AT');
   const expiresAt = optionalTimestamp(row.EXPIRES_AT, 'EXPIRES_AT');
   const approvedConfigurationVersionId = nullableString(

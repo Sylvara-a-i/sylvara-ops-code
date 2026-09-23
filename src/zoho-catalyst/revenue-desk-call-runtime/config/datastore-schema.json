@@ -153,7 +153,7 @@
           "api_name": "APPROVED_START_AT",
           "type": "varchar",
           "max_length": 32,
-          "mandatory": true,
+          "mandatory": false,
           "unique": false
         },
         {
