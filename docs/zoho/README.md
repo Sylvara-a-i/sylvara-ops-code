@@ -47,6 +47,7 @@ The [product reference collection](reference/README.md) covers the currently gov
 
 - [MCP Evidence And Navigation](mcp/README.md)
 - [MCP Server Standard](mcp/server-standard.md)
+- [Latest advertised Sylvara Zoho tool inventory, 2026-09-25](mcp/snapshots/advertised/2026-09-25/README.md)
 - [Sylvara configured-session capability catalog, 2026-08-04](mcp/snapshots/configured/2026-08-04/capability-catalog.md)
 - [Sylvara configured-session machine-readable inventory, 2026-08-04](mcp/snapshots/configured/2026-08-04/sylvara-observed-tool-inventory.json)
 - [Tool Manual service catalog, 2026-07-24](mcp/reference/tool-manual-service-catalog-2026-07-24.md)

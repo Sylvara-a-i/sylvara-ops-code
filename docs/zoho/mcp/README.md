@@ -16,12 +16,24 @@ This folder separates MCP design policy from dated evidence. A large catalog doe
 | Preconfigured portal templates | [`reference/preconfigured-template-catalog-2026-07-25.md`](reference/preconfigured-template-catalog-2026-07-25.md) | Dated template names and captured memberships, not a recommendation |
 | Configured-session selections | [`snapshots/configured/2026-08-04/`](snapshots/configured/2026-08-04/) | Sanitized Sylvara-only role membership, prefix-free catalog operation keys, and annotations observed in one inspected session |
 | Proposed server designs | [`proposals/`](proposals/) | Dated least-privilege allowlists that are not selected, authorized, or deployed merely because they are documented |
-| Advertised MCP contract | Not stored as a blanket claim | Requires current inspection of the selected operation's description and input schema |
+| Advertised session tools | [2026-09-25 snapshot](snapshots/advertised/2026-09-25/README.md) | 506 role-qualified entries visible in the current session; includes a focused two-tool contract comparison, not blanket schema or tenant-access verification |
 | Effective Sylvara access | Dated, operation-specific evidence only; current Free-Test CRM evidence is in [`snapshots/effective/2026-08-14/`](snapshots/effective/2026-08-14/) | Requires a current identity check and authorized acceptance call; a dated success is neither blanket capability nor continuing authorization |
 
 Dated snapshots are append-only evidence under `<evidence-class>/YYYY-MM-DD`. A later observation creates a new dated directory and updates navigation; it never silently overwrites an older observation. A correction or reconciliation of historical evidence must record its date, scope, and reason without relabeling it as a new observation.
 
-## Current Configured Snapshot
+## Latest Advertised Snapshot
+
+The [2026-09-25 advertised snapshot](snapshots/advertised/2026-09-25/README.md)
+records all 506 Sylvara Zoho entries exposed to the inspected session across
+17 neutral roles and seven products after a CRM metadata refresh. The complete
+[machine-readable inventory](snapshots/advertised/2026-09-25/sylvara-advertised-tool-inventory.json)
+uses prefix-free normalized operation names and excludes private connection data.
+It records the newly observed Deal update contract and its remaining control
+limitations. Advertisement does not prove provider-side enablement, tenant
+access, safe execution, cost or authorization. Other connectors were not
+individually refreshed or acceptance-tested.
+
+## Historical Configured Snapshot
 
 The complete 2026-08-04 snapshot contains 294 configured Sylvara-only selections across 18 neutral roles and eight products. It records 221 reads and 73 write/action tools. An earlier 2026-08-05 export matched that snapshot, but later same-day callable-registry refreshes superseded its Books and CRM portions. Runtime server names, generated transport IDs, service-prefixed adapter labels, endpoints, authentication details, connection aliases, target identifiers, and returned data are removed.
 
