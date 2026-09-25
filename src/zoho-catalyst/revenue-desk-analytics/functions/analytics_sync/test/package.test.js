@@ -627,6 +627,61 @@ test('additive v2 schemas preserve live rows and include fencing, retry, readbac
   assert.equal(schema.data_policy.raw_transcripts, false);
 });
 
+test('migration separates pre-import authority from post-import acceptance without a bypass', () => {
+  const migration = json(path.join('config', 'datastore-schema.json')).migration_policy;
+  const sequence = migration.acceptance_sequence;
+  assert.equal(sequence.pre_import_digest_variable, 'ANALYTICS_MIGRATION_EVIDENCE_DIGEST');
+  assert.equal(sequence.execution_phase, 'later-separately-approved-controlled-call-acceptance');
+  assert.match(sequence.first_call_gate, /first normal call.*alert\/inbox.*Analytics.*CRM summary.*safe completion before another call.*no synthetic cloud mode or direct success seeding/);
+  assert.match(sequence.enforcement, /operator.*not a runtime canary selector or an execution grant/);
+  assert.match(sequence.pre_import_digest_scope, /pre-import.*not completed import acceptance/);
+  assert.equal(sequence.pre_import_required.length, 8);
+  assert.match(sequence.pre_import_required.join(' '),
+    /normalized-key.*immutable.*zero unresolved.*controlled-call worker-produced.*distinct Connections.*frozen competing producers.*legacy-row.*separate bounded.*non-charging/);
+  assert.deepEqual(sequence.controlled_call_import.job_params, {});
+  assert.equal(sequence.controlled_call_import.runtime_mode, 'active');
+  assert.equal(sequence.controlled_call_import.scheduled_execution_allowed, false);
+  assert.equal(sequence.controlled_call_import.caller_selected_partition_supported, false);
+  assert.match(sequence.controlled_call_import.required_scope, /synthetic.*derived daily metric/);
+  assert.match(sequence.controlled_call_import.before_each_execution.join(' '),
+    /disabled mode.*disabled Cron.*inventory empty.*producers frozen.*batch and rollup-source.*hashes.*fixed batch.*fresh per-phase/);
+  assert.match(sequence.controlled_call_import.execution_window,
+    /exactly one serialized manual Job.*bounded terminal.*restore\/read back disabled.*ambiguous.*without retry/);
+  assert.match(sequence.controlled_call_import.allocation_consumption,
+    /not config-capture evidence.*DisabledNoOp consumes.*drain\/reconcile.*separately budgeted/);
+  assert.deepEqual(sequence.controlled_call_import.required_limits,
+    ['source and derived rows', 'manual Job executions', 'import jobs', 'export jobs',
+      'status polls', 'elapsed time', 'incremental cost']);
+  assert.match(sequence.controlled_call_import.stop_on.join(' '),
+    /future-due.*competing.*drift.*unknown outcome.*unknown cost/);
+  assert.match(sequence.controlled_call_import.on_completion_or_stop, /restore disabled.*preserve claims.*reconcile/);
+  assert.equal(sequence.post_import_required.length, 5);
+  assert.match(sequence.post_import_required.join(' '),
+    /exact pre-import.*actual import.*terminal.*independent target.*immutable hashes.*UTC.*monotonic watermarks.*derived daily-metric.*legacy.*containment/);
+  assert.deepEqual(sequence.normal_or_scheduled_operation_requires,
+    ['pre_import_required', 'post_import_required', 'separate activation authorization']);
+  assert.ok(migration.required_migration_evidence.includes(
+    'Zoho Analytics import and independent readback counts and watermarks'));
+  assert.match(sequence.complete_migration_acceptance, /both phases.*every required_migration_evidence.*not acceptance/);
+  const variable = json(path.join('config', 'variables.json')).variables
+    .find(({ name }) => name === sequence.pre_import_digest_variable);
+  assert.match(variable.rule, /pre-import.*runtime checks format only.*separate post-import acceptance/);
+  const runbook = fs.readFileSync(path.join(projectRoot, 'RUNBOOK.md'), 'utf8');
+  assert.match(runbook, /There is \*\*no runtime canary mode or caller-selected partition\*\*/);
+  assert.match(runbook, /Inventory \*\*all\*\* Development v2 rows, including future-due/);
+  assert.match(runbook, /Before \*\*each\*\* manual Job/);
+  assert.match(runbook, /exactly one manual Job/);
+  assert.match(runbook, /Do not assume a queued Job has captured its environment/);
+  assert.match(runbook, /per-Job return to disabled is required/);
+  assert.match(runbook, /No first-import success is required before its own authorized first import/);
+  assert.doesNotMatch(runbook, /Move to `active` only after live-source parity and additive migration acceptance/);
+  assert.match(runbook, /Call-derived import\/readback stays in the later controlled-call phase/);
+  assert.match(runbook, /Do not seed success rows or create a cloud simulator/);
+  assert.doesNotMatch(runbook, /write a bounded synthetic v2 fixture/);
+  const readme = fs.readFileSync(path.join(projectRoot, 'README.md'), 'utf8');
+  assert.match(readme, /RUNBOOK.md#first-import-sequencing-in-controlled-call-acceptance/);
+});
+
 test('active Analytics package has no retired physical fence column or key-inequality loophole', () => {
   const retiredColumn = ['PROVIDER', 'VERSION', 'KEY'].join('_');
   const activeFiles = [

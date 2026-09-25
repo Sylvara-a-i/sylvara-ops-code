@@ -55,7 +55,46 @@
       "provider-version-fenced OUTBOX_KEY count and digest with duplicate and payload-conflict reports",
       "Zoho Analytics import and independent readback counts and watermarks",
       "legacy-row disposition and rollback or containment"
-    ]
+    ],
+    "acceptance_sequence": {
+      "enforcement": "operator release contract; not a runtime canary selector or an execution grant",
+      "execution_phase": "later-separately-approved-controlled-call-acceptance",
+      "first_call_gate": "first normal call must pass alert/inbox, Analytics import/readback, reconciled results/CRM summary and safe completion before another call; no synthetic cloud mode or direct success seeding",
+      "pre_import_digest_variable": "ANALYTICS_MIGRATION_EVIDENCE_DIGEST",
+      "pre_import_digest_scope": "reviewed pre-import migration-preflight envelope, not completed import acceptance",
+      "pre_import_required": [
+        "fresh exact Development identity, deployed artifact, source schemas and nullable-unique constraints",
+        "complete source inventory, normalized-key count/digest and algorithm, immutable fact hashes and ownership",
+        "provider-version-fenced OUTBOX_KEY count/digest and zero unresolved duplicate, payload or lineage conflicts",
+        "approved controlled-call worker-produced v2 evidence and independent immutable source readback",
+        "exact private target bindings, independent target schema/access/row-count prestate and distinct Connections",
+        "complete eligible-work and execution inventory, frozen competing producers and disabled schedules",
+        "legacy-row disposition, source preservation and independently verifiable containment",
+        "separate bounded controlled-call import authorization with confirmed non-charging Analytics/Catalyst allowance"
+      ],
+      "controlled_call_import": {
+        "runtime_mode": "active",
+        "job_params": {},
+        "scheduled_execution_allowed": false,
+        "caller_selected_partition_supported": false,
+        "required_scope": "only the approved synthetic client/deployment and enumerated record types, including any derived daily metric",
+        "before_each_execution": ["independently read-back disabled mode and disabled Cron", "complete pending/running execution inventory empty and all competing producers frozen", "complete authoritative v2, batch and rollup-source inventory equals the pinned canary scope", "exact row identities, ownership, hashes, watermarks, revision and fixed batch/rollup/poll settings", "fresh per-phase packet within a valid finite allocation"],
+        "execution_window": "authorize exactly one serialized manual Job; correlate and reconcile its bounded terminal outcome, then restore/read back disabled before any next phase; an ambiguous submit, deadline or state immediately triggers containment without retry",
+        "allocation_consumption": "queued/running status is not config-capture evidence; DisabledNoOp consumes its Job allocation without passing an import phase; drain/reconcile possible executions before another separately budgeted window",
+        "required_limits": ["source and derived rows", "manual Job executions", "import jobs", "export jobs", "status polls", "elapsed time", "incremental cost"],
+        "stop_on": ["unknown or unrelated v2 work, including future-due rows", "competing producer or execution", "identity or prestate drift", "unknown outcome", "exhausted limit or unknown cost"],
+        "on_completion_or_stop": "restore disabled mode and approved containment; preserve claims, rows, provider job identities and all evidence; reconcile before another approved attempt"
+      },
+      "post_import_required": [
+        "reference to the exact pre-import envelope digest and consumed controlled-call import authorization",
+        "actual import job identities and terminal accepted/rejected/total counts",
+        "independent target readback matching exact keys, ownership, immutable hashes and normalized UTC values",
+        "outbox/checkpoint/source reconciliation, monotonic watermarks and no unresolved earlier work",
+        "derived daily-metric accounting, unchanged retained legacy rows and restored containment"
+      ],
+      "normal_or_scheduled_operation_requires": ["pre_import_required", "post_import_required", "separate activation authorization"],
+      "complete_migration_acceptance": "both phases together satisfy every required_migration_evidence item; a preflight digest, empty target or successful submission is not acceptance"
+    }
   },
   "tables": [
     {

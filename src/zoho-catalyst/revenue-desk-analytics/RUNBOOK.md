@@ -4,7 +4,7 @@
 
 This runbook is repository guidance. It does not authorize a Catalyst deployment, Analytics import, Connection change, schedule, table mutation, dashboard publication, Production change, or deletion.
 
-Keep `ANALYTICS_SYNC_MODE=disabled` until the full gate below passes. The 2026-08-24 readback established the retained row counts: `AnalyticsSyncOutbox=307`, `AnalyticsSyncCheckpoints=10`, `ClientDailyMetrics=10`, `ReportRuns=1`, `Calls=13`, and `FreeTestCalls=30`. Packet A then proved the exact required checkpoint application columns, the outbox's 71-column count, and the nullable-unique `OUTBOX_KEY` contract without rewriting a retained row; that historical packet did not prove the full outbox application schema. A later 2026-08-28 connector-first read-only preflight proved that the current repository-required application-schema projections for both tables match exactly while preserving the documented additive legacy columns. Fresh activation-time drift readback, retained-row semantics, producer/consumer lineage, normalized keys, target matches, and watermarks remain mandatory before activation.
+Keep `ANALYTICS_SYNC_MODE=disabled` except for a separately authorized readiness check or the bounded controlled-call import below. Normal or scheduled operation requires complete two-phase migration acceptance and separate activation approval. The 2026-08-24 readback established the retained row counts: `AnalyticsSyncOutbox=307`, `AnalyticsSyncCheckpoints=10`, `ClientDailyMetrics=10`, `ReportRuns=1`, `Calls=13`, and `FreeTestCalls=30`. Packet A then proved the exact required checkpoint application columns, the outbox's 71-column count, and the nullable-unique `OUTBOX_KEY` contract without rewriting a retained row; that historical packet did not prove the full outbox application schema. A later 2026-08-28 connector-first read-only preflight proved that the current repository-required application-schema projections for both tables match exactly while preserving the documented additive legacy columns. Fresh pre-import drift readback, retained-row semantics, producer/consumer lineage, normalized keys and target prestate remain mandatory; actual import/readback counts and watermarks are post-import acceptance evidence, never assumed prerequisites already satisfied by an empty table.
 
 ## Blocking Live-Source Parity Gate
 
@@ -25,11 +25,103 @@ If the live source cannot be exported or a behavior cannot be classified, stop w
 3. Record source counts by environment and a deterministic normalized-key digest. The private evidence must state the normalization algorithm and stable key set.
 4. Add only compatible physically nullable columns required by [`config/datastore-schema.json`](config/datastore-schema.json). Never recreate, truncate, rename, or delete a nonempty table. Use `SYNC_STATUS` for v2 outbox state; do not add `STATUS`, which collides case-insensitively with live v1 `Status`. Add provider-enforced nullable unique constraints on `CHECKPOINT_KEY` and `OUTBOX_KEY`; application-side preflight queries are not a concurrency boundary.
 5. Prove Catalyst permits those unique nullable columns while preserving multiple legacy nulls. For every retained v2 row, normalize all accepted UTC timestamps with `new Date(value).toISOString()`, recompute the reviewed single-key `OUTBOX_KEY` and `PAYLOAD_HASH`, and compare counts/digests before activation. Block on more than one row for an `OUTBOX_KEY`, one provider identity mapped to a different key, or one key and identity bound to a different payload hash or immutable ownership. Confirm legacy rows retain a null or non-v2 `ROW_SCHEMA_VERSION` and that the Job query selects only version 2.
-6. Write a bounded synthetic v2 fixture through the approved worker path. Read its immutable payload hash and ownership columns back before invoking this Job.
-7. Reconcile source count, normalized-key count/digest, immutable fact hashes, Analytics accepted/rejected counts, exact target readback rows, and watermarks.
-8. Rehearse containment and rollback while the old source and rows remain recoverable.
+6. Use worker-produced v2 evidence from the separately approved controlled-call acceptance in the existing [free-test operator runbook](../revenue-desk-release/free-test-operator-runbook.md#settled-sequencing-decision--2026-09-23). Read its immutable payload hash and ownership columns back before invoking this Job. Do not seed success rows or create a cloud simulator, synthetic ingestion mode or replacement rehearsal. No call or Job is authorized in the current preparation phase.
+7. Complete and privately hash the **pre-import migration-preflight envelope** below. It records actual source/legacy evidence and target prestate; it does not claim an import occurred. Bind its reviewed digest to `ANALYTICS_MIGRATION_EVIDENCE_DIGEST` only under an exact configuration approval.
+8. Execute the separately approved bounded import within that same controlled-call packet. Then collect **post-import acceptance**: reconcile source count, normalized-key count/digest, immutable fact hashes, Analytics accepted/rejected counts, exact target readback rows, normalized UTC values and watermarks. Preserve the pre-import envelope and reference its digest from the result; do not overwrite it with a success claim.
+9. Rehearse containment and rollback while the old source and rows remain recoverable. Both evidence phases together must satisfy every `required_migration_evidence` item in the schema. Only then may a separate approval permit normal or scheduled operation.
 
 Any mismatch blocks activation. Do not “fix” an ambiguous legacy row in place.
+
+### First-import sequencing in controlled-call acceptance
+
+Owner: the authorized Development release operator; business/release approval
+remains with the owner. The previous ordering required import acceptance before
+the first import. This two-phase sequence corrects that circular dependency
+without dropping an acceptance requirement or adding a second importer.
+
+Call-derived import/readback stays in the later controlled-call phase. The first
+normal call must pass its alert/inbox, Analytics, reconciled results/CRM-summary
+and safe-completion path before any further call. This is preparation for that
+existing path, not a new synthetic cloud acceptance mode or permission to run it.
+
+Use the existing `analytics_sync` Job with empty parameters. `disabled` performs
+no I/O, `readiness` checks Catalyst tables only, and only `active` constructs the
+Analytics client. There is **no runtime canary mode or caller-selected partition**.
+The digest is format-checked by the runtime; it does not authenticate or validate
+the private evidence. These are operator release gates, not newly implemented
+runtime isolation or authority. If their preconditions cannot be proved, stop.
+
+Before a first import:
+
+- Complete steps 1–6 above, live-source parity, exact artifact/binding/readback,
+  independent reader/writer access and target schema/access/count prestate. An
+  empty target is not proof of empty Catalyst source or migration completion.
+- Inventory **all** Development v2 rows, including future-due, claimed,
+  unresolved and terminal rows that can contribute to the controlled test's rollup.
+  Enumerate their normalized identities, ownership and hashes privately. Every
+  possible selected or derived row must belong to the approved synthetic
+  client/deployment and finite record-type set. Existing unrelated v2 work blocks
+  this initial import; do not delete, reclassify or reset it to obtain clearance.
+- Prove schedules disabled, exact Job/execution correlation, no competing
+  execution and no producer able to add unapproved work during the allocation.
+  Before **each** manual Job, independently read back disabled mode and disabled
+  Cron, an empty pending/running execution inventory, frozen producers, the full
+  v2/batch/rollup-source inventory, exact pinned identities/hashes/watermarks and
+  fixed batch/rollup/poll settings. Build a fresh per-phase packet within the
+  still-valid finite allocation. Serialize submissions; never admit a second Job
+  while the first is pending or running.
+  An unavailable complete inventory is a blocker, not permission to assume zero.
+- The separate packet must pin the release, private targets, source identities,
+  preflight digest, exact temporary revision/mode changes, rollback and maximum
+  rows, manual Jobs, imports, exports, polls, elapsed time and incremental cost.
+  Include the daily-metric row generated when a call checkpoint settles. Confirm
+  the applicable non-charging Analytics/Catalyst allowance before execution;
+  unknown cost blocks it. Any provider call has its own separate later spending
+  approval; this import contract neither authorizes it nor describes it as free.
+  A generic “continue,” table-creation approval or consumed installation allocation
+  does not supply these limits.
+
+Hash the complete reviewed preflight envelope, not just the target map or schema.
+Retain legacy evidence, immutable source readback and the allocation reference in
+that envelope. Do not invent a digest, result count, timestamp or watermark.
+Only an exact approved cutover may bind the immutable installed revision and
+temporarily select `active`; Cron remains disabled. This document does not change
+any live hold, grant, schedule, import, report visibility or customer access.
+
+Drive the existing durable submit → import-status → independent export/readback
+→ checkpoint sequence only within the packet's limits. Each temporary active
+window admits **exactly one manual Job**. Correlate and reconcile its bounded
+terminal outcome, then restore and independently read back `disabled` before
+preparing the next phase. Do not assume a queued Job has captured its environment
+at submission: changing mode while it is queued may correctly produce a disabled
+no-op, not import evidence. An unknown submit outcome, elapsed-time limit, state
+or readback failure triggers immediate containment and no retry. If the single
+execution window cannot be bounded and independently verified, do not open it.
+After an ambiguous submission or deadline, preserve and drain/reconcile the
+possibly running Job before considering another window. `DisabledNoOp` still
+consumes its Job allocation and proves no import phase; another submission is
+permitted only if the exact packet already budgets it and fresh prestate passes.
+Queued/running status alone never proves which configuration the handler read.
+
+Provider acceptance is not completion. Stop on drift, contention, unrelated work,
+ambiguous delivery, unknown cost or exhausted limits. Preserve all rows, claims
+and job identities; reconcile before any separately approved continuation.
+Never reset state or blindly resubmit. A per-Job return to disabled is required,
+not merely containment after an entire multi-Job acceptance batch.
+
+The post-import envelope must bind the preflight digest and actual consumed
+allocation; include terminal provider counts, exact independent key/hash/owner/
+UTC/watermark agreement, checkpoint and derived-metric reconciliation, unchanged
+legacy evidence and containment readback. Missing, failed or ambiguous evidence
+leaves migration acceptance pending. Normal or scheduled execution needs both
+phases plus separate activation approval. No result here authorizes Retell,
+Production, customer traffic, financial actions or report publication.
+
+This sequencing correction changes repository policy/tests only, not deployed
+handler bytes or schema columns. It requires no unchanged-function redeployment.
+Existing disabled mode, revision holds, outbox/checkpoint failures and the private
+acceptance record remain the monitoring and rollback surfaces; no new service or
+ongoing cost is introduced.
 
 ## Development Configuration
 
@@ -42,11 +134,11 @@ Any mismatch blocks activation. Do not “fix” an ambiguous legacy row in plac
 7. Render [`config/analytics-model-contract.json`](config/analytics-model-contract.json) with `node tools/render-analytics-model-contract.js`. Build a schema-v3 `asset_creation` packet from complete fresh existing/missing inventory and a separate approval. Create or uniquely verify only the exact root folders `Revenue Desk - Data Model`, `Revenue Desk - Operations`, and `Revenue Desk - Customer Results`; keep `makeDefaultFolder=false` and omit `parentFolderId`. Stop on duplicate exact names, a non-root same-name folder, access ambiguity, or unexpected existing membership. The Changes connector has no folder-delete operation, so a partial empty folder is containment evidence rather than implicit cleanup authority.
 8. In the exact Development workspace, create only the five absent fixed target names and their complete connector-compatible schemas. The connected `createTable` contract accepts only column name and type; `MANDATORY` and `PII` remain source-validation and classification rules and must not be sent or claimed as provider-enforced metadata. Stop on a same-name asset, unexpected column, type mismatch, existing share, or nonzero target row count. Independently read back and privately bind each returned view ID; never commit an organization, workspace, folder, table, query-view, report, or dashboard ID.
 9. Create the four exact derived query views from the rendered SQL, then create every exact report payload still listed by the same `asset_creation` packet. Read back names, base views, report types, chart types, axes/operations, filters, user filters, and dependencies after every operation. A success response is not sufficient. The optional-evidence view must preserve `available` versus `not_available` state so a verified numeric zero cannot collapse into missing evidence. Any partial or ambiguous result stops the phase; build a new packet from fresh exact inventory so already created assets are omitted. A post-ambiguity packet must bind the prior packet digest, exact operation fingerprint, and its current authoritative evidence; it may classify the target only as proven absent or exact existing. Do not place any view until both dashboards exist and the separate placement phase has fresh concrete IDs.
-10. Configure every variable in [`functions/analytics_sync/.env.example`](functions/analytics_sync/.env.example) privately. Use lowercase `DEPLOYMENT_ENVIRONMENT`, replace every placeholder, preserve the five fixed public table names inside `ANALYTICS_TARGETS_JSON`, insert only their independently read-back private view IDs, and set `SOURCE_REVISION` to the exact stamped revision plus the reviewed migration-evidence digest.
+10. Prepare every variable in [`functions/analytics_sync/.env.example`](functions/analytics_sync/.env.example) privately. Use lowercase `DEPLOYMENT_ENVIRONMENT`, replace every placeholder, preserve the five fixed public table names inside `ANALYTICS_TARGETS_JSON`, and insert only independently read-back private view IDs. The migration digest covers the reviewed **pre-import** envelope above. Keep an intentional `SOURCE_REVISION` hold until its exact cutover is approved; then bind the actual immutable installed revision, never only a parity label. Preparation is not a save or execution grant.
 11. Leave the mode `disabled`, deploy only the exact `analytics_sync` target, and independently read the deployed source identity back.
 12. Before requesting a canary approval, prove the exact Audit Job response shape and a lossless Job-to-execution-ID correlation. The documented Job response provides `job_id`, `job_status`, and `job_meta_details`, but no execution-ID field; a time-window or unscoped log search is not an acceptable substitute. If exact correlation is unavailable, the canary remains blocked. Under a separate exact canary approval only after that gate, manually submit the disabled Cron once with the exact headers, Cron/project path IDs, and same Job metadata. Require terminal `job_status=SUCCESS`, normalized exact Job metadata, and the `analytics_sync_disabled` event from an application-log query scoped to the proven exact execution ID. Keep the mode and Cron disabled. Treat no SDK, Data Store, Connection, or Analytics I/O as an inference from exact deployed-archive parity plus the reviewed disabled code path, not as direct provider I/O telemetry.
 13. Move to `readiness`; run once and verify exactly two additive v2 Catalyst table contracts with zero Analytics calls.
-14. Move to `active` only after live-source parity and additive migration acceptance. Submit one synthetic partition and drive its durable states across separate Job executions; activate the Cron only through a separate exact packet after this manual acceptance passes.
+14. After live-source parity, readiness and the complete pre-import envelope pass, temporarily select `active` only under the later controlled-call import packet above. Drive the one approved isolated test scope across its finite serialized Job executions, then restore `disabled`/containment. Complete post-import acceptance before any normal operation; activate Cron only through a separate exact packet after both migration phases pass. No first-import success is required before its own authorized first import, and no post-import requirement is waived.
 
 ## Report And Dashboard Assembly Gate
 

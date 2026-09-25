@@ -289,6 +289,29 @@ Earlier checks on the predecessor local candidate (overlapping, not additive):
 
 `analytics_sync` is the one private Zoho Catalyst Job target for Revenue Desk-to-Zoho Analytics synchronization. It has no HTTP route, accepts no caller-selected Job parameters, and targets the shared Revenue Desk Catalyst project through the dedicated `RevenueDeskAnalyticsJobs` Function Job pool.
 
+## First-import sequencing in controlled-call acceptance
+
+The [runbook's two-phase migration gate](RUNBOOK.md#first-import-sequencing-in-controlled-call-acceptance)
+separates reviewed pre-import source/legacy/target evidence from actual
+post-import acceptance. `ANALYTICS_MIGRATION_EVIDENCE_DIGEST` pins the first
+envelope; it is not evidence that an import succeeded. The existing later
+controlled-call packet supplies actual worker-produced call evidence; no new
+synthetic cloud rehearsal or source seeding is permitted. Its separately approved,
+finite import sequence uses the existing Job and returns to independently verified
+disabled mode after **each** execution. Complete source/execution inventory and
+frozen competing producers are mandatory because active mode has no canary
+selector. Include derived daily metrics in the exact scope and limits. Both
+evidence phases and separate activation approval remain necessary before normal
+or scheduled operation. Empty tables, a connected OAuth grant, a hash or a
+successful submit cannot pass that gate. Complete the first call's alert/inbox,
+Analytics-backed results/CRM summary and safe-completion chain before further
+calls. Current preparation authorizes no call, import or configuration change.
+
+This is a source-only ordering correction; it adds no runtime mode, importer,
+deployment, access grant or live permission. No deployed function file changes,
+so existing immutable artifact evidence and intentional revision holds remain
+valid. Do not redeploy or reopen a handler solely for this documentation change.
+
 ## Historical August 28 Development Installation
 
 This section records the earlier installed baseline, not deployment of the
