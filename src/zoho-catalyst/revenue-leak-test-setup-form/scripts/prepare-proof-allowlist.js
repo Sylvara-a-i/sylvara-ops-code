@@ -259,9 +259,13 @@ async function run({
     // Do not publish success if the owner's exact console state cannot be restored.
     if (!restoreTerminal()) throw new InputError("WINDOWS_CONSOLE_UNAVAILABLE");
     output.write(
-      "Private derived value for FORM2_PROOF_ALLOWED_RECIPIENT_DIGESTS:\n" +
+      "Private single-recipient entry for FORM2_PROOF_ALLOWED_RECIPIENT_DIGESTS:\n" +
       `${result}\n` +
-      "Owner: replace that Development variable in revenue_leak_test_setup_form only.\n" +
+      "Owner: edit that Development variable in revenue_leak_test_setup_form only.\n" +
+      "Preserve every existing approved entry. Append only the new quoted digest to the existing JSON array.\n" +
+      "Do not add a duplicate or nest this array. Maximum: 16 unique entries.\n" +
+      "Initialize with this array only if the existing allowlist is genuinely empty.\n" +
+      "Never replace or remove existing entries.\n" +
       "Keep SOURCE_REVISION and both workflow-secret fields unchanged. Do not send this output to chat.\n" +
       "No configuration was read or changed. No session, OTP, approval or live test was performed.\n",
     );
