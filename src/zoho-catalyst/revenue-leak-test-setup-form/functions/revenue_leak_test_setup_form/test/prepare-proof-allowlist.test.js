@@ -204,6 +204,24 @@ for (const newline of ["\r", "\n", "\r\n"]) {
   });
 }
 
+test("owner instructions preserve the existing allowlist when adding one recipient", async () => {
+  const result = await execute(successfulAnswers());
+  assert.equal(result.code, 0);
+  for (const instruction of [
+    "Private single-recipient entry for FORM2_PROOF_ALLOWED_RECIPIENT_DIGESTS:",
+    "Preserve every existing approved entry. Append only the new quoted digest to the existing JSON array.",
+    "Do not add a duplicate or nest this array. Maximum: 16 unique entries.",
+    "Initialize with this array only if the existing allowlist is genuinely empty.",
+    "Never replace or remove existing entries.",
+  ]) {
+    assert.ok(result.output.text.includes(instruction));
+  }
+  assert.equal(result.output.text.includes("Owner: replace that Development variable"), false);
+  assert.ok(result.output.text.includes(deriveAllowlist(QA_EMAIL, PROOF_KEY)));
+  assertNoInputs(result.output);
+  assertRestored(result.input);
+});
+
 test("successful input restores an already-raw terminal to its original state", async () => {
   const result = await execute(successfulAnswers(), { isRaw: true });
   assert.equal(result.code, 0);
