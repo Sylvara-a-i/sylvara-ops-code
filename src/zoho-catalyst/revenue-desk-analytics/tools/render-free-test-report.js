@@ -1,6 +1,6 @@
 'use strict';
 
-// Local operator draft only. Never send, import, initialize a provider, or render
+// Local review drafts only. Never send, import, initialize a provider, or render
 // raw input objects: the existing report builder must reconcile the evidence first.
 const fs = require('node:fs');
 const path = require('node:path');
@@ -48,6 +48,102 @@ function table(caption, headers, rows) {
       `<td>${escapeHtml(text(value))}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
 }
 
+// Presentation-only projection of the same reconciled result. Never accept raw
+// names, IDs or supplemental totals here: the minimized source has no approved
+// business display name. That delivery prerequisite stays visibly unresolved.
+function renderClientSummary(report, { now, synthetic }) {
+  const during = report.duringTest;
+  const opportunities = during.callMix.find((group) => group.category === 'new_job_opportunities').calls;
+  const needsReview = during.callMix.find((group) => group.category === 'needs_review').calls;
+  const notes = [];
+  if (!report.evidence.analysisComplete) notes.push('Call analysis is incomplete. Some classifications or flags may change after review.');
+  if (needsReview > 0) notes.push(`${needsReview} connected call(s) are incomplete or need review; do not treat them as confirmed opportunities.`);
+  const configurationFailures = during.outcomeDetail.find((item) => item.outcome === 'configuration_failure').calls;
+  if (configurationFailures > 0) notes.push(`${configurationFailures} call(s) ended with a setup failure. Review those requests before relying on the results.`);
+  if (during.observedWorkflowFailures === null) notes.push('The total number of workflow failures is not available; this does not mean zero failures.');
+  else if (during.observedWorkflowFailures > 0) notes.push(`${during.observedWorkflowFailures} call(s) had a recorded workflow failure. These may overlap the calls needing review.`);
+  if (during.unhandledAttempts > 0) notes.push(`${during.unhandledAttempts} unconnected or unhandled attempt(s) are excluded from Calls Handled.`);
+  if (during.inFlightOvershoot > 0) notes.push(`${during.inFlightOvershoot} already-admitted call(s) finished above the ${during.callLimit}-call limit and are included in the total.`);
+  else if (during.inFlightOvershoot === null) notes.push('Evidence of calls finishing above the limit is not available.');
+
+  // Preserve each existing state count, without calculating a second alert
+  // total or implying that provider acceptance proves delivery or human work.
+  const alertNotes = {
+    Pending: 'office alert(s) were waiting to be sent',
+    Sending: 'office alert(s) had an unconfirmed send outcome',
+    RetryRequired: 'office alert(s) required delivery recovery',
+    DryRunRecorded: 'office alert(s) were preview-only; nothing was sent for those calls',
+    Sent: 'office alert(s) were accepted by the mail provider; inbox receipt is not verified',
+    Ambiguous: 'office alert(s) had an uncertain outcome; check before any resend',
+    ReconciliationRequired: 'office alert(s) needed operator investigation',
+    Succeeded: 'office alert(s) had a legacy success status without verified delivery',
+    TerminalFailure: 'office alert(s) failed; operator follow-up is required',
+  };
+  for (const { state, calls } of during.handoff.notificationStates) {
+    if (calls > 0) notes.push(`${calls} ${alertNotes[state]}.`);
+  }
+  if (during.handoff.missingNotificationEvidenceCalls > 0) {
+    notes.push(`Office-alert evidence is not available for ${during.handoff.missingNotificationEvidenceCalls} call(s).`);
+  }
+  if (during.callsCaptured > 0) notes.push('Inbox receipt, office acknowledgment and completed callbacks are not verified by this report.');
+  const baseline = report.beforeTest.values
+    ? 'Pre-test context is not a like-for-like comparison. These results do not establish measured improvement.'
+    : 'No pre-test baseline is available, so improvement over previous call handling cannot be measured.';
+  const interpretation = during.callsCaptured === 0
+    ? 'No connected calls were captured on this test route. There is no observed call sample from which to judge demand.'
+    : `${opportunities} of ${during.callsCaptured} connected calls were classified as potential new-job calls. This describes requests, not unique customers, confirmed appointments, jobs or revenue.`;
+  const stopReasons = {
+    seven_day_limit_reached: 'Seven-day limit reached',
+    call_limit_reached: 'Call limit reached; not necessarily seven completed days',
+    client_requested_stop: 'Stopped at the business’s request',
+    sylvara_stopped: 'Stopped by Sylvara', technical_failure: 'Stopped because of a technical failure',
+    converted_early: 'Ended early', other: 'Other recorded reason; review with Sylvara',
+  };
+  const metric = (label, value) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(count(value))}</dd></div>`;
+  return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+<title>${TITLE} — Client Summary Draft</title><style>
+@page { size: Letter; margin: .80in 1in .78in; }
+* { box-sizing: border-box; }
+body { margin: 0 auto; padding: .4in; max-width: 8.5in; color: #161616; background: white;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif; font-size: 10pt; line-height: 1.25; }
+h1 { font-size: 18pt; margin: 8pt 0; } h2 { font-size: 12pt; margin: 12pt 0 5pt; }
+h1, h2, caption { break-after: avoid; } p, li { orphans: 3; widows: 3; }
+p { margin: 0 0 5pt; } header { border-bottom: 2px solid; padding-bottom: 8pt; }
+.status { font-size: 9pt; font-weight: bold; } .synthetic { border: 2px solid; padding: 6pt; font-weight: bold; }
+.metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10pt; margin: 12pt 0; break-inside: avoid; }
+.metrics div { border-bottom: 1px solid #777; padding-bottom: 6pt; } dt { font-size: 10pt; } dd { margin: 4pt 0 0; font-size: 22pt; font-weight: bold; }
+table { border-collapse: collapse; width: 100%; margin: 8pt 0; font-size: 10pt; }
+caption { text-align: left; font-weight: bold; margin-bottom: 5pt; } th, td { text-align: left; border-bottom: 1px solid #aaa; padding: 4pt; }
+thead { display: table-header-group; } tr { break-inside: avoid; } td { width: 20%; }
+ul { padding-left: 16pt; margin: 5pt 0; } li { margin-bottom: 4pt; } footer { border-top: 1px solid; margin-top: 12pt; padding-top: 5pt; font-size: 9pt; }
+@media screen and (max-width: 520px) { body { padding: 16px; } .metrics { grid-template-columns: 1fr; } }
+@media print { body { max-width: none; padding: 0; } }
+</style></head><body>
+<header><p>Sylvara | Free-Test Results</p><p class="status">Draft — Client layout for review — Not for delivery</p>
+${synthetic ? '<p class="synthetic">Synthetic Demo — No Live Calls</p>' : ''}
+<h1>${TITLE}</h1><p><strong>Business name:</strong> Not supplied</p>
+<p><strong>${synthetic ? 'Illustrative test period' : 'Test period'}:</strong> ${escapeHtml(instant(during.startedAtUtc))} to ${escapeHtml(instant(during.endedAtUtc))}</p>
+<p><strong>Coverage:</strong> ${escapeHtml(COVERAGE[during.coverage] || 'Not available')}. Only this route was measured, not all calls to the business.</p>
+<p><strong>Why it ended:</strong> ${escapeHtml(stopReasons[during.endReason])}. The actual dates above apply.</p></header>
+<main><dl class="metrics">
+${metric('Calls Handled', during.callsCaptured)}${metric('Potential New-Job Calls', opportunities)}${metric('Calls Flagged For Office Follow-Up', during.officeFollowUpCalls)}
+</dl><p>Calls Handled counts unique connected calls. A follow-up flag does not establish whether office work is still outstanding.</p>
+${table('Connected-call breakdown — each call appears once', ['Call category', 'Calls'], [
+    ...during.callMix.map((group) => [group.label, group.calls]), ['Total', during.callsCaptured],
+  ])}
+<p>Urgent requests: ${escapeHtml(count(during.urgentRequests))}. Urgency and follow-up flags overlap these categories and each other; do not add them to the total.</p>
+<section aria-labelledby="meaning"><h2 id="meaning">What the results mean</h2><p>${escapeHtml(interpretation)}</p><p>${escapeHtml(baseline)}</p></section>
+<section aria-labelledby="limits"><h2 id="limits">What needs attention</h2><ul>${notes.map((note) => `<li>${escapeHtml(note)}</li>`).join('')}</ul>
+<p>Missing evidence means Not available, not zero. No recovered revenue, savings or measured improvement is calculated.</p>
+${synthetic ? '<p>All results are illustrative. This preview proves no live call, delivery or customer outcome.</p>' : ''}</section>
+<section aria-labelledby="next"><h2 id="next">Next practical action</h2><p>Review the call mix and any flagged requests with your office. Confirm what has already been handled and what needs a callback. Resolve uncertain or failed alerts with Sylvara before resending anything.</p>
+<p>The recorded test stop does not prove that original phone handling was restored; confirm restoration separately.</p></section>
+</main><footer>Draft — Not for delivery | Sylvara | Version 1 | Rev. ${escapeHtml(new Date(now).toISOString().slice(0, 10))}</footer>
+</body></html>`;
+}
+
 /** Produce self-contained HTML only after the fixed-test report gate passes.
  * All source IDs/hashes remain in private evidence, not visible or hidden HTML.
  * Fonts use the local standards stack; no font is downloaded or bundled. Print
@@ -55,10 +151,12 @@ function table(caption, headers, rows) {
  */
 function renderFreeTestReport(input, options = {}) {
   if (!options || typeof options !== 'object' || Array.isArray(options)
-    || Object.keys(options).some((key) => !['now', 'synthetic'].includes(key))) fail('REPORT_RENDER_OPTIONS_INVALID');
-  const { now = Date.now(), synthetic = false } = options;
-  if (!Number.isSafeInteger(now) || typeof synthetic !== 'boolean') fail('REPORT_RENDER_OPTIONS_INVALID');
+    || Object.keys(options).some((key) => !['now', 'synthetic', 'audience'].includes(key))) fail('REPORT_RENDER_OPTIONS_INVALID');
+  const { now = Date.now(), synthetic = false, audience = 'internal' } = options;
+  if (!Number.isSafeInteger(now) || typeof synthetic !== 'boolean'
+    || !['internal', 'client'].includes(audience)) fail('REPORT_RENDER_OPTIONS_INVALID');
   const report = buildFreeTestReport(input, now);
+  if (audience === 'client') return renderClientSummary(report, { now, synthetic });
   const before = report.beforeTest;
   const during = report.duringTest;
   const evidence = report.evidence;
@@ -190,8 +288,9 @@ function outsideGit(directory) {
  */
 function run(argv, now = Date.now()) {
   try {
-    if (!Array.isArray(argv) || ![2, 3].includes(argv.length)
-      || (argv.length === 3 && argv[2] !== '--synthetic')) fail('REPORT_ARGUMENTS_INVALID');
+    if (!Array.isArray(argv) || argv.length < 2 || argv.length > 4
+      || argv.slice(2).some((flag) => !['--synthetic', '--audience=client'].includes(flag))
+      || new Set(argv.slice(2)).size !== argv.length - 2) fail('REPORT_ARGUMENTS_INVALID');
     const inputPath = localAbsolute(argv[0], '.json');
     const outputPath = localAbsolute(argv[1], '.html');
     const inputMetadata = fs.lstatSync(inputPath);
@@ -208,7 +307,8 @@ function run(argv, now = Date.now()) {
     let input;
     try { input = JSON.parse(fs.readFileSync(physicalInput, 'utf8')); }
     catch { fail('REPORT_INPUT_JSON_INVALID'); }
-    const html = renderFreeTestReport(input, { now, synthetic: argv.length === 3 });
+    const html = renderFreeTestReport(input, { now, synthetic: argv.includes('--synthetic'),
+      audience: argv.includes('--audience=client') ? 'client' : 'internal' });
     fs.writeFileSync(physicalOutput, html, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
     return Object.freeze({ status: 'draft_created_not_for_delivery' });
   } catch {
