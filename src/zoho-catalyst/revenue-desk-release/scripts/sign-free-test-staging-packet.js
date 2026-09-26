@@ -21,6 +21,7 @@ const {
   TRANSITION_PROFILE,
   validateUnsignedTransitionEnvelope,
   signFreeTestTransitionPacket,
+  SUCCESSOR_PROFILE, validateUnsignedSuccessorEnvelope, signFreeTestSuccessorPacket,
 } = require('../lib/free-test-staging-packet');
 
 const MAX_INPUT_BYTES = 1024 * 1024;
@@ -279,13 +280,15 @@ function main() {
   }
   const now = Date.now();
   const profile = envelope?.request?.profile;
-  fail([PROFILE, RECONCILIATION_PROFILE, COMPLETION_PROFILE, TRANSITION_PROFILE].includes(profile), 'INVALID_SIGNING_PROFILE');
+  fail([PROFILE, RECONCILIATION_PROFILE, COMPLETION_PROFILE, TRANSITION_PROFILE, SUCCESSOR_PROFILE].includes(profile), 'INVALID_SIGNING_PROFILE');
   const validate = profile === PROFILE ? validateUnsignedStagingEnvelope
     : profile === RECONCILIATION_PROFILE ? validateUnsignedReconciliationEnvelope
-      : profile === COMPLETION_PROFILE ? validateUnsignedCompletionEnvelope : validateUnsignedTransitionEnvelope;
+      : profile === COMPLETION_PROFILE ? validateUnsignedCompletionEnvelope
+        : profile === SUCCESSOR_PROFILE ? validateUnsignedSuccessorEnvelope : validateUnsignedTransitionEnvelope;
   const sign = profile === PROFILE ? signFreeTestStagingPacket
     : profile === RECONCILIATION_PROFILE ? signFreeTestReconciliationPacket
-      : profile === COMPLETION_PROFILE ? signFreeTestCompletionPacket : signFreeTestTransitionPacket;
+      : profile === COMPLETION_PROFILE ? signFreeTestCompletionPacket
+        : profile === SUCCESSOR_PROFILE ? signFreeTestSuccessorPacket : signFreeTestTransitionPacket;
   // Complete all packet/evidence validation before consuming protected stdin.
   validate(envelope, {
     expectedRevision: args.expectedRevision,

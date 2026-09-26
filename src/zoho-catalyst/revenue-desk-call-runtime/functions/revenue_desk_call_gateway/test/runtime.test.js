@@ -1766,6 +1766,81 @@ test('integration: a late Mail acceptance cannot override stale-send containment
   assert.equal(fixture.store.rows.get('RevenueDeskNotifications').length, 1);
 });
 
+test('integration: signed provider artifacts are discarded while approved structured analysis survives', async () => {
+  const fixture = runtimeFixture();
+  const inbound = await invoke(fixture.listener, { url: '/retell/inbound',
+    payload: payloadInbound('A'), env: fixture.env });
+  const event = eventPayload('call_analyzed', 'artifact_minimization_A',
+    inbound.body.call_inbound.metadata, 'A', {
+      callback_number_confirmed: true, bookable_opportunity: true, office_follow_up_required: true,
+    });
+  const marker = 'synthetic-excluded-provider-artifact';
+  Object.assign(event.call, {
+    transcript: marker, transcript_object: [{ content: marker }],
+    recording_url: `https://example.invalid/${marker}`,
+    recording_multi_channel_url: `https://example.invalid/${marker}`,
+    scrubbed_recording_url: `https://example.invalid/${marker}`,
+  });
+  event.call.call_analysis.call_summary = marker;
+  const accepted = await invoke(fixture.listener, {
+    url: '/retell/events', payload: event, env: fixture.env, processJobs: false,
+  });
+  assert.equal(accepted.status, 200);
+  const receipt = fixture.store.rows.get('RevenueDeskEventReceipts')
+    .find((row) => row.RECEIPT_KIND === 'provider_event');
+  assert.deepEqual(fixture.jobQueue, [{ mode: 'process_event', event_key: receipt.EVENT_KEY }]);
+  await fixture.listener.processQueuedJobs();
+  assert.equal(fixture.workerErrors.length, 0);
+  assert.equal(receipt.STATUS, 'Completed');
+  const canonical = JSON.parse(fixture.store.rows.get('RevenueDeskCalls')[0].CANONICAL_CALL_JSON);
+  assert.equal(canonical.issueSummary, 'Leaking water heater');
+  assert.equal(canonical.callbackNumber, '+15551110001');
+  assert.equal(canonical.bookableOpportunity, true);
+  assert.equal(canonical.officeFollowUpRequired, true);
+  assert.equal(JSON.stringify([...fixture.store.rows]).includes(marker), false);
+  assert.equal(JSON.stringify({ logs: fixture.logs, response: accepted.body }).includes(marker), false);
+});
+
+test('integration: receipt failure diagnostics are contained without changing retry or ambiguity state', async () => {
+  const marker = 'synthetic-private-receipt-diagnostic';
+  const cases = [
+    { failure: Object.assign(new Error(marker), { code: `https://example.invalid/${marker}` }),
+      status: 'TerminalFailure', errorCode: 'UNEXPECTED_ERROR' },
+    { failure: Object.assign(new Error(marker), { code: 'SYNTHETIC_PRIVATE_CONTENT' }),
+      status: 'TerminalFailure', errorCode: 'UNEXPECTED_ERROR' },
+    { failure: new RevenueDeskError('CATALYST_QUERY_FAILED', marker,
+      { httpStatus: 503, retryable: true }), status: 'RetryRequired', errorCode: 'CATALYST_QUERY_FAILED' },
+    { failure: new RevenueDeskError('CATALYST_UPDATE_FAILED', marker,
+      { httpStatus: 503, retryable: true, ambiguous: true }),
+      status: 'ReconciliationRequired', errorCode: 'CATALYST_UPDATE_FAILED' },
+  ];
+  for (const { failure, status, errorCode } of cases) {
+    const fixture = runtimeFixture();
+    const inbound = await invoke(fixture.listener, { url: '/retell/inbound',
+      payload: payloadInbound('A'), env: fixture.env });
+    const query = fixture.store.query.bind(fixture.store);
+    fixture.store.query = async (...args) => {
+      if (args[0] === 'RevenueDeskDeployments' && args[1] === 'DEPLOYMENT_ID') throw failure;
+      return query(...args);
+    };
+    const accepted = await invoke(fixture.listener, { url: '/retell/events', env: fixture.env,
+      payload: eventPayload('call_ended', 'diagnostic_containment_A',
+        inbound.body.call_inbound.metadata, 'A') });
+    assert.equal(accepted.status, 200);
+    assert.equal(fixture.workerErrors.length, 1);
+    const receipt = fixture.store.rows.get('RevenueDeskEventReceipts')
+      .find((row) => row.RECEIPT_KIND === 'provider_event');
+    assert.equal(receipt.STATUS, status);
+    assert.equal(receipt.LAST_ERROR_CODE, errorCode);
+    assert.equal(receipt.NEXT_ATTEMPT_AT !== null, status === 'RetryRequired');
+    assert.equal(fixture.store.rows.get('RevenueDeskCalls').length, 0);
+    const diagnostic = fixture.logs.find(({ event }) => event === 'retell_event_failed');
+    assert.equal(diagnostic.errorCode, errorCode);
+    assert.equal(JSON.stringify({ rows: [...fixture.store.rows], logs: fixture.logs,
+      response: accepted.body }).includes(marker), false);
+  }
+});
+
 test('integration: Catalyst retry job replays a due minimized event receipt without raw provider payload', async () => {
   const fixture = runtimeFixture();
   const inbound = await invoke(fixture.listener, { url: '/retell/inbound', payload: payloadInbound('A'), env: fixture.env });

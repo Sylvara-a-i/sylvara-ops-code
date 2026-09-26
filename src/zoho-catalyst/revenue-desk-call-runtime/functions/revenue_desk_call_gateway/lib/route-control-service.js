@@ -1186,9 +1186,13 @@ function createRouteControlService({
     const configuration = parseConfiguration(
       configurationRow, command, config.sourceRevision, deployment,
     );
-    const events = receipts.filter((receipt) => receipt.STATUS === 'Completed')
+    const currentReceipts = String(command.configurationVersionId).startsWith('cfgsuccessor_')
+      ? await configurationStaging?.partitionAuthorizationHistory(command, receipts) : receipts;
+    invariant(Array.isArray(currentReceipts), 'CONTROL_AUDIT_INVALID',
+      'Successor authorization history is unavailable.', { httpStatus: 503 });
+    const events = currentReceipts.filter((receipt) => receipt.STATUS === 'Completed')
       .map((receipt) => eventFromReceipt(receipt, config));
-    return { deployment, configurationRow, configuration, deal, events, receipts };
+    return { deployment, configurationRow, configuration, deal, events, receipts: currentReceipts };
   }
 
   async function requireCompletedActivationApproval(command, suppliedState = null) {
@@ -1214,7 +1218,11 @@ function createRouteControlService({
     invariant(receipts.length < 100,
       'CONTROL_AUDIT_INVALID', 'Approval receipt inventory is incomplete.',
       { httpStatus: 503 });
-    const approvals = receipts.filter((receipt) => receipt.EVENT_TYPE === 'approve');
+    const currentReceipts = String(command.configurationVersionId).startsWith('cfgsuccessor_')
+      ? await configurationStaging?.partitionAuthorizationHistory(command, receipts) : receipts;
+    invariant(Array.isArray(currentReceipts), 'CONTROL_AUDIT_INVALID',
+      'Successor approval history is unavailable.', { httpStatus: 503 });
+    const approvals = currentReceipts.filter((receipt) => receipt.EVENT_TYPE === 'approve');
     invariant(approvals.length === 1
       && approvals[0].EVENT_KEY === deployment.APPROVAL_EVENT_KEY,
     'CONTROL_AUDIT_INVALID', 'Activation requires one exact referenced approval receipt.',

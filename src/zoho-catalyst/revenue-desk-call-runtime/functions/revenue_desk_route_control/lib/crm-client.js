@@ -385,7 +385,7 @@ function createCrmControlClient(config, {
     return readback;
   }
 
-  async function updateCoreDeal(dealId, patch, modifiedTime) {
+  async function updateCoreDeal(dealId, patch, modifiedTime, { suppressCadences = false } = {}) {
     invariant(plain(patch) && Object.keys(patch).length > 0
       && typeof modifiedTime === 'string' && Number.isFinite(Date.parse(modifiedTime)),
     'CRM_WRITE_INVALID', 'CRM Journey-core patch is invalid.', { httpStatus: 503 });
@@ -395,7 +395,8 @@ function createCrmControlClient(config, {
       headers: { 'Content-Type': 'application/json', 'If-Unmodified-Since': modifiedTime },
       // Core writes are authoritative and read back below. Deferred workflows
       // and Blueprint actions must not run as hidden side effects.
-      body: JSON.stringify({ data: [{ id: dealId, ...patch }], trigger: [] }),
+      body: JSON.stringify({ data: [{ id: dealId, ...patch }], trigger: [],
+        ...(suppressCadences ? { skip_feature_execution: [{ name: 'cadences' }] } : {}) }),
     }, true);
     const entry = Array.isArray(json.data) ? json.data[0] : null;
     invariant(entry?.status === 'success' && entry?.code === 'SUCCESS'
@@ -424,6 +425,39 @@ function createCrmControlClient(config, {
       'CRM_TRANSITION_ACK_INVALID', 'CRM Blueprint transition acknowledgement is invalid.',
       { httpStatus: 503, ambiguous: true });
     return getDeal(dealId);
+  }
+
+  async function recordConfigurationSuccessor(dealId, {
+    expectedDeal, deploymentId, predecessorConfigurationId, predecessorApprovedAt,
+  }) {
+    const deal = await getDeal(dealId);
+    assertDealSnapshot(deal, expectedDeal);
+    invariant(deal.Stage === 'Setup and QA' && deal.Test_Status === 'Scheduled'
+      && deal.Go_Live_Approval_Status === 'Approved'
+      && deal.Deployment_Record_ID === deploymentId && deal.Approved_Deployment_Record_ID === deploymentId
+      && deal.Approved_Configuration_Version === predecessorConfigurationId
+      && sameDealField('Go_Live_Approved_At', deal.Go_Live_Approved_At, predecessorApprovedAt)
+      && !deal.Test_Start_At && !deal.Test_End_At && !deal.Test_End_Reason
+      && !deal.Rollback_Completed_At && !deal.Billing_Subscription_ID,
+    'CRM_TRANSITION_PRECONDITION_FAILED', 'Successor requires the exact inactive predecessor approval.', { httpStatus: 409 });
+    // Old approval remains in immutable receipts. Only the current pointer is
+    // made explicitly pending; this is not customer consent or a new approval.
+    const patch = { Test_Status: 'Setup Pending', Go_Live_Approval_Status: 'Not Ready',
+      Go_Live_Approved_At: null, Approved_Deployment_Record_ID: null, Approved_Configuration_Version: null };
+    let result;
+    try { result = await updateCoreDeal(dealId, patch, deal.Modified_Time, { suppressCadences: true }); }
+    catch (_) {
+      try { result = await getDeal(dealId); } catch (_) { result = null; }
+      invariant(result && Object.entries(patch).every(([key, value]) => sameDealField(key, result[key], value)),
+        'CONFIGURATION_SUCCESSOR_RECONCILIATION_REQUIRED', 'Successor CRM write requires reconciliation.',
+        { httpStatus: 503, ambiguous: true });
+    }
+    invariant(Object.entries(patch).every(([key, value]) => sameDealField(key, result[key], value))
+      && result.Stage === expectedDeal.Stage,
+    'CONFIGURATION_SUCCESSOR_RECONCILIATION_REQUIRED', 'Successor CRM state did not read back exactly.',
+    { httpStatus: 503, ambiguous: true });
+    assertDealSnapshot(result, expectedDeal, APPROVAL_MUTABLE_FIELDS);
+    return result;
   }
 
   async function recordApproval(dealId, {
@@ -868,7 +902,7 @@ function createCrmControlClient(config, {
   return Object.freeze({ getDeal, proveActivationInactive, containActivation,
     recordApproval, recordActivation, recordRollback, recordCoreApproval, recordCoreRollback,
     getPreparationRecords, getPreparationFieldMetadata, getNativeConversion, getPublicOriginalLead,
-    recordConfigurationStaging });
+    recordConfigurationStaging, recordConfigurationSuccessor });
 }
 
 module.exports = Object.freeze({ DEAL_FIELDS, PUBLIC_LINEAGE_FIELDS, TRANSITIONS, createCrmControlClient,

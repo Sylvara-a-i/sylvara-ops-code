@@ -22,6 +22,9 @@ const { invariant }
 const { keyedDigest, numberLookupKey }
   = require('../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/security');
 const { prepareFreeTestConfiguration, MAX_READBACK_AGE_MS } = require('./free-test-preparation');
+const { PROFILE: SUCCESSOR_PROFILE, SIGNATURE_DOMAIN: SUCCESSOR_SIGNATURE_DOMAIN,
+  canonicalSuccessorIntent, projectInactiveSuccessor, successorPlanDigest }
+  = require('../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/configuration-successor');
 
 const PROFILE = 'free-test-configuration-staging-v1';
 const SIGNATURE_DOMAIN = 'revenue-desk-configuration-staging-intent-v1\0';
@@ -606,6 +609,44 @@ function signFreeTestTransitionPacket(envelope, {
     sourceRevision: expectedRevision, maxBodyBytes, profile: TRANSITION_PROFILE });
 }
 
+function validateUnsignedSuccessorEnvelope(envelope, {
+  expectedRevision, expectedOperatorHash, maxBodyBytes, now = Date.now(),
+}) {
+  validateContext({ expectedRevision, expectedOperatorHash, maxBodyBytes, now });
+  exactObject(envelope, ['schemaVersion', 'predecessorConfigurationRow', 'predecessorDeployment', 'request'],
+    'INVALID_UNSIGNED_SUCCESSOR_ENVELOPE');
+  const request = envelope.request;
+  exactObject(request, ['profile', 'intent'], 'INVALID_UNSIGNED_SUCCESSOR_ENVELOPE');
+  invariant(envelope.schemaVersion === 1 && request.profile === SUCCESSOR_PROFILE,
+    'INVALID_UNSIGNED_SUCCESSOR_ENVELOPE', 'Successor envelope is invalid.');
+  const canonicalIntent = canonicalSuccessorIntent(request.intent);
+  const plan = request.intent.plan;
+  invariant(plan.target_revision === expectedRevision && plan.operator_id_hash === expectedOperatorHash
+    && Date.parse(request.intent.requested_at) <= now && now - Date.parse(request.intent.requested_at) <= MAX_INTENT_AGE_MS,
+  'INVALID_STAGING_INTENT', 'Successor intent is stale or has the wrong release/operator.');
+  projectInactiveSuccessor(plan, envelope.predecessorConfigurationRow, envelope.predecessorDeployment,
+    request.intent.requested_at);
+  const byteLength = Buffer.byteLength(`${JSON.stringify({ ...request, signature: `v1=${'0'.repeat(64)}` })}\n`, 'utf8');
+  invariant(byteLength <= maxBodyBytes, 'STAGING_PACKET_TOO_LARGE', 'Successor exceeds the verified body limit.');
+  return deepFreeze({ packet: structuredClone(request), canonicalIntent, sourceRevision: expectedRevision,
+    maxBodyBytes, profile: SUCCESSOR_PROFILE, authorizationDocumentSha256: successorPlanDigest(plan),
+    durableEvidenceAuthenticated: false });
+}
+
+function signFreeTestSuccessorPacket(envelope, {
+  secret, expectedRevision, expectedOperatorHash, maxBodyBytes, now = Date.now(),
+}) {
+  const validated = validateUnsignedSuccessorEnvelope(envelope,
+    { expectedRevision, expectedOperatorHash, maxBodyBytes, now });
+  const signature = `v1=${crypto.createHmac('sha256', decodeSigningSecret(secret))
+    .update(SUCCESSOR_SIGNATURE_DOMAIN).update(validated.canonicalIntent).digest('hex')}`;
+  const packet = deepFreeze({ ...validated.packet, signature });
+  const serialized = `${JSON.stringify(packet)}\n`;
+  return deepFreeze({ packet, serialized, byteLength: Buffer.byteLength(serialized, 'utf8'),
+    sha256: crypto.createHash('sha256').update(serialized).digest('hex'), sourceRevision: expectedRevision,
+    maxBodyBytes, profile: SUCCESSOR_PROFILE });
+}
+
 function signFreeTestStagingPacket(envelope, {
   secret, expectedRevision, expectedOperatorHash, maxBodyBytes, now = Date.now(),
 }) {
@@ -653,4 +694,5 @@ module.exports = Object.freeze({
   TRANSITION_PROFILE,
   validateUnsignedTransitionEnvelope,
   signFreeTestTransitionPacket,
+  SUCCESSOR_PROFILE, validateUnsignedSuccessorEnvelope, signFreeTestSuccessorPacket,
 });

@@ -131,7 +131,9 @@ function integerColumn(value, name, minimum = 0) {
 }
 
 function durableErrorCode(error) {
-  return typeof error?.code === 'string' && /^[A-Z][A-Z0-9_]{0,63}$/.test(error.code)
+  // SDK diagnostics are untrusted content even when their code looks operational.
+  return error instanceof RevenueDeskError
+    && typeof error.code === 'string' && /^[A-Z][A-Z0-9_]{0,63}$/.test(error.code)
     ? error.code : 'UNEXPECTED_ERROR';
 }
 
@@ -1607,12 +1609,12 @@ function createRuntimeService({
         }
         await mutateClaimedReceipt(receiptKey, workerToken, () => ({
           STATUS: status, LEASE_EXPIRES_AT: null, NEXT_ATTEMPT_AT: nextAttemptAt,
-          LAST_ERROR_CODE: error.code || 'UNEXPECTED_ERROR',
+          LAST_ERROR_CODE: durableErrorCode(error),
         }));
       } catch (_) { /* Original error remains authoritative. */ }
       const correlationId = publicCorrelationId(config.eventSecret, ['event-failure', receiptKey]);
       logger.error({ event: 'retell_event_failed', correlationId, eventType: eventData.event,
-        state: status, errorCode: error.code || 'UNEXPECTED_ERROR' });
+        state: status, errorCode: durableErrorCode(error) });
       throw error;
     }
   }
@@ -1761,7 +1763,7 @@ function createRuntimeService({
         DEPLOYMENT_ID: null, STATUS: 'TerminalFailure', RECEIPT_VERSION: 1,
         ATTEMPT_COUNT: 1, LEASE_TOKEN: null,
         LEASE_EXPIRES_AT: null, NEXT_ATTEMPT_AT: null,
-        LAST_ERROR_CODE: error.code || 'INVALID_EVENT', RECEIVED_AT: at, PROCESSED_AT: at,
+        LAST_ERROR_CODE: durableErrorCode(error), RECEIVED_AT: at, PROCESSED_AT: at,
         SOURCE_REVISION: config.sourceRevision, SOURCE_ENVIRONMENT: config.environment,
       }, RECEIPT_IMMUTABLE);
       throw error;
@@ -2381,5 +2383,5 @@ function createRuntimeService({
 module.exports = {
   createRuntimeService, deploymentFromRow, loadDeployment, activeAt, resolverMetadata, unavailable,
   normalizeEventForReceipt, assertCanonicalCallIntegrity,
-  boundedPendingDeployments,
+  boundedPendingDeployments, durableErrorCode,
 };

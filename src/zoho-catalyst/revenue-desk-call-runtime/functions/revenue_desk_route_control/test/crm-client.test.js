@@ -13,6 +13,44 @@ const CORE_STOPPED_AT = '2026-08-29T12:20:00.789Z';
 const SYNTHETIC_ORGANIZATION_ID = '606';
 const PUBLIC_JOURNEY = 'synthetic_public_journey';
 
+test('successor CRM pointer uses conditional automation-suppressed PUT and reconciles ambiguity without retry', async () => {
+  for (const outcome of ['success', 'lost-after-commit', 'lost-before-commit', 'stale', 'false-success', 'partial-success']) {
+    const state = { ...scheduledDeal(), Go_Live_Approved_At: CORE_APPROVED_AT };
+    const before = structuredClone(state); const writes = [];
+    const client = createCrmControlClient({ crmApiBaseUrl: 'https://www.zohoapis.com/crm/v8',
+      crmOrganizationId: SYNTHETIC_ORGANIZATION_ID, platformTimeoutMs: 500 }, {
+      readAuthorization: async () => 'Zoho-oauthtoken synthetic-read',
+      writeAuthorization: async () => 'Zoho-oauthtoken synthetic-write',
+      fetchImpl: async (url, options) => {
+        if (url.endsWith('/org')) return response(200, { org: [{ zgid: SYNTHETIC_ORGANIZATION_ID }] });
+        if (options.method === 'GET') return response(200, { data: [state] });
+        assert.equal(options.method, 'PUT'); assert.equal(options.headers['If-Unmodified-Since'], before.Modified_Time);
+        const body = JSON.parse(options.body); writes.push(body);
+        assert.deepEqual(body.trigger, []); assert.deepEqual(body.skip_feature_execution, [{ name: 'cadences' }]);
+        assert.equal(body.data.length, 1); assert.equal(body.data[0].id, DEAL_ID);
+        assert.deepEqual(Object.keys(body.data[0]).sort(), ['id', 'Test_Status', 'Go_Live_Approval_Status',
+          'Go_Live_Approved_At', 'Approved_Deployment_Record_ID', 'Approved_Configuration_Version'].sort());
+        if (outcome === 'stale') return response(412, { code: 'ALREADY_MODIFIED' });
+        if (outcome === 'lost-before-commit') throw new Error('synthetic timeout');
+        if (outcome !== 'false-success') Object.assign(state, body.data[0]);
+        if (outcome === 'partial-success') state.Approved_Configuration_Version = before.Approved_Configuration_Version;
+        if (outcome === 'lost-after-commit') throw new Error('synthetic timeout');
+        return response(200, { data: [{ status: 'success', code: 'SUCCESS', details: { id: DEAL_ID } }] });
+      },
+    });
+    const pending = client.recordConfigurationSuccessor(DEAL_ID, { expectedDeal: before,
+      deploymentId: DEPLOYMENT_ID, predecessorConfigurationId: CONFIGURATION_ID, predecessorApprovedAt: CORE_APPROVED_AT });
+    if (['success', 'lost-after-commit'].includes(outcome)) {
+      assert.equal((await pending).Go_Live_Approval_Status, 'Not Ready');
+      assert.equal(state.Test_Start_At, null); assert.equal(state.Configuration_Version, before.Configuration_Version);
+    } else {
+      await assert.rejects(pending);
+      if (outcome !== 'partial-success') assert.deepEqual(state, before);
+    }
+    assert.equal(writes.length, 1);
+  }
+});
+
 function publicLead(overrides = {}) {
   return { id: '7100000000001', Intake_Submission_ID: PUBLIC_JOURNEY,
     Submission_Channel: 'Synthetic Public Form',

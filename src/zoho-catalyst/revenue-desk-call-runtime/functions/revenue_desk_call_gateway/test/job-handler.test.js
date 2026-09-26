@@ -3,6 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
+const { RevenueDeskError } = require('../lib/errors');
 const { loadJobConfig: loadRuntimeJobConfig } = require('../lib/config');
 const {
   createWorkerJobHandler: createRuntimeWorkerJobHandler, assertDevelopmentJob, readJobParams,
@@ -168,4 +169,46 @@ test('unit: retry_scan closes with failure when a row failure remains uncontaine
   });
   assert.equal(context.failed, true);
   assert.equal(context.succeeded, false);
+});
+
+test('unit: worker contains diagnostic codes, messages and causes at both failure exits', async () => {
+  const marker = 'synthetic-private-diagnostic';
+  const cases = [
+    { failure: Object.assign(new Error(marker, { cause: new Error(marker) }),
+      { code: `https://example.invalid/${marker}`, retryable: true, ambiguous: true }),
+      expectedCode: 'UNEXPECTED_ERROR', retryable: false, ambiguous: false },
+    { failure: Object.assign(new Error(marker), { code: 'SYNTHETIC_PRIVATE_CONTENT' }),
+      expectedCode: 'UNEXPECTED_ERROR', retryable: false, ambiguous: false },
+    { failure: new RevenueDeskError(marker, marker, { cause: new Error(marker) }),
+      expectedCode: 'UNEXPECTED_ERROR', retryable: false, ambiguous: false },
+    { failure: new RevenueDeskError('CATALYST_QUERY_FAILED', marker,
+      { cause: new Error(marker), httpStatus: 503, retryable: true, ambiguous: true }),
+      expectedCode: 'CATALYST_QUERY_FAILED', retryable: true, ambiguous: true },
+  ];
+  for (const { failure, expectedCode, retryable, ambiguous } of cases) {
+    const logs = [];
+    let closed = 0;
+    const handler = createWorkerJobHandler({
+      environment: runtimeEnvironment,
+      catalystSdk: { initialize() { throw failure; } },
+      logger: { error(record) { logs.push(record); } },
+    });
+    assert.deepEqual(await handler(request(), { closeWithFailure() { closed += 1; } }),
+      { status: 'Failed', errorCode: expectedCode });
+    assert.equal(closed, 1);
+    await assert.rejects(handler(request(), {}), (escaped) => {
+      assert.notEqual(escaped, failure);
+      assert.equal(escaped.code, expectedCode);
+      assert.equal(escaped.message, 'Revenue Desk worker failed.');
+      assert.equal(escaped.retryable, retryable);
+      assert.equal(escaped.ambiguous, ambiguous);
+      assert.equal(escaped.httpStatus, failure instanceof RevenueDeskError ? failure.httpStatus : 503);
+      assert.equal(Object.hasOwn(escaped, 'cause'), false);
+      assert.equal(escaped.stack.includes(marker), false);
+      return true;
+    });
+    assert.equal(logs.length, 2);
+    assert.ok(logs.every(({ errorCode }) => errorCode === expectedCode));
+    assert.equal(JSON.stringify(logs).includes(marker), false);
+  }
 });
