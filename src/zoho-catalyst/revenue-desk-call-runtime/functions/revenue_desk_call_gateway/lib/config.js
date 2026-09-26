@@ -95,9 +95,28 @@ function loadCrmDispatcherConfig(env) {
     && !new Set(['x-zcfkey', 'x-api-key']).has(sharedHeaderName),
   'INVALID_RUNTIME_CONFIGURATION', 'CRM Billing shared header name is invalid.',
   { httpStatus: 503 });
-  const apiGatewayKey = runtimeSecret(env, 'CRM_BILLING_API_GATEWAY_KEY', {
-    minimum: 16, maximum: 4096,
-  });
+  // Omission preserves the installed predecessor contract. OAuth is an explicit
+  // cutover, never a fallback from failed shared-key or OAuth authentication.
+  const authMode = env.CRM_BILLING_AUTH_MODE ?? 'api_key';
+  invariant(authMode === 'api_key' || authMode === 'oauth',
+    'INVALID_RUNTIME_CONFIGURATION', 'CRM report authentication mode is invalid.', { httpStatus: 503 });
+  let apiGatewayKey = null;
+  let connectionLinkName = null;
+  if (authMode === 'oauth') {
+    invariant(!Object.hasOwn(env, 'CRM_BILLING_API_GATEWAY_KEY'),
+      'INVALID_RUNTIME_CONFIGURATION', 'OAuth report dispatch must not retain an API-key binding.',
+      { httpStatus: 503 });
+    connectionLinkName = required(env, 'CRM_BILLING_CONNECTION_LINK_NAME', { maximum: 50 });
+    invariant(/^[a-z][a-z0-9_]{0,49}$/.test(connectionLinkName),
+      'INVALID_RUNTIME_CONFIGURATION', 'CRM report Connection binding is invalid.', { httpStatus: 503 });
+  } else {
+    invariant(env.CRM_BILLING_CONNECTION_LINK_NAME === undefined,
+      'INVALID_RUNTIME_CONFIGURATION', 'API-key report dispatch must not retain an OAuth binding.',
+      { httpStatus: 503 });
+    apiGatewayKey = runtimeSecret(env, 'CRM_BILLING_API_GATEWAY_KEY', {
+      minimum: 16, maximum: 4096,
+    });
+  }
   const sharedHeaderValue = runtimeSecret(env, 'CRM_BILLING_SHARED_HEADER_VALUE', {
     minimum: 32, maximum: 4096,
   });
@@ -107,6 +126,8 @@ function loadCrmDispatcherConfig(env) {
   return Object.freeze({
     crmBillingOrchestratorHost: host,
     crmBillingOrchestratorUrl: endpoint.toString(),
+    crmBillingAuthMode: authMode,
+    crmBillingConnectionLinkName: connectionLinkName,
     crmBillingApiGatewayKey: apiGatewayKey,
     crmBillingSharedHeaderName: sharedHeaderName,
     crmBillingSharedHeaderValue: sharedHeaderValue,

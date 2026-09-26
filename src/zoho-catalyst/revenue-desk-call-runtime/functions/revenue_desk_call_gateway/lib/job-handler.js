@@ -86,7 +86,7 @@ function createWorkerJobHandler(options = {}) {
     storeFactory = createCatalystStore,
     serviceFactory = createRuntimeService,
     mailFactory = (app, config) => new CatalystMailAdapter({ app, config }),
-    dispatcherFactory = (_app, config) => createCrmReportDispatcher(config),
+    dispatcherFactory = (app, config) => createCrmReportDispatcher(config, globalThis.fetch, app),
     artifactSourceRevision,
   } = options;
   return async function revenueDeskCallWorker(jobRequest, context) {
