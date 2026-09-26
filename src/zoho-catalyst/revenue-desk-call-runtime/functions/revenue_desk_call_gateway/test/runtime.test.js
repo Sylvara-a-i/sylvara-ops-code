@@ -268,6 +268,45 @@ test('integration: Advanced I/O resolver isolates two clients and rejects unknow
   assert.doesNotMatch(JSON.stringify(rejected.body), /client_[AB]|Synthetic Plumbing/);
 });
 
+test('integration: documented inbound call ID preserves signed routing and bounded replay effects', async () => {
+  const fixture = runtimeFixture();
+  const payload = payloadInbound('A');
+  payload.call_inbound.call_id = 'call_synthetic_preallocated';
+  const request = { url: '/retell/inbound', payload, env: fixture.env };
+  const rejected = await invoke(fixture.listener, { ...request,
+    headers: { 'x-retell-signature': null } });
+  // Header validation rejects absence before signature verification runs.
+  assert.equal(rejected.status, 400);
+  const receipts = () => fixture.store.rows.get('RevenueDeskEventReceipts')
+    .filter((row) => row.RECEIPT_KIND === 'inbound_resolution');
+  assert.equal(receipts().length, 0);
+  const first = await invoke(fixture.listener, request);
+  const replay = await invoke(fixture.listener, request);
+  assert.equal(first.status, 200);
+  assert.equal(first.body.call_inbound.metadata.client_id, 'client_A');
+  assert.deepEqual(replay.body, first.body);
+  assert.equal(receipts().length, 1);
+  assert.doesNotMatch(JSON.stringify([first.body, receipts(), fixture.logs]), /call_synthetic_preallocated/);
+  assert.equal(fixture.store.rows.get('RevenueDeskCalls').length, 0);
+  assert.equal(fixture.store.rows.get('RevenueDeskNotifications').length, 0);
+  assert.equal(fixture.jobQueue.length, 0);
+});
+
+test('integration: malformed inbound call ID and unrelated fields still fail closed', async () => {
+  for (const fields of [{ call_id: 'bad/id' }, { call_id: 'call_test', unknown_field: true }]) {
+    const fixture = runtimeFixture();
+    const payload = payloadInbound('A');
+    Object.assign(payload.call_inbound, fields);
+    const result = await invoke(fixture.listener, {
+      url: '/retell/inbound', payload, env: fixture.env,
+    });
+    assert.deepEqual(result.body, { call_inbound: { reject: true } });
+    assert.equal(fixture.store.rows.get('RevenueDeskCalls').length, 0);
+    assert.equal(fixture.store.rows.get('RevenueDeskNotifications').length, 0);
+    assert.equal(fixture.jobQueue.length, 0);
+  }
+});
+
 test('integration: a mismatched legacy body timestamp fails closed under the current signed contract', async () => {
   const fixture = runtimeFixture();
   const payload = payloadInbound('A', fixture.clock.value
