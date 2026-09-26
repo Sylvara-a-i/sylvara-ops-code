@@ -647,7 +647,7 @@
     "automatic_dispatch_owner": "revenue_desk_call_worker retry_scan in RevenueDeskCallJobs",
     "dispatch_limit_per_scan": 5,
     "consumer": "crm_billing_orchestrator sync_report_summary on its existing Advanced I/O route",
-    "authentication": ["Catalyst API Gateway ZCFKEY", "action-scoped REPORT_SUMMARY_HEADER_VALUE supplied under SHARED_HEADER_NAME (the worker uses CRM_BILLING_SHARED_HEADER_NAME)"],
+    "authentication": ["api_key mode (legacy default): Catalyst API Gateway ZCFKEY; oauth mode (explicit opt-in): managed Catalyst Connection Authorization with ZC-OAUTH-USER ADMIN and no ZCFKEY binding or fallback; OAuth route/grant/runtime qualification and coordinated cutover remain separate release gates", "both modes require action-scoped REPORT_SUMMARY_HEADER_VALUE supplied under SHARED_HEADER_NAME (the worker uses CRM_BILLING_SHARED_HEADER_NAME)"],
     "request_fields": ["schemaVersion", "action", "dealId", "operationKey"],
     "claim": "atomic pending-to-processing claim, or processing pre-write reclaim, fenced by OPERATION_VERSION and exact report_claim token readback",
     "write_boundary": "an exact version-fenced report_write_started marker must be read back before CRM PUT; only report_claim processing rows are reclaimable",
@@ -1144,7 +1144,9 @@
     {"name": "REPORT_SUMMARY_HEADER_VALUE", "consumer": "crm_billing_orchestrator", "secret": true},
     {"name": "CRM_BILLING_ORCHESTRATOR_HOST", "consumer": "revenue_desk_call_worker", "secret": false},
     {"name": "CRM_BILLING_ORCHESTRATOR_URL", "consumer": "revenue_desk_call_worker", "secret": true},
-    {"name": "CRM_BILLING_API_GATEWAY_KEY", "consumer": "revenue_desk_call_worker", "secret": true},
+    {"name": "CRM_BILLING_AUTH_MODE", "consumer": "revenue_desk_call_worker", "secret": false, "requirement": "Optional; omitted uses api_key. OAuth is an explicit coordinated cutover, never an automatic fallback."},
+    {"name": "CRM_BILLING_API_GATEWAY_KEY", "consumer": "revenue_desk_call_worker", "secret": true, "requirement": "Required only in api_key mode; must be absent in oauth mode."},
+    {"name": "CRM_BILLING_CONNECTION_LINK_NAME", "consumer": "revenue_desk_call_worker", "secret": false, "requirement": "Required only in oauth mode; managed Catalyst OAuth Connection reference, not a token."},
     {"name": "CRM_BILLING_SHARED_HEADER_NAME", "consumer": "revenue_desk_call_worker", "secret": false},
     {"name": "CRM_BILLING_SHARED_HEADER_VALUE", "consumer": "revenue_desk_call_worker", "secret": true},
     {"name": "CRM_BILLING_DISPATCH_TIMEOUT_MS", "consumer": "revenue_desk_call_worker", "secret": false}
@@ -1154,7 +1156,7 @@
     "revenue_leak_test_setup_form": ["CRM_READ_CONNECTION_LINK_NAME", "CRM_WRITE_CONNECTION_LINK_NAME"],
     "revenue_desk_call_gateway": [],
     "revenue_desk_route_control": ["CRM_READ_CONNECTION_LINK_NAME", "CRM_WRITE_CONNECTION_LINK_NAME", "RETELL_CONNECTION_LINK_NAME"],
-    "revenue_desk_call_worker": [],
+    "revenue_desk_call_worker": ["CRM_BILLING_CONNECTION_LINK_NAME"],
     "crm_billing_orchestrator": ["CRM_READ_CONNECTION_LINK_NAME", "CRM_WRITE_CONNECTION_LINK_NAME", "BILLING_READ_CONNECTION_LINK_NAME", "BILLING_WRITE_CONNECTION_LINK_NAME"],
     "analytics_sync": ["ANALYTICS_READ_CONNECTION_LINK_NAME", "ANALYTICS_WRITE_CONNECTION_LINK_NAME"]
   },

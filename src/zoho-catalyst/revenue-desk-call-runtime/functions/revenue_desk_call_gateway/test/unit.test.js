@@ -547,7 +547,14 @@ test('unit: approved gate taxonomies, engagement types, and capability profiles 
 test('unit: environment registry permits only minimal Production dark mode and rejects unsafe values', () => {
   const registry = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', '..', 'config', 'variables.json'), 'utf8'));
   const env = environment();
-  assert.deepEqual(Object.keys(env).sort(), registry.variables
+  // The predecessor fixture omits the opt-in transport fields. The registry is
+  // the union of both modes, not a requirement to install incompatible bindings.
+  const optionalTransportNames = ['CRM_BILLING_AUTH_MODE', 'CRM_BILLING_CONNECTION_LINK_NAME'];
+  for (const name of optionalTransportNames) {
+    assert.equal(Object.hasOwn(env, name), false);
+    assert.equal(registry.variables.find((entry) => entry.name === name).required, false);
+  }
+  assert.deepEqual([...Object.keys(env), ...optionalTransportNames].sort(), registry.variables
     .filter(({ consumer }) => consumer !== 'route_control')
     .map(({ name }) => name).sort());
   const controlNames = registry.variables
@@ -616,7 +623,10 @@ test('unit: environment registry permits only minimal Production dark mode and r
     .map((line) => line.slice(0, line.indexOf('=')));
   assert.equal(new Set(workerNames).size, workerNames.length,
     'worker environment example must not duplicate a variable');
-  assert.deepEqual(workerNames.sort(), registry.variables
+  assert.equal(workerNames.includes('CRM_BILLING_AUTH_MODE'), true);
+  assert.equal(workerNames.includes('CRM_BILLING_CONNECTION_LINK_NAME'), false,
+    'legacy example must not install the mutually exclusive OAuth binding');
+  assert.deepEqual([...workerNames, 'CRM_BILLING_CONNECTION_LINK_NAME'].sort(), registry.variables
     .filter(({ consumer }) => consumer === 'worker' || consumer === 'both')
     .map(({ name }) => name).sort());
   assert.deepEqual(registry.variables.filter(({ name }) => name.startsWith('CATALYST_')), [],
