@@ -19,6 +19,8 @@ const { createConfigurationStagingService, configurationClaimKey, PROFILE } = re
 const { createConfigurationSourceReader } = require('./configuration-source-reader');
 const { createConfigurationConversionReader } = require('./configuration-conversion-reader');
 const { createConfigurationMetadataReader } = require('./configuration-metadata-reader');
+const { PROFILE: SUCCESSOR_PROFILE } = require('revenue_desk_call_gateway/lib/configuration-successor');
+const { createConfigurationSuccessorService } = require('./configuration-successor-service');
 
 function headerValues(request, target) {
   const name = target.toLowerCase();
@@ -166,7 +168,8 @@ function createRequestListener({
       const reconciliation = body.profile === RECONCILIATION_PROFILE;
       const completion = body.profile === COMPLETION_PROFILE;
       const transition = body.profile === TRANSITION_PROFILE;
-      if (reconciliation || completion || transition) invariant(action === 'approve', 'INVALID_CONTROL_REQUEST',
+      const successor = body.profile === SUCCESSOR_PROFILE;
+      if (reconciliation || completion || transition || successor) invariant(action === 'approve', 'INVALID_CONTROL_REQUEST',
         'Configuration reconciliation uses the approval control route.', { httpStatus: 400 });
       const runtime = catalystSdk || require('zcatalyst-sdk-node');
       const app = runtime.initialize(request);
@@ -184,6 +187,13 @@ function createRequestListener({
         fetchImpl,
       });
       const store = (factories.store || createCatalystStore)(app, config);
+      const successorService = () => (factories.successor || createConfigurationSuccessorService)({
+        config, store, crm, now,
+        sourceReader: (factories.configurationSource || createConfigurationSourceReader)(app, config, { now }),
+        conversionReader: (factories.configurationConversion || createConfigurationConversionReader)({ crm, now,
+          timeoutMs: config.platformTimeoutMs }),
+        evidenceStore: (factories.evidence || createForm2EvidenceStore)(app, { timeoutMs: config.platformTimeoutMs }),
+      });
       const stagingService = () => (factories.staging || createConfigurationStagingService)({
         config, store, crm, now,
         core: (factories.core || createJourneyCoreControlService)({ config, store, crm, now,
@@ -194,16 +204,16 @@ function createRequestListener({
         metadataReader: (factories.configurationMetadata || createConfigurationMetadataReader)({ crm, now,
           timeoutMs: config.platformTimeoutMs }),
       });
-      if (body.profile === PROFILE || reconciliation || completion || transition) {
+      if (body.profile === PROFILE || reconciliation || completion || transition || successor) {
         invariant(action === 'approve', 'INVALID_CONTROL_REQUEST',
           'Configuration staging uses the approval control route.', { httpStatus: 400 });
         // This controller-owned branch is deliberately before provider
         // construction. Approved content is not approval to activate a route.
-        const service = stagingService();
-        const result = transition ? await service.transition(body) : completion ? await service.complete(body)
+        const service = successor ? successorService() : stagingService();
+        const result = successor ? await service.succeed(body) : transition ? await service.transition(body) : completion ? await service.complete(body)
           : reconciliation ? await service.reconcile(body) : await service.stage(body);
         send(response, 200, { ok: true,
-          action: transition ? 'transition_configuration' : completion ? 'complete_configuration'
+          action: successor ? 'succeed_inactive_configuration' : transition ? 'transition_configuration' : completion ? 'complete_configuration'
             : reconciliation ? 'reconcile_configuration' : 'stage_configuration', state: result.state,
           replayed: result.replayed, approved: false, active: false,
           configurationVersionId: result.configurationVersionId, deploymentId: result.deploymentId });
@@ -243,11 +253,16 @@ function createRequestListener({
         // Legacy accepted rows do not acquire new reader/env dependencies.
         // Newly staged rows must keep their authenticated source provenance.
         configurationStaging: { async assertApprovalSource(command, state) {
+          if (String(command.configurationVersionId).startsWith('cfgsuccessor_')) {
+            return successorService().assertApprovalSource(command, state);
+          }
           const receipt = await store.unique(config.tables.EVENT_RECEIPT_TABLE,
             'EVENT_KEY', configurationClaimKey(config, command));
           if (!receipt && !String(state.deployment?.DEPLOYMENT_KEY || '').startsWith('cfgdeployment_')
             && !String(state.deployment?.DEPLOYMENT_ID || '').startsWith('cfgdeploy_')) return null;
           return stagingService().assertApprovalSource(command, state);
+        }, async partitionAuthorizationHistory(command, receipts) {
+          return successorService().partitionAuthorizationHistory(command, receipts);
         } },
       });
       const result = await service[action](body);

@@ -154,6 +154,14 @@ function loadConfig(env = process.env, artifactSourceRevision = ARTIFACT_SOURCE_
     // Additional nonsecret provenance/binding is required only by staging;
     // historical Journey-core routes and held deployments remain unchanged.
     form1DestinationSha256: optional(env, 'FORM1_DESTINATION_SHA256'),
+    // Disabled unless an exact independently approved successor document is
+    // pinned. This is a document digest, never a key fingerprint or old MAC.
+    successorAuthorizationSha256: (() => {
+      const value = optional(env, 'ROUTE_CONTROL_SUCCESSOR_AUTHORIZATION_SHA256');
+      invariant(value === null || /^[a-f0-9]{64}$/.test(value),
+        'INVALID_RUNTIME_CONFIGURATION', 'Successor authorization pin is invalid.', { httpStatus: 503 });
+      return value;
+    })(),
     // Public/native lineage remains disabled until fresh Forms/CRM readback
     // supplies the exact server-owned channel value. Never infer a default from
     // the CRM picklist or from a caller-provided lane selector.

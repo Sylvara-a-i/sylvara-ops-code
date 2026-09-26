@@ -206,6 +206,7 @@
         "sylvara.crm-report-writer.v1"
       ],
       "durable_outputs": [
+        "RevenueDeskConfigurationVersions.CONFIGURATION_JSON.reportBaseline.clientKey, deploymentKey and physical configurationVersionId; preserve historical baseline facts and provenance in the predecessor, and independently approve any new execution namespace",
         "AnalyticsSyncOutbox.RECORD_KEY for CRM conversion v2 facts with free_test origin and paid_service target",
         "AnalyticsSyncOutbox.CLIENT_KEY for ROW_SCHEMA_VERSION=2",
         "AnalyticsSyncOutbox.DEPLOYMENT_KEY for ROW_SCHEMA_VERSION=2",

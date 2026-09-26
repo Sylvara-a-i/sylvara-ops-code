@@ -10,6 +10,7 @@ const { deterministicIdempotencyKey } = require('../lib/journey-core-service');
 const { RevenueDeskError } = require('revenue_desk_call_gateway/lib/errors');
 const { numberLookupKey } = require('revenue_desk_call_gateway/lib/security');
 const { PROFILE } = require('../lib/configuration-staging-service');
+const { PROFILE: SUCCESSOR_PROFILE } = require('revenue_desk_call_gateway/lib/configuration-successor');
 const { RECONCILIATION_PROFILE, COMPLETION_PROFILE, TRANSITION_PROFILE } = require('revenue_desk_call_gateway/lib/configuration-reconciliation');
 
 const REVISION = 'a'.repeat(40);
@@ -90,6 +91,33 @@ test('authenticated configuration staging binds reader deadlines before dispatch
   }
   assert.equal(stages, 1); assert.equal(providers, 0);
   assert.deepEqual(readerTimeouts, [['conversion', 3000], ['metadata', 3000]]);
+});
+
+test('inactive successor uses only existing authenticated approval route without constructing a provider', async () => {
+  let attempts = 0;
+  const listener = createRequestListener({ environment: environment(), artifactSourceRevision: REVISION,
+    catalystSdk: { initialize() { return { config: { environment: 'development', projectId: PROJECT_ID } }; } },
+    factories: { crm: () => ({}), store: () => ({}), evidence: () => ({}), configurationSource: () => ({}),
+      configurationConversion: () => ({}), successor: () => ({ async succeed() {
+        attempts += 1; return { state: 'SuccessorInactive', replayed: false,
+          configurationVersionId: 'synthetic_successor', deploymentId: 'synthetic_deployment' };
+      } }), provider: () => { throw new Error('Provider construction prohibited'); },
+      full: () => { throw new Error('Ordinary control prohibited'); } } });
+  for (const action of ['approve-configuration', 'activate-free-test', 'rollback-free-test']) {
+    const output = response();
+    await listener({ method: 'POST', url: `/internal/revenue-desk/${action}`,
+      headers: { host: 'route-control.development.catalystserverless.com', 'x-zc-environment': 'development',
+        'x-zc-projectid': PROJECT_ID, 'x-synthetic-control': 'h'.repeat(32), 'content-type': 'application/json' },
+      rawBody: Buffer.from(JSON.stringify({ profile: SUCCESSOR_PROFILE })) }, output);
+    assert.equal(output.statusCode, action === 'approve-configuration' ? 200 : 400);
+    if (output.statusCode === 200) {
+      assert.equal(output.body.active, false); assert.equal(output.body.approved, false);
+      assert.equal(output.body.action, 'succeed_inactive_configuration');
+    }
+  }
+  assert.equal(attempts, 1);
+  assert.equal(loadConfig(environment(), REVISION).successorAuthorizationSha256, null);
+  assert.throws(() => loadConfig(environment({ ROUTE_CONTROL_SUCCESSOR_AUTHORIZATION_SHA256: 'not-a-document-digest' }), REVISION));
 });
 
 test('configuration reconciliation, completion and transition dispatch only to the staging owner without provider or mail paths', async () => {

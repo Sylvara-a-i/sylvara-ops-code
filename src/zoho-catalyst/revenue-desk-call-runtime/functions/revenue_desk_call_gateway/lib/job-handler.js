@@ -1,11 +1,11 @@
 'use strict';
 
 const { loadJobConfig } = require('./config');
-const { invariant } = require('./errors');
+const { RevenueDeskError, invariant } = require('./errors');
 const { createCatalystStore } = require('./catalyst-store');
 const { CatalystMailAdapter } = require('./catalyst-mail');
 const { createCrmReportDispatcher } = require('./crm-report-dispatch');
-const { createRuntimeService } = require('./runtime-service');
+const { createRuntimeService, durableErrorCode } = require('./runtime-service');
 
 const JOB_MODES = Object.freeze({
   process_event: Object.freeze(['event_key', 'mode']),
@@ -128,19 +128,26 @@ function createWorkerJobHandler(options = {}) {
       if (context && typeof context.closeWithSuccess === 'function') context.closeWithSuccess();
       return result;
     } catch (error) {
+      const errorCode = durableErrorCode(error);
       logger.error({
         event: 'revenue_desk_worker_failed',
         mode,
-        errorCode: typeof error?.code === 'string' ? error.code : 'UNEXPECTED_ERROR',
+        errorCode,
       });
       if (context && typeof context.closeWithFailure === 'function') {
         context.closeWithFailure();
         return Object.freeze({
           status: 'Failed',
-          errorCode: typeof error?.code === 'string' ? error.code : 'UNEXPECTED_ERROR',
+          errorCode,
         });
       }
-      throw error;
+      // The host may log an escaping exception. Keep diagnostic content and
+      // nested provider causes private without changing trusted failure semantics.
+      throw new RevenueDeskError(errorCode, 'Revenue Desk worker failed.', {
+        httpStatus: error instanceof RevenueDeskError ? error.httpStatus : 503,
+        retryable: error instanceof RevenueDeskError && error.retryable,
+        ambiguous: error instanceof RevenueDeskError && error.ambiguous,
+      });
     }
   };
 }
