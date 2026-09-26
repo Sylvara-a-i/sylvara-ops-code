@@ -968,6 +968,24 @@ test('unit: optional bounded SIP headers are accepted then discarded', () => {
   assert.equal(currentContract.agentVersion, null);
 });
 
+test('unit: optional inbound call ID is bounded and does not change normalized routing input', () => {
+  const payload = { event: 'call_inbound', call_inbound: {
+    from_number: '+15551110001', to_number: '+15550000001',
+  } };
+  const withoutId = validateInboundPayload(payload);
+  for (const callId of ['call_synthetic_contract', 'a', 'a'.repeat(128)]) {
+    assert.deepEqual(validateInboundPayload({ ...payload,
+      call_inbound: { ...payload.call_inbound, call_id: callId } }), withoutId);
+  }
+  for (const callId of [null, false, 1, [], {}, '', ' ', ' call_test', 'call/test', 'a'.repeat(129)]) {
+    assert.throws(() => validateInboundPayload({ ...payload,
+      call_inbound: { ...payload.call_inbound, call_id: callId } }), { code: 'INVALID_SCHEMA' });
+  }
+  assert.throws(() => validateInboundPayload({ ...payload,
+    call_inbound: { ...payload.call_inbound, call_id: 'call_test', unknown_field: true } }),
+  { code: 'INVALID_SCHEMA' });
+});
+
 test('unit: Retell post-call duration is required, integral, and bounded', () => {
   const payload = eventPayload('call_ended', 'duration_unit', {}, 'A');
   payload.call.duration_ms = 45_000;

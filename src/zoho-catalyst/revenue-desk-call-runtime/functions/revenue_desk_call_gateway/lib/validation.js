@@ -340,7 +340,11 @@ function validateInboundPayload(input) {
   exactKeys(value, ['event', 'event_timestamp', 'call_inbound'], 'inbound webhook');
   invariant(value.event === 'call_inbound', 'INVALID_EVENT', 'Unsupported inbound event.');
   const inbound = object(value.call_inbound, 'inbound webhook.call_inbound');
-  exactKeys(inbound, ['agent_id', 'agent_version', 'from_number', 'to_number', 'custom_sip_headers'], 'inbound webhook.call_inbound');
+  exactKeys(inbound, ['call_id', 'agent_id', 'agent_version', 'from_number', 'to_number', 'custom_sip_headers'], 'inbound webhook.call_inbound');
+  // Retell may supply a preallocated call ID before the call exists. Validate
+  // and discard it here: it is not admission, call completion, or ownership
+  // evidence, and does not replace the existing signed receipt/metadata path.
+  if (inbound.call_id !== undefined) identifier(inbound.call_id, 'inbound webhook.call_inbound.call_id');
   if (inbound.custom_sip_headers !== undefined) {
     const headers = object(inbound.custom_sip_headers, 'inbound webhook.call_inbound.custom_sip_headers');
     invariant(Object.keys(headers).length <= 32, 'INVALID_SCHEMA', 'Too many custom SIP headers.');
