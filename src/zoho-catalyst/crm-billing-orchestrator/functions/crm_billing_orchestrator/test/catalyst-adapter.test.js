@@ -2,6 +2,7 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
+const { PassThrough } = require("node:stream");
 const {
   assertCatalystRequestBinding,
   assertCatalystSdkBinding,
@@ -102,6 +103,62 @@ function configFor(environment = baseEnvironment()) {
     artifactDevelopmentZaidHmacSha256: DEVELOPMENT_ZAID_HMAC_SHA256,
   });
 }
+
+test("report-only application authentication rejects missing, retired and unrelated credentials before body or SDK", async () => {
+  const previous = baseEnvironment();
+  const environment = baseEnvironment({ ENABLE_PAID_SUBSCRIPTION_PREPARATION: "false",
+    ENABLE_TEST_DIRECT_CUSTOMER_PROVISIONING: "false", REPORT_SUMMARY_HEADER_VALUE: "r".repeat(64) });
+  for (const variant of ["missing", "wrong", "retired", "paid", "duplicate", "joined", "array", "current-malformed"]) {
+    let bodies = 0; let initialized = 0;
+    const logs = [];
+    const listener = createRequestListener(listenerOptions(environment, {
+      catalystSdk: { initialize() { initialized += 1; throw new Error("SDK prohibited"); } },
+      logger: { info: (value) => logs.push(value), error: (value) => logs.push(value) },
+    }));
+    const request = requestFor(environment);
+    delete request.body;
+    delete request.headers[environment.SHARED_HEADER_NAME];
+    Object.defineProperty(request, "body", { get() { bodies += 1;
+      if (variant === "current-malformed") return "{";
+      throw new Error("Body prohibited"); } });
+    const secret = environment.REPORT_SUMMARY_HEADER_VALUE;
+    const supplied = {
+      paid: previous.SHARED_HEADER_VALUE,
+      retired: previous.REPORT_SUMMARY_HEADER_VALUE,
+      joined: `${secret}, ${secret}`, array: [secret, secret],
+      duplicate: secret, "current-malformed": secret, wrong: "synthetic-wrong-credential",
+    };
+    if (variant !== "missing") request.headers[environment.SHARED_HEADER_NAME] = supplied[variant];
+    if (variant === "duplicate") request.headers[environment.SHARED_HEADER_NAME.toUpperCase()] = secret;
+    const output = responseCapture(); await listener(request, output.response);
+    assert.equal(output.result.statusCode, variant === "current-malformed" ? 400 : 401, variant);
+    assert.equal(JSON.parse(output.result.body).code, variant === "current-malformed" ? "request_invalid" : "authentication_failed");
+    assert.equal(initialized, 0); assert.equal(bodies > 0, variant === "current-malformed");
+    assert.equal(JSON.stringify(logs).includes(secret), false);
+  }
+});
+
+test("authenticated report body has an absolute deadline and late chunks never reach SDK", async () => {
+  const environment = baseEnvironment({ PLATFORM_OPERATION_TIMEOUT_MS: "250" });
+  let initialized = 0;
+  const listener = createRequestListener(listenerOptions(environment, {
+    catalystSdk: { initialize() { initialized += 1; throw new Error("SDK prohibited"); } },
+  }));
+  const request = new PassThrough();
+  const metadata = requestFor(environment); delete metadata.body;
+  Object.assign(request, metadata);
+  const output = responseCapture();
+  const pending = listener(request, output.response);
+  request.write("{");
+  const trickle = setInterval(() => request.write(" "), 40);
+  try { await pending; } finally { clearInterval(trickle); }
+  assert.equal(output.result.statusCode, 408);
+  assert.equal(JSON.parse(output.result.body).code, "body_timeout");
+  assert.equal(request.listenerCount("data"), 0);
+  assert.equal(request.listenerCount("end"), 0);
+  request.end("}"); await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(initialized, 0);
+});
 
 function addRealSdkHeaders(request, overrides = {}) {
   Object.assign(request.headers, {

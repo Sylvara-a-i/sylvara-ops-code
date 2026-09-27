@@ -302,3 +302,74 @@ test('worker default factory passes its SDK app into OAuth report dispatch', asy
   }, {});
   assert.equal(result.status, 'Dispatched'); assert.equal(reads, 1); assert.equal(sends, 1);
 });
+
+const applicationConfig = (overrides = {}) => config({
+  crmBillingAuthMode: 'application', crmBillingApiGatewayKey: null,
+  crmBillingConnectionLinkName: null, crmBillingSharedHeaderValue: 'r'.repeat(32), ...overrides,
+});
+
+test('application dispatch uses only purpose-specific authorization and exact operation binding', async () => {
+  let sends = 0;
+  const dispatcher = createCrmReportDispatcher(applicationConfig(), async (_url, request) => {
+    sends += 1;
+    assert.deepEqual(request.headers, { Accept: 'application/json', 'Content-Type': 'application/json',
+      'x-sylvara-report-auth': 'r'.repeat(32) });
+    assert.equal(request.method, 'POST'); assert.equal(request.redirect, 'error');
+    assert.deepEqual(JSON.parse(request.body), { schemaVersion: 'crm-billing-lifecycle-v2',
+      action: 'sync_report_summary', dealId: '100000000000001', operationKey: OPERATION_KEY });
+    return successResponse();
+  }, connectionApp(() => { throw new Error('Application mode must not acquire OAuth'); }));
+  assert.deepEqual(await dispatcher.dispatch('100000000000001', OPERATION_KEY), {
+    status: 'Dispatched', duplicate: false,
+  });
+  assert.equal(sends, 1);
+});
+
+test('application configuration rejects retained transport bindings or missing authorization', () => {
+  const env = environment({ CRM_BILLING_AUTH_MODE: 'application' });
+  delete env.CRM_BILLING_API_GATEWAY_KEY;
+  const selected = loadJobConfig(env, { artifactSourceRevision: SOURCE_REVISION });
+  assert.equal(selected.crmBillingAuthMode, 'application');
+  assert.equal(selected.crmBillingApiGatewayKey, null);
+  assert.equal(selected.crmBillingConnectionLinkName, null);
+  for (const extra of [
+    { CRM_BILLING_API_GATEWAY_KEY: '' }, { CRM_BILLING_API_GATEWAY_KEY: undefined },
+    { CRM_BILLING_API_GATEWAY_KEY: 'synthetic-secret-value' },
+    { CRM_BILLING_CONNECTION_LINK_NAME: 'synthetic_unused_connection' },
+    { CRM_BILLING_SHARED_HEADER_VALUE: undefined }, { CRM_BILLING_SHARED_HEADER_NAME: 'x-api-key' },
+  ]) assert.throws(() => loadJobConfig({ ...env, ...extra }, { artifactSourceRevision: SOURCE_REVISION }),
+    { code: 'INVALID_RUNTIME_CONFIGURATION' });
+  for (const extra of [
+    { crmBillingApiGatewayKey: 'synthetic-retired-key' },
+    { crmBillingConnectionLinkName: 'synthetic_unused_connection' },
+    { crmBillingSharedHeaderValue: '' }, { crmBillingSharedHeaderValue: undefined },
+    { crmBillingSharedHeaderName: 'ZCFKEY' }, { crmBillingSharedHeaderName: 'x-zcfkey' },
+  ]) assert.throws(() => createCrmReportDispatcher(applicationConfig(extra)),
+    { code: 'INVALID_RUNTIME_CONFIGURATION' });
+});
+
+test('application failures stay bounded and never fall back, retry or leak authorization', async () => {
+  for (const phase of ['invalid', 'rejection', 'transport', 'request-timeout', 'body-timeout']) {
+    let sends = 0; let aborted = false;
+    const dispatcher = createCrmReportDispatcher(applicationConfig({ crmBillingDispatchTimeoutMs: 20 }),
+      async (_url, request) => {
+        sends += 1;
+        request.signal.addEventListener('abort', () => { aborted = true; });
+        if (phase === 'transport') throw new Error(`private ${'r'.repeat(32)}`);
+        if (phase === 'request-timeout') return new Promise(() => {});
+        if (phase === 'body-timeout') return new Response(new ReadableStream({ start() {} }), {
+          status: 200, headers: { 'content-type': 'application/json' },
+        });
+        return new Response('{}', { status: 401, headers: { 'content-type': 'application/json' } });
+      }, connectionApp(() => { throw new Error('OAuth fallback prohibited'); }));
+    await assert.rejects(dispatcher.dispatch('100000000000001', phase === 'invalid' ? '' : OPERATION_KEY),
+      (error) => {
+        assert.equal(error.ambiguous, phase !== 'invalid');
+        assert.equal(error.cause, undefined);
+        assert.equal(`${error.message}${JSON.stringify(error)}`.includes('r'.repeat(32)), false);
+        return true;
+      });
+    assert.equal(sends, phase === 'invalid' ? 0 : 1);
+    assert.equal(aborted, phase.endsWith('timeout'));
+  }
+});

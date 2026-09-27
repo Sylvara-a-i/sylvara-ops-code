@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const test = require('node:test');
+const { PassThrough } = require('node:stream');
 const { loadConfig } = require('../lib/config');
 const { createRequestListener } = require('../lib/http-boundary');
 const { createRetellRouteProvider } = require('../lib/retell-route-provider');
@@ -65,6 +66,61 @@ function response() {
     end(value) { this.body = JSON.parse(value); },
   };
 }
+
+test('application credential rejection on every control action precedes body, SDK and effects', async () => {
+  const retiredCredential = environment().ROUTE_CONTROL_SHARED_HEADER_VALUE;
+  const env = environment({ ROUTE_CONTROL_SHARED_HEADER_VALUE: 'z'.repeat(32) });
+  for (const action of ['approve-configuration', 'activate-free-test', 'rollback-free-test']) {
+    for (const variant of ['missing', 'wrong', 'retired', 'form2', 'duplicate', 'physical-duplicate', 'raw-duplicate']) {
+      let sdk = 0; let body = 0;
+      const listener = createRequestListener({ environment: env, artifactSourceRevision: REVISION,
+        catalystSdk: { initialize() { sdk += 1; throw new Error('SDK prohibited'); } } });
+      const request = { method: 'POST', url: `/internal/revenue-desk/${action}`,
+        headers: { host: env.ROUTE_CONTROL_HOST, 'x-zc-environment': 'development',
+          'x-zc-projectid': PROJECT_ID, 'content-type': 'application/json' },
+        get rawBody() { body += 1; throw new Error('Body prohibited'); } };
+      const supplied = {
+        form2: env.FORM2_WORKFLOW_HMAC_SECRET,
+        retired: retiredCredential,
+        duplicate: env.ROUTE_CONTROL_SHARED_HEADER_VALUE,
+        'physical-duplicate': env.ROUTE_CONTROL_SHARED_HEADER_VALUE,
+        'raw-duplicate': env.ROUTE_CONTROL_SHARED_HEADER_VALUE,
+        wrong: 'synthetic-wrong-value',
+      };
+      if (variant !== 'missing') request.headers['x-synthetic-control'] = supplied[variant];
+      if (variant === 'duplicate') request.headers['X-Synthetic-Control'] = env.ROUTE_CONTROL_SHARED_HEADER_VALUE;
+      if (variant === 'physical-duplicate') request.headersDistinct = {
+        'x-synthetic-control': [env.ROUTE_CONTROL_SHARED_HEADER_VALUE, env.ROUTE_CONTROL_SHARED_HEADER_VALUE],
+      };
+      if (variant === 'raw-duplicate') request.rawHeaders = ['x-synthetic-control',
+        env.ROUTE_CONTROL_SHARED_HEADER_VALUE, 'X-Synthetic-Control', env.ROUTE_CONTROL_SHARED_HEADER_VALUE];
+      const output = response(); await listener(request, output);
+      assert.equal(output.statusCode, 401, `${action}/${variant}`);
+      assert.deepEqual(output.body, { ok: false, code: 'control_authentication_failed' });
+      assert.equal(sdk, 0); assert.equal(body, 0);
+    }
+  }
+});
+
+test('authenticated unfinished control body times out before SDK and late input cannot dispatch', async () => {
+  let sdk = 0;
+  const env = environment({ PLATFORM_OPERATION_TIMEOUT_MS: '250' });
+  const listener = createRequestListener({ environment: env, artifactSourceRevision: REVISION,
+    catalystSdk: { initialize() { sdk += 1; throw new Error('SDK prohibited'); } } });
+  const request = new PassThrough();
+  Object.assign(request, { method: 'POST', url: '/internal/revenue-desk/approve-configuration',
+    headers: { host: env.ROUTE_CONTROL_HOST, 'x-zc-environment': 'development',
+      'x-zc-projectid': PROJECT_ID, 'x-synthetic-control': env.ROUTE_CONTROL_SHARED_HEADER_VALUE,
+      'content-type': 'application/json' } });
+  const output = response();
+  await listener(request, output);
+  assert.equal(output.statusCode, 408);
+  assert.equal(output.body.code, 'invalid_control_request');
+  assert.equal(request.listenerCount('data'), 0);
+  assert.equal(request.listenerCount('end'), 0);
+  request.end('{}'); await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(sdk, 0);
+});
 
 test('authenticated configuration staging binds reader deadlines before dispatch and rejects other actions', async () => {
   let providers = 0; let stages = 0;

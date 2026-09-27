@@ -62,7 +62,7 @@ function createCrmReportDispatcher(config, fetchImpl = globalThis.fetch, app = n
   invariant(config.environment === 'development' && typeof fetchImpl === 'function',
     'INVALID_RUNTIME_CONFIGURATION', 'CRM report dispatcher is unavailable.', { httpStatus: 503 });
   const authMode = config.crmBillingAuthMode ?? 'api_key';
-  invariant(authMode === 'api_key' || authMode === 'oauth',
+  invariant(['api_key', 'oauth', 'application'].includes(authMode),
     'INVALID_RUNTIME_CONFIGURATION', 'CRM report authentication mode is invalid.', { httpStatus: 503 });
   if (authMode === 'oauth') {
     invariant(app && typeof app.connections === 'function'
@@ -70,6 +70,14 @@ function createCrmReportDispatcher(config, fetchImpl = globalThis.fetch, app = n
       && /^[a-z][a-z0-9_]{0,49}$/.test(config.crmBillingConnectionLinkName)
       && config.crmBillingApiGatewayKey == null,
     'INVALID_RUNTIME_CONFIGURATION', 'CRM report OAuth binding is unavailable.', { httpStatus: 503 });
+  }
+  if (authMode === 'application') {
+    invariant(config.crmBillingApiGatewayKey == null && config.crmBillingConnectionLinkName == null
+      && /^x-[a-z0-9-]{1,77}$/.test(config.crmBillingSharedHeaderName)
+      && !['x-zcfkey', 'x-api-key'].includes(config.crmBillingSharedHeaderName)
+      && typeof config.crmBillingSharedHeaderValue === 'string'
+      && /^\S{32,4096}$/.test(config.crmBillingSharedHeaderValue),
+    'INVALID_RUNTIME_CONFIGURATION', 'CRM report application binding is invalid.', { httpStatus: 503 });
   }
 
   async function dispatch(dealId, operationKey) {
@@ -97,7 +105,7 @@ function createCrmReportDispatcher(config, fetchImpl = globalThis.fetch, app = n
         ? { Authorization: await Promise.race([
           oauthAuthorization(app, config.crmBillingConnectionLinkName), timeout,
         ]), 'ZC-OAUTH-USER': 'ADMIN' }
-        : { ZCFKEY: config.crmBillingApiGatewayKey };
+        : authMode === 'api_key' ? { ZCFKEY: config.crmBillingApiGatewayKey } : {};
       requestStarted = true;
       response = await Promise.race([fetchImpl(config.crmBillingOrchestratorUrl, {
         method: 'POST',

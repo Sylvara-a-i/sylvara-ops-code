@@ -2,6 +2,7 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
+const { PassThrough } = require("node:stream");
 const {
   DEVELOPMENT_COMPATIBILITY_PROBE_ACTION,
   DEVELOPMENT_COMPATIBILITY_PROBE_CASES,
@@ -38,6 +39,30 @@ function withoutConditionalPaidVariables(overrides = {}) {
   for (const name of CONDITIONAL_PAID_VARIABLES) delete environment[name];
   return environment;
 }
+
+test("authenticated stream collection preserves exact parsing, byte limit and aborted-input rejection", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const payload = { schemaVersion: "crm-billing-lifecycle-v2", action: "sync_report_summary",
+    dealId: "100000000000001", operationKey: "a".repeat(64) };
+  for (const variant of ["complete", "oversized", "aborted", "error"]) {
+    const request = new PassThrough();
+    Object.assign(request, { method: "POST", url: config.allowedPath,
+      headers: { "content-type": "application/json", [config.sharedHeaderName]: config.reportSummaryHeaderValue } });
+    const pending = parseActionRequest(request, config);
+    if (variant === "complete") { request.end(JSON.stringify(payload)); assert.deepEqual(await pending, payload); }
+    else {
+      const rejected = assert.rejects(pending, (error) => error.status === (variant === "oversized" ? 413 : 400)
+        && !error.message.includes("synthetic-private-stream-error"));
+      if (variant === "oversized") request.write("x".repeat(config.maxBodyBytes + 1));
+      if (variant === "aborted") request.emit("aborted");
+      if (variant === "error") request.emit("error", new Error("synthetic-private-stream-error"));
+      await rejected;
+    }
+    assert.equal(request.listenerCount("data"), 0);
+    assert.equal(request.listenerCount("end"), 0);
+    request.destroy();
+  }
+});
 
 test("configuration is immutable active Development or dependency-free dark Production", () => {
   const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });

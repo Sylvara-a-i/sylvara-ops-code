@@ -160,8 +160,8 @@
       "consumer": "worker",
       "secret": false,
       "required": false,
-      "format": "api_key or oauth; omission preserves the predecessor api_key contract",
-      "boundary": "Explicitly selects exactly one report transport. OAuth never falls back to the API key. The selected route, managed Connection and independent report authorization require a coordinated approved cutover."
+      "format": "api_key, oauth or application; omission preserves the predecessor api_key contract",
+      "boundary": "Explicitly selects one report transport; never authentication fallback. Application mode sends only the purpose-specific report header, not ZCFKEY or OAuth. Each changed gateway/application trust boundary requires coordinated approval and rejection/readback verification."
     },
     {
       "name": "CRM_BILLING_CONNECTION_LINK_NAME",
@@ -169,7 +169,7 @@
       "secret": false,
       "required": false,
       "format": "1-50 lowercase letters, digits or underscores, beginning with a letter",
-      "boundary": "Required only in oauth mode; forbidden in api_key mode. Exact private Catalyst managed Connection alias, never a token or a grant created by the worker. Must yield only a Zoho-oauthtoken Authorization header and no query/form parameters."
+      "boundary": "Required only in oauth mode; forbidden in api_key and application modes. Exact private Catalyst managed Connection alias, never a token or a grant created by the worker. Must yield only a Zoho-oauthtoken Authorization header and no query/form parameters."
     },
     {
       "name": "CRM_BILLING_API_GATEWAY_KEY",
@@ -177,7 +177,7 @@
       "secret": true,
       "required": false,
       "format": "16-4096 non-whitespace characters sent only as ZCFKEY",
-      "boundary": "Required only in api_key mode; the variable must be absent in oauth mode. Platform-generated Development Catalyst API Gateway key, which may be common across Development projects and is never sole authorization. Changing transport or deleting a route does not establish issuer-key revocation. Retain independent report-only authorization in either mode."
+      "boundary": "Required only in api_key mode; absent in oauth and application modes. Platform-generated Development Catalyst API Gateway key may be common across Development projects. Changing transport does not establish issuer-key revocation. Retain purpose-specific report authorization in every mode."
     },
     {
       "name": "CRM_BILLING_SHARED_HEADER_NAME",
@@ -369,7 +369,7 @@
       "secret": false,
       "required": true,
       "format": "integer 250-5000",
-      "boundary": "Bounded Catalyst calls including Function Job submission."
+      "boundary": "Bounded Catalyst calls including Function Job submission; also caps total authenticated controller-body collection without resetting per chunk."
     },
     {
       "name": "REVENUE_DESK_NOTIFICATION_MODE",
