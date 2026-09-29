@@ -139,6 +139,7 @@ function createCrmClient(config, {
     "Test_Start_At",
     "Test_End_At",
     "Test_End_Reason",
+    "Rollback_Completed_At",
     "Call_Totals_Reconciled",
     "Test_Calls_Reaching_Route",
     "Test_Qualified_Opportunities",

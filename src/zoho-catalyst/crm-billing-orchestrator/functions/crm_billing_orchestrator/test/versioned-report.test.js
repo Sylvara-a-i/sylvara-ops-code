@@ -207,3 +207,48 @@ test("concurrent incomparable revisions serialize and cannot overwrite the winne
   assert.equal(results.filter((result) => result.status === "fulfilled").length, 1);
   assert.equal(h.writes, 2);
 });
+
+
+test("verified rollback accepts derived totals and source revisions while preserving terminal state", async () => {
+  const h = harness();
+  const first = summary(1, { testStatus: "Rolled Back", testEndReason: "Sylvara Stopped" });
+  Object.assign(h.state.deal, { Stage: "Closed Lost", Test_Status: "Rolled Back",
+    Test_Start_At: first.testStartAt, Test_End_At: first.testEndAt,
+    Test_End_Reason: first.testEndReason, Rollback_Completed_At: first.testEndAt });
+  const original = structuredClone(h.state.deal);
+  assert.equal((await h.run(first)).duplicate, false);
+  const newer = summary(2, { testStatus: "Rolled Back", testEndReason: "Sylvara Stopped", bookableOpportunities: 1 });
+  assert.equal((await h.run(newer)).duplicate, false);
+  assert.equal((await h.run(first)).duplicate, true);
+  assert.equal((await h.run(newer)).duplicate, true);
+  for (const field of ["Stage", "Test_Status", "Test_Start_At", "Test_End_At", "Test_End_Reason", "Rollback_Completed_At"]) {
+    assert.equal(h.state.deal[field], original[field]);
+  }
+  assert.equal(h.writes, 2);
+});
+
+test("rollback summaries cannot establish a rollback, drift its clock or bypass protected commercial state", async () => {
+  for (const drift of [{ Test_Status: "Live" }, { Test_Status: "Completed" }, { Stage: "Test Live" },
+    { Test_End_Reason: "Technical Failure" }, { Test_Start_At: null }, { Test_End_At: null },
+    { Rollback_Completed_At: null }, { Rollback_Completed_At: "2026-09-08T00:00:01.000Z" },
+    { Billing_Subscription_ID: "10000003" }, { Results_Review_At: "2026-09-08T00:00:00.000Z" }]) {
+    const h = harness();
+    const selected = summary(1, { testStatus: "Rolled Back", testEndReason: "Sylvara Stopped" });
+    Object.assign(h.state.deal, { Stage: "Closed Lost", Test_Status: "Rolled Back",
+      Test_Start_At: selected.testStartAt, Test_End_At: selected.testEndAt,
+      Test_End_Reason: selected.testEndReason, Rollback_Completed_At: selected.testEndAt }, drift);
+    await assert.rejects(h.run(selected)); assert.equal(h.writes, 0);
+  }
+});
+
+test("rollback proof drifting after a write never completes an operation or retries the write", async () => {
+  const h = harness();
+  const selected = summary(1, { testStatus: "Rolled Back", testEndReason: "Sylvara Stopped" });
+  Object.assign(h.state.deal, { Stage: "Closed Lost", Test_Status: "Rolled Back",
+    Test_Start_At: selected.testStartAt, Test_End_At: selected.testEndAt,
+    Test_End_Reason: selected.testEndReason, Rollback_Completed_At: selected.testEndAt });
+  h.updateBehavior((state, patch) => { Object.assign(state.deal, patch); state.deal.Rollback_Completed_At = null; });
+  await assert.rejects(h.run(selected)); await assert.rejects(h.run(selected));
+  assert.equal(h.writes, 1);
+  assert.notEqual(h.rows.get(operation(selected).OPERATION_KEY).STATUS, "completed");
+});

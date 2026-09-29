@@ -3,6 +3,8 @@
 const { AnalyticsSyncError, invariant } = require('./errors');
 const { withTimeout } = require('./connection-boundary');
 const { checkpointKey, compareWatermark, parseOutboxRow, sameLegacyDailyMetricVersion } = require('./facts');
+const { isReportAttemptBudget } = require('./report-attempt-budget');
+const { checkpointState, checkpointVerificationPatch } = require('./report-checkpoint-verification');
 
 const ROW_ID_PATTERN = /^\d{1,30}$/;
 const COLUMN_PATTERN = /^[A-Z][A-Z0-9_]{0,63}$/;
@@ -95,6 +97,21 @@ function sameRowId(left, right) {
   return ROW_ID_PATTERN.test(String(left?.ROWID))
     && ROW_ID_PATTERN.test(String(right?.ROWID))
     && String(left.ROWID) === String(right.ROWID);
+}
+
+function reportOperationContext(options) {
+  invariant(options && typeof options === 'object' && !Array.isArray(options)
+    && Object.keys(options).every((key) => key === 'signal' || key === 'budget')
+    && (options.signal === undefined || options.signal instanceof AbortSignal)
+    && (options.budget === undefined || (isReportAttemptBudget(options.budget)
+      && (options.signal === undefined || options.signal === options.budget.signal))),
+  'REPORT_SCOPE_INVALID', 'Report source cancellation or budget is invalid.');
+  const budget = options.budget;
+  const signal = budget?.signal || options.signal;
+  return { budget, assertActive() {
+    budget?.assertActive();
+    invariant(!signal?.aborted, 'REPORT_READ_ABORTED', 'Report source read was cancelled.', { retryable: true });
+  } };
 }
 
 function createCatalystStore(app, config) {
@@ -392,7 +409,8 @@ function createCatalystStore(app, config) {
     invariant(scope && typeof scope === 'object' && !Array.isArray(scope)
       && Object.keys(scope).sort().join(',') === [...keys].sort().join(',')
       && /^[a-f0-9]{64}$/.test(scope.CLIENT_KEY) && /^[a-f0-9]{64}$/.test(scope.DEPLOYMENT_KEY)
-      && /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(scope.CONFIGURATION_VERSION)
+      && typeof scope.CONFIGURATION_VERSION === 'string'
+      && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(scope.CONFIGURATION_VERSION)
       && scope.ENVIRONMENT === 'development' && scope.ENGAGEMENT_TYPE === 'free_test'
       && /^[a-f0-9]{40}$/.test(scope.SOURCE_REVISION) && scope.SOURCE_REVISION === config.sourceRevision,
     'REPORT_SCOPE_INVALID', 'Report source scope is invalid.');
@@ -405,16 +423,11 @@ function createCatalystStore(app, config) {
    */
   async function listReportRows(scope, options = {}) {
     validateReportScope(scope);
-    invariant(options && typeof options === 'object' && !Array.isArray(options)
-      && Object.keys(options).every((key) => key === 'signal')
-      && (options.signal === undefined || options.signal instanceof AbortSignal),
-    'REPORT_SCOPE_INVALID', 'Report source cancellation is invalid.');
-    const signal = options.signal;
-    const assertActive = () => invariant(!signal?.aborted,
-      'REPORT_READ_ABORTED', 'Report source read was cancelled.', { retryable: true });
+    const { budget, assertActive } = reportOperationContext(options);
     const result = [];
     for (const type of REPORT_RECORD_TYPES) {
       assertActive();
+      budget?.consume('source_read');
       const rows = await query(outbox, `SELECT * FROM ${outbox} WHERE ROW_SCHEMA_VERSION = 2`
         + ` AND ENVIRONMENT = ${sqlValue(scope.ENVIRONMENT)}`
         + ` AND CLIENT_KEY = ${sqlValue(scope.CLIENT_KEY)}`
@@ -431,22 +444,62 @@ function createCatalystStore(app, config) {
     return result;
   }
 
-  async function getReportCheckpoint(scope, recordType) {
+  async function getReportCheckpoint(scope, recordType, options = {}) {
     validateReportScope(scope);
+    const { budget, assertActive } = reportOperationContext(options);
     invariant(REPORT_RECORD_TYPES.includes(recordType), 'REPORT_SCOPE_INVALID',
       'Report checkpoint type is invalid.');
     const key = checkpointKey({ ...scope, RECORD_TYPE: recordType });
+    assertActive();
+    budget?.consume('source_read');
     const row = await unique(checkpoint, 'CHECKPOINT_KEY', key);
+    assertActive();
     invariant(row === null || (row.CHECKPOINT_KEY === key && row.RECORD_TYPE === recordType
       && ['CLIENT_KEY', 'DEPLOYMENT_KEY', 'ENVIRONMENT', 'SOURCE_REVISION'].every((column) => row[column] === scope[column])),
     'REPORT_SCOPE_INVALID', 'Report checkpoint readback crosses its requested partition.');
     return row === null ? null : structuredClone(row);
   }
 
+  /** Re-attest an already imported checkpoint after complete report agreement.
+   * The additive digest is intentionally outside ordinary import/readiness
+   * columns: this held path cannot make existing jobs require a schema change.
+   * A failed/unknown UPDATE is never replayed; independent readback resolves it.
+   */
+  async function reattestReportCheckpoint(scope, recordType, expected, verification, options = {}) {
+    validateReportScope(scope);
+    const { budget, assertActive } = reportOperationContext(options);
+    const patch = checkpointVerificationPatch(scope, recordType, expected, verification);
+    const desired = { ...expected, ...patch };
+    const current = await getReportCheckpoint(scope, recordType, options);
+    invariant(sameRowId(current, expected), 'REPORT_CHECKPOINT_CONFLICT',
+      'Report checkpoint physical ownership changed.');
+    if (checkpointState(current) === checkpointState(desired)) return current;
+    invariant(checkpointState(current) === checkpointState(expected), 'REPORT_CHECKPOINT_CONFLICT',
+      'Report checkpoint changed during verification.');
+    const changed = validatePatch(patch, [...CHECKPOINT_COLUMNS, 'REPORT_VERIFICATION_DIGEST']);
+    const predicates = validatePatch({ VERSION: Number(expected.VERSION), UPDATED_AT: expected.UPDATED_AT,
+      LAST_SOURCE_MODIFIED_AT: expected.LAST_SOURCE_MODIFIED_AT, SOURCE_REVISION: scope.SOURCE_REVISION }, CHECKPOINT_COLUMNS);
+    const setClause = Object.entries(changed).sort().map(([key, value]) => `${key} = ${sqlValue(value)}`).join(', ');
+    const whereClause = Object.entries(predicates).sort().map(([key, value]) => `${key} = ${sqlValue(value)}`).join(' AND ');
+    assertActive();
+    budget?.consume('checkpoint_write');
+    try {
+      await execute(`UPDATE ${checkpoint} SET ${setClause} WHERE ROWID = ${current.ROWID} AND ${whereClause}`, true);
+    } catch {
+      // A timeout can follow a committed update. Resolve only by exact readback;
+      // never increment the version or refresh time again on an uncertain write.
+    }
+    assertActive();
+    const readback = await getReportCheckpoint(scope, recordType, options);
+    invariant(sameRowId(readback, expected) && checkpointState(readback) === checkpointState(desired),
+      'REPORT_CHECKPOINT_WRITE_UNCONFIRMED', 'Report checkpoint verification requires reconciliation.', { ambiguous: true });
+    return readback;
+  }
+
   return Object.freeze({
     listDue, listBatch, listRollupCalls, ensureOutbox, claim, patchClaim,
     hasOlderUnresolved, hasOutboxOwnershipConflict, upsertCheckpoint, readiness,
-    listReportRows, getReportCheckpoint,
+    listReportRows, getReportCheckpoint, reattestReportCheckpoint,
   });
 }
 

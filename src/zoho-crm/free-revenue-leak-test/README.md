@@ -2,6 +2,12 @@
 
 This directory is the sanitized, version-controlled desired state for the Free Revenue Leak Test lifecycle in Zoho CRM. CRM remains the relationship, qualification, commercial-acceptance, and summary system. Catalyst owns call events, deployment ownership, notification processing, counters, and detailed reports.
 
+The [entry-route map](entry-routes.md) keeps both mandatory paths explicit:
+CRM-assisted Form 1 bypasses scheduling; public website Form 1 uses the existing
+setup-appointment flow. Both continue the original relationship into Form 2.
+Source checks and retained intake acceptance do not establish iPad or booking
+acceptance, and neither path authorizes a second intake or competing CRM writer.
+
 ## Current Journey-Core Profile
 
 `free-test-journey-core-v1` keeps Catalyst as the authoritative security and state controller while CRM remains the operator surface and operational record. The Deal-side `Open Free-Test Setup` function accepts only the current Deal ID, fresh-reads the exact eligible Free-Test Deal, initializes only missing approved defaults plus the deterministic setup-issue identity, suppresses CRM automation triggers, and requires exact post-write readback before issuing Form 2 access. Conflicting nonblank state fails closed without overwrite. Form 2 is mandatory and its authenticated Catalyst controller persists the canonical `Submitted` state directly with exact CRM readback.

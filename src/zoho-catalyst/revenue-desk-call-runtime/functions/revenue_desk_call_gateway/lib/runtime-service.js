@@ -25,6 +25,7 @@ const {
   buildCrmReportSummary, ensureCrmReportSummary, reportSummaryIdentity,
 } = require('./crm-report-outbox');
 const { routeFingerprint, routeFromRows } = require('./approval-control');
+const { assertStoppedReportEvidence, isStoppedReportEvidence } = require('./route-control-service');
 const {
   verifyAuthorizationReceiptIntegrity,
 } = require('./authorization-receipt');
@@ -843,6 +844,13 @@ function createRuntimeService({
   invariant(config.environment === 'development', 'PRODUCTION_BLOCKED', 'Runtime service is Development-only.', { httpStatus: 503 });
   invariant(onTerminalReportReconciled === null || typeof onTerminalReportReconciled === 'function',
     'INVALID_RUNTIME_CONFIGURATION', 'Terminal draft reconciler is invalid.', { httpStatus: 503 });
+  const configuredReportTimeout = onTerminalReportReconciled?.attemptTimeoutMs;
+  invariant(configuredReportTimeout === undefined
+    || (Object.isFrozen(onTerminalReportReconciled)
+      && Number.isSafeInteger(configuredReportTimeout)
+      && configuredReportTimeout >= 1 && configuredReportTimeout <= 120_000),
+  'INVALID_RUNTIME_CONFIGURATION', 'Terminal draft deadline is invalid.', { httpStatus: 503 });
+  const reportAttemptTimeoutMs = configuredReportTimeout ?? config.platformTimeoutMs;
   const deploymentTable = config.tables.DEPLOYMENT_TABLE;
   const receiptTable = config.tables.EVENT_RECEIPT_TABLE;
   const callTable = config.tables.CANONICAL_CALL_TABLE;
@@ -1967,12 +1975,13 @@ function createRuntimeService({
       'INVALID_RETRY_LIMIT', 'Retry job limit is invalid.');
     const events = await retryDueEvents(limit);
     const notifications = await retryDueNotifications(limit);
-    const deployments = await reconcileDueDeployments(limit);
+    const reportAttempt = { used: false, skipped: new Set() };
+    const deployments = await reconcileDueDeployments(limit, reportAttempt);
     return Object.freeze({
       events,
       notifications,
       deployments,
-      reportSummaries: await dispatchPendingReportSummaries(limit),
+      reportSummaries: await dispatchPendingReportSummaries(limit, reportAttempt),
     });
   }
 
@@ -2093,21 +2102,39 @@ function createRuntimeService({
     )) || sameLegacyReportVersion(analytics, expected)));
   }
 
-  async function completedTerminalReport(deployment, report) {
+  async function assertStoppedReportReady(deploymentId) {
+    const row = await store.unique(deploymentTable, 'DEPLOYMENT_ID', validDeploymentId(deploymentId));
+    const deployment = await assertStoppedReportEvidence(store, await loadDeployment(store, row, config), config);
+    invariant((await terminalSettlement(deployment)).ready
+      && await terminalArtifactsPresent(deployment, row, await buildReport(deployment)),
+    'REPORT_RECONCILIATION_REQUIRED', 'Stopped report requires settled source and exact CRM readback.');
+    return deployment;
+  }
+
+  async function completedTerminalReport(deployment, report, reportAttempt) {
     const result = { status: 'TerminalReportReconciled', deploymentId: deployment.deploymentId, report };
     if (onTerminalReportReconciled === null) return Object.freeze(result);
+    // One shared permit spans the complete retry invocation, including CRM
+    // settlement. Deferring a draft never defers ordinary source maintenance.
+    if (reportAttempt.used) {
+      reportAttempt.skipped.add(deployment.deploymentId);
+      return Object.freeze(result);
+    }
+    reportAttempt.used = true;
     let timer;
     const controller = new AbortController();
     try {
       const current = await store.unique(deploymentTable, 'DEPLOYMENT_ID', deployment.deploymentId);
-      invariant(current?.TEST_STATUS === 'Completed' && current.REPORT_RECONCILIATION_STATUS === 'Completed'
+      invariant(((current?.TEST_STATUS === 'Completed' && current.REPORT_RECONCILIATION_STATUS === 'Completed')
+        || (isStoppedReportEvidence(deployment) && current?.TEST_STATUS === 'Stopped'
+          && current.REPORT_RECONCILIATION_STATUS === 'NotRequired'))
         && current.CLIENT_ID === deployment.clientId && current.SOURCE_REVISION === config.sourceRevision
         && current.ACTIVE_CONFIGURATION_VERSION_ID === deployment.configurationVersionId,
       'REPORT_DRAFT_RECONCILIATION_REQUIRED', 'Terminal draft requires completed reconciliation.');
       // This is a trusted dependency, never a Job parameter or a delivery grant.
       // The draft adapter must honor cancellation before any document write.
-      // The existing Completed lane retries on its next fair scan without
-      // reopening CRM or Analytics work.
+      // Completed retries use the existing fair scan. Verified Stopped reports
+      // remain manual retries; neither path reopens CRM or Analytics work.
       const prepared = await Promise.race([
         Promise.resolve().then(() => onTerminalReportReconciled(Object.freeze({
           clientId: deployment.clientId, deploymentId: deployment.deploymentId,
@@ -2116,7 +2143,7 @@ function createRuntimeService({
           timer = setTimeout(() => {
             controller.abort();
             reject(new Error('Terminal draft timed out.'));
-          }, config.platformTimeoutMs);
+          }, reportAttemptTimeoutMs);
         }),
       ]);
       invariant(isPlainObject(prepared) && new Set([
@@ -2132,18 +2159,38 @@ function createRuntimeService({
     } finally { clearTimeout(timer); }
   }
 
-  async function reconcileTerminalDeployment(deploymentId) {
+  async function reconcileTerminalDeployment(deploymentId, reportAttempt = { used: false, skipped: new Set() },
+    { allowStopped = false } = {}) {
     const id = validDeploymentId(deploymentId);
     await stopExpiredDeployment(id);
     const row = await store.unique(deploymentTable, 'DEPLOYMENT_ID', id);
     const deployment = await loadDeployment(store, row, config);
+    if (allowStopped && deployment.testStatus === 'Stopped') {
+      // This branch is reachable only from the existing explicit reconciliation
+      // Job. Do not turn operator rollback into another automatic scan lane.
+      const stopped = await assertStoppedReportEvidence(store, deployment, config);
+      const settlement = await terminalSettlement(stopped);
+      if (!settlement.ready) return Object.freeze({ status: 'AwaitingSettlement', deploymentId: id, settlement });
+      const report = await buildReport(stopped);
+      await materializeReportArtifacts(stopped, row, report, new Date(now()).toISOString(), true);
+      if (!(await terminalArtifactsPresent(stopped, row, report))) {
+        return Object.freeze({ status: 'AwaitingCrmReportReadback', deploymentId: id, report });
+      }
+      const freshRow = await store.unique(deploymentTable, 'DEPLOYMENT_ID', id);
+      const fresh = await assertStoppedReportEvidence(store, await loadDeployment(store, freshRow, config), config);
+      const freshReport = await buildReport(fresh);
+      invariant((await terminalSettlement(fresh)).ready
+        && await terminalArtifactsPresent(fresh, freshRow, freshReport),
+      'REPORT_RECONCILIATION_REQUIRED', 'Stopped report evidence changed during reconciliation.');
+      return completedTerminalReport(fresh, freshReport, reportAttempt);
+    }
     if (deployment.engagementType !== 'free_test' || deployment.testStatus !== 'Completed') {
       return Object.freeze({ status: 'NotTerminal', deploymentId: id });
     }
     if (deployment.reportReconciliationStatus === 'Completed') {
       const report = await buildReport(deployment);
       if (await terminalArtifactsPresent(deployment, row, report)) {
-        return completedTerminalReport(deployment, report);
+        return completedTerminalReport(deployment, report, reportAttempt);
       }
       await setReportReconciliationStatus(id, new Set(['Completed']), 'Pending');
     }
@@ -2169,10 +2216,10 @@ function createRuntimeService({
     await setReportReconciliationStatus(
       id, new Set(['Pending', 'AwaitingSettlement']), 'Completed',
     );
-    return completedTerminalReport(pendingDeployment, report);
+    return completedTerminalReport(pendingDeployment, report, reportAttempt);
   }
 
-  async function reconcileDueDeployments(limit = 25) {
+  async function reconcileDueDeployments(limit = 25, reportAttempt = { used: false, skipped: new Set() }) {
     const liveRows = (await store.queryBounded(
       deploymentTable, 'TEST_STATUS', CONTRACT.active_test_status, 'EXPIRES_AT', limit,
       { SOURCE_REVISION: config.sourceRevision },
@@ -2204,12 +2251,16 @@ function createRuntimeService({
     for (const row of candidates) {
       let result;
       try {
-        result = await reconcileTerminalDeployment(row.DEPLOYMENT_ID);
+        result = await reconcileTerminalDeployment(row.DEPLOYMENT_ID, reportAttempt);
       } catch (error) {
         result = { status: 'Failed', errorCode: durableErrorCode(error) };
       }
       try {
-        await advanceTerminalScanCursor(row.DEPLOYMENT_ID);
+        // A deferred ready draft keeps its older cursor so the next bounded
+        // invocation reaches it before an already-attempted deployment.
+        if (!reportAttempt.skipped.has(row.DEPLOYMENT_ID)) {
+          await advanceTerminalScanCursor(row.DEPLOYMENT_ID);
+        }
       } catch (error) {
         result = { status: 'Failed', errorCode: durableErrorCode(error) };
       }
@@ -2222,7 +2273,7 @@ function createRuntimeService({
     });
   }
 
-  async function dispatchPendingReportSummaries(limit = 25) {
+  async function dispatchPendingReportSummaries(limit = 25, reportAttempt = { used: false, skipped: new Set() }) {
     invariant(crmSummaryDispatcher && typeof crmSummaryDispatcher.dispatch === 'function',
       'INVALID_RUNTIME_CONFIGURATION', 'CRM report dispatcher is unavailable.',
       { httpStatus: 503 });
@@ -2264,7 +2315,7 @@ function createRuntimeService({
           && readback.OPERATION_PAYLOAD_JSON === operation.OPERATION_PAYLOAD_JSON
           && readback.ACTION === operation.ACTION
           && readback.CRM_DEAL_ID === operation.CRM_DEAL_ID && summary) {
-          const terminal = await reconcileTerminalDeployment(summary.deploymentId);
+          const terminal = await reconcileTerminalDeployment(summary.deploymentId, reportAttempt);
           result = { status: 'Completed', ...(terminal.reportDraftStatus
             ? { reportDraftStatus: terminal.reportDraftStatus } : {}) };
         } else {
@@ -2307,14 +2358,16 @@ function createRuntimeService({
     const id = validDeploymentId(deploymentId);
     await stopExpiredDeployment(id);
     const row = await store.unique(deploymentTable, 'DEPLOYMENT_ID', id);
-    const deployment = await loadDeployment(store, row, config);
+    const loaded = await loadDeployment(store, row, config);
+    const deployment = loaded.testStatus === 'Stopped'
+      ? await assertStoppedReportEvidence(store, loaded, config) : loaded;
     const report = await buildReport(deployment);
-    const settlement = deployment.testStatus === 'Completed'
-      ? await terminalSettlement(deployment) : Object.freeze({ ready: false });
+    const terminal = deployment.testStatus === 'Completed' || isStoppedReportEvidence(deployment);
+    const settlement = terminal ? await terminalSettlement(deployment) : Object.freeze({ ready: false });
     const createdAt = new Date(now()).toISOString();
     await materializeReportArtifacts(deployment, row, report, createdAt, settlement.ready);
     return Object.freeze({
-      status: deployment.testStatus === 'Completed' && !settlement.ready
+      status: terminal && !settlement.ready
         ? 'ReportRebuiltAwaitingSettlement' : 'ReportRebuilt',
       report,
       terminalSettlementReady: settlement.ready,
@@ -2322,7 +2375,8 @@ function createRuntimeService({
   }
 
   async function reconcileDeployment(deploymentId) {
-    const terminal = await reconcileTerminalDeployment(deploymentId);
+    const terminal = await reconcileTerminalDeployment(deploymentId,
+      { used: false, skipped: new Set() }, { allowStopped: true });
     invariant(terminal.status === 'TerminalReportReconciled',
       'REPORT_RECONCILIATION_REQUIRED', 'Deployment is not ready for terminal reconciliation.',
       { httpStatus: 503, retryable: true });
@@ -2418,6 +2472,7 @@ function createRuntimeService({
     retryDueNotifications,
     runRetryJob,
     rebuildReport,
+    assertStoppedReportReady,
     reconcileDeployment,
     reconcileDueDeployments,
     readiness,

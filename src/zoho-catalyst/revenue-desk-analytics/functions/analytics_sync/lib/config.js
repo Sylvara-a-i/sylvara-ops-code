@@ -189,6 +189,8 @@ function loadConfig(environment = process.env, artifactRevision = ARTIFACT_SOURC
 
 module.exports = {
   ANALYTICS_HOSTS,
+  analyticsHost,
+  parseTargets,
   loadConfig,
   RECORD_TYPES,
   REVISION_PATTERN,

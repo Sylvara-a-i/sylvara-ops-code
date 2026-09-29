@@ -81,10 +81,20 @@ test('existing worker scan waits for Analytics then assembles and renders one pr
   assert.match(html, /Unknown/);
   assert.match(html, /Not for delivery/);
   const sourceRows = structuredClone(f.analyticsStore.rows);
+  // One reporting attempt is allowed per retry invocation. The other completed
+  // fixture deployment gets its older fair-scan cursor before A is retried.
+  const otherTurn = await run();
+  assert.equal(otherTurn.context.failures, 0);
+  assert.deepEqual(otherTurn.result.deployments.results.filter((row) => row.reportDraftStatus)
+    .map((row) => ({ deploymentId: row.deploymentId, status: row.reportDraftStatus })),
+  [{ deploymentId: 'deployment_B', status: 'awaiting_reconciled_evidence' }]);
+  assert.equal(fs.readdirSync(directory).length, 3);
+  assert.deepEqual(f.analyticsStore.rows, sourceRows);
   const repeated = await run();
   assert.equal(repeated.context.failures, 0);
   assert.ok(repeated.result.deployments.results.some((row) =>
-    row.reportDraftStatus === 'existing_draft_verified_not_for_delivery'));
+    row.deploymentId === f.identity.deploymentId
+      && row.reportDraftStatus === 'existing_draft_verified_not_for_delivery'));
   assert.deepEqual(f.analyticsStore.rows, sourceRows, 'Generating a draft must not resubmit Analytics facts');
   assert.equal(fs.readdirSync(directory).length, 3);
 });

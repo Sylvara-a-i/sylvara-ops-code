@@ -69,9 +69,11 @@ test('terminal draft dependency stays held by default and starts only after exac
   assert.deepEqual(observed, []);
   await completeSyntheticCrmReadback(fixture);
   const ready = await runtime.reconcileDueDeployments();
+  assert.deepEqual(observed, [{ clientId: 'client_A', deploymentId: 'deployment_A' }]);
+  assert.equal(ready.results.filter((row) => row.reportDraftStatus).length, 1);
+  await runtime.reconcileDueDeployments();
   assert.deepEqual(observed, [{ clientId: 'client_A', deploymentId: 'deployment_A' },
     { clientId: 'client_B', deploymentId: 'deployment_B' }]);
-  assert.ok(ready.results.every((row) => row.reportDraftStatus === 'awaiting_reconciled_evidence'));
   assert.equal(JSON.stringify(ready).includes('must-not-propagate'), false);
   const before = businessState(fixture);
   const held = await service(fixture).reconcileDueDeployments();
@@ -121,7 +123,10 @@ test('a timed-out draft receives cancellation and cannot monopolize another comp
   assert.equal(stalledSignal.aborted, true);
   assert.deepEqual(scanned.results[0], { status: 'Failed', errorCode: 'REPORT_DRAFT_RECONCILIATION_REQUIRED' });
   assert.equal(scanned.results[1].deploymentId, 'deployment_B');
-  assert.equal(scanned.results[1].reportDraftStatus, 'draft_created_not_for_delivery');
+  assert.equal(scanned.results[1].reportDraftStatus, undefined);
+  const next = await runtime.reconcileDueDeployments(2);
+  assert.equal(next.results[0].deploymentId, 'deployment_B');
+  assert.equal(next.results[0].reportDraftStatus, 'draft_created_not_for_delivery');
   assert.deepEqual(businessState(fixture), before);
 });
 
@@ -169,4 +174,31 @@ test('worker accepts the held trusted factory only after identity validation and
     terminalDraftReconcilerFactory() { throw new Error('private factory configuration'); } });
   assert.equal((await factoryFailure(retryJobRequest(fixture.env), context())).errorCode,
     'REPORT_DRAFT_RECONCILIATION_REQUIRED');
+});
+
+
+test('trusted frozen reporting deadlines override only the callback timeout and one attempt spans the full worker scan', async () => {
+  const fixture = await terminalFixture();
+  const attempted = [];
+  const callback = Object.freeze(Object.assign(async (scope) => {
+    attempted.push(scope.deploymentId);
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    return { status: 'draft_created_not_for_delivery' };
+  }, { attemptTimeoutMs: 250 }));
+  const runtime = service(fixture, { config: { ...fixture.config, platformTimeoutMs: 5 },
+    onTerminalReportReconciled: callback, crmSummaryDispatcher: { async dispatch() {
+      assert.fail('Completed CRM work cannot replay');
+    } } });
+  const first = await runtime.runRetryJob(100);
+  assert.equal(first.deployments.results.filter((row) => row.reportDraftStatus).length, 1);
+  assert.deepEqual(attempted, ['deployment_A']);
+  await runtime.runRetryJob(100);
+  assert.deepEqual(attempted, ['deployment_A', 'deployment_B']);
+  for (const deadline of [null, true, '', 0, 120001, 2.5]) {
+    const invalid = Object.freeze(Object.assign(async () => {}, { attemptTimeoutMs: deadline }));
+    assert.throws(() => service(fixture, { onTerminalReportReconciled: invalid }),
+      { code: 'INVALID_RUNTIME_CONFIGURATION' });
+  }
+  assert.throws(() => service(fixture, { onTerminalReportReconciled:
+    Object.assign(async () => {}, { attemptTimeoutMs: 250 }) }), { code: 'INVALID_RUNTIME_CONFIGURATION' });
 });

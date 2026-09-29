@@ -2,6 +2,7 @@
 
 const { AnalyticsSyncError, invariant } = require('./errors');
 const { withTimeout } = require('./connection-boundary');
+const { isReportAttemptBudget } = require('./report-attempt-budget');
 
 const JOB_ID_PATTERN = /^\d{3,30}$/;
 const READBACK_COLUMNS = Object.freeze([
@@ -151,7 +152,7 @@ function createAnalyticsClient(options) {
       && ['CLIENT_KEY', 'DEPLOYMENT_KEY'].every((key) => typeof scope[key] === 'string'
         && /^[a-f0-9]{64}$/.test(scope[key]))
       && typeof scope.CONFIGURATION_VERSION === 'string'
-      && /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(scope.CONFIGURATION_VERSION)
+      && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(scope.CONFIGURATION_VERSION)
       && scope.ENGAGEMENT_TYPE === 'free_test' && scope.ENVIRONMENT === 'development'
       && config.environment === scope.ENVIRONMENT
       && /^[a-f0-9]{40}$/.test(scope.SOURCE_REVISION)
@@ -160,10 +161,13 @@ function createAnalyticsClient(options) {
       && typeof now === 'function', 'ANALYTICS_SCOPE_INVALID',
     'Analytics complete-partition scope is invalid.');
     invariant(options && typeof options === 'object' && !Array.isArray(options)
-      && Object.keys(options).every((key) => key === 'signal')
-      && (options.signal === undefined || options.signal instanceof AbortSignal),
+      && Object.keys(options).every((key) => key === 'signal' || key === 'budget')
+      && (options.signal === undefined || options.signal instanceof AbortSignal)
+      && (options.budget === undefined || (isReportAttemptBudget(options.budget)
+        && (options.signal === undefined || options.signal === options.budget.signal))),
     'ANALYTICS_SCOPE_INVALID', 'Analytics complete-partition cancellation is invalid.');
-    const parentSignal = options.signal;
+    const budget = options.budget;
+    const parentSignal = budget?.signal || options.signal;
     const snapshot = Object.freeze({ ...scope });
     const target = provider.targets[recordType];
     invariant(target && Number.isSafeInteger(config.analyticsTimeoutMs) && config.analyticsTimeoutMs > 0
@@ -190,12 +194,14 @@ function createAnalyticsClient(options) {
     });
     async function readJson(url) {
       controller.signal.throwIfAborted();
+      budget?.consume('analytics_read');
       const authorization = await readAuthorizationProvider();
       controller.signal.throwIfAborted();
       const response = await fetchImpl(url, { method: 'GET', redirect: 'error',
         signal: controller.signal, headers: { Authorization: authorization,
           'ZANALYTICS-ORGID': provider.organizationId } });
       controller.signal.throwIfAborted();
+      budget?.assertActive();
       invariant(response?.status === 200, 'ANALYTICS_HTTP_ERROR',
         'Analytics complete-partition read did not return a complete response.',
         { retryable: response?.status === 408 || response?.status === 429 || response?.status >= 500 });

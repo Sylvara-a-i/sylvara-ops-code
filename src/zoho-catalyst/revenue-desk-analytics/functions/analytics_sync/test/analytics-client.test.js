@@ -408,3 +408,38 @@ test('parent cancellation promptly releases an active body before the longer ada
   await rejected;
   assert.equal(cancelled, true);
 });
+
+
+test('complete partition shares the whole-attempt ceiling and deadline across authorization and later requests', async () => {
+  const { createReportAttemptBudget, REPORT_ATTEMPT_MAXIMUMS } = require('../lib/report-attempt-budget');
+  const f = completeScopeFixture({ analyticsTimeoutMs: 1000 });
+  let authorize;
+  const budget = createReportAttemptBudget({ timeoutMs: 15, limits: REPORT_ATTEMPT_MAXIMUMS });
+  try {
+    const client = f.clientFor([], { readAuthorizationProvider: () => new Promise((resolve) => { authorize = resolve; }) });
+    await assert.rejects(client.readCompleteScope(f.scope, 'call', { budget }), { code: 'ANALYTICS_ABORTED' });
+    authorize(await authorization());
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(f.requests.length, 0);
+    assert.equal(budget.snapshot().analytics_read, 1, 'Failed authorization reserves its request slot.');
+  } finally { budget.close(); }
+  const capped = createReportAttemptBudget({ timeoutMs: 1000,
+    limits: { ...REPORT_ATTEMPT_MAXIMUMS, analytics_read: 1 } });
+  try {
+    await assert.rejects(f.clientFor([]).readCompleteScope(f.scope, 'call', { budget: capped }));
+    assert.equal(f.requests.length, 1, 'Export cannot start after the metadata request exhausts the shared ceiling.');
+    assert.equal(capped.snapshot().analytics_read, 1);
+    assert.equal(capped.signal.aborted, true);
+  } finally { capped.close(); }
+});
+
+
+test('complete partition preserves the existing Form2 version identity syntax', async () => {
+  const f = completeScopeFixture();
+  const scope = { ...f.scope, CONFIGURATION_VERSION: 'form2cfgv1:101:' + 'd'.repeat(40) };
+  assert.deepEqual((await f.clientFor([]).readCompleteScope(scope, 'call')).scope, scope);
+  for (const value of [true, 101, "invalid' OR 1=1", 'invalid whitespace', 'invalid/config']) {
+    await assert.rejects(f.clientFor([]).readCompleteScope({ ...scope, CONFIGURATION_VERSION: value }, 'call'),
+      { code: 'ANALYTICS_SCOPE_INVALID' });
+  }
+});

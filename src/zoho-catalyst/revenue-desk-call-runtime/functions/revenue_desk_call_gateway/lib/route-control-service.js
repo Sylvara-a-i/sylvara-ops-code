@@ -381,6 +381,66 @@ function rollbackClaimPayload(command) {
   });
 }
 
+/** Read-only proof for the existing manual early-stop report path. A Stopped
+ * row alone is not rollback authority: retain the completed command claim and
+ * signed revoke decision that the control service already wrote and verified.
+ * Runtime call settlement may advance counts without changing this control state.
+ */
+const stoppedReportProofs = new WeakSet();
+const isStoppedReportEvidence = (value) => stoppedReportProofs.has(value);
+
+async function assertStoppedReportEvidence(store, deployment, config) {
+  const requireProof = (value) => invariant(value, 'REPORT_RECONCILIATION_REQUIRED',
+    'Stopped report requires exact completed rollback evidence.', { httpStatus: 503 });
+  requireProof(deployment.engagementType === 'free_test' && deployment.testStatus === 'Stopped'
+    && deployment.approvalStatus === 'Revoked' && deployment.reportReconciliationStatus === 'NotRequired'
+    && deployment.activationEvidenceValidated === true && deployment.actualStartAt !== null
+    && deployment.stoppedAt !== null && Date.parse(deployment.stoppedAt) >= Date.parse(deployment.actualStartAt));
+  const claims = await store.queryBounded(config.tables.EVENT_RECEIPT_TABLE,
+    'DEPLOYMENT_ID', deployment.deploymentId, 'RECEIVED_AT', 100, { RECEIPT_KIND: 'control_claim' });
+  requireProof(claims.length === 1);
+  const claim = claims[0];
+  let payload;
+  try { payload = JSON.parse(claim.EVENT_DATA_JSON); } catch { requireProof(false); }
+  const command = validateCommand('rollback', Object.fromEntries(['dealId', 'journeyId', 'deploymentId',
+    'configurationVersionId', 'idempotencyKey', 'reason'].map((key) => [key, payload?.[key]])));
+  const serialized = JSON.stringify(rollbackClaimPayload(command));
+  const controlConfig = { ...config, eventChainSecret: config.authorizationEventSecret };
+  requireProof(command.dealId === deployment.crmDealId && command.deploymentId === deployment.deploymentId
+    && command.configurationVersionId === deployment.configurationVersionId && command.reason === deployment.stopReason
+    && claim.EVENT_DATA_JSON === serialized && claim.RECEIPT_KIND === 'control_claim'
+    && claim.EVENT_TYPE === 'rollback_claim' && claim.STATUS === 'Completed'
+    && claim.LAST_ERROR_CODE === null && Number(claim.RECEIPT_VERSION) === 1
+    && claim.DEPLOYMENT_ID === deployment.deploymentId && claim.CONFIGURATION_VERSION_ID === deployment.configurationVersionId
+    && claim.SOURCE_REVISION === config.sourceRevision && claim.SOURCE_ENVIRONMENT === config.environment
+    && claim.EVENT_KEY === `rollback_claim_${keyedDigest(config.authorizationEventSecret,
+      'revenue-desk-rollback-claim-key-v1', [config.environment, config.sourceRevision, deployment.deploymentId])}`
+    && claim.PAYLOAD_FINGERPRINT === keyedDigest(config.authorizationEventSecret,
+      'revenue-desk-rollback-claim-v1', [config.environment, config.sourceRevision, serialized])
+    && exactTimestamp(claim.RECEIVED_AT) && exactTimestamp(claim.PROCESSED_AT)
+    && Date.parse(claim.RECEIVED_AT) <= Date.parse(deployment.stoppedAt)
+    && Date.parse(claim.PROCESSED_AT) >= Date.parse(deployment.stoppedAt));
+  const receipt = await store.unique(config.tables.EVENT_RECEIPT_TABLE,
+    'EVENT_KEY', eventKey(controlConfig, 'rollback', command.idempotencyKey));
+  const patch = decisionPatch('rollback', receipt, command, controlConfig);
+  const data = receiptData(receipt, controlConfig);
+  const activation = await store.unique(config.tables.EVENT_RECEIPT_TABLE,
+    'EVENT_KEY', deployment.activationEventKey);
+  const activationData = receiptData(activation, controlConfig);
+  requireProof(receipt.STATUS === 'Completed' && receipt.LAST_ERROR_CODE === null
+    && receipt.PROCESSED_AT === deployment.stoppedAt && data.decidedAt === deployment.stoppedAt
+    && data.previousEventHash === activationData.eventHash
+    && command.journeyId === activationData.controlBinding.journeyId
+    && data.controlBinding.deploymentControlPoststateDigest
+      === deploymentControlDigest(config.authorizationEventSecret, deployment.row)
+    && ['TEST_STATUS', 'GO_LIVE_APPROVAL_STATUS', 'STOP_REASON', 'STOPPED_AT']
+      .every((key) => deployment.row[key] === patch[key])
+    && Number(deployment.row.COUNT_VERSION) >= patch.COUNT_VERSION);
+  const proven = Object.freeze({ ...deployment });
+  stoppedReportProofs.add(proven);
+  return proven;
+}
+
 function hasText(value) {
   return typeof value === 'string' && value.trim().length > 0;
 }
@@ -2632,6 +2692,8 @@ module.exports = Object.freeze({
   ROLLBACK_REASON_TO_CRM,
   ROLLBACK_REASONS,
   createRouteControlService,
+  assertStoppedReportEvidence,
+  isStoppedReportEvidence,
   validateCommand,
   deploymentCasPredicates,
   verifyDeploymentPoststate,

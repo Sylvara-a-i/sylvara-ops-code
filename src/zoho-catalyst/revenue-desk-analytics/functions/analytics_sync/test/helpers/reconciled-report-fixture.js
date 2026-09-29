@@ -3,7 +3,7 @@
 // Reuse the accepted offline runtime/CRM harness and Analytics service/store.
 // All rows below are synthetic local test state, never provider receipts.
 const assert = require('node:assert/strict');
-const { createOfflineHarness } = require('../../../../../revenue-desk-release/test/helpers/free-test-demo');
+const { createOfflineHarness, createStoppedOfflineHarness } = require('../../../../../revenue-desk-release/test/helpers/free-test-demo');
 const { createAnalyticsSyncService } = require('../../lib/service');
 const { MemoryStore, serviceConfig } = require('../helpers');
 const { createReconciledFreeTestInputReader } = require('../../../../tools/read-reconciled-free-test-input');
@@ -12,31 +12,62 @@ const TYPES = ['deployment', 'call', 'final_test_result'];
 const READBACK_KEYS = ['RECORD_KEY', 'CLIENT_KEY', 'DEPLOYMENT_KEY', 'ENVIRONMENT', 'PAYLOAD_HASH', 'SOURCE_MODIFIED_AT'];
 
 async function createReconciledReportFixture({ empty = false, reconcile = true, analyses,
-  endedBeforeAnalysis = false, mailBehavior } = {}) {
-  const h = await createOfflineHarness({ mailBehavior });
+  endedBeforeAnalysis = false, mailBehavior, lateFinalCall = false, inFlightOvershoot = false, stopped = false } = {}) {
+  const h = stopped ? await createStoppedOfflineHarness({ empty }) : await createOfflineHarness({ mailBehavior });
   const runtime = h.runtime;
-  const calls = analyses === undefined ? (empty ? [] : [{}]) : analyses;
-  assert.ok(Array.isArray(calls) && calls.length <= 25 && (empty ? calls.length === 0 : calls.length >= 1)
+  const calls = stopped ? Array.from({ length: runtime.store.rows.get('RevenueDeskCalls').length }, () => ({}))
+    : analyses === undefined ? (empty ? [] : [{}]) : analyses;
+  assert.ok(Array.isArray(calls) && calls.length <= (inFlightOvershoot ? 26 : 25) && (empty ? calls.length === 0 : calls.length >= 1)
     && calls.every((value) => value && typeof value === 'object' && !Array.isArray(value)),
   'Synthetic analyses must be bounded call-analysis objects.');
-  for (const [index, analysis] of calls.entries()) {
-    const admission = await h.inbound('A');
-    if (endedBeforeAnalysis) {
+  assert.ok(!(lateFinalCall && inFlightOvershoot) && (!lateFinalCall || calls.length === 25)
+    && (!inFlightOvershoot || calls.length === 26));
+  const admitted = [];
+  if (inFlightOvershoot) {
+    // All admissions precede the stop; already accepted calls remain accountable.
+    for (let index = 0; index < calls.length; index += 1) admitted.push(await h.inbound('A'));
+    for (const [index, admission] of admitted.entries()) {
       await h.event('A', admission.body.call_inbound.metadata, `reconciled_report_fixture_${index}`, {}, 'call_ended');
     }
+  }
+  async function analyze(index, admission) {
     await h.event('A', admission.body.call_inbound.metadata, `reconciled_report_fixture_${index}`, {
       caller_intent: 'Synthetic repair request', issue_summary: 'Synthetic leaking tap',
       bookable_opportunity: true, office_follow_up_required: true,
-      workflow_failure_code: null, workflow_failure_text: null, ...structuredClone(analysis),
+      workflow_failure_code: null, workflow_failure_text: null, ...structuredClone(calls[index]),
     });
   }
-  runtime.clock.value = Date.parse('2026-08-27T12:00:01.000Z');
-  await h.job({ mode: 'rebuild_report', deployment_id: 'deployment_A' });
-  const operation = runtime.store.rows.get('CRMBillingOperations')[0];
-  assert.ok(operation, 'Runtime terminal reconciliation must produce the CRM operation.');
-  await h.dispatcher.dispatch(operation.CRM_DEAL_ID, operation.OPERATION_KEY);
-  await h.job({ mode: 'reconcile_deployment', deployment_id: 'deployment_A' });
-  assert.equal(operation.STATUS, 'completed');
+  for (const [index] of (stopped ? [] : calls).entries()) {
+    const admission = inFlightOvershoot ? admitted[index] : await h.inbound('A');
+    if (lateFinalCall && index === calls.length - 1) { admitted.push(admission); break; }
+    if (endedBeforeAnalysis && !inFlightOvershoot) {
+      await h.event('A', admission.body.call_inbound.metadata, `reconciled_report_fixture_${index}`, {}, 'call_ended');
+    }
+    await analyze(index, admission);
+  }
+  async function completeTerminal() {
+    await h.job({ mode: 'rebuild_report', deployment_id: 'deployment_A' });
+    const operations = runtime.store.rows.get('CRMBillingOperations');
+    assert.ok(operations.length, 'Runtime terminal reconciliation must produce the CRM operation.');
+    for (const operation of operations.filter((row) => row.STATUS !== 'completed')) {
+      await h.dispatcher.dispatch(operation.CRM_DEAL_ID, operation.OPERATION_KEY);
+      assert.equal(operation.STATUS, 'completed');
+    }
+    await h.job({ mode: 'reconcile_deployment', deployment_id: 'deployment_A' });
+  }
+  if (!stopped) runtime.clock.value = Date.parse('2026-08-27T12:00:01.000Z');
+  if (lateFinalCall) {
+    const waiting = await h.job({ mode: 'rebuild_report', deployment_id: 'deployment_A' });
+    assert.equal(waiting.status, 'ReportRebuiltAwaitingSettlement');
+    assert.equal(runtime.store.rows.get('CRMBillingOperations').length, 0);
+  } else await completeTerminal();
+  if (lateFinalCall) {
+    const index = calls.length - 1;
+    const admission = admitted[0];
+    await h.event('A', admission.body.call_inbound.metadata, `reconciled_report_fixture_${index}`, {}, 'call_ended');
+    await analyze(index, admission);
+    await completeTerminal();
+  }
   const all = runtime.store.rows.get('AnalyticsSyncOutbox');
   const final = all.find((row) => row.RECORD_TYPE === 'final_test_result');
   assert.ok(final, 'Final fact must be emitted by runtime terminal processing.');

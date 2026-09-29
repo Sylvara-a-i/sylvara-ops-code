@@ -32,7 +32,7 @@ function validateScope(scope) {
   requireCondition(exactObject(scope, SCOPE_FIELDS)
     && HASH.test(scope.CLIENT_KEY) && HASH.test(scope.DEPLOYMENT_KEY)
     && typeof scope.CONFIGURATION_VERSION === 'string'
-    && /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(scope.CONFIGURATION_VERSION)
+    && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(scope.CONFIGURATION_VERSION)
     && scope.ENVIRONMENT === 'development' && scope.ENGAGEMENT_TYPE === 'free_test'
     && typeof scope.SOURCE_REVISION === 'string' && /^[a-f0-9]{40}$/.test(scope.SOURCE_REVISION),
   'OPPORTUNITY_SCOPE_INVALID');

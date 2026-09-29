@@ -50,7 +50,7 @@ customer-launch readiness. Keep the fixed G1–G8 and H1–H10 denominators unch
 
 | Pending outcome | Required call/activation evidence | Independent preparation | Existing acceptance path |
 | --- | --- | --- | --- |
-| Public entry identity/retry | None; this is not call-dependent | Source and fixed native mapping retained; narrow reader grant complete | Separately allocated public/native fixture and readback; do not rerun the accepted assisted lane |
+| Both entry routes and identity/retry | None; these are not call-dependent | Accepted assisted and selected public recovery/conversion facets retained; Route A bypass and shared convergence checked locally | G1 Route A iPad/redirect evidence and Route B existing booking/calendar/CRM correlation; allocate only missing effects, never replay accepted entries |
 | Genuine call ownership, count and late analysis | Verified activation plus admitted provider call and ended/analyzed events | Existing deterministic authentication, isolation, deduplication and late-event tests | Signed provider ingress → durable receipt → existing worker → canonical call/outbox; no inserted success rows |
 | Actionable alert and actual inbox receipt | Canonical actionable call, approved recipient and outbox claim | Existing minimized template, named monitored owner, bounded recovery tests | Actual call-alert adapter; read durable send state and mailbox independently. Acceptance is not inbox delivery or completed callback |
 | Analytics import/UTC roundtrip | Worker-produced v2 facts and actual source watermark | Five tables/141 columns installed; mappings and typed local tests retained. Six nonsecret connection/target bindings saved and freshly read back on 2026-09-23 with Analytics disabled and its revision hold unchanged. Migration evidence digest remains absent | Scoped importer → import-job outcome → independent exact partition/UTC readback → checkpoint; no scheduler or extra dashboard |
@@ -123,8 +123,12 @@ Analytics or carrier acceptance.
 1. **Join the correct relationship.** A public Form 1 request has exactly one
    native CRM writer. An existing Lead uses CRM-assisted Form 1, whose sole writer
    is Catalyst. Preserve the exact original conversion lineage; do not create a
-   second Lead or Deal to evade duplicates. A setup appointment is only a meeting:
-   verify its CRM deduplication owner and next action before using it as an entry.
+   second Lead or Deal to evade duplicates. Route A bypasses scheduling entirely.
+   Route B continues the existing website intake through its existing setup
+   appointment, with authoritative booking/calendar/CRM correlation. Neither a
+   redirect nor a confirmed appointment grants Form 2 authority or activation.
+   Follow the [two-route map](../../zoho-crm/free-revenue-leak-test/entry-routes.md)
+   and continue the original relationship without another Form 1 submission.
 2. **Obtain setup and authority.** Use the accepted Form 2 access/verification
    path. Fresh-read the successful receipt, consumed proof, submitted session and
    exact Contact/Account/Deal. A hash or prefill snapshot is not submitted truth.
@@ -235,11 +239,15 @@ appointments map to CRM Events. No Sync, Save, appointment, email or record acti
 was performed. This metadata is not proof of a successful deduplicated booking.
 
 The service-specific match keys, notification recipients/content and exact
-Journey next-action association have not all been read back. Optional public
-scheduling acceptance remains deferred; it is not a prerequisite for the
-mandatory public/assisted Form 1 → native conversion → Form 2 Journey. Keep the
-assisted form's booking detour removed. Do not add another writer or automation
-as a shortcut or silently represent the optional scheduling entry as verified.
+Journey next-action association have not all been read back. Public website
+setup scheduling is a mandatory Route B subcheck of G1. Keep Route A's assisted
+form booking detour removed: it requires no slot, booking ID or scheduling
+availability. Route B must independently join the original intake, confirmed
+appointment, intended calendar and CRM relationship before its appointment
+handoff is accepted. Both use the same existing Form 2; neither requires a
+replacement Form 1. Do not add another writer or automation as a shortcut.
+The [route map](../../zoho-crm/free-revenue-leak-test/entry-routes.md) separates
+retained acceptance, current metadata and remaining device/provider evidence.
 The public free-test CTA resolves to the existing intake entry. Its short
 "25 calls" wording should be clarified, under separate website publication
 approval, to "25 unique connected calls or seven days, whichever comes first;
@@ -322,9 +330,9 @@ contract: [ZDK Functions](https://www.zohocrm.dev/explore/client-script/webapi/F
 ### Historical rollout evidence — superseded, not a current instruction
 
 The dated installation/source narrative in this subsection records earlier states.
-The settled sequencing decision and G8 below own the current release: controller
-`20bf11c` verified, matching gateway/worker delta pending, unchanged Analytics
-`5227abe` held. Do not execute the older four-target rollout again.
+The dated rows below preserve their original release evidence. The September 29
+continuation after the fixed ledger records the later held authentication release
+and reporting candidate. Do not execute an older rollout from this history.
 
 **2026-09-15 installed-state correction:** the private held-installation record
 supersedes the older local-only early-stop paragraphs below. The existing gateway,
@@ -403,7 +411,7 @@ this table is the sanitized operating view, not a new release contract.
 
 | Gate | Current evidence and revision | Remaining action | Cost class | Approval needed | Status |
 | --- | --- | --- | --- | --- | --- |
-| G1 Public/assisted entry and native relationships | Accepted assisted Forms/conversion retained. Public native entry and original unconverted Lead reconciled; conversion options identify an email collision with a different synthetic company's Contact. Native failed-entry recovery is documented; successful-entry redelivery is not supported | Resolve the email-fallback isolation risk, then allocate collision-free native conversion and eligible failed-entry recovery/readback; see the bounded G1 procedure below | Read-only/local preparation now; execution allowance must be confirmed | Exact Forms configuration and fixture/effect allocation; no reused canary | Public G1 incomplete; no mutation of retained relationships; assisted evidence retained |
+| G1 Public/assisted entry and native relationships | Accepted assisted Forms/conversion retained. September 24–25 selected same-entry native recovery, new-business conversion/lineage and delayed duplicate-email non-overwrite facets retained; contained existing-relationship alternative accepted | Route A: iPad handoff and no scheduling dependency. Route B: existing website scheduling, authoritative booking/calendar/CRM correlation and retry behavior. Preserve unresolved public identity/task-effect subchecks | Read-only/local preparation now; execution allowance must be confirmed | Separate exact route/device/appointment effects allocation; no replay of accepted entries or consumed canaries | Partial; both mandatory route subchecks remain explicit; existing public hold retained |
 | G2 Authenticated configuration review/staging | `20bf11c` controller installed; all 246 downloaded entries verified. Prior staging retained; approved immutable transition and separate internal approval completed with independent storage/CRM readback. Original hold restored; Scheduled/Approved, zero calls, no activation/start/expiry | Preserve exact receipts and configuration. Do not repeat staging or approval for a documentation or utility revision | Consumed execution used confirmed Development/included CRM allowance | Completed block consumed; no automatic replay | Passed for the accepted assisted lineage at `20bf11c` |
 | G3 Coverage and restoration preparation | After-hours fixtures; new owner-attested overflow/combined snapshot contract | Actual originating-provider setting/unit/evidence and later execution binding; preserve original handling | Local preparation only | Owner evidence; separate provider phase for live behavior | Preparation only; overflow/combined execution held |
 | G4 Call-to-owner handoff | H1–H10 source at `c28affd`; Gabriel owns monitoring of the privately approved QA mailbox; separate dry-run/acceptance/delivery meanings | Actual alert adapter/inbox proof and bounded recovery readback in first controlled-call path | No real sending now | Exact owner-only email and controlled-call runtime allocation | Source complete; Development 0/10 |
@@ -412,38 +420,100 @@ this table is the sanitized operating view, not a new release contract.
 | G7 Operator demo | Original owner acceptance plus 2026-09-23 acceptance of both added handoff/staging panels; retained 23 focused tests and exact artifact parity | None for the unchanged existing offline demo | Local only | Owner visual check completed; no live-action permission | Passed for the existing synthetic offline demo |
 | G8 Held release and acceptance | PR #93 merged as `6bbbf27`; controller/gateway/worker `20bf11c` downloaded content verified against the exact artifact manifest (246/233/235 entries). Historical PR #91 four-target evidence retained. Repository and installed revisions remain distinct | Preserve holds and immutable artifacts; affected call-dependent functional acceptance follows the approved later controlled-call sequence. No runtime redeploy for these documentation changes | Completed held installations used confirmed Development allowance; later execution must remain explicitly bounded | Installation allocations consumed; controlled-call acceptance and customer launch remain separately unapproved | Source release and matching held installation complete; required runtime acceptance pending |
 
-No row asserts that only Retell testing remains. Optional scheduling, paid
-conversion, Full Blueprint and customer traffic remain outside this goal.
+No row asserts that only Retell testing remains. Existing website setup scheduling
+is required within G1 Route B; assisted Route A bypasses it. Caller-job booking,
+paid conversion, Full Blueprint and customer traffic remain outside this goal.
 
 The eight-row whole-goal numerator is **2/8 fully accepted**: G2 and G7 passed; the other
 rows retain their unpassed required subgates. This does not erase the retained Forms,
 source/offline or artifact evidence. The separate handoff source result remains
 10/10 and its Development acceptance remains 0/10; neither is a whole-goal score.
 
+### September 29 continuation — current evidence boundaries
+
+This continuation preserves all eight gates and ten handoff gates. It adds no
+acceptance credit for local source, provider metadata, packaging or CI alone.
+
+- **G1 Route A:** exactly one existing CRM-assisted Form 1 remains webhook-only;
+  its saved thank-you configuration has no scheduling link or redirect. Source
+  tests retain the CRM-bound writer, unchecked consent and independence from
+  Bookings. The actual iPad CRM/browser handoff remains an explicit device check.
+- **G1 Route B:** the separate existing website Form 1 retains its native Lead
+  writer. Fresh settings show a missing scheduling handoff on its thank-you page.
+  The existing setup service, staff, CRM integration, calendar destination and
+  time zone were discovered privately. Native sync can update a matching Lead or
+  Contact or create a Lead; that alone does not prove original-intake ownership.
+  Qualify that join and approve the exact existing configuration correction before
+  appointment fixtures. The two Form 1 surfaces converge on the one shared Form 2.
+- **G6:** validated report assembly, complete-partition revalidation, checkpoint
+  re-attestation, durable WorkDrive claim/readback and bounded retry are source
+  implementations. Existing ReportRuns metadata is reused; nullable report-run
+  version and checkpoint verification-digest columns are proposed, not installed.
+  Fresh Analytics table identities/types match Development, but complete column
+  visibility and the synchronous export contract remain tenant acceptance gaps.
+  The existing Sylvara WorkDrive structure was read back; exact client mapping,
+  writer identity, complete sharing evidence and approved retention remain private
+  binding gates. No new hierarchy, upload or public sharing was created.
+- **G5/G6 terminal results:** automatic scans remain limited to Completed. The
+  existing manual reconciliation path can report settled Stopped deployments
+  with the protected rollback proof and the original RolledBack CRM meaning.
+  It does not relabel termination or add an automatic stopped-deployment lane.
+- **G8:** later private acceptance records identify held gateway, worker,
+  controller and CRM artifacts at `89411b3`, with completed authentication-setting
+  saves. Authentication runtime qualification remains open. Reporting draft PR
+  #107 and authentication draft PR #106 remain separate changes; an immutable
+  reviewed composition preserves both without requiring their automatic merge.
+  The runtime report factory remains unbound pending exact installation approval.
+
+Keep these release states separate in the private candidate receipt: **Source
+Complete**, **Packaging Verified**, **Development Installed**, **Pre-Call
+Preparation Complete**, **Internal End-to-End Accepted**, and **Customer Launch
+Approved**. Only the exact candidate's observed checks may advance its first two
+states. Existing held installation of an earlier revision cannot advance a new
+candidate. Both route acceptance, writer/reader qualification, authentication,
+provider timing and routing/restoration remain prerequisites at their respective
+execution gates. Genuine call checkpoints and inbox receipts are produced by the
+later authorized call; they are not fabricated pre-call prerequisites.
+
+The private execution packet separates route/device/appointment effects,
+Development installation/storage/re-attestation, and controlled internal call
+activity. Gabriel remains the requirement and failure-monitoring owner through
+the existing operator workflow. Keep zero current live allocations, preserve all
+consumed reservations and holds, and restore containment on any identity,
+freshness, readback or cost uncertainty. Customer launch and external report
+delivery require their own later approvals.
+
 ### G1 native recovery and identity reconciliation
 
 Owner: Gabriel for the native integration contract and exact execution allocation.
-The 2026-09-23 private readback distinguishes a successful public Forms push from
-a later native conversion collision. The original entry still says record added;
-the exact original Lead is not converted. Its email also belongs to a retained
-Contact under a different synthetic Account with existing Deals. Preserve those
-records: the conversion candidate is evidence of a conflict, not authority to
-select it. The failed-integration filter currently has no eligible entries.
+The later September 24–25 private records retain selected same-entry recovery,
+new-business native conversion with exact lineage, and delayed duplicate-email
+non-overwrite acceptance. They supersede earlier descriptions of those selected
+facets as unexecuted. The original cross-company collision remains negative
+evidence; no merge, reparenting or overwrite is authorized. Whole G1 remains
+partial: preserve the public hold, unresolved task-effect/duplicate-intake cases,
+and both route subchecks in the [route map](../../zoho-crm/free-revenue-leak-test/entry-routes.md).
+Do not repeat accepted fixtures because the historical diagnostic trail below is
+older than those receipts.
 
 | Case | Supported operator action | Evidence required / current disposition |
 | --- | --- | --- |
-| Successful original entry | Reconcile its exact original Lead and any native conversion result; do not resend, edit, delete its destination or toggle integration to force a retry | Original entry ID, generated intake ID, timestamps and Lead agree. Successful push reconciled; new-business conversion remains incomplete because of the distinct-company Contact collision |
-| Genuinely failed integration | Reconcile any prior effects and fix the actual cause first; use All Entries → Integration - Failed Entries → select only the exact entry → Re-push, when that native control is available | Preserve entry/intake identity and original consent/submission timestamps; read back status, exact CRM relationships, changed fields and repeated effects. Documented support is not tenant acceptance; no eligible current failure has been executed |
+| Successful original entry | Reconcile its exact original Lead and any native conversion result; do not resend, edit, delete its destination or toggle integration to force a retry | Preserve accepted native conversion/lineage for the selected new-business fixture and the separate original cross-company collision; do not combine their dispositions |
+| Genuinely failed integration | Reconcile any prior effects and fix the actual cause first; use All Entries → Integration - Failed Entries → select only the exact entry → Re-push, when that native control and a fresh allocation are available | Selected same-entry recovery and identity/timestamp preservation passed; intended downstream task effects remain separate. Preserve the original receipt and do not repeat its consumed recovery allocation |
 | Ambiguous or partially applied operation | Hold and reconcile Forms status, exact Lead, native conversion relationships and emitted effects before deciding whether anything remains to retry | A missing search result or timeout cannot authorize another write. Never reset claims, invent a new identity or blindly repeat conversion |
 | New entry with repeated business details | Treat it as a new Forms submission, not a retry of the original entry; check business ownership independently | New entry/intake identity is not same-entry recovery evidence. Same email or phone alone cannot establish company ownership |
-| Existing relationship / native conversion | Read conversion options and, if already converted, its recorded result; use an existing record only for the verified same person and business | The current cross-company QA identity is a preserved negative case. No merge, reparenting, overwrite, duplicate Contact or extra Deal is authorized |
+| Existing relationship / native conversion | Read conversion options and, if already converted, its recorded result; continue the exact eligible existing Deal through Form 2 for the verified same person and business | Contained operating alternative accepted; no new execution is claimed. The original cross-company QA identity remains negative evidence. No new Form 1, reconversion, merge, reparenting or extra Deal is authorized |
 
 Zoho's [failed-entry Re-push procedure](https://help.zoho.com/portal/en/kb/forms/faqs-frequently-asked-questions/integrations/articles/how-to-re-push-values-after-fixing-the-cause-of-integration-failure)
 includes CRM. The private support answer confirms that successful entries are
 excluded and that editing an entry does not retrigger its CRM integration. G1
 requires safe recovery and no duplicate effects, not an unsupported successful
-redelivery experiment. This clarification does not pass the failed-recovery or
-legitimate-existing-relationship subgates without their own evidence.
+redelivery experiment. Credit the later selected recovery receipt and contained
+existing-relationship decision within their recorded limits; they do not pass
+unexercised duplicate-intake execution or the Route B appointment handoff.
+
+The following historical configuration analysis explains retained containment;
+it is not a fresh execution allocation or a replacement for the later receipts.
 
 The current [Forms Upsert order](https://help.zoho.com/portal/en/kb/forms/integrations/zoho-crm/articles/adding-a-new-record-to-a-zoho-crm-module)
 is sequential, not a joint identity condition: generated intake ID, then Email.

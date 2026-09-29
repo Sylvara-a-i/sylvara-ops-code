@@ -106,23 +106,25 @@ test('real conversion reader and CRM field selection connect accepted setup to i
 });
 
 test('real native reader rejects wrong joins and chronology before staging consumes any write', async () => {
-  for (const mutate of [
-    (row) => { row.Converted_Account.id = '900000000001'; },
-    (row) => { row.Converted_Contact.id = '900000000001'; },
-    (row) => { row.Converted_Deal.id = '900000000001'; },
-    (row) => { row.Intake_Submission_ID = 'synthetic_other_journey'; },
-    (row) => { row.Converted_Date_Time = '2026-09-09T11:39:00.000Z'; },
-    (row) => { row.Converted_Date_Time = '2026-09-09T11:46:00.000Z'; row.Modified_Time = row.Converted_Date_Time; },
-    (row) => { row.Converted_Date_Time = '2026-09-09T11:44:00.000Z'; },
-    (row) => { delete row.Converted_Contact; },
-  ]) {
-    const selected = connectedNativeFixture(); mutate(selected.nativeRow);
-    await assert.rejects(selected.service.stage(selected.f.request), (error) => {
-      assert.ok(['CONFIGURATION_CONVERSION_INVALID', 'CONFIGURATION_NATIVE_CONVERSION_UNVERIFIED'].includes(error.code));
-      return true;
-    });
-    assert.equal(selected.f.store.writes.length, 0); assert.equal(selected.f.stagingWrites, 0);
-    assert.equal(selected.writes(), 0);
+  for (const publicNative of [false, true]) {
+    for (const mutate of [
+      (row) => { row.Converted_Account.id = '900000000001'; },
+      (row) => { row.Converted_Contact.id = '900000000001'; },
+      (row) => { row.Converted_Deal.id = '900000000001'; },
+      (row) => { row.Intake_Submission_ID = 'synthetic_other_journey'; },
+      (row) => { row.Converted_Date_Time = '2026-09-09T11:39:00.000Z'; },
+      (row) => { row.Converted_Date_Time = '2026-09-09T11:46:00.000Z'; row.Modified_Time = row.Converted_Date_Time; },
+      (row) => { row.Converted_Date_Time = '2026-09-09T11:44:00.000Z'; },
+      (row) => { delete row.Converted_Contact; },
+    ]) {
+      const selected = connectedNativeFixture({ publicNative }); mutate(selected.nativeRow);
+      await assert.rejects(selected.service.stage(selected.f.request), (error) => {
+        assert.ok(['CONFIGURATION_CONVERSION_INVALID', 'CONFIGURATION_NATIVE_CONVERSION_UNVERIFIED'].includes(error.code));
+        return true;
+      });
+      assert.equal(selected.f.store.writes.length, 0); assert.equal(selected.f.stagingWrites, 0);
+      assert.equal(selected.writes(), 0);
+    }
   }
 });
 
@@ -416,9 +418,11 @@ test('wrong owner, stale review, edited recipient or evidence and unauthorized f
     (f) => { f.records.deal.Approved_Test_Route = 'Both'; },
     (f) => { f.request.deployment.MONITOR_AGENT_ID = 'wrong_agent'; f.sign(); },
   ];
-  for (const change of changes) {
-    const f = createStagingFixture(); change(f);
-    await assert.rejects(f.service.stage(f.request)); assert.equal(f.store.writes.length, 0);
+  for (const publicNative of [false, true]) {
+    for (const change of changes) {
+      const f = createStagingFixture(0, { publicNative }); change(f);
+      await assert.rejects(f.service.stage(f.request)); assert.equal(f.store.writes.length, 0);
+    }
   }
 });
 
@@ -434,18 +438,20 @@ test('two businesses preserve configuration recipient number and durable claim o
 });
 
 test('interrupted multi-table staging is visibly blocked; retry cannot spend a second write allocation', async () => {
-  const f = createStagingFixture(); const insert = f.store.insertUnique.bind(f.store);
-  f.store.insertUnique = async (table, ...args) => {
-    if (table === f.config.tables.DEPLOYMENT_TABLE) throw new Error('synthetic interruption');
-    return insert(table, ...args);
-  };
-  await assert.rejects(f.service.stage(f.request));
-  assert.equal(f.store.rowsFor(f.config.tables.CONFIGURATION_VERSION_TABLE).length, 1);
-  assert.equal(f.store.rowsFor(f.config.tables.DEPLOYMENT_TABLE).length, 0);
-  assert.equal(f.stagingWrites, 0);
-  const writes = f.store.writes.length;
-  await assert.rejects(f.service.stage(f.request), { code: 'CONFIGURATION_STAGING_RECONCILIATION_REQUIRED' });
-  assert.equal(f.store.writes.length, writes);
+  for (const publicNative of [false, true]) {
+    const f = createStagingFixture(0, { publicNative }); const insert = f.store.insertUnique.bind(f.store);
+    f.store.insertUnique = async (table, ...args) => {
+      if (table === f.config.tables.DEPLOYMENT_TABLE) throw new Error('synthetic interruption');
+      return insert(table, ...args);
+    };
+    await assert.rejects(f.service.stage(f.request));
+    assert.equal(f.store.rowsFor(f.config.tables.CONFIGURATION_VERSION_TABLE).length, 1);
+    assert.equal(f.store.rowsFor(f.config.tables.DEPLOYMENT_TABLE).length, 0);
+    assert.equal(f.stagingWrites, 0);
+    const writes = f.store.writes.length;
+    await assert.rejects(f.service.stage(f.request), { code: 'CONFIGURATION_STAGING_RECONCILIATION_REQUIRED' });
+    assert.equal(f.store.writes.length, writes);
+  }
 });
 
 test('failed receipt CAS or changed source after creation cannot become completed evidence', async () => {

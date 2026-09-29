@@ -9,7 +9,7 @@
     "node": "24.x"
   },
   "scripts": {
-    "check": "node --check index.js",
+    "check": "node --check index.js && node --check lib/terminal-draft-composition.js && node --check ../../scripts/compose-reporting-artifact.js",
     "test": "node --test test/package.test.js",
     "ci": "npm run check && npm test"
   },

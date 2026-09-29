@@ -247,3 +247,16 @@ test('Catalyst store counts every schema version when checking an OUTBOX_KEY own
   await assert.rejects(() => durable.ensureOutbox(original),
     (error) => error.code === 'DURABLE_OWNERSHIP_AMBIGUOUS');
 });
+
+
+test('report source reads accept the canonical Form2 version identity without relaxing scope equality', async () => {
+  const f = reportReadFixture(() => []);
+  const scope = { ...f.scope, CONFIGURATION_VERSION: 'form2cfgv1:101:' + 'd'.repeat(40) };
+  assert.deepEqual(await f.durable.listReportRows(scope), []);
+  assert.equal(f.statements.length, 3);
+  for (const value of [true, 101, "invalid' OR 1=1", 'invalid whitespace', 'invalid/config']) {
+    await assert.rejects(f.durable.listReportRows({ ...scope, CONFIGURATION_VERSION: value }),
+      { code: 'REPORT_SCOPE_INVALID' });
+  }
+  assert.equal(f.statements.length, 3);
+});

@@ -8,7 +8,22 @@ const { execFileSync } = require('node:child_process');
 const SOURCE_REVISION_PATTERN = /^[a-f0-9]{40}$/;
 const SENTINEL = '__REVENUE_DESK_SOURCE_REVISION__';
 const COMPONENT_PATH = 'src/zoho-catalyst/revenue-desk-call-runtime';
+const ANALYTICS_PATH = 'src/zoho-catalyst/revenue-desk-analytics';
+const WORKER_REPORTING_PATH = 'functions/revenue_desk_call_worker/reporting';
+const REPORTING_PATH = `${WORKER_REPORTING_PATH}/revenue-desk-analytics`;
+const CORE_BRIDGE_PATH = `${WORKER_REPORTING_PATH}/revenue-desk-call-runtime/functions/revenue_desk_call_gateway`;
 const SOURCE_STAMP_PATH = 'functions/revenue_desk_call_gateway/lib/source-revision.js';
+const ANALYTICS_STAMP_PATH = `${REPORTING_PATH}/functions/analytics_sync/lib/source-revision.js`;
+const REPORT_TOOLS = Object.freeze([
+  'build-free-test-report', 'build-private-call-ledger', 'create-durable-report-composition',
+  'create-reporting-factory',
+  'evaluate-dashboard-pre-render-gate', 'opportunity-value', 'prepare-free-test-draft',
+  'prepare-workdrive-draft', 'read-reconciled-free-test-input', 'render-free-test-report',
+  'reattest-report-checkpoints',
+]);
+const CORE_BRIDGES = Object.freeze([
+  'analytics-outbox', 'crm-report-baseline', 'reporting', 'runtime-service',
+]);
 const TARGET_CONTRACTS = Object.freeze({
   gateway: Object.freeze({
     name: 'revenue_desk_call_gateway',
@@ -43,9 +58,17 @@ const REQUIRED_FILES = new Set([
   'functions/revenue_desk_route_control/package.json',
   'functions/revenue_desk_call_worker/catalyst-config.json',
   'functions/revenue_desk_call_worker/index.js',
+  'functions/revenue_desk_call_worker/lib/terminal-draft-composition.js',
   'functions/revenue_desk_call_worker/package-lock.json',
   'functions/revenue_desk_call_worker/package.json',
   SOURCE_STAMP_PATH,
+  ...CORE_BRIDGES.map((name) => `functions/revenue_desk_call_gateway/lib/${name}.js`),
+  ANALYTICS_STAMP_PATH,
+  ...REPORT_TOOLS.map((name) => `${REPORTING_PATH}/tools/${name}.js`),
+  `${REPORTING_PATH}/config/free-test-report-contract.json`,
+  `${REPORTING_PATH}/config/analytics-model-contract.json`,
+  ...['analytics-client', 'catalyst-store', 'report-attempt-budget', 'report-run-store',
+    'workdrive-client'].map((name) => `${REPORTING_PATH}/functions/analytics_sync/lib/${name}.js`),
 ]);
 const sourceRoot = path.resolve(__dirname, '..');
 
@@ -79,7 +102,21 @@ function isDeployable(relative) {
     || /^functions\/revenue_desk_call_gateway\/contracts\/[A-Za-z0-9._-]+\.json$/
       .test(relative)
     || /^functions\/revenue_desk_route_control\/lib\/[A-Za-z0-9._-]+\.js$/
+      .test(relative)
+    || /^functions\/revenue_desk_call_worker\/lib\/[A-Za-z0-9._-]+\.js$/
       .test(relative);
+}
+
+function reportingDestination(repositoryPath) {
+  const prefix = `${ANALYTICS_PATH}/`;
+  if (!repositoryPath.startsWith(prefix)) return null;
+  const relative = repositoryPath.slice(prefix.length);
+  if (REPORT_TOOLS.some((name) => relative === `tools/${name}.js`)
+    || ['config/free-test-report-contract.json', 'config/analytics-model-contract.json'].includes(relative)
+    || /^functions\/analytics_sync\/lib\/[A-Za-z0-9._-]+\.js$/.test(relative)) {
+    return `${REPORTING_PATH}/${relative}`;
+  }
+  return null;
 }
 
 function safeDestination(root, relative) {
@@ -96,7 +133,7 @@ function safeDestination(root, relative) {
 
 function readTree(revision) {
   const raw = git([
-    'ls-tree', '-r', '-z', '--full-tree', revision, '--', COMPONENT_PATH,
+    'ls-tree', '-r', '-z', '--full-tree', revision, '--', COMPONENT_PATH, ANALYTICS_PATH,
   ]);
   const prefix = `${COMPONENT_PATH}/`;
   const entries = [];
@@ -106,24 +143,60 @@ function readTree(revision) {
     if (tab === -1) throw new Error('Git returned a malformed release tree entry.');
     const [mode, type, object] = record.slice(0, tab).split(' ');
     const repositoryPath = record.slice(tab + 1);
-    if (!repositoryPath.startsWith(prefix)) continue;
-    const relative = repositoryPath.slice(prefix.length);
-    if (!isDeployable(relative)) continue;
+    const relative = repositoryPath.startsWith(prefix)
+      ? repositoryPath.slice(prefix.length) : reportingDestination(repositoryPath);
+    if (!relative || (repositoryPath.startsWith(prefix) && !isDeployable(relative))) continue;
     if (mode !== '100644' || type !== 'blob' || !/^[a-f0-9]{40,64}$/.test(object)) {
       throw new Error('Release tree contains a non-regular deployable file.');
     }
-    entries.push({ object, relative });
+    entries.push({ object, relative, repositoryPath });
   }
   entries.sort((left, right) => left.relative.localeCompare(right.relative));
   const present = new Set(entries.map(({ relative }) => relative));
+  if (present.size !== entries.length) throw new Error('Release tree contains a duplicate output path.');
   for (const required of REQUIRED_FILES) {
     if (!present.has(required)) throw new Error(`Release commit is missing ${required}.`);
   }
   return entries;
 }
 
+const blobs = new Map();
 function readBlob(object) {
-  return git(['cat-file', 'blob', object], { encoding: null });
+  if (!blobs.has(object)) blobs.set(object, git(['cat-file', 'blob', object], { encoding: null }));
+  return blobs.get(object);
+}
+
+function stampSource(root, relative, sentinel, revision) {
+  const stampPath = safeDestination(root, relative);
+  const unstamped = fs.readFileSync(stampPath, 'utf8');
+  if (unstamped.split(sentinel).length - 1 !== 1) {
+    throw new Error('Source-revision sentinel must occur exactly once in the release commit.');
+  }
+  fs.writeFileSync(stampPath, unstamped.replace(sentinel, revision), 'utf8');
+}
+
+function writeCoreBridges(root, entries) {
+  const generated = [];
+  // Report tools retain their source-relative paths, but these bridges resolve
+  // the materialized worker package. Copying core JS here would split reporting
+  // WeakSet identity and silently reject genuine canonical call details.
+  for (const name of CORE_BRIDGES) {
+    const relative = `${CORE_BRIDGE_PATH}/lib/${name}.js`;
+    const destination = safeDestination(root, relative);
+    fs.mkdirSync(path.dirname(destination), { recursive: true });
+    fs.writeFileSync(destination, `'use strict';\n\n// One canonical runtime package owns report trust.\n`
+      + `module.exports = require('revenue_desk_call_gateway/lib/${name}');\n`, { flag: 'wx' });
+    generated.push({ relative, generated: 'canonical_gateway_module_bridge',
+      source: entries.find((entry) => entry.relative === `functions/revenue_desk_call_gateway/lib/${name}.js`) });
+  }
+  const contract = entries.find((entry) => entry.relative
+    === 'functions/revenue_desk_call_gateway/contracts/revenue-desk-call-contract.json');
+  const relative = `${CORE_BRIDGE_PATH}/contracts/revenue-desk-call-contract.json`;
+  const destination = safeDestination(root, relative);
+  fs.mkdirSync(path.dirname(destination), { recursive: true });
+  fs.writeFileSync(destination, readBlob(contract.object), { flag: 'wx' });
+  generated.push({ relative, generated: 'canonical_gateway_contract_copy', source: contract });
+  return generated;
 }
 
 function parseJsonFile(root, relative) {
@@ -235,22 +308,23 @@ function build() {
       fs.writeFileSync(destination, readBlob(entry.object));
     }
 
-    const stampPath = path.join(stagingRoot, ...SOURCE_STAMP_PATH.split('/'));
-    const unstamped = fs.readFileSync(stampPath, 'utf8');
-    const occurrences = unstamped.split(SENTINEL).length - 1;
-    if (occurrences !== 1) {
-      throw new Error('Source-revision sentinel must occur exactly once in the release commit.');
-    }
-    fs.writeFileSync(stampPath, unstamped.replace(SENTINEL, revision), 'utf8');
+    stampSource(stagingRoot, SOURCE_STAMP_PATH, SENTINEL, revision);
+    stampSource(stagingRoot, ANALYTICS_STAMP_PATH, '__SYLVARA_UNSTAMPED_SOURCE_REVISION__', revision);
+    const generated = writeCoreBridges(stagingRoot, entries);
     validateArtifact(stagingRoot);
 
-    const manifestFiles = entries.map(({ relative }) => {
+    const manifestFiles = [...entries, ...generated].map((entry) => {
+      const { relative } = entry;
+      const source = entry.source || entry;
       const data = fs.readFileSync(path.join(stagingRoot, ...relative.split('/')));
       return {
         path: relative,
         sha256: crypto.createHash('sha256').update(data).digest('hex'),
+        source_path: source.repositoryPath,
+        source_sha256: crypto.createHash('sha256').update(readBlob(source.object)).digest('hex'),
+        ...(entry.generated ? { generated: entry.generated } : {}),
       };
-    });
+    }).sort((left, right) => left.path.localeCompare(right.path));
     fs.writeFileSync(path.join(stagingRoot, 'release-manifest.json'), `${JSON.stringify({
       schema_version: 1,
       source_revision: revision,
@@ -269,9 +343,14 @@ function build() {
   }
 }
 
-try {
-  build();
-} catch (error) {
-  process.stderr.write(`${error instanceof Error ? error.message : 'Release build failed.'}\n`);
-  process.exitCode = 1;
+if (require.main === module) {
+  try {
+    build();
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : 'Release build failed.'}\n`);
+    process.exitCode = 1;
+  }
 }
+
+module.exports = { readTree, readBlob, writeCoreBridges, stampSource, validateArtifact,
+  SOURCE_STAMP_PATH, ANALYTICS_STAMP_PATH };

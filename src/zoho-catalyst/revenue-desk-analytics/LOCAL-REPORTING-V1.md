@@ -18,7 +18,7 @@ summary, internal report, Journey, demo, or reporting platform.
 | Analytics | Existing minimized facts, source versions, three-type rowset digests and readback gate | No new caller descriptions, transcripts, identities or public links in Analytics |
 | Report-input assembly | Canonical source, settled outbox history, checkpoints and independent complete-partition readback are validated together | The live complete-partition reader remains unbound |
 | Client report | Existing builder plus private call ledger and reviewed opportunity estimate | No booking, revenue, delivery or completed-callback claim |
-| Draft generation | `prepare-free-test-draft.js` renders the existing client layout and writes a deterministic private artifact plus receipt | Local storage is not accepted WorkDrive storage or a deployed job |
+| Draft generation | Existing renderer, local draft writer and opt-in WorkDrive writer produce deterministic private revisions plus verified receipts | Local tests do not establish accepted WorkDrive bindings, installation or delivery authority |
 | Results review | Existing owner results-review step includes grouping and value applicability | Not a new per-call approval or mandatory CRM Note workflow |
 | Delivery | Existing reviewed closeout/delivery procedure remains separate | A generated receipt is never permission to email |
 
@@ -97,9 +97,13 @@ content or changed valuation produces a distinct revision even when aggregate
 counts remain unchanged.
 
 `read-reconciled-free-test-input.js` now assembles the report input from the
-canonical runtime and Analytics stores. It requires the current completed
-deployment and final-result facts, settled source history, exact checkpoints and
-independent readback for all three record types. The private ledger remains a
+canonical runtime and Analytics stores. It requires current terminal deployment
+and final-result facts, settled source history, exact checkpoints and independent
+readback for all three record types. Completed tests require completed terminal
+reconciliation. A manually closed Stopped test retains Stopped/NotRequired and
+must additionally re-prove the signed rollback, settled inbound/call/notification
+history, and exact completed CRM summary/final-outbox artifacts on every source
+pass. This does not add Stopped tests to the automatic completed-test scan. The private ledger remains a
 branded canonical snapshot. The assembler re-reads source, checkpoints and
 canonical details after asynchronous reads; moving, stale, conflicting or
 cross-scope evidence fails closed. Empty tests require independent proof that the
@@ -107,16 +111,27 @@ call partition is empty, not an invented call checkpoint. The bounded source
 reader refuses a full 100-row page for any record type instead of reporting a
 truncated history as complete.
 
-The existing checkpoint freshness gate is unchanged. A fresh partition readback
-does not waive an expired checkpoint, and a completed-deployment scan does not
-refresh checkpoints or resubmit imports. The current service creates checkpoints
-after import and independent readback; `upsertCheckpoint` returns an existing
-checkpoint unchanged for the same or an older source watermark. No accepted
-re-attestation path currently refreshes an unchanged completed partition. Initial
-Development acceptance can use genuinely fresh import/readback checkpoints within
-their existing freshness window. A delayed retry or later results-review revision
-needs a separately approved and implemented reconciliation procedure; editing
-timestamps or reimporting completed rows solely to extend freshness is not one.
+The freshness gate remains strict. A fresh export alone cannot waive expired
+checkpoints. The optional local `createReportCheckpointReattestor` verifies the
+exact six-field scope, complete independent agreement for all three partitions,
+settled source history and fresh canonical facts before any verification write.
+It conditionally updates the existing checkpoint rows and independently reads
+back every result; the assembler then rechecks canonical/source/checkpoint state.
+A conflict or partial write cannot return a ready draft. A new complete retry may
+finish partial verification without reimporting facts or replaying CRM work.
+
+The held [additive schema proposal](config/report-checkpoint-verification-schema.json)
+adds nullable `REPORT_VERIFICATION_DIGEST` to AnalyticsSyncCheckpoints. The digest
+binds the scope, source/canonical snapshots and all three rowsets. Re-attestation
+records the actual verification time in `LAST_RECONCILED_AT`, a bounded freshness
+window, and a new CAS version. It preserves `LAST_SYNC_AT`, provider import job,
+accepted/rejected import counts, source watermarks and ownership. True empty-call
+reports verify the empty partition and never manufacture a call checkpoint.
+Legacy import-only checkpoints remain valid, and ordinary imports/readiness do
+not depend on the proposed column. This code and proposal are not installed or
+live-accepted; metadata change, binding and runtime verification require separate
+scoped approval. The existing `upsertCheckpoint` behavior for same/older source
+watermarks is unchanged.
 
 The provider client now implements `readCompleteScope(scope, recordType)` using
 the official [synchronous Export Data API](https://www.zoho.com/analytics/api/v2/bulk-api/export-data.html)
@@ -149,9 +164,27 @@ unsupported targets fail closed rather than falling back to an incomplete read.
 Each complete source pass performs six read-only provider requests: one metadata
 GET and one export GET for each of three types. Revalidation after an asynchronous
 results-review lookup can perform a second pass, for twelve requests per attempt.
-Before binding, approve the exact scheduling, request/cost limits and total worker
-latency budget; the existing per-operation timeout is not a demonstrated budget
-for that composition. This source change does not activate provider polling.
+One branded whole-attempt budget spans both source passes, verification writes,
+WorkDrive and ReportRuns operations. The source composition defaults to 60 seconds
+and accepts only a trusted bounded deadline up to 120 seconds. Hard request
+ceilings are 12 Analytics reads, 240 source reads, 3 checkpoint writes, 24 WorkDrive
+reads, 1 WorkDrive write, 16 ReportRuns reads and 12 ReportRuns writes. Reservations
+count even after failed authorization and cannot reset between passes. The
+existing retry invocation allows one reporting attempt across its completed-test
+scan and CRM-summary settlement; a deferred ready draft retains its older fair
+scan cursor. Ordinary callbacks retain their prior platform timeout unless an
+immutable trusted callback declares its longer reporting deadline.
+
+Local actual-runtime/service fixtures measured 137 source reads for an expired
+Completed report plus review reread, and 222 for the equivalent verified Stopped
+path (220 for empty Stopped). The outer composition adds its initial canonical
+lookup. A 25-call late-settlement cohort and 26 already-admitted in-flight calls
+fit the existing less-than-100 source-history limit per record type; older
+unresolved versions still block. No history truncation or provider-row ceiling
+increase was introduced. Before binding, approve scheduling and these bounded
+request/cost limits, then measure total runtime against the exact installed
+artifact. Local timing tests are not provider latency or quota evidence; this
+source change does not activate provider polling.
 
 `createTerminalDraftReconciler` composes that assembler with the existing draft
 writer. The runtime's existing completed-deployment scan invokes it through an
@@ -159,12 +192,19 @@ optional trusted `terminalDraftReconcilerFactory`. It returns
 `awaiting_reconciled_evidence` until Analytics is ready. Failed generation remains
 eligible for the next fair completed-deployment scan, without replaying completed
 CRM operations or Analytics imports. The worker bounds the callback by its
-existing platform timeout; the coordinator checks cancellation before writing so
-a late read response cannot create a document after the scan times out.
+validated trusted reporting deadline when supplied, otherwise its existing
+platform timeout. The coordinator checks cancellation before writing so a late
+read response cannot create a document after the scan times out.
 
-The deployed factory remains `null`. Job parameters and environment variables
-cannot enable it. The automatic source lane remains the existing `Completed`
-deployment lane; this change adds no automatic stopped/rolled-back report lane.
+`create-reporting-factory.js` now constructs the trusted Analytics reader,
+checkpoint verifier, ReportRuns store, WorkDrive client and durable composition
+from accepted private configuration. It requires current acceptance evidence and
+actual protected Connection references; neither source code nor test fixtures
+invent live references. The worker's packaged composition export exposes this
+factory, but `index.js` still leaves it `null`. Job parameters and environment
+variables cannot enable it. The automatic source lane remains the existing
+`Completed` deployment lane; this change adds no automatic stopped/rolled-back
+report lane.
 The older optional Analytics `onReconciledScope` wakeup and
 `createReconciledDraftTrigger` remain compatible, but an already-succeeded import
 is not the durable retry mechanism for document generation.
@@ -188,23 +228,56 @@ Files must be outside Git, without links, in an already approved private directo
 File mode 0600 does not establish Windows ACL privacy. The storage owner must
 verify access and retention before any real input is used.
 
+The durable path is implemented locally. `prepare-workdrive-draft.js` uses a
+unique ReportRuns intent and conditional version fence to authorize one upload
+for an immutable generation key. It verifies the exact resource version and
+bytes before recording a receipt. An ambiguous upload is reconciled without
+blindly dispatching another upload, overwriting, deleting or sharing a document.
+`create-durable-report-composition.js` shares the attempt budget, cancellation,
+source verification and durable retry state with that writer. Synthetic fixtures
+exercise repeated/concurrent attempts, exact-byte recovery and failure holds;
+these are not provider acceptance results.
+
+`report-run-store.js` reuses the observed existing `ReportRuns` table. It preserves
+its identity, period and status contract, including `ReportRunId`, `ClientId`,
+`DeploymentId`, `ReportType`, `PeriodStart`, `PeriodEnd`, `ReportVersion`,
+`GenerationStatus`, `ApprovalStatus`, `DeliveryStatus` and reconciliation/control
+projections. Durable state uses the existing unique `IdempotencyKey` and encrypted
+`ReportPayloadJson`. The held [ReportRuns schema proposal](config/report-run-schema.json)
+adds only nullable, nonunique INT `RD_REPORT_VERSION`, bounded from 1 through
+2147483647 for newly owned rows. Legacy rows remain unchanged with no backfill.
+Namespaced records keep them outside the new reader/writer. Fresh schema,
+encryption, uniqueness, conditional-update and
+readback acceptance are required before binding; the proposal has not been
+installed. Attempt records explicitly represent verification attempts, not
+completed reports, and every draft remains owner-review-required and not sent.
+
 Remaining integration work is bounded. These are separate evidence layers:
 
 | Requirement | Existing evidence and remaining gap | Next action and passing condition |
 |---|---|---|
-| Complete-partition Analytics read | Local provider adapter, assembler and rejection tests exist. Live target configuration, effective role visibility, exact response contract and runtime latency are unverified; factory stays unbound. | Under separately scoped Development read authority, verify fixed table/workspace/organization and read role, full and empty exports, unexpected-row detection and exact six-column digests. All three partitions must match canonical source and fresh checkpoints within the worker budget; no import or state mutation by the reader. |
-| Durable private drafts | Existing local exclusive intent, deterministic generation key, exact-byte recovery and hash-only receipt are tested. An approved WorkDrive destination and durable adapter contract have not been established. | Owner selects one private Sylvara WorkDrive Team Folder and fixed parent, service principal, authorized readers and retention. Then verify the upload/version/readback contract and implement serialized generation-key state, immutable draft revisions and ambiguous-write recovery. Concurrent/repeated attempts must yield one matching document/receipt; conflicting or uncertain outcomes remain held. |
-| Fresh checkpoints | The existing service checkpoints genuinely imported and independently reconciled batches. Same/older watermarks do not refresh; completed scans and report reads perform no checkpoint writes. | Initial acceptance runs inside the actual fresh-checkpoint window. Before later review/retry outside it, approve and implement authoritative re-attestation with exact source/rowset equality, concurrent-change rejection and independent durable readback. Expired or conflicting checkpoints must still block generation. |
-| Installed composition and retry | Source worker hook/factory and local completed-scan recovery are tested. The shipped worker index still binds only its logger; report tools are outside the Analytics package's `files` allowlist. A deployable reporting composition and durable writer remain missing code, installation and runtime acceptance. | After the durable storage contract is approved, package the existing assembler/renderer/writer dependencies with the worker, inspect and verify the exact artifact/source revision, then separately authorize installation and binding. Verify bounded scheduling, cancellation, failure recovery and no replay of completed CRM/import writes against the approved destination. |
+| Complete-partition Analytics read | Local provider adapter, assembler and rejection tests exist. Live target configuration, effective role visibility, exact response contract and runtime latency are unverified; factory stays unbound. | Under separately scoped Development read authority, verify fixed table/workspace/organization and read role, full and empty exports, unexpected-row detection and exact six-column digests. All three partitions must match canonical source and fresh checkpoints within the attempt budget. The export adapter performs reads only; the separately approved verifier below may update checkpoint verification state. |
+| Durable private drafts | Owner-confirmed WorkDrive storage and an existing Sylvara company structure have been discovered through fresh metadata UI inspection. The WorkDrive client, durable writer and ReportRuns adapter are implemented and locally tested; the exact destination, effective access, retention, writer identity and tenant API contract are not accepted. | Reuse the discovered structure and resolve the exact existing destination/CRM mapping in the private binding packet. Approve its writer, readers, retention and bounded operations; verify upload/version/download response contracts and ReportRuns schema/CAS behavior. Concurrent/repeated attempts must produce one matching document/receipt; conflicting or uncertain outcomes remain held. |
+| Fresh checkpoints | Local authoritative re-attestation, optimistic version guards, independent durable readback and partial-write recovery are implemented and synthetically tested. Import history is preserved; the nullable verification-digest column is a held schema proposal, not installed metadata. | Separately approve/install/read back the additive checkpoint column and bound verifier in Development. Verify expired and empty-call partitions against real complete Analytics exports, concurrent-change rejection and exact readback, with no import or CRM replay. A failed/partial/conflicting verification must hold generation; only a successful fresh complete retry may resume it. |
+| Installed composition and retry | Trusted factory, durable composition and worker packaging are implemented. Isolated extracted-archive tests exercise the assembler/renderer/writer through one canonical runtime trust module. The worker index remains unbound; no installed reporting composition is accepted. | Build the final clean revision using the runtime packaging procedure, identify any separately reviewed auth-preserving composition, materialize reviewed dependencies and verify the final archive/digests. Separately authorize installation and exact private binding only after schema/storage acceptance. Verify bounded scheduling, cancellation, failure recovery and no replay of completed CRM/import writes against the approved destination. |
 
-Recommended storage is that one private WorkDrive Team Folder, consistent with
-the existing [document ownership standard](../../../docs/zoho/standards/document-lifecycle.md).
-This recommendation does not claim an existing accepted folder or create one.
-Approval must name the exact private destination, writer identity, readers,
-retention, permitted operations and reconciliation/readback procedure. A filename
-or upload success alone does not establish durable duplicate prevention. Preserve
-the current drafts and receipt state; never substitute Catalyst temporary disk
-for durable document storage. No new document platform is needed.
+WorkDrive is the owner-confirmed storage system, consistent with the existing
+[document ownership standard](../../../docs/zoho/standards/document-lifecycle.md).
+Reuse the existing Sylvara structure; vendor selection and a new folder hierarchy
+are not prerequisites. Discovery is not destination approval: a private-folder
+label or an empty direct-external-member list does not prove effective inherited
+access or that sharing is disabled. Full access review, retention, writer
+identity, exact parent and CRM mapping remain private acceptance requirements.
+Names, hierarchy, identifiers and live permission details stay out of Git.
+
+The [runtime packaging procedure](../revenue-desk-call-runtime/README.md#release-artifact-and-migration-gates)
+describes the explicit report-tool allowlist, single canonical runtime module,
+clean-revision export, separate two-revision composition and final dependency/
+archive digests. Packaging closes the source dependency gap without binding the
+factory or authorizing replacement of an installed authentication change.
+A filename or upload success alone does not establish durable duplicate
+prevention. Preserve current drafts and receipt state; Catalyst temporary disk
+is not durable document storage.
 
 Results review and delivery remain separate: review the exact draft, opportunity
 grouping and valuation evidence, then separately authorize the exact customer
@@ -265,15 +338,20 @@ short records and headings together and request recurring draft/synthetic
 identification with page counters. Existing Inter-first portable styling and
 local fallbacks remain; no fonts are fetched.
 
-The revised artifact is synthetic HTML. The reviewed original is preserved.
-Revised pagination, page counters and PDF extraction require inspection of an
-actual revised export; CSS/content checks do not establish those results. The
-supplied PDF was reported to render legibly but produce corrupted text in two
-extraction paths. This repository emits HTML and does not implement the PDF
-export, so the original PDF bytes and export provenance are needed to diagnose
-that defect. Browser visual inspection remains unverified: browser policy
-blocked local-file navigation. No server, alternate browser, image flattening or
-OCR was used to bypass that boundary. Customer delivery still requires owner
+The revised artifact is synthetic HTML. The supplied original PDF bytes were
+inspected read-only and preserved with unchanged size and SHA-256. Its four
+custom Type 3 font resources lack `ToUnicode` mappings; two independent text
+extractors did not recover reliable semantic text, while rendered pages retained
+the visible content. This is confirmed PDF structure and extraction evidence,
+not proof of the originating application's export settings or a complete root
+cause. The original export provenance remains unconfirmed.
+
+Revised pagination, page counters, selectable text and PDF extraction still
+require inspection of an actual revised export; CSS/content checks do not
+establish those results. This repository emits HTML and does not implement the
+PDF export. Interactive visual QA of the revised HTML remains unverified after
+the earlier local-file navigation block; no server, alternate browser, image
+flattening or OCR was used to bypass it. Customer delivery still requires owner
 review of the exact final document.
 
 ### Prior local checks (2026-09-29)

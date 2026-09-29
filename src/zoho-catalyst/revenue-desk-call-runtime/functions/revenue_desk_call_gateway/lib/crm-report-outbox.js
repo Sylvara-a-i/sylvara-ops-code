@@ -2,6 +2,7 @@
 
 const crypto = require('node:crypto');
 const { invariant } = require('./errors');
+const { isStoppedReportEvidence } = require('./route-control-service');
 const { MAX_CATALYST_TEXT_BYTES } = require('./catalyst-store');
 
 const REPORT_SUMMARY_ACTION = 'sync_report_summary';
@@ -97,6 +98,8 @@ function buildCrmReportSummary(config, deployment, report) {
     && report.callLimit >= 1
     && report.handledCallCount === deployment.handledCount,
   'REPORT_RECONCILIATION_REQUIRED', 'Terminal report is incomplete.');
+  invariant(deployment.testStatus !== 'Stopped' || isStoppedReportEvidence(deployment),
+    'REPORT_RECONCILIATION_REQUIRED', 'Stopped report requires completed rollback evidence.');
   const countedCallKeys = [...deployment.countedCallKeys].sort();
   invariant(countedCallKeys.length === report.handledCallCount,
     'REPORT_RECONCILIATION_REQUIRED', 'Terminal report call identities are incomplete.');
@@ -129,7 +132,7 @@ function buildCrmReportSummary(config, deployment, report) {
     configurationVersion: deployment.configurationVersion,
     reportSchemaVersion: report.schemaVersion,
     callSetDigest,
-    testStatus: 'Completed',
+    testStatus: deployment.testStatus === 'Stopped' ? 'Rolled Back' : 'Completed',
     testStartAt: report.testStart,
     testEndAt: report.testEnd,
     testEndReason: report.testEndReason,

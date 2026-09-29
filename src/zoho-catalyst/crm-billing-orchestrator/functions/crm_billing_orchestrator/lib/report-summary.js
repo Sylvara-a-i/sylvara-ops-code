@@ -49,7 +49,7 @@ function sourceVersions(value) {
 function isNewerReport(previous, next) {
   if (previous.schemaVersion !== 3 || next.schemaVersion !== 3
     || !["dealId", "deploymentId", "configurationVersion", "reportSchemaVersion",
-      "testStartAt", "testEndAt", "testEndReason"].every((key) => previous[key] === next[key])) {
+      "testStatus", "testStartAt", "testEndAt", "testEndReason"].every((key) => previous[key] === next[key])) {
     return false;
   }
   sourceVersions(previous.sourceVersions);
@@ -127,7 +127,8 @@ function parseReportSummary(value) {
     || !IDENTIFIER.test(summary.deploymentId)
     || !IDENTIFIER.test(summary.configurationVersion)
     || !HASH.test(summary.callSetDigest)
-    || summary.testStatus !== "Completed"
+    || !(summary.testStatus === "Completed" || (summary.schemaVersion === 3 && summary.testStatus === "Rolled Back"
+      && new Set(["Client Requested Stop", "Sylvara Stopped", "Technical Failure", "Other"]).has(summary.testEndReason)))
     || !TIMESTAMP.test(summary.testStartAt)
     || !TIMESTAMP.test(summary.testEndAt)
     || Date.parse(summary.testEndAt) < Date.parse(summary.testStartAt)
@@ -239,7 +240,7 @@ function reportSummaryPatch(config, summary) {
     fail("Normalized monthly connected-minute bounds are invalid");
   }
   return Object.freeze({
-    Test_Status: config.testCompletedStatusValue,
+    Test_Status: summary.testStatus === "Rolled Back" ? "Rolled Back" : config.testCompletedStatusValue,
     Test_Start_At: summary.testStartAt,
     Test_End_At: summary.testEndAt,
     Test_End_Reason: summary.testEndReason,

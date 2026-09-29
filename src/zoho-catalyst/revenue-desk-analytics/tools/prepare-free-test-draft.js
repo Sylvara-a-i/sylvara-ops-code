@@ -12,6 +12,7 @@ const MAX_DOCUMENT_BYTES = 2 * 1024 * 1024;
 const MAX_RECEIPT_BYTES = 4096;
 const REVIEW_STATE = 'draft_generated_owner_review_required_delivery_not_authorized';
 const INPUT_KEYS = new Set(['privateDirectory', 'now', 'synthetic', 'callDetails', 'opportunityReview']);
+const preparedDocuments = new WeakSet();
 
 function fail() {
   // Neither filesystem diagnostics nor renderer errors may expose private input,
@@ -90,7 +91,7 @@ function exactBytes(actual, expected) {
  * and retention policy; POSIX mode 0600 does not establish Windows ACL privacy.
  * An untrusted process able to modify that directory is outside this boundary.
  */
-async function prepareFreeTestDraft(input, options = {}) {
+function prepareFreeTestDocument(input, options = {}) {
   try {
     if (!options || typeof options !== 'object' || Array.isArray(options)
       || Object.keys(options).some((key) => !INPUT_KEYS.has(key))) fail();
@@ -122,6 +123,23 @@ async function prepareFreeTestDraft(input, options = {}) {
       rendererVersion: CLIENT_DRAFT_RENDERER_VERSION,
       documentSha256,
     })}`);
+    const prepared = Object.freeze({ generationKey, documentSha256, document,
+      periodStart: input.finalResult.TEST_STARTED_AT.slice(0, 10),
+      periodEnd: input.finalResult.TEST_ENDED_AT.slice(0, 10),
+      rendererVersion: CLIENT_DRAFT_RENDERER_VERSION, scope: Object.freeze({
+        environment: input.deployment.ENVIRONMENT, clientKey: input.deployment.CLIENT_KEY,
+        deploymentKey: input.deployment.DEPLOYMENT_KEY,
+        configurationVersion: input.deployment.CONFIGURATION_VERSION,
+        sourceRevision: input.finalResult.SOURCE_REVISION,
+      }) });
+    preparedDocuments.add(prepared);
+    return prepared;
+  } catch { fail(); }
+}
+
+async function prepareFreeTestDraft(input, options = {}) {
+  try {
+    const { generationKey, documentSha256, document } = prepareFreeTestDocument(input, options);
     const directory = privateDirectory(options.privateDirectory);
     const base = path.join(directory, `free-test-${generationKey}`);
     const files = { intent: `${base}.intent.json`, document: `${base}.html`, receipt: `${base}.receipt.json` };
@@ -177,7 +195,7 @@ function createReconciledDraftTrigger({ readReconciledInput, privateDirectory: d
       if (!event || Object.keys(event).sort().join(',') !== 'reconciledAt,recordType,scope,sourceModifiedAt'
         || !event.scope || Object.keys(event.scope).sort().join(',') !== scopeKeys.slice().sort().join(',')
         || !/^[a-f0-9]{64}$/.test(event.scope.CLIENT_KEY) || !/^[a-f0-9]{64}$/.test(event.scope.DEPLOYMENT_KEY)
-        || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(event.scope.CONFIGURATION_VERSION)
+        || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(event.scope.CONFIGURATION_VERSION)
         || !/^[a-f0-9]{40}$/.test(event.scope.SOURCE_REVISION)
         || !['deployment', 'call', 'final_test_result'].includes(event.recordType)
         || event.scope.ENVIRONMENT !== 'development' || event.scope.ENGAGEMENT_TYPE !== 'free_test'
@@ -254,4 +272,6 @@ function createTerminalDraftReconciler({ runtimeStore, runtimeConfig, analyticsS
   };
 }
 
-module.exports = { prepareFreeTestDraft, createReconciledDraftTrigger, createTerminalDraftReconciler };
+module.exports = { prepareFreeTestDocument, prepareFreeTestDraft, createReconciledDraftTrigger,
+  createTerminalDraftReconciler, MAX_DOCUMENT_BYTES, REVIEW_STATE,
+  isPreparedFreeTestDocument: (value) => preparedDocuments.has(value) };
