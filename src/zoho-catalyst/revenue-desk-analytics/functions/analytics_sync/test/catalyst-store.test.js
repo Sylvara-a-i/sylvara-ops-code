@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const { createCatalystStore } = require('../lib/catalyst-store');
 const { outboxRow } = require('./helpers');
 const { callFact, MemoryStore, key } = require('./helpers');
-const { checkpointKey, createOutboxRow } = require('../lib/facts');
+const { checkpointKey, checkpointRow, createOutboxRow } = require('../lib/facts');
 const { buildDailyMetricFact } = require('../lib/daily-rollup');
 
 const OUTBOX = 'AnalyticsSyncOutbox';
@@ -259,4 +259,139 @@ test('report source reads accept the canonical Form2 version identity without re
       { code: 'REPORT_SCOPE_INVALID' });
   }
   assert.equal(f.statements.length, 3);
+});
+
+function checkpointInsertFixture({ legacy = true, mutateColumns, provider = true, ambiguous = false,
+  changeReadback, readMetadata, timeoutMs = 1000 } = {}) {
+  const contract = require('../../../config/datastore-schema.json').tables
+    .find(table => table.api_name === CHECKPOINT);
+  let columns = contract.columns.map(column => ({ column_name: column.api_name,
+    data_type: column.type, max_length: column.max_length, is_mandatory: column.mandatory,
+    is_unique: column.unique }));
+  if (legacy) {
+    columns.push(...Object.entries({ CheckpointKey: 255, TargetEnvironment: 32, RecordType: 64,
+      SourceTableName: 120, TargetWorkspaceId: 64, TargetViewId: 64, MatchColumns: 255 })
+      .map(([name, length]) => ({ column_name: name, data_type: 'varchar', max_length: length,
+        is_mandatory: true, is_unique: name === 'CheckpointKey' })),
+    { column_name: 'SyncEnabled', data_type: 'boolean', is_mandatory: true, is_unique: false,
+      default_value: 'false' });
+  }
+  if (mutateColumns) columns = mutateColumns(columns);
+  const rows = []; const writes = []; let metadataReads = 0;
+  const app = {
+    datastore: () => ({ table: table => {
+      assert.equal(table, CHECKPOINT);
+      return {
+        getAllColumns: async () => {
+          metadataReads += 1;
+          return readMetadata ? readMetadata() : structuredClone(columns);
+        },
+        insertRow: async value => {
+          writes.push(structuredClone(value));
+          for (const column of columns) {
+            if (column.is_mandatory && column.default_value === undefined) {
+              assert.notEqual(value[column.column_name], undefined, `Required ${column.column_name}`);
+            }
+          }
+          for (const name of Object.keys(value)) {
+            assert.ok(columns.some(column => column.column_name === name), `Unknown ${name}`);
+          }
+          if (rows.some(row => row.CHECKPOINT_KEY === value.CHECKPOINT_KEY)) throw new Error('Unique conflict');
+          rows.push({ ...value, ROWID: '100' });
+          if (ambiguous) throw new Error('Synthetic response loss after commit');
+          return structuredClone(rows[0]);
+        },
+      };
+    } }),
+    zcql: () => ({ executeZCQLQuery: async statement => {
+      assert.match(statement, /^SELECT \* FROM AnalyticsSyncCheckpoints WHERE CHECKPOINT_KEY = /);
+      const result = rows.filter(row => row.CHECKPOINT_KEY === literal(statement, 'CHECKPOINT_KEY'));
+      return result.map(row => ({ [CHECKPOINT]: changeReadback ? changeReadback({ ...row }) : { ...row } }));
+    } }),
+  };
+  const config = { environment: 'development', platformTimeoutMs: timeoutMs,
+    tables: { checkpoint: CHECKPOINT, outbox: OUTBOX },
+    provider: provider ? { workspaceId: '10001', targets: {
+      call: { table: 'RevenueDeskAnalyticsCallFacts', viewId: '10002' },
+    } } : null };
+  const last = outboxRow({ PROVIDER_JOB_ID: '10003', ACCEPTED_ROW_COUNT: 1, REJECTED_ROW_COUNT: 0 });
+  const row = checkpointRow(last, 'call', '2026-08-24T12:06:00.000Z', '2026-08-24T13:06:00.000Z');
+  return { app, durable: createCatalystStore(app, config), row, rows, writes,
+    metadataReads: () => metadataReads };
+}
+
+test('first checkpoint insert satisfies retained mandatory columns from its exact import binding', async () => {
+  const f = checkpointInsertFixture();
+  const actual = await f.durable.upsertCheckpoint(f.row);
+  assert.equal(actual.CHECKPOINT_KEY, f.row.CHECKPOINT_KEY);
+  assert.deepEqual(Object.fromEntries(Object.keys(actual).filter(name => /^[A-Z][a-z]/.test(name))
+    .map(name => [name, actual[name]])), {
+    CheckpointKey: f.row.CHECKPOINT_KEY, TargetEnvironment: 'Development', RecordType: 'call',
+    SourceTableName: OUTBOX, TargetWorkspaceId: '10001', TargetViewId: '10002',
+    MatchColumns: 'RECORD_KEY,CLIENT_KEY,DEPLOYMENT_KEY,ENVIRONMENT', SyncEnabled: false,
+  });
+  assert.equal(f.writes.length, 1);
+  assert.equal(f.metadataReads(), 1);
+  await f.durable.upsertCheckpoint(f.row);
+  assert.equal(f.writes.length, 1);
+  assert.equal(f.metadataReads(), 1, 'Existing checkpoints do not re-enter schema/insert handling');
+});
+
+test('v2-only checkpoint table receives no nonexistent compatibility columns or provider dependency', async () => {
+  const f = checkpointInsertFixture({ legacy: false, provider: false });
+  const actual = await f.durable.upsertCheckpoint(f.row);
+  assert.deepEqual(f.writes[0], { ...f.row, VERSION: 0 });
+  assert.equal(actual.SyncEnabled, undefined);
+});
+
+test('checkpoint insertion rejects partial, duplicate, missing and newly required schema before writing', async () => {
+  for (const mutateColumns of [
+    columns => columns.filter(column => column.column_name !== 'TargetViewId'),
+    columns => columns.filter(column => column.column_name !== 'VERSION'),
+    columns => [...columns, { ...columns[0] }],
+    columns => columns.map(column => column.column_name === 'CheckpointKey'
+      ? { ...column, is_unique: false } : column),
+    columns => [...columns, { column_name: 'UnexpectedRequired', data_type: 'varchar', is_mandatory: true }],
+    () => [],
+  ]) {
+    const f = checkpointInsertFixture({ mutateColumns });
+    await assert.rejects(f.durable.upsertCheckpoint(f.row), { code: 'CHECKPOINT_SCHEMA_UNVERIFIED' });
+    assert.equal(f.writes.length, 0);
+  }
+});
+
+test('legacy checkpoint insert requires a trusted provider target and original deterministic identity', async () => {
+  const f = checkpointInsertFixture({ provider: false });
+  await assert.rejects(f.durable.upsertCheckpoint(f.row), { code: 'CHECKPOINT_BINDING_UNVERIFIED' });
+  assert.equal(f.writes.length, 0);
+  const crossed = checkpointInsertFixture();
+  await assert.rejects(crossed.durable.upsertCheckpoint({ ...crossed.row, CLIENT_KEY: 'f'.repeat(64) }),
+    { code: 'CHECKPOINT_BINDING_UNVERIFIED' });
+  assert.equal(crossed.writes.length, 0);
+});
+
+test('ambiguous and concurrent first checkpoint inserts reconcile one immutable compatibility binding', async () => {
+  const f = checkpointInsertFixture({ ambiguous: true });
+  const [a, b] = await Promise.all([f.durable.upsertCheckpoint(f.row), f.durable.upsertCheckpoint(f.row)]);
+  assert.equal(f.rows.length, 1);
+  assert.equal(a.ROWID, b.ROWID);
+  assert.equal(f.writes.length, 2, 'Two competing unique-key insert attempts, no automatic retry');
+  assert.equal(f.metadataReads(), 2);
+  const crossed = checkpointInsertFixture({ changeReadback: row => ({ ...row, TargetViewId: '99999' }) });
+  await assert.rejects(crossed.durable.upsertCheckpoint(crossed.row), { code: 'CHECKPOINT_OWNERSHIP_CONFLICT' });
+  assert.equal(crossed.writes.length, 1);
+});
+
+test('late or failed checkpoint metadata cannot dispatch an insert after the bounded read fails', async () => {
+  let release;
+  const pending = new Promise(resolve => { release = resolve; });
+  const f = checkpointInsertFixture({ readMetadata: () => pending, timeoutMs: 10 });
+  await assert.rejects(f.durable.upsertCheckpoint(f.row), { code: 'DATASTORE_TIMEOUT' });
+  release([]);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(f.writes.length, 0);
+  assert.equal(f.metadataReads(), 1);
+  const failed = checkpointInsertFixture({ readMetadata: () => { throw new Error('Synthetic metadata failure'); } });
+  await assert.rejects(failed.durable.upsertCheckpoint(failed.row), { code: 'DATASTORE_OPERATION_FAILED' });
+  assert.equal(failed.writes.length, 0);
 });

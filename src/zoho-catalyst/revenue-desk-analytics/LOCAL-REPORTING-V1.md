@@ -252,6 +252,27 @@ readback acceptance are required before binding; the proposal has not been
 installed. Attempt records explicitly represent verification attempts, not
 completed reports, and every draft remains owner-review-required and not sent.
 
+First-import checkpoint insertion also preserves existing schema coexistence.
+Some retained `AnalyticsSyncCheckpoints` tables require legacy identity and target
+columns beside the nullable v2 columns. Before a new checkpoint insert, the SDK
+reads complete column metadata within the existing platform timeout. A v2-only
+table receives only v2 fields; a recognized legacy table receives its required
+identity, source and destination fields from the same trusted import binding.
+The original checkpoint digest also supplies the legacy unique key, and both
+projections use the importer's exact matching-column order. `SyncEnabled=false`
+keeps the legacy lane disabled. Partial, conflicting or unknown required schema
+blocks insertion. Exact compatibility readback resolves duplicate or uncertain
+insert outcomes. Existing rows, update paths and re-attestation remain unchanged.
+
+This repair adds one metadata read per new checkpoint insert, with no new service,
+environment switch, schema change or import replay. It requires qualification of
+the changed standalone importer as well as any worker containing these modules;
+unchanged prior archives remain evidence only for their original bytes. Provider
+column-read permission, first genuine checkpoint creation and conditional update
+semantics remain Development acceptance. Keep the importer disabled and reporting
+factory unbound until their separate allocations pass; preserve legacy rows and
+all checkpoint/import history on failure.
+
 Remaining integration work is bounded. These are separate evidence layers:
 
 | Requirement | Existing evidence and remaining gap | Next action and passing condition |

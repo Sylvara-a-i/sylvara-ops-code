@@ -3,6 +3,7 @@
 const { AnalyticsSyncError, invariant } = require('./errors');
 const { withTimeout } = require('./connection-boundary');
 const { isReportAttemptBudget } = require('./report-attempt-budget');
+const { IMPORT_MATCH_COLUMNS } = require('./config');
 
 const JOB_ID_PATTERN = /^\d{3,30}$/;
 const READBACK_COLUMNS = Object.freeze([
@@ -339,7 +340,7 @@ function createAnalyticsClient(options) {
       fileType: 'json',
       autoIdentify: false,
       onError: 'abort',
-      matchingColumns: ['RECORD_KEY', 'CLIENT_KEY', 'DEPLOYMENT_KEY', 'ENVIRONMENT'],
+      matchingColumns: IMPORT_MATCH_COLUMNS,
       retainColumnNames: true,
     };
     const url = `${provider.apiBaseUrl}/restapi/v2/bulk/workspaces/${provider.workspaceId}`

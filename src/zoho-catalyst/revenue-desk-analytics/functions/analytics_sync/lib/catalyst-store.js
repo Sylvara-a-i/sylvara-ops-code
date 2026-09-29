@@ -5,6 +5,7 @@ const { withTimeout } = require('./connection-boundary');
 const { checkpointKey, compareWatermark, parseOutboxRow, sameLegacyDailyMetricVersion } = require('./facts');
 const { isReportAttemptBudget } = require('./report-attempt-budget');
 const { checkpointState, checkpointVerificationPatch } = require('./report-checkpoint-verification');
+const { IMPORT_MATCH_COLUMNS, TARGET_TABLE_NAMES } = require('./config');
 
 const ROW_ID_PATTERN = /^\d{1,30}$/;
 const COLUMN_PATTERN = /^[A-Z][A-Z0-9_]{0,63}$/;
@@ -341,8 +342,59 @@ function createCatalystStore(app, config) {
 
   async function insertCheckpoint(row) {
     const normalized = validatePatch({ ...row, VERSION: 0 }, CHECKPOINT_COLUMNS);
+    const table = app.datastore().table(checkpoint);
+    invariant(typeof table.getAllColumns === 'function', 'CHECKPOINT_SCHEMA_UNVERIFIED',
+      'Checkpoint insertion requires complete current column metadata.');
+    let columns;
     try {
-      await withTimeout(() => app.datastore().table(checkpoint).insertRow(normalized),
+      columns = await withTimeout(() => table.getAllColumns(), config.platformTimeoutMs,
+        { code: 'DATASTORE_TIMEOUT', retryable: true });
+    } catch (error) {
+      if (error instanceof AnalyticsSyncError) throw error;
+      throw new AnalyticsSyncError('DATASTORE_OPERATION_FAILED',
+        'Checkpoint column metadata could not be verified.', { retryable: true });
+    }
+    invariant(Array.isArray(columns) && columns.length > 0 && columns.length <= 100
+      && columns.every(column => column && typeof column.column_name === 'string'
+        && typeof column.is_mandatory === 'boolean')
+      && new Set(columns.map(column => column.column_name.toLowerCase())).size === columns.length
+      && CHECKPOINT_COLUMNS.every(name => columns.some(column => column.column_name === name)),
+    'CHECKPOINT_SCHEMA_UNVERIFIED', 'Checkpoint column metadata is incomplete or conflicting.');
+
+    // Some accepted tables retain mandatory v1 columns beside the nullable v2
+    // contract. Populate only new rows, from the same trusted import binding;
+    // never relax those columns, rewrite old rows, or enable the legacy lane.
+    const legacyLengths = { CheckpointKey: 255, TargetEnvironment: 32, RecordType: 64,
+      SourceTableName: 120, TargetWorkspaceId: 64, TargetViewId: 64, MatchColumns: 255 };
+    const legacyNames = [...Object.keys(legacyLengths), 'SyncEnabled'];
+    const present = columns.filter(column => legacyNames.includes(column.column_name));
+    let compatibility = {};
+    if (present.length) {
+      invariant(present.length === legacyNames.length && present.every(column =>
+        column.is_mandatory === true && column.is_unique === (column.column_name === 'CheckpointKey')
+        && (column.column_name === 'SyncEnabled' ? column.data_type === 'boolean'
+          : column.data_type === 'varchar' && Number(column.max_length) === legacyLengths[column.column_name])),
+      'CHECKPOINT_SCHEMA_UNVERIFIED', 'Checkpoint legacy compatibility metadata differs.');
+      const target = config.provider?.targets?.[row.RECORD_TYPE];
+      invariant(/^[a-f0-9]{64}$/.test(row.CHECKPOINT_KEY)
+        && row.CHECKPOINT_KEY === checkpointKey(row) && row.ROW_SCHEMA_VERSION === 2
+        && row.ENVIRONMENT === 'development' && row.TARGET_TABLE_ALIAS === row.RECORD_TYPE
+        && outbox === 'AnalyticsSyncOutbox' && /^\d{3,30}$/.test(config.provider?.workspaceId)
+        && target && target.table === TARGET_TABLE_NAMES[row.RECORD_TYPE]
+        && /^\d{3,30}$/.test(target.viewId),
+      'CHECKPOINT_BINDING_UNVERIFIED', 'Checkpoint compatibility requires the exact import binding.');
+      compatibility = { CheckpointKey: row.CHECKPOINT_KEY, TargetEnvironment: 'Development',
+        RecordType: row.RECORD_TYPE, SourceTableName: outbox,
+        TargetWorkspaceId: config.provider.workspaceId, TargetViewId: target.viewId,
+        MatchColumns: IMPORT_MATCH_COLUMNS.join(','), SyncEnabled: false };
+    }
+    const inserted = { ...normalized, ...compatibility };
+    invariant(columns.every(column => !column.is_mandatory
+      || Object.hasOwn(inserted, column.column_name)
+      || (column.default_value !== undefined && column.default_value !== null && column.default_value !== '')),
+    'CHECKPOINT_SCHEMA_UNVERIFIED', 'Checkpoint schema has an unsupported required column.');
+    try {
+      await withTimeout(() => table.insertRow(inserted),
         config.platformTimeoutMs,
         { code: 'DATASTORE_TIMEOUT', retryable: true, ambiguous: true });
     } catch (error) {
@@ -353,6 +405,8 @@ function createCatalystStore(app, config) {
     const readback = await unique(checkpoint, 'CHECKPOINT_KEY', row.CHECKPOINT_KEY);
     invariant(readback, 'CHECKPOINT_WRITE_AMBIGUOUS',
       'Analytics checkpoint insert could not be read back.', { ambiguous: true });
+    invariant(Object.entries(compatibility).every(([name, value]) => same(readback[name], value)),
+      'CHECKPOINT_OWNERSHIP_CONFLICT', 'Checkpoint compatibility readback differs from its import binding.');
     return readback;
   }
 
