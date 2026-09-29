@@ -86,13 +86,20 @@ test('private details reject stale, future, cross-scope, missing, duplicate or c
 });
 
 test('request text is escaped; unknown trigger is never inferred from the route', async () => {
-  const { input, snapshot, now } = await privateCallLedgerFixture({
-    caller_intent: '<script>alert(1)</script>', issue_summary: '=PRIVATE & <request>', coverage_trigger: 'Unknown',
-  });
-  const html = renderFreeTestReport(input, { now, audience: 'client', callDetails: snapshot });
-  assert.match(html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
-  assert.match(html, /=PRIVATE &amp; &lt;request&gt;/);
-  assert.doesNotMatch(html, /<script>/);
-  assert.match(html, /Observed trigger<\/th><td>Unknown/);
-  assert.match(html, /After-hours only/);
+  for (const [request, escaped] of [
+    ['<script>alert(1)</script>', '&lt;script&gt;alert(1)&lt;/script&gt;'],
+    ['<SCRIPT>alert(1)</SCRIPT>', '&lt;SCRIPT&gt;alert(1)&lt;/SCRIPT&gt;'],
+    ['<ScRiPt data-test="synthetic">alert(1)</ScRiPt>',
+      '&lt;ScRiPt data-test=&quot;synthetic&quot;&gt;alert(1)&lt;/ScRiPt&gt;'],
+  ]) {
+    const { input, snapshot, now } = await privateCallLedgerFixture({
+      caller_intent: request, issue_summary: '=PRIVATE & <request>', coverage_trigger: 'Unknown',
+    });
+    const html = renderFreeTestReport(input, { now, audience: 'client', callDetails: snapshot });
+    assert.ok(html.includes(escaped));
+    assert.match(html, /=PRIVATE &amp; &lt;request&gt;/);
+    assert.doesNotMatch(html, /<script\b/i);
+    assert.match(html, /Observed trigger<\/th><td>Unknown/);
+    assert.match(html, /After-hours only/);
+  }
 });
