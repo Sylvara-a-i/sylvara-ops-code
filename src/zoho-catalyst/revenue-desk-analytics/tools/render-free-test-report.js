@@ -9,6 +9,7 @@ const { buildFreeTestReport } = require('./build-free-test-report');
 const MAX_INPUT_BYTES = 2 * 1024 * 1024;
 const TITLE = 'Seven-Day Free Test Results';
 const DRAFT = 'Draft — Operator review only — Not for delivery';
+const CLIENT_DRAFT_RENDERER_VERSION = 'free-test-client-v3';
 const COVERAGE = Object.freeze({
   after_hours_only: 'After-hours only', no_answer_overflow_only: 'No-answer / overflow only',
   after_hours_and_overflow: 'After-hours and overflow',
@@ -46,6 +47,77 @@ function table(caption, headers, rows) {
     `<th scope="col">${escapeHtml(header)}</th>`).join('')}</tr></thead><tbody>${rows.map((row) =>
     `<tr><th scope="row">${escapeHtml(row[0])}</th>${row.slice(1).map((value) =>
       `<td>${escapeHtml(text(value))}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+}
+
+function renderCallDetails(details) {
+  if (!details) return '';
+  const unknown = (value) => value === null || value === undefined ? 'Unknown' : value;
+  const notification = (value) => {
+    if (!value) return 'Unknown';
+    const key = Object.keys(NOTIFICATION_LABELS).find((state) =>
+      state.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase() === value);
+    return NOTIFICATION_LABELS[key] || 'Unknown';
+  };
+  return `<section aria-labelledby="call-detail"><h2 id="call-detail">Individual call details</h2>
+<p>References apply to this draft only. Each row is one observed call, not necessarily a distinct job. Unknown means evidence is unavailable.</p>
+${details.length === 0 ? '<p>No observed calls in the reconciled test.</p>' : details.map((call) =>
+    `<section class="call-detail"><h3>${escapeHtml(call.callReference)}</h3>${table('Call record', ['Detail', 'Observed evidence'], [
+      ['Date/time (UTC)', instant(call.startedAtUtc)],
+      ['Connection', call.connected ? 'Connected' : 'Unconnected / unhandled attempt'],
+      ['Approved route', COVERAGE[call.route] || 'Unknown'],
+      ['Observed trigger', unknown(call.trigger)],
+      ['Caller request', call.contentWithheld ? 'Withheld — sensitive-data minimization' : unknown(call.callerIntent)],
+      ['Issue summary', call.contentWithheld ? 'Withheld — sensitive-data minimization' : unknown(call.issueSummary)],
+      ['Outcome', titleCase(call.outcome)], ['Urgency', unknown(call.urgency)],
+      ['Office follow-up required', call.officeFollowUpRequired === null ? 'Unknown' : call.officeFollowUpRequired ? 'Yes' : 'No'],
+      ['Office alert', notification(call.notificationState)],
+      ['Inbox receipt / office acknowledgment / completed follow-up', 'Unknown / Unknown / Unknown'],
+    ])}</section>`).join('')}
+<p>An alert accepted by the provider is not proof of inbox receipt or completed office work.</p></section>`;
+}
+
+function opportunityAmount(value, currency) {
+  if (value === null || currency === null) return 'Unknown';
+  if (!Number.isSafeInteger(value) || value < 0
+    || !Intl.supportedValuesOf('currency').includes(currency)) fail('REPORT_VALUE_CURRENCY_UNSUPPORTED');
+  const digits = new Intl.NumberFormat('en-US', { style: 'currency', currency })
+    .resolvedOptions().maximumFractionDigits;
+  // Integer minor units remain exact even near Number.MAX_SAFE_INTEGER. The
+  // currency owns the scale: JPY has no decimal places, while KWD has three.
+  const scale = 10n ** BigInt(digits);
+  const units = BigInt(value);
+  return `${currency} ${units / scale}${digits ? `.${String(units % scale).padStart(digits, '0')}` : ''}`;
+}
+
+function renderOpportunityValue(value) {
+  if (!value) return '';
+  const basisLabels = { contractor_known_job: 'Contractor-documented known job value',
+    contractor_average_job: 'Contractor-documented applicable average job value' };
+  const unknownLabels = { group_review_incomplete: 'Unknown — group review incomplete',
+    value_not_available: 'Unknown — documented value unavailable' };
+  return `<section aria-labelledby="opportunity-value"><h2 id="opportunity-value">${escapeHtml(value.label)}</h2>
+<p>This estimate counts each explicitly reviewed opportunity group once, even when it contains repeat calls. It uses a documented contractor known-job value first, otherwise a documented applicable contractor average. No generic price or assumed close rate is used.</p>
+${value.status === 'not_available' ? '<p>Unknown — no reviewed opportunity group has an applicable documented value. No monetary zero has been inferred.</p>'
+    : `<p>${value.status === 'partial' ? 'Partial coverage — the amounts below are documented subtotals, not a complete test value.'
+      : 'All qualifying calls are grouped and valued for this review. The amounts remain estimates, not revenue.'}</p>`}
+${table('Valuation coverage', ['Evidence', 'Count'], [
+    ['Potential new-job calls', value.qualifiedCallCount],
+    ['Reviewed qualified opportunity groups', value.reviewedGroupCount],
+    ['Groups with documented values', value.valuedGroupCount],
+    ['Groups with unknown value or incomplete review', value.unknownGroupCount],
+    ['Potential new-job calls not yet grouped', value.ungroupedQualifiedCallCount],
+  ])}
+${value.subtotals.length ? table('Documented estimate subtotals — currencies are not combined',
+    ['Currency', 'Estimated value', 'Valued groups'], value.subtotals.map((subtotal) => [
+      subtotal.currency, opportunityAmount(subtotal.amountMinorUnits, subtotal.currency), subtotal.valuedGroupCount,
+    ])) : ''}
+${value.groups.length ? table('Opportunity groups — document-local call references',
+    ['Group', 'Related calls', 'Value basis', 'Estimated value'], value.groups.map((group) => [
+      group.groupReference, group.callReferences.join(', '),
+      basisLabels[group.basisType] || unknownLabels[group.unknownReason],
+      opportunityAmount(group.amountMinorUnits, group.currency),
+    ])) : '<p>No explicit opportunity groups are recorded. The individual calls below are preserved; distinct calls have not been assumed to be distinct jobs.</p>'}
+<p>${escapeHtml(value.limitation)}</p><p>Method version ${escapeHtml(value.methodVersion)}. Grouping and value applicability are reviewed as part of the results review; this report does not approve a workflow or trigger follow-up.</p></section>`;
 }
 
 // Presentation-only projection of the same reconciled result. Never accept raw
@@ -120,6 +192,7 @@ thead { display: table-header-group; } tr { break-inside: avoid; } td { width: 2
 ul { padding-left: 16pt; margin: 5pt 0; } li { margin-bottom: 4pt; } footer { border-top: 1px solid; margin-top: 12pt; padding-top: 5pt; font-size: 9pt; }
 @media screen and (max-width: 520px) { body { padding: 16px; } .metrics { grid-template-columns: 1fr; } }
 @media print { body { max-width: none; padding: 0; } }
+${report.callDetails ? '.call-detail { break-inside: avoid; } .call-detail table { table-layout: fixed; } .call-detail th { width: 32%; } .call-detail td { width: 68%; overflow-wrap: anywhere; } .call-detail h3 { font-size: 11pt; margin: 10pt 0 0; }' : ''}
 </style></head><body>
 <header><p>Sylvara | Free-Test Results</p><p class="status">Draft — Client layout for review — Not for delivery</p>
 ${synthetic ? '<p class="synthetic">Synthetic Demo — No Live Calls</p>' : ''}
@@ -140,7 +213,7 @@ ${table('Connected-call breakdown — each call appears once', ['Call category',
 ${synthetic ? '<p>All results are illustrative. This preview proves no live call, delivery or customer outcome.</p>' : ''}</section>
 <section aria-labelledby="next"><h2 id="next">Next practical action</h2><p>Review the call mix and any flagged requests with your office. Confirm what has already been handled and what needs a callback. Resolve uncertain or failed alerts with Sylvara before resending anything.</p>
 <p>The recorded test stop does not prove that original phone handling was restored; confirm restoration separately.</p></section>
-</main><footer>Draft — Not for delivery | Sylvara | Version 1 | Rev. ${escapeHtml(new Date(now).toISOString().slice(0, 10))}</footer>
+${renderOpportunityValue(report.opportunityValue)}${renderCallDetails(report.callDetails)}</main><footer>Draft — Not for delivery | Sylvara | Version 1 | Rev. ${escapeHtml(new Date(now).toISOString().slice(0, 10))}</footer>
 </body></html>`;
 }
 
@@ -151,12 +224,17 @@ ${synthetic ? '<p>All results are illustrative. This preview proves no live call
  */
 function renderFreeTestReport(input, options = {}) {
   if (!options || typeof options !== 'object' || Array.isArray(options)
-    || Object.keys(options).some((key) => !['now', 'synthetic', 'audience'].includes(key))) fail('REPORT_RENDER_OPTIONS_INVALID');
-  const { now = Date.now(), synthetic = false, audience = 'internal' } = options;
+    || Object.keys(options).some((key) => !['now', 'synthetic', 'audience', 'callDetails', 'opportunityReview', 'documentRevisionAt'].includes(key))) fail('REPORT_RENDER_OPTIONS_INVALID');
+  const { now = Date.now(), synthetic = false, audience = 'internal', callDetails = null,
+    opportunityReview = null, documentRevisionAt = now } = options;
   if (!Number.isSafeInteger(now) || typeof synthetic !== 'boolean'
-    || !['internal', 'client'].includes(audience)) fail('REPORT_RENDER_OPTIONS_INVALID');
-  const report = buildFreeTestReport(input, now);
-  if (audience === 'client') return renderClientSummary(report, { now, synthetic });
+    || !['internal', 'client'].includes(audience)
+    || (callDetails !== null && audience !== 'client')
+    || (opportunityReview !== null && (audience !== 'client' || callDetails === null))
+    || !Number.isSafeInteger(documentRevisionAt) || documentRevisionAt < 0
+    || documentRevisionAt > now) fail('REPORT_RENDER_OPTIONS_INVALID');
+  const report = buildFreeTestReport(input, now, callDetails, opportunityReview);
+  if (audience === 'client') return renderClientSummary(report, { now: documentRevisionAt, synthetic });
   const before = report.beforeTest;
   const during = report.duringTest;
   const evidence = report.evidence;
@@ -323,4 +401,4 @@ if (require.main === module) {
   catch { process.stderr.write('Report render failed; no delivery is authorized.\n'); process.exitCode = 1; }
 }
 
-module.exports = { escapeHtml, renderFreeTestReport, run };
+module.exports = { escapeHtml, renderFreeTestReport, run, CLIENT_DRAFT_RENDERER_VERSION };

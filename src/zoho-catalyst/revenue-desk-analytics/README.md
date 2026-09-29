@@ -137,6 +137,12 @@ this candidate. Plan capacity must be rechecked before any later installation.
 
 ### One final report without an Analytics upgrade
 
+The later [local free-test draft implementation](LOCAL-REPORTING-V1.md) adds
+canonical call details, reviewed opportunity valuation, and duplicate-safe draft
+preparation. It preserves the internal report and the manual delivery controls
+below. Local tests do not establish an installed automatic document workflow or
+accepted WorkDrive storage.
+
 The free test requires one final results review, not recurring customer reporting.
 The Analytics **Free edition** and Sylvara's **free test** are different things.
 Zoho's [report export documentation](https://www.zoho.com/analytics/help/export/exporting-a-report.html)
