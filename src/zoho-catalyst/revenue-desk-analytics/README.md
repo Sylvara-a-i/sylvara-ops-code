@@ -138,10 +138,12 @@ this candidate. Plan capacity must be rechecked before any later installation.
 ### One final report without an Analytics upgrade
 
 The later [local free-test draft implementation](LOCAL-REPORTING-V1.md) adds
-canonical call details, reviewed opportunity valuation, and duplicate-safe draft
-preparation. It preserves the internal report and the manual delivery controls
-below. Local tests do not establish an installed automatic document workflow or
-accepted WorkDrive storage.
+canonical call details, reviewed opportunity valuation, validated report-input
+assembly and duplicate-safe draft preparation. A held worker factory connects
+the existing completed-test scan to generation and retries; local fixtures cover
+that full path. It preserves the internal report and manual delivery controls
+below. The live complete-partition reader and durable WorkDrive destination
+remain unbound; local tests do not establish an installed document workflow.
 
 The free test requires one final results review, not recurring customer reporting.
 The Analytics **Free edition** and Sylvara's **free test** are different things.

@@ -1,6 +1,7 @@
 'use strict';
 
-const { compareWatermark, createOutboxRow, sameLegacyDailyMetricVersion } = require('../lib/facts');
+const { checkpointKey, compareWatermark, createOutboxRow, sameLegacyDailyMetricVersion } = require('../lib/facts');
+const { REPORT_SOURCE_PAGE_SIZE } = require('../lib/catalyst-store');
 const LEASE_PROOF_COLUMN = 'LEASE_' + 'TOKEN';
 const OUTBOX_IMMUTABLE = Object.freeze([
   'OUTBOX_KEY', 'ROW_SCHEMA_VERSION', 'RECORD_TYPE',
@@ -190,6 +191,21 @@ class MemoryStore {
   async readiness() {
     this.readinessCalls += 1;
     return { tableCount: 2, rowSchemaVersion: 2 };
+  }
+
+  async listReportRows(scope) {
+    const rows = this.rows.filter((row) => Number(row.ROW_SCHEMA_VERSION) === 2
+      && ['deployment', 'call', 'final_test_result'].includes(row.RECORD_TYPE)
+      && ['CLIENT_KEY', 'DEPLOYMENT_KEY', 'ENVIRONMENT'].every((key) => row[key] === scope[key]));
+    if (['deployment', 'call', 'final_test_result'].some((type) =>
+      rows.filter((row) => row.RECORD_TYPE === type).length >= REPORT_SOURCE_PAGE_SIZE)) {
+      throw new Error('Synthetic report history exceeds the complete-source bound.');
+    }
+    return structuredClone(rows);
+  }
+
+  async getReportCheckpoint(scope, recordType) {
+    return structuredClone(this.checkpoints.get(checkpointKey({ ...scope, RECORD_TYPE: recordType })) || null);
   }
 }
 

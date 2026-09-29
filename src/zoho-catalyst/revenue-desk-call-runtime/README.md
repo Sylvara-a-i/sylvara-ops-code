@@ -75,6 +75,23 @@ The 288a93c deployment reconfirmed the required consumer-first six-function uplo
 
 The installed Changes connector advertises a full Cron body for status changes, while the official provider operation is status-only. Do not discover the accepted shape by mutation. Exact classification exhaustively buckets every advertised schedule, end, notification, request, header, URL, retry, provider-identity, and metadata field; canonical-absent fields must be literally absent, and nulls, empty values, defaults, unknown keys, or unproven absence fail closed. The current full-body templates are not execution-ready until read-only evidence proves status-only/nonreplacement semantics, and they must never be applied to a drifted or duplicate predecessor. Without a proven safe status-only shape, keep the worker mode dark, preserve those predecessor definitions, mark Cron containment unproven, and stop. A Cron create/resource `data.id`, persisted Job-definition or `cron_detail.jobId`, or pool/target/function identifier is not a submitted execution Job ID. Terminal canary evidence must bind the exact lossless manual-submit `data.job_id` through the get-by-ID request/response and bind `source_type=Cron` plus the exact source Cron ID, name, and `pre-defined` execution type; pool/target/params/time matching is insufficient. The contract does not authorize a live write or activation. Its dark-worker containment canary remains blocked until the provider exposes a lossless Job-to-execution identifier binding and callable execution-scoped log readback; it would not prove `retry_scan` business behavior. Conditional rollback deletion additionally needs fresh exact authority, permanently destroys Cron history, is never retried after ambiguity, and succeeds only after complete name/ID inventory absence plus shape-proven get-by-ID not-found readback.
 
+### Held local draft reconciliation
+
+The existing `Completed` deployment scan can invoke a trusted
+`terminalDraftReconcilerFactory` supplied when constructing the worker. Its
+default is `null`; no Job parameter or environment switch enables it. The
+Analytics-owned [local reporting implementation](../revenue-desk-analytics/LOCAL-REPORTING-V1.md)
+validates all three reconciled partitions and canonical call details, then
+prepares an owner-review draft. Incomplete evidence waits; a failed generation
+retries on the next fair completed-deployment scan without resending completed
+CRM or Analytics work. Callback errors are sanitized, and cancellation prevents
+a late callback from writing a draft after the bounded worker timeout.
+
+Synthetic tests compose the actual worker, runtime, Analytics service and local
+renderer. The provider's complete-partition reader, approved durable destination,
+deployment construction and live acceptance remain unbound. This source path
+does not authorize upload or customer delivery.
+
 ## Private approval, activation, and rollback control
 
 The control Host guard accepts only the configured Development hostname, matched

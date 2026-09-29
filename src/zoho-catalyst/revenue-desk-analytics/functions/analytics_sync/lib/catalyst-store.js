@@ -2,13 +2,18 @@
 
 const { AnalyticsSyncError, invariant } = require('./errors');
 const { withTimeout } = require('./connection-boundary');
-const { compareWatermark, parseOutboxRow, sameLegacyDailyMetricVersion } = require('./facts');
+const { checkpointKey, compareWatermark, parseOutboxRow, sameLegacyDailyMetricVersion } = require('./facts');
 
 const ROW_ID_PATTERN = /^\d{1,30}$/;
 const COLUMN_PATTERN = /^[A-Z][A-Z0-9_]{0,63}$/;
 const MAX_STATEMENT_BYTES = 65536;
 const MAX_TEXT_BYTES = 10000;
 const TERMINAL_STATUSES = new Set(['Succeeded', 'TerminalFailure']);
+const REPORT_RECORD_TYPES = Object.freeze(['deployment', 'call', 'final_test_result']);
+// A saturated page cannot prove a complete report history. Stay within the
+// existing bounded query size and fail closed rather than select only the latest
+// rows or silently omit an older unresolved source version.
+const REPORT_SOURCE_PAGE_SIZE = 100;
 const LEASE_PROOF_COLUMN = 'LEASE_' + 'TOKEN';
 const OUTBOX_COLUMNS = Object.freeze([
   'OUTBOX_KEY', 'ROW_SCHEMA_VERSION', 'RECORD_TYPE',
@@ -381,13 +386,72 @@ function createCatalystStore(app, config) {
     return Object.freeze({ tableCount: 2, rowSchemaVersion: 2 });
   }
 
+  function validateReportScope(scope) {
+    const keys = ['CLIENT_KEY', 'DEPLOYMENT_KEY', 'CONFIGURATION_VERSION',
+      'ENGAGEMENT_TYPE', 'ENVIRONMENT', 'SOURCE_REVISION'];
+    invariant(scope && typeof scope === 'object' && !Array.isArray(scope)
+      && Object.keys(scope).sort().join(',') === [...keys].sort().join(',')
+      && /^[a-f0-9]{64}$/.test(scope.CLIENT_KEY) && /^[a-f0-9]{64}$/.test(scope.DEPLOYMENT_KEY)
+      && /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(scope.CONFIGURATION_VERSION)
+      && scope.ENVIRONMENT === 'development' && scope.ENGAGEMENT_TYPE === 'free_test'
+      && /^[a-f0-9]{40}$/.test(scope.SOURCE_REVISION) && scope.SOURCE_REVISION === config.sourceRevision,
+    'REPORT_SCOPE_INVALID', 'Report source scope is invalid.');
+  }
+
+  /** Read every v2 report-source version in one client/deployment partition.
+   * Do not filter configuration, revision or status in SQL: an incompatible or
+   * unresolved row must reach the report validator, not disappear from evidence.
+   * No write, import or checkpoint refresh is performed by this read boundary.
+   */
+  async function listReportRows(scope, options = {}) {
+    validateReportScope(scope);
+    invariant(options && typeof options === 'object' && !Array.isArray(options)
+      && Object.keys(options).every((key) => key === 'signal')
+      && (options.signal === undefined || options.signal instanceof AbortSignal),
+    'REPORT_SCOPE_INVALID', 'Report source cancellation is invalid.');
+    const signal = options.signal;
+    const assertActive = () => invariant(!signal?.aborted,
+      'REPORT_READ_ABORTED', 'Report source read was cancelled.', { retryable: true });
+    const result = [];
+    for (const type of REPORT_RECORD_TYPES) {
+      assertActive();
+      const rows = await query(outbox, `SELECT * FROM ${outbox} WHERE ROW_SCHEMA_VERSION = 2`
+        + ` AND ENVIRONMENT = ${sqlValue(scope.ENVIRONMENT)}`
+        + ` AND CLIENT_KEY = ${sqlValue(scope.CLIENT_KEY)}`
+        + ` AND DEPLOYMENT_KEY = ${sqlValue(scope.DEPLOYMENT_KEY)}`
+        + ` AND RECORD_TYPE = ${sqlValue(type)} ORDER BY ROWID ASC LIMIT ${REPORT_SOURCE_PAGE_SIZE}`);
+      assertActive();
+      invariant(rows.length < REPORT_SOURCE_PAGE_SIZE, 'REPORT_SOURCE_BOUND_EXCEEDED',
+        'Report source history is incomplete at the bounded query limit.');
+      invariant(rows.every((row) => row.RECORD_TYPE === type
+        && ['CLIENT_KEY', 'DEPLOYMENT_KEY', 'ENVIRONMENT'].every((key) => row[key] === scope[key])),
+      'REPORT_SCOPE_INVALID', 'Report source readback crosses its requested partition.');
+      result.push(...structuredClone(rows));
+    }
+    return result;
+  }
+
+  async function getReportCheckpoint(scope, recordType) {
+    validateReportScope(scope);
+    invariant(REPORT_RECORD_TYPES.includes(recordType), 'REPORT_SCOPE_INVALID',
+      'Report checkpoint type is invalid.');
+    const key = checkpointKey({ ...scope, RECORD_TYPE: recordType });
+    const row = await unique(checkpoint, 'CHECKPOINT_KEY', key);
+    invariant(row === null || (row.CHECKPOINT_KEY === key && row.RECORD_TYPE === recordType
+      && ['CLIENT_KEY', 'DEPLOYMENT_KEY', 'ENVIRONMENT', 'SOURCE_REVISION'].every((column) => row[column] === scope[column])),
+    'REPORT_SCOPE_INVALID', 'Report checkpoint readback crosses its requested partition.');
+    return row === null ? null : structuredClone(row);
+  }
+
   return Object.freeze({
     listDue, listBatch, listRollupCalls, ensureOutbox, claim, patchClaim,
     hasOlderUnresolved, hasOutboxOwnershipConflict, upsertCheckpoint, readiness,
+    listReportRows, getReportCheckpoint,
   });
 }
 
 module.exports = {
   createCatalystStore, sqlValue, unwrapRows, OUTBOX_COLUMNS, OUTBOX_IMMUTABLE,
   CHECKPOINT_COLUMNS,
+  REPORT_SOURCE_PAGE_SIZE,
 };

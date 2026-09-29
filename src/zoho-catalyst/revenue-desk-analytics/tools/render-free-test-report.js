@@ -9,7 +9,7 @@ const { buildFreeTestReport } = require('./build-free-test-report');
 const MAX_INPUT_BYTES = 2 * 1024 * 1024;
 const TITLE = 'Seven-Day Free Test Results';
 const DRAFT = 'Draft — Operator review only — Not for delivery';
-const CLIENT_DRAFT_RENDERER_VERSION = 'free-test-client-v3';
+const CLIENT_DRAFT_RENDERER_VERSION = 'free-test-client-v4';
 const COVERAGE = Object.freeze({
   after_hours_only: 'After-hours only', no_answer_overflow_only: 'No-answer / overflow only',
   after_hours_and_overflow: 'After-hours and overflow',
@@ -56,24 +56,26 @@ function renderCallDetails(details) {
     if (!value) return 'Unknown';
     const key = Object.keys(NOTIFICATION_LABELS).find((state) =>
       state.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase() === value);
-    return NOTIFICATION_LABELS[key] || 'Unknown';
+    return key === 'DryRunRecorded' ? 'Preview Only — Not Sent' : NOTIFICATION_LABELS[key] || 'Unknown';
   };
   return `<section aria-labelledby="call-detail"><h2 id="call-detail">Individual call details</h2>
-<p>References apply to this draft only. Each row is one observed call, not necessarily a distinct job. Unknown means evidence is unavailable.</p>
+<p>References apply to this draft only. Each record is one observed call, not necessarily a distinct job. Unknown means evidence is unavailable. An alert accepted by the provider is not proof of inbox receipt or completed office work.</p>
 ${details.length === 0 ? '<p>No observed calls in the reconciled test.</p>' : details.map((call) =>
-    `<section class="call-detail"><h3>${escapeHtml(call.callReference)}</h3>${table('Call record', ['Detail', 'Observed evidence'], [
+    `<section class="call-detail">${table(`${call.callReference} — Call record`, ['Detail', 'Observed evidence'], [
       ['Date/time (UTC)', instant(call.startedAtUtc)],
       ['Connection', call.connected ? 'Connected' : 'Unconnected / unhandled attempt'],
       ['Approved route', COVERAGE[call.route] || 'Unknown'],
-      ['Observed trigger', unknown(call.trigger)],
+      ['Observed trigger', call.trigger === 'AfterHours' ? 'After Hours'
+        : call.trigger === 'NoAnswerOverflow' ? 'No Answer / Overflow' : unknown(call.trigger)],
       ['Caller request', call.contentWithheld ? 'Withheld — sensitive-data minimization' : unknown(call.callerIntent)],
       ['Issue summary', call.contentWithheld ? 'Withheld — sensitive-data minimization' : unknown(call.issueSummary)],
-      ['Outcome', titleCase(call.outcome)], ['Urgency', unknown(call.urgency)],
-      ['Office follow-up required', call.officeFollowUpRequired === null ? 'Unknown' : call.officeFollowUpRequired ? 'Yes' : 'No'],
+      ['Outcome', titleCase(call.outcome)], ['Urgency', call.urgency === null ? 'Unknown' : titleCase(call.urgency)],
+      ['Flagged for Office Follow-Up', call.officeFollowUpRequired === null ? 'Unknown' : call.officeFollowUpRequired ? 'Yes' : 'No'],
       ['Office alert', notification(call.notificationState)],
-      ['Inbox receipt / office acknowledgment / completed follow-up', 'Unknown / Unknown / Unknown'],
-    ])}</section>`).join('')}
-<p>An alert accepted by the provider is not proof of inbox receipt or completed office work.</p></section>`;
+      ['Inbox Receipt', unknown(call.inboxDelivery)],
+      ['Office Acknowledgment', unknown(call.businessAcknowledgment)],
+      ['Completed Follow-Up', unknown(call.completedFollowUp)],
+    ])}</section>`).join('')}</section>`;
 }
 
 function opportunityAmount(value, currency) {
@@ -89,35 +91,41 @@ function opportunityAmount(value, currency) {
   return `${currency} ${units / scale}${digits ? `.${String(units % scale).padStart(digits, '0')}` : ''}`;
 }
 
-function renderOpportunityValue(value) {
+function renderOpportunitySummary(value) {
+  if (!value) return '';
+  return `<section class="value-summary" aria-labelledby="value-summary"><h2 id="value-summary">${escapeHtml(value.label)}${value.status === 'partial' ? ' — Partial coverage' : ''}</h2>
+${value.subtotals.length ? value.subtotals.map((subtotal) =>
+    `<p class="value-subtotal"><strong>${escapeHtml(opportunityAmount(subtotal.amountMinorUnits, subtotal.currency))}${value.status === 'partial' ? ' — Partial Subtotal' : ''}</strong> · ${subtotal.valuedGroupCount} valued group(s)</p>`).join('')
+    : '<p><strong>Unknown</strong> — no applicable documented value is available.</p>'}
+<p>Valued groups: ${value.valuedGroupCount} · Unknown / incomplete groups excluded: ${value.unknownGroupCount} · Potential new-job calls not yet grouped: ${value.ungroupedQualifiedCallCount}.</p>
+<p>Each reviewed group is counted once. Currencies are kept separate. This is an estimate, not revenue; unknown values are excluded, not treated as zero.</p></section>`;
+}
+
+function renderOpportunityValue(value, callDetails) {
   if (!value) return '';
   const basisLabels = { contractor_known_job: 'Contractor-documented known job value',
     contractor_average_job: 'Contractor-documented applicable average job value' };
   const unknownLabels = { group_review_incomplete: 'Unknown — group review incomplete',
     value_not_available: 'Unknown — documented value unavailable' };
-  return `<section aria-labelledby="opportunity-value"><h2 id="opportunity-value">${escapeHtml(value.label)}</h2>
+  // Descriptions are verbatim, minimized summaries from the already joined
+  // member calls. A renderer must not invent a new job description or grouping.
+  const calls = new Map(callDetails.map((call) => [call.callReference, call]));
+  const description = (group) => [...new Set(group.callReferences.map((reference) => {
+    const call = calls.get(reference);
+    return call.contentWithheld ? 'Withheld — sensitive-data minimization' : call.issueSummary ?? 'Unknown';
+  }))].join(' / ');
+  return `<section class="opportunity-section" aria-labelledby="opportunity-value"><h2 id="opportunity-value">${escapeHtml(value.label)}</h2>
 <p>This estimate counts each explicitly reviewed opportunity group once, even when it contains repeat calls. It uses a documented contractor known-job value first, otherwise a documented applicable contractor average. No generic price or assumed close rate is used.</p>
 ${value.status === 'not_available' ? '<p>Unknown — no reviewed opportunity group has an applicable documented value. No monetary zero has been inferred.</p>'
     : `<p>${value.status === 'partial' ? 'Partial coverage — the amounts below are documented subtotals, not a complete test value.'
       : 'All qualifying calls are grouped and valued for this review. The amounts remain estimates, not revenue.'}</p>`}
-${table('Valuation coverage', ['Evidence', 'Count'], [
-    ['Potential new-job calls', value.qualifiedCallCount],
-    ['Reviewed qualified opportunity groups', value.reviewedGroupCount],
-    ['Groups with documented values', value.valuedGroupCount],
-    ['Groups with unknown value or incomplete review', value.unknownGroupCount],
-    ['Potential new-job calls not yet grouped', value.ungroupedQualifiedCallCount],
-  ])}
-${value.subtotals.length ? table('Documented estimate subtotals — currencies are not combined',
-    ['Currency', 'Estimated value', 'Valued groups'], value.subtotals.map((subtotal) => [
-      subtotal.currency, opportunityAmount(subtotal.amountMinorUnits, subtotal.currency), subtotal.valuedGroupCount,
-    ])) : ''}
-${value.groups.length ? table('Opportunity groups — document-local call references',
-    ['Group', 'Related calls', 'Value basis', 'Estimated value'], value.groups.map((group) => [
-      group.groupReference, group.callReferences.join(', '),
+${value.groups.length ? `<div class="opportunity-groups">${table('Opportunity groups — document-local call references',
+    ['Group / request summary', 'Related calls', 'Value basis', 'Estimated value'], value.groups.map((group) => [
+      `${group.groupReference} — ${description(group)}`, group.callReferences.join(', '),
       basisLabels[group.basisType] || unknownLabels[group.unknownReason],
       opportunityAmount(group.amountMinorUnits, group.currency),
-    ])) : '<p>No explicit opportunity groups are recorded. The individual calls below are preserved; distinct calls have not been assumed to be distinct jobs.</p>'}
-<p>${escapeHtml(value.limitation)}</p><p>Method version ${escapeHtml(value.methodVersion)}. Grouping and value applicability are reviewed as part of the results review; this report does not approve a workflow or trigger follow-up.</p></section>`;
+    ]))}</div>` : '<p>No explicit opportunity groups are recorded. The individual calls below are preserved; distinct calls have not been assumed to be distinct jobs.</p>'}
+<div class="summary-section"><h3>Value limitations</h3><p>${escapeHtml(value.limitation)}</p><p>Method version ${escapeHtml(value.methodVersion)}. Grouping and value applicability are reviewed as part of the results review; this report does not approve a workflow or trigger follow-up.</p></div></section>`;
 }
 
 // Presentation-only projection of the same reconciled result. Never accept raw
@@ -176,23 +184,34 @@ function renderClientSummary(report, { now, synthetic }) {
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
 <title>${TITLE} — Client Summary Draft</title><style>
-@page { size: Letter; margin: .80in 1in .78in; }
+@page { size: Letter; margin: .80in 1in .78in;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
+  @top-left { content: "Sylvara | Free-Test Results"; font-size: 9pt; }
+  @top-right { content: "${synthetic ? 'Synthetic draft — No live calls' : 'Draft — Not for delivery'}"; font-size: 9pt; }
+  @bottom-left { content: "Draft — Not for delivery | Rev. ${new Date(now).toISOString().slice(0, 10)}"; font-size: 9pt; }
+  @bottom-right { content: "Page " counter(page) " of " counter(pages); font-size: 9pt; }
+}
 * { box-sizing: border-box; }
 body { margin: 0 auto; padding: .4in; max-width: 8.5in; color: #161616; background: white;
   font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif; font-size: 10pt; line-height: 1.25; }
 h1 { font-size: 18pt; margin: 8pt 0; } h2 { font-size: 12pt; margin: 12pt 0 5pt; }
-h1, h2, caption { break-after: avoid; } p, li { orphans: 3; widows: 3; }
+h1, h2, h3, caption { break-after: avoid; } p, li { orphans: 3; widows: 3; }
 p { margin: 0 0 5pt; } header { border-bottom: 2px solid; padding-bottom: 8pt; }
 .status { font-size: 9pt; font-weight: bold; } .synthetic { border: 2px solid; padding: 6pt; font-weight: bold; }
 .metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10pt; margin: 12pt 0; break-inside: avoid; }
-.metrics div { border-bottom: 1px solid #777; padding-bottom: 6pt; } dt { font-size: 10pt; } dd { margin: 4pt 0 0; font-size: 22pt; font-weight: bold; }
+.metrics div { display: grid; grid-template-rows: 1fr auto; border-bottom: 1px solid #777; padding-bottom: 6pt; } dt { font-size: 10pt; } dd { margin: 4pt 0 0; font-size: 22pt; font-weight: bold; }
+.summary-overview, .value-summary, .summary-section, .opportunity-section, .opportunity-groups { break-inside: avoid; }
+#call-detail + p { break-after: avoid; }
+.value-summary { border: 1px solid #777; padding: 8pt; margin-bottom: 8pt; } .value-summary h2 { margin-top: 0; }
+.value-subtotal strong { font-size: 14pt; }
 table { border-collapse: collapse; width: 100%; margin: 8pt 0; font-size: 10pt; }
 caption { text-align: left; font-weight: bold; margin-bottom: 5pt; } th, td { text-align: left; border-bottom: 1px solid #aaa; padding: 4pt; }
-thead { display: table-header-group; } tr { break-inside: avoid; } td { width: 20%; }
+thead { display: table-header-group; } table, tr { break-inside: avoid; } td { width: 20%; }
+.opportunity-groups th:first-child { width: 35%; } .opportunity-groups td { width: auto; }
 ul { padding-left: 16pt; margin: 5pt 0; } li { margin-bottom: 4pt; } footer { border-top: 1px solid; margin-top: 12pt; padding-top: 5pt; font-size: 9pt; }
 @media screen and (max-width: 520px) { body { padding: 16px; } .metrics { grid-template-columns: 1fr; } }
-@media print { body { max-width: none; padding: 0; } }
-${report.callDetails ? '.call-detail { break-inside: avoid; } .call-detail table { table-layout: fixed; } .call-detail th { width: 32%; } .call-detail td { width: 68%; overflow-wrap: anywhere; } .call-detail h3 { font-size: 11pt; margin: 10pt 0 0; }' : ''}
+@media print { body { max-width: none; padding: 0; } footer { display: none; } }
+${report.callDetails ? '.call-detail { break-inside: avoid; } .call-detail table { table-layout: fixed; } .call-detail th { width: 32%; } .call-detail td { width: 68%; overflow-wrap: anywhere; }' : ''}
 </style></head><body>
 <header><p>Sylvara | Free-Test Results</p><p class="status">Draft — Client layout for review — Not for delivery</p>
 ${synthetic ? '<p class="synthetic">Synthetic Demo — No Live Calls</p>' : ''}
@@ -200,20 +219,22 @@ ${synthetic ? '<p class="synthetic">Synthetic Demo — No Live Calls</p>' : ''}
 <p><strong>${synthetic ? 'Illustrative test period' : 'Test period'}:</strong> ${escapeHtml(instant(during.startedAtUtc))} to ${escapeHtml(instant(during.endedAtUtc))}</p>
 <p><strong>Coverage:</strong> ${escapeHtml(COVERAGE[during.coverage] || 'Not available')}. Only this route was measured, not all calls to the business.</p>
 <p><strong>Why it ended:</strong> ${escapeHtml(stopReasons[during.endReason])}. The actual dates above apply.</p></header>
-<main><dl class="metrics">
-${metric('Calls Handled', during.callsCaptured)}${metric('Potential New-Job Calls', opportunities)}${metric('Calls Flagged For Office Follow-Up', during.officeFollowUpCalls)}
-</dl><p>Calls Handled counts unique connected calls. A follow-up flag does not establish whether office work is still outstanding.</p>
+<main><div class="summary-overview"><dl class="metrics">
+${metric('Calls Handled', during.callsCaptured)}${metric('Potential New-Job Calls', opportunities)}${metric('Reviewed Opportunity Groups', report.opportunityValue?.reviewedGroupCount)}
+</dl>${renderOpportunitySummary(report.opportunityValue)}</div>
+<p>Calls Handled counts unique connected calls. Potential New-Job Calls are call classifications; reviewed opportunity groups can contain repeat calls about the same job.</p>
+<p><strong>Flagged for Office Follow-Up:</strong> ${escapeHtml(count(during.officeFollowUpCalls))} calls. A follow-up flag does not establish whether office work is still outstanding.</p>
 ${table('Connected-call breakdown — each call appears once', ['Call category', 'Calls'], [
-    ...during.callMix.map((group) => [group.label, group.calls]), ['Total', during.callsCaptured],
+    ...during.callMix.map((group) => [group.category === 'new_job_opportunities' ? 'Potential New-Job Calls' : group.label, group.calls]), ['Total', during.callsCaptured],
   ])}
 <p>Urgent requests: ${escapeHtml(count(during.urgentRequests))}. Urgency and follow-up flags overlap these categories and each other; do not add them to the total.</p>
-<section aria-labelledby="meaning"><h2 id="meaning">What the results mean</h2><p>${escapeHtml(interpretation)}</p><p>${escapeHtml(baseline)}</p></section>
-<section aria-labelledby="limits"><h2 id="limits">What needs attention</h2><ul>${notes.map((note) => `<li>${escapeHtml(note)}</li>`).join('')}</ul>
+<section class="summary-section" aria-labelledby="meaning"><h2 id="meaning">What the results mean</h2><p>${escapeHtml(interpretation)}</p><p>${escapeHtml(baseline)}</p></section>
+<section class="summary-section" aria-labelledby="limits"><h2 id="limits">What needs attention</h2><ul>${notes.map((note) => `<li>${escapeHtml(note)}</li>`).join('')}</ul>
 <p>Missing evidence means Not available, not zero. No recovered revenue, savings or measured improvement is calculated.</p>
 ${synthetic ? '<p>All results are illustrative. This preview proves no live call, delivery or customer outcome.</p>' : ''}</section>
-<section aria-labelledby="next"><h2 id="next">Next practical action</h2><p>Review the call mix and any flagged requests with your office. Confirm what has already been handled and what needs a callback. Resolve uncertain or failed alerts with Sylvara before resending anything.</p>
+<section class="summary-section" aria-labelledby="next"><h2 id="next">Next practical action</h2><p>Review the call mix and any flagged requests with your office. Confirm what has already been handled and what needs a callback. Resolve uncertain or failed alerts with Sylvara before resending anything.</p>
 <p>The recorded test stop does not prove that original phone handling was restored; confirm restoration separately.</p></section>
-${renderOpportunityValue(report.opportunityValue)}${renderCallDetails(report.callDetails)}</main><footer>Draft — Not for delivery | Sylvara | Version 1 | Rev. ${escapeHtml(new Date(now).toISOString().slice(0, 10))}</footer>
+${renderOpportunityValue(report.opportunityValue, report.callDetails)}${renderCallDetails(report.callDetails)}</main><footer>Draft — Not for delivery | Sylvara | Version 4 | Rev. ${escapeHtml(new Date(now).toISOString().slice(0, 10))}</footer>
 </body></html>`;
 }
 

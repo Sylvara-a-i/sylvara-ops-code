@@ -834,12 +834,15 @@ function createRuntimeService({
   store,
   mailAdapter,
   crmSummaryDispatcher = null,
+  onTerminalReportReconciled = null,
   jobAdapter = null,
   config,
   now = Date.now,
   logger = { info() {}, warn() {}, error() {} },
 }) {
   invariant(config.environment === 'development', 'PRODUCTION_BLOCKED', 'Runtime service is Development-only.', { httpStatus: 503 });
+  invariant(onTerminalReportReconciled === null || typeof onTerminalReportReconciled === 'function',
+    'INVALID_RUNTIME_CONFIGURATION', 'Terminal draft reconciler is invalid.', { httpStatus: 503 });
   const deploymentTable = config.tables.DEPLOYMENT_TABLE;
   const receiptTable = config.tables.EVENT_RECEIPT_TABLE;
   const callTable = config.tables.CANONICAL_CALL_TABLE;
@@ -2090,6 +2093,45 @@ function createRuntimeService({
     )) || sameLegacyReportVersion(analytics, expected)));
   }
 
+  async function completedTerminalReport(deployment, report) {
+    const result = { status: 'TerminalReportReconciled', deploymentId: deployment.deploymentId, report };
+    if (onTerminalReportReconciled === null) return Object.freeze(result);
+    let timer;
+    const controller = new AbortController();
+    try {
+      const current = await store.unique(deploymentTable, 'DEPLOYMENT_ID', deployment.deploymentId);
+      invariant(current?.TEST_STATUS === 'Completed' && current.REPORT_RECONCILIATION_STATUS === 'Completed'
+        && current.CLIENT_ID === deployment.clientId && current.SOURCE_REVISION === config.sourceRevision
+        && current.ACTIVE_CONFIGURATION_VERSION_ID === deployment.configurationVersionId,
+      'REPORT_DRAFT_RECONCILIATION_REQUIRED', 'Terminal draft requires completed reconciliation.');
+      // This is a trusted dependency, never a Job parameter or a delivery grant.
+      // The draft adapter must honor cancellation before any document write.
+      // The existing Completed lane retries on its next fair scan without
+      // reopening CRM or Analytics work.
+      const prepared = await Promise.race([
+        Promise.resolve().then(() => onTerminalReportReconciled(Object.freeze({
+          clientId: deployment.clientId, deploymentId: deployment.deploymentId,
+        }), Object.freeze({ signal: controller.signal }))),
+        new Promise((_, reject) => {
+          timer = setTimeout(() => {
+            controller.abort();
+            reject(new Error('Terminal draft timed out.'));
+          }, config.platformTimeoutMs);
+        }),
+      ]);
+      invariant(isPlainObject(prepared) && new Set([
+        'awaiting_reconciled_evidence', 'draft_created_not_for_delivery',
+        'existing_draft_verified_not_for_delivery',
+      ]).has(prepared.status), 'REPORT_DRAFT_RECONCILIATION_REQUIRED', 'Terminal draft result is invalid.');
+      return Object.freeze({ ...result, reportDraftStatus: prepared.status });
+    } catch {
+      // Hook errors may carry private document content, paths or identifiers.
+      // Preserve only a fixed failure while leaving completed source facts intact.
+      throw new RevenueDeskError('REPORT_DRAFT_RECONCILIATION_REQUIRED',
+        'Terminal draft requires reconciliation.', { httpStatus: 503, retryable: true });
+    } finally { clearTimeout(timer); }
+  }
+
   async function reconcileTerminalDeployment(deploymentId) {
     const id = validDeploymentId(deploymentId);
     await stopExpiredDeployment(id);
@@ -2101,7 +2143,7 @@ function createRuntimeService({
     if (deployment.reportReconciliationStatus === 'Completed') {
       const report = await buildReport(deployment);
       if (await terminalArtifactsPresent(deployment, row, report)) {
-        return Object.freeze({ status: 'TerminalReportReconciled', deploymentId: id, report });
+        return completedTerminalReport(deployment, report);
       }
       await setReportReconciliationStatus(id, new Set(['Completed']), 'Pending');
     }
@@ -2127,7 +2169,7 @@ function createRuntimeService({
     await setReportReconciliationStatus(
       id, new Set(['Pending', 'AwaitingSettlement']), 'Completed',
     );
-    return Object.freeze({ status: 'TerminalReportReconciled', deploymentId: id, report });
+    return completedTerminalReport(pendingDeployment, report);
   }
 
   async function reconcileDueDeployments(limit = 25) {
@@ -2222,8 +2264,9 @@ function createRuntimeService({
           && readback.OPERATION_PAYLOAD_JSON === operation.OPERATION_PAYLOAD_JSON
           && readback.ACTION === operation.ACTION
           && readback.CRM_DEAL_ID === operation.CRM_DEAL_ID && summary) {
-          await reconcileTerminalDeployment(summary.deploymentId);
-          result = { status: 'Completed' };
+          const terminal = await reconcileTerminalDeployment(summary.deploymentId);
+          result = { status: 'Completed', ...(terminal.reportDraftStatus
+            ? { reportDraftStatus: terminal.reportDraftStatus } : {}) };
         } else {
           throw new RevenueDeskError(
             'REPORT_RECONCILIATION_REQUIRED',
@@ -2288,6 +2331,7 @@ function createRuntimeService({
       deploymentId: terminal.report.deploymentId,
       handledCallCount: terminal.report.handledCallCount,
       notificationStateCount: Object.keys(terminal.report.notificationStates).length,
+      ...(terminal.reportDraftStatus ? { reportDraftStatus: terminal.reportDraftStatus } : {}),
     });
   }
 

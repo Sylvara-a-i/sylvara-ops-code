@@ -22,9 +22,11 @@ test('client summary uses the same validated counts and categories without alter
   const html = render(input);
   assert.ok(html.includes(metric('Calls Handled', report.duringTest.callsCaptured)));
   assert.ok(html.includes(metric('Potential New-Job Calls', report.duringTest.callMix[0].calls)));
-  assert.ok(html.includes(metric('Calls Flagged For Office Follow-Up', report.duringTest.officeFollowUpCalls)));
+  assert.ok(html.includes(metric('Reviewed Opportunity Groups', 'Not available')));
+  assert.ok(html.includes(`<strong>Flagged for Office Follow-Up:</strong> ${report.duringTest.officeFollowUpCalls} calls.`));
   for (const group of report.duringTest.callMix) {
-    assert.ok(html.includes(`<th scope="row">${group.label}</th><td>${group.calls}</td>`));
+    const label = group.category === 'new_job_opportunities' ? 'Potential New-Job Calls' : group.label;
+    assert.ok(html.includes(`<th scope="row">${label}</th><td>${group.calls}</td>`));
   }
   assert.equal((html.match(/<th scope="row">/g) || []).length, 7); // Six categories and their existing total.
   assert.match(html, /unique connected calls/);
@@ -49,7 +51,7 @@ test('unknown optional counts and absent baseline never become zero or a wall of
   input.finalResult.ANALYSIS_EVIDENCE_COMPLETE = false;
   refreshDigests(input);
   const html = render(input);
-  assert.ok(html.includes(metric('Calls Flagged For Office Follow-Up', 'Not available')));
+  assert.match(html, /Flagged for Office Follow-Up:<\/strong> Not available calls\./);
   assert.match(html, /Call analysis is incomplete/);
   assert.match(html, /total number of workflow failures is not available; this does not mean zero/);
   assert.match(html, /1 call\(s\) ended with a setup failure/);
@@ -57,7 +59,7 @@ test('unknown optional counts and absent baseline never become zero or a wall of
   assert.doesNotMatch(html, /Monthly inbound|Average job value|Monthly answering cost|USD/);
   const empty = render(fixture(true));
   assert.ok(empty.includes(metric('Calls Handled', 0)));
-  assert.ok(empty.includes(metric('Calls Flagged For Office Follow-Up', 0)));
+  assert.match(empty, /Flagged for Office Follow-Up:<\/strong> 0 calls\./);
   assert.match(empty, /No connected calls were captured/);
   assert.doesNotMatch(empty, /improved results|recovered revenue of|successful test/i);
 });

@@ -87,6 +87,7 @@ function createWorkerJobHandler(options = {}) {
     serviceFactory = createRuntimeService,
     mailFactory = (app, config) => new CatalystMailAdapter({ app, config }),
     dispatcherFactory = (app, config) => createCrmReportDispatcher(config, globalThis.fetch, app),
+    terminalDraftReconcilerFactory = null,
     artifactSourceRevision,
   } = options;
   return async function revenueDeskCallWorker(jobRequest, context) {
@@ -103,10 +104,26 @@ function createWorkerJobHandler(options = {}) {
         'INVALID_RUNTIME_CONFIGURATION', 'Catalyst SDK is unavailable.', { httpStatus: 503 });
       const app = runtimeCatalystSdk.initialize(context);
       const store = storeFactory(app, config);
+      invariant(terminalDraftReconcilerFactory === null || typeof terminalDraftReconcilerFactory === 'function',
+        'INVALID_RUNTIME_CONFIGURATION', 'Terminal draft factory is invalid.', { httpStatus: 503 });
+      // Production construction leaves this unbound. Only a trusted composition
+      // can supply the reconciler; Job parameters and environment cannot enable it.
+      let onTerminalReportReconciled = null;
+      if (terminalDraftReconcilerFactory !== null) {
+        try {
+          onTerminalReportReconciled = terminalDraftReconcilerFactory(app, config, store);
+          invariant(typeof onTerminalReportReconciled === 'function',
+            'INVALID_RUNTIME_CONFIGURATION', 'Terminal draft factory returned an invalid reconciler.');
+        } catch {
+          throw new RevenueDeskError('REPORT_DRAFT_RECONCILIATION_REQUIRED',
+            'Terminal draft reconciler is unavailable.', { httpStatus: 503, retryable: true });
+        }
+      }
       const service = serviceFactory({
         store,
         mailAdapter: mailFactory(app, config),
         crmSummaryDispatcher: dispatcherFactory(app, config, store),
+        onTerminalReportReconciled,
         config,
         now,
         logger,

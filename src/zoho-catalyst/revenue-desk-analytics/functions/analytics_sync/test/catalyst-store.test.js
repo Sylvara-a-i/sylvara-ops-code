@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const { createCatalystStore } = require('../lib/catalyst-store');
 const { outboxRow } = require('./helpers');
 const { callFact, MemoryStore, key } = require('./helpers');
-const { createOutboxRow } = require('../lib/facts');
+const { checkpointKey, createOutboxRow } = require('../lib/facts');
 const { buildDailyMetricFact } = require('../lib/daily-rollup');
 
 const OUTBOX = 'AnalyticsSyncOutbox';
@@ -70,6 +70,104 @@ function candidate(overrides = {}) {
   const { ROWID: _rowId, ...row } = outboxRow(overrides);
   return row;
 }
+
+function reportReadFixture(respond) {
+  const statements = [];
+  const scope = { CLIENT_KEY: 'b'.repeat(64), DEPLOYMENT_KEY: 'c'.repeat(64),
+    CONFIGURATION_VERSION: 'config-v1', ENGAGEMENT_TYPE: 'free_test',
+    ENVIRONMENT: 'development', SOURCE_REVISION: 'd'.repeat(40) };
+  const app = {
+    datastore() { throw new Error('Report readers must never initialize a write.'); },
+    zcql: () => ({ async executeZCQLQuery(statement) {
+      statements.push(statement);
+      assert.match(statement, /^SELECT /);
+      return respond(statement, scope);
+    } }),
+  };
+  const durable = createCatalystStore(app, { environment: 'development', sourceRevision: scope.SOURCE_REVISION,
+    platformTimeoutMs: 1000, maxBatchSize: 25, maxRollupCalls: 250,
+    tables: { outbox: OUTBOX, checkpoint: CHECKPOINT } });
+  return { scope, statements, durable };
+}
+
+test('report source cancellation stops partition enumeration after a pending query', async () => {
+  const controller = new AbortController();
+  let release;
+  let reached;
+  const pending = new Promise((resolve) => { release = resolve; });
+  const paused = new Promise((resolve) => { reached = resolve; });
+  const f = reportReadFixture(async () => { reached(); await pending; return []; });
+  const result = f.durable.listReportRows(f.scope, { signal: controller.signal });
+  const rejected = assert.rejects(result, { code: 'REPORT_READ_ABORTED' });
+  await paused;
+  assert.equal(f.statements.length, 1);
+  controller.abort();
+  release();
+  await rejected;
+  assert.equal(f.statements.length, 1);
+  await assert.rejects(f.durable.listReportRows(f.scope, { signal: controller.signal }),
+    { code: 'REPORT_READ_ABORTED' });
+  assert.equal(f.statements.length, 1);
+});
+
+test('report source reader preserves complete bounded history including old unresolved versions', async () => {
+  const f = reportReadFixture((statement, scope) => {
+    const type = literal(statement, 'RECORD_TYPE');
+    return [0, 1].map((index) => ({ [OUTBOX]: { ...scope, RECORD_TYPE: type, ROW_SCHEMA_VERSION: 2,
+      ROWID: String(index + 1), SYNC_STATUS: index === 0 ? 'ReconciliationRequired' : 'Succeeded',
+      CONFIGURATION_VERSION: index === 0 ? 'prior-config' : scope.CONFIGURATION_VERSION,
+      SOURCE_REVISION: index === 0 ? 'a'.repeat(40) : scope.SOURCE_REVISION } }));
+  });
+  const rows = await f.durable.listReportRows(f.scope);
+  assert.equal(rows.length, 6);
+  assert.equal(rows.filter((row) => row.SYNC_STATUS === 'ReconciliationRequired').length, 3);
+  assert.deepEqual(f.statements.map((query) => literal(query, 'RECORD_TYPE')), ['deployment', 'call', 'final_test_result']);
+  for (const query of f.statements) {
+    assert.match(query, /ORDER BY ROWID ASC LIMIT 100$/);
+    assert.equal(query.split(' AND ').length, 5);
+    assert.equal(literal(query, 'CLIENT_KEY'), f.scope.CLIENT_KEY);
+    assert.equal(literal(query, 'DEPLOYMENT_KEY'), f.scope.DEPLOYMENT_KEY);
+    assert.doesNotMatch(query, /SYNC_STATUS|CONFIGURATION_VERSION|SOURCE_REVISION|OFFSET/);
+  }
+});
+
+test('report source reader fails on a saturated page instead of claiming complete enumeration', async () => {
+  const f = reportReadFixture((statement, scope) => Array.from({ length: 100 }, (_, index) => ({ [OUTBOX]: {
+    ...scope, RECORD_TYPE: literal(statement, 'RECORD_TYPE'), ROWID: String(index + 1),
+  } })));
+  await assert.rejects(f.durable.listReportRows(f.scope), { code: 'REPORT_SOURCE_BOUND_EXCEEDED' });
+  assert.equal(f.statements.length, 1);
+});
+
+test('report read boundaries reject malformed scopes before querying and reject crossed responses', async () => {
+  const f = reportReadFixture(() => []);
+  for (const patch of [{ CLIENT_KEY: "'unsafe" }, { SOURCE_REVISION: 'f'.repeat(40) },
+    { CONFIGURATION_VERSION: '' }, { ENVIRONMENT: 'production' }, { extra: true }]) {
+    await assert.rejects(f.durable.listReportRows({ ...f.scope, ...patch }), { code: 'REPORT_SCOPE_INVALID' });
+    await assert.rejects(f.durable.getReportCheckpoint({ ...f.scope, ...patch }, 'call'), { code: 'REPORT_SCOPE_INVALID' });
+  }
+  await assert.rejects(f.durable.getReportCheckpoint(f.scope, 'daily_metric'), { code: 'REPORT_SCOPE_INVALID' });
+  assert.equal(f.statements.length, 0);
+  const crossed = reportReadFixture((statement, scope) => [{ [OUTBOX]: { ...scope,
+    CLIENT_KEY: 'a'.repeat(64), RECORD_TYPE: literal(statement, 'RECORD_TYPE') } }]);
+  await assert.rejects(crossed.durable.listReportRows(crossed.scope), { code: 'REPORT_SCOPE_INVALID' });
+});
+
+test('report checkpoint reader uses existing deterministic key and refuses absent or ambiguous ownership', async () => {
+  const absent = reportReadFixture(() => []);
+  assert.equal(await absent.durable.getReportCheckpoint(absent.scope, 'call'), null);
+  assert.equal(absent.statements.length, 1);
+  assert.match(absent.statements[0], /LIMIT 2$/);
+  assert.equal(literal(absent.statements[0], 'CHECKPOINT_KEY'), checkpointKey({ ...absent.scope, RECORD_TYPE: 'call' }));
+  const exact = reportReadFixture((statement, scope) => [{ [CHECKPOINT]: { ...scope,
+    RECORD_TYPE: 'call', CHECKPOINT_KEY: checkpointKey({ ...scope, RECORD_TYPE: 'call' }), STATUS: 'Healthy' } }]);
+  assert.equal((await exact.durable.getReportCheckpoint(exact.scope, 'call')).STATUS, 'Healthy');
+  const crossed = reportReadFixture((statement, scope) => [{ [CHECKPOINT]: { ...scope,
+    RECORD_TYPE: 'call', CHECKPOINT_KEY: checkpointKey({ ...scope, RECORD_TYPE: 'call' }), CLIENT_KEY: 'a'.repeat(64) } }]);
+  await assert.rejects(crossed.durable.getReportCheckpoint(crossed.scope, 'call'), { code: 'REPORT_SCOPE_INVALID' });
+  const duplicate = reportReadFixture(() => [{ [CHECKPOINT]: {} }, { [CHECKPOINT]: {} }]);
+  await assert.rejects(duplicate.durable.getReportCheckpoint(duplicate.scope, 'call'), { code: 'DURABLE_OWNERSHIP_AMBIGUOUS' });
+});
 
 test('daily rollup rematerialization preserves an existing legacy payload and rejects changed old fields', async () => {
   const fact = buildDailyMetricFact({ calls: [callFact()], reportingDateUtc: '2026-08-24',

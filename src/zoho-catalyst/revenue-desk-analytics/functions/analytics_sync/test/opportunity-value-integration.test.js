@@ -141,10 +141,29 @@ test('three observed calls retain every ledger row while repeat calls share one 
   assert.deepEqual(report.opportunityValue.groups.map((group) => group.callReferences.length).sort(), [1, 2]);
   const html = renderFreeTestReport(input, { now, audience: 'client', callDetails: snapshot, opportunityReview: review });
   assert.match(html, /Partial coverage — the amounts below are documented subtotals/);
+  const summary = html.slice(html.indexOf('<div class="summary-overview">'), html.indexOf('<caption>Connected-call breakdown'));
+  assert.match(summary, /<dt>Calls Handled<\/dt><dd>3<\/dd>/);
+  assert.match(summary, /<dt>Reviewed Opportunity Groups<\/dt><dd>2<\/dd>/);
+  assert.match(summary, /Estimated Opportunity Value — Partial coverage/);
+  assert.match(summary, /USD 125\.00 — Partial Subtotal/);
+  assert.match(summary, /Valued groups: 1 · Unknown \/ incomplete groups excluded: 1 · Potential new-job calls not yet grouped: 0/);
+  assert.match(summary, /estimate, not revenue; unknown values are excluded, not treated as zero/);
+  assert.match(html, /<th scope="row">Potential New-Job Calls<\/th><td>3<\/td>/);
+  assert.doesNotMatch(html, /New job opportunities/);
+  const groups = html.slice(html.indexOf('<div class="opportunity-groups">'), html.indexOf('<h3>Value limitations'));
+  for (const row of snapshot.rows) assert.ok(groups.includes(row.issueSummary));
+  for (const group of report.opportunityValue.groups) {
+    assert.ok(groups.includes(group.groupReference));
+    assert.ok(groups.includes(`<td>${group.callReferences.join(', ')}</td>`));
+  }
+  assert.equal((groups.match(/USD 125\.00/g) || []).length, 1);
   assert.equal((html.match(/<section class="call-detail">/g) || []).length, 3);
   for (const reference of ['C-0001', 'C-0002', 'C-0003']) assert.equal(html.includes(reference), true);
   for (const row of snapshot.rows) assert.equal(html.includes(row.issueSummary), true);
   assert.doesNotMatch(html, /USD 250\.00|USD 375\.00/);
+  assert.match(html, /grid-template-rows: 1fr auto/);
+  assert.match(html, /counter\(page\).*counter\(pages\)/);
+  assert.match(html, /\.call-detail \{ break-inside: avoid; \}/);
 });
 
 test('multi-call synthetic fixture remains bounded to one through four local analyses', async () => {

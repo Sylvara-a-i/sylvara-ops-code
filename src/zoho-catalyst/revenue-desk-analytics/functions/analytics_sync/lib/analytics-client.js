@@ -8,6 +8,38 @@ const READBACK_COLUMNS = Object.freeze([
   'RECORD_KEY', 'CLIENT_KEY', 'DEPLOYMENT_KEY', 'ENVIRONMENT',
   'PAYLOAD_HASH', 'SOURCE_MODIFIED_AT',
 ]);
+const REPORT_SCOPE_KEYS = Object.freeze([
+  'CLIENT_KEY', 'DEPLOYMENT_KEY', 'CONFIGURATION_VERSION', 'ENGAGEMENT_TYPE',
+  'ENVIRONMENT', 'SOURCE_REVISION',
+]);
+
+function exactKeys(value, keys) {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    && Object.keys(value).sort().join(',') === [...keys].sort().join(',');
+}
+
+function completePartitionRows(payload, scope) {
+  // Reject pagination/truncation envelopes instead of silently discarding their
+  // markers. These are the same row shapes accepted by the existing readback.
+  const rows = Array.isArray(payload) ? payload
+    : exactKeys(payload, ['data']) && Array.isArray(payload.data) ? payload.data
+      : exactKeys(payload, ['data']) && exactKeys(payload.data, ['rows'])
+        && Array.isArray(payload.data.rows) ? payload.data.rows : null;
+  invariant(rows && rows.length < 100, 'ANALYTICS_RESPONSE_INVALID',
+    'Analytics complete partition is missing or exceeds the report bound.');
+  const normalized = normalizeReadback(rows);
+  const keys = new Set();
+  for (const row of normalized) {
+    invariant(['CLIENT_KEY', 'DEPLOYMENT_KEY', 'ENVIRONMENT'].every((key) => row[key] === scope[key])
+      && /^[a-f0-9]{64}$/.test(row.RECORD_KEY) && /^[a-f0-9]{64}$/.test(row.PAYLOAD_HASH)
+      && Number.isFinite(Date.parse(row.SOURCE_MODIFIED_AT))
+      && new Date(row.SOURCE_MODIFIED_AT).toISOString() === row.SOURCE_MODIFIED_AT
+      && !keys.has(row.RECORD_KEY), 'ANALYTICS_RESPONSE_INVALID',
+    'Analytics complete partition contains invalid or conflicting rows.');
+    keys.add(row.RECORD_KEY);
+  }
+  return Object.freeze(normalized);
+}
 
 function safeInteger(value, field) {
   const parsed = typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : value;
@@ -103,12 +135,129 @@ function createAnalyticsClient(options) {
     readAuthorizationProvider,
     writeAuthorizationProvider,
     fetchImpl = globalThis.fetch,
+    now = Date.now,
   } = options;
   invariant(config?.provider && typeof fetchImpl === 'function'
     && typeof readAuthorizationProvider === 'function'
     && typeof writeAuthorizationProvider === 'function', 'ANALYTICS_CONFIGURATION_INVALID',
   'Zoho Analytics client dependencies are unavailable.');
   const provider = config.provider;
+
+  // Separate from the established async batch protocol: this read must cover
+  // the whole small report partition, including unknown keys and zero rows.
+  // No known-key filter, LIMIT, pagination, or import is permitted here.
+  async function readCompleteScope(scope, recordType, options = {}) {
+    invariant(exactKeys(scope, REPORT_SCOPE_KEYS)
+      && ['CLIENT_KEY', 'DEPLOYMENT_KEY'].every((key) => typeof scope[key] === 'string'
+        && /^[a-f0-9]{64}$/.test(scope[key]))
+      && typeof scope.CONFIGURATION_VERSION === 'string'
+      && /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(scope.CONFIGURATION_VERSION)
+      && scope.ENGAGEMENT_TYPE === 'free_test' && scope.ENVIRONMENT === 'development'
+      && config.environment === scope.ENVIRONMENT
+      && /^[a-f0-9]{40}$/.test(scope.SOURCE_REVISION)
+      && scope.SOURCE_REVISION === config.sourceRevision
+      && ['deployment', 'call', 'final_test_result'].includes(recordType)
+      && typeof now === 'function', 'ANALYTICS_SCOPE_INVALID',
+    'Analytics complete-partition scope is invalid.');
+    invariant(options && typeof options === 'object' && !Array.isArray(options)
+      && Object.keys(options).every((key) => key === 'signal')
+      && (options.signal === undefined || options.signal instanceof AbortSignal),
+    'ANALYTICS_SCOPE_INVALID', 'Analytics complete-partition cancellation is invalid.');
+    const parentSignal = options.signal;
+    const snapshot = Object.freeze({ ...scope });
+    const target = provider.targets[recordType];
+    invariant(target && Number.isSafeInteger(config.analyticsTimeoutMs) && config.analyticsTimeoutMs > 0
+      && Number.isSafeInteger(config.responseMaxBytes) && config.responseMaxBytes > 0,
+    'ANALYTICS_CONFIGURATION_INVALID', 'Analytics complete-partition configuration is invalid.');
+    const controller = new AbortController();
+    let timeout;
+    const timedOut = new Promise((resolve, reject) => {
+      timeout = setTimeout(() => {
+        controller.abort();
+        reject(new AnalyticsSyncError('ANALYTICS_TIMEOUT',
+          'Analytics complete-partition read timed out.', { retryable: true }));
+      }, config.analyticsTimeoutMs);
+    });
+    let cancelParent;
+    const cancelled = new Promise((resolve, reject) => {
+      cancelParent = () => {
+        controller.abort();
+        reject(new AnalyticsSyncError('ANALYTICS_ABORTED',
+          'Analytics complete-partition read was cancelled.', { retryable: true }));
+      };
+      parentSignal?.addEventListener('abort', cancelParent, { once: true });
+      if (parentSignal?.aborted) cancelParent();
+    });
+    async function readJson(url) {
+      controller.signal.throwIfAborted();
+      const authorization = await readAuthorizationProvider();
+      controller.signal.throwIfAborted();
+      const response = await fetchImpl(url, { method: 'GET', redirect: 'error',
+        signal: controller.signal, headers: { Authorization: authorization,
+          'ZANALYTICS-ORGID': provider.organizationId } });
+      controller.signal.throwIfAborted();
+      invariant(response?.status === 200, 'ANALYTICS_HTTP_ERROR',
+        'Analytics complete-partition read did not return a complete response.',
+        { retryable: response?.status === 408 || response?.status === 429 || response?.status >= 500 });
+      invariant(/^application\/json(?:\s*;|$)/i.test(response.headers?.get('content-type') || '')
+        && !response.headers?.get('content-range') && response.body?.getReader,
+      'ANALYTICS_RESPONSE_INVALID', 'Analytics complete-partition response is incomplete.');
+      const length = response.headers.get('content-length');
+      invariant(length === null || (/^\d+$/.test(length) && Number(length) <= config.responseMaxBytes),
+        'ANALYTICS_RESPONSE_TOO_LARGE', 'Analytics complete-partition response exceeds the approved size.');
+      const reader = response.body.getReader();
+      const cancel = () => { reader.cancel().catch(() => {}); };
+      controller.signal.addEventListener('abort', cancel, { once: true });
+      const chunks = [];
+      let size = 0;
+      let complete = false;
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          controller.signal.throwIfAborted();
+          if (done) break;
+          size += value.byteLength;
+          invariant(size <= config.responseMaxBytes, 'ANALYTICS_RESPONSE_TOO_LARGE',
+            'Analytics complete-partition response exceeds the approved size.');
+          chunks.push(Buffer.from(value));
+        }
+        const payload = JSON.parse(Buffer.concat(chunks, size).toString('utf8'));
+        complete = true;
+        return payload;
+      } finally {
+        controller.signal.removeEventListener('abort', cancel);
+        if (!complete) cancel();
+      }
+    }
+    try {
+      return await Promise.race([timedOut, cancelled, (async () => {
+        validateTargetBinding(await readJson(`${provider.apiBaseUrl}/restapi/v2/views/${target.viewId}`),
+          provider, target);
+        const table = quoteSqlIdentifier(target.table);
+        const criteria = ['ENVIRONMENT', 'CLIENT_KEY', 'DEPLOYMENT_KEY'].map((key) =>
+          `${table}.${quoteSqlIdentifier(key)} = ${quoteSqlValue(snapshot[key])}`).join(' AND ');
+        const exportConfig = { responseFormat: 'json', criteria,
+          selectedColumns: [...READBACK_COLUMNS], keyValueFormat: true,
+          showHiddenCols: false, showPersonalCols: false };
+        const url = `${provider.apiBaseUrl}/restapi/v2/workspaces/${provider.workspaceId}`
+          + `/views/${target.viewId}/data?CONFIG=${encodeURIComponent(JSON.stringify(exportConfig))}`;
+        const rows = completePartitionRows(await readJson(url), snapshot);
+        const observedAt = now();
+        invariant(Number.isSafeInteger(observedAt) && observedAt >= 0,
+          'ANALYTICS_RESPONSE_INVALID', 'Analytics observation time is invalid.');
+        return Object.freeze({ scope: snapshot, recordType, rows, complete: true,
+          bindingVerified: true, observedAt: new Date(observedAt).toISOString() });
+      })()]);
+    } catch (error) {
+      if (error instanceof AnalyticsSyncError) throw error;
+      throw new AnalyticsSyncError('ANALYTICS_RESPONSE_INVALID',
+        'Analytics complete-partition read failed.', { retryable: true });
+    } finally {
+      clearTimeout(timeout);
+      parentSignal?.removeEventListener('abort', cancelParent);
+      controller.abort();
+    }
+  }
 
   async function request(url, init, authorizationProvider, semantics) {
     const authorization = await authorizationProvider();
@@ -253,7 +402,7 @@ function createAnalyticsClient(options) {
     return Object.freeze({ state: 'complete', rows: Object.freeze(normalizeReadback(payload)) });
   }
 
-  return Object.freeze({ submitBatch, pollImport, startReadback, pollReadback });
+  return Object.freeze({ submitBatch, pollImport, startReadback, pollReadback, readCompleteScope });
 }
 
 module.exports = {

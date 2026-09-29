@@ -16,6 +16,7 @@ summary, internal report, Journey, demo, or reporting platform.
 |---|---|---|
 | Canonical call detail | Runtime `queryClientCallDetails` uses the existing validated report query; immutable in-memory snapshot | A serialized file is not a trusted snapshot |
 | Analytics | Existing minimized facts, source versions, three-type rowset digests and readback gate | No new caller descriptions, transcripts, identities or public links in Analytics |
+| Report-input assembly | Canonical source, settled outbox history, checkpoints and independent complete-partition readback are validated together | The live complete-partition reader remains unbound |
 | Client report | Existing builder plus private call ledger and reviewed opportunity estimate | No booking, revenue, delivery or completed-callback claim |
 | Draft generation | `prepare-free-test-draft.js` renders the existing client layout and writes a deterministic private artifact plus receipt | Local storage is not accepted WorkDrive storage or a deployed job |
 | Results review | Existing owner results-review step includes grouping and value applicability | Not a new per-call approval or mandatory CRM Note workflow |
@@ -95,22 +96,89 @@ Refreshing readback timestamps alone does not duplicate output. Changed request
 content or changed valuation produces a distinct revision even when aggregate
 counts remain unchanged.
 
-The existing Analytics service now exposes an optional `onReconciledScope`
-callback after checkpoint success for each of the three record types. It is
-`null` by default; the deployed job handler does not inject it. The callback
-event contains only immutable opaque scope/version metadata. The source helper
-`createReconciledDraftTrigger` asks its trusted `readReconciledInput` adapter for
-all reconciled evidence and returns `awaiting_reconciled_evidence` when it is not
-complete. It cannot use the wakeup event as proof of report readiness.
+`read-reconciled-free-test-input.js` now assembles the report input from the
+canonical runtime and Analytics stores. It requires the current completed
+deployment and final-result facts, settled source history, exact checkpoints and
+independent readback for all three record types. The private ledger remains a
+branded canonical snapshot. The assembler re-reads source, checkpoints and
+canonical details after asynchronous reads; moving, stale, conflicting or
+cross-scope evidence fails closed. Empty tests require independent proof that the
+call partition is empty, not an invented call checkpoint. The bounded source
+reader refuses a full 100-row page for any record type instead of reporting a
+truncated history as complete.
 
-A local integration test composes this hook with the existing runtime and
+The existing checkpoint freshness gate is unchanged. A fresh partition readback
+does not waive an expired checkpoint, and a completed-deployment scan does not
+refresh checkpoints or resubmit imports. The current service creates checkpoints
+after import and independent readback; `upsertCheckpoint` returns an existing
+checkpoint unchanged for the same or an older source watermark. No accepted
+re-attestation path currently refreshes an unchanged completed partition. Initial
+Development acceptance can use genuinely fresh import/readback checkpoints within
+their existing freshness window. A delayed retry or later results-review revision
+needs a separately approved and implemented reconciliation procedure; editing
+timestamps or reimporting completed rows solely to extend freshness is not one.
+
+The provider client now implements `readCompleteScope(scope, recordType)` using
+the official [synchronous Export Data API](https://www.zoho.com/analytics/api/v2/bulk-api/export-data.html)
+(contract reviewed 2026-09-29). It first verifies the fixed view, table type,
+workspace and organization through the existing metadata boundary, then requests
+all matching environment/client/deployment rows and exactly six approved columns.
+It never filters by known record keys, so unexpected rows remain visible to the
+assembler; an explicit empty export proves zero calls. It rejects partial HTTP
+responses, unrecognized or paginated JSON envelopes, extra/missing columns,
+duplicate/cross-scope keys, invalid hashes/watermarks and 100 or more rows.
+Streamed response bytes and the entire authorization/metadata/export operation
+are bounded; timeout aborts the request and prevents late authorization from
+starting a read. The coordinator forwards its worker cancellation signal through
+the assembler to the adapter, releasing pending authorization/body waits and
+preventing reads of later partitions after cancellation. Only the read
+authorization provider is used. The established
+asynchronous batch import/readback protocol is unchanged.
+Canonical helper reads and source-history enumeration also check cancellation
+before each subsequent store request. A Catalyst SDK query already in flight
+retains its existing timeout; its late result cannot start another query.
+
+This is local adapter code, still unbound. Official documentation establishes
+the synchronous request contract, but does not show its exact JSON response
+envelope. The three conservative envelopes already supported by batch readback
+are locally tested; the actual authorized target's JSON envelope, content type,
+all-column visibility, row-filter access and zero-row behavior remain independent
+Development acceptance requirements. The synchronous API excludes live-connect
+workspaces, query tables, dashboards and tables exceeding one million rows;
+unsupported targets fail closed rather than falling back to an incomplete read.
+Each complete source pass performs six read-only provider requests: one metadata
+GET and one export GET for each of three types. Revalidation after an asynchronous
+results-review lookup can perform a second pass, for twelve requests per attempt.
+Before binding, approve the exact scheduling, request/cost limits and total worker
+latency budget; the existing per-operation timeout is not a demonstrated budget
+for that composition. This source change does not activate provider polling.
+
+`createTerminalDraftReconciler` composes that assembler with the existing draft
+writer. The runtime's existing completed-deployment scan invokes it through an
+optional trusted `terminalDraftReconcilerFactory`. It returns
+`awaiting_reconciled_evidence` until Analytics is ready. Failed generation remains
+eligible for the next fair completed-deployment scan, without replaying completed
+CRM operations or Analytics imports. The worker bounds the callback by its
+existing platform timeout; the coordinator checks cancellation before writing so
+a late read response cannot create a document after the scan times out.
+
+The deployed factory remains `null`. Job parameters and environment variables
+cannot enable it. The automatic source lane remains the existing `Completed`
+deployment lane; this change adds no automatic stopped/rolled-back report lane.
+The older optional Analytics `onReconciledScope` wakeup and
+`createReconciledDraftTrigger` remain compatible, but an already-succeeded import
+is not the durable retry mechanism for document generation.
+
+Local integration tests compose the existing worker with the runtime and
 Analytics memory fixtures: actual inbound/event classification, expiry and report
 rebuild, actual CRM summary dispatch/readback, runtime-produced outbox, Analytics
-import/readback/checkpoint transitions, and the generated client HTML. The first
-two partitions wait; completion of the third generates the draft. No hand-built
+import/readback/checkpoint transitions, and the generated client HTML. Incomplete
+partitions wait; complete evidence generates the draft. No hand-built
 final fact substitutes for the terminal runtime output in that integration test.
-A hook failure surfaces `ReconciliationRequired` while preserving the completed
-Analytics writes; another import scan does not replay them to retry the document.
+A callback failure surfaces a fixed reconciliation error while preserving the
+completed writes. A later worker scan retries the draft. An asynchronous
+opportunity-review lookup is followed by another source validation before render;
+review corrections produce a distinct draft and preserve the original.
 
 An exclusive intent and exact-byte readback protect the local HTML and hash-only
 receipt. A complete document can recover a missing receipt. A missing, partial or
@@ -120,21 +188,29 @@ Files must be outside Git, without links, in an already approved private directo
 File mode 0600 does not establish Windows ACL privacy. The storage owner must
 verify access and retention before any real input is used.
 
-Remaining live integration work is bounded:
+Remaining integration work is bounded. These are separate evidence layers:
 
-1. Bind the existing Analytics completion mechanism to authoritative full-scope
-   evidence assembly and the canonical detail reader, not client-provided JSON.
-   Reconcile all three partitions and late source changes before generation.
-2. Connect the current private WorkDrive closeout destination and durable
-   idempotency/readback semantics. Preserve its readers and retention; do not use
-   Catalyst temporary disk as durable document storage or create a new platform.
-3. Establish durable recovery for a generation failure after a checkpoint has
-   succeeded. Such a row is no longer due in the import queue. Surface the failure
-   for reconciliation; do not claim that ordinary import retries will regenerate.
-4. Review the exact draft and opportunity grouping in the existing results-review
-   step, then separately authorize the exact customer document and recipient.
-5. Run the later bounded Development integration acceptance and Retell-dependent
-   acceptance. Local fixtures are not provider, WorkDrive, delivery or call receipts.
+| Requirement | Existing evidence and remaining gap | Next action and passing condition |
+|---|---|---|
+| Complete-partition Analytics read | Local provider adapter, assembler and rejection tests exist. Live target configuration, effective role visibility, exact response contract and runtime latency are unverified; factory stays unbound. | Under separately scoped Development read authority, verify fixed table/workspace/organization and read role, full and empty exports, unexpected-row detection and exact six-column digests. All three partitions must match canonical source and fresh checkpoints within the worker budget; no import or state mutation by the reader. |
+| Durable private drafts | Existing local exclusive intent, deterministic generation key, exact-byte recovery and hash-only receipt are tested. An approved WorkDrive destination and durable adapter contract have not been established. | Owner selects one private Sylvara WorkDrive Team Folder and fixed parent, service principal, authorized readers and retention. Then verify the upload/version/readback contract and implement serialized generation-key state, immutable draft revisions and ambiguous-write recovery. Concurrent/repeated attempts must yield one matching document/receipt; conflicting or uncertain outcomes remain held. |
+| Fresh checkpoints | The existing service checkpoints genuinely imported and independently reconciled batches. Same/older watermarks do not refresh; completed scans and report reads perform no checkpoint writes. | Initial acceptance runs inside the actual fresh-checkpoint window. Before later review/retry outside it, approve and implement authoritative re-attestation with exact source/rowset equality, concurrent-change rejection and independent durable readback. Expired or conflicting checkpoints must still block generation. |
+| Installed composition and retry | Source worker hook/factory and local completed-scan recovery are tested. The shipped worker index still binds only its logger; report tools are outside the Analytics package's `files` allowlist. A deployable reporting composition and durable writer remain missing code, installation and runtime acceptance. | After the durable storage contract is approved, package the existing assembler/renderer/writer dependencies with the worker, inspect and verify the exact artifact/source revision, then separately authorize installation and binding. Verify bounded scheduling, cancellation, failure recovery and no replay of completed CRM/import writes against the approved destination. |
+
+Recommended storage is that one private WorkDrive Team Folder, consistent with
+the existing [document ownership standard](../../../docs/zoho/standards/document-lifecycle.md).
+This recommendation does not claim an existing accepted folder or create one.
+Approval must name the exact private destination, writer identity, readers,
+retention, permitted operations and reconciliation/readback procedure. A filename
+or upload success alone does not establish durable duplicate prevention. Preserve
+the current drafts and receipt state; never substitute Catalyst temporary disk
+for durable document storage. No new document platform is needed.
+
+Results review and delivery remain separate: review the exact draft, opportunity
+grouping and valuation evidence, then separately authorize the exact customer
+document and recipient. Later bounded Development and genuine call-generated
+acceptance remain necessary. Local fixtures are not provider, WorkDrive, delivery
+or call receipts.
 
 No live adapter, job activation, upload, deployment, provider call, credential
 change or send is authorized by this source implementation. Rollback is to leave
@@ -147,7 +223,7 @@ Use the repository-pinned Node runtime. From the repository root:
 
 ```powershell
 node --test src/zoho-catalyst/revenue-desk-analytics/functions/analytics_sync/test/*.test.js
-node --test src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_gateway/test/client-call-details.test.js
+node --test src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_gateway/test/client-call-details.test.js src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_gateway/test/terminal-draft-retry.test.js
 node --test src/zoho-catalyst/revenue-desk-release/test/offline-guard-paths.test.js
 ```
 
@@ -164,26 +240,80 @@ partial writes. Unchanged intake/configuration, provider-event classification,
 alerts, the 2:55 cap and terminal controls retain their existing tests. No synthetic
 success is inserted into cloud stores.
 
-The revised preview is synthetic HTML, not a customer PDF. Existing Inter-first
-portable styling is preserved with explicit local fallback; no fonts are fetched.
-Any final PDF still needs every-page pagination/font inspection and owner review.
-Browser visual inspection of the generated HTML remains unverified: the browser
-policy blocked local-file navigation. The HTML and its content were generated and
-tested locally; no server or alternate browser was used to bypass that boundary.
+The gateway's existing `test:unit` verifier now includes the previously omitted
+`client-call-details.test.js` plus the new held-retry tests; no existing check was
+removed. End-to-end local cases cover zero calls, a full 25-call supported
+ended/analyzed/notification lifecycle, and a three-call draft with two reviewed
+opportunities, one documented value and one Unknown. Fixture table identities are
+owned by the synthetic Analytics store so copied runtime row IDs cannot collide
+with service-created daily metrics.
 
-### Observed local checks
+The supplied four-page synthetic PDF has user-reported visual status **PDF Review
+Completed — Targeted Changes Required**. That review found all three call records,
+two reviewed groups, one USD 425.00 valuation, one Unknown valuation and zero
+ungrouped potential new-job calls; no missing columns or clipped page-edge text
+were observed. It is review of that supplied PDF, not owner delivery approval,
+interactive-browser QA or live-system acceptance.
 
-- Analytics offline suite: 238 passed, zero failed, six artifact tests skipped.
-- Canonical reader/source-version and offline-guard regression suites: 20 passed.
-- Focused runtime acceptance, alerts, limits and terminal reconciliation: 19 passed.
-- Existing connected offline demo and Journey route-coexistence: 108 passed.
-- Existing Journey-core release profile: 13 passed, using the checked-in function
-  directory as `NODE_PATH` because this isolated checkout has no installed local
-  package link.
-- Analytics syntax checks, repository safety scan, workflow security policy and
-  `git diff --check`: passed.
+The focused renderer correction preserves the calculation path and fixture
+timestamps. The opening summary distinguishes potential new-job calls from
+reviewed opportunity groups and keeps the estimated subtotal beside its partial
+coverage warning. Call details label each follow-up evidence state separately;
+only the actual dry-run state displays "Preview Only — Not Sent." Group
+descriptions come from existing member-call issue summaries. Print rules keep
+short records and headings together and request recurring draft/synthetic
+identification with page counters. Existing Inter-first portable styling and
+local fallbacks remain; no fonts are fetched.
 
-Initial direct test invocations lacked the npm runner/local function link, and
-the first workflow-policy invocation lacked PyYAML. Reruns used already installed
-tooling and the existing offline mode; no dependency download was needed. These
-are local checks, not GitHub CI or live installation acceptance.
+The revised artifact is synthetic HTML. The reviewed original is preserved.
+Revised pagination, page counters and PDF extraction require inspection of an
+actual revised export; CSS/content checks do not establish those results. The
+supplied PDF was reported to render legibly but produce corrupted text in two
+extraction paths. This repository emits HTML and does not implement the PDF
+export, so the original PDF bytes and export provenance are needed to diagnose
+that defect. Browser visual inspection remains unverified: browser policy
+blocked local-file navigation. No server, alternate browser, image flattening or
+OCR was used to bypass that boundary. Customer delivery still requires owner
+review of the exact final document.
+
+### Prior local checks (2026-09-29)
+
+The prior Analytics rerun after the 25-call fixture correction passed syntax
+checks and 260 tests, with zero failures and six existing offline artifact-test
+skips. The focused assembler/store/worker-to-draft review run passed 27 tests.
+The revised three-call preview passed content assertions and repeated exact-byte
+draft verification; the prior accepted preview was preserved byte-for-byte.
+
+Before the complete-partition adapter and presentation corrections, the canonical
+offline Quick verifier completed successfully, including the
+existing Windows signing/ACL-fixture release tests. No checks were weakened or
+removed. Its supporting suites passed as follows:
+
+| Suite | Passed | Existing skips |
+|---|---:|---:|
+| Python safety regressions | 370 | 1 |
+| CRM free-test contracts | 87 | 0 |
+| Billing gateway | 58 | 4 |
+| CRM-Billing orchestrator | 166 | 7 |
+| Request form | 104 | 2 |
+| Setup form | 411 | 11 |
+| Form 2 prefill fixture | 20 | 0 |
+| Call gateway, including unit/integration/acceptance | 216 | 0 |
+| Route control | 257 | 0 |
+| Call worker packaging | 3 | 0 |
+| Canonical-table migration | 31 | 0 |
+| Seven-function release, Journey and offline demo | 332 | 1 |
+
+Repository safety, workflow policy and `git diff --check` passed for that prior
+candidate. Its independent source review found no actionable defect. The final
+combined candidate requires another canonical run; retain its exact results with
+the local closeout record rather than treating the earlier totals as current.
+Comments document the source-history completeness boundary, reconciliation-only
+deployment cursor, asynchronous source revalidation, cancellation and sanitized
+errors so future maintainers do not mistake a successful import for a ready or
+deliverable report.
+
+Already installed pinned Node, SDK packages and Python/PyYAML supplied the offline
+run; no dependency download was needed. Gateway copies in the local worker and
+route-control dependency directories were checked byte-for-byte against current
+source. These are local checks, not GitHub CI or live installation acceptance.

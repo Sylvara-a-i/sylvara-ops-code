@@ -6,6 +6,7 @@ const crypto = require('node:crypto');
 const { canonicalJson } = require('../functions/analytics_sync/lib/facts');
 const { renderFreeTestReport, CLIENT_DRAFT_RENDERER_VERSION } = require('./render-free-test-report');
 const { isClientCallDetails } = require('../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/reporting');
+const { createReconciledFreeTestInputReader } = require('./read-reconciled-free-test-input');
 
 const MAX_DOCUMENT_BYTES = 2 * 1024 * 1024;
 const MAX_RECEIPT_BYTES = 4096;
@@ -199,4 +200,58 @@ function createReconciledDraftTrigger({ readReconciledInput, privateDirectory: d
   };
 }
 
-module.exports = { prepareFreeTestDraft, createReconciledDraftTrigger };
+/** Bind the existing completed-test scan to validated private draft preparation.
+ *
+ * Construction requires trusted application dependencies; no request, Job
+ * parameter or environment switch can install this callback. The deployed
+ * handler leaves its factory null. The provider's complete-scope reader and
+ * approved durable storage remain separate live-integration requirements.
+ *
+ * The optional review reader belongs to the existing results-review step. A
+ * missing review prepares an explicitly unvalued draft; it never invents job
+ * groups. Re-read canonical evidence after that asynchronous lookup so a source
+ * correction during review retrieval cannot produce a stale document.
+ */
+function createTerminalDraftReconciler({ runtimeStore, runtimeConfig, analyticsStore,
+  readCompleteScope, readOpportunityReview = null, privateDirectory: directory,
+  synthetic = false, now = Date.now } = {}) {
+  if ((readOpportunityReview !== null && typeof readOpportunityReview !== 'function')
+    || typeof synthetic !== 'boolean' || typeof now !== 'function') fail();
+  const readReconciledInput = createReconciledFreeTestInputReader({
+    runtimeStore, runtimeConfig, analyticsStore, readCompleteScope, now,
+  });
+  return async function onTerminalReportReconciled(scope, options = {}) {
+    try {
+      if (!scope || Object.keys(scope).sort().join(',') !== 'clientId,deploymentId'
+        || !options || typeof options !== 'object' || Array.isArray(options)
+        || Object.keys(options).some((key) => key !== 'signal')
+        || (options.signal !== undefined && !(options.signal instanceof AbortSignal))) fail();
+      const identity = Object.freeze({ clientId: scope.clientId, deploymentId: scope.deploymentId });
+      const signal = options.signal;
+      const assertActive = () => { if (signal?.aborted) fail(); };
+      assertActive();
+      let prepared = await readReconciledInput(identity, { signal });
+      assertActive();
+      if (prepared === null) return Object.freeze({ status: 'awaiting_reconciled_evidence' });
+      let opportunityReview = null;
+      if (readOpportunityReview) {
+        opportunityReview = await readOpportunityReview(identity, Object.freeze({ signal }));
+        assertActive();
+        if (opportunityReview === undefined) fail();
+        // Copy before another await: a mutable adapter view cannot change the
+        // grouping or amounts while the current source is being reconciled.
+        opportunityReview = structuredClone(opportunityReview);
+        prepared = await readReconciledInput(identity, { signal });
+        assertActive();
+        if (prepared === null) return Object.freeze({ status: 'awaiting_reconciled_evidence' });
+      }
+      // The file writer below performs its validation and exclusive writes
+      // synchronously. A timed-out scan cannot resume into a late file write.
+      assertActive();
+      return await prepareFreeTestDraft(prepared.input, { privateDirectory: directory,
+        synthetic, now: now(), callDetails: prepared.callDetails, opportunityReview });
+    } catch { fail(); }
+  };
+}
+
+module.exports = { prepareFreeTestDraft, createReconciledDraftTrigger, createTerminalDraftReconciler };
