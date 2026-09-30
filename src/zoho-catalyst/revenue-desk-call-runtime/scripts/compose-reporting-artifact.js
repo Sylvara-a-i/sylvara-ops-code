@@ -20,6 +20,29 @@ const AUTH_PATHS = Object.freeze([
   `${CRM}/${CRM_FUNCTION}/lib/catalyst-adapter.js`,
 ]);
 const SHA = /^[a-f0-9]{40}$/;
+
+const DELIVERY_BOUNDARY_PATH = `${RUNTIME}/functions/revenue_desk_route_control/lib/http-boundary.js`;
+// Exact independently reviewed additive branch. Any further overlap needs review.
+const DELIVERY_BOUNDARY_SHA256 = '317bd88533f0f5295aaacc8a83b78b46426b7ceb7dba69213b606dd5490989af';
+function composeReviewedDeliveryBoundary(repositoryPath, base, current, selected) {
+  if (repositoryPath !== DELIVERY_BOUNDARY_PATH) fail('source_overlap');
+  const source = current.toString('utf8');
+  const start = source.indexOf("      if (body.profile === 'report_delivery_v1') {");
+  const end = source.indexOf('      const crm = ', start);
+  if (start < 0 || end <= start || !Buffer.from(source).equals(current)) fail('source_overlap');
+  const addition = source.slice(start, end);
+  if (digest(Buffer.from(addition)) !== DELIVERY_BOUNDARY_SHA256
+    || !Buffer.from(source.slice(0, start) + source.slice(end)).equals(base)) fail('source_overlap');
+  const anchor = "      const crm = (factories.crm || createCrmControlClient)(config, {\n";
+  const auth = selected.toString('utf8');
+  if (!Buffer.from(auth).equals(selected) || auth.split(anchor).length !== 2
+    || auth.includes("body.profile === 'report_delivery_v1'")) fail('source_overlap');
+  const bytes = Buffer.from(auth.replace(anchor, addition + anchor));
+  if (!Buffer.from(bytes.toString().replace(addition, '')).equals(selected)) fail('source_overlap');
+  return { bytes, composition: 'reviewed-report-delivery-boundary-addition-v1',
+    reporting_sha256: digest(current), auth_sha256: digest(selected), addition_sha256: DELIVERY_BOUNDARY_SHA256 };
+}
+
 const sourceRoot = path.resolve(__dirname, '..');
 const digest = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 const slash = value => value.split(path.sep).join('/');
@@ -220,8 +243,13 @@ function compose({ reportingRevision, authRevision, runtimeArtifact, crmArtifact
     const base = git(['cat-file', 'blob', `${baseRevision}:${repositoryPath}`], true);
     const current = git(['cat-file', 'blob', `${reportingRevision}:${repositoryPath}`], true);
     const selected = git(['cat-file', 'blob', `${authRevision}:${repositoryPath}`], true);
-    if (!base.equals(current) || selected.equals(base)) fail('source_overlap');
-    return { repositoryPath, selected, baseSha256: digest(base), authSha256: digest(selected),
+    if (selected.equals(base)) fail('source_overlap');
+    const derived = base.equals(current) ? null
+      : composeReviewedDeliveryBoundary(repositoryPath, base, current, selected);
+    return { repositoryPath, selected: derived?.bytes || selected,
+      ...(derived ? { composition: derived.composition, reportingSha256: derived.reporting_sha256,
+        additionSha256: derived.addition_sha256, composedSha256: digest(derived.bytes) } : {}),
+      baseSha256: digest(base), authSha256: digest(selected),
       authBlob: git(['rev-parse', '--verify', `${authRevision}:${repositoryPath}`]).trim() };
   });
   const destination = prepareDestination(repository, [runtimeArtifact, crmArtifact], outputRoot);
@@ -266,8 +294,11 @@ function compose({ reportingRevision, authRevision, runtimeArtifact, crmArtifact
     phase = 'composition_manifest';
     const files = sourceFiles.map(({ artifact, path: relative, source }) => ({
       artifact, path: relative, source_path: source.repositoryPath,
-      source_revision: AUTH_PATHS.includes(source.repositoryPath) ? authRevision : reportingRevision,
-      source_sha256: overlays.find(item => item.repositoryPath === source.repositoryPath)?.authSha256
+      source_revision: overlays.find(item => item.repositoryPath === source.repositoryPath)?.composition
+        ? { reporting: reportingRevision, authentication: authRevision }
+        : AUTH_PATHS.includes(source.repositoryPath) ? authRevision : reportingRevision,
+      source_sha256: overlays.find(item => item.repositoryPath === source.repositoryPath)?.composedSha256
+        || overlays.find(item => item.repositoryPath === source.repositoryPath)?.authSha256
         || digest(readBlob(source.object)),
       sha256: digest(regularFile(artifact === 'runtime' ? runtimeOutput : crmOutput, relative)),
     })).sort((a, b) => `${a.artifact}/${a.path}`.localeCompare(`${b.artifact}/${b.path}`));
@@ -278,7 +309,9 @@ function compose({ reportingRevision, authRevision, runtimeArtifact, crmArtifact
       source_revision_stamp_meaning: 'reporting_base_not_single_revision_artifact_parity',
       runtime_base_manifest_sha256: digest(regularFile(runtimeArtifact, 'release-manifest.json')),
       overlays: overlays.map(item => ({ source_path: item.repositoryPath,
-        base_sha256: item.baseSha256, auth_blob_sha: item.authBlob, auth_sha256: item.authSha256 })), files };
+        base_sha256: item.baseSha256, auth_blob_sha: item.authBlob, auth_sha256: item.authSha256,
+        ...(item.composition ? { composition: item.composition, reporting_sha256: item.reportingSha256,
+          addition_sha256: item.additionSha256, composed_sha256: item.composedSha256 } : {}) })), files };
     put(staging, 'composition-manifest.json', Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`));
     if (git(['status', '--porcelain=v1', '--untracked-files=all']).trim() || fs.existsSync(destination)) fail();
     fs.renameSync(staging, destination);
@@ -335,4 +368,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { compose, prepareCrmBase, AUTH_PATHS };
+module.exports = { compose, prepareCrmBase, AUTH_PATHS, composeReviewedDeliveryBoundary };
