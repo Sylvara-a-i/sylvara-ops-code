@@ -587,3 +587,22 @@ test('rollback treats sparse provider readback as manual and never as inactive',
     assert.equal(patches, sparsePhase === 'before' ? 0 : 1);
   }
 });
+
+
+test('report delivery profile is authenticated and uses existing controller principal before provider construction', async () => {
+  const actors=[];let calls=0;
+  const listener=createRequestListener({environment:environment(),artifactSourceRevision:REVISION,
+    catalystSdk:{initialize(){return {config:{environment:'development',projectId:PROJECT_ID}};}},
+    factories:{store:()=>({}),reportDelivery:()=>({async handle(body,context){calls++;actors.push(context.actor);
+      assert.equal(body.dealId,'synthetic_deal');return {manifestSha256:'a'.repeat(64)};}}),
+      crm:()=>{throw Error('CRM control writer construction prohibited');},provider:()=>{throw Error('Retell construction prohibited');}}});
+  const headers={host:'route-control.development.catalystserverless.com','x-zc-environment':'development',
+    'x-zc-projectid':PROJECT_ID,'x-synthetic-control':'h'.repeat(32),'content-type':'application/json'};
+  const output=response();await listener({method:'POST',url:'/internal/revenue-desk/approve-configuration',headers,
+    rawBody:Buffer.from(JSON.stringify({profile:'report_delivery_v1',action:'view',dealId:'synthetic_deal'}))},output);
+  assert.equal(output.statusCode,200);assert.equal(calls,1);assert.equal(actors[0].kind,'internal_controller');
+  assert.equal(actors[0].identity,loadConfig(environment(),REVISION).operatorIdHash);
+  const denied=response();await listener({method:'POST',url:'/internal/revenue-desk/approve-configuration',
+    headers:{...headers,'x-synthetic-control':'invalid'},rawBody:Buffer.from('{}')},denied);
+  assert.equal(denied.statusCode,401);assert.equal(calls,1);
+});

@@ -466,3 +466,158 @@ The customer Bookable Evidence and Office Follow-Up reports use the single `Reve
 - [Create table](https://www.zoho.com/analytics/api/v2/modeling-api/create-table.html)
 - [Create query table](https://www.zoho.com/analytics/api/v2/modeling-api/create-query-table.html)
 - [Create report](https://www.zoho.com/analytics/api/v2/modeling-api/create-report.html)
+
+
+### Automatic PDF preparation boundary
+
+The automatic `createReportingFactory` path requires a trusted `pdfRenderer`
+with `render`, a pinned `version`, and a nonzero `qualificationDigest` matching
+the private acceptance record's `pdfRendererDigest`. Missing or mismatched
+qualification fails before credential, source or provider access. The installed
+factory remains unbound; a native renderer implementation is available as described below. Source
+implementation supplies no installation, private configuration, scheduling,
+upload or live acceptance.
+
+`prepareFreeTestPdfDocument` validates the existing client HTML projection first,
+renders it, then hashes the actual bounded PDF bytes. PDF generation identity
+binds the source generation key and renderer version/qualification; the accepted
+actual PDF checksum is verified separately. Automatic composition acquires its
+durable dispatch claim before rendering, as described below.
+The local `prepareFreeTestPdfDraft` and durable WorkDrive writer use `.pdf` names.
+Prior HTML documents, intents and receipts retain their existing immutable keys;
+the legacy local HTML helpers remain available for evidence/source inspection.
+Automatic factory binding cannot silently fall back to HTML. The durable path
+re-reads source and opportunity-review evidence after asynchronous export and
+blocks storage if the source generation identity changed. Existing claims,
+single-upload fencing, exact-version byte readback and ambiguous-write recovery
+continue to apply; generation is not owner review, delivery approval or sending.
+
+PDF envelope checks are not semantic acceptance. Before approving a runtime
+renderer, qualify durable reuse of accepted bytes for identical immutable source,
+all-call and request-summary text fidelity, opportunity/currency/Unknown labels,
+Unicode/ToUnicode extraction, every rendered page, Inter embedding or a documented
+exception, complete 25-call/overshoot and long-summary pagination, bounded resource
+use, cancellation, no external-resource loads, and extracted/installed Catalyst
+Node 24 packaging. Desktop Edge layout evidence is not Catalyst compatibility.
+No dependency installation or provider invocation is part of these offline tests.
+
+
+PDF format is retained in new WorkDrive intent identity and projected to
+`ReportRuns.ReportFormat`; historical identities without `format` continue to
+project as HTML. Wrong-format index readback blocks reconciliation. The actual
+automatic entry is the existing `revenue_desk_call_worker` terminal scan and its
+trusted construction-time `terminalDraftReconcilerFactory`, not `analytics_sync`
+index.js. The shipped worker entry remains unbound. Offline worker-hook tests
+prove the source path can reach PDF preparation; they do not supply a deployed
+renderer, private binding, scheduler, production trigger or runtime acceptance.
+
+
+The PDF v2 generation identity binds immutable validated source and the qualified
+renderer revision, separately from the SHA-256 of its accepted actual PDF bytes.
+Automatic composition persists a unique `pdf_generation_v1` ReportRuns dispatch
+claim before rendering. A consumed claim never expires into another conversion.
+Verified repeats retrieve the same exact WorkDrive version and check its hash,
+ownership/access/retention and fresh source evidence; no renderer is called.
+Unknown rendering with no exact stored bytes stays held. Completed uploads and
+lost receipts/acceptance can recover by independent content readback, without
+another conversion or upload. Corrections create a separate source identity and
+preserve previous drafts. This additional claim projection needs separate
+installed schema/runtime acceptance; existing installed A2 packages are unchanged.
+Abort/deadline rejection fences local admission and handles late render promises;
+it does not assert remote provider cancellation. No normalization dependency is
+introduced solely to make separately generated PDFs byte-identical.
+
+
+### Native PDF renderer and package boundary
+
+The trusted factory accepts either a qualified injected renderer or a private
+`pdfBinding`, never both. The native binding constructs `createManagedPdfRenderer`
+inside the existing worker's Catalyst runtime. Construction reads only project
+and Development metadata; the documented AdminScope
+`app.connections().getConnectionCredentials(connectionReference)` method is
+called only when rendering. The isolated server closure validates one managed
+Authorization header and no query credentials. It never logs or exports the
+credential, response diagnostics or report content. Creating or expanding a
+persistent Connection remains an access action outside this implementation.
+
+`native-pdf-renderer.js` uses Node 24 native fetch, one fixed-origin POST, no
+redirects or retries, a maximum 30-second deadline covering authorization,
+headers and streamed body, 600 KiB complete inline-font HTML, 1 MiB serialized
+JSON, and 2 MiB output. The stream is also bounded to 4096 non-empty chunks.
+The US-only binding explicitly supplies organization and `Environment:
+Development`; missing or foreign-DC metadata fails closed. Client abort cancels
+the native signal and response reader but does not prove provider-side
+cancellation. A dispatched failure is ambiguous, non-retryable and leaves the
+durable source/renderer claim consumed. PDF envelope validity is not semantic
+or provider acceptance.
+
+Unmodified Inter v4.1 regular and bold WOFF2 bytes are hash-verified and packaged
+with their complete OFL-1.1 license in `pdf-fonts.js`; there is no new npm
+dependency or operating-system font requirement. The HTML projection remains
+inert, JavaScript is disabled, external subresources are blocked by CSP, and
+only pinned inline font data is allowed. Font-face ligatures are disabled to
+preserve searchable hyphens in body and page-margin text. No metadata
+normalization is needed: the accepted actual PDF byte hash is immutable.
+
+The owning worker release exporter includes Analytics lib modules and refuses
+a native-factory revision missing either renderer or fonts; older accepted
+releases remain exportable. Before binding or invocation, qualify the reviewed
+immutable revision's extracted package, font/license hashes, Node 24 module
+closure, existing protected owner/configuration, bounded execution context and
+separate installed state. Keep the current unbound worker and all provider
+holds until those prerequisites and the finite synthetic conversion cost/access
+decision are closed. No forms, calls, imports, CRM writes, alerts, storage
+uploads, owner review or customer delivery are performed by renderer proof.
+
+Official contracts:
+- [PDF conversion REST API](https://docs.catalyst.zoho.com/en/api/code-reference/smartbrowz/generate-pdfnscreenshoturl/)
+- [DC, organization and environment headers](https://docs.catalyst.zoho.com/en/api/introduction/overview-and-prerequisites/)
+- [Default Connection services](https://docs.catalyst.zoho.com/en/cloud-scale/help/connections/introduction/)
+- [Managed credentials SDK method](https://docs.catalyst.zoho.com/en/sdk/javascript/v1/cloudscale/connections/get-auth-credentials/)
+- [Pinned Inter source and license](https://github.com/rsms/inter/tree/e3a3d4c57d5ecc01453a575621882a384c1995a3)
+
+
+### Paired 7-Day Revenue Leak Test report (offline source milestone)
+
+The trusted reporting factory now selects `reportBundle: true`: one reconciled
+snapshot and review produces a two-page client summary and a complete supporting
+packet. Legacy single-document calls and immutable HTML/PDF receipts remain
+unchanged. Both packet sources have explicit role-specific revision identities;
+their actual PDF bytes retain independent SHA-256 hashes. A unique ReportRuns
+`report_bundle_v1` row records the shared source and both generation identities
+before either rendering, binds the canonical private review snapshot hash, then
+accepts an immutable manifest only after both
+stored versions are independently verified. The manifest links private receipt
+keys and actual hashes; summary is the future initial-delivery artifact and the
+supporting packet remains private. This milestone sends no mail and supplies no
+recipient or delivery eligibility.
+
+Each artifact retains its existing pre-render dispatch fence and immutable
+WorkDrive upload claim. Unknown render/upload outcomes never authorize another
+dispatch. A repeat verifies the stored bytes and reconstructs the same manifest;
+corrections create a new pair without modifying previous files. The explicit pair
+budget is at most two uploads, 48 WorkDrive reads, 40 ReportRuns reads, 26
+ReportRuns writes and 120 seconds; a legacy single-document composition retains
+its original ceilings. Source/Analytics bounds remain unchanged.
+
+The summary uses embedded static Inter and Gabriel's original, inspected,
+self-contained Sylvara premium SVG. Original SVG/provenance are retained under
+`assets/report-brand`; the original PNG is retained privately, not exported into
+the provider package. The runtime brand module pins the exact SVG content.
+Charts use the existing exhaustive connected-call categories without inference;
+below five connected calls, text counts replace bars. Zero-count bars are omitted
+explicitly. No timing chart is shown without qualified local schedule/timezone
+evidence. Monetary currencies remain separate; up to three currency subtotals
+appear on the summary and any additional currencies are explicitly referred to
+the complete supporting packet. Examples are up to three approved, non-withheld
+ledger summaries; shortened excerpts link to the complete individual records.
+
+The paired presentation does not close protected binding, provider rendering,
+installed-state, storage permissions/retention, recipient qualification or either
+Journey's live acceptance. Initial automatic client-summary delivery and
+confirmed manual resend are the accepted next workflow milestone, not enabled
+by a generated private report or by this source change.
+
+A private review-reference correction with identical displayed content creates a
+new immutable manifest and reuses both verified PDF versions. Review drift during
+asynchronous rendering is held, even if amounts and descriptions stay unchanged.

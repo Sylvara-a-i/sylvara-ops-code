@@ -121,7 +121,7 @@ test('expired evidence and a later reviewed valuation create immutable drafts wi
   assert.notEqual(revised.generationKey, first.generationKey);
   assert.equal(d.uploads.length, 2);
   assert.deepEqual([...d.resources.values()][0].bytes, original[0]);
-  assert.match([...d.resources.values()][1].bytes.toString(), /USD 425\.00/);
+  assert.match([...d.resources.values()][1].bytes.toString(), /\$425/);
   assert.deepEqual({ outbox: f.analyticsStore.rows, imports: [...f.imported],
     crm: f.runtime.store.rows.get('CRMBillingOperations') }, baseline);
   assert.deepEqual([...f.analyticsStore.checkpoints.values()].map(row => row.LAST_SYNC_AT), checkpointImports);

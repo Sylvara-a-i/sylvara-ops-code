@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { readTree, readBlob, writeCoreBridges, stampSource, validateArtifact,
-  SOURCE_STAMP_PATH, ANALYTICS_STAMP_PATH } = require('./build-release');
+  SOURCE_STAMP_PATH, ANALYTICS_STAMP_PATH, CONTROL_ANALYTICS_STAMP_PATH } = require('./build-release');
 
 const RUNTIME = 'src/zoho-catalyst/revenue-desk-call-runtime';
 const CRM = 'src/zoho-catalyst/crm-billing-orchestrator';
@@ -234,6 +234,8 @@ function compose({ reportingRevision, authRevision, runtimeArtifact, crmArtifact
     for (const entry of entries) put(runtimeOutput, entry.relative, readBlob(entry.object));
     stampSource(runtimeOutput, SOURCE_STAMP_PATH, '__REVENUE_DESK_SOURCE_REVISION__', reportingRevision);
     stampSource(runtimeOutput, ANALYTICS_STAMP_PATH, SOURCE_SENTINEL, reportingRevision);
+    if(fs.existsSync(path.join(runtimeOutput,CONTROL_ANALYTICS_STAMP_PATH)))
+      stampSource(runtimeOutput, CONTROL_ANALYTICS_STAMP_PATH, SOURCE_SENTINEL, reportingRevision);
     const generated = writeCoreBridges(runtimeOutput, entries);
     phase = 'runtime_base_verification';
     const baseManifest = JSON.parse(regularFile(runtimeArtifact, 'release-manifest.json'));

@@ -68,3 +68,14 @@ python -m unittest discover -s tools\safety\tests -p "test_retell_workspace.py" 
 ```
 
 No Retell API call is required by either command.
+
+## Callback confirmation preparation
+
+The provider-neutral `callback-confirmation-contract.json` aligns the optional
+boolean-or-null post-call field with the backend exact-true requirement. Only
+explicit confirmation of the final best callback number is usable; an alternate
+number is read back once, correction invalidates prior confirmation, and missing
+or unclear evidence remains review-needed. Safety, consent withdrawal and sensitive
+data minimization take precedence. The complete original export and proposed
+callback-only derivative remain private; no live provider access, import, call,
+simulation or publication is evidenced by these offline checks.

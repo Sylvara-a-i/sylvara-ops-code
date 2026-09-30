@@ -35,7 +35,7 @@ test('client summary uses the same validated counts and categories without alter
   assert.match(html, /not unique customers, confirmed appointments, jobs or revenue/);
   assert.match(html, /not a like-for-like comparison/);
   assert.match(html, /Only this route was measured, not all calls to the business/);
-  assert.match(html, /Draft — Client layout for review — Not for delivery/);
+  assert.match(html, /Private Review Draft - Not for delivery/);
   assert.match(html, /Synthetic Demo — No Live Calls/);
   assert.match(html, /Business name:<\/strong> Not supplied/);
   assert.doesNotMatch(html, /Source last modified|Business baseline —|Recorded alert states|rendering notes|font substitution|Operator review only/);

@@ -28,7 +28,7 @@ test('static draft renders exactly six groups, separate flags, limits and no par
   const input = fixture();
   const before = structuredClone(input);
   const html = renderFreeTestReport(input, { now: NOW });
-  assert.match(html, /<title>Seven-Day Free Test Results<\/title>/);
+  assert.match(html, /<title>7-Day Revenue Leak Test<\/title>/);
   assert.match(html, /Draft — Operator review only — Not for delivery/);
   assert.match(html, /Six non-overlapping groups of connected calls/);
   for (const [label, value] of [
@@ -60,9 +60,9 @@ test('synthetic baseline is prominent and clearly separates estimates, zero, unk
   assert.match(html, /Business-supplied estimate/);
   assert.match(html, /2026-07-01 00:00:00 UTC/);
   assert.match(html, /Monthly inbound calls<\/th><td>Not available/);
-  assert.match(html, /Monthly answering cost \(business supplied\)<\/th><td>USD 0\.00/);
+  assert.match(html, /Monthly answering cost \(business supplied\)<\/th><td>\$0/);
   assert.match(html, /Average connected call duration<\/th><td>180 seconds/);
-  assert.match(html, /Average job value \(business supplied\)<\/th><td>USD 350\.25/);
+  assert.match(html, /Average job value \(business supplied\)<\/th><td>\$350\.25/);
   assert.match(html, /After-hours call share<\/th><td>20\.25%/);
   assert.match(html, /No recovered revenue, confirmed jobs, savings or improvement is calculated/);
   assert.match(html, /All displayed outcomes are illustrative synthetic data/);

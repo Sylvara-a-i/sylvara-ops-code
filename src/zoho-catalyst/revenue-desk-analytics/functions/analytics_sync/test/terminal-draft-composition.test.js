@@ -136,7 +136,7 @@ test('results review creates a distinct valued revision and preserves the origin
   assert.notEqual(valued.generationKey, initial.generationKey);
   assert.deepEqual(fs.readFileSync(originalFile), original);
   const html = fs.readFileSync(path.join(directory, `free-test-${valued.generationKey}.html`), 'utf8');
-  assert.match(html, /USD 425\.00/);
+  assert.match(html, /\$425/);
   assert.match(html, /Estimated Opportunity Value/);
   assert.equal((await reconcile(f.identity)).status, 'existing_draft_verified_not_for_delivery');
   assert.equal(documents(directory).length, 2);
@@ -200,7 +200,7 @@ test('the reconciled backend retains repeat calls and values a reviewed opportun
   const overview = html.slice(html.indexOf('<div class="summary-overview">'), html.indexOf('<caption>Connected-call breakdown'));
   assert.match(overview, /<dt>Calls Handled<\/dt><dd>3<\/dd>/);
   assert.match(overview, /<dt>Reviewed Opportunity Groups<\/dt><dd>2<\/dd>/);
-  assert.match(overview, /USD 425\.00 — Partial Subtotal/);
+  assert.match(overview, /\$425 — Partial Subtotal/);
   assert.match(overview, /Valued groups: 1 · Unknown \/ incomplete groups excluded: 1 · Potential new-job calls not yet grouped: 0/);
   const groupTable = html.slice(html.indexOf('<div class="opportunity-groups">'), html.indexOf('<h3>Value limitations'));
   const groupRows = [...groupTable.matchAll(/<tr><th scope="row">([\s\S]*?)<\/tr>/g)]
@@ -209,12 +209,12 @@ test('the reconciled backend retains repeat calls and values a reviewed opportun
   assert.match(groupRows[0], /O-0001 — Separate slow kitchen drain request<\/th><td>C-0001<\/td>/);
   assert.match(groupRows[0], /<td>Unknown<\/td>/);
   assert.match(groupRows[1], /O-0002 — .*<\/th><td>C-0002, C-0003<\/td>/);
-  assert.equal((groupTable.match(/USD 425\.00/g) || []).length, 1);
+  assert.equal((groupTable.match(/\$425/g) || []).length, 1);
   for (const reference of ['C-0001', 'C-0002', 'C-0003']) assert.ok(html.includes(reference));
   for (const description of ['Leaking water heater repair request', 'Repeat water heater repair request',
     'Separate slow kitchen drain request']) assert.ok(html.includes(description));
-  assert.match(html, /USD 425\.00/);
-  assert.doesNotMatch(html, /USD (850|1275)\.00/);
+  assert.match(html, /\$425/);
+  assert.doesNotMatch(html, /\$(850|1,275)/);
   assert.match(html, /Partial coverage — the amounts below are documented subtotals, not a complete test value\./);
   assert.match(html, /Unknown/);
 });

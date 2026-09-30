@@ -11,7 +11,7 @@ const { createReconciledFreeTestInputReader } = require('./read-reconciled-free-
 const MAX_DOCUMENT_BYTES = 2 * 1024 * 1024;
 const MAX_RECEIPT_BYTES = 4096;
 const REVIEW_STATE = 'draft_generated_owner_review_required_delivery_not_authorized';
-const INPUT_KEYS = new Set(['privateDirectory', 'now', 'synthetic', 'callDetails', 'opportunityReview']);
+const INPUT_KEYS = new Set(['privateDirectory', 'now', 'synthetic', 'callDetails', 'opportunityReview', 'packetRole']);
 const preparedDocuments = new WeakSet();
 
 function fail() {
@@ -95,18 +95,20 @@ function prepareFreeTestDocument(input, options = {}) {
   try {
     if (!options || typeof options !== 'object' || Array.isArray(options)
       || Object.keys(options).some((key) => !INPUT_KEYS.has(key))) fail();
-    const { now = Date.now(), synthetic = false } = options;
+    const { now = Date.now(), synthetic = false, packetRole = null } = options;
     if (!Number.isSafeInteger(now) || typeof synthetic !== 'boolean'
+      || (packetRole !== null && !['summary','supporting'].includes(packetRole))
       || !isClientCallDetails(options.callDetails)
       || typeof CLIENT_DRAFT_RENDERER_VERSION !== 'string'
       || !/^[a-z0-9][a-z0-9._-]{0,79}$/.test(CLIENT_DRAFT_RENDERER_VERSION)) fail();
-    const renderOptions = { now, synthetic, audience: 'client',
+    const renderOptions = { now, synthetic, audience: 'client', packetRole,
       // Fresh readback time controls admission; the immutable source version
       // controls the printed date so next-day reconciliation is idempotent.
       documentRevisionAt: Date.parse(input?.finalResult?.SOURCE_MODIFIED_AT) };
     for (const key of ['callDetails', 'opportunityReview']) {
       if (Object.hasOwn(options, key)) renderOptions[key] = options[key];
     }
+    const sourceRendererVersion = packetRole ? `free-test-packet-v1.${packetRole}` : CLIENT_DRAFT_RENDERER_VERSION;
     const document = Buffer.from(renderFreeTestReport(input, renderOptions), 'utf8');
     if (document.length < 1 || document.length > MAX_DOCUMENT_BYTES) fail();
     const documentSha256 = hash(document);
@@ -120,13 +122,13 @@ function prepareFreeTestDocument(input, options = {}) {
       sourceRevision: input.finalResult.SOURCE_REVISION,
       rowsets: Object.fromEntries(['deployment', 'call', 'final_test_result'].map((kind) =>
         [kind, scope.analytics_readback.record_types[kind].rowset_digest])),
-      rendererVersion: CLIENT_DRAFT_RENDERER_VERSION,
+      rendererVersion: sourceRendererVersion,
       documentSha256,
     })}`);
     const prepared = Object.freeze({ generationKey, documentSha256, document,
       periodStart: input.finalResult.TEST_STARTED_AT.slice(0, 10),
       periodEnd: input.finalResult.TEST_ENDED_AT.slice(0, 10),
-      rendererVersion: CLIENT_DRAFT_RENDERER_VERSION, scope: Object.freeze({
+      rendererVersion: sourceRendererVersion, scope: Object.freeze({
         environment: input.deployment.ENVIRONMENT, clientKey: input.deployment.CLIENT_KEY,
         deploymentKey: input.deployment.DEPLOYMENT_KEY,
         configurationVersion: input.deployment.CONFIGURATION_VERSION,
@@ -137,14 +139,90 @@ function prepareFreeTestDocument(input, options = {}) {
   } catch { fail(); }
 }
 
-async function prepareFreeTestDraft(input, options = {}) {
+/** A stable source/renderer identity owns ONE accepted PDF byte sequence.
+ * Actual bytes have their own immutable checksum. Provider metadata variation
+ * is never permission to generate another document for the same identity.
+ */
+function pdfDocumentIdentity(source, pdfRenderer) {
+  if (!preparedDocuments.has(source) || source.format === 'pdf'
+    || hash(source.document) !== source.documentSha256
+    || !pdfRenderer || typeof pdfRenderer.render !== 'function'
+    || typeof pdfRenderer.version !== 'string'
+    || !/^[a-z0-9][a-z0-9._-]{0,79}$/.test(pdfRenderer.version)
+    || !/^[a-f0-9]{64}$/.test(pdfRenderer.qualificationDigest)
+    || /^0+$/.test(pdfRenderer.qualificationDigest)) fail();
+  const rendererVersion = `${source.rendererVersion}.pdf.${pdfRenderer.version}`;
+  const generationKey = hash(`free-test-client-pdf-v2\0${canonicalJson({
+    sourceGenerationKey: source.generationKey, rendererVersion,
+    rendererQualificationDigest: pdfRenderer.qualificationDigest })}`);
+  return Object.freeze({ generationKey, rendererVersion,
+    sourceGenerationKey: source.generationKey,
+    rendererQualificationDigest: pdfRenderer.qualificationDigest });
+}
+
+function preparePdfFromSource(source, pdfRenderer, rendered) {
+  const identity = pdfDocumentIdentity(source, pdfRenderer);
+  if (!Buffer.isBuffer(rendered) || rendered.length < 16 || rendered.length > MAX_DOCUMENT_BYTES
+    || !/^%PDF-1\.[0-7]/.test(rendered.subarray(0, 8).toString('ascii'))
+    || !/%%EOF\s*$/.test(rendered.subarray(-1024).toString('ascii'))) fail();
+  const document = Buffer.from(rendered);
+  const prepared = Object.freeze({ ...source, ...identity, document,
+    documentSha256: hash(document), format: 'pdf' });
+  preparedDocuments.add(prepared);
+  return prepared;
+}
+
+/** Trusted renderer only. Envelope checks are not text/layout acceptance.
+ * Abort stops local admission and handles late promises; it does NOT assert
+ * that a remote conversion was cancelled. The durable dispatch claim remains.
+ */
+async function prepareFreeTestPdfDocument(input, options = {}, pdfRenderer, context = {}) {
+  let cancel;
   try {
-    const { generationKey, documentSha256, document } = prepareFreeTestDocument(input, options);
+    const source = prepareFreeTestDocument(input, options);
+    pdfDocumentIdentity(source, pdfRenderer);
+    const active = () => { context.budget?.assertActive(); if (context.signal?.aborted) fail(); };
+    active();
+    const pending = Promise.resolve().then(() => {
+      active();
+      return pdfRenderer.render({ html: Buffer.from(source.document),
+        revisionAt: Date.parse(input.finalResult.SOURCE_MODIFIED_AT), signal: context.signal });
+    });
+    const aborted = new Promise((resolve, reject) => {
+      cancel = () => reject(Object.assign(new Error('DRAFT_RECONCILIATION_REQUIRED'),
+        { code: 'DRAFT_RECONCILIATION_REQUIRED' }));
+      context.signal?.addEventListener('abort', cancel, { once: true });
+      if (context.signal?.aborted) cancel();
+    });
+    const rendered = await Promise.race([pending, aborted]);
+    active();
+    return preparePdfFromSource(source, pdfRenderer, rendered);
+  } catch { fail(); }
+  finally { context.signal?.removeEventListener('abort', cancel); }
+}
+
+async function prepareFreeTestDraft(input, options = {}) {
+  return storePreparedDraft(prepareFreeTestDocument(input, options), options);
+}
+
+async function prepareFreeTestPdfDraft(input, options = {}, pdfRenderer, context = {}) {
+  try {
+    const prepared = await prepareFreeTestPdfDocument(input, options, pdfRenderer, context);
+    context.budget?.assertActive();
+    if (context.signal?.aborted) fail();
+    return await storePreparedDraft(prepared, options);
+  } catch { fail(); }
+}
+
+async function storePreparedDraft(prepared, options) {
+  try {
+    if (!isPreparedDocument(prepared)) fail();
+    const { generationKey, documentSha256, document, rendererVersion } = prepared;
     const directory = privateDirectory(options.privateDirectory);
     const base = path.join(directory, `free-test-${generationKey}`);
-    const files = { intent: `${base}.intent.json`, document: `${base}.html`, receipt: `${base}.receipt.json` };
+    const files = { intent: `${base}.intent.json`, document: `${base}.${prepared.format === 'pdf' ? 'pdf' : 'html'}`, receipt: `${base}.receipt.json` };
     const identity = { schemaVersion: 1, generationKey, documentSha256,
-      rendererVersion: CLIENT_DRAFT_RENDERER_VERSION };
+      rendererVersion };
     const intent = Buffer.from(canonicalJson({ ...identity, status: 'generation_intent' }), 'utf8');
     const receipt = Buffer.from(canonicalJson({ ...identity, status: REVIEW_STATE }), 'utf8');
     const existingIntent = readOptional(files.intent, MAX_RECEIPT_BYTES);
@@ -272,6 +350,8 @@ function createTerminalDraftReconciler({ runtimeStore, runtimeConfig, analyticsS
   };
 }
 
-module.exports = { prepareFreeTestDocument, prepareFreeTestDraft, createReconciledDraftTrigger,
+const isPreparedDocument = value => preparedDocuments.has(value);
+module.exports = { prepareFreeTestDocument, prepareFreeTestDraft, prepareFreeTestPdfDocument,
+  prepareFreeTestPdfDraft, pdfDocumentIdentity, preparePdfFromSource, createReconciledDraftTrigger,
   createTerminalDraftReconciler, MAX_DOCUMENT_BYTES, REVIEW_STATE,
   isPreparedFreeTestDocument: (value) => preparedDocuments.has(value) };

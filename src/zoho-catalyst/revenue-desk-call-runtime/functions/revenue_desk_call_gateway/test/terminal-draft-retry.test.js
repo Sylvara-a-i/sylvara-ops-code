@@ -202,3 +202,15 @@ test('trusted frozen reporting deadlines override only the callback timeout and 
   assert.throws(() => service(fixture, { onTerminalReportReconciled:
     Object.assign(async () => {}, { attemptTimeoutMs: 250 }) }), { code: 'INVALID_RUNTIME_CONFIGURATION' });
 });
+
+
+test('verified report pair and truthful held delivery reach the terminal hook without replaying CRM', async () => {
+  const fixture=await terminalFixture();const before=businessState(fixture);
+  const runtime=service(fixture,{async onTerminalReportReconciled(){return {
+    status:'report_pair_verified_not_for_delivery',deliveryStatus:'held',privateManifest:'must-not-propagate'};}});
+  const result=await runtime.reconcileDueDeployments();
+  assert.equal(result.results.filter(row=>row.reportDraftStatus==='report_pair_verified_not_for_delivery').length,1);
+  assert.equal(result.results.find(row=>row.reportDraftStatus).reportDeliveryStatus,'held');
+  assert.equal(JSON.stringify(result).includes('must-not-propagate'),false);
+  assert.deepEqual(businessState(fixture),before);
+});

@@ -40,7 +40,7 @@ test('private client report joins opportunity groups using document-local call r
   const html = renderFreeTestReport(input, { now, audience: 'client', callDetails: snapshot, opportunityReview: review });
   assert.match(html, /Estimated Opportunity Value/);
   assert.match(html, /Contractor-documented known job value/);
-  assert.match(html, /USD 125\.00/);
+  assert.match(html, /\$125/);
   assert.match(html, /O-0001/);
   assert.match(html, /C-0001/);
   assert.match(html, /Individual call details/);
@@ -63,7 +63,7 @@ test('trusted details without review explicitly show unknown while default repor
   assert.match(html, /Unknown — no reviewed opportunity group/);
   assert.match(html, /No explicit opportunity groups are recorded/);
   assert.match(html, /Individual call details/);
-  assert.doesNotMatch(html, /USD 0\.00/);
+  assert.doesNotMatch(html, /\$0/);
   const defaults = buildFreeTestReport(input, now);
   assert.equal(Object.hasOwn(defaults, 'opportunityValue'), false);
   assert.doesNotMatch(renderFreeTestReport(input, { now }), /Estimated Opportunity Value/);
@@ -88,8 +88,8 @@ test('opportunity review cannot bypass trusted details or enter the internal aud
 test('client money formatting respects currency minor units without floating-point loss', async () => {
   const { input, snapshot, now } = await privateCallLedgerFixture();
   for (const [currency, amountMinorUnits, expected] of [
-    ['JPY', 12500, 'JPY 12500'], ['KWD', 12500, 'KWD 12.500'],
-    ['USD', Number.MAX_SAFE_INTEGER, 'USD 90071992547409.91'],
+    ['JPY', 12500, '¥12,500'], ['KWD', 12500, 'KWD 12.500'],
+    ['USD', Number.MAX_SAFE_INTEGER, '$90,071,992,547,409.91'],
   ]) {
     const review = reviewFor(input, now);
     Object.assign(review.groups[0].knownJobValue, { currency, amountMinorUnits });
@@ -112,7 +112,7 @@ test('incomplete groups stay unvalued and applicable average basis is explicit',
   review.groups[0].reviewStatus = 'incomplete';
   const incomplete = renderFreeTestReport(input, { now, audience: 'client', callDetails: snapshot, opportunityReview: review });
   assert.match(incomplete, /Unknown — group review incomplete/);
-  assert.doesNotMatch(incomplete, /USD 125\.00/);
+  assert.doesNotMatch(incomplete, /\$125/);
   assert.match(incomplete, /Individual call details/);
 });
 
@@ -145,7 +145,7 @@ test('three observed calls retain every ledger row while repeat calls share one 
   assert.match(summary, /<dt>Calls Handled<\/dt><dd>3<\/dd>/);
   assert.match(summary, /<dt>Reviewed Opportunity Groups<\/dt><dd>2<\/dd>/);
   assert.match(summary, /Estimated Opportunity Value — Partial coverage/);
-  assert.match(summary, /USD 125\.00 — Partial Subtotal/);
+  assert.match(summary, /\$125 — Partial Subtotal/);
   assert.match(summary, /Valued groups: 1 · Unknown \/ incomplete groups excluded: 1 · Potential new-job calls not yet grouped: 0/);
   assert.match(summary, /estimate, not revenue; unknown values are excluded, not treated as zero/);
   assert.match(html, /<th scope="row">Potential New-Job Calls<\/th><td>3<\/td>/);
@@ -156,14 +156,24 @@ test('three observed calls retain every ledger row while repeat calls share one 
     assert.ok(groups.includes(group.groupReference));
     assert.ok(groups.includes(`<td>${group.callReferences.join(', ')}</td>`));
   }
-  assert.equal((groups.match(/USD 125\.00/g) || []).length, 1);
+  assert.equal((groups.match(/\$125/g) || []).length, 1);
   assert.equal((html.match(/<section class="call-detail">/g) || []).length, 3);
   for (const reference of ['C-0001', 'C-0002', 'C-0003']) assert.equal(html.includes(reference), true);
   for (const row of snapshot.rows) assert.equal(html.includes(row.issueSummary), true);
-  assert.doesNotMatch(html, /USD 250\.00|USD 375\.00/);
+  assert.doesNotMatch(html, /\$250|\$375/);
   assert.match(html, /grid-template-rows: 1fr auto/);
   assert.match(html, /counter\(page\).*counter\(pages\)/);
   assert.match(html, /\.call-detail \{ break-inside: avoid; \}/);
+  // A keep-with-next rule alone allows the introduction itself to split.
+  const intro = html.match(/<h2 id="call-detail">Individual call details<\/h2>\s*<p>(.*?)<\/p>\s*<section class="call-detail"><table><caption>(.*?)<\/caption>/);
+  assert.ok(intro, 'the complete introduction immediately precedes the first call record');
+  assert.equal(intro[1], 'References apply to this draft only. Each record is one observed call, not necessarily a distinct job. Unknown means evidence is unavailable. An alert accepted by the provider is not proof of inbox receipt or completed office work.');
+  assert.equal(intro[2], 'C-0001 — Call record');
+  assert.match(html, /#call-detail \{ page-break-after: avoid; \}/);
+  const introStyle = html.match(/#call-detail \+ p \{([^}]+)\}/)[1];
+  for (const property of ['break-inside', 'page-break-inside', 'break-after', 'page-break-after']) {
+    assert.match(introStyle, new RegExp(`(?:^|;)\\s*${property}: avoid;`));
+  }
 });
 
 test('multi-call synthetic fixture remains bounded to one through four local analyses', async () => {
@@ -175,4 +185,21 @@ test('multi-call synthetic fixture remains bounded to one through four local ana
   assert.equal(report.callDetails.length, 4);
   assert.equal(report.duringTest.callsCaptured, 4);
   assert.equal(report.opportunityValue.qualifiedCallCount, 3);
+});
+
+test('client presentation uses the exact product name and disambiguated symbols without changing canonical currencies', async () => {
+  const { input, snapshot, now } = await privateCallLedgerFixture();
+  for (const [currency, expected] of [['USD', '$1,250'], ['CAD', 'CA$1,250'],
+    ['AUD', 'A$1,250'], ['EUR', '\u20ac1,250'], ['GBP', '\u00a31,250']]) {
+    const review = reviewFor(input, now);
+    Object.assign(review.groups[0].knownJobValue, { currency, amountMinorUnits: 125000 });
+    const report = buildFreeTestReport(input, now, snapshot, review);
+    assert.equal(report.opportunityValue.subtotals[0].currency, currency);
+    assert.equal(report.opportunityValue.subtotals[0].amountMinorUnits, 125000);
+    const html = renderFreeTestReport(input, { now, audience: 'client', callDetails: snapshot, opportunityReview: review });
+    assert.ok(html.includes(expected));
+    assert.match(html, /<h1>7-Day Revenue Leak Test<\/h1>/);
+    assert.match(html, /Private Review Draft - Not for delivery/);
+    assert.doesNotMatch(html, /USD 1,250|Seven-Day Free Test Results/);
+  }
 });

@@ -163,37 +163,41 @@ function createCrmControlClient(config, {
   let readOrganizationVerified = false;
   let writeOrganizationVerified = false;
 
-  async function request(path, options, write = false) {
-    const authorization = await (write ? writeAuthorization() : readAuthorization());
+  async function request(path, options, write = false, parentSignal) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), config.platformTimeoutMs);
-    let response;
+    const cancel = () => controller.abort();
+    parentSignal?.addEventListener('abort', cancel, { once:true });
+    if(parentSignal?.aborted)cancel();
+    const timer = setTimeout(cancel, config.platformTimeoutMs);
+    let dispatched=false;
     try {
-      response = await fetchImpl(`${config.crmApiBaseUrl}${path}`, {
-        ...options,
-        headers: { Accept: 'application/json', ...options.headers, Authorization: authorization },
-        signal: controller.signal,
+      invariant(!controller.signal.aborted, 'CRM_REQUEST_FAILED', 'CRM request was cancelled.', {httpStatus:503});
+      const authorization = await (write ? writeAuthorization() : readAuthorization());
+      invariant(!controller.signal.aborted, 'CRM_REQUEST_FAILED', 'CRM request was cancelled.', {httpStatus:503});
+      dispatched=true;
+      const response = await fetchImpl(`${config.crmApiBaseUrl}${path}`, {
+        ...options, headers: { Accept:'application/json', ...options.headers, Authorization:authorization },
+        signal:controller.signal,
       });
-    } catch (error) {
-      throw new RevenueDeskError('CRM_REQUEST_FAILED', 'CRM request failed.', {
-        cause: error, httpStatus: 503, retryable: !write, ambiguous: write,
-      });
-    } finally {
-      clearTimeout(timer);
-    }
-    let json;
-    try { json = await response.json(); } catch (_) { json = null; }
-    invariant(response.status >= 200 && response.status < 300 && plain(json),
-      write ? 'CRM_WRITE_REJECTED' : 'CRM_READ_REJECTED',
-      write ? 'CRM rejected the control transition.' : 'CRM rejected the control read.',
-      { httpStatus: response.status === 401 || response.status === 403 ? 503 : 409,
-        retryable: !write, ambiguous: write && response.status >= 500 });
-    return json;
+      let json;try{json=await response.json();}catch{json=null;}
+      invariant(!controller.signal.aborted, 'CRM_REQUEST_FAILED', 'CRM request was cancelled.',
+        {httpStatus:503,retryable:!write,ambiguous:write&&dispatched});
+      invariant(response.status>=200 && response.status<300 && plain(json),
+        write?'CRM_WRITE_REJECTED':'CRM_READ_REJECTED',
+        write?'CRM rejected the control transition.':'CRM rejected the control read.',
+        {httpStatus:response.status===401||response.status===403?503:409,
+          retryable:!write,ambiguous:write&&response.status>=500});
+      return json;
+    }catch(error){
+      if(error instanceof RevenueDeskError)throw error;
+      throw new RevenueDeskError('CRM_REQUEST_FAILED','CRM request failed.',
+        {cause:error,httpStatus:503,retryable:!write,ambiguous:write&&dispatched});
+    }finally{clearTimeout(timer);parentSignal?.removeEventListener('abort',cancel);controller.abort();}
   }
 
-  async function assertOrganization(write = false) {
+  async function assertOrganization(write = false, signal) {
     if ((write && writeOrganizationVerified) || (!write && readOrganizationVerified)) return;
-    const json = await request('/org', { method: 'GET' }, write);
+    const json = await request('/org', { method: 'GET' }, write, signal);
     const organizations = json?.org;
     invariant(Array.isArray(organizations) && organizations.length === 1
       && plain(organizations[0])
@@ -291,6 +295,30 @@ function createCrmControlClient(config, {
       consentAt: new Date(consentAt).toISOString(),
       submissionChannel: row.Submission_Channel,
       intakeFormVersion: row.Intake_Form_Version });
+  }
+
+  async function getReportRecords(dealId, {signal} = {}) {
+    invariant(/^[1-9][0-9]{7,29}$/.test(dealId || ''), 'CRM_READ_REJECTED',
+      'Report relationship identity is invalid.', { httpStatus: 409 });
+    const active=()=>invariant(!signal?.aborted,'CRM_READ_REJECTED','Report read was cancelled.',{httpStatus:503});
+    active();await assertOrganization(false,signal);active();
+    const fields = ['id','Modified_Time','Intake_Submission_ID','Account_Name','Contact_Name',
+      'Deployment_Record_ID','Configuration_Version','Test_Status','Test_Report_PDF_URL',
+      'Test_Report_Revision','Test_Report_Recipient_Email','Test_Report_Recipient_Verified_At',
+      'Test_Report_Delivery_Status'];
+    const deal = parseRecord(await request(`/Deals/${dealId}?${new URLSearchParams({fields:fields.join(',')})}`,
+      { method:'GET' },false,signal), dealId);
+    active();
+    const contactId = deal.Contact_Name?.id;
+    invariant(typeof contactId === 'string' && /^[1-9][0-9]{7,29}$/.test(contactId),
+      'CRM_READBACK_INVALID', 'Report recipient relationship is unavailable.', { httpStatus:409 });
+    const contactFields = ['id','Modified_Time','Account_Name','Email'];
+    const contact = parseRecord(await request(`/Contacts/${contactId}?${new URLSearchParams({fields:contactFields.join(',')})}`,
+      { method:'GET' },false,signal), contactId);
+    active();
+    const select = (row, names) => Object.fromEntries(names.map(name => [name,
+      LOOKUP_FIELDS.has(name) && plain(row[name]) ? {id:String(row[name].id)} : row[name] ?? null]));
+    return {deal:select(deal,fields),contact:select(contact,contactFields)};
   }
 
   async function getPreparationRecords(dealId) {
@@ -899,7 +927,7 @@ function createCrmControlClient(config, {
     return deal;
   }
 
-  return Object.freeze({ getDeal, proveActivationInactive, containActivation,
+  return Object.freeze({ getDeal, getReportRecords, proveActivationInactive, containActivation,
     recordApproval, recordActivation, recordRollback, recordCoreApproval, recordCoreRollback,
     getPreparationRecords, getPreparationFieldMetadata, getNativeConversion, getPublicOriginalLead,
     recordConfigurationStaging, recordConfigurationSuccessor });

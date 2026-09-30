@@ -19,27 +19,55 @@ const quote = (value) => `'${value.replaceAll("'", "''")}'`;
 const providerKey = (key) => `revenue-desk-report-v1:${key}`;
 
 function projection(state) {
+  if (state?.kind === 'report_delivery_v1') return require('./report-delivery-control').deliveryProjection(state);
   const identity = state.identity;
   const date = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
     && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
   if (!identity || !['clientId', 'deploymentId'].every(name => typeof identity[name] === 'string'
     && /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/.test(identity[name]))
     || !date(identity.periodStart) || !date(identity.periodEnd) || identity.periodEnd < identity.periodStart
-    || !['workdrive_draft_v1', 'report_attempt_v1'].includes(state.kind)) fail();
+    || !['workdrive_draft_v1', 'report_attempt_v1', 'pdf_generation_v1', 'report_bundle_v1'].includes(state.kind)) fail();
   const draft = state.kind === 'workdrive_draft_v1';
-  const verified = draft && state.phase === 'verified';
+  const generation = state.kind === 'pdf_generation_v1';
+  if (generation && (!['render_started', 'accepted'].includes(state.phase)
+    || !KEY.test(identity.generationKey) || !KEY.test(identity.sourceGenerationKey)
+    || !KEY.test(identity.rendererQualificationDigest)
+    || typeof identity.rendererVersion !== 'string'
+    || (state.phase === 'accepted' && (!state.accepted
+      || state.accepted.generationKey !== identity.generationKey
+      || !KEY.test(state.accepted.documentSha256) || !KEY.test(state.accepted.receiptSha256))))) fail();
+  const bundle = state.kind === 'report_bundle_v1';
+  if (bundle && (!KEY.test(identity.sourceGenerationKey) || !KEY.test(identity.reviewSnapshotSha256)
+    || identity.rendererVersion !== 'free-test-pair-v1'
+    || Object.keys(identity.artifacts || {}).sort().join(',') !== 'summary,supporting'
+    || !['working','accepted'].includes(state.phase)
+    || Object.values(identity.artifacts).some(a => !KEY.test(a.generationKey) || !KEY.test(a.sourceGenerationKey)
+      || !KEY.test(a.rendererQualificationDigest) || typeof a.rendererVersion !== 'string')
+    || (state.phase === 'accepted' && (!state.manifest || !KEY.test(state.manifestSha256)
+      || state.manifest.sourceGenerationKey !== identity.sourceGenerationKey
+      || state.manifest.reviewSnapshotSha256 !== identity.reviewSnapshotSha256
+      || state.manifest.initialDeliveryArtifact !== 'summary'
+      || state.manifest.supportingAvailability !== 'private'
+      || Object.keys(state.manifest.artifacts || {}).sort().join(',') !== 'summary,supporting'
+      || Object.entries(state.manifest.artifacts).some(([role,a]) =>
+        a.generationKey !== identity.artifacts[role].generationKey || !KEY.test(a.documentSha256)
+        || !KEY.test(a.receiptSha256) || !KEY.test(a.privateReceiptKey)
+        || require('node:crypto').createHash('sha256').update(`workdrive-draft-v1\0${a.generationKey}`).digest('hex') !== a.privateReceiptKey)
+      || require('node:crypto').createHash('sha256').update(canonicalJson(state.manifest)).digest('hex') !== state.manifestSha256)))) fail();
+  const verified = draft && state.phase === 'verified' || bundle && state.phase === 'accepted';
+  if (draft && identity.format !== undefined && !['html', 'pdf'].includes(identity.format)) fail();
   return { ClientId: identity.clientId, DeploymentId: identity.deploymentId,
-    ReportType: draft ? 'free_test_client_draft' : 'free_test_report_verification_attempt',
+    ReportType: bundle ? 'free_test_report_pair' : draft ? 'free_test_client_draft' : generation ? 'free_test_pdf_generation_claim' : 'free_test_report_verification_attempt',
     PeriodStart: identity.periodStart, PeriodEnd: identity.periodEnd,
-    ReportVersion: draft ? identity.rendererVersion : 'report-attempt-v1',
+    ReportVersion: draft || generation || bundle ? identity.rendererVersion : 'report-attempt-v1',
     GenerationStatus: verified ? 'DraftGenerated' : draft ? 'ReconciliationRequired' : 'VerificationPending',
     ApprovalStatus: 'OwnerReviewRequired', DeliveryStatus: 'NotSent',
     ReconciliationStatus: verified ? 'Verified' : 'Pending',
     ActualEstimatedSeparated: verified, CrossClientIsolationPassed: verified,
     DuplicateSendGuardPassed: false, ReportTotalsReconciled: verified,
     AutoDeliveryEnabledAtRun: false, SchemaVersion: 2,
-    ReportFormat: draft ? 'html' : 'none',
-    ReportObjectKey: verified ? canonicalJson(state.receipt) : null };
+    ReportFormat: bundle ? 'pdf' : draft ? identity.format || 'html' : generation ? 'pdf' : 'none',
+    ReportObjectKey: verified ? canonicalJson(bundle ? state.manifest : state.receipt) : null };
 }
 
 /** Opt-in adapter for the observed EXISTING ReportRuns table, retaining its

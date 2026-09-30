@@ -120,3 +120,75 @@ test('ambiguous insert and CAS recover by exact independent readback, while conf
     await assert.rejects(f.store.get(key), { code: 'REPORT_RUN_RECONCILIATION_REQUIRED' });
   }
 });
+
+test('PDF ReportRuns projection preserves format and blocks corrupt index readback while old HTML remains valid', async () => {
+  const draft = { kind: 'workdrive_draft_v1', identity: { ...state.identity, rendererVersion: 'synthetic-pdf-v1', format: 'pdf' },
+    phase: 'intent', owner: 'synthetic', leaseUntil: 1800000000000, receipt: null };
+  const pdf = fixture();
+  await pdf.store.insert(key, draft);
+  assert.equal(pdf.read().ReportFormat, 'pdf');
+  pdf.corrupt(row => ({ ...row, ReportFormat: 'html' }));
+  await assert.rejects(pdf.store.get(key));
+  const legacy = fixture();
+  const old = structuredClone(draft); delete old.identity.format;
+  await legacy.store.insert(key, old);
+  assert.equal(legacy.read().ReportFormat, 'html');
+  await legacy.store.get(key);
+  const invalid = fixture();
+  await assert.rejects(invalid.store.insert(key, { ...draft, identity: { ...draft.identity, format: 'image' } }));
+  assert.equal(invalid.read(), null);
+});
+
+
+test('durable PDF dispatch claims project as pending and accepted checksum state never fabricates report approval', async () => {
+  const f = fixture();
+  const claim = { kind: 'pdf_generation_v1', identity: { ...state.identity,
+    generationKey: 'b'.repeat(64), sourceGenerationKey: 'c'.repeat(64),
+    rendererQualificationDigest: 'd'.repeat(64), rendererVersion: 'synthetic-pdf-v2' },
+    phase: 'render_started', owner: 'synthetic', accepted: null };
+  const row = await f.store.insert(key, claim);
+  assert.equal(f.read().ReportType, 'free_test_pdf_generation_claim');
+  assert.equal(f.read().ReportFormat, 'pdf');
+  assert.equal(f.read().GenerationStatus, 'VerificationPending');
+  const accepted = { ...claim, phase: 'accepted', accepted: { generationKey: claim.identity.generationKey,
+    documentSha256: 'e'.repeat(64), receiptSha256: 'f'.repeat(64) } };
+  await f.store.compareAndSwap(row, accepted);
+  assert.equal(f.read().ReconciliationStatus, 'Pending');
+  assert.equal(f.read().ApprovalStatus, 'OwnerReviewRequired');
+  assert.equal(f.read().DeliveryStatus, 'NotSent');
+  assert.equal(f.read().ReportObjectKey, null);
+  f.corrupt(row => ({ ...row, ReportFormat: 'html' }));
+  await assert.rejects(f.store.get(key));
+  await assert.rejects(fixture().store.insert(key, { ...accepted, accepted: null }));
+  await assert.rejects(fixture().store.insert(key, { ...claim, phase: 'retry_render' }));
+});
+
+test('pair manifest is private, linked to both exact artifact identities and rejected when corrupt',async()=>{
+ const crypto=require('node:crypto'),{canonicalJson}=require('../lib/facts');
+ const hash=value=>crypto.createHash('sha256').update(value).digest('hex');
+ const identity={...state.identity,sourceGenerationKey:'b'.repeat(64),rendererVersion:'free-test-pair-v1',reviewSnapshotSha256:'c'.repeat(64),
+  artifacts:Object.fromEntries(['summary','supporting'].map((role,n)=>[role,{generationKey:String(n+1).repeat(64),sourceGenerationKey:String(n+3).repeat(64),rendererQualificationDigest:'d'.repeat(64),rendererVersion:`free-test-packet-v1.${role}.pdf.synthetic-v1`}]))};
+ const initial={kind:'report_bundle_v1',identity,phase:'working',manifest:null};
+ const f=fixture(),row=await f.store.insert(key,initial);
+ assert.equal(f.read().GenerationStatus,'VerificationPending');assert.equal(f.read().ReportObjectKey,null);
+ const manifest={schemaVersion:1,sourceGenerationKey:identity.sourceGenerationKey,initialDeliveryArtifact:'summary',supportingAvailability:'private',reviewSnapshotSha256:identity.reviewSnapshotSha256,
+  artifacts:Object.fromEntries(Object.entries(identity.artifacts).map(([role,a])=>[role,{generationKey:a.generationKey,documentSha256:'e'.repeat(64),receiptSha256:'f'.repeat(64),privateReceiptKey:hash(`workdrive-draft-v1\0${a.generationKey}`)}]))};
+ const accepted={...initial,phase:'accepted',manifest,manifestSha256:hash(canonicalJson(manifest))};
+ await f.store.compareAndSwap(row,accepted);assert.equal(f.read().GenerationStatus,'DraftGenerated');
+ assert.equal(f.read().DeliveryStatus,'NotSent');assert.equal(f.read().AutoDeliveryEnabledAtRun,false);
+ assert.equal(f.read().ReportType,'free_test_report_pair');assert.deepEqual(JSON.parse(f.read().ReportObjectKey),manifest);
+ for(const mutate of [x=>delete x.manifest.artifacts.supporting,x=>x.manifest.initialDeliveryArtifact='supporting',x=>x.manifest.artifacts.summary.privateReceiptKey='a'.repeat(64),x=>x.manifest.artifacts.summary.documentSha256='0',x=>x.manifestSha256='0'.repeat(64),x=>x.manifest.reviewSnapshotSha256='a'.repeat(64)]){
+  const invalid=structuredClone(accepted);mutate(invalid);await assert.rejects(fixture().store.insert(key,invalid));
+ }
+});
+
+
+test('delivery reuses encrypted recipient and exact artifact projections with accepted-provider CAS readback', async () => {
+ const f=fixture(),at=1800000000000,h=x=>require('node:crypto').createHash('sha256').update(x).digest('hex');
+ const delivery={kind:'report_delivery_v1',mode:'initial',phase:'dispatch_started',claimToken:h('synthetic claim'),createdAt:at,confirmBy:at,inboxReceipt:'unknown',readReceipt:'unknown',followUp:'unknown',snapshot:{binding:{clientId:'synthetic_client',deploymentId:'synthetic_deployment',dealId:'synthetic_deal',accountId:'synthetic_account',contactId:'synthetic_contact',configurationVersion:'configuration_v1',periodStart:'2027-01-01',periodEnd:'2027-01-07'},nativeRelationshipEvidenceSha256:h('native lineage'),report:{generationKey:h('pair'),manifestSha256:h('manifest'),sourceRevisionDigest:h('source'),summary:{role:'summary',generationKey:h('pdf'),documentSha256:h('actual bytes'),privateReceiptKey:h('private receipt')}},recipient:{contactId:'synthetic_contact',address:'owner@example.com',verificationDigest:h('explicit verified recipient'),verifiedAt:at-1000,expiresAt:at+3600000}}};
+ const first=await f.store.insert(key,delivery);assert.equal(f.read().DeliveryStatus,'ReconciliationRequired');
+ assert.equal(JSON.parse(f.read().RecipientSnapshotJson).address,'owner@example.com');assert.equal(f.read().AutoDeliveryEnabledAtRun,true);
+ f.failUpdateResponse=true;const accepted={...delivery,phase:'provider_accepted',provider:{accepted:true,messageReferenceDigest:h('exact provider reference'),acceptedAt:at}};
+ const second=await f.store.compareAndSwap(first,accepted);assert.equal(second.state.phase,'provider_accepted');assert.equal(f.read().DeliveryStatus,'ProviderAccepted');
+ f.corrupt(row=>({...row,RecipientSnapshotJson:'{}'}));await assert.rejects(f.store.get(key));
+});

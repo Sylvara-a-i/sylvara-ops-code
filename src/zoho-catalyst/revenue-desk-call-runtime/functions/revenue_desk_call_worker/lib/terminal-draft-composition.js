@@ -6,4 +6,5 @@
 const { createDurableReportComposition } = require('../reporting/revenue-desk-analytics/tools/create-durable-report-composition');
 const { createReportingFactory } = require('../reporting/revenue-desk-analytics/tools/create-reporting-factory');
 
-module.exports = { createDurableReportComposition, createReportingFactory };
+const { createReportDeliveryFactory } = require('../reporting/revenue-desk-analytics/tools/create-report-delivery-factory');
+module.exports = { createDurableReportComposition, createReportingFactory, createReportDeliveryFactory };

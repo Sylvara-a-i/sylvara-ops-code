@@ -10,7 +10,9 @@
   "test_duration_days": 7,
   "handled_call_limit": 25,
   "canonical_call_schema_version": 2,
-  "legacy_canonical_call_schema_versions": [1],
+  "legacy_canonical_call_schema_versions": [
+    1
+  ],
   "canonical_coverage_modes": [
     "AfterHoursOnly",
     "NoAnswerOverflowOnly",
@@ -56,32 +58,98 @@
   "active_test_status": "Live",
   "approved_go_live_status": "Approved",
   "stop_reason_mappings": [
-    { "internal": "seven_day_limit_reached", "crm_test_end_reason": "Seven-Day Limit Reached" },
-    { "internal": "call_limit_reached", "crm_test_end_reason": "Call Limit Reached" },
-    { "internal": "client_requested_stop", "crm_test_end_reason": "Client Requested Stop" },
-    { "internal": "sylvara_stopped", "crm_test_end_reason": "Sylvara Stopped" },
-    { "internal": "technical_failure", "crm_test_end_reason": "Technical Failure" },
-    { "internal": "converted_early", "crm_test_end_reason": "Converted Early" },
-    { "internal": "other", "crm_test_end_reason": "Other" }
+    {
+      "internal": "seven_day_limit_reached",
+      "crm_test_end_reason": "Seven-Day Limit Reached"
+    },
+    {
+      "internal": "call_limit_reached",
+      "crm_test_end_reason": "Call Limit Reached"
+    },
+    {
+      "internal": "client_requested_stop",
+      "crm_test_end_reason": "Client Requested Stop"
+    },
+    {
+      "internal": "sylvara_stopped",
+      "crm_test_end_reason": "Sylvara Stopped"
+    },
+    {
+      "internal": "technical_failure",
+      "crm_test_end_reason": "Technical Failure"
+    },
+    {
+      "internal": "converted_early",
+      "crm_test_end_reason": "Converted Early"
+    },
+    {
+      "internal": "other",
+      "crm_test_end_reason": "Other"
+    }
   ],
   "rollback_control_reason_mappings": [
-    { "internal": "operator_requested", "crm_test_end_reason": "Sylvara Stopped" },
-    { "internal": "route_verification_failed", "crm_test_end_reason": "Technical Failure" },
-    { "internal": "configuration_changed", "crm_test_end_reason": "Technical Failure" },
-    { "internal": "synthetic_test_complete", "crm_test_end_reason": "Other" }
+    {
+      "internal": "operator_requested",
+      "crm_test_end_reason": "Sylvara Stopped"
+    },
+    {
+      "internal": "route_verification_failed",
+      "crm_test_end_reason": "Technical Failure"
+    },
+    {
+      "internal": "configuration_changed",
+      "crm_test_end_reason": "Technical Failure"
+    },
+    {
+      "internal": "synthetic_test_complete",
+      "crm_test_end_reason": "Other"
+    }
   ],
   "outcomes": [
-    { "value": "potential_job", "label": "Potential Job" },
-    { "value": "existing_customer", "label": "Existing Customer" },
-    { "value": "urgent_potential_job", "label": "Urgent Potential Job" },
-    { "value": "spam", "label": "Spam" },
-    { "value": "unsupported_service", "label": "Unsupported Service" },
-    { "value": "out_of_area", "label": "Out Of Area" },
-    { "value": "other_general_inquiry", "label": "Other / General Inquiry" },
-    { "value": "sensitive_data_ended", "label": "Sensitive Data Ended" },
-    { "value": "configuration_failure", "label": "Configuration Failure" },
-    { "value": "caller_abandoned", "label": "Caller Abandoned" },
-    { "value": "unresolved", "label": "Unresolved" }
+    {
+      "value": "potential_job",
+      "label": "Potential Job"
+    },
+    {
+      "value": "existing_customer",
+      "label": "Existing Customer"
+    },
+    {
+      "value": "urgent_potential_job",
+      "label": "Urgent Potential Job"
+    },
+    {
+      "value": "spam",
+      "label": "Spam"
+    },
+    {
+      "value": "unsupported_service",
+      "label": "Unsupported Service"
+    },
+    {
+      "value": "out_of_area",
+      "label": "Out Of Area"
+    },
+    {
+      "value": "other_general_inquiry",
+      "label": "Other / General Inquiry"
+    },
+    {
+      "value": "sensitive_data_ended",
+      "label": "Sensitive Data Ended"
+    },
+    {
+      "value": "configuration_failure",
+      "label": "Configuration Failure"
+    },
+    {
+      "value": "caller_abandoned",
+      "label": "Caller Abandoned"
+    },
+    {
+      "value": "unresolved",
+      "label": "Unresolved"
+    }
   ],
   "coverage_triggers": [
     "AfterHours",
@@ -165,9 +233,9 @@
   "optional_handoff_analysis": {
     "callback_number_confirmed": {
       "type": "boolean_or_null",
-      "meaning": "Caller explicitly confirmed the extracted callback number in this conversation; not caller ID or format validation.",
+      "meaning": "Caller explicitly confirmed the exact final caller-stated usable number as the best callback number in this conversation; never caller ID, formatting, silence or an earlier corrected number.",
       "absent_or_false": "Callback number is unknown for human follow-up.",
-      "provider_configuration_status": "Proposal only; separate review and live provider evidence required."
+      "provider_configuration_status": "Approved offline callback candidate; no live provider configuration or acceptance claimed."
     }
   },
   "retell_conversation_variable_fields": [

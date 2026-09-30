@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "classification": "public-provider-neutral-callback-confirmation-contract",
+  "runtime_authority": false,
+  "deployment_authorized": false,
+  "post_call_field": {
+    "name": "callback_number_confirmed",
+    "type": "boolean_or_null",
+    "required": false,
+    "true": "The caller explicitly confirmed the exact final caller-stated usable number as the best callback number in this conversation.",
+    "false": "The caller explicitly refused or stated that no usable callback number is available.",
+    "null_or_missing": "Confirmation is missing, unclear, conflicting or unavailable; human review is needed.",
+    "format_or_caller_id_is_confirmation": false
+  },
+  "collection": {
+    "ask_best_number_explicitly": true,
+    "read_back_alternate_number_once": true,
+    "require_confirmation_after_correction": true,
+    "maximum_clarifications": 1,
+    "infer_from_silence": false,
+    "infer_from_format": false,
+    "infer_from_caller_id": false
+  },
+  "status_alignment": {
+    "confirmed_usable_requires": ["usable_final_caller_stated_number", "explicit_confirmation_of_final_number", "callback_number_confirmed_exactly_true"],
+    "missing_or_unclear_status": "unknown",
+    "missing_or_unclear_disposition": "needs_review",
+    "backend_retains_number_only_for_exact_true": true
+  },
+  "precedence": ["immediate_safety_end", "consent_withdrawal_end", "sensitive_data_minimization", "ordinary_callback_confirmation"],
+  "prohibited_effects": ["actual_callback", "callback_promise", "transfer", "dispatch", "booking", "message", "crm_write"],
+  "provider_status": "offline_candidate_only_requires_separate_provider_readback_and_acceptance"
+}

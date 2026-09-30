@@ -24,7 +24,9 @@ function fixture() {
     verifiedAt: clock.value - 1000, expiresAt: clock.value + 86400000,
     schemaDigest: 'c'.repeat(64), analyticsContractDigest: 'd'.repeat(64),
     workdriveContractDigest: 'e'.repeat(64), releaseCompositionDigest: 'f'.repeat(64) };
-  const options = { analyticsConfig: config, acceptance,
+  acceptance.pdfRendererDigest = 'e'.repeat(64);
+  const options = { pdfRenderer: { version: 'synthetic-v1', qualificationDigest: acceptance.pdfRendererDigest,
+    async render() { assert.fail('Unexpected PDF render'); } }, analyticsConfig: config, acceptance,
     workdriveBinding: { connectionReference: 'synthetic_workdrive_drafts',
       apiOrigin: 'https://www.zohoapis.com', downloadOrigin: 'https://download.zoho.com', timeoutMs: 20000 },
     now: () => clock.value,
@@ -53,7 +55,7 @@ test('protected private bindings compose a frozen hook without credentials, sour
   const hook = factory(f.app, f.runtimeConfig, f.runtimeStore);
   assert.equal(typeof hook, 'function');
   assert.equal(Object.isFrozen(hook), true);
-  assert.equal(hook.attemptTimeoutMs, 60000);
+  assert.equal(hook.attemptTimeoutMs, 120000);
   assert.deepEqual(f.effects, none);
 });
 
@@ -169,4 +171,44 @@ test('approval expiry observed before a timer turn prevents the next reserved op
   await assert.rejects(hook({ clientId: 'client_A', deploymentId: 'deployment_A' }),
     { code: 'DRAFT_RECONCILIATION_REQUIRED' });
   assert.deepEqual(f.effects, { ...none, source: 1 });
+});
+
+test('automatic factory refuses absent or unqualified PDF renderer before any access', () => {
+  for (const mutate of [f => { delete f.options.pdfRenderer; },
+    f => { f.options.pdfRenderer.qualificationDigest = 'f'.repeat(64); },
+    f => { delete f.acceptance.pdfRendererDigest; }]) {
+    const f = fixture(); mutate(f);
+    assert.throws(() => createReportingFactory(f.options), REQUIRED);
+    assert.deepEqual(f.effects, none);
+  }
+});
+
+test('automatic native binding constructs the managed renderer with no credential read and immutable metadata', () => {
+  const f = fixture();
+  const { VERSION } = require('../lib/native-pdf-renderer');
+  delete f.options.pdfRenderer;
+  f.options.pdfBinding = { apiOrigin: 'https://api.catalyst.zoho.com',
+    projectId: f.config.expectedProjectId, organizationId: '123456789', environment: 'Development',
+    connectionReference: 'syntheticPdfRenderer', timeoutMs: 30000, version: VERSION,
+    qualificationDigest: f.acceptance.pdfRendererDigest };
+  f.app.config = { projectId: f.config.expectedProjectId, environment: 'Development' };
+  const factory = createReportingFactory(f.options);
+  f.options.pdfBinding.apiOrigin = 'https://invalid.test';
+  const hook = factory(f.app, f.runtimeConfig, f.runtimeStore);
+  assert.equal(typeof hook, 'function');
+  assert.deepEqual(f.effects, none);
+  assert.throws(() => factory({ ...f.app, config: { projectId: '999', environment: 'Development' } },
+    f.runtimeConfig, f.runtimeStore), { code: 'PDF_RENDER_CONFIGURATION_INVALID' });
+  assert.deepEqual(f.effects, none);
+});
+test('automatic factory cannot accept two competing PDF bindings or a wrong native project', () => {
+  const f=fixture();
+  const { VERSION } = require('../lib/native-pdf-renderer');
+  f.options.pdfBinding={apiOrigin:'https://api.catalyst.zoho.com',projectId:'999',organizationId:'123456789',
+    environment:'Development',connectionReference:'syntheticPdfRenderer',timeoutMs:30000,version:VERSION,
+    qualificationDigest:f.acceptance.pdfRendererDigest};
+  assert.throws(()=>createReportingFactory(f.options),REQUIRED);
+  delete f.options.pdfRenderer;
+  assert.throws(()=>createReportingFactory(f.options),REQUIRED);
+  assert.deepEqual(f.effects,none);
 });

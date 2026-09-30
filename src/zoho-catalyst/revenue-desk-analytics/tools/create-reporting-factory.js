@@ -8,6 +8,8 @@ const { createWorkDriveClient } = require('../functions/analytics_sync/lib/workd
 const { createReportRunStore } = require('../functions/analytics_sync/lib/report-run-store');
 const { createReportCheckpointReattestor } = require('./reattest-report-checkpoints');
 const { createDurableReportComposition } = require('./create-durable-report-composition');
+const { attachTerminalReportDelivery } = require('../functions/analytics_sync/lib/report-delivery-handlers');
+const { createManagedPdfRenderer, validatePdfRendererBinding } = require('../functions/analytics_sync/lib/native-pdf-renderer');
 
 function fail() { throw Object.assign(new Error('REPORTING_BINDING_REQUIRED'), { code: 'REPORTING_BINDING_REQUIRED' }); }
 const digest = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value) && !/^0+$/.test(value);
@@ -20,14 +22,26 @@ const digest = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value
  */
 function createReportingFactory({ analyticsConfig, workdriveBinding, acceptance,
   readDestinationBinding, readOpportunityReview = null, now = Date.now,
-  fetchImpl = globalThis.fetch, synthetic = false } = {}) {
+  fetchImpl = globalThis.fetch, synthetic = false, pdfRenderer, pdfBinding, deliveryFactory = null } = {}) {
+  if (deliveryFactory !== null && typeof deliveryFactory !== 'function') fail();
+  if ((pdfRenderer && pdfBinding) || (!pdfRenderer && !pdfBinding)) fail();
+  const nativeBinding = pdfBinding ? validatePdfRendererBinding(pdfBinding) : null;
+  const rendererMetadata = pdfRenderer || nativeBinding;
   if (!analyticsConfig || !workdriveBinding || !acceptance
     || typeof readDestinationBinding !== 'function' || typeof now !== 'function'
     || typeof fetchImpl !== 'function' || typeof synthetic !== 'boolean'
+    || (!nativeBinding && typeof rendererMetadata.render !== 'function')
+    || typeof rendererMetadata.version !== 'string' || !/^[a-z0-9][a-z0-9._-]{0,79}$/.test(rendererMetadata.version)
+    || !digest(rendererMetadata.qualificationDigest)
     || (readOpportunityReview !== null && typeof readOpportunityReview !== 'function')) fail();
   const config = structuredClone(analyticsConfig);
   const storage = structuredClone(workdriveBinding);
   const approved = structuredClone(acceptance);
+  const renderer = nativeBinding || Object.freeze({ render: pdfRenderer.render, version: pdfRenderer.version,
+    qualificationDigest: pdfRenderer.qualificationDigest });
+  if (nativeBinding && (nativeBinding.projectId !== config.expectedProjectId
+    || nativeBinding.environment !== config.catalystEnvironment)) fail();
+  if (approved.pdfRendererDigest !== renderer.qualificationDigest) fail();
   const assertAccepted = () => {
     const at = now();
     if (!Number.isSafeInteger(at) || at < 0 || approved.verifiedAt < 0
@@ -66,6 +80,8 @@ function createReportingFactory({ analyticsConfig, workdriveBinding, acceptance,
     if (runtimeConfig?.environment !== 'development' || runtimeConfig.sourceRevision !== config.sourceRevision
       || runtimeConfig.projectId !== config.expectedProjectId) fail();
     assertAccepted();
+    const runtimeRenderer = nativeBinding
+      ? createManagedPdfRenderer({ app, binding: nativeBinding, fetchImpl, now: assertAccepted }) : renderer;
     const analyticsStore = createCatalystStore(app, config);
     const readAuthorizationProvider = createConnectionAuthorizationProvider(app,
       config.provider.readConnection, config.platformTimeoutMs);
@@ -88,7 +104,7 @@ function createReportingFactory({ analyticsConfig, workdriveBinding, acceptance,
       },
       // The shared budget checks this clock before every reservation, so expiry
       // also blocks immediate promise chains before the timer gets its turn.
-      reattestCheckpoints, now: assertAccepted, synthetic });
+      reattestCheckpoints, now: assertAccepted, synthetic, pdfRenderer: runtimeRenderer, reportBundle: true });
     async function approvedAttempt(scope, options = {}) {
       const at = assertAccepted();
       if (!options || typeof options !== 'object' || Array.isArray(options)
@@ -118,7 +134,8 @@ function createReportingFactory({ analyticsConfig, workdriveBinding, acceptance,
       }
     }
     Object.defineProperty(approvedAttempt, 'attemptTimeoutMs', { value: reconcile.attemptTimeoutMs });
-    return Object.freeze(approvedAttempt);
+    return deliveryFactory === null ? Object.freeze(approvedAttempt)
+      : attachTerminalReportDelivery(approvedAttempt, deliveryFactory(app, runtimeConfig, runtimeStore));
   };
 }
 

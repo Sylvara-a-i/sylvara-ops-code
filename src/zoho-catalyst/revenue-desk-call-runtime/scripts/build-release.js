@@ -11,15 +11,19 @@ const COMPONENT_PATH = 'src/zoho-catalyst/revenue-desk-call-runtime';
 const ANALYTICS_PATH = 'src/zoho-catalyst/revenue-desk-analytics';
 const WORKER_REPORTING_PATH = 'functions/revenue_desk_call_worker/reporting';
 const REPORTING_PATH = `${WORKER_REPORTING_PATH}/revenue-desk-analytics`;
+const CONTROL_REPORTING_PATH = 'functions/revenue_desk_route_control/reporting/revenue-desk-analytics';
+const DELIVERY_LIBS = ['report-delivery-control','report-delivery-handlers','report-mail-sender','report-delivery-snapshot',
+  'report-run-store','facts','errors','connection-boundary','config','source-revision'];
 const CORE_BRIDGE_PATH = `${WORKER_REPORTING_PATH}/revenue-desk-call-runtime/functions/revenue_desk_call_gateway`;
 const SOURCE_STAMP_PATH = 'functions/revenue_desk_call_gateway/lib/source-revision.js';
 const ANALYTICS_STAMP_PATH = `${REPORTING_PATH}/functions/analytics_sync/lib/source-revision.js`;
+const CONTROL_ANALYTICS_STAMP_PATH = `${CONTROL_REPORTING_PATH}/functions/analytics_sync/lib/source-revision.js`;
 const REPORT_TOOLS = Object.freeze([
   'build-free-test-report', 'build-private-call-ledger', 'create-durable-report-composition',
-  'create-reporting-factory',
+  'create-reporting-factory', 'create-report-delivery-factory',
   'evaluate-dashboard-pre-render-gate', 'opportunity-value', 'prepare-free-test-draft',
   'prepare-workdrive-draft', 'read-reconciled-free-test-input', 'render-free-test-report',
-  'reattest-report-checkpoints',
+  'reattest-report-checkpoints', 'report-brand', 'report-packet-layout',
 ]);
 const CORE_BRIDGES = Object.freeze([
   'analytics-outbox', 'crm-report-baseline', 'reporting', 'runtime-service',
@@ -64,7 +68,7 @@ const REQUIRED_FILES = new Set([
   SOURCE_STAMP_PATH,
   ...CORE_BRIDGES.map((name) => `functions/revenue_desk_call_gateway/lib/${name}.js`),
   ANALYTICS_STAMP_PATH,
-  ...REPORT_TOOLS.map((name) => `${REPORTING_PATH}/tools/${name}.js`),
+  ...REPORT_TOOLS.filter(name => !['report-brand','report-packet-layout','create-report-delivery-factory'].includes(name)).map((name) => `${REPORTING_PATH}/tools/${name}.js`),
   `${REPORTING_PATH}/config/free-test-report-contract.json`,
   `${REPORTING_PATH}/config/analytics-model-contract.json`,
   ...['analytics-client', 'catalyst-store', 'report-attempt-budget', 'report-run-store',
@@ -151,11 +155,49 @@ function readTree(revision) {
     }
     entries.push({ object, relative, repositoryPath });
   }
+  if (entries.some(entry => entry.relative === 'functions/revenue_desk_route_control/lib/report-delivery-composition.js')) {
+    const deliveryPaths = new Set(['tools/create-report-delivery-factory.js',
+      ...DELIVERY_LIBS.map(name => `functions/analytics_sync/lib/${name}.js`)]);
+    for (const entry of [...entries]) {
+      if (entry.relative.startsWith(`${REPORTING_PATH}/`)
+        && deliveryPaths.has(entry.relative.slice(REPORTING_PATH.length + 1))) {
+        entries.push({...entry, relative: entry.relative.replace(REPORTING_PATH, CONTROL_REPORTING_PATH)});
+      }
+    }
+    for (const relative of deliveryPaths) {
+      if (!entries.some(entry => entry.relative === `${CONTROL_REPORTING_PATH}/${relative}`))
+        throw new Error('Controller report delivery package is incomplete.');
+    }
+  }
   entries.sort((left, right) => left.relative.localeCompare(right.relative));
   const present = new Set(entries.map(({ relative }) => relative));
   if (present.size !== entries.length) throw new Error('Release tree contains a duplicate output path.');
   for (const required of REQUIRED_FILES) {
     if (!present.has(required)) throw new Error(`Release commit is missing ${required}.`);
+  }
+  // Historical accepted releases remain exportable. A revision that introduces
+  // the native factory must carry both renderer and licensed static-font module.
+  const factory = entries.find(entry => entry.relative === `${REPORTING_PATH}/tools/create-reporting-factory.js`);
+  if (factory && readBlob(factory.object).toString('utf8').includes("lib/native-pdf-renderer")) {
+    for (const name of ['native-pdf-renderer', 'pdf-fonts']) {
+      if (!present.has(`${REPORTING_PATH}/functions/analytics_sync/lib/${name}.js`)) {
+        throw new Error('Native PDF renderer package is incomplete.');
+      }
+    }
+  }
+  if (factory && readBlob(factory.object).toString('utf8').includes('attachTerminalReportDelivery')) {
+    for (const name of ['report-delivery-control','report-delivery-handlers','report-mail-sender','report-delivery-snapshot']) {
+      if (!present.has(`${REPORTING_PATH}/functions/analytics_sync/lib/${name}.js`))
+        throw new Error('Report delivery package is incomplete.');
+    }
+    if (!present.has(`${REPORTING_PATH}/tools/create-report-delivery-factory.js`))
+      throw new Error('Report delivery factory package is incomplete.');
+  }
+  const report = entries.find(entry => entry.relative === `${REPORTING_PATH}/tools/render-free-test-report.js`);
+  if (report && readBlob(report.object).toString('utf8').includes("./report-packet-layout")) {
+    for (const name of ['report-brand','report-packet-layout']) {
+      if (!present.has(`${REPORTING_PATH}/tools/${name}.js`)) throw new Error('Paired PDF presentation package is incomplete.');
+    }
   }
   return entries;
 }
@@ -180,8 +222,12 @@ function writeCoreBridges(root, entries) {
   // Report tools retain their source-relative paths, but these bridges resolve
   // the materialized worker package. Copying core JS here would split reporting
   // WeakSet identity and silently reject genuine canonical call details.
+  const bridgeRoots = [CORE_BRIDGE_PATH];
+  if(entries.some(entry => entry.relative.startsWith(`${CONTROL_REPORTING_PATH}/`)))
+    bridgeRoots.push('functions/revenue_desk_route_control/reporting/revenue-desk-call-runtime/functions/revenue_desk_call_gateway');
+  for (const bridgeRoot of bridgeRoots) {
   for (const name of CORE_BRIDGES) {
-    const relative = `${CORE_BRIDGE_PATH}/lib/${name}.js`;
+    const relative = `${bridgeRoot}/lib/${name}.js`;
     const destination = safeDestination(root, relative);
     fs.mkdirSync(path.dirname(destination), { recursive: true });
     fs.writeFileSync(destination, `'use strict';\n\n// One canonical runtime package owns report trust.\n`
@@ -191,11 +237,12 @@ function writeCoreBridges(root, entries) {
   }
   const contract = entries.find((entry) => entry.relative
     === 'functions/revenue_desk_call_gateway/contracts/revenue-desk-call-contract.json');
-  const relative = `${CORE_BRIDGE_PATH}/contracts/revenue-desk-call-contract.json`;
+  const relative = `${bridgeRoot}/contracts/revenue-desk-call-contract.json`;
   const destination = safeDestination(root, relative);
   fs.mkdirSync(path.dirname(destination), { recursive: true });
   fs.writeFileSync(destination, readBlob(contract.object), { flag: 'wx' });
   generated.push({ relative, generated: 'canonical_gateway_contract_copy', source: contract });
+  }
   return generated;
 }
 
@@ -310,6 +357,8 @@ function build() {
 
     stampSource(stagingRoot, SOURCE_STAMP_PATH, SENTINEL, revision);
     stampSource(stagingRoot, ANALYTICS_STAMP_PATH, '__SYLVARA_UNSTAMPED_SOURCE_REVISION__', revision);
+    if(entries.some(entry=>entry.relative===CONTROL_ANALYTICS_STAMP_PATH))
+      stampSource(stagingRoot, CONTROL_ANALYTICS_STAMP_PATH, '__SYLVARA_UNSTAMPED_SOURCE_REVISION__', revision);
     const generated = writeCoreBridges(stagingRoot, entries);
     validateArtifact(stagingRoot);
 
@@ -353,4 +402,4 @@ if (require.main === module) {
 }
 
 module.exports = { readTree, readBlob, writeCoreBridges, stampSource, validateArtifact,
-  SOURCE_STAMP_PATH, ANALYTICS_STAMP_PATH };
+  SOURCE_STAMP_PATH, ANALYTICS_STAMP_PATH, CONTROL_ANALYTICS_STAMP_PATH };

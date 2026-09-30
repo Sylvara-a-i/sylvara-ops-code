@@ -6,6 +6,9 @@ const budgets = new WeakSet();
 const MAXIMUMS = Object.freeze({ analytics_read: 12, source_read: 240, checkpoint_write: 3,
   workdrive_read: 24, workdrive_write: 1, report_run_read: 16, report_run_write: 12 });
 
+const PAIR_MAXIMUMS = Object.freeze({ ...MAXIMUMS, workdrive_read: 48, workdrive_write: 2,
+  report_run_read: 40, report_run_write: 26 });
+
 /** One trusted construction-time budget for the complete reporting attempt.
  * Reservations count even when authorization or a request fails. They cannot be
  * replenished by a retry, another source pass, or a document adapter.
@@ -16,7 +19,7 @@ function createReportAttemptBudget({ signal, timeoutMs, limits, now = Date.now }
     && limits && typeof limits === 'object' && !Array.isArray(limits)
     && Object.keys(limits).sort().join(',') === Object.keys(MAXIMUMS).sort().join(',')
     && Object.keys(MAXIMUMS).every((key) => Number.isSafeInteger(limits[key])
-      && limits[key] >= 0 && limits[key] <= MAXIMUMS[key]),
+      && limits[key] >= 0 && limits[key] <= PAIR_MAXIMUMS[key]),
   'REPORT_BUDGET_INVALID', 'Report attempt budget is invalid.');
   const startedAt = now();
   invariant(Number.isSafeInteger(startedAt) && startedAt >= 0
@@ -67,4 +70,4 @@ function createReportAttemptBudget({ signal, timeoutMs, limits, now = Date.now }
 
 const isReportAttemptBudget = (value) => budgets.has(value);
 
-module.exports = { createReportAttemptBudget, isReportAttemptBudget, REPORT_ATTEMPT_MAXIMUMS: MAXIMUMS };
+module.exports = { createReportAttemptBudget, isReportAttemptBudget, REPORT_ATTEMPT_MAXIMUMS: MAXIMUMS, REPORT_PAIR_ATTEMPT_MAXIMUMS: PAIR_MAXIMUMS };

@@ -177,6 +177,19 @@ function createRequestListener({
         && String(app?.config?.projectId || '') === projectId,
       'CONTROL_AUTHENTICATION_FAILED', 'Control runtime identity is invalid.',
       { httpStatus: 503 });
+      if (body.profile === 'report_delivery_v1') {
+        invariant(action === 'approve' && typeof factories.reportDelivery === 'function',
+          'CONTROL_PRECONDITION_FAILED', 'Report delivery binding is unavailable.', { httpStatus: 503 });
+        // Existing authenticated controller principal; never body.actor. This
+        // branch cannot construct CRM control writers or a Retell provider.
+        const store = (factories.store || createCatalystStore)(app, config);
+        const handlers = factories.reportDelivery(app, config, store);
+        const result = await handlers.handle(body, { actor: Object.freeze({
+          kind: 'internal_controller', identity: config.operatorIdHash,
+        }) });
+        send(response, 200, { ok: true, action: body.action, result });
+        return;
+      }
       const crm = (factories.crm || createCrmControlClient)(config, {
         readAuthorization: createAuthorizationProvider(app,
           config.crmReadConnectionLinkName, /^Zoho-oauthtoken [A-Za-z0-9._-]{16,4096}$/,

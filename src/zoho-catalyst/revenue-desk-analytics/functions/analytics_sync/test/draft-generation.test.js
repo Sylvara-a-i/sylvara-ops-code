@@ -58,7 +58,7 @@ test('reconciled canonical records generate one private client draft and hash-on
   const files = paths(directory, result);
   assert.equal(fs.readdirSync(directory).length, 3);
   const html = fs.readFileSync(files.document, 'utf8');
-  assert.match(html, /Draft — Client layout for review — Not for delivery/);
+  assert.match(html, /Private Review Draft - Not for delivery/);
   assert.match(html, /Synthetic dripping kitchen fixture/);
   assert.equal(result.documentSha256, sha256(html));
   const receipt = fs.readFileSync(files.receipt, 'utf8');

@@ -2148,9 +2148,11 @@ function createRuntimeService({
       ]);
       invariant(isPlainObject(prepared) && new Set([
         'awaiting_reconciled_evidence', 'draft_created_not_for_delivery',
-        'existing_draft_verified_not_for_delivery',
+        'existing_draft_verified_not_for_delivery', 'report_pair_verified_not_for_delivery',
       ]).has(prepared.status), 'REPORT_DRAFT_RECONCILIATION_REQUIRED', 'Terminal draft result is invalid.');
-      return Object.freeze({ ...result, reportDraftStatus: prepared.status });
+      return Object.freeze({ ...result, reportDraftStatus: prepared.status,
+        ...(new Set(['held','provider_accepted','delivery_reconciliation_required']).has(prepared.deliveryStatus)
+          ? { reportDeliveryStatus: prepared.deliveryStatus } : {}) });
     } catch {
       // Hook errors may carry private document content, paths or identifiers.
       // Preserve only a fixed failure while leaving completed source facts intact.

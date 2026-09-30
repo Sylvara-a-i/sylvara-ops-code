@@ -7,9 +7,9 @@ const path = require('node:path');
 const { buildFreeTestReport } = require('./build-free-test-report');
 
 const MAX_INPUT_BYTES = 2 * 1024 * 1024;
-const TITLE = 'Seven-Day Free Test Results';
+const TITLE = '7-Day Revenue Leak Test';
 const DRAFT = 'Draft — Operator review only — Not for delivery';
-const CLIENT_DRAFT_RENDERER_VERSION = 'free-test-client-v4';
+const CLIENT_DRAFT_RENDERER_VERSION = 'free-test-client-v6';
 const COVERAGE = Object.freeze({
   after_hours_only: 'After-hours only', no_answer_overflow_only: 'No-answer / overflow only',
   after_hours_and_overflow: 'After-hours and overflow',
@@ -37,7 +37,7 @@ const text = (value) => available(value) ? String(value) : 'Not available';
 const count = (value) => available(value) ? String(value) : 'Not available';
 const percent = (value) => available(value) ? `${value}%` : 'Not available';
 const amount = (value, currency) => available(value) && currency === 'USD'
-  ? `USD ${(value / 100).toFixed(2)}` : 'Not available';
+  ? opportunityAmount(value, currency) : 'Not available';
 const instant = (value) => available(value) ? `${value.replace('T', ' ').replace('.000Z', '').replace(/Z$/, '')} UTC` : 'Not available';
 const titleCase = (value) => available(value)
   ? value.split('_').map((word) => word[0].toUpperCase() + word.slice(1)).join(' ') : 'Not available';
@@ -88,7 +88,15 @@ function opportunityAmount(value, currency) {
   // currency owns the scale: JPY has no decimal places, while KWD has three.
   const scale = 10n ** BigInt(digits);
   const units = BigInt(value);
-  return `${currency} ${units / scale}${digits ? `.${String(units % scale).padStart(digits, '0')}` : ''}`;
+  const fraction = units % scale;
+  // CLDR's symbol display disambiguates dollars (for example CA$ and A$).
+  // Format the whole integer as BigInt, then substitute exact minor units;
+  // converting to a floating Number would round large documented valuations.
+  const formatter = new Intl.NumberFormat('en-US', { style: 'currency', currency,
+    currencyDisplay: 'symbol', minimumFractionDigits: fraction ? digits : 0,
+    maximumFractionDigits: digits });
+  return formatter.formatToParts(units / scale).map(part => part.type === 'fraction'
+    ? String(fraction).padStart(digits, '0') : part.value).join('').replace(/\u00a0/g, ' ');
 }
 
 function renderOpportunitySummary(value) {
@@ -186,7 +194,7 @@ function renderClientSummary(report, { now, synthetic }) {
 <title>${TITLE} — Client Summary Draft</title><style>
 @page { size: Letter; margin: .80in 1in .78in;
   font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
-  @top-left { content: "Sylvara | Free-Test Results"; font-size: 9pt; }
+  @top-left { content: "Sylvara | 7-Day Revenue Leak Test"; font-size: 9pt; }
   @top-right { content: "${synthetic ? 'Synthetic draft — No live calls' : 'Draft — Not for delivery'}"; font-size: 9pt; }
   @bottom-left { content: "Draft — Not for delivery | Rev. ${new Date(now).toISOString().slice(0, 10)}"; font-size: 9pt; }
   @bottom-right { content: "Page " counter(page) " of " counter(pages); font-size: 9pt; }
@@ -201,7 +209,9 @@ p { margin: 0 0 5pt; } header { border-bottom: 2px solid; padding-bottom: 8pt; }
 .metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10pt; margin: 12pt 0; break-inside: avoid; }
 .metrics div { display: grid; grid-template-rows: 1fr auto; border-bottom: 1px solid #777; padding-bottom: 6pt; } dt { font-size: 10pt; } dd { margin: 4pt 0 0; font-size: 22pt; font-weight: bold; }
 .summary-overview, .value-summary, .summary-section, .opportunity-section, .opportunity-groups { break-inside: avoid; }
-#call-detail + p { break-after: avoid; }
+/* Keep the full introduction intact and with the first record when it fits. */
+#call-detail { page-break-after: avoid; }
+#call-detail + p { break-inside: avoid; page-break-inside: avoid; break-after: avoid; page-break-after: avoid; }
 .value-summary { border: 1px solid #777; padding: 8pt; margin-bottom: 8pt; } .value-summary h2 { margin-top: 0; }
 .value-subtotal strong { font-size: 14pt; }
 table { border-collapse: collapse; width: 100%; margin: 8pt 0; font-size: 10pt; }
@@ -213,7 +223,7 @@ ul { padding-left: 16pt; margin: 5pt 0; } li { margin-bottom: 4pt; } footer { bo
 @media print { body { max-width: none; padding: 0; } footer { display: none; } }
 ${report.callDetails ? '.call-detail { break-inside: avoid; } .call-detail table { table-layout: fixed; } .call-detail th { width: 32%; } .call-detail td { width: 68%; overflow-wrap: anywhere; }' : ''}
 </style></head><body>
-<header><p>Sylvara | Free-Test Results</p><p class="status">Draft — Client layout for review — Not for delivery</p>
+<header><p>Sylvara | 7-Day Revenue Leak Test</p><p class="status">Private Review Draft - Not for delivery</p>
 ${synthetic ? '<p class="synthetic">Synthetic Demo — No Live Calls</p>' : ''}
 <h1>${TITLE}</h1><p><strong>Business name:</strong> Not supplied</p>
 <p><strong>${synthetic ? 'Illustrative test period' : 'Test period'}:</strong> ${escapeHtml(instant(during.startedAtUtc))} to ${escapeHtml(instant(during.endedAtUtc))}</p>
@@ -245,17 +255,24 @@ ${renderOpportunityValue(report.opportunityValue, report.callDetails)}${renderCa
  */
 function renderFreeTestReport(input, options = {}) {
   if (!options || typeof options !== 'object' || Array.isArray(options)
-    || Object.keys(options).some((key) => !['now', 'synthetic', 'audience', 'callDetails', 'opportunityReview', 'documentRevisionAt'].includes(key))) fail('REPORT_RENDER_OPTIONS_INVALID');
+    || Object.keys(options).some((key) => !['now', 'synthetic', 'audience', 'callDetails', 'opportunityReview', 'documentRevisionAt', 'packetRole'].includes(key))) fail('REPORT_RENDER_OPTIONS_INVALID');
   const { now = Date.now(), synthetic = false, audience = 'internal', callDetails = null,
-    opportunityReview = null, documentRevisionAt = now } = options;
+    opportunityReview = null, documentRevisionAt = now, packetRole = null } = options;
   if (!Number.isSafeInteger(now) || typeof synthetic !== 'boolean'
     || !['internal', 'client'].includes(audience)
+    || (packetRole !== null && (!['summary','supporting'].includes(packetRole) || audience !== 'client'))
     || (callDetails !== null && audience !== 'client')
     || (opportunityReview !== null && (audience !== 'client' || callDetails === null))
     || !Number.isSafeInteger(documentRevisionAt) || documentRevisionAt < 0
     || documentRevisionAt > now) fail('REPORT_RENDER_OPTIONS_INVALID');
   const report = buildFreeTestReport(input, now, callDetails, opportunityReview);
-  if (audience === 'client') return renderClientSummary(report, { now: documentRevisionAt, synthetic });
+  if (packetRole === 'summary') return require('./report-packet-layout').renderSummaryPacket(report, { now: documentRevisionAt, synthetic, money: opportunityAmount });
+  if (audience === 'client') {
+    const html = renderClientSummary(report, { now: documentRevisionAt, synthetic });
+    if (packetRole !== 'supporting') return html;
+    return html.replace('Client Summary Draft', 'Complete Supporting Packet')
+      .replace('<h1>7-Day Revenue Leak Test</h1>', '<header class="packet-brand"><div style="width:42pt;height:42pt">'+require('./report-brand').logoSvg().replace('<svg ', '<svg style="width:100%;height:100%" ')+'</div></header><h1>7-Day Revenue Leak Test</h1><p><strong>Complete supporting packet</strong></p>');
+  }
   const before = report.beforeTest;
   const during = report.duringTest;
   const evidence = report.evidence;
@@ -296,7 +313,7 @@ thead { display: table-header-group; } tr { break-inside: avoid; }
 footer { margin-top: 18pt; border-top: 1px solid; padding-top: 6pt; font-size: 9pt; }
 @media print { body { max-width: none; padding: 0; } }
 </style></head><body>
-<header><p>Sylvara | Free-Test Results</p><p class="status">${DRAFT}</p>
+<header><p>Sylvara | 7-Day Revenue Leak Test</p><p class="status">${DRAFT}</p>
 ${synthetic ? '<p class="synthetic">Synthetic Demo — No Live Calls</p>' : ''}
 <h1>${TITLE}</h1><p>One test, one business. Review the evidence and limitations before deciding next steps.</p>
 <p>Owner: Sylvara operator | Document version 1 | Rev. ${escapeHtml(new Date(now).toISOString().slice(0, 10))}</p></header>
