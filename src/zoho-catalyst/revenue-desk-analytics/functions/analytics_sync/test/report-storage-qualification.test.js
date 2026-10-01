@@ -25,10 +25,10 @@ test('actual managed SDK proof makes exactly four inserts/eight reads, retains t
   assert.equal(result.status,'storage_unique_successor_observed');assert.equal(result.inserts,4);assert.equal(result.reads,8);
   assert.equal(result.physicalRows,2);assert.equal(result.overlappingRounds,2);assert.equal(result.qualificationAuthority,false);
   assert.equal(result.deliveryAuthority,false);assert.equal(f.sdk.rows.size,2);
-  assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/row')).length,4);
-  assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/query')).length,7);
+  assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/table/ReportRuns/row')).length,4);
+  assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/query')).length,8);
   assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/project-user/current')).length,1);
-  assert.ok(f.sdk.requests.every(x=>/\/(?:query|project-user\/current|table\/ReportRuns\/row)$/.test(x.path)));
+  assert.ok(f.sdk.requests.every(x=>/\/(?:query|project-user\/current|table\/(?:ReportRuns|RevenueDeskEventReceipts)\/row)$/.test(x.path)));
   assert.ok(!JSON.stringify(result).includes('987654321'));assert.ok(!JSON.stringify(result).includes('private-unused'));
   assert.match(result.evidenceDigest,/^[a-f0-9]{64}$/);assert.ok(f.sdk.principals.every(x=>x==='user'));
  }finally{f.sdk.restore();}
@@ -38,7 +38,7 @@ test('warm double tap and cold repeat cannot restart a durable diagnostic; readb
   const factory=f.factory(),first=factory(f.sdk.app,f.config),second=factory(f.sdk.app,f.config);
   const outcomes=await Promise.allSettled([first.handle(f.command,{actor:f.actor}),second.handle(f.command,{actor:f.actor})]);
   assert.equal(outcomes.filter(x=>x.status==='fulfilled').length,1);assert.equal(f.sdk.rows.size,2);
-  const writes=()=>f.sdk.requests.filter(x=>x.path.endsWith('/row')).length;
+  const writes=()=>f.sdk.requests.filter(x=>x.path.endsWith('/table/ReportRuns/row')).length;
   assert.equal(writes(),4);await assert.rejects(f.make().handle(f.command,{actor:f.actor}),held);assert.equal(writes(),4);
   const evidence=await f.make().handle({...f.command,action:'read_storage_evidence'},{actor:f.actor});
   assert.equal(evidence.status,'storage_evidence_unattested');assert.equal(evidence.inserts,0);assert.equal(evidence.reads,3);
@@ -64,11 +64,11 @@ test('wrong current principal stops after one read and before any ReportRuns wri
 test('lost insert response retains partial immutable evidence and never qualifies or retries a mutation',async()=>{
  const f=fixture();try{
   f.sdk.mode='lost_insert';const handler=f.make();await assert.rejects(handler.handle(f.command,{actor:f.actor}),held);
-  assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/row')).length,2);assert.equal(f.sdk.rows.size,1);
+  assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/table/ReportRuns/row')).length,2);assert.equal(f.sdk.rows.size,1);
   await assert.rejects(handler.handle(f.command,{actor:f.actor}),held);
   f.sdk.mode='normal';const evidence=await f.make().handle({...f.command,action:'read_storage_evidence'},{actor:f.actor});
   assert.equal(evidence.headVersion,1);assert.equal(evidence.qualificationAuthority,false);
-  assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/row')).length,2);assert.equal(f.sdk.rows.size,1);
+  assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/table/ReportRuns/row')).length,2);assert.equal(f.sdk.rows.size,1);
  }finally{f.sdk.restore();}
 });
 test('creator or stored envelope mismatch is held on readback without destructive cleanup or extra writes',async()=>{
@@ -77,7 +77,7 @@ test('creator or stored envelope mismatch is held on readback without destructiv
   await assert.rejects(f.make().handle({...f.command,action:'read_storage_evidence'},{actor:f.actor}),held);
   saved.CREATORID='987654321';saved.ReportPayloadJson+=' ';
   await assert.rejects(f.make().handle({...f.command,action:'read_storage_evidence'},{actor:f.actor}),held);
-  assert.equal(f.sdk.rows.size,2);assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/row')).length,4);
+  assert.equal(f.sdk.rows.size,2);assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/table/ReportRuns/row')).length,4);
  }finally{f.sdk.restore();}
 });
 test('late authentication and deadline cannot dispatch after diagnostic admission expires',async()=>{
@@ -85,5 +85,52 @@ test('late authentication and deadline cannot dispatch after diagnostic admissio
   f.binding.timeoutMs=20;let release;f.sdk.authDelay=new Promise(resolve=>{release=resolve;});
   await assert.rejects(f.make().handle(f.command,{actor:f.actor}),held);release();
   await new Promise(resolve=>setTimeout(resolve,30));assert.equal(f.sdk.requests.length,0);assert.equal(f.sdk.rows.size,0);
+ }finally{f.sdk.restore();}
+});
+
+test('simultaneous cold instances admit exactly one durable owner before the four target inserts',async()=>{
+ const f=fixture();try{
+  const outcomes=await Promise.allSettled([f.make().handle(f.command,{actor:f.actor}),f.make().handle(f.command,{actor:f.actor})]);
+  assert.equal(outcomes.filter(x=>x.status==='fulfilled').length,1);
+  assert.equal(f.sdk.receipts.size,1);assert.equal(f.sdk.rows.size,2);
+  assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/table/ReportRuns/row')).length,4);
+  assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/table/RevenueDeskEventReceipts/row')).length,2);
+  const result=outcomes.find(x=>x.status==='fulfilled').value;
+  assert.equal(result.admissionReads,1);assert.equal(result.admissionInserts,1);
+  assert.equal(result.durableAdmissionObserved,true);assert.match(result.admissionEvidenceDigest,/^[a-f0-9]{64}$/);
+ }finally{f.sdk.restore();}
+});
+for(const mode of ['admission_lost','admission_conflict'])test(mode+' never grants target dispatch or repeats admission',async()=>{
+ const f=fixture();try{
+  f.sdk.mode=mode;await assert.rejects(f.make().handle(f.command,{actor:f.actor}),held);
+  assert.equal(f.sdk.rows.size,0);assert.equal(f.sdk.receipts.size,1);
+  assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/table/RevenueDeskEventReceipts/row')).length,1);
+  f.sdk.mode='normal';await assert.rejects(f.make().handle(f.command,{actor:f.actor}),held);
+  assert.equal(f.sdk.rows.size,0);assert.equal(f.sdk.receipts.size,1);
+ }finally{f.sdk.restore();}
+});
+
+test('admission response timeout permanently consumes claim and cannot dispatch after cancellation',async()=>{
+ const f=fixture();try{
+  f.binding.timeoutMs=25;f.sdk.mode='admission_stall';
+  await assert.rejects(f.make().handle(f.command,{actor:f.actor}),held);
+  await new Promise(resolve=>setTimeout(resolve,30));
+  assert.equal(f.sdk.rows.size,0);assert.equal(f.sdk.receipts.size,1);
+  f.sdk.mode='normal';await assert.rejects(f.make().handle(f.command,{actor:f.actor}),held);
+  assert.equal(f.sdk.rows.size,0);
+ }finally{f.sdk.restore();}
+});
+test('source mismatch and expiration fail before admission requests',async()=>{
+ const f=fixture();try{
+  const original=f.config.sourceRevision;f.config.sourceRevision='f'.repeat(40);assert.throws(()=>f.make(),held);
+  f.config.sourceRevision=original;f.advance(60000);assert.throws(()=>f.make(),held);
+  assert.equal(f.sdk.requests.length,0);assert.equal(f.sdk.receipts.size,0);
+ }finally{f.sdk.restore();}
+});
+
+test('bounded primitive representation does not change admission ownership or protected expiry',async()=>{
+ const f=fixture();try{
+  f.sdk.mode='admission_representation';const result=await f.make().handle(f.command,{actor:f.actor});
+  assert.equal(result.durableAdmissionObserved,true);assert.equal(result.inserts,4);
  }finally{f.sdk.restore();}
 });

@@ -9,7 +9,7 @@ function sdkClient(app){
  const {AuthorizedHttpClient}=require(path.join(root,'lib/utils/api-request'));
  return new AuthorizedHttpClient(app);
 }
-/** Fixed ReportRuns-only transport. RAW SDK bodies suppress implicit retries.
+/** Fixed ReportRuns and diagnostic admission-receipt transport. RAW SDK bodies suppress implicit retries.
  * Same managed runtime principal; no credential extraction or SDK mutation.
  * Every request owns an actual deadline/cancellation, with bounded response.
  */
@@ -47,7 +47,7 @@ function createReportRunTransport({app,timeoutMs=3000,createClient=sdkClient}={}
    request.once('close',()=>requests.delete(request));
    // Applies to error responses too, which SDK 3.4.0 otherwise buffers itself.
    request.once('response',stream=>{
-    responseStatus=stream.statusCode;trace({event:'response',operation:endpoint==='/table/ReportRuns/row'?'insert':'read',status:responseStatus});
+    responseStatus=stream.statusCode;trace({event:'response',operation:endpoint.endsWith('/row')?'insert':'read',status:responseStatus});
     streams.add(stream);let total=0,chunks=0;const parts=[];
     stream.on('data',chunk=>{if(++chunks>128||(total+=Buffer.byteLength(chunk))>65536){
      rejectBody(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'));
@@ -59,7 +59,7 @@ function createReportRunTransport({app,timeoutMs=3000,createClient=sdkClient}={}
     stream.once('close',()=>streams.delete(stream));
     if(signal.aborted){request.destroy(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'));stream.destroy();}
    });
-   try{admit();trace({event:'dispatch',operation:endpoint==='/table/ReportRuns/row'?'insert':'read'});}catch{request.destroy(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'));return request;}
+   try{admit();trace({event:'dispatch',operation:endpoint.endsWith('/row')?'insert':'read'});}catch{request.destroy(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'));return request;}
    return originalPipe.call(this,request,...args);
   };
   try{
@@ -73,13 +73,13 @@ function createReportRunTransport({app,timeoutMs=3000,createClient=sdkClient}={}
     const p=result?.data;if(!p||Array.isArray(p)||typeof p!=='object')held();
     return Object.freeze({userId:String(p.user_id||''),roleId:String(p.role_details?.role_id||''),roleName:p.role_details?.role_name,status:p.status});
    }
-   if(!Array.isArray(result?.data))held();trace({event:'outcome',operation:endpoint==='/table/ReportRuns/row'?'insert':'read',accepted:true,duplicate:false});return result.data;
+   if(!Array.isArray(result?.data))held();trace({event:'outcome',operation:endpoint.endsWith('/row')?'insert':'read',accepted:true,duplicate:false});return result.data;
   }catch{failed=true;
    // Diagnostic observes only a documented duplicate code, never provider text.
    if(typeof options.trace==='function'&&responseStatus!==undefined){try{
     const raw=await Promise.race([responseBody,deadline]);
     const error=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(raw));
-    trace({event:'outcome',operation:endpoint==='/table/ReportRuns/row'?'insert':'read',accepted:false,
+    trace({event:'outcome',operation:endpoint.endsWith('/row')?'insert':'read',accepted:false,
      duplicate:responseStatus===409&&error?.data?.error_code==='DUPLICATE_VALUE'});
    }catch{}}
    held();}finally{body.destroy();requestStream?.destroy();clearTimeout(timer);
@@ -88,6 +88,21 @@ function createReportRunTransport({app,timeoutMs=3000,createClient=sdkClient}={}
 
  const valid=key=>/^revenue-desk-report-v[12]:[a-f0-9]{64}(?::[0-9]{10})?$/.test(key||'');
  return Object.freeze({
+  async insertAdmission(row,options){
+   const fields=['EVENT_KEY','RECEIPT_KIND','STATUS','EVENT_TYPE','EVENT_DATA_JSON','PAYLOAD_FINGERPRINT',
+    'RECEIPT_VERSION','SOURCE_REVISION','SOURCE_ENVIRONMENT','RECEIVED_AT','PROCESSED_AT'];
+   if(!row||Object.keys(row).sort().join(',')!==fields.sort().join(',')||row.EVENT_TYPE!=='storage_qualification'
+    ||row.SOURCE_ENVIRONMENT!=='development'||!/^([a-f0-9]{64})$/.test(row.PAYLOAD_FINGERPRINT||'')
+    ||![row.RECEIVED_AT,row.PROCESSED_AT].every(x=>typeof x==='string'&&Number.isFinite(Date.parse(x)))
+    ||!/^report-storage:[a-f0-9]{64}$/.test(row?.EVENT_KEY||'')||row.RECEIPT_KIND!=='report_storage_admission'
+    ||row.STATUS!=='Completed'||row.RECEIPT_VERSION!==1||!/^([a-f0-9]{40})$/.test(row.SOURCE_REVISION||'')
+    ||typeof row.EVENT_DATA_JSON!=='string'||Buffer.byteLength(row.EVENT_DATA_JSON)>2048)held();
+   return send('/table/RevenueDeskEventReceipts/row',[row],false,options);
+  },
+  async readAdmission(key,options){
+   if(!/^report-storage:[a-f0-9]{64}$/.test(key||''))held();
+   return send('/query',{query:`SELECT * FROM RevenueDeskEventReceipts WHERE EVENT_KEY = '${key}' LIMIT 2`},true,options);
+  },
   // Fixed read-only SDK-documented principal endpoint, same managed user path.
   async currentPrincipal(options){return send('/project-user/current',null,false,options,'GET');},
   async insert(row,options){

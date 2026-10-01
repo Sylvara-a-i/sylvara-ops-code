@@ -7,9 +7,9 @@ const PROFILE='report_storage_qualification_v1',HASH=/^[a-f0-9]{64}$/,ID=/^[1-9]
 const sha=x=>crypto.createHash('sha256').update(typeof x==='string'?x:canonicalJson(x)).digest('hex');
 const exact=(x,keys)=>x&&typeof x==='object'&&!Array.isArray(x)&&Object.keys(x).sort().join(',')===keys.sort().join(',');
 function held(){throw Object.assign(new Error('REPORT_STORAGE_QUALIFICATION_HELD'),{code:'REPORT_STORAGE_QUALIFICATION_HELD'});}
-/** Diagnostic only. A warm reservation plus immutable root prevents replayed
- * effects; a single admitted invocation remains required across cold instances.
- * No claim of a distributed invocation counter or complete history audit. */
+/** Diagnostic only. A permanently consumed unique receipt admits one owner
+ * across cold instances. Ambiguous acceptance never grants dispatch. Admission
+ * requests are counted separately; replays still incur request/read cost. */
 function createProtectedStorageQualification({environment=process.env,now=Date.now,transportFactory=createReportRunTransport}={}){
  const consumed=new Set();
  return function storageQualification(app,config){
@@ -43,18 +43,47 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
    let reject;const deadline=new Promise((_,r)=>{reject=r;});deadline.catch(()=>{});
    const cancel=()=>{abort.abort();reject(new Error('REPORT_STORAGE_QUALIFICATION_HELD'));};
    signal?.addEventListener('abort',cancel,{once:true});if(signal?.aborted)cancel();const timer=setTimeout(cancel,b.timeoutMs);
-   const counts={reads:0,inserts:0};
+   const counts={reads:0,inserts:0,admissionReads:0,admissionInserts:0};
    function admission(){const at=active();if(abort.signal.aborted||at<start||at-start>=b.timeoutMs||performance.now()>=wall)held();return at;}
    const budget={assertActive:admission,consume(kind){admission();if(kind==='report_run_read'){if(++counts.reads>8)held();}
+    else if(kind==='admission_read'){if(!write||++counts.admissionReads>1)held();}
+    else if(kind==='admission_write'){if(!write||++counts.admissionInserts>1)held();}
     else if(kind==='report_run_write'){if(!write||++counts.inserts>4)held();}else held();}};
    const options={signal:abort.signal,budget};
    async function run(){
     admission();const io=transportFactory({app,timeoutMs:Math.min(b.timeoutMs,3000)});
-    if(!['query','insert','currentPrincipal'].every(k=>typeof io?.[k]==='function'))held();
+    if(!['query','insert','currentPrincipal','insertAdmission','readAdmission'].every(k=>typeof io?.[k]==='function'))held();
     budget.consume('report_run_read');const principal=await io.currentPrincipal(options);admission();
     if(principal?.status!=='ACTIVE'||principal.roleName!=='App Administrator'||!ID.test(principal.userId||'')||!ID.test(principal.roleId||'')
      ||sha({projectId:b.projectId,userId:principal.userId,roleId:principal.roleId})!==b.principalSha256
      ||sha(principal.userId)!==b.creatorIdSha256)held();
+    let admissionEvidenceDigest;
+    if(write){
+     // No pre-read race and no ambiguous-write recovery authorizing dispatch.
+     const owner=crypto.randomUUID(),eventKey='report-storage:'+key;
+     const payload=canonicalJson({kind:'report_storage_admission_v1',operationDigest:key,owner,
+      sourceRevision:b.sourceRevision,principalSha256:b.principalSha256,bindingSha256:pin});
+     const receipt={EVENT_KEY:eventKey,RECEIPT_KIND:'report_storage_admission',STATUS:'Completed',
+      EVENT_TYPE:'storage_qualification',EVENT_DATA_JSON:payload,PAYLOAD_FINGERPRINT:sha(payload),
+      RECEIPT_VERSION:1,SOURCE_REVISION:b.sourceRevision,SOURCE_ENVIRONMENT:'development',
+      RECEIVED_AT:new Date(admission()).toISOString(),PROCESSED_AT:new Date(admission()).toISOString()};
+     budget.consume('admission_write');const accepted=await io.insertAdmission(receipt,options);admission();
+     if(!Array.isArray(accepted)||accepted.length!==1)held();
+     budget.consume('admission_read');const observed=await io.readAdmission(eventKey,options);admission();
+     if(!Array.isArray(observed)||observed.length!==1)held();
+     const row=observed[0].RevenueDeskEventReceipts||observed[0],ack=accepted[0];
+     if(!/^[1-9][0-9]{0,29}$/.test(String(row?.ROWID||''))||String(row.ROWID)!==String(ack?.ROWID||'')
+      ||sha(String(row.CREATORID||''))!==b.creatorIdSha256)held();
+     for(const [field,value] of Object.entries(receipt)){
+      if(field==='RECEIPT_VERSION'){if(!/^(?:1)$/.test(String(row[field]))||!/^(?:1)$/.test(String(ack[field])))held();}
+      else if(field==='RECEIVED_AT'||field==='PROCESSED_AT'){
+       // Provider formatting is not an expiry authority; independent readback
+       // must retain exactly the nonempty bounded timestamp acknowledged.
+       if(typeof row[field]!=='string'||row[field].length<1||row[field].length>64||row[field]!==ack[field])held();
+      }else if(row[field]!==value||ack[field]!==value)held();
+     }
+     admissionEvidenceDigest=sha({row:structuredClone(row)});
+    }
     const rows=new Map();
     const checked={async query(sql,o){const {trace,...readOptions}=o||{};const found=await io.query(sql,readOptions);admission();
      if(!Array.isArray(found)||found.length>2)held();
@@ -104,10 +133,11 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
     if(head?.version!==2||head.rowId!==successors[successorWinner].value.rowId||rows.size!==2||counts.reads!==8||counts.inserts!==4)held();
     const observedAt=admission(),evidence={bindingSha256:pin,operationDigest:key,principalSha256:b.principalSha256,
      rows:[...rows.values()].sort((a,c)=>String(a.ROWID).localeCompare(String(c.ROWID))),rootWinner,successorWinner,
-     requests:[...traces.entries()],counts,observedAt};
+     requests:[...traces.entries()],counts,admissionEvidenceDigest,observedAt};
     return Object.freeze({status:'storage_unique_successor_observed',mechanism:'unique_insert_successor_v1',operationDigest:key,
      evidenceDigest:sha(evidence),observedAt,physicalRows:2,reads:8,inserts:4,overlappingRounds:2,
-     singleAdmittedInvocationRequired:true,qualificationAuthority:false,deliveryAuthority:false});
+     admissionReads:counts.admissionReads,admissionInserts:counts.admissionInserts,admissionEvidenceDigest,
+     durableAdmissionObserved:true,singleAdmittedInvocationRequired:true,qualificationAuthority:false,deliveryAuthority:false});
    }
    try{const result=await Promise.race([run(),deadline]);admission();return result;}
    catch{held();}finally{clearTimeout(timer);abort.abort();signal?.removeEventListener('abort',cancel);}
