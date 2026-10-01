@@ -139,6 +139,7 @@ function codeForError(error) {
     "billing_rejected",
     "billing_state_invalid",
     "body_too_large",
+    "body_timeout",
     "configuration_invalid",
     "connection_unavailable",
     "content_type_not_allowed",

@@ -49,6 +49,6 @@
     { "name": "MAX_BODY_BYTES", "classification": "bounded-runtime-policy", "required": false },
     { "name": "OUTBOUND_TIMEOUT_MS", "classification": "bounded-runtime-policy", "required": false },
     { "name": "OUTBOUND_MAX_BYTES", "classification": "bounded-runtime-policy", "required": false },
-    { "name": "PLATFORM_OPERATION_TIMEOUT_MS", "classification": "bounded-runtime-policy", "required": false }
+    { "name": "PLATFORM_OPERATION_TIMEOUT_MS", "classification": "bounded-runtime-policy", "required": false, "boundary": "Also caps total authenticated inbound body collection; chunks do not restart the deadline." }
   ]
 }
