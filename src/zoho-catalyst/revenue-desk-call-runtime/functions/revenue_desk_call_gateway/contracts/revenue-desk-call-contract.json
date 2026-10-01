@@ -236,6 +236,19 @@
       "meaning": "Caller explicitly confirmed the exact final caller-stated usable number as the best callback number in this conversation; never caller ID, formatting, silence or an earlier corrected number.",
       "absent_or_false": "Callback number is unknown for human follow-up.",
       "provider_configuration_status": "Approved offline callback candidate; no live provider configuration or acceptance claimed."
+    },
+    "request_kind": {
+      "type": "string_enum",
+      "required": false,
+      "values": [
+        "new_service_request",
+        "existing_job_follow_up",
+        "unknown"
+      ],
+      "missing_value": "unknown",
+      "independent_of_customer_type": true,
+      "positive_bookable_opportunity_requires": "new_service_request",
+      "runtime_authority": false
     }
   },
   "retell_conversation_variable_fields": [

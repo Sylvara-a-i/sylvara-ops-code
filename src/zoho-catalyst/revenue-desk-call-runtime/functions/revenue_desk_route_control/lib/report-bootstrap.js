@@ -15,13 +15,14 @@ function createProtectedReportController({environment=process.env,now=Date.now,f
   if(!b||(!b.attestation.enabled&&!b.delivery.enabled)||String(app?.config?.projectId)!==b.projectId
    ||String(app.config.environment).toLowerCase()!=='development'||config.sourceRevision!==b.sourceRevision)held();
   const active=()=>{const at=now();if(at<b.verifiedAt||at>=b.expiresAt
-   ||(b.delivery.enabled&&at>=b.delivery.casQualification.expiresAt))held();return at;};active();
+   ||(b.delivery.enabled&&at>=b.delivery.claimQualification.expiresAt)
+   ||(b.attestation.enabled&&at>=b.attestation.claimQualification.expiresAt))held();return at;};active();
   const delivery=b.delivery.enabled?require('./report-delivery-composition').createReportDeliveryFactory({
    binding:{...b.delivery.binding,systemActor:workerReportActor(b)},
    readDestinationBinding:protectedDestinations(b.delivery.destinations),
    deliveryEnabled:false,autoDeliveryEnabled:false,projectionEnabled:false,now:active,fetchImpl})(app,config,store):null;
   if(!b.attestation.enabled)return delivery;
-  const {createReportRunStore}=require('../reporting/revenue-desk-analytics/functions/analytics_sync/lib/report-run-store');
+  const {createReportSuccessorStore}=require('../reporting/revenue-desk-analytics/functions/analytics_sync/lib/report-successor-store');
   const {createReportRecipientWriter}=require('../reporting/revenue-desk-analytics/functions/analytics_sync/lib/report-recipient-writer');
   const c={...config,...b.attestation.crm};
   // Private CRM metadata may not override authenticated controller authority.
@@ -34,7 +35,7 @@ function createProtectedReportController({environment=process.env,now=Date.now,f
   const conversionReader=createConfigurationConversionReader({crm,now,timeoutMs:c.platformTimeoutMs});
   const staging=createConfigurationStagingService({config:c,store,crm,core,sourceReader,conversionReader,now});
   const readSetup=createReportSetupReader({config:c,store,crm,core,now,sourceReader,conversionReader,staging});
-  const attest=createReportRecipientWriter({store:createReportRunStore({app,environment:'development'}),readSetup,
+  const attest=createReportRecipientWriter({store:createReportSuccessorStore({app,environment:'development'}),readSetup,
    authorityDigest:b.attestation.authorityDigest,systemActor:workerReportActor(b),now:active,expiresAt:b.expiresAt});
   return Object.freeze({async handle(command,options){
    if(command?.action==='attest_recipient')return attest(command,options);

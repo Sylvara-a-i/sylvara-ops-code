@@ -1,0 +1,49 @@
+'use strict';
+const assert=require('node:assert/strict'),crypto=require('node:crypto'),https=require('node:https'),http=require('node:http');
+const {Writable,PassThrough}=require('node:stream');
+const sha=x=>crypto.createHash('sha256').update(x).digest('hex');
+function fixture(){
+ let at=1800000000000;const rows=new Map(),requests=[],principals=[],created=[];let sequence=0,authDelay=null,mode='normal',clientCalls=0;
+ const binding={schemaVersion:1,enabled:true,environment:'development',sourceRevision:'a'.repeat(40),projectId:'123456789',
+  controlHost:'synthetic.invalid',tableId:'123456788',nonce:'c'.repeat(32),verifiedAt:at-1,expiresAt:at+60000,timeoutMs:1000};
+ const config={environment:'development',sourceRevision:binding.sourceRevision,controlHost:binding.controlHost,
+  expectedProjectIdSha256:sha(binding.projectId),operatorIdHash:'operator_'+sha('synthetic')};
+ let user='admin';
+ const app={config:{projectId:binding.projectId,projectKey:'synthetic-key',environment:'Development'},
+  credential:{switchUser(value){user=value;principals.push(value);},getCurrentUser:()=>user,getCurrentUserType:()=> 'admin'},
+  async authenticateRequest(request){if(authDelay)await authDelay;request.headers.Authorization='synthetic-managed-credential';}};
+ function query(sql){
+  const key=/IdempotencyKey = '([^']+)'/.exec(sql)?.[1];
+  if(key)return rows.has(key)?[{ReportRuns:structuredClone(rows.get(key))}]:[];
+  const prefix=/IdempotencyKey LIKE '([^']+)%'/.exec(sql)?.[1];
+  return [...rows.values()].filter(r=>r.IdempotencyKey.startsWith(prefix)).sort((a,b)=>b.RD_REPORT_VERSION-a.RD_REPORT_VERSION).slice(0,2).map(r=>({ReportRuns:structuredClone(r)}));
+ }
+ const originalHttps=https.request,originalHttp=http.request;
+ https.request=function(options,callback){
+  clientCalls++;const parts=[];let request;
+  request=new Writable({autoDestroy:false,write(chunk,_encoding,done){parts.push(Buffer.from(chunk));done();},final(done){
+   const payload=JSON.parse(Buffer.concat(parts));requests.push({path:options.path,payload});
+   assert.equal(options.headers.Authorization,'synthetic-managed-credential');
+   assert.equal(options.headers['X-CATALYST-USER'],'admin');
+   const path=options.path.replace(`/baas/v1/project/${binding.projectId}`,'');
+   queueMicrotask(()=>{
+    if(mode==='network_error'){request.destroy(new Error('synthetic socket error'));return;}
+    if(mode==='stall')return;
+    let status=200,data;
+    if(path==='/query')data=query(payload.query);
+    else {assert.equal(path,'/table/ReportRuns/row');assert.equal(payload.length,1);
+     const row=payload[0];if(rows.has(row.IdempotencyKey)){status=409;data=[];}
+     else {row.ROWID=String(++sequence);rows.set(row.IdempotencyKey,structuredClone(row));data=[row];}}
+    if(mode==='lost_insert'&&path!=='/query'){request.destroy(new Error('synthetic response lost after insert'));return;}
+    const stream=new PassThrough();stream.statusCode=status;stream.headers={'content-type':'application/json'};
+    callback(stream);request.emit('response',stream);
+    if(mode==='oversize')stream.end('x'.repeat(65537));else stream.end(JSON.stringify({data}));
+   });done();}});
+  request.method='POST';request.protocol='https:';request.host='synthetic.invalid';request.path=options.path;created.push(request);return request;
+ };
+ http.request=()=>{throw Error('HTTP/network prohibited');};
+ return {app,rows,requests,principals,created,get clientCalls(){return clientCalls;},set mode(v){mode=v;},set authDelay(v){authDelay=v;},restore(){https.request=originalHttps;http.request=originalHttp;}};
+}
+
+
+module.exports={fixture};

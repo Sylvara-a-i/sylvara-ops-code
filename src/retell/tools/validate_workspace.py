@@ -40,6 +40,7 @@ NONURGENT_CONTRACT_RELATIVE_PATH = (
     "agents/7-day-free-test/contracts/nonurgent-classification-contract.json"
 )
 SHADOW_QA_PUBLIC_FILES = {
+    "agents/7-day-free-test/contracts/request-intent-contract.json",
     "agents/7-day-free-test/contracts/callback-confirmation-contract.json",
     "agents/7-day-free-test/contracts/conversation-contract.json",
     "agents/7-day-free-test/contracts/shadow-qa-contract.json",

@@ -56,12 +56,9 @@ test('stale complete-partition proof, corrected source and native lineage mismat
  }
 });
 test('actual SDK ledger factory composes protected readers and private view with delivery switches off',async()=>{
- const x=await fixture(),raw=new Map();let credentials=0,network=0;
- const app={config:{projectId:'123456789',environment:'Development'},zcql(){return {executeZCQLQuery:async sql=>{
-  assert.match(sql,/^SELECT /);const key=/IdempotencyKey = '([^']+)'/.exec(sql)[1];return raw.has(key)?[{ReportRuns:structuredClone(raw.get(key))}]:[];}};},
-  datastore(){return {table:()=>({insertRow:async row=>{if(!raw.has(row.IdempotencyKey))raw.set(row.IdempotencyKey,{...row,ROWID:String(raw.size+1)});}})};},
-  connections(){credentials++;assert.fail('No credential read allowed');}};
- const runs=createReportRunStore({app,environment:'development'});
+ const x=await fixture(),sdk=require('./helpers/report-run-sdk-fixture').fixture();let credentials=0,network=0;
+ const app=sdk.app;app.connections=()=>{credentials++;assert.fail('No credential read allowed');};try{
+ const runs=require('../lib/report-successor-store').createReportSuccessorStore({app,environment:'development'});
  for(const r of x.d.rows.values())await runs.insert(r.key,r.state);
  const now=x.f.now(),binding={environment:'development',sourceRevision:x.f.runtime.config.sourceRevision,projectId:app.config.projectId,
   verifiedAt:now-1000,expiresAt:now+3600000,...Object.fromEntries(['schemaDigest','nativeLineageDigest','recipientContractDigest','authorizationContractDigest','storageContractDigest'].map(k=>[k,sha(k)])),
@@ -82,15 +79,6 @@ test('actual SDK ledger factory composes protected readers and private view with
   timeoutMs:5000,connectionReference:'synthetic_projection'};
  app.connections=()=>({getConnectionCredentials:async name=>{credentials++;assert.equal(name,'synthetic_projection');
   return {headers:{Authorization:`Zoho-oauthtoken ${'x'.repeat(30)}`}};}});
- const select=app.zcql;app.zcql=()=>({executeZCQLQuery:async sql=>{
-  if(sql.startsWith('SELECT '))return select().executeZCQLQuery(sql);
-  assert.match(sql,/^UPDATE ReportRuns /);
-  const key=/IdempotencyKey = '([^']+)'/.exec(sql)[1],row=raw.get(key);
-  const expected=Number(/AND RD_REPORT_VERSION = (\d+)$/.exec(sql)[1]);
-  if(row.RD_REPORT_VERSION===expected){row.ReportPayloadJson=/ReportPayloadJson = '((?:''|[^'])*)'/.exec(sql)[1].replaceAll("''", "'");
-   row.RD_REPORT_VERSION=expected+1;row.ReconciliationStatus='Verified';}
-  return [];
- }});
  const projecting=createReportDeliveryFactory({binding,projectionEnabled:true,now:x.f.now,
   fetchImpl:async(url,request)=>{network++;assert.equal(request.method,'PUT');
    const patch=JSON.parse(request.body).data[0];for(const [k,v] of Object.entries(patch))if(k!=='skip_feature_execution')x.records.deal[k]=v;
@@ -101,6 +89,8 @@ test('actual SDK ledger factory composes protected readers and private view with
  assert.equal(network,1);assert.equal(credentials,1);assert.equal(x.records.deal.Test_Report_Revision,x.pair.manifestSha256);
  assert.equal(x.records.deal.Test_Report_Delivery_Status,'Held');
  assert.equal((await projecting.afterPair(x.f.identity,x.pair)).status,'held');assert.equal(network,1);
+
+ }finally{sdk.restore();}
 
 });
 

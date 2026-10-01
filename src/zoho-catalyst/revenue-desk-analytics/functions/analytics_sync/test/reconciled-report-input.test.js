@@ -96,7 +96,7 @@ test('a matching source and Analytics rowset cannot override current canonical d
   changeLatestFact(f, 'deployment', { CALL_LIMIT: 26 });
   changeLatestFact(f, 'final_test_result', { CALL_LIMIT: 26 });
   await assert.rejects(f.readInput(f.identity), REJECTED);
-  const second = await createReconciledReportFixture();
+  const second = await createReconciledReportFixture({analyses:[{request_kind:'new_service_request'}]});
   changeLatestFact(second, 'final_test_result', { ANALYSIS_EVIDENCE_COMPLETE: false });
   await assert.rejects(second.readInput(second.identity), REJECTED);
 });

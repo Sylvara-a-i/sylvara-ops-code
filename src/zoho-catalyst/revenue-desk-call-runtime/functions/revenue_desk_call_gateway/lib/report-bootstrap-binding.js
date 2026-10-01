@@ -21,12 +21,12 @@ function loadReportBootstrapBinding(env=process.env,{now=Date.now}={}){
   ||b.controllerFunctionId===b.workerFunctionId||!Number.isSafeInteger(b.verifiedAt)||b.verifiedAt<0||b.verifiedAt>now()
   ||!Number.isSafeInteger(b.expiresAt)||b.expiresAt<=now())held();
  for(const key of ['attestation','delivery','reporting'])if(!b[key]||typeof b[key].enabled!=='boolean')held();
- // Conditional UPDATE documentation does not establish atomic CAS. These
- // effectful paths remain held until separately qualified live evidence is
- // installed. An evidence pin is not itself proof of provider atomicity.
- for(const part of [b.delivery,b.reporting]){
-  if(part.enabled){const q=part.casQualification;
-   if(q?.status!=='qualified'||!HASH.test(q.evidenceDigest||'')||!Number.isSafeInteger(q.expiresAt)||q.expiresAt<=now())held();
+ // Documented uniqueness is the concurrency boundary. Effectful paths still
+ // require exact table/principal/insert/readback qualification; an evidence pin
+ // is not itself proof of live access or claim ownership.
+ for(const part of [b.attestation,b.delivery,b.reporting]){
+  if(part.enabled){const q=part.claimQualification;
+   if(q?.mechanism!=='unique_insert_successor_v1'||q.status!=='qualified'||!HASH.test(q.evidenceDigest||'')||!Number.isSafeInteger(q.expiresAt)||q.expiresAt<=now())held();
   }
  }
  if(b.attestation.enabled){

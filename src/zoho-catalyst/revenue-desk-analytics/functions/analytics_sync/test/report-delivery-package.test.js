@@ -45,12 +45,12 @@ test('isolated controller delivery package imports with one canonical gateway an
   const acceptance={environment:'development',sourceRevision,verifiedAt:at-1000,expiresAt:at+86400000,
    ...Object.fromEntries(['schemaDigest','analyticsContractDigest','workdriveContractDigest','releaseCompositionDigest','pdfRendererDigest'].map(k=>[k,'e'.repeat(64)]))};
   const b={schemaVersion:1,environment:'development',sourceRevision,projectId,controllerFunctionId:'123456781',workerFunctionId:'123456782',verifiedAt:at-1000,expiresAt:at+2000,
-   attestation:{enabled:false},delivery:{enabled:false},reporting:{enabled:true,casQualification:{status:'qualified',evidenceDigest:'e'.repeat(64),expiresAt:at+1000},destinations:[{scope:{},binding:{}}],
+   attestation:{enabled:false},delivery:{enabled:false},reporting:{enabled:true,claimQualification:{mechanism:'unique_insert_successor_v1',status:'qualified',evidenceDigest:'e'.repeat(64),expiresAt:at+1000},destinations:[{scope:{},binding:{}}],
     options:{analyticsConfig:config,acceptance,workdriveBinding:{connectionReference:'synthetic_workdrive',apiOrigin:'https://www.zohoapis.com',downloadOrigin:'https://download.zoho.com',timeoutMs:20000},
      pdfBinding:{apiOrigin:'https://api.catalyst.zoho.com',projectId,organizationId:'123456789',environment:'Development',connectionReference:'synthetic_pdf',timeoutMs:1000,version:'smartbrowz-native-inter41-v1',qualificationDigest:'e'.repeat(64)}}}};
   const raw=JSON.stringify(b),pin=require('node:crypto').createHash('sha256').update(raw).digest('hex');
   const options=createProtectedWorkerReportOptions({REPORT_RUNTIME_BINDING_JSON:raw,REPORT_RUNTIME_BINDING_SHA256:pin,DEPLOYMENT_ENVIRONMENT:'development',SOURCE_REVISION:sourceRevision},{now:()=>at});
-  const app={config:{projectId,environment:'Development'},datastore:blocked,zcql:blocked,connections:blocked};
+  const app={config:{projectId,environment:'Development'},authenticateRequest:blocked,datastore:blocked,zcql:blocked,connections:blocked};
   const runtimeConfig={environment:'development',sourceRevision,projectId,tables:{DEPLOYMENT_TABLE:'RevenueDeskDeployments'}};
   const store={unique:blocked,query:blocked,queryBounded:blocked};
   const hook=options.terminalDraftReconcilerFactory(app,runtimeConfig,store);assert.equal(typeof hook,'function');

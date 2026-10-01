@@ -122,7 +122,13 @@ function structuredReportFields(call) {
     && new Set(['routine', 'urgent', 'immediate_danger', 'unknown']).has(call.urgency),
   'REPORT_DATA_INVALID', 'Canonical customer or urgency classification is invalid.');
   assertOutcomeUrgencyConsistency(call.outcome, call.urgency, 'REPORT_DATA_INVALID');
-  const bookableOpportunity = call.bookableOpportunity ?? null;
+  const requestKind = call.requestKind ?? 'unknown';
+  invariant(new Set(['new_service_request', 'existing_job_follow_up', 'unknown']).has(requestKind),
+    'REPORT_DATA_INVALID', 'Canonical request kind is invalid.');
+  invariant(call.bookableOpportunity !== true || requestKind !== 'existing_job_follow_up',
+    'REPORT_DATA_INVALID', 'Existing-job follow-up conflicts with opportunity evidence.');
+  const bookableOpportunity = call.bookableOpportunity === true && requestKind === 'unknown'
+    ? null : call.bookableOpportunity ?? null;
   const officeFollowUpRequired = call.officeFollowUpRequired ?? null;
   const workflowFailureCode = call.workflowFailureCode ?? null;
   const workflowFailureText = call.workflowFailureText ?? null;
@@ -300,6 +306,7 @@ async function queryClientReportSnapshot(store, config, clientId, deploymentId, 
       callDurationSeconds: durationSeconds,
       coverageTrigger: call.coverageTrigger,
       customerType: call.customerType,
+      requestKind: call.requestKind ?? 'unknown',
       urgency: call.urgency,
       safetyFlag: call.urgency === 'immediate_danger',
       outcome: call.outcome,

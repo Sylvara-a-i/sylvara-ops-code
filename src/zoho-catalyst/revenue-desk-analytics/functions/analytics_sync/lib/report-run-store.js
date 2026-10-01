@@ -152,4 +152,4 @@ function createReportRunStore({ app, environment, table = 'ReportRuns', timeoutM
   return Object.freeze({ get, insert, compareAndSwap });
 }
 
-module.exports = { createReportRunStore, MAX_STATE_BYTES };
+module.exports = { createReportRunStore, MAX_STATE_BYTES, reportRunProjection: projection };

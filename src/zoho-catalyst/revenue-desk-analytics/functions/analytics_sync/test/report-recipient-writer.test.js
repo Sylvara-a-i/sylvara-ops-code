@@ -11,7 +11,7 @@ const at=1800000000000,actor={kind:'internal_controller',identity:'operator_'+sh
 function fixture(){
  const rows=new Map();let inserts=0,reads=0;
  const b={schemaVersion:1,environment:'development',sourceRevision:'a'.repeat(40),projectId:'123456789',controllerFunctionId:'123456781',workerFunctionId:'123456782',
-  verifiedAt:at-1000,expiresAt:at+3600000,attestation:{enabled:true,authorityDigest:sha('authority'),crm:{}},delivery:{enabled:false},reporting:{enabled:false}};
+  verifiedAt:at-1000,expiresAt:at+3600000,attestation:{enabled:true,claimQualification:{mechanism:'unique_insert_successor_v1',status:'qualified',evidenceDigest:sha('claim'),expiresAt:at+3600000},authorityDigest:sha('authority'),crm:{}},delivery:{enabled:false},reporting:{enabled:false}};
  const proof={authorizedActor:actor.identity,identity:{clientId:'client',deploymentId:'deployment',dealId:'190000001',accountId:'190000002',contactId:'190000003',configurationVersion:'form2cfgv1:1:'+ 'b'.repeat(40),configurationVersionId:'configuration',originalLeadId:'190000004',intakeSubmissionId:'journey'},
   recipientEmail:'owner@example.invalid',crmEmailOptOut:false,nativeRelationshipEvidenceSha256:sha('native'),configurationSourceDigest:sha('config'),
   suppression:{status:'qualified_clear',evidenceDigest:sha('synthetic suppression'),expiresAt:at+3600000}};
@@ -82,5 +82,11 @@ test('shortened binding or suppression validity holds immutable replay without o
   const f=fixture();await f.write(f.command,{actor});
   if(key==='binding')f.options.expiresAt=at+1000;else f.proof.suppression.expiresAt=at+1000;
   await assert.rejects(createReportRecipientWriter(f.options)(f.command,{actor}));assert.equal(f.counts().inserts,1);
+ }
+});
+test('attestation-only bootstrap requires live unique-claim qualification',()=>{
+ for(const change of [b=>delete b.attestation.claimQualification,b=>b.attestation.claimQualification.mechanism='unqualified',b=>b.attestation.claimQualification.expiresAt=at]){
+ const f=fixture();change(f.b);const raw=JSON.stringify(f.b);
+ assert.throws(()=>loadReportBootstrapBinding({REPORT_RUNTIME_BINDING_JSON:raw,REPORT_RUNTIME_BINDING_SHA256:sha(raw),DEPLOYMENT_ENVIRONMENT:'development',SOURCE_REVISION:f.b.sourceRevision},{now:()=>at}),{code:'REPORT_BOOTSTRAP_HELD'});
  }
 });

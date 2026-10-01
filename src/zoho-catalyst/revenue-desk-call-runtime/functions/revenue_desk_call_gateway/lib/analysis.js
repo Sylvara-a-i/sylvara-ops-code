@@ -8,6 +8,7 @@ const {
 const { invariant } = require('./errors');
 const { optionalString, integer, boolean, e164, validateOutcome } = require('./validation');
 
+const REQUEST_KINDS = new Set(['new_service_request', 'existing_job_follow_up', 'unknown']);
 const BOOKABLE_OUTCOMES = new Set(['potential_job', 'urgent_potential_job']);
 const VALUE_EVIDENCE_BY_SOURCE = Object.freeze({
   retell: MVP_REPORT_VALUE_EVIDENCE_CLASSES,
@@ -96,6 +97,8 @@ function extractAnalysis(call, documentedMethods = new Set()) {
     ? data.customer_type : 'unknown';
   invariant(CUSTOMER_TYPES.has(customerType),
     'INVALID_ANALYSIS', 'Customer type is invalid.');
+  const requestKind = Object.hasOwn(data, 'request_kind') ? data.request_kind : 'unknown';
+  invariant(REQUEST_KINDS.has(requestKind), 'INVALID_ANALYSIS', 'Request kind is invalid.');
   const urgency = Object.hasOwn(data, 'urgency') ? data.urgency : 'unknown';
   invariant(URGENCIES.has(urgency), 'INVALID_ANALYSIS', 'Urgency is invalid.');
   const sensitiveDataDetected = Object.hasOwn(data, 'sensitive_data_detected')
@@ -113,7 +116,7 @@ function extractAnalysis(call, documentedMethods = new Set()) {
     outcome: outcome === 'configuration_failure' ? outcome : 'sensitive_data_ended',
     coverageTrigger: COVERAGE_TRIGGERS.has(data.coverage_trigger) ? data.coverage_trigger : 'Unknown',
     callerName: null, callbackNumber: null, callbackNumberConfirmed: null,
-    customerType: 'unknown', callerIntent: null,
+    customerType: 'unknown', requestKind: 'unknown', callerIntent: null,
     // An explicit danger category is nonpersonal safety evidence, not permission
     // to retain descriptions or arrange an emergency response.
     issueSummary: null, cityOrZip: null,
@@ -139,9 +142,13 @@ function extractAnalysis(call, documentedMethods = new Set()) {
   // separately reviewed provider field exists, omit the unconfirmed number
   // from durable actionable content instead of presenting it as callable.
   const callbackNumber = callbackNumberConfirmed === true ? suppliedCallbackNumber : null;
-  const bookableOpportunity = data.bookable_opportunity === undefined
+  const suppliedBookableOpportunity = data.bookable_opportunity === undefined
     || data.bookable_opportunity === null ? null
     : boolean(data.bookable_opportunity, 'bookable_opportunity');
+  invariant(suppliedBookableOpportunity !== true || requestKind !== 'existing_job_follow_up',
+    'INVALID_ANALYSIS', 'Existing-job follow-up cannot be positive new-opportunity evidence.');
+  const bookableOpportunity = suppliedBookableOpportunity === true && requestKind === 'unknown'
+    ? null : suppliedBookableOpportunity;
   const officeFollowUpRequired = data.office_follow_up_required === undefined
     || data.office_follow_up_required === null ? null
     : boolean(data.office_follow_up_required, 'office_follow_up_required');
@@ -151,13 +158,13 @@ function extractAnalysis(call, documentedMethods = new Set()) {
     'INVALID_ANALYSIS', 'Workflow failure code is invalid.');
   invariant(!workflowFailureText || workflowFailureCode,
     'INVALID_ANALYSIS', 'Workflow failure text requires a canonical code.');
-  invariant(bookableOpportunity !== true || BOOKABLE_OUTCOMES.has(outcome),
+  invariant(suppliedBookableOpportunity !== true || BOOKABLE_OUTCOMES.has(outcome),
   'INVALID_ANALYSIS', 'Bookable opportunity conflicts with the call outcome.');
   assertOutcomeUrgencyConsistency(outcome, urgency);
   return Object.freeze({
     outcome, coverageTrigger, callerName: text(data.caller_name, 'caller_name', 120), callbackNumber,
     callbackNumberConfirmed,
-    customerType, callerIntent: text(data.caller_intent, 'caller_intent', 160),
+    customerType, requestKind, callerIntent: text(data.caller_intent, 'caller_intent', 160),
     issueSummary: text(data.issue_summary, 'issue_summary', 500),
     cityOrZip: text(data.city_or_zip, 'city_or_zip', 120), urgency,
     specificPersonRequested: text(data.specific_person_requested, 'specific_person_requested', 120),
@@ -186,6 +193,22 @@ function priorTerminalAnalysis(call, documentedMethods = new Set()) {
     if (!prior.sensitiveDataMinimized || data.urgency !== 'immediate_danger') return null;
   }
   if (prior.sensitiveDataMinimized) prior = { ...prior, urgency: 'unknown' };
+  prior = { ...prior };
+  if (!Object.hasOwn(data, 'request_kind')) {
+    delete prior.requestKind;
+    if (!prior.sensitiveDataMinimized) prior.bookableOpportunity = data.bookable_opportunity ?? null;
+  }
+  return Object.freeze(prior);
+}
+
+// Exact receipt comparison only. Missing old evidence is never added to a
+// canonical record, and this old projection never authorizes processing/effects.
+function priorRequestIntentAnalysis(call, documentedMethods = new Set()) {
+  const data = call?.call_analysis?.custom_analysis_data;
+  if (!data || Object.hasOwn(data, 'request_kind')) return null;
+  const prior = { ...extractAnalysis({ ...call, call_analysis: { ...call.call_analysis,
+    custom_analysis_data: { ...data, request_kind: 'new_service_request' } } }, documentedMethods) };
+  delete prior.requestKind;
   return Object.freeze(prior);
 }
 
@@ -236,7 +259,7 @@ function makeNotificationPayload(call, configuration) {
 }
 
 module.exports = {
-  extractAnalysis, priorTerminalAnalysis, validateValueEvidence, triggerAllowedForMode,
+  extractAnalysis, priorTerminalAnalysis, priorRequestIntentAnalysis, validateValueEvidence, triggerAllowedForMode,
   makeNotificationPayload, isHighConfidencePaymentCard, VALUE_EVIDENCE_BY_SOURCE,
   assertOutcomeUrgencyConsistency,
 };

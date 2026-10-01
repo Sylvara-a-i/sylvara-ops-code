@@ -544,6 +544,7 @@ async function historicalCallbackReceiptFixture({ processJobs = true } = {}) {
   // body. All other identity, source, lease, and audit fields remain intact.
   const historical = JSON.parse(receipt.EVENT_DATA_JSON);
   delete historical.analysis.callbackNumberConfirmed;
+  delete historical.analysis.requestKind; // Exact historical shape predates both optional fields.
   historical.analysis.callbackNumber = event.call.call_analysis.custom_analysis_data.callback_number;
   receipt.EVENT_DATA_JSON = JSON.stringify(historical);
   return { fixture, event, receipt };
@@ -1772,7 +1773,7 @@ test('integration: signed provider artifacts are discarded while approved struct
     payload: payloadInbound('A'), env: fixture.env });
   const event = eventPayload('call_analyzed', 'artifact_minimization_A',
     inbound.body.call_inbound.metadata, 'A', {
-      callback_number_confirmed: true, bookable_opportunity: true, office_follow_up_required: true,
+      callback_number_confirmed: true, request_kind: 'new_service_request', bookable_opportunity: true, office_follow_up_required: true,
     });
   const marker = 'synthetic-excluded-provider-artifact';
   Object.assign(event.call, {
@@ -1909,7 +1910,7 @@ test('integration: canonical-table report query and CSV remain client partitione
   const inbound = await invoke(fixture.listener, { url: '/retell/inbound', payload: payloadInbound('A'), env: fixture.env });
   const event = eventPayload('call_analyzed', 'report_A', inbound.body.call_inbound.metadata, 'A', {
     outcome: 'urgent_potential_job', urgency: 'urgent',
-    bookable_opportunity: true, office_follow_up_required: true,
+    request_kind: 'new_service_request', bookable_opportunity: true, office_follow_up_required: true,
     workflow_failure_code: 'office_queue_unavailable',
     workflow_failure_text: 'The synthetic office queue was unavailable.',
     value_evidence_class: 'customer_supplied_estimate', value_minor_units: 12500, value_currency: 'USD',
@@ -2013,7 +2014,7 @@ test('integration: only a terminal authoritative report emits one immutable sani
     url: '/retell/events',
     payload: eventPayload('call_analyzed', 'final_report_A',
       inbound.body.call_inbound.metadata, 'A', {
-        outcome: 'potential_job', bookable_opportunity: true,
+        outcome: 'potential_job', request_kind: 'new_service_request', bookable_opportunity: true,
         office_follow_up_required: true,
         workflow_failure_code: null, workflow_failure_text: null,
       }),

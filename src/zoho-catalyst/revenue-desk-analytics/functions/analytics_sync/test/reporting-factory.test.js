@@ -37,7 +37,7 @@ function fixture() {
   const runtimeStore = { async unique() { effects.source += 1; assert.fail('Unexpected canonical read'); },
     async query() { effects.source += 1; assert.fail('Unexpected canonical read'); },
     async queryBounded() { effects.source += 1; assert.fail('Unexpected canonical read'); } };
-  const app = { datastore() { effects.datastore += 1; assert.fail('Unexpected SDK store access'); },
+  const app = { async authenticateRequest() { effects.credentials += 1; assert.fail('Unexpected runtime authorization'); }, datastore() { effects.datastore += 1; assert.fail('Unexpected SDK store access'); },
     zcql() { effects.query += 1; assert.fail('Unexpected SDK query'); },
     connections() { effects.credentials += 1; assert.fail('Unexpected credential access'); } };
   return { options, config, acceptance, clock, effects, app, runtimeConfig, runtimeStore };

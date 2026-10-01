@@ -166,14 +166,18 @@ test('private details reject source, ownership and notification drift before rec
   await assert.rejects(readDetails(fixture), { code: 'REPORT_RECONCILIATION_REQUIRED' });
 });
 
-test('default report JSON and CSV remain byte-identical to the accepted source baseline', async () => {
-  const fixture = await fixtureWithCall();
+test('explicit request intent preserves every original report field and accepted CSV baseline', async () => {
+  const fixture = await fixtureWithCall({ request_kind: 'new_service_request' });
   const report = await queryClientReport(fixture.store, fixture.config,
     'client_A', 'deployment_A', fixture.clock.value);
   const digest = (value) => crypto.createHash('sha256').update(value).digest('hex');
   // Captured with this exact synthetic fixture on the accepted 89411b3 source,
-  // before the private reader addition. Private detail must not alter exports.
-  assert.equal(digest(JSON.stringify(report)), '4fd603b431984515480cb7d006dcf27fb36c1b398e2a9b272e537c462e871c54');
+  // before the private reader addition. Preserve that evidence unchanged.
+  // The approved optional J1 field is asserted separately; all original fields
+  // still match the exact old baseline when fresh positive evidence is explicit.
+  assert.equal(report.calls[0].requestKind, 'new_service_request');
+  const priorShape = { ...report, calls: report.calls.map(({ requestKind, ...call }) => call) };
+  assert.equal(digest(JSON.stringify(priorShape)), '4fd603b431984515480cb7d006dcf27fb36c1b398e2a9b272e537c462e871c54');
   assert.equal(digest(reportToCsv(report)), '2b1a7c6f03e8dd6b1ae300580648705cbee8bb6066e2cedd682f49dfd6e9f619');
   await readDetails(fixture);
   const after = await queryClientReport(fixture.store, fixture.config,
