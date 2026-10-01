@@ -35,7 +35,7 @@ function composeReviewedDeliveryBoundary(repositoryPath, base, current, selected
   const addition = source.slice(start, end);
   const expectedDigest = senderStart < 0 ? DELIVERY_BOUNDARY_SHA256 : SENDER_BOUNDARY_SHA256;
   if (digest(Buffer.from(addition)) !== expectedDigest
-    || !Buffer.from(source.slice(0, start) + source.slice(end)).equals(base)) fail('source_overlap');
+    || ![base, selected].some(reference => Buffer.from(source.slice(0, start) + source.slice(end)).equals(reference))) fail('source_overlap');
   const anchor = "      const crm = (factories.crm || createCrmControlClient)(config, {\n";
   const auth = selected.toString('utf8');
   if (!Buffer.from(auth).equals(selected) || auth.split(anchor).length !== 2
@@ -248,7 +248,7 @@ function compose({ reportingRevision, authRevision, runtimeArtifact, crmArtifact
     const current = git(['cat-file', 'blob', `${reportingRevision}:${repositoryPath}`], true);
     const selected = git(['cat-file', 'blob', `${authRevision}:${repositoryPath}`], true);
     if (selected.equals(base)) fail('source_overlap');
-    const derived = base.equals(current) ? null
+    const derived = (base.equals(current) || selected.equals(current)) ? null
       : composeReviewedDeliveryBoundary(repositoryPath, base, current, selected);
     return { repositoryPath, selected: derived?.bytes || selected,
       ...(derived ? { composition: derived.composition, reportingSha256: derived.reporting_sha256,
