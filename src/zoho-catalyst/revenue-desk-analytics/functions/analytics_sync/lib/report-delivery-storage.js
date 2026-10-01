@@ -15,8 +15,9 @@ function createReportDeliveryStorageReader({reportRunStore:runs,workdrive,readDe
  if(!runs||typeof runs.get!=='function'||!workdrive||!['getMetadata','listVersions','downloadVersion'].every(k=>typeof workdrive[k]==='function')
  ||typeof readDestinationBinding!=='function'||typeof now!=='function'||!Number.isSafeInteger(timeoutMs)||timeoutMs<1||timeoutMs>15000)held();
  return async function readSummary({snapshot,signal}={}){
+  // Four logical immutable successor reads each require root and current-head queries.
   const budget=createReportAttemptBudget({signal,timeoutMs,now,limits:{...REPORT_ATTEMPT_MAXIMUMS,
-   analytics_read:0,source_read:0,checkpoint_write:0,workdrive_read:6,workdrive_write:0,report_run_read:4,report_run_write:0}});
+   analytics_read:0,source_read:0,checkpoint_write:0,workdrive_read:6,workdrive_write:0,report_run_read:8,report_run_write:0}});
   const options={signal:budget.signal,budget};
   const active=()=>budget.assertActive();
   try{

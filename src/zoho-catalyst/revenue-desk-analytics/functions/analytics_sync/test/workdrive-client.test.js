@@ -307,3 +307,17 @@ test('the shared budget prevents another actual upload and cancels pending provi
   await assert.rejects(result, { code: 'REPORT_ATTEMPT_ABORTED' });
   assert.equal(pending.calls[0].options.signal.aborted, true);
 });
+
+test('download body rejects empty or excessive fragments and cancels without another request',async t=>{
+ for(const empty of [true,false]){let reads=0,cancels=0;
+ const f=fixture(t,{respond:()=>({status:200,headers:new Headers({'content-type':'application/pdf'}),body:{getReader:()=>({async read(){reads++;return {done:false,value:new Uint8Array(empty?0:1)};},async cancel(){cancels++;}})}})});
+ await assert.rejects(f.client.downloadVersion(FILE,{versionId:'v1',versionNumber:'1'},f.options),{code:'WORKDRIVE_RESPONSE_INVALID'});
+ assert.equal(reads,empty?1:129);assert.equal(cancels,1);assert.equal(f.calls.length,1);assert.equal(f.budget.snapshot().workdrive_read,1);
+ }
+});
+
+test('download body permits the exact finite fragment boundary',async t=>{
+ let reads=0;
+ const f=fixture(t,{respond:()=>({status:200,headers:new Headers({'content-type':'application/pdf'}),body:{getReader:()=>({async read(){return reads++<128?{done:false,value:new Uint8Array([1])}:{done:true};},async cancel(){assert.fail('Valid body must not be cancelled');}})}})});
+ assert.equal((await f.client.downloadVersion(FILE,{versionId:'v1',versionNumber:'1'},f.options)).length,128);assert.equal(f.calls.length,1);
+});

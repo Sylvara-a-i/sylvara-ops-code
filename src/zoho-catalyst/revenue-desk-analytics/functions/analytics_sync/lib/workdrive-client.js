@@ -166,7 +166,8 @@ function createWorkDriveClient({ authorizationProvider, fetchImpl = globalThis.f
           const chunk = await reader.read();
           assertActive();
           if (chunk.done) break;
-          requireResponse(chunk.value instanceof Uint8Array);
+          // Byte and fragment ceilings both bound memory; empty fragments are invalid.
+          requireResponse(chunk.value instanceof Uint8Array && chunk.value.byteLength > 0 && chunks.length < 128);
           size += chunk.value.byteLength;
           requireResponse(size <= maximum);
           chunks.push(Buffer.from(chunk.value));

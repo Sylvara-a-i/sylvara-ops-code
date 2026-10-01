@@ -6,7 +6,9 @@ const budgets = new WeakSet();
 const MAXIMUMS = Object.freeze({ analytics_read: 12, source_read: 240, checkpoint_write: 3,
   workdrive_read: 24, workdrive_write: 1, report_run_read: 16, report_run_write: 12 });
 
-const PAIR_MAXIMUMS = Object.freeze({ ...MAXIMUMS, workdrive_read: 48, workdrive_write: 2,
+// Four complete source passes when reviewed (initial, review fence, two PDF fences),
+// each three metadata/export pairs. Legacy single-document ceilings are unchanged.
+const PAIR_MAXIMUMS = Object.freeze({ ...MAXIMUMS, analytics_read: 24, workdrive_read: 48, workdrive_write: 2,
   report_run_read: 40, report_run_write: 26 });
 
 /** One trusted construction-time budget for the complete reporting attempt.
