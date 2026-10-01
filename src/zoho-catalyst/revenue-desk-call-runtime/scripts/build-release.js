@@ -15,7 +15,7 @@ const CONTROL_REPORTING_PATH = 'functions/revenue_desk_route_control/reporting/r
 const DELIVERY_LIBS = ['report-delivery-control','report-delivery-handlers','report-mail-sender','report-delivery-snapshot',
   'report-run-store','report-delivery-storage','workdrive-client','report-attempt-budget',
   'facts','errors','connection-boundary','config','source-revision',
-  'report-crm-projection','report-delivery-attestation','analytics-client','catalyst-store',
+  'report-crm-projection','report-delivery-attestation','report-recipient-writer','analytics-client','catalyst-store',
   'report-checkpoint-verification','pdf-fonts','daily-rollup','native-pdf-renderer'];
 const CORE_BRIDGE_PATH = `${WORKER_REPORTING_PATH}/revenue-desk-call-runtime/functions/revenue_desk_call_gateway`;
 const SOURCE_STAMP_PATH = 'functions/revenue_desk_call_gateway/lib/source-revision.js';

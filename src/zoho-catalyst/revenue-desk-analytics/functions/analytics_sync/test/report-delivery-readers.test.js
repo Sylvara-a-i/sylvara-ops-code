@@ -33,8 +33,8 @@ async function fixture(){
  await d.runs.insert(sha(`report-delivery-attestation-v1\0${b.dealId}\0${b.deploymentId}`),proof);
  const records={deal:{id:b.dealId,Deployment_Record_ID:b.deploymentId,Configuration_Version:b.configurationVersion,Test_Status:'Completed',
   Account_Name:{id:b.accountId},Contact_Name:{id:b.contactId},Intake_Submission_ID:b.intakeSubmissionId,Test_Report_Revision:pair.manifestSha256,
-  Test_Report_Recipient_Email:proof.recipient.address,Test_Report_Recipient_Verified_At:new Date(f.now()).toISOString()},
-  contact:{id:b.contactId,Account_Name:{id:b.accountId},Email:proof.recipient.address}};
+  Test_Report_Recipient_Email:proof.recipient.address,Email_Opt_Out:false,Test_Report_Recipient_Verified_At:new Date(f.now()).toISOString()},
+  contact:{id:b.contactId,Account_Name:{id:b.accountId},Email:proof.recipient.address,Email_Opt_Out:false}};
  const options={...f.readerOptions,reportRunStore:d.runs,crm:{getReportRecords:async()=>structuredClone(records)},
   readNativeConversion:async()=>structuredClone(native),readIntakeLineage:async()=>({originalLeadId:b.originalLeadId,journeyId:b.intakeSubmissionId}),
   authorityDigest,privateView:{template:'https://workdrive.zoho.com/file/{resourceId}?version={versionNumber}',qualificationDigest:sha('version URL'),expiresAt:f.now()+3600000},synthetic:true};

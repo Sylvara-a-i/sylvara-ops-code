@@ -214,3 +214,41 @@ Mail CREATE approval alone does not establish connected runtime authorization.
 Private exact-version WorkDrive URL templates require independent qualification;
 no share link or guessed version URL is a fallback. Keep all bindings disabled until
 destination, permissions, retention, principal and provider contracts are accepted.
+
+
+## Protected bootstrap and setup-time recipient authoring
+
+Server-only `REPORT_RUNTIME_BINDING_JSON` and its exact-byte SHA-256 pin
+`REPORT_RUNTIME_BINDING_SHA256` supply the sealed Development bootstrap. Missing
+both preserves the old worker null hook; malformed or partial bindings hold.
+The local loader caps JSON at 65,536 bytes; this is not a verified Catalyst
+environment-variable capacity. Installation must qualify capacity and exact
+function placement without exposing values. No populated binding belongs in Git.
+
+Controller report commands retain the existing authenticated approval route.
+`attest_recipient` accepts only profile, action, Deal ID, recipient email and
+explicit confirmation. Actor, configuration, native relationships and recipient
+eligibility cannot be supplied by HTTP. Setup reads reuse existing Form2 consent,
+HMAC/core approval and staging provenance, plus original intake/native conversion.
+They do not require terminal records, calls, a generated report or live routing.
+
+The writer inserts one immutable attestation per Deal/deployment using the
+existing unique ReportRuns key and encrypted ReportPayloadJson (9,500-byte bound).
+Identical accepted selection replays; conflicting, expired or mismatched selection
+holds without overwriting history. There is no CAS in this authoring path. Unknown
+insertion outcomes require exact readback; no repeated insertion within a request.
+The fixed worker actor derives from protected Development project/function IDs,
+not Job data. Installation must independently verify that fixed placement.
+
+Conditional ZCQL UPDATE documentation is not atomic-CAS evidence. Effectful
+report-generation/delivery bootstrap requires separately qualified, unexpired
+CAS evidence, and access/cost acceptance remains independent. Sending, automatic
+sending and CRM projection are explicitly disabled in this bootstrap. A pin or
+mock test does not establish provider concurrency guarantees.
+
+Contacts.Email_Opt_Out must be explicitly false at delivery selection; missing,
+null, malformed or true holds. False alone is not comprehensive unsubscribe,
+bounce or consent clearance. The actual managed setup reader returns suppression
+status `unqualified`, so it cannot mint an approved recipient attestation. A
+qualified current suppression authority for standalone Mail remains an unresolved
+live contract; do not change CRM fields or assume Mail inherits CRM suppression.

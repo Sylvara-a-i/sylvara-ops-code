@@ -312,7 +312,7 @@ function createCrmControlClient(config, {
     const contactId = deal.Contact_Name?.id;
     invariant(typeof contactId === 'string' && /^[1-9][0-9]{7,29}$/.test(contactId),
       'CRM_READBACK_INVALID', 'Report recipient relationship is unavailable.', { httpStatus:409 });
-    const contactFields = ['id','Modified_Time','Account_Name','Email'];
+    const contactFields = ['id','Modified_Time','Account_Name','Email','Email_Opt_Out'];
     const contact = parseRecord(await request(`/Contacts/${contactId}?${new URLSearchParams({fields:contactFields.join(',')})}`,
       { method:'GET' },false,signal), contactId);
     active();

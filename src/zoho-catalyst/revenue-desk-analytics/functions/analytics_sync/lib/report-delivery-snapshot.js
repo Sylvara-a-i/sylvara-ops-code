@@ -32,7 +32,7 @@ function createDealReportSnapshotReader({crm,readCanonicalSelection,readRecipien
     const nativeDigest=sha(Object.fromEntries(['originalLeadId','journeyId','accountId','contactId','dealId','convertedAt']
       .map(k=>[k,native[k]])));
     const recipient=await readRecipientAttestation({binding:b,nativeRelationshipEvidenceSha256:nativeDigest,signal});active();
-    if((requireProjection&&recipient?.address!==deal.Test_Report_Recipient_Email)||recipient.address!==contact.Email
+    if(contact.Email_Opt_Out!==false||(requireProjection&&recipient?.address!==deal.Test_Report_Recipient_Email)||recipient.address!==contact.Email
       ||recipient.contactId!==b.contactId||recipient.address.length>100
       ||(requireProjection&&Date.parse(deal.Test_Report_Recipient_Verified_At)!==recipient.verifiedAt)
       ||recipient.nativeRelationshipEvidenceSha256!==nativeDigest)held();

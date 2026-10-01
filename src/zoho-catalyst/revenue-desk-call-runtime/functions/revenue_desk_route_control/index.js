@@ -8,4 +8,7 @@ const catalyst = {
   },
 };
 
-module.exports = createRequestListener({ catalystSdk: catalyst });
+const { createProtectedReportController } = require('./lib/report-bootstrap');
+module.exports = createRequestListener({ catalystSdk: catalyst, factories: {
+  reportDelivery: createProtectedReportController(),
+} });
