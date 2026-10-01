@@ -141,7 +141,8 @@ function structuredReportFields(call) {
   'REPORT_DATA_INVALID', 'Canonical bookable opportunity conflicts with its outcome.');
   invariant(typeof call.sensitiveDataMinimized === 'boolean',
     'REPORT_DATA_INVALID', 'Canonical sensitive-data state is invalid.');
-  invariant(call.sensitiveDataMinimized === (call.outcome === 'sensitive_data_ended'),
+  invariant(call.sensitiveDataMinimized === (call.outcome === 'sensitive_data_ended'
+    || call.outcome === 'configuration_failure'),
     'REPORT_DATA_INVALID', 'Canonical sensitive-data outcome and minimization state conflict.');
   const configuredAnalysisComplete = call.configuredAnalysisComplete === true;
   const workflowFailureEvidenceComplete = call.workflowFailureEvidenceComplete === true;
@@ -151,11 +152,13 @@ function structuredReportFields(call) {
       || typeof call.workflowFailureEvidenceComplete === 'boolean'),
   'REPORT_DATA_INVALID', 'Canonical analysis completeness evidence is invalid.');
   const valueEvidence = persistedValueEvidence(call.value);
-  if (call.sensitiveDataMinimized) invariant(call.outcome === 'sensitive_data_ended'
+  if (call.sensitiveDataMinimized) invariant(
+    (call.outcome === 'sensitive_data_ended' || call.outcome === 'configuration_failure')
     && call.callerName === null && call.callbackNumber === null && call.callerIntent === null
     && call.issueSummary === null && call.cityOrZip === null
     && call.specificPersonRequested === null && call.customerType === 'unknown'
-    && call.urgency === 'unknown' && bookableOpportunity !== true
+    && (call.urgency === 'unknown' || call.urgency === 'immediate_danger')
+    && bookableOpportunity !== true
     && officeFollowUpRequired !== true && workflowFailureCode === null
     && workflowFailureText === null && valueEvidence.evidenceClass === 'unknown',
   'REPORT_DATA_INVALID', 'Canonical minimized call retains unsupported analysis detail.');
