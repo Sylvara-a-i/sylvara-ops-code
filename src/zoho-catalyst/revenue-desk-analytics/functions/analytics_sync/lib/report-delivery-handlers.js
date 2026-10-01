@@ -12,11 +12,12 @@ function held(){throw Object.assign(new Error('REPORT_DELIVERY_HELD'),{code:'REP
  * independently authorizes that principal for this exact Deal/action.
  * No request can select a recipient, attachment, sender, Connection or report.
  */
-function createReportDeliveryHandlers({control,readDealForScope,readSnapshot,systemActor,readPrivateView=null,now=Date.now,timeoutMs=15000}={}) {
+function createReportDeliveryHandlers({control,readDealForScope,readSnapshot,systemActor,readPrivateView=null,projectReport=null,now=Date.now,timeoutMs=15000}={}) {
   if(!control||!['initial','prepareResend','confirmResend','view'].every(k=>typeof control[k]==='function')
     ||typeof readDealForScope!=='function'||typeof readSnapshot!=='function'||!systemActor
     ||!Number.isSafeInteger(timeoutMs)||timeoutMs<1||timeoutMs>30000
-    ||typeof now!=='function'||(readPrivateView!==null&&typeof readPrivateView!=='function'))held();
+    ||typeof now!=='function'||(readPrivateView!==null&&typeof readPrivateView!=='function')
+    ||(projectReport!==null&&typeof projectReport!=='function'))held();
   async function handleCommand(command,{actor,signal}={}) {
     if(!actor||command?.profile!==PROFILE||!ID.test(command.dealId)
       ||!['view','prepare_resend','confirm_resend'].includes(command.action))held();
@@ -42,7 +43,11 @@ function createReportDeliveryHandlers({control,readDealForScope,readSnapshot,sys
       return {...result,url:link.url};
     }
     if(command.action==='prepare_resend')return control.prepareResend(request);
-    return control.confirmResend({...request,confirmationId:command.confirmationId,confirmed:command.confirmed});
+    const delivery=await control.confirmResend({...request,confirmationId:command.confirmationId,confirmed:command.confirmed});
+    if(projectReport!==null&&delivery.status==='provider_accepted'){
+      try{await projectReport({...request,deliveryOperationKey:delivery.operationKey});return {...delivery,crmProjectionStatus:'verified'};}
+      catch{return {...delivery,crmProjectionStatus:'held'};}
+    }return delivery;
   }
   async function handle(command,{actor,signal}={}) {
     if(signal!==undefined&&!(signal instanceof AbortSignal))held();
@@ -68,6 +73,7 @@ function createReportDeliveryHandlers({control,readDealForScope,readSnapshot,sys
       // Stopped/failed terminal states keep their report and original status.
       // They never acquire completed-test automatic delivery authority.
       if(selection.testStatus!=='Completed')return {status:'held'};
+      if(projectReport!==null)await projectReport({dealId:selection.dealId,actor:systemActor,signal});
       const snapshot=await readSnapshot({dealId:selection.dealId,signal});
       if(signal?.aborted||snapshot?.binding?.clientId!==scope.clientId
         ||snapshot.binding.deploymentId!==scope.deploymentId
@@ -79,6 +85,11 @@ function createReportDeliveryHandlers({control,readDealForScope,readSnapshot,sys
       // cannot label this corrected PDF or recipient as newly accepted.
       const sameSummary=['generationKey','documentSha256','privateReceiptKey'].every(k=>
         delivery.summary?.[k]===snapshot.report.summary[k]);
+      if(projectReport!==null&&delivery.status==='provider_accepted'&&sameSummary
+        &&delivery.recipientVerificationDigest===snapshot.recipient.verificationDigest){
+        try{await projectReport({dealId:selection.dealId,actor:systemActor,signal,deliveryOperationKey:delivery.operationKey});
+          return {status:delivery.status,crmProjectionStatus:'verified'};}catch{return {status:delivery.status,crmProjectionStatus:'held'};}
+      }
       return {status:sameSummary && delivery.recipientVerificationDigest===snapshot.recipient.verificationDigest
         ? delivery.status : 'held'};
     }catch{return {status:'held'};}

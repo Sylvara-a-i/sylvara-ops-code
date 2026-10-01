@@ -13,8 +13,8 @@ function held(){throw Object.assign(new Error('REPORT_DELIVERY_HELD'),{code:'REP
  * current suppression evidence. Neither dependency is accepted from a request.
  */
 function createDealReportSnapshotReader({crm,readCanonicalSelection,readRecipientAttestation,
-  readNativeConversion,now=Date.now}={}) {
-  if(typeof crm?.getReportRecords!=='function'||![readCanonicalSelection,readRecipientAttestation,
+  readNativeConversion,now=Date.now,requireProjection=true}={}) {
+  if(typeof requireProjection!=='boolean'||typeof crm?.getReportRecords!=='function'||![readCanonicalSelection,readRecipientAttestation,
     readNativeConversion,now].every(x=>typeof x==='function'))held();
   return async function readSnapshot({dealId,signal}={}) {
     const active=()=>{if(signal?.aborted)held();};active();
@@ -28,13 +28,13 @@ function createDealReportSnapshotReader({crm,readCanonicalSelection,readRecipien
       ||deal.Account_Name?.id!==b.accountId||deal.Contact_Name?.id!==b.contactId
       ||contact.id!==b.contactId||contact.Account_Name?.id!==b.accountId
       ||deal.Deployment_Record_ID!==b.deploymentId||deal.Configuration_Version!==b.configurationVersion
-      ||deal.Test_Status!=='Completed'||deal.Test_Report_Revision!==selected.report?.manifestSha256)held();
+      ||deal.Test_Status!=='Completed'||(requireProjection&&deal.Test_Report_Revision!==selected.report?.manifestSha256))held();
     const nativeDigest=sha(Object.fromEntries(['originalLeadId','journeyId','accountId','contactId','dealId','convertedAt']
       .map(k=>[k,native[k]])));
     const recipient=await readRecipientAttestation({binding:b,nativeRelationshipEvidenceSha256:nativeDigest,signal});active();
-    if(recipient?.address!==deal.Test_Report_Recipient_Email||recipient.address!==contact.Email
+    if((requireProjection&&recipient?.address!==deal.Test_Report_Recipient_Email)||recipient.address!==contact.Email
       ||recipient.contactId!==b.contactId||recipient.address.length>100
-      ||Date.parse(deal.Test_Report_Recipient_Verified_At)!==recipient.verifiedAt
+      ||(requireProjection&&Date.parse(deal.Test_Report_Recipient_Verified_At)!==recipient.verifiedAt)
       ||recipient.nativeRelationshipEvidenceSha256!==nativeDigest)held();
     const snapshot={binding:b,nativeRelationshipEvidenceSha256:nativeDigest,report:selected.report,recipient};
     validateSnapshot(snapshot,now());

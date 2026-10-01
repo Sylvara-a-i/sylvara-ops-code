@@ -180,3 +180,37 @@ A2 packages. After a reviewed source commit, build/extract exact-revision artifa
 and verify isolated controller/worker imports and source/protected-auth parity;
 installed-state readback and provider acceptance remain separate. Disable the
 trusted delivery binding for containment; retain consumed claims and receipts.
+
+
+### Bounded read/projection adapter source qualification
+
+The default managed factory now composes the existing canonical complete-partition
+reader, native Lead conversion reader, original intake lineage reader and encrypted
+ReportRuns directly. Selection recomputes the existing source identity and requires
+the accepted pair and current reviewed-source digest. It performs no imports,
+checkpoint re-attestation, rendering or uploads. Stale evidence holds delivery.
+
+Protected recipient/actor attestations are keyed by Deal and deployment, preserving
+repeat-test history. Explicit recipient selection precedes operation; no final
+call-derived dates are required to attest a recipient. Mandatory ledger period
+columns record the attestation capture date; actual report dates come exclusively
+from canonical terminal/report evidence. Attestation authoring still requires its
+qualified setup/internal-approval binding; there is no public authoring endpoint.
+
+The projection writer updates only Test_Report_PDF_URL, Test_Report_Revision,
+Test_Report_Recipient_Email, Test_Report_Recipient_Verified_At and
+Test_Report_Delivery_Status. One per-Deal/test durable CAS slot serializes corrections
+and status updates. Unknown writes hold later updates until exact independent
+readback; no PUT is replayed. Conditional CRM modification time, empty workflow
+triggers and cadence suppression fence the sole PUT. Actor, recipient and link
+freshness are checked again immediately before dispatch. Provider Accepted requires
+the exact immutable delivery receipt; it does not mean inbox receipt or reading.
+
+Deployment switches deliveryEnabled, autoDeliveryEnabled and projectionEnabled
+default false. The existing narrow Deals UPDATE Connection can be reused only after
+fixed runtime principal and field/schema qualification; its token is never used for
+org.READ. Read Connections independently own cohort/lineage corroboration. Managed
+Mail CREATE approval alone does not establish connected runtime authorization.
+Private exact-version WorkDrive URL templates require independent qualification;
+no share link or guessed version URL is a fallback. Keep all bindings disabled until
+destination, permissions, retention, principal and provider contracts are accepted.

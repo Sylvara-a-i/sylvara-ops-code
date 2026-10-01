@@ -11,7 +11,8 @@ const fields = ['clientId','deploymentId','dealId','accountId','contactId','conf
 function validateSnapshot(value, at) {
   const x = structuredClone(value);
   if (!x || !x.binding || !fields.every(k => typeof x.binding[k] === 'string')
-    || !fields.slice(0,6).every(k => ID.test(x.binding[k]))
+    || !fields.slice(0,5).every(k => ID.test(x.binding[k]))
+    || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(x.binding.configurationVersion)
     || !HASH.test(x.nativeRelationshipEvidenceSha256)
     || !x.report || x.report.completed !== true || x.report.fresh !== true || x.report.validated !== true
     || !['generationKey','manifestSha256','sourceRevisionDigest'].every(k => HASH.test(x.report[k]))

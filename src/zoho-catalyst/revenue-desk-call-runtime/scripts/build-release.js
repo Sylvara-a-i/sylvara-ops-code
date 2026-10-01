@@ -13,14 +13,17 @@ const WORKER_REPORTING_PATH = 'functions/revenue_desk_call_worker/reporting';
 const REPORTING_PATH = `${WORKER_REPORTING_PATH}/revenue-desk-analytics`;
 const CONTROL_REPORTING_PATH = 'functions/revenue_desk_route_control/reporting/revenue-desk-analytics';
 const DELIVERY_LIBS = ['report-delivery-control','report-delivery-handlers','report-mail-sender','report-delivery-snapshot',
-  'report-run-store','facts','errors','connection-boundary','config','source-revision'];
+  'report-run-store','report-delivery-storage','workdrive-client','report-attempt-budget',
+  'facts','errors','connection-boundary','config','source-revision',
+  'report-crm-projection','report-delivery-attestation','analytics-client','catalyst-store',
+  'report-checkpoint-verification','pdf-fonts','daily-rollup','native-pdf-renderer'];
 const CORE_BRIDGE_PATH = `${WORKER_REPORTING_PATH}/revenue-desk-call-runtime/functions/revenue_desk_call_gateway`;
 const SOURCE_STAMP_PATH = 'functions/revenue_desk_call_gateway/lib/source-revision.js';
 const ANALYTICS_STAMP_PATH = `${REPORTING_PATH}/functions/analytics_sync/lib/source-revision.js`;
 const CONTROL_ANALYTICS_STAMP_PATH = `${CONTROL_REPORTING_PATH}/functions/analytics_sync/lib/source-revision.js`;
 const REPORT_TOOLS = Object.freeze([
   'build-free-test-report', 'build-private-call-ledger', 'create-durable-report-composition',
-  'create-reporting-factory', 'create-report-delivery-factory',
+  'create-reporting-factory', 'create-report-delivery-factory', 'create-report-delivery-readers',
   'evaluate-dashboard-pre-render-gate', 'opportunity-value', 'prepare-free-test-draft',
   'prepare-workdrive-draft', 'read-reconciled-free-test-input', 'render-free-test-report',
   'reattest-report-checkpoints', 'report-brand', 'report-packet-layout',
@@ -156,7 +159,8 @@ function readTree(revision) {
     entries.push({ object, relative, repositoryPath });
   }
   if (entries.some(entry => entry.relative === 'functions/revenue_desk_route_control/lib/report-delivery-composition.js')) {
-    const deliveryPaths = new Set(['tools/create-report-delivery-factory.js',
+    const deliveryPaths = new Set([...REPORT_TOOLS.map(name=>`tools/${name}.js`),
+      'config/free-test-report-contract.json','config/analytics-model-contract.json',
       ...DELIVERY_LIBS.map(name => `functions/analytics_sync/lib/${name}.js`)]);
     for (const entry of [...entries]) {
       if (entry.relative.startsWith(`${REPORTING_PATH}/`)
@@ -167,6 +171,14 @@ function readTree(revision) {
     for (const relative of deliveryPaths) {
       if (!entries.some(entry => entry.relative === `${CONTROL_REPORTING_PATH}/${relative}`))
         throw new Error('Controller report delivery package is incomplete.');
+    }
+  }
+  if(entries.some(entry=>entry.relative===`${REPORTING_PATH}/tools/create-report-delivery-readers.js`)){
+    for(const name of ['crm-client','configuration-source-reader','configuration-conversion-reader']){
+      const original=entries.find(entry=>entry.relative===`functions/revenue_desk_route_control/lib/${name}.js`);
+      if(!original)throw new Error('Managed report reader contract is incomplete.');
+      for(const owner of ['revenue_desk_call_worker','revenue_desk_route_control'])entries.push({...original,
+        relative:`functions/${owner}/reporting/revenue-desk-call-runtime/functions/revenue_desk_route_control/lib/${name}.js`});
     }
   }
   entries.sort((left, right) => left.relative.localeCompare(right.relative));

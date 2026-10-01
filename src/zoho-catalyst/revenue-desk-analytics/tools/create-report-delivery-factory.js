@@ -4,6 +4,11 @@ const {createReportRunStore}=require('../functions/analytics_sync/lib/report-run
 const {createReportDeliveryControl}=require('../functions/analytics_sync/lib/report-delivery-control');
 const {createManagedReportMailSender}=require('../functions/analytics_sync/lib/report-mail-sender');
 const {createReportDeliveryHandlers}=require('../functions/analytics_sync/lib/report-delivery-handlers');
+const {createReportDeliveryStorageReader}=require('../functions/analytics_sync/lib/report-delivery-storage');
+const {createWorkDriveClient}=require('../functions/analytics_sync/lib/workdrive-client');
+const {createConnectionAuthorizationProvider}=require('../functions/analytics_sync/lib/connection-boundary');
+const {createManagedReportDeliveryReaders}=require('./create-report-delivery-readers');
+const {createReportCrmProjectionWriter}=require('../functions/analytics_sync/lib/report-crm-projection');
 const {loadDeployment}=require('../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/runtime-service');
 
 function held(){throw Object.assign(new Error('REPORT_DELIVERY_BINDING_REQUIRED'),{code:'REPORT_DELIVERY_BINDING_REQUIRED'});}
@@ -14,14 +19,15 @@ function held(){throw Object.assign(new Error('REPORT_DELIVERY_BINDING_REQUIRED'
  * Default auto admission is false. This factory provisions no access grant.
  */
 function createReportDeliveryFactory({binding,createReaders,fetchImpl=globalThis.fetch,now=Date.now,
-  autoDeliveryEnabled=false}={}) {
+  autoDeliveryEnabled=false,deliveryEnabled=false,projectionEnabled=false,readDestinationBinding,readOpportunityReview=null,synthetic=false}={}) {
   const b=structuredClone(binding);
   if(!b||b.environment!=='development'||!/^[a-f0-9]{40}$/.test(b.sourceRevision||'')
     ||!/^[1-9][0-9]{2,29}$/.test(b.projectId||'')
     ||!Number.isSafeInteger(b.verifiedAt)||!Number.isSafeInteger(b.expiresAt)||b.expiresAt<=b.verifiedAt
     ||!['schemaDigest','nativeLineageDigest','recipientContractDigest','authorizationContractDigest','storageContractDigest'].every(k=>
       /^[a-f0-9]{64}$/.test(b[k]||''))
-    ||typeof createReaders!=='function'||typeof now!=='function'||typeof autoDeliveryEnabled!=='boolean'
+    ||(createReaders!==undefined&&typeof createReaders!=='function')||typeof now!=='function'||typeof autoDeliveryEnabled!=='boolean'
+    ||typeof deliveryEnabled!=='boolean'||typeof projectionEnabled!=='boolean'||typeof synthetic!=='boolean'
     ||!b.systemActor)held();
   const active=()=>{const at=now();if(!Number.isSafeInteger(at)||at<b.verifiedAt||at>=b.expiresAt)held();return at;};
   active();
@@ -31,15 +37,43 @@ function createReportDeliveryFactory({binding,createReaders,fetchImpl=globalThis
       ||String(app?.config?.projectId||'')!==b.projectId
       ||String(app.config.environment||'').toLowerCase()!=='development'
       ||typeof store?.unique!=='function')held();
-    const readers=createReaders(app,config,store);
-    if(!readers||!['readSnapshot','readSummary','authorize'].every(k=>typeof readers[k]==='function'))held();
+    const runs=createReportRunStore({app,environment:'development',timeoutMs:3000});
+    const readers=createReaders ? createReaders(app,config,store,{reportRunStore:runs})
+      :createManagedReportDeliveryReaders({app,runtimeConfig:config,runtimeStore:store,reportRunStore:runs,
+        binding:b.readers,readDestinationBinding,readOpportunityReview,fetchImpl,now:active,synthetic});
+    if(!readers||!['readSnapshot','authorize'].every(k=>typeof readers[k]==='function'))held();
     const wrap=method=>async(...args)=>{active();const result=await readers[method](...args);active();return result;};
     const readSnapshot=wrap('readSnapshot');
-    const control=createReportDeliveryControl({store:createReportRunStore({app,environment:'development',timeoutMs:3000}),
-      readSnapshot,readSummary:wrap('readSummary'),authorize:wrap('authorize'),now:active,autoDeliveryEnabled,
+    let readSummary;
+    if(typeof readers.readSummary==='function')readSummary=wrap('readSummary');
+    else {
+      const storage=b.storage;
+      if(typeof readers.readDestinationBinding!=='function'||!storage
+        ||storage.contractQualificationDigest!==b.storageContractDigest)held();
+      const workdrive=createWorkDriveClient({authorizationProvider:createConnectionAuthorizationProvider(app,
+        storage.connectionReference,3000),fetchImpl,apiOrigin:storage.apiOrigin,downloadOrigin:storage.downloadOrigin,
+        timeoutMs:storage.timeoutMs,now:active});
+      const stored=createReportDeliveryStorageReader({reportRunStore:runs,workdrive,
+        readDestinationBinding:wrap('readDestinationBinding'),now:active});
+      readSummary=async({snapshot,signal}={})=>{active();const bytes=await stored({snapshot,signal});active();return bytes;};
+    }
+    const authorize=async request=>((request.action==='view'||request.action==='project'||deliveryEnabled)
+      &&await wrap('authorize')(request)===true);
+    let projectReport=null;
+    if(projectionEnabled){
+      if(!b.crmProjection||typeof readers.readProjection!=='function'||typeof readers.readRecords!=='function')held();
+      const writer=createReportCrmProjectionWriter({store:runs,readRecords:wrap('readRecords'),
+        async readProjection(request){const result=await wrap('readProjection')(request);
+          await readSummary({snapshot:result.snapshot,signal:request.signal});return result;},
+        authorizationProvider:createConnectionAuthorizationProvider(app,b.crmProjection.connectionReference,3000),
+        binding:b.crmProjection,authorize,fetchImpl,now:active});
+      projectReport=async(request)=>{if(!await authorize({...request,action:'project'}))held();return writer(request);};
+    }
+    const control=createReportDeliveryControl({store:runs,
+      readSnapshot,readSummary,authorize,now:active,autoDeliveryEnabled,
       sender:createManagedReportMailSender({app,binding:b.mail,fetchImpl,now:active,
         lookupAcceptance:readers.lookupAcceptance?wrap('lookupAcceptance'):null})});
-    return createReportDeliveryHandlers({control,readSnapshot,systemActor:b.systemActor,now:active,
+    return createReportDeliveryHandlers({control,readSnapshot,projectReport,systemActor:b.systemActor,now:active,
       readPrivateView:readers.readPrivateView?wrap('readPrivateView'):null,
       async readDealForScope(scope,{signal}={}) {
         active();if(signal?.aborted)held();
