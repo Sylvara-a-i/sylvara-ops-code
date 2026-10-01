@@ -155,7 +155,7 @@ test('privacy erasure preserves explicit immediate-danger category through canon
 });
 
 
-async function priorTerminalReceipt(outcome, completed) {
+async function priorTerminalReceipt(outcome, completed, legacyCallback = false) {
   const fixture = runtimeFixture();
   const inbound = await invoke(fixture.listener, { url: '/retell/inbound',
     payload: payloadInbound('A'), env: fixture.env });
@@ -164,12 +164,18 @@ async function priorTerminalReceipt(outcome, completed) {
       outcome, urgency: outcome === 'unresolved' ? 'immediate_danger' : 'routine',
       sensitive_data_detected: outcome === 'unresolved', callback_number_confirmed: true,
     });
+  if (legacyCallback) delete event.call.call_analysis.custom_analysis_data.callback_number_confirmed;
   await invoke(fixture.listener, { url: '/retell/events', payload: event,
     env: fixture.env, processJobs: completed });
   const receipt = fixture.store.rows.get('RevenueDeskEventReceipts')
     .find((row) => row.RECEIPT_KIND === 'provider_event');
   const prior = JSON.parse(receipt.EVENT_DATA_JSON);
-  prior.analysis = require('../lib/analysis').priorTerminalAnalysis(event.call);
+  prior.analysis = { ...require('../lib/analysis').priorTerminalAnalysis(event.call) };
+  if (legacyCallback) {
+    delete prior.analysis.callbackNumberConfirmed;
+    prior.analysis.callbackNumber = prior.analysis.sensitiveDataMinimized ? null
+      : event.call.call_analysis.custom_analysis_data.callback_number;
+  }
   receipt.EVENT_DATA_JSON = JSON.stringify(prior);
   return { fixture, event, receipt };
 }
@@ -259,3 +265,29 @@ test('historical terminal notification retry is contained before preparation or 
    }
   }
 });
+
+ test('combined old terminal and callback receipt preserves completed bytes and holds pending',async()=>{
+  for(const completed of [true,false]){
+   const {fixture,event,receipt}=await priorTerminalReceipt('configuration_failure',completed,true);
+   const before=structuredClone(receipt),queued=fixture.jobQueue.length;
+   const result=await invoke(fixture.listener,{url:'/retell/events',payload:event,env:fixture.env,processJobs:false});
+   assert.equal(result.status,completed?200:409);assert.deepEqual(receipt,before);
+   assert.equal(fixture.jobQueue.length,queued);assert.equal(fixture.mailAccesses,0);
+   event.call.call_analysis.custom_analysis_data.issue_summary='Changed synthetic issue';
+   const changed=await invoke(fixture.listener,{url:'/retell/events',payload:event,env:fixture.env,processJobs:false});
+   assert.equal(changed.status,400);assert.deepEqual(receipt,before);
+  }
+ });
+ test('signed returning-customer new work keeps intent; absent intent is Unknown',async()=>{
+  for(const explicit of [true,false]){
+   const data={outcome:'potential_job',customer_type:'existing',bookable_opportunity:true};
+   if(explicit)data.request_kind='new_service_request';
+   const fixture=await recordAnalyzedCall(data);
+   const canonical=JSON.parse(fixture.store.rows.get('RevenueDeskCalls')[0].CANONICAL_CALL_JSON);
+   const report=await queryClientReport(fixture.store,fixture.config,'client_A','deployment_A',TERMINAL_AS_OF);
+   assert.equal(canonical.requestKind,explicit?'new_service_request':'unknown');
+   assert.equal(canonical.bookableOpportunity,explicit?true:null);
+   assert.equal(report.calls[0].requestKind,canonical.requestKind);
+   assert.equal(report.calls[0].bookableOpportunity,canonical.bookableOpportunity);
+  }
+ });

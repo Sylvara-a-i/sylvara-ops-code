@@ -415,7 +415,7 @@ async function ownerHandoffRehearsal() {
     const admission = await h.inbound('A');
     assert.equal(admission.body.call_inbound.metadata.resolver_status, 'Resolved');
     const payload = await h.event('A', admission.body.call_inbound.metadata, `handoff_${behavior}`, {
-      outcome: 'urgent_potential_job', urgency: 'urgent', bookable_opportunity: true,
+      outcome: 'urgent_potential_job', urgency: 'urgent', request_kind: 'new_service_request', bookable_opportunity: true,
       office_follow_up_required: true, callback_number_confirmed: true,
     });
     const notifications = h.runtime.store.rows.get('RevenueDeskNotifications');
@@ -572,8 +572,8 @@ async function runFreeTestDemo() {
       return [letter, result.body.call_inbound.metadata];
     })));
     const categories = [
-      { outcome: 'potential_job', bookable_opportunity: true, office_follow_up_required: true },
-      { outcome: 'urgent_potential_job', urgency: 'urgent', bookable_opportunity: true,
+      { outcome: 'potential_job', request_kind: 'new_service_request', bookable_opportunity: true, office_follow_up_required: true },
+      { outcome: 'urgent_potential_job', urgency: 'urgent', request_kind: 'new_service_request', bookable_opportunity: true,
         office_follow_up_required: true },
       { outcome: 'existing_customer', customer_type: 'existing', office_follow_up_required: true },
       { outcome: 'out_of_area', city_or_zip: 'Synthetic outside territory' },
@@ -583,7 +583,7 @@ async function runFreeTestDemo() {
     ];
     for (const [index, analysis] of categories.entries()) await h.event('A', entries.A, index, analysis);
     for (let index = 0; index < 25; index += 1) {
-      await h.event('B', entries.B, index, { outcome: 'potential_job', bookable_opportunity: true });
+      await h.event('B', entries.B, index, { outcome: 'potential_job', request_kind: 'new_service_request', bookable_opportunity: true });
     }
     const limitDenied = await h.inbound('B');
     assert.notEqual(limitDenied.body?.call_inbound?.metadata?.resolver_status, 'Resolved');
@@ -607,7 +607,7 @@ async function runFreeTestDemo() {
     assert.equal(preliminary.bookableOpportunities, null);
     // A newly versioned source event arrives after terminal CRM completion. The
     // report guard advances only from the exact previous confirmed summary.
-    await h.event('A', entries.A, 'late', { outcome: 'potential_job', bookable_opportunity: true });
+    await h.event('A', entries.A, 'late', { outcome: 'potential_job', request_kind: 'new_service_request', bookable_opportunity: true });
     const revised = await h.job({ mode: 'rebuild_report', deployment_id: 'deployment_A' });
     assert.equal(revised.report.bookableOpportunities, 3);
     assert.notEqual(revised.report.sourceModifiedAt, beforeLate.sourceModifiedAt);

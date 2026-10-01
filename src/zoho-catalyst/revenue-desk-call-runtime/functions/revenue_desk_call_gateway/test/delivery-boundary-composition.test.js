@@ -40,3 +40,14 @@ test('historical delivery-only composition remains exact and exportable',()=>{
 });
 test('altered sender diagnostic cannot weaken selected authentication',()=>held(()=>composeReviewedDeliveryBoundary(file,base,
  Buffer.from(source.replace("kind: 'internal_controller'","kind: 'terminal_worker'")),selected)));
+
+test('already integrated selected auth permits only the same reviewed additive boundary',()=>{
+ const integrated=Buffer.from(selected.toString().replace(anchor,addition+anchor));
+ const result=composeReviewedDeliveryBoundary(file,base,integrated,selected);
+ assert.deepEqual(result.bytes,integrated);
+ assert.deepEqual(Buffer.from(result.bytes.toString().replace(addition,'')),selected);
+});
+test('integrated auth with unrelated source overlap remains rejected',()=>{
+ const integrated=Buffer.from(selected.toString().replace(anchor,addition+anchor)+'\n// unrelated overlap\n');
+ held(()=>composeReviewedDeliveryBoundary(file,base,integrated,selected));
+});

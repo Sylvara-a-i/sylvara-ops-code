@@ -12,18 +12,20 @@ const {METHOD_ID,METHOD_VERSION,SCOPE_FIELDS}=require('../../../tools/opportunit
 const {factRowsetDigest}=require('../../../tools/build-free-test-report');
 const hash=v=>crypto.createHash('sha256').update(v).digest('hex');
 const rejection={code:'DRAFT_RECONCILIATION_REQUIRED'};
-async function fixture(count=1){
+async function fixture(count=1, physical=false){
  const f=await createReconciledReportFixture({analyses:Array.from({length:count},(_,n)=>({issue_summary:`Synthetic request ${n+1}`}))});
  const data=await f.readInput(f.identity);
  const source=prepareFreeTestDocument(data.input,{now:f.now(),synthetic:true,callDetails:data.callDetails});
  const d=createWorkDriveDraftFixture(source,{now:f.now()});let renders=0;
+ const physicalStore=physical?require('./helpers/report-successor-fixture').fixture():null;
+ if(physicalStore)d.runs=physicalStore.store;
  const renderer={version:'synthetic-pair-v1',qualificationDigest:'d'.repeat(64),async render({html}){
-  renders++;assert.ok([...d.rows.values()].some(r=>r.state.kind==='report_bundle_v1'));
+  renders++;assert.ok(physicalStore?[...physicalStore.rows.values()].some(r=>JSON.parse(r.ReportPayloadJson).state.kind==='report_bundle_v1'):[...d.rows.values()].some(r=>r.state.kind==='report_bundle_v1'));
   preparePdfPayload(html);return Buffer.from(`%PDF-1.7\n% synthetic ${hash(html)}\n%%EOF\n`);
  }};
  const options={...f.readerOptions,reportRunStore:d.runs,workdrive:d.workdrive,readDestinationBinding:d.readDestinationBinding,now:f.now,synthetic:true,pdfRenderer:renderer,reportBundle:true};
- const advance=()=>{f.runtime.clock.value=[...d.rows.values()].find(r=>r.state.kind==='report_attempt_v1').state.nextAttemptAt;};
- return {f,d,data,source,renderer,options,advance,get renders(){return renders;}};
+ const advance=()=>{const rows=physicalStore?[...physicalStore.rows.values()].sort((a,b)=>b.RD_REPORT_VERSION-a.RD_REPORT_VERSION).map(r=>({state:JSON.parse(r.ReportPayloadJson).state})):[...d.rows.values()];f.runtime.clock.value=rows.find(r=>r.state.kind==='report_attempt_v1').state.nextAttemptAt;};
+ return {f,d,data,source,renderer,options,advance,physicalStore,get renders(){return renders;}};
 }
 test('summary suppresses chart below five and uses only existing labeled counts at five',()=>{
  const mix=[{category:'new_job_opportunities',label:'New jobs',calls:4},{category:'needs_review',label:'Unclear',calls:0}];
@@ -81,12 +83,13 @@ test('lost pair acceptance response recovers exact manifest without repeated eff
  const result=await createDurableReportComposition(x.options)(x.f.identity);
  assert.equal(result.status,'report_pair_verified_not_for_delivery');assert.equal(x.renders,2);assert.equal(x.d.uploads.length,2);
 });
-test('corrected reviewed source creates a new immutable pair preserving both prior artifacts',async()=>{
- const x=await fixture(), first=await createDurableReportComposition(x.options)(x.f.identity);x.advance();
+test('corrected reviewed source creates a new immutable pair preserving both prior artifacts',async t=>{
+ const x=await fixture(1,true), first=await createDurableReportComposition(x.options)(x.f.identity);x.advance();
  const input=x.data.input, now=x.f.now();
  const review={schemaVersion:1,methodId:METHOD_ID,methodVersion:METHOD_VERSION,scope:Object.fromEntries(SCOPE_FIELDS.map(k=>[k,input.deployment[k]])),callRowsetDigest:factRowsetDigest('call',input.calls),review:{status:'reviewed',reviewedAt:new Date(now).toISOString(),reviewerReference:hash('synthetic reviewer')},groups:[{groupKey:hash('synthetic group'),callKeys:[input.calls[0].CALL_KEY],reviewStatus:'qualified',knownJobValue:{amountMinorUnits:125000,currency:'USD',evidenceReference:hash('synthetic valuation'),effectiveDate:new Date(now).toISOString().slice(0,10)},averageJobValue:null}]};
  const second=await createDurableReportComposition({...x.options,readOpportunityReview:async()=>review})(x.f.identity);
  assert.notEqual(second.generationKey,first.generationKey);assert.equal(x.renders,4);assert.equal(x.d.uploads.length,4);
+ t.diagnostic(`two corrected revisions: ${x.physicalStore.rows.size} immutable rows`);
  for(const a of Object.values(first.manifest.artifacts))assert.ok([...x.d.resources.values()].some(r=>r.metadata.name.includes(a.generationKey)&&hash(r.bytes)===a.documentSha256));
 });
 
@@ -130,4 +133,35 @@ test('private review drift is held even when displayed amounts and request text 
  const reconcile=createDurableReportComposition({...x.options,readOpportunityReview:async()=>++reads===1?original:changed});
  await assert.rejects(reconcile(x.f.identity),rejection);assert.equal(x.renders,1);assert.equal(x.d.uploads.length,0);
  assert.equal([...x.d.rows.values()].find(r=>r.state.kind==='report_bundle_v1').state.phase,'working');
+});
+
+test('physical immutable successors fit pair ceilings and accepted replay has no new effects',async t=>{
+ const x=await fixture(25,true),baseline=structuredClone({analytics:x.f.analyticsStore.rows,crm:x.f.runtime.store.rows.get('CRMBillingOperations')});
+ const first=await createDurableReportComposition(x.options)(x.f.identity);
+ assert.equal(first.status,'report_pair_verified_not_for_delivery');
+ const rows=x.physicalStore.rows.size,reads=x.physicalStore.queries.length,writes=x.physicalStore.writes.length;
+ t.diagnostic(`cold pair: ${rows} physical rows, ${reads} reads, ${writes} insert attempts`);
+ assert.ok(reads<=40);assert.ok(writes<=26);assert.equal(x.renders,2);assert.equal(x.d.uploads.length,2);
+ x.advance();const second=await createDurableReportComposition(x.options)(x.f.identity);
+ assert.deepEqual(second.manifest,first.manifest);assert.equal(x.renders,2);assert.equal(x.d.uploads.length,2);
+ assert.deepEqual({analytics:x.f.analyticsStore.rows,crm:x.f.runtime.store.rows.get('CRMBillingOperations')},baseline);
+ t.diagnostic(`accepted replay: ${x.physicalStore.queries.length-reads} reads, ${x.physicalStore.writes.length-writes} insert attempts`);
+});
+
+test('physical concurrent pair claims have one accepted owner and exactly two effects',async()=>{
+ const x=await fixture(1,true);
+ const results=await Promise.all([createDurableReportComposition(x.options)(x.f.identity),createDurableReportComposition(x.options)(x.f.identity)]);
+ assert.equal(results.filter(r=>r.status==='report_pair_verified_not_for_delivery').length,1);
+ assert.equal(x.renders,2);assert.equal(x.d.uploads.length,2);
+});
+test('physical ambiguous render and stored mismatch cannot repeat provider effects',async()=>{
+ for(const mismatch of [false,true]){const x=await fixture(1,true);let calls=0;
+ const renderer=mismatch?x.renderer:{...x.renderer,async render(input){calls++;if(calls===2)throw Error('synthetic unknown');return x.renderer.render(input);}};
+ const run=createDurableReportComposition({...x.options,pdfRenderer:renderer});
+ if(mismatch){await run(x.f.identity);[...x.d.resources.values()][0].bytes[10]^=1;}
+ else await assert.rejects(run(x.f.identity),rejection);
+ const before={renders:x.renders,uploads:x.d.uploads.length,calls};x.advance();
+ await assert.rejects(run(x.f.identity),rejection);
+ assert.deepEqual({renders:x.renders,uploads:x.d.uploads.length,calls},before);
+ }
 });

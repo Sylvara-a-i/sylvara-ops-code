@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "runtime_authority": false,
+  "deployment_authorized": false,
+  "provider_field": "request_kind",
+  "canonical_field": "requestKind",
+  "required": false,
+  "values": [
+    "new_service_request",
+    "existing_job_follow_up",
+    "unknown"
+  ],
+  "missing_historical_value": "unknown",
+  "relationship_field": "customer_type",
+  "rules": [
+    "Never derive request kind from customer relationship or caller ID",
+    "Existing customers can request genuine new work",
+    "Positive bookable_opportunity requires explicit new_service_request",
+    "Existing_job_follow_up with positive bookable_opportunity is contradictory and held",
+    "Unknown positive opportunity assertion is withheld as null, not counted as zero",
+    "Preserve original outcome and immutable historical evidence; do not relabel old calls",
+    "Opportunity grouping and documented valuation remain separately reviewed"
+  ],
+  "fixtures": [
+    {
+      "customer_type": "existing",
+      "request_kind": "new_service_request",
+      "outcome": "potential_job",
+      "bookable_opportunity": true,
+      "expected_bookable": true
+    },
+    {
+      "customer_type": "new",
+      "request_kind": "existing_job_follow_up",
+      "outcome": "existing_customer",
+      "bookable_opportunity": false,
+      "expected_bookable": false
+    },
+    {
+      "customer_type": "existing",
+      "outcome": "potential_job",
+      "bookable_opportunity": true,
+      "expected_request_kind": "unknown",
+      "expected_bookable": null
+    },
+    {
+      "customer_type": "existing",
+      "request_kind": "existing_job_follow_up",
+      "outcome": "potential_job",
+      "bookable_opportunity": true,
+      "expected": "INVALID_ANALYSIS"
+    }
+  ]
+}

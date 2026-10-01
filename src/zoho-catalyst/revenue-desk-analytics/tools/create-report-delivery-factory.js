@@ -1,6 +1,6 @@
 'use strict';
 
-const {createReportRunStore}=require('../functions/analytics_sync/lib/report-run-store');
+const {createReportSuccessorStore}=require('../functions/analytics_sync/lib/report-successor-store');
 const {createReportDeliveryControl}=require('../functions/analytics_sync/lib/report-delivery-control');
 const {createManagedReportCrmSender}=require('../functions/analytics_sync/lib/report-mail-sender');
 const {createReportDeliveryHandlers}=require('../functions/analytics_sync/lib/report-delivery-handlers');
@@ -37,7 +37,7 @@ function createReportDeliveryFactory({binding,createReaders,fetchImpl=globalThis
       ||String(app?.config?.projectId||'')!==b.projectId
       ||String(app.config.environment||'').toLowerCase()!=='development'
       ||typeof store?.unique!=='function')held();
-    const runs=createReportRunStore({app,environment:'development',timeoutMs:3000});
+    const runs=createReportSuccessorStore({app,environment:'development',timeoutMs:3000});
     const readers=createReaders ? createReaders(app,config,store,{reportRunStore:runs})
       :createManagedReportDeliveryReaders({app,runtimeConfig:config,runtimeStore:store,reportRunStore:runs,
         binding:b.readers,readDestinationBinding,readOpportunityReview,fetchImpl,now:active,synthetic});

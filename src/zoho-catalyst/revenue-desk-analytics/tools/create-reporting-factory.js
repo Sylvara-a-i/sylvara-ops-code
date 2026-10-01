@@ -5,7 +5,7 @@ const { createCatalystStore } = require('../functions/analytics_sync/lib/catalys
 const { createConnectionAuthorizationProvider } = require('../functions/analytics_sync/lib/connection-boundary');
 const { createAnalyticsClient } = require('../functions/analytics_sync/lib/analytics-client');
 const { createWorkDriveClient } = require('../functions/analytics_sync/lib/workdrive-client');
-const { createReportRunStore } = require('../functions/analytics_sync/lib/report-run-store');
+const { createReportSuccessorStore } = require('../functions/analytics_sync/lib/report-successor-store');
 const { createReportCheckpointReattestor } = require('./reattest-report-checkpoints');
 const { createDurableReportComposition } = require('./create-durable-report-composition');
 const { attachTerminalReportDelivery } = require('../functions/analytics_sync/lib/report-delivery-handlers');
@@ -90,7 +90,7 @@ function createReportingFactory({ analyticsConfig, workdriveBinding, acceptance,
     const workdrive = createWorkDriveClient({ authorizationProvider: createConnectionAuthorizationProvider(app,
       storage.connectionReference, config.platformTimeoutMs), apiOrigin: storage.apiOrigin,
     downloadOrigin: storage.downloadOrigin, timeoutMs: storage.timeoutMs, fetchImpl, now: assertAccepted });
-    const reportRunStore = createReportRunStore({ app, environment: config.environment,
+    const reportRunStore = createReportSuccessorStore({ app, environment: config.environment,
       timeoutMs: config.platformTimeoutMs });
     const reattestCheckpoints = createReportCheckpointReattestor({ analyticsStore, now: assertAccepted, freshnessMs: config.staleAfterMs });
     const reconcile = createDurableReportComposition({ runtimeStore, runtimeConfig, analyticsStore,

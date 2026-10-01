@@ -8,8 +8,8 @@ function createProtectedWorkerReportOptions(environment=process.env,{now=Date.no
  if(!b||!b.reporting.enabled)return Object.freeze({terminalDraftReconcilerFactory:null});
  const {createReportingFactory,createReportDeliveryFactory}=require('./terminal-draft-composition');
  const active=()=>{
-  const at=now();if(at<b.verifiedAt||at>=b.expiresAt||at>=b.reporting.casQualification.expiresAt
-   ||(b.delivery.enabled&&at>=b.delivery.casQualification.expiresAt))throw Object.assign(new Error('REPORT_BOOTSTRAP_HELD'),{code:'REPORT_BOOTSTRAP_HELD'});
+  const at=now();if(at<b.verifiedAt||at>=b.expiresAt||at>=b.reporting.claimQualification.expiresAt
+   ||(b.delivery.enabled&&at>=b.delivery.claimQualification.expiresAt))throw Object.assign(new Error('REPORT_BOOTSTRAP_HELD'),{code:'REPORT_BOOTSTRAP_HELD'});
   return at;
  };
  const readDestinationBinding=protectedDestinations(b.reporting.destinations);

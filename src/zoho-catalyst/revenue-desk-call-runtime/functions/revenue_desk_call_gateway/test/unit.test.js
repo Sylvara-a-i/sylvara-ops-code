@@ -1063,7 +1063,7 @@ test('unit: sensitive-data signals minimize every caller field before value vali
 test('unit: structured opportunity and workflow evidence is bounded and internally consistent', () => {
   const result = extractAnalysis({ call_analysis: { custom_analysis_data: {
     outcome: 'urgent_potential_job', coverage_trigger: 'AfterHours', urgency: 'urgent',
-    bookable_opportunity: true, office_follow_up_required: true,
+    request_kind: 'new_service_request', bookable_opportunity: true, office_follow_up_required: true,
     workflow_failure_code: 'office_queue_unavailable',
     workflow_failure_text: 'The office queue was unavailable during the test call.',
   } } });

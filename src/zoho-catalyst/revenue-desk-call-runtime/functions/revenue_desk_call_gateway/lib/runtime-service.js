@@ -1,6 +1,6 @@
 'use strict';
 
-const { priorTerminalAnalysis } = require('./analysis');
+const { priorTerminalAnalysis, priorRequestIntentAnalysis } = require('./analysis');
 
 const crypto = require('node:crypto');
 const {
@@ -710,6 +710,7 @@ function canonicalCallObject(envelope, deployment, callKey, correlationId, analy
     callbackNumber: existing.callbackNumberConfirmed === true ? existing.callbackNumber ?? null : null,
     callbackNumberConfirmed: existing.callbackNumberConfirmed ?? null,
     customerType: existing.customerType || 'unknown',
+    requestKind: existing.requestKind ?? 'unknown',
     callerIntent: existing.callerIntent ?? null,
     issueSummary: existing.issueSummary ?? null,
     cityOrZip: existing.cityOrZip ?? null,
@@ -731,6 +732,8 @@ function assertCanonicalCallIntegrity(row, canonical, deployment = null,
   errorCode = 'CALL_OWNERSHIP_UNRESOLVED') {
   const bindingVersion = Number(row?.BINDING_VERSION);
   const supportedSchema = canonical?.schemaVersion === 1 || canonical?.schemaVersion === 2;
+  invariant(canonical?.requestKind === undefined || ['new_service_request', 'existing_job_follow_up', 'unknown'].includes(canonical.requestKind),
+    errorCode, 'Canonical request intent is invalid.');
   const durationValid = canonical?.schemaVersion === 1
     || (Number.isSafeInteger(canonical?.durationMs)
       && canonical.durationMs >= 0 && canonical.durationMs <= MAX_RETELL_CALL_DURATION_MS);
@@ -813,8 +816,26 @@ function samePriorTerminalReceipt(existing, expected, eventData, payload) {
     || !RECEIPT_IMMUTABLE.filter((column) => column !== 'EVENT_DATA_JSON')
       .every((column) => existing[column] === expected[column])) return false;
   const prior = priorTerminalAnalysis(payload.call);
-  return prior !== null
-    && existing.EVENT_DATA_JSON === JSON.stringify({ ...eventData, analysis: prior });
+  if (prior === null) return false;
+  if (existing.EVENT_DATA_JSON === JSON.stringify({ ...eventData, analysis: prior })) return true;
+  const supplied = payload.call?.call_analysis?.custom_analysis_data;
+  if (!isPlainObject(supplied) || Object.hasOwn(supplied, 'callback_number_confirmed')) return false;
+  const legacy = { ...prior };
+  delete legacy.callbackNumberConfirmed;
+  legacy.callbackNumber = prior.sensitiveDataMinimized || supplied.callback_number === undefined
+    || supplied.callback_number === null || supplied.callback_number === ''
+    ? null : e164(supplied.callback_number, 'callback_number');
+  return existing.EVENT_DATA_JSON === JSON.stringify({ ...eventData, analysis: legacy });
+}
+
+function samePriorRequestIntentReceipt(existing, expected, eventData, payload) {
+  if (!existing || existing.EVENT_TYPE !== 'call_analyzed'
+    || existing.SOURCE_ENVIRONMENT !== expected.SOURCE_ENVIRONMENT
+    || !/^[a-f0-9]{40}$/.test(existing.SOURCE_REVISION)
+    || !RECEIPT_IMMUTABLE.filter(column => column !== 'EVENT_DATA_JSON')
+      .every(column => existing[column] === expected[column])) return false;
+  const prior = priorRequestIntentAnalysis(payload.call);
+  return prior !== null && existing.EVENT_DATA_JSON === JSON.stringify({ ...eventData, analysis: prior });
 }
 
 function sameLegacyCallbackReceipt(existing, expected, eventData, payload) {
@@ -830,7 +851,8 @@ function sameLegacyCallbackReceipt(existing, expected, eventData, payload) {
   // The old normalizer retained a syntactically valid callback without proving
   // confirmation. Match only that exact old projection of this identical raw
   // payload; no other field or ownership difference becomes compatible.
-  const legacyAnalysis = { ...eventData.analysis };
+  const priorIntent = priorRequestIntentAnalysis(payload.call);
+  const legacyAnalysis = { ...(priorIntent || eventData.analysis) };
   delete legacyAnalysis.callbackNumberConfirmed;
   legacyAnalysis.callbackNumber = eventData.analysis.sensitiveDataMinimized
     || supplied?.callback_number === undefined || supplied?.callback_number === null
@@ -1827,7 +1849,8 @@ function createRuntimeService({
           'REPORT_RECONCILIATION_REQUIRED',
           'Historical terminal analysis requires controlled correction before recovery.',
           { httpStatus: 409 });
-      } else if (!sameLegacyCallbackReceipt(existing, receipt, eventData, payload)) throw error;
+      } else if (!samePriorRequestIntentReceipt(existing, receipt, eventData, payload)
+        && !sameLegacyCallbackReceipt(existing, receipt, eventData, payload)) throw error;
       // Preserve the exact historical row. Its current status/lease controls
       // recovery, not the newer normalized projection of the same HTTP body.
       claimed = { inserted: false, row: existing };
@@ -1871,6 +1894,11 @@ function createRuntimeService({
     const claimed = await claimExistingReceipt(receiptKey, current);
     if (claimed.terminal) return claimed.terminal;
     const eventData = parseJsonColumn(claimed.row.EVENT_DATA_JSON, 'EVENT_DATA_JSON');
+    if (eventData.analysis && !Object.hasOwn(eventData.analysis, 'requestKind')) {
+      eventData.analysis = { ...eventData.analysis, requestKind: 'unknown',
+        bookableOpportunity: eventData.analysis.bookableOpportunity === true
+          ? null : eventData.analysis.bookableOpportunity };
+    }
     return executeClaimedEvent(
       eventData,
       claimed.row.CALL_KEY,
