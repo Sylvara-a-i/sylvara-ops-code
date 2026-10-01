@@ -25,7 +25,8 @@ test('disabled/missing/partial or mismatched identity/cost binding never accesse
   const x=fixture();mutate(x);assert.throws(()=>x.make());assert.equal(x.reads.length,0);assert.equal(x.calls.length,0);}
 });
 test('only exact command and authenticated controller actor admit the read',async()=>{
- for(const extra of [{url:'https://other.invalid'},{recordId:'1234'},{sender:'other@example.invalid'},{actor:{kind:'internal_controller'}}]){
+ for(const extra of [{url:'https://other.invalid'},
+  {recordId:'1234'},{sender:'other@example.invalid'},{actor:{kind:'internal_controller'}}]){
   const f=fixture();await assert.rejects(f.make().handle({...f.command,...extra},{actor:f.actor}));assert.equal(f.reads.length,0);}
  const f=fixture();for(const actor of [null,{kind:'terminal_worker',identity:f.actor.identity},{kind:'internal_controller',identity:'other'}])await assert.rejects(f.make().handle(f.command,{actor}));assert.equal(f.reads.length,0);
 });

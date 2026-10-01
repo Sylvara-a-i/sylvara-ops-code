@@ -24,23 +24,27 @@ const SHA = /^[a-f0-9]{40}$/;
 const DELIVERY_BOUNDARY_PATH = `${RUNTIME}/functions/revenue_desk_route_control/lib/http-boundary.js`;
 // Exact independently reviewed additive branch. Any further overlap needs review.
 const DELIVERY_BOUNDARY_SHA256 = '317bd88533f0f5295aaacc8a83b78b46426b7ceb7dba69213b606dd5490989af';
+const SENDER_BOUNDARY_SHA256 = '9ca408616b5db4335a78e9c53dceb5cb12fe7722da34f9d94a2cfa749e881cb2';
 function composeReviewedDeliveryBoundary(repositoryPath, base, current, selected) {
   if (repositoryPath !== DELIVERY_BOUNDARY_PATH) fail('source_overlap');
   const source = current.toString('utf8');
-  const start = source.indexOf("      if (body.profile === 'report_delivery_v1') {");
+  const senderStart = source.indexOf("      if (body.profile === 'report_sender_qualification_v1') {");
+  const start = senderStart < 0 ? source.indexOf("      if (body.profile === 'report_delivery_v1') {") : senderStart;
   const end = source.indexOf('      const crm = ', start);
   if (start < 0 || end <= start || !Buffer.from(source).equals(current)) fail('source_overlap');
   const addition = source.slice(start, end);
-  if (digest(Buffer.from(addition)) !== DELIVERY_BOUNDARY_SHA256
+  const expectedDigest = senderStart < 0 ? DELIVERY_BOUNDARY_SHA256 : SENDER_BOUNDARY_SHA256;
+  if (digest(Buffer.from(addition)) !== expectedDigest
     || !Buffer.from(source.slice(0, start) + source.slice(end)).equals(base)) fail('source_overlap');
   const anchor = "      const crm = (factories.crm || createCrmControlClient)(config, {\n";
   const auth = selected.toString('utf8');
   if (!Buffer.from(auth).equals(selected) || auth.split(anchor).length !== 2
-    || auth.includes("body.profile === 'report_delivery_v1'")) fail('source_overlap');
+    || auth.includes("body.profile === 'report_delivery_v1'")
+    || auth.includes("body.profile === 'report_sender_qualification_v1'")) fail('source_overlap');
   const bytes = Buffer.from(auth.replace(anchor, addition + anchor));
   if (!Buffer.from(bytes.toString().replace(addition, '')).equals(selected)) fail('source_overlap');
-  return { bytes, composition: 'reviewed-report-delivery-boundary-addition-v1',
-    reporting_sha256: digest(current), auth_sha256: digest(selected), addition_sha256: DELIVERY_BOUNDARY_SHA256 };
+  return { bytes, composition: senderStart < 0 ? 'reviewed-report-delivery-boundary-addition-v1' : 'reviewed-report-delivery-sender-boundary-addition-v1',
+    reporting_sha256: digest(current), auth_sha256: digest(selected), addition_sha256: expectedDigest };
 }
 
 const sourceRoot = path.resolve(__dirname, '..');

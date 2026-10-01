@@ -3,7 +3,7 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const {composeReviewedDeliveryBoundary}=require('../../../scripts/compose-reporting-artifact');
 const file='src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_route_control/lib/http-boundary.js';
 const current=fs.readFileSync(path.resolve(__dirname,'../../revenue_desk_route_control/lib/http-boundary.js'));
-const source=current.toString(),start=source.indexOf("      if (body.profile === 'report_delivery_v1') {");
+const source=current.toString(),start=source.indexOf("      if (body.profile === 'report_sender_qualification_v1') {");
 const end=source.indexOf('      const crm = ',start),addition=source.slice(start,end);
 const base=Buffer.from(source.slice(0,start)+source.slice(end));
 const anchor="      const crm = (factories.crm || createCrmControlClient)(config, {\n";
@@ -17,7 +17,7 @@ test('reviewed additive delivery branch preserves every selected authentication 
  assert.ok(result.bytes.toString().indexOf("body.profile === 'report_delivery_v1'")>
  result.bytes.toString().indexOf('Control runtime identity is invalid.'));
  assert.ok(result.bytes.toString().indexOf("body.profile === 'report_delivery_v1'")<result.bytes.toString().indexOf(anchor));
- assert.equal(result.composition,'reviewed-report-delivery-boundary-addition-v1');
+ assert.equal(result.composition,'reviewed-report-delivery-sender-boundary-addition-v1');
 });
 test('altered delivery branch is rejected',()=>held(()=>composeReviewedDeliveryBoundary(file,base,
  Buffer.from(source.replace('identity: config.operatorIdHash','identity: body.actor')),selected)));
@@ -29,3 +29,14 @@ test('missing selected-auth insertion anchor is rejected',()=>held(()=>composeRe
  Buffer.from(selected.toString().replace(anchor,'')))));
 test('existing selected-auth delivery branch is rejected',()=>held(()=>composeReviewedDeliveryBoundary(file,base,current,current)));
 test('other paths cannot use the reviewed exception',()=>held(()=>composeReviewedDeliveryBoundary('other.js',base,current,selected)));
+
+
+test('historical delivery-only composition remains exact and exportable',()=>{
+ const delivery=addition.slice(addition.indexOf("      if (body.profile === 'report_delivery_v1') {"));
+ const historical=Buffer.from(base.toString().replace(anchor,delivery+anchor));
+ const result=composeReviewedDeliveryBoundary(file,base,historical,selected);
+ assert.equal(result.composition,'reviewed-report-delivery-boundary-addition-v1');
+ assert.deepEqual(Buffer.from(result.bytes.toString().replace(delivery,'')),selected);
+});
+test('altered sender diagnostic cannot weaken selected authentication',()=>held(()=>composeReviewedDeliveryBoundary(file,base,
+ Buffer.from(source.replace("kind: 'internal_controller'","kind: 'terminal_worker'")),selected)));
