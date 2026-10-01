@@ -6,6 +6,7 @@ const { createReportAttemptBudget, REPORT_ATTEMPT_MAXIMUMS, REPORT_PAIR_ATTEMPT_
 const { createReconciledFreeTestInputReader } = require('./read-reconciled-free-test-input');
 const { prepareFreeTestDocument, prepareFreeTestPdfDocument, pdfDocumentIdentity } = require('./prepare-free-test-draft');
 const { createWorkDriveDraftWriter } = require('./prepare-workdrive-draft');
+const { createReportDeliveryStorageReader } = require('../functions/analytics_sync/lib/report-delivery-storage');
 const LIMITS = REPORT_ATTEMPT_MAXIMUMS;
 const WAITING = Object.freeze({ status: 'awaiting_reconciled_evidence' });
 const id = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/.test(value);
@@ -228,6 +229,113 @@ function createDurableReportComposition({ runtimeStore, runtimeConfig, analytics
   }
   // The trusted runtime wrapper recognizes this bounded duration; public job
   // input and environment configuration cannot install or lengthen this hook.
+
+  /** Separately admitted inspection after ordinary attempts are exhausted. No
+   * durable adoption: legacy ownership and every effect claim remain unchanged.
+   * Exact stored receipts/bytes may support an ephemeral evidence attestation;
+   * absent receipts or bytes never authorize rendering, upload or delivery. */
+  async function inspectExhausted(scope, options = {}) {
+    let budget;
+    try {
+      if (!reportBundle || !scope || Object.keys(scope).sort().join(',') !== 'clientId,deploymentId'
+        || !id(scope.clientId) || !id(scope.deploymentId)
+        || Object.keys(options).some(key => key !== 'signal')) fail();
+      budget = createReportAttemptBudget({ signal: options.signal, timeoutMs: 120000, now,
+        limits: { ...REPORT_PAIR_ATTEMPT_MAXIMUMS, checkpoint_write: 0, workdrive_write: 0, report_run_write: 0 } });
+      const context = { signal: budget.signal, budget };
+      const active = () => budget.assertActive();
+      const digest = value => crypto.createHash('sha256').update(canonicalJson(value)).digest('hex');
+      budget.consume('source_read');
+      const terminal = structuredClone(await runtimeStore.unique(runtimeConfig.tables.DEPLOYMENT_TABLE, 'DEPLOYMENT_ID', scope.deploymentId));
+      active();
+      const instant = v => typeof v === 'string' && Number.isFinite(Date.parse(v)) && new Date(v).toISOString() === v;
+      if (terminal?.CLIENT_ID !== scope.clientId || terminal.SOURCE_REVISION !== runtimeConfig.sourceRevision
+        || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(terminal.ACTIVE_CONFIGURATION_VERSION_ID)
+        || !instant(terminal.ACTUAL_START_AT) || !instant(terminal.STOPPED_AT)
+        || terminal.STOPPED_AT < terminal.ACTUAL_START_AT) fail();
+      const identity = { ...scope, environment: runtimeConfig.environment, sourceRevision: runtimeConfig.sourceRevision,
+        configurationVersionId: terminal.ACTIVE_CONFIGURATION_VERSION_ID,
+        periodStart: terminal.ACTUAL_START_AT.slice(0, 10), periodEnd: terminal.STOPPED_AT.slice(0, 10) };
+      const attemptKey = crypto.createHash('sha256').update(`report-attempt-v1\0${canonicalJson(identity)}`).digest('hex');
+      const attempt = await runs.get(attemptKey, context); active();
+      if (attempt?.state?.kind !== 'report_attempt_v1' || attempt.state.failures !== 6
+        || canonicalJson(attempt.state.identity) !== canonicalJson(identity)
+        || !['working','waiting','verified'].includes(attempt.state.phase)
+        || !Number.isSafeInteger(attempt.state.nextAttemptAt)) fail();
+      // Explicitly omit checkpoint re-attestation, even if routine composition
+      // has it configured: inspection never repairs freshness with a write.
+      const inspectSource = createReconciledFreeTestInputReader({ runtimeStore, runtimeConfig,
+        analyticsStore, readCompleteScope, now });
+      const prepared = await inspectSource(scope, context); active();
+      if (!prepared) fail();
+      const review = readOpportunityReview ? structuredClone(await readOpportunityReview(scope, context)) : null;
+      active(); if (review === undefined) fail();
+      const documentOptions = { callDetails: prepared.callDetails, opportunityReview: review, now: now(), synthetic };
+      const source = prepareFreeTestDocument(prepared.input, documentOptions);
+      const artifacts = Object.fromEntries(['summary','supporting'].map(role => [role, pdfDocumentIdentity(
+        prepareFreeTestDocument(prepared.input, { ...documentOptions, packetRole: role }), pdfRenderer)]));
+      const bundleIdentity = { ...identity, sourceGenerationKey: source.generationKey,
+        rendererVersion: 'free-test-pair-v1', reviewSnapshotSha256: digest({ review: review ?? null }), artifacts };
+      const bundleKey = crypto.createHash('sha256').update(`report-pdf-pair-v1\0${canonicalJson(bundleIdentity)}`).digest('hex');
+      const bundle = await runs.get(bundleKey, context); active();
+      if (bundle?.state?.kind !== 'report_bundle_v1' || canonicalJson(bundle.state.identity) !== canonicalJson(bundleIdentity)
+        || !['working','accepted'].includes(bundle.state.phase)) fail();
+      const evidenceRows = new Map([[attemptKey, attempt], [bundleKey, bundle]]);
+      const refs = {};
+      for (const role of ['summary','supporting']) {
+        const generationIdentity = { ...identity, ...artifacts[role] };
+        const generationKey = crypto.createHash('sha256').update(`report-pdf-generation-v1\0${canonicalJson(generationIdentity)}`).digest('hex');
+        const generation = await runs.get(generationKey, context); active();
+        if (generation?.state?.kind !== 'pdf_generation_v1'
+          || canonicalJson(generation.state.identity) !== canonicalJson(generationIdentity)
+          || !['render_started','accepted'].includes(generation.state.phase)) fail();
+        const privateReceiptKey = crypto.createHash('sha256').update(`workdrive-draft-v1\0${artifacts[role].generationKey}`).digest('hex');
+        const draft = await runs.get(privateReceiptKey, context); active();
+        if (draft?.state?.kind !== 'workdrive_draft_v1' || draft.state.phase !== 'verified'
+          || draft.state.identity?.generationKey !== artifacts[role].generationKey || !draft.state.receipt) fail();
+        const ref = { generationKey: artifacts[role].generationKey,
+          documentSha256: draft.state.identity.documentSha256, receiptSha256: digest(draft.state.receipt), privateReceiptKey };
+        if (generation.state.phase === 'accepted' && canonicalJson(generation.state.accepted) !== canonicalJson({
+          generationKey: ref.generationKey, documentSha256: ref.documentSha256, receiptSha256: ref.receiptSha256 })) fail();
+        if (generation.state.phase === 'render_started' && generation.state.accepted !== null) fail();
+        refs[role] = ref; evidenceRows.set(generationKey, generation); evidenceRows.set(privateReceiptKey, draft);
+      }
+      const manifest = { schemaVersion: 1, sourceGenerationKey: source.generationKey, initialDeliveryArtifact: 'summary',
+        supportingAvailability: 'private', reviewSnapshotSha256: bundleIdentity.reviewSnapshotSha256, artifacts: refs };
+      const manifestSha256 = digest(manifest);
+      if (bundle.state.phase === 'accepted' && (bundle.state.manifestSha256 !== manifestSha256
+        || canonicalJson(bundle.state.manifest) !== canonicalJson(manifest))) fail();
+      if (bundle.state.phase === 'working' && bundle.state.manifest !== null) fail();
+      // The reader validates both exact immutable versions against current
+      // destination authority. Its accepted view is temporary, never persisted.
+      const acceptedView = { ...bundle, state: { ...bundle.state, phase: 'accepted', manifest, manifestSha256 } };
+      const readonlyRuns = { async get(key, readOptions) {
+        const actual = await runs.get(key, readOptions);
+        if (!evidenceRows.has(key) || canonicalJson(actual) !== canonicalJson(evidenceRows.get(key))) fail();
+        return key === bundleKey ? structuredClone(acceptedView) : actual;
+      } };
+      for (const role of ['summary','supporting']) {
+        const reader = createReportDeliveryStorageReader({ reportRunStore: readonlyRuns, workdrive,
+          readDestinationBinding, now, artifactRole: role, timeoutMs: 10000 });
+        await reader({ signal: budget.signal, snapshot: { binding: identity,
+          report: { generationKey: bundleKey, manifestSha256, [role]: { role, ...refs[role] } } } }); active();
+      }
+      const finalReview = readOpportunityReview ? structuredClone(await readOpportunityReview(scope, context)) : null;
+      const final = await inspectSource(scope, context); active();
+      if (!final || finalReview === undefined || digest({ review: finalReview ?? null }) !== bundleIdentity.reviewSnapshotSha256
+        || prepareFreeTestDocument(final.input, { callDetails: final.callDetails, opportunityReview: finalReview,
+          now: now(), synthetic }).generationKey !== source.generationKey) fail();
+      for (const [key, prior] of evidenceRows) {
+        if (canonicalJson(await runs.get(key, context)) !== canonicalJson(prior)) fail(); active();
+      }
+      return Object.freeze({ status: 'exhausted_report_evidence_inspected_not_adopted', generationKey: bundleKey,
+        manifestSha256, evidenceDigest: digest({ rows: [...evidenceRows].sort(([a],[b]) => a.localeCompare(b)) }),
+        legacyEvidence: [...evidenceRows.values()].some(row => row.storageRevision === 'legacy_read_only_v1'),
+        persisted: false, qualificationAuthority: false, deliveryAuthority: false });
+    } catch { fail(); } finally { budget?.close(); }
+  }
+  Object.defineProperty(reconcile, 'inspectExhausted', { value: Object.freeze(inspectExhausted) });
+
   Object.defineProperty(reconcile, 'attemptTimeoutMs', { value: timeoutMs });
   return Object.freeze(reconcile);
 }

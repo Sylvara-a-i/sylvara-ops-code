@@ -110,6 +110,8 @@ function attachTerminalReportDelivery(reconcile,handlers) {
     const delivery=await handlers.afterPair(scope,pair,options);
     return {status:pair.status,deliveryStatus:delivery.status};
   }
+  // Inspection is a distinct trusted operation and never reaches afterPair.
+  if(typeof reconcile.inspectExhausted==='function')Object.defineProperty(terminal,'inspectExhausted',{value:reconcile.inspectExhausted});
   Object.defineProperty(terminal,'attemptTimeoutMs',{value:reconcile.attemptTimeoutMs});
   return Object.freeze(terminal);
 }
