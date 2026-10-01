@@ -165,3 +165,60 @@ test('physical ambiguous render and stored mismatch cannot repeat provider effec
  assert.deepEqual({renders:x.renders,uploads:x.d.uploads.length,calls},before);
  }
 });
+
+function realAnalyticsAccounting(x){
+ const {createAnalyticsClient}=require('../lib/analytics-client'),{TARGET_TABLE_NAMES}=require('../lib/config');
+ const config={environment:'development',sourceRevision:x.f.scope.SOURCE_REVISION,analyticsTimeoutMs:20000,responseMaxBytes:1048576,
+ provider:{apiBaseUrl:'https://analyticsapi.zoho.com',organizationId:'123456789',workspaceId:'987654321',targets:Object.fromEntries(Object.entries(TARGET_TABLE_NAMES).map(([type,table],i)=>[type,{table,viewId:String(1000+i)}]))}};
+ let reads=0;
+ const client=createAnalyticsClient({config,now:x.f.now,readAuthorizationProvider:async()=>'Zoho-oauthtoken '+'s'.repeat(32),writeAuthorizationProvider:async()=>assert.fail('No Analytics import allowed'),
+ fetchImpl:async(url,init)=>{reads++;assert.equal(init.method,'GET');const parsed=new URL(url),id=/\/views\/([0-9]+)/.exec(parsed.pathname)[1],type=Object.keys(config.provider.targets).find(t=>config.provider.targets[t].viewId===id),target=config.provider.targets[type];
+ if(!parsed.pathname.endsWith('/data'))return new Response(JSON.stringify({status:'success',data:{views:{viewId:id,viewName:target.table,viewType:'Table',workspaceId:'987654321',orgId:'123456789'}}}),{headers:{'content-type':'application/json'}});
+ const rows=[...(x.f.imported.get(type)?.values()||[])].map(row=>Object.fromEntries(['RECORD_KEY','CLIENT_KEY','DEPLOYMENT_KEY','ENVIRONMENT','PAYLOAD_HASH','SOURCE_MODIFIED_AT'].map(key=>[key,row[key]])));
+ return new Response(JSON.stringify({data:rows}),{headers:{'content-type':'application/json'}});
+ }});
+ x.options.readCompleteScope=client.readCompleteScope;return ()=>reads;
+}
+
+test('real Analytics HTTP accounting and immutable successors complete cold/replay/correction with and without review',async t=>{
+ for(const reviewed of [false,true]){const x=await fixture(25,true),reads=realAnalyticsAccounting(x);let review=documentedReview(x);
+ const budgets=[],runs=x.options.reportRunStore;
+ x.options.reportRunStore={...runs,async compareAndSwap(row,state,context){const result=await runs.compareAndSwap(row,state,context);if(state.kind==='report_attempt_v1'&&state.phase==='verified')budgets.push(context.budget.snapshot());return result;}};
+ if(reviewed)x.options.readOpportunityReview=async()=>review;
+ const first=await createDurableReportComposition(x.options)(x.f.identity);assert.equal(reads(),reviewed?24:18);assert.equal(x.renders,2);assert.equal(x.d.uploads.length,2);
+ x.advance();const before=reads(),replay=await createDurableReportComposition(x.options)(x.f.identity);assert.deepEqual(replay.manifest,first.manifest);assert.equal(reads()-before,reviewed?24:18);assert.equal(x.renders,2);assert.equal(x.d.uploads.length,2);
+ x.advance();review=structuredClone(review);review.groups[0].knownJobValue.amountMinorUnits=225000;x.options.readOpportunityReview=async()=>review;
+ const correctionStart=reads(),corrected=await createDurableReportComposition(x.options)(x.f.identity);assert.equal(reads()-correctionStart,24);assert.notEqual(corrected.generationKey,first.generationKey);assert.equal(x.renders,4);assert.equal(x.d.uploads.length,4);
+ const ceilings=require('../lib/report-attempt-budget').REPORT_PAIR_ATTEMPT_MAXIMUMS;
+ assert.equal(budgets.length,3);for(const budget of budgets)for(const [kind,count]of Object.entries(budget))assert.ok(count<=ceilings[kind],`${kind} must fit planned attempt`);
+ assert.equal(budgets[0].analytics_read,reviewed?24:18);assert.equal(budgets[0].report_run_read,26);assert.equal(budgets[0].report_run_write,14);assert.equal(budgets[0].workdrive_write,2);
+ t.diagnostic(`review=${reviewed}: cold operation plan ${JSON.stringify(budgets[0])}`);
+ t.diagnostic(`review=${reviewed}: cold/replay/correction Analytics reads ${reviewed?24:18}/${reviewed?24:18}/24`);
+ }
+});
+
+test('known undersized pair Analytics plan fails before consuming durable/render/provider claims',async()=>{
+ for(const reviewed of [false,true]){const x=await fixture(1,true);if(reviewed)x.options.readOpportunityReview=async()=>documentedReview(x);
+ assert.throws(()=>createDurableReportComposition({...x.options,budgetOptions:{limits:{analytics_read:reviewed?23:17}}}),rejection);
+ assert.equal(x.physicalStore.rows.size,0);assert.equal(x.renders,0);assert.equal(x.d.uploads.length,0);}
+});
+
+test('actual managed-SDK successor summary reader completes all eight ledger and six WorkDrive reads',async()=>{
+ const x=await fixture(1,true),result=await createDurableReportComposition(x.options)(x.f.identity);
+ const sdk=require('./helpers/report-run-sdk-fixture').fixture();try{
+ for(const [key,row] of x.physicalStore.rows)sdk.rows.set(key,structuredClone(row));
+ const runs=require('../lib/report-successor-store').createReportSuccessorStore({app:sdk.app,environment:'development'});
+ const bundle=await x.d.runs.get(result.generationKey),identity=bundle.state.identity;let workdriveReads=0;
+ const workdrive=Object.fromEntries(['getMetadata','listVersions','downloadVersion'].map(method=>[method,async(...args)=>{workdriveReads++;return x.d.workdrive[method](...args);} ]));
+ sdk.requests.length=0;
+ const snapshot={binding:{clientId:identity.clientId,deploymentId:identity.deploymentId,periodStart:identity.periodStart,periodEnd:identity.periodEnd},report:{generationKey:result.generationKey,manifestSha256:result.manifestSha256,summary:{role:'summary',...result.manifest.artifacts.summary}}};
+ const bytes=await require('../lib/report-delivery-storage').createReportDeliveryStorageReader({reportRunStore:runs,workdrive,readDestinationBinding:x.d.readDestinationBinding,now:x.f.now})({snapshot});
+ assert.equal(hash(bytes),result.manifest.artifacts.summary.documentSha256);assert.equal(sdk.requests.filter(r=>r.path.endsWith('/query')).length,8);assert.equal(workdriveReads,6);assert.equal(sdk.requests.filter(r=>r.path.endsWith('/row')).length,0);
+ }finally{sdk.restore();}
+});
+test('pair reserves its complete finite operation and elapsed plan before any claim',async()=>{
+ const x=await fixture(1,true),ceilings=require('../lib/report-attempt-budget').REPORT_PAIR_ATTEMPT_MAXIMUMS;
+ for(const kind of Object.keys(ceilings).filter(kind=>kind!=='analytics_read'))assert.throws(()=>createDurableReportComposition({...x.options,budgetOptions:{limits:{[kind]:ceilings[kind]-1}}}),rejection);
+ assert.throws(()=>createDurableReportComposition({...x.options,budgetOptions:{timeoutMs:119999}}),rejection);
+ assert.equal(x.physicalStore.rows.size,0);assert.equal(x.renders,0);assert.equal(x.d.uploads.length,0);
+});

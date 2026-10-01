@@ -683,3 +683,17 @@ test('sender qualification reuses authenticated controller without any storage o
  const output=response();await listener({method:'POST',url:'/internal/revenue-desk/approve-configuration',headers,rawBody:body},output);
  assert.equal(output.statusCode,200);assert.equal(output.body.result.status,'sender_allowed');assert.equal(credentials,1);assert.equal(gets,1);
 });
+
+test('storage qualification authenticates before diagnostic and never constructs customer effects', async()=>{
+ const env=environment(),config=loadConfig(env,REVISION);let calls=0;
+ const blocked=()=>assert.fail('Customer storage/CRM/Retell factory prohibited');
+ const listener=createRequestListener({environment:env,artifactSourceRevision:REVISION,
+ catalystSdk:{initialize(){return {config:{environment:'development',projectId:PROJECT_ID}};}},
+ factories:{store:blocked,crm:blocked,provider:blocked,reportDelivery:blocked,
+ storageQualification:()=>({async handle(body,context){calls++;assert.equal(body.action,'qualify_storage');assert.equal(context.actor.kind,'internal_controller');assert.equal(context.actor.identity,config.operatorIdHash);return {status:'synthetic_observation'};}})}});
+ const headers={host:config.controlHost,'x-zc-environment':'development','x-zc-projectid':PROJECT_ID,'x-synthetic-control':'h'.repeat(32),'content-type':'application/json'};
+ const rawBody=Buffer.from(JSON.stringify({profile:'report_storage_qualification_v1',action:'qualify_storage'}));
+ for(const change of [{headers:{...headers,'x-synthetic-control':'invalid'}},{headers:{...headers,'x-zc-environment':'production'}},{url:'/internal/revenue-desk/activate-free-test'}]){
+ const out=response();await listener({method:'POST',url:'/internal/revenue-desk/approve-configuration',headers,rawBody,...change},out);assert.notEqual(out.statusCode,200);}
+ assert.equal(calls,0);const out=response();await listener({method:'POST',url:'/internal/revenue-desk/approve-configuration',headers,rawBody},out);assert.equal(out.statusCode,200);assert.equal(calls,1);
+});

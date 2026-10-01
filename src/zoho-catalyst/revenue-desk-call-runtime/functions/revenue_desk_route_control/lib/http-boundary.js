@@ -176,6 +176,17 @@ function createRequestListener({
         && String(app?.config?.projectId || '') === projectId,
       'CONTROL_AUTHENTICATION_FAILED', 'Control runtime identity is invalid.',
       { httpStatus: 503 });
+      if (body.profile === 'report_storage_qualification_v1') {
+        invariant(action === 'approve' && typeof factories.storageQualification === 'function',
+          'CONTROL_PRECONDITION_FAILED', 'Storage qualification is unavailable.', { httpStatus: 503 });
+        // Independent disabled diagnostic, before customer stores/writers/providers.
+        const handler = factories.storageQualification(app, config);
+        const result = await handler.handle(body, { actor: Object.freeze({
+          kind: 'internal_controller', identity: config.operatorIdHash,
+        }) });
+        send(response, 200, { ok: true, action: body.action, result });
+        return;
+      }
       if (body.profile === 'report_sender_qualification_v1') {
         invariant(action === 'approve' && typeof factories.senderQualification === 'function',
           'CONTROL_PRECONDITION_FAILED', 'Sender qualification is unavailable.', { httpStatus: 503 });

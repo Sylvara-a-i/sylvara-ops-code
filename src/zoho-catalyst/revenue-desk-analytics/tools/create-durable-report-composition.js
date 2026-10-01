@@ -35,6 +35,12 @@ function createDurableReportComposition({ runtimeStore, runtimeConfig, analytics
   if (Object.keys(limits).length !== Object.keys(LIMITS).length
     || Object.keys(limits).some(key => !Number.isSafeInteger(limits[key])
       || limits[key] < 1 || limits[key] > ceilings[key])) fail();
+  // Reject a known-incomplete HTTP plan before any durable/render claim is consumed.
+  // Each complete partition pass is three fixed metadata/export pairs; review
+  // adds the existing extra source fence. Narrowing remains allowed above this floor.
+  if (reportBundle && (timeoutMs !== 120000
+    || limits.analytics_read < (readOpportunityReview ? 24 : 18)
+    || Object.keys(ceilings).some(kind => kind !== 'analytics_read' && limits[kind] !== ceilings[kind]))) fail();
   const read = createReconciledFreeTestInputReader({ runtimeStore, runtimeConfig,
     analyticsStore, readCompleteScope, reattestCheckpoints, now });
   async function reconcile(scope, options = {}) {

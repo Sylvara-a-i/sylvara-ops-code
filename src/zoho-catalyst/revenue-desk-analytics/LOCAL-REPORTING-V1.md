@@ -416,3 +416,37 @@ Already installed pinned Node, SDK packages and Python/PyYAML supplied the offli
 run; no dependency download was needed. Gateway copies in the local worker and
 route-control dependency directories were checked byte-for-byte against current
 source. These are local checks, not GitHub CI or live installation acceptance.
+
+## Paired-report request accounting and recovery limits
+
+A pair reserves the complete finite attempt plan before any durable claim or
+render dispatch: 120 seconds total, 240 canonical source reads, three checkpoint
+writes, 48 WorkDrive reads/two uploads, and 40 physical immutable-ledger
+reads/26 inserts. Analytics allows 24 HTTP reads: three fixed metadata/export
+pairs per complete source pass; three passes without opportunity review (18),
+or four with the existing review fence (24). Trusted pair configuration cannot
+reduce the remaining plan or elapsed window. Legacy single-document limits are
+unchanged. These are ceilings and admission prerequisites, not a promise that
+remote latency will complete within the deadline.
+
+Production-shaped offline regressions use the real Analytics HTTP adapter and
+immutable successor store, including cold generation, accepted replay, corrected
+review and 25 calls. Observed cold source reads are 151 without review/201 with
+review, with 20 WorkDrive reads/two uploads and 26 ledger reads/14 inserts. The
+accepted-summary reader separately reserves eight physical ledger reads (four
+logical root/head lookups) and six WorkDrive reads, with zero writes. Both final
+ledger and destination/content fences remain required after download. WorkDrive
+bodies must contain non-empty chunks and no more than 128 chunks, in addition to
+the existing byte, deadline and cancellation bounds; provider fragmentation
+compatibility remains a live qualification requirement.
+
+A lost upload response can be reconciled only from the exact immutable stored
+version and actual content hash. A consumed render claim does not permit another
+render when its bytes never reached storage; unchanged-input retries remain held.
+The fixed six-failure ceiling still contains further ordinary source/provider
+inspection, including late storage completion. Existing legacy attempt roots are
+read-only and cannot be advanced by this composition. Neither condition silently
+resets a claim, mutates an old draft or authorizes a new generation. A separately
+qualified finite operator recovery/migration contract is still required for those
+cases; no such live recovery is accepted by the offline tests. Preserve partial
+rows, prior versions and truthful held states until that contract is established.
