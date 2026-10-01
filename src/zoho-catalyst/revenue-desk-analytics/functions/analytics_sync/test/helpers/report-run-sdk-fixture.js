@@ -3,7 +3,7 @@ const assert=require('node:assert/strict'),crypto=require('node:crypto'),https=r
 const {Writable,PassThrough}=require('node:stream');
 const sha=x=>crypto.createHash('sha256').update(x).digest('hex');
 function fixture({deferResponses=false}={}){
- let at=1800000000000;const rows=new Map(),requests=[],principals=[],created=[];let sequence=0,authDelay=null,mode='normal',clientCalls=0;
+ let at=1800000000000;const rows=new Map(),receipts=new Map(),requests=[],principals=[],created=[];let sequence=0,authDelay=null,mode='normal',clientCalls=0;
  const binding={schemaVersion:1,enabled:true,environment:'development',sourceRevision:'a'.repeat(40),projectId:'123456789',
   controlHost:'synthetic.invalid',tableId:'123456788',nonce:'c'.repeat(32),verifiedAt:at-1,expiresAt:at+60000,timeoutMs:1000};
  const config={environment:'development',sourceRevision:binding.sourceRevision,controlHost:binding.controlHost,
@@ -13,6 +13,8 @@ function fixture({deferResponses=false}={}){
   credential:{switchUser(value){user=value;principals.push(value);},getCurrentUser:()=>user,getCurrentUserType:()=> 'admin'},
   async authenticateRequest(request){if(authDelay)await authDelay;request.headers.Authorization='synthetic-managed-credential';}};
  function query(sql){
+  const receiptKey=/EVENT_KEY = '([^']+)'/.exec(sql)?.[1];
+  if(receiptKey)return receipts.has(receiptKey)?[{RevenueDeskEventReceipts:structuredClone(receipts.get(receiptKey))}]:[];
   const key=/IdempotencyKey = '([^']+)'/.exec(sql)?.[1];
   if(key)return rows.has(key)?[{ReportRuns:structuredClone(rows.get(key))}]:[];
   const prefix=/IdempotencyKey LIKE '([^']+)%'/.exec(sql)?.[1];
@@ -32,6 +34,16 @@ function fixture({deferResponses=false}={}){
     let status=200,data;
     if(path==='/query')data=query(payload.query);
     else if(path==='/project-user/current')data={user_id:'987654321',status:'ACTIVE',role_details:{role_name:'App Administrator',role_id:'987654320'},email_id:'private-unused@example.invalid'};
+    else if(path==='/table/RevenueDeskEventReceipts/row'){
+     assert.equal(payload.length,1);const row=payload[0];
+     if(receipts.has(row.EVENT_KEY)){status=409;data={error_code:'DUPLICATE_VALUE'};}
+     else {row.ROWID=String(++sequence);row.CREATORID='987654321';
+      if(mode==='admission_representation'){row.RECEIPT_VERSION='1';row.RECEIVED_AT='2027-01-15 08:00:00';row.PROCESSED_AT=row.RECEIVED_AT;}
+      receipts.set(row.EVENT_KEY,structuredClone(row));data=[row];}
+     if(mode==='admission_stall')return;
+     if(mode==='admission_lost'){request.destroy(new Error('synthetic ambiguous admission'));return;}
+     if(mode==='admission_conflict')receipts.get(row.EVENT_KEY).EVENT_DATA_JSON='{}';
+    }
     else {assert.equal(path,'/table/ReportRuns/row');assert.equal(payload.length,1);
      const row=payload[0];if(rows.has(row.IdempotencyKey)){status=409;data={error_code:'DUPLICATE_VALUE'};}
      else {row.ROWID=String(++sequence);row.CREATORID='987654321';rows.set(row.IdempotencyKey,structuredClone(row));data=[row];}}
@@ -43,7 +55,7 @@ function fixture({deferResponses=false}={}){
   request.method='POST';request.protocol='https:';request.host='synthetic.invalid';request.path=options.path;created.push(request);return request;
  };
  http.request=()=>{throw Error('HTTP/network prohibited');};
- return {app,rows,requests,principals,created,get clientCalls(){return clientCalls;},set mode(v){mode=v;},set authDelay(v){authDelay=v;},restore(){https.request=originalHttps;http.request=originalHttp;}};
+ return {app,rows,receipts,requests,principals,created,get clientCalls(){return clientCalls;},set mode(v){mode=v;},set authDelay(v){authDelay=v;},restore(){https.request=originalHttps;http.request=originalHttp;}};
 }
 
 
