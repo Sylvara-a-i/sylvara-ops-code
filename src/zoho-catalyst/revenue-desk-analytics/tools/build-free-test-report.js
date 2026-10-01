@@ -6,6 +6,8 @@ const runtimeContract = require('../../revenue-desk-call-runtime/functions/reven
 const { deduplicateCalls } = require('../functions/analytics_sync/lib/daily-rollup');
 const { buildCrmReportBaseline } = require('../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/crm-report-baseline');
 const { evaluateFreeTestReportGate } = require('./evaluate-dashboard-pre-render-gate');
+const { buildPrivateCallLedger } = require('./build-private-call-ledger');
+const { buildOpportunityValue, SCOPE_FIELDS } = require('./opportunity-value');
 
 function requireCondition(condition, code) {
   if (!condition) {
@@ -61,8 +63,10 @@ function readbackRowsetDigest(recordType, rows) {
  * Callers supply independently reconciled canonical facts and the CRM snapshot.
  * The gate is evidence validation, not authentication of caller-supplied evidence.
  */
-function buildFreeTestReport(input, now = Date.now()) {
+function buildFreeTestReport(input, now = Date.now(), privateCallDetails = null, opportunityReview = null) {
   requireCondition(input && typeof input === 'object', 'REPORT_INPUT_INVALID');
+  requireCondition(opportunityReview === null || privateCallDetails !== null,
+    'REPORT_OPPORTUNITY_DETAILS_REQUIRED');
   const gate = evaluateFreeTestReportGate(contract.pre_render_gate,
     input.evidence, now, input.approval);
   requireCondition(gate.verdict === 'ready', 'REPORT_RECONCILIATION_REQUIRED');
@@ -199,10 +203,31 @@ function buildFreeTestReport(input, now = Date.now()) {
     missingNotificationEvidenceCalls: handled.filter((call) => !Object.hasOwn(call, 'NOTIFICATION_STATE')).length,
     inboxDeliveryVerifiedCalls: null, businessAcknowledgmentCalls: null, completedCallbackCalls: null,
   };
+  const callDetails = privateCallDetails === null ? null
+    : buildPrivateCallLedger(privateCallDetails, calls, deployment, now);
+  let opportunityValue = null;
+  if (callDetails !== null) {
+    const derived = buildOpportunityValue({ calls,
+      scope: Object.fromEntries(SCOPE_FIELDS.map((field) => [field, deployment[field]])),
+      callRowsetDigest: scope.analytics_readback.record_types.call.rowset_digest,
+      evidence: opportunityReview, now });
+    // Use the canonical ledger's deterministic ordering. Only document-local
+    // references leave this join; opaque source/group keys never enter HTML.
+    const orderedCalls = calls.slice().sort((left, right) =>
+      left.STARTED_AT.localeCompare(right.STARTED_AT) || left.CALL_KEY.localeCompare(right.CALL_KEY));
+    const references = new Map(orderedCalls.map((call, index) => [call.CALL_KEY, callDetails[index].callReference]));
+    opportunityValue = Object.freeze({ ...derived,
+      groups: Object.freeze(derived.groups.map(({ groupKey, callKeys, ...group }, index) => Object.freeze({
+        ...group, groupReference: `O-${String(index + 1).padStart(4, '0')}`,
+        callReferences: Object.freeze(callKeys.map((key) => references.get(key)).sort()),
+      }))),
+    });
+  }
   return Object.freeze({
     schemaVersion: 1,
     title: contract.title,
     status: 'operator_review_only_delivery_not_authorized',
+    ...(callDetails === null ? {} : { callDetails, opportunityValue }),
     beforeTest: baseline ? {
       label: 'Before the test — business baseline',
       evidenceClass: baseline.evidenceClass, sourcePeriod: baseline.sourcePeriod,

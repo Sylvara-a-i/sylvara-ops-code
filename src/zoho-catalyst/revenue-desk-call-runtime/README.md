@@ -33,6 +33,11 @@ The worker accepts only exact string parameters:
 
 Unknown modes, extra keys, non-string values, malformed keys, wrong project/pool identity, and Production fail before SDK or durable access.
 
+The existing explicit `rebuild_report` and `reconcile_deployment` Jobs also support an activated free test stopped by the existing rollback control. The source requires the original completed rollback claim, its signed revoke decision, exact activation/Deal/journey/configuration binding, original stop reason/time and unchanged control state. A bare `Stopped` row cannot authorize a closeout. Pending admitted calls, provider receipts or notifications withhold final artifacts. After settlement, the same final-result outbox and exact CRM summary readback must reconcile before the held document callback runs. Catalyst stays `Stopped`/`Revoked` with reconciliation status `NotRequired`; CRM stays `Rolled Back`/`Closed Lost`. No new automatic Stopped scan, schedule, route activation or stop-state rewrite is introduced.
+
+For an independently approved Development manual closeout, run the existing rebuild Job for the exact private deployment, let its existing CRM-summary operation reach authoritative readback, then run the existing reconcile Job. Repeating those Jobs reuses the same source artifacts; an ambiguous CRM write remains readback-only. Fresh source revisions still require a fresh report. Source tests cover zero calls, already-admitted late settlement, missing or altered rollback proof, duplicate reconciliation and preservation of terminal facts. Installation, authenticated invocation, original carrier restoration and any durable document destination remain separate acceptance gates.
+
+
 ## Environment and capability isolation
 
 Development requires `DEPLOYMENT_ENVIRONMENT=development`, `DEPLOYMENT_MODE=active`, reviewed private configuration, exact table names, and an artifact-stamped `SOURCE_REVISION`. Runtime rows must match the active and approved configuration-version IDs, engagement, capability, environment, revision, binding, shared agent/version, coverage, approval receipt, activation receipt, activation time, and handled-call state. Status strings never substitute for durable authorization evidence.
@@ -75,6 +80,23 @@ The 288a93c deployment reconfirmed the required consumer-first six-function uplo
 
 The installed Changes connector advertises a full Cron body for status changes, while the official provider operation is status-only. Do not discover the accepted shape by mutation. Exact classification exhaustively buckets every advertised schedule, end, notification, request, header, URL, retry, provider-identity, and metadata field; canonical-absent fields must be literally absent, and nulls, empty values, defaults, unknown keys, or unproven absence fail closed. The current full-body templates are not execution-ready until read-only evidence proves status-only/nonreplacement semantics, and they must never be applied to a drifted or duplicate predecessor. Without a proven safe status-only shape, keep the worker mode dark, preserve those predecessor definitions, mark Cron containment unproven, and stop. A Cron create/resource `data.id`, persisted Job-definition or `cron_detail.jobId`, or pool/target/function identifier is not a submitted execution Job ID. Terminal canary evidence must bind the exact lossless manual-submit `data.job_id` through the get-by-ID request/response and bind `source_type=Cron` plus the exact source Cron ID, name, and `pre-defined` execution type; pool/target/params/time matching is insufficient. The contract does not authorize a live write or activation. Its dark-worker containment canary remains blocked until the provider exposes a lossless Job-to-execution identifier binding and callable execution-scoped log readback; it would not prove `retry_scan` business behavior. Conditional rollback deletion additionally needs fresh exact authority, permanently destroys Cron history, is never retried after ambiguity, and succeeds only after complete name/ID inventory absence plus shape-proven get-by-ID not-found readback.
 
+### Held local draft reconciliation
+
+The existing `Completed` deployment scan can invoke a trusted
+`terminalDraftReconcilerFactory` supplied when constructing the worker. Its
+default is `null`; no Job parameter or environment switch enables it. The
+Analytics-owned [local reporting implementation](../revenue-desk-analytics/LOCAL-REPORTING-V1.md)
+validates all three reconciled partitions and canonical call details, then
+prepares an owner-review draft. Incomplete evidence waits; a failed generation
+retries on the next fair completed-deployment scan without resending completed
+CRM or Analytics work. Callback errors are sanitized, and cancellation prevents
+a late callback from writing a draft after the bounded worker timeout.
+
+Synthetic tests compose the actual worker, runtime, Analytics service and local
+renderer. The provider's complete-partition reader, approved durable destination,
+deployment construction and live acceptance remain unbound. This source path
+does not authorize upload or customer delivery.
+
 ## Private approval, activation, and rollback control
 
 The control Host guard accepts only the configured Development hostname, matched
@@ -115,6 +137,80 @@ node scripts/build-release.js --revision <40-character-final-main-sha> --output 
 
 The builder accepts only the exact clean checked-out Git `HEAD`, reads the deployable allowlist from that commit's blobs, refuses existing or in-repository output, rejects non-regular paths, stamps only an atomic outside-repository artifact, validates the exact three targets and linked local dependencies, and writes deterministic hashes in `release-manifest.json`. Materialize dependencies only in that staged tree. Never deploy the mutable or unstamped checkout.
 
+The worker artifact also contains the allowlisted Analytics report tools, contracts and libraries under `reporting/revenue-desk-analytics`. Both source-revision modules are stamped from the same release commit. Its small runtime import bridges resolve the worker's one materialized `revenue_desk_call_gateway` package; they never copy the reporting trust module or fall back to a sibling checkout. The manifest records the original source path/hash and final artifact hash, including generated bridges. The trusted `lib/terminal-draft-composition.js` export is packaged for later approved application composition; `index.js` still leaves the report factory unbound. The release test extracts a self-contained worker archive outside the checkout and exercises canonical evidence through the actual worker, assembler and renderer.
+
+A reporting-only source revision is not approval to replace a separately installed authentication change. A deployment proposal must identify a separately reviewed composed artifact that preserves that behavior and its exact source provenance. This builder neither imports another branch automatically nor authorizes merging its pull request, installing the artifact, binding the factory, or enabling a schedule.
+
+For a separately reviewed auth-preserving candidate, use `scripts/compose-reporting-artifact.js` with the exact reporting/auth commit SHAs and runtime/CRM artifact roots from the reporting revision. It requires clean reporting `HEAD`, the auth commit's single common-base parent, no reporting edits to the five fixed auth paths, and exact base-artifact source bytes. It preserves the CRM artifact's existing protected proof stamp without reading credentials or recomputing that stamp. No source checkout, input artifact, branch or pull request is changed.
+
+If the reviewed CRM artifact comes from an older revision, first use the helper's `--prepare-crm-base` mode. It verifies every allowlisted source file in that artifact against the explicitly selected proof-source commit, exports fresh reporting Git blobs, and carries forward only the existing opaque Development proof value. It copies no old auth code or dependencies. The new `crm-source-base-manifest.json` records both revisions and source/output hashes without the proof value; retain it in the private packet with the immutable proof-source artifact. This is a held source base, not renewed live binding acceptance. It needs no protected credential input, HMAC recomputation, install or network call, and refuses a dirty reporting checkout.
+
+```text
+node scripts/compose-reporting-artifact.js --reporting-revision <reporting-sha> --auth-revision <auth-sha> --runtime-artifact <absolute-runtime-root> --crm-artifact <absolute-crm-root> --output <new-absolute-outside-repository-root>
+```
+
+The new `composition-manifest.json` identifies the common base, reporting and auth revisions, exact selected blobs, source hashes and output hashes. The original runtime manifest is retained under `provenance/` and cannot be presented as final composed parity. Source-revision stamps still identify the reporting base; the explicit composition manifest is required to identify all shipped source. The output is a held **source** candidate: materialize reviewed dependencies afterward, with the auth-overlay gateway copied into the worker/control packages, then rehash and independently verify the complete archive. The helper performs no install, provider request, protected-input read, factory binding or deployment. A standard single-revision release approval cannot silently approve this two-revision candidate.
+
+`release-builder.test.js` covers deterministic reporting packaging and synthetic composition drift/rejection. To qualify a specific already available auth revision locally, set the nonsecret `SYLVARA_AUTH_COMPOSITION_TEST_REVISION` to its full SHA and run the extracted-worker test. That mode exercises the selected application's auth configuration and producer against its matching CRM consumer, then executes the actual reporting/durable composition. Ordinary CI does not depend on an unmerged external PR/ref; it does not claim that separate revision was qualified.
+
+From the repository root, the source packaging and qualification commands are:
+
+```powershell
+node src/zoho-catalyst/revenue-desk-call-runtime/scripts/build-release.js --revision <reporting-sha> --output <new-absolute-runtime-root>
+node src/zoho-catalyst/revenue-desk-call-runtime/scripts/compose-reporting-artifact.js --prepare-crm-base --reporting-revision <reporting-sha> --proof-source-revision <reviewed-crm-source-sha> --proof-artifact <absolute-reviewed-crm-root> --output <new-absolute-reporting-crm-root>
+node src/zoho-catalyst/revenue-desk-call-runtime/scripts/compose-reporting-artifact.js --reporting-revision <reporting-sha> --auth-revision <auth-sha> --runtime-artifact <absolute-runtime-root> --crm-artifact <absolute-reporting-crm-root> --output <new-absolute-composed-root>
+$env:SYLVARA_AUTH_COMPOSITION_TEST_REVISION = '<auth-sha>'
+node --test --test-name-pattern 'extracted worker archive' src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_gateway/test/release-builder.test.js
+Remove-Item Env:SYLVARA_AUTH_COMPOSITION_TEST_REVISION
+```
+
+For the composed candidate's `runtime` and `crm` projects, materialize dependencies **only from an already verified local dependency directory**. The following bounded Node script checks the exact lockfile versions, refuses existing target `node_modules`, dereferences source junctions into ordinary files, and copies the overlaid gateway into both consumers. It runs no package-manager or lifecycle script and cannot download a missing package. Use explicit absolute reviewed paths; failure leaves an incomplete candidate held for inspection, never permission to overwrite it.
+
+```powershell
+$runtimeArtifact = '<absolute-composed-root>\runtime'
+$crmArtifact = '<absolute-composed-root>\crm'
+$reviewedDependencies = '<absolute-verified-node_modules-root>'
+@'
+const fs = require('node:fs');
+const path = require('node:path');
+const [runtime, crm, dependencies] = process.argv.slice(2).map(value => fs.realpathSync(value));
+const targets = ['revenue_desk_call_gateway', 'revenue_desk_route_control', 'revenue_desk_call_worker']
+  .map(name => path.join(runtime, 'functions', name));
+targets.push(path.join(crm, 'functions', 'crm_billing_orchestrator'));
+const names = ['agent-base', 'debug', 'https-proxy-agent', 'ms', 'zcatalyst-sdk-node'];
+for (const target of targets) {
+  if (fs.existsSync(path.join(target, 'node_modules'))) throw new Error('Target dependencies already exist');
+  const lock = JSON.parse(fs.readFileSync(path.join(target, 'package-lock.json')));
+  for (const name of names) {
+    const installed = JSON.parse(fs.readFileSync(path.join(dependencies, name, 'package.json')));
+    if (installed.version !== lock.packages[`node_modules/${name}`]?.version) throw new Error('Dependency version mismatch');
+  }
+}
+for (const target of targets) {
+  const modules = path.join(target, 'node_modules');
+  fs.mkdirSync(modules);
+  for (const name of names) fs.cpSync(path.join(dependencies, name), path.join(modules, name),
+    { recursive: true, dereference: true, force: false, errorOnExist: true });
+  if (['revenue_desk_route_control', 'revenue_desk_call_worker'].includes(path.basename(target))) {
+    const core = path.join(modules, 'revenue_desk_call_gateway');
+    fs.mkdirSync(core);
+    for (const name of ['index.js', 'package.json', 'lib', 'contracts']) {
+      fs.cpSync(path.join(runtime, 'functions', 'revenue_desk_call_gateway', name), path.join(core, name),
+        { recursive: true, dereference: true, force: false, errorOnExist: true });
+    }
+  }
+}
+'@ | node - $runtimeArtifact $crmArtifact $reviewedDependencies
+```
+
+After materialization, hash each complete project with the existing strict tree hasher (which rejects links) and preserve the results in the private packet **outside** the hashed projects. Record the compressed archive's separate SHA-256, extract it into a new outside-repository directory, and require exact tree digest/file-count equality before considering provider readback. The composition manifest describes source provenance; these post-materialization digests describe the actual archives. Neither authorizes installation.
+
+```powershell
+node -e "const h=require('./src/zoho-catalyst/revenue-desk-release/lib/release-manifest').hashArtifact; console.log(JSON.stringify(h(process.argv[1])))" $runtimeArtifact
+node -e "const h=require('./src/zoho-catalyst/revenue-desk-release/lib/release-manifest').hashArtifact; console.log(JSON.stringify(h(process.argv[1])))" $crmArtifact
+Get-FileHash -Algorithm SHA256 -LiteralPath '<absolute-final-archive-path>'
+```
+
 Observed Development counts require preservation: `FreeTestDeployments=3`, `FreeTestCalls=30`, `FreeTestNotifications=6`, `FreeTestRetellEventReceipts=39`, plus nonempty generic resolver/call/Analytics tables. No deletion, rename, truncate, in-place rewrite, or cutover is safe. A future one-way migration must preserve keys, environment/engagement ownership, configuration-version IDs, receipt kinds/idempotency, call attribution, notifications, authorization chains, handled counts, and outbox lineage, then prove counts, per-partition keyed digests, samples, every conflict, rollback, and a recovery window.
 
 ## Verification
@@ -136,3 +232,5 @@ npm run ci
 Tests cover the SDK Job payload/readback, fast durable ingress, the exact three gateway routes and four worker modes, replay/reordering, inbound audit, tenant/configuration/capability isolation, approval-versus-activation timing, receipt/readback invalidation, call limits, minimized notifications/outbox facts, report reconciliation, source-stamp mismatch, isolated release building, and no-access Production dark containment.
 
 No live call, route invocation, further Catalyst route mutation, Retell-provider or agent change, provider-side phone or route change, migration, deletion, Production access, real mail, CRM write, Analytics reverse-write, booking, dispatch, transfer, quote, payment, SMS, outbound communication, private ID, or secret is authorized or included.
+
+The auth-preserving composer permits one reviewed overlap: the exact pinned additive report-delivery controller branch. Removing that branch must reproduce merge-base bytes exactly; all selected authentication bytes remain unchanged outside its unique insertion. Altered branches, ambiguous anchors and all other overlaps fail closed. The private composition manifest records both input revisions/hashes, the addition hash and derived output hash; this remains a two-revision held artifact, never single-revision parity.

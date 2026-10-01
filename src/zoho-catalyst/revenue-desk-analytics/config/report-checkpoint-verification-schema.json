@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "status": "held-local-proposal-not-installed",
+  "table": "AnalyticsSyncCheckpoints",
+  "additive_columns": [
+    { "api_name": "REPORT_VERIFICATION_DIGEST", "type": "varchar", "max_length": 64, "mandatory": false, "unique": false }
+  ],
+  "legacy_rows": "Preserve all rows and existing columns. Null remains valid for checkpoints produced solely by the existing import/readback service.",
+  "meaning": "SHA-256 of exact report scope, settled source history, canonical snapshot and all three independently verified Analytics rowsets. Verification advances LAST_RECONCILED_AT and STALE_AFTER_AT with CAS VERSION and independent readback; source watermarks, LAST_SYNC_AT, provider import job and accepted/rejected counts are preserved.",
+  "activation": "Requires separately approved additive Development metadata change/readback and trusted factory composition. No environment toggle or this source proposal authorizes a live write."
+}

@@ -53,7 +53,15 @@ function installOfflineGuard() {
     return load.call(this, request, parent, isMain);
   });
   const sensitivePath = (value) => {
-    const name = String(value).replaceAll('\\', '/');
+    const absolute = path.resolve(String(value));
+    const sourceRoot = path.resolve(__dirname, '../../../../..');
+    const relative = path.relative(sourceRoot, absolute);
+    // Managed checkouts may themselves live under .codex/worktrees. Inspect
+    // paths inside this reviewed source tree relative to its root; continue to
+    // deny credential directories inside the tree and everywhere outside it.
+    const insideSource = relative !== '..' && !relative.startsWith(`..${path.sep}`)
+      && !path.isAbsolute(relative);
+    const name = (insideSource ? relative : absolute).replaceAll('\\', '/');
     const canonicalGatewayRoot = path.resolve(__dirname,
       '../../../revenue-desk-call-runtime/functions');
     const approvedExamples = ['revenue_desk_call_gateway', 'revenue_desk_route_control',

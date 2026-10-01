@@ -643,3 +643,43 @@ test('rollback treats sparse provider readback as manual and never as inactive',
     assert.equal(patches, sparsePhase === 'before' ? 0 : 1);
   }
 });
+
+
+test('report delivery profile is authenticated and uses existing controller principal before provider construction', async () => {
+  const actors=[];let calls=0;
+  const listener=createRequestListener({environment:environment(),artifactSourceRevision:REVISION,
+    catalystSdk:{initialize(){return {config:{environment:'development',projectId:PROJECT_ID}};}},
+    factories:{store:()=>({}),reportDelivery:()=>({async handle(body,context){calls++;actors.push(context.actor);
+      assert.equal(body.dealId,'synthetic_deal');return {manifestSha256:'a'.repeat(64)};}}),
+      crm:()=>{throw Error('CRM control writer construction prohibited');},provider:()=>{throw Error('Retell construction prohibited');}}});
+  const headers={host:'route-control.development.catalystserverless.com','x-zc-environment':'development',
+    'x-zc-projectid':PROJECT_ID,'x-synthetic-control':'h'.repeat(32),'content-type':'application/json'};
+  const output=response();await listener({method:'POST',url:'/internal/revenue-desk/approve-configuration',headers,
+    rawBody:Buffer.from(JSON.stringify({profile:'report_delivery_v1',action:'view',dealId:'synthetic_deal'}))},output);
+  assert.equal(output.statusCode,200);assert.equal(calls,1);assert.equal(actors[0].kind,'internal_controller');
+  assert.equal(actors[0].identity,loadConfig(environment(),REVISION).operatorIdHash);
+  const denied=response();await listener({method:'POST',url:'/internal/revenue-desk/approve-configuration',
+    headers:{...headers,'x-synthetic-control':'invalid'},rawBody:Buffer.from('{}')},denied);
+  assert.equal(denied.statusCode,401);assert.equal(calls,1);
+});
+
+
+test('sender qualification reuses authenticated controller without any storage or writer/provider construction',async()=>{
+ const {createProtectedSenderQualification}=require('../lib/report-sender-qualification');
+ const env=environment(),config=loadConfig(env,REVISION);let credentials=0,gets=0;
+ const at=1800000000000,b={schemaVersion:1,enabled:true,environment:'development',sourceRevision:REVISION,projectId:PROJECT_ID,
+  controlHost:config.controlHost,connectionReference:'synthetic_sender',fromAddress:'reports@example.invalid',fromName:'Synthetic',verifiedAt:at-1,expiresAt:at+60000,timeoutMs:1000,costQualificationDigest:'b'.repeat(64)};
+ env.REPORT_SENDER_QUALIFICATION_JSON=JSON.stringify(b);env.REPORT_SENDER_QUALIFICATION_SHA256=crypto.createHash('sha256').update(env.REPORT_SENDER_QUALIFICATION_JSON).digest('hex');
+ const blocked=()=>{assert.fail('No stores/writers/provider/other factory allowed');};
+ const listener=createRequestListener({environment:env,artifactSourceRevision:REVISION,catalystSdk:{initialize(){return {config:{environment:'Development',projectId:PROJECT_ID},datastore:blocked,zcql:blocked,
+  connections:()=>({async getConnectionCredentials(link){credentials++;assert.equal(link,'synthetic_sender');return {parameters:{},headers:{Authorization:'Zoho-oauthtoken '+'s'.repeat(24)}};}})};}},
+  factories:{store:blocked,crm:blocked,provider:blocked,reportDelivery:blocked,senderQualification:createProtectedSenderQualification({environment:env,now:()=>at,
+   fetchImpl:async()=>{gets++;return new Response(JSON.stringify({from_addresses:[{email:b.fromAddress,user_name:b.fromName,type:'org_email',id:'123456789'}]}),{headers:{'content-type':'application/json'}});}})}});
+ const headers={host:config.controlHost,'x-zc-environment':'development','x-zc-projectid':PROJECT_ID,'x-synthetic-control':'h'.repeat(32),'content-type':'application/json'};
+ const body=Buffer.from(JSON.stringify({profile:'report_sender_qualification_v1',action:'qualify_sender'}));
+ for(const change of [{headers:{...headers,'x-synthetic-control':'invalid'}},{headers:{...headers,'x-zc-environment':'production'}},{url:'/internal/revenue-desk/activate-free-test'}]){
+  const output=response();await listener({method:'POST',url:'/internal/revenue-desk/approve-configuration',headers,rawBody:body,...change},output);assert.notEqual(output.statusCode,200);}
+ assert.equal(credentials,0);assert.equal(gets,0);
+ const output=response();await listener({method:'POST',url:'/internal/revenue-desk/approve-configuration',headers,rawBody:body},output);
+ assert.equal(output.statusCode,200);assert.equal(output.body.result.status,'sender_allowed');assert.equal(credentials,1);assert.equal(gets,1);
+});

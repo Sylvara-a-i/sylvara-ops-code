@@ -139,3 +139,17 @@ test("report-summary identifiers, confidence text, and paired range bounds fail 
     expectedMonthlyConnectedMinutesMax: 200,
   })));
 });
+
+
+test("only signed v3 rollback summaries preserve Rolled Back; legacy and normal end reasons cannot enter it", () => {
+  const valid = summary({ schemaVersion: 3, testStatus: "Rolled Back", callsCaptured: 0,
+    sourceVersions: [], testEndReason: "Sylvara Stopped" });
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  assert.equal(reportSummaryPatch(config, parseReportSummary(valid)).Test_Status, "Rolled Back");
+  for (const changed of [{ schemaVersion: 2 }, { testStatus: "Stopped" },
+    { testEndReason: "Seven-Day Limit Reached" }, { testEndReason: "Call Limit Reached" }]) {
+    assert.throws(() => parseReportSummary({ ...valid, ...changed }));
+  }
+  assert.equal(isNewerReport(valid, { ...valid, testStatus: "Completed", callsCaptured: 1,
+    sourceVersions: [[`c:${"a".repeat(64)}`, 1]] }), false);
+});

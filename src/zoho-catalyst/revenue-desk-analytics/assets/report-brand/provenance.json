@@ -1,0 +1,17 @@
+{
+  "originals": [
+    {
+      "filename": "Sylvara-Mark-v1.0-Premium-Digital-Plate.svg",
+      "sha256": "9230eeec0e3441c6a414bc2368dcf646e03394c2fb12d05fa7a00e0eb6c4ba7b",
+      "bytes": 4274,
+      "source": "Gabriel-confirmed Windows Downloads original"
+    },
+    {
+      "filename": "Sylvara-Mark-v1.0-Canonical-Flat-Plate-4096.png",
+      "sha256": "ff70457a31ccd49a6bb0d80f0a2ed4f4a0bdaaf7ee976ce5c3cd01ff3383f7e7",
+      "bytes": 250374,
+      "source": "Gabriel-confirmed Windows Downloads original"
+    }
+  ],
+  "note": "Library references identify related supplied assets; local PNG is not asserted byte-identical to Library derivative. SVG original retained here; PNG original retained in Downloads and private execution workspace. Runtime embeds the inspected self-contained SVG, not a redrawn mark."
+}

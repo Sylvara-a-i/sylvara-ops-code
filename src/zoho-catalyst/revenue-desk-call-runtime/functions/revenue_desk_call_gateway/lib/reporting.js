@@ -10,6 +10,12 @@ const { loadDeployment, assertCanonicalCallIntegrity } = require('./runtime-serv
 const { assertOutcomeUrgencyConsistency } = require('./analysis');
 const { isPlainObject, E164_PATTERN, MAX_RETELL_CALL_DURATION_MS } = require('./validation');
 const { validateSourceVersions } = require('./crm-report-outbox');
+const { callFact, opaqueKeys, normalizeFactTimestamps } = require('./analytics-outbox');
+
+// Request descriptions belong only to an in-process private draft projection.
+// Serialized input cannot acquire this brand and must never be treated as a
+// trusted canonical read merely because it supplies matching Analytics keys.
+const clientCallDetailSnapshots = new WeakSet();
 
 const DAY_MS = 86_400_000;
 const QUALIFIED_OUTCOMES = new Set(['potential_job', 'urgent_potential_job']);
@@ -166,7 +172,8 @@ function structuredReportFields(call) {
   });
 }
 
-async function queryClientReport(store, config, clientId, deploymentId, asOfMs = Date.now()) {
+async function queryClientReportSnapshot(store, config, clientId, deploymentId, asOfMs,
+  includePrivateCallDetails = false) {
   invariant(Number.isSafeInteger(asOfMs) && asOfMs >= 0,
     'REPORT_DATA_INVALID', 'Report as-of timestamp is invalid.');
   const deploymentRow = await store.unique(config.tables.DEPLOYMENT_TABLE, 'DEPLOYMENT_ID', deploymentId);
@@ -229,6 +236,7 @@ async function queryClientReport(store, config, clientId, deploymentId, asOfMs =
   let officeFollowUpEvidenceComplete = true;
   let structuredAnalysisEvidenceComplete = true;
   let workflowFailureEvidenceComplete = true;
+  const detailRows = [];
   const calls = callRows.map((row) => {
     invariant(!callsByKey.has(row.CALL_KEY), 'REPORT_RECONCILIATION_REQUIRED',
       'Report contains duplicate call ownership.');
@@ -264,6 +272,23 @@ async function queryClientReport(store, config, clientId, deploymentId, asOfMs =
         workflowFailureEvidenceComplete = false;
       }
       if (structured.workflowFailureCode) reportCounts.observedWorkflowFailures += 1;
+    }
+    if (includePrivateCallDetails) {
+      invariant(typeof config.sourceRevision === 'string'
+        && /^[a-f0-9]{40}$/.test(config.sourceRevision)
+        && row.SOURCE_REVISION === config.sourceRevision,
+      'REPORT_OWNERSHIP_CONFLICT', 'Private call details cross the reviewed source revision.');
+      const sourceVersion = validateSourceVersions([versionEntry(row)])[0][1];
+      detailRows.push(Object.freeze({
+        // Reuse the exact minimized producer projection for downstream rowset
+        // reconciliation. The descriptions are deliberately outside this fact.
+        fact: normalizeFactTimestamps('call', callFact(config, row, call)),
+        sourceVersion,
+        callerIntent: call.callerIntent,
+        issueSummary: call.issueSummary,
+        coverageTrigger: call.coverageTrigger,
+        contentWithheld: call.sensitiveDataMinimized,
+      }));
     }
     return Object.freeze({
       correlationId: row.CORRELATION_ID,
@@ -393,7 +418,7 @@ async function queryClientReport(store, config, clientId, deploymentId, asOfMs =
       : 'No in-flight call-limit overshoot is present.',
     'Opportunity value remains source-qualified per call and is not converted into a generic revenue claim.',
   ];
-  return Object.freeze({
+  const report = Object.freeze({
     schemaVersion: 2,
     clientId: deployment.clientId,
     deploymentId: deployment.deploymentId,
@@ -437,6 +462,46 @@ async function queryClientReport(store, config, clientId, deploymentId, asOfMs =
     dataConfidenceNotes: Object.freeze(dataConfidenceNotes),
     calls: Object.freeze(calls),
   });
+  let callDetails = null;
+  if (includePrivateCallDetails) {
+    invariant(typeof config.sourceRevision === 'string'
+      && /^[a-f0-9]{40}$/.test(config.sourceRevision),
+    'REPORT_DATA_INVALID', 'Private call detail source revision is invalid.');
+    const keys = opaqueKeys(config, deployment.clientId, deployment.deploymentId);
+    callDetails = Object.freeze({
+      schemaVersion: 1,
+      capturedAt: new Date(asOfMs).toISOString(),
+      clientKey: keys.CLIENT_KEY,
+      deploymentKey: keys.DEPLOYMENT_KEY,
+      configurationVersionId: deployment.configurationVersionId,
+      sourceRevision: config.sourceRevision,
+      rows: Object.freeze(detailRows.sort((left, right) =>
+        left.fact.STARTED_AT.localeCompare(right.fact.STARTED_AT)
+          || left.fact.CALL_KEY.localeCompare(right.fact.CALL_KEY))),
+    });
+    // Brand only after every ownership, count, notification and period check
+    // has completed against the same copied canonical row snapshot.
+    clientCallDetailSnapshots.add(callDetails);
+  }
+  return Object.freeze({ report, callDetails });
+}
+
+async function queryClientReport(store, config, clientId, deploymentId, asOfMs = Date.now()) {
+  return (await queryClientReportSnapshot(store, config, clientId, deploymentId, asOfMs)).report;
+}
+
+/** Read private call descriptions for an owner-review draft, never Analytics.
+ * The trusted store adapter is the authority; this function is not an input
+ * validator for arbitrary caller-provided rows or a public reporting endpoint.
+ */
+async function queryClientCallDetails(store, config, clientId, deploymentId, asOfMs = Date.now()) {
+  return (await queryClientReportSnapshot(
+    store, config, clientId, deploymentId, asOfMs, true,
+  )).callDetails;
+}
+
+function isClientCallDetails(snapshot) {
+  return clientCallDetailSnapshots.has(snapshot);
 }
 
 function csvCell(value) {
@@ -522,4 +587,4 @@ function reportToCsv(report) {
     .join('\r\n');
 }
 
-module.exports = { queryClientReport, reportToCsv, csvCell };
+module.exports = { queryClientReport, queryClientCallDetails, isClientCallDetails, reportToCsv, csvCell };

@@ -427,6 +427,32 @@ test("assisted submission resolves CRM server-side and contains no bearer", asyn
   );
 });
 
+test("assisted entry completes without scheduling availability or appointment side effects", async () => {
+  const selected = fixture();
+  // Scheduling is a website setup handoff, never an assisted access dependency.
+  // A later attempt to consult either service must fail this regression.
+  for (const dependency of ["bookingClient", "calendarClient"]) {
+    Object.defineProperty(selected.dependencies, dependency, {
+      get() { throw new Error("Synthetic scheduling service unavailable"); },
+    });
+  }
+  const issue = await launch(selected);
+  const exchanged = await exchange(selected, journeyTokenFrom(issue));
+  const destination = new URL(exchanged.result.body.formUrl);
+  const configured = new URL(selected.config.form1PublicUrl);
+  assert.equal(destination.origin, configured.origin);
+  assert.equal(destination.pathname, configured.pathname);
+  const prepared = await prefill(selected, exchanged.prefillHandle);
+  assert.equal(Object.hasOwn(prepared.body, "contactConsent"), false);
+  const result = await submit(selected, prepared.body);
+  assert.equal(result.status, 200);
+  assert.equal(selected.records.get(RECORD_ID).Submission_Channel, "CRM Assisted");
+  assert.ok(selected.events.every(([operation, module, id]) =>
+    ["get", "update"].includes(operation) && module === "Leads" && id === RECORD_ID));
+  assert.equal(selected.events.filter(([operation]) => operation === "update").length, 1);
+  assert.equal(selected.records.size, 2);
+});
+
 test("same assisted submission replays while changed identity, payload, or revision conflicts", async () => {
   const selected = fixture();
   const prepared = await prepare(selected);

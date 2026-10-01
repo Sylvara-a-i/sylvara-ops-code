@@ -1,6 +1,8 @@
 'use strict';
 
-const { compareWatermark, createOutboxRow, sameLegacyDailyMetricVersion } = require('../lib/facts');
+const { checkpointKey, compareWatermark, createOutboxRow, sameLegacyDailyMetricVersion } = require('../lib/facts');
+const { REPORT_SOURCE_PAGE_SIZE } = require('../lib/catalyst-store');
+const { checkpointState, checkpointVerificationPatch } = require('../lib/report-checkpoint-verification');
 const LEASE_PROOF_COLUMN = 'LEASE_' + 'TOKEN';
 const OUTBOX_IMMUTABLE = Object.freeze([
   'OUTBOX_KEY', 'ROW_SCHEMA_VERSION', 'RECORD_TYPE',
@@ -190,6 +192,35 @@ class MemoryStore {
   async readiness() {
     this.readinessCalls += 1;
     return { tableCount: 2, rowSchemaVersion: 2 };
+  }
+
+  async listReportRows(scope, options = {}) {
+    options.budget?.consume('source_read', 3);
+    const rows = this.rows.filter((row) => Number(row.ROW_SCHEMA_VERSION) === 2
+      && ['deployment', 'call', 'final_test_result'].includes(row.RECORD_TYPE)
+      && ['CLIENT_KEY', 'DEPLOYMENT_KEY', 'ENVIRONMENT'].every((key) => row[key] === scope[key]));
+    if (['deployment', 'call', 'final_test_result'].some((type) =>
+      rows.filter((row) => row.RECORD_TYPE === type).length >= REPORT_SOURCE_PAGE_SIZE)) {
+      throw new Error('Synthetic report history exceeds the complete-source bound.');
+    }
+    return structuredClone(rows);
+  }
+
+  async getReportCheckpoint(scope, recordType, options = {}) {
+    options.budget?.consume('source_read');
+    return structuredClone(this.checkpoints.get(checkpointKey({ ...scope, RECORD_TYPE: recordType })) || null);
+  }
+
+  async reattestReportCheckpoint(scope, recordType, expected, verification, options = {}) {
+    const patch = checkpointVerificationPatch(scope, recordType, expected, verification);
+    const desired = { ...expected, ...patch };
+    const current = await this.getReportCheckpoint(scope, recordType, options);
+    if (checkpointState(current) === checkpointState(desired)) return current;
+    if (checkpointState(current) !== checkpointState(expected)) throw new Error('Synthetic checkpoint conflict.');
+    options.budget?.consume('checkpoint_write');
+    if (options.signal?.aborted) throw new Error('Synthetic checkpoint cancelled.');
+    this.checkpoints.set(expected.CHECKPOINT_KEY, structuredClone(desired));
+    return this.getReportCheckpoint(scope, recordType, options);
   }
 }
 

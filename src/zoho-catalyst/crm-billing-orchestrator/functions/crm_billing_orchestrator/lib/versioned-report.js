@@ -49,10 +49,20 @@ async function syncVersionedReport({
   const freshState = async () => {
     const fresh = validateContext(await crmClient.getContext(binding.dealId));
     if (!sameBinding(fresh)) fail();
+    if (rolledBack && !exactRollback(fresh.deal)) fail();
     return fresh;
   };
-  const protectedState = (deal) => !config.reportMutableStageValue
-    || deal.Stage !== config.reportMutableStageValue
+  const rolledBack = summary.schemaVersion === 3 && summary.testStatus === "Rolled Back";
+  const exactRollback = (deal) => deal.Test_Status === "Rolled Back" && deal.Stage === "Closed Lost"
+    && deal.Test_End_Reason === summary.testEndReason
+    && ["Test_Start_At", "Test_End_At", "Rollback_Completed_At"].every((field) => (
+      typeof deal[field] === "string" && Number.isFinite(Date.parse(deal[field]))
+      && Date.parse(deal[field]) === Date.parse(field === "Test_Start_At" ? summary.testStartAt : summary.testEndAt)
+    ));
+  // Rollback is already an authoritative CRM terminal state. Add derived report
+  // totals only; never use a summary to create, reclassify or reopen a rollback.
+  const protectedState = (deal) => (rolledBack ? !exactRollback(deal)
+    : !config.reportMutableStageValue || deal.Stage !== config.reportMutableStageValue)
     || PROTECTED_FIELDS.some((field) => !Object.hasOwn(deal, field) || deal[field] !== null);
   const contain = async (cursor, outcome = "report_summary_readback_required") => {
     // Completed receipts are historical evidence. Failure to prove current
@@ -112,8 +122,10 @@ async function syncVersionedReport({
   }
   const eligible = (current, currentHead) => {
     if (protectedState(current.deal)) return "report_revision_protected";
-    if (current.deal.Test_Status === "Live" && !currentHead) return null;
-    if (current.deal.Test_Status !== config.testCompletedStatusValue) return "report_test_status_conflict";
+    if (!currentHead && (rolledBack || current.deal.Test_Status === "Live")) return null;
+    if (current.deal.Test_Status !== (rolledBack ? "Rolled Back" : config.testCompletedStatusValue)) {
+      return "report_test_status_conflict";
+    }
     if (!currentHead || !patchMatches(current.deal, currentHead.patch)
       || !isNewerReport(currentHead.summary, summary)) return "report_summary_readback_required";
     return null;

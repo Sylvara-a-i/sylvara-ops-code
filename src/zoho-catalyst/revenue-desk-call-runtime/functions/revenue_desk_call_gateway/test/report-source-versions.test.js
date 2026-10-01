@@ -45,8 +45,8 @@ test('terminal reports preserve every approved stop reason, including operator r
     assert.equal(report.callsCaptured, 1);
     assert.ok(Date.parse(report.sourceModifiedAt) >= Date.parse(stoppedAt));
     const deployment = await loadDeployment(fixture.store, row, fixture.config);
-    assert.equal(buildCrmReportSummary(fixture.config, deployment, report).testEndReason,
-      reason.crm_test_end_reason);
+    assert.throws(() => buildCrmReportSummary(fixture.config, deployment, report),
+      { code: 'REPORT_RECONCILIATION_REQUIRED' }, 'A bare Stopped row is not completed rollback authority');
   }
 });
 

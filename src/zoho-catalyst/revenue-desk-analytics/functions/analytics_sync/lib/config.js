@@ -7,6 +7,7 @@ const REVISION_PATTERN = /^[a-f0-9]{40}$/;
 const PLATFORM_ID_PATTERN = /^[A-Za-z0-9_-]{3,128}$/;
 const CONNECTION_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,99}$/;
 const TABLE_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
+const IMPORT_MATCH_COLUMNS = Object.freeze(['RECORD_KEY', 'CLIENT_KEY', 'DEPLOYMENT_KEY', 'ENVIRONMENT']);
 const ANALYTICS_HOSTS = new Set([
   'analyticsapi.zoho.com',
   'analyticsapi.zoho.eu',
@@ -189,9 +190,12 @@ function loadConfig(environment = process.env, artifactRevision = ARTIFACT_SOURC
 
 module.exports = {
   ANALYTICS_HOSTS,
+  analyticsHost,
+  parseTargets,
   loadConfig,
   RECORD_TYPES,
   REVISION_PATTERN,
   TABLE_PATTERN,
   TARGET_TABLE_NAMES,
+  IMPORT_MATCH_COLUMNS,
 };

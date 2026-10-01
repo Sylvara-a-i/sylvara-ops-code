@@ -1,0 +1,198 @@
+{
+  "schema_version": 1,
+  "status": "held-local-proposal-not-installed",
+  "table": "ReportRuns",
+  "observed_requirements_date": "2026-09-29",
+  "existing_system_columns": [
+    "ROWID",
+    "CREATORID",
+    "CREATEDTIME",
+    "MODIFIEDTIME"
+  ],
+  "existing_required_columns": [
+    {
+      "api_name": "ReportRunId",
+      "type": "varchar",
+      "max_length": 255,
+      "mandatory": true,
+      "unique": true
+    },
+    {
+      "api_name": "IdempotencyKey",
+      "type": "varchar",
+      "max_length": 255,
+      "mandatory": true,
+      "unique": true
+    },
+    {
+      "api_name": "ClientId",
+      "type": "varchar",
+      "max_length": 255,
+      "mandatory": true
+    },
+    {
+      "api_name": "DeploymentId",
+      "type": "varchar",
+      "max_length": 255,
+      "mandatory": true
+    },
+    {
+      "api_name": "ReportType",
+      "type": "varchar",
+      "max_length": 100,
+      "mandatory": true
+    },
+    {
+      "api_name": "PeriodStart",
+      "type": "date",
+      "mandatory": true
+    },
+    {
+      "api_name": "PeriodEnd",
+      "type": "date",
+      "mandatory": true
+    },
+    {
+      "api_name": "ReportVersion",
+      "type": "varchar",
+      "max_length": 64,
+      "mandatory": true
+    },
+    {
+      "api_name": "GenerationStatus",
+      "type": "varchar",
+      "max_length": 64,
+      "mandatory": true
+    },
+    {
+      "api_name": "ApprovalStatus",
+      "type": "varchar",
+      "max_length": 64,
+      "mandatory": true
+    },
+    {
+      "api_name": "DeliveryStatus",
+      "type": "varchar",
+      "max_length": 64,
+      "mandatory": true
+    },
+    {
+      "api_name": "ReconciliationStatus",
+      "type": "varchar",
+      "max_length": 64,
+      "mandatory": true
+    },
+    {
+      "api_name": "ActualEstimatedSeparated",
+      "type": "boolean",
+      "mandatory": true
+    },
+    {
+      "api_name": "CrossClientIsolationPassed",
+      "type": "boolean",
+      "mandatory": true
+    },
+    {
+      "api_name": "DuplicateSendGuardPassed",
+      "type": "boolean",
+      "mandatory": true
+    },
+    {
+      "api_name": "ReportTotalsReconciled",
+      "type": "boolean",
+      "mandatory": true
+    },
+    {
+      "api_name": "AutoDeliveryEnabledAtRun",
+      "type": "boolean",
+      "mandatory": true
+    },
+    {
+      "api_name": "SchemaVersion",
+      "type": "int",
+      "mandatory": true
+    },
+    {
+      "api_name": "ReportFormat",
+      "type": "varchar",
+      "max_length": 32,
+      "mandatory": true
+    }
+  ],
+  "existing_optional_columns": [
+    {
+      "api_name": "RecipientSnapshotJson",
+      "type": "text",
+      "max_length": 10000,
+      "mandatory": false,
+      "encrypted": true
+    },
+    {
+      "api_name": "ReportObjectKey",
+      "type": "text",
+      "max_length": 10000,
+      "mandatory": false,
+      "encrypted": true
+    },
+    {
+      "api_name": "ErrorMessage",
+      "type": "text",
+      "max_length": 10000,
+      "mandatory": false,
+      "encrypted": true
+    },
+    {
+      "api_name": "ReportPayloadJson",
+      "type": "text",
+      "max_length": 10000,
+      "mandatory": false,
+      "encrypted": true
+    },
+    {
+      "api_name": "GeneratedAt",
+      "type": "datetime",
+      "mandatory": false
+    },
+    {
+      "api_name": "ApprovedAt",
+      "type": "datetime",
+      "mandatory": false
+    },
+    {
+      "api_name": "SentAt",
+      "type": "datetime",
+      "mandatory": false
+    },
+    {
+      "api_name": "ApprovedByRef",
+      "type": "varchar",
+      "max_length": 64,
+      "mandatory": false
+    },
+    {
+      "api_name": "SourceMetricHash",
+      "type": "varchar",
+      "max_length": 64,
+      "mandatory": false
+    }
+  ],
+  "additive_columns": [
+    {
+      "api_name": "RD_REPORT_VERSION",
+      "type": "int",
+      "mandatory": false,
+      "unique": false
+    }
+  ],
+  "owned_row_version": {
+    "minimum": 1,
+    "maximum": 2147483647,
+    "increment": 1,
+    "overflow": "Hold for reconciliation; never wrap or reset."
+  },
+  "owned_rows": "The adapter uses the revenue-desk-report-v1: namespace in both existing unique identity fields. It writes only new scoped verification-attempt and immutable WorkDrive-draft rows; it does not select or modify legacy rows. report_delivery_v1 records reuse the same encrypted payload and unique identity/CAS for per-test initial delivery and confirmed resend; no legacy rows are rewritten.",
+  "state": "Use existing encrypted ReportPayloadJson for canonical state, bounded to 9500 UTF-8 bytes, with mandatory identity, actual terminal period and status projections independently checked on readback. A verified draft stores its exact resource/version/hash receipt in existing encrypted ReportObjectKey. Verification attempts are explicitly not generated reports.",
+  "delivery_boundary": "Generated drafts remain NotSent and owner review is a separate state. A separately protected, initially disabled report_delivery_v1 workflow may send the completed/fresh/validated summary once to the explicitly verified per-test Contact recipient under standing initial-delivery authority. Manual resend requires exact revision/recipient confirmation. Provider acceptance is not inbox receipt, read or follow-up. No live delivery binding is installed.",
+  "legacy_rows": "Preserve every existing row and column. RD_REPORT_VERSION remains null for legacy rows; no default, backfill, reset, migration or deletion is proposed.",
+  "activation": "Only the nullable RD_REPORT_VERSION column is an additive proposal. Existing-column entries record observed requirements, not requested additions. Fresh authorized Development identity/schema readback, exact type/encryption/unique constraints, conditional-update and ambiguous-write qualification, private destination binding and trusted factory composition remain prerequisites. No new table, queue, cron or environment toggle is proposed. This file authorizes no live schema or data write."
+}

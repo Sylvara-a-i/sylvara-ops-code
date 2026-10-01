@@ -3,7 +3,8 @@
 ## Status
 
 - Repository standard: **Proposed**
-- Sylvara WorkDrive folders, Contracts templates, Sign templates, signer routing, and live document integrations: **Unknown**
+- Sylvara WorkDrive company structure: **Owner-confirmed existing; read-only existence verified**. Reuse it; exact destinations, mappings, runtime writer, access and retention acceptance remain private workflow-specific evidence.
+- Contracts templates, Sign templates, signer routing and live document integrations: **Unverified**.
 
 The official [WorkDrive API documentation](https://workdrive.zoho.com/apidocs/v1/teamfolder/getteamfolderfiles), [Zoho Contracts API introduction](https://www.zoho.com/contracts/api/introduction.html), [Zoho Sign API reference](https://www.zoho.com/sign/api/), and [Zoho Sign OAuth scopes](https://www.zoho.com/sign/api/oauth.html) describe product capabilities. They do not prove that a template, document, or integration is configured or legally suitable for Sylvara.
 
@@ -68,7 +69,8 @@ Legal review, signer-authentication review, and retention review are required be
 
 ## Manual Setup
 
-All live setup is currently **Unknown**. Before use, verify or configure:
+Existing WorkDrive structure must be discovered and reused, not recreated from
+an old Unknown label. Before each workflow is enabled, verify or configure:
 
 - Contracts and Sign organizations, editions, data centers, administrators, roles, and OAuth scopes;
 - qualified approval of legal templates and version ownership;

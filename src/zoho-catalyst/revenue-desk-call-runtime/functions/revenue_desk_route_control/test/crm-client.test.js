@@ -888,3 +888,26 @@ test('public Form 1 search body timeout is bounded, sanitized, and never retried
   });
   assert.equal(searches, 1);
 });
+
+
+test('report record reader selects installed APIs and native Contact only, with no write credentials',async()=>{
+ const requests=[];
+ const client=createCrmControlClient({crmApiBaseUrl:'https://www.zohoapis.com/crm/v8',crmOrganizationId:SYNTHETIC_ORGANIZATION_ID,platformTimeoutMs:500},{
+  readAuthorization:async()=> 'Zoho-oauthtoken synthetic-read',writeAuthorization:async()=>{throw Error('write prohibited');},
+  fetchImpl:async(url,options)=>{requests.push({url:new URL(url),options});assert.equal(options.method,'GET');
+   if(url.endsWith('/org'))return response(200,{org:[{zgid:SYNTHETIC_ORGANIZATION_ID}]});
+   if(url.includes('/Deals/'))return response(200,{data:[{id:DEAL_ID,Contact_Name:{id:'500000001'},Account_Name:{id:'600000001'},Test_Report_Recipient_Email:'owner@example.com'}]});
+   return response(200,{data:[{id:'500000001',Account_Name:{id:'600000001'},Email:'owner@example.com'}]});}});
+ const records=await client.getReportRecords(DEAL_ID);assert.equal(records.contact.Email,'owner@example.com');
+ const fields=requests[1].url.searchParams.get('fields').split(',');
+ assert.ok(fields.includes('Test_Report_PDF_URL')&&fields.includes('Test_Report_Recipient_Email'));
+ assert.equal(fields.includes('Alert_Recipient_Email'),false);assert.equal(requests.length,3);
+});
+test('cancelled report record read cannot issue a later Contact request',async()=>{
+ const controller=new AbortController(),requests=[];
+ const client=createCrmControlClient({crmApiBaseUrl:'https://www.zohoapis.com/crm/v8',crmOrganizationId:SYNTHETIC_ORGANIZATION_ID,platformTimeoutMs:500},{
+  readAuthorization:async()=> 'Zoho-oauthtoken synthetic-read',writeAuthorization:async()=>{throw Error('write prohibited');},
+  fetchImpl:async(url,options)=>{requests.push(url);if(url.endsWith('/org'))return response(200,{org:[{zgid:SYNTHETIC_ORGANIZATION_ID}]});
+   controller.abort();return response(200,{data:[{id:DEAL_ID,Contact_Name:{id:'500000001'}}]});}});
+ await assert.rejects(client.getReportRecords(DEAL_ID,{signal:controller.signal}));assert.equal(requests.length,2);
+});

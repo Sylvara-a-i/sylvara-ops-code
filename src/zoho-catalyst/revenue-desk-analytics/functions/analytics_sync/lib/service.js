@@ -88,9 +88,12 @@ function createAnalyticsSyncService(options) {
     now = Date.now,
     randomBytes = crypto.randomBytes,
     logger = { info() {}, warn() {}, error() {} },
+    onReconciledScope = null,
   } = options;
   invariant(store && adapter && config?.environment === 'development' && config.mode === 'active',
     'SERVICE_CONFIGURATION_INVALID', 'Active Analytics service dependencies are invalid.');
+  invariant(onReconciledScope === null || typeof onReconciledScope === 'function',
+    'SERVICE_CONFIGURATION_INVALID', 'Analytics reconciliation hook is invalid.');
 
   function result(state, counts = {}) {
     return Object.freeze({
@@ -104,6 +107,7 @@ function createAnalyticsSyncService(options) {
       failed: counts.failed || 0,
       contention: counts.contention || 0,
       dailyMetricsEnsured: counts.dailyMetricsEnsured || 0,
+      ...(counts.reportDraftStatus ? { reportDraftStatus: counts.reportDraftStatus } : {}),
     });
   }
 
@@ -389,8 +393,33 @@ function createAnalyticsSyncService(options) {
       NEXT_ATTEMPT_AT: nowIso,
       UPDATED_AT: nowIso,
     }));
+    // Optional source-composition hook, held by default: a completed partition
+    // is only a wakeup, never proof that all report partitions are ready. The
+    // injected owner must assemble fresh independent readbacks and canonical
+    // call details. Neither raw facts nor credentials enter this event.
+    let reportDraftStatus;
+    if (onReconciledScope && last.ENGAGEMENT_TYPE === 'free_test'
+      && ['deployment', 'call', 'final_test_result'].includes(last.RECORD_TYPE)) {
+      try {
+        const completion = await onReconciledScope(Object.freeze({
+          scope: Object.freeze(Object.fromEntries(['CLIENT_KEY', 'DEPLOYMENT_KEY', 'CONFIGURATION_VERSION',
+            'ENGAGEMENT_TYPE', 'ENVIRONMENT', 'SOURCE_REVISION'].map((key) => [key, last[key]]))),
+          recordType: last.RECORD_TYPE, sourceModifiedAt: last.SOURCE_MODIFIED_AT, reconciledAt: nowIso,
+        }));
+        invariant(completion && ['awaiting_reconciled_evidence', 'draft_created_not_for_delivery',
+          'existing_draft_verified_not_for_delivery'].includes(completion.status),
+        'REPORT_DRAFT_HOOK_INVALID', 'Report completion hook returned an unsupported result.');
+        reportDraftStatus = completion.status;
+      } catch {
+        // Analytics has already reconciled: never replay its import to retry a
+        // document. A hook failure is explicit and requires a separately owned
+        // reconciliation wakeup; this callback does not claim durable recovery.
+        return result('ReconciliationRequired', { claimed: rows.length, reconciled: rows.length,
+          dailyMetricsEnsured, reportDraftStatus: 'draft_reconciliation_required' });
+      }
+    }
     return result('Succeeded', {
-      claimed: rows.length, reconciled: rows.length, dailyMetricsEnsured,
+      claimed: rows.length, reconciled: rows.length, dailyMetricsEnsured, reportDraftStatus,
     });
   }
 

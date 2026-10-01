@@ -439,7 +439,7 @@ async function ensureOutboxRow(store, config, recordType, fact, createdAt) {
 }
 
 module.exports = Object.freeze({
-  OUTBOX_IMMUTABLE, canonicalJson, createOutboxRow, callFact, deploymentFact,
+  OUTBOX_IMMUTABLE, canonicalJson, createOutboxRow, callFact, deploymentFact, opaqueKeys,
   finalTestResultFact, sameLegacyReportVersion,
   ensureOutboxRow, normalizeFactTimestamps, outboxKey, sha256,
 });

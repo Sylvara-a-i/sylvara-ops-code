@@ -252,7 +252,8 @@ async function createOfflineHarness(options = {}) {
 // original expiry/call-limit reports remain immutable. The production control
 // service owns the revoke claim, decision, persistence and replay; only storage,
 // CRM and the route readback are fakes. No live provider adapter is constructed.
-async function earlyStopRehearsal() {
+async function earlyStopRehearsal({ callCount = 2, onStopped = null } = {}) {
+  assert.ok([0, 2].includes(callCount));
   const h = await createOfflineHarness({ controlVersionIdentity: true });
   const { createRouteControlService } = require(path.join(runtimeRoot, 'lib/route-control-service'));
   const { verifyAuthorizationReceiptIntegrity } = require(path.join(runtimeRoot, 'lib/authorization-receipt'));
@@ -323,17 +324,20 @@ async function earlyStopRehearsal() {
       return { status: 'route_inactive', instructions: 'SIMULATED ONLY: original handling is not verified.' };
     } },
   });
-  const firstAdmission = await h.inbound('A', h.runtime.clock.value);
-  assert.equal(firstAdmission.status, 200);
-  h.runtime.clock.value += 1;
-  const secondAdmission = await h.inbound('A', h.runtime.clock.value);
-  assert.equal(secondAdmission.status, 200);
-  const firstMetadata = firstAdmission.body.call_inbound.metadata;
-  const secondMetadata = secondAdmission.body.call_inbound.metadata;
-  assert.notEqual(firstMetadata.correlation_id, secondMetadata.correlation_id);
-  assert.equal(firstMetadata.resolver_status, 'Resolved');
-  assert.equal(secondMetadata.resolver_status, 'Resolved');
-  await h.event('A', firstMetadata, 'before_operator_stop');
+  let secondMetadata;
+  if (callCount === 2) {
+    const firstAdmission = await h.inbound('A', h.runtime.clock.value);
+    assert.equal(firstAdmission.status, 200);
+    h.runtime.clock.value += 1;
+    const secondAdmission = await h.inbound('A', h.runtime.clock.value);
+    assert.equal(secondAdmission.status, 200);
+    const firstMetadata = firstAdmission.body.call_inbound.metadata;
+    secondMetadata = secondAdmission.body.call_inbound.metadata;
+    assert.notEqual(firstMetadata.correlation_id, secondMetadata.correlation_id);
+    assert.equal(firstMetadata.resolver_status, 'Resolved');
+    assert.equal(secondMetadata.resolver_status, 'Resolved');
+    await h.event('A', firstMetadata, 'before_operator_stop');
+  }
   const before = await deployment();
   h.runtime.clock.value += 1000;
   const command = { dealId: binding.dealId, journeyId: binding.journeyId,
@@ -346,7 +350,7 @@ async function earlyStopRehearsal() {
   assert.notEqual((await h.inbound('A')).body?.call_inbound?.metadata?.resolver_status, 'Resolved');
   // Admission ended, but a previously admitted call retains its immutable
   // interval and may settle. Late evidence must not restart the route or clock.
-  await h.event('A', secondMetadata, 'already_admitted_after_stop');
+  if (callCount === 2) await h.event('A', secondMetadata, 'already_admitted_after_stop');
   const settled = await deployment();
   for (const key of ['TEST_STATUS', 'GO_LIVE_APPROVAL_STATUS', 'STOP_REASON',
     'STOPPED_AT', 'ACTUAL_START_AT', 'EXPIRES_AT']) {
@@ -361,12 +365,14 @@ async function earlyStopRehearsal() {
   assert.equal(effects.crmRollbackWrites, 1);
   assert.equal(h.runtime.mailAccesses, 0);
   const report = await h.report('A');
-  assert.equal(report.callsCaptured, 2);
+  assert.equal(report.callsCaptured, callCount);
   assert.equal(report.testEndReason, 'Sylvara Stopped');
   assert.equal(report.testEnd, settled.STOPPED_AT);
   assert.ok(Date.parse(report.sourceModifiedAt) >= Date.parse(settled.STOPPED_AT));
   assert.ok(Date.parse(report.sourceModifiedAt) >= Math.max(...store.rows.get('RevenueDeskCalls')
     .map((row) => Date.parse(row.UPDATED_AT))));
+  Object.assign(h.crm.contexts.get(binding.dealId).deal, crmState);
+  if (onStopped) await onStopped(h);
   const receipts = store.rows.get(tables.EVENT_RECEIPT_TABLE);
   return { evidenceClass: 'production_control_service_with_memory_adapters',
     before: { testStatus: before.TEST_STATUS, callsCaptured: Number(before.HANDLED_COUNT) },
@@ -684,4 +690,10 @@ async function runFreeTestDemo() {
   } finally { guard.restore(); }
 }
 
-module.exports = { runFreeTestDemo, createOfflineHarness, reportOperationStore };
+async function createStoppedOfflineHarness({ empty = false } = {}) {
+  let captured;
+  await earlyStopRehearsal({ callCount: empty ? 0 : 2, onStopped(harness) { captured = harness; } });
+  return captured;
+}
+
+module.exports = { runFreeTestDemo, createOfflineHarness, createStoppedOfflineHarness, reportOperationStore };
