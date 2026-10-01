@@ -313,3 +313,38 @@ Official contracts: [send mail](https://www.zoho.com/crm/developer/docs/api/v8/s
 [Contact email list](https://www.zoho.com/crm/developer/docs/api/v8/get-email-rel-list.html),
 [exact email](https://www.zoho.com/crm/developer/docs/api/v8/view-email.html),
 [allowed senders](https://www.zoho.com/crm/developer/docs/api/v8/get-from-addresses-list.html).
+
+
+### Disabled read-only sender qualification
+
+The existing controller approval route accepts only the exact diagnostic body
+`{"profile":"report_sender_qualification_v1","action":"qualify_sender"}` after
+its existing host, Development, project and shared-header authentication. It
+constructs no Data Store, CRM writer, report factory or Retell provider. There is
+no new public route or arbitrary URL/record/sender input.
+
+Default is disabled: REPORT_SENDER_QUALIFICATION_JSON and its byte-exact
+REPORT_SENDER_QUALIFICATION_SHA256 pin must be privately installed. The exact
+binding keys are schemaVersion (1), enabled (true for separately authorized proof),
+environment (development), sourceRevision, projectId, controlHost,
+connectionReference, fromAddress, fromName, verifiedAt, expiresAt, timeoutMs and
+costQualificationDigest. Maximum validity is 15 minutes; timeout is at most 10
+seconds. Pinning a digest is not cost evidence. Missing usage data or a Connected
+grant does not establish no-cost operation; installation/invocation stay held.
+
+One fixed GET to the US CRM v8 settings/emails/actions/from_addresses endpoint
+uses server-only SDK-managed authentication. Responses are capped at 64 KiB, 128
+chunks and 1,000 entries; redirects, compression, retries and token/raw-body output
+are prohibited. A unique exact organization sender must match the protected
+address and display name. Only that intended sender, observation time, evidence
+digest and deliveryAuthority=false return to the authenticated owner. Missing,
+ambiguous, malformed or late evidence fails generically. Cancellation prevents a
+late SDK credential result from dispatching HTTP; an already-running SDK lookup
+is not claimed to be cancelled. Every native HTTP read is cancellable.
+
+Only the existing revenue_desk_route_control function needs a future exact
+source/auth-preserving candidate install for this diagnostic. Do not install a
+new function or switch on reporting/delivery/admission. Preserve prior A2 and
+other candidates. The sender read establishes allowed-From evidence for the
+managed principal; it does not prove Contact send scope, suppression, inbox
+receipt, cost allowance or overall Journey acceptance.

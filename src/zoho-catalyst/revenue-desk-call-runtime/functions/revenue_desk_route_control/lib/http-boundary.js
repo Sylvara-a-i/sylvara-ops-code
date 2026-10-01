@@ -177,6 +177,18 @@ function createRequestListener({
         && String(app?.config?.projectId || '') === projectId,
       'CONTROL_AUTHENTICATION_FAILED', 'Control runtime identity is invalid.',
       { httpStatus: 503 });
+      if (body.profile === 'report_sender_qualification_v1') {
+        invariant(action === 'approve' && typeof factories.senderQualification === 'function',
+          'CONTROL_PRECONDITION_FAILED', 'Sender qualification is unavailable.', { httpStatus: 503 });
+        // After existing authentication and runtime identity, before every store,
+        // CRM writer, report factory and Retell provider construction.
+        const handler = factories.senderQualification(app, config);
+        const result = await handler.handle(body, { actor: Object.freeze({
+          kind: 'internal_controller', identity: config.operatorIdHash,
+        }) });
+        send(response, 200, { ok: true, action: body.action, result });
+        return;
+      }
       if (body.profile === 'report_delivery_v1') {
         invariant(action === 'approve' && typeof factories.reportDelivery === 'function',
           'CONTROL_PRECONDITION_FAILED', 'Report delivery binding is unavailable.', { httpStatus: 503 });
