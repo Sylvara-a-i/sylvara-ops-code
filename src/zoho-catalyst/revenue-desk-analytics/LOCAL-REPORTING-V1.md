@@ -450,3 +450,35 @@ resets a claim, mutates an old draft or authorizes a new generation. A separatel
 qualified finite operator recovery/migration contract is still required for those
 cases; no such live recovery is accepted by the offline tests. Preserve partial
 rows, prior versions and truthful held states until that contract is established.
+
+### Separate read-only inspection after exhausted attempts
+
+The trusted reporting factory exposes `inspectExhausted(scope, { signal })` as a
+distinct operation. Normal terminal reconciliation never selects it, and the
+delivery wrapper never calls `afterPair` for it. It requires the exact canonical
+client/deployment/configuration/source/period identity and an existing six-failure
+attempt. The routine attempt, generation, draft and bundle claims remain unchanged.
+
+One separately admitted inspection has a 120-second whole-operation deadline,
+at most 240 canonical source reads, 24 Analytics reads, 40 physical ReportRuns
+reads and 12 WorkDrive reads. The two exact-version readers each have an additional
+10-second deadline, eight physical ReportRuns reads and six WorkDrive reads;
+these are included in the stated aggregate bounds. All write budgets are zero.
+There is no checkpoint re-attestation, import, CRM projection, render, upload or
+send. A late result cannot admit subsequent operations after cancellation.
+
+It rereads complete current source/review evidence and independently verifies
+both immutable PDF byte hashes, exact private versions, current destination
+authority and final unchanged claims. Late stored completion can produce
+`exhausted_report_evidence_inspected_not_adopted` only when both verified private
+receipts already exist. In-memory accepted views are used solely to reuse exact
+byte verification; they never advance a durable record. Returned evidence sets
+`persisted`, `qualificationAuthority` and `deliveryAuthority` to false.
+
+Immutable legacy rows may be inspected only under these same current provenance
+and authority checks. Missing receipts/bytes, stale source, tenant mismatch or
+contradictory acceptance remain held. This does not reset the failure ceiling,
+rerender consumed claims, relabel terminal states, migrate legacy ownership or
+authorize delivery. Persistent adoption would require a separately designed
+durable transition and exact-version authority; inspection alone is insufficient.
+No live recovery acceptance is claimed by the offline checks.

@@ -11,8 +11,8 @@ function held(){throw Object.assign(new Error('REPORT_DELIVERY_STORAGE_HELD'),{c
  * fences every stored client/deployment, receipt, destination and actual byte.
  */
 function createReportDeliveryStorageReader({reportRunStore:runs,workdrive,readDestinationBinding,
- now=Date.now,timeoutMs=10000}={}){
- if(!runs||typeof runs.get!=='function'||!workdrive||!['getMetadata','listVersions','downloadVersion'].every(k=>typeof workdrive[k]==='function')
+ now=Date.now,timeoutMs=10000,artifactRole='summary'}={}){
+ if(!['summary','supporting'].includes(artifactRole)||!runs||typeof runs.get!=='function'||!workdrive||!['getMetadata','listVersions','downloadVersion'].every(k=>typeof workdrive[k]==='function')
  ||typeof readDestinationBinding!=='function'||typeof now!=='function'||!Number.isSafeInteger(timeoutMs)||timeoutMs<1||timeoutMs>15000)held();
  return async function readSummary({snapshot,signal}={}){
   // Four logical immutable successor reads each require root and current-head queries.
@@ -23,7 +23,7 @@ function createReportDeliveryStorageReader({reportRunStore:runs,workdrive,readDe
   try{
    active();
    const report=snapshot?.report,b=snapshot?.binding;
-   if(!b||!report||!HASH.test(report.generationKey)||!HASH.test(report.manifestSha256)||!report.summary)held();
+   if(!b||!report||!HASH.test(report.generationKey)||!HASH.test(report.manifestSha256)||!report[artifactRole])held();
    const bundle=await runs.get(report.generationKey,options);active();
    const state=bundle?.state,m=state?.manifest;
    if(state?.kind!=='report_bundle_v1'||state.phase!=='accepted'||state.identity?.clientId!==b.clientId
@@ -31,9 +31,9 @@ function createReportDeliveryStorageReader({reportRunStore:runs,workdrive,readDe
     ||state.manifestSha256!==report.manifestSha256
     ||digest(m)!==report.manifestSha256||m.initialDeliveryArtifact!=='summary'||m.supportingAvailability!=='private'
     ||Object.keys(m.artifacts||{}).sort().join(',')!=='summary,supporting')held();
-   const ref=m.artifacts.summary;
-   if(report.summary.role!=='summary'||!['generationKey','documentSha256','privateReceiptKey'].every(k=>
-    HASH.test(ref[k]||'')&&ref[k]===report.summary[k])
+   const ref=m.artifacts[artifactRole];
+   if(report[artifactRole].role!==artifactRole||!['generationKey','documentSha256','privateReceiptKey'].every(k=>
+    HASH.test(ref[k]||'')&&ref[k]===report[artifactRole][k])
     ||ref.privateReceiptKey!==digest(`workdrive-draft-v1\0${ref.generationKey}`))held();
    const draft=await runs.get(ref.privateReceiptKey,options);active();
    const d=draft?.state,i=d?.identity,r=d?.receipt;

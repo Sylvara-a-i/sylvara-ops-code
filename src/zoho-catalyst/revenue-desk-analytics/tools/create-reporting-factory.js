@@ -105,7 +105,7 @@ function createReportingFactory({ analyticsConfig, workdriveBinding, acceptance,
       // The shared budget checks this clock before every reservation, so expiry
       // also blocks immediate promise chains before the timer gets its turn.
       reattestCheckpoints, now: assertAccepted, synthetic, pdfRenderer: runtimeRenderer, reportBundle: true });
-    async function approvedAttempt(scope, options = {}) {
+    async function acceptedOperation(scope, options, operation) {
       const at = assertAccepted();
       if (!options || typeof options !== 'object' || Array.isArray(options)
         || Object.keys(options).some(key => key !== 'signal')
@@ -126,13 +126,16 @@ function createReportingFactory({ analyticsConfig, workdriveBinding, acceptance,
         timer = setTimeout(cancel, approved.expiresAt - at);
       }
       try {
-        return await Promise.race([cancelled, reconcile(scope, { signal: controller.signal })]);
+        return await Promise.race([cancelled, operation(scope, { signal: controller.signal })]);
       } finally {
         clearTimeout(timer);
         options.signal?.removeEventListener('abort', cancel);
         controller.abort();
       }
     }
+    const approvedAttempt = (scope, options = {}) => acceptedOperation(scope, options, reconcile);
+    Object.defineProperty(approvedAttempt, 'inspectExhausted', { value: Object.freeze(
+      (scope, options = {}) => acceptedOperation(scope, options, reconcile.inspectExhausted)) });
     Object.defineProperty(approvedAttempt, 'attemptTimeoutMs', { value: reconcile.attemptTimeoutMs });
     return deliveryFactory === null ? Object.freeze(approvedAttempt)
       : attachTerminalReportDelivery(approvedAttempt, deliveryFactory(app, runtimeConfig, runtimeStore));

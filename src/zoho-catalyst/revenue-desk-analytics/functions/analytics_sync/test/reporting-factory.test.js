@@ -212,3 +212,11 @@ test('automatic factory cannot accept two competing PDF bindings or a wrong nati
   assert.throws(()=>createReportingFactory(f.options),REQUIRED);
   assert.deepEqual(f.effects,none);
 });
+
+test('protected factory retains separate read-only recovery admission and checks expiry before reads', async()=>{
+ const f=fixture();const hook=createReportingFactory(f.options)(f.app,f.runtimeConfig,f.runtimeStore);
+ assert.equal(typeof hook.inspectExhausted,'function');assert.equal(Object.isFrozen(hook.inspectExhausted),true);
+ f.clock.value=f.acceptance.expiresAt;
+ await assert.rejects(hook.inspectExhausted({clientId:'client_A',deploymentId:'deployment_A'}),REQUIRED);
+ assert.deepEqual(f.effects,none);
+});

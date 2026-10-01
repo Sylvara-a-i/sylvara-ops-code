@@ -222,3 +222,71 @@ test('pair reserves its complete finite operation and elapsed plan before any cl
  assert.throws(()=>createDurableReportComposition({...x.options,budgetOptions:{timeoutMs:119999}}),rejection);
  assert.equal(x.physicalStore.rows.size,0);assert.equal(x.renders,0);assert.equal(x.d.uploads.length,0);
 });
+
+async function exhaustedFixture() {
+ const x=await fixture(); await createDurableReportComposition(x.options)(x.f.identity);
+ const attempt=[...x.d.rows.values()].find(row=>row.state.kind==='report_attempt_v1');
+ attempt.state.failures=6;attempt.state.phase='waiting';
+ let writes=0;
+ for(const method of ['insert','compareAndSwap'])x.d.runs[method]=async()=>{writes++;throw Error('inspection wrote');};
+ x.d.workdrive.upload=async()=>{writes++;throw Error('inspection uploaded');};
+ x.options.reattestCheckpoints=async()=>{writes++;throw Error('inspection reattested');};
+ return {...x,get writes(){return writes;}};
+}
+test('exhausted inspection freshly verifies both bytes without resetting claims or repeating effects',async()=>{
+ const x=await exhaustedFixture(),before=structuredClone([...x.d.rows]);
+ const reconcile=createDurableReportComposition(x.options);
+ assert.equal((await reconcile(x.f.identity)).status,'awaiting_reconciled_evidence');
+ const result=await reconcile.inspectExhausted(x.f.identity);
+ assert.equal(result.status,'exhausted_report_evidence_inspected_not_adopted');
+ assert.equal(result.persisted,false);assert.equal(result.deliveryAuthority,false);
+ assert.deepEqual([...x.d.rows],before);assert.equal(x.writes,0);assert.equal(x.d.uploads.length,2);
+});
+test('late completed receipts can be inspected while bundle/render acceptance remains unpersisted',async()=>{
+ const x=await exhaustedFixture();
+ for(const row of x.d.rows.values()){
+  if(row.state.kind==='report_bundle_v1'){row.state.phase='working';row.state.manifest=null;delete row.state.manifestSha256;}
+  if(row.state.kind==='pdf_generation_v1'){row.state.phase='render_started';row.state.accepted=null;}
+ }
+ const before=structuredClone([...x.d.rows]);
+ assert.equal((await createDurableReportComposition(x.options).inspectExhausted(x.f.identity)).persisted,false);
+ assert.deepEqual([...x.d.rows],before);assert.equal(x.writes,0);
+});
+test('legacy immutable rows require current source and destination authority without durable adoption',async()=>{
+ const x=await exhaustedFixture();for(const row of x.d.rows.values())row.storageRevision='legacy_read_only_v1';
+ const before=structuredClone([...x.d.rows]);
+ assert.equal((await createDurableReportComposition(x.options).inspectExhausted(x.f.identity)).legacyEvidence,true);
+ assert.deepEqual([...x.d.rows],before);assert.equal(x.writes,0);
+ x.d.binding.expiresAt=x.f.now();
+ await assert.rejects(createDurableReportComposition(x.options).inspectExhausted(x.f.identity),rejection);
+ assert.equal(x.writes,0);
+});
+test('contradictory acceptance receipts hold read-only inspection',async()=>{
+ const x=await exhaustedFixture();const generation=[...x.d.rows.values()].find(r=>r.state.kind==='pdf_generation_v1');
+ generation.state.accepted.receiptSha256='f'.repeat(64);
+ await assert.rejects(createDurableReportComposition(x.options).inspectExhausted(x.f.identity),rejection);
+ assert.equal(x.writes,0);
+});
+test('stale complete Analytics source cannot be repaired by exhausted inspection',async()=>{
+ const x=await exhaustedFixture();x.f.imported.get('call').clear();
+ await assert.rejects(createDurableReportComposition(x.options).inspectExhausted(x.f.identity),rejection);
+ assert.equal(x.writes,0);
+});
+test('tenant mismatch and changed source revision hold without any write',async()=>{
+ const x=await exhaustedFixture();
+ await assert.rejects(createDurableReportComposition(x.options).inspectExhausted({...x.f.identity,clientId:'other_client'}),rejection);
+ await assert.rejects(createDurableReportComposition({...x.options,runtimeConfig:{...x.options.runtimeConfig,sourceRevision:'f'.repeat(40)}}).inspectExhausted(x.f.identity),rejection);
+ assert.equal(x.writes,0);
+});
+test('missing stored PDF or verified receipt never authorizes inspection rerender or upload',async()=>{
+ const x=await exhaustedFixture(),draft=[...x.d.rows.values()].find(r=>r.state.kind==='workdrive_draft_v1');
+ draft.state.phase='upload_started';draft.state.receipt=null;
+ await assert.rejects(createDurableReportComposition(x.options).inspectExhausted(x.f.identity),rejection);
+ assert.equal(x.writes,0);assert.equal(x.d.uploads.length,2);
+});
+test('changed immutable bytes or receipt during final fencing holds inspection',async()=>{
+ const x=await exhaustedFixture(),original=x.d.workdrive.downloadVersion.bind(x.d.workdrive);
+ x.d.workdrive.downloadVersion=async(...args)=>{const bytes=await original(...args);bytes[10]^=1;return bytes;};
+ await assert.rejects(createDurableReportComposition(x.options).inspectExhausted(x.f.identity),rejection);
+ assert.equal(x.writes,0);
+});
