@@ -1,65 +1,74 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),crypto=require('node:crypto');
-const {createReportMailSender}=require('../lib/report-mail-sender');
+const {createReportCrmSender,projection}=require('../lib/report-mail-sender');
 const sha=x=>crypto.createHash('sha256').update(x).digest('hex');
 function fixture(){
-  let at=1800000000000;const requests=[],bytes=Buffer.from('%PDF-1.7\n synthetic summary\n%%EOF\n');
-  const snapshot={report:{summary:{role:'summary',documentSha256:sha(bytes)}},recipient:{address:'owner@example.com',verificationDigest:sha('verified recipient')}};
-  const binding={environment:'development',apiOrigin:'https://mail.zoho.com',
-    accountId:'101000001',fromAddress:'reports@example.com',
-    contractQualificationDigest:sha('synthetic proposed envelope'),verifiedAt:at-1000,expiresAt:at+60000,timeoutMs:1000};
-  const replies=[{status:{code:200},data:{attachmentName:'7-Day Revenue Leak Test.pdf',attachmentPath:'/Mail/synthetic-summary.pdf',storeName:'synthetic'}},
-    {status:{code:200},data:{messageId:'101000002'}}];
-  const options={binding,now:()=>at,authorizationProvider:async()=>`Zoho-oauthtoken ${'s'.repeat(24)}`,
-    fetchImpl:async(url,init)=>{requests.push({url,init});return new Response(JSON.stringify(replies.shift()),{status:200,headers:{'content-type':'application/json'}});}};
-  const request={operationKey:sha('operation'),snapshot,bytes,signal:new AbortController().signal};
-  return {options,request,requests,replies,advance:n=>{at+=n;}};
+ let at=1800000000000;const requests=[],rows=new Map(),bytes=Buffer.from('%PDF-1.7\n synthetic summary\n%%EOF\n');
+ const snapshot={binding:{clientId:'synthetic',deploymentId:'test',contactId:'19000003',periodStart:'2027-01-01',periodEnd:'2027-01-07'},
+  report:{summary:{role:'summary',documentSha256:sha(bytes)}},recipient:{contactId:'19000003',address:'owner@example.invalid',verificationDigest:sha('recipient')}};
+ const binding={environment:'development',provider:'crm_native',apiOrigin:'https://www.zohoapis.com',
+  fromAddress:'reports@example.invalid',fromName:'Sylvara',
+  contractQualificationDigest:sha('contract'),senderQualificationDigest:sha('sender'),verifiedAt:at-1000,expiresAt:at+60000,timeoutMs:1000,maxReconciliationPages:3};
+ const replies=[{data:[{code:'SUCCESS',status:'success',details:{name:'7-Day Revenue Leak Test.pdf',id:'synthetic_zfs'}}]},
+  {data:[{code:'SUCCESS',status:'success',details:{message_id:'synthetic_message'}}]}];
+ const store={async get(key){return rows.has(key)?{key,state:structuredClone(rows.get(key))}:null;},async insert(key,state){projection(state);
+  if(!rows.has(key))rows.set(key,structuredClone(state));return this.get(key);}};
+ const options={binding,store,now:()=>at,authorizationProvider:async()=>`Zoho-oauthtoken ${'s'.repeat(24)}`,
+  fetchImpl:async(url,init)=>{requests.push({url,init});return new Response(JSON.stringify(replies.shift()),{headers:{'content-type':'application/json'}});}};
+ const request={operationKey:sha('operation'),snapshot,bytes,signal:new AbortController().signal};
+ return {options,request,requests,replies,rows,advance:n=>at+=n};
 }
-test('Mail transport uploads exact summary and sends one attachment to one verified recipient',async()=>{
- const f=fixture(),proof=await createReportMailSender(f.options).sendSummary(f.request);
- assert.equal(f.requests.length,2);assert.ok(f.requests.every(x=>x.init.method==='POST'&&x.init.redirect==='error'));
- assert.deepEqual(f.requests[0].init.body,f.request.bytes);const body=JSON.parse(f.requests[1].init.body);
- assert.equal(body.toAddress,'owner@example.com');assert.equal(body.fromAddress,'reports@example.com');assert.equal(body.attachments.length,1);
- assert.equal(body.askReceipt,'no');assert.equal(body.isSchedule,false);assert.ok(!('ccAddress'in body)&&!('bccAddress'in body));
- assert.equal(proof.documentSha256,sha(f.request.bytes));assert.equal(proof.operationKey,f.request.operationKey);
- assert.equal(proof.recipientVerificationDigest,f.request.snapshot.recipient.verificationDigest);
- assert.equal(proof.accepted,true);assert.equal('messageId'in proof,false);
+test('CRM native transport preserves upload receipt and one Contact/org sender',async()=>{
+ const f=fixture(),proof=await createReportCrmSender(f.options).sendSummary(f.request);
+ assert.equal(f.requests.length,2);assert.equal(f.requests[0].url,'https://www.zohoapis.com/crm/v8/files');
+ const file=f.requests[0].init.body.get('file');assert.equal(file.type,'application/pdf');assert.deepEqual(Buffer.from(await file.arrayBuffer()),f.request.bytes);
+ const send=f.requests[1];assert.ok(send.url.endsWith('/Contacts/19000003/actions/send_mail'));
+ const data=JSON.parse(send.init.body).data[0];assert.deepEqual(data.to,[{email:'owner@example.invalid'}]);assert.equal(data.org_email,true);
+ assert.equal(data.from.email,'reports@example.invalid');assert.deepEqual(data.attachments,[{id:'synthetic_zfs'}]);
+ for(const key of ['cc','bcc','consent_email','scheduled_time'])assert.ok(!(key in data));
+ assert.equal(proof.accepted,true);assert.equal(proof.documentSha256,sha(f.request.bytes));assert.equal(f.rows.size,2);
+ assert.ok([...f.rows.values()].some(x=>x.fileId==='synthetic_zfs'));
+ await assert.rejects(createReportCrmSender(f.options).sendSummary(f.request));assert.equal(f.requests.length,2);
 });
-test('unqualified binding, recipient, artifact role and bytes never dispatch',async()=>{
- for(const mutate of [f=>f.request.bytes[10]=0,f=>f.request.snapshot.report.summary.role='supporting',f=>f.request.snapshot.recipient.address='a@example.com,b@example.com',f=>f.options.binding.expiresAt=1800000000000]){
-  const f=fixture();mutate(f);await assert.rejects(async()=>createReportMailSender(f.options).sendSummary(f.request),{code:'REPORT_MAIL_HELD'});assert.equal(f.requests.length,0);
- }
+test('concurrent repeats dispatch upload/send once',async()=>{
+ const f=fixture(),sender=createReportCrmSender(f.options);const results=await Promise.allSettled([sender.sendSummary(f.request),sender.sendSummary(f.request)]);
+ assert.equal(results.filter(x=>x.status==='fulfilled').length,1);assert.equal(f.requests.length,2);
 });
-test('upload timeout cancels native request and cannot issue message send',async()=>{
- const f=fixture();f.options.binding.timeoutMs=10;let release,signal;
- f.options.fetchImpl=async(url,init)=>{f.requests.push({url,init});signal=init.signal;return new Promise(resolve=>{release=()=>resolve(new Response(JSON.stringify(f.replies[0]),{headers:{'content-type':'application/json'}}));});};
- await assert.rejects(createReportMailSender(f.options).sendSummary(f.request),e=>e.code==='REPORT_MAIL_HELD'&&e.ambiguous);
- assert.equal(signal.aborted,true);release();await new Promise(resolve=>setTimeout(resolve,15));assert.equal(f.requests.length,1);
+test('invalid binding or artifact never dispatches',async()=>{
+ for(const mutate of [f=>f.options.binding.provider='mail',f=>f.options.binding.apiOrigin='https://mail.zoho.com',
+  f=>f.request.snapshot.binding.contactId='unknown',f=>f.request.bytes[10]=0,f=>f.request.snapshot.report.summary.role='supporting',
+  f=>f.request.snapshot.recipient.address='a@example.invalid,b@example.invalid',f=>f.options.binding.expiresAt=1800000000000]){
+  const f=fixture();mutate(f);await assert.rejects(async()=>createReportCrmSender(f.options).sendSummary(f.request));assert.equal(f.requests.length,0);}
 });
-test('late authorization cannot initiate a provider request after deadline',async()=>{
- const f=fixture();f.options.binding.timeoutMs=10;let release;
- f.options.authorizationProvider=()=>new Promise(resolve=>{release=()=>resolve(`Zoho-oauthtoken ${'s'.repeat(24)}`);});
- await assert.rejects(createReportMailSender(f.options).sendSummary(f.request));release();await new Promise(resolve=>setTimeout(resolve,15));assert.equal(f.requests.length,0);
+test('unknown upload and failed durable receipt never send or re-upload',async()=>{
+ for(const mode of ['unknown','receipt']){const f=fixture();if(mode==='unknown')f.replies[0]={data:[]};else{
+  const insert=f.options.store.insert.bind(f.options.store);f.options.store.insert=async(k,s)=>{if(s.phase==='uploaded')throw Error('unknown');return insert(k,s);};}
+  await assert.rejects(createReportCrmSender(f.options).sendSummary(f.request));assert.equal(f.requests.length,1);
+  await assert.rejects(createReportCrmSender(f.options).sendSummary(f.request));assert.equal(f.requests.length,1);}
 });
-test('unknown upload envelope and hostile attachment reference cannot progress to send',async()=>{
- for(const data of [[],{}, {attachmentName:'foreign.pdf',attachmentPath:'/Mail/synthetic',storeName:'synthetic'},
-   {attachmentName:'7-Day Revenue Leak Test.pdf',attachmentPath:'https://external.invalid/file',storeName:'synthetic'}]){
-  const f=fixture();f.replies[0].data=data;await assert.rejects(createReportMailSender(f.options).sendSummary(f.request));assert.equal(f.requests.length,1);
- }
+test('timeout cancels and never admits a second dispatch',async()=>{
+ const f=fixture();f.options.binding.timeoutMs=20;let signal;f.options.fetchImpl=async(u,o)=>{f.requests.push({u,o});signal=o.signal;return new Promise(()=>{});};
+ await assert.rejects(createReportCrmSender(f.options).sendSummary(f.request));assert.equal(signal.aborted,true);
+ await assert.rejects(createReportCrmSender(f.options).sendSummary(f.request));assert.equal(f.requests.length,1);
 });
-test('send rejection or missing message identity remains ambiguous, never retries or claims receipt',async()=>{
- for(const data of [{}, {messageId:'unknown'}]){const f=fixture();f.replies[1].data=data;
-  await assert.rejects(createReportMailSender(f.options).sendSummary(f.request),e=>e.ambiguous===true);assert.equal(f.requests.length,2);}
- const f=fixture();assert.equal(await createReportMailSender(f.options).lookupAcceptance({operationKey:f.request.operationKey}),null);assert.equal(f.requests.length,0);
+test('CRM suppression/consent errors remain unknown, never bypassed or replayed',async()=>{
+ const f=fixture();f.replies[1]={data:[{code:'EMAIL_OPT_OUT',status:'error'}]};await assert.rejects(createReportCrmSender(f.options).sendSummary(f.request));
+ await assert.rejects(createReportCrmSender(f.options).sendSummary(f.request));assert.equal(f.requests.length,2);
 });
-test('oversized/unfinished response body is bounded and cancels before another dispatch',async()=>{
- const f=fixture();let cancelled=false;
- f.options.fetchImpl=async()=>{f.requests.push({});return {status:200,headers:new Headers({'content-type':'application/json'}),body:{getReader(){let done=false;return {async read(){if(done)return {done:true};done=true;return {done:false,value:new Uint8Array(32769)};},async cancel(){cancelled=true;}};}}};};
- await assert.rejects(createReportMailSender(f.options).sendSummary(f.request));assert.equal(f.requests.length,1);
- // No second request occurs even when the provider response was malformed.
- assert.equal(cancelled,true);
+test('reconciliation paginates Contact CRM emails and requires exact body/attachment/recipient/sender',async()=>{
+ for(const mode of ['exact','recipient','attachment','truncated','absent']){
+  const f=fixture();f.replies[1]={data:[]};const sender=createReportCrmSender(f.options);await assert.rejects(sender.sendSummary(f.request));
+  const sent=JSON.parse(f.requests[1].init.body).data[0];
+  f.replies.push({Emails:[],info:{more_records:true,next_index:'opaque_index'}},
+   {Emails:mode==='absent'?[]:[{subject:sent.subject,message_id:'synthetic_message'}],info:{more_records:mode==='truncated',next_index:'next'}},
+   mode==='truncated'?{Emails:[],info:{more_records:true,next_index:'last'}}:{Emails:[{...sent,sent:true,attachments:[{id:'synthetic_zfs',name:'7-Day Revenue Leak Test.pdf',size:String(f.request.bytes.length)}]}]});
+  if(mode==='recipient')f.replies[2].Emails[0].to=[{email:'other@example.invalid'}];
+  if(mode==='attachment')f.replies[2].Emails[0].attachments[0].id='different';
+  const result=await sender.lookupAcceptance(f.request);assert.equal(result?.accepted===true,mode==='exact');
+  assert.equal(f.requests.filter(x=>x.init.method==='POST').length,2);
+  assert.ok(f.requests[3].url.includes('index=opaque_index'));}
 });
-test('elapsed clock admission blocks send after successful upload without timer dependence',async()=>{
- const f=fixture(),fetch=f.options.fetchImpl;f.options.fetchImpl=async(...args)=>{const reply=await fetch(...args);f.advance(1001);return reply;};
- await assert.rejects(createReportMailSender(f.options).sendSummary(f.request));assert.equal(f.requests.length,1);
+test('malformed pagination/response, multiple matches and changed source hold',async()=>{
+ const f=fixture();await createReportCrmSender(f.options).sendSummary(f.request);f.request.snapshot.report.summary.documentSha256=sha('changed');
+ await assert.rejects(createReportCrmSender(f.options).lookupAcceptance(f.request));assert.equal(f.requests.length,2);
 });

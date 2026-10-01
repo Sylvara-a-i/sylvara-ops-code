@@ -45,7 +45,7 @@ function createReportSetupReader({config,store,crm,core,sourceReader,conversionR
    recipientEmail:t.Email,crmEmailOptOut:t.Email_Opt_Out,
    // False is not comprehensive suppression clearance. No live suppression
    // contract has been qualified; actual managed authoring remains held.
-   suppression:{status:'unqualified',reason:'standalone_mail_suppression_unverified'}};
+   suppression:{status:'unqualified',reason:'crm_native_suppression_contract_unverified'}};
  };
 }
 module.exports={createReportSetupReader};

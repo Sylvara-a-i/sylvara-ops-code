@@ -65,9 +65,9 @@ test('actual SDK ledger factory composes protected readers and private view with
  for(const r of x.d.rows.values())await runs.insert(r.key,r.state);
  const now=x.f.now(),binding={environment:'development',sourceRevision:x.f.runtime.config.sourceRevision,projectId:app.config.projectId,
   verifiedAt:now-1000,expiresAt:now+3600000,...Object.fromEntries(['schemaDigest','nativeLineageDigest','recipientContractDigest','authorizationContractDigest','storageContractDigest'].map(k=>[k,sha(k)])),
-  systemActor:x.worker,mail:{environment:'development',apiOrigin:'https://mail.zoho.com',
-   accountId:'123456789',fromAddress:'sender@example.invalid',
-   contractQualificationDigest:sha('mail'),verifiedAt:now-1000,expiresAt:now+3600000,timeoutMs:1000,connectionReference:'synthetic_mail'}};
+  systemActor:x.worker,crmEmail:{environment:'development',provider:'crm_native',apiOrigin:'https://www.zohoapis.com',fromName:'Sylvara',maxReconciliationPages:3,senderQualificationDigest:sha('sender'),
+   fromAddress:'sender@example.invalid',
+   contractQualificationDigest:sha('crm email'),verifiedAt:now-1000,expiresAt:now+3600000,timeoutMs:1000,connectionReference:'synthetic_crm_email'}};
  const handler=createReportDeliveryFactory({binding,now:x.f.now,fetchImpl:async()=>{network++;assert.fail('No provider dispatch');},
   createReaders(app,config,store,{reportRunStore}){return {...createReportDeliveryReaders({...x.options,reportRunStore}),readSummary:async()=>Buffer.from('%PDF-1.7\n synthetic source proof\n%%EOF\n')};}})(app,x.f.runtime.config,x.f.runtime.store);
  const result=await handler.handle({profile:'report_delivery_v1',action:'view',dealId:x.b.dealId},{actor:x.actor});

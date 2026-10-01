@@ -19,6 +19,7 @@ const quote = (value) => `'${value.replaceAll("'", "''")}'`;
 const providerKey = (key) => `revenue-desk-report-v1:${key}`;
 
 function projection(state) {
+  if (state?.kind === 'report_crm_attachment_v1') return require('./report-mail-sender').projection(state);
   if (state?.kind === 'report_delivery_attestation_v1') return require('./report-delivery-attestation').projection(state);
   if (state?.kind === 'report_crm_projection_v1') return require('./report-crm-projection').projection(state);
   if (state?.kind === 'report_delivery_v1') return require('./report-delivery-control').deliveryProjection(state);

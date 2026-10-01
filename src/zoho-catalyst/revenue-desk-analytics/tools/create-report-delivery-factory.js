@@ -2,7 +2,7 @@
 
 const {createReportRunStore}=require('../functions/analytics_sync/lib/report-run-store');
 const {createReportDeliveryControl}=require('../functions/analytics_sync/lib/report-delivery-control');
-const {createManagedReportMailSender}=require('../functions/analytics_sync/lib/report-mail-sender');
+const {createManagedReportCrmSender}=require('../functions/analytics_sync/lib/report-mail-sender');
 const {createReportDeliveryHandlers}=require('../functions/analytics_sync/lib/report-delivery-handlers');
 const {createReportDeliveryStorageReader}=require('../functions/analytics_sync/lib/report-delivery-storage');
 const {createWorkDriveClient}=require('../functions/analytics_sync/lib/workdrive-client');
@@ -12,7 +12,7 @@ const {createReportCrmProjectionWriter}=require('../functions/analytics_sync/lib
 const {loadDeployment}=require('../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/runtime-service');
 
 function held(){throw Object.assign(new Error('REPORT_DELIVERY_BINDING_REQUIRED'),{code:'REPORT_DELIVERY_BINDING_REQUIRED'});}
-/** Actual SDK composition for the existing encrypted ReportRuns, managed Mail
+/** Actual SDK composition for the existing encrypted ReportRuns, CRM-native
  * Connection, canonical scope-to-Deal resolver and authenticated handlers.
  * Qualified snapshot/content/authorization readers are protected installation
  * dependencies, not caller-supplied flags or public Job/HTTP parameters.
@@ -71,8 +71,7 @@ function createReportDeliveryFactory({binding,createReaders,fetchImpl=globalThis
     }
     const control=createReportDeliveryControl({store:runs,
       readSnapshot,readSummary,authorize,now:active,autoDeliveryEnabled,
-      sender:createManagedReportMailSender({app,binding:b.mail,fetchImpl,now:active,
-        lookupAcceptance:readers.lookupAcceptance?wrap('lookupAcceptance'):null})});
+      sender:createManagedReportCrmSender({app,binding:b.crmEmail,store:runs,fetchImpl,now:active})});
     return createReportDeliveryHandlers({control,readSnapshot,projectReport,systemActor:b.systemActor,now:active,
       readPrivateView:readers.readPrivateView?wrap('readPrivateView'):null,
       async readDealForScope(scope,{signal}={}) {

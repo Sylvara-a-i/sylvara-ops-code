@@ -252,3 +252,64 @@ bounce or consent clearance. The actual managed setup reader returns suppression
 status `unqualified`, so it cannot mint an approved recipient attestation. A
 qualified current suppression authority for standalone Mail remains an unresolved
 live contract; do not change CRM fields or assume Mail inherits CRM suppression.
+
+
+
+### CRM-native delivery (supersedes Mail transport)
+
+Report automation uses only the CRM-native Contact send-mail API. The historical
+report-mail-sender.js filename is retained for package closure, but contains no
+Zoho Mail transport or SMTP fallback. The Connected Mail CREATE grant is not used
+for automated report delivery; https://www.zoho.com/mail/help/usage-policy.html
+excludes automated/transactional usage. Historical Mail binding instructions
+above are superseded and must not be installed.
+
+The protected delivery binding now requires crmEmail (not mail): provider
+crm_native, Development environment, fixed US apiOrigin https://www.zohoapis.com,
+existing managed connectionReference, qualified organization fromAddress/fromName,
+contractQualificationDigest, senderQualificationDigest, verifiedAt/expiresAt,
+timeoutMs (1–15000), maxReconciliationPages (1–20). No populated binding or grant
+is supplied by source. Five candidate archives require exact rebuilt qualification.
+
+Minimum proposed permission contract:
+- ZohoCRM.send_mail.contacts.CREATE: one Contact recipient, org_email=true.
+- ZohoCRM.Files.CREATE: multipart upload of verified immutable summary PDF.
+- ZohoCRM.modules.contacts.READ plus ZohoCRM.modules.emails.READ: Contact email
+  list/detail recovery; both scopes must be present on the effective read token.
+- ZohoCRM.settings.emails.READ: allowed From qualification, specifically org_email.
+
+Existing CRM READ/UPDATE grants do not establish these additional capabilities.
+New persistent authorization is held for owner action-time approval. Effective
+principal/organization sender, edition/daily limits, quota/API credits and no-cost
+conditions require live qualification before any invocation. No new subscription,
+Mail fallback or consent_email bypass is part of this change.
+
+The existing exact WorkDrive version reader verifies PDF hash/type/size before
+transport; the current stricter 2 MiB local cap remains below CRM's 10 MB combined
+attachment send limit. Single multipart POST /crm/v8/files follows a unique durable
+upload claim. The accepted ZFS ID is independently stored in an immutable receipt
+row before the sole POST /crm/v8/Contacts/{contact_id}/actions/send_mail. Unknown
+upload/write outcomes consume the claim and never upload/send again. ReportRuns
+projection supports these two encrypted attachment states; no new storage system
+or live schema change is performed. The outer Deal ledger preserves initial/resend
+intent and exact revision, including repeat-test history.
+
+Recovery uses GET Contact Emails?type=sent_from_crm, ten per page and opaque
+next_index, then GET the exact message. Match unique opaque operation reference,
+exact body containing PDF hash, recipient, sender and accepted ZFS attachment ID,
+name/size. The finite page bound, incomplete scan, transformed body/attachment ID,
+multiple matches or absence remains Unknown without replay. ZFS-ID equivalence
+and response/body behavior need provider proof; source does not assume it.
+message_id proves only provider acceptance, never inbox receipt/read/follow-up.
+
+CRM opt-out, consent and bounce enforcement must be independently qualified.
+Email_Opt_Out=false remains only a negative field check, not clearance. Managed
+recipient authoring still fails closed until a protected current suppression
+contract is qualified. No live sends, grants, deployment or auto-delivery activation
+are authorized by this source milestone. All switches remain disabled.
+
+Official contracts: [send mail](https://www.zoho.com/crm/developer/docs/api/v8/send-mail.html),
+[ZFS upload](https://www.zoho.com/crm/developer/docs/api/v8/upload-files-to-zfs.html),
+[Contact email list](https://www.zoho.com/crm/developer/docs/api/v8/get-email-rel-list.html),
+[exact email](https://www.zoho.com/crm/developer/docs/api/v8/view-email.html),
+[allowed senders](https://www.zoho.com/crm/developer/docs/api/v8/get-from-addresses-list.html).
