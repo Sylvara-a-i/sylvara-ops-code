@@ -16,7 +16,7 @@ function sdkClient(app){
 function createReportRunTransport({app,timeoutMs=3000,createClient=sdkClient}={}){
  if(typeof app?.authenticateRequest!=='function'||!Number.isSafeInteger(timeoutMs)
   ||timeoutMs<1||timeoutMs>30000||String(process.env.ZC_SECURE||'').toLowerCase()==='override')held();
- async function send(endpoint,data,query,options={}){
+ async function send(endpoint,data,query,options={},method='POST'){
  const controller=new AbortController(),signal=controller.signal;
  const expiresAt=performance.now()+timeoutMs;
  const parentAbort=()=>controller.abort();options.signal?.addEventListener('abort',parentAbort,{once:true});
@@ -29,12 +29,14 @@ function createReportRunTransport({app,timeoutMs=3000,createClient=sdkClient}={}
  }});
  const requests=new Set(),streams=new Set();let failed=false,rejectDeadline;
  const deadline=new Promise((_,reject)=>{rejectDeadline=reject;});deadline.catch(()=>{});
+ const trace=event=>{if(typeof options.trace==='function')options.trace(Object.freeze({...event,at:performance.now()}));};
+ let responseStatus;
  let client;try{client=createClient(guarded);}catch{clearTimeout(timer);options.signal?.removeEventListener('abort',parentAbort);held();}
  const cancel=()=>{rejectDeadline(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'));for(const r of requests)r.destroy(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'));
   for(const s of streams)s.destroy(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'));};
  signal.addEventListener('abort',cancel,{once:true});
 
-  let bytes;try{if(failed)held();admit();bytes=Buffer.from(JSON.stringify(data));if(bytes.length>32768)held();}
+  let bytes;try{if(failed)held();admit();bytes=method==='GET'?Buffer.alloc(0):Buffer.from(JSON.stringify(data));if(bytes.length>32768)held();}
   catch{clearTimeout(timer);options.signal?.removeEventListener('abort',parentAbort);signal.removeEventListener('abort',cancel);cancel();held();}
   const body=Readable.from([bytes]);let requestStream,resolveBody,rejectBody;
   const responseBody=new Promise((resolve,reject)=>{resolveBody=resolve;rejectBody=reject;});
@@ -45,6 +47,7 @@ function createReportRunTransport({app,timeoutMs=3000,createClient=sdkClient}={}
    request.once('close',()=>requests.delete(request));
    // Applies to error responses too, which SDK 3.4.0 otherwise buffers itself.
    request.once('response',stream=>{
+    responseStatus=stream.statusCode;trace({event:'response',operation:endpoint==='/table/ReportRuns/row'?'insert':'read',status:responseStatus});
     streams.add(stream);let total=0,chunks=0;const parts=[];
     stream.on('data',chunk=>{if(++chunks>128||(total+=Buffer.byteLength(chunk))>65536){
      rejectBody(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'));
@@ -56,23 +59,37 @@ function createReportRunTransport({app,timeoutMs=3000,createClient=sdkClient}={}
     stream.once('close',()=>streams.delete(stream));
     if(signal.aborted){request.destroy(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'));stream.destroy();}
    });
-   try{admit();}catch{request.destroy(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'));return request;}
+   try{admit();trace({event:'dispatch',operation:endpoint==='/table/ReportRuns/row'?'insert':'read'});}catch{request.destroy(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'));return request;}
    return originalPipe.call(this,request,...args);
   };
   try{
-   const response=await Promise.race([deadline,client.send({method:'POST',path:endpoint,data:body,type:'raw',expecting:'raw',
+   const response=await Promise.race([deadline,client.send({method,path:endpoint,data:body,type:'raw',expecting:'raw',
     catalyst:true,track:true,user:'user',headers:{'Content-Type':'application/json','Content-Length':String(bytes.length),
      ...(query?{Accept:'application/vnd.catalyst.v2+zcql'}:{})}})]);
    admit();if(response.statusCode<200||response.statusCode>=300)held();
    if(!response.data||typeof response.data.on!=='function')held();
    const result=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(await responseBody));admit();
-   if(!Array.isArray(result?.data))held();return result.data;
-  }catch{failed=true;held();}finally{body.destroy();requestStream?.destroy();clearTimeout(timer);
+   if(endpoint==='/project-user/current'){
+    const p=result?.data;if(!p||Array.isArray(p)||typeof p!=='object')held();
+    return Object.freeze({userId:String(p.user_id||''),roleId:String(p.role_details?.role_id||''),roleName:p.role_details?.role_name,status:p.status});
+   }
+   if(!Array.isArray(result?.data))held();trace({event:'outcome',operation:endpoint==='/table/ReportRuns/row'?'insert':'read',accepted:true,duplicate:false});return result.data;
+  }catch{failed=true;
+   // Diagnostic observes only a documented duplicate code, never provider text.
+   if(typeof options.trace==='function'&&responseStatus!==undefined){try{
+    const raw=await Promise.race([responseBody,deadline]);
+    const error=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(raw));
+    trace({event:'outcome',operation:endpoint==='/table/ReportRuns/row'?'insert':'read',accepted:false,
+     duplicate:responseStatus===409&&error?.data?.error_code==='DUPLICATE_VALUE'});
+   }catch{}}
+   held();}finally{body.destroy();requestStream?.destroy();clearTimeout(timer);
    options.signal?.removeEventListener('abort',parentAbort);signal.removeEventListener('abort',cancel);cancel();}
  }
 
  const valid=key=>/^revenue-desk-report-v[12]:[a-f0-9]{64}(?::[0-9]{10})?$/.test(key||'');
  return Object.freeze({
+  // Fixed read-only SDK-documented principal endpoint, same managed user path.
+  async currentPrincipal(options){return send('/project-user/current',null,false,options,'GET');},
   async insert(row,options){
    if(!valid(row?.IdempotencyKey)||row.ReportRunId!==row.IdempotencyKey
     ||!Number.isSafeInteger(row.RD_REPORT_VERSION)||row.RD_REPORT_VERSION<1)held();

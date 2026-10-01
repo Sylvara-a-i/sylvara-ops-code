@@ -2,7 +2,7 @@
 const assert=require('node:assert/strict'),crypto=require('node:crypto'),https=require('node:https'),http=require('node:http');
 const {Writable,PassThrough}=require('node:stream');
 const sha=x=>crypto.createHash('sha256').update(x).digest('hex');
-function fixture(){
+function fixture({deferResponses=false}={}){
  let at=1800000000000;const rows=new Map(),requests=[],principals=[],created=[];let sequence=0,authDelay=null,mode='normal',clientCalls=0;
  const binding={schemaVersion:1,enabled:true,environment:'development',sourceRevision:'a'.repeat(40),projectId:'123456789',
   controlHost:'synthetic.invalid',tableId:'123456788',nonce:'c'.repeat(32),verifiedAt:at-1,expiresAt:at+60000,timeoutMs:1000};
@@ -22,19 +22,20 @@ function fixture(){
  https.request=function(options,callback){
   clientCalls++;const parts=[];let request;
   request=new Writable({autoDestroy:false,write(chunk,_encoding,done){parts.push(Buffer.from(chunk));done();},final(done){
-   const payload=JSON.parse(Buffer.concat(parts));requests.push({path:options.path,payload});
+   const bytes=Buffer.concat(parts);const payload=bytes.length?JSON.parse(bytes):null;requests.push({path:options.path,payload});
    assert.equal(options.headers.Authorization,'synthetic-managed-credential');
    assert.equal(options.headers['X-CATALYST-USER'],'admin');
    const path=options.path.replace(`/baas/v1/project/${binding.projectId}`,'');
-   queueMicrotask(()=>{
+   (deferResponses?setImmediate:queueMicrotask)(()=>{
     if(mode==='network_error'){request.destroy(new Error('synthetic socket error'));return;}
     if(mode==='stall')return;
     let status=200,data;
     if(path==='/query')data=query(payload.query);
+    else if(path==='/project-user/current')data={user_id:'987654321',status:'ACTIVE',role_details:{role_name:'App Administrator',role_id:'987654320'},email_id:'private-unused@example.invalid'};
     else {assert.equal(path,'/table/ReportRuns/row');assert.equal(payload.length,1);
-     const row=payload[0];if(rows.has(row.IdempotencyKey)){status=409;data=[];}
-     else {row.ROWID=String(++sequence);rows.set(row.IdempotencyKey,structuredClone(row));data=[row];}}
-    if(mode==='lost_insert'&&path!=='/query'){request.destroy(new Error('synthetic response lost after insert'));return;}
+     const row=payload[0];if(rows.has(row.IdempotencyKey)){status=409;data={error_code:'DUPLICATE_VALUE'};}
+     else {row.ROWID=String(++sequence);row.CREATORID='987654321';rows.set(row.IdempotencyKey,structuredClone(row));data=[row];}}
+    if(mode==='lost_insert'&&path==='/table/ReportRuns/row'){request.destroy(new Error('synthetic response lost after insert'));return;}
     const stream=new PassThrough();stream.statusCode=status;stream.headers={'content-type':'application/json'};
     callback(stream);request.emit('response',stream);
     if(mode==='oversize')stream.end('x'.repeat(65537));else stream.end(JSON.stringify({data}));

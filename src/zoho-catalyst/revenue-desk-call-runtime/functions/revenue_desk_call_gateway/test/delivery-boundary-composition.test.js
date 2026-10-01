@@ -3,7 +3,7 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const {composeReviewedDeliveryBoundary}=require('../../../scripts/compose-reporting-artifact');
 const file='src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_route_control/lib/http-boundary.js';
 const current=fs.readFileSync(path.resolve(__dirname,'../../revenue_desk_route_control/lib/http-boundary.js'));
-const source=current.toString(),start=source.indexOf("      if (body.profile === 'report_sender_qualification_v1') {");
+const source=current.toString(),start=source.indexOf("      if (body.profile === 'report_storage_qualification_v1') {");
 const end=source.indexOf('      const crm = ',start),addition=source.slice(start,end);
 const base=Buffer.from(source.slice(0,start)+source.slice(end));
 const anchor="      const crm = (factories.crm || createCrmControlClient)(config, {\n";
@@ -17,7 +17,7 @@ test('reviewed additive delivery branch preserves every selected authentication 
  assert.ok(result.bytes.toString().indexOf("body.profile === 'report_delivery_v1'")>
  result.bytes.toString().indexOf('Control runtime identity is invalid.'));
  assert.ok(result.bytes.toString().indexOf("body.profile === 'report_delivery_v1'")<result.bytes.toString().indexOf(anchor));
- assert.equal(result.composition,'reviewed-report-delivery-sender-boundary-addition-v1');
+ assert.equal(result.composition,'reviewed-report-delivery-sender-storage-boundary-addition-v1');
 });
 test('altered delivery branch is rejected',()=>held(()=>composeReviewedDeliveryBoundary(file,base,
  Buffer.from(source.replace('identity: config.operatorIdHash','identity: body.actor')),selected)));
