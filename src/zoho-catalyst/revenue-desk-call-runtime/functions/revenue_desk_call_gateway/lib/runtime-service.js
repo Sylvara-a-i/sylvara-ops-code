@@ -1,5 +1,7 @@
 'use strict';
 
+const { priorTerminalAnalysis } = require('./analysis');
+
 const crypto = require('node:crypto');
 const {
   CONTRACT, COVERAGE_MODES, NOTIFICATION_STATES, CRM_TEST_STATUSES,
@@ -804,6 +806,17 @@ function normalizeEventForReceipt(payload, config) {
   return Object.freeze({ callId: envelope.callId, eventData });
 }
 
+function samePriorTerminalReceipt(existing, expected, eventData, payload) {
+  if (!existing || existing.EVENT_TYPE !== 'call_analyzed'
+    || existing.SOURCE_ENVIRONMENT !== expected.SOURCE_ENVIRONMENT
+    || !/^[a-f0-9]{40}$/.test(existing.SOURCE_REVISION)
+    || !RECEIPT_IMMUTABLE.filter((column) => column !== 'EVENT_DATA_JSON')
+      .every((column) => existing[column] === expected[column])) return false;
+  const prior = priorTerminalAnalysis(payload.call);
+  return prior !== null
+    && existing.EVENT_DATA_JSON === JSON.stringify({ ...eventData, analysis: prior });
+}
+
 function sameLegacyCallbackReceipt(existing, expected, eventData, payload) {
   if (!existing || existing.EVENT_TYPE !== 'call_analyzed'
     || existing.SOURCE_ENVIRONMENT !== expected.SOURCE_ENVIRONMENT
@@ -1228,6 +1241,15 @@ function createRuntimeService({
   async function ensureNotification(callRow, deployment, at) {
     const call = assertCanonicalCallIntegrity(callRow,
       parseJsonColumn(callRow.CANONICAL_CALL_JSON, 'CANONICAL_CALL_JSON'), deployment);
+    invariant(call.outcome !== 'configuration_failure' || call.sensitiveDataMinimized === true,
+      'REPORT_RECONCILIATION_REQUIRED',
+      'Historical terminal notification requires controlled correction.',
+      { httpStatus: 409 });
+    invariant(callRow.SOURCE_REVISION === config.sourceRevision
+      || call.outcome !== 'sensitive_data_ended' || call.urgency !== 'unknown',
+      'REPORT_RECONCILIATION_REQUIRED',
+      'Historical minimized safety notification requires controlled reconciliation.',
+      { httpStatus: 409 });
     const payload = makeNotificationPayload(call, deployment.configuration);
     const prepared = mailAdapter.prepare({ recipient: deployment.configuration.notificationRecipient, payload });
     const notificationKey = `notify_${keyedDigest(config.eventSecret, 'revenue-desk-notification-v1', [
@@ -1800,7 +1822,12 @@ function createRuntimeService({
     } catch (error) {
       if (error.code !== 'DURABLE_IDEMPOTENCY_CONFLICT') throw error;
       const existing = await store.unique(receiptTable, 'EVENT_KEY', receiptKey);
-      if (!sameLegacyCallbackReceipt(existing, receipt, eventData, payload)) throw error;
+      if (samePriorTerminalReceipt(existing, receipt, eventData, payload)) {
+        invariant(new Set(['Completed', 'TerminalFailure', 'ReconciliationRequired']).has(existing.STATUS),
+          'REPORT_RECONCILIATION_REQUIRED',
+          'Historical terminal analysis requires controlled correction before recovery.',
+          { httpStatus: 409 });
+      } else if (!sameLegacyCallbackReceipt(existing, receipt, eventData, payload)) throw error;
       // Preserve the exact historical row. Its current status/lease controls
       // recovery, not the newer normalized projection of the same HTTP body.
       claimed = { inserted: false, row: existing };
@@ -1826,6 +1853,21 @@ function createRuntimeService({
     invariant(current.RECEIPT_KIND === 'provider_event',
       'INVALID_JOB_PARAMETER', 'process_event accepts provider-event receipts only.',
       { httpStatus: 400 });
+    if (new Set(['Completed', 'TerminalFailure', 'ReconciliationRequired']).has(current.STATUS)) {
+      return (await claimExistingReceipt(receiptKey, current)).terminal;
+    }
+    const priorEvent = parseJsonColumn(current.EVENT_DATA_JSON, 'EVENT_DATA_JSON');
+    invariant(priorEvent.analysis?.outcome !== 'configuration_failure'
+      || priorEvent.analysis.sensitiveDataMinimized === true,
+    'REPORT_RECONCILIATION_REQUIRED',
+    'Historical terminal analysis requires controlled correction before recovery.',
+    { httpStatus: 409 });
+    invariant(current.SOURCE_REVISION === config.sourceRevision
+      || priorEvent.analysis?.outcome !== 'sensitive_data_ended'
+      || priorEvent.analysis.urgency !== 'unknown',
+    'REPORT_RECONCILIATION_REQUIRED',
+    'Historical minimized safety evidence requires controlled reconciliation.',
+    { httpStatus: 409 });
     const claimed = await claimExistingReceipt(receiptKey, current);
     if (claimed.terminal) return claimed.terminal;
     const eventData = parseJsonColumn(claimed.row.EVENT_DATA_JSON, 'EVENT_DATA_JSON');

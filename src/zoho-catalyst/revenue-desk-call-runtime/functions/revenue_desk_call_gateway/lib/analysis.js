@@ -73,7 +73,8 @@ function assertOutcomeUrgencyConsistency(outcome, urgency, code = 'INVALID_ANALY
   invariant(outcome !== 'potential_job'
     || (urgency !== 'urgent' && urgency !== 'immediate_danger'), code,
   'Potential job outcome conflicts with urgency classification.');
-  invariant(urgency !== 'immediate_danger' || outcome === 'unresolved', code,
+  invariant(urgency !== 'immediate_danger'
+    || new Set(['unresolved', 'sensitive_data_ended', 'configuration_failure']).has(outcome), code,
     'Immediate danger must use the unresolved safety outcome.');
 }
 
@@ -106,12 +107,17 @@ function extractAnalysis(call, documentedMethods = new Set()) {
       data.caller_name, data.caller_intent, data.issue_summary, data.city_or_zip,
       data.specific_person_requested, data.workflow_failure_text,
     ]);
-  if (sensitive) return Object.freeze({
-    outcome: 'sensitive_data_ended',
+  // Configuration failure has no authority to retain caller details. Preserve
+  // its terminal outcome while applying the same conservative erasure policy.
+  if (sensitive || outcome === 'configuration_failure') return Object.freeze({
+    outcome: outcome === 'configuration_failure' ? outcome : 'sensitive_data_ended',
     coverageTrigger: COVERAGE_TRIGGERS.has(data.coverage_trigger) ? data.coverage_trigger : 'Unknown',
     callerName: null, callbackNumber: null, callbackNumberConfirmed: null,
     customerType: 'unknown', callerIntent: null,
-    issueSummary: null, cityOrZip: null, urgency: 'unknown', specificPersonRequested: null,
+    // An explicit danger category is nonpersonal safety evidence, not permission
+    // to retain descriptions or arrange an emergency response.
+    issueSummary: null, cityOrZip: null,
+    urgency: urgency === 'immediate_danger' ? urgency : 'unknown', specificPersonRequested: null,
     // Privacy minimization deliberately withholds these provider assertions.
     // Null prevents downstream reporting from turning erased true values into
     // a confident zero.
@@ -161,6 +167,28 @@ function extractAnalysis(call, documentedMethods = new Set()) {
   });
 }
 
+// Compatibility comparison only. Never use this historical projection for
+// processing, reporting, notification generation or new durable writes.
+function priorTerminalAnalysis(call, documentedMethods = new Set()) {
+  const data = call?.call_analysis?.custom_analysis_data;
+  if (!data || typeof data !== 'object') return null;
+  let prior;
+  if (data.outcome === 'configuration_failure') {
+    prior = extractAnalysis({ ...call, call_analysis: { ...call.call_analysis,
+      custom_analysis_data: { ...data, outcome: 'unresolved' } } }, documentedMethods);
+    if (prior.outcome === 'unresolved') {
+      // The previous contract rejected this inconsistent combination.
+      if (data.bookable_opportunity === true || data.urgency === 'immediate_danger') return null;
+      prior = { ...prior, outcome: 'configuration_failure' };
+    }
+  } else {
+    prior = extractAnalysis(call, documentedMethods);
+    if (!prior.sensitiveDataMinimized || data.urgency !== 'immediate_danger') return null;
+  }
+  if (prior.sensitiveDataMinimized) prior = { ...prior, urgency: 'unknown' };
+  return Object.freeze(prior);
+}
+
 function triggerAllowedForMode(trigger, coverageMode) {
   const compatible = COVERAGE_TRIGGER_COMPATIBILITY.get(coverageMode);
   if (!compatible || !COVERAGE_TRIGGERS.has(trigger)) return false;
@@ -208,7 +236,7 @@ function makeNotificationPayload(call, configuration) {
 }
 
 module.exports = {
-  extractAnalysis, validateValueEvidence, triggerAllowedForMode,
+  extractAnalysis, priorTerminalAnalysis, validateValueEvidence, triggerAllowedForMode,
   makeNotificationPayload, isHighConfidencePaymentCard, VALUE_EVIDENCE_BY_SOURCE,
   assertOutcomeUrgencyConsistency,
 };
