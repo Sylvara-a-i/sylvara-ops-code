@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const { createCatalystStore }
   = require('revenue_desk_call_gateway/lib/catalyst-store');
 const { RevenueDeskError, invariant } = require('revenue_desk_call_gateway/lib/errors');
+const { readRawBody } = require('revenue_desk_call_gateway/lib/http');
 const { createRouteControlService }
   = require('revenue_desk_call_gateway/lib/route-control-service');
 const { RECONCILIATION_PROFILE, COMPLETION_PROFILE, TRANSITION_PROFILE }
@@ -73,7 +74,7 @@ function authenticate(request, config) {
   return projectId;
 }
 
-async function readBody(request, maximum) {
+async function readBody(request, maximum, timeoutMs = 3000) {
   const contentType = oneHeader(request, 'content-type').toLowerCase();
   invariant(contentType === 'application/json', 'INVALID_CONTROL_REQUEST',
     'Control request must use application/json.', { httpStatus: 415 });
@@ -88,16 +89,14 @@ async function readBody(request, maximum) {
   else if (typeof request.body === 'string') buffer = Buffer.from(request.body, 'utf8');
   else if (Buffer.isBuffer(request.body)) buffer = request.body;
   else {
-    const chunks = [];
-    let total = 0;
-    for await (const chunk of request) {
-      const next = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-      total += next.length;
-      invariant(total <= maximum, 'INVALID_CONTROL_REQUEST',
-        'Control request is too large.', { httpStatus: 413 });
-      chunks.push(next);
+    try {
+      // Authentication precedes collection. A valid credential still must not
+      // hold an invocation indefinitely with an unfinished body.
+      buffer = await readRawBody(request, { maximumBytes: maximum, timeoutMs });
+    } catch (error) {
+      throw new RevenueDeskError('INVALID_CONTROL_REQUEST', 'Control body is unavailable.',
+        { httpStatus: error instanceof RevenueDeskError ? error.httpStatus : 400 });
     }
-    buffer = Buffer.concat(chunks);
   }
   invariant(buffer.length > 0 && buffer.length <= maximum,
     'INVALID_CONTROL_REQUEST', 'Control request body is invalid.', { httpStatus: 400 });
@@ -164,7 +163,7 @@ function createRequestListener({
       invariant(action, 'INVALID_CONTROL_REQUEST', 'Control route is invalid.',
         { httpStatus: 404 });
       const projectId = authenticate(request, config);
-      const body = await readBody(request, config.maxBodyBytes);
+      const body = await readBody(request, config.maxBodyBytes, config.platformTimeoutMs);
       const reconciliation = body.profile === RECONCILIATION_PROFILE;
       const completion = body.profile === COMPLETION_PROFILE;
       const transition = body.profile === TRANSITION_PROFILE;

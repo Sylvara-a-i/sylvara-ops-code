@@ -114,6 +114,59 @@ function responseStub() {
   };
 }
 
+test("server-route application authentication rejects before body, stores, CRM, Connections or mail", async () => {
+  const previous = listenerEnvironment();
+  const environment = listenerEnvironment();
+  environment.ISSUE_HEADER_SECRET = "i".repeat(43);
+  environment.PREFILL_HEADER_SECRET = "f".repeat(43);
+  environment.SUBMISSION_HEADER_SECRET = "s".repeat(43);
+  const routes = [
+    [environment.ISSUE_PATH, environment.ISSUE_HEADER_NAME, environment.ISSUE_HEADER_SECRET],
+    [environment.PREFILL_PATH, environment.FORMS_HEADER_NAME, environment.PREFILL_HEADER_SECRET],
+    [environment.SUBMISSION_PATH, environment.FORMS_HEADER_NAME, environment.SUBMISSION_HEADER_SECRET],
+  ];
+  const retiredByPath = {
+    [environment.ISSUE_PATH]: previous.ISSUE_HEADER_SECRET,
+    [environment.PREFILL_PATH]: previous.PREFILL_HEADER_SECRET,
+    [environment.SUBMISSION_PATH]: previous.SUBMISSION_HEADER_SECRET,
+  };
+  for (const [path, header, secret] of routes) {
+    for (const variant of ["missing", "wrong", "retired", "cross-purpose", "duplicate", "joined", "array", "current-malformed"]) {
+      let initialized = 0; let effects = 0; let bodies = 0;
+      const logs = [];
+      const forbidden = () => { effects += 1; throw new Error("Business I/O prohibited"); };
+      const listener = createRequestListener({ environment,
+        artifactSourceRevision: environment.SOURCE_REVISION,
+        artifactFormDestinationSha256: FORM2_DESTINATION_SHA256,
+        catalystSdk: { initialize() { initialized += 1; return {
+          config: { environment: "development", projectId: SYNTHETIC_CATALYST_PROJECT_ID },
+          datastore: forbidden, zcql: forbidden, connections: forbidden, email: forbidden,
+        }; } }, fetchImpl: forbidden,
+        logger: { info: (value) => logs.push(value), error: (value) => logs.push(value) },
+      });
+      const headers = catalystHeaders({ "content-type": "application/json" });
+      const supplied = {
+        "cross-purpose": routes.find((route) => route[2] !== secret)[2],
+        retired: retiredByPath[path], joined: `${secret}, ${secret}`, array: [secret, secret],
+        duplicate: secret, "current-malformed": secret, wrong: "synthetic-wrong-credential",
+      };
+      if (variant !== "missing") headers[header] = supplied[variant];
+      if (variant === "duplicate") headers[header.toUpperCase()] = secret;
+      const request = { method: "POST", url: path, headers,
+        get body() { bodies += 1; throw new Error("Body prohibited"); },
+        get rawBody() { bodies += 1;
+          if (variant === "current-malformed") return Buffer.from("{");
+          throw new Error("Body prohibited"); } };
+      const output = responseStub(); await listener(request, output);
+      assert.equal(output.statusCode, variant === "current-malformed" ? 400 : 401, `${path}/${variant}`);
+      assert.equal(JSON.parse(output.payload).code, variant === "current-malformed" ? "body_invalid" : "unauthorized_source");
+      assert.equal(initialized, 1); // SDK context construction is not a downstream request.
+      assert.equal(effects, 0); assert.equal(bodies > 0, variant === "current-malformed");
+      assert.equal(JSON.stringify(logs).includes(secret), false);
+    }
+  }
+});
+
 test("requires request and SDK identity to match the reviewed Development project digest", () => {
   const request = { headers: catalystHeaders() };
   const config = {

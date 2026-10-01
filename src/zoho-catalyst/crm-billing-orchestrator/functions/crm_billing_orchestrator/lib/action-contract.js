@@ -48,7 +48,7 @@ function safeEqual(left, right) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
-async function readBody(request, maximumBytes) {
+async function readBody(request, maximumBytes, timeoutMs) {
   if (Buffer.isBuffer(request?.body)) {
     if (request.body.length > maximumBytes) throw new RequestContractError("Body is too large", 413);
     return request.body;
@@ -58,20 +58,44 @@ async function readBody(request, maximumBytes) {
     if (body.length > maximumBytes) throw new RequestContractError("Body is too large", 413);
     return body;
   }
-  const chunks = [];
-  let bytes = 0;
-  try {
-    for await (const chunk of request) {
+  if (!request || typeof request.on !== "function" || !Number.isSafeInteger(timeoutMs)
+    || timeoutMs <= 0) throw new RequestContractError("Body is unavailable");
+  // This absolute deadline starts only after application authentication. Chunk
+  // arrival never extends it; no SDK/CRM operation starts before it completes.
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let bytes = 0;
+    let settled = false;
+    const finish = (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      request.removeListener("data", onData);
+      request.removeListener("end", onEnd);
+      request.removeListener("aborted", onUnavailable);
+      request.removeListener("error", onUnavailable);
+      if (error) { request.pause?.(); reject(error); }
+      else resolve(Buffer.concat(chunks, bytes));
+    };
+    const onData = (chunk) => {
       const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
       bytes += buffer.length;
-      if (bytes > maximumBytes) throw new RequestContractError("Body is too large", 413);
+      if (bytes > maximumBytes) {
+        finish(new RequestContractError("Body is too large", 413, "body_too_large"));
+        return;
+      }
       chunks.push(buffer);
-    }
-  } catch (error) {
-    if (error instanceof RequestContractError) throw error;
-    throw new RequestContractError("Body is unavailable");
-  }
-  return Buffer.concat(chunks);
+    };
+    const onEnd = () => finish();
+    const onUnavailable = () => finish(new RequestContractError("Body is unavailable"));
+    const timer = setTimeout(() => finish(new RequestContractError(
+      "Body deadline exceeded", 408, "body_timeout",
+    )), timeoutMs);
+    request.on("data", onData);
+    request.once("end", onEnd);
+    request.once("aborted", onUnavailable);
+    request.once("error", onUnavailable);
+  });
 }
 
 function validatePayload(payload) {
@@ -138,7 +162,7 @@ async function parseActionRequest(request, config) {
   if (!paidCredential && !reportCredential) {
     throw new RequestContractError("Request authentication failed", 401, "authentication_failed");
   }
-  const raw = await readBody(request, config.maxBodyBytes);
+  const raw = await readBody(request, config.maxBodyBytes, config.platformOperationTimeoutMs);
   let payload;
   try {
     payload = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(raw));
