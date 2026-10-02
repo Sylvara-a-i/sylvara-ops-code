@@ -1,7 +1,7 @@
 'use strict';
 const crypto=require('node:crypto');
 const {canonicalJson}=require('./facts');
-const {validateSnapshot}=require('./report-delivery-control');
+const {validateSnapshot,validState}=require('./report-delivery-control');
 const HASH=/^[a-f0-9]{64}$/;
 const FIELDS=Object.freeze(['Test_Report_PDF_URL','Test_Report_Revision','Test_Report_Recipient_Email',
  'Test_Report_Recipient_Verified_At','Test_Report_Delivery_Status']);
@@ -14,7 +14,7 @@ function projection(state){
   ||p.Test_Report_Revision!==s.report?.manifestSha256||p.Test_Report_Recipient_Email!==s.recipient?.address
   ||!Number.isSafeInteger(state.at))throw held();
  validateSnapshot({...s,report:{...s.report,completed:true,fresh:true,validated:true},
-  recipient:{...s.recipient,explicitlySelected:true,verified:true,eligible:true,suppressed:false}},state.at);
+  recipient:{...s.recipient,explicitlySelected:true,verified:true,eligible:true,suppressed:null}},state.at);
  return {ClientId:b.clientId,DeploymentId:b.deploymentId,ReportType:'free_test_crm_report_projection',
   PeriodStart:b.periodStart,PeriodEnd:b.periodEnd,ReportVersion:'report-crm-projection-v1',
   GenerationStatus:'DraftGenerated',ApprovalStatus:'OwnerReviewRequired',DeliveryStatus:'NotSent',
@@ -58,12 +58,15 @@ function createReportCrmProjectionWriter({store,readRecords,readProjection,autho
    if(deliveryOperationKey!==undefined&&!HASH.test(deliveryOperationKey))throw held();
    const deliveryKey=deliveryOperationKey||sha(`report-initial-delivery-v1\0${snapshot.binding.deploymentId}`);
    const delivery=await bounded(()=>store.get(deliveryKey,options));active();
+   if(delivery?.state?.kind==='report_delivery_v1')validState(delivery.state);
+   const rejected=delivery?.state?.phase==='provider_rejected'&&delivery.state.kind==='report_delivery_v1'
+    &&canonicalJson(delivery.state.snapshot)===canonicalJson(snapshot);
    const accepted=delivery?.state?.phase==='provider_accepted'&&delivery.state.kind==='report_delivery_v1'
     &&canonicalJson(delivery.state.snapshot)===canonicalJson(snapshot);
    const patch={Test_Report_PDF_URL:link.url,Test_Report_Revision:snapshot.report.manifestSha256,
     Test_Report_Recipient_Email:snapshot.recipient.address,
     Test_Report_Recipient_Verified_At:new Date(snapshot.recipient.verifiedAt).toISOString().replace(/\.\d{3}Z$/,'+00:00'),
-    Test_Report_Delivery_Status:accepted?'Provider Accepted':'Held'};
+    Test_Report_Delivery_Status:rejected?'Failed':accepted?'Provider Accepted':'Held'};
    // One durable admission slot per Deal/test serializes corrections and status changes.
    const key=sha(`report-crm-projection-v1\0${dealId}\0${snapshot.binding.deploymentId}`);
    const exact=record=>record?.deal?.id===dealId&&record.deal.Deployment_Record_ID===snapshot.binding.deploymentId

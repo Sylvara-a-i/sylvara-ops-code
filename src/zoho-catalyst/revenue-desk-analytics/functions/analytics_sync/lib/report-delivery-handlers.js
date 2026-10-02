@@ -44,7 +44,7 @@ function createReportDeliveryHandlers({control,readDealForScope,readSnapshot,sys
     }
     if(command.action==='prepare_resend')return control.prepareResend(request);
     const delivery=await control.confirmResend({...request,confirmationId:command.confirmationId,confirmed:command.confirmed});
-    if(projectReport!==null&&delivery.status==='provider_accepted'){
+    if(projectReport!==null&&['provider_accepted','provider_rejected'].includes(delivery.status)){
       try{await projectReport({...request,deliveryOperationKey:delivery.operationKey});return {...delivery,crmProjectionStatus:'verified'};}
       catch{return {...delivery,crmProjectionStatus:'held'};}
     }return delivery;
@@ -85,7 +85,7 @@ function createReportDeliveryHandlers({control,readDealForScope,readSnapshot,sys
       // cannot label this corrected PDF or recipient as newly accepted.
       const sameSummary=['generationKey','documentSha256','privateReceiptKey'].every(k=>
         delivery.summary?.[k]===snapshot.report.summary[k]);
-      if(projectReport!==null&&delivery.status==='provider_accepted'&&sameSummary
+      if(projectReport!==null&&['provider_accepted','provider_rejected'].includes(delivery.status)&&sameSummary
         &&delivery.recipientVerificationDigest===snapshot.recipient.verificationDigest){
         try{await projectReport({dealId:selection.dealId,actor:systemActor,signal,deliveryOperationKey:delivery.operationKey});
           return {status:delivery.status,crmProjectionStatus:'verified'};}catch{return {status:delivery.status,crmProjectionStatus:'held'};}

@@ -28,14 +28,17 @@ async function fixture(){
  const actor={kind:'internal_controller',identity:'operator_'+sha('actor')},worker={kind:'terminal_worker',identity:'operator_'+sha('worker')};
  const authorityDigest=sha('authority'),proof={kind:'report_delivery_attestation_v1',phase:'approved',identity:b,authorityDigest,
   nativeRelationshipEvidenceSha256:sha(native),configurationSourceDigest:sha(config.CONFIGURATION_JSON),verifiedAt:f.now(),expiresAt:f.now()+3600000,
-  recipient:{contactId:b.contactId,address:'owner@example.invalid',explicitlySelected:true,verified:true,eligible:true,suppressed:false,
+  recipient:{contactId:b.contactId,address:'owner@example.invalid',explicitlySelected:true,verified:true,eligible:true,suppressed:null,suppressionStatus:'provider_enforcement_pending',consentEvidenceDigest:'a'.repeat(64),preflightEvidenceDigest:'b'.repeat(64),
    verificationDigest:sha('verified recipient'),nativeRelationshipEvidenceSha256:sha(native),verifiedAt:f.now(),expiresAt:f.now()+3600000},actors:[actor,worker]};
+ const request=require('./helpers/report-recipient-fixture').requestEvidence(native,proof.recipient.address);
+ const preflight=require('../lib/report-recipient-preflight').qualifyReportRecipient({request,contact:{id:b.contactId,Account_Name:{id:b.accountId},Email:proof.recipient.address,Email_Opt_Out:false},native,now:f.now()});
+ proof.recipient.consentEvidenceDigest=preflight.consentEvidenceDigest;proof.recipient.preflightEvidenceDigest=preflight.evidenceDigest;
  await d.runs.insert(sha(`report-delivery-attestation-v1\0${b.dealId}\0${b.deploymentId}`),proof);
  const records={deal:{id:b.dealId,Deployment_Record_ID:b.deploymentId,Configuration_Version:b.configurationVersion,Test_Status:'Completed',
   Account_Name:{id:b.accountId},Contact_Name:{id:b.contactId},Intake_Submission_ID:b.intakeSubmissionId,Test_Report_Revision:pair.manifestSha256,
   Test_Report_Recipient_Email:proof.recipient.address,Email_Opt_Out:false,Test_Report_Recipient_Verified_At:new Date(f.now()).toISOString()},
   contact:{id:b.contactId,Account_Name:{id:b.accountId},Email:proof.recipient.address,Email_Opt_Out:false}};
- const options={...f.readerOptions,reportRunStore:d.runs,crm:{getReportRecords:async()=>structuredClone(records)},
+ const options={...f.readerOptions,reportRunStore:d.runs,crm:{getReportRecords:async()=>structuredClone(records),getReportRequestEvidence:async()=>structuredClone(request)},
   readNativeConversion:async()=>structuredClone(native),readIntakeLineage:async()=>({originalLeadId:b.originalLeadId,journeyId:b.intakeSubmissionId}),
   authorityDigest,privateView:{template:'https://workdrive.zoho.com/file/{resourceId}?version={versionNumber}',qualificationDigest:sha('version URL'),expiresAt:f.now()+3600000},synthetic:true};
  return {f,d,b,pair,proof,records,options,actor,worker};

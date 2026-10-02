@@ -911,3 +911,19 @@ test('cancelled report record read cannot issue a later Contact request',async()
    controller.abort();return response(200,{data:[{id:DEAL_ID,Contact_Name:{id:'500000001'}}]});}});
  await assert.rejects(client.getReportRecords(DEAL_ID,{signal:controller.signal}));assert.equal(requests.length,2);
 });
+
+
+test('report consent reader selects exactly one converted original Lead and consent fields read-only',async()=>{
+ const originalLeadId='19000000004',requests=[];
+ const client=createCrmControlClient({crmApiBaseUrl:'https://www.zohoapis.com/crm/v8',crmOrganizationId:SYNTHETIC_ORGANIZATION_ID,platformTimeoutMs:500},{
+  readAuthorization:async()=> 'Zoho-oauthtoken synthetic-read',writeAuthorization:async()=>{throw Error('write prohibited');},
+  fetchImpl:async(url,options)=>{requests.push({url:new URL(url),options});assert.equal(options.method,'GET');
+   if(url.endsWith('/org'))return response(200,{org:[{zgid:SYNTHETIC_ORGANIZATION_ID}]});
+   return response(200,{data:[{id:originalLeadId,Email:'owner@example.invalid',Free_Test_Contact_Consent:true,
+    Converted_Contact:{id:'19000000003',name:'not selected'}}],info:{count:1,more_records:false}});}});
+ const proof=await client.getReportRequestEvidence(originalLeadId);assert.equal(proof.id,originalLeadId);
+ assert.deepEqual(proof.Converted_Contact,{id:'19000000003'});
+ const query=requests[1].url.searchParams;assert.equal(query.get('ids'),originalLeadId);assert.equal(query.get('converted'),'true');assert.equal(query.get('per_page'),'2');
+ assert.ok(query.get('fields').includes('Free_Test_Contact_Consent_Version'));assert.ok(query.get('fields').includes('Unsubscribed_Time'));
+ const cancel=new AbortController();cancel.abort();await assert.rejects(client.getReportRequestEvidence(originalLeadId,{signal:cancel.signal}));assert.equal(requests.length,2);
+});

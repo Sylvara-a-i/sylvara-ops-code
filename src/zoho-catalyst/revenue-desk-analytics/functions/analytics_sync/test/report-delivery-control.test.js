@@ -7,7 +7,7 @@ const hash=v=>crypto.createHash('sha256').update(v).digest('hex');
 function fixture(){
  let at=1800000000000,sends=0,lookups=0;
  const bytes=Buffer.from('%PDF-1.7\n synthetic summary only\n%%EOF\n');
- let snapshot={binding:{clientId:'synthetic_client',deploymentId:'synthetic_deployment',dealId:'synthetic_deal',accountId:'synthetic_account',contactId:'synthetic_contact',configurationVersion:'configuration_v1',periodStart:'2027-01-01',periodEnd:'2027-01-07'},nativeRelationshipEvidenceSha256:hash('native lineage'),report:{completed:true,fresh:true,validated:true,generationKey:hash('pair'),manifestSha256:hash('manifest'),sourceRevisionDigest:hash('source'),summary:{role:'summary',generationKey:hash('pdf'),documentSha256:hash(bytes),privateReceiptKey:hash('receipt')}},recipient:{contactId:'synthetic_contact',address:'owner@example.com',explicitlySelected:true,verified:true,eligible:true,suppressed:false,verificationDigest:hash('recipient'),verifiedAt:at-1000,expiresAt:at+3600000}};
+ let snapshot={binding:{clientId:'synthetic_client',deploymentId:'synthetic_deployment',dealId:'synthetic_deal',accountId:'synthetic_account',contactId:'synthetic_contact',configurationVersion:'configuration_v1',periodStart:'2027-01-01',periodEnd:'2027-01-07'},nativeRelationshipEvidenceSha256:hash('native lineage'),report:{completed:true,fresh:true,validated:true,generationKey:hash('pair'),manifestSha256:hash('manifest'),sourceRevisionDigest:hash('source'),summary:{role:'summary',generationKey:hash('pdf'),documentSha256:hash(bytes),privateReceiptKey:hash('receipt')}},recipient:{contactId:'synthetic_contact',address:'owner@example.com',explicitlySelected:true,verified:true,eligible:true,suppressed:null,suppressionStatus:'provider_enforcement_pending',consentEvidenceDigest:'a'.repeat(64),preflightEvidenceDigest:'b'.repeat(64),verificationDigest:hash('recipient'),verifiedAt:at-1000,expiresAt:at+3600000}};
  const rows=new Map();const copy=structuredClone;
  const store={async get(key){return copy(rows.get(key)||null);},async insert(key,state){if(!rows.has(key))rows.set(key,{key,version:1,state:persisted(state)});return copy(rows.get(key));},async compareAndSwap(row,state){const old=rows.get(row.key);if(old.version!==row.version)return null;const next={key:row.key,version:row.version+1,state:persisted(state)};rows.set(row.key,next);return copy(next);}};
  const proofs=new Map();const sender={async sendSummary({operationKey,snapshot,bytes:actual}){sends++;assert.deepEqual(actual,bytes);const p={accepted:true,operationKey,documentSha256:snapshot.report.summary.documentSha256,recipientVerificationDigest:snapshot.recipient.verificationDigest,messageReferenceDigest:hash(operationKey),acceptedAt:at};proofs.set(operationKey,p);return p;},async lookupAcceptance({operationKey}){lookups++;return proofs.get(operationKey)||null;}};
@@ -122,5 +122,32 @@ test('view rechecks exact current snapshot and current authorization after priva
   const f=fixture();let allowed=true;f.options.authorize=async()=>allowed;
   f.options.readSummary=async()=>{if(revoke)allowed=false;else f.snapshot.report.manifestSha256=hash('new revision during retrieval');return f.bytes;};
   await assert.rejects(f.control().view(f.req),{code:'REPORT_DELIVERY_HELD'});assert.equal(f.sends,0);
+ }
+});
+
+test('definitive provider rejection becomes terminal Failed without receipt claims or later dispatch',async()=>{
+ const f=fixture();let calls=0;f.sender.sendSummary=async x=>{calls++;return {accepted:false,rejected:true,rejectionCode:'NOT_ALLOWED',
+  operationKey:x.operationKey,documentSha256:x.snapshot.report.summary.documentSha256,
+  recipientVerificationDigest:x.snapshot.recipient.verificationDigest,rejectedAt:1800000000000};};
+ const c=f.control(),first=await c.initial(f.req);assert.equal(first.status,'provider_rejected');assert.equal(first.rejectionCode,'NOT_ALLOWED');
+ const saved=[...f.rows.values()][0].state;assert.equal(deliveryProjection(saved).DeliveryStatus,'Failed');
+ assert.equal(first.inboxReceipt,'unknown');assert.equal(first.readReceipt,'unknown');assert.equal(first.followUp,'unknown');
+ assert.equal((await c.initial(f.req)).status,'provider_rejected');assert.equal(calls,1);assert.equal(f.lookups,0);
+ await assert.rejects(c.prepareResend(f.req));assert.equal(calls,1);
+});
+
+test('lost failed-state acknowledgement reconciles exact immutable failure without another send',async()=>{
+ const f=fixture();let calls=0;const cas=f.options.store.compareAndSwap;
+ f.options.store.compareAndSwap=async(...args)=>{await cas(...args);return null;};
+ f.sender.sendSummary=async x=>{calls++;return {accepted:false,rejected:true,rejectionCode:'NO_PERMISSION',operationKey:x.operationKey,
+  documentSha256:x.snapshot.report.summary.documentSha256,recipientVerificationDigest:x.snapshot.recipient.verificationDigest,rejectedAt:1800000000000};};
+ assert.equal((await f.control().initial(f.req)).status,'provider_rejected');assert.equal((await f.control().initial(f.req)).status,'provider_rejected');assert.equal(calls,1);
+});
+
+test('wrong rejection scope and unknown provider error cannot fabricate Failed',async()=>{
+ for(const change of [p=>p.operationKey=hash('other'),p=>p.documentSha256=hash('other'),p=>p.recipientVerificationDigest=hash('other'),p=>p.rejectionCode='CUSTOM_ERROR']){
+  const f=fixture();f.sender.sendSummary=async x=>{const p={accepted:false,rejected:true,rejectionCode:'NOT_ALLOWED',operationKey:x.operationKey,
+   documentSha256:x.snapshot.report.summary.documentSha256,recipientVerificationDigest:x.snapshot.recipient.verificationDigest,rejectedAt:1800000000000};change(p);return p;};
+  assert.equal((await f.control().initial(f.req)).status,'delivery_reconciliation_required');assert.equal([...f.rows.values()][0].state.phase,'dispatch_started');
  }
 });

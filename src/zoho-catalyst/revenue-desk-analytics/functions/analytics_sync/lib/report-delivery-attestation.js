@@ -12,7 +12,8 @@ function validate(state,at){
   ||!['configurationVersion','intakeSubmissionId'].every(k=>/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(b[k]||''))
   ||!['authorityDigest','nativeRelationshipEvidenceSha256','configurationSourceDigest'].every(k=>HASH.test(state[k]||''))
   ||!Number.isSafeInteger(state.verifiedAt)||state.verifiedAt<0||state.verifiedAt>at||!Number.isSafeInteger(state.expiresAt)||state.expiresAt<=at
-  ||!r||r.contactId!==b.contactId||r.explicitlySelected!==true||r.verified!==true||r.eligible!==true||r.suppressed!==false
+  ||!r||r.contactId!==b.contactId||r.explicitlySelected!==true||r.verified!==true||r.eligible!==true||r.suppressed!==null
+  ||r.suppressionStatus!=='provider_enforcement_pending'||!HASH.test(r.consentEvidenceDigest||'')||!HASH.test(r.preflightEvidenceDigest||'')
   ||typeof r.address!=='string'||r.address.length>100||!/^[^\s@<>;,]+@[^\s@<>;,]+\.[^\s@<>;,]+$/.test(r.address)
   ||!HASH.test(r.verificationDigest||'')||r.nativeRelationshipEvidenceSha256!==state.nativeRelationshipEvidenceSha256
   ||!Number.isSafeInteger(r.verifiedAt)||r.verifiedAt<0||r.verifiedAt%1000!==0||r.verifiedAt>at
