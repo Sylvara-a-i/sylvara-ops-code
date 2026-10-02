@@ -5,14 +5,17 @@ const file='src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_r
 const current=fs.readFileSync(path.resolve(__dirname,'../../revenue_desk_route_control/lib/http-boundary.js'));
 const source=current.toString(),start=source.indexOf("      if (body.profile === 'report_storage_qualification_v1') {");
 const end=source.indexOf('      const crm = ',start),addition=source.slice(start,end);
-const base=Buffer.from(source.slice(0,start)+source.slice(end));
+const contextStart=source.indexOf("      if (body.profile === 'report_runtime_context_v1') {");
+const contextEnd=source.indexOf('      const app = runtime.initialize(request);',contextStart);
+const context=source.slice(contextStart,contextEnd);
+const base=Buffer.from((source.slice(0,start)+source.slice(end)).replace(context,''));
 const anchor="      const crm = (factories.crm || createCrmControlClient)(config, {\n";
 const selected=Buffer.from(base.toString().replace('async function readBody(request, maximum)',
  'async function readBody(request, maximum, timeoutMs = 3000)'));
 const held=fn=>assert.throws(fn,error=>error.phase==='source_overlap');
 test('reviewed additive delivery branch preserves every selected authentication byte',()=>{
  const result=composeReviewedDeliveryBoundary(file,base,current,selected);
- assert.deepEqual(Buffer.from(result.bytes.toString().replace(addition,'')),selected);
+ assert.deepEqual(Buffer.from(result.bytes.toString().replace(addition,'').replace(context,'')),selected);
  assert.equal(result.bytes.toString().split(addition).length,2);
  assert.ok(result.bytes.toString().indexOf("body.profile === 'report_delivery_v1'")>
  result.bytes.toString().indexOf('Control runtime identity is invalid.'));
@@ -45,9 +48,18 @@ test('already integrated selected auth permits only the same reviewed additive b
  const integrated=Buffer.from(selected.toString().replace(anchor,addition+anchor));
  const result=composeReviewedDeliveryBoundary(file,base,integrated,selected);
  assert.deepEqual(result.bytes,integrated);
- assert.deepEqual(Buffer.from(result.bytes.toString().replace(addition,'')),selected);
+ assert.deepEqual(Buffer.from(result.bytes.toString().replace(addition,'').replace(context,'')),selected);
 });
 test('integrated auth with unrelated source overlap remains rejected',()=>{
  const integrated=Buffer.from(selected.toString().replace(anchor,addition+anchor)+'\n// unrelated overlap\n');
  held(()=>composeReviewedDeliveryBoundary(file,base,integrated,selected));
+});
+
+
+test('context branch is separately pinned, before initialization and removable without changing auth',()=>{
+ const result=composeReviewedDeliveryBoundary(file,base,current,selected);
+ assert.equal(result.context_addition_sha256,'47e2bebff359c47d9779b45987a3f251df284f02005fb279154d790f04fb6a1b');
+ assert.ok(result.bytes.toString().indexOf('report_runtime_context_v1')<result.bytes.toString().indexOf('const app = runtime.initialize(request)'));
+ held(()=>composeReviewedDeliveryBoundary(file,base,Buffer.from(source.replace('factories.runtimeContext(request','factories.runtimeContext(body')),selected));
+ held(()=>composeReviewedDeliveryBoundary(file,base,current,Buffer.from(selected.toString().replace('      const app = runtime.initialize(request);',''))));
 });

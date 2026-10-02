@@ -713,3 +713,22 @@ test('protected inventory composes in actual Controller config while provider ex
     RETELL_NUMBER_INVENTORY_JSON:raw,RETELL_NUMBER_INVENTORY_SHA256:'0'.repeat(64)},REVISION),
     {code:'INVALID_TEST_NUMBER_INVENTORY'});
 });
+
+
+test('runtime context stays authenticated, disabled and before SDK/stores/providers', async () => {
+  const { createProtectedRuntimeContext } = require('../lib/report-runtime-context');
+  const env = environment(); let sdk = 0;
+  const listener = createRequestListener({ environment: env, artifactSourceRevision: REVISION,
+    catalystSdk: { initialize() { sdk++; throw Error('SDK must not initialize while disabled'); } },
+    factories: { runtimeContext: createProtectedRuntimeContext({ environment: env }),
+      store() { assert.fail('store'); }, crm() { assert.fail('CRM'); }, provider() { assert.fail('provider'); } } });
+  const request = { method: 'POST', url: '/internal/revenue-desk/approve-configuration',
+    headers: { host: env.ROUTE_CONTROL_HOST, 'x-zc-environment': 'development',
+      'x-zc-projectid': PROJECT_ID, 'x-synthetic-control': env.ROUTE_CONTROL_SHARED_HEADER_VALUE,
+      'content-type': 'application/json' },
+    body: JSON.stringify({ profile: 'report_runtime_context_v1', action: 'inspect_context' }) };
+  const output = response(); await listener(request, output);
+  assert.equal(output.statusCode, 200); assert.equal(output.body.result.binding_valid, false); assert.equal(sdk, 0);
+  delete request.headers['x-synthetic-control']; const denied = response(); await listener(request, denied);
+  assert.equal(denied.statusCode, 401); assert.equal(sdk, 0);
+});
