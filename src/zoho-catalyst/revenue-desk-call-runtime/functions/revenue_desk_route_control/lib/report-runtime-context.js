@@ -10,6 +10,8 @@ function defaultTransport(options) {
     .createReportRunTransport(options);
 }
 /** Read-only inspection, disabled without a separately pinned finite binding.
+ * Schema 2 pins the current Catalyst principal, not an operational HMAC actor.
+ * Shared control authentication does not identify an individual CRM caller.
  * No durable one-shot claim is possible without a write: owner coordinates one invocation.
  * Local replays are consumed before initialization; no result permits storage or delivery.
  */
@@ -33,13 +35,13 @@ function createProtectedRuntimeContext({ environment = process.env, now = Date.n
         || !/^[a-f0-9]{64}$/.test(pin || '') || sha(raw) !== pin) held();
       b = JSON.parse(raw);
       if (!exact(b, ['schemaVersion', 'enabled', 'environment', 'sourceRevision', 'projectId',
-        'controlHost', 'operatorIdHash', 'principalSha256', 'verifiedAt', 'expiresAt', 'timeoutMs', 'nonce'])
-        || b.schemaVersion !== 1 || b.enabled !== true || b.environment !== 'development'
+        'controlHost', 'principalSha256', 'verifiedAt', 'expiresAt', 'timeoutMs', 'nonce'])
+        || b.schemaVersion !== 2 || b.enabled !== true || b.environment !== 'development'
         || config.environment !== 'development' || environment.DEPLOYMENT_ENVIRONMENT !== 'development'
         || !/^[a-f0-9]{40}$/.test(b.sourceRevision || '')
         || b.sourceRevision !== config.sourceRevision || b.sourceRevision !== environment.SOURCE_REVISION
         || !/^[1-9][0-9]{2,29}$/.test(b.projectId || '') || sha(b.projectId) !== config.expectedProjectIdSha256
-        || b.controlHost !== config.controlHost || b.operatorIdHash !== config.operatorIdHash
+        || b.controlHost !== config.controlHost
         || !/^[a-f0-9]{64}$/.test(b.principalSha256 || '') || !/^[a-f0-9]{32}$/.test(b.nonce || '')
         || !Number.isSafeInteger(b.verifiedAt) || b.verifiedAt < 0 || !Number.isSafeInteger(b.expiresAt)
         || b.expiresAt <= b.verifiedAt || b.expiresAt - b.verifiedAt > 900000
@@ -92,6 +94,8 @@ function createProtectedRuntimeContext({ environment = process.env, now = Date.n
         roleId: principal.roleId, userId: principal.userId })) === b.principalSha256;
       out.principal_status_active = principal.status === 'ACTIVE';
       out.principal_role_matches = principal.roleName === 'App Administrator';
+      // HTTP completion alone is not an accepted principal observation.
+      if (!out.principal_identity_matches || !out.principal_status_active || !out.principal_role_matches) held();
       out.stage = 'complete';
     } catch {
       if (abort.signal.aborted && dispatches) out.principal_request_status = 'timeout';

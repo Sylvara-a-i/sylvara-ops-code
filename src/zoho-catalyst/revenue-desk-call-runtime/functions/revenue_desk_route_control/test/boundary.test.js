@@ -732,3 +732,27 @@ test('runtime context stays authenticated, disabled and before SDK/stores/provid
   delete request.headers['x-synthetic-control']; const denied = response(); await listener(request, denied);
   assert.equal(denied.statusCode, 401); assert.equal(sdk, 0);
 });
+
+test('context command cannot bypass control headers, host, project, environment or route', async () => {
+  const env = environment(); let inspections = 0;
+  const listener = createRequestListener({ environment: env, artifactSourceRevision: REVISION,
+    catalystSdk: { initialize() { assert.fail('SDK'); } },
+    factories: { runtimeContext() { inspections++; assert.fail('inspection'); },
+      store() { assert.fail('store'); }, crm() { assert.fail('CRM'); }, provider() { assert.fail('provider'); } } });
+  for (const variant of ['header', 'host', 'project', 'environment', 'route', 'body']) {
+    const request = { method: 'POST', url: '/internal/revenue-desk/approve-configuration',
+      headers: { host: env.ROUTE_CONTROL_HOST, 'x-zc-environment': 'development',
+        'x-zc-projectid': PROJECT_ID, 'x-synthetic-control': env.ROUTE_CONTROL_SHARED_HEADER_VALUE,
+        'content-type': 'application/json' },
+      body: JSON.stringify({ profile: 'report_runtime_context_v1', action: 'inspect_context' }) };
+    if (variant === 'header') request.headers['x-synthetic-control'] = 'wrong';
+    if (variant === 'host') request.headers.host = 'wrong.invalid';
+    if (variant === 'project') request.headers['x-zc-projectid'] = '999999999';
+    if (variant === 'environment') request.headers['x-zc-environment'] = 'production';
+    if (variant === 'route') request.url = '/internal/revenue-desk/activate-free-test';
+    if (variant === 'body') request.headers['content-type'] = 'text/plain';
+    const output = response(); await listener(request, output);
+    assert.ok(output.statusCode >= 400); assert.equal(output.body.result, undefined);
+  }
+  assert.equal(inspections, 0);
+});
