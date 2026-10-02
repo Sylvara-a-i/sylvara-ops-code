@@ -135,7 +135,7 @@ test('actual SDK principal response failures emit only closed classes and never 
       assert.equal(result.authentication_status, 'succeeded');
       assert.equal(result.principal_identity_matches, 'Unknown');
       assert.equal(result.principal_status_active, 'Unknown'); assert.equal(result.principal_role_matches, 'Unknown');
-      assert.equal(result.qualification_authority, false); assert.equal(Object.keys(result).length, 15);
+      assert.equal(result.qualification_authority, false); assert.equal(Object.keys(result).length, 20);
       assert.equal(f.clientCalls, 1); assert.equal(f.rows.size + f.receipts.size, 0);
       assert.doesNotMatch(JSON.stringify(result), /private synthetic|987654321|987654320|private-unused|synthetic-managed|Content-Type|Authorization/);
       await new Promise(resolve=>setImmediate(resolve)); // Late teardown cannot mutate frozen output or emit private errors.
@@ -160,4 +160,88 @@ test('documented numeric principal shape remains strict; unknown trace classes c
       assert.doesNotMatch(JSON.stringify(result),/private synthetic|987654321|987654320/);
     }finally{f.restore();}
   }
+});
+
+test('actual SDK credential boundary distinguishes console admin null from registered app user', async()=>{
+ const principal={user_id:'987654321',status:'ACTIVE',role_details:{role_id:'987654320',role_name:'App Administrator'}};
+ for(const credentialType of ['admin','user']){
+  const f=fixture({credentialType,principalBody:JSON.stringify({status:'success',data:credentialType==='admin'?null:principal})});
+  try{const s=setup(f),run=createProtectedRuntimeContext({environment:s.environment,now:()=>s.at,transportFactory:createReportRunTransport});
+   const out=await run({},s.args);
+   assert.equal(out.credential_user_mode,'user');assert.equal(out.credential_user_type,credentialType);
+   assert.equal(out.stage,credentialType==='admin'?'principal_envelope':'complete');
+   assert.equal(out.response_structure.data_type,credentialType==='admin'?'null':'object');
+   assert.equal(out.response_structure.root_status,'success');
+   assert.equal(out.principal_get_exact,true);assert.equal(out.principal_path_exact,true);
+   assert.equal(out.principal_raw_stream_same,true);assert.equal(out.principal_body_complete,true);
+   assert.equal(f.requests[0].method,'GET');assert.equal(f.clientCalls,1);assert.equal(f.rows.size+f.receipts.size,0);
+   assert.equal(out.qualification_authority,false);assert.equal(Object.isFrozen(out.response_structure),true);
+   assert.doesNotMatch(JSON.stringify(out),/synthetic-user-token|synthetic-admin-token|987654321|987654320|Authorization/);
+   assert.equal((await run({},s.args)).binding_valid,false);assert.equal(f.clientCalls,1);
+  }finally{f.restore();}
+ }
+});
+test('comprehensive fixed structural classes cover roots, data, arrays and one bounded string parse without acceptance',async()=>{
+ const principal={user_id:'private-user',role_details:{role_id:'private-role',role_name:'private-name'},status:'PRIVATE'};
+ const cases=[
+  [null,{root_type:'null',data_type:'absent'}],
+  [false,{root_type:'boolean'}], [17,{root_type:'number'}],
+  [{status:'success'},{root_status:'success',data_type:'absent'}],
+  [{status:'error',data:null},{root_status:'error',data_type:'null'}],
+  [{status:'private-status',data:false},{root_status:'other',data_type:'boolean'}],
+  [{data:17},{data_type:'number'}],
+  [{data:[]},{array_location:'data',array_bucket:'zero',singleton_type:'absent'}],
+  [{data:[principal]},{array_bucket:'one',singleton_type:'object',singleton_has_user_id:true}],
+  [{data:[principal,principal]},{array_bucket:'multiple',singleton_type:'absent'}],
+  [[principal],{root_type:'array',array_location:'root',array_bucket:'one',singleton_has_user_id:true}],
+  [principal,{root_type:'object',root_has_user_id:true,data_type:'absent'}],
+  [{data:JSON.stringify(principal)},{decoded_location:'data',decoded_parse:'parsed',decoded_root_type:'object',decoded_root_has_user_id:true}],
+  [JSON.stringify({data:principal}),{root_type:'string',decoded_location:'root',decoded_parse:'parsed',decoded_data_type:'object',decoded_data_has_user_id:true}],
+  [{data:[JSON.stringify(principal)]},{decoded_location:'singleton',decoded_parse:'parsed',decoded_root_has_user_id:true}],
+  [{data:'private non-JSON string'},{data_type:'string',decoded_parse:'invalid'}],
+  [{data:JSON.stringify('private double-encoded')},{decoded_parse:'parsed',decoded_root_type:'string'}],
+ ];
+ for(const [body,expected]of cases){const f=fixture({principalBody:JSON.stringify(body)});
+  try{const s=setup(f),out=await createProtectedRuntimeContext({environment:s.environment,now:()=>s.at,transportFactory:createReportRunTransport})({},s.args);
+   assert.equal(out.stage,'principal_envelope');assert.equal(out.principal_identity_matches,'Unknown');
+   for(const [key,value]of Object.entries(expected))assert.equal(out.response_structure[key],value,key);
+   assert.equal(out.qualification_authority,false);assert.equal(f.clientCalls,1);assert.equal(f.rows.size+f.receipts.size,0);
+   assert.doesNotMatch(JSON.stringify(out),/private-user|private-role|private-name|PRIVATE|private-status|private non-JSON|private double-encoded/);
+   assert.ok(Buffer.byteLength(JSON.stringify(out))<4096);
+  }finally{f.restore();}
+ }
+});
+test('chunked UTF8, premature close, limits and timeout remain bounded and truthful',async()=>{
+ const bytes=Buffer.from(JSON.stringify({data:{user_id:'987654321',status:'ACTIVE',role_details:{role_id:'987654320',role_name:'App Administrator'},unused:'🪠'}}));
+ const split=bytes.indexOf(Buffer.from('🪠'))+1;
+ for(const [options,expected,complete]of[
+  [{principalChunks:[bytes.subarray(0,split),bytes.subarray(split,split+1),bytes.subarray(split+1)]},'complete',true],
+  [{principalPrematureClose:true},'principal_stream',false],
+  [{principalChunks:Array.from({length:129},()=>Buffer.from(' '))},'principal_size',true],
+  [{principalBody:'x'.repeat(65537)},'principal_size',true],
+  [{principalBody:Buffer.from([0xc3,0x28])},'principal_utf8',true],
+ ]){const f=fixture(options);try{const s=setup(f),out=await createProtectedRuntimeContext({environment:s.environment,now:()=>s.at,transportFactory:createReportRunTransport})({},s.args);
+  assert.equal(out.stage,expected);if(complete&&expected!=='principal_size')assert.equal(out.principal_body_complete,true);
+  if(!complete)assert.equal(out.principal_body_complete,false);assert.equal(out.qualification_authority,false);
+  assert.equal(f.clientCalls,1);assert.equal(f.rows.size+f.receipts.size,0);
+  if(expected!=='complete')assert.equal(out.response_structure,null);
+  assert.doesNotMatch(JSON.stringify(out),/987654321|🪠|private synthetic/);
+ }finally{f.restore();}}
+ const f=fixture();try{f.mode='stall';const s=setup(f,{timeoutMs:20});
+  const out=await createProtectedRuntimeContext({environment:s.environment,now:()=>s.at,transportFactory:createReportRunTransport})({},s.args);
+  assert.equal(out.principal_request_status,'timeout');assert.equal(out.principal_body_complete,false);assert.equal(out.response_structure,null);
+  assert.equal(f.clientCalls,1);for(const r of f.created)assert.equal(r.destroyed,true);
+ }finally{f.restore();}
+});
+test('untrusted structural trace and unknown credential methods cannot expose private values',async()=>{
+ const f=fixture();try{f.app.credential.getCurrentUserType=()=> 'private credential value';const s=setup(f);
+  const factory=options=>{const io=createReportRunTransport(options);return {currentPrincipal:async opts=>{
+   opts.trace({event:'principal_structure',structure:{private:'private response text'}});
+   opts.trace({event:'principal_raw',same:'private response text'});
+   return io.currentPrincipal(opts);
+  }};};
+  const out=await createProtectedRuntimeContext({environment:s.environment,now:()=>s.at,transportFactory:factory})({},s.args);
+  assert.equal(out.credential_user_type,'unknown');assert.equal(out.stage,'principal_response');assert.equal(out.response_structure,null);
+  assert.doesNotMatch(JSON.stringify(out),/private credential|private response/);assert.equal(f.clientCalls,1);
+ }finally{f.restore();}
 });

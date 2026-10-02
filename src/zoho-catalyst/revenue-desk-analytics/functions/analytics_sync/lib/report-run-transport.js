@@ -2,6 +2,33 @@
 const {Readable}=require('node:stream');
 const path=require('node:path');
 const {performance}=require('node:perf_hooks');
+// Structural observations contain only closed types/presence flags, never provider values.
+const structureType=value=>value===undefined?'absent':value===null?'null':Array.isArray(value)?'array':typeof value;
+const has=(value,key)=>value!==null&&typeof value==='object'&&Object.hasOwn(value,key);
+function principalStructure(root){
+ const out={};
+ const describe=(value,prefix)=>{out[prefix+'_type']=structureType(value);
+  for(const key of ['user_id','role_details','status'])out[prefix+'_has_'+key]=has(value,key);};
+ const status=value=>!has(value,'status')?'absent':value.status==='success'?'success':value.status==='error'?'error':'other';
+ const describeEnvelope=(value,prefix='')=>{
+  const data=has(value,'data')?value.data:undefined;
+  const array=Array.isArray(data)?data:Array.isArray(value)?value:undefined;
+  const singleton=array?.length===1?array[0]:undefined;
+  describe(value,prefix+'root');describe(data,prefix+'data');describe(singleton,prefix+'singleton');
+  out[prefix+'root_status']=status(value);
+  out[prefix+'array_location']=Array.isArray(data)?'data':Array.isArray(value)?'root':'none';
+  out[prefix+'array_bucket']=!array?'not_array':array.length===0?'zero':array.length===1?'one':'multiple';
+  return {data,singleton};
+ };
+ const {data,singleton}=describeEnvelope(root);describeEnvelope(undefined,'decoded_');
+ out.decoded_location='none';out.decoded_parse='not_attempted';
+ const candidate=typeof root==='string'?{location:'root',value:root}:typeof data==='string'?{location:'data',value:data}
+  :typeof singleton==='string'?{location:'singleton',value:singleton}:null;
+ if(candidate){out.decoded_location=candidate.location;
+  if(Buffer.byteLength(candidate.value)>65536)out.decoded_parse='held';
+  else try{describeEnvelope(JSON.parse(candidate.value),'decoded_');out.decoded_parse='parsed';}catch{out.decoded_parse='invalid';}}
+ return Object.freeze(out);
+}
 function held(){throw Object.assign(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'),{code:'REPORT_RUN_RECONCILIATION_REQUIRED'});}
 function sdkClient(app){
  const root=path.dirname(require.resolve('zcatalyst-sdk-node/package.json'));
@@ -30,7 +57,8 @@ function createReportRunTransport({app,timeoutMs=3000,createClient=sdkClient}={}
  const requests=new Set(),streams=new Set();let failed=false,rejectDeadline;
  const deadline=new Promise((_,reject)=>{rejectDeadline=reject;});deadline.catch(()=>{});
  const trace=event=>{if(typeof options.trace==='function')options.trace(Object.freeze({...event,at:performance.now()}));};
- let responseStatus,principalFailureClass,responseSettled=false;
+ let responseStatus,principalFailureClass,responseSettled=false,responseStream;
+ const principalTrace=event=>{if(endpoint==='/project-user/current'&&!signal.aborted&&!responseSettled)trace(event);};
  // Fixed classifications only; never pass response data or errors into trace.
  const principalFailure=kind=>{if(endpoint!=='/project-user/current'||signal.aborted||responseSettled||principalFailureClass)return;
   principalFailureClass=kind;trace({event:'principal_failure',failureClass:kind});};
@@ -51,18 +79,19 @@ function createReportRunTransport({app,timeoutMs=3000,createClient=sdkClient}={}
    // Applies to error responses too, which SDK 3.4.0 otherwise buffers itself.
    request.once('response',stream=>{
     responseStatus=stream.statusCode;trace({event:'response',operation:endpoint.endsWith('/row')?'insert':'read',status:responseStatus});
-    streams.add(stream);let total=0,chunks=0;const parts=[];
+    responseStream=stream;streams.add(stream);let total=0,chunks=0,ended=false;const parts=[];
     stream.on('data',chunk=>{if(++chunks>128||(total+=Buffer.byteLength(chunk))>65536){
      principalFailure('size');rejectBody(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'));
      request.destroy(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'));stream.destroy(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'));
     }else parts.push(Buffer.from(chunk));});
-    stream.once('end',()=>resolveBody(Buffer.concat(parts)));
+    stream.once('end',()=>{ended=true;principalTrace({event:'principal_body',complete:true});resolveBody(Buffer.concat(parts));});
     stream.once('error',()=>{principalFailure('stream');rejectBody(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'));});
     stream.once('aborted',()=>{principalFailure('stream');rejectBody(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'));});
-    stream.once('close',()=>streams.delete(stream));
+    stream.once('close',()=>{streams.delete(stream);if(!ended&&!signal.aborted&&!responseSettled){principalFailure('stream');rejectBody(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'));}});
     if(signal.aborted){request.destroy(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'));stream.destroy();}
    });
-   try{admit();trace({event:'dispatch',operation:endpoint.endsWith('/row')?'insert':'read'});}catch{request.destroy(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'));return request;}
+   try{admit();trace({event:'dispatch',operation:endpoint.endsWith('/row')?'insert':'read'});
+    principalTrace({event:'principal_request',getExact:method==='GET',pathExact:endpoint==='/project-user/current'});}catch{request.destroy(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'));return request;}
    return originalPipe.call(this,request,...args);
   };
   try{
@@ -70,11 +99,13 @@ function createReportRunTransport({app,timeoutMs=3000,createClient=sdkClient}={}
     catalyst:true,track:true,user:'user',headers:{'Content-Type':'application/json','Content-Length':String(bytes.length),
      ...(query?{Accept:'application/vnd.catalyst.v2+zcql'}:{})}})]);
    admit();if(response.statusCode<200||response.statusCode>=300)held();
-   try{if(!response.data||typeof response.data.on!=='function')held();}catch{principalFailure('stream');held();}
+   try{const raw=response.data;principalTrace({event:'principal_raw',same:raw===responseStream});
+    if(!raw||typeof raw.on!=='function')held();}catch{principalFailure('stream');held();}
    const received=await responseBody;let text,result;
    try{text=new TextDecoder('utf-8',{fatal:true}).decode(received);}catch{principalFailure('utf8');held();}
    try{result=JSON.parse(text);}catch{principalFailure('json');held();}admit();
    if(endpoint==='/project-user/current'){
+    principalTrace({event:'principal_structure',structure:principalStructure(result)});
     const p=result?.data;if(!p||Array.isArray(p)||typeof p!=='object'){principalFailure('envelope');held();}
     return Object.freeze({userId:String(p.user_id||''),roleId:String(p.role_details?.role_id||''),roleName:p.role_details?.role_name,status:p.status});
    }

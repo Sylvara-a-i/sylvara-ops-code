@@ -2,16 +2,26 @@
 const assert=require('node:assert/strict'),crypto=require('node:crypto'),https=require('node:https'),http=require('node:http');
 const {Writable,PassThrough}=require('node:stream');
 const sha=x=>crypto.createHash('sha256').update(x).digest('hex');
-function fixture({deferResponses=false,principalData,principalBody,principalStreamFailure=false}={}){
+function fixture({deferResponses=false,principalData,principalBody,principalStreamFailure=false,principalChunks,principalPrematureClose=false,credentialType}={}){
  let at=1800000000000;const rows=new Map(),receipts=new Map(),requests=[],principals=[],created=[];let sequence=0,authDelay=null,mode='normal',clientCalls=0;
  const binding={schemaVersion:1,enabled:true,environment:'development',sourceRevision:'a'.repeat(40),projectId:'123456789',
   controlHost:'synthetic.invalid',tableId:'123456788',nonce:'c'.repeat(32),verifiedAt:at-1,expiresAt:at+60000,timeoutMs:1000};
  const config={environment:'development',sourceRevision:binding.sourceRevision,controlHost:binding.controlHost,
   expectedProjectIdSha256:sha(binding.projectId),operatorIdHash:'operator_'+sha('synthetic')};
  let user='admin';
- const app={config:{projectId:binding.projectId,projectKey:'synthetic-key',environment:'Development'},
+ let app={config:{projectId:binding.projectId,projectKey:'synthetic-key',environment:'Development'},
   credential:{switchUser(value){user=value;principals.push(value);},getCurrentUser:()=>user,getCurrentUserType:()=> 'admin'},
   async authenticateRequest(request){if(authDelay)await authDelay;request.headers.Authorization='synthetic-managed-credential';}};
+ if(credentialType){
+  assert.ok(['admin','user'].includes(credentialType));
+  const path=require('node:path'),root=path.dirname(require.resolve('zcatalyst-sdk-node/package.json'));
+  const {CatalystCredential}=require(path.join(root,'lib/utils/credential'));
+  const {CatalystApp}=require(path.join(root,'lib/catalyst-app'));
+  const {CREDENTIAL_HEADER}=require(path.join(root,'lib/utils/constants')).default;
+  const credential=new CatalystCredential({adminType:'token',adminToken:'synthetic-admin-token',
+   [CREDENTIAL_HEADER.user_token]:'synthetic-user-token',[CREDENTIAL_HEADER.user_cred_type]:'token',[CREDENTIAL_HEADER.user]:credentialType});
+  app=new CatalystApp({project_id:binding.projectId,project_key:'synthetic-key',environment:'Development',credential});
+ }
  function query(sql){
   const receiptKey=/EVENT_KEY = '([^']+)'/.exec(sql)?.[1];
   if(receiptKey)return receipts.has(receiptKey)?[{RevenueDeskEventReceipts:structuredClone(receipts.get(receiptKey))}]:[];
@@ -24,9 +34,9 @@ function fixture({deferResponses=false,principalData,principalBody,principalStre
  https.request=function(options,callback){
   clientCalls++;const parts=[];let request;
   request=new Writable({autoDestroy:false,write(chunk,_encoding,done){parts.push(Buffer.from(chunk));done();},final(done){
-   const bytes=Buffer.concat(parts);const payload=bytes.length?JSON.parse(bytes):null;requests.push({path:options.path,payload});
-   assert.equal(options.headers.Authorization,'synthetic-managed-credential');
-   assert.equal(options.headers['X-CATALYST-USER'],'admin');
+   const bytes=Buffer.concat(parts);const payload=bytes.length?JSON.parse(bytes):null;requests.push({path:options.path,payload,method:options.method});
+   assert.equal(options.headers.Authorization,credentialType?'Zoho-oauthtoken synthetic-user-token':'synthetic-managed-credential');
+   assert.equal(options.headers['X-CATALYST-USER'],credentialType||'admin');
    const path=options.path.replace(`/baas/v1/project/${binding.projectId}`,'');
    (deferResponses?setImmediate:queueMicrotask)(()=>{
     if(mode==='network_error'){request.destroy(new Error('synthetic socket error'));return;}
@@ -51,7 +61,9 @@ function fixture({deferResponses=false,principalData,principalBody,principalStre
     const stream=new PassThrough();stream.statusCode=status;stream.headers={'content-type':'application/json'};
     callback(stream);request.emit('response',stream);
     if(path==='/project-user/current'&&principalStreamFailure){stream.destroy(new Error('private synthetic stream failure'));return;}
-    if(path==='/project-user/current'&&principalBody!==undefined)stream.end(principalBody);
+    if(path==='/project-user/current'&&principalPrematureClose){stream.write('{');stream.destroy();return;}
+    if(path==='/project-user/current'&&principalChunks){for(const chunk of principalChunks)stream.write(chunk);stream.end();}
+    else if(path==='/project-user/current'&&principalBody!==undefined)stream.end(principalBody);
     else if(mode==='oversize')stream.end('x'.repeat(65537));else stream.end(JSON.stringify({data}));
    });done();}});
   request.method='POST';request.protocol='https:';request.host='synthetic.invalid';request.path=options.path;created.push(request);return request;
