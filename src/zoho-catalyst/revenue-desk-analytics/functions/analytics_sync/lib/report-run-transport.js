@@ -30,7 +30,10 @@ function createReportRunTransport({app,timeoutMs=3000,createClient=sdkClient}={}
  const requests=new Set(),streams=new Set();let failed=false,rejectDeadline;
  const deadline=new Promise((_,reject)=>{rejectDeadline=reject;});deadline.catch(()=>{});
  const trace=event=>{if(typeof options.trace==='function')options.trace(Object.freeze({...event,at:performance.now()}));};
- let responseStatus;
+ let responseStatus,principalFailureClass,responseSettled=false;
+ // Fixed classifications only; never pass response data or errors into trace.
+ const principalFailure=kind=>{if(endpoint!=='/project-user/current'||signal.aborted||responseSettled||principalFailureClass)return;
+  principalFailureClass=kind;trace({event:'principal_failure',failureClass:kind});};
  let client;try{client=createClient(guarded);}catch{clearTimeout(timer);options.signal?.removeEventListener('abort',parentAbort);held();}
  const cancel=()=>{rejectDeadline(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'));for(const r of requests)r.destroy(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'));
   for(const s of streams)s.destroy(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'));};
@@ -50,12 +53,12 @@ function createReportRunTransport({app,timeoutMs=3000,createClient=sdkClient}={}
     responseStatus=stream.statusCode;trace({event:'response',operation:endpoint.endsWith('/row')?'insert':'read',status:responseStatus});
     streams.add(stream);let total=0,chunks=0;const parts=[];
     stream.on('data',chunk=>{if(++chunks>128||(total+=Buffer.byteLength(chunk))>65536){
-     rejectBody(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'));
+     principalFailure('size');rejectBody(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'));
      request.destroy(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'));stream.destroy(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'));
     }else parts.push(Buffer.from(chunk));});
     stream.once('end',()=>resolveBody(Buffer.concat(parts)));
-    stream.once('error',rejectBody);
-    stream.once('aborted',()=>rejectBody(new Error('REPORT_RUN_RECONCILIATION_REQUIRED')));
+    stream.once('error',()=>{principalFailure('stream');rejectBody(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'));});
+    stream.once('aborted',()=>{principalFailure('stream');rejectBody(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'));});
     stream.once('close',()=>streams.delete(stream));
     if(signal.aborted){request.destroy(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'));stream.destroy();}
    });
@@ -67,10 +70,12 @@ function createReportRunTransport({app,timeoutMs=3000,createClient=sdkClient}={}
     catalyst:true,track:true,user:'user',headers:{'Content-Type':'application/json','Content-Length':String(bytes.length),
      ...(query?{Accept:'application/vnd.catalyst.v2+zcql'}:{})}})]);
    admit();if(response.statusCode<200||response.statusCode>=300)held();
-   if(!response.data||typeof response.data.on!=='function')held();
-   const result=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(await responseBody));admit();
+   try{if(!response.data||typeof response.data.on!=='function')held();}catch{principalFailure('stream');held();}
+   const received=await responseBody;let text,result;
+   try{text=new TextDecoder('utf-8',{fatal:true}).decode(received);}catch{principalFailure('utf8');held();}
+   try{result=JSON.parse(text);}catch{principalFailure('json');held();}admit();
    if(endpoint==='/project-user/current'){
-    const p=result?.data;if(!p||Array.isArray(p)||typeof p!=='object')held();
+    const p=result?.data;if(!p||Array.isArray(p)||typeof p!=='object'){principalFailure('envelope');held();}
     return Object.freeze({userId:String(p.user_id||''),roleId:String(p.role_details?.role_id||''),roleName:p.role_details?.role_name,status:p.status});
    }
    if(!Array.isArray(result?.data))held();trace({event:'outcome',operation:endpoint.endsWith('/row')?'insert':'read',accepted:true,duplicate:false});return result.data;
@@ -82,7 +87,7 @@ function createReportRunTransport({app,timeoutMs=3000,createClient=sdkClient}={}
     trace({event:'outcome',operation:endpoint.endsWith('/row')?'insert':'read',accepted:false,
      duplicate:responseStatus===409&&error?.data?.error_code==='DUPLICATE_VALUE'});
    }catch{}}
-   held();}finally{body.destroy();requestStream?.destroy();clearTimeout(timer);
+   held();}finally{responseSettled=true;body.destroy();requestStream?.destroy();clearTimeout(timer);
    options.signal?.removeEventListener('abort',parentAbort);signal.removeEventListener('abort',cancel);cancel();}
  }
 
