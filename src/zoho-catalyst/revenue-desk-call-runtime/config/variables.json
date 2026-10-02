@@ -60,6 +60,10 @@
         "RETELL_SHARED_AGENT_VERSION",
         "RETELL_INBOUND_WEBHOOK_URL"
       ],
+      "required_when_number_assignment_approved_inventory": [
+        "RETELL_NUMBER_INVENTORY_JSON",
+        "RETELL_NUMBER_INVENTORY_SHA256"
+      ],
       "required_for_configuration_staging": [
         "FORM1_DESTINATION_SHA256",
         "RETELL_TEST_PHONE_NUMBER",
@@ -571,6 +575,32 @@
       "required_when": "RETELL_ROUTE_MODE=isolated_test",
       "format": "private Catalyst Connection link name",
       "boundary": "Connection must return only one Retell Bearer Authorization header."
+    },
+    {
+      "name": "RETELL_NUMBER_ASSIGNMENT_MODE",
+      "consumer": "route_control",
+      "secret": false,
+      "required": false,
+      "format": "qa_only (default) or approved_inventory",
+      "boundary": "Does not enable Retell execution. The accepted single QA number remains reserved outside the inventory."
+    },
+    {
+      "name": "RETELL_NUMBER_INVENTORY_JSON",
+      "consumer": "route_control",
+      "secret": true,
+      "required": false,
+      "required_when": "RETELL_NUMBER_ASSIGNMENT_MODE=approved_inventory",
+      "format": "Protected source/operator-pinned approved inventory JSON; schemaVersion/environment/sourceRevision/operatorIdHash/approvalSha256/assignments",
+      "boundary": "Private exact client/Deal/Journey/deployment/US-number tuples. No caller/Form1/Form2 authority, duplicates or number recycling. Preserve historical ownership."
+    },
+    {
+      "name": "RETELL_NUMBER_INVENTORY_SHA256",
+      "consumer": "route_control",
+      "secret": false,
+      "required": false,
+      "required_when": "RETELL_NUMBER_ASSIGNMENT_MODE=approved_inventory",
+      "format": "SHA-256 of exact UTF-8 inventory JSON",
+      "boundary": "Must match protected JSON. This document pin grants no provider execution or purchase authority."
     },
     {
       "name": "RETELL_TEST_PHONE_NUMBER",

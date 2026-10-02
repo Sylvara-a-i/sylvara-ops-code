@@ -15,6 +15,7 @@ const {
 } = require('./contracts');
 const { RevenueDeskError, invariant } = require('./errors');
 const { keyedDigest, numberLookupKey } = require('./security');
+const { assignedTestPhoneNumber } = require('./test-number-assignment');
 const { E164_PATTERN, validateConfiguration, assertExecutionTimingSupported,
   assertNotificationHandoffReady } = require('./validation');
 const {
@@ -564,13 +565,14 @@ function validateApprovalDeal(deal, command, configuration, preservedCoreApprova
 }
 
 function validateAssignedTestNumber(deal, deployment, runtimeConfig) {
+  const assignedNumber = assignedTestPhoneNumber(runtimeConfig, deployment, { dealId: deal.id, journeyId: deal.Intake_Submission_ID });
   invariant(runtimeConfig.retellRouteMode === 'isolated_test'
-    && E164_PATTERN.test(runtimeConfig.retellPhoneNumber || '')
+    && E164_PATTERN.test(assignedNumber || '')
     && E164_PATTERN.test(deal.Test_Phone_Number || '')
-    && deal.Test_Phone_Number === runtimeConfig.retellPhoneNumber
+    && deal.Test_Phone_Number === assignedNumber
     && deployment.NUMBER_LOOKUP_HASH === numberLookupKey(
       runtimeConfig.numberSecret,
-      runtimeConfig.retellPhoneNumber,
+      assignedNumber,
     ),
   'ISOLATED_RETELL_TEST_NUMBER_REQUIRED',
   'An isolated Retell Development test number is required.', { httpStatus: 409 });

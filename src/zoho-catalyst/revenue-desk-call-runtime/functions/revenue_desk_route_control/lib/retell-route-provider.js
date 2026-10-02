@@ -3,6 +3,7 @@
 const crypto = require('node:crypto');
 const { RevenueDeskError, invariant } = require('revenue_desk_call_gateway/lib/errors');
 const { numberLookupKey } = require('revenue_desk_call_gateway/lib/security');
+const { assignedTestPhoneNumber } = require('revenue_desk_call_gateway/lib/test-number-assignment');
 
 const AGENT_FIELDS = Object.freeze([
   'inbound_agents', 'outbound_agents', 'inbound_sms_agents', 'outbound_sms_agents',
@@ -101,7 +102,7 @@ function createRetellRouteProvider(config, {
     && typeof authorization === 'function' && typeof fetchImpl === 'function',
     'INVALID_RUNTIME_CONFIGURATION', 'Retell provider dependencies are unavailable.',
     { httpStatus: 503 });
-  const phonePath = encodeURIComponent(config.retellPhoneNumber);
+  const numberConfig = deployment => ({ ...config, retellPhoneNumber: assignedTestPhoneNumber(config, deployment) });
 
   async function request(method, path, body) {
     const token = await authorization();
@@ -135,12 +136,13 @@ function createRetellRouteProvider(config, {
     return json;
   }
 
-  async function getPhoneNumber() {
-    return request('GET', `/get-phone-number/${phonePath}`);
+  async function getPhoneNumber(selected) {
+    return request('GET', `/get-phone-number/${encodeURIComponent(selected.retellPhoneNumber)}`);
   }
 
   async function verifyActiveRoute({ deployment, configurationVersion, routeFingerprint }) {
-    const live = canonicalReadback(config, await getPhoneNumber());
+    const selected = numberConfig(deployment);
+    const live = canonicalReadback(selected, await getPhoneNumber(selected));
     invariant(live.numberLookupHash === deployment.NUMBER_LOOKUP_HASH
       && deployment.MONITOR_AGENT_ID === config.sharedAgentId
       && Number(deployment.MONITOR_AGENT_VERSION) === config.sharedAgentVersion
@@ -157,28 +159,29 @@ function createRetellRouteProvider(config, {
 
   async function disableRoute(binding) {
     try {
-      const before = await getPhoneNumber();
-      assertRollbackOwnership(config, before, binding || {});
+      const selected = numberConfig(binding?.deployment);
+      const before = await getPhoneNumber(selected);
+      assertRollbackOwnership(selected, before, binding || {});
       const alreadyInactive = routeIsInactive(before);
       if (!alreadyInactive) {
         // A mismatched or repurposed active route must never be cleared. This
         // exact active readback is the final ownership gate before mutation.
-        const active = canonicalReadback(config, before);
+        const active = canonicalReadback(selected, before);
         invariant(active.numberLookupHash === binding.deployment.NUMBER_LOOKUP_HASH,
           'ROUTE_ROLLBACK_OWNERSHIP_UNPROVEN',
           'Retell route does not belong to the selected deployment.', { httpStatus: 409 });
       }
-      if (!alreadyInactive) await request('PATCH', `/update-phone-number/${phonePath}`, {
+      if (!alreadyInactive) await request('PATCH', `/update-phone-number/${encodeURIComponent(selected.retellPhoneNumber)}`, {
         inbound_agents: [], outbound_agents: [], inbound_sms_agents: [],
         outbound_sms_agents: [], inbound_webhook_url: null, inbound_sms_webhook_url: null,
       });
-      const after = await getPhoneNumber();
-      assertRollbackOwnership(config, after, binding || {});
+      const after = await getPhoneNumber(selected);
+      assertRollbackOwnership(selected, after, binding || {});
       invariant(routeIsInactive(after),
         'ROUTE_ROLLBACK_FAILED', 'Retell route rollback did not read back inactive.',
         { httpStatus: 503, ambiguous: true });
       const safe = {
-        numberLookupHash: numberLookupKey(config.numberSecret, config.retellPhoneNumber),
+        numberLookupHash: numberLookupKey(config.numberSecret, selected.retellPhoneNumber),
         lastModificationTimestamp: after.last_modification_timestamp,
         inboundAgentCount: 0, outboundAgentCount: 0,
         inboundSmsAgentCount: 0, outboundSmsAgentCount: 0,

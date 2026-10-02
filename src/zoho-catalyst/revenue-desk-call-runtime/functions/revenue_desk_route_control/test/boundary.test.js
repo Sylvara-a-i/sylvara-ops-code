@@ -697,3 +697,19 @@ test('storage qualification authenticates before diagnostic and never constructs
  const out=response();await listener({method:'POST',url:'/internal/revenue-desk/approve-configuration',headers,rawBody,...change},out);assert.notEqual(out.statusCode,200);}
  assert.equal(calls,0);const out=response();await listener({method:'POST',url:'/internal/revenue-desk/approve-configuration',headers,rawBody},out);assert.equal(out.statusCode,200);assert.equal(calls,1);
 });
+
+test('protected inventory composes in actual Controller config while provider execution stays disabled', () => {
+  const env = environment({RETELL_TEST_PHONE_NUMBER:SYNTHETIC_TEST_PHONE}), baseline = loadConfig(env, REVISION);
+  const document = {schemaVersion:1,environment:'development',sourceRevision:REVISION,
+    operatorIdHash:baseline.operatorIdHash,approvalSha256:'9'.repeat(64),assignments:[{
+      dealId:'900000001',journeyId:'synthetic_inventory_journey',clientId:'synthetic_inventory_client',
+      deploymentId:'synthetic_inventory_deployment',phoneNumber:'+19135550901'}]};
+  const raw=JSON.stringify(document), pin=crypto.createHash('sha256').update(raw).digest('hex');
+  const config=loadConfig({...env,RETELL_NUMBER_ASSIGNMENT_MODE:'approved_inventory',
+    RETELL_NUMBER_INVENTORY_JSON:raw,RETELL_NUMBER_INVENTORY_SHA256:pin},REVISION);
+  assert.equal(config.retellRouteMode,'disabled');assert.equal(config.numberAssignmentMode,'approved_inventory');
+  assert.equal(config.approvedTestNumbers.length,1);
+  assert.throws(()=>loadConfig({...env,RETELL_NUMBER_ASSIGNMENT_MODE:'approved_inventory',
+    RETELL_NUMBER_INVENTORY_JSON:raw,RETELL_NUMBER_INVENTORY_SHA256:'0'.repeat(64)},REVISION),
+    {code:'INVALID_TEST_NUMBER_INVENTORY'});
+});

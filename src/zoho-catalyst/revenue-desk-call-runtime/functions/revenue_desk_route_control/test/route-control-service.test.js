@@ -249,7 +249,7 @@ class MemoryStore {
   }
 }
 
-function fixture({ dealOverrides = {}, deploymentOverrides = {}, configOverrides = {},
+function fixture({ dealOverrides = {}, deploymentOverrides = {}, configOverrides = {}, runtimeConfigOverrides = {},
   configurationStaging, beforeCrmApproval = async () => {},
   providerMode = 'active', failCrmActivation = false,
   ambiguousCrmActivation = false, mutateDealDuringRouteVerification = null,
@@ -428,7 +428,7 @@ function fixture({ dealOverrides = {}, deploymentOverrides = {}, configOverrides
     operatorVerificationSecret: 'o'.repeat(32), eventChainSecret: EVENT_CHAIN_SECRET,
     operatorIdHash: `operator_${'4'.repeat(64)}`, tables,
     retellRouteMode: 'isolated_test', retellPhoneNumber: '+15550100104',
-    numberSecret: 'n'.repeat(32),
+    numberSecret: 'n'.repeat(32), ...runtimeConfigOverrides,
   };
   const runtimeConfig = {
     environment: 'development', sourceRevision: SOURCE_REVISION,
@@ -2470,4 +2470,27 @@ test('route fingerprint binds every immutable Form 2 control field', () => {
   assert.notEqual(routeFingerprint(routeFromRows(baseDeployment, row)), first);
   const otherClient = { ...baseDeployment, CLIENT_ID: 'client_other' };
   assert.notEqual(routeFingerprint(routeFromRows(otherClient, configurationRow())), first);
+});
+
+
+test('inventory-bound activation uses exact assigned destination and never trusts CRM number alone', async () => {
+  const {loadTestNumberAssignments}=require('revenue_desk_call_gateway/lib/test-number-assignment');
+  const crypto=require('node:crypto'), phone='+19135550901';
+  const raw=JSON.stringify({schemaVersion:1,environment:'development',sourceRevision:SOURCE_REVISION,
+    operatorIdHash:'operator_'+'4'.repeat(64),approvalSha256:'9'.repeat(64),assignments:[{
+      dealId:IDS.deal,journeyId:IDS.journey,clientId:deployment().CLIENT_ID,deploymentId:IDS.deployment,phoneNumber:phone}]});
+  const assignment=loadTestNumberAssignments({RETELL_NUMBER_ASSIGNMENT_MODE:'approved_inventory',
+    RETELL_NUMBER_INVENTORY_JSON:raw,RETELL_NUMBER_INVENTORY_SHA256:crypto.createHash('sha256').update(raw).digest('hex')},
+    {sourceRevision:SOURCE_REVISION,operatorIdHash:'operator_'+'4'.repeat(64),numberSecret:'n'.repeat(32),qaPhoneNumber:'+15550100104'});
+  for(const wrongCrmNumber of [false,true]){
+    const subject=fixture({dealOverrides:{Test_Phone_Number:wrongCrmNumber?'+13035550902':phone},
+      deploymentOverrides:{NUMBER_LOOKUP_HASH:numberLookupKey('n'.repeat(32),phone)},runtimeConfigOverrides:assignment});
+    await subject.service.approve(command('approve'));subject.setClock(NOW+300_000);
+    if(wrongCrmNumber){await assert.rejects(subject.service.activate(command('activate')),{code:'ISOLATED_RETELL_TEST_NUMBER_REQUIRED'});
+      assert.equal(subject.getProviderVerificationCalls(),0);assert.equal(subject.getCrmActivationCalls(),0);
+    }else{const result=await subject.service.activate(command('activate'));assert.equal(result.deployment.TEST_STATUS,'Live');
+      assert.equal(result.deployment.NUMBER_LOOKUP_HASH,numberLookupKey('n'.repeat(32),phone));
+      assert.equal(result.deployment.CALL_LIMIT,25);assert.equal(Date.parse(result.deployment.EXPIRES_AT)-Date.parse(result.deployment.ACTUAL_START_AT),7*86400000);
+    }
+  }
 });
