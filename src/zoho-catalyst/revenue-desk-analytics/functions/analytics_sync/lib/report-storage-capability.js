@@ -15,13 +15,13 @@ function held(){throw Object.assign(new Error('REPORT_STORAGE_QUALIFICATION_HELD
  * Evidence hashes refer to independently retained metadata, not self-proving provider permission.
  */
 function validateStorageCapability(c,{app,config,environment,now,verifiedAt,expiresAt}={}){
- if(!exact(c,['region','origin','controllerFunctionId','deploymentId','sdkVersion','authMode','authType','tables','evidence'])
+ if(!exact(c,['region','origin','controllerFunctionId','deploymentId','sdkVersion','authMode','authType','creatorPolicy','tables','evidence'])
   ||c.region!=='US'||c.origin!=='https://api.catalyst.zoho.com'||c.sdkVersion!=='3.4.0'
-  ||c.authMode!=='user'||c.authType!=='admin'||!ID.test(c.controllerFunctionId||'')
+  ||c.creatorPolicy!=='observed_consistent_v1'||c.authMode!=='user'||c.authType!=='admin'||!ID.test(c.controllerFunctionId||'')
   ||c.controllerFunctionId!==environment.REPORT_CONTROLLER_FUNCTION_ID
   ||typeof c.deploymentId!=='string'||!/^[A-Za-z0-9_-]{1,100}$/.test(c.deploymentId)
   ||c.deploymentId!==environment.REPORT_DEPLOYMENT_ID
-  ||!exact(c.tables,['reportRuns','eventReceipts'])||!exact(c.evidence,['ownerAuthorization','ownership','access','creator']))held();
+  ||!exact(c.tables,['reportRuns','eventReceipts'])||!exact(c.evidence,['ownerAuthorization','ownership','access']))held();
  for(const [role,name,unique,fields]of [['reportRuns','ReportRuns','IdempotencyKey',REPORT_FIELDS],
   ['eventReceipts','RevenueDeskEventReceipts','EVENT_KEY',RECEIPT_FIELDS]]){
   const t=c.tables[role];
@@ -30,12 +30,11 @@ function validateStorageCapability(c,{app,config,environment,now,verifiedAt,expi
    ||!HASH.test(t.uniquenessSha256||'')||t.projectionSha256!==digest(fields))held();
  }
  if(c.tables.reportRuns.id===c.tables.eventReceipts.id)held();
- for(const [kind,e]of Object.entries(c.evidence)){
-  if(!exact(e,kind==='creator'?['digest','verifiedAt','expiresAt','creatorIdSha256']:['digest','verifiedAt','expiresAt'])
+ for(const e of Object.values(c.evidence)){
+  if(!exact(e,['digest','verifiedAt','expiresAt'])
    ||!HASH.test(e.digest||'')||!Number.isSafeInteger(e.verifiedAt)||e.verifiedAt<0
    ||!Number.isSafeInteger(e.expiresAt)||e.verifiedAt>verifiedAt||verifiedAt-e.verifiedAt>900000
-   ||e.expiresAt<expiresAt||now<e.verifiedAt||now>=e.expiresAt
-   ||kind==='creator'&&!HASH.test(e.creatorIdSha256||''))held();
+   ||e.expiresAt<expiresAt||now<e.verifiedAt||now>=e.expiresAt)held();
  }
  const root=require('node:path').dirname(require.resolve('zcatalyst-sdk-node/package.json'));
  const constants=require(require('node:path').join(root,'lib/utils/constants')).default;

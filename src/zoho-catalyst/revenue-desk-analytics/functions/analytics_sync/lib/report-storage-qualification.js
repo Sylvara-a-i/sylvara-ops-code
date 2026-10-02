@@ -19,7 +19,7 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
   let b;try{b=JSON.parse(raw);}catch{held();}
   if(!exact(b,['schemaVersion','enabled','environment','sourceRevision','projectId','controlHost','tableId','nonce',
    'capability','verifiedAt','expiresAt','timeoutMs','singleAdmittedInvocation'])
-   ||b.schemaVersion!==2||b.enabled!==true||b.environment!=='development'||b.singleAdmittedInvocation!==true
+   ||b.schemaVersion!==3||b.enabled!==true||b.environment!=='development'||b.singleAdmittedInvocation!==true
    ||config?.environment!==b.environment||environment.DEPLOYMENT_ENVIRONMENT!==b.environment
    ||b.sourceRevision!==config.sourceRevision||environment.SOURCE_REVISION!==b.sourceRevision||!/^[a-f0-9]{40}$/.test(b.sourceRevision||'')
    ||!ID.test(b.projectId||'')||sha(b.projectId)!==config.expectedProjectIdSha256
@@ -30,7 +30,7 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
    ||!Number.isSafeInteger(b.timeoutMs)||b.timeoutMs<1||b.timeoutMs>60000||typeof now!=='function'||typeof transportFactory!=='function')held();
   const capability=validateStorageCapability(b.capability,{app,config:{projectId:b.projectId},environment,now:now(),verifiedAt:b.verifiedAt,expiresAt:b.expiresAt});
   if(b.tableId!==capability.tables.reportRuns.id)held();
-  const capabilitySha256=sha(capability),creatorIdSha256=capability.evidence.creator.creatorIdSha256;
+  const capabilitySha256=sha(capability);
   const key=sha({mechanism:'unique_insert_successor_v1',projectId:b.projectId,tables:capability.tables,nonce:b.nonce,sourceRevision:b.sourceRevision,capabilitySha256});
   const rootKey='revenue-desk-report-v1:'+key;
   const active=()=>{const at=now();validateStorageCapability(capability,{app,config:{projectId:b.projectId},environment,now:at,verifiedAt:b.verifiedAt,expiresAt:b.expiresAt});if(!Number.isSafeInteger(at)||at<b.verifiedAt||at>=b.expiresAt)held();return at;};active();
@@ -47,7 +47,8 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
    const cancel=()=>{abort.abort();reject(new Error('REPORT_STORAGE_QUALIFICATION_HELD'));};
    signal?.addEventListener('abort',cancel,{once:true});if(signal?.aborted)cancel();const timer=setTimeout(cancel,b.timeoutMs);
    const counts={reads:0,inserts:0,admissionReads:0,admissionInserts:0};
-   function admission(){const at=active();if(abort.signal.aborted||at<start||at-start>=b.timeoutMs||performance.now()>=wall)held();return at;}
+   let provenanceFailed=false;
+   function admission(){const at=active();if(provenanceFailed||abort.signal.aborted||at<start||at-start>=b.timeoutMs||performance.now()>=wall)held();return at;}
    const budget={assertActive:admission,consume(kind){admission();if(kind==='report_run_read'){if(++counts.reads>7)held();}
     else if(kind==='admission_read'){if(!write||++counts.admissionReads>1)held();}
     else if(kind==='admission_write'){if(!write||++counts.admissionInserts>1)held();}
@@ -56,7 +57,19 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
    async function run(){
     admission();const io=transportFactory({app,timeoutMs:Math.min(b.timeoutMs,3000),storageCapability:capability,storageOperationKey:key,storageAssertActive:admission,storageSourceRevision:b.sourceRevision,storageBindingSha256:pin});
     if(!['query','insert','insertAdmission','readAdmission'].every(k=>typeof io?.[k]==='function'))held();
-    let admissionEvidenceDigest;
+    let admissionEvidenceDigest,observedCreator;
+    const acknowledgments=new Map();
+    // Observed provenance only; never account identity or a renewed attestation.
+    // Latch validation failure because the successor store catches insert errors.
+    function provenance(row){
+     const value=row?.CREATORID;
+     const id=typeof value==='string'?value:Number.isSafeInteger(value)&&value>0?String(value):'';
+     if(!/^[1-9][0-9]{0,29}$/.test(id)||observedCreator!==undefined&&id!==observedCreator){provenanceFailed=true;held();}
+     observedCreator=id;
+    }
+    function projection(row,role){try{validateStoredProjection(row,role);
+     if(!/^[1-9][0-9]{0,29}$/.test(String(row?.ROWID||'')))held();provenance(row);
+    }catch(error){provenanceFailed=true;throw error;}}
     if(write){
      // No pre-read race and no ambiguous-write recovery authorizing dispatch.
      const owner=crypto.randomUUID(),eventKey='report-storage:'+key;
@@ -71,9 +84,8 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
      budget.consume('admission_read');const observed=await io.readAdmission(eventKey,options);admission();
      if(!Array.isArray(observed)||observed.length!==1)held();
      const row=observed[0].RevenueDeskEventReceipts||observed[0],ack=accepted[0];
-     validateStoredProjection(row,'eventReceipts');validateStoredProjection(ack,'eventReceipts');
-     if(!/^[1-9][0-9]{0,29}$/.test(String(row?.ROWID||''))||String(row.ROWID)!==String(ack?.ROWID||'')
-      ||sha(String(row.CREATORID||''))!==creatorIdSha256)held();
+     projection(ack,'eventReceipts');projection(row,'eventReceipts');
+     if(String(row.ROWID)!==String(ack.ROWID))held();
      for(const [field,value] of Object.entries(receipt)){
       if(field==='RECEIPT_VERSION'){if(!/^(?:1)$/.test(String(row[field]))||!/^(?:1)$/.test(String(ack[field])))held();}
       else if(field==='RECEIVED_AT'||field==='PROCESSED_AT'){
@@ -87,11 +99,19 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
     const rows=new Map();
     const checked={async query(sql,o){const {trace,...readOptions}=o||{};const found=await io.query(sql,readOptions);admission();
      if(!Array.isArray(found)||found.length>2)held();
-     for(const entry of found){const row=entry.ReportRuns||entry;validateStoredProjection(row,'reportRuns');
-      if(sha(String(row?.CREATORID||''))!==creatorIdSha256||!/^[1-9][0-9]{0,29}$/.test(String(row?.ROWID||'')))held();
+     for(const entry of found){const row=entry.ReportRuns||entry;projection(row,'reportRuns');
+      const ack=acknowledgments.get(row.IdempotencyKey);
+      if(ack&&Object.keys(ack).some(k=>k!=='CREATORID'&&row[k]!==ack[k])){provenanceFailed=true;held();}
       if(rows.has(row.ROWID)&&canonicalJson(rows.get(row.ROWID))!==canonicalJson(row))held();
       rows.set(row.ROWID,structuredClone(row));}
-     return found;},async insert(row,o){admission();if(!write)held();return io.insert(row,o);}};
+     return found;},async insert(row,o){admission();if(!write)held();
+     const accepted=await io.insert(row,o);admission();
+     if(!Array.isArray(accepted)||accepted.length!==1){provenanceFailed=true;held();}
+     const ack=accepted[0];projection(ack,'reportRuns');
+     const fields=Object.keys(row);
+     if(fields.some(k=>ack[k]!==row[k])){provenanceFailed=true;held();}
+     acknowledgments.set(ack.IdempotencyKey,{...Object.fromEntries(fields.map(k=>[k,ack[k]])),ROWID:ack.ROWID});
+     return accepted;}};
     const left=createReportSuccessorStore({app,environment:'development',transport:checked});
     const right=createReportSuccessorStore({app,environment:'development',transport:checked});
     if(!write){
@@ -100,6 +120,7 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
       ||head.state.diagnostic.sourceRevision!==b.sourceRevision||head.version>2)held();
      return Object.freeze({status:'storage_evidence_unattested',mechanism:'unique_insert_successor_v1',
       operationDigest:key,evidenceDigest:sha({rows:[...rows.values()].sort((a,c)=>String(a.ROWID).localeCompare(String(c.ROWID)))}),
+      creatorProvenance:'observed_consistent_v1',namedIdentityVerified:false,
       physicalRows:rows.size,headVersion:head.version,reads:counts.reads,inserts:0,qualificationAuthority:false,deliveryAuthority:false});
     }
     budget.consume('report_run_read');const prior=await checked.query(`SELECT * FROM ReportRuns WHERE IdempotencyKey = '${rootKey}' LIMIT 2`,options);
@@ -108,7 +129,7 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
     const state=label=>({kind:'report_attempt_v1',identity,phase:'working',owner:'synthetic_'+label,failures:0,nextAttemptAt:0,lastGenerationKey:null,
      diagnostic:{nonce:b.nonce,sourceRevision:b.sourceRevision,label}});
     const traces=new Map();
-    function contender(label){const events=[];traces.set(label,events);return {...options,trace:e=>{admission();events.push(e);}};}
+    function contender(label){const events=[];traces.set(label,events);return {...options,trace:e=>{if(provenanceFailed)return;admission();events.push(e);}};}
     function round(labels,outcomes){
      if(outcomes.some(x=>x.status!=='fulfilled')||outcomes.filter(x=>x.value).length!==1)held();
      const winner=outcomes.findIndex(x=>x.value);
@@ -137,6 +158,7 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
     return Object.freeze({status:'storage_unique_successor_observed',mechanism:'unique_insert_successor_v1',operationDigest:key,
      evidenceDigest:sha(evidence),observedAt,physicalRows:2,reads:7,inserts:4,overlappingRounds:2,
      admissionReads:counts.admissionReads,admissionInserts:counts.admissionInserts,admissionEvidenceDigest,
+     creatorProvenance:'observed_consistent_v1',namedIdentityVerified:false,
      durableAdmissionObserved:true,singleAdmittedInvocationRequired:true,qualificationAuthority:false,deliveryAuthority:false});
    }
    try{const result=await Promise.race([run(),deadline]);admission();return result;}
