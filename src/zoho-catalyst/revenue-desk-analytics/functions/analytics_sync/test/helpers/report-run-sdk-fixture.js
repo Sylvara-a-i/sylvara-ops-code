@@ -2,7 +2,7 @@
 const assert=require('node:assert/strict'),crypto=require('node:crypto'),https=require('node:https'),http=require('node:http');
 const {Writable,PassThrough}=require('node:stream');
 const sha=x=>crypto.createHash('sha256').update(x).digest('hex');
-function fixture({deferResponses=false}={}){
+function fixture({deferResponses=false,principalData,principalBody,principalStreamFailure=false}={}){
  let at=1800000000000;const rows=new Map(),receipts=new Map(),requests=[],principals=[],created=[];let sequence=0,authDelay=null,mode='normal',clientCalls=0;
  const binding={schemaVersion:1,enabled:true,environment:'development',sourceRevision:'a'.repeat(40),projectId:'123456789',
   controlHost:'synthetic.invalid',tableId:'123456788',nonce:'c'.repeat(32),verifiedAt:at-1,expiresAt:at+60000,timeoutMs:1000};
@@ -33,7 +33,7 @@ function fixture({deferResponses=false}={}){
     if(mode==='stall')return;
     let status=200,data;
     if(path==='/query')data=query(payload.query);
-    else if(path==='/project-user/current')data={user_id:'987654321',status:'ACTIVE',role_details:{role_name:'App Administrator',role_id:'987654320'},email_id:'private-unused@example.invalid'};
+    else if(path==='/project-user/current')data=principalData === undefined ? {user_id:'987654321',status:'ACTIVE',role_details:{role_name:'App Administrator',role_id:'987654320'},email_id:'private-unused@example.invalid'} : principalData;
     else if(path==='/table/RevenueDeskEventReceipts/row'){
      assert.equal(payload.length,1);const row=payload[0];
      if(receipts.has(row.EVENT_KEY)){status=409;data={error_code:'DUPLICATE_VALUE'};}
@@ -50,7 +50,9 @@ function fixture({deferResponses=false}={}){
     if(mode==='lost_insert'&&path==='/table/ReportRuns/row'){request.destroy(new Error('synthetic response lost after insert'));return;}
     const stream=new PassThrough();stream.statusCode=status;stream.headers={'content-type':'application/json'};
     callback(stream);request.emit('response',stream);
-    if(mode==='oversize')stream.end('x'.repeat(65537));else stream.end(JSON.stringify({data}));
+    if(path==='/project-user/current'&&principalStreamFailure){stream.destroy(new Error('private synthetic stream failure'));return;}
+    if(path==='/project-user/current'&&principalBody!==undefined)stream.end(principalBody);
+    else if(mode==='oversize')stream.end('x'.repeat(65537));else stream.end(JSON.stringify({data}));
    });done();}});
   request.method='POST';request.protocol='https:';request.host='synthetic.invalid';request.path=options.path;created.push(request);return request;
  };

@@ -1,6 +1,8 @@
 'use strict';
 const crypto = require('node:crypto');
 const PROFILE = 'report_runtime_context_v1';
+const PRINCIPAL_FAILURE_STAGES = Object.freeze({ stream: 'principal_stream', size: 'principal_size',
+  utf8: 'principal_utf8', json: 'principal_json', envelope: 'principal_envelope' });
 const sha = value => crypto.createHash('sha256').update(value).digest('hex');
 const exact = (value, keys) => value && typeof value === 'object' && !Array.isArray(value)
   && Object.keys(value).sort().join(',') === [...keys].sort().join(',');
@@ -82,6 +84,9 @@ function createProtectedRuntimeContext({ environment = process.env, now = Date.n
         budget: { assertActive: active }, trace(event) {
           if (event?.event === 'dispatch') { active(); if (++dispatches > 1) held();
             out.stage = 'principal_response'; out.principal_request_status = 'unknown'; }
+          if (event?.event === 'principal_failure' && typeof event.failureClass === 'string'
+            && Object.hasOwn(PRINCIPAL_FAILURE_STAGES, event.failureClass))
+            out.stage = PRINCIPAL_FAILURE_STAGES[event.failureClass];
           if (event?.event === 'response' && Number.isInteger(event.status)) {
             out.principal_request_status = event.status >= 200 && event.status < 300 ? '2xx'
               : event.status >= 400 && event.status < 500 ? '4xx' : event.status >= 500 ? '5xx' : 'unknown';

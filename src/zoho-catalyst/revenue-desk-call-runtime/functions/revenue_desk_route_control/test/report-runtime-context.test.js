@@ -84,6 +84,7 @@ test('timeout cancels actual SDK request; delayed auth cannot dispatch after dea
       const run = createProtectedRuntimeContext({ environment: s.environment, now: () => s.at, transportFactory: createReportRunTransport });
       const result = await run({}, s.args);
       assert.equal(result.principal_request_status, delayedAuth ? 'not_dispatched' : 'timeout');
+      assert.notEqual(result.stage, 'principal_stream');
       if (release) release(); await new Promise(resolve => setImmediate(resolve));
       assert.equal(f.clientCalls, delayedAuth ? 0 : 1); assert.equal(f.rows.size + f.receipts.size, 0);
       for (const request of f.created) assert.equal(request.destroyed, true);
@@ -115,4 +116,48 @@ test('schema 2 diagnostic is independent of operational HMAC actor continuity', 
     assert.equal(result.qualification_authority, false); assert.equal(f.clientCalls, 1);
     assert.equal(f.rows.size + f.receipts.size, 0);
   } finally { f.restore(); }
+});
+
+test('actual SDK principal response failures emit only closed classes and never write', async () => {
+  const principal = {user_id:'987654321', role_details:{role_id:'987654320', role_name:'App Administrator'}, status:'ACTIVE'};
+  for (const [options, stage] of [
+    [{principalStreamFailure:true}, 'principal_stream'],
+    [{principalBody:'private synthetic body '.repeat(4000)}, 'principal_size'],
+    [{principalBody:Buffer.from([0xc3,0x28])}, 'principal_utf8'],
+    [{principalBody:'{private synthetic body'}, 'principal_json'],
+    [{principalData:[principal]}, 'principal_envelope'],
+    [{principalData:null}, 'principal_envelope'],
+  ]) {
+    const f = fixture(options); try {
+      const s = setup(f), run = createProtectedRuntimeContext({ environment:s.environment, now:()=>s.at, transportFactory:createReportRunTransport });
+      const result = await run({}, s.args);
+      assert.equal(result.stage, stage); assert.equal(result.principal_request_status, '2xx');
+      assert.equal(result.authentication_status, 'succeeded');
+      assert.equal(result.principal_identity_matches, 'Unknown');
+      assert.equal(result.principal_status_active, 'Unknown'); assert.equal(result.principal_role_matches, 'Unknown');
+      assert.equal(result.qualification_authority, false); assert.equal(Object.keys(result).length, 15);
+      assert.equal(f.clientCalls, 1); assert.equal(f.rows.size + f.receipts.size, 0);
+      assert.doesNotMatch(JSON.stringify(result), /private synthetic|987654321|987654320|private-unused|synthetic-managed|Content-Type|Authorization/);
+      await new Promise(resolve=>setImmediate(resolve)); // Late teardown cannot mutate frozen output or emit private errors.
+      assert.equal(result.stage, stage); assert.equal((await run({}, s.args)).binding_valid, false);
+      assert.equal(f.clientCalls, 1);
+    } finally { f.restore(); }
+  }
+});
+
+test('documented numeric principal shape remains strict; unknown trace classes cannot echo private text', async () => {
+  for(const malicious of [false, true]) {
+    const f = fixture({principalData:{user_id:987654321, role_details:{role_id:987654320,role_name:'App Administrator'},status:'ACTIVE'}});
+    try {
+      const s = setup(f);
+      const factory = options => {const io=createReportRunTransport(options);return malicious ? {currentPrincipal:async o=>{
+        o.trace({event:'principal_failure',failureClass:'private synthetic response'});
+        return io.currentPrincipal(o);
+      }} : io;};
+      const result = await createProtectedRuntimeContext({environment:s.environment,now:()=>s.at,transportFactory:factory})({},s.args);
+      assert.equal(result.stage,'complete');assert.equal(result.principal_identity_matches,true);
+      assert.equal(f.clientCalls,1);assert.equal(f.rows.size+f.receipts.size,0);
+      assert.doesNotMatch(JSON.stringify(result),/private synthetic|987654321|987654320/);
+    }finally{f.restore();}
+  }
 });
