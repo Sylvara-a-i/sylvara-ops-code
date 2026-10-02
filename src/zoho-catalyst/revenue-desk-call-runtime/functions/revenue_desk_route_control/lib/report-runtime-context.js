@@ -6,6 +6,21 @@ const PRINCIPAL_FAILURE_STAGES = Object.freeze({ stream: 'principal_stream', siz
 const sha = value => crypto.createHash('sha256').update(value).digest('hex');
 const exact = (value, keys) => value && typeof value === 'object' && !Array.isArray(value)
   && Object.keys(value).sort().join(',') === [...keys].sort().join(',');
+const credentialEnum=value=>value==='user'||value==='admin'?value:'unknown';
+function safeStructure(value){
+ if(!value||typeof value!=='object'||Array.isArray(value))return null;
+ const schema={};
+ for(const prefix of ['root','data','singleton','decoded_root','decoded_data','decoded_singleton']){
+  schema[prefix+'_type']=['null','object','array','string','number','boolean','absent'];
+  for(const field of ['user_id','role_details','status'])schema[prefix+'_has_'+field]=[true,false];
+ }
+ for(const prefix of ['','decoded_']){schema[prefix+'root_status']=['success','error','absent','other'];
+  schema[prefix+'array_location']=['root','data','none'];schema[prefix+'array_bucket']=['not_array','zero','one','multiple'];}
+ schema.decoded_location=['root','data','singleton','none'];schema.decoded_parse=['not_attempted','parsed','invalid','held'];
+ if(!exact(value,Object.keys(schema)))return null;
+ const out={};for(const [key,choices]of Object.entries(schema)){if(!choices.includes(value[key]))return null;out[key]=value[key];}
+ return Object.freeze(out);
+}
 function held() { throw new Error('REPORT_RUNTIME_CONTEXT_HELD'); }
 function defaultTransport(options) {
   return require('../reporting/revenue-desk-analytics/functions/analytics_sync/lib/report-run-transport')
@@ -26,7 +41,9 @@ function createProtectedRuntimeContext({ environment = process.env, now = Date.n
     const out = { stage: 'binding', binding_valid: false, source_revision_matches: false,
       sdk_version_matches: 'Unknown', app_project_matches: 'Unknown',
       app_environment_is_development: 'Unknown', authenticate_request_available: 'Unknown',
-      credential_user_mode: 'user', credential_user_type: 'unknown',
+      credential_user_mode: 'unknown', credential_user_type: 'unknown',
+      principal_get_exact: 'Unknown', principal_path_exact: 'Unknown',
+      principal_raw_stream_same: 'Unknown', principal_body_complete: false, response_structure: null,
       authentication_status: 'not_run', principal_request_status: 'not_dispatched',
       principal_identity_matches: 'Unknown', principal_status_active: 'Unknown',
       principal_role_matches: 'Unknown', qualification_authority: false };
@@ -74,6 +91,9 @@ function createProtectedRuntimeContext({ environment = process.env, now = Date.n
           out.stage = 'auth'; out.authentication_status = 'held';
           active(); if (++authCalls > 1) held();
           await target.authenticateRequest(command); active(); out.authentication_status = 'succeeded';
+          // Read only documented nonsecret scope/type methods after managed authentication.
+          try{out.credential_user_mode=credentialEnum(target.credential?.getCurrentUser?.());
+            out.credential_user_type=credentialEnum(target.credential?.getCurrentUserType?.());}catch{}
         };
         const value = Reflect.get(target, key, target);
         return typeof value === 'function' ? value.bind(target) : value;
@@ -84,6 +104,11 @@ function createProtectedRuntimeContext({ environment = process.env, now = Date.n
         budget: { assertActive: active }, trace(event) {
           if (event?.event === 'dispatch') { active(); if (++dispatches > 1) held();
             out.stage = 'principal_response'; out.principal_request_status = 'unknown'; }
+          if(event?.event==='principal_request'&&typeof event.getExact==='boolean'&&typeof event.pathExact==='boolean'){
+            out.principal_get_exact=event.getExact;out.principal_path_exact=event.pathExact;}
+          if(event?.event==='principal_raw'&&typeof event.same==='boolean')out.principal_raw_stream_same=event.same;
+          if(event?.event==='principal_body'&&event.complete===true)out.principal_body_complete=true;
+          if(event?.event==='principal_structure'){const observed=safeStructure(event.structure);if(observed)out.response_structure=observed;}
           if (event?.event === 'principal_failure' && typeof event.failureClass === 'string'
             && Object.hasOwn(PRINCIPAL_FAILURE_STAGES, event.failureClass))
             out.stage = PRINCIPAL_FAILURE_STAGES[event.failureClass];
