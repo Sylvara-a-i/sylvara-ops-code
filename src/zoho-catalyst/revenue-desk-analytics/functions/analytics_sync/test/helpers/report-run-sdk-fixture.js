@@ -8,7 +8,7 @@ function fixture({deferResponses=false,principalData,principalBody,principalStre
   controlHost:'synthetic.invalid',tableId:'123456788',nonce:'c'.repeat(32),verifiedAt:at-1,expiresAt:at+60000,timeoutMs:1000};
  const config={environment:'development',sourceRevision:binding.sourceRevision,controlHost:binding.controlHost,
   expectedProjectIdSha256:sha(binding.projectId),operatorIdHash:'operator_'+sha('synthetic')};
- let user='admin';
+ let user='user';
  let app={config:{projectId:binding.projectId,projectKey:'synthetic-key',environment:'Development'},
   credential:{switchUser(value){user=value;principals.push(value);},getCurrentUser:()=>user,getCurrentUserType:()=> 'admin'},
   async authenticateRequest(request){if(authDelay)await authDelay;request.headers.Authorization='synthetic-managed-credential';}};
@@ -44,7 +44,7 @@ function fixture({deferResponses=false,principalData,principalBody,principalStre
     let status=200,data;
     if(path==='/query')data=query(payload.query);
     else if(path==='/project-user/current')data=principalData === undefined ? {user_id:'987654321',status:'ACTIVE',role_details:{role_name:'App Administrator',role_id:'987654320'},email_id:'private-unused@example.invalid'} : principalData;
-    else if(path==='/table/RevenueDeskEventReceipts/row'){
+    else if(['/table/RevenueDeskEventReceipts/row','/table/123456787/row'].includes(path)){
      assert.equal(payload.length,1);const row=payload[0];
      if(receipts.has(row.EVENT_KEY)){status=409;data={error_code:'DUPLICATE_VALUE'};}
      else {row.ROWID=String(++sequence);row.CREATORID='987654321';
@@ -54,10 +54,10 @@ function fixture({deferResponses=false,principalData,principalBody,principalStre
      if(mode==='admission_lost'){request.destroy(new Error('synthetic ambiguous admission'));return;}
      if(mode==='admission_conflict')receipts.get(row.EVENT_KEY).EVENT_DATA_JSON='{}';
     }
-    else {assert.equal(path,'/table/ReportRuns/row');assert.equal(payload.length,1);
+    else {assert.ok(['/table/ReportRuns/row','/table/123456788/row'].includes(path));assert.equal(payload.length,1);
      const row=payload[0];if(rows.has(row.IdempotencyKey)){status=409;data={error_code:'DUPLICATE_VALUE'};}
      else {row.ROWID=String(++sequence);row.CREATORID='987654321';rows.set(row.IdempotencyKey,structuredClone(row));data=[row];}}
-    if(mode==='lost_insert'&&path==='/table/ReportRuns/row'){request.destroy(new Error('synthetic response lost after insert'));return;}
+    if(mode==='lost_insert'&&['/table/ReportRuns/row','/table/123456788/row'].includes(path)){request.destroy(new Error('synthetic response lost after insert'));return;}
     const stream=new PassThrough();stream.statusCode=status;stream.headers={'content-type':'application/json'};
     callback(stream);request.emit('response',stream);
     if(path==='/project-user/current'&&principalStreamFailure){stream.destroy(new Error('private synthetic stream failure'));return;}

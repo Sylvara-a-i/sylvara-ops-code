@@ -3,32 +3,36 @@ const test=require('node:test'),assert=require('node:assert/strict'),crypto=requ
 const {fixture:network}=require('./helpers/report-run-sdk-fixture');
 const {canonicalJson}=require('../lib/facts');
 const {createProtectedStorageQualification}=require('../lib/report-storage-qualification');
+const {REPORT_FIELDS,RECEIPT_FIELDS,projectionDigest}=require('../lib/report-storage-capability');
 const sha=x=>crypto.createHash('sha256').update(typeof x==='string'?x:canonicalJson(x)).digest('hex');
-function fixture(){
- const sdk=network({deferResponses:true});let at=1800000000000;
- const binding={schemaVersion:1,enabled:true,environment:'development',sourceRevision:'a'.repeat(40),projectId:'123456789',
+function fixture(options={}){
+ const sdk=network({deferResponses:true,...options});let at=1800000000000;
+ const binding={schemaVersion:2,enabled:true,environment:'development',sourceRevision:'a'.repeat(40),projectId:'123456789',
   controlHost:'synthetic.invalid',tableId:'123456788',nonce:crypto.randomBytes(16).toString('hex'),
-  principalSha256:sha({projectId:'123456789',userId:'987654321',roleId:'987654320'}),creatorIdSha256:sha('987654321'),
+  capability:{region:'US',origin:'https://api.catalyst.zoho.com',controllerFunctionId:'123456786',deploymentId:'synthetic_controller',sdkVersion:'3.4.0',authMode:'user',authType:'admin',
+   tables:{reportRuns:{id:'123456788',name:'ReportRuns',schemaSha256:sha('synthetic-schema-runs'),uniquenessSha256:sha('synthetic-unique-runs'),uniqueField:'IdempotencyKey',projectionSha256:projectionDigest(REPORT_FIELDS)},
+    eventReceipts:{id:'123456787',name:'RevenueDeskEventReceipts',schemaSha256:sha('synthetic-schema-receipts'),uniquenessSha256:sha('synthetic-unique-receipts'),uniqueField:'EVENT_KEY',projectionSha256:projectionDigest(RECEIPT_FIELDS)}},
+   evidence:Object.fromEntries(['ownerAuthorization','ownership','access','creator'].map(kind=>[kind,{digest:sha('synthetic-'+kind),verifiedAt:at-2,expiresAt:at+60000,...(kind==='creator'?{creatorIdSha256:sha('987654321')}:{})}]))},
   verifiedAt:at-1,expiresAt:at+60000,timeoutMs:1000,singleAdmittedInvocation:true};
  const config={environment:'development',sourceRevision:binding.sourceRevision,controlHost:binding.controlHost,
   expectedProjectIdSha256:sha(binding.projectId),operatorIdHash:'operator_'+sha('synthetic')};
- const environment=()=>{const raw=JSON.stringify(binding);return {DEPLOYMENT_ENVIRONMENT:'development',SOURCE_REVISION:binding.sourceRevision,
+ const environment=()=>{const raw=JSON.stringify(binding);return {REPORT_CONTROLLER_FUNCTION_ID:'123456786',REPORT_DEPLOYMENT_ID:'synthetic_controller',DEPLOYMENT_ENVIRONMENT:'development',SOURCE_REVISION:binding.sourceRevision,
   REPORT_STORAGE_QUALIFICATION_JSON:raw,REPORT_STORAGE_QUALIFICATION_SHA256:sha(raw)};};
  const factory=()=>createProtectedStorageQualification({environment:environment(),now:()=>at});
  const command={profile:'report_storage_qualification_v1',action:'qualify_storage'},actor={kind:'internal_controller',identity:config.operatorIdHash};
  return {sdk,binding,config,environment,factory,make:()=>factory()(sdk.app,config),command,actor,advance:n=>at+=n};
 }
 const held={code:'REPORT_STORAGE_QUALIFICATION_HELD'};
-test('actual managed SDK proof makes exactly four inserts/eight reads, retains two rows and proves overlapping rounds',async()=>{
+test('actual managed SDK proof makes exactly four inserts/seven reads, retains two rows and proves overlapping rounds',async()=>{
  const f=fixture();try{
   const result=await f.make().handle(f.command,{actor:f.actor});
-  assert.equal(result.status,'storage_unique_successor_observed');assert.equal(result.inserts,4);assert.equal(result.reads,8);
+  assert.equal(result.status,'storage_unique_successor_observed');assert.equal(result.inserts,4);assert.equal(result.reads,7);
   assert.equal(result.physicalRows,2);assert.equal(result.overlappingRounds,2);assert.equal(result.qualificationAuthority,false);
   assert.equal(result.deliveryAuthority,false);assert.equal(f.sdk.rows.size,2);
-  assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/table/ReportRuns/row')).length,4);
+  assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/table/123456788/row')).length,4);
   assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/query')).length,8);
-  assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/project-user/current')).length,1);
-  assert.ok(f.sdk.requests.every(x=>/\/(?:query|project-user\/current|table\/(?:ReportRuns|RevenueDeskEventReceipts)\/row)$/.test(x.path)));
+  assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/project-user/current')).length,0);
+  assert.ok(f.sdk.requests.every(x=>/\/(?:query|table\/(?:123456788|123456787)\/row)$/.test(x.path)));
   assert.ok(!JSON.stringify(result).includes('987654321'));assert.ok(!JSON.stringify(result).includes('private-unused'));
   assert.match(result.evidenceDigest,/^[a-f0-9]{64}$/);assert.ok(f.sdk.principals.every(x=>x==='user'));
  }finally{f.sdk.restore();}
@@ -38,10 +42,10 @@ test('warm double tap and cold repeat cannot restart a durable diagnostic; readb
   const factory=f.factory(),first=factory(f.sdk.app,f.config),second=factory(f.sdk.app,f.config);
   const outcomes=await Promise.allSettled([first.handle(f.command,{actor:f.actor}),second.handle(f.command,{actor:f.actor})]);
   assert.equal(outcomes.filter(x=>x.status==='fulfilled').length,1);assert.equal(f.sdk.rows.size,2);
-  const writes=()=>f.sdk.requests.filter(x=>x.path.endsWith('/table/ReportRuns/row')).length;
+  const writes=()=>f.sdk.requests.filter(x=>x.path.endsWith('/table/123456788/row')).length;
   assert.equal(writes(),4);await assert.rejects(f.make().handle(f.command,{actor:f.actor}),held);assert.equal(writes(),4);
   const evidence=await f.make().handle({...f.command,action:'read_storage_evidence'},{actor:f.actor});
-  assert.equal(evidence.status,'storage_evidence_unattested');assert.equal(evidence.inserts,0);assert.equal(evidence.reads,3);
+  assert.equal(evidence.status,'storage_evidence_unattested');assert.equal(evidence.inserts,0);assert.equal(evidence.reads,2);
   assert.equal(evidence.headVersion,2);assert.equal(evidence.qualificationAuthority,false);assert.equal(writes(),4);
  }finally{f.sdk.restore();}
 });
@@ -55,20 +59,20 @@ test('missing/disabled/expired or mismatched protected binding and invalid actor
   f.advance(60000);assert.throws(()=>f.make(),held);assert.equal(f.sdk.requests.length,0);
  }finally{f.sdk.restore();}
 });
-test('wrong current principal stops after one read and before any ReportRuns write',async()=>{
+test('missing creator provenance stops before any managed dispatch',async()=>{
  const f=fixture();try{
-  f.binding.principalSha256='b'.repeat(64);await assert.rejects(f.make().handle(f.command,{actor:f.actor}),held);
-  assert.equal(f.sdk.requests.length,1);assert.equal(f.sdk.rows.size,0);
+  delete f.binding.capability.evidence.creator;assert.throws(()=>f.make(),held);
+  assert.equal(f.sdk.requests.length,0);assert.equal(f.sdk.rows.size,0);
  }finally{f.sdk.restore();}
 });
 test('lost insert response retains partial immutable evidence and never qualifies or retries a mutation',async()=>{
  const f=fixture();try{
   f.sdk.mode='lost_insert';const handler=f.make();await assert.rejects(handler.handle(f.command,{actor:f.actor}),held);
-  assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/table/ReportRuns/row')).length,2);assert.equal(f.sdk.rows.size,1);
+  assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/table/123456788/row')).length,2);assert.equal(f.sdk.rows.size,1);
   await assert.rejects(handler.handle(f.command,{actor:f.actor}),held);
   f.sdk.mode='normal';const evidence=await f.make().handle({...f.command,action:'read_storage_evidence'},{actor:f.actor});
   assert.equal(evidence.headVersion,1);assert.equal(evidence.qualificationAuthority,false);
-  assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/table/ReportRuns/row')).length,2);assert.equal(f.sdk.rows.size,1);
+  assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/table/123456788/row')).length,2);assert.equal(f.sdk.rows.size,1);
  }finally{f.sdk.restore();}
 });
 test('creator or stored envelope mismatch is held on readback without destructive cleanup or extra writes',async()=>{
@@ -77,7 +81,7 @@ test('creator or stored envelope mismatch is held on readback without destructiv
   await assert.rejects(f.make().handle({...f.command,action:'read_storage_evidence'},{actor:f.actor}),held);
   saved.CREATORID='987654321';saved.ReportPayloadJson+=' ';
   await assert.rejects(f.make().handle({...f.command,action:'read_storage_evidence'},{actor:f.actor}),held);
-  assert.equal(f.sdk.rows.size,2);assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/table/ReportRuns/row')).length,4);
+  assert.equal(f.sdk.rows.size,2);assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/table/123456788/row')).length,4);
  }finally{f.sdk.restore();}
 });
 test('late authentication and deadline cannot dispatch after diagnostic admission expires',async()=>{
@@ -93,8 +97,8 @@ test('simultaneous cold instances admit exactly one durable owner before the fou
   const outcomes=await Promise.allSettled([f.make().handle(f.command,{actor:f.actor}),f.make().handle(f.command,{actor:f.actor})]);
   assert.equal(outcomes.filter(x=>x.status==='fulfilled').length,1);
   assert.equal(f.sdk.receipts.size,1);assert.equal(f.sdk.rows.size,2);
-  assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/table/ReportRuns/row')).length,4);
-  assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/table/RevenueDeskEventReceipts/row')).length,2);
+  assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/table/123456788/row')).length,4);
+  assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/table/123456787/row')).length,2);
   const result=outcomes.find(x=>x.status==='fulfilled').value;
   assert.equal(result.admissionReads,1);assert.equal(result.admissionInserts,1);
   assert.equal(result.durableAdmissionObserved,true);assert.match(result.admissionEvidenceDigest,/^[a-f0-9]{64}$/);
@@ -104,7 +108,7 @@ for(const mode of ['admission_lost','admission_conflict'])test(mode+' never gran
  const f=fixture();try{
   f.sdk.mode=mode;await assert.rejects(f.make().handle(f.command,{actor:f.actor}),held);
   assert.equal(f.sdk.rows.size,0);assert.equal(f.sdk.receipts.size,1);
-  assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/table/RevenueDeskEventReceipts/row')).length,1);
+  assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/table/123456787/row')).length,1);
   f.sdk.mode='normal';await assert.rejects(f.make().handle(f.command,{actor:f.actor}),held);
   assert.equal(f.sdk.rows.size,0);assert.equal(f.sdk.receipts.size,1);
  }finally{f.sdk.restore();}
@@ -132,5 +136,56 @@ test('bounded primitive representation does not change admission ownership or pr
  const f=fixture();try{
   f.sdk.mode='admission_representation';const result=await f.make().handle(f.command,{actor:f.actor});
   assert.equal(result.durableAdmissionObserved,true);assert.equal(result.inserts,4);
+ }finally{f.sdk.restore();}
+});
+
+
+test('real SDK console-admin path qualifies bounded storage without application-user lookup',async()=>{
+ const f=fixture({credentialType:'admin',principalData:null});try{
+  const result=await f.make().handle(f.command,{actor:f.actor});
+  assert.equal(result.reads,7);assert.equal(result.qualificationAuthority,false);
+  assert.equal(f.sdk.requests.length,13);assert.ok(f.sdk.requests.every(r=>!r.path.includes('project-user')));
+ }finally{f.sdk.restore();}
+});
+for(const [name,mutate]of [
+ ['legacy binding',b=>b.schemaVersion=1],['extra binding key',b=>b.principalSha256='b'.repeat(64)],
+ ['region',b=>b.capability.region='EU'],['origin',b=>b.capability.origin='https://synthetic.invalid'],
+ ['SDK',b=>b.capability.sdkVersion='3.3.0'],['scope switch',b=>b.capability.authMode='admin'],
+ ['credential type',b=>b.capability.authType='user'],['controller identity',b=>b.capability.controllerFunctionId='123456780'],
+ ['deployment identity',b=>b.capability.deploymentId='wrong'],['table ID mismatch',b=>b.capability.tables.reportRuns.id='123456780'],
+ ['table alias',b=>b.capability.tables.eventReceipts.name='ReportRuns'],['duplicate IDs',b=>b.capability.tables.eventReceipts.id=b.tableId],
+ ['extra table',b=>b.capability.tables.other={}],['wrong unique field',b=>b.capability.tables.eventReceipts.uniqueField='STATUS'],
+ ['missing schema',b=>delete b.capability.tables.reportRuns.schemaSha256],['wrong projection',b=>b.capability.tables.reportRuns.projectionSha256='b'.repeat(64)],
+ ['missing ownership',b=>delete b.capability.evidence.ownership],['missing access',b=>delete b.capability.evidence.access],
+ ['missing owner authorization',b=>delete b.capability.evidence.ownerAuthorization],
+ ['future owner evidence',b=>b.capability.evidence.ownerAuthorization.verifiedAt=b.verifiedAt+1],
+ ['stale permission evidence',b=>b.capability.evidence.access.verifiedAt=b.verifiedAt-900001],
+ ['short evidence expiry',b=>b.capability.evidence.creator.expiresAt=b.expiresAt-1],
+ ['ungrounded creator',b=>delete b.capability.evidence.creator.creatorIdSha256]
+])test(name+' fails closed before managed dispatch',()=>{
+ const f=fixture();try{mutate(f.binding);assert.throws(()=>f.make(),held);assert.equal(f.sdk.requests.length,0);}finally{f.sdk.restore();}
+});
+
+test('runtime user credential cannot be reinterpreted as admin deployment capability',()=>{
+ const f=fixture({credentialType:'user'});try{assert.throws(()=>f.make(),held);assert.equal(f.sdk.requests.length,0);}finally{f.sdk.restore();}
+});
+test('extra stored column is held and cannot authorize another successor',async()=>{
+ const f=fixture();try{await f.make().handle(f.command,{actor:f.actor});[...f.sdk.rows.values()][0].UnapprovedColumn='synthetic';
+  await assert.rejects(f.make().handle({...f.command,action:'read_storage_evidence'},{actor:f.actor}),held);
+  assert.equal(f.sdk.rows.size,2);
+ }finally{f.sdk.restore();}
+});
+test('numeric-ID transport refuses other operation namespaces, arbitrary queries and extra INSERT columns',async()=>{
+ const f=fixture();let io;try{
+  const {createReportRunTransport}=require('../lib/report-run-transport');
+  const make=createProtectedStorageQualification({environment:f.environment(),now:()=>1800000000000,
+   transportFactory:options=>{io=createReportRunTransport(options);return io;}});
+  await make(f.sdk.app,f.config).handle(f.command,{actor:f.actor});const before=f.sdk.requests.length;
+  await assert.rejects(io.query("SELECT * FROM ReportRuns WHERE IdempotencyKey = 'revenue-desk-report-v1:"+'f'.repeat(64)+"' LIMIT 2"));
+  await assert.rejects(io.query('DELETE FROM ReportRuns'));await assert.rejects(io.query('SELECT * FROM ReportRuns LIMIT 100'));
+  await assert.rejects(io.readAdmission('report-storage:'+'f'.repeat(64)));
+  const row=structuredClone([...f.sdk.rows.values()][0]);delete row.ROWID;delete row.CREATORID;
+  await assert.rejects(io.insert({...row,ExtraColumn:true}));await assert.rejects(io.insert({...row,GenerationStatus:'DraftGenerated'}));
+  assert.equal(f.sdk.requests.length,before);
  }finally{f.sdk.restore();}
 });
