@@ -9,7 +9,7 @@ function fixture(){
  const snapshot={binding,nativeRelationshipEvidenceSha256:hash('native'),
   report:{completed:true,fresh:true,validated:true,generationKey:hash('bundle'),manifestSha256:hash('manifest'),
    sourceRevisionDigest:hash('source'),summary:{role:'summary',generationKey:hash('summary'),documentSha256:hash('pdf'),privateReceiptKey:hash('receipt')}},
-  recipient:{contactId:binding.contactId,address:'synthetic@example.com',explicitlySelected:true,verified:true,eligible:true,suppressed:false,
+  recipient:{contactId:binding.contactId,address:'synthetic@example.com',explicitlySelected:true,verified:true,eligible:true,suppressed:null,suppressionStatus:'provider_enforcement_pending',consentEvidenceDigest:'a'.repeat(64),preflightEvidenceDigest:'b'.repeat(64),
    verifiedAt:at-1000,expiresAt:at+60000,verificationDigest:hash('recipient')}};
  const link={url:'https://workdrive.zoho.com/file/synthetic?version=1',access:'authenticated_private',qualificationDigest:hash('link'),
   expiresAt:at+60000,manifestSha256:snapshot.report.manifestSha256,documentSha256:snapshot.report.summary.documentSha256};
@@ -91,5 +91,18 @@ test('link or recipient expiring during final actor authorization cannot dispatc
   // The writer captures now; advance its shared closure rather than replacing it.
   let clock=at;f.options.now=()=>clock;f.options.authorize=async()=>{clock=at+11;return true;};
   await assert.rejects(f.write());assert.equal(f.puts,0);
+ }
+});
+
+
+test('exact terminal rejection projects Failed once and malformed failure cannot project',async()=>{
+ for(const corrupt of [false,true]){
+  const f=fixture(),at=f.options.now(),key=hash('report-initial-delivery-v1\0'+f.snapshot.binding.deploymentId);
+  const snapshot=require('../lib/report-delivery-control').validateSnapshot(f.snapshot,at);
+  const state={kind:'report_delivery_v1',mode:'initial',phase:'provider_rejected',claimToken:hash('owner'),createdAt:at,confirmBy:at,
+   snapshot,inboxReceipt:'unknown',readReceipt:'unknown',followUp:'unknown',provider:{accepted:false,rejectionCode:corrupt?'CUSTOM_ERROR':'NOT_ALLOWED',rejectedAt:at}};
+  f.rows.set(key,{key,version:2,state});
+  if(corrupt){await assert.rejects(f.write());assert.equal(f.puts,0);}
+  else{assert.equal((await f.write()).status,'verified');assert.equal(f.records.deal.Test_Report_Delivery_Status,'Failed');await f.write();assert.equal(f.puts,1);}
  }
 });

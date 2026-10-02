@@ -6,10 +6,13 @@ function fixture(){
  const at=1800000000000,native={originalLeadId:'lead',journeyId:'journey',accountId:'account',contactId:'contact',dealId:'deal',convertedAt:'2026-01-01T00:00:00.000Z'};
  const digest=sha(canonicalJson(native));
  const selected={originalLeadId:'lead',binding:{clientId:'client',deploymentId:'deployment',dealId:'deal',accountId:'account',contactId:'contact',configurationVersion:'v1',periodStart:'2027-01-01',periodEnd:'2027-01-07'},report:{completed:true,fresh:true,validated:true,generationKey:sha('pair'),manifestSha256:sha('manifest'),sourceRevisionDigest:sha('source'),summary:{role:'summary',generationKey:sha('summary'),documentSha256:sha('PDF'),privateReceiptKey:sha('receipt')}}};
- const recipient={contactId:'contact',address:'owner@example.com',explicitlySelected:true,verified:true,eligible:true,suppressed:false,verificationDigest:sha('recipient'),nativeRelationshipEvidenceSha256:digest,verifiedAt:at-1000,expiresAt:at+60000};
+ const recipient={contactId:'contact',address:'owner@example.com',explicitlySelected:true,verified:true,eligible:true,suppressed:null,suppressionStatus:'provider_enforcement_pending',consentEvidenceDigest:'a'.repeat(64),preflightEvidenceDigest:'b'.repeat(64),verificationDigest:sha('recipient'),nativeRelationshipEvidenceSha256:digest,verifiedAt:at-1000,expiresAt:at+60000};
  const records={deal:{id:'deal',Intake_Submission_ID:'journey',Account_Name:{id:'account'},Contact_Name:{id:'contact'},Deployment_Record_ID:'deployment',Configuration_Version:'v1',Test_Status:'Completed',Test_Report_Revision:sha('manifest'),Test_Report_Recipient_Email:'owner@example.com',Email_Opt_Out:false,Test_Report_Recipient_Verified_At:new Date(at-1000).toISOString()},contact:{id:'contact',Account_Name:{id:'account'},Email:'owner@example.com',Email_Opt_Out:false}};
- const options={crm:{getReportRecords:async()=>structuredClone(records)},readCanonicalSelection:async()=>structuredClone(selected),readRecipientAttestation:async()=>structuredClone(recipient),readNativeConversion:async()=>structuredClone(native),now:()=>at};
- return {records,native,selected,recipient,options,read:()=>createDealReportSnapshotReader(options)({dealId:'deal'})};
+ const request=require('./helpers/report-recipient-fixture').requestEvidence(native,records.contact.Email);
+ const preflight=require('../lib/report-recipient-preflight').qualifyReportRecipient({request,contact:records.contact,native,now:at});
+ recipient.consentEvidenceDigest=preflight.consentEvidenceDigest;recipient.preflightEvidenceDigest=preflight.evidenceDigest;
+ const options={crm:{getReportRecords:async()=>structuredClone(records),getReportRequestEvidence:async()=>structuredClone(request)},readCanonicalSelection:async()=>structuredClone(selected),readRecipientAttestation:async()=>structuredClone(recipient),readNativeConversion:async()=>structuredClone(native),now:()=>at};
+ return {records,native,selected,recipient,request,options,read:()=>createDealReportSnapshotReader(options)({dealId:'deal'})};
 }
 test('field-selected Deal/Contact plus native lineage and private attestation bind exact test recipient',async()=>{
  const f=fixture(),result=await f.read();assert.equal(result.recipient.address,'owner@example.com');assert.equal(result.binding.deploymentId,'deployment');
@@ -24,4 +27,14 @@ test('CRM cohort drift during attestation read holds before control claims',asyn
 });
 test('missing report recipient never falls back to alert/signer/Account email',async()=>{
  const f=fixture();delete f.records.deal.Test_Report_Recipient_Email;f.records.deal.Alert_Recipient_Email='owner@example.com';await assert.rejects(f.read());
+});
+
+test('request consent provenance, original address and current unsubscribe contradictions hold',async()=>{
+ for(const change of [f=>f.request.Free_Test_Contact_Consent=false,f=>f.request.Free_Test_Contact_Consent_Version='unknown',
+  f=>f.request.Email='other@example.com',f=>f.request.Email_Opt_Out=true,f=>f.request.Unsubscribed_Mode='Manual',
+  f=>f.records.contact.Unsubscribed_Time='2026-01-01T00:00:00Z',f=>f.request.Converted_Contact.id='foreign',
+  f=>f.request.Free_Test_Contact_Consent_At='2028-01-01T00:00:00Z']){
+  const f=fixture();change(f);await assert.rejects(f.read());
+ }
+ const f=fixture();f.recipient.suppressed=false;delete f.recipient.suppressionStatus;await assert.rejects(f.read());
 });

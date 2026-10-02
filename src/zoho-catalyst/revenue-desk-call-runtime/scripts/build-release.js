@@ -12,7 +12,7 @@ const ANALYTICS_PATH = 'src/zoho-catalyst/revenue-desk-analytics';
 const WORKER_REPORTING_PATH = 'functions/revenue_desk_call_worker/reporting';
 const REPORTING_PATH = `${WORKER_REPORTING_PATH}/revenue-desk-analytics`;
 const CONTROL_REPORTING_PATH = 'functions/revenue_desk_route_control/reporting/revenue-desk-analytics';
-const DELIVERY_LIBS = ['report-delivery-control','report-delivery-handlers','report-mail-sender','report-delivery-snapshot',
+const DELIVERY_LIBS = ['report-recipient-preflight','report-delivery-control','report-delivery-handlers','report-mail-sender','report-delivery-snapshot',
   'report-run-store','report-successor-store','report-run-transport','report-storage-qualification','report-delivery-storage','workdrive-client','report-attempt-budget',
   'facts','errors','connection-boundary','config','source-revision',
   'report-crm-projection','report-delivery-attestation','report-recipient-writer','analytics-client','catalyst-store',

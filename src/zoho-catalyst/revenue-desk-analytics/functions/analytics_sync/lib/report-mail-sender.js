@@ -5,6 +5,8 @@ const HASH=/^[a-f0-9]{64}$/,ID=/^[1-9][0-9]{2,29}$/,REF=/^[A-Za-z0-9_-]{1,512}$/
 const ADDRESS=/^[^\s@<>;,]+@[^\s@<>;,]+\.[^\s@<>;,]+$/;
 const sha=x=>crypto.createHash('sha256').update(x).digest('hex');
 const NAME='7-Day Revenue Leak Test.pdf',MAX_PDF=2*1024*1024;
+const SEND_REJECTIONS=new Set(['NOT_ALLOWED','NO_PERMISSION','INVALID_DATA','MANDATORY_NOT_FOUND','FILE_SIZE_EXCEEDS','LIMIT_EXCEEDED','RECORD_LOCKED']);
+const {unsubscribed}=require('./report-recipient-preflight');
 function held(ambiguous=false){return Object.assign(new Error('REPORT_CRM_EMAIL_HELD'),{code:'REPORT_CRM_EMAIL_HELD',ambiguous});}
 function projection(s){
  if(s?.kind!=='report_crm_attachment_v1'||!['upload_started','uploaded'].includes(s.phase)
@@ -49,17 +51,27 @@ function createReportCrmSender({binding,store,authorizationProvider,fetchImpl=gl
   x.signal.addEventListener('abort',cancel,{once:true});if(x.signal.aborted)cancel();const timer=setTimeout(cancel,b.timeoutMs);
   function active(){const at=now();if(controller.signal.aborted||!Number.isSafeInteger(at)||at<start||at>=start+b.timeoutMs
    ||performance.now()>=wall||at<b.verifiedAt||at>=b.expiresAt)throw held(dispatched);}
-  async function request(path,{method='GET',body,authorization}={}){
+  async function request(path,{method='GET',body,authorization,allowSendRejection=false}={}){
    active();if(method==='POST')dispatched=true;
    const response=await fetchImpl(b.apiOrigin+'/crm/v8'+path,{method,body,redirect:'error',signal:controller.signal,
     headers:{Authorization:authorization,Accept:'application/json','Accept-Encoding':'identity',...(typeof body==='string'?{'Content-Type':'application/json'}:{})}});active();
-   if(![200,201,202].includes(response?.status)||!/^application\/json(?:\s*;|$)/i.test(response.headers?.get('content-type')||'')
+   if(!([200,201,202].includes(response?.status)||(allowSendRejection&&[400,403].includes(response?.status)))||!/^application\/json(?:\s*;|$)/i.test(response.headers?.get('content-type')||'')
     ||(response.headers.get('content-encoding')&&response.headers.get('content-encoding')!=='identity')||!response.body?.getReader)throw held(dispatched);
    const size=response.headers.get('content-length');if(size!==null&&(!/^\d+$/.test(size)||Number(size)>262144))throw held(dispatched);
    reader=response.body.getReader();let n=0,count=0;const parts=[];
    while(true){active();const part=await reader.read();active();if(part.done)break;
     if(!(part.value instanceof Uint8Array)||++count>512||(n+=part.value.length)>262144)throw held(dispatched);parts.push(Buffer.from(part.value));}
-   try{return JSON.parse(Buffer.concat(parts).toString('utf8'));}catch{throw held(dispatched);}
+   let json;try{json=JSON.parse(Buffer.concat(parts).toString('utf8'));}catch{throw held(dispatched);}
+   if([400,403].includes(response.status)){
+    // Only bounded documented send_mail rejection responses prove no message
+    // acceptance. SMTP errors, 5xx, malformed or mixed responses stay ambiguous.
+    const item=json?.data?.[0];
+    const error=json?.data===undefined?json:item;
+    if((json?.data===undefined||json.data?.length===1)&&error?.status==='error'&&SEND_REJECTIONS.has(error.code))
+      return {definitiveSendRejection:error.code};
+    throw held(dispatched);
+   }
+   return json;
   }
   async function run(){active();const authorization=await authorizationProvider({signal:controller.signal});active();
    if(typeof authorization!=='string'||!/^Zoho-oauthtoken [A-Za-z0-9._~-]{16,4096}$/.test(authorization))throw held();
@@ -79,6 +91,21 @@ function createReportCrmSender({binding,store,authorizationProvider,fetchImpl=gl
   ||!x.bytes.subarray(0,8).toString('ascii').startsWith('%PDF-')||sha(x.bytes)!==x.snapshot.report.summary.documentSha256)throw held();
   const pdf=Buffer.from(x.bytes);
   return attempt(x,async({active,request,signal})=>{
+   // Current Contact and the latest ten related-email status summaries are
+   // a bounded contradiction check, not complete suppression clearance. No
+   // body/history absence is promoted to eligibility; Zoho still enforces it.
+   const current=await request('/Contacts/'+x.snapshot.binding.contactId+'?'+new URLSearchParams({
+    fields:'id,Email,Email_Opt_Out,Unsubscribed_Mode,Unsubscribed_Time'}));active();
+   const contact=current?.data?.[0];
+   if(current.data?.length!==1||contact?.id!==x.snapshot.binding.contactId
+    ||contact.Email!==x.snapshot.recipient.address||contact.Email_Opt_Out!==false||unsubscribed(contact))throw held();
+   const history=await request('/Contacts/'+x.snapshot.binding.contactId+'/Emails');active();
+   if(!Array.isArray(history?.Emails)||history.Emails.length>10||typeof history.info?.more_records!=='boolean')throw held();
+   for(const email of history.Emails){
+    if(!Array.isArray(email.to)||!Array.isArray(email.status)||email.status.some(s=>typeof s?.type!=='string'))throw held();
+    if(email.to.some(t=>t.email===x.snapshot.recipient.address)
+      &&email.status.some(s=>['bounced','blocked','unsubscribed'].includes(s.type.toLowerCase())))throw held();
+   }
    const k=keys(x),accepted=await store.get(k.receipt,{signal});active();
    // An existing receipt/claim means this operation already entered transport;
    // recovery is read-only through lookupAcceptance, never another send.
@@ -93,9 +120,13 @@ function createReportCrmSender({binding,store,authorizationProvider,fetchImpl=gl
    if(uploaded.data?.length!==1||item?.code!=='SUCCESS'||item.status!=='success'||item.details?.name!==NAME||!REF.test(item.details?.id||''))throw held(true);
    const receipt={...state,phase:'uploaded',fileId:item.details.id,acceptedAt:now()};projection(receipt);
    const saved=await store.insert(k.receipt,receipt,{signal});active();if(!same(saved?.state,receipt))throw held(true);
-   const sent=await request('/Contacts/'+x.snapshot.binding.contactId+'/actions/send_mail',{method:'POST',body:JSON.stringify({data:[{
+   const sent=await request('/Contacts/'+x.snapshot.binding.contactId+'/actions/send_mail',{method:'POST',allowSendRejection:true,body:JSON.stringify({data:[{
     from:{user_name:b.fromName,email:b.fromAddress},to:[{email:x.snapshot.recipient.address}],org_email:true,
-    subject:subject(x),content:content(x),mail_format:'text',attachments:[{id:receipt.fileId}]}]})});active();const result=sent?.data?.[0];
+    subject:subject(x),content:content(x),mail_format:'text',attachments:[{id:receipt.fileId}]}]})});active();
+   if(sent.definitiveSendRejection)return Object.freeze({accepted:false,rejected:true,rejectionCode:sent.definitiveSendRejection,
+    operationKey:x.operationKey,documentSha256:x.snapshot.report.summary.documentSha256,
+    recipientVerificationDigest:x.snapshot.recipient.verificationDigest,rejectedAt:now()});
+   const result=sent?.data?.[0];
    if(sent.data?.length!==1||result?.code!=='SUCCESS'||result.status!=='success'||!REF.test(result.details?.message_id||''))throw held(true);
    return proof(x,result.details.message_id);
   });

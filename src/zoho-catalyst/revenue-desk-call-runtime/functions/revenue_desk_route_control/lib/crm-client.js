@@ -297,6 +297,26 @@ function createCrmControlClient(config, {
       intakeFormVersion: row.Intake_Form_Version });
   }
 
+  async function getReportRequestEvidence(originalLeadId, {signal} = {}) {
+    invariant(/^[1-9][0-9]{9,29}$/.test(originalLeadId || ''), 'CRM_READ_REJECTED',
+      'Report consent identity is invalid.', {httpStatus:409});
+    await assertOrganization(false,signal);
+    const fields = [...NATIVE_CONVERSION_FIELDS,'Email','Email_Opt_Out','Unsubscribed_Mode','Unsubscribed_Time',
+      'Entry_Offer','Submission_Channel','Free_Test_Contact_Consent','Free_Test_Contact_Consent_At',
+      'Free_Test_Contact_Consent_Version','Free_Test_Request_Submitted_At','Intake_Form_Version'];
+    const query = new URLSearchParams({ids:originalLeadId,converted:'true',fields:fields.join(','),per_page:'2'});
+    const json = await request(`/Leads?${query}`,{method:'GET'},false,signal);
+    invariant(plain(json.info) && json.info.count===1 && json.info.more_records===false
+      && (json.info.next_page_token===null || json.info.next_page_token===undefined),
+      'CRM_READBACK_INVALID','Report consent cohort is incomplete.',{httpStatus:409});
+    const row = parseRecord(json,originalLeadId);
+    // Select the original converted request, never infer consent from today's
+    // Contact address or an internal approval. No provider body is logged.
+    return Object.fromEntries(fields.map(field=>[field,
+      ['Converted_Account','Converted_Contact','Converted_Deal'].includes(field) && plain(row[field])
+        ? {id:String(row[field].id)} : row[field] ?? null]));
+  }
+
   async function getReportRecords(dealId, {signal} = {}) {
     invariant(/^[1-9][0-9]{7,29}$/.test(dealId || ''), 'CRM_READ_REJECTED',
       'Report relationship identity is invalid.', { httpStatus: 409 });
@@ -312,7 +332,7 @@ function createCrmControlClient(config, {
     const contactId = deal.Contact_Name?.id;
     invariant(typeof contactId === 'string' && /^[1-9][0-9]{7,29}$/.test(contactId),
       'CRM_READBACK_INVALID', 'Report recipient relationship is unavailable.', { httpStatus:409 });
-    const contactFields = ['id','Modified_Time','Account_Name','Email','Email_Opt_Out'];
+    const contactFields = ['id','Modified_Time','Account_Name','Email','Email_Opt_Out','Unsubscribed_Mode','Unsubscribed_Time'];
     const contact = parseRecord(await request(`/Contacts/${contactId}?${new URLSearchParams({fields:contactFields.join(',')})}`,
       { method:'GET' },false,signal), contactId);
     active();
@@ -929,7 +949,7 @@ function createCrmControlClient(config, {
 
   return Object.freeze({ getDeal, getReportRecords, proveActivationInactive, containActivation,
     recordApproval, recordActivation, recordRollback, recordCoreApproval, recordCoreRollback,
-    getPreparationRecords, getPreparationFieldMetadata, getNativeConversion, getPublicOriginalLead,
+    getPreparationRecords, getPreparationFieldMetadata, getNativeConversion, getPublicOriginalLead, getReportRequestEvidence,
     recordConfigurationStaging, recordConfigurationSuccessor });
 }
 

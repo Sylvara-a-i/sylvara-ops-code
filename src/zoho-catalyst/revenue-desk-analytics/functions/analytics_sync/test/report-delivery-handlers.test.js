@@ -3,17 +3,17 @@ const test=require('node:test'),assert=require('node:assert/strict'),crypto=requ
 const {createReportDeliveryControl}=require('../lib/report-delivery-control');
 const {createReportDeliveryHandlers,attachTerminalReportDelivery,PROFILE}=require('../lib/report-delivery-handlers');
 const sha=x=>crypto.createHash('sha256').update(x).digest('hex');
-function fixture(){
+function fixture({reject=false,projectReport=null}={}){
  const at=1800000000000,rows=new Map(),bytes=Buffer.from('%PDF-1.7\nsynthetic\n%%EOF\n');let sends=0,reads=0;
  const snapshot={binding:{clientId:'client',deploymentId:'deployment',dealId:'deal',accountId:'account',contactId:'contact',configurationVersion:'v1',periodStart:'2027-01-01',periodEnd:'2027-01-07'},nativeRelationshipEvidenceSha256:sha('native'),
   report:{completed:true,fresh:true,validated:true,generationKey:sha('pair'),manifestSha256:sha('manifest'),sourceRevisionDigest:sha('source'),summary:{role:'summary',generationKey:sha('summary'),documentSha256:sha(bytes),privateReceiptKey:sha('receipt')}},
-  recipient:{contactId:'contact',address:'owner@example.com',explicitlySelected:true,verified:true,eligible:true,suppressed:false,verificationDigest:sha('recipient'),verifiedAt:at-1000,expiresAt:at+60000}};
+  recipient:{contactId:'contact',address:'owner@example.com',explicitlySelected:true,verified:true,eligible:true,suppressed:null,suppressionStatus:'provider_enforcement_pending',consentEvidenceDigest:'a'.repeat(64),preflightEvidenceDigest:'b'.repeat(64),verificationDigest:sha('recipient'),verifiedAt:at-1000,expiresAt:at+60000}};
  const copy=structuredClone;const store={async get(k){return copy(rows.get(k)||null);},async insert(k,state){if(!rows.has(k))rows.set(k,{key:k,version:1,state:copy(state)});return copy(rows.get(k));},async compareAndSwap(row,state){const old=rows.get(row.key);if(old.version!==row.version)return null;const next={key:row.key,version:row.version+1,state:copy(state)};rows.set(row.key,next);return copy(next);}};
  const readSnapshot=async()=>{reads++;return copy(snapshot);};const owner={kind:'internal_controller',identity:'synthetic_owner'},system={kind:'worker',identity:'synthetic_worker'};
  const control=createReportDeliveryControl({store,readSnapshot,readSummary:async()=>Buffer.from(bytes),now:()=>at,autoDeliveryEnabled:true,
-  authorize:async({actor})=>actor===owner||actor===system,sender:{async sendSummary({operationKey,snapshot}){sends++;return {accepted:true,operationKey,documentSha256:sha(bytes),recipientVerificationDigest:snapshot.recipient.verificationDigest,messageReferenceDigest:sha('message'),acceptedAt:at};},async lookupAcceptance(){return null;}}});
+  authorize:async({actor})=>actor===owner||actor===system,sender:{async sendSummary({operationKey,snapshot}){sends++;if(reject)return {accepted:false,rejected:true,rejectionCode:'NOT_ALLOWED',operationKey,documentSha256:sha(bytes),recipientVerificationDigest:snapshot.recipient.verificationDigest,rejectedAt:at};return {accepted:true,operationKey,documentSha256:sha(bytes),recipientVerificationDigest:snapshot.recipient.verificationDigest,messageReferenceDigest:sha('message'),acceptedAt:at};},async lookupAcceptance(){return null;}}});
  const selection={clientId:'client',deploymentId:'deployment',dealId:'deal',testStatus:'Completed'};
- const handlers=createReportDeliveryHandlers({control,readSnapshot,systemActor:system,now:()=>at,readPrivateView:async({summary,manifestSha256})=>({url:'https://workdrive.zoho.com/file/synthetic',access:'authenticated_private',qualificationDigest:sha('synthetic version link'),expiresAt:at+60000,manifestSha256,documentSha256:summary.documentSha256}),readDealForScope:async()=>copy(selection)});
+ const handlers=createReportDeliveryHandlers({control,readSnapshot,projectReport,systemActor:system,now:()=>at,readPrivateView:async({summary,manifestSha256})=>({url:'https://workdrive.zoho.com/file/synthetic',access:'authenticated_private',qualificationDigest:sha('synthetic version link'),expiresAt:at+60000,manifestSha256,documentSha256:summary.documentSha256}),readDealForScope:async()=>copy(selection)});
  const scope={clientId:'client',deploymentId:'deployment'},pair={status:'report_pair_verified_not_for_delivery',generationKey:sha('pair'),manifestSha256:sha('manifest'),manifest:{initialDeliveryArtifact:'summary'}};
  return {handlers,control,snapshot,scope,pair,owner,system,selection,rows,get sends(){return sends;},get reads(){return reads;}};
 }
@@ -77,4 +77,12 @@ test('private view resolver deadline cancels pending work without another byte r
   readDealForScope:async()=>{},readSnapshot:async()=>{},systemActor:{},timeoutMs:10,
   readPrivateView:()=>new Promise(resolve=>{release=()=>resolve({url:'https://workdrive.zoho.com/file/synthetic',access:'authenticated_private',qualificationDigest:sha('qualified'),expiresAt:Date.now()+60000,...result,documentSha256:result.summary.documentSha256});})});
  await assert.rejects(handlers.handle({profile:PROFILE,action:'view',dealId:'deal'},{actor:{}}));release();await new Promise(resolve=>setTimeout(resolve,15));assert.equal(views,1);
+});
+
+
+test('terminal rejected initial send returns truthful failure and projects its exact operation once',async()=>{
+ const projected=[];const f=fixture({reject:true,projectReport:async request=>{projected.push(request);return {status:'verified'};}});
+ const result=await f.handlers.afterPair(f.scope,f.pair);assert.equal(result.status,'provider_rejected');assert.equal(f.sends,1);
+ assert.equal(projected.length,2);assert.equal(projected[0].deliveryOperationKey,undefined);assert.match(projected[1].deliveryOperationKey,/^[a-f0-9]{64}$/);assert.equal(result.crmProjectionStatus,'verified');
+ assert.equal([...f.rows.values()][0].state.phase,'provider_rejected');
 });

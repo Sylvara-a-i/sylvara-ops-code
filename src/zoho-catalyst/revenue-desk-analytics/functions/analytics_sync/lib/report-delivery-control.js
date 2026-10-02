@@ -20,7 +20,9 @@ function validateSnapshot(value, at) {
     || x.report.summary.role !== 'summary'
     || !x.recipient || x.recipient.contactId !== x.binding.contactId
     || x.recipient.explicitlySelected !== true || x.recipient.verified !== true
-    || x.recipient.eligible !== true || x.recipient.suppressed !== false
+    || x.recipient.eligible !== true || x.recipient.suppressed !== null
+    || x.recipient.suppressionStatus !== 'provider_enforcement_pending'
+    || !HASH.test(x.recipient.consentEvidenceDigest) || !HASH.test(x.recipient.preflightEvidenceDigest)
     || typeof x.recipient.address !== 'string' || x.recipient.address.length > 254
     || !/^[^\s@<>;,]+@[^\s@<>;,]+\.[^\s@<>;,]+$/.test(x.recipient.address)
     || !HASH.test(x.recipient.verificationDigest)
@@ -36,23 +38,27 @@ function validateSnapshot(value, at) {
     report:{generationKey:x.report.generationKey,manifestSha256:x.report.manifestSha256,
       sourceRevisionDigest:x.report.sourceRevisionDigest,summary:Object.fromEntries(['role','generationKey','documentSha256','privateReceiptKey'].map(k=>[k,x.report.summary[k]]))},
     recipient:{contactId:x.recipient.contactId,address:x.recipient.address,
-      verificationDigest:x.recipient.verificationDigest,verifiedAt:x.recipient.verifiedAt,expiresAt:x.recipient.expiresAt} };
+      suppressionStatus:x.recipient.suppressionStatus,consentEvidenceDigest:x.recipient.consentEvidenceDigest,
+      preflightEvidenceDigest:x.recipient.preflightEvidenceDigest,verificationDigest:x.recipient.verificationDigest,verifiedAt:x.recipient.verifiedAt,expiresAt:x.recipient.expiresAt} };
 }
 function validState(state) {
   if (!state || state.kind !== 'report_delivery_v1' || !['initial','resend'].includes(state.mode)
-    || !['confirmation','dispatch_started','provider_accepted'].includes(state.phase)
+    || !['confirmation','dispatch_started','provider_accepted','provider_rejected'].includes(state.phase)
     || !HASH.test(state.claimToken) || !Number.isSafeInteger(state.createdAt)
     || !Number.isSafeInteger(state.confirmBy) || state.confirmBy < state.createdAt
     || !state.snapshot || !fields.every(k => typeof state.snapshot.binding?.[k] === 'string')
     || !HASH.test(state.snapshot.report?.summary?.documentSha256)
     || (state.phase === 'provider_accepted' && (!state.provider || !HASH.test(state.provider.messageReferenceDigest)
       || state.provider.accepted !== true || !Number.isSafeInteger(state.provider.acceptedAt)))
+    || (state.phase === 'provider_rejected' && (!state.provider || state.provider.accepted!==false
+      || !['NOT_ALLOWED','NO_PERMISSION','INVALID_DATA','MANDATORY_NOT_FOUND','FILE_SIZE_EXCEEDS','LIMIT_EXCEEDED','RECORD_LOCKED'].includes(state.provider.rejectionCode)
+      || !Number.isSafeInteger(state.provider.rejectedAt) || state.provider.rejectedAt<state.createdAt))
     || state.inboxReceipt !== 'unknown'
     || state.readReceipt !== 'unknown'
     || state.followUp !== 'unknown') fail();
   const s=state.snapshot;
   validateSnapshot({...s,report:{...s.report,completed:true,fresh:true,validated:true},
-    recipient:{...s.recipient,explicitlySelected:true,verified:true,eligible:true,suppressed:false}},state.createdAt);
+    recipient:{...s.recipient,explicitlySelected:true,verified:true,eligible:true,suppressed:null}},state.createdAt);
   return state;
 }
 function deliveryProjection(state) {
@@ -60,7 +66,7 @@ function deliveryProjection(state) {
   return {ClientId:b.clientId,DeploymentId:b.deploymentId,ReportType:'free_test_summary_delivery',
     PeriodStart:b.periodStart,PeriodEnd:b.periodEnd,ReportVersion:'report-delivery-v1',
     GenerationStatus:'DraftGenerated',ApprovalStatus:state.mode==='initial'?'StandingInitialDelivery':state.phase==='confirmation'?'ResendConfirmationRequired':'ResendConfirmed',
-    DeliveryStatus:state.phase==='provider_accepted'?'ProviderAccepted':state.phase==='confirmation'?'ConfirmationPending':'ReconciliationRequired',
+    DeliveryStatus:state.phase==='provider_rejected'?'Failed':state.phase==='provider_accepted'?'ProviderAccepted':state.phase==='confirmation'?'ConfirmationPending':'ReconciliationRequired',
     ReconciliationStatus:'Verified',ActualEstimatedSeparated:true,CrossClientIsolationPassed:true,
     DuplicateSendGuardPassed:true,ReportTotalsReconciled:true,AutoDeliveryEnabledAtRun:state.mode==='initial',
     SchemaVersion:2,ReportFormat:'pdf',ReportObjectKey:json(state.snapshot.report),
@@ -109,7 +115,8 @@ function createReportDeliveryControl({store,readSnapshot,authorize,readSummary,s
     finally{clearTimeout(timer);parent?.removeEventListener('abort',abort);parent?.removeEventListener('abort',parentTimeout);controller.abort();}
   }
   const initialKey=s=>hash(`report-initial-delivery-v1\0${s.binding.deploymentId}`);
-  const result=row=>({status:row.state.phase==='provider_accepted'?'provider_accepted':'delivery_reconciliation_required',
+  const result=row=>({status:row.state.phase==='provider_rejected'?'provider_rejected':row.state.phase==='provider_accepted'?'provider_accepted':'delivery_reconciliation_required',
+    ...(row.state.phase==='provider_rejected'?{rejectionCode:row.state.provider.rejectionCode}:{}),
     operationKey:row.key,summary:row.state.snapshot.report.summary,
     recipientVerificationDigest:row.state.snapshot.recipient.verificationDigest,
     inboxReceipt:row.state.inboxReceipt,readReceipt:row.state.readReceipt,followUp:row.state.followUp});
@@ -128,8 +135,20 @@ function createReportDeliveryControl({store,readSnapshot,authorize,readSummary,s
     const actual=saved||await store.get(row.key,{signal});
     if(!actual||!same(actual.state,state)) fail();return result(actual);
   }
+  async function saveRejected(row,proof,signal){
+    active(signal);
+    if(proof?.accepted!==false||proof.rejected!==true
+      ||!['NOT_ALLOWED','NO_PERMISSION','INVALID_DATA','MANDATORY_NOT_FOUND','FILE_SIZE_EXCEEDS','LIMIT_EXCEEDED','RECORD_LOCKED'].includes(proof.rejectionCode)
+      ||proof.operationKey!==row.key||proof.documentSha256!==row.state.snapshot.report.summary.documentSha256
+      ||proof.recipientVerificationDigest!==row.state.snapshot.recipient.verificationDigest
+      ||!Number.isSafeInteger(proof.rejectedAt)||proof.rejectedAt<row.state.createdAt||proof.rejectedAt>now())fail();
+    const state={...row.state,phase:'provider_rejected',provider:{accepted:false,rejectionCode:proof.rejectionCode,rejectedAt:proof.rejectedAt}};
+    const saved=await store.compareAndSwap(row,state,{signal});
+    const actual=saved||await store.get(row.key,{signal});
+    if(!actual||!same(actual.state,state))fail();return result(actual);
+  }
   async function recover(row,signal) {
-    active(signal);validState(row.state);if(row.state.phase==='provider_accepted')return result(row);
+    active(signal);validState(row.state);if(['provider_accepted','provider_rejected'].includes(row.state.phase))return result(row);
     if(row.state.phase!=='dispatch_started')fail();
     // Unknown/rejected requests are never sent again. Readback must bind exact
     // operation, immutable bytes and verified recipient, not subject/time alone.
@@ -151,7 +170,7 @@ function createReportDeliveryControl({store,readSnapshot,authorize,readSummary,s
     // Timeout/cancellation after dispatch is ambiguous, even if a late result
     // arrives. Reconciliation only; no second request or fabricated receipt.
     try{active(signal);}catch{return result(row);}
-    try{return await saveAccepted(row,proof,signal);}catch{return result(row);}
+    try{return proof?.rejected===true?await saveRejected(row,proof,signal):await saveAccepted(row,proof,signal);}catch{return result(row);}
   }
   async function initial({dealId,actor,signal,expectedManifestSha256}={}) {return bounded(async signal=>{
     if(!autoDeliveryEnabled)fail();const snapshot=await scope(dealId,actor,'initial',signal);

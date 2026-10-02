@@ -34,7 +34,8 @@ function createProtectedReportController({environment=process.env,now=Date.now,f
   const sourceReader=createConfigurationSourceReader(app,c,{now});
   const conversionReader=createConfigurationConversionReader({crm,now,timeoutMs:c.platformTimeoutMs});
   const staging=createConfigurationStagingService({config:c,store,crm,core,sourceReader,conversionReader,now});
-  const readSetup=createReportSetupReader({config:c,store,crm,core,now,sourceReader,conversionReader,staging});
+  const {qualifyReportRecipient}=require('../reporting/revenue-desk-analytics/functions/analytics_sync/lib/report-recipient-preflight');
+  const readSetup=createReportSetupReader({config:c,store,crm,core,now,sourceReader,conversionReader,staging,qualifyRecipient:qualifyReportRecipient,expiresAt:b.expiresAt});
   const attest=createReportRecipientWriter({store:createReportSuccessorStore({app,environment:'development'}),readSetup,
    authorityDigest:b.attestation.authorityDigest,systemActor:workerReportActor(b),now:active,expiresAt:b.expiresAt});
   return Object.freeze({async handle(command,options){

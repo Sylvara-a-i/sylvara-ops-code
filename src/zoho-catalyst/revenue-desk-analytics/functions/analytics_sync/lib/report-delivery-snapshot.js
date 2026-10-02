@@ -2,6 +2,7 @@
 const crypto=require('node:crypto');
 const {canonicalJson}=require('./facts');
 const {validateSnapshot}=require('./report-delivery-control');
+const {qualifyReportRecipient}=require('./report-recipient-preflight');
 const sha=x=>crypto.createHash('sha256').update(canonicalJson(x)).digest('hex');
 function held(){throw Object.assign(new Error('REPORT_DELIVERY_HELD'),{code:'REPORT_DELIVERY_HELD'});}
 
@@ -14,7 +15,7 @@ function held(){throw Object.assign(new Error('REPORT_DELIVERY_HELD'),{code:'REP
  */
 function createDealReportSnapshotReader({crm,readCanonicalSelection,readRecipientAttestation,
   readNativeConversion,now=Date.now,requireProjection=true}={}) {
-  if(typeof requireProjection!=='boolean'||typeof crm?.getReportRecords!=='function'||![readCanonicalSelection,readRecipientAttestation,
+  if(typeof requireProjection!=='boolean'||typeof crm?.getReportRecords!=='function'||typeof crm.getReportRequestEvidence!=='function'||![readCanonicalSelection,readRecipientAttestation,
     readNativeConversion,now].every(x=>typeof x==='function'))held();
   return async function readSnapshot({dealId,signal}={}) {
     const active=()=>{if(signal?.aborted)held();};active();
@@ -36,6 +37,12 @@ function createDealReportSnapshotReader({crm,readCanonicalSelection,readRecipien
       ||recipient.contactId!==b.contactId||recipient.address.length>100
       ||(requireProjection&&Date.parse(deal.Test_Report_Recipient_Verified_At)!==recipient.verifiedAt)
       ||recipient.nativeRelationshipEvidenceSha256!==nativeDigest)held();
+    const request=await crm.getReportRequestEvidence(selected.originalLeadId,{signal});active();
+    const preflight=qualifyReportRecipient({request,contact,native,now:now()});
+    if(preflight.consentEvidenceDigest!==recipient.consentEvidenceDigest
+      ||preflight.evidenceDigest!==recipient.preflightEvidenceDigest)held();
+    const requestFresh=await crm.getReportRequestEvidence(selected.originalLeadId,{signal});active();
+    if(canonicalJson(requestFresh)!==canonicalJson(request))held();
     const snapshot={binding:b,nativeRelationshipEvidenceSha256:nativeDigest,report:selected.report,recipient};
     validateSnapshot(snapshot,now());
     // Re-read the CRM cohort after the private attestation read. A changed

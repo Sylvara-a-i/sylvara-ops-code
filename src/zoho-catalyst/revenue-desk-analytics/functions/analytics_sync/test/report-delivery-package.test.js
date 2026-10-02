@@ -11,7 +11,7 @@ test('isolated controller delivery package imports with one canonical gateway an
     let bytes=fs.readFileSync(source);if(replace)bytes=Buffer.from(bytes.toString().replace(...replace));fs.writeFileSync(target,bytes);};
   const builder=fs.readFileSync(path.join(runtime,'scripts/build-release.js'),'utf8');
   const names=/const DELIVERY_LIBS = \[([\s\S]*?)\];/.exec(builder)[1].match(/'([a-z-]+)'/g).map(x=>x.slice(1,-1));
-  assert.ok(names.includes('config')&&names.includes('source-revision'));
+  assert.ok(names.includes('config')&&names.includes('source-revision')&&names.includes('report-recipient-preflight'));
   for(const name of names)put(`reporting/revenue-desk-analytics/functions/analytics_sync/lib/${name}.js`,path.join(root,`revenue-desk-analytics/functions/analytics_sync/lib/${name}.js`),
     name==='source-revision'?['__SYLVARA_UNSTAMPED_SOURCE_REVISION__','a'.repeat(40)]:null);
   const tools=/const REPORT_TOOLS = Object.freeze\(\[([\s\S]*?)\]\);/.exec(builder)[1].match(/'([a-z-]+)'/g).map(x=>x.slice(1,-1));

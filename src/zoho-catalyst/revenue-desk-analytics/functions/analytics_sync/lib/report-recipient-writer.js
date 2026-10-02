@@ -18,7 +18,8 @@ function createReportRecipientWriter({store,readSetup,authorityDigest,systemActo
    ||actor?.kind!=='internal_controller'||!/^operator_[a-f0-9]{64}$/.test(actor.identity||''))held();
   const proof=await readSetup({dealId:command.dealId,actor,signal});active();
   if(proof?.authorizedActor!==actor.identity||proof.recipientEmail!==command.recipientEmail
-   ||proof.crmEmailOptOut!==false||proof.suppression?.status!=='qualified_clear'
+   ||proof.crmEmailOptOut!==false||proof.suppression?.status!=='provider_enforcement_pending'
+   ||!/^[a-f0-9]{64}$/.test(proof.suppression.consentEvidenceDigest||'')
    ||!/^[a-f0-9]{64}$/.test(proof.suppression.evidenceDigest||'')
    ||!Number.isSafeInteger(proof.suppression.expiresAt)||proof.suppression.expiresAt<=now())held();
   const identity=proof.identity,key=sha(`report-delivery-attestation-v1\0${identity?.dealId}\0${identity?.deploymentId}`);
@@ -42,7 +43,8 @@ function createReportRecipientWriter({store,readSetup,authorityDigest,systemActo
   const state={kind:'report_delivery_attestation_v1',phase:'approved',identity,authorityDigest,
    configurationSourceDigest:proof.configurationSourceDigest,nativeRelationshipEvidenceSha256:proof.nativeRelationshipEvidenceSha256,
    verifiedAt,expiresAt:expiry,actors:[actor,systemActor],recipient:{contactId:identity.contactId,address:proof.recipientEmail,
-    explicitlySelected:true,verified:true,eligible:true,suppressed:false,verificationDigest:selectionDigest,
+    explicitlySelected:true,verified:true,eligible:true,suppressed:null,suppressionStatus:'provider_enforcement_pending',
+    consentEvidenceDigest:proof.suppression.consentEvidenceDigest,preflightEvidenceDigest:proof.suppression.evidenceDigest,verificationDigest:selectionDigest,
     nativeRelationshipEvidenceSha256:proof.nativeRelationshipEvidenceSha256,verifiedAt,expiresAt:expiry}};
   validate(state,now());active();
   // Store.insert reconciles ambiguous acceptance by independent exact readback.

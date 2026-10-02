@@ -14,7 +14,7 @@ function fixture(){
   verifiedAt:at-1000,expiresAt:at+3600000,attestation:{enabled:true,claimQualification:{mechanism:'unique_insert_successor_v1',status:'qualified',evidenceDigest:sha('claim'),expiresAt:at+3600000},authorityDigest:sha('authority'),crm:{}},delivery:{enabled:false},reporting:{enabled:false}};
  const proof={authorizedActor:actor.identity,identity:{clientId:'client',deploymentId:'deployment',dealId:'190000001',accountId:'190000002',contactId:'190000003',configurationVersion:'form2cfgv1:1:'+ 'b'.repeat(40),configurationVersionId:'configuration',originalLeadId:'190000004',intakeSubmissionId:'journey'},
   recipientEmail:'owner@example.invalid',crmEmailOptOut:false,nativeRelationshipEvidenceSha256:sha('native'),configurationSourceDigest:sha('config'),
-  suppression:{status:'qualified_clear',evidenceDigest:sha('synthetic suppression'),expiresAt:at+3600000}};
+  suppression:{status:'provider_enforcement_pending',consentEvidenceDigest:sha('consent'),evidenceDigest:sha('synthetic suppression'),expiresAt:at+3600000}};
  const options={store:{async get(k){return structuredClone(rows.get(k)||null);},async insert(k,state){inserts++;if(!rows.has(k))rows.set(k,{key:k,state:structuredClone(state)});return structuredClone(rows.get(k));}},
   readSetup:async()=>{reads++;return structuredClone(proof);},authorityDigest:b.attestation.authorityDigest,systemActor:workerReportActor(b),now:()=>at,expiresAt:b.expiresAt};
  const command={profile:'report_delivery_v1',action:'attest_recipient',dealId:'190000001',recipientEmail:proof.recipientEmail,confirmed:true};
@@ -24,12 +24,13 @@ test('unique immutable selection accepts concurrent identical requests and holds
  const f=fixture();const results=await Promise.all([f.write(f.command,{actor}),f.write(f.command,{actor})]);
  assert.equal(results.every(x=>x.status==='recipient_attested'),true);assert.equal(f.rows.size,1);
  assert.equal((await f.write(f.command,{actor})).replayed,true);
+ const selected=[...f.rows.values()][0].state.recipient;assert.equal(selected.suppressed,null);assert.equal(selected.suppressionStatus,'provider_enforcement_pending');assert.equal(selected.consentEvidenceDigest,f.proof.suppression.consentEvidenceDigest);
  f.proof.recipientEmail='other@example.invalid';await assert.rejects(f.write({...f.command,recipientEmail:f.proof.recipientEmail},{actor}));assert.equal(f.rows.size,1);
 });
 test('missing confirmation, body actor, identity spoof, opt-out and unresolved suppression hold before insert',async()=>{
  for(const change of [f=>f.command.confirmed=false,f=>f.command.actor=actor,f=>f.proof.authorizedActor='foreign',
   f=>f.proof.crmEmailOptOut=true,f=>f.proof.crmEmailOptOut=null,f=>f.proof.crmEmailOptOut='false',
-  f=>f.proof.suppression.status='unqualified',f=>f.proof.suppression.expiresAt=at]){
+  f=>f.proof.suppression.status='unqualified',f=>f.proof.suppression.status='qualified_clear',f=>delete f.proof.suppression.consentEvidenceDigest,f=>f.proof.suppression.expiresAt=at]){
   const f=fixture();change(f);await assert.rejects(f.write(f.command,{actor}));assert.equal(f.counts().inserts,0);
  }
 });
@@ -60,11 +61,13 @@ test('setup reader validates inactive approval and native lineage without termin
  const records={deal:{id:'190000001',Intake_Submission_ID:'journey',Configuration_Version:label,Deployment_Record_ID:row.DEPLOYMENT_ID,Account_Name:{id:'190000002'},Contact_Name:{id:'190000003'}},
   contact:{id:'190000003',Account_Name:{id:'190000002'},Email:'owner@example.invalid',Email_Opt_Out:false}};
  const store={unique:async(table)=>table===config.tables.DEPLOYMENT_TABLE?row:cfg};let approvals=0;
- const reader=createReportSetupReader({config,store,crm:{getReportRecords:async()=>structuredClone(records)},now:()=>at,
+ const native={originalLeadId:'190000004',journeyId:'journey',dealId:'190000001',accountId:'190000002',contactId:'190000003',convertedAt:'2026-01-01T00:00:00.000Z'};
+ const request=require('./helpers/report-recipient-fixture').requestEvidence(native,records.contact.Email);
+ const reader=createReportSetupReader({expiresAt:at+8*24*60*60*1000,qualifyRecipient:require('../lib/report-recipient-preflight').qualifyReportRecipient,config,store,crm:{getReportRecords:async()=>structuredClone(records),getReportRequestEvidence:async()=>structuredClone(request)},now:()=>at,
   staging:{assertApprovalSource:async()=>({configurationStaged:true,priorCoreApproval:{configurationVersionId:label}})},
   core:{async readStagingSource(command,options){approvals++;assert.equal(command.configurationVersionId,label);assert.equal(options.expectedDeploymentId,row.DEPLOYMENT_ID);return {priorApproval:{configurationVersionId:label}};}},
   sourceReader:{findAssistedLineage:async()=>({originalLeadId:'190000004'})},conversionReader:{readConversion:async()=>({originalLeadId:'190000004',journeyId:'journey',dealId:'190000001',accountId:'190000002',contactId:'190000003',convertedAt:'2026-01-01T00:00:00.000Z'})}});
- const proof=await reader({dealId:'190000001',actor});assert.equal(approvals,1);assert.equal(proof.suppression.status,'unqualified');assert.equal(proof.identity.configurationVersion,label);
+ const proof=await reader({dealId:'190000001',actor});assert.equal(approvals,1);assert.equal(proof.suppression.status,'provider_enforcement_pending');assert.equal(proof.suppression.expiresAt,at+8*24*60*60*1000);assert.equal(proof.identity.configurationVersion,label);
  records.contact.Account_Name.id='foreign';await assert.rejects(reader({dealId:'190000001',actor}));
 });
 

@@ -41,7 +41,7 @@ test('actual delivery control reads persisted lowercase physical scope independe
  const f=fixture();f.snapshot.binding.configurationVersion='crm_label';
  const full={...f.snapshot,nativeRelationshipEvidenceSha256:sha('native'),
   report:{...f.snapshot.report,completed:true,fresh:true,validated:true,sourceRevisionDigest:sha('source')},
-  recipient:{contactId:'contact_a',address:'synthetic@example.com',explicitlySelected:true,verified:true,eligible:true,suppressed:false,
+  recipient:{contactId:'contact_a',address:'synthetic@example.com',explicitlySelected:true,verified:true,eligible:true,suppressed:null,suppressionStatus:'provider_enforcement_pending',consentEvidenceDigest:'a'.repeat(64),preflightEvidenceDigest:'b'.repeat(64),
    verificationDigest:sha('recipient'),verifiedAt:1800000000000-1000,expiresAt:1800000000000+60000}};
  const control=require('../lib/report-delivery-control').createReportDeliveryControl({
   store:{get:async()=>{},insert:async()=>{throw Error('unexpected write');},compareAndSwap:async()=>{throw Error('unexpected write');}},

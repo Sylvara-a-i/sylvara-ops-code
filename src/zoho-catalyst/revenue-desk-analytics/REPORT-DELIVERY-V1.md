@@ -348,3 +348,18 @@ new function or switch on reporting/delivery/admission. Preserve prior A2 and
 other candidates. The sender read establishes allowed-From evidence for the
 managed principal; it does not prove Contact send scope, suppression, inbox
 receipt, cost allowance or overall Journey acceptance.
+
+
+## Request-email preflight and provider enforcement pending
+
+The approved automatic initial summary delivery checks the exact current Contact/address, immutable native Lead conversion and the original Form 1 request consent (form1-contact-consent-v1: request, setup and follow-up emails). It requires explicit false opt-out on both original Lead and current Contact, rejects known unsubscribe evidence, and rechecks the original request/CRM cohort before dispatch. Changed addresses do not inherit consent. Internal Form 2 approval is not substitute email consent.
+
+Protected recipient attestations retain consent and preflight digests and explicitly state suppressionStatus=provider_enforcement_pending, suppressed=null. eligible=true means eligibility for this bounded provider-enforced send attempt only. Old comprehensive-clear attestations do not satisfy this contract and are not overwritten or silently migrated. Prior report drafts and delivery histories remain immutable; ambiguous historic operations are never replayed to adopt this policy.
+
+Immediately before attachment upload/send, the existing CRM-native Connection rereads the exact Contact opt-out/unsubscribe fields and the latest ten related-email status summaries. Observed bounce/block/unsubscribe contradictions hold. This bounded read does not establish complete historical or provider-wide suppression clearance; unavailable/malformed reads hold, while remaining provider enforcement is explicitly pending. It uses existing Contacts.READ and emails.READ capabilities, never an unblock/UPDATE operation or Zoho Mail fallback.
+
+Only a bounded HTTP 400/403 send_mail rejection with one documented allowlisted error (NOT_ALLOWED, NO_PERMISSION, INVALID_DATA, MANDATORY_NOT_FOUND, FILE_SIZE_EXCEEDS, LIMIT_EXCEEDED or RECORD_LOCKED) becomes a durable provider_rejected terminal successor and Failed CRM projection. The receipt binds operation, exact PDF hash and recipient verification digest and retains no raw provider details. CUSTOM_ERROR/SMTP failure, timeout, cancellation, 5xx, malformed/mixed response and lost failure persistence remain reconciliation-required. No automatic retry follows either rejection or ambiguity. A rejected initial attempt does not enable manual resend; changing eligibility requires a separately controlled operation, not resetting the consumed initial claim.
+
+ProviderAccepted never means inbox receipt, read or completed follow-up. No new access grant, installed-state claim, customer email or automatic-delivery activation follows from this source change. Current private bootstrap bindings must select the exact new source and existing read Connections before a separately scoped live qualification.
+
+Official contracts: https://www.zoho.com/crm/developer/docs/api/v8/send-mail.html and https://www.zoho.com/crm/developer/docs/api/v8/get-email-rel-list.html .
