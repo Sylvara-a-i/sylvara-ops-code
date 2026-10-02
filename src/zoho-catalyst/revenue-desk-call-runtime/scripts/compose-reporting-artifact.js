@@ -28,12 +28,21 @@ const SENDER_BOUNDARY_SHA256 = '9ca408616b5db4335a78e9c53dceb5cb12fe7722da34f9d9
 const STORAGE_BOUNDARY_SHA256 = 'af72d2fe68b31e73fcfdd452fa0fdde975dadb04c66729cbc857330ac4743455';
 function composeReviewedDeliveryBoundary(repositoryPath, base, current, selected) {
   if (repositoryPath !== DELIVERY_BOUNDARY_PATH) fail('source_overlap');
-  const source = current.toString('utf8');
+  let source = current.toString('utf8');
+  const contextStart = source.indexOf("      if (body.profile === 'report_runtime_context_v1') {");
+  const contextEnd = source.indexOf('      const app = runtime.initialize(request);', contextStart);
+  let contextAddition = '';
+  if (contextStart >= 0) {
+    if (contextEnd <= contextStart) fail('source_overlap');
+    contextAddition = source.slice(contextStart, contextEnd);
+    if (digest(Buffer.from(contextAddition)) !== '47e2bebff359c47d9779b45987a3f251df284f02005fb279154d790f04fb6a1b') fail('source_overlap');
+    source = source.slice(0, contextStart) + source.slice(contextEnd);
+  }
   const storageStart = source.indexOf("      if (body.profile === 'report_storage_qualification_v1') {");
   const senderStart = source.indexOf("      if (body.profile === 'report_sender_qualification_v1') {");
   const start = storageStart >= 0 ? storageStart : senderStart < 0 ? source.indexOf("      if (body.profile === 'report_delivery_v1') {") : senderStart;
   const end = source.indexOf('      const crm = ', start);
-  if (start < 0 || end <= start || !Buffer.from(source).equals(current)) fail('source_overlap');
+  if (start < 0 || end <= start) fail('source_overlap');
   const addition = source.slice(start, end);
   const expectedDigest = storageStart >= 0 ? STORAGE_BOUNDARY_SHA256 : senderStart < 0 ? DELIVERY_BOUNDARY_SHA256 : SENDER_BOUNDARY_SHA256;
   if (digest(Buffer.from(addition)) !== expectedDigest
@@ -44,10 +53,15 @@ function composeReviewedDeliveryBoundary(repositoryPath, base, current, selected
     || auth.includes("body.profile === 'report_delivery_v1'")
     || auth.includes("body.profile === 'report_sender_qualification_v1'")
     || auth.includes("body.profile === 'report_storage_qualification_v1'")) fail('source_overlap');
-  const bytes = Buffer.from(auth.replace(anchor, addition + anchor));
-  if (!Buffer.from(bytes.toString().replace(addition, '')).equals(selected)) fail('source_overlap');
+  const initAnchor = '      const app = runtime.initialize(request);\n';
+  if (contextAddition && (auth.split(initAnchor).length !== 2
+    || auth.includes("body.profile === 'report_runtime_context_v1'"))) fail('source_overlap');
+  const bytes = Buffer.from(auth.replace(anchor, addition + anchor)
+    .replace(initAnchor, contextAddition + initAnchor));
+  if (!Buffer.from(bytes.toString().replace(addition, '').replace(contextAddition, '')).equals(selected)) fail('source_overlap');
   return { bytes, composition: storageStart >= 0 ? 'reviewed-report-delivery-sender-storage-boundary-addition-v1' : senderStart < 0 ? 'reviewed-report-delivery-boundary-addition-v1' : 'reviewed-report-delivery-sender-boundary-addition-v1',
-    reporting_sha256: digest(current), auth_sha256: digest(selected), addition_sha256: expectedDigest };
+    reporting_sha256: digest(current), auth_sha256: digest(selected), addition_sha256: expectedDigest,
+    ...(contextAddition ? { context_addition_sha256: digest(Buffer.from(contextAddition)) } : {}) };
 }
 
 const sourceRoot = path.resolve(__dirname, '..');

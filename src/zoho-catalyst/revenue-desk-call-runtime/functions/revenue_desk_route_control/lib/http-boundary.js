@@ -171,6 +171,14 @@ function createRequestListener({
       if (reconciliation || completion || transition || successor) invariant(action === 'approve', 'INVALID_CONTROL_REQUEST',
         'Configuration reconciliation uses the approval control route.', { httpStatus: 400 });
       const runtime = catalystSdk || require('zcatalyst-sdk-node');
+      if (body.profile === 'report_runtime_context_v1') {
+        invariant(action === 'approve' && typeof factories.runtimeContext === 'function',
+          'CONTROL_PRECONDITION_FAILED', 'Runtime inspection is unavailable.', { httpStatus: 503 });
+        // Authenticated, bounded command before SDK initialization. No store/provider construction.
+        const result = await factories.runtimeContext(request, { runtime, config, body });
+        send(response, 200, { ok: true, action: body.action, result });
+        return;
+      }
       const app = runtime.initialize(request);
       invariant(String(app?.config?.environment || '').toLowerCase() === 'development'
         && String(app?.config?.projectId || '') === projectId,
