@@ -6,10 +6,10 @@ const { fixture } = require('../../../../revenue-desk-analytics/functions/analyt
 const sha = x => crypto.createHash('sha256').update(x).digest('hex');
 function setup(f, changes = {}) {
   const at = 1800000000000;
-  const binding = { schemaVersion: 1, enabled: true, environment: 'development', sourceRevision: 'a'.repeat(40),
-    projectId: '123456789', controlHost: 'synthetic.invalid', operatorIdHash: 'operator_synthetic',
+  const binding = { schemaVersion: 2, enabled: true, environment: 'development', sourceRevision: 'a'.repeat(40),
+    projectId: '123456789', controlHost: 'synthetic.invalid',
     principalSha256: sha(JSON.stringify({ projectId: '123456789', roleId: '987654320', userId: '987654321' })),
-    verifiedAt: at - 1, expiresAt: at + 10000, timeoutMs: 100, nonce: 'c'.repeat(32), ...changes };
+    verifiedAt: at - 1, expiresAt: at + 10000, timeoutMs: 1000, nonce: 'c'.repeat(32), ...changes };
   const raw = JSON.stringify(binding);
   const environment = { DEPLOYMENT_ENVIRONMENT: 'development', SOURCE_REVISION: 'a'.repeat(40),
     REPORT_RUNTIME_CONTEXT_JSON: raw, REPORT_RUNTIME_CONTEXT_SHA256: sha(raw) };
@@ -32,10 +32,10 @@ test('actual SDK read-only success, privacy, local replay and no writes', async 
     assert.equal((await run({}, s.args)).binding_valid, false); assert.equal(f.clientCalls, 1);
   } finally { f.restore(); }
 });
-test('eight early-failure variants return coarse distinct observations with zero writes', async () => {
+test('early-failure variants return coarse distinct observations with zero writes', async () => {
   const results = {};
   for (const scenario of ['sdk_initialize_exception', 'bad_binding_pin', 'expired_binding', 'missing_user_authentication',
-    'sdk_uninitialized_user_credential', 'principal_socket_failure', 'principal_identity_mismatch', 'principal_role_name_mismatch']) {
+    'sdk_uninitialized_user_credential', 'principal_socket_failure', 'principal_identity_mismatch', 'principal_role_name_mismatch', 'principal_inactive']) {
     const f = fixture(); try {
       const s = setup(f, scenario === 'expired_binding' ? { expiresAt: 1800000000000 } : {});
       if (scenario === 'bad_binding_pin') s.environment.REPORT_RUNTIME_CONTEXT_SHA256 = '0'.repeat(64);
@@ -54,9 +54,10 @@ test('eight early-failure variants return coarse distinct observations with zero
       if (scenario === 'principal_socket_failure') f.mode = 'network_error';
       const factory = options => {
         const io = createReportRunTransport(options);
-        return ['principal_identity_mismatch', 'principal_role_name_mismatch'].includes(scenario)
+        return ['principal_identity_mismatch', 'principal_role_name_mismatch', 'principal_inactive'].includes(scenario)
           ? { currentPrincipal: async o => ({ ...await io.currentPrincipal(o),
-            ...(scenario === 'principal_identity_mismatch' ? { userId: '111111111' } : { roleName: 'AppAdministrator' }) }) } : io;
+            ...(scenario === 'principal_identity_mismatch' ? { userId: '111111111' }
+              : scenario === 'principal_inactive' ? { status: 'INACTIVE' } : { roleName: 'AppAdministrator' }) }) } : io;
       };
       const run = createProtectedRuntimeContext({ environment: s.environment, now: () => s.at, transportFactory: factory });
       results[scenario] = await run({}, s.args);
@@ -71,6 +72,9 @@ test('eight early-failure variants return coarse distinct observations with zero
   assert.equal(results.principal_socket_failure.principal_request_status, 'unknown');
   assert.equal(results.principal_identity_mismatch.principal_identity_matches, false);
   assert.equal(results.principal_role_name_mismatch.principal_role_matches, false);
+  assert.equal(results.principal_inactive.principal_status_active, false);
+  for (const scenario of ['principal_identity_mismatch', 'principal_role_name_mismatch', 'principal_inactive'])
+    assert.equal(results[scenario].stage, 'principal_match');
 });
 test('timeout cancels actual SDK request; delayed auth cannot dispatch after deadline', async () => {
   for (const delayedAuth of [false, true]) {
@@ -86,9 +90,10 @@ test('timeout cancels actual SDK request; delayed auth cannot dispatch after dea
     } finally { f.restore(); }
   }
 });
-test('disabled, malformed, wrong actor/source/project, stale and unsupported SDK never dispatch', async () => {
+test('disabled, legacy schema, malformed, wrong host/source/project, stale and unsupported SDK never dispatch', async () => {
   const f = fixture(); try {
-    for (const change of [{ enabled: false }, { operatorIdHash: 'wrong' }, { sourceRevision: 'b'.repeat(40) },
+    for (const change of [{ enabled: false }, { schemaVersion: 1 }, { schemaVersion: 1, operatorIdHash: 'operator_synthetic' },
+      { operatorIdHash: 'operator_synthetic' }, { controlHost: 'wrong.invalid' }, { sourceRevision: 'b'.repeat(40) },
       { projectId: '111111111' }, { extra: 'private-value' }, { timeoutMs: 3001 }]) {
       const s = setup(f, change);
       const run = createProtectedRuntimeContext({ environment: s.environment, now: () => s.at, transportFactory: () => assert.fail('transport') });
@@ -98,5 +103,16 @@ test('disabled, malformed, wrong actor/source/project, stale and unsupported SDK
       sdkVersion: () => 'wrong', transportFactory: () => assert.fail('transport') });
     assert.equal((await run({}, s.args)).sdk_version_matches, false); assert.equal(f.clientCalls, 0);
     await assert.rejects(run({}, { ...s.args, body: { profile: PROFILE, action: 'inspect_context', actor: 'caller' } }));
+  } finally { f.restore(); }
+});
+
+test('schema 2 diagnostic is independent of operational HMAC actor continuity', async () => {
+  const f = fixture(); try {
+    const s = setup(f); s.config.operatorIdHash = 'operator_unrelated';
+    const run = createProtectedRuntimeContext({ environment: s.environment, now: () => s.at, transportFactory: createReportRunTransport });
+    const result = await run({}, s.args);
+    assert.equal(result.stage, 'complete'); assert.equal(result.principal_status_active, true);
+    assert.equal(result.qualification_authority, false); assert.equal(f.clientCalls, 1);
+    assert.equal(f.rows.size + f.receipts.size, 0);
   } finally { f.restore(); }
 });
