@@ -7,12 +7,12 @@ const {REPORT_FIELDS,RECEIPT_FIELDS,projectionDigest}=require('../lib/report-sto
 const sha=x=>crypto.createHash('sha256').update(typeof x==='string'?x:canonicalJson(x)).digest('hex');
 function fixture(options={}){
  const sdk=network({deferResponses:true,...options});let at=1800000000000;
- const binding={schemaVersion:2,enabled:true,environment:'development',sourceRevision:'a'.repeat(40),projectId:'123456789',
+ const binding={schemaVersion:3,enabled:true,environment:'development',sourceRevision:'a'.repeat(40),projectId:'123456789',
   controlHost:'synthetic.invalid',tableId:'123456788',nonce:crypto.randomBytes(16).toString('hex'),
-  capability:{region:'US',origin:'https://api.catalyst.zoho.com',controllerFunctionId:'123456786',deploymentId:'synthetic_controller',sdkVersion:'3.4.0',authMode:'user',authType:'admin',
+  capability:{region:'US',origin:'https://api.catalyst.zoho.com',controllerFunctionId:'123456786',deploymentId:'synthetic_controller',sdkVersion:'3.4.0',authMode:'user',authType:'admin',creatorPolicy:'observed_consistent_v1',
    tables:{reportRuns:{id:'123456788',name:'ReportRuns',schemaSha256:sha('synthetic-schema-runs'),uniquenessSha256:sha('synthetic-unique-runs'),uniqueField:'IdempotencyKey',projectionSha256:projectionDigest(REPORT_FIELDS)},
     eventReceipts:{id:'123456787',name:'RevenueDeskEventReceipts',schemaSha256:sha('synthetic-schema-receipts'),uniquenessSha256:sha('synthetic-unique-receipts'),uniqueField:'EVENT_KEY',projectionSha256:projectionDigest(RECEIPT_FIELDS)}},
-   evidence:Object.fromEntries(['ownerAuthorization','ownership','access','creator'].map(kind=>[kind,{digest:sha('synthetic-'+kind),verifiedAt:at-2,expiresAt:at+60000,...(kind==='creator'?{creatorIdSha256:sha('987654321')}:{})}]))},
+   evidence:Object.fromEntries(['ownerAuthorization','ownership','access'].map(kind=>[kind,{digest:sha('synthetic-'+kind),verifiedAt:at-2,expiresAt:at+60000}]))},
   verifiedAt:at-1,expiresAt:at+60000,timeoutMs:1000,singleAdmittedInvocation:true};
  const config={environment:'development',sourceRevision:binding.sourceRevision,controlHost:binding.controlHost,
   expectedProjectIdSha256:sha(binding.projectId),operatorIdHash:'operator_'+sha('synthetic')};
@@ -28,7 +28,8 @@ test('actual managed SDK proof makes exactly four inserts/seven reads, retains t
   const result=await f.make().handle(f.command,{actor:f.actor});
   assert.equal(result.status,'storage_unique_successor_observed');assert.equal(result.inserts,4);assert.equal(result.reads,7);
   assert.equal(result.physicalRows,2);assert.equal(result.overlappingRounds,2);assert.equal(result.qualificationAuthority,false);
-  assert.equal(result.deliveryAuthority,false);assert.equal(f.sdk.rows.size,2);
+  assert.equal(result.deliveryAuthority,false);assert.equal(result.namedIdentityVerified,false);
+  assert.equal(result.creatorProvenance,'observed_consistent_v1');assert.equal(f.sdk.rows.size,2);
   assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/table/123456788/row')).length,4);
   assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/query')).length,8);
   assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/project-user/current')).length,0);
@@ -59,9 +60,9 @@ test('missing/disabled/expired or mismatched protected binding and invalid actor
   f.advance(60000);assert.throws(()=>f.make(),held);assert.equal(f.sdk.requests.length,0);
  }finally{f.sdk.restore();}
 });
-test('missing creator provenance stops before any managed dispatch',async()=>{
+test('missing observed creator policy stops before any managed dispatch',async()=>{
  const f=fixture();try{
-  delete f.binding.capability.evidence.creator;assert.throws(()=>f.make(),held);
+  delete f.binding.capability.creatorPolicy;assert.throws(()=>f.make(),held);
   assert.equal(f.sdk.requests.length,0);assert.equal(f.sdk.rows.size,0);
  }finally{f.sdk.restore();}
 });
@@ -148,7 +149,7 @@ test('real SDK console-admin path qualifies bounded storage without application-
  }finally{f.sdk.restore();}
 });
 for(const [name,mutate]of [
- ['legacy binding',b=>b.schemaVersion=1],['extra binding key',b=>b.principalSha256='b'.repeat(64)],
+ ['legacy binding',b=>b.schemaVersion=1],['prior creator binding',b=>b.schemaVersion=2],['extra binding key',b=>b.principalSha256='b'.repeat(64)],
  ['region',b=>b.capability.region='EU'],['origin',b=>b.capability.origin='https://synthetic.invalid'],
  ['SDK',b=>b.capability.sdkVersion='3.3.0'],['scope switch',b=>b.capability.authMode='admin'],
  ['credential type',b=>b.capability.authType='user'],['controller identity',b=>b.capability.controllerFunctionId='123456780'],
@@ -160,8 +161,9 @@ for(const [name,mutate]of [
  ['missing owner authorization',b=>delete b.capability.evidence.ownerAuthorization],
  ['future owner evidence',b=>b.capability.evidence.ownerAuthorization.verifiedAt=b.verifiedAt+1],
  ['stale permission evidence',b=>b.capability.evidence.access.verifiedAt=b.verifiedAt-900001],
- ['short evidence expiry',b=>b.capability.evidence.creator.expiresAt=b.expiresAt-1],
- ['ungrounded creator',b=>delete b.capability.evidence.creator.creatorIdSha256]
+ ['short evidence expiry',b=>b.capability.evidence.access.expiresAt=b.expiresAt-1],
+ ['unsupported creator policy',b=>b.capability.creatorPolicy='named_identity'],
+ ['legacy creator evidence',b=>b.capability.evidence.creator={creatorIdSha256:sha('987654321')}]
 ])test(name+' fails closed before managed dispatch',()=>{
  const f=fixture();try{mutate(f.binding);assert.throws(()=>f.make(),held);assert.equal(f.sdk.requests.length,0);}finally{f.sdk.restore();}
 });
@@ -187,5 +189,49 @@ test('numeric-ID transport refuses other operation namespaces, arbitrary queries
   const row=structuredClone([...f.sdk.rows.values()][0]);delete row.ROWID;delete row.CREATORID;
   await assert.rejects(io.insert({...row,ExtraColumn:true}));await assert.rejects(io.insert({...row,GenerationStatus:'DraftGenerated'}));
   assert.equal(f.sdk.requests.length,before);
+ }finally{f.sdk.restore();}
+});
+
+for(const [label,value]of [['missing',undefined],['null',null],['blank',''],['zero','0'],['negative',-1],
+ ['leading zero','0123'],['space','123 '],['fraction',1.5],['unsafe number',Number.MAX_SAFE_INTEGER+1],
+ ['oversize','1'.repeat(31)],['object',{}],['boolean',true]])test('invalid admission ACK creator '+label+' holds before report dispatch',async()=>{
+ const f=fixture({storageResponseTransform({path,data}){if(path==='/table/123456787/row'&&Array.isArray(data)){data[0].CREATORID=value;}}});
+ try{await assert.rejects(f.make().handle(f.command,{actor:f.actor}),held);
+  assert.equal(f.sdk.rows.size,0);assert.equal(f.sdk.receipts.size,1);
+  assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/table/123456787/row')).length,1);
+  await assert.rejects(f.make().handle(f.command,{actor:f.actor}),held);assert.equal(f.sdk.rows.size,0);
+ }finally{f.sdk.restore();}
+});
+for(const target of ['admission readback','report ACK','report readback'])test(target+' creator disagreement fails closed',async()=>{
+ const f=fixture({storageResponseTransform({path,data}){
+  if(target==='admission readback'&&path==='/query'&&data[0]?.RevenueDeskEventReceipts)data[0].RevenueDeskEventReceipts.CREATORID='987654322';
+  if(target==='report ACK'&&path==='/table/123456788/row'&&Array.isArray(data))data[0].CREATORID='987654322';
+  if(target==='report readback'&&path==='/query'&&data[0]?.ReportRuns)data[0].ReportRuns.CREATORID='987654322';
+ }});try{const handler=f.make();await assert.rejects(handler.handle(f.command,{actor:f.actor}),held);
+  const writes=f.sdk.requests.filter(x=>x.path.endsWith('/row')).length;
+  assert.ok(f.sdk.rows.size<=1);await assert.rejects(handler.handle(f.command,{actor:f.actor}),held);
+  assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/row')).length,writes);
+ }finally{f.sdk.restore();}
+});
+test('report ACK row ID mismatch cannot pass exact independent readback',async()=>{
+ const f=fixture({storageResponseTransform({path,data}){if(path==='/table/123456788/row'&&Array.isArray(data))data[0].ROWID='999999999';}});
+ try{await assert.rejects(f.make().handle(f.command,{actor:f.actor}),held);assert.ok(f.sdk.rows.size<=1);}
+ finally{f.sdk.restore();}
+});
+test('valid numeric creator representation remains observed provenance only',async()=>{
+ const f=fixture({storageResponseTransform({path,data}){if(!Array.isArray(data))return;
+  for(const entry of data){const row=entry.ReportRuns||entry.RevenueDeskEventReceipts||entry;
+   if(Object.hasOwn(row,'CREATORID'))row.CREATORID=987654321;}
+ }});try{const result=await f.make().handle(f.command,{actor:f.actor});
+  assert.equal(result.creatorProvenance,'observed_consistent_v1');assert.equal(result.namedIdentityVerified,false);
+  assert.equal(result.qualificationAuthority,false);assert.equal(result.deliveryAuthority,false);
+ }finally{f.sdk.restore();}
+});
+test('read-only retrieval checks current evidence consistency without renewing identity',async()=>{
+ const f=fixture();try{await f.make().handle(f.command,{actor:f.actor});
+  for(const row of f.sdk.rows.values())row.CREATORID='987654322';
+  const result=await f.make().handle({...f.command,action:'read_storage_evidence'},{actor:f.actor});
+  assert.equal(result.status,'storage_evidence_unattested');assert.equal(result.namedIdentityVerified,false);
+  assert.equal(result.qualificationAuthority,false);assert.equal(result.inserts,0);
  }finally{f.sdk.restore();}
 });
