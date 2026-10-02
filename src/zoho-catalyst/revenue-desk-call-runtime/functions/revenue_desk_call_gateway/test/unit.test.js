@@ -598,9 +598,12 @@ test('unit: environment registry permits only minimal Production dark mode and r
   'assisted staging must not require an unverified public-form setting');
   // Conditional profiles legitimately share provider bindings. Validate their
   // exact sets above, then compare the union against the installation example.
+  assert.deepEqual(routeControlSet.required_when_number_assignment_approved_inventory,
+    ['RETELL_NUMBER_INVENTORY_JSON', 'RETELL_NUMBER_INVENTORY_SHA256']);
   const allRouteControlNames = [...new Set([
     ...routeControlNames, ...routeControlSet.required_for_configuration_staging,
     ...routeControlSet.required_for_public_configuration_staging,
+    'RETELL_NUMBER_ASSIGNMENT_MODE', ...routeControlSet.required_when_number_assignment_approved_inventory,
   ])];
   const registryNames = new Set(registry.variables.map(({ name }) => name));
   assert.equal(allRouteControlNames.every((name) => registryNames.has(name)), true,

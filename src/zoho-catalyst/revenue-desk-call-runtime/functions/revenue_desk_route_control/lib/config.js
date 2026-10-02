@@ -3,6 +3,7 @@
 const crypto = require('node:crypto');
 const { invariant } = require('revenue_desk_call_gateway/lib/errors');
 const { keyedDigest } = require('revenue_desk_call_gateway/lib/security');
+const { loadTestNumberAssignments } = require('revenue_desk_call_gateway/lib/test-number-assignment');
 const { ARTIFACT_SOURCE_REVISION, assertArtifactSourceRevision }
   = require('revenue_desk_call_gateway/lib/source-revision');
 
@@ -134,11 +135,14 @@ function loadConfig(env = process.env, artifactSourceRevision = ARTIFACT_SOURCE_
     ));
     sharedAgentVersion = integer(temporary, 'RETELL_SHARED_AGENT_VERSION', 0, 100_000);
   }
+  const operatorIdHash = `operator_${keyedDigest(eventChainSecret,
+    'revenue-desk-route-control-operator-v1', [crmOrganizationId, operatorIdentity])}`;
+  const numberAssignments = loadTestNumberAssignments(env, { sourceRevision, operatorIdHash, numberSecret, qaPhoneNumber: retellPhoneNumber });
   return Object.freeze({
+    ...numberAssignments,
     environment, deploymentMode, sourceRevision, tables: Object.freeze(tables),
     operatorVerificationSecret, eventChainSecret, form2WorkflowHmacMaterial, numberSecret,
-    operatorIdHash: `operator_${keyedDigest(eventChainSecret,
-      'revenue-desk-route-control-operator-v1', [crmOrganizationId, operatorIdentity])}`,
+    operatorIdHash,
     sharedHeaderName, sharedHeaderValue, controlHost, expectedProjectIdSha256,
     platformTimeoutMs: integer(env, 'PLATFORM_OPERATION_TIMEOUT_MS', 250, 5000),
     maxBodyBytes: integer(env, 'ROUTE_CONTROL_MAX_BODY_BYTES', 512, 16_384),

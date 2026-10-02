@@ -3,6 +3,7 @@
 const crypto = require('node:crypto');
 const { invariant } = require('revenue_desk_call_gateway/lib/errors');
 const { keyedDigest, numberLookupKey } = require('revenue_desk_call_gateway/lib/security');
+const { assignedTestPhoneNumber } = require('revenue_desk_call_gateway/lib/test-number-assignment');
 const { canonicalApprovalIntent, configurationSnapshotFingerprint, routeFromRows, routeFingerprint }
   = require('revenue_desk_call_gateway/lib/approval-control');
 const { validateConfigurationVersionRow, REQUIRED_CONFIGURATION_FIELDS }
@@ -164,6 +165,7 @@ function createConfigurationStagingService({ config, store, crm, core, sourceRea
     requireState(crypto.timingSafeEqual(expected, Buffer.from(request.signature.slice(3), 'hex')),
       'INVALID_APPROVAL_SIGNATURE');
     const row = request.configurationRow; const deployment = request.deployment;
+    const assignedNumber = assignedTestPhoneNumber(config, deployment, { dealId: request.dealId, journeyId: request.journeyId });
     requireState(exact(row, ROW_FIELDS) && exact(deployment, DEPLOYMENT_FIELDS));
     validateConfigurationVersionRow(row, { expectedEnvironment: config.environment,
       expectedSourceRevision: expectedRevision, expectedDeploymentId: intent.deployment_id });
@@ -180,8 +182,8 @@ function createConfigurationStagingService({ config, store, crm, core, sourceRea
       && Number.isSafeInteger(deployment.BINDING_VERSION) && deployment.BINDING_VERSION >= 1
       && deployment.MONITOR_AGENT_ID === config.sharedAgentId
       && deployment.MONITOR_AGENT_VERSION === config.stagingAgentVersion
-      && /^\+1[2-9][0-9]{2}[2-9][0-9]{6}$/.test(config.retellPhoneNumber || '')
-      && deployment.NUMBER_LOOKUP_HASH === numberLookupKey(config.numberSecret, config.retellPhoneNumber)
+      && /^\+1[2-9][0-9]{2}[2-9][0-9]{6}$/.test(assignedNumber || '')
+      && deployment.NUMBER_LOOKUP_HASH === numberLookupKey(config.numberSecret, assignedNumber)
       && routeFingerprint(routeFromRows(deployment, row)) === intent.route_fingerprint);
     return digest({ request });
   }

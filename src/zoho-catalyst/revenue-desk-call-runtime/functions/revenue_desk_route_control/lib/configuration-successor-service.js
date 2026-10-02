@@ -185,6 +185,9 @@ function createConfigurationSuccessorService({ config, store, crm, sourceReader,
   }
 
   async function succeed(request) {
+    // This historical successor changes the number hash. Inventory tests retain
+    // their original immutable reservation; no replacement or recycling path.
+    check(config.numberAssignmentMode !== 'approved_inventory', 'TEST_NUMBER_REASSIGNMENT_HELD');
     const plan = request?.intent?.plan;
     // Validate the exact server pin before even looking up an attempt identity.
     verifySuccessorIntent(request, config, now(), { replay: true });
