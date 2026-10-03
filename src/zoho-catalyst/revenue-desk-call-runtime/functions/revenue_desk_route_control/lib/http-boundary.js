@@ -152,8 +152,10 @@ function publicCode(error) {
 function createRequestListener({
   catalystSdk, environment = process.env, fetchImpl = globalThis.fetch,
   now = Date.now, artifactSourceRevision, factories = {},
+  failureLogger = record => console.error(JSON.stringify(record)),
 } = {}) {
   return async function listener(request, response) {
+    let storageFailureStage = null;
     try {
       const config = loadConfig(environment, artifactSourceRevision);
       invariant(request.method === 'POST', 'INVALID_CONTROL_REQUEST',
@@ -179,19 +181,26 @@ function createRequestListener({
         send(response, 200, { ok: true, action: body.action, result });
         return;
       }
+      if (body.profile === 'report_storage_qualification_v1' && action === 'approve') {
+        storageFailureStage = 'sdk_initialize';
+      }
       const app = runtime.initialize(request);
+      if (storageFailureStage) storageFailureStage = 'runtime_identity';
       invariant(String(app?.config?.environment || '').toLowerCase() === 'development'
         && String(app?.config?.projectId || '') === projectId,
       'CONTROL_AUTHENTICATION_FAILED', 'Control runtime identity is invalid.',
       { httpStatus: 503 });
       if (body.profile === 'report_storage_qualification_v1') {
+        if (storageFailureStage) storageFailureStage = 'storage_binding';
         invariant(action === 'approve' && typeof factories.storageQualification === 'function',
           'CONTROL_PRECONDITION_FAILED', 'Storage qualification is unavailable.', { httpStatus: 503 });
         // Independent disabled diagnostic, before customer stores/writers/providers.
         const handler = factories.storageQualification(app, config);
+        if (storageFailureStage) storageFailureStage = 'storage_handler';
         const result = await handler.handle(body, { actor: Object.freeze({
           kind: 'internal_controller', identity: config.operatorIdHash,
         }) });
+        storageFailureStage = null;
         send(response, 200, { ok: true, action: body.action, result });
         return;
       }
@@ -320,6 +329,22 @@ function createRequestListener({
         rollbackInstructions: result.route?.instructions || null,
       });
     } catch (error) {
+      if (storageFailureStage && typeof failureLogger === 'function') {
+        // Diagnostic observation only. Handler failure never proves zero effects.
+        // Never pass an Error, request, header, body or arbitrary code to logging.
+        let candidate;
+        try { candidate = error?.code; } catch (_) { candidate = undefined; }
+        const allowed = new Set(['app/invalid_project_details', 'app/invalid_app_object',
+          'auth/invalid_credential', 'MODULE_NOT_FOUND', 'CONTROL_AUTHENTICATION_FAILED',
+          'CONTROL_PRECONDITION_FAILED', 'REPORT_STORAGE_QUALIFICATION_HELD']);
+        const code = typeof candidate === 'string' && allowed.has(candidate) ? candidate : 'unknown';
+        try {
+          Promise.resolve(failureLogger(Object.freeze({ stage: storageFailureStage, code })))
+            .catch(() => {});
+        } catch (_) {
+          // Observability failure cannot change the existing HTTP result.
+        }
+      }
       const status = error instanceof RevenueDeskError ? error.httpStatus : 500;
       const code = publicCode(error);
       let details = {};
