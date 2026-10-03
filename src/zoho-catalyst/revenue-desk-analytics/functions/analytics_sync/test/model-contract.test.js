@@ -153,7 +153,8 @@ test('renders every dashboard widget to a unique executable report payload', () 
     assert.ok(payload.userFilters.some(({ columnName }) => columnName === 'DEPLOYMENT_KEY'));
     assert.ok([...payload.filters, ...payload.userFilters]
       .every(({ tableName }) => tableName === payload.baseTableName));
-    assert.match(payload.description, new RegExp(`^${widget.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\.`));
+    if (Object.hasOwn(definition, 'provider_description')) assert.equal(payload.description, definition.provider_description);
+    else assert.match(payload.description, new RegExp(`^${widget.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\.`));
     assert.equal(/TBD_PRIVATE|\bviewId\b|\bworkspaceId\b/.test(JSON.stringify(payload)), false);
   }
 });

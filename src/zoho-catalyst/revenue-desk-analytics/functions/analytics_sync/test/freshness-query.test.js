@@ -16,7 +16,8 @@ test('derived freshness outer references use the declared table alias', () => {
   const select = view.sql.slice(0, view.sql.indexOf(' FROM ('));
   const group = view.sql.slice(view.sql.lastIndexOf(' GROUP BY '));
   for (const dimension of dimensions) {
-    assert.ok(select.includes(`"RevenueDeskFacts"."${dimension}"`));
+    // Zoho otherwise exposes qualified dimension names rather than contractual output names.
+    assert.ok(select.includes(`"RevenueDeskFacts"."${dimension}" AS "${dimension}"`));
     assert.ok(group.includes(`"RevenueDeskFacts"."${dimension}"`));
   }
   assert.ok(select.includes('MAX("RevenueDeskFacts"."SOURCE_MODIFIED_AT") AS "LATEST_SOURCE_MODIFIED_AT"'));
