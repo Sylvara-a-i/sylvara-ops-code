@@ -1,5 +1,6 @@
 'use strict';
 const crypto=require('node:crypto');
+const {encodeReportBootstrap,decodeReportBootstrap,preflightReportBootstrapEnvironment,JSON_KEY,HASH_KEY,PART_PREFIX}=require('./report-bootstrap-transport');
 const HASH=/^[a-f0-9]{64}$/;
 const ID=/^[1-9][0-9]{2,29}$/;
 const sha=s=>crypto.createHash('sha256').update(s).digest('hex');
@@ -9,8 +10,8 @@ function freeze(x){if(x&&typeof x==='object'){Object.values(x).forEach(freeze);O
  * Catalyst environment-variable capacity. Installation must qualify capacity.
  * No tokens, Job parameters or HTTP payloads enter this loader. */
 function loadReportBootstrapBinding(env=process.env,{now=Date.now}={}){
- const raw=env.REPORT_RUNTIME_BINDING_JSON,pin=env.REPORT_RUNTIME_BINDING_SHA256;
- if(raw===undefined&&pin===undefined)return null;
+ if(!Object.hasOwn(env,'REPORT_RUNTIME_BINDING_JSON')&&!Object.hasOwn(env,'REPORT_RUNTIME_BINDING_SHA256')&&!Object.keys(env).some(k=>k.startsWith(PART_PREFIX)))return null;
+ const raw=decodeReportBootstrap(env),pin=env.REPORT_RUNTIME_BINDING_SHA256;
  if(typeof now!=='function'||!Number.isSafeInteger(now())||now()<0)held();
  if(typeof raw!=='string'||Buffer.byteLength(raw)>65536||!HASH.test(pin||'')||sha(raw)!==pin)held();
  let b;try{b=JSON.parse(raw);}catch{held();}
@@ -48,4 +49,13 @@ function protectedDestinations(entries){
   if(matches.length!==1||!matches[0].binding)held();return structuredClone(matches[0].binding);
  };
 }
-module.exports={loadReportBootstrapBinding,workerReportActor,protectedDestinations};
+/** Pure offline preparation: complete-map sizing and the existing authority,
+ * source and expiry gates pass before returning any stageable configuration.
+ * This does not acquire a claim, change environment or invoke a provider. */
+function prepareReportBootstrapBinding({raw,bindingSha256,baseline,identityPins,partSize=400,format='deflate-v2',now=Date.now}={}){
+ const transport=encodeReportBootstrap(raw,{partSize,format});
+ const preflight=preflightReportBootstrapEnvironment({baseline,transport,bindingSha256,identityPins,now});
+ loadReportBootstrapBinding({...identityPins,...transport.parts,[JSON_KEY]:transport.marker,[HASH_KEY]:bindingSha256},{now});
+ return Object.freeze({...transport,bindingSha256,preflight});
+}
+module.exports={loadReportBootstrapBinding,prepareReportBootstrapBinding,workerReportActor,protectedDestinations};
