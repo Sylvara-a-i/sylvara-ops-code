@@ -1,8 +1,9 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
-const {composeReviewedDeliveryBoundary}=require('../../../scripts/compose-reporting-artifact');
+const {composeReviewedDeliveryBoundary,reviewedStorageDiagnostic}=require('../../../scripts/compose-reporting-artifact');
 const file='src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_route_control/lib/http-boundary.js';
-const current=fs.readFileSync(path.resolve(__dirname,'../../revenue_desk_route_control/lib/http-boundary.js'));
+const diagnosticCurrent=fs.readFileSync(path.resolve(__dirname,'../../revenue_desk_route_control/lib/http-boundary.js'));
+const current=reviewedStorageDiagnostic(diagnosticCurrent);
 const source=current.toString(),start=source.indexOf("      if (body.profile === 'report_storage_qualification_v1') {");
 const end=source.indexOf('      const crm = ',start),addition=source.slice(start,end);
 const contextStart=source.indexOf("      if (body.profile === 'report_runtime_context_v1') {");
@@ -62,4 +63,22 @@ test('context branch is separately pinned, before initialization and removable w
  assert.ok(result.bytes.toString().indexOf('report_runtime_context_v1')<result.bytes.toString().indexOf('const app = runtime.initialize(request)'));
  held(()=>composeReviewedDeliveryBoundary(file,base,Buffer.from(source.replace('factories.runtimeContext(request','factories.runtimeContext(body')),selected));
  held(()=>composeReviewedDeliveryBoundary(file,base,current,Buffer.from(selected.toString().replace('      const app = runtime.initialize(request);',''))));
+});
+
+test('exact pinned storage observations preserve selected auth through forward and inverse composition',()=>{
+ const result=composeReviewedDeliveryBoundary(file,base,diagnosticCurrent,selected);
+ assert.match(result.storage_diagnostic_sha256,/^[a-f0-9]{64}$/);
+ const prior=composeReviewedDeliveryBoundary(file,base,current,selected);
+ assert.deepEqual(reviewedStorageDiagnostic(result.bytes),prior.bytes);
+ assert.deepEqual(Buffer.from(reviewedStorageDiagnostic(result.bytes).toString().replace(addition,'').replace(context,'')),selected);
+ assert.deepEqual(reviewedStorageDiagnostic(diagnosticCurrent),current);
+ assert.ok(result.bytes.toString().includes('Promise.resolve(failureLogger(Object.freeze'));
+});
+
+test('altered logging, stage or authentication cannot use the storage observation exception',()=>{
+ for(const [from,to] of [['code }','code, error }'],["storageFailureStage = 'storage_handler'","storageFailureStage = 'storage_binding'"],['identity: config.operatorIdHash','identity: body.actor'],["app/invalid_project_details","private/unapproved"]]) {
+  assert.ok(diagnosticCurrent.toString().includes(from));
+  held(()=>composeReviewedDeliveryBoundary(file,base,Buffer.from(diagnosticCurrent.toString().replace(from,to)),selected));
+ }
+ held(()=>composeReviewedDeliveryBoundary(file,base,Buffer.concat([diagnosticCurrent,Buffer.from('\n// unrelated\n')]),selected));
 });
