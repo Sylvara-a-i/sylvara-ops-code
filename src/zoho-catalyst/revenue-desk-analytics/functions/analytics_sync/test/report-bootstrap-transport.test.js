@@ -48,6 +48,7 @@ test('legacy exact bytes remain supported without any staged parts',()=>{
  assert.equal(load(e,{now:()=>at}).delivery.enabled,false);held(()=>load({...e,[PART_PREFIX+'0']:''},{now:()=>at}));
 });
 
+
 const zlib=require('node:zlib');
 const {preflightReportBootstrapEnvironment:preflight,PLANNING_BUDGET}=require(base+'revenue_desk_call_gateway/lib/report-bootstrap-transport');
 const {prepareReportBootstrapBinding:prepare}=require(base+'revenue_desk_call_gateway/lib/report-bootstrap-binding');

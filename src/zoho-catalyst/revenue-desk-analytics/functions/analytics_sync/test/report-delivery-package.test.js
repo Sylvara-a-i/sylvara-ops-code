@@ -11,7 +11,9 @@ test('isolated controller delivery package imports with one canonical gateway an
     let bytes=fs.readFileSync(source);if(replace)bytes=Buffer.from(bytes.toString().replace(...replace));fs.writeFileSync(target,bytes);};
   const builder=fs.readFileSync(path.join(runtime,'scripts/build-release.js'),'utf8');
   const names=/const DELIVERY_LIBS = \[([\s\S]*?)\];/.exec(builder)[1].match(/'([a-z-]+)'/g).map(x=>x.slice(1,-1));
-  assert.ok(names.includes('report-storage-capability'));
+  assert.ok(names.includes('report-storage-capability')&&names.includes('report-storage-window'));
+  const windowSource=fs.readFileSync(path.join(root,'revenue-desk-analytics/functions/analytics_sync/lib/report-storage-window.js'),'utf8');
+  assert.match(windowSource,/DEVELOPMENT_SYNTHETIC_WINDOW_MS=3600000/);
   assert.ok(names.includes('config')&&names.includes('source-revision')&&names.includes('report-recipient-preflight'));
   for(const name of names)put(`reporting/revenue-desk-analytics/functions/analytics_sync/lib/${name}.js`,path.join(root,`revenue-desk-analytics/functions/analytics_sync/lib/${name}.js`),
     name==='source-revision'?['__SYLVARA_UNSTAMPED_SOURCE_REVISION__','a'.repeat(40)]:null);
@@ -35,6 +37,9 @@ test('isolated controller delivery package imports with one canonical gateway an
   put('reporting/revenue-desk-call-runtime/functions/revenue_desk_call_gateway/contracts/revenue-desk-call-contract.json',path.join(runtime,'functions/revenue_desk_call_gateway/contracts/revenue-desk-call-contract.json'));
   assert.equal(typeof require(path.join(controller,'index.js')),'function');
   const storage=require(path.join(analytics,'functions/analytics_sync/lib/report-storage-qualification'));
+  const window=require(path.join(analytics,'functions/analytics_sync/lib/report-storage-window'));
+  assert.equal(window.diagnosticWindowMs({schemaVersion:4,profile:'report_storage_qualification_v1',environment:'development'}),3600000);
+  assert.throws(()=>window.diagnosticWindowMs({schemaVersion:4,profile:'report_storage_qualification_v1',environment:'production'}));
   assert.throws(()=>storage.createProtectedStorageQualification({environment:{}})({},{}),{code:'REPORT_STORAGE_QUALIFICATION_HELD'});
   assert.equal(typeof require(path.join(controller,'lib/report-delivery-composition.js')).createReportDeliveryFactory,'function');
   const {createProtectedWorkerReportOptions}=require(path.join(controller,'worker-lib/report-bootstrap.js'));

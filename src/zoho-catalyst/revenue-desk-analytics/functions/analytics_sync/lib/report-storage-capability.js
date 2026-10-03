@@ -2,6 +2,7 @@
 const crypto=require('node:crypto');
 const {canonicalJson}=require('./facts');
 const {reportRunProjection}=require('./report-run-store');
+const {LEGACY_WINDOW_MS,diagnosticWindowMs}=require('./report-storage-window');
 const issued=new WeakSet();
 const HASH=/^[a-f0-9]{64}$/,ID=/^[1-9][0-9]{2,29}$/;
 const exact=(v,k)=>v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).sort().join(',')===[...k].sort().join(',');
@@ -14,7 +15,12 @@ function held(){throw Object.assign(new Error('REPORT_STORAGE_QUALIFICATION_HELD
 /** Protected owner-reviewed deployment capability; not named token identity or provider least privilege.
  * Evidence hashes refer to independently retained metadata, not self-proving provider permission.
  */
-function validateStorageCapability(c,{app,config,environment,now,verifiedAt,expiresAt}={}){
+function validateStorageCapability(c,{app,config,environment,now,verifiedAt,expiresAt,diagnosticContract}={}){
+ let windowMs=LEGACY_WINDOW_MS;
+ if(diagnosticContract!==undefined){
+  if(config?.environment!=='development'||environment?.DEPLOYMENT_ENVIRONMENT!=='development'||String(app?.config?.environment).toLowerCase()!=='development')held();
+  windowMs=diagnosticWindowMs(diagnosticContract);
+ }
  if(!exact(c,['region','origin','controllerFunctionId','deploymentId','sdkVersion','authMode','authType','creatorPolicy','tables','evidence'])
   ||c.region!=='US'||c.origin!=='https://api.catalyst.zoho.com'||c.sdkVersion!=='3.4.0'
   ||c.creatorPolicy!=='observed_consistent_v1'||c.authMode!=='user'||c.authType!=='admin'||!ID.test(c.controllerFunctionId||'')
@@ -33,7 +39,8 @@ function validateStorageCapability(c,{app,config,environment,now,verifiedAt,expi
  for(const e of Object.values(c.evidence)){
   if(!exact(e,['digest','verifiedAt','expiresAt'])
    ||!HASH.test(e.digest||'')||!Number.isSafeInteger(e.verifiedAt)||e.verifiedAt<0
-   ||!Number.isSafeInteger(e.expiresAt)||e.verifiedAt>verifiedAt||verifiedAt-e.verifiedAt>900000
+   ||!Number.isSafeInteger(e.expiresAt)||e.verifiedAt>verifiedAt||verifiedAt-e.verifiedAt>windowMs
+   ||diagnosticContract?.schemaVersion===4&&e.expiresAt-e.verifiedAt>windowMs
    ||e.expiresAt<expiresAt||now<e.verifiedAt||now>=e.expiresAt)held();
  }
  const root=require('node:path').dirname(require.resolve('zcatalyst-sdk-node/package.json'));
@@ -68,4 +75,3 @@ function validateStoredProjection(row,role){
   ||Object.keys(row).some(k=>!fields.includes(k)&&!['ROWID','CREATORID','MODIFIEDBY','CREATEDTIME','MODIFIEDTIME'].includes(k)))held();
 }
 module.exports={assertIssuedCapability,validateStoredProjection,validateStorageCapability,validateReportInsert,REPORT_FIELDS,RECEIPT_FIELDS,projectionDigest:digest};
-
