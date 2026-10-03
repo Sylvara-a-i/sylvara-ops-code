@@ -1,5 +1,6 @@
 'use strict';
 const crypto=require('node:crypto');
+const {decodeStorageBinding}=require('./report-storage-binding');
 const {canonicalJson}=require('./facts');
 const {createReportSuccessorStore}=require('./report-successor-store');
 const {createReportRunTransport}=require('./report-run-transport');
@@ -14,7 +15,7 @@ function held(){throw Object.assign(new Error('REPORT_STORAGE_QUALIFICATION_HELD
 function createProtectedStorageQualification({environment=process.env,now=Date.now,transportFactory=createReportRunTransport}={}){
  const consumed=new Set();
  return function storageQualification(app,config){
-  const raw=environment.REPORT_STORAGE_QUALIFICATION_JSON,pin=environment.REPORT_STORAGE_QUALIFICATION_SHA256;
+  const raw=decodeStorageBinding(environment),pin=environment.REPORT_STORAGE_QUALIFICATION_SHA256;
   if(typeof raw!=='string'||Buffer.byteLength(raw)>4096||!HASH.test(pin||'')||sha(raw)!==pin)held();
   let b;try{b=JSON.parse(raw);}catch{held();}
   if(!exact(b,['schemaVersion','enabled','environment','sourceRevision','projectId','controlHost','tableId','nonce',
