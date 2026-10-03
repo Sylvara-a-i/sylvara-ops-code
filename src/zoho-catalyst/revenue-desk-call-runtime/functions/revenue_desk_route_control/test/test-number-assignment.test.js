@@ -79,10 +79,10 @@ function providerFixture() {
   const provider = createRetellRouteProvider(config, { authorization: async () => 'Bearer synthetic', fetchImpl: async (url, options) => {
     requests.push(url); const phone = decodeURIComponent(new URL(url).pathname.split('/').pop());
     if(options.method === 'PATCH') inactive.add(phone);
-    return { status:200, json:async () => ({phone_number:phone,phone_number_type:'retell-twilio',
+    return new Response(JSON.stringify({phone_number:phone,phone_number_type:'retell-twilio',
       last_modification_timestamp:1,nickname:'ZZZ SYNTHETIC inventory',inbound_agents:inactive.has(phone)?[]:[{agent_id:config.sharedAgentId,agent_version:1,weight:1}],
       outbound_agents:[],inbound_sms_agents:[],outbound_sms_agents:[],inbound_webhook_url:inactive.has(phone)?null:config.inboundWebhookUrl,
-      inbound_sms_webhook_url:null,fallback_number:null}) };
+      inbound_sms_webhook_url:null,fallback_number:null}), {headers:{'content-type':'application/json'}});
   }});
   b.request.deployment.MONITOR_AGENT_ID = config.sharedAgentId;
   return {a,b,config,provider,requests};

@@ -104,36 +104,70 @@ function createRetellRouteProvider(config, {
     { httpStatus: 503 });
   const numberConfig = deployment => ({ ...config, retellPhoneNumber: assignedTestPhoneNumber(config, deployment) });
 
+  // Local policy bound, not a claim about provider payload limits.
+  const maxResponseBytes = 262144;
   async function request(method, path, body) {
-    const token = await authorization();
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), config.platformTimeoutMs);
-    let response;
-    try {
-      response = await fetchImpl(`${config.retellApiBaseUrl}${path}`, {
-        method,
-        headers: {
-          Accept: 'application/json', Authorization: token,
-          ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
-        },
-        body: body === undefined ? undefined : JSON.stringify(body),
-        signal: controller.signal,
+    const deadlineAt = performance.now() + config.platformTimeoutMs;
+    let reader, dispatched = false, rejectDeadline;
+    const failed = cause => new RevenueDeskError('RETELL_ROUTE_REQUEST_FAILED',
+      'Retell route operation failed.', { cause, httpStatus: 503,
+        retryable: method === 'GET', ambiguous: method !== 'GET' && dispatched });
+    const deadline = new Promise((_, reject) => { rejectDeadline = reject; });
+    const cancel = () => {
+      controller.abort();
+      try { Promise.resolve(reader?.cancel()).catch(() => {}); } catch (_) {}
+      rejectDeadline(failed());
+    };
+    const timer = setTimeout(cancel, config.platformTimeoutMs);
+    const active = () => {
+      if (controller.signal.aborted || performance.now() >= deadlineAt) {
+        controller.abort(); throw failed();
+      }
+    };
+    async function run() {
+      active(); const token = await authorization(); active();
+      dispatched = true;
+      const response = await fetchImpl(`${config.retellApiBaseUrl}${path}`, {
+        method, redirect: 'error',
+        headers: { Accept: 'application/json', 'Accept-Encoding': 'identity', Authorization: token,
+          ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+        body: body === undefined ? undefined : JSON.stringify(body), signal: controller.signal,
       });
-    } catch (error) {
-      throw new RevenueDeskError('RETELL_ROUTE_REQUEST_FAILED',
-        'Retell route operation failed.',
-        { cause: error, httpStatus: 503, retryable: method === 'GET', ambiguous: method !== 'GET' });
-    } finally {
-      clearTimeout(timer);
+      if (controller.signal.aborted || performance.now() >= deadlineAt) {
+        try { Promise.resolve(response?.body?.cancel()).catch(() => {}); } catch (_) {}
+      }
+      active();
+      if (!Number.isInteger(response?.status) || response.status < 100 || response.status > 599
+        || !/^application\/json(?:\s*;|$)/i.test(response.headers?.get('content-type') || '')
+        || (response.headers.get('content-encoding') && response.headers.get('content-encoding') !== 'identity')
+        || !response.body?.getReader) throw failed();
+      const length = response.headers.get('content-length');
+      if (length !== null && (!/^\d+$/.test(length) || Number(length) > maxResponseBytes)) throw failed();
+      reader = response.body.getReader(); const chunks = []; let bytes = 0, count = 0;
+      while (true) {
+        active(); const part = await reader.read(); active(); if (part.done) break;
+        if (!(part.value instanceof Uint8Array) || ++count > 512
+          || (bytes += part.value.byteLength) > maxResponseBytes) throw failed();
+        chunks.push(Buffer.from(part.value));
+      }
+      let json;
+      try { json = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks))); }
+      catch (error) { throw failed(error); }
+      active();
+      if (!json || typeof json !== 'object' || Array.isArray(json)) throw failed();
+      invariant(response.status >= 200 && response.status < 300,
+      'RETELL_ROUTE_REJECTED', 'Retell rejected the route operation.',
+      { httpStatus: response.status === 401 || response.status === 403 ? 503 : 409,
+        retryable: method === 'GET', ambiguous: method !== 'GET' && response.status >= 500 });
+      return json;
     }
-    let json;
-    try { json = await response.json(); } catch (_) { json = null; }
-    invariant(response.status >= 200 && response.status < 300 && json
-      && typeof json === 'object' && !Array.isArray(json),
-    'RETELL_ROUTE_REJECTED', 'Retell rejected the route operation.',
-    { httpStatus: response.status === 401 || response.status === 403 ? 503 : 409,
-      retryable: method === 'GET', ambiguous: method !== 'GET' && response.status >= 500 });
-    return json;
+    try { return await Promise.race([run(), deadline]); }
+    catch (error) { throw error instanceof RevenueDeskError ? error : failed(error); }
+    finally {
+      clearTimeout(timer); controller.abort();
+      try { Promise.resolve(reader?.cancel()).catch(() => {}); } catch (_) {}
+    }
   }
 
   async function getPhoneNumber(selected) {
