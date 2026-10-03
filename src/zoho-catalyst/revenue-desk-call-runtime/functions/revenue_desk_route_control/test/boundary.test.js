@@ -756,3 +756,129 @@ test('context command cannot bypass control headers, host, project, environment 
   }
   assert.equal(inspections, 0);
 });
+
+function storageFailureFixture({ initialize, binding, handler, failureLogger } = {}) {
+  const env = environment(), config = loadConfig(env, REVISION), logs = [];
+  const blocked = () => assert.fail('No customer stores, CRM writers or providers');
+  const listener = createRequestListener({ environment: env, artifactSourceRevision: REVISION,
+    failureLogger: failureLogger || (record => logs.push(record)),
+    catalystSdk: { initialize: initialize || (() => ({ config: { environment: 'Development', projectId: PROJECT_ID } })) },
+    factories: { store: blocked, crm: blocked, provider: blocked, reportDelivery: blocked,
+      storageQualification: binding || (() => ({ handle: handler || (async () => ({ status: 'synthetic_observation' })) })) } });
+  const request = { method: 'POST', url: '/internal/revenue-desk/approve-configuration',
+    headers: { host: config.controlHost, 'x-zc-environment': 'development', 'x-zc-projectid': PROJECT_ID,
+      'x-synthetic-control': env.ROUTE_CONTROL_SHARED_HEADER_VALUE, 'content-type': 'application/json' },
+    rawBody: Buffer.from(JSON.stringify({ profile: 'report_storage_qualification_v1', action: 'qualify_storage' })) };
+  return { listener, request, logs };
+}
+const storageFailure = code => Object.assign(new Error('SYNTHETIC_PRIVATE_MESSAGE'), { code,
+  value: { token: 'SYNTHETIC_PRIVATE_TOKEN' }, privateHeader: 'SYNTHETIC_PRIVATE_HEADER' });
+for (const [stage, options, expectedStatus, expectedCode] of [
+  ['sdk_initialize', { initialize() { throw storageFailure('app/invalid_project_details'); } }, 500, 'app/invalid_project_details'],
+  ['runtime_identity', { initialize() { return { config: { environment: 'Production', projectId: PROJECT_ID } }; } }, 503, 'CONTROL_AUTHENTICATION_FAILED'],
+  ['storage_binding', { binding() { throw storageFailure('REPORT_STORAGE_QUALIFICATION_HELD'); } }, 500, 'REPORT_STORAGE_QUALIFICATION_HELD'],
+  ['storage_handler', { handler: async () => { throw storageFailure('REPORT_STORAGE_QUALIFICATION_HELD'); } }, 500, 'REPORT_STORAGE_QUALIFICATION_HELD'],
+]) test('fixed storage failure observation at ' + stage + ' preserves public response', async () => {
+  const f = storageFailureFixture(options), output = response(); await f.listener(f.request, output);
+  assert.equal(output.statusCode, expectedStatus);
+  assert.deepEqual(output.body, { ok: false, code: expectedStatus === 503 ? 'control_authentication_failed' : 'control_failed' });
+  assert.deepEqual(f.logs, [{ stage, code: expectedCode }]);
+  assert.deepEqual(Object.keys(f.logs[0]).sort(), ['code', 'stage']);
+  assert.equal(Object.isFrozen(f.logs[0]), true);
+  assert.equal(JSON.stringify({ logs: f.logs, output: output.body }).includes('SYNTHETIC_PRIVATE'), false);
+});
+for (const code of ['auth/invalid_credential', 'MODULE_NOT_FOUND', 'app/invalid_app_object'])
+  test('SDK fixed code allowlist preserves ' + code, async () => {
+    const f = storageFailureFixture({ initialize() { throw storageFailure(code); } }), output = response();
+    await f.listener(f.request, output); assert.equal(output.statusCode, 500);
+    assert.deepEqual(output.body, { ok: false, code: 'control_failed' });
+    assert.deepEqual(f.logs, [{ stage: 'sdk_initialize', code }]);
+  });
+for (const code of ['SYNTHETIC_PRIVATE_CODE', undefined, { raw: 'SYNTHETIC_PRIVATE_TOKEN' }])
+  test('unknown storage error code remains fixed unknown ' + typeof code, async () => {
+    const f = storageFailureFixture({ binding() { throw storageFailure(code); } }), output = response();
+    await f.listener(f.request, output); assert.deepEqual(f.logs, [{ stage: 'storage_binding', code: 'unknown' }]);
+    assert.deepEqual(output.body, { ok: false, code: 'control_failed' });
+    assert.equal(JSON.stringify(f.logs).includes('SYNTHETIC_PRIVATE'), false);
+  });
+test('storage logger failure cannot change diagnostic HTTP result or retry handler', async () => {
+  let calls = 0, logCalls = 0;
+  const f = storageFailureFixture({ handler: async () => { calls++; throw storageFailure('REPORT_STORAGE_QUALIFICATION_HELD'); },
+    failureLogger() { logCalls++; throw Error('SYNTHETIC_PRIVATE_LOGGER_ERROR'); } }), output = response();
+  await f.listener(f.request, output); assert.equal(calls, 1); assert.equal(logCalls, 1);
+  assert.equal(output.statusCode, 500); assert.deepEqual(output.body, { ok: false, code: 'control_failed' });
+});
+test('asynchronous storage logger rejection is contained without delaying or changing HTTP result', async () => {
+  let calls = 0, logCalls = 0;
+  const f = storageFailureFixture({ handler: async () => { calls++; throw storageFailure('REPORT_STORAGE_QUALIFICATION_HELD'); },
+    async failureLogger() { logCalls++; throw Error('SYNTHETIC_PRIVATE_ASYNC_LOGGER_ERROR'); } }), output = response();
+  await f.listener(f.request, output);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(calls, 1); assert.equal(logCalls, 1);
+  assert.equal(output.statusCode, 500); assert.deepEqual(output.body, { ok: false, code: 'control_failed' });
+});
+test('storage success produces no failure observation', async () => {
+  const f = storageFailureFixture(), output = response(); await f.listener(f.request, output);
+  assert.equal(output.statusCode, 200); assert.deepEqual(output.body, { ok: true, action: 'qualify_storage', result: { status: 'synthetic_observation' } });
+  assert.deepEqual(f.logs, []);
+});
+test('storage response failure after successful handler is not mislabelled as handler failure', async () => {
+  const f = storageFailureFixture(), output = response(), normalEnd = output.end; let sends = 0;
+  output.end = function(value) { if (++sends === 1) throw Error('SYNTHETIC_PRIVATE_RESPONSE_FAILURE'); normalEnd.call(this, value); };
+  await f.listener(f.request, output); assert.equal(output.statusCode, 500);
+  assert.deepEqual(output.body, { ok: false, code: 'control_failed' }); assert.deepEqual(f.logs, []);
+});
+test('storage handler failure keeps accepted effects unknown and never retries', async () => {
+  let acceptedEffects = 0;
+  const f = storageFailureFixture({ handler: async () => { acceptedEffects++; throw storageFailure('REPORT_STORAGE_QUALIFICATION_HELD'); } }), output = response();
+  await f.listener(f.request, output); assert.equal(acceptedEffects, 1);
+  assert.deepEqual(f.logs, [{ stage: 'storage_handler', code: 'REPORT_STORAGE_QUALIFICATION_HELD' }]);
+  assert.deepEqual(Object.keys(f.logs[0]).sort(), ['code', 'stage']);
+  assert.deepEqual(output.body, { ok: false, code: 'control_failed' });
+});
+test('auth body and wrong control route failures produce no storage diagnostic observation', async () => {
+  for (const variant of ['auth', 'body', 'route']) {
+    let calls = 0;
+    const f = storageFailureFixture({ initialize() { calls++; throw Error('Must not reach tracked SDK initialization'); } }), output = response();
+    if (variant === 'auth') f.request.headers['x-synthetic-control'] = 'invalid';
+    if (variant === 'body') f.request.headers['content-type'] = 'text/plain';
+    if (variant === 'route') f.request.url = '/internal/revenue-desk/activate-free-test';
+    await f.listener(f.request, output); assert.deepEqual(f.logs, []);
+    assert.equal(output.statusCode, variant === 'auth' ? 401 : variant === 'body' ? 415 : 500);
+    assert.equal(calls, variant === 'route' ? 1 : 0);
+  }
+});
+test('nonstorage SDK failure produces no storage observation', async () => {
+  const f = storageFailureFixture({ initialize() { throw storageFailure('auth/invalid_credential'); } }), output = response();
+  f.request.rawBody = Buffer.from(JSON.stringify({ profile: 'report_sender_qualification_v1', action: 'qualify_sender' }));
+  await f.listener(f.request, output); assert.equal(output.statusCode, 500);
+  assert.deepEqual(output.body, { ok: false, code: 'control_failed' }); assert.deepEqual(f.logs, []);
+});
+
+test('storage precondition allowlist preserves existing503 response', async () => {
+  const f = storageFailureFixture({ binding() { throw new RevenueDeskError('CONTROL_PRECONDITION_FAILED', 'SYNTHETIC_PRIVATE_MESSAGE', { httpStatus: 503 }); } }), output = response();
+  await f.listener(f.request, output); assert.equal(output.statusCode, 503);
+  assert.deepEqual(output.body, { ok: false, code: 'control_precondition_failed' });
+  assert.deepEqual(f.logs, [{ stage: 'storage_binding', code: 'CONTROL_PRECONDITION_FAILED' }]);
+});
+for (const [missing, stage, code] of [
+  ['x-zc-project-key', 'sdk_initialize', 'app/invalid_project_details'],
+  ['x-zc-admin-cred-type', 'sdk_initialize', 'auth/invalid_credential'],
+  ['x-zc-user-type', 'storage_binding', 'REPORT_STORAGE_QUALIFICATION_HELD'],
+  ['x-zc-user-cred-type', 'storage_handler', 'auth/invalid_credential'],
+]) test('actual SDK fake header boundary observes ' + missing + ' without provider dispatch', async () => {
+  const sdk = require('zcatalyst-sdk-node');
+  const f = storageFailureFixture({ initialize(request) {
+    const headers = { ...request.headers, 'x-zc-project-key': 'synthetic-project-key',
+      'x-zc-admin-cred-type': 'token', 'x-zc-admin-cred-token': 'synthetic-admin-token',
+      'x-zc-user-cred-type': 'token', 'x-zc-user-cred-token': 'synthetic-user-token', 'x-zc-user-type': 'admin' };
+    delete headers[missing]; return sdk.initialize({ headers });
+  }, binding(app) {
+    if (app.credential.getCurrentUser() !== 'user' || app.credential.getCurrentUserType() !== 'admin')
+      throw storageFailure('REPORT_STORAGE_QUALIFICATION_HELD');
+    return { async handle() { await app.authenticateRequest({ headers: {} }); assert.fail('Missing synthetic credential type must reject'); } };
+  } }), output = response();
+  await f.listener(f.request, output); assert.equal(output.statusCode, 500);
+  assert.deepEqual(output.body, { ok: false, code: 'control_failed' }); assert.deepEqual(f.logs, [{ stage, code }]);
+  assert.equal(JSON.stringify(f.logs).includes('synthetic-'), false);
+});
