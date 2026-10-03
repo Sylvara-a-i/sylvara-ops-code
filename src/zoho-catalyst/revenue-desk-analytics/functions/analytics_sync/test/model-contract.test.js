@@ -275,8 +275,8 @@ test('optional customer evidence preserves an explicit missing-versus-zero discr
     ]);
     assert.equal(report.filters.some(({ columnName }) =>
       columnName === 'ANALYSIS_EVIDENCE_COMPLETE'), false);
-    assert.match(report.description, /available with numeric zero/i);
-    assert.match(report.description, /not_available with a null measure/i);
+    assert.match(model.reports[reportKey].null_behavior, /available with numeric zero/i);
+    assert.match(model.reports[reportKey].null_behavior, /not_available with a null measure/i);
   }
 });
 
@@ -287,9 +287,33 @@ test('rendered freshness contract requires the fail-closed authoritative pre-ren
   assert.match(rendered.pre_render_gate.timestamp_boundary,
     /No timestamp.*complete authoritative checkpoint/i);
   for (const reportKey of ['operations_data_freshness', 'customer_data_freshness']) {
-    assert.match(rendered.report_payloads[reportKey].description,
+    assert.match(model.reports[reportKey].null_behavior,
       /never emits or implies Healthy/i);
-    assert.match(rendered.report_payloads[reportKey].description, /pre_render_gate/i);
+    assert.match(model.reports[reportKey].null_behavior, /pre_render_gate/i);
+    assert.match(rendered.report_payloads[reportKey].description, /never Healthy/);
+  }
+});
+
+test('provider description overrides preserve exact approved concise copy and ordinary fallback', () => {
+  const expected = {
+    customer_bookable_evidence: 'Bookable Evidence. Show state with count: available only with complete analysis and a present value. available + 0 is verified zero; not_available + null is Not Available. Never hide/filter state.',
+    customer_office_follow_up: 'Office Follow-Up. Show state with count: available only with complete analysis and a present value. available + 0 is verified zero; not_available + null is Not Available. Never hide/filter state.',
+    operations_data_freshness: 'Observed watermarks/counts only, never Healthy. Publication or Reconciled labels need a ready complete-scope gate and verified access. Missing, stale, unresolved or mismatched evidence blocks use.',
+    customer_data_freshness: 'Observed watermarks/counts only, never Healthy. Publication or Reconciled labels need a ready locked-scope gate and verified access. Missing, stale, unresolved or mismatched evidence blocks use.',
+  };
+  const rendered = renderContract(model);
+  for (const [key, report] of Object.entries(model.reports)) {
+    assert.equal(rendered.report_payloads[key].description,
+      expected[key] ?? `${report.widget_title}. ${report.null_behavior}`);
+  }
+  assert.deepEqual(Object.keys(model.reports).filter(key => Object.hasOwn(model.reports[key], 'provider_description')).sort(), Object.keys(expected).sort());
+});
+
+test('explicit malformed provider descriptions hold instead of silently using fallback', () => {
+  for (const value of [null, false, 0, [], {}, '', ' \t\n', undefined]) {
+    const changed = structuredClone(model);
+    changed.reports.customer_bookable_evidence.provider_description = value;
+    assert.throws(() => renderContract(changed), /invalid provider description/);
   }
 });
 
