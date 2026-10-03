@@ -64,7 +64,7 @@
         { "name": "Engagement Type", "column": "ENGAGEMENT_TYPE", "control": "single-select", "required": true, "visible": false, "locked": true, "fixed_value": "free_test", "applies_to": "all widgets" },
         { "name": "Client", "column": "CLIENT_KEY", "control": "multi-select", "required": false, "visible": true, "locked": false, "applies_to": "all widgets" },
         { "name": "Deployment", "column": "DEPLOYMENT_KEY", "control": "multi-select", "required": false, "visible": true, "locked": false, "applies_to": "all widgets" },
-        { "name": "Expiry Window", "column": "EXPIRES_AT", "control": "relative-date", "required": true, "visible": true, "locked": true, "default": "next 48 hours", "applies_to": ["operations_tests_ending_soon"] }
+        { "name": "Expiry Window", "column": "EXPIRES_AT", "control": "relative-date", "required": false, "visible": true, "locked": false, "default": null, "fixed_criterion_binding": "analytics-model-contract.json.reports.operations_tests_ending_soon.native_assembly", "applies_to": ["operations_tests_ending_soon"] }
       ],
       "widgets": [
         { "title": "Active Free Tests", "type": "summary", "source": "deployment", "report_key": "operations_active_free_tests", "definition": "Distinct current DEPLOYMENT_KEY values with DEPLOYMENT_STATUS=live inside the selected Development partition." },

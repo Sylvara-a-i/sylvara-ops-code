@@ -25,9 +25,9 @@ const READBACK_RULES_DIGEST_DOMAIN = "sylvara.analytics.readback-rules.v3";
 const CONTAINMENT_RULES_DIGEST_DOMAIN = "sylvara.analytics.containment-rules.v3";
 
 const EXPECTED_CONTRACT_DIGESTS = Object.freeze({
-  analyticsModel: "db7be115f9be717e696c54ef5a358242351306d812639f1e735f6580df19fe02",
-  dashboard: "3b98fd48f203dc86f8e4bab5a546878ed5f544c28cbdc7004444e52c12941a2c",
-  rendered: "b8e7f329c1848b3e49a3e40837e8428c099882d448cb6db947a80aa377b94016",
+  analyticsModel: "2e9c44e8e0002b6e08988d53620f3e3f9189901100e41157bd94881ee4ef9be8",
+  dashboard: "5b0ac8de350da7ae987b0529bda6bb44e7bb7e1e7e884242842266ca846bfea6",
+  rendered: "0ab0e4eb0a06b8ca2150e988b2b1051aad0c59f1974e2728bcdd55bd42098a21",
 });
 
 const PHASES = Object.freeze({
@@ -128,6 +128,7 @@ const READBACK_RULES = Object.freeze({
     "Tables require exact name, Table type, organization/workspace binding, ordered columns and types, zero unexpected columns, and zero rows before import.",
     "Query tables require exact SQL, output columns, involved source views, organization/workspace binding, and uniqueness.",
     "Reports require exact connector identity and base dependency plus native-console verification of type, axes, filters, user filters, chart design, and description.",
+    "Tests Ending Soon additionally requires the native Filters shelf EXPIRES_AT / Relative / Hour / Next48Hours / Include Items criterion after independent saved reload, preserving the other three fixed filters and seven axes. Its optional expiry selector may remain unset and cannot broaden the fixed criterion; empty tables do not prove populated boundary or timezone behavior.",
     "Dashboards require exact title, ten exact concrete report dependencies, locked controls, administrator-only access, and no public link, embed, scheduled export, or direct customer access.",
     "Folder placement uses one canonical view per mutation, binds its exact prior folder, and proves that no legacy view moved.",
     "Any incomplete, truncated, pagination-ambiguous, differently shaped, or conflicting readback stops the packet.",
