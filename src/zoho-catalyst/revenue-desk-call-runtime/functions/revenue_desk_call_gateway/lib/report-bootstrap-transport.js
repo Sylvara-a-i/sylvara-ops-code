@@ -3,6 +3,9 @@ const zlib=require('node:zlib'),crypto=require('node:crypto');
 const JSON_KEY='REPORT_RUNTIME_BINDING_JSON',HASH_KEY='REPORT_RUNTIME_BINDING_SHA256',PART_PREFIX='REPORT_RUNTIME_BINDING_PART_';
 const MAX_BYTES=65536,MAX_ENCODED=4*Math.ceil(MAX_BYTES/3),MAX_PARTS=Math.ceil(MAX_ENCODED/100);
 const MAX_COMPRESSED=MAX_BYTES+1024,MAX_COMPACT_ENCODED=4*Math.ceil(MAX_COMPRESSED/3),MAX_COMPACT_PARTS=Math.ceil(MAX_COMPACT_ENCODED/100);
+// Fixed public schema keys are a compression dictionary, not omitted values.
+// This dictionary is part of the v1 wire contract; future changes need v2.
+const DEFLATE_V1_DICTIONARY=Buffer.from('"schemaVersion":,"environment":,"sourceRevision":,"projectId":,"controllerFunctionId":,"workerFunctionId":,"verifiedAt":,"expiresAt":,"attestation":,"delivery":,"reporting":,"enabled":');
 const PLANNING_BUDGET=3578,IDENTITY_KEYS=['SOURCE_REVISION','DEPLOYMENT_ENVIRONMENT'];
 const sha=raw=>crypto.createHash('sha256').update(raw).digest('hex');
 function held(){throw Object.assign(new Error('REPORT_BOOTSTRAP_HELD'),{code:'REPORT_BOOTSTRAP_HELD'});}
@@ -12,7 +15,7 @@ function entryBytes(key,value){return Buffer.byteLength(JSON.stringify(key)+':'+
 function encodeReportBootstrap(raw,{partSize=400,format='parts-v1'}={}){
  if(typeof raw!=='string'||!raw.length||Buffer.byteLength(raw)>MAX_BYTES||![100,200,400].includes(partSize)||!['parts-v1','deflate-v1'].includes(format))held();
  const bytes=Buffer.from(raw,'utf8');if(bytes.length>MAX_BYTES||bytes.toString('utf8')!==raw)held();
- const compact=format==='deflate-v1',wire=compact?zlib.deflateRawSync(bytes,{level:9}):bytes;
+ const compact=format==='deflate-v1',wire=compact?zlib.deflateRawSync(bytes,{level:9,dictionary:DEFLATE_V1_DICTIONARY}):bytes;
  if(compact&&wire.length>MAX_COMPRESSED)held();
  const encoded=wire.toString('base64'),parts={};
  for(let i=0;i<Math.ceil(encoded.length/partSize);i++)parts[PART_PREFIX+i]=encoded.slice(i*partSize,(i+1)*partSize);
@@ -38,7 +41,7 @@ function decodeReportBootstrap(env){
  const wire=Buffer.from(encoded,'base64');if(wire.toString('base64')!==encoded||compact&&wire.length>MAX_COMPRESSED)held();
  let bytes=wire;
  if(compact){
-  let inflated;try{inflated=zlib.inflateRawSync(wire,{maxOutputLength:MAX_BYTES,info:true});}catch{held();}
+  let inflated;try{inflated=zlib.inflateRawSync(wire,{maxOutputLength:MAX_BYTES,info:true,dictionary:DEFLATE_V1_DICTIONARY});}catch{held();}
   // Node24 has no rejectGarbageAfterEnd option. Compare actually consumed bytes.
   if(inflated.engine.bytesWritten!==wire.length)held();bytes=inflated.buffer;
  }
