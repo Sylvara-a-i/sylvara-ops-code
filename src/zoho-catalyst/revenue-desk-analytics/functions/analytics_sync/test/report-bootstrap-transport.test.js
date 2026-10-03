@@ -47,13 +47,6 @@ test('legacy exact bytes remain supported without any staged parts',()=>{
  const raw=JSON.stringify(fixture()),e={[JSON_KEY]:raw,[HASH_KEY]:sha(raw),DEPLOYMENT_ENVIRONMENT:'development',SOURCE_REVISION:'a'.repeat(40)};
  assert.equal(load(e,{now:()=>at}).delivery.enabled,false);held(()=>load({...e,[PART_PREFIX+'0']:''},{now:()=>at}));
 });
-test('current Controller and Worker composition keeps all delivery switches disabled',()=>{
- const fs=require('node:fs'),path=require('node:path');
- for(const name of ['revenue_desk_route_control','revenue_desk_call_worker']){
-  const source=fs.readFileSync(path.resolve(__dirname,base+name+'/lib/report-bootstrap.js'),'utf8');
-  for(const flag of ['deliveryEnabled','autoDeliveryEnabled','projectionEnabled'])assert.match(source,new RegExp(flag+':false'));
- }
-});
 
 const zlib=require('node:zlib');
 const {preflightReportBootstrapEnvironment:preflight,PLANNING_BUDGET}=require(base+'revenue_desk_call_gateway/lib/report-bootstrap-transport');

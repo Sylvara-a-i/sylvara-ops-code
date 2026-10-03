@@ -111,3 +111,19 @@ test('current exact Contact optout, unsubscribe and known bounce hold before att
  const f=fixture();f.history.info.more_records=true; // partial scan is not a comprehensive clear claim
  const proof=await createReportCrmSender(f.options).sendSummary(f.request);assert.equal(proof.accepted,true);
 });
+
+test('protected execution expiry after authorization or upload blocks the next provider effect and retains claims',async()=>{
+ const {protectedDeliveryExecution}=require('../../../../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/report-bootstrap-binding');
+ for(const stage of ['authorization','upload']){
+  const f=fixture(),clock=f.options.now,at=clock(),q={mechanism:'unique_insert_successor_v1',status:'qualified',evidenceDigest:sha('storage'),expiresAt:at+60000};
+  const b={verifiedAt:at-1000,expiresAt:at+60000,reporting:{enabled:false},delivery:{enabled:true,claimQualification:q,
+   execution:{deliveryEnabled:true,autoDeliveryEnabled:false,projectionEnabled:false,qualification:{status:'qualified',evidenceDigest:sha('accepted execution'),verifiedAt:at-1000,expiresAt:at+100}}}};
+  f.options.now=protectedDeliveryExecution(b,{role:'controller',now:clock}).assertActive;
+  if(stage==='authorization'){const authorize=f.options.authorizationProvider;f.options.authorizationProvider=async()=>{const value=await authorize();f.advance(100);return value;};}
+  else {const fetch=f.options.fetchImpl;f.options.fetchImpl=async(...args)=>{const result=await fetch(...args);if(args[1].method==='POST')f.advance(100);return result;};}
+  const sender=createReportCrmSender(f.options);await assert.rejects(sender.sendSummary(f.request));
+  assert.equal(f.requests.filter(x=>x.init.method==='POST').length,stage==='upload'?1:0);
+  assert.equal(f.rows.size,stage==='upload'?1:0);const count=f.requests.length;
+  await assert.rejects(sender.sendSummary(f.request));assert.equal(f.requests.length,count);
+ }
+});

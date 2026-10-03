@@ -22,10 +22,57 @@ Use only the existing Development function and protected configuration surface. 
 
 Disarm by removing the JSON marker FIRST, then raw SHA and every matching numbered key, with independent own-key absence readback. Empty values count as present. Preserve immutable claims, receipts and installed baselines. Storage qualification uses a separate codec and binding; this update preserves the merged compact storage source. No active claim, real endpoint, destination, customer data or populated binding belongs in Git.
 
-## Delivery wiring plan, not activation
+## Protected delivery execution, not activation
 
-Controller and Worker retain explicit `deliveryEnabled:false`, `autoDeliveryEnabled:false` and `projectionEnabled:false`. A valid delivery section alone cannot enable sending or CRM projection. Recipient-only setup still works with delivery effects off.
+Legacy bindings and omitted `delivery.execution` default all effects false. An
+explicit execution object has exactly `deliveryEnabled`, `autoDeliveryEnabled`,
+`projectionEnabled` booleans and `qualification`. All-false configuration requires
+`qualification:null`. Any true flag requires a separately accepted qualification
+with exactly `status:"qualified"`, nonzero SHA256 `evidenceDigest`, numeric
+`verifiedAt` and finite `expiresAt`. Its expiry may not exceed the enclosing
+bootstrap or delivery claim qualification. The digest is only a reference to
+independently accepted evidence, never self-certifying provider authorization.
+Protected installation pins the whole object with the exact source, project,
+function identities and raw SHA. No HTTP, Job or command flag supplies it.
 
-Later source wiring must derive these switches only from separately qualified protected configuration, default each false, reject unknown flags and forbid caller/job overrides. Initial delivery requires the exact fresh complete two-artifact revision, test-bound verified recipient/native lineage, current consent, safe eligibility, durable initial-send claim and summary-only attachment. Manual resend requires exact revision/address confirmation and double-tap protection. Provider acceptance, inbox receipt and completed follow-up remain separate.
+True flags require the delivery section. Automatic delivery additionally requires
+delivery and reporting enabled. Controller always forces automatic delivery false;
+only Worker may select it. When reporting and an execution effect are enabled,
+Controller delivery and Worker reporting destination maps must agree exactly,
+with no duplicate scope. Projection alone permits no mail dispatch. Recipient-only
+attestation remains independent of reporting, report completion and these effects.
 
-Before activation, independently qualify effective runtime principal, durable claims/recovery, exact private WorkDrive destination/version/readback/retention, PDF access, bounded CRM projection and sender eligibility. Routine bounded Zoho-to-Zoho calls do not require blanket zero-cost proof; actual quota exhaustion, new purchases/upgrades, Retell charges and customer delivery remain separate boundaries. This document authorizes no deployment, grant, provider invocation or delivery.
+Every effect uses the protected active clock. Expired qualification blocks new
+reads, claims, uploads, sends and projection through existing boundary guards,
+including after awaited authorization. Expiry after dispatch is ambiguous; retain
+the claim and use reconciliation only. Never replay a completed or unknown effect.
+
+Before live flag qualification, independently accept fixed principal, durable
+claim/recovery, recipient native lineage and consent, PDF output, exact private
+WorkDrive version/content/retention, and sender identity/transport. Projection
+also requires exact five-field schema and effective narrow writer qualification.
+Initial delivery requires a fresh complete two-artifact revision and Completed
+test, sends summary only, and preserves the private supporting packet. Manual
+resend requires exact revision/address confirmation. Provider acceptance is not
+inbox receipt, read receipt or completed follow-up.
+
+Count every execution and qualification byte in a fresh complete-map preflight.
+The earlier 159-byte synthetic margin is not available by assumption. Oversized
+bindings hold; never omit evidence to fit. The isolated package test includes all
+new fields and a ninth distinct synthetic digest, and asserts exact accounting or
+the engineering-budget hold. Receipt/value dictionaries remain immutable.
+
+Warm Worker processes capture configuration at startup; removing environment
+keys alone is not revocation and cannot recall an in-flight provider request.
+Contain dispatch first, account for in-flight attempts and preserve ambiguous
+claims. Remove the activation marker first, then hash/parts, and independently
+verify absence. Install the prior disabled package only through the separately
+accepted process, verify runtime replacement or wait for finite captured expiry,
+and do not resume dispatch on a presumed refresh. This adds no remote kill-switch
+or hot-revocation architecture. Immediate revocation beyond these controls remains
+an operator/platform qualification boundary, not a source success claim.
+
+Source tests and receipt shapes authorize no installation, staging, grant,
+provider invocation or customer delivery. Routine bounded Zoho-to-Zoho calls
+have no blanket zero-cost proof hold; actual new paid services, purchases,
+upgrades, Retell charges and customer effects remain separate boundaries.

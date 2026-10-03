@@ -71,12 +71,22 @@ test('isolated controller delivery package imports with one canonical gateway an
   const stressPrepared=prepareReportBootstrapBinding({raw:stressRaw,bindingSha256:stressPin,baseline,identityPins,now:()=>at});
   assert.ok(stressPrepared.preflight.serializedBytes<=3578);assert.equal(stressPrepared.preflight.providerLimitVerified,false);
   assert.throws(()=>prepareReportBootstrapBinding({raw:stressRaw,bindingSha256:stressPin,baseline,identityPins,now:()=>at,format:'deflate-v1'}),{code:'REPORT_BOOTSTRAP_HELD'});
+  // New execution fields are counted in full, with no assumed old margin.
+  const flagged=structuredClone(stress);flagged.delivery={enabled:true,claimQualification:flagged.reporting.claimQualification,
+   destinations:structuredClone(flagged.reporting.destinations),execution:{deliveryEnabled:true,autoDeliveryEnabled:true,projectionEnabled:true,
+    qualification:{status:'qualified',evidenceDigest:require('node:crypto').createHash('sha256').update('ninth distinct execution digest').digest('hex'),verifiedAt:at-1000,expiresAt:at+1000}}};
+  const flaggedRaw=JSON.stringify(flagged),flaggedPin=require('node:crypto').createHash('sha256').update(flaggedRaw).digest('hex');
+  const codec=require(path.join(gateway,'lib/report-bootstrap-transport.js')),wire=codec.encodeReportBootstrap(flaggedRaw,{format:'deflate-v2'});
+  const completeMapBytes=Buffer.byteLength(JSON.stringify({...syntheticMap,...wire.parts,[codec.HASH_KEY]:flaggedPin,[codec.JSON_KEY]:wire.marker}));
+  if(completeMapBytes>codec.PLANNING_BUDGET)assert.throws(()=>prepareReportBootstrapBinding({raw:flaggedRaw,bindingSha256:flaggedPin,baseline,identityPins,now:()=>at}),{code:'REPORT_BOOTSTRAP_HELD'});
+  else assert.equal(prepareReportBootstrapBinding({raw:flaggedRaw,bindingSha256:flaggedPin,baseline,identityPins,now:()=>at}).preflight.serializedBytes,completeMapBytes);
   // Stress is sizing evidence only; it never enters a provider/effectful factory.
   const options=createProtectedWorkerReportOptions({...packed.parts,REPORT_RUNTIME_BINDING_JSON:packed.marker,REPORT_RUNTIME_BINDING_SHA256:pin,DEPLOYMENT_ENVIRONMENT:'development',SOURCE_REVISION:sourceRevision},{now:()=>at});
   const app={config:{projectId,environment:'Development'},authenticateRequest:blocked,datastore:blocked,zcql:blocked,connections:blocked};
   const runtimeConfig={environment:'development',sourceRevision,projectId,tables:{DEPLOYMENT_TABLE:'RevenueDeskDeployments'}};
   const store={unique:blocked,query:blocked,queryBounded:blocked};
   const hook=options.terminalDraftReconcilerFactory(app,runtimeConfig,store);assert.equal(typeof hook,'function');
+  await assert.rejects(hook({clientId:'client',deploymentId:'deployment'},{deliveryEnabled:true,autoDeliveryEnabled:true}),{code:'REPORTING_BINDING_REQUIRED'});assert.equal(effects,0);
   at+=1000;
   assert.throws(()=>options.terminalDraftReconcilerFactory(app,runtimeConfig,store),{code:'REPORT_BOOTSTRAP_HELD'});
   await assert.rejects(hook({clientId:'client',deploymentId:'deployment'}),{code:'REPORT_BOOTSTRAP_HELD'});assert.equal(effects,0);
