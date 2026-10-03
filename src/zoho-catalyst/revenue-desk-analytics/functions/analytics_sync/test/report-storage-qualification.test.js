@@ -2,6 +2,7 @@
 const test=require('node:test'),assert=require('node:assert/strict'),crypto=require('node:crypto');
 const {fixture:network}=require('./helpers/report-run-sdk-fixture');
 const {canonicalJson}=require('../lib/facts');
+const {encodeStorageBinding}=require('../lib/report-storage-binding');
 const {createProtectedStorageQualification}=require('../lib/report-storage-qualification');
 const {REPORT_FIELDS,RECEIPT_FIELDS,projectionDigest}=require('../lib/report-storage-capability');
 const sha=x=>crypto.createHash('sha256').update(typeof x==='string'?x:canonicalJson(x)).digest('hex');
@@ -17,7 +18,7 @@ function fixture(options={}){
  const config={environment:'development',sourceRevision:binding.sourceRevision,controlHost:binding.controlHost,
   expectedProjectIdSha256:sha(binding.projectId),operatorIdHash:'operator_'+sha('synthetic')};
  const environment=()=>{const raw=JSON.stringify(binding);return {REPORT_CONTROLLER_FUNCTION_ID:'123456786',REPORT_DEPLOYMENT_ID:'synthetic_controller',DEPLOYMENT_ENVIRONMENT:'development',SOURCE_REVISION:binding.sourceRevision,
-  REPORT_STORAGE_QUALIFICATION_JSON:raw,REPORT_STORAGE_QUALIFICATION_SHA256:sha(raw)};};
+  ...(options.multipart?{...encodeStorageBinding(raw,{partSize:options.multipart}).parts,REPORT_STORAGE_QUALIFICATION_JSON:encodeStorageBinding(raw,{partSize:options.multipart}).marker}:{REPORT_STORAGE_QUALIFICATION_JSON:raw}),REPORT_STORAGE_QUALIFICATION_SHA256:sha(raw)};};
  const factory=()=>createProtectedStorageQualification({environment:environment(),now:()=>at});
  const command={profile:'report_storage_qualification_v1',action:'qualify_storage'},actor={kind:'internal_controller',identity:config.operatorIdHash};
  return {sdk,binding,config,environment,factory,make:()=>factory()(sdk.app,config),command,actor,advance:n=>at+=n};
@@ -235,3 +236,6 @@ test('read-only retrieval checks current evidence consistency without renewing i
   assert.equal(result.qualificationAuthority,false);assert.equal(result.inserts,0);
  }finally{f.sdk.restore();}
 });
+
+for(const multipart of [100,200,400])test('multipart factory preserves exact operation and finite admission '+multipart,async()=>{const f=fixture({multipart});try{const result=await f.make().handle(f.command,{actor:f.actor});assert.equal(result.inserts,4);assert.equal(result.reads,7);assert.equal(result.admissionInserts,1);assert.equal(result.admissionReads,1);assert.equal(result.qualificationAuthority,false);assert.equal(result.deliveryAuthority,false);await assert.rejects(f.make().handle(f.command,{actor:f.actor}),held);}finally{f.sdk.restore();}});
+test('mixed same-size chunk fails exact binding hash before provider dispatch',()=>{const f=fixture({multipart:200});try{const env=f.environment();env.REPORT_STORAGE_QUALIFICATION_PART_0='x'+env.REPORT_STORAGE_QUALIFICATION_PART_0.slice(1);assert.throws(()=>createProtectedStorageQualification({environment:env,now:()=>f.binding.verifiedAt+1})(f.sdk.app,f.config),held);assert.equal(f.sdk.requests.length,0);}finally{f.sdk.restore();}});
