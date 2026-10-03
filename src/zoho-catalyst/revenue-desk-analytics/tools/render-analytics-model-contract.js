@@ -60,10 +60,14 @@ function reportPayloads(contract) {
     assert(config && profile, `Analytics report ${key} has an incomplete create contract.`);
     assert(!titles.has(config.title), `Analytics report title is duplicated: ${config.title}.`);
     titles.add(config.title);
+    const hasDescription = Object.hasOwn(report, 'provider_description');
+    assert(!hasDescription || (typeof report.provider_description === 'string'
+      && report.provider_description.trim().length > 0),
+    `Analytics report ${key} has an invalid provider description.`);
     const payload = {
       baseTableName: config.baseTableName,
       title: config.title,
-      description: `${report.widget_title}. ${report.null_behavior}`,
+      description: hasDescription ? report.provider_description : `${report.widget_title}. ${report.null_behavior}`,
       reportType: config.reportType,
       ...(config.chartType ? { chartType: config.chartType } : {}),
       axisColumns: config.axisColumns,
