@@ -586,7 +586,7 @@ test('rollback never clears an unverified or repurposed Retell number', async ()
     authorization: async () => 'Bearer synthetic',
     fetchImpl: async (_url, options) => {
       if (options.method === 'PATCH') patches += 1;
-      return { status: 200, async json() { return structuredClone(repurposed); } };
+      return new Response(JSON.stringify(repurposed), {headers:{'content-type':'application/json'}});
     },
   });
   const result = await provider.disableRoute(routeBinding(config));
@@ -608,9 +608,7 @@ test('active verification rejects every missing or malformed route-state field',
       else malformed[field] = field.endsWith('_agents') ? {} : [];
       const provider = createRetellRouteProvider(config, {
         authorization: async () => 'Bearer synthetic',
-        fetchImpl: async () => ({
-          status: 200, async json() { return structuredClone(malformed); },
-        }),
+        fetchImpl: async () => new Response(JSON.stringify(malformed), {headers:{'content-type':'application/json'}}),
       });
       await assert.rejects(provider.verifyActiveRoute(routeBinding(config)),
         { code: 'ROUTE_VERIFICATION_FAILED' });
@@ -628,13 +626,13 @@ test('rollback treats sparse provider readback as manual and never as inactive',
       fetchImpl: async (_url, options) => {
         if (options.method === 'PATCH') {
           patches += 1;
-          return { status: 200, async json() { return {}; } };
+          return new Response('{}', {headers:{'content-type':'application/json'}});
         }
         gets += 1;
         const value = sparsePhase === 'before' || gets > 1
           ? { ...activePhone(config), inbound_agents: undefined }
           : activePhone(config);
-        return { status: 200, async json() { return structuredClone(value); } };
+        return new Response(JSON.stringify(value), {headers:{'content-type':'application/json'}});
       },
     });
     const result = await provider.disableRoute(routeBinding(config));
@@ -755,6 +753,77 @@ test('context command cannot bypass control headers, host, project, environment 
     assert.ok(output.statusCode >= 400); assert.equal(output.body.result, undefined);
   }
   assert.equal(inspections, 0);
+});
+
+test('route adapter deadlines cover authorization and stalled headers without late dispatch', async () => {
+ for(const stage of ['authorization','headers']){
+  const config={...isolatedConfig(),platformTimeoutMs:20};let requests=0,signal,release;
+  const pending=new Promise(resolve=>{release=resolve;});
+  const provider=createRetellRouteProvider(config,{authorization:stage==='authorization'?()=>pending:async()=> 'Bearer synthetic',
+   fetchImpl:async(_url,options)=>{requests++;signal=options.signal;return pending;}});
+  const started=performance.now();await assert.rejects(provider.verifyActiveRoute(routeBinding(config)),error=>
+   error.code==='RETELL_ROUTE_REQUEST_FAILED'&&error.retryable===true&&error.ambiguous===false);
+  assert.ok(performance.now()-started<500);assert.equal(requests,stage==='headers'?1:0);if(signal)assert.equal(signal.aborted,true);
+  let cancelled=0;release(stage==='authorization'?'Bearer synthetic':new Response(new ReadableStream({cancel(){cancelled++;}}),{headers:{'content-type':'application/json'}}));
+  await new Promise(resolve=>setTimeout(resolve,5));assert.equal(requests,stage==='headers'?1:0);if(stage==='headers')assert.equal(cancelled,1);
+ }
+});
+
+test('route adapter cancels stalled body reads and ignores late body completion',async()=>{
+ const config={...isolatedConfig(),platformTimeoutMs:20};let requests=0,cancels=0,signal,release;
+ const body={getReader(){return {read:()=>new Promise(resolve=>{release=resolve;}),cancel(){cancels++;return new Promise(()=>{});}};}};
+ const provider=createRetellRouteProvider(config,{authorization:async()=> 'Bearer synthetic',fetchImpl:async(_url,options)=>{
+  requests++;signal=options.signal;return {status:200,headers:new Headers({'content-type':'application/json'}),body};}});
+ await assert.rejects(provider.verifyActiveRoute(routeBinding(config)),{code:'RETELL_ROUTE_REQUEST_FAILED'});
+ assert.equal(signal.aborted,true);assert.ok(cancels>=1);assert.equal(requests,1);
+ release({done:false,value:Buffer.from(JSON.stringify(activePhone(config)))});await new Promise(resolve=>setTimeout(resolve,5));assert.equal(requests,1);
+});
+
+test('route adapter bounds declared and actual bytes, chunk count, JSON and UTF8 before accepting evidence',async()=>{
+ const config=isolatedConfig();
+ const responses=[()=>new Response('{}',{headers:{'content-type':'application/json','content-length':'262145'}}),
+  ()=>new Response(Buffer.alloc(262145,32),{headers:{'content-type':'application/json'}}),
+  ()=>new Response('{bad',{headers:{'content-type':'application/json'}}),
+  ()=>new Response(Buffer.from([255]),{headers:{'content-type':'application/json'}}),
+  ()=>new Response('{}',{headers:{'content-type':'text/plain'}}),
+  ()=>new Response('{}',{headers:{'content-type':'application/json','content-encoding':'gzip'}}),
+  ()=>({status:200,headers:new Headers({'content-type':'application/json'}),body:{getReader(){return {async read(){return {done:false,value:Buffer.alloc(0)};},async cancel(){}};}}})];
+ for(const response of responses){let requests=0;const provider=createRetellRouteProvider(config,{authorization:async()=> 'Bearer synthetic',fetchImpl:async()=>{requests++;return response();}});
+  await assert.rejects(provider.verifyActiveRoute(routeBinding(config)),{code:'RETELL_ROUTE_REQUEST_FAILED'});assert.equal(requests,1);
+ }
+});
+
+test('route adapter rejects redirects and malformed GET evidence without retry or route mutation',async()=>{
+ const config=isolatedConfig();let requests=0;
+ const provider=createRetellRouteProvider(config,{authorization:async()=> 'Bearer synthetic',fetchImpl:async(_url,options)=>{
+  requests++;assert.equal(options.redirect,'error');assert.equal(options.headers['Accept-Encoding'],'identity');throw Error('synthetic redirect rejected');}});
+ await assert.rejects(provider.verifyActiveRoute(routeBinding(config)),error=>error.code==='RETELL_ROUTE_REQUEST_FAILED'&&error.retryable===true&&error.ambiguous===false);assert.equal(requests,1);
+});
+
+test('unknown PATCH headers or body stays manual with one dispatch and no later readback',async()=>{
+ for(const stage of ['headers','body']){
+  const config={...isolatedConfig(),platformTimeoutMs:20};let gets=0,patches=0,signal;
+  const provider=createRetellRouteProvider(config,{authorization:async()=> 'Bearer synthetic',fetchImpl:async(_url,options)=>{
+   assert.equal(options.redirect,'error');if(options.method==='GET'){gets++;return new Response(JSON.stringify(activePhone(config)),{headers:{'content-type':'application/json'}});}
+   patches++;signal=options.signal;if(stage==='headers')return new Promise(()=>{});
+   return new Response(new ReadableStream({pull(){return new Promise(()=>{});}}),{headers:{'content-type':'application/json'}});
+  }});
+  const result=await provider.disableRoute(routeBinding(config));assert.equal(result.status,'manual_rollback_required');assert.equal(result.failureCode,'RETELL_ROUTE_REQUEST_FAILED');
+  assert.equal(patches,1);assert.equal(gets,1);assert.equal(signal.aborted,true);
+ }
+});
+
+test('successful PATCH with null or array JSON remains unknown and never retries',async()=>{
+ for(const payload of ['null','[]']){
+  const config=isolatedConfig();let gets=0,patches=0;
+  const provider=createRetellRouteProvider(config,{authorization:async()=> 'Bearer synthetic',fetchImpl:async(_url,options)=>{
+   if(options.method==='GET'){gets++;return new Response(JSON.stringify(activePhone(config)),{headers:{'content-type':'application/json'}});}
+   patches++;return new Response(payload,{headers:{'content-type':'application/json'}});
+  }});
+  const result=await provider.disableRoute(routeBinding(config));
+  assert.equal(result.status,'manual_rollback_required');assert.equal(result.failureCode,'RETELL_ROUTE_REQUEST_FAILED');
+  assert.equal(gets,1);assert.equal(patches,1);
+ }
 });
 
 function storageFailureFixture({ initialize, binding, handler, failureLogger } = {}) {
