@@ -366,5 +366,55 @@ test('dashboard assembly locks environment and fixed-client boundaries before re
   }
   const expiry = operations.user_filter_controls.find(({ name }) => name === 'Expiry Window');
   assert.deepEqual({ required: expiry.required, locked: expiry.locked, value: expiry.default },
-    { required: true, locked: true, value: 'next 48 hours' });
+    { required: false, locked: false, value: null });
+});
+
+
+test('Tests Ending Soon requires native fixed expiry assembly outside the API payload', () => {
+  const rendered = renderContract(model);
+  const payload = rendered.report_payloads.operations_tests_ending_soon;
+  const assembly = rendered.report_native_assembly.operations_tests_ending_soon;
+  assert.equal(assembly.mode, 'native-required');
+  assert.equal(assembly.api_payload_installs_fixed_criterion, false);
+  assert.deepEqual(assembly.fixed_criteria, [{
+    column: 'EXPIRES_AT', surface: 'Filters shelf', type: 'Relative',
+    unit: 'Hour', selection: 'Next48Hours', items: 'Include Items', window_hours: 48,
+  }]);
+  assert.deepEqual(payload.filters.map(({ columnName, values }) => [columnName, values]), [
+    ['ENVIRONMENT', ['development']], ['ENGAGEMENT_TYPE', ['free_test']],
+    ['DEPLOYMENT_STATUS', ['live']],
+  ]);
+  assert.deepEqual(payload.axisColumns.map(({ columnName }) => columnName), [
+    'DEPLOYMENT_KEY', 'DEPLOYMENT_STATUS', 'HANDLED_COUNT', 'CALL_LIMIT',
+    'ACTUAL_START_AT', 'EXPIRES_AT', 'RECORD_KEY',
+  ]);
+  assert.deepEqual(payload.userFilters.find(({ columnName }) => columnName === 'EXPIRES_AT'),
+    { tableName: payload.baseTableName, columnName: 'EXPIRES_AT', operation: 'relative' });
+  assert.equal(JSON.stringify(payload.filters).includes('Next48Hours'), false);
+  assert.equal(Object.hasOwn(payload, 'native_assembly'), false);
+  assert.equal(assembly.acceptance.independent_saved_reload_required, true);
+  assert.match(assembly.acceptance.optional_expiry_selector, /unset.*cannot broaden/);
+  assert.match(assembly.acceptance.populated_validation_required, /timezone.*Empty-table/);
+  assert.match(assembly.acceptance.approval_boundary, /prior approvals do not transfer/);
+  const baseline = renderContract(model).report_payloads.operations_active_free_tests;
+  const changed = structuredClone(model);
+  changed.reports.operations_tests_ending_soon.native_assembly.acceptance.approval_boundary += ' Fresh readback.';
+  assert.deepEqual(renderContract(changed).report_payloads.operations_active_free_tests, baseline);
+});
+
+test('missing or broadened fixed expiry assembly fails closed', () => {
+  for (const mutate of [
+    (report) => { delete report.native_assembly; },
+    (report) => { report.native_assembly.api_payload_installs_fixed_criterion = true; },
+    (report) => { report.native_assembly.fixed_criteria = []; },
+    (report) => { report.native_assembly.fixed_criteria = [null]; },
+    (report) => { report.native_assembly.fixed_criteria[0].window_hours = 72; },
+    (report) => { report.native_assembly.fixed_criteria[0].unit = 'Day'; },
+    (report) => { report.native_assembly.fixed_criteria[0].selection = 'Next2Days'; },
+    (report) => { report.native_assembly.acceptance.independent_saved_reload_required = false; },
+  ]) {
+    const changed = structuredClone(model);
+    mutate(changed.reports.operations_tests_ending_soon);
+    assert.throws(() => renderContract(changed), /native.*criterion|native assembly acceptance/);
+  }
 });
