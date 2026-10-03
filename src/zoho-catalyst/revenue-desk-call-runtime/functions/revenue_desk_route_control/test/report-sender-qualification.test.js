@@ -52,3 +52,16 @@ test('aborted input, warm expiry and elapsed clock hold before or after dispatch
  f.advance(60000);await assert.rejects(handler.handle(f.command,{actor:f.actor}));assert.equal(f.reads.length,0);
  const late=fixture();late.options.fetchImpl=async()=>{late.calls.push({});late.advance(1000);return new Response('{}');};await assert.rejects(late.make().handle(late.command,{actor:late.actor}));assert.equal(late.calls.length,1);
 });
+
+test('retiring only the expired diagnostic pair fails closed through both partial removals before SDK credentials or network',()=>{
+ const f=fixture();f.binding.enabled=false;const raw=JSON.stringify(f.binding);
+ const original={DEPLOYMENT_ENVIRONMENT:'development',SOURCE_REVISION:f.binding.sourceRevision,REPORT_SENDER_QUALIFICATION_JSON:raw,REPORT_SENDER_QUALIFICATION_SHA256:sha(raw)};
+ let sdkAccess=0,networkAccess=0;
+ const app=new Proxy({}, {get(){sdkAccess++;throw Error('No SDK access permitted');}});
+ for(const keys of [[],['REPORT_SENDER_QUALIFICATION_JSON'],['REPORT_SENDER_QUALIFICATION_SHA256'],['REPORT_SENDER_QUALIFICATION_JSON','REPORT_SENDER_QUALIFICATION_SHA256']]){
+  const environment={...original};for(const key of keys)delete environment[key];
+  assert.throws(()=>createProtectedSenderQualification({environment,now:()=>f.binding.expiresAt+1,fetchImpl(){networkAccess++;throw Error('No network permitted');}})(app,f.config),{code:'REPORT_SENDER_QUALIFICATION_HELD'});
+ }
+ assert.equal(sdkAccess,0);assert.equal(networkAccess,0);
+ assert.equal(original.REPORT_SENDER_QUALIFICATION_JSON,raw);
+});
