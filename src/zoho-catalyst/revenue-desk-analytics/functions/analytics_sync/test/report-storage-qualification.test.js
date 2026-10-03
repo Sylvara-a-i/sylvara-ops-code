@@ -258,3 +258,75 @@ test('altered tuple raw hash and scope hold before transport construction',()=>{
   assert.equal(constructed,0);assert.equal(f.sdk.requests.length,0);
  }finally{f.sdk.restore();}
 });
+
+
+function sixtyMinuteDiagnostic(f,schemaVersion=4){
+ f.binding.schemaVersion=schemaVersion;f.binding.expiresAt=f.binding.verifiedAt+3600000;
+ for(const e of Object.values(f.binding.capability.evidence)){e.verifiedAt=f.binding.verifiedAt;e.expiresAt=f.binding.expiresAt;}
+}
+test('explicit Development schema4 admits the exact60minute bound with unchanged13requests and3retained rows',async()=>{
+ const f=fixture({multipart:400,compact:true});try{
+  sixtyMinuteDiagnostic(f);const result=await f.make().handle(f.command,{actor:f.actor});
+  assert.equal(f.sdk.requests.length,13);assert.equal(result.inserts,4);assert.equal(result.reads,7);
+  assert.equal(result.admissionInserts,1);assert.equal(result.admissionReads,1);
+  assert.equal(f.sdk.rows.size,2);assert.equal(f.sdk.receipts.size,1);assert.equal(result.physicalRows,2);
+  assert.equal(result.qualificationAuthority,false);assert.equal(result.deliveryAuthority,false);
+ }finally{f.sdk.restore();}
+});
+for(const [label,mutate]of [
+ ['60minutes plus1ms',f=>f.binding.expiresAt++],
+ ['legacy schema3 extended window',f=>f.binding.schemaVersion=3],
+ ['unknown schema5',f=>f.binding.schemaVersion=5],
+ ['production binding',f=>f.binding.environment='production'],
+ ['production control config',f=>f.config.environment='production'],
+ ['production runtime app',f=>f.sdk.app.config.environment='Production'],
+ ['permission evidence older than60minutes',f=>f.binding.capability.evidence.access.verifiedAt=f.binding.verifiedAt-3600001],
+ ['permission evidence expiry beyondactual60minute horizon',f=>f.binding.capability.evidence.access.expiresAt++]
+])test('schema4 '+label+' holds before any managed dispatch',()=>{
+ const f=fixture();try{sixtyMinuteDiagnostic(f);mutate(f);assert.throws(()=>f.make(),held);assert.equal(f.sdk.requests.length,0);}finally{f.sdk.restore();}
+});
+test('legacy schema3 exact15minute boundary remains accepted and15minutes plus1ms holds',()=>{
+ const f=fixture();try{
+  f.binding.expiresAt=f.binding.verifiedAt+900000;for(const e of Object.values(f.binding.capability.evidence))e.expiresAt=f.binding.expiresAt;
+  assert.doesNotThrow(()=>f.make());f.binding.expiresAt++;for(const e of Object.values(f.binding.capability.evidence))e.expiresAt=f.binding.expiresAt;
+  assert.throws(()=>f.make(),held);assert.equal(f.sdk.requests.length,0);
+ }finally{f.sdk.restore();}
+});
+test('schema4 exact expiry rejects cold construction and previously constructed warm handler',async()=>{
+ const f=fixture();try{
+  sixtyMinuteDiagnostic(f);const handler=f.make();f.advance(3599999);
+  assert.throws(()=>f.make(),held);await assert.rejects(handler.handle(f.command,{actor:f.actor}),held);
+  assert.equal(f.sdk.requests.length,0);assert.equal(f.sdk.rows.size,0);assert.equal(f.sdk.receipts.size,0);
+ }finally{f.sdk.restore();}
+});
+test('schema4 delayed authentication cannot dispatch after finite expiry or restart warm admission',async()=>{
+ const f=fixture();try{
+  sixtyMinuteDiagnostic(f);let release;f.sdk.authDelay=new Promise(resolve=>{release=resolve;});
+  const handler=f.make(),pending=handler.handle(f.command,{actor:f.actor});
+  await new Promise(resolve=>setImmediate(resolve));f.advance(3599999);release();
+  await assert.rejects(pending,held);await assert.rejects(handler.handle(f.command,{actor:f.actor}),held);
+  assert.equal(f.sdk.requests.length,0);assert.equal(f.sdk.rows.size,0);assert.equal(f.sdk.receipts.size,0);
+ }finally{f.sdk.restore();}
+});
+test('shared capability validation keeps15minute freshness without explicit diagnostic contract',()=>{
+ const f=fixture();try{
+  sixtyMinuteDiagnostic(f);f.binding.expiresAt=f.binding.verifiedAt+1800000;for(const e of Object.values(f.binding.capability.evidence))e.expiresAt=f.binding.expiresAt;f.binding.capability.evidence.access.verifiedAt=f.binding.verifiedAt-900001;
+  const {validateStorageCapability}=require('../lib/report-storage-capability');
+  const options={app:f.sdk.app,config:{projectId:f.binding.projectId,environment:'development'},environment:f.environment(),now:f.binding.verifiedAt+1,verifiedAt:f.binding.verifiedAt,expiresAt:f.binding.expiresAt};
+  assert.throws(()=>validateStorageCapability(f.binding.capability,options),held);
+  assert.doesNotThrow(()=>validateStorageCapability(f.binding.capability,{...options,diagnosticContract:{schemaVersion:4,profile:'report_storage_qualification_v1',environment:'development'}}));
+  for(const diagnosticContract of [{schemaVersion:5,profile:'report_storage_qualification_v1',environment:'development'},{schemaVersion:4,profile:'other',environment:'development'},{schemaVersion:4,profile:'report_storage_qualification_v1',environment:'production'}])assert.throws(()=>validateStorageCapability(f.binding.capability,{...options,diagnosticContract}),held);
+  assert.equal(f.sdk.requests.length,0);
+ }finally{f.sdk.restore();}
+});
+
+
+test('schema4 thirtyminute-old evidence remains usable only inside each actual60minute horizon',async()=>{
+ const f=fixture();try{
+  sixtyMinuteDiagnostic(f);f.binding.expiresAt=f.binding.verifiedAt+1800000;
+  for(const e of Object.values(f.binding.capability.evidence)){e.verifiedAt=f.binding.verifiedAt-1800000;e.expiresAt=f.binding.expiresAt;}
+  const result=await f.make().handle(f.command,{actor:f.actor});
+  assert.equal(result.qualificationAuthority,false);assert.equal(f.sdk.requests.length,13);
+  assert.equal(f.sdk.rows.size,2);assert.equal(f.sdk.receipts.size,1);
+ }finally{f.sdk.restore();}
+});
