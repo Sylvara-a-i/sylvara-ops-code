@@ -35,7 +35,47 @@ function loadReportBootstrapBinding(env=process.env,{now=Date.now}={}){
   const allowed=['form1DestinationSha256','form1PublicSubmissionChannel'];
   if(Object.keys(b.attestation.crm).some(k=>!allowed.includes(k)))held();
  }
+ validateDeliveryExecution(b,now);
  return freeze(b);
+}
+// Receipt digests reference independently accepted evidence. They do not
+// certify provider access or authorize a caller; only protected installation
+// supplies this object, pinned together with the exact source and scope.
+function validateDeliveryExecution(b,now){
+ const x=b.delivery.execution;
+ if(x===undefined)return {deliveryEnabled:false,autoDeliveryEnabled:false,projectionEnabled:false};
+ const keys=['deliveryEnabled','autoDeliveryEnabled','projectionEnabled','qualification'];
+ if(!x||Array.isArray(x)||Object.keys(x).sort().join(',')!==keys.sort().join(',')
+  ||keys.slice(0,3).some(k=>typeof x[k]!=='boolean'))held();
+ const enabled=keys.slice(0,3).some(k=>x[k]);
+ if(!enabled){if(x.qualification!==null)held();return x;}
+ const q=x.qualification,at=now();
+ if(!b.delivery.enabled||(x.autoDeliveryEnabled&&(!x.deliveryEnabled||!b.reporting.enabled))
+  ||!q||Array.isArray(q)||Object.keys(q).sort().join(',')!=='evidenceDigest,expiresAt,status,verifiedAt'
+  ||q.status!=='qualified'||!HASH.test(q.evidenceDigest||'')||/^0+$/.test(q.evidenceDigest)
+  ||!Number.isSafeInteger(at)||!Number.isSafeInteger(q.verifiedAt)||q.verifiedAt<0||q.verifiedAt>at
+  ||!Number.isSafeInteger(q.expiresAt)||q.expiresAt<=at||q.expiresAt<=q.verifiedAt
+  ||q.expiresAt>b.expiresAt||q.expiresAt>b.delivery.claimQualification.expiresAt)held();
+ if(b.reporting.enabled){
+  const normalize=entries=>{
+   if(!Array.isArray(entries)||!entries.length||entries.length>100)held();
+   const scope=e=>JSON.stringify(Object.entries(e?.scope||{}).sort(([a],[c])=>a.localeCompare(c)));
+   if(new Set(entries.map(scope)).size!==entries.length)held();
+   return [...entries].sort((a,c)=>scope(a).localeCompare(scope(c)));
+  };
+  if(!require('node:util').isDeepStrictEqual(normalize(b.delivery.destinations),normalize(b.reporting.destinations)))held();
+ }
+ return x;
+}
+function protectedDeliveryExecution(b,{role,now=Date.now}={}){
+ if(!['controller','worker'].includes(role)||typeof now!=='function')held();
+ const x=validateDeliveryExecution(b,now);
+ // A warm runtime retains its captured binding. Finite expiry, not removal of
+ // environment keys, fences future effects; operators must contain dispatch.
+ const assertActive=()=>{const at=now();if(!Number.isSafeInteger(at)||at<b.verifiedAt||at>=b.expiresAt)held();validateDeliveryExecution(b,()=>at);return at;};
+ assertActive();
+ return Object.freeze({deliveryEnabled:x.deliveryEnabled,autoDeliveryEnabled:role==='worker'&&x.autoDeliveryEnabled,
+  projectionEnabled:x.projectionEnabled,assertActive});
 }
 function workerReportActor(b){
  if(!b||!ID.test(b.projectId)||!ID.test(b.workerFunctionId))held();
@@ -58,4 +98,4 @@ function prepareReportBootstrapBinding({raw,bindingSha256,baseline,identityPins,
  loadReportBootstrapBinding({...identityPins,...transport.parts,[JSON_KEY]:transport.marker,[HASH_KEY]:bindingSha256},{now});
  return Object.freeze({...transport,bindingSha256,preflight});
 }
-module.exports={loadReportBootstrapBinding,prepareReportBootstrapBinding,workerReportActor,protectedDestinations};
+module.exports={loadReportBootstrapBinding,prepareReportBootstrapBinding,workerReportActor,protectedDestinations,protectedDeliveryExecution};

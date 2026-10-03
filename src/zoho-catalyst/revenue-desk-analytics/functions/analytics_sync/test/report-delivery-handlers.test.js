@@ -38,7 +38,7 @@ test('view and resend commands use authenticated actor and existing durable doub
  await Promise.all([f.handlers.handle(cmd,context),f.handlers.handle(cmd,context)]);assert.equal(f.sends,2);
 });
 test('body cannot override actor, PDF, recipient, sender or select automatic initial mode',async()=>{
- for(const extra of [{actor:{kind:'worker'}},{recipient:'foreign@example.com'},{pdf:'foreign'},{sender:'foreign@example.com'}]){
+ for(const extra of [{actor:{kind:'worker'}},{recipient:'foreign@example.com'},{pdf:'foreign'},{sender:'foreign@example.com'},{deliveryEnabled:true},{autoDeliveryEnabled:true},{projectionEnabled:true},{execution:{deliveryEnabled:true}}]){
   const f=fixture();await assert.rejects(f.handlers.handle({profile:PROFILE,action:'view',dealId:'deal',...extra},{actor:f.owner}));assert.equal(f.reads,0);
  }
  const f=fixture();await assert.rejects(f.handlers.handle({profile:PROFILE,action:'initial',dealId:'deal'},{actor:f.owner}));

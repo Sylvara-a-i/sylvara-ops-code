@@ -1,5 +1,5 @@
 'use strict';
-const {loadReportBootstrapBinding,workerReportActor,protectedDestinations}=require('revenue_desk_call_gateway/lib/report-bootstrap-binding');
+const {loadReportBootstrapBinding,workerReportActor,protectedDestinations,protectedDeliveryExecution}=require('revenue_desk_call_gateway/lib/report-bootstrap-binding');
 const {createCrmControlClient}=require('./crm-client');
 const {createAuthorizationProvider}=require('./connection');
 const {createConfigurationSourceReader}=require('./configuration-source-reader');
@@ -14,13 +14,14 @@ function createProtectedReportController({environment=process.env,now=Date.now,f
   const b=loadReportBootstrapBinding(environment,{now});
   if(!b||(!b.attestation.enabled&&!b.delivery.enabled)||String(app?.config?.projectId)!==b.projectId
    ||String(app.config.environment).toLowerCase()!=='development'||config.sourceRevision!==b.sourceRevision)held();
-  const active=()=>{const at=now();if(at<b.verifiedAt||at>=b.expiresAt
+  const execution=protectedDeliveryExecution(b,{role:'controller',now});
+  const active=()=>{const at=execution.assertActive();if(at<b.verifiedAt||at>=b.expiresAt
    ||(b.delivery.enabled&&at>=b.delivery.claimQualification.expiresAt)
    ||(b.attestation.enabled&&at>=b.attestation.claimQualification.expiresAt))held();return at;};active();
   const delivery=b.delivery.enabled?require('./report-delivery-composition').createReportDeliveryFactory({
    binding:{...b.delivery.binding,systemActor:workerReportActor(b)},
    readDestinationBinding:protectedDestinations(b.delivery.destinations),
-   deliveryEnabled:false,autoDeliveryEnabled:false,projectionEnabled:false,now:active,fetchImpl})(app,config,store):null;
+   deliveryEnabled:execution.deliveryEnabled,autoDeliveryEnabled:execution.autoDeliveryEnabled,projectionEnabled:execution.projectionEnabled,now:active,fetchImpl})(app,config,store):null;
   if(!b.attestation.enabled)return delivery;
   const {createReportSuccessorStore}=require('../reporting/revenue-desk-analytics/functions/analytics_sync/lib/report-successor-store');
   const {createReportRecipientWriter}=require('../reporting/revenue-desk-analytics/functions/analytics_sync/lib/report-recipient-writer');
