@@ -26,7 +26,47 @@ const DELIVERY_BOUNDARY_PATH = `${RUNTIME}/functions/revenue_desk_route_control/
 const DELIVERY_BOUNDARY_SHA256 = '317bd88533f0f5295aaacc8a83b78b46426b7ceb7dba69213b606dd5490989af';
 const SENDER_BOUNDARY_SHA256 = '9ca408616b5db4335a78e9c53dceb5cb12fe7722da34f9d94a2cfa749e881cb2';
 const STORAGE_BOUNDARY_SHA256 = 'af72d2fe68b31e73fcfdd452fa0fdde975dadb04c66729cbc857330ac4743455';
+// Exact reviewed PR130 observation-only changes; all old guards remain byte-identical.
+const STORAGE_DIAGNOSTIC_HUNKS = [
+  {
+    "before": "  catalystSdk, environment = process.env, fetchImpl = globalThis.fetch,\n  now = Date.now, artifactSourceRevision, factories = {},\n} = {}) {\n  return async function listener(request, response) {\n    try {\n      const config = loadConfig(environment, artifactSourceRevision);\n",
+    "after": "  catalystSdk, environment = process.env, fetchImpl = globalThis.fetch,\n  now = Date.now, artifactSourceRevision, factories = {},\n  failureLogger = record => console.error(JSON.stringify(record)),\n} = {}) {\n  return async function listener(request, response) {\n    let storageFailureStage = null;\n    try {\n      const config = loadConfig(environment, artifactSourceRevision);\n"
+  },
+  {
+    "before": "        return;\n      }\n      const app = runtime.initialize(request);\n      invariant(String(app?.config?.environment || '').toLowerCase() === 'development'\n        && String(app?.config?.projectId || '') === projectId,\n",
+    "after": "        return;\n      }\n      if (body.profile === 'report_storage_qualification_v1' && action === 'approve') {\n        storageFailureStage = 'sdk_initialize';\n      }\n      const app = runtime.initialize(request);\n      if (storageFailureStage) storageFailureStage = 'runtime_identity';\n      invariant(String(app?.config?.environment || '').toLowerCase() === 'development'\n        && String(app?.config?.projectId || '') === projectId,\n"
+  },
+  {
+    "before": "      { httpStatus: 503 });\n      if (body.profile === 'report_storage_qualification_v1') {\n        invariant(action === 'approve' && typeof factories.storageQualification === 'function',\n          'CONTROL_PRECONDITION_FAILED', 'Storage qualification is unavailable.', { httpStatus: 503 });\n        // Independent disabled diagnostic, before customer stores/writers/providers.\n        const handler = factories.storageQualification(app, config);\n        const result = await handler.handle(body, { actor: Object.freeze({\n          kind: 'internal_controller', identity: config.operatorIdHash,\n        }) });\n        send(response, 200, { ok: true, action: body.action, result });\n        return;\n",
+    "after": "      { httpStatus: 503 });\n      if (body.profile === 'report_storage_qualification_v1') {\n        if (storageFailureStage) storageFailureStage = 'storage_binding';\n        invariant(action === 'approve' && typeof factories.storageQualification === 'function',\n          'CONTROL_PRECONDITION_FAILED', 'Storage qualification is unavailable.', { httpStatus: 503 });\n        // Independent disabled diagnostic, before customer stores/writers/providers.\n        const handler = factories.storageQualification(app, config);\n        if (storageFailureStage) storageFailureStage = 'storage_handler';\n        const result = await handler.handle(body, { actor: Object.freeze({\n          kind: 'internal_controller', identity: config.operatorIdHash,\n        }) });\n        storageFailureStage = null;\n        send(response, 200, { ok: true, action: body.action, result });\n        return;\n"
+  },
+  {
+    "before": "      });\n    } catch (error) {\n      const status = error instanceof RevenueDeskError ? error.httpStatus : 500;\n      const code = publicCode(error);\n",
+    "after": "      });\n    } catch (error) {\n      if (storageFailureStage && typeof failureLogger === 'function') {\n        // Diagnostic observation only. Handler failure never proves zero effects.\n        // Never pass an Error, request, header, body or arbitrary code to logging.\n        let candidate;\n        try { candidate = error?.code; } catch (_) { candidate = undefined; }\n        const allowed = new Set(['app/invalid_project_details', 'app/invalid_app_object',\n          'auth/invalid_credential', 'MODULE_NOT_FOUND', 'CONTROL_AUTHENTICATION_FAILED',\n          'CONTROL_PRECONDITION_FAILED', 'REPORT_STORAGE_QUALIFICATION_HELD']);\n        const code = typeof candidate === 'string' && allowed.has(candidate) ? candidate : 'unknown';\n        try {\n          Promise.resolve(failureLogger(Object.freeze({ stage: storageFailureStage, code })))\n            .catch(() => {});\n        } catch (_) {\n          // Observability failure cannot change the existing HTTP result.\n        }\n      }\n      const status = error instanceof RevenueDeskError ? error.httpStatus : 500;\n      const code = publicCode(error);\n"
+  }
+];
+const STORAGE_DIAGNOSTIC_SHA256 = 'e8c684143fa1312940578b2b7e6a09e3089a61a11cf3b757903eea7f0ab22805';
+function reviewedStorageDiagnostic(bytes, reverse = true) {
+  const source = bytes.toString('utf8');
+  if (!Buffer.from(source).equals(bytes)) fail('source_overlap');
+  if (digest(Buffer.from(JSON.stringify(STORAGE_DIAGNOSTIC_HUNKS))) !== STORAGE_DIAGNOSTIC_SHA256) fail('source_overlap');
+  let result = source;
+  for (const hunk of STORAGE_DIAGNOSTIC_HUNKS) {
+    const from = reverse ? hunk.after : hunk.before, to = reverse ? hunk.before : hunk.after;
+    if (result.split(from).length !== 2) fail('source_overlap');
+    result = result.replace(from, to);
+  }
+  return Buffer.from(result);
+}
 function composeReviewedDeliveryBoundary(repositoryPath, base, current, selected) {
+  if (repositoryPath === DELIVERY_BOUNDARY_PATH && current.toString('utf8').includes('let storageFailureStage = null;')) {
+    const stripped = reviewedStorageDiagnostic(current);
+    const prior = composeReviewedDeliveryBoundary(repositoryPath, base, stripped, selected);
+    const bytes = reviewedStorageDiagnostic(prior.bytes, false);
+    if (!reviewedStorageDiagnostic(bytes).equals(prior.bytes)) fail('source_overlap');
+    return { ...prior, bytes, reporting_sha256: digest(current),
+      storage_diagnostic_sha256: STORAGE_DIAGNOSTIC_SHA256 };
+  }
   if (repositoryPath !== DELIVERY_BOUNDARY_PATH) fail('source_overlap');
   let source = current.toString('utf8');
   const contextStart = source.indexOf("      if (body.profile === 'report_runtime_context_v1') {");
@@ -269,7 +309,8 @@ function compose({ reportingRevision, authRevision, runtimeArtifact, crmArtifact
       : composeReviewedDeliveryBoundary(repositoryPath, base, current, selected);
     return { repositoryPath, selected: derived?.bytes || selected,
       ...(derived ? { composition: derived.composition, reportingSha256: derived.reporting_sha256,
-        additionSha256: derived.addition_sha256, composedSha256: digest(derived.bytes) } : {}),
+        additionSha256: derived.addition_sha256, composedSha256: digest(derived.bytes),
+          ...(derived.storage_diagnostic_sha256 ? { storageDiagnosticSha256: derived.storage_diagnostic_sha256 } : {}) } : {}),
       baseSha256: digest(base), authSha256: digest(selected),
       authBlob: git(['rev-parse', '--verify', `${authRevision}:${repositoryPath}`]).trim() };
   });
@@ -332,7 +373,8 @@ function compose({ reportingRevision, authRevision, runtimeArtifact, crmArtifact
       overlays: overlays.map(item => ({ source_path: item.repositoryPath,
         base_sha256: item.baseSha256, auth_blob_sha: item.authBlob, auth_sha256: item.authSha256,
         ...(item.composition ? { composition: item.composition, reporting_sha256: item.reportingSha256,
-          addition_sha256: item.additionSha256, composed_sha256: item.composedSha256 } : {}) })), files };
+          addition_sha256: item.additionSha256, composed_sha256: item.composedSha256,
+          ...(item.storageDiagnosticSha256 ? { storage_diagnostic_sha256: item.storageDiagnosticSha256 } : {}) } : {}) })), files };
     put(staging, 'composition-manifest.json', Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`));
     if (git(['status', '--porcelain=v1', '--untracked-files=all']).trim() || fs.existsSync(destination)) fail();
     fs.renameSync(staging, destination);
@@ -389,4 +431,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { compose, prepareCrmBase, AUTH_PATHS, composeReviewedDeliveryBoundary };
+module.exports = { compose, prepareCrmBase, AUTH_PATHS, composeReviewedDeliveryBoundary, reviewedStorageDiagnostic };
