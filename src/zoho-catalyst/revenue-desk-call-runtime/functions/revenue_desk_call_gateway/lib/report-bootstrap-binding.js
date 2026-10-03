@@ -1,6 +1,6 @@
 'use strict';
 const crypto=require('node:crypto');
-const {decodeReportBootstrap,PART_PREFIX}=require('./report-bootstrap-transport');
+const {encodeReportBootstrap,decodeReportBootstrap,preflightReportBootstrapEnvironment,JSON_KEY,HASH_KEY,PART_PREFIX}=require('./report-bootstrap-transport');
 const HASH=/^[a-f0-9]{64}$/;
 const ID=/^[1-9][0-9]{2,29}$/;
 const sha=s=>crypto.createHash('sha256').update(s).digest('hex');
@@ -49,4 +49,13 @@ function protectedDestinations(entries){
   if(matches.length!==1||!matches[0].binding)held();return structuredClone(matches[0].binding);
  };
 }
-module.exports={loadReportBootstrapBinding,workerReportActor,protectedDestinations};
+/** Pure offline preparation: complete-map sizing and the existing authority,
+ * source and expiry gates pass before returning any stageable configuration.
+ * This does not acquire a claim, change environment or invoke a provider. */
+function prepareReportBootstrapBinding({raw,bindingSha256,baseline,identityPins,partSize=400,format='deflate-v1',now=Date.now}={}){
+ const transport=encodeReportBootstrap(raw,{partSize,format});
+ const preflight=preflightReportBootstrapEnvironment({baseline,transport,bindingSha256,identityPins,now});
+ loadReportBootstrapBinding({...identityPins,...transport.parts,[JSON_KEY]:transport.marker,[HASH_KEY]:bindingSha256},{now});
+ return Object.freeze({...transport,bindingSha256,preflight});
+}
+module.exports={loadReportBootstrapBinding,prepareReportBootstrapBinding,workerReportActor,protectedDestinations};

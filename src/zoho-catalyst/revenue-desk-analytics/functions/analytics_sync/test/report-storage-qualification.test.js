@@ -18,7 +18,7 @@ function fixture(options={}){
  const config={environment:'development',sourceRevision:binding.sourceRevision,controlHost:binding.controlHost,
   expectedProjectIdSha256:sha(binding.projectId),operatorIdHash:'operator_'+sha('synthetic')};
  const environment=()=>{const raw=JSON.stringify(binding);return {REPORT_CONTROLLER_FUNCTION_ID:'123456786',REPORT_DEPLOYMENT_ID:'synthetic_controller',DEPLOYMENT_ENVIRONMENT:'development',SOURCE_REVISION:binding.sourceRevision,
-  ...(options.multipart?{...encodeStorageBinding(raw,{partSize:options.multipart}).parts,REPORT_STORAGE_QUALIFICATION_JSON:encodeStorageBinding(raw,{partSize:options.multipart}).marker}:{REPORT_STORAGE_QUALIFICATION_JSON:raw}),REPORT_STORAGE_QUALIFICATION_SHA256:sha(raw)};};
+  ...(options.multipart?{...encodeStorageBinding(raw,{partSize:options.multipart,format:options.compact?'tuple-v1':'json'}).parts,REPORT_STORAGE_QUALIFICATION_JSON:encodeStorageBinding(raw,{partSize:options.multipart,format:options.compact?'tuple-v1':'json'}).marker}:{REPORT_STORAGE_QUALIFICATION_JSON:raw}),REPORT_STORAGE_QUALIFICATION_SHA256:sha(raw)};};
  const factory=()=>createProtectedStorageQualification({environment:environment(),now:()=>at});
  const command={profile:'report_storage_qualification_v1',action:'qualify_storage'},actor={kind:'internal_controller',identity:config.operatorIdHash};
  return {sdk,binding,config,environment,factory,make:()=>factory()(sdk.app,config),command,actor,advance:n=>at+=n};
@@ -239,3 +239,22 @@ test('read-only retrieval checks current evidence consistency without renewing i
 
 for(const multipart of [100,200,400])test('multipart factory preserves exact operation and finite admission '+multipart,async()=>{const f=fixture({multipart});try{const result=await f.make().handle(f.command,{actor:f.actor});assert.equal(result.inserts,4);assert.equal(result.reads,7);assert.equal(result.admissionInserts,1);assert.equal(result.admissionReads,1);assert.equal(result.qualificationAuthority,false);assert.equal(result.deliveryAuthority,false);await assert.rejects(f.make().handle(f.command,{actor:f.actor}),held);}finally{f.sdk.restore();}});
 test('mixed same-size chunk fails exact binding hash before provider dispatch',()=>{const f=fixture({multipart:200});try{const env=f.environment();env.REPORT_STORAGE_QUALIFICATION_PART_0='x'+env.REPORT_STORAGE_QUALIFICATION_PART_0.slice(1);assert.throws(()=>createProtectedStorageQualification({environment:env,now:()=>f.binding.verifiedAt+1})(f.sdk.app,f.config),held);assert.equal(f.sdk.requests.length,0);}finally{f.sdk.restore();}});
+
+for(const multipart of [100,200,400])test('all-field tuple reaches actual immutable storage proof with unchanged thirteen-attempt ceiling '+multipart,async()=>{
+ const f=fixture({multipart,compact:true});try{
+  const result=await f.make().handle(f.command,{actor:f.actor});
+  assert.equal(result.inserts,4);assert.equal(result.reads,7);assert.equal(result.admissionInserts,1);assert.equal(result.admissionReads,1);
+  assert.equal(f.sdk.requests.length,13);assert.equal(result.qualificationAuthority,false);assert.equal(result.deliveryAuthority,false);assert.equal(result.namedIdentityVerified,false);
+  await assert.rejects(f.make().handle(f.command,{actor:f.actor}),held);
+  assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/table/123456788/row')).length,4);
+ }finally{f.sdk.restore();}
+});
+test('altered tuple raw hash and scope hold before transport construction',()=>{
+ const f=fixture({multipart:400,compact:true});try{
+  const e=f.environment();e.REPORT_STORAGE_QUALIFICATION_SHA256=sha('wrong');let constructed=0;
+  assert.throws(()=>createProtectedStorageQualification({environment:e,now:()=>1800000000000,transportFactory:()=>{constructed++;throw Error('Must not construct');}})(f.sdk.app,f.config),held);
+  f.config.expectedProjectIdSha256=sha('wrong-project');
+  assert.throws(()=>createProtectedStorageQualification({environment:f.environment(),now:()=>1800000000000,transportFactory:()=>{constructed++;throw Error('Must not construct');}})(f.sdk.app,f.config),held);
+  assert.equal(constructed,0);assert.equal(f.sdk.requests.length,0);
+ }finally{f.sdk.restore();}
+});

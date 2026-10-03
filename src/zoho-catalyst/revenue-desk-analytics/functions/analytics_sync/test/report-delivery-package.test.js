@@ -53,7 +53,7 @@ test('isolated controller delivery package imports with one canonical gateway an
      pdfBinding:{apiOrigin:'https://api.catalyst.zoho.com',projectId,organizationId:'123456789',environment:'Development',connectionReference:'synthetic_pdf',timeoutMs:1000,version:'smartbrowz-native-inter41-v1',qualificationDigest:'e'.repeat(64)}}}};
   const raw=JSON.stringify(b),pin=require('node:crypto').createHash('sha256').update(raw).digest('hex');
   const {encodeReportBootstrap}=require(path.join(gateway,'lib/report-bootstrap-transport.js'));
-  const packed=encodeReportBootstrap(raw);assert.equal(Object.keys(packed.parts).length,9);
+  const packed=encodeReportBootstrap(raw,{format:'deflate-v1'});assert.ok(Object.keys(packed.parts).length<9);assert.match(packed.marker,/^runtime-deflate-v1:/);
   const options=createProtectedWorkerReportOptions({...packed.parts,REPORT_RUNTIME_BINDING_JSON:packed.marker,REPORT_RUNTIME_BINDING_SHA256:pin,DEPLOYMENT_ENVIRONMENT:'development',SOURCE_REVISION:sourceRevision},{now:()=>at});
   const app={config:{projectId,environment:'Development'},authenticateRequest:blocked,datastore:blocked,zcql:blocked,connections:blocked};
   const runtimeConfig={environment:'development',sourceRevision,projectId,tables:{DEPLOYMENT_TABLE:'RevenueDeskDeployments'}};
