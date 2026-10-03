@@ -60,7 +60,18 @@ test('isolated controller delivery package imports with one canonical gateway an
    controlledEntries:Object.entries(identityPins).map(([key,value])=>({key,serializedEntryBytes:Buffer.byteLength(JSON.stringify(key)+':'+JSON.stringify(value))}))};
   const packed=prepareReportBootstrapBinding({raw,bindingSha256:pin,baseline,identityPins,now:()=>at});
   assert.equal(baseline.serializedBytes,2205);assert.ok(packed.preflight.serializedBytes<=3578);assert.equal(packed.preflight.providerLimitVerified,false);
-  assert.ok(Object.keys(packed.parts).length<9);assert.match(packed.marker,/^runtime-deflate-v1:/);
+  assert.ok(Object.keys(packed.parts).length<9);assert.match(packed.marker,/^runtime-deflate-v2:/);
+  // Distinct synthetic digests avoid claiming capacity from repeated placeholders.
+  const stress=JSON.parse(raw);let distinctDigests=0;
+  function varyDigests(object,keys=[]){for(const [key,value]of Object.entries(object)){
+   if(typeof value==='string'&&/^[a-f0-9]{64}$/.test(value)){object[key]=require('node:crypto').createHash('sha256').update('synthetic entropy '+[...keys,key].join('.')).digest('hex');distinctDigests++;}
+   else if(value&&typeof value==='object')varyDigests(value,[...keys,key]);
+  }}
+  varyDigests(stress);assert.equal(distinctDigests,8);const stressRaw=JSON.stringify(stress),stressPin=require('node:crypto').createHash('sha256').update(stressRaw).digest('hex');
+  const stressPrepared=prepareReportBootstrapBinding({raw:stressRaw,bindingSha256:stressPin,baseline,identityPins,now:()=>at});
+  assert.ok(stressPrepared.preflight.serializedBytes<=3578);assert.equal(stressPrepared.preflight.providerLimitVerified,false);
+  assert.throws(()=>prepareReportBootstrapBinding({raw:stressRaw,bindingSha256:stressPin,baseline,identityPins,now:()=>at,format:'deflate-v1'}),{code:'REPORT_BOOTSTRAP_HELD'});
+  // Stress is sizing evidence only; it never enters a provider/effectful factory.
   const options=createProtectedWorkerReportOptions({...packed.parts,REPORT_RUNTIME_BINDING_JSON:packed.marker,REPORT_RUNTIME_BINDING_SHA256:pin,DEPLOYMENT_ENVIRONMENT:'development',SOURCE_REVISION:sourceRevision},{now:()=>at});
   const app={config:{projectId,environment:'Development'},authenticateRequest:blocked,datastore:blocked,zcql:blocked,connections:blocked};
   const runtimeConfig={environment:'development',sourceRevision,projectId,tables:{DEPLOYMENT_TABLE:'RevenueDeskDeployments'}};

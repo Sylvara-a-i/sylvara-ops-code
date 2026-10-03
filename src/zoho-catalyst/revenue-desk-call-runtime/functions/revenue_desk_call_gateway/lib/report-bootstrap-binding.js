@@ -52,7 +52,7 @@ function protectedDestinations(entries){
 /** Pure offline preparation: complete-map sizing and the existing authority,
  * source and expiry gates pass before returning any stageable configuration.
  * This does not acquire a claim, change environment or invoke a provider. */
-function prepareReportBootstrapBinding({raw,bindingSha256,baseline,identityPins,partSize=400,format='deflate-v1',now=Date.now}={}){
+function prepareReportBootstrapBinding({raw,bindingSha256,baseline,identityPins,partSize=400,format='deflate-v2',now=Date.now}={}){
  const transport=encodeReportBootstrap(raw,{partSize,format});
  const preflight=preflightReportBootstrapEnvironment({baseline,transport,bindingSha256,identityPins,now});
  loadReportBootstrapBinding({...identityPins,...transport.parts,[JSON_KEY]:transport.marker,[HASH_KEY]:bindingSha256},{now});

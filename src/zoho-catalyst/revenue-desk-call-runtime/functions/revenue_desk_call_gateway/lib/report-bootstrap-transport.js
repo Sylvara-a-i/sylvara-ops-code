@@ -4,8 +4,9 @@ const JSON_KEY='REPORT_RUNTIME_BINDING_JSON',HASH_KEY='REPORT_RUNTIME_BINDING_SH
 const MAX_BYTES=65536,MAX_ENCODED=4*Math.ceil(MAX_BYTES/3),MAX_PARTS=Math.ceil(MAX_ENCODED/100);
 const MAX_COMPRESSED=MAX_BYTES+1024,MAX_COMPACT_ENCODED=4*Math.ceil(MAX_COMPRESSED/3),MAX_COMPACT_PARTS=Math.ceil(MAX_COMPACT_ENCODED/100);
 // Fixed public schema keys are a compression dictionary, not omitted values.
-// This dictionary is part of the v1 wire contract; future changes need v2.
+// Dictionaries are immutable wire-version contracts, not configuration defaults.
 const DEFLATE_V1_DICTIONARY=Buffer.from('"schemaVersion":,"environment":,"sourceRevision":,"projectId":,"controllerFunctionId":,"workerFunctionId":,"verifiedAt":,"expiresAt":,"attestation":,"delivery":,"reporting":,"enabled":');
+const DEFLATE_V2_DICTIONARY=Buffer.from("\"acceptance\":,\"analyticsConfig\":,\"analyticsContractDigest\":,\"analyticsTimeoutMs\":,\"apiBaseUrl\":,\"apiOrigin\":,\"attestation\":,\"binding\":,\"call\":,\"catalystEnvironment\":,\"checkpoint\":,\"claimQualification\":,\"connectionReference\":,\"controllerFunctionId\":,\"conversion_status\":,\"daily_metric\":,\"delivery\":,\"deployment\":,\"destinations\":,\"downloadOrigin\":,\"enabled\":,\"environment\":,\"evidenceDigest\":,\"expectedProjectId\":,\"expiresAt\":,\"final_test_result\":,\"mechanism\":,\"migrationEvidenceDigest\":,\"options\":,\"organizationId\":,\"outbox\":,\"pdfBinding\":,\"pdfRendererDigest\":,\"platformTimeoutMs\":,\"projectId\":,\"provider\":,\"qualificationDigest\":,\"readConnection\":,\"releaseCompositionDigest\":,\"reporting\":,\"responseMaxBytes\":,\"schemaDigest\":,\"schemaVersion\":,\"scope\":,\"sourceRevision\":,\"staleAfterMs\":,\"status\":,\"table\":,\"tables\":,\"targets\":,\"timeoutMs\":,\"verifiedAt\":,\"version\":,\"viewId\":,\"workdriveBinding\":,\"workdriveContractDigest\":,\"workerFunctionId\":,\"workspaceId\":,\"development\",\"Development\",\"unique_insert_successor_v1\",\"qualified\",\"AnalyticsSyncOutbox\",\"AnalyticsSyncCheckpoints\",\"https://analyticsapi.zoho.com\",\"https://www.zohoapis.com\",\"https://download.zoho.com\",\"https://api.catalyst.zoho.com\",\"smartbrowz-native-inter41-v1\",\"RevenueDeskAnalyticsDeploymentFacts\",\"RevenueDeskAnalyticsCallFacts\",\"RevenueDeskAnalyticsDailyMetricFacts\",\"RevenueDeskAnalyticsFinalTestResultFacts\",\"RevenueDeskAnalyticsConversionStatusFacts\"");
 const PLANNING_BUDGET=3578,IDENTITY_KEYS=['SOURCE_REVISION','DEPLOYMENT_ENVIRONMENT'];
 const sha=raw=>crypto.createHash('sha256').update(raw).digest('hex');
 function held(){throw Object.assign(new Error('REPORT_BOOTSTRAP_HELD'),{code:'REPORT_BOOTSTRAP_HELD'});}
@@ -13,21 +14,22 @@ function exact(x,keys){return x&&typeof x==='object'&&!Array.isArray(x)&&Object.
 function entryBytes(key,value){return Buffer.byteLength(JSON.stringify(key)+':'+JSON.stringify(value));}
 /** Lossless bounded transport only; never grants authority or changes raw SHA. */
 function encodeReportBootstrap(raw,{partSize=400,format='parts-v1'}={}){
- if(typeof raw!=='string'||!raw.length||Buffer.byteLength(raw)>MAX_BYTES||![100,200,400].includes(partSize)||!['parts-v1','deflate-v1'].includes(format))held();
+ if(typeof raw!=='string'||!raw.length||Buffer.byteLength(raw)>MAX_BYTES||![100,200,400].includes(partSize)||!['parts-v1','deflate-v1','deflate-v2'].includes(format))held();
  const bytes=Buffer.from(raw,'utf8');if(bytes.length>MAX_BYTES||bytes.toString('utf8')!==raw)held();
- const compact=format==='deflate-v1',wire=compact?zlib.deflateRawSync(bytes,{level:9,dictionary:DEFLATE_V1_DICTIONARY}):bytes;
+ const compact=format!=='parts-v1',dictionary=format==='deflate-v2'?DEFLATE_V2_DICTIONARY:DEFLATE_V1_DICTIONARY;
+ const wire=compact?zlib.deflateRawSync(bytes,{level:9,dictionary}):bytes;
  if(compact&&wire.length>MAX_COMPRESSED)held();
  const encoded=wire.toString('base64'),parts={};
  for(let i=0;i<Math.ceil(encoded.length/partSize);i++)parts[PART_PREFIX+i]=encoded.slice(i*partSize,(i+1)*partSize);
- return {parts,marker:(compact?'runtime-deflate-v1:':'runtime-parts-v1:')+partSize+':'+Object.keys(parts).length+':'+encoded.length+':'+bytes.length};
+ return {parts,marker:('runtime-'+format+':')+partSize+':'+Object.keys(parts).length+':'+encoded.length+':'+bytes.length};
 }
 function decodeReportBootstrap(env){
  if(!env||typeof env!=='object'||Array.isArray(env)||!Object.hasOwn(env,JSON_KEY))held();
  const value=env[JSON_KEY],keys=Object.keys(env).filter(k=>k.startsWith(PART_PREFIX));
  if(typeof value!=='string')held();
- const compact=value.startsWith('runtime-deflate-v1:');
+ const v2=value.startsWith('runtime-deflate-v2:'),compact=v2||value.startsWith('runtime-deflate-v1:');
  if(!compact&&!value.startsWith('runtime-parts-v1:')){if(keys.length||Buffer.byteLength(value)>MAX_BYTES||/^runtime-(?:parts|deflate)-/.test(value))held();return value;}
- const expression=compact?/^runtime-deflate-v1:(100|200|400):([1-9][0-9]{0,2}):([1-9][0-9]{0,4}):([1-9][0-9]{0,4})$/
+ const expression=compact?/^runtime-deflate-v[12]:(100|200|400):([1-9][0-9]{0,2}):([1-9][0-9]{0,4}):([1-9][0-9]{0,4})$/
   :/^runtime-parts-v1:(100|200|400):([1-9][0-9]{0,2}):([1-9][0-9]{0,4}):([1-9][0-9]{0,4})$/;
  const match=expression.exec(value);if(!match)held();
  const size=Number(match[1]),count=Number(match[2]),length=Number(match[3]),rawLength=Number(match[4]);
@@ -41,7 +43,7 @@ function decodeReportBootstrap(env){
  const wire=Buffer.from(encoded,'base64');if(wire.toString('base64')!==encoded||compact&&wire.length>MAX_COMPRESSED)held();
  let bytes=wire;
  if(compact){
-  let inflated;try{inflated=zlib.inflateRawSync(wire,{maxOutputLength:MAX_BYTES,info:true,dictionary:DEFLATE_V1_DICTIONARY});}catch{held();}
+  let inflated;try{inflated=zlib.inflateRawSync(wire,{maxOutputLength:MAX_BYTES,info:true,dictionary:v2?DEFLATE_V2_DICTIONARY:DEFLATE_V1_DICTIONARY});}catch{held();}
   // Node24 has no rejectGarbageAfterEnd option. Compare actually consumed bytes.
   if(inflated.engine.bytesWritten!==wire.length)held();bytes=inflated.buffer;
  }
