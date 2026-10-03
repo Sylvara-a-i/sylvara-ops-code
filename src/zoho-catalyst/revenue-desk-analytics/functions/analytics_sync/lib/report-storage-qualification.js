@@ -5,6 +5,7 @@ const {canonicalJson}=require('./facts');
 const {createReportSuccessorStore}=require('./report-successor-store');
 const {createReportRunTransport}=require('./report-run-transport');
 const {validateStorageCapability,validateStoredProjection}=require('./report-storage-capability');
+const {diagnosticWindowMs}=require('./report-storage-window');
 const PROFILE='report_storage_qualification_v1',HASH=/^[a-f0-9]{64}$/,ID=/^[1-9][0-9]{2,29}$/;
 const sha=x=>crypto.createHash('sha256').update(typeof x==='string'?x:canonicalJson(x)).digest('hex');
 const exact=(x,keys)=>x&&typeof x==='object'&&!Array.isArray(x)&&Object.keys(x).sort().join(',')===keys.sort().join(',');
@@ -20,21 +21,24 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
   let b;try{b=JSON.parse(raw);}catch{held();}
   if(!exact(b,['schemaVersion','enabled','environment','sourceRevision','projectId','controlHost','tableId','nonce',
    'capability','verifiedAt','expiresAt','timeoutMs','singleAdmittedInvocation'])
-   ||b.schemaVersion!==3||b.enabled!==true||b.environment!=='development'||b.singleAdmittedInvocation!==true
+   ||![3,4].includes(b.schemaVersion)||b.enabled!==true||b.environment!=='development'||b.singleAdmittedInvocation!==true
    ||config?.environment!==b.environment||environment.DEPLOYMENT_ENVIRONMENT!==b.environment
    ||b.sourceRevision!==config.sourceRevision||environment.SOURCE_REVISION!==b.sourceRevision||!/^[a-f0-9]{40}$/.test(b.sourceRevision||'')
    ||!ID.test(b.projectId||'')||sha(b.projectId)!==config.expectedProjectIdSha256
    ||String(app?.config?.projectId)!==b.projectId||String(app.config.environment).toLowerCase()!=='development'
    ||b.controlHost!==config.controlHost||!ID.test(b.tableId||'')||!/^[a-f0-9]{32}$/.test(b.nonce||'')
       ||!Number.isSafeInteger(b.verifiedAt)||b.verifiedAt<0||!Number.isSafeInteger(b.expiresAt)
-   ||b.expiresAt<=b.verifiedAt||b.expiresAt-b.verifiedAt>900000
+   ||b.expiresAt<=b.verifiedAt
    ||!Number.isSafeInteger(b.timeoutMs)||b.timeoutMs<1||b.timeoutMs>60000||typeof now!=='function'||typeof transportFactory!=='function')held();
-  const capability=validateStorageCapability(b.capability,{app,config:{projectId:b.projectId},environment,now:now(),verifiedAt:b.verifiedAt,expiresAt:b.expiresAt});
+  const diagnosticContract={schemaVersion:b.schemaVersion,profile:PROFILE,environment:b.environment};
+  if(b.expiresAt-b.verifiedAt>diagnosticWindowMs(diagnosticContract))held();
+  const capabilityOptions={app,config:{projectId:b.projectId,environment:b.environment},environment,verifiedAt:b.verifiedAt,expiresAt:b.expiresAt,diagnosticContract};
+  const capability=validateStorageCapability(b.capability,{...capabilityOptions,now:now()});
   if(b.tableId!==capability.tables.reportRuns.id)held();
   const capabilitySha256=sha(capability);
   const key=sha({mechanism:'unique_insert_successor_v1',projectId:b.projectId,tables:capability.tables,nonce:b.nonce,sourceRevision:b.sourceRevision,capabilitySha256});
   const rootKey='revenue-desk-report-v1:'+key;
-  const active=()=>{const at=now();validateStorageCapability(capability,{app,config:{projectId:b.projectId},environment,now:at,verifiedAt:b.verifiedAt,expiresAt:b.expiresAt});if(!Number.isSafeInteger(at)||at<b.verifiedAt||at>=b.expiresAt)held();return at;};active();
+  const active=()=>{const at=now();validateStorageCapability(capability,{...capabilityOptions,now:at});if(!Number.isSafeInteger(at)||at<b.verifiedAt||at>=b.expiresAt)held();return at;};active();
   return Object.freeze({async handle(command,{actor,signal}={}){
    if(!exact(command,['profile','action'])||command.profile!==PROFILE
     ||!['qualify_storage','read_storage_evidence'].includes(command.action)
