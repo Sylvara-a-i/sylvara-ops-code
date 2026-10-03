@@ -1,5 +1,6 @@
 'use strict';
 const crypto=require('node:crypto');
+const {decodeReportBootstrap,PART_PREFIX}=require('./report-bootstrap-transport');
 const HASH=/^[a-f0-9]{64}$/;
 const ID=/^[1-9][0-9]{2,29}$/;
 const sha=s=>crypto.createHash('sha256').update(s).digest('hex');
@@ -9,8 +10,8 @@ function freeze(x){if(x&&typeof x==='object'){Object.values(x).forEach(freeze);O
  * Catalyst environment-variable capacity. Installation must qualify capacity.
  * No tokens, Job parameters or HTTP payloads enter this loader. */
 function loadReportBootstrapBinding(env=process.env,{now=Date.now}={}){
- const raw=env.REPORT_RUNTIME_BINDING_JSON,pin=env.REPORT_RUNTIME_BINDING_SHA256;
- if(raw===undefined&&pin===undefined)return null;
+ if(!Object.hasOwn(env,'REPORT_RUNTIME_BINDING_JSON')&&!Object.hasOwn(env,'REPORT_RUNTIME_BINDING_SHA256')&&!Object.keys(env).some(k=>k.startsWith(PART_PREFIX)))return null;
+ const raw=decodeReportBootstrap(env),pin=env.REPORT_RUNTIME_BINDING_SHA256;
  if(typeof now!=='function'||!Number.isSafeInteger(now())||now()<0)held();
  if(typeof raw!=='string'||Buffer.byteLength(raw)>65536||!HASH.test(pin||'')||sha(raw)!==pin)held();
  let b;try{b=JSON.parse(raw);}catch{held();}
