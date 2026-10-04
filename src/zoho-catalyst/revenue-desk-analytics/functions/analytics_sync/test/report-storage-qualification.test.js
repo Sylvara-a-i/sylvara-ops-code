@@ -25,6 +25,45 @@ function fixture(options={}){
  return {sdk,binding,config,environment,factory,make:()=>factory()(sdk.app,config),command,actor,advance:n=>at+=n};
 }
 const held={code:'REPORT_STORAGE_QUALIFICATION_HELD'};
+test('actual SDK admission covers every mandatory schema column and accepts null-only full table responses',async()=>{
+ const schema=require('./helpers/report-storage-schema-fixture'),f=fixture({storageSchema:true});
+ try{const result=await f.make().handle(f.command,{actor:f.actor});
+  const admission=f.sdk.requests.find(x=>x.path.endsWith('/table/123456787/row')).payload[0];
+  assert.deepEqual(schema.missingMandatory(admission,'eventReceipts'),[]);
+  assert.equal(admission.ATTEMPT_COUNT,0);assert.equal(typeof admission.ATTEMPT_COUNT,'number');
+  assert.equal(Object.keys([...f.sdk.receipts.values()][0]).length,29);
+  assert.ok([...f.sdk.rows.values()].every(row=>Object.keys(row).length===33));
+  assert.equal(result.durableAdmissionObserved,true);assert.equal(result.qualificationAuthority,false);
+  assert.equal(f.sdk.requests.length,13);assert.equal(f.sdk.receipts.size,1);assert.equal(f.sdk.rows.size,2);
+ }finally{f.sdk.restore();}
+});
+for(const target of ['admission ACK','admission readback'])for(const [label,value]of [
+ ['missing',undefined],['null',null],['nonzero',1],['boolean',false],['object',{}],['array',[]],['leading zero','00'],['fraction','0.0'],['whitespace',' 0']
+])test(target+' malformed attempt count '+label+' holds without report dispatch or replay',async()=>{
+ const f=fixture({storageResponseTransform({path,data}){
+  if(target==='admission ACK'&&path==='/table/123456787/row'&&Array.isArray(data))data[0].ATTEMPT_COUNT=value;
+  if(target==='admission readback'&&path==='/query'&&data[0]?.RevenueDeskEventReceipts)data[0].RevenueDeskEventReceipts.ATTEMPT_COUNT=value;
+ }});
+ try{const handler=f.make();await assert.rejects(handler.handle(f.command,{actor:f.actor}),held);
+  assert.equal(f.sdk.rows.size,0);const requests=f.sdk.requests.length;
+  await assert.rejects(handler.handle(f.command,{actor:f.actor}),held);assert.equal(f.sdk.requests.length,requests);
+ }finally{f.sdk.restore();}
+});
+for(const role of ['eventReceipts','reportRuns'])for(const target of ['ACK','readback'])for(const mutation of ['unknown_null','known_nonnull','known_object'])test(role+' full schema '+target+' rejects '+mutation,async()=>{
+ const f=fixture({storageSchema:true,storageResponseTransform({path,data}){
+  const expected=role==='eventReceipts'?'/table/123456787/row':'/table/123456788/row';
+  if(path!==(target==='ACK'?expected:'/query')||!Array.isArray(data))return;
+  const row=target==='ACK'?data[0]:data.map(x=>x.ReportRuns||x.RevenueDeskEventReceipts||x).find(x=>Object.hasOwn(x,role==='eventReceipts'?'EVENT_KEY':'IdempotencyKey'));
+  if(!row)return;
+  const field=role==='eventReceipts'?'CALL_KEY':'RecipientSnapshotJson';
+  if(mutation==='unknown_null')row.UNREVIEWED_COLUMN=null;
+  else row[field]=mutation==='known_object'?{}:'unexpected';
+ }});
+ try{const handler=f.make();await assert.rejects(handler.handle(f.command,{actor:f.actor}),held);
+  assert.ok(f.sdk.rows.size<2);const requests=f.sdk.requests.length;
+  await assert.rejects(handler.handle(f.command,{actor:f.actor}),held);assert.equal(f.sdk.requests.length,requests);
+ }finally{f.sdk.restore();}
+});
 test('actual managed SDK proof makes exactly four inserts/seven reads, retains two rows and proves overlapping rounds',async()=>{
  const f=fixture();try{
   const result=await f.make().handle(f.command,{actor:f.actor});

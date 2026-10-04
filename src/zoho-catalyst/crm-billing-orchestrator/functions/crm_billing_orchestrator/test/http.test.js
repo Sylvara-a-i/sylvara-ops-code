@@ -9,10 +9,12 @@ const unknownWrite = error => error instanceof HttpBoundaryError
 
 test("headers do not end the deadline; stalled read is cancelled without waiting for cancellation", async () => {
   let signal, reads = 0, cancels = 0, release;
+  // Cold Headers initialization belongs to fixture setup, not the body deadline.
+  const headers = new Headers();
   const output = requestJson("https://synthetic.invalid", { method: "POST" }, boundary,
     async (_url, options) => {
       signal = options.signal;
-      return { status: 200, headers: new Headers(), body: { getReader: () => ({
+      return { status: 200, headers, body: { getReader: () => ({
         read() { reads += 1; return new Promise(resolve => { release = resolve; }); },
         cancel() { cancels += 1; return new Promise(() => {}); },
         releaseLock() {},

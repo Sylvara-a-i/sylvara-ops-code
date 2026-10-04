@@ -1,5 +1,19 @@
 # Two-stage Development storage preparation
 
+Admission inserts explicitly submit numeric `ATTEMPT_COUNT: 0` alongside the
+receipt version. Static review rejects missing mandatory application columns
+from either insert projection, even when an obsolete projection hash matches.
+It checks the attempt-count bigint contract without inferring a provider default.
+Acknowledgments/readback accept only exact numeric values or canonical bigint
+strings (`0`/`"0"`, `1`/`"1"`); malformed values remain held. Known omitted optional
+schema columns may be absent or returned as `null`. Unknown columns and non-null
+unsubmitted columns remain held; returned data is validated before use.
+
+This contract change requires new projection pins, source/artifact readback and
+fresh reviewed evidence before any later qualification. Prior consumed claims,
+attempt ceilings and ambiguity are preserved. A missing mandatory field is a
+plausible provider rejection cause, not proof of an observed upstream status.
+
 This offline tool separates static review and transfer from final preparation. It changes no deployed runtime, token lifetime, product limit or live authority.
 
 The private kit supplies reviewed pins/templates. `review(input,{root,at})` validates safe original metadata, mapping, controls, installed artifact and complete-map accounting. Historical observations retain their original times; the result has no nonce, expiry, binding or claim. `writeReview` creates only an immutable non-executable review file.

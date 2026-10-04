@@ -7,15 +7,15 @@ function fixture(){
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'sylvara-two-stage-synthetic-'));
  const save=(name,obj)=>{const f=path.join(root,name);fs.writeFileSync(f,JSON.stringify(obj));return f;};
  const projection=require(path.join(repo,'src/zoho-catalyst/revenue-desk-analytics/functions/analytics_sync/lib/report-run-store')).reportRunProjection;
- const fields={reportRuns:[...Object.keys(projection({kind:'report_attempt_v1',identity:{clientId:'synthetic',deploymentId:'synthetic',periodStart:'1970-01-01',periodEnd:'1970-01-01'}})),'IdempotencyKey','ReportRunId','ReportPayloadJson','RD_REPORT_VERSION'].sort(),eventReceipts:['EVENT_KEY','RECEIPT_KIND','STATUS','EVENT_TYPE','EVENT_DATA_JSON','PAYLOAD_FINGERPRINT','RECEIPT_VERSION','SOURCE_REVISION','SOURCE_ENVIRONMENT','RECEIVED_AT','PROCESSED_AT'].sort()};
+ const fields={reportRuns:[...Object.keys(projection({kind:'report_attempt_v1',identity:{clientId:'synthetic',deploymentId:'synthetic',periodStart:'1970-01-01',periodEnd:'1970-01-01'}})),'IdempotencyKey','ReportRunId','ReportPayloadJson','RD_REPORT_VERSION'].sort(),eventReceipts:['EVENT_KEY','RECEIPT_KIND','STATUS','EVENT_TYPE','EVENT_DATA_JSON','PAYLOAD_FINGERPRINT','RECEIPT_VERSION','ATTEMPT_COUNT','SOURCE_REVISION','SOURCE_ENVIRONMENT','RECEIVED_AT','PROCESSED_AT'].sort()};
  const pins={organization:'606',projectId:'101000001',controllerFunctionId:'101000002',sourceRevision:rev,archiveSha256:hash,fileCount:308,deploymentId:'controller_'+rev,projections:fields};save('reviewed-pins.json',pins);
  const tables={reportRuns:{id:'101000003',name:'ReportRuns',schemaSha256:null,uniquenessSha256:null,uniqueField:'IdempotencyKey',projectionSha256:p.sha({projection:fields.reportRuns})},eventReceipts:{id:'101000004',name:'RevenueDeskEventReceipts',schemaSha256:null,uniquenessSha256:null,uniqueField:'EVENT_KEY',projectionSha256:p.sha({projection:fields.eventReceipts})}};
  save('binding.template.json',{schemaVersion:3,enabled:false,environment:'development',sourceRevision:rev,projectId:pins.projectId,controlHost:'synthetic.development.catalystserverless.com',tableId:tables.reportRuns.id,nonce:'<FRESH_32_HEX_NONCE_ONLY_WHEN_READY>',capability:{region:'US',origin:'https://api.catalyst.zoho.com',controllerFunctionId:pins.controllerFunctionId,deploymentId:pins.deploymentId,sdkVersion:'3.4.0',authMode:'user',authType:'admin',creatorPolicy:'observed_consistent_v1',tables,evidence:{}},verifiedAt:null,expiresAt:null,timeoutMs:3000,singleAdmittedInvocation:true});
  fs.writeFileSync(path.join(root,'caller.template.ds'),'synthetic __OPERATION_DIGEST__ __VERIFIED_AT__ __EXPIRES_AT__');
  const records={metadata:{organization:pins.organization,project:pins.projectId,environment:'Development',observedAt:new Date(old).toISOString(),metadata:[]},mapping:{observedAt:new Date(old).toISOString(),project:{id:pins.projectId},tables:Object.values(tables).map(x=>({id:x.id,name:x.name,projectId:pins.projectId}))},installation:{sourceRevision:rev,controllerFunctionId:pins.controllerFunctionId,archiveSha256:hash,fileCount:308,allFilesMatch:true,independentReadback:true,verifiedAt:old},controls:{observedAt:new Date(old).toISOString(),organization:pins.organization,projectId:pins.projectId,environment:'Development',controllerFunctionId:pins.controllerFunctionId,sourceRevision:rev,retellRouteMode:'disabled',deploymentMode:'active',storagePartKeys:[],controllerPinMatches:true,deploymentPinMatches:true,runtimeInvoked:false,bindings:Object.fromEntries(['runtime','storage','context','sender'].map(x=>[x,{jsonPresent:false,pinPresent:false,enabled:false}]))},sizing:{observedAt:new Date(old).toISOString(),baseline:{serializedBytes:2205,entryCount:36,controlledEntries:[]}},ownerAuthorization:{digest:hash,verifiedAt:old}};
  for(const [role,count]of [['reportRuns',33],['eventReceipts',29]]){
-  const descriptor=tables[role],columns=fields[role].map(name=>({column_name:name,data_type:name===descriptor.uniqueField?'varchar':name==='ReportPayloadJson'||name==='EVENT_DATA_JSON'?'encrypted text':'text',is_unique:name===descriptor.uniqueField,is_mandatory:name===descriptor.uniqueField}));
-  while(columns.length<count)columns.push({column_name:'synthetic_extra_'+columns.length,data_type:'text',is_unique:false,is_mandatory:false});
+  const descriptor=tables[role],columns=require('./helpers/report-storage-schema-fixture').columns(role);
+  assert.equal(columns.length,count);
   for(const [op,data]of [['list_all_columns',columns],['get_table_permissions',[{role_name:'App Administrator',role_id:'100',permissions:['SELECT','INSERT']},{role_name:'App User',role_id:'101',permissions:[]}]],['get_table_scopes',[{role_id:'100',scope:'GLOBAL'},{role_id:'101',scope:role==='reportRuns'?'USER':'GLOBAL'}]]])records.metadata.metadata.push({name:descriptor.name,id:descriptor.id,op,data});
  }
  const paths={metadata:'metadataFile',mapping:'projectMappingFile',controls:'controlsFile',installation:'installationFile',sizing:'sizingFile'};
@@ -29,6 +29,34 @@ function fixture(){
 }
 test('static review retains old observations and creates no nonce, expiry, binding or claim',()=>{const f=fixture();assert.equal(f.review.originals.metadata.observedAt,new Date(old).toISOString());assert.equal(f.review.executable,false);for(const key of ['nonce','expiresAt','binding','operationDigest'])assert.equal(Object.hasOwn(f.review,key),false);assert.equal(fs.existsSync(path.join(f.root,'PREPARATION-CLAIM.json')),false);});
 function absentDescriptors(f){Object.assign(f.records.controls,{controllerPinPresent:false,deploymentPinPresent:false,controllerPinMatches:false,deploymentPinMatches:false});f.input.controlsFile=f.save('absent-controls.json',f.records.controls);f.review=p.review(f.input,{at,root:f.root});f.save('static-review.json',f.review);return f;}
+test('static review rejects an omitted mandatory attempt count even with a matching obsolete projection hash',()=>{
+ const f=fixture(),pins=JSON.parse(fs.readFileSync(path.join(f.root,'reviewed-pins.json'))),binding=JSON.parse(fs.readFileSync(path.join(f.root,'binding.template.json')));
+ pins.projections.eventReceipts=pins.projections.eventReceipts.filter(x=>x!=='ATTEMPT_COUNT');
+ binding.capability.tables.eventReceipts.projectionSha256=p.sha({projection:pins.projections.eventReceipts});
+ f.save('reviewed-pins.json',pins);f.save('binding.template.json',binding);
+ assert.throws(()=>p.review(f.input,{root:f.root,at}),/HELD/);
+ assert.equal(fs.existsSync(path.join(f.root,'PREPARATION-CLAIM.json')),false);
+});
+for(const role of ['eventReceipts','reportRuns'])test('static review rejects a newly mandatory unsubmitted '+role+' column',()=>{
+ const f=fixture(),entry=f.records.metadata.metadata.find(x=>x.name===(role==='eventReceipts'?'RevenueDeskEventReceipts':'ReportRuns')&&x.op==='list_all_columns');
+ entry.data.find(x=>x.column_name===(role==='eventReceipts'?'CALL_KEY':'RecipientSnapshotJson')).is_mandatory=true;
+ f.input.metadataFile=f.save('new-mandatory.json',f.records.metadata);
+ assert.throws(()=>p.review(f.input,{root:f.root,at}),/HELD/);
+ assert.equal(fs.existsSync(path.join(f.root,'PREPARATION-CLAIM.json')),false);
+});
+for(const change of ['type','length','mandatory'])test('static review rejects incompatible attempt-count '+change+' metadata',()=>{
+ const f=fixture(),column=f.records.metadata.metadata.find(x=>x.name==='RevenueDeskEventReceipts'&&x.op==='list_all_columns').data.find(x=>x.column_name==='ATTEMPT_COUNT');
+ if(change==='type')column.data_type='varchar';if(change==='length')column.max_length=0;if(change==='mandatory')column.is_mandatory=false;
+ f.input.metadataFile=f.save('bad-attempt-column.json',f.records.metadata);
+ assert.throws(()=>p.review(f.input,{root:f.root,at}),/HELD/);
+ assert.equal(fs.existsSync(path.join(f.root,'PREPARATION-CLAIM.json')),false);
+});
+for(const role of ['eventReceipts','reportRuns'])for(const value of ['true',null,undefined])test('static review holds unknown mandatory status for an omitted '+role+' column '+String(value),()=>{
+ const f=fixture(),column=f.records.metadata.metadata.find(x=>x.name===(role==='eventReceipts'?'RevenueDeskEventReceipts':'ReportRuns')&&x.op==='list_all_columns').data.find(x=>x.column_name===(role==='eventReceipts'?'CALL_KEY':'RecipientSnapshotJson'));
+ column.is_mandatory=value;f.input.metadataFile=f.save('unknown-mandatory.json',f.records.metadata);
+ assert.throws(()=>p.review(f.input,{root:f.root,at}),/HELD/);
+ assert.equal(fs.existsSync(path.join(f.root,'PREPARATION-CLAIM.json')),false);
+});
 test('explicitly absent descriptors permit static review only and preserve observed state',()=>{const f=absentDescriptors(fixture());assert.equal(f.review.originals.controls.controllerPinPresent,false);assert.equal(f.review.originals.controls.deploymentPinMatches,false);assert.equal(f.review.executable,false);const fresh=f.final();assert.throws(()=>p.prepare(fresh.input,{at,root:f.root}),/HELD/);assert.equal(fs.existsSync(path.join(f.root,'PREPARATION-CLAIM.json')),false);});
 test('missing, partial, malformed or mismatched descriptor evidence holds static review',()=>{for(const change of ['missing','partial','malformed','mismatch']){const f=absentDescriptors(fixture()),c=structuredClone(f.records.controls);if(change==='missing')delete c.controllerPinPresent;if(change==='partial')c.controllerPinPresent=true;if(change==='malformed')c.deploymentPinPresent='false';if(change==='mismatch'){c.controllerPinPresent=true;c.deploymentPinPresent=true;}f.input.controlsFile=f.save('bad-descriptors.json',c);assert.throws(()=>p.review(f.input,{at,root:f.root}),/HELD/);}});
 test('static review rejects contradictory or malformed presence despite asserted matches',()=>{for(const key of ['controllerPinPresent','deploymentPinPresent'])for(const value of [false,'true',null]){const f=fixture(),c={...f.records.controls,[key]:value};f.input.controlsFile=f.save('contradictory-presence.json',c);assert.throws(()=>p.review(f.input,{at,root:f.root}),/HELD/);}});

@@ -67,7 +67,19 @@ function validate(input,{at=Date.now(),root,staticOnly=false,nonce,codec}={}){
   const unique=columns.filter(x=>x.is_unique===true),key=unique.find(x=>x.column_name===descriptor.uniqueField);
   if(!key||key.is_mandatory!==true||key.data_type!=='varchar')stop();
   const fields=pins.projections[role];
-  if(!fields.every(k=>columns.some(x=>x.column_name===k))||descriptor.projectionSha256!==sha({projection:fields}))stop();
+  // A matching projection hash cannot excuse a mandatory application column
+  // omitted from the actual insert projection. Defaults are not inferred.
+  const systemColumns=['ROWID','CREATORID','CREATEDTIME','MODIFIEDTIME'];
+  if(!Array.isArray(fields)||new Set(fields).size!==fields.length
+   ||columns.some(x=>typeof x.is_mandatory!=='boolean')
+   ||!fields.every(k=>columns.some(x=>x.column_name===k))
+   ||columns.some(x=>x.is_mandatory===true&&!systemColumns.includes(x.column_name)&&!fields.includes(x.column_name))
+   ||descriptor.projectionSha256!==sha({projection:fields}))stop();
+  if(role==='eventReceipts'){
+   const attempt=columns.find(x=>x.column_name==='ATTEMPT_COUNT');
+   if(!fields.includes('ATTEMPT_COUNT')||attempt?.data_type!=='bigint'||attempt.is_mandatory!==true
+    ||!Number.isSafeInteger(attempt.max_length)||attempt.max_length<1)stop();
+  }
   for(const name of role==='reportRuns'?['ReportPayloadJson']:['EVENT_DATA_JSON']){
    if(columns.find(x=>x.column_name===name)?.data_type!=='encrypted text')stop();
   }

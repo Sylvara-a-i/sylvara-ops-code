@@ -2,7 +2,8 @@
 const assert=require('node:assert/strict'),crypto=require('node:crypto'),https=require('node:https'),http=require('node:http');
 const {Writable,PassThrough}=require('node:stream');
 const sha=x=>crypto.createHash('sha256').update(x).digest('hex');
-function fixture({deferResponses=false,principalData,principalBody,principalStreamFailure=false,principalChunks,principalPrematureClose=false,credentialType,storageResponseTransform}={}){
+const schema=require('./report-storage-schema-fixture');
+function fixture({deferResponses=false,principalData,principalBody,principalStreamFailure=false,principalChunks,principalPrematureClose=false,credentialType,storageResponseTransform,storageSchema=false}={}){
  let at=1800000000000;const rows=new Map(),receipts=new Map(),requests=[],principals=[],created=[];let sequence=0,authDelay=null,mode='normal',clientCalls=0;
  const binding={schemaVersion:1,enabled:true,environment:'development',sourceRevision:'a'.repeat(40),projectId:'123456789',
   controlHost:'synthetic.invalid',tableId:'123456788',nonce:'c'.repeat(32),verifiedAt:at-1,expiresAt:at+60000,timeoutMs:1000};
@@ -46,17 +47,21 @@ function fixture({deferResponses=false,principalData,principalBody,principalStre
     else if(path==='/project-user/current')data=principalData === undefined ? {user_id:'987654321',status:'ACTIVE',role_details:{role_name:'App Administrator',role_id:'987654320'},email_id:'private-unused@example.invalid'} : principalData;
     else if(['/table/RevenueDeskEventReceipts/row','/table/123456787/row'].includes(path)){
      assert.equal(payload.length,1);const row=payload[0];
-     if(receipts.has(row.EVENT_KEY)){status=409;data={error_code:'DUPLICATE_VALUE'};}
+     if(storageSchema&&schema.missingMandatory(row,'eventReceipts').length){status=400;data={error_code:'INVALID_DATA'};}
+     else if(receipts.has(row.EVENT_KEY)){status=409;data={error_code:'DUPLICATE_VALUE'};}
      else {row.ROWID=String(++sequence);row.CREATORID='987654321';
-      if(mode==='admission_representation'){row.RECEIPT_VERSION='1';row.RECEIVED_AT='2027-01-15 08:00:00';row.PROCESSED_AT=row.RECEIVED_AT;}
-      receipts.set(row.EVENT_KEY,structuredClone(row));data=[row];}
+      if(mode==='admission_representation'){row.RECEIPT_VERSION='1';row.ATTEMPT_COUNT='0';row.RECEIVED_AT='2027-01-15 08:00:00';row.PROCESSED_AT=row.RECEIVED_AT;}
+      const stored=storageSchema?schema.withNullColumns(row,'eventReceipts'):row;
+      receipts.set(row.EVENT_KEY,structuredClone(stored));data=[stored];}
      if(mode==='admission_stall')return;
      if(mode==='admission_lost'){request.destroy(new Error('synthetic ambiguous admission'));return;}
      if(mode==='admission_conflict')receipts.get(row.EVENT_KEY).EVENT_DATA_JSON='{}';
     }
     else {assert.ok(['/table/ReportRuns/row','/table/123456788/row'].includes(path));assert.equal(payload.length,1);
-     const row=payload[0];if(rows.has(row.IdempotencyKey)){status=409;data={error_code:'DUPLICATE_VALUE'};}
-     else {row.ROWID=String(++sequence);row.CREATORID='987654321';rows.set(row.IdempotencyKey,structuredClone(row));data=[row];}}
+     const row=payload[0];if(storageSchema&&schema.missingMandatory(row,'reportRuns').length){status=400;data={error_code:'INVALID_DATA'};}
+     else if(rows.has(row.IdempotencyKey)){status=409;data={error_code:'DUPLICATE_VALUE'};}
+     else {row.ROWID=String(++sequence);row.CREATORID='987654321';const stored=storageSchema?schema.withNullColumns(row,'reportRuns'):row;
+      rows.set(row.IdempotencyKey,structuredClone(stored));data=[stored];}}
     if(mode==='lost_insert'&&['/table/ReportRuns/row','/table/123456788/row'].includes(path)){request.destroy(new Error('synthetic response lost after insert'));return;}
     if(storageResponseTransform&&path!=='/project-user/current')storageResponseTransform({path,data,rows,receipts});
     const stream=new PassThrough();stream.statusCode=status;stream.headers={'content-type':'application/json'};
