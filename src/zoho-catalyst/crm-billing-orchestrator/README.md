@@ -4,6 +4,13 @@
 
 This package consumes the terminal free-test report summary and, later, performs one bounded paid operation after explicit acceptance. Billing is not used to start, run, stop, measure, or review the free test. CRM owns the relationship, report summary, human Results Review, and accepted commercial state; Billing owns the resulting customer, catalog, subscription, and subscription status. Zoho Books is deliberately absent.
 
+Outbound CRM/Billing JSON reads keep the configured deadline active through headers,
+bounded stream collection and decoding. Unfinished or oversized responses abort the
+request and cancel the reader; cancellation is best effort and never establishes a
+provider write outcome. An interrupted write requires authoritative reconciliation,
+with no automatic write retry. Existing safe-read retries remain capped at two attempts.
+This source contract does not qualify an installed transport or authorize paid execution.
+
 ## Public Contract
 
 | Action | Required authoritative CRM state | Bounded outcome |

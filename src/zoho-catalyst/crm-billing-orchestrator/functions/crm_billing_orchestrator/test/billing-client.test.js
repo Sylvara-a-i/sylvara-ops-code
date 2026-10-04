@@ -17,6 +17,45 @@ const customerId = "200000000000001";
 const subscriptionId = "300000000000001";
 const reference = `syl-paid-${"c".repeat(32)}`;
 
+test("Billing stalled read bodies retain the two-attempt read ceiling", async () => {
+  const config = testConfig({ OUTBOUND_TIMEOUT_MS: "250" });
+  let cancelled = 0;
+  const stalled = () => new Response(new ReadableStream({
+    pull() { return new Promise(() => {}); },
+    cancel() { cancelled += 1; },
+  }));
+  const calls = [];
+  const client = clientFor(config, [stalled(), stalled()], calls);
+  await assert.rejects(client.getPlan(config.paidPlanCodeMap["Growth::Monthly"]), error =>
+    error.publicCode === "billing_dependency_failed" && error.ambiguous === false);
+  assert.equal(calls.length, 2);
+  assert.equal(cancelled, 2);
+  assert.ok(calls.every(call => call.options.method === "GET" && call.options.signal.aborted));
+});
+
+test("Billing stalled create acknowledgment dispatches once and retains unresolved reconciliation", async () => {
+  const config = testConfig({ OUTBOUND_TIMEOUT_MS: "250" });
+  let cancelled = 0;
+  const stalled = new Response(new ReadableStream({
+    pull() { return new Promise(() => {}); },
+    cancel() { cancelled += 1; },
+  }), { status: 201 });
+  const calls = [];
+  const client = clientFor(config, [
+    ...catalogResponses(config), jsonResponse(200, subscriptionPage([])),
+    stalled, jsonResponse(200, subscriptionPage([])),
+  ], calls);
+  await assert.rejects(client.ensurePaidSubscription({
+    customerId, deterministicReference: reference,
+    selectedPlanCode: config.paidPlanCodeMap["Growth::Monthly"],
+    commercialTerms: approvedTerms("Growth", "Monthly"), subscriptionStartDate: "2026-09-01",
+  }), error => error.ambiguous === true && error.publicCode === "reconciliation_required");
+  const writes = calls.filter(call => call.options.method === "POST");
+  assert.equal(writes.length, 1); assert.equal(cancelled, 1);
+  assert.equal(writes[0].options.signal.aborted, true);
+  assert.equal(calls.at(-1).options.method, "GET");
+});
+
 function approvedTerms(planName, billingFrequency) {
   const values = SYNTHETIC_COMMERCIAL_TERMS.plans[`${planName}::${billingFrequency}`];
   return values ? { plan: planName, billingFrequency, ...values } : null;
