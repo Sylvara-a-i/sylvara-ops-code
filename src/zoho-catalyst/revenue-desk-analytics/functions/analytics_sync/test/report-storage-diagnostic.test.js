@@ -1,6 +1,16 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
 const {createStorageDiagnostic,recordStorageDiagnostic,storageDiagnosticError,storageFailureDiagnostic}=require('../lib/report-storage-diagnostic');
+const {recordStorageProviderResult}=require('../lib/report-storage-diagnostic');
+test('provider diagnostic projects only bounded status and exact own data-property code',()=>{
+ const tracker=createStorageDiagnostic();let accessed=false;
+ recordStorageProviderResult(tracker,409,{code:'DUPLICATE_VALUE',message:'synthetic-private-message'});
+ let s=storageFailureDiagnostic(storageDiagnosticError(tracker));assert.equal(s.httpStatus,409);assert.equal(s.providerCode,'duplicate_value');assert.equal(JSON.stringify(s).includes('synthetic-private'),false);
+ recordStorageProviderResult(tracker,400,{code:'INVALID_DATA'});s=storageFailureDiagnostic(storageDiagnosticError(tracker));assert.equal(s.providerCode,'invalid_data');
+ recordStorageProviderResult(tracker,600,{get code(){accessed=true;throw Error('private');}});assert.equal(accessed,false);
+ s=storageFailureDiagnostic(storageDiagnosticError(tracker));assert.equal(Object.hasOwn(s,'httpStatus'),false);assert.equal(s.providerCode,'unknown');
+ recordStorageProviderResult(tracker,403,{code:'PRIVATE_BODY'});assert.equal(storageFailureDiagnostic(storageDiagnosticError(tracker)).providerCode,'other');
+});
 test('only issued errors expose immutable closed snapshots without inspecting arbitrary properties',()=>{
  const tracker=createStorageDiagnostic();recordStorageDiagnostic(tracker,'authenticate_enter','admission_insert','attempted');
  const error=storageDiagnosticError(tracker),snapshot=storageFailureDiagnostic(error);

@@ -2,7 +2,7 @@
 const {Readable}=require('node:stream');
 const path=require('node:path');
 const {performance}=require('node:perf_hooks');
-const {recordStorageDiagnostic}=require('./report-storage-diagnostic');
+const {recordStorageDiagnostic,recordStorageProviderResult}=require('./report-storage-diagnostic');
 // Structural observations contain only closed types/presence flags, never provider values.
 const structureType=value=>value===undefined?'absent':value===null?'null':Array.isArray(value)?'array':typeof value;
 const has=(value,key)=>value!==null&&typeof value==='object'&&Object.hasOwn(value,key);
@@ -41,7 +41,7 @@ function sdkClient(app){
  * Same managed runtime principal; no credential extraction or SDK mutation.
  * Every request owns an actual deadline/cancellation, with bounded response.
  */
-function createReportRunTransport({app,timeoutMs=3000,createClient=sdkClient,storageCapability=null,storageOperationKey=null,storageAssertActive=null,storageSourceRevision=null,storageBindingSha256=null,storageDiagnostic=null}={}){
+function createReportRunTransport({app,timeoutMs=3000,createClient=sdkClient,storageCapability=null,storageOperationKey=null,storageAssertActive=null,storageSourceRevision=null,storageBindingSha256=null,storageDiagnostic=null,storageProviderDiagnostics=false}={}){
  recordStorageDiagnostic(storageDiagnostic,'transport_construct');
  if(String(process.env.ZC_SECURE||'').toLowerCase()==='override')recordStorageDiagnostic(storageDiagnostic,'secure_override');
  if(typeof app?.authenticateRequest!=='function'||!Number.isSafeInteger(timeoutMs)
@@ -92,7 +92,7 @@ function createReportRunTransport({app,timeoutMs=3000,createClient=sdkClient,sto
    request.once('close',()=>requests.delete(request));
    // Applies to error responses too, which SDK 3.4.0 otherwise buffers itself.
    request.once('response',stream=>{
-    responseStatus=stream.statusCode;observe('response_received','responses');trace({event:'response',operation:endpoint.endsWith('/row')?'insert':'read',status:responseStatus});
+    responseStatus=stream.statusCode;if(storageProviderDiagnostics)recordStorageProviderResult(storageDiagnostic,responseStatus,undefined,operation);observe('response_received','responses');trace({event:'response',operation:endpoint.endsWith('/row')?'insert':'read',status:responseStatus});
     responseStream=stream;streams.add(stream);let total=0,chunks=0,ended=false;const parts=[];
     stream.on('data',chunk=>{if(++chunks>128||(total+=Buffer.byteLength(chunk))>65536){
      principalFailure('size');rejectBody(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'));
@@ -124,7 +124,8 @@ function createReportRunTransport({app,timeoutMs=3000,createClient=sdkClient,sto
     return Object.freeze({userId:String(p.user_id||''),roleId:String(p.role_details?.role_id||''),roleName:p.role_details?.role_name,status:p.status});
    }
    if(!Array.isArray(result?.data))held();trace({event:'outcome',operation:endpoint.endsWith('/row')?'insert':'read',accepted:true,duplicate:false});return result.data;
-  }catch{failed=true;
+  }catch(error){failed=true;
+   if(storageProviderDiagnostics)recordStorageProviderResult(storageDiagnostic,responseStatus,error,operation);
    // Diagnostic observes only a documented duplicate code, never provider text.
    if(typeof options.trace==='function'&&responseStatus!==undefined){try{
     const raw=await Promise.race([responseBody,deadline]);

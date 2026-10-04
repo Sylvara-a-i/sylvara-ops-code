@@ -27,7 +27,7 @@ function fixture({deferResponses=false,principalData,principalBody,principalStre
   const receiptKey=/EVENT_KEY = '([^']+)'/.exec(sql)?.[1];
   if(receiptKey)return receipts.has(receiptKey)?[{RevenueDeskEventReceipts:structuredClone(receipts.get(receiptKey))}]:[];
   const key=/IdempotencyKey = '([^']+)'/.exec(sql)?.[1];
-  if(key)return rows.has(key)?[{ReportRuns:structuredClone(rows.get(key))}]:[];
+  if(key)return [...rows.values()].filter(r=>r.IdempotencyKey===key).slice(0,2).map(r=>({ReportRuns:structuredClone(r)}));
   const prefix=/IdempotencyKey LIKE '([^']+)%'/.exec(sql)?.[1];
   return [...rows.values()].filter(r=>r.IdempotencyKey.startsWith(prefix)).sort((a,b)=>b.RD_REPORT_VERSION-a.RD_REPORT_VERSION).slice(0,2).map(r=>({ReportRuns:structuredClone(r)}));
  }
@@ -58,10 +58,10 @@ function fixture({deferResponses=false,principalData,principalBody,principalStre
      if(mode==='admission_conflict')receipts.get(row.EVENT_KEY).EVENT_DATA_JSON='{}';
     }
     else {assert.ok(['/table/ReportRuns/row','/table/123456788/row'].includes(path));assert.equal(payload.length,1);
-     const row=payload[0];if(storageSchema&&schema.missingMandatory(row,'reportRuns').length){status=400;data={error_code:'INVALID_DATA'};}
-     else if(rows.has(row.IdempotencyKey)){status=409;data={error_code:'DUPLICATE_VALUE'};}
+     const row=payload[0];if(mode==='report_invalid_data'||storageSchema&&schema.missingMandatory(row,'reportRuns').length){status=400;data={error_code:'INVALID_DATA'};}
+     else if(rows.has(row.IdempotencyKey)&&mode!=='uniqueness_broken'){status=409;data={error_code:'DUPLICATE_VALUE'};}
      else {row.ROWID=String(++sequence);row.CREATORID='987654321';const stored=storageSchema?schema.withNullColumns(row,'reportRuns'):row;
-      rows.set(row.IdempotencyKey,structuredClone(stored));data=[stored];}}
+      rows.set(mode==='uniqueness_broken'&&rows.has(row.IdempotencyKey)?row.ROWID:row.IdempotencyKey,structuredClone(stored));data=[stored];}}
     if(mode==='lost_insert'&&['/table/ReportRuns/row','/table/123456788/row'].includes(path)){request.destroy(new Error('synthetic response lost after insert'));return;}
     if(storageResponseTransform&&path!=='/project-user/current')storageResponseTransform({path,data,rows,receipts});
     const stream=new PassThrough();stream.statusCode=status;stream.headers={'content-type':'application/json'};
