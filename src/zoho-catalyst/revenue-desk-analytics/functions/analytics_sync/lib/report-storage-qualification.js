@@ -86,7 +86,7 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
       sourceRevision:b.sourceRevision,capabilitySha256,bindingSha256:pin});
      const receipt={EVENT_KEY:eventKey,RECEIPT_KIND:'report_storage_admission',STATUS:'Completed',
       EVENT_TYPE:'storage_qualification',EVENT_DATA_JSON:payload,PAYLOAD_FINGERPRINT:sha(payload),
-      RECEIPT_VERSION:1,SOURCE_REVISION:b.sourceRevision,SOURCE_ENVIRONMENT:'development',
+      RECEIPT_VERSION:1,ATTEMPT_COUNT:0,SOURCE_REVISION:b.sourceRevision,SOURCE_ENVIRONMENT:'development',
       RECEIVED_AT:new Date(admission()).toISOString(),PROCESSED_AT:new Date(admission()).toISOString()};
      budget.consume('admission_write');const accepted=await io.insertAdmission(receipt,options);admission();
      if(!Array.isArray(accepted)||accepted.length!==1)held();
@@ -96,7 +96,10 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
      projection(ack,'eventReceipts');projection(row,'eventReceipts');
      if(String(row.ROWID)!==String(ack.ROWID))held();
      for(const [field,value] of Object.entries(receipt)){
-      if(field==='RECEIPT_VERSION'){if(!/^(?:1)$/.test(String(row[field]))||!/^(?:1)$/.test(String(ack[field])))held();}
+      if(field==='RECEIPT_VERSION'||field==='ATTEMPT_COUNT'){
+       // Only the exact numeric value or its canonical bigint string is allowed.
+       if(![value,String(value)].includes(row[field])||![value,String(value)].includes(ack[field]))held();
+      }
       else if(field==='RECEIVED_AT'||field==='PROCESSED_AT'){
        // Provider formatting is not an expiry authority; independent readback
        // must retain exactly the nonempty bounded timestamp acknowledged.

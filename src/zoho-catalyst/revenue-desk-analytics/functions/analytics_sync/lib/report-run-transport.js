@@ -142,9 +142,10 @@ function createReportRunTransport({app,timeoutMs=3000,createClient=sdkClient,sto
   async insertAdmission(row,options){
    if(storageCapability&&row?.EVENT_KEY!==`report-storage:${storageOperationKey}`)held();
    const fields=['EVENT_KEY','RECEIPT_KIND','STATUS','EVENT_TYPE','EVENT_DATA_JSON','PAYLOAD_FINGERPRINT',
-    'RECEIPT_VERSION','SOURCE_REVISION','SOURCE_ENVIRONMENT','RECEIVED_AT','PROCESSED_AT'];
+    'RECEIPT_VERSION','ATTEMPT_COUNT','SOURCE_REVISION','SOURCE_ENVIRONMENT','RECEIVED_AT','PROCESSED_AT'];
    if(!row||Object.keys(row).sort().join(',')!==fields.sort().join(',')||row.EVENT_TYPE!=='storage_qualification'
     ||row.SOURCE_ENVIRONMENT!=='development'||!/^([a-f0-9]{64})$/.test(row.PAYLOAD_FINGERPRINT||'')
+    ||row.ATTEMPT_COUNT!==0
     ||![row.RECEIVED_AT,row.PROCESSED_AT].every(x=>typeof x==='string'&&Number.isFinite(Date.parse(x)))
     ||!/^report-storage:[a-f0-9]{64}$/.test(row?.EVENT_KEY||'')||row.RECEIPT_KIND!=='report_storage_admission'
     ||row.STATUS!=='Completed'||row.RECEIPT_VERSION!==1||!/^([a-f0-9]{40})$/.test(row.SOURCE_REVISION||'')

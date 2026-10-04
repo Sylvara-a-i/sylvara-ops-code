@@ -10,7 +10,14 @@ const digest=v=>crypto.createHash('sha256').update(canonicalJson({projection:v})
 const REPORT_FIELDS=Object.freeze([...Object.keys(reportRunProjection({kind:'report_attempt_v1',identity:{clientId:'synthetic',deploymentId:'synthetic',periodStart:'1970-01-01',periodEnd:'1970-01-01'}})),
  'IdempotencyKey','ReportRunId','ReportPayloadJson','RD_REPORT_VERSION'].sort());
 const RECEIPT_FIELDS=Object.freeze(['EVENT_KEY','RECEIPT_KIND','STATUS','EVENT_TYPE','EVENT_DATA_JSON','PAYLOAD_FINGERPRINT',
- 'RECEIPT_VERSION','SOURCE_REVISION','SOURCE_ENVIRONMENT','RECEIVED_AT','PROCESSED_AT'].sort());
+ 'RECEIPT_VERSION','ATTEMPT_COUNT','SOURCE_REVISION','SOURCE_ENVIRONMENT','RECEIVED_AT','PROCESSED_AT'].sort());
+// Provider responses may include omitted optional schema columns as null. This
+// diagnostic never owns non-null values in these columns or arbitrary extras.
+const NULL_COLUMNS=Object.freeze({
+ reportRuns:Object.freeze(['RecipientSnapshotJson','GeneratedAt','ApprovedAt','ApprovedByRef','SentAt','SourceMetricHash','ErrorMessage']),
+ eventReceipts:Object.freeze(['CALL_KEY','CORRELATION_ID','DEPLOYMENT_ID','CONFIGURATION_VERSION_ID','ROUTE_FINGERPRINT',
+  'ROUTE_READBACK_FINGERPRINT','RELATED_EVENT_KEY','LEASE_TOKEN','LEASE_EXPIRES_AT','JOB_REFERENCE','ENQUEUED_AT','NEXT_ATTEMPT_AT','LAST_ERROR_CODE'])
+});
 function held(){throw Object.assign(new Error('REPORT_STORAGE_QUALIFICATION_HELD'),{code:'REPORT_STORAGE_QUALIFICATION_HELD'});}
 /** Protected owner-reviewed deployment capability; not named token identity or provider least privilege.
  * Evidence hashes refer to independently retained metadata, not self-proving provider permission.
@@ -69,9 +76,11 @@ function validateReportInsert(row){
 }
 function assertIssuedCapability(c){if(!issued.has(c))held();}
 function validateStoredProjection(row,role){
+ if(!Object.hasOwn(NULL_COLUMNS,role))held();
  const fields=role==='reportRuns'?REPORT_FIELDS:RECEIPT_FIELDS;
  if(!row||typeof row!=='object'||Array.isArray(row)||!fields.every(k=>Object.hasOwn(row,k))
   ||!Object.hasOwn(row,'ROWID')||!Object.hasOwn(row,'CREATORID')
-  ||Object.keys(row).some(k=>!fields.includes(k)&&!['ROWID','CREATORID','MODIFIEDBY','CREATEDTIME','MODIFIEDTIME'].includes(k)))held();
+  ||Object.keys(row).some(k=>!fields.includes(k)&&!['ROWID','CREATORID','MODIFIEDBY','CREATEDTIME','MODIFIEDTIME'].includes(k)
+   &&(!NULL_COLUMNS[role].includes(k)||row[k]!==null)))held();
 }
 module.exports={assertIssuedCapability,validateStoredProjection,validateStorageCapability,validateReportInsert,REPORT_FIELDS,RECEIPT_FIELDS,projectionDigest:digest};
