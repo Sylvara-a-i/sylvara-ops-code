@@ -80,6 +80,34 @@ function reportPayloads(contract) {
   }));
 }
 
+// Native UI labels are assembly instructions, never invented createReport tokens.
+function reportNativeAssembly(contract) {
+  const report = contract.reports?.operations_tests_ending_soon;
+  const assembly = report?.native_assembly;
+  const criterion = assembly?.fixed_criteria?.[0];
+  assert(assembly?.mode === 'native-required'
+    && assembly.api_payload_installs_fixed_criterion === false
+    && Array.isArray(assembly.fixed_criteria)
+    && assembly.fixed_criteria.length === 1
+    && criterion
+    && criterion.column === 'EXPIRES_AT'
+    && criterion.surface === 'Filters shelf'
+    && criterion.type === 'Relative'
+    && criterion.unit === 'Hour'
+    && criterion.selection === 'Next48Hours'
+    && criterion.items === 'Include Items'
+    && criterion.window_hours === 48,
+  'Tests Ending Soon requires the exact native fixed 48-hour criterion.');
+  assert(assembly.acceptance?.independent_saved_reload_required === true
+    && assembly.acceptance.expected_fixed_criteria_count === 4
+    && assembly.acceptance.preserve_api_filters_and_axes === true
+    && typeof assembly.acceptance.optional_expiry_selector === 'string'
+    && typeof assembly.acceptance.populated_validation_required === 'string'
+    && typeof assembly.acceptance.approval_boundary === 'string',
+  'Tests Ending Soon requires native assembly acceptance metadata.');
+  return { operations_tests_ending_soon: assembly };
+}
+
 function replaceBindingKey(template, placeholder, key) {
   assert(typeof template === 'string' && template.includes(placeholder),
     `Analytics private binding template is missing ${placeholder}.`);
@@ -230,6 +258,7 @@ function renderContract(contract = readContract(), dashboardContract = readDashb
         queryTableName: view.physical_view_name,
         sqlQuery: view.sql,
       }])),
+    report_native_assembly: reportNativeAssembly(contract),
     report_payloads: reportPayloads(contract),
   });
 }

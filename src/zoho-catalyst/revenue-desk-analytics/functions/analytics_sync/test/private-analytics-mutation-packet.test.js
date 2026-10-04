@@ -773,6 +773,10 @@ test("pins the reviewed model, dashboard, rendered contract, and phase rule dige
 
 test("historical contract digests cannot carry old or freshly reissued approval across contract changes", () => {
   const historicalDigests = [{
+    analyticsModel: "db7be115f9be717e696c54ef5a358242351306d812639f1e735f6580df19fe02",
+    dashboard: "3b98fd48f203dc86f8e4bab5a546878ed5f544c28cbdc7004444e52c12941a2c",
+    rendered: "b8e7f329c1848b3e49a3e40837e8428c099882d448cb6db947a80aa377b94016",
+  }, {
     analyticsModel: "4987603d86ee9b3c6b441fecf734709a283e73ce7f06f3334a37a6008fa93e47",
     rendered: "b2b48c8cac2ac96b982316c826f06191761a06c07b493dd3f0db53f1e7548dad",
   }, {

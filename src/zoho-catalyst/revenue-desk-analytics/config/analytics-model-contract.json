@@ -314,7 +314,30 @@
     "operations_tests_ending_soon": {
       "dashboard": "operations", "widget_title": "Tests Ending Soon", "private_view_id_binding": "PRIVATE_ANALYTICS_REPORT_VIEW_IDS_JSON.operations_tests_ending_soon", "filter_profile": "free_test",
       "create_config": { "baseTableName": "RevenueDeskAnalyticsDeploymentFacts", "title": "Operations - Tests Ending Soon", "reportType": "summary", "axisColumns": [{ "type": "groupBy", "columnName": "DEPLOYMENT_KEY", "operation": "actual" }, { "type": "groupBy", "columnName": "DEPLOYMENT_STATUS", "operation": "actual" }, { "type": "groupBy", "columnName": "HANDLED_COUNT", "operation": "dimension" }, { "type": "groupBy", "columnName": "CALL_LIMIT", "operation": "dimension" }, { "type": "groupBy", "columnName": "ACTUAL_START_AT", "operation": "dateTime" }, { "type": "groupBy", "columnName": "EXPIRES_AT", "operation": "dateTime" }, { "type": "summarize", "columnName": "RECORD_KEY", "operation": "distinctCount" }], "extra_filters": [{ "columnName": "DEPLOYMENT_STATUS", "operation": "actual", "filterType": "individualValues", "values": ["live"], "exclude": "false" }], "extra_user_filters": [{ "columnName": "EXPIRES_AT", "operation": "relative" }] },
-      "null_behavior": "EXPIRES_AT is mandatory. Browser assembly must set the Expiry Window control to the next 48 hours; an unset window blocks dashboard acceptance."
+      "native_assembly": {
+        "mode": "native-required",
+        "api_payload_installs_fixed_criterion": false,
+        "fixed_criteria": [
+          {
+            "column": "EXPIRES_AT",
+            "surface": "Filters shelf",
+            "type": "Relative",
+            "unit": "Hour",
+            "selection": "Next48Hours",
+            "items": "Include Items",
+            "window_hours": 48
+          }
+        ],
+        "acceptance": {
+          "independent_saved_reload_required": true,
+          "expected_fixed_criteria_count": 4,
+          "preserve_api_filters_and_axes": true,
+          "optional_expiry_selector": "May remain unset or narrow the fixed criterion; cannot broaden or replace it.",
+          "populated_validation_required": "Verify before/at/after the rolling 48-hour boundary and timezone behavior with authorized synthetic populated data. Empty-table reload proves persistence only.",
+          "approval_boundary": "Changed source and assembly metadata require fresh exact-revision private packet and approval; prior approvals do not transfer."
+        }
+      },
+      "null_behavior": "EXPIRES_AT is mandatory. Native Filters shelf EXPIRES_AT / Relative / Hour / Next48Hours / Include Items is required and must persist after independent saved reload. An unset optional Expiry Window selector is allowed only with that fixed criterion; missing fixed criterion blocks dashboard acceptance."
     },
     "operations_daily_call_outcomes": {
       "dashboard": "operations", "widget_title": "Daily Call Outcomes", "private_view_id_binding": "PRIVATE_ANALYTICS_REPORT_VIEW_IDS_JSON.operations_daily_call_outcomes", "filter_profile": "free_test",
