@@ -23,7 +23,7 @@ async function fixture(){
  const deployment=await loadDeployment(f.runtime.store,row,f.runtime.config);
  const config=await f.runtime.store.unique(f.runtime.config.tables.CONFIGURATION_VERSION_TABLE,'CONFIGURATION_VERSION_ID',deployment.configurationVersionId);
  const b={...f.identity,dealId:deployment.crmDealId,accountId:'190000002',contactId:'190000003',configurationVersion:deployment.configurationVersion,
-  configurationVersionId:deployment.configurationVersionId,originalLeadId:'190000004',intakeSubmissionId:'intake:test'};
+  configurationVersionId:deployment.configurationVersionId,originalLeadId:'19000000004',intakeSubmissionId:'intake:test'};
  const native={originalLeadId:b.originalLeadId,journeyId:b.intakeSubmissionId,accountId:b.accountId,contactId:b.contactId,dealId:b.dealId,convertedAt:'2026-08-20T12:00:00.000Z'};
  const actor={kind:'internal_controller',identity:'operator_'+sha('actor')},worker={kind:'terminal_worker',identity:'operator_'+sha('worker')};
  const authorityDigest=sha('authority'),proof={kind:'report_delivery_attestation_v1',phase:'approved',identity:b,authorityDigest,
@@ -114,10 +114,12 @@ test('default managed SDK reader composition constructs without credentials, pro
 
 // Join production readers and orchestration; only provider transport and sending
 // are synthetic. Every WorkDrive read parses the actual JSON:API/binary envelope.
-async function deliveryIntegration({unknownSend=false,unknownProjection=false}={}){
+async function deliveryIntegration({unknownSend=false,unknownProjection=false,transportFactory=null}={}){
  const x=await fixture();let storageReads=0,sends=0,puts=0,acceptance=null;
  const nativeReader=x.options.readNativeConversion;
  x.options.readNativeConversion=async(...args)=>({...await nativeReader(...args),observedAt:x.f.now()});
+ const transport=transportFactory===null?null:await transportFactory(x);
+ if(transport)x.options.crm=transport.crm;
  const readers=createReportDeliveryReaders(x.options);
  const workdrive=require('../lib/workdrive-client').createWorkDriveClient({
   apiOrigin:'https://www.zohoapis.com',downloadOrigin:'https://download.zoho.com',timeoutMs:1000,now:x.f.now,
@@ -145,7 +147,7 @@ async function deliveryIntegration({unknownSend=false,unknownProjection=false}={
   reportRunStore:x.d.runs,workdrive,readDestinationBinding:x.d.readDestinationBinding,now:x.f.now});
  const control=require('../lib/report-delivery-control').createReportDeliveryControl({store:x.d.runs,
   readSnapshot:readers.readSnapshot,authorize:readers.authorize,readSummary,now:x.f.now,autoDeliveryEnabled:true,
-  sender:{async sendSummary({operationKey,snapshot,bytes}){
+  sender:transport?.sender||{async sendSummary({operationKey,snapshot,bytes}){
    sends++;assert.equal(crypto.createHash('sha256').update(bytes).digest('hex'),x.pair.manifest.artifacts.summary.documentSha256);
    acceptance={accepted:true,operationKey,documentSha256:snapshot.report.summary.documentSha256,
     recipientVerificationDigest:snapshot.recipient.verificationDigest,messageReferenceDigest:sha('synthetic acceptance'),acceptedAt:x.f.now()};
@@ -168,7 +170,7 @@ async function deliveryIntegration({unknownSend=false,unknownProjection=false}={
  const handlers=require('../lib/report-delivery-handlers').createReportDeliveryHandlers({control,
   readSnapshot:readers.readSnapshot,readPrivateView:readers.readPrivateView,projectReport:project,systemActor:x.worker,now:x.f.now,
   readDealForScope:async()=>({...x.f.identity,dealId:x.b.dealId,testStatus:'Completed'})});
- return {...x,handlers,readers,readSummary,get sends(){return sends;},get puts(){return puts;},get storageReads(){return storageReads;}};
+ return {...x,handlers,readers,readSummary,transport,get sends(){return sends;},get puts(){return puts;},get storageReads(){return storageReads;}};
 }
 
 test('integrated pair receipts, advancing WorkDrive reads and CRM projection deliver once across resume',async()=>{
@@ -213,4 +215,67 @@ test('integrated expired authority and changed source cannot resume an ambiguous
   assert.equal((await x.handlers.afterPair(x.f.identity,x.pair)).status,'held');assert.equal(x.sends,1);
   assert.equal(x.records.deal.Test_Report_Delivery_Status,'Held');assert.equal(x.d.uploads.length,2);
  }
+});
+
+const {createCrmReportDeliveryTransport}=require('./helpers/crm-report-delivery-transport-fixture');
+const transportFixture=options=>deliveryIntegration({transportFactory:x=>createCrmReportDeliveryTransport(x,options)});
+
+test('actual field-selected CRM readers and managed mail recover a lost send through paginated exact email detail once',async()=>{
+ const x=await transportFixture({outcome:'unknown_send'}),t=x.transport;
+ const records=await t.crm.getReportRecords(x.b.dealId),request=await t.crm.getReportRequestEvidence(x.b.originalLeadId);
+ assert.equal(records.contact.Email,x.proof.recipient.address);assert.equal(request.Free_Test_Contact_Consent,true);
+ assert.doesNotMatch(JSON.stringify({records,request}),/unrequested_private|synthetic must be discarded|\$layout/);
+ assert.equal((await x.handlers.afterPair(x.f.identity,x.pair)).status,'delivery_reconciliation_required');
+ assert.equal(t.uploads,1);assert.equal(t.sends,1);assert.equal(x.records.deal.Test_Report_Delivery_Status,'Held');
+ x.f.runtime.clock.value+=1000;
+ assert.deepEqual(await x.handlers.afterPair(x.f.identity,x.pair),{status:'provider_accepted',crmProjectionStatus:'verified'});
+ assert.equal(t.details,1);assert.equal(t.uploads,1);assert.equal(t.sends,1);assert.equal(x.puts,2);
+ assert.equal(crypto.createHash('sha256').update(t.file).digest('hex'),x.pair.manifest.artifacts.summary.documentSha256);
+ assert.ok(t.calls.some(c=>c.query==='type=sent_from_crm&index=synthetic_next'));
+ assert.ok(t.connections.includes('synthetic_report_read')&&t.connections.includes('synthetic_report_mail'));
+ assert.equal((await x.handlers.afterPair(x.f.identity,x.pair)).status,'provider_accepted');
+ assert.equal(t.uploads,1);assert.equal(t.sends,1);assert.equal(t.details,1);
+});
+
+test('real CRM reader rejects partial consent cohorts and omitted optout before mail upload/send',async()=>{
+ for(const change of [t=>{t.state.requestInfo.more_records=true;t.state.requestInfo.next_page_token='synthetic_next';},
+  t=>{t.state.requestInfo.more_records=false;t.state.requestInfo.next_page_token='contradictory';},
+  t=>{t.state.readFault='missing_optout';}]){
+  const x=await transportFixture(),t=x.transport;change(t);
+  assert.equal((await x.handlers.afterPair(x.f.identity,x.pair)).status,'held');assert.equal(x.puts,0);
+  assert.equal(t.uploads,0);assert.equal(t.sends,0);
+  assert.equal([...x.d.rows.values()].filter(r=>r.state.kind==='report_delivery_v1').length,0);
+ }
+});
+
+test('real mail upload ambiguity and incomplete/mismatched email history cannot repeat a consumed delivery',async()=>{
+ for(const [outcome,scan,expected]of [['unknown_upload','exact','delivery_reconciliation_required'],
+  ['unknown_send','truncated','delivery_reconciliation_required'],['unknown_send','wrong_attachment','delivery_reconciliation_required'],
+  ['unknown_send','duplicate','delivery_reconciliation_required'],
+  ['unknown_send','repeated_index','held']]){
+  const x=await transportFixture({outcome,scan}),t=x.transport;
+  assert.equal((await x.handlers.afterPair(x.f.identity,x.pair)).status,'delivery_reconciliation_required');
+  x.f.runtime.clock.value+=1000;
+  assert.equal((await x.handlers.afterPair(x.f.identity,x.pair)).status,expected);
+  assert.equal(t.uploads,1);assert.equal(t.sends,outcome==='unknown_upload'?0:1);
+  assert.equal(x.records.deal.Test_Report_Delivery_Status,'Held');assert.equal(x.puts,1);
+ }
+});
+
+test('managed mail streamed response timeout cancels locally and exact readback resumes without second send',async()=>{
+ const x=await transportFixture({outcome:'timeout_send',timeoutMs:250}),t=x.transport;
+ assert.equal((await x.handlers.afterPair(x.f.identity,x.pair)).status,'delivery_reconciliation_required');
+ assert.equal(t.lateReaderCancelled,true);assert.equal(t.uploads,1);assert.equal(t.sends,1);
+ x.f.runtime.clock.value+=1000;
+ assert.equal((await x.handlers.afterPair(x.f.identity,x.pair)).status,'provider_accepted');
+ assert.equal(t.uploads,1);assert.equal(t.sends,1);assert.equal(t.details,1);
+ assert.equal(x.records.deal.Test_Report_Delivery_Status,'Provider Accepted');
+});
+
+test('managed mail definitive rejection projects Failed and retains the single-send claim on repeated terminal hooks',async()=>{
+ const x=await transportFixture({outcome:'rejected'}),t=x.transport;
+ assert.deepEqual(await x.handlers.afterPair(x.f.identity,x.pair),{status:'provider_rejected',crmProjectionStatus:'verified'});
+ assert.equal(x.records.deal.Test_Report_Delivery_Status,'Failed');assert.equal(t.uploads,1);assert.equal(t.sends,1);
+ assert.deepEqual(await x.handlers.afterPair(x.f.identity,x.pair),{status:'provider_rejected',crmProjectionStatus:'verified'});
+ assert.equal(t.uploads,1);assert.equal(t.sends,1);assert.equal(t.details,0);assert.equal(x.puts,2);
 });
