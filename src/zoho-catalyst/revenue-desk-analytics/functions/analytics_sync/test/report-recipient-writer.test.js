@@ -12,12 +12,12 @@ function fixture(){
  const rows=new Map();let inserts=0,reads=0;
  const b={schemaVersion:1,environment:'development',sourceRevision:'a'.repeat(40),projectId:'123456789',controllerFunctionId:'123456781',workerFunctionId:'123456782',
   verifiedAt:at-1000,expiresAt:at+3600000,attestation:{enabled:true,claimQualification:{mechanism:'unique_insert_successor_v1',status:'qualified',evidenceDigest:sha('claim'),expiresAt:at+3600000},authorityDigest:sha('authority'),crm:{}},delivery:{enabled:false},reporting:{enabled:false}};
- const proof={authorizedActor:actor.identity,identity:{clientId:'client',deploymentId:'deployment',dealId:'190000001',accountId:'190000002',contactId:'190000003',configurationVersion:'form2cfgv1:1:'+ 'b'.repeat(40),configurationVersionId:'configuration',originalLeadId:'190000004',intakeSubmissionId:'journey'},
+ const proof={authorizedActor:actor.identity,identity:{clientId:'client',deploymentId:'deployment',dealId:'1900000010',accountId:'1900000020',contactId:'1900000030',configurationVersion:'form2cfgv1:1:'+ 'b'.repeat(40),configurationVersionId:'configuration',originalLeadId:'1900000040',intakeSubmissionId:'journey'},
   recipientEmail:'owner@example.invalid',crmEmailOptOut:false,nativeRelationshipEvidenceSha256:sha('native'),configurationSourceDigest:sha('config'),
   suppression:{status:'provider_enforcement_pending',consentEvidenceDigest:sha('consent'),evidenceDigest:sha('synthetic suppression'),expiresAt:at+3600000}};
  const options={store:{async get(k){return structuredClone(rows.get(k)||null);},async insert(k,state){inserts++;if(!rows.has(k))rows.set(k,{key:k,state:structuredClone(state)});return structuredClone(rows.get(k));}},
   readSetup:async()=>{reads++;return structuredClone(proof);},authorityDigest:b.attestation.authorityDigest,systemActor:workerReportActor(b),now:()=>at,expiresAt:b.expiresAt};
- const command={profile:'report_delivery_v1',action:'attest_recipient',dealId:'190000001',recipientEmail:proof.recipientEmail,confirmed:true};
+ const command={profile:'report_delivery_v1',action:'attest_recipient',dealId:'1900000010',recipientEmail:proof.recipientEmail,confirmed:true};
  return {b,proof,options,command,rows,write:createReportRecipientWriter(options),counts:()=>({inserts,reads})};
 }
 test('unique immutable selection accepts concurrent identical requests and holds conflicting selection without CAS',async()=>{
@@ -58,17 +58,29 @@ test('setup reader validates inactive approval and native lineage without termin
  const cfg=await f.runtime.store.unique(f.runtime.config.tables.CONFIGURATION_VERSION_TABLE,'CONFIGURATION_VERSION_ID',row.ACTIVE_CONFIGURATION_VERSION_ID);
  const label='form2cfgv1:1:'+'b'.repeat(40);cfg.CONFIGURATION_VERSION=label;row.TEST_STATUS='Not Started';row.REPORT_RECONCILIATION_STATUS='NotRequired';
  const config={...f.runtime.config,deploymentMode:'active',operatorIdHash:actor.identity};
- const records={deal:{id:'190000001',Intake_Submission_ID:'journey',Configuration_Version:label,Deployment_Record_ID:row.DEPLOYMENT_ID,Account_Name:{id:'190000002'},Contact_Name:{id:'190000003'}},
-  contact:{id:'190000003',Account_Name:{id:'190000002'},Email:'owner@example.invalid',Email_Opt_Out:false}};
+ const records={deal:{id:'1900000010',Intake_Submission_ID:'journey',Configuration_Version:label,Deployment_Record_ID:row.DEPLOYMENT_ID,Account_Name:{id:'1900000020'},Contact_Name:{id:'1900000030'}},
+  contact:{id:'1900000030',Account_Name:{id:'1900000020'},Email:'owner@example.invalid',Email_Opt_Out:false}};
  const store={unique:async(table)=>table===config.tables.DEPLOYMENT_TABLE?row:cfg};let approvals=0;
- const native={originalLeadId:'190000004',journeyId:'journey',dealId:'190000001',accountId:'190000002',contactId:'190000003',convertedAt:'2026-01-01T00:00:00.000Z'};
+ const native={originalLeadId:'1900000040',journeyId:'journey',dealId:'1900000010',accountId:'1900000020',contactId:'1900000030',convertedAt:'2026-01-01T00:00:00.000Z'};
  const request=require('./helpers/report-recipient-fixture').requestEvidence(native,records.contact.Email);
+ let observed=at;
+ const conversion=require('./helpers/report-recipient-fixture').observedConversion(native,()=>observed++);
  const reader=createReportSetupReader({expiresAt:at+8*24*60*60*1000,qualifyRecipient:require('../lib/report-recipient-preflight').qualifyReportRecipient,config,store,crm:{getReportRecords:async()=>structuredClone(records),getReportRequestEvidence:async()=>structuredClone(request)},now:()=>at,
   staging:{assertApprovalSource:async()=>({configurationStaged:true,priorCoreApproval:{configurationVersionId:label}})},
   core:{async readStagingSource(command,options){approvals++;assert.equal(command.configurationVersionId,label);assert.equal(options.expectedDeploymentId,row.DEPLOYMENT_ID);return {priorApproval:{configurationVersionId:label}};}},
-  sourceReader:{findAssistedLineage:async()=>({originalLeadId:'190000004'})},conversionReader:{readConversion:async()=>({originalLeadId:'190000004',journeyId:'journey',dealId:'190000001',accountId:'190000002',contactId:'190000003',convertedAt:'2026-01-01T00:00:00.000Z'})}});
- const proof=await reader({dealId:'190000001',actor});assert.equal(approvals,1);assert.equal(proof.suppression.status,'provider_enforcement_pending');assert.equal(proof.suppression.expiresAt,at+8*24*60*60*1000);assert.equal(proof.identity.configurationVersion,label);
- records.contact.Account_Name.id='foreign';await assert.rejects(reader({dealId:'190000001',actor}));
+  sourceReader:{findAssistedLineage:async()=>({originalLeadId:'1900000040'})},conversionReader:conversion.reader});
+ const proof=await reader({dealId:'1900000010',actor});assert.equal(approvals,1);assert.equal(proof.suppression.status,'provider_enforcement_pending');assert.equal(proof.suppression.expiresAt,at+8*24*60*60*1000);assert.equal(proof.identity.configurationVersion,label);
+ const options=fixture().options;options.readSetup=reader;options.expiresAt=at+3600000;
+ const writer=createReportRecipientWriter(options);
+ assert.equal((await writer({profile:'report_delivery_v1',action:'attest_recipient',dealId:'1900000010',recipientEmail:records.contact.Email,confirmed:true},{actor})).status,'recipient_attested');
+ assert.equal((await writer({profile:'report_delivery_v1',action:'attest_recipient',dealId:'1900000010',recipientEmail:records.contact.Email,confirmed:true},{actor})).replayed,true);
+ // Mutable consent/address/opt-out drift must still prevent insertion or replay.
+ for(const mutate of [()=>{request.Email_Opt_Out=true;},()=>{records.contact.Email='changed@example.invalid';},()=>{request.Free_Test_Contact_Consent=false;},()=>{conversion.response.data[0].Converted_Contact.id='7000000000009';}]){
+  const savedRequest=structuredClone(request),savedRecords=structuredClone(records),savedNative=structuredClone(conversion.response);mutate();
+  await assert.rejects(writer({profile:'report_delivery_v1',action:'attest_recipient',dealId:'1900000010',recipientEmail:records.contact.Email,confirmed:true},{actor}));
+  Object.assign(request,savedRequest);Object.assign(records,savedRecords);Object.assign(conversion.response,savedNative);
+ }
+ records.contact.Account_Name.id='foreign';await assert.rejects(reader({dealId:'1900000010',actor}));
 });
 
 test('stalled setup/readback and elapsed attempt hold without another insertion',async()=>{

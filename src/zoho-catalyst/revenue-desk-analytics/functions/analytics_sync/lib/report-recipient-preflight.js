@@ -14,6 +14,13 @@ function qualifyReportRecipient({request,contact,native,now}={}){
   const local=x.slice(0,19),localEpoch=Date.parse(local+'.000Z'),epoch=Date.parse(x);
   return Number.isFinite(localEpoch)&&new Date(localEpoch).toISOString()===local+'.000Z'&&Number.isFinite(epoch)?epoch:NaN;
  };
+ // Bind only the immutable native relationship. The conversion reader and
+ // staging validation independently enforce observation chronology/freshness;
+ // a new read's observedAt must not change an otherwise identical selection.
+ const fields=['originalLeadId','journeyId','accountId','contactId','dealId','convertedAt'];
+ if(!native||fields.some(k=>typeof native[k]!=='string'||native[k].trim().length===0)
+  ||new Set([native.originalLeadId,native.accountId,native.contactId,native.dealId]).size!==4)held();
+ const relationship=Object.fromEntries(fields.map(k=>[k,native[k]]));
  const consentAt=time(request?.Free_Test_Contact_Consent_At),submittedAt=time(request?.Free_Test_Request_Submitted_At);
  if(!Number.isSafeInteger(now)||!request||!contact||!native||request.id!==native.originalLeadId
   ||request.Converted__s!==true||request.Intake_Submission_ID!==native.journeyId
@@ -33,7 +40,7 @@ function qualifyReportRecipient({request,contact,native,now}={}){
  const consentEvidenceDigest=sha({originalLeadId:native.originalLeadId,intakeSubmissionId:native.journeyId,
   address:contact.Email,consentAt,submittedAt,consentVersion:request.Free_Test_Contact_Consent_Version,
   intakeVersion:request.Intake_Form_Version,channel:request.Submission_Channel});
- const evidenceDigest=sha({policy:'request_email_preflight_v1',consentEvidenceDigest,native,
+ const evidenceDigest=sha({policy:'request_email_preflight_v1',consentEvidenceDigest,native:relationship,
   leadOptOut:request.Email_Opt_Out,contactOptOut:contact.Email_Opt_Out,
   leadUnsubscribe:[request.Unsubscribed_Mode??null,request.Unsubscribed_Time??null],
   contactUnsubscribe:[contact.Unsubscribed_Mode??null,contact.Unsubscribed_Time??null]});
