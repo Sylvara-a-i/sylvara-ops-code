@@ -25,9 +25,9 @@ const READBACK_RULES_DIGEST_DOMAIN = "sylvara.analytics.readback-rules.v3";
 const CONTAINMENT_RULES_DIGEST_DOMAIN = "sylvara.analytics.containment-rules.v3";
 
 const EXPECTED_CONTRACT_DIGESTS = Object.freeze({
-  analyticsModel: "2e9c44e8e0002b6e08988d53620f3e3f9189901100e41157bd94881ee4ef9be8",
+  analyticsModel: "bcd8020f3130f0d78da5abfdd35a66c57a9113197861980aad91f14fe4d91b05",
   dashboard: "5b0ac8de350da7ae987b0529bda6bb44e7bb7e1e7e884242842266ca846bfea6",
-  rendered: "0ab0e4eb0a06b8ca2150e988b2b1051aad0c59f1974e2728bcdd55bd42098a21",
+  rendered: "a51f89952f73aee54dba8429d292c7b24519eccde6ba9d3d29b84327a72435ac",
 });
 
 const PHASES = Object.freeze({

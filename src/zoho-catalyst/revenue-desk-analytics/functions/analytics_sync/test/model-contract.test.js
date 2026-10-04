@@ -297,12 +297,14 @@ test('rendered freshness contract requires the fail-closed authoritative pre-ren
 
 test('provider description overrides preserve exact approved concise copy and ordinary fallback', () => {
   const expected = {
+    operations_tests_ending_soon: 'Shows Development free tests marked live with a fixed next-48-hours expiry filter. Missing expiry is excluded; optional filters only narrow the window. Populated boundary tests are pending.',
     customer_bookable_evidence: 'Bookable Evidence. Show state with count: available only with complete analysis and a present value. available + 0 is verified zero; not_available + null is Not Available. Never hide/filter state.',
     customer_office_follow_up: 'Office Follow-Up. Show state with count: available only with complete analysis and a present value. available + 0 is verified zero; not_available + null is Not Available. Never hide/filter state.',
     operations_data_freshness: 'Observed watermarks/counts only, never Healthy. Publication or Reconciled labels need a ready complete-scope gate and verified access. Missing, stale, unresolved or mismatched evidence blocks use.',
     customer_data_freshness: 'Observed watermarks/counts only, never Healthy. Publication or Reconciled labels need a ready locked-scope gate and verified access. Missing, stale, unresolved or mismatched evidence blocks use.',
   };
   const rendered = renderContract(model);
+  assert.equal(rendered.report_payloads.operations_tests_ending_soon.description.length, 189);
   for (const [key, report] of Object.entries(model.reports)) {
     assert.equal(rendered.report_payloads[key].description,
       expected[key] ?? `${report.widget_title}. ${report.null_behavior}`);
