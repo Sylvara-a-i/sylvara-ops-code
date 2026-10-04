@@ -22,7 +22,7 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
   let b;try{b=JSON.parse(raw);}catch{held();}
   if(!exact(b,['schemaVersion','enabled','environment','sourceRevision','projectId','controlHost','tableId','nonce',
    'capability','verifiedAt','expiresAt','timeoutMs','singleAdmittedInvocation'])
-   ||![3,4].includes(b.schemaVersion)||b.enabled!==true||b.environment!=='development'||b.singleAdmittedInvocation!==true
+   ||![3,4,5].includes(b.schemaVersion)||b.enabled!==true||b.environment!=='development'||b.singleAdmittedInvocation!==true
    ||config?.environment!==b.environment||environment.DEPLOYMENT_ENVIRONMENT!==b.environment
    ||b.sourceRevision!==config.sourceRevision||environment.SOURCE_REVISION!==b.sourceRevision||!/^[a-f0-9]{40}$/.test(b.sourceRevision||'')
    ||!ID.test(b.projectId||'')||sha(b.projectId)!==config.expectedProjectIdSha256
@@ -37,7 +37,9 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
   const capability=validateStorageCapability(b.capability,{...capabilityOptions,now:now()});
   if(b.tableId!==capability.tables.reportRuns.id)held();
   const capabilitySha256=sha(capability);
-  const key=sha({mechanism:'unique_insert_successor_v1',projectId:b.projectId,tables:capability.tables,nonce:b.nonce,sourceRevision:b.sourceRevision,capabilitySha256});
+  const sequential=b.schemaVersion===5;
+  const mechanism=sequential?'sequential_unique_diagnostic_v1':'unique_insert_successor_v1';
+  const key=sha({mechanism,projectId:b.projectId,tables:capability.tables,nonce:b.nonce,sourceRevision:b.sourceRevision,capabilitySha256});
   const rootKey='revenue-desk-report-v1:'+key;
   const active=()=>{const at=now();validateStorageCapability(capability,{...capabilityOptions,now:at});if(!Number.isSafeInteger(at)||at<b.verifiedAt||at>=b.expiresAt)held();return at;};active();
   return Object.freeze({async handle(command,{actor,signal}={}){
@@ -58,13 +60,13 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
    const counts={reads:0,inserts:0,admissionReads:0,admissionInserts:0};
    let provenanceFailed=false;
    function admission(){const at=active();if(provenanceFailed||abort.signal.aborted||at<start||at-start>=b.timeoutMs||performance.now()>=wall)held();return at;}
-   const budget={assertActive:admission,consume(kind){admission();if(kind==='report_run_read'){if(++counts.reads>7)held();}
+   const budget={assertActive:admission,consume(kind){admission();if(kind==='report_run_read'){if(++counts.reads>(sequential?3:7))held();}
     else if(kind==='admission_read'){if(!write||++counts.admissionReads>1)held();}
     else if(kind==='admission_write'){if(!write||++counts.admissionInserts>1)held();}
-    else if(kind==='report_run_write'){if(!write||++counts.inserts>4)held();}else held();}};
+    else if(kind==='report_run_write'){if(!write||++counts.inserts>(sequential?2:4))held();}else held();}};
    const options={signal:abort.signal,budget};
    async function run(){
-    admission();observe('transport_construct');const io=transportFactory({storageDiagnostic:diagnostic,app,timeoutMs:Math.min(b.timeoutMs,3000),storageCapability:capability,storageOperationKey:key,storageAssertActive:admission,storageSourceRevision:b.sourceRevision,storageBindingSha256:pin});
+    admission();observe('transport_construct');const io=transportFactory({storageDiagnostic:diagnostic,storageProviderDiagnostics:sequential,app,timeoutMs:Math.min(b.timeoutMs,3000),storageCapability:capability,storageOperationKey:key,storageAssertActive:admission,storageSourceRevision:b.sourceRevision,storageBindingSha256:pin});
     if(!['query','insert','insertAdmission','readAdmission'].every(k=>typeof io?.[k]==='function'))held();
     let admissionEvidenceDigest,observedCreator;
     const acknowledgments=new Map();
@@ -129,8 +131,8 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
     if(!write){
      const head=await left.get(key,options);admission();
      if(!head||head.storageRevision!=='unique_insert_successor_v1'||head.state?.diagnostic?.nonce!==b.nonce
-      ||head.state.diagnostic.sourceRevision!==b.sourceRevision||head.version>2)held();
-     return Object.freeze({status:'storage_evidence_unattested',mechanism:'unique_insert_successor_v1',
+      ||head.state.diagnostic.sourceRevision!==b.sourceRevision||head.version>2||sequential&&head.version!==1)held();
+     return Object.freeze({status:'storage_evidence_unattested',mechanism,...(sequential?{concurrencyProven:false}:{}),
       operationDigest:key,evidenceDigest:sha({rows:[...rows.values()].sort((a,c)=>String(a.ROWID).localeCompare(String(c.ROWID)))}),
       creatorProvenance:'observed_consistent_v1',namedIdentityVerified:false,
       physicalRows:rows.size,headVersion:head.version,reads:counts.reads,inserts:0,qualificationAuthority:false,deliveryAuthority:false});
@@ -155,6 +157,29 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
      const firstResponse=Math.min(...facts.map(e=>e.find(x=>x.event==='response')?.at??-1));
      if(lastDispatch>=firstResponse)held();
      return winner;
+    }
+    if(sequential){
+     observe('root_round');const first=await left.insert(key,state('root_left'),contender('root_left'));admission();
+     const firstEvents=traces.get('root_left');
+     if(!first||provenanceFailed||firstEvents.filter(e=>e.event==='dispatch').length!==1
+      ||firstEvents.filter(e=>e.event==='outcome'&&e.accepted===true).length!==1)held();
+     const second=await right.insert(key,state('root_right'),contender('root_right'));admission();
+     const a=traces.get('root_left'),c=traces.get('root_right');
+     const events=(list,type)=>list.filter(e=>e.event===type);
+     if(second!==null||provenanceFailed||rows.size!==1||counts.reads!==3||counts.inserts!==2
+      ||counts.admissionReads!==1||counts.admissionInserts!==1
+      ||events(a,'dispatch').length!==1||events(c,'dispatch').length!==1
+      ||events(a,'outcome').length!==1||events(c,'outcome').length!==1
+      ||events(a,'outcome')[0].accepted!==true||events(c,'outcome')[0].duplicate!==true
+      ||events(a,'response').length!==1||events(c,'response').length!==1
+      ||!Number.isInteger(events(a,'response')[0].status)||events(a,'response')[0].status<200||events(a,'response')[0].status>=300
+      ||events(c,'response')[0].status!==409
+      ||events(a,'response')[0].at>=events(c,'dispatch')[0].at)held();
+     return Object.freeze({status:'storage_sequential_duplicate_rejected',mechanism:'sequential_unique_diagnostic_v1',
+      operationDigest:key,evidenceDigest:sha({rows:[...rows.values()],requests:[...traces.entries()],counts,admissionEvidenceDigest}),
+      physicalRows:1,reads:3,inserts:2,admissionReads:1,admissionInserts:1,
+      firstInsertHttpStatus:events(a,'response')[0].status,secondInsertHttpStatus:409,secondInsertProviderCode:'duplicate_value',
+      concurrencyProven:false,qualificationAuthority:false,deliveryAuthority:false});
     }
     observe('root_round');const root=await Promise.allSettled([left.insert(key,state('root_left'),contender('root_left')),
      right.insert(key,state('root_right'),contender('root_right'))]);admission();

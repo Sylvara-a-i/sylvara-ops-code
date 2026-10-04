@@ -25,7 +25,7 @@ function validate(input,{at=Date.now(),root,staticOnly=false,nonce,codec}={}){
  if(!exact(input,['metadataFile','projectMappingFile','controlsFile','installationFile','sizingFile','ownerAuthorization',...(staticOnly?[]:['expiresAt','operatorReady'])]))stop();
  if((!staticOnly&&input.operatorReady!==true)||!exact(input.ownerAuthorization,['digest','verifiedAt'])||!HASH.test(input.ownerAuthorization.digest||''))stop();
  const b=read(path.join(root,'binding.template.json')),pins=read(path.join(root,'reviewed-pins.json'));
- if(![3,4].includes(b.schemaVersion)||b.environment!=='development'||b.enabled!==false||b.sourceRevision!==pins.sourceRevision||b.projectId!==pins.projectId||b.capability?.controllerFunctionId!==pins.controllerFunctionId||b.capability?.deploymentId!==pins.deploymentId||b.singleAdmittedInvocation!==true||b.nonce!=='<FRESH_32_HEX_NONCE_ONLY_WHEN_READY>')stop();
+ if(![3,4,5].includes(b.schemaVersion)||b.environment!=='development'||b.enabled!==false||b.sourceRevision!==pins.sourceRevision||b.projectId!==pins.projectId||b.capability?.controllerFunctionId!==pins.controllerFunctionId||b.capability?.deploymentId!==pins.deploymentId||b.singleAdmittedInvocation!==true||b.nonce!=='<FRESH_32_HEX_NONCE_ONLY_WHEN_READY>')stop();
  const windowMs=diagnosticWindow(root,b.schemaVersion);
  const metadata=read(input.metadataFile),mapping=read(input.projectMappingFile),controls=read(input.controlsFile),install=read(input.installationFile);
  const sizing=read(input.sizingFile);
@@ -105,8 +105,8 @@ function validate(input,{at=Date.now(),root,staticOnly=false,nonce,codec}={}){
   access:{digest:sha(metadata),verifiedAt:metaAt,expiresAt:input.expiresAt}};
  Object.assign(b,{enabled:true,verifiedAt:at,expiresAt:input.expiresAt});b.capability.evidence=evidence;
  const raw=JSON.stringify(b),pin=sha(raw),capabilitySha256=sha(b.capability);
- if(Buffer.byteLength(raw)>4096||![3,4].includes(b.schemaVersion)||b.capability.creatorPolicy!=='observed_consistent_v1'||!/^[a-f0-9]{32}$/.test(b.nonce||''))stop();
- const operationDigest=sha({mechanism:'unique_insert_successor_v1',projectId:b.projectId,tables:b.capability.tables,
+ if(Buffer.byteLength(raw)>4096||![3,4,5].includes(b.schemaVersion)||b.capability.creatorPolicy!=='observed_consistent_v1'||!/^[a-f0-9]{32}$/.test(b.nonce||''))stop();
+ const operationDigest=sha({mechanism:b.schemaVersion===5?'sequential_unique_diagnostic_v1':'unique_insert_successor_v1',projectId:b.projectId,tables:b.capability.tables,
   nonce:b.nonce,sourceRevision:b.sourceRevision,capabilitySha256});
  const caller=fs.readFileSync(path.join(root,'caller.template.ds'),'utf8')
   .replaceAll('__OPERATION_DIGEST__',operationDigest).replaceAll('__VERIFIED_AT__',String(at)).replaceAll('__EXPIRES_AT__',String(input.expiresAt));
@@ -115,10 +115,11 @@ function validate(input,{at=Date.now(),root,staticOnly=false,nonce,codec}={}){
  const sizePreflight=preflightStorageEnvironment({baseline:sizing.baseline,transport,bindingSha256:pin,descriptorPins:{REPORT_CONTROLLER_FUNCTION_ID:pins.controllerFunctionId,REPORT_DEPLOYMENT_ID:pins.deploymentId}});
  return {binding:b,raw,pin,operationDigest,capabilitySha256,caller,transport,
   manifest:{sourceRevision:b.sourceRevision,bindingSha256:pin,operationDigest,capabilitySha256,
-   verifiedAt:at,expiresAt:input.expiresAt,maximumDataStoreAttempts:13,maximumRetainedSyntheticRows:3,sizePreflight,
+   verifiedAt:at,expiresAt:input.expiresAt,maximumDataStoreAttempts:b.schemaVersion===5?7:13,maximumRetainedSyntheticRows:3,sizePreflight,
+   ...(b.schemaVersion===5?{mechanism:'sequential_unique_diagnostic_v1',concurrencyProven:false}:{}),
    transport:{format:'tuple-v1',marker:transport.marker,partSize:400,partKeys:Object.keys(transport.parts),activationKey:'REPORT_STORAGE_QUALIFICATION_JSON',hashKey:'REPORT_STORAGE_QUALIFICATION_SHA256',activationLast:true,disarmFirst:true},
    keys:{admission:'report-storage:'+operationDigest,root:'revenue-desk-report-v1:'+operationDigest,
-    successor:'revenue-desk-report-v2:'+operationDigest+':0000000002'},
+    ...(b.schemaVersion===5?{}:{successor:'revenue-desk-report-v2:'+operationDigest+':0000000002'})},
    namedIdentityVerified:false,qualificationAuthority:false,deliveryAuthority:false,armed:false,invoked:false}};
 }
 function write(result,destination,{root,at=Date.now()}={}){
@@ -134,7 +135,8 @@ function write(result,destination,{root,at=Date.now()}={}){
  for(const [name,bytes]of Object.entries(files))fs.writeFileSync(path.join(destination,name),bytes,{flag:'wx'});
  return {status:'prepared_local_only_not_armed',sourceRevision:result.binding.sourceRevision,
   operationDigest:result.operationDigest,bindingSha256:result.pin,expiresAt:result.binding.expiresAt,
-  maximumDataStoreAttempts:13,maximumRetainedSyntheticRows:3,sizePreflight:result.manifest.sizePreflight,providerRequests:0};
+   maximumDataStoreAttempts:result.manifest.maximumDataStoreAttempts,maximumRetainedSyntheticRows:3,sizePreflight:result.manifest.sizePreflight,providerRequests:0,
+   ...(result.binding.schemaVersion===5?{mechanism:'sequential_unique_diagnostic_v1',concurrencyProven:false}:{} )};
 }
 
 // Recursive canonical state hashing preserves arrays and all original records.
@@ -150,10 +152,12 @@ function state(record,role){const copy=structuredClone(record);delete copy[role=
 const templateDigests=root=>Object.fromEntries(templates.map(name=>[name,sha(fs.readFileSync(path.join(root,name),'utf8'))]));
 function review(input,options={}){
  const {originals,pins}=validate(input,{...options,staticOnly:true});
+ const sequential=read(path.join(options.root,'binding.template.json')).schemaVersion===5;
  return {schemaVersion:1,status:'static_review_only',executable:false,reviewedAt:options.at??Date.now(),
   sourceRevision:pins.sourceRevision,templates:templateDigests(options.root),originals,
   originalsDigest:digest(originals),stateDigests:Object.fromEntries(roles.map(role=>[role,digest(state(originals[role],role))])),
-  maximumDataStoreAttempts:13,maximumRetainedSyntheticRows:3,singleAdmittedInvocation:true};
+  maximumDataStoreAttempts:sequential?7:13,maximumRetainedSyntheticRows:3,singleAdmittedInvocation:true,
+  ...(sequential?{mechanism:'sequential_unique_diagnostic_v1',concurrencyProven:false}:{})};
 }
 function writeReview(result,destination){
  if(result?.status!=='static_review_only'||result.executable!==false||!path.isAbsolute(destination)||fs.existsSync(destination))stop();
@@ -162,7 +166,8 @@ function writeReview(result,destination){
 }
 // Provenance references document independent reads; they are not provider signatures.
 function validateReview(prior,root){
- if(!exact(prior,['schemaVersion','status','executable','reviewedAt','sourceRevision','templates','originals','originalsDigest','stateDigests','maximumDataStoreAttempts','maximumRetainedSyntheticRows','singleAdmittedInvocation'])||prior.schemaVersion!==1||prior.status!=='static_review_only'||prior.executable!==false||prior.maximumDataStoreAttempts!==13||prior.maximumRetainedSyntheticRows!==3||prior.singleAdmittedInvocation!==true||digest(prior.originals)!==prior.originalsDigest||!exact(prior.originals,roles)||!exact(prior.stateDigests,roles)||!exact(prior.templates,templates)||canonicalState(prior.templates)!==canonicalState(templateDigests(root)))stop();
+ const sequential=read(path.join(root,'binding.template.json')).schemaVersion===5;
+ if(!exact(prior,['schemaVersion','status','executable','reviewedAt','sourceRevision','templates','originals','originalsDigest','stateDigests','maximumDataStoreAttempts','maximumRetainedSyntheticRows','singleAdmittedInvocation',...(sequential?['mechanism','concurrencyProven']:[])])||prior.schemaVersion!==1||prior.status!=='static_review_only'||prior.executable!==false||prior.maximumDataStoreAttempts!==(sequential?7:13)||sequential&&(prior.mechanism!=='sequential_unique_diagnostic_v1'||prior.concurrencyProven!==false)||prior.maximumRetainedSyntheticRows!==3||prior.singleAdmittedInvocation!==true||digest(prior.originals)!==prior.originalsDigest||!exact(prior.originals,roles)||!exact(prior.stateDigests,roles)||!exact(prior.templates,templates)||canonicalState(prior.templates)!==canonicalState(templateDigests(root)))stop();
 }
 function prepare(input,options={}){
  if(!exact(input,['staticReviewFile','metadataFile','projectMappingFile','controlsFile','installationFile','sizingFile','ownerAuthorization','expiresAt','operatorReady','nonce','provenanceFile']))stop();

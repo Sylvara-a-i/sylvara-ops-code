@@ -47,7 +47,7 @@ function validateStorageCapability(c,{app,config,environment,now,verifiedAt,expi
   if(!exact(e,['digest','verifiedAt','expiresAt'])
    ||!HASH.test(e.digest||'')||!Number.isSafeInteger(e.verifiedAt)||e.verifiedAt<0
    ||!Number.isSafeInteger(e.expiresAt)||e.verifiedAt>verifiedAt||verifiedAt-e.verifiedAt>windowMs
-   ||diagnosticContract?.schemaVersion===4&&e.expiresAt-e.verifiedAt>windowMs
+   ||[4,5].includes(diagnosticContract?.schemaVersion)&&e.expiresAt-e.verifiedAt>windowMs
    ||e.expiresAt<expiresAt||now<e.verifiedAt||now>=e.expiresAt)held();
  }
  const root=require('node:path').dirname(require.resolve('zcatalyst-sdk-node/package.json'));

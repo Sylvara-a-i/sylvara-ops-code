@@ -316,7 +316,7 @@ test('explicit Development schema4 admits the exact60minute bound with unchanged
 for(const [label,mutate]of [
  ['60minutes plus1ms',f=>f.binding.expiresAt++],
  ['legacy schema3 extended window',f=>f.binding.schemaVersion=3],
- ['unknown schema5',f=>f.binding.schemaVersion=5],
+ ['unknown schema6',f=>f.binding.schemaVersion=6],
  ['production binding',f=>f.binding.environment='production'],
  ['production control config',f=>f.config.environment='production'],
  ['production runtime app',f=>f.sdk.app.config.environment='Production'],
@@ -355,7 +355,7 @@ test('shared capability validation keeps15minute freshness without explicit diag
   const options={app:f.sdk.app,config:{projectId:f.binding.projectId,environment:'development'},environment:f.environment(),now:f.binding.verifiedAt+1,verifiedAt:f.binding.verifiedAt,expiresAt:f.binding.expiresAt};
   assert.throws(()=>validateStorageCapability(f.binding.capability,options),held);
   assert.doesNotThrow(()=>validateStorageCapability(f.binding.capability,{...options,diagnosticContract:{schemaVersion:4,profile:'report_storage_qualification_v1',environment:'development'}}));
-  for(const diagnosticContract of [{schemaVersion:5,profile:'report_storage_qualification_v1',environment:'development'},{schemaVersion:4,profile:'other',environment:'development'},{schemaVersion:4,profile:'report_storage_qualification_v1',environment:'production'}])assert.throws(()=>validateStorageCapability(f.binding.capability,{...options,diagnosticContract}),held);
+  for(const diagnosticContract of [{schemaVersion:6,profile:'report_storage_qualification_v1',environment:'development'},{schemaVersion:4,profile:'other',environment:'development'},{schemaVersion:4,profile:'report_storage_qualification_v1',environment:'production'}])assert.throws(()=>validateStorageCapability(f.binding.capability,{...options,diagnosticContract}),held);
   assert.equal(f.sdk.requests.length,0);
  }finally{f.sdk.restore();}
 });
