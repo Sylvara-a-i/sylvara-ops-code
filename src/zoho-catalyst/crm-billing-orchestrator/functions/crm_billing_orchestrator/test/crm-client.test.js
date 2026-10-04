@@ -8,6 +8,46 @@ const { REVISION, baseEnvironment, jsonResponse } = require("./helpers");
 
 const token = `Zoho-oauthtoken ${"t".repeat(24)}`;
 
+test("CRM stalled read body retries once and accepts only the next complete readback", async () => {
+  const config = loadConfig(baseEnvironment({ OUTBOUND_TIMEOUT_MS: "250" }), { artifactRevision: REVISION });
+  const deal = { id: "100000000000001", Modified_Time: "2026-08-21T10:00:00-05:00" };
+  let calls = 0, cancelled = 0;
+  const client = createCrmClient(config, {
+    readAuthorizationProvider: async () => token, writeAuthorizationProvider: async () => token,
+    fetchImpl: async () => {
+      calls += 1;
+      return calls === 1 ? new Response(new ReadableStream({
+        pull() { return new Promise(() => {}); }, cancel() { cancelled += 1; },
+      })) : jsonResponse(200, { data: [deal] });
+    },
+  });
+  assert.deepEqual(await client.getDeal(deal.id), deal);
+  assert.equal(calls, 2); assert.equal(cancelled, 1);
+});
+
+test("CRM stalled write body cancels once then uses readback without repeating the write", async () => {
+  const config = loadConfig(baseEnvironment({ OUTBOUND_TIMEOUT_MS: "250" }), { artifactRevision: REVISION });
+  const deal = { id: "100000000000001", Modified_Time: "2026-08-21T10:00:00-05:00" };
+  let writes = 0, reads = 0, cancelled = 0, signal;
+  const client = createCrmClient(config, {
+    readAuthorizationProvider: async () => token, writeAuthorizationProvider: async () => token,
+    fetchImpl: async (_url, options) => {
+      if (options.method === "PUT") {
+        writes += 1; signal = options.signal;
+        return new Response(new ReadableStream({
+          pull() { return new Promise(() => {}); }, cancel() { cancelled += 1; },
+        }));
+      }
+      reads += 1;
+      return jsonResponse(200, { data: [deal] });
+    },
+  });
+  await assert.rejects(client.updateDealIntegration(deal, { Billing_Customer_ID: "200000000000001" }),
+    error => error.ambiguous === true && error.publicCode === "reconciliation_required");
+  assert.equal(writes, 1); assert.equal(reads, 1);
+  assert.equal(cancelled, 1); assert.equal(signal.aborted, true);
+});
+
 function reportSummaryPatchFixture(overrides = {}) {
   return {
     Test_Status: "Completed",
