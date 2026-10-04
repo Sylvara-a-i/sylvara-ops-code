@@ -43,7 +43,14 @@ function validate(input,{at=Date.now(),root,staticOnly=false,nonce,codec}={}){
   ||controls.controllerFunctionId!==pins.controllerFunctionId||controls.sourceRevision!==pins.sourceRevision
   ||controls.retellRouteMode!=='disabled'||controls.deploymentMode!=='active'
   ||!Array.isArray(controls.storagePartKeys)||controls.storagePartKeys.length!==0
-  ||controls.controllerPinMatches!==true||controls.deploymentPinMatches!==true||controls.runtimeInvoked!==false)stop();
+  ||controls.runtimeInvoked!==false)stop();
+ // Static review can precede descriptor configuration, but absence must be explicit.
+ // Active preparation still requires matching pins; configuration changes need a new review.
+ const matchingDescriptors=controls.controllerPinMatches===true&&controls.deploymentPinMatches===true
+  &&(!staticOnly||['controllerPinPresent','deploymentPinPresent'].every(key=>!Object.hasOwn(controls,key)||controls[key]===true));
+ const absentDescriptors=staticOnly&&controls.controllerPinPresent===false&&controls.deploymentPinPresent===false
+  &&controls.controllerPinMatches===false&&controls.deploymentPinMatches===false;
+ if(!matchingDescriptors&&!absentDescriptors)stop();
  for(const role of ['runtime','storage','context']){
   const x=controls.bindings?.[role];if(!x||x.jsonPresent!==false||x.pinPresent!==false||x.enabled!==false)stop();
  }

@@ -191,3 +191,20 @@ Deletion of `retell_route_approval_control` is allowed only after all source/exp
 - the legacy route remains absent after the observation window.
 
 Until then, the safe disposition is **stopped, access-restricted, source-export pending, binding-proof pending, recoverable, and not deletion-authorized**.
+
+## Route-provider response boundary
+
+The existing provider adapter bounds each request from authorization through
+headers, body reading and JSON parsing with the configured platform timeout.
+Deadline cancellation aborts the native fetch and cancels its reader; late
+authorization, headers or body cannot continue the route operation. Redirects
+are rejected. Responses require JSON/identity encoding, strict UTF8 and at most
+262144 bytes / 512 chunks. These are local safety limits, not provider guarantees.
+No request is automatically retried. GET failure remains read-only/retryable;
+uncertain PATCH outcomes remain manual rollback reconciliation, never inactivity
+evidence. Keep admission contained and the existing immutable operation history;
+do not dispatch again merely because a deadline returned.
+
+These tests use fake responses only. They prove no Retell access, telephone
+forwarding, carrier restoration or live timing behavior. All existing ownership,
+coverage/timing holds, Development isolation and separate live authority remain.
