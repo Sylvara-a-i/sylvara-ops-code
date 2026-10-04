@@ -111,3 +111,106 @@ test('default managed SDK reader composition constructs without credentials, pro
  const readers=createManagedReportDeliveryReaders({app,runtimeConfig,runtimeStore:{},reportRunStore:{get:blocked},binding,readDestinationBinding:blocked,fetchImpl:blocked});
  assert.equal(typeof readers.readSnapshot,'function');assert.equal(typeof readers.readRecords,'function');assert.equal(effects,0);
 });
+
+// Join production readers and orchestration; only provider transport and sending
+// are synthetic. Every WorkDrive read parses the actual JSON:API/binary envelope.
+async function deliveryIntegration({unknownSend=false,unknownProjection=false}={}){
+ const x=await fixture();let storageReads=0,sends=0,puts=0,acceptance=null;
+ const nativeReader=x.options.readNativeConversion;
+ x.options.readNativeConversion=async(...args)=>({...await nativeReader(...args),observedAt:x.f.now()});
+ const readers=createReportDeliveryReaders(x.options);
+ const workdrive=require('../lib/workdrive-client').createWorkDriveClient({
+  apiOrigin:'https://www.zohoapis.com',downloadOrigin:'https://download.zoho.com',timeoutMs:1000,now:x.f.now,
+  authorizationProvider:async()=> 'Zoho-oauthtoken synthetic-only',
+  async fetchImpl(url,request){
+   assert.equal(request.method,'GET');storageReads++;x.f.runtime.clock.value++;
+   const u=new URL(url),id=u.pathname.split('/').filter(Boolean).at(-1);
+   if(u.origin==='https://download.zoho.com'){
+    assert.equal(u.searchParams.get('version'),'1');
+    return new Response(x.d.resources.get(id).bytes,{headers:{'content-type':'application/pdf'}});
+   }
+   let data;
+   if(id==='versions'){
+    const resourceId=u.pathname.split('/').at(-2),r=x.d.resources.get(resourceId);
+    data=r.versions.map(v=>({id:v.versionId,type:'versions',attributes:{resource_id:resourceId,
+     version_id:v.versionId,version_number:Number(v.versionNumber),file_size:r.bytes.length,size_in_bytes:'formatted bytes'}}));
+   }else{
+    const m=id===x.d.parent.id?x.d.parent:x.d.resources.get(id).metadata;
+    data={id:m.id,type:'files',attributes:{name:m.name,parent_id:m.parentId,org_id:m.organizationId,
+     library_id:m.teamFolderId,is_folder:m.isFolder,storage_info:{size_in_bytes:m.sizeBytes}}};
+   }
+   return new Response(JSON.stringify({data}),{headers:{'content-type':'application/vnd.api+json'}});
+  }});
+ const readSummary=require('../lib/report-delivery-storage').createReportDeliveryStorageReader({
+  reportRunStore:x.d.runs,workdrive,readDestinationBinding:x.d.readDestinationBinding,now:x.f.now});
+ const control=require('../lib/report-delivery-control').createReportDeliveryControl({store:x.d.runs,
+  readSnapshot:readers.readSnapshot,authorize:readers.authorize,readSummary,now:x.f.now,autoDeliveryEnabled:true,
+  sender:{async sendSummary({operationKey,snapshot,bytes}){
+   sends++;assert.equal(crypto.createHash('sha256').update(bytes).digest('hex'),x.pair.manifest.artifacts.summary.documentSha256);
+   acceptance={accepted:true,operationKey,documentSha256:snapshot.report.summary.documentSha256,
+    recipientVerificationDigest:snapshot.recipient.verificationDigest,messageReferenceDigest:sha('synthetic acceptance'),acceptedAt:x.f.now()};
+   if(unknownSend)throw Error('synthetic lost send response');return acceptance;
+  },async lookupAcceptance(){return acceptance;}}});
+ x.records.deal.Modified_Time='2026-08-27T12:00:00+00:00';
+ const project=require('../lib/report-crm-projection').createReportCrmProjectionWriter({store:x.d.runs,
+  readRecords:x.options.crm.getReportRecords,authorize:readers.authorize,now:x.f.now,
+  async readProjection(request){const selected=await readers.readProjection(request);await readSummary({snapshot:selected.snapshot});return selected;},
+  authorizationProvider:async()=> 'Zoho-oauthtoken '+ 's'.repeat(30),
+  binding:{environment:'development',apiOrigin:'https://www.zohoapis.com',principalQualificationDigest:sha('principal'),
+   schemaDigest:sha('schema'),verifiedAt:x.f.now()-1000,expiresAt:x.f.now()+3600000,timeoutMs:5000},
+  async fetchImpl(url,request){puts++;assert.equal(request.method,'PUT');assert.ok(url.endsWith('/Deals/'+x.b.dealId));
+   const body=JSON.parse(request.body);assert.deepEqual(body.trigger,[]);
+   assert.equal(request.headers['If-Unmodified-Since'],x.records.deal.Modified_Time);
+   for(const [key,value]of Object.entries(body.data[0]))if(key!=='skip_feature_execution')x.records.deal[key]=value;
+   if(unknownProjection&&puts===1)throw Error('synthetic lost conditional PUT response');
+   return new Response(JSON.stringify({data:[{status:'success',code:'SUCCESS',details:{id:x.b.dealId}}]}),{headers:{'content-type':'application/json'}});
+  }});
+ const handlers=require('../lib/report-delivery-handlers').createReportDeliveryHandlers({control,
+  readSnapshot:readers.readSnapshot,readPrivateView:readers.readPrivateView,projectReport:project,systemActor:x.worker,now:x.f.now,
+  readDealForScope:async()=>({...x.f.identity,dealId:x.b.dealId,testStatus:'Completed'})});
+ return {...x,handlers,readers,readSummary,get sends(){return sends;},get puts(){return puts;},get storageReads(){return storageReads;}};
+}
+
+test('integrated pair receipts, advancing WorkDrive reads and CRM projection deliver once across resume',async()=>{
+ for(const unknownSend of [false,true]){
+  const x=await deliveryIntegration({unknownSend}),first=await x.handlers.afterPair(x.f.identity,x.pair);
+  assert.equal(first.status,unknownSend?'delivery_reconciliation_required':'provider_accepted');
+  assert.equal(x.sends,1);assert.ok(x.storageReads>=12);
+  x.f.runtime.clock.value+=1000;
+  const resumed=await x.handlers.afterPair(x.f.identity,x.pair);
+  assert.equal(resumed.status,'provider_accepted');assert.equal(resumed.crmProjectionStatus,'verified');
+  assert.equal(x.records.deal.Test_Report_Delivery_Status,'Provider Accepted');assert.equal(x.sends,1);assert.equal(x.puts,2);
+  assert.equal((await x.handlers.afterPair(x.f.identity,x.pair)).status,'provider_accepted');assert.equal(x.puts,2);
+  assert.equal(x.d.uploads.length,2);
+ }
+});
+
+test('integrated unknown conditional projection recovers by exact readback before initial delivery',async()=>{
+ const x=await deliveryIntegration({unknownProjection:true});
+ assert.equal((await x.handlers.afterPair(x.f.identity,x.pair)).status,'held');assert.equal(x.sends,0);assert.equal(x.puts,1);
+ x.f.runtime.clock.value+=1000;
+ assert.equal((await x.handlers.afterPair(x.f.identity,x.pair)).status,'provider_accepted');
+ assert.equal(x.sends,1);assert.equal(x.puts,2);assert.equal(x.records.deal.Test_Report_Delivery_Status,'Provider Accepted');
+});
+
+test('integrated stored byte, version, privacy and recipient failures hold before any send or CRM PUT',async()=>{
+ for(const mutate of [x=>{[...x.d.resources.values()][0].bytes[10]^=1;},
+  x=>{[...x.d.resources.values()][0].versions[0].versionId='foreign_version';},
+  x=>{x.d.binding.externalSharing=true;},x=>{x.records.contact.Email_Opt_Out=true;}]){
+  const x=await deliveryIntegration();mutate(x);
+  assert.equal((await x.handlers.afterPair(x.f.identity,x.pair)).status,'held');
+  assert.equal(x.sends,0);assert.equal(x.puts,0);assert.equal(x.d.uploads.length,2);
+ }
+});
+
+test('integrated expired authority and changed source cannot resume an ambiguous send',async()=>{
+ for(const mutate of [x=>{x.f.runtime.clock.value=x.proof.expiresAt;},
+  x=>{x.f.imported.get('call').clear();},
+  x=>{x.records.deal.Contact_Name.id='foreign';}]){
+  const x=await deliveryIntegration({unknownSend:true});
+  assert.equal((await x.handlers.afterPair(x.f.identity,x.pair)).status,'delivery_reconciliation_required');
+  mutate(x);
+  assert.equal((await x.handlers.afterPair(x.f.identity,x.pair)).status,'held');assert.equal(x.sends,1);
+  assert.equal(x.records.deal.Test_Report_Delivery_Status,'Held');assert.equal(x.d.uploads.length,2);
+ }
+});
