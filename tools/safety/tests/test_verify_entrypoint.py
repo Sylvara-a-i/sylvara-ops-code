@@ -230,6 +230,37 @@ class VerifyEntrypointTests(unittest.TestCase):
         )
         self.assertNotIn("if (", common_checks)
 
+    def test_service_area_contract_checks_run_in_ci_and_both_local_modes(self) -> None:
+        portal_path = "src/zoho-creator/client-portal/company-settings-requests"
+        self.assertIn(
+            "      - name: Run service-area request contract checks and tests\n"
+            "        run: |\n"
+            f"          node --check {portal_path}/service-area-request-contract.js\n"
+            f"          node --test {portal_path}/test/service-area-request-contract.test.js\n",
+            self.workflow,
+        )
+        self.assertIn(
+            '$ServiceAreaRequestRoot = Join-PathSegments $RepoRoot @(\n'
+            '    "src", "zoho-creator", "client-portal", "company-settings-requests"\n)',
+            self.script,
+        )
+        common_checks = self.script[
+            self.script.index('        Invoke-Native -Label "Billing gateway checks and tests"'):
+            self.script.index('        Write-Host "Verification passed ($Mode mode)."')
+        ]
+        self.assertIn(
+            'Invoke-Native -Label "Service-area request contract syntax" -Executable $node `\n'
+            '            -Arguments @("--check", (Join-Path $ServiceAreaRequestRoot "service-area-request-contract.js"))',
+            common_checks,
+        )
+        self.assertIn(
+            'Invoke-Native -Label "Service-area request contract tests" -Executable $node `\n'
+            '            -Arguments @("--test", (Join-PathSegments $ServiceAreaRequestRoot @("test", "service-area-request-contract.test.js")))',
+            common_checks,
+        )
+        self.assertNotIn("if (", common_checks)
+        self.assertTrue((ROOT / portal_path / "test" / "service-area-request-contract.test.js").is_file())
+
     def test_ci_and_dependabot_use_only_the_new_revenue_desk_packages(self) -> None:
         canonical_paths = (
             "src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_gateway",

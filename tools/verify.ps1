@@ -41,6 +41,9 @@ $SetupFormRoot = Join-PathSegments $RepoRoot @(
 $Form2PrefillMappingFixtureRoot = Join-PathSegments $RepoRoot @(
     "src", "zoho-catalyst", "form2-prefill-mapping-fixture", "functions", "form2_prefill_mapping_fixture"
 )
+$ServiceAreaRequestRoot = Join-PathSegments $RepoRoot @(
+    "src", "zoho-creator", "client-portal", "company-settings-requests"
+)
 $RevenueDeskCallGatewayRoot = Join-PathSegments $RepoRoot @(
     "src", "zoho-catalyst", "revenue-desk-call-runtime", "functions", "revenue_desk_call_gateway"
 )
@@ -690,6 +693,10 @@ try {
             -Arguments @("run", "ci", "--prefix", $SetupFormRoot)
         Invoke-Native -Label "Form 2 Prefill Mapping Fixture checks and tests" -Executable $npm `
             -Arguments @("run", "ci", "--prefix", $Form2PrefillMappingFixtureRoot)
+        Invoke-Native -Label "Service-area request contract syntax" -Executable $node `
+            -Arguments @("--check", (Join-Path $ServiceAreaRequestRoot "service-area-request-contract.js"))
+        Invoke-Native -Label "Service-area request contract tests" -Executable $node `
+            -Arguments @("--test", (Join-PathSegments $ServiceAreaRequestRoot @("test", "service-area-request-contract.test.js")))
         Invoke-Native -Label "Revenue Desk call-gateway checks and tests" -Executable $npm `
             -Arguments @("run", "ci", "--prefix", $RevenueDeskCallGatewayRoot)
         Invoke-Native -Label "Revenue Desk route-control checks and tests" -Executable $npm `
