@@ -4,6 +4,7 @@ const {fixture:network}=require('./helpers/report-run-sdk-fixture');
 const {canonicalJson}=require('../lib/facts');
 const {encodeStorageBinding}=require('../lib/report-storage-binding');
 const {createProtectedStorageQualification}=require('../lib/report-storage-qualification');
+const {storageFailureDiagnostic}=require('../lib/report-storage-diagnostic');
 const {REPORT_FIELDS,RECEIPT_FIELDS,projectionDigest}=require('../lib/report-storage-capability');
 const sha=x=>crypto.createHash('sha256').update(typeof x==='string'?x:canonicalJson(x)).digest('hex');
 function fixture(options={}){
@@ -328,5 +329,37 @@ test('schema4 thirtyminute-old evidence remains usable only inside each actual60
   const result=await f.make().handle(f.command,{actor:f.actor});
   assert.equal(result.qualificationAuthority,false);assert.equal(f.sdk.requests.length,13);
   assert.equal(f.sdk.rows.size,2);assert.equal(f.sdk.receipts.size,1);
+ }finally{f.sdk.restore();}
+});
+
+test('safe diagnostic records command rejection without provider construction or new authority',async()=>{
+ const f=fixture();try{let error;try{await f.make().handle(f.command,{actor:{kind:'customer',identity:f.actor.identity}});}catch(e){error=e;}
+  assert.equal(error.code,held.code);assert.deepEqual(storageFailureDiagnostic(error),{lastStage:'command',lastOperation:'none',attempted:0,dispatchStarted:0,responses:0,counterOverflow:false});assert.equal(f.sdk.requests.length,0);
+ }finally{f.sdk.restore();}
+});
+for(const [mode,expectedStage,attempted,dispatchStarted,responses]of [
+ ['auth_rejected','authenticate_rejected',1,0,0],['network_error','dispatch_admitted',1,1,0],['admission_lost','dispatch_admitted',1,1,0]
+])test('safe diagnostic distinguishes '+mode+' without retry or raw error disclosure',async()=>{
+ const f=fixture();try{if(mode==='auth_rejected')f.sdk.app.authenticateRequest=async()=>{throw Object.assign(new Error('SYNTHETIC_PRIVATE_TOKEN'),{code:'SYNTHETIC_PRIVATE_CODE'});};else f.sdk.mode=mode;
+  const handler=f.make();let error;try{await handler.handle(f.command,{actor:f.actor});}catch(e){error=e;}
+  assert.equal(error.code,held.code);const snapshot=storageFailureDiagnostic(error);
+  assert.deepEqual(snapshot,{lastStage:expectedStage,lastOperation:'admission_insert',attempted,dispatchStarted,responses,counterOverflow:false});
+  assert.equal(JSON.stringify({error,snapshot}).includes('SYNTHETIC_PRIVATE'),false);
+  const requests=f.sdk.clientCalls;await assert.rejects(handler.handle(f.command,{actor:f.actor}),held);assert.equal(f.sdk.clientCalls,requests);assert.equal(f.sdk.rows.size,0);
+  assert.equal(f.sdk.receipts.size,mode==='admission_lost'?1:0);
+ }finally{f.sdk.restore();}
+});
+test('diagnostic auth timeout remains cancelled with immutable counters and no late dispatch',async()=>{
+ const f=fixture();try{f.binding.timeoutMs=20;let release;f.sdk.authDelay=new Promise(resolve=>{release=resolve;});
+  let error;try{await f.make().handle(f.command,{actor:f.actor});}catch(e){error=e;}
+  const snapshot=storageFailureDiagnostic(error);assert.equal(snapshot.lastStage,'authenticate_enter');assert.equal(snapshot.attempted,1);assert.equal(snapshot.dispatchStarted,0);assert.equal(snapshot.responses,0);
+  release();await new Promise(resolve=>setTimeout(resolve,30));assert.equal(f.sdk.clientCalls,0);assert.equal(snapshot.lastStage,'authenticate_enter');
+ }finally{f.sdk.restore();}
+});
+test('admission projection hold reports two attempted dispatched responses without report effects',async()=>{
+ const f=fixture({storageResponseTransform({path,data}){if(path.endsWith('/row'))data[0].CREATORID=null;}});try{
+  let error;try{await f.make().handle(f.command,{actor:f.actor});}catch(e){error=e;}
+  assert.deepEqual(storageFailureDiagnostic(error),{lastStage:'admission_verify',lastOperation:'none',attempted:2,dispatchStarted:2,responses:2,counterOverflow:false});
+  assert.equal(f.sdk.receipts.size,1);assert.equal(f.sdk.rows.size,0);assert.equal(f.sdk.requests.length,2);
  }finally{f.sdk.restore();}
 });

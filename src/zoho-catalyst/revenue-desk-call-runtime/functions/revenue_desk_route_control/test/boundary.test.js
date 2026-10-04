@@ -951,3 +951,30 @@ for (const [missing, stage, code] of [
   assert.deepEqual(output.body, { ok: false, code: 'control_failed' }); assert.deepEqual(f.logs, [{ stage, code }]);
   assert.equal(JSON.stringify(f.logs).includes('synthetic-'), false);
 });
+
+test('issued handler diagnostic crosses only the internal log with unchanged public response and one handler call',async()=>{
+ const bridge=require('../lib/report-storage-qualification');
+ const helper=require('../../../../revenue-desk-analytics/functions/analytics_sync/lib/report-storage-diagnostic');
+ const previous=bridge.storageFailureDiagnostic;bridge.storageFailureDiagnostic=helper.storageFailureDiagnostic;
+ try{for(const loggerMode of ['normal','throw','reject']){
+  let handlers=0,logs=0;const tracker=helper.createStorageDiagnostic();
+  helper.recordStorageDiagnostic(tracker,'authenticate_rejected','admission_insert','attempted');
+  const error=helper.storageDiagnosticError(tracker);error.privateToken='SYNTHETIC_PRIVATE_TOKEN';
+  const f=storageFailureFixture({handler:async()=>{handlers++;throw error;},failureLogger(record){
+   logs++;assert.deepEqual(Object.keys(record).sort(),['code','diagnostic','stage']);
+   assert.equal(record.stage,'storage_handler');assert.equal(record.code,'REPORT_STORAGE_QUALIFICATION_HELD');
+   assert.deepEqual(record.diagnostic,{lastStage:'authenticate_rejected',lastOperation:'admission_insert',attempted:1,dispatchStarted:0,responses:0,counterOverflow:false});
+   assert.ok(Object.isFrozen(record));assert.ok(Object.isFrozen(record.diagnostic));
+   assert.equal(JSON.stringify(record).includes('SYNTHETIC_PRIVATE'),false);
+   if(loggerMode==='throw')throw Error('SYNTHETIC_PRIVATE_LOGGER');
+   if(loggerMode==='reject')return Promise.reject(Error('SYNTHETIC_PRIVATE_LOGGER'));
+  }}),output=response();await f.listener(f.request,output);await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(handlers,1);assert.equal(logs,1);assert.equal(output.statusCode,500);
+  assert.deepEqual(output.body,{ok:false,code:'control_failed'});assert.equal(output.body.diagnostic,undefined);
+ }}finally{bridge.storageFailureDiagnostic=previous;}
+});
+test('forged diagnostic getter is never inspected and cannot enter the storage error log',async()=>{
+ const error=storageFailure('REPORT_STORAGE_QUALIFICATION_HELD');Object.defineProperty(error,'storageDiagnostic',{get(){assert.fail('untrusted diagnostic getter');}});
+ const f=storageFailureFixture({handler:async()=>{throw error;}}),output=response();await f.listener(f.request,output);
+ assert.deepEqual(f.logs,[{stage:'storage_handler',code:'REPORT_STORAGE_QUALIFICATION_HELD'}]);assert.equal(output.statusCode,500);
+});

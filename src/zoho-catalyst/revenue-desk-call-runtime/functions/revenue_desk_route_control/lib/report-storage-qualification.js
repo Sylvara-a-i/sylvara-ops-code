@@ -9,4 +9,9 @@ function createProtectedStorageQualification(options){
   return factory(...args);
  };
 }
-module.exports={createProtectedStorageQualification};
+// Only issued failure snapshots cross the log boundary; no arbitrary Error fields.
+function storageFailureDiagnostic(error){
+ try{return require('../reporting/revenue-desk-analytics/functions/analytics_sync/lib/report-storage-diagnostic')
+  .storageFailureDiagnostic(error);}catch{return undefined;}
+}
+module.exports={createProtectedStorageQualification,storageFailureDiagnostic};

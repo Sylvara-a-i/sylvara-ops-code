@@ -2,6 +2,7 @@
 const {Readable}=require('node:stream');
 const path=require('node:path');
 const {performance}=require('node:perf_hooks');
+const {recordStorageDiagnostic}=require('./report-storage-diagnostic');
 // Structural observations contain only closed types/presence flags, never provider values.
 const structureType=value=>value===undefined?'absent':value===null?'null':Array.isArray(value)?'array':typeof value;
 const has=(value,key)=>value!==null&&typeof value==='object'&&Object.hasOwn(value,key);
@@ -40,12 +41,19 @@ function sdkClient(app){
  * Same managed runtime principal; no credential extraction or SDK mutation.
  * Every request owns an actual deadline/cancellation, with bounded response.
  */
-function createReportRunTransport({app,timeoutMs=3000,createClient=sdkClient,storageCapability=null,storageOperationKey=null,storageAssertActive=null,storageSourceRevision=null,storageBindingSha256=null}={}){
+function createReportRunTransport({app,timeoutMs=3000,createClient=sdkClient,storageCapability=null,storageOperationKey=null,storageAssertActive=null,storageSourceRevision=null,storageBindingSha256=null,storageDiagnostic=null}={}){
+ recordStorageDiagnostic(storageDiagnostic,'transport_construct');
+ if(String(process.env.ZC_SECURE||'').toLowerCase()==='override')recordStorageDiagnostic(storageDiagnostic,'secure_override');
  if(typeof app?.authenticateRequest!=='function'||!Number.isSafeInteger(timeoutMs)
   ||timeoutMs<1||timeoutMs>30000||String(process.env.ZC_SECURE||'').toLowerCase()==='override')held();
  if(storageCapability){require('./report-storage-capability').assertIssuedCapability(storageCapability);if(!/^[a-f0-9]{64}$/.test(storageOperationKey||'')||typeof storageAssertActive!=='function'||!/^[a-f0-9]{40}$/.test(storageSourceRevision||'')||!/^[a-f0-9]{64}$/.test(storageBindingSha256||''))held();}
  const target=role=>storageCapability?storageCapability.tables[role].id:role==='reportRuns'?'ReportRuns':'RevenueDeskEventReceipts';
  async function send(endpoint,data,query,options={},method='POST'){
+ const operation=endpoint==='/project-user/current'?'none':endpoint.endsWith('/row')
+  ?endpoint.includes('/'+target('eventReceipts')+'/')?'admission_insert':'report_insert'
+  :query&&data?.query?.startsWith('SELECT * FROM RevenueDeskEventReceipts ')?'admission_read':'report_read';
+ const observe=(stage,counter)=>recordStorageDiagnostic(storageDiagnostic,stage,operation,counter);
+ observe('request_prepare','attempted');
  const controller=new AbortController(),signal=controller.signal;
  const expiresAt=performance.now()+timeoutMs;
  const parentAbort=()=>controller.abort();options.signal?.addEventListener('abort',parentAbort,{once:true});
@@ -53,8 +61,10 @@ function createReportRunTransport({app,timeoutMs=3000,createClient=sdkClient,sto
  const timer=setTimeout(()=>controller.abort(),timeoutMs);
  const admit=()=>{if(signal.aborted||performance.now()>=expiresAt)held();storageAssertActive?.();options.budget?.assertActive();};
  const guarded=new Proxy(app,{get(target,key){
-  if(key==='authenticateRequest')return async request=>{admit();if(storageCapability&&(request.user!=='user'||target.credential?.getCurrentUser?.()!=='user'||target.credential?.getCurrentUserType?.()!=='admin'))held();
-   await target.authenticateRequest(request);admit();
+  if(key==='authenticateRequest')return async request=>{observe('authenticate_guard');admit();if(storageCapability&&(request.user!=='user'||target.credential?.getCurrentUser?.()!=='user'||target.credential?.getCurrentUserType?.()!=='admin'))held();
+   observe('authenticate_enter');
+   try{await target.authenticateRequest(request);}catch(error){observe('authenticate_rejected');throw error;}
+   observe('authenticate_complete');admit();observe('authenticate_postguard');
    if(storageCapability&&(target.credential.getCurrentUser()!=='user'||target.credential.getCurrentUserType()!=='admin'))held();};
   const value=Reflect.get(target,key,target);return typeof value==='function'?value.bind(target):value;
  }});
@@ -82,7 +92,7 @@ function createReportRunTransport({app,timeoutMs=3000,createClient=sdkClient,sto
    request.once('close',()=>requests.delete(request));
    // Applies to error responses too, which SDK 3.4.0 otherwise buffers itself.
    request.once('response',stream=>{
-    responseStatus=stream.statusCode;trace({event:'response',operation:endpoint.endsWith('/row')?'insert':'read',status:responseStatus});
+    responseStatus=stream.statusCode;observe('response_received','responses');trace({event:'response',operation:endpoint.endsWith('/row')?'insert':'read',status:responseStatus});
     responseStream=stream;streams.add(stream);let total=0,chunks=0,ended=false;const parts=[];
     stream.on('data',chunk=>{if(++chunks>128||(total+=Buffer.byteLength(chunk))>65536){
      principalFailure('size');rejectBody(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'));
@@ -94,7 +104,7 @@ function createReportRunTransport({app,timeoutMs=3000,createClient=sdkClient,sto
     stream.once('close',()=>{streams.delete(stream);if(!ended&&!signal.aborted&&!responseSettled){principalFailure('stream');rejectBody(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'));}});
     if(signal.aborted){request.destroy(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'));stream.destroy();}
    });
-   try{admit();trace({event:'dispatch',operation:endpoint.endsWith('/row')?'insert':'read'});
+   try{admit();observe('dispatch_admitted','dispatchStarted');trace({event:'dispatch',operation:endpoint.endsWith('/row')?'insert':'read'});
     principalTrace({event:'principal_request',getExact:method==='GET',pathExact:endpoint==='/project-user/current'});}catch{request.destroy(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'));return request;}
    return originalPipe.call(this,request,...args);
   };
@@ -105,7 +115,7 @@ function createReportRunTransport({app,timeoutMs=3000,createClient=sdkClient,sto
    admit();if(response.statusCode<200||response.statusCode>=300)held();
    try{const raw=response.data;principalTrace({event:'principal_raw',same:raw===responseStream});
     if(!raw||typeof raw.on!=='function')held();}catch{principalFailure('stream');held();}
-   const received=await responseBody;let text,result;
+   const received=await responseBody;observe('response_decode');let text,result;
    try{text=new TextDecoder('utf-8',{fatal:true}).decode(received);}catch{principalFailure('utf8');held();}
    try{result=JSON.parse(text);}catch{principalFailure('json');held();}admit();
    if(endpoint==='/project-user/current'){
