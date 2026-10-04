@@ -187,6 +187,25 @@ test('release builder exports only a clean exact Git revision and stamps only it
     'node_modules')), false);
   assert.equal(fs.existsSync(path.join(output, 'functions', 'revenue_desk_route_control',
     'node_modules')), false);
+  // Load the actual isolated Controller closure, with no source/helper fallback.
+  const isolatedControl = path.join(parent, 'isolated-controller');
+  fs.cpSync(path.join(output, 'functions', 'revenue_desk_route_control'), isolatedControl, { recursive: true });
+  const isolated = run(process.execPath, ['-e', `
+    const assert=require('node:assert/strict'),path=require('node:path');
+    const root=process.cwd(),lib=path.join(root,'reporting/revenue-desk-analytics/functions/analytics_sync/lib');
+    require(path.join(lib,'report-run-transport'));
+    require(path.join(lib,'report-storage-qualification'));
+    const helper=require(path.join(lib,'report-storage-diagnostic'));
+    const bridge=require(path.join(root,'lib/report-storage-qualification'));
+    const tracker=helper.createStorageDiagnostic();
+    helper.recordStorageDiagnostic(tracker,'authenticate_rejected','admission_insert','attempted');
+    const error=helper.storageDiagnosticError(tracker);
+    assert.equal(bridge.storageFailureDiagnostic(error).attempted,1);
+    assert.equal(bridge.storageFailureDiagnostic(Error('unissued')),undefined);
+    assert.throws(()=>bridge.createProtectedStorageQualification({environment:{}})({},{}),
+      {code:'REPORT_STORAGE_QUALIFICATION_HELD'});
+  `], isolatedControl);
+  assert.equal(isolated.status, 0, isolated.stderr || isolated.stdout);
   assert.deepEqual(require(path.join(output, 'catalyst.json')).functions.targets,
     ['revenue_desk_call_gateway', 'revenue_desk_route_control',
       'revenue_desk_call_worker']);

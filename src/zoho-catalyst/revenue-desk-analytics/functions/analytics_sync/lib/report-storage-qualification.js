@@ -6,6 +6,7 @@ const {createReportSuccessorStore}=require('./report-successor-store');
 const {createReportRunTransport}=require('./report-run-transport');
 const {validateStorageCapability,validateStoredProjection}=require('./report-storage-capability');
 const {diagnosticWindowMs}=require('./report-storage-window');
+const {createStorageDiagnostic,recordStorageDiagnostic,storageDiagnosticError}=require('./report-storage-diagnostic');
 const PROFILE='report_storage_qualification_v1',HASH=/^[a-f0-9]{64}$/,ID=/^[1-9][0-9]{2,29}$/;
 const sha=x=>crypto.createHash('sha256').update(typeof x==='string'?x:canonicalJson(x)).digest('hex');
 const exact=(x,keys)=>x&&typeof x==='object'&&!Array.isArray(x)&&Object.keys(x).sort().join(',')===keys.sort().join(',');
@@ -40,6 +41,9 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
   const rootKey='revenue-desk-report-v1:'+key;
   const active=()=>{const at=now();validateStorageCapability(capability,{...capabilityOptions,now:at});if(!Number.isSafeInteger(at)||at<b.verifiedAt||at>=b.expiresAt)held();return at;};active();
   return Object.freeze({async handle(command,{actor,signal}={}){
+   const diagnostic=createStorageDiagnostic();
+   function held(){throw storageDiagnosticError(diagnostic);}
+   const observe=stage=>recordStorageDiagnostic(diagnostic,stage);
    if(!exact(command,['profile','action'])||command.profile!==PROFILE
     ||!['qualify_storage','read_storage_evidence'].includes(command.action)
     ||actor?.kind!=='internal_controller'||actor.identity!==config.operatorIdHash
@@ -47,7 +51,7 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
    const write=command.action==='qualify_storage';
    if(write&&consumed.has(key))held();
    if(write)consumed.add(key); // Before any await; unknown/failed admission is consumed.
-   const start=active(),wall=performance.now()+b.timeoutMs,abort=new AbortController();
+   observe('active');const start=active(),wall=performance.now()+b.timeoutMs,abort=new AbortController();
    let reject;const deadline=new Promise((_,r)=>{reject=r;});deadline.catch(()=>{});
    const cancel=()=>{abort.abort();reject(new Error('REPORT_STORAGE_QUALIFICATION_HELD'));};
    signal?.addEventListener('abort',cancel,{once:true});if(signal?.aborted)cancel();const timer=setTimeout(cancel,b.timeoutMs);
@@ -60,7 +64,7 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
     else if(kind==='report_run_write'){if(!write||++counts.inserts>4)held();}else held();}};
    const options={signal:abort.signal,budget};
    async function run(){
-    admission();const io=transportFactory({app,timeoutMs:Math.min(b.timeoutMs,3000),storageCapability:capability,storageOperationKey:key,storageAssertActive:admission,storageSourceRevision:b.sourceRevision,storageBindingSha256:pin});
+    admission();observe('transport_construct');const io=transportFactory({storageDiagnostic:diagnostic,app,timeoutMs:Math.min(b.timeoutMs,3000),storageCapability:capability,storageOperationKey:key,storageAssertActive:admission,storageSourceRevision:b.sourceRevision,storageBindingSha256:pin});
     if(!['query','insert','insertAdmission','readAdmission'].every(k=>typeof io?.[k]==='function'))held();
     let admissionEvidenceDigest,observedCreator;
     const acknowledgments=new Map();
@@ -88,7 +92,7 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
      if(!Array.isArray(accepted)||accepted.length!==1)held();
      budget.consume('admission_read');const observed=await io.readAdmission(eventKey,options);admission();
      if(!Array.isArray(observed)||observed.length!==1)held();
-     const row=observed[0].RevenueDeskEventReceipts||observed[0],ack=accepted[0];
+     observe('admission_verify');const row=observed[0].RevenueDeskEventReceipts||observed[0],ack=accepted[0];
      projection(ack,'eventReceipts');projection(row,'eventReceipts');
      if(String(row.ROWID)!==String(ack.ROWID))held();
      for(const [field,value] of Object.entries(receipt)){
@@ -128,7 +132,7 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
       creatorProvenance:'observed_consistent_v1',namedIdentityVerified:false,
       physicalRows:rows.size,headVersion:head.version,reads:counts.reads,inserts:0,qualificationAuthority:false,deliveryAuthority:false});
     }
-    budget.consume('report_run_read');const prior=await checked.query(`SELECT * FROM ReportRuns WHERE IdempotencyKey = '${rootKey}' LIMIT 2`,options);
+    observe('root_prior_read');budget.consume('report_run_read');const prior=await checked.query(`SELECT * FROM ReportRuns WHERE IdempotencyKey = '${rootKey}' LIMIT 2`,options);
     if(prior.length)held(); // A durable consumed identity is never restarted, even after a cold reload.
     const identity={clientId:'qualification_'+b.nonce,deploymentId:'qualification_'+b.nonce,periodStart:'1970-01-01',periodEnd:'1970-01-01'};
     const state=label=>({kind:'report_attempt_v1',identity,phase:'working',owner:'synthetic_'+label,failures:0,nextAttemptAt:0,lastGenerationKey:null,
@@ -149,14 +153,14 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
      if(lastDispatch>=firstResponse)held();
      return winner;
     }
-    const root=await Promise.allSettled([left.insert(key,state('root_left'),contender('root_left')),
+    observe('root_round');const root=await Promise.allSettled([left.insert(key,state('root_left'),contender('root_left')),
      right.insert(key,state('root_right'),contender('root_right'))]);admission();
     const rootWinner=round(['root_left','root_right'],root),owner=rootWinner===0?left:right,accepted=root[rootWinner].value;
     const successorState=label=>({...state(label),phase:'waiting'});
-    const successors=await Promise.allSettled([owner.compareAndSwap(accepted,successorState('successor_left'),contender('successor_left')),
+    observe('successor_round');const successors=await Promise.allSettled([owner.compareAndSwap(accepted,successorState('successor_left'),contender('successor_left')),
      owner.compareAndSwap(accepted,successorState('successor_right'),contender('successor_right'))]);admission();
     const successorWinner=round(['successor_left','successor_right'],successors),head=await owner.get(key,options);admission();
-    if(head?.version!==2||head.rowId!==successors[successorWinner].value.rowId||rows.size!==2||counts.reads!==7||counts.inserts!==4)held();
+    observe('final_verify');if(head?.version!==2||head.rowId!==successors[successorWinner].value.rowId||rows.size!==2||counts.reads!==7||counts.inserts!==4)held();
     const observedAt=admission(),evidence={bindingSha256:pin,operationDigest:key,capabilitySha256,
      rows:[...rows.values()].sort((a,c)=>String(a.ROWID).localeCompare(String(c.ROWID))),rootWinner,successorWinner,
      requests:[...traces.entries()],counts,admissionEvidenceDigest,observedAt};

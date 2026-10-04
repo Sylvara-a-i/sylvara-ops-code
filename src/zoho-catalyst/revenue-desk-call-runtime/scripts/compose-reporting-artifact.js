@@ -26,7 +26,7 @@ const DELIVERY_BOUNDARY_PATH = `${RUNTIME}/functions/revenue_desk_route_control/
 const DELIVERY_BOUNDARY_SHA256 = '317bd88533f0f5295aaacc8a83b78b46426b7ceb7dba69213b606dd5490989af';
 const SENDER_BOUNDARY_SHA256 = '9ca408616b5db4335a78e9c53dceb5cb12fe7722da34f9d94a2cfa749e881cb2';
 const STORAGE_BOUNDARY_SHA256 = 'af72d2fe68b31e73fcfdd452fa0fdde975dadb04c66729cbc857330ac4743455';
-// Exact reviewed PR130 observation-only changes; all old guards remain byte-identical.
+// Exact reviewed observation-only changes; inverse composition restores every old guard.
 const STORAGE_DIAGNOSTIC_HUNKS = [
   {
     "before": "  catalystSdk, environment = process.env, fetchImpl = globalThis.fetch,\n  now = Date.now, artifactSourceRevision, factories = {},\n} = {}) {\n  return async function listener(request, response) {\n    try {\n      const config = loadConfig(environment, artifactSourceRevision);\n",
@@ -42,10 +42,10 @@ const STORAGE_DIAGNOSTIC_HUNKS = [
   },
   {
     "before": "      });\n    } catch (error) {\n      const status = error instanceof RevenueDeskError ? error.httpStatus : 500;\n      const code = publicCode(error);\n",
-    "after": "      });\n    } catch (error) {\n      if (storageFailureStage && typeof failureLogger === 'function') {\n        // Diagnostic observation only. Handler failure never proves zero effects.\n        // Never pass an Error, request, header, body or arbitrary code to logging.\n        let candidate;\n        try { candidate = error?.code; } catch (_) { candidate = undefined; }\n        const allowed = new Set(['app/invalid_project_details', 'app/invalid_app_object',\n          'auth/invalid_credential', 'MODULE_NOT_FOUND', 'CONTROL_AUTHENTICATION_FAILED',\n          'CONTROL_PRECONDITION_FAILED', 'REPORT_STORAGE_QUALIFICATION_HELD']);\n        const code = typeof candidate === 'string' && allowed.has(candidate) ? candidate : 'unknown';\n        try {\n          Promise.resolve(failureLogger(Object.freeze({ stage: storageFailureStage, code })))\n            .catch(() => {});\n        } catch (_) {\n          // Observability failure cannot change the existing HTTP result.\n        }\n      }\n      const status = error instanceof RevenueDeskError ? error.httpStatus : 500;\n      const code = publicCode(error);\n"
+    "after": "      });\n    } catch (error) {\n      if (storageFailureStage && typeof failureLogger === 'function') {\n        // Diagnostic observation only. Handler failure never proves zero effects.\n        // Never pass an Error, request, header, body or arbitrary code to logging.\n        let candidate;\n        try { candidate = error?.code; } catch (_) { candidate = undefined; }\n        const allowed = new Set(['app/invalid_project_details', 'app/invalid_app_object',\n          'auth/invalid_credential', 'MODULE_NOT_FOUND', 'CONTROL_AUTHENTICATION_FAILED',\n          'CONTROL_PRECONDITION_FAILED', 'REPORT_STORAGE_QUALIFICATION_HELD']);\n        const code = typeof candidate === 'string' && allowed.has(candidate) ? candidate : 'unknown';\n        let diagnostic;\n        try { diagnostic = require('./report-storage-qualification').storageFailureDiagnostic(error); } catch (_) {}\n        try {\n          Promise.resolve(failureLogger(Object.freeze({ stage: storageFailureStage, code,\n            ...(diagnostic ? { diagnostic } : {}) })))\n            .catch(() => {});\n        } catch (_) {\n          // Observability failure cannot change the existing HTTP result.\n        }\n      }\n      const status = error instanceof RevenueDeskError ? error.httpStatus : 500;\n      const code = publicCode(error);\n"
   }
 ];
-const STORAGE_DIAGNOSTIC_SHA256 = 'e8c684143fa1312940578b2b7e6a09e3089a61a11cf3b757903eea7f0ab22805';
+const STORAGE_DIAGNOSTIC_SHA256 = 'a18425258e9a137b6ad6cf8019fcca74bda3b029b5c05d065e7c4ff829aba02d';
 function reviewedStorageDiagnostic(bytes, reverse = true) {
   const source = bytes.toString('utf8');
   if (!Buffer.from(source).equals(bytes)) fail('source_overlap');

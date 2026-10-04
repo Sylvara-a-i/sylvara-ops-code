@@ -66,6 +66,8 @@ test('context branch is separately pinned, before initialization and removable w
 });
 
 test('exact pinned storage observations preserve selected auth through forward and inverse composition',()=>{
+ assert.equal(require('node:crypto').createHash('sha256').update(current).digest('hex'),
+  '02638f77c7c5ab6b0e39fbd11f0874e2cdf7fc5e700bf37d8990945468259014');
  const result=composeReviewedDeliveryBoundary(file,base,diagnosticCurrent,selected);
  assert.match(result.storage_diagnostic_sha256,/^[a-f0-9]{64}$/);
  const prior=composeReviewedDeliveryBoundary(file,base,current,selected);
@@ -76,7 +78,7 @@ test('exact pinned storage observations preserve selected auth through forward a
 });
 
 test('altered logging, stage or authentication cannot use the storage observation exception',()=>{
- for(const [from,to] of [['code }','code, error }'],["storageFailureStage = 'storage_handler'","storageFailureStage = 'storage_binding'"],['identity: config.operatorIdHash','identity: body.actor'],["app/invalid_project_details","private/unapproved"]]) {
+ for(const [from,to] of [['{ diagnostic }','{ diagnostic, error }'],["storageFailureStage = 'storage_handler'","storageFailureStage = 'storage_binding'"],['identity: config.operatorIdHash','identity: body.actor'],["app/invalid_project_details","private/unapproved"],['storageFailureDiagnostic(error)','storageFailureDiagnostic(request)']]) {
   assert.ok(diagnosticCurrent.toString().includes(from));
   held(()=>composeReviewedDeliveryBoundary(file,base,Buffer.from(diagnosticCurrent.toString().replace(from,to)),selected));
  }

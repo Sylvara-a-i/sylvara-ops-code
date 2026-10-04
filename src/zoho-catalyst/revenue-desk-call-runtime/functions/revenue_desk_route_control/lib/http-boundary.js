@@ -338,8 +338,11 @@ function createRequestListener({
           'auth/invalid_credential', 'MODULE_NOT_FOUND', 'CONTROL_AUTHENTICATION_FAILED',
           'CONTROL_PRECONDITION_FAILED', 'REPORT_STORAGE_QUALIFICATION_HELD']);
         const code = typeof candidate === 'string' && allowed.has(candidate) ? candidate : 'unknown';
+        let diagnostic;
+        try { diagnostic = require('./report-storage-qualification').storageFailureDiagnostic(error); } catch (_) {}
         try {
-          Promise.resolve(failureLogger(Object.freeze({ stage: storageFailureStage, code })))
+          Promise.resolve(failureLogger(Object.freeze({ stage: storageFailureStage, code,
+            ...(diagnostic ? { diagnostic } : {}) })))
             .catch(() => {});
         } catch (_) {
           // Observability failure cannot change the existing HTTP result.
