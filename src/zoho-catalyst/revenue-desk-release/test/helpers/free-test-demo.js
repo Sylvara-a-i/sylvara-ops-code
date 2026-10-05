@@ -182,6 +182,15 @@ async function createOfflineHarness(options = {}) {
     .replaceAll('2026-09-09', '2026-08-20'));
   const preparations = inputs.map((input, index) => {
     const letter = ['A', 'B'][index];
+    if (options.crmIdentity && index === 0) {
+      // Establish the whole fictional native relationship before preparation,
+      // authorization history and canonical facts acquire their hashes.
+      for (const module of ['account', 'contact', 'deal']) {
+        assert.match(options.crmIdentity[module], /^[1-9][0-9]{9,29}$/);
+        input = JSON.parse(JSON.stringify(input).replaceAll(input.crm[module].id, options.crmIdentity[module]));
+      }
+      inputs[index] = input;
+    }
     input.crm.account.Account_Name = `ZZZ ${input.crm.account.Account_Name}`;
     Object.assign(input.review, { clientId: `client_${letter}`, deploymentId: `deployment_${letter}`,
       notificationRecipientId: `recipient_${letter}` });

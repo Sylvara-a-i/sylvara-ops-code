@@ -12,8 +12,8 @@ const TYPES = ['deployment', 'call', 'final_test_result'];
 const READBACK_KEYS = ['RECORD_KEY', 'CLIENT_KEY', 'DEPLOYMENT_KEY', 'ENVIRONMENT', 'PAYLOAD_HASH', 'SOURCE_MODIFIED_AT'];
 
 async function createReconciledReportFixture({ empty = false, reconcile = true, analyses,
-  endedBeforeAnalysis = false, mailBehavior, lateFinalCall = false, inFlightOvershoot = false, stopped = false } = {}) {
-  const h = stopped ? await createStoppedOfflineHarness({ empty }) : await createOfflineHarness({ mailBehavior });
+  endedBeforeAnalysis = false, mailBehavior, lateFinalCall = false, inFlightOvershoot = false, stopped = false, crmIdentity } = {}) {
+  const h = stopped ? await createStoppedOfflineHarness({ empty }) : await createOfflineHarness({ mailBehavior, crmIdentity });
   const runtime = h.runtime;
   const calls = stopped ? Array.from({ length: runtime.store.rows.get('RevenueDeskCalls').length }, () => ({}))
     : analyses === undefined ? (empty ? [] : [{}]) : analyses;

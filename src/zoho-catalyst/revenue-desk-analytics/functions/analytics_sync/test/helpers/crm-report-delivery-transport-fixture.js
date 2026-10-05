@@ -105,7 +105,7 @@ async function createCrmReportDeliveryTransport(x,{outcome='accepted',scan='exac
    fromAddress:'reports@example.invalid',fromName:'Sylvara',connectionReference:'synthetic_report_mail',
    contractQualificationDigest:'c'.repeat(64),senderQualificationDigest:'d'.repeat(64),
    verifiedAt:x.f.now()-1000,expiresAt:x.f.now()+3600000,timeoutMs,maxReconciliationPages:scan==='truncated'?2:3}});
- return {crm,sender,calls,connections,state,readSignals,requestEvidence,
+ return {crm,sender,fetchImpl,tokens,calls,connections,state,readSignals,requestEvidence,
   get uploads(){return uploadCount;},get sends(){return sendCount;},get details(){return detailReads;},get lists(){return listReads;},
   get sent(){return sent;},get file(){return file;},get lateReaderCancelled(){return lateReaderCancelled;}};
 }

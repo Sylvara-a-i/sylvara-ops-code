@@ -206,7 +206,7 @@ function authorizationRows(deployment, configurationVersion, letter, eventChainS
     controlBinding: {
       schemaVersion: 1,
       action: event.ACTION,
-      dealId: configuration(letter).crmDealId,
+      dealId: JSON.parse(configurationVersion.CONFIGURATION_JSON).crmDealId,
       journeyId: `journey_${letter.toLowerCase()}`,
       deploymentId: event.DEPLOYMENT_ID,
       configurationVersionId: event.CONFIGURATION_VERSION_ID,
