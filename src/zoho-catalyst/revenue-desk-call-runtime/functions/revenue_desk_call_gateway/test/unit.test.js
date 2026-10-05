@@ -999,6 +999,20 @@ test('unit: optional inbound call ID is bounded and does not change normalized r
   { code: 'INVALID_SCHEMA' });
 });
 
+test('unit: Retell post-call events require terminal status including failed calls', () => {
+  for (const event of ['call_ended', 'call_analyzed']) {
+    const payload = eventPayload(event, 'terminal_status_unit', {}, 'A');
+    for (const status of ['ended', 'not_connected', 'error']) {
+      payload.call.call_status = status;
+      assert.equal(validateEventEnvelope(payload).callStatus, status);
+    }
+    for (const status of ['registered', 'ongoing', 'unknown', null, undefined]) {
+      payload.call.call_status = status;
+      assert.throws(() => validateEventEnvelope(payload), { code: 'INVALID_SCHEMA' });
+    }
+  }
+});
+
 test('unit: Retell post-call duration is required, integral, and bounded', () => {
   const payload = eventPayload('call_ended', 'duration_unit', {}, 'A');
   payload.call.duration_ms = 45_000;

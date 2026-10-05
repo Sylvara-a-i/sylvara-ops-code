@@ -14,7 +14,9 @@ const E164_PATTERN = /^\+[1-9][0-9]{7,14}$/;
 const SHA_PATTERN = /^[0-9a-f]{40}$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ZIP_PATTERN = /^[0-9]{5}(?:-[0-9]{4})?$/;
-const CALL_STATUSES = new Set(['registered', 'not_connected', 'ongoing', 'ended', 'error']);
+// Only terminal events enter this boundary. A nonterminal status would bind
+// the durable call and prevent its later terminal evidence from converging.
+const TERMINAL_CALL_STATUSES = new Set(['not_connected', 'ended', 'error']);
 const MAX_RETELL_CALL_DURATION_MS = 86_400_000;
 // Keep the configuration boundary aligned with Form 2's exact choices. A
 // destination label is not free text and cannot imply an unverified number.
@@ -372,7 +374,7 @@ function validateEventEnvelope(input) {
   const callId = identifier(call.call_id, 'event webhook.call.call_id');
   const agentId = identifier(call.agent_id, 'event webhook.call.agent_id');
   const agentVersion = integer(call.agent_version, 'event webhook.call.agent_version', 0, 1_000_000);
-  const callStatus = enumValue(call.call_status, CALL_STATUSES, 'event webhook.call.call_status');
+  const callStatus = enumValue(call.call_status, TERMINAL_CALL_STATUSES, 'event webhook.call.call_status');
   const disconnectionReason = optionalString(call.disconnection_reason,
     'event webhook.call.disconnection_reason', { maximum: 64, trim: false });
   invariant(disconnectionReason === null || /^[a-z][a-z0-9_]{0,63}$/.test(disconnectionReason),

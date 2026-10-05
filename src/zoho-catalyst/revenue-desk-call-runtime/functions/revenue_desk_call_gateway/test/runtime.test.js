@@ -739,6 +739,54 @@ test('integration: conflicting lifecycle timestamps are quarantined without rewr
   assert.equal(fixture.store.rows.get('RevenueDeskEventReceipts').at(-1).STATUS, 'TerminalFailure');
 });
 
+test('integration: nonterminal post-call payloads cannot poison later terminal delivery', async () => {
+  for (const event of ['call_ended', 'call_analyzed']) {
+    for (const status of ['registered', 'ongoing']) {
+      const fixture = runtimeFixture();
+      const inbound = await invoke(fixture.listener, { url: '/retell/inbound',
+        payload: payloadInbound('A'), env: fixture.env });
+      const metadata = inbound.body.call_inbound.metadata;
+      const callId = `nonterminal_${event}_${status}`;
+      const malformed = eventPayload(event, callId, metadata, 'A');
+      malformed.call.call_status = status;
+
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const rejected = await invoke(fixture.listener, { url: '/retell/events',
+          payload: malformed, env: fixture.env, processJobs: false });
+        assert.equal(rejected.status, 400);
+        assert.equal(rejected.body.code, 'INVALID_SCHEMA');
+      }
+      const quarantined = fixture.store.rows.get('RevenueDeskEventReceipts')
+        .filter(row => row.RECEIPT_KIND === 'provider_event');
+      assert.equal(quarantined.length, 1);
+      assert.match(quarantined[0].EVENT_KEY, /^evtq_/);
+      assert.equal(quarantined[0].STATUS, 'TerminalFailure');
+      assert.equal(quarantined[0].EVENT_DATA_JSON, '{}');
+      assert.equal(fixture.jobQueue.length, 0);
+      assert.equal(fixture.store.rows.get('RevenueDeskCalls').length, 0);
+      assert.equal(fixture.store.rows.get('RevenueDeskDeployments')[0].HANDLED_COUNT, 0);
+      assert.equal(fixture.store.rows.get('RevenueDeskNotifications').length, 0);
+
+      // Exercise both terminal orders, then replay both provider receipts.
+      const order = event === 'call_ended'
+        ? ['call_analyzed', 'call_ended'] : ['call_ended', 'call_analyzed'];
+      for (const terminalEvent of [...order, ...order]) {
+        const accepted = await invoke(fixture.listener, { url: '/retell/events',
+          payload: eventPayload(terminalEvent, callId, metadata, 'A'), env: fixture.env });
+        assert.equal(accepted.status, 200);
+      }
+      assert.deepEqual(fixture.workerErrors, []);
+      const calls = fixture.store.rows.get('RevenueDeskCalls');
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0].PROCESSING_STATE, 'Completed');
+      assert.equal(JSON.parse(calls[0].CANONICAL_CALL_JSON).callStatus, 'ended');
+      assert.equal(fixture.store.rows.get('RevenueDeskDeployments')[0].HANDLED_COUNT, 1);
+      assert.equal(fixture.store.rows.get('RevenueDeskNotifications').length, 1);
+      assert.equal(fixture.mailAccesses, 0);
+    }
+  }
+});
+
 test('integration: authoritative Retell duration converges across event order and conflicts fail closed', async () => {
   const fixture = runtimeFixture();
   const inbound = await invoke(fixture.listener, { url: '/retell/inbound',
