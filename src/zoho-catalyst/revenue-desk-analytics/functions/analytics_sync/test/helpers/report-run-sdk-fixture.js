@@ -3,7 +3,7 @@ const assert=require('node:assert/strict'),crypto=require('node:crypto'),https=r
 const {Writable,PassThrough}=require('node:stream');
 const sha=x=>crypto.createHash('sha256').update(x).digest('hex');
 const schema=require('./report-storage-schema-fixture');
-function fixture({deferResponses=false,principalData,principalBody,principalStreamFailure=false,principalChunks,principalPrematureClose=false,credentialType,storageResponseTransform,storageSchema=false,providerTransport}={}){
+function fixture({deferResponses=false,principalData,principalBody,principalStreamFailure=false,principalChunks,principalPrematureClose=false,credentialType,storageResponseTransform,storageSchema=false,providerTransport,storageBodyTransform}={}){
  let at=1800000000000;const rows=new Map(),receipts=new Map(),requests=[],principals=[],created=[];let sequence=0,authDelay=null,mode='normal',clientCalls=0;
  const binding={schemaVersion:1,enabled:true,environment:'development',sourceRevision:'a'.repeat(40),projectId:'123456789',
   controlHost:'synthetic.invalid',tableId:'123456788',nonce:'c'.repeat(32),verifiedAt:at-1,expiresAt:at+60000,timeoutMs:1000};
@@ -75,7 +75,7 @@ function fixture({deferResponses=false,principalData,principalBody,principalStre
     if(path==='/project-user/current'&&principalPrematureClose){stream.write('{');stream.destroy();return;}
     if(path==='/project-user/current'&&principalChunks){for(const chunk of principalChunks)stream.write(chunk);stream.end();}
     else if(path==='/project-user/current'&&principalBody!==undefined)stream.end(principalBody);
-    else if(mode==='oversize')stream.end('x'.repeat(65537));else stream.end(JSON.stringify({data}));
+    else if(mode==='oversize')stream.end('x'.repeat(65537));else stream.end(storageBodyTransform?storageBodyTransform({path,data}):JSON.stringify({data}));
    });done();}});
   request.method='POST';request.protocol='https:';request.host='synthetic.invalid';request.path=options.path;created.push(request);return request;
  };

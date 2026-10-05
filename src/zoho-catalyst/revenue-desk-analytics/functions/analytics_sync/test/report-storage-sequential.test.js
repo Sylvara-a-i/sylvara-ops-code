@@ -25,6 +25,18 @@ function fixture(options={}){
  return {sdk,binding,config,environment,factory,make:()=>factory()(sdk.app,config),command,actor,advance:n=>at+=n};
 }
 const held={code:'REPORT_STORAGE_QUALIFICATION_HELD'};
+test('first insert decode failure remains closed and attributed after actual slot recovery read',async()=>{
+ const f=sequential({storageSchema:true,storageBodyTransform:({path,data})=>JSON.stringify({data:path==='/table/123456788/row'?{privateBodyValue:'never_logged'}:data})});
+ try{let failure;try{await f.make().handle(f.command,{actor:f.actor});}catch(e){failure=e;}
+  assert.equal(failure.code,held.code);const d=storageFailureDiagnostic(failure);
+  assert.equal(d.firstDecodeFailure.operation,'report_insert');assert.equal(d.firstDecodeFailure.decodeFailure,'data_not_array');
+  assert.equal(d.firstDecodeFailure.decodeDataType,'object');assert.equal(d.firstDecodeFailure.decodeArrayCardinality,'not_array');
+  assert.equal(d.decodeDataType,'array');assert.equal(d.decodeFailure,'none');
+  assert.equal(f.sdk.rows.size,1);assert.equal(f.sdk.receipts.size,1);assert.equal(f.sdk.requests.length,5);
+  assert.equal(f.sdk.requests.filter(r=>r.path.endsWith('/table/123456788/row')).length,1);
+  assert(!JSON.stringify(d).includes('never_logged'));assert(Object.isFrozen(d.firstDecodeFailure));
+ }finally{f.sdk.restore();}
+});
 test('provider insert rejection survives later readback as closed numeric status and fixed code',async()=>{
  const f=sequential();f.sdk.mode='report_invalid_data';try{
   let failure;try{await f.make().handle(f.command,{actor:f.actor});}catch(e){failure=e;}

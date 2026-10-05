@@ -2,7 +2,7 @@
 const {Readable}=require('node:stream');
 const path=require('node:path');
 const {performance}=require('node:perf_hooks');
-const {recordStorageDiagnostic,recordStorageProviderResult}=require('./report-storage-diagnostic');
+const {recordStorageDiagnostic,recordStorageProviderResult,recordStorageDecodeEvent,recordStorageResponseMetadata,recordStorageResponseShape}=require('./report-storage-diagnostic');
 // Structural observations contain only closed types/presence flags, never provider values.
 const structureType=value=>value===undefined?'absent':value===null?'null':Array.isArray(value)?'array':typeof value;
 const has=(value,key)=>value!==null&&typeof value==='object'&&Object.hasOwn(value,key);
@@ -54,12 +54,15 @@ function createReportRunTransport({app,timeoutMs=3000,createClient=sdkClient,sto
   :query&&data?.query?.startsWith('SELECT * FROM RevenueDeskEventReceipts ')?'admission_read':'report_read';
  const observe=(stage,counter)=>recordStorageDiagnostic(storageDiagnostic,stage,operation,counter);
  observe('request_prepare','attempted');
+ if(storageProviderDiagnostics)recordStorageResponseMetadata(storageDiagnostic,undefined);
  const controller=new AbortController(),signal=controller.signal;
  const expiresAt=performance.now()+timeoutMs;
  const parentAbort=()=>controller.abort();options.signal?.addEventListener('abort',parentAbort,{once:true});
  if(options.signal?.aborted)controller.abort();
  const timer=setTimeout(()=>controller.abort(),timeoutMs);
- const admit=()=>{if(signal.aborted||performance.now()>=expiresAt)held();storageAssertActive?.();options.budget?.assertActive();};
+ const decodeEvent=event=>{if(storageProviderDiagnostics)recordStorageDecodeEvent(storageDiagnostic,event);};
+ const admit=()=>{if(signal.aborted||performance.now()>=expiresAt){decodeEvent(signal.aborted?'deadline_cancelled':'deadline_expired');held();}
+  try{storageAssertActive?.();options.budget?.assertActive();}catch(error){decodeEvent('deadline_authority_held');throw error;}decodeEvent('deadline_active');};
  const guarded=new Proxy(app,{get(target,key){
   if(key==='authenticateRequest')return async request=>{observe('authenticate_guard');admit();if(storageCapability&&(request.user!=='user'||target.credential?.getCurrentUser?.()!=='user'||target.credential?.getCurrentUserType?.()!=='admin'))held();
    observe('authenticate_enter');
@@ -77,7 +80,7 @@ function createReportRunTransport({app,timeoutMs=3000,createClient=sdkClient,sto
  const principalFailure=kind=>{if(endpoint!=='/project-user/current'||signal.aborted||responseSettled||principalFailureClass)return;
   principalFailureClass=kind;trace({event:'principal_failure',failureClass:kind});};
  let client;try{client=createClient(guarded);}catch{clearTimeout(timer);options.signal?.removeEventListener('abort',parentAbort);held();}
- const cancel=()=>{rejectDeadline(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'));for(const r of requests)r.destroy(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'));
+ const cancel=()=>{if(signal.aborted)decodeEvent('deadline_cancelled');rejectDeadline(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'));for(const r of requests)r.destroy(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'));
   for(const s of streams)s.destroy(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'));};
  signal.addEventListener('abort',cancel,{once:true});
 
@@ -92,7 +95,7 @@ function createReportRunTransport({app,timeoutMs=3000,createClient=sdkClient,sto
    request.once('close',()=>requests.delete(request));
    // Applies to error responses too, which SDK 3.4.0 otherwise buffers itself.
    request.once('response',stream=>{
-    responseStatus=stream.statusCode;if(storageProviderDiagnostics)recordStorageProviderResult(storageDiagnostic,responseStatus,undefined,operation);observe('response_received','responses');trace({event:'response',operation:endpoint.endsWith('/row')?'insert':'read',status:responseStatus});
+    responseStatus=stream.statusCode;if(storageProviderDiagnostics){recordStorageProviderResult(storageDiagnostic,responseStatus,undefined,operation);recordStorageResponseMetadata(storageDiagnostic,stream.headers);}observe('response_received','responses');trace({event:'response',operation:endpoint.endsWith('/row')?'insert':'read',status:responseStatus});
     responseStream=stream;streams.add(stream);let total=0,chunks=0,ended=false;const parts=[];
     stream.on('data',chunk=>{if(++chunks>128||(total+=Buffer.byteLength(chunk))>65536){
      principalFailure('size');rejectBody(new Error('REPORT_RUN_RECONCILIATION_REQUIRED'));
@@ -116,14 +119,15 @@ function createReportRunTransport({app,timeoutMs=3000,createClient=sdkClient,sto
    try{const raw=response.data;principalTrace({event:'principal_raw',same:raw===responseStream});
     if(!raw||typeof raw.on!=='function')held();}catch{principalFailure('stream');held();}
    const received=await responseBody;observe('response_decode');let text,result;
-   try{text=new TextDecoder('utf-8',{fatal:true}).decode(received);}catch{principalFailure('utf8');held();}
-   try{result=JSON.parse(text);}catch{principalFailure('json');held();}admit();
+   try{text=new TextDecoder('utf-8',{fatal:true}).decode(received);decodeEvent('utf8_valid');}catch{decodeEvent('utf8_invalid');decodeEvent('failure_utf8');principalFailure('utf8');held();}
+   try{result=JSON.parse(text);decodeEvent('json_valid');}catch{decodeEvent('json_invalid');decodeEvent('failure_json');principalFailure('json');held();}
+   if(storageProviderDiagnostics)recordStorageResponseShape(storageDiagnostic,result);admit();
    if(endpoint==='/project-user/current'){
     principalTrace({event:'principal_structure',structure:principalStructure(result)});
     const p=result?.data;if(!p||Array.isArray(p)||typeof p!=='object'){principalFailure('envelope');held();}
     return Object.freeze({userId:String(p.user_id||''),roleId:String(p.role_details?.role_id||''),roleName:p.role_details?.role_name,status:p.status});
    }
-   if(!Array.isArray(result?.data))held();trace({event:'outcome',operation:endpoint.endsWith('/row')?'insert':'read',accepted:true,duplicate:false});return result.data;
+   if(!Array.isArray(result?.data)){decodeEvent('failure_envelope');held();}trace({event:'outcome',operation:endpoint.endsWith('/row')?'insert':'read',accepted:true,duplicate:false});return result.data;
   }catch(error){failed=true;
    if(storageProviderDiagnostics)recordStorageProviderResult(storageDiagnostic,responseStatus,error,operation);
    // Diagnostic observes only a documented duplicate code, never provider text.
