@@ -3,7 +3,7 @@ const assert=require('node:assert/strict'),crypto=require('node:crypto'),https=r
 const {Writable,PassThrough}=require('node:stream');
 const sha=x=>crypto.createHash('sha256').update(x).digest('hex');
 const schema=require('./report-storage-schema-fixture');
-function fixture({deferResponses=false,principalData,principalBody,principalStreamFailure=false,principalChunks,principalPrematureClose=false,credentialType,storageResponseTransform,storageSchema=false}={}){
+function fixture({deferResponses=false,principalData,principalBody,principalStreamFailure=false,principalChunks,principalPrematureClose=false,credentialType,storageResponseTransform,storageSchema=false,providerTransport}={}){
  let at=1800000000000;const rows=new Map(),receipts=new Map(),requests=[],principals=[],created=[];let sequence=0,authDelay=null,mode='normal',clientCalls=0;
  const binding={schemaVersion:1,enabled:true,environment:'development',sourceRevision:'a'.repeat(40),projectId:'123456789',
   controlHost:'synthetic.invalid',tableId:'123456788',nonce:'c'.repeat(32),verifiedAt:at-1,expiresAt:at+60000,timeoutMs:1000};
@@ -36,14 +36,19 @@ function fixture({deferResponses=false,principalData,principalBody,principalStre
   clientCalls++;const parts=[];let request;
   request=new Writable({autoDestroy:false,write(chunk,_encoding,done){parts.push(Buffer.from(chunk));done();},final(done){
    const bytes=Buffer.concat(parts);const payload=bytes.length?JSON.parse(bytes):null;requests.push({path:options.path,payload,method:options.method});
-   assert.equal(options.headers.Authorization,credentialType?'Zoho-oauthtoken synthetic-user-token':'synthetic-managed-credential');
-   assert.equal(options.headers['X-CATALYST-USER'],credentialType||'admin');
+   const principal=options.headers['X-CATALYST-USER'];
+   assert.ok(['admin','user'].includes(principal));
+   if(providerTransport&&credentialType)assert.ok(['Zoho-oauthtoken synthetic-user-token','Zoho-oauthtoken synthetic-admin-token'].includes(options.headers.Authorization));
+   else assert.equal(options.headers.Authorization,credentialType?'Zoho-oauthtoken synthetic-user-token':'synthetic-managed-credential');
+   if(!providerTransport)assert.equal(principal,credentialType||'admin');
    const path=options.path.replace(`/baas/v1/project/${binding.projectId}`,'');
-   (deferResponses?setImmediate:queueMicrotask)(()=>{
+   (deferResponses?setImmediate:queueMicrotask)(async()=>{
     if(mode==='network_error'){request.destroy(new Error('synthetic socket error'));return;}
     if(mode==='stall')return;
     let status=200,data;
-    if(path==='/query')data=query(payload.query);
+    const provided=providerTransport?await providerTransport({path,payload,method:options.method,principal}):null;
+    if(provided){status=provided.status||200;data=provided.data;}
+    else if(path==='/query')data=query(payload.query);
     else if(path==='/project-user/current')data=principalData === undefined ? {user_id:'987654321',status:'ACTIVE',role_details:{role_name:'App Administrator',role_id:'987654320'},email_id:'private-unused@example.invalid'} : principalData;
     else if(['/table/RevenueDeskEventReceipts/row','/table/123456787/row'].includes(path)){
      assert.equal(payload.length,1);const row=payload[0];
