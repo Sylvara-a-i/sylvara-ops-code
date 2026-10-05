@@ -121,7 +121,7 @@ async function coldFixture(outcome){
    assert.equal(init.headers.Authorization,'Zoho-oauthtoken '+'synthetic_pdf'.padEnd(30,'x'));
    assert.equal(u.pathname,'/browser360/v1/project/123456789/convert');assert.equal(init.method,'POST');assert.equal(init.headers.Environment,'Development');
    const payload=JSON.parse(init.body);assert.equal(payload.page_options.javascript_enabled,false);assert.match(payload.html,/@font-face/);pdfs++;
-   return new Response(Buffer.from('%PDF-1.7\n synthetic cold composition\n%%EOF\n'),{headers:{'content-type':'application/pdf'}});
+   return new Response(Buffer.from(`%PDF-1.7\n synthetic cold composition ${sha(payload.html)}\n%%EOF\n`),{headers:{'content-type':'application/pdf'}});
   }
   if(u.origin==='https://download.zoho.com'){
    assert.equal(init.headers.Authorization,'Zoho-oauthtoken '+'synthetic_workdrive'.padEnd(30,'x'));
@@ -177,6 +177,8 @@ test('cold protected worker/default adapters publish private pair and deliver on
    assert.equal(first.status,'report_pair_verified_not_for_delivery');
    assert.equal(first.deliveryStatus,outcome==='accepted'?'provider_accepted':'delivery_reconciliation_required');
    assert.equal(x.mail.sends,1);assert.equal(x.mail.uploads,1);assert.equal(x.wd.uploads.length,2);
+   const [summary,supporting]=[...x.wd.resources.values()].map(r=>r.bytes);
+   assert.deepEqual(x.mail.file,summary);assert.notDeepEqual(x.mail.file,supporting);
    assert.equal(x.counters().pdfs,2);assert.equal(x.counters().checkpointWrites,0);assert.ok(x.counters().queries>0);
    assert.deepEqual([...new Set(x.connections)].sort(),['synthetic_analytics','synthetic_pdf','synthetic_projection','synthetic_report_mail','synthetic_report_read','synthetic_workdrive']);
    // The protected worker preserves the normal retry cadence on a new instance.
