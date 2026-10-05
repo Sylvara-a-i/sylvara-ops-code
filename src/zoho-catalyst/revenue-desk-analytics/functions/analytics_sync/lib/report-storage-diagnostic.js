@@ -35,4 +35,43 @@ function recordStorageProviderResult(tracker,status,error,operation='none'){
   state.insertProviderCode=state.providerCode;
  }
 }
-module.exports={createStorageDiagnostic,recordStorageDiagnostic,storageDiagnosticError,storageFailureDiagnostic,recordStorageProviderResult};
+// Closed decode observations only. These never confer acceptance or retry authority.
+const DECODE_EVENTS=Object.freeze({
+ utf8_valid:['decodeUtf8','valid'],utf8_invalid:['decodeUtf8','invalid'],
+ json_valid:['decodeJson','valid'],json_invalid:['decodeJson','invalid'],
+ deadline_active:['decodeDeadline','active'],deadline_expired:['decodeDeadline','expired'],
+ deadline_cancelled:['decodeDeadline','cancelled'],deadline_authority_held:['decodeDeadline','authority_held'],
+ failure_utf8:['decodeFailure','utf8_invalid'],failure_json:['decodeFailure','json_invalid'],
+ failure_envelope:['decodeFailure','data_not_array']
+});
+function recordStorageDecodeEvent(tracker,event){
+ const state=trackers.get(tracker),entry=Object.hasOwn(DECODE_EVENTS,event)?DECODE_EVENTS[event]:null;
+ if(state&&entry){state[entry[0]]=entry[1];
+  if(!state.firstDecodeFailure&&(event.startsWith('failure_')||['deadline_expired','deadline_cancelled','deadline_authority_held'].includes(event))&&Object.hasOwn(state,'decodeUtf8')){
+   const fields=['decodeUtf8','decodeJson','decodeRootType','decodeDataType','decodeArrayCardinality','decodeEnvelopeStatus','decodeDeadline','decodeFailure','requestApiVersion','responseContentType'];
+   state.firstDecodeFailure=Object.freeze({operation:state.lastOperation,...Object.fromEntries(fields.map(k=>[k,state[k]]))});
+  }
+ }
+}
+function recordStorageResponseMetadata(tracker,headers){
+ const state=trackers.get(tracker);if(!state)return;
+ Object.assign(state,{decodeUtf8:'not_attempted',decodeJson:'not_attempted',decodeRootType:'not_decoded',decodeDataType:'not_decoded',decodeArrayCardinality:'not_decoded',decodeEnvelopeStatus:'not_decoded',decodeDeadline:'not_observed',decodeFailure:'none',requestApiVersion:'v1',responseContentType:'absent'});
+ if(headers===undefined||headers===null)return;
+ try{const d=Object.getOwnPropertyDescriptor(headers,'content-type');if(!d)return;
+  if(!Object.hasOwn(d,'value')||typeof d.value!=='string'||d.value.length>128){state.responseContentType='other';return;}
+  const media=d.value.split(';',1)[0].trim().toLowerCase();
+  state.responseContentType=media==='application/json'?'json':media==='text/plain'?'text':media==='text/html'?'html':'other';
+ }catch{state.responseContentType='other';}
+}
+function recordStorageResponseShape(tracker,result){
+ const state=trackers.get(tracker);if(!state)return;
+ const type=v=>v===undefined?'absent':v===null?'null':Array.isArray(v)?'array':typeof v;
+ try{const d=result&&typeof result==='object'?Object.getOwnPropertyDescriptor(result,'data'):undefined;
+  const data=d&&Object.hasOwn(d,'value')?d.value:undefined;
+  const s=result&&typeof result==='object'?Object.getOwnPropertyDescriptor(result,'status'):undefined;
+  state.decodeRootType=type(result);state.decodeDataType=type(data);
+  state.decodeArrayCardinality=!Array.isArray(data)?'not_array':data.length===0?'zero':data.length===1?'one':'multiple';
+  state.decodeEnvelopeStatus=!s?'absent':!Object.hasOwn(s,'value')?'other':s.value==='success'?'success':s.value==='error'?'error':'other';
+ }catch{} // No getter, provider value or thrown message is copied.
+}
+module.exports={createStorageDiagnostic,recordStorageDiagnostic,storageDiagnosticError,storageFailureDiagnostic,recordStorageProviderResult,recordStorageDecodeEvent,recordStorageResponseMetadata,recordStorageResponseShape};
