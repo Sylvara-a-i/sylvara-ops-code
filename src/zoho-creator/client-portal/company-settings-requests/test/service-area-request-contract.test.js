@@ -1,5 +1,8 @@
 "use strict";
 
+// Keep the offline identity prototype covered by the existing canonical/CI entrypoint.
+require("./offline-identity-contract.test");
+
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
