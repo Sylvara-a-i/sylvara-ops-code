@@ -77,6 +77,8 @@ test('deadline cancels local admission and late provider completion cannot dispa
  const f=fixture();let seenSignal,release;f.options.timeoutMs=10;
  f.sender.sendSummary=async x=>{seenSignal=x.signal;return new Promise(resolve=>{release=()=>resolve(null);});};
  await assert.rejects(f.control().initial(f.req),{code:'REPORT_DELIVERY_HELD'});assert.equal(seenSignal.aborted,true);release();
+ // Reconciliation tests consumed-state behavior, not another short wall deadline.
+ f.options.timeoutMs=1000;
  assert.equal((await f.control().initial(f.req)).status,'delivery_reconciliation_required');
 });
 test('lost claim CAS/acceptance response recovers by exact state readback without double send',async()=>{
