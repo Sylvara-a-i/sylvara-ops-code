@@ -1,4 +1,5 @@
 'use strict';
+
 const test=require('node:test'),assert=require('node:assert/strict'),crypto=require('node:crypto');
 const {fixture:network}=require('./helpers/report-run-sdk-fixture');
 const {canonicalJson}=require('../lib/facts');
@@ -91,5 +92,102 @@ test('sequential diagnostic never retries ambiguous admission or authorizes a co
   await assert.rejects(f.make().handle(f.command,{actor:f.actor}),held);assert.equal(f.sdk.rows.size,0);
   assert.equal(f.sdk.requests.length,1);f.sdk.mode='normal';
   await assert.rejects(f.make().handle(f.command,{actor:f.actor}),held);assert.equal(f.sdk.rows.size,0);
+ }finally{f.sdk.restore();}
+});
+
+test('closed report acknowledgement diagnostic: missing column',async()=>{
+ const f=sequential({storageSchema:true,storageBodyTransform:({path,data})=>{
+  if(path==='/table/123456788/row'){data=structuredClone(data);const row=data[0];delete row.ReportType;}
+  return JSON.stringify({status:'success',data});
+ }});try{let failure;try{await f.make().handle(f.command,{actor:f.actor});}catch(e){failure=e;}
+  assert.equal(failure?.code,held.code);const d=storageFailureDiagnostic(failure);
+  assert.deepEqual(d.firstValidationFailure,{location:'report_ack',reason:'projection_missing'});
+  assert(Object.isFrozen(d.firstValidationFailure));assert(!JSON.stringify(d).includes('never_logged'));
+  assert.equal(f.sdk.requests.length,4);assert.equal(f.sdk.rows.size,1);assert.equal(f.sdk.receipts.size,1);
+  assert.equal(d.decodeFailure,'none');assert.equal(d.decodeDataType,'array');
+ }finally{f.sdk.restore();}
+});
+test('closed report acknowledgement diagnostic: unexpected private column',async()=>{
+ const f=sequential({storageSchema:true,storageBodyTransform:({path,data})=>{
+  if(path==='/table/123456788/row'){data=structuredClone(data);const row=data[0];row.privateExtra='never_logged';}
+  return JSON.stringify({status:'success',data});
+ }});try{let failure;try{await f.make().handle(f.command,{actor:f.actor});}catch(e){failure=e;}
+  assert.equal(failure?.code,held.code);const d=storageFailureDiagnostic(failure);
+  assert.deepEqual(d.firstValidationFailure,{location:'report_ack',reason:'projection_extra'});
+  assert(Object.isFrozen(d.firstValidationFailure));assert(!JSON.stringify(d).includes('never_logged'));
+  assert.equal(f.sdk.requests.length,4);assert.equal(f.sdk.rows.size,1);assert.equal(f.sdk.receipts.size,1);
+  assert.equal(d.decodeFailure,'none');assert.equal(d.decodeDataType,'array');
+ }finally{f.sdk.restore();}
+});
+test('closed report acknowledgement diagnostic: invalid row id',async()=>{
+ const f=sequential({storageSchema:true,storageBodyTransform:({path,data})=>{
+  if(path==='/table/123456788/row'){data=structuredClone(data);const row=data[0];row.ROWID='never_logged';}
+  return JSON.stringify({status:'success',data});
+ }});try{let failure;try{await f.make().handle(f.command,{actor:f.actor});}catch(e){failure=e;}
+  assert.equal(failure?.code,held.code);const d=storageFailureDiagnostic(failure);
+  assert.deepEqual(d.firstValidationFailure,{location:'report_ack',reason:'row_id'});
+  assert(Object.isFrozen(d.firstValidationFailure));assert(!JSON.stringify(d).includes('never_logged'));
+  assert.equal(f.sdk.requests.length,4);assert.equal(f.sdk.rows.size,1);assert.equal(f.sdk.receipts.size,1);
+  assert.equal(d.decodeFailure,'none');assert.equal(d.decodeDataType,'array');
+ }finally{f.sdk.restore();}
+});
+test('closed report acknowledgement diagnostic: invalid creator id',async()=>{
+ const f=sequential({storageSchema:true,storageBodyTransform:({path,data})=>{
+  if(path==='/table/123456788/row'){data=structuredClone(data);const row=data[0];row.CREATORID='never_logged';}
+  return JSON.stringify({status:'success',data});
+ }});try{let failure;try{await f.make().handle(f.command,{actor:f.actor});}catch(e){failure=e;}
+  assert.equal(failure?.code,held.code);const d=storageFailureDiagnostic(failure);
+  assert.deepEqual(d.firstValidationFailure,{location:'report_ack',reason:'creator_id'});
+  assert(Object.isFrozen(d.firstValidationFailure));assert(!JSON.stringify(d).includes('never_logged'));
+  assert.equal(f.sdk.requests.length,4);assert.equal(f.sdk.rows.size,1);assert.equal(f.sdk.receipts.size,1);
+  assert.equal(d.decodeFailure,'none');assert.equal(d.decodeDataType,'array');
+ }finally{f.sdk.restore();}
+});
+test('closed report acknowledgement diagnostic: different creator',async()=>{
+ const f=sequential({storageSchema:true,storageBodyTransform:({path,data})=>{
+  if(path==='/table/123456788/row'){data=structuredClone(data);const row=data[0];row.CREATORID='999999999';}
+  return JSON.stringify({status:'success',data});
+ }});try{let failure;try{await f.make().handle(f.command,{actor:f.actor});}catch(e){failure=e;}
+  assert.equal(failure?.code,held.code);const d=storageFailureDiagnostic(failure);
+  assert.deepEqual(d.firstValidationFailure,{location:'report_ack',reason:'creator_mismatch'});
+  assert(Object.isFrozen(d.firstValidationFailure));assert(!JSON.stringify(d).includes('never_logged'));
+  assert.equal(f.sdk.requests.length,4);assert.equal(f.sdk.rows.size,1);assert.equal(f.sdk.receipts.size,1);
+  assert.equal(d.decodeFailure,'none');assert.equal(d.decodeDataType,'array');
+ }finally{f.sdk.restore();}
+});
+test('closed report acknowledgement diagnostic: string boolean',async()=>{
+ const f=sequential({storageSchema:true,storageBodyTransform:({path,data})=>{
+  if(path==='/table/123456788/row'){data=structuredClone(data);const row=data[0];row.ActualEstimatedSeparated=String(row.ActualEstimatedSeparated);}
+  return JSON.stringify({status:'success',data});
+ }});try{let failure;try{await f.make().handle(f.command,{actor:f.actor});}catch(e){failure=e;}
+  assert.equal(failure?.code,held.code);const d=storageFailureDiagnostic(failure);
+  assert.deepEqual(d.firstValidationFailure,{location:'report_ack',reason:'field_boolean_type'});
+  assert(Object.isFrozen(d.firstValidationFailure));assert(!JSON.stringify(d).includes('never_logged'));
+  assert.equal(f.sdk.requests.length,4);assert.equal(f.sdk.rows.size,1);assert.equal(f.sdk.receipts.size,1);
+  assert.equal(d.decodeFailure,'none');assert.equal(d.decodeDataType,'array');
+ }finally{f.sdk.restore();}
+});
+test('closed report acknowledgement diagnostic: string number',async()=>{
+ const f=sequential({storageSchema:true,storageBodyTransform:({path,data})=>{
+  if(path==='/table/123456788/row'){data=structuredClone(data);const row=data[0];row.RD_REPORT_VERSION=String(row.RD_REPORT_VERSION);row.SchemaVersion=String(row.SchemaVersion);}
+  return JSON.stringify({status:'success',data});
+ }});try{let failure;try{await f.make().handle(f.command,{actor:f.actor});}catch(e){failure=e;}
+  assert.equal(failure?.code,held.code);const d=storageFailureDiagnostic(failure);
+  assert.deepEqual(d.firstValidationFailure,{location:'report_ack',reason:'field_number_type'});
+  assert(Object.isFrozen(d.firstValidationFailure));assert(!JSON.stringify(d).includes('never_logged'));
+  assert.equal(f.sdk.requests.length,4);assert.equal(f.sdk.rows.size,1);assert.equal(f.sdk.receipts.size,1);
+  assert.equal(d.decodeFailure,'none');assert.equal(d.decodeDataType,'array');
+ }finally{f.sdk.restore();}
+});
+test('closed report acknowledgement diagnostic: changed text',async()=>{
+ const f=sequential({storageSchema:true,storageBodyTransform:({path,data})=>{
+  if(path==='/table/123456788/row'){data=structuredClone(data);const row=data[0];row.ReportType='never_logged';}
+  return JSON.stringify({status:'success',data});
+ }});try{let failure;try{await f.make().handle(f.command,{actor:f.actor});}catch(e){failure=e;}
+  assert.equal(failure?.code,held.code);const d=storageFailureDiagnostic(failure);
+  assert.deepEqual(d.firstValidationFailure,{location:'report_ack',reason:'field_value'});
+  assert(Object.isFrozen(d.firstValidationFailure));assert(!JSON.stringify(d).includes('never_logged'));
+  assert.equal(f.sdk.requests.length,4);assert.equal(f.sdk.rows.size,1);assert.equal(f.sdk.receipts.size,1);
+  assert.equal(d.decodeFailure,'none');assert.equal(d.decodeDataType,'array');
  }finally{f.sdk.restore();}
 });
