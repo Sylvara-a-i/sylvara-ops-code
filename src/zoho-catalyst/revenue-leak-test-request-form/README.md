@@ -30,6 +30,42 @@ The historical `288a93c` convergence evidence remains preserved in `free-revenue
 - The two CRM receipt datetime fields use whole-second `+00:00` values, following the [Zoho CRM v8 field contract](https://www.zoho.com/crm/developer/docs/api/v8/insert-records.html) verified on 2026-09-04. Readback compares only these two typed fields as valid timestamps for the same instant; malformed dates fail closed. The stored claim timestamp and fingerprint retain their original values, and the raw CRM `Modified_Time` concurrency fence remains exact.
 - The public lane remains owned by the existing native Forms upsert and cannot manufacture an assisted binding with hidden record fields.
 
+## Form 1 length contract
+
+The 2026-10-06 CRM Leads metadata audit supplied for this correction reports
+`First_Name` 40, `Last_Name` 80, `Email` 100, `Free_Test_Request_Notes` 2000, and
+`Phone_System_Provider` 120. The executable contract and the shared public/assisted
+UI schema in [`forms-manifest.json`](../../zoho-forms/free-revenue-leak-test/forms-manifest.json)
+use those limits. The source trace found no tighter downstream cap: both ordinary
+assisted submission and recovery call `normalizeFormData` / `buildCrmPatch`, and
+`completeAssistedSubmission` sends the resulting respondent values unchanged.
+Oversized ordinary assisted input now fails with `form_data_invalid`. Both paths
+reject it before a CRM read or write or submission-claim mutation; recovery retains
+its existing generic public error response. Prefill also rejects oversized source values.
+
+This preserves existing semantics: length counts JavaScript Unicode code points,
+not UTF-16 code units, bytes, or grapheme clusters; combining marks count separately.
+Input must already be trimmed and control-free. Values are never truncated or
+Unicode-normalized; blank optional values remain omitted and required blanks fail.
+Metadata length alone does not establish CRM or Forms Unicode counting or email
+acceptance. Before enabling a separately approved release, verify exact-limit and
+over-limit ASCII, supplementary-character and combining-sequence cases against
+both providers, including non-destructive UI rejection and unchanged CRM readback.
+
+The provider picklist's 120 limit is a string-length guard, **not enum validation**.
+The desired UI schema still requires `exact_active_choice` and fresh private Forms/
+CRM choice parity. This patch neither invents an active-choice list nor activates
+legacy options; server-side membership enforcement remains a separate gap pending
+an authoritative selection contract.
+
+This is a source correction, not an installed-form or runtime fix. The public lane
+uses native Forms CRM upsert and bypasses Catalyst form-data validation. Both Forms
+surfaces still require separately approved builder-limit/choice readback and
+acceptance; the assisted runtime needs a reviewed immutable artifact installation.
+Do not replay an older oversized submission under a new revision: preserve its
+entry and claim for reconciliation. Source rollback reverts this change; it does
+not change installed Forms or Catalyst behavior or authorize restoring wider limits.
+
 ## Development setup
 
 Install only from the final immutable release. The complete variable-name and classification registry is [`config/variables.json`](config/variables.json); values remain private Catalyst configuration.
