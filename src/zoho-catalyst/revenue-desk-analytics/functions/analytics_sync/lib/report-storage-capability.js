@@ -85,4 +85,12 @@ function validateStoredProjection(row,role,diagnostic,location){
  if(Object.keys(row).some(k=>!fields.includes(k)&&!['ROWID','CREATORID','MODIFIEDBY','CREATEDTIME','MODIFIEDTIME'].includes(k)
    &&(!NULL_COLUMNS[role].includes(k)||row[k]!==null)))reject('projection_extra');
 }
-module.exports={assertIssuedCapability,validateStoredProjection,validateStorageCapability,validateReportInsert,REPORT_FIELDS,RECEIPT_FIELDS,projectionDigest:digest};
+// Only these INT version columns may
+// represent the exact submitted positive int32 as its canonical decimal string.
+// Neither provider values nor payload bytes are rewritten.
+function matchesStoredReportField(field,expected,actual){
+ if(field!=='SchemaVersion'&&field!=='RD_REPORT_VERSION')return actual===expected;
+ if(!Number.isSafeInteger(expected)||expected<1||expected>2147483647)return false;
+ return actual===expected||typeof actual==='string'&&actual===String(expected);
+}
+module.exports={assertIssuedCapability,validateStoredProjection,validateStorageCapability,validateReportInsert,REPORT_FIELDS,RECEIPT_FIELDS,projectionDigest:digest,matchesStoredReportField};
