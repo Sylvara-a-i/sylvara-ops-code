@@ -6,7 +6,7 @@ const {createReportSuccessorStore}=require('./report-successor-store');
 const {createReportRunTransport}=require('./report-run-transport');
 const {validateStorageCapability,validateStoredProjection}=require('./report-storage-capability');
 const {diagnosticWindowMs}=require('./report-storage-window');
-const {createStorageDiagnostic,recordStorageDiagnostic,storageDiagnosticError}=require('./report-storage-diagnostic');
+const {createStorageDiagnostic,recordStorageDiagnostic,storageDiagnosticError,recordStorageValidationFailure}=require('./report-storage-diagnostic');
 const PROFILE='report_storage_qualification_v1',HASH=/^[a-f0-9]{64}$/,ID=/^[1-9][0-9]{2,29}$/;
 const sha=x=>crypto.createHash('sha256').update(typeof x==='string'?x:canonicalJson(x)).digest('hex');
 const exact=(x,keys)=>x&&typeof x==='object'&&!Array.isArray(x)&&Object.keys(x).sort().join(',')===keys.sort().join(',');
@@ -72,14 +72,16 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
     const acknowledgments=new Map();
     // Observed provenance only; never account identity or a renewed attestation.
     // Latch validation failure because the successor store catches insert errors.
-    function provenance(row){
+    const validationFailure=(location,reason)=>recordStorageValidationFailure(diagnostic,location,reason);
+    function provenance(row,location){
      const value=row?.CREATORID;
      const id=typeof value==='string'?value:Number.isSafeInteger(value)&&value>0?String(value):'';
-     if(!/^[1-9][0-9]{0,29}$/.test(id)||observedCreator!==undefined&&id!==observedCreator){provenanceFailed=true;held();}
+     if(!/^[1-9][0-9]{0,29}$/.test(id)||observedCreator!==undefined&&id!==observedCreator){
+      validationFailure(location,!/^[1-9][0-9]{0,29}$/.test(id)?'creator_id':'creator_mismatch');provenanceFailed=true;held();}
      observedCreator=id;
     }
-    function projection(row,role){try{validateStoredProjection(row,role);
-     if(!/^[1-9][0-9]{0,29}$/.test(String(row?.ROWID||'')))held();provenance(row);
+    function projection(row,role,location){try{validateStoredProjection(row,role,diagnostic,location);
+     if(!/^[1-9][0-9]{0,29}$/.test(String(row?.ROWID||''))){validationFailure(location,'row_id');held();}provenance(row,location);
     }catch(error){provenanceFailed=true;throw error;}}
     if(write){
      // No pre-read race and no ambiguous-write recovery authorizing dispatch.
@@ -95,7 +97,7 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
      budget.consume('admission_read');const observed=await io.readAdmission(eventKey,options);admission();
      if(!Array.isArray(observed)||observed.length!==1)held();
      observe('admission_verify');const row=observed[0].RevenueDeskEventReceipts||observed[0],ack=accepted[0];
-     projection(ack,'eventReceipts');projection(row,'eventReceipts');
+     projection(ack,'eventReceipts','admission_ack');projection(row,'eventReceipts','admission_row');
      if(String(row.ROWID)!==String(ack.ROWID))held();
      for(const [field,value] of Object.entries(receipt)){
       if(field==='RECEIPT_VERSION'||field==='ATTEMPT_COUNT'){
@@ -113,17 +115,22 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
     const rows=new Map();
     const checked={async query(sql,o){const {trace,...readOptions}=o||{};const found=await io.query(sql,readOptions);admission();
      if(!Array.isArray(found)||found.length>2)held();
-     for(const entry of found){const row=entry.ReportRuns||entry;projection(row,'reportRuns');
+     for(const entry of found){const row=entry.ReportRuns||entry;projection(row,'reportRuns','report_row');
       const ack=acknowledgments.get(row.IdempotencyKey);
-      if(ack&&Object.keys(ack).some(k=>k!=='CREATORID'&&row[k]!==ack[k])){provenanceFailed=true;held();}
+      if(ack&&Object.keys(ack).some(k=>k!=='CREATORID'&&row[k]!==ack[k])){validationFailure('report_row','readback_mismatch');provenanceFailed=true;held();}
       if(rows.has(row.ROWID)&&canonicalJson(rows.get(row.ROWID))!==canonicalJson(row))held();
       rows.set(row.ROWID,structuredClone(row));}
      return found;},async insert(row,o){admission();if(!write)held();
      const accepted=await io.insert(row,o);admission();
-     if(!Array.isArray(accepted)||accepted.length!==1){provenanceFailed=true;held();}
-     const ack=accepted[0];projection(ack,'reportRuns');
+     if(!Array.isArray(accepted)||accepted.length!==1){validationFailure('report_ack','ack_cardinality');provenanceFailed=true;held();}
+     const ack=accepted[0];projection(ack,'reportRuns','report_ack');
      const fields=Object.keys(row);
-     if(fields.some(k=>ack[k]!==row[k])){provenanceFailed=true;held();}
+     const mismatch=fields.find(k=>ack[k]!==row[k]);
+     if(mismatch!==undefined){
+      const expected=row[mismatch],actual=ack[mismatch];
+      const reason=typeof actual===typeof expected&&!(expected===null&&actual!==null)?'field_value'
+       :expected===null?'field_null_type':typeof expected==='boolean'?'field_boolean_type':typeof expected==='number'?'field_number_type':'field_text_type';
+      validationFailure('report_ack',reason);provenanceFailed=true;held();}
      acknowledgments.set(ack.IdempotencyKey,{...Object.fromEntries(fields.map(k=>[k,ack[k]])),ROWID:ack.ROWID});
      return accepted;}};
     const left=createReportSuccessorStore({app,environment:'development',transport:checked});

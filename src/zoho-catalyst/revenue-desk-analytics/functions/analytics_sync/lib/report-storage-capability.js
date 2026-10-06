@@ -3,6 +3,7 @@ const crypto=require('node:crypto');
 const {canonicalJson}=require('./facts');
 const {reportRunProjection}=require('./report-run-store');
 const {LEGACY_WINDOW_MS,diagnosticWindowMs}=require('./report-storage-window');
+const {recordStorageValidationFailure}=require('./report-storage-diagnostic');
 const issued=new WeakSet();
 const HASH=/^[a-f0-9]{64}$/,ID=/^[1-9][0-9]{2,29}$/;
 const exact=(v,k)=>v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).sort().join(',')===[...k].sort().join(',');
@@ -75,12 +76,13 @@ function validateReportInsert(row){
  if(!Object.entries(expectedProjection).every(([k,v])=>row[k]===v))held();
 }
 function assertIssuedCapability(c){if(!issued.has(c))held();}
-function validateStoredProjection(row,role){
+function validateStoredProjection(row,role,diagnostic,location){
  if(!Object.hasOwn(NULL_COLUMNS,role))held();
  const fields=role==='reportRuns'?REPORT_FIELDS:RECEIPT_FIELDS;
- if(!row||typeof row!=='object'||Array.isArray(row)||!fields.every(k=>Object.hasOwn(row,k))
-  ||!Object.hasOwn(row,'ROWID')||!Object.hasOwn(row,'CREATORID')
-  ||Object.keys(row).some(k=>!fields.includes(k)&&!['ROWID','CREATORID','MODIFIEDBY','CREATEDTIME','MODIFIEDTIME'].includes(k)
-   &&(!NULL_COLUMNS[role].includes(k)||row[k]!==null)))held();
+ const reject=reason=>{recordStorageValidationFailure(diagnostic,location,reason);held();};
+ if(!row||typeof row!=='object'||Array.isArray(row))reject('projection_shape');
+ if(!fields.every(k=>Object.hasOwn(row,k))||!Object.hasOwn(row,'ROWID')||!Object.hasOwn(row,'CREATORID'))reject('projection_missing');
+ if(Object.keys(row).some(k=>!fields.includes(k)&&!['ROWID','CREATORID','MODIFIEDBY','CREATEDTIME','MODIFIEDTIME'].includes(k)
+   &&(!NULL_COLUMNS[role].includes(k)||row[k]!==null)))reject('projection_extra');
 }
 module.exports={assertIssuedCapability,validateStoredProjection,validateStorageCapability,validateReportInsert,REPORT_FIELDS,RECEIPT_FIELDS,projectionDigest:digest};

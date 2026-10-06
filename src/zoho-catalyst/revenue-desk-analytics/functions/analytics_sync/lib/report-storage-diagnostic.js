@@ -74,4 +74,11 @@ function recordStorageResponseShape(tracker,result){
   state.decodeEnvelopeStatus=!s?'absent':!Object.hasOwn(s,'value')?'other':s.value==='success'?'success':s.value==='error'?'error':'other';
  }catch{} // No getter, provider value or thrown message is copied.
 }
-module.exports={createStorageDiagnostic,recordStorageDiagnostic,storageDiagnosticError,storageFailureDiagnostic,recordStorageProviderResult,recordStorageDecodeEvent,recordStorageResponseMetadata,recordStorageResponseShape};
+const VALIDATION_LOCATIONS=new Set(['admission_ack','admission_row','report_ack','report_row']);
+const VALIDATION_REASONS=new Set(['projection_shape','projection_missing','projection_extra','row_id','creator_id','creator_mismatch','ack_cardinality','field_boolean_type','field_number_type','field_null_type','field_text_type','field_value','readback_mismatch']);
+function recordStorageValidationFailure(tracker,location,reason){
+ const state=trackers.get(tracker);
+ if(state&&!state.firstValidationFailure&&VALIDATION_LOCATIONS.has(location)&&VALIDATION_REASONS.has(reason))
+  state.firstValidationFailure=Object.freeze({location,reason});
+}
+module.exports={createStorageDiagnostic,recordStorageDiagnostic,storageDiagnosticError,storageFailureDiagnostic,recordStorageProviderResult,recordStorageDecodeEvent,recordStorageResponseMetadata,recordStorageResponseShape,recordStorageValidationFailure};
