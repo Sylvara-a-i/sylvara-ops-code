@@ -167,16 +167,13 @@ test('closed report acknowledgement diagnostic: string boolean',async()=>{
   assert.equal(d.decodeFailure,'none');assert.equal(d.decodeDataType,'array');
  }finally{f.sdk.restore();}
 });
-test('closed report acknowledgement diagnostic: string number',async()=>{
+test('canonical INT version ACK accepts exact decimal strings with numeric readback',async()=>{
  const f=sequential({storageSchema:true,storageBodyTransform:({path,data})=>{
-  if(path==='/table/123456788/row'){data=structuredClone(data);const row=data[0];row.RD_REPORT_VERSION=String(row.RD_REPORT_VERSION);row.SchemaVersion=String(row.SchemaVersion);}
-  return JSON.stringify({status:'success',data});
+  if(path==='/table/123456788/row'&&Array.isArray(data)){data=structuredClone(data);const row=data[0];row.RD_REPORT_VERSION=String(row.RD_REPORT_VERSION);row.SchemaVersion=String(row.SchemaVersion);}
+  return JSON.stringify({status:Array.isArray(data)?'success':'error',data});
  }});try{let failure;try{await f.make().handle(f.command,{actor:f.actor});}catch(e){failure=e;}
-  assert.equal(failure?.code,held.code);const d=storageFailureDiagnostic(failure);
-  assert.deepEqual(d.firstValidationFailure,{location:'report_ack',reason:'field_number_type'});
-  assert(Object.isFrozen(d.firstValidationFailure));assert(!JSON.stringify(d).includes('never_logged'));
-  assert.equal(f.sdk.requests.length,4);assert.equal(f.sdk.rows.size,1);assert.equal(f.sdk.receipts.size,1);
-  assert.equal(d.decodeFailure,'none');assert.equal(d.decodeDataType,'array');
+  assert.equal(failure,undefined);
+  assert.equal(f.sdk.requests.length,7);assert.equal(f.sdk.rows.size,1);assert.equal(f.sdk.receipts.size,1);
  }finally{f.sdk.restore();}
 });
 test('closed report acknowledgement diagnostic: changed text',async()=>{

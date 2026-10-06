@@ -4,7 +4,7 @@ const {decodeStorageBinding}=require('./report-storage-binding');
 const {canonicalJson}=require('./facts');
 const {createReportSuccessorStore}=require('./report-successor-store');
 const {createReportRunTransport}=require('./report-run-transport');
-const {validateStorageCapability,validateStoredProjection}=require('./report-storage-capability');
+const {validateStorageCapability,validateStoredProjection,matchesStoredReportField}=require('./report-storage-capability');
 const {diagnosticWindowMs}=require('./report-storage-window');
 const {createStorageDiagnostic,recordStorageDiagnostic,storageDiagnosticError,recordStorageValidationFailure}=require('./report-storage-diagnostic');
 const PROFILE='report_storage_qualification_v1',HASH=/^[a-f0-9]{64}$/,ID=/^[1-9][0-9]{2,29}$/;
@@ -117,7 +117,7 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
      if(!Array.isArray(found)||found.length>2)held();
      for(const entry of found){const row=entry.ReportRuns||entry;projection(row,'reportRuns','report_row');
       const ack=acknowledgments.get(row.IdempotencyKey);
-      if(ack&&Object.keys(ack).some(k=>k!=='CREATORID'&&row[k]!==ack[k])){validationFailure('report_row','readback_mismatch');provenanceFailed=true;held();}
+      if(ack&&Object.keys(ack).some(k=>k!=='CREATORID'&&!matchesStoredReportField(k,ack[k],row[k]))){validationFailure('report_row','readback_mismatch');provenanceFailed=true;held();}
       if(rows.has(row.ROWID)&&canonicalJson(rows.get(row.ROWID))!==canonicalJson(row))held();
       rows.set(row.ROWID,structuredClone(row));}
      return found;},async insert(row,o){admission();if(!write)held();
@@ -125,13 +125,15 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
      if(!Array.isArray(accepted)||accepted.length!==1){validationFailure('report_ack','ack_cardinality');provenanceFailed=true;held();}
      const ack=accepted[0];projection(ack,'reportRuns','report_ack');
      const fields=Object.keys(row);
-     const mismatch=fields.find(k=>ack[k]!==row[k]);
+     const mismatch=fields.find(k=>!matchesStoredReportField(k,row[k],ack[k]));
      if(mismatch!==undefined){
       const expected=row[mismatch],actual=ack[mismatch];
       const reason=typeof actual===typeof expected&&!(expected===null&&actual!==null)?'field_value'
        :expected===null?'field_null_type':typeof expected==='boolean'?'field_boolean_type':typeof expected==='number'?'field_number_type':'field_text_type';
       validationFailure('report_ack',reason);provenanceFailed=true;held();}
-     acknowledgments.set(ack.IdempotencyKey,{...Object.fromEntries(fields.map(k=>[k,ack[k]])),ROWID:ack.ROWID});
+     // Compare independent readback to the submitted canonical expectations,
+     // preserving the original ACK/payload and supporting either allowed INT form.
+     acknowledgments.set(ack.IdempotencyKey,{...Object.fromEntries(fields.map(k=>[k,row[k]])),ROWID:ack.ROWID});
      return accepted;}};
     const left=createReportSuccessorStore({app,environment:'development',transport:checked});
     const right=createReportSuccessorStore({app,environment:'development',transport:checked});
