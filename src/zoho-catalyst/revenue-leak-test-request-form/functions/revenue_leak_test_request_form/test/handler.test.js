@@ -260,6 +260,41 @@ async function submitProvider(selected, options = {}) {
   ), selected.dependencies);
 }
 
+for (const [key, crm, maximum] of [
+  ["firstName", "First_Name", 40],
+  ["lastName", "Last_Name", 80],
+  ["email", "Email", 100],
+  ["additionalNotes", "Free_Test_Request_Notes", 2000],
+  ["phoneSystemProvider", "Phone_System_Provider", 120],
+]) {
+  test(`${key} rejects oversized assisted input before CRM or claim mutation`, async () => {
+    const selected = fixture();
+    const prepared = await prepare(selected);
+    const before = structuredClone(selected.adapter.rows);
+    selected.events.length = 0;
+    const value = key === "email"
+      ? `${"a".repeat(44)}@${"b".repeat(maximum - 53)}.invalid`
+      : "a".repeat(maximum);
+    const formOverrides = { [key]: `${value}a` };
+    for (const submitInvalid of [
+      () => submit(selected, prepared, "oversized_001", { formData: formData(formOverrides) }),
+      () => submitProvider(selected, { ...prepared, formOverrides }),
+    ]) {
+      await assert.rejects(submitInvalid,
+        (error) => error.status === 422 && error.publicCode === "form_data_invalid");
+      assert.deepEqual(selected.events, []);
+      assert.deepEqual(selected.adapter.rows, before);
+    }
+    const accepted = await submitProvider(selected, {
+      ...prepared, formOverrides: { [key]: value },
+    });
+    assert.equal(accepted.status, 200);
+    assert.equal(selected.records.get(RECORD_ID)[crm], value);
+    assert.equal(selected.events.filter(([name]) => name === "update").length, 1);
+    assert.equal(selected.adapter.rows[0].STATUS, "consumed");
+  });
+}
+
 test("launch keeps the journey credential in a Catalyst fragment and stores only its digest", async () => {
   const selected = fixture();
   const issue = await launch(selected);
