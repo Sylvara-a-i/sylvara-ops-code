@@ -691,6 +691,10 @@ try {
             -Arguments @("run", "ci", "--prefix", $RequestFormRoot)
         Invoke-Native -Label "Revenue Leak Test Setup Form checks and tests" -Executable $npm `
             -Arguments @("run", "ci", "--prefix", $SetupFormRoot)
+        Invoke-Native -Label "Form 1 recovery phone-policy source provenance" -Executable $node `
+            -Arguments @((Join-PathSegments $RepoRoot @("src", "zoho-catalyst", "revenue-leak-test-request-form", "tools", "verify-recovery-phone-policy.js")), "--check")
+        Invoke-Native -Label "Forms phone policy and isolated packaging parity tests" -Executable $node `
+            -Arguments @("--test", (Join-PathSegments $RepoRoot @("src", "zoho-forms", "free-revenue-leak-test", "phone-policy", "test", "phone-policy.test.js")))
         Invoke-Native -Label "Form 2 Prefill Mapping Fixture checks and tests" -Executable $npm `
             -Arguments @("run", "ci", "--prefix", $Form2PrefillMappingFixtureRoot)
         Invoke-Native -Label "Service-area request contract syntax" -Executable $node `

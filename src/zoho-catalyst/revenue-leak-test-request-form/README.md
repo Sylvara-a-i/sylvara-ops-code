@@ -81,9 +81,41 @@ A Forms thank-you page or redirect proves only that Forms captured the entry. Af
 
 Dependency diagnostics retain only fixed writer-credential, writer-organization, CRM-write, and CRM-readback stages, allowlisted provider codes, and actual HTTP status. Provider messages, arguments, bodies, credentials, and stacks never enter logs. Logging cannot change write/retry behavior. The CRM client's read-only writer preflight performs only credential validation and the existing organization GET; it adds no route or recovery authority, and local CLI behavior does not prove deployed runtime behavior.
 
+## Source-bound phone representation
+
+The immutable code profile `us-national-e164-v1` emits ten national digits for
+assisted native US controls and canonical `+1` values for new phone writes.
+`SOURCE_REVISION` remains the exact artifact/session binding; native intake or
+consent version labels do not replace that revision. The shared policy, native
+public-writer boundary, Form2 raw-fingerprint preservation, migration tests and
+rollout gates are documented in
+[`phone-policy/README.md`](../../zoho-forms/free-revenue-leak-test/phone-policy/README.md).
+No historical CRM/Billing/Books record or routing identity is rewritten.
+
 ### Separately approved one-claim recovery
 
 `FORM1_RECOVERY_MANIFEST_JSON` is absent or empty during ordinary operation. A separately approved Development recovery may set one compact, exact JSON object with eight fields: `schemaVersion` (1), `mode` (`inspect` or `complete`), `originalSourceRevision`, `claimBindingSha256`, `assistedConstantsSha256`, `originalSessionVersion`, `originalUpdatedAt`, and `originalLastOutcome`. The initial outcome is `submission_started`; a separately authorized follow-on may instead pin an exact valid reservation marker from a different predecessor artifact. Generate the digests with the recovery module's hash helpers over the complete normalized approved prestate and the five original server-owned constants. Keep the packet and all values outside Git and logs; preserve the original pepper until reconciliation. The deployed artifact retains its honest new source stamp.
+
+Schema 1 remains the exact eight-field legacy protocol and keeps its original
+raw normalization and packet bytes. Canonical-profile recovery requires schema 2:
+add `phonePolicy` (`us-national-e164-v1`) and `phonePolicySourceRevision` (exactly
+`originalSourceRevision`) to those fields. No other profile is accepted. The
+original revision/profile pair must also appear in the reviewed immutable
+`lib/recovery-phone-policy-revisions.js` registry with exact SHA-256 hashes of the
+original `phone-contract.js`, `us-phone-policy.js`, and `handler.js` Git blobs. The manifest alone cannot
+establish provenance, and phone formatting is never used to select a policy.
+
+The registry initially has no canonical predecessors because this candidate has
+not published any. A failed future canonical claim still requires a distinct,
+reviewed recovery artifact, as before. Prepare its sanitized provenance candidate
+with `node tools/verify-recovery-phone-policy.js --prepare <original-commit>` from
+this component; independently review the original artifact/profile and add only
+that exact entry to the new recovery source. Both release builders and the
+repository verifier run the source-provenance check. Preserve the original raw
+entry, signed/private packet, claim, pepper and timestamps; never edit them to fit
+another policy. A synthetic fixture proves schema2 mechanics, not authority to
+recover an unregistered real predecessor. Unknown, contradictory or unregistered
+bindings fail before dependency access.
 
 Recovery uses only the existing authenticated Submission endpoint. Other assisted access and launch paths temporarily fail before SDK access. Public unbound acknowledgments remain non-writing; the public form, its native CRM integration, and its URL are unchanged. Any other claim, changed payload or consent, changed form/organization/actor, or changed original fingerprint fails closed.
 
@@ -137,3 +169,9 @@ node src/zoho-catalyst/revenue-leak-test-request-form/tools/build-single-file.js
 ```
 
 The command fails closed for dirty or mismatched revisions, linked or special Git entries, dependency escape, linked output directories, in-repository output, or an existing destination. Review and read back the resulting artifact before any separately authorized Development upload. The committed checkout keeps the unstamped sentinel and remains unchanged.
+
+Canonical predecessor verification also requires byte-identical original/current
+phone adapter and core modules. Same-profile drift fails closed and needs a new
+profile or an explicitly retained implementation. Provenance Git reads use the
+builders' sanitized environment with replacement objects disabled; inherited Git
+configuration cannot substitute content for a pinned revision.

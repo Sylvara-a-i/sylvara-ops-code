@@ -3,14 +3,14 @@
 const crypto = require("node:crypto");
 const { sanitizeProviderDiagnostic } = require("./connection-boundary");
 const { buildCrmPatch, normalizeFormData } = require("./form-contract");
+const { PHONE_POLICY, canonicalizeForm1Submission } = require("./phone-contract");
+const { recoveryManifestKeys } = require("./recovery-phone-policy");
 const { withOperationTimeout } = require("./operation-timeout");
 const {
   constantTimeEqual, normalizeConfigurationRevision, normalizeCrmModule, normalizeCrmRecordId,
   normalizeJourneyId, normalizePrefillId, normalizeSubmissionId, submissionFingerprint,
 } = require("./security");
 
-const MANIFEST_KEYS = ["schemaVersion", "mode", "originalSourceRevision", "claimBindingSha256",
-  "assistedConstantsSha256", "originalSessionVersion", "originalUpdatedAt", "originalLastOutcome"];
 const BODY_KEYS = ["prefillId", "configurationRevision", "submissionId", "formData"];
 const CONSTANT_KEYS = ["entryOffer", "intakeFormVersion", "leadStatus", "sourcePage",
   "submissionChannel"];
@@ -97,8 +97,9 @@ function assistedConstantsSha256(constants) {
 
 function validateConfiguration(config, store, crm) {
   const manifest = config?.recoveryManifest;
+  const manifestKeys = recoveryManifestKeys(manifest);
   if (config?.deploymentEnvironment !== "development" || config?.deploymentMode !== "active" ||
-      !exactKeys(manifest, MANIFEST_KEYS) || manifest.schemaVersion !== 1 ||
+      !manifestKeys || !exactKeys(manifest, manifestKeys) ||
       !new Set(["inspect", "complete"]).has(manifest.mode) ||
       !/^[a-f0-9]{40}$/.test(manifest.originalSourceRevision ?? "") ||
       !/^[a-f0-9]{40}$/.test(config.sourceRevision ?? "") ||
@@ -183,12 +184,16 @@ async function recoverAssistedSubmission(body, dependencies) {
     const revision = normalizeConfigurationRevision(body.configurationRevision);
     const submissionId = normalizeSubmissionId(body.submissionId);
     if (revision !== manifest.originalSourceRevision) fail("recovery_binding_mismatch", 409);
-    const normalized = normalizeFormData(body.formData);
+    // Schema 1 remains the exact historical protocol. Schema 2 is admitted only
+    // by explicit policy + original-artifact binding, never format guessing.
+    const formData = manifest.schemaVersion === 2
+      ? canonicalizeForm1Submission(body.formData, PHONE_POLICY) : body.formData;
+    const normalized = normalizeFormData(formData);
     let session = await bounded(() => store.readByPrefillId(prefillId));
     const reserved = assertClaim(session, prefillId, config, store);
     const fingerprint = submissionFingerprint(submissionId, prefillId, revision, normalized, config.tokenPepper);
     if (!constantTimeEqual(fingerprint, session.submissionFingerprint)) fail("submission_conflict", 409);
-    const patch = buildCrmPatch(body.formData, config.assistedConstants, {
+    const patch = buildCrmPatch(formData, config.assistedConstants, {
       journeyId: session.journeyId, submittedAt: session.submissionStartedAt,
     });
     let record = await bounded(() => crm.getRecord(session.crmModule, session.recordId));

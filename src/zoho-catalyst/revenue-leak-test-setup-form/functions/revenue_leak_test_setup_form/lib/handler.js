@@ -7,11 +7,11 @@ const {
 const {
   CLIENT_KEYS,
   FormContractError,
-  buildPrefillPayload,
-  validateForm2Payload,
   validateForm2PayloadTypes,
   verifyRecordRelationships,
 } = require("./form-contract");
+const { PHONE_POLICY, buildNationalForm2Prefill, validateCanonicalForm2Payload } =
+  require("./phone-contract");
 const {
   HttpBoundaryError,
   parseJsonObject,
@@ -34,6 +34,16 @@ const {
 const { fingerprintSnapshot, fingerprintSubmission } = require("./snapshot");
 const { requireEmailOtpVerified } = require("./verification-proof");
 const { renderAccessPage } = require("./access-page");
+
+// This source-owned profile changes only with a new immutable artifact. Every
+// new prefill projection and its snapshot must use the same national-input shape.
+// Raw formPayload fingerprinting and succeeded-receipt replay below are unchanged.
+function buildCurrentPrefillPayload(existing, options) {
+  return buildNationalForm2Prefill(existing, { ...options, ...PHONE_POLICY });
+}
+function validateCurrentForm2Payload(payload, options) {
+  return validateCanonicalForm2Payload(payload, { ...options, ...PHONE_POLICY });
+}
 
 const ISSUE_REQUEST_KEYS = new Set(["dealId", "issueRequestId"]);
 const PREFILL_KEYS = new Set(["prefillHandle"]);
@@ -1143,7 +1153,7 @@ async function handleIssue(body, dependencies, nowMs) {
   // Validate every prefilled value that cannot be repaired by the respondent,
   // especially the locked Email and Mobile identity, before creating durable
   // session state or changing the Deal.
-  buildPrefillPayload(existing, {
+  buildCurrentPrefillPayload(existing, {
     allowedPhoneSystemProviders: dependencies.config.form2PhoneSystemProviders,
   });
   const journeyBindingDigest = prefillSecurityBinding(
@@ -1310,7 +1320,7 @@ async function preparePrefill(verificationBinding, dependencies, nowMs) {
   }
   // Fail deterministic CRM/Form contract defects before consuming the
   // one-time email proof or changing durable session state.
-  buildPrefillPayload(existing, {
+  buildCurrentPrefillPayload(existing, {
     allowedPhoneSystemProviders: dependencies.config.form2PhoneSystemProviders,
   });
   const proofBinding = {
@@ -1410,7 +1420,7 @@ async function preparePrefill(verificationBinding, dependencies, nowMs) {
       ambiguous: true,
     });
   }
-  const prefill = buildPrefillPayload(existing, {
+  const prefill = buildCurrentPrefillPayload(existing, {
     allowedPhoneSystemProviders: dependencies.config.form2PhoneSystemProviders,
   });
   const snapshotFingerprint = fingerprintSnapshot(
@@ -1459,7 +1469,7 @@ async function handlePrefill(body, dependencies) {
     session.issueRequestKey,
   );
   assertFreshPrefill(existing, selected.revision);
-  const prefill = buildPrefillPayload(existing, {
+  const prefill = buildCurrentPrefillPayload(existing, {
     allowedPhoneSystemProviders: dependencies.config.form2PhoneSystemProviders,
   });
   const snapshotFingerprint = fingerprintSnapshot(
@@ -2084,7 +2094,7 @@ async function handleSubmission(body, dependencies, nowMs) {
     );
     assertFreshPrefill(existing, revision);
     const currentFingerprint = fingerprintSnapshot(
-      buildPrefillPayload(existing, {
+      buildCurrentPrefillPayload(existing, {
         allowedPhoneSystemProviders: dependencies.config.form2PhoneSystemProviders,
       }),
       dependencies.config.workflowKeyMaterial,
@@ -2096,7 +2106,7 @@ async function handleSubmission(body, dependencies, nowMs) {
       });
     }
 
-    const updates = validateForm2Payload(decodedFormPayload, {
+    const updates = validateCurrentForm2Payload(decodedFormPayload, {
       existing,
       trustedNow: new Date(nowMs).toISOString(),
       setupFormVersion: dependencies.config.form2FormVersion,
