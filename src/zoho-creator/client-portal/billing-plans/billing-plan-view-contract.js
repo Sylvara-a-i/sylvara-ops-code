@@ -72,7 +72,7 @@ function prepareBillingPlanView(evidence, policy) {
           !Number.isSafeInteger(plan.currency.minorUnitExponent) || plan.currency.minorUnitExponent < 0 ||
           plan.currency.minorUnitExponent > 4 ||
           !["plan-response", "verified-catalog-metadata"].includes(plan.currency.source)) deny();
-      currency = Object.freeze({ ...plan.currency });
+      currency = Object.freeze({ code: plan.currency.code, minorUnitExponent: plan.currency.minorUnitExponent, source: plan.currency.source });
       if (currencyExponents.has(currency.code) &&
           currencyExponents.get(currency.code) !== currency.minorUnitExponent) deny();
       currencyExponents.set(currency.code, currency.minorUnitExponent);
