@@ -28,6 +28,20 @@ test("unknown currency/unit/interval stay unavailable, never default USD or zero
   e.plans[0].recurringMinor = 123; assert.throws(() => prepare(e, policy()), TypeError);
 });
 
+test("non-enumerable currency data fields retain complete provenance beside amounts", () => {
+  const keys = ["code", "minorUnitExponent", "source"];
+  for (let mask = 1; mask < 8; mask++) {
+    const e = evidence();
+    keys.forEach((key, bit) => {
+      if (mask & (1 << bit)) Object.defineProperty(e.plans[0].currency, key, { enumerable: false });
+    });
+    const v = prepare(e, policy()).plans[0];
+    assert.deepEqual(v, plan());
+    assert.deepEqual(Object.keys(v.currency), keys);
+    assert.ok(Object.isFrozen(v.currency));
+  }
+});
+
 test("active/inactive/unavailable catalog is separate from entitlement and usage", () => {
   for (const status of ["active", "inactive", "unavailable"]) {
     const e = evidence(); e.plans[0].catalogStatus = status;
@@ -110,3 +124,6 @@ test("no transport, writer, log or clock capability on import or projection", ()
   vm.runInContext(`module.exports.prepareBillingPlanView(${JSON.stringify(evidence())}, ${JSON.stringify(policy())})`, sandbox);
   assert.equal(calls, 0);
 });
+
+// Keep the customer read projection covered without changing the shared portal entrypoint.
+require("../../billing-customer/test/billing-customer-view-contract.test");
