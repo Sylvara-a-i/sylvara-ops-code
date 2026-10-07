@@ -27,7 +27,7 @@ function formData() {
     utmMedium: "", utmCampaign: "", utmTerm: "", utmContent: "" };
 }
 
-async function fixture(mode = "complete", predecessorRevision = null) {
+async function fixture(mode = "complete", predecessorRevision = null, canonicalPolicy = false, legacyNational = false) {
   const originalConfig = loadConfig(environment(), REVISION);
   let raw;
   let clock = NOW;
@@ -60,8 +60,14 @@ async function fixture(mode = "complete", predecessorRevision = null) {
   const prefilled = await store.consumePrefillHandle(handle, "c".repeat(64), VERSION);
   const body = { prefillId: PREFILL_ID, configurationRevision: REVISION,
     submissionId: "synthetic-original-entry", formData: formData() };
+  if (canonicalPolicy || legacyNational) Object.assign(body.formData, {
+    mobilePhone: "2025550109", companyPhone: "202-555-0110",
+  });
+  const claimedData = canonicalPolicy
+    ? require("../lib/phone-contract").canonicalizeForm1Submission(body.formData, { countryCode: "US" })
+    : body.formData;
   const fingerprint = submissionFingerprint(body.submissionId, PREFILL_ID, REVISION,
-    normalizeFormData(body.formData), originalConfig.tokenPepper);
+    normalizeFormData(claimedData), originalConfig.tokenPepper);
   await store.beginSubmission(prefilled.row, fingerprint, VERSION);
   // Represent the persisted initial recovery checkpoint without changing its claim.
   raw.SESSION_VERSION = 17;
@@ -78,7 +84,9 @@ async function fixture(mode = "complete", predecessorRevision = null) {
       assistedConstantsSha256: assistedConstantsSha256(originalConfig.assistedConstants),
       originalSessionVersion: original.sessionVersion, originalUpdatedAt: original.updatedAt,
       originalLastOutcome: original.lastOutcome } };
-  const patch = buildCrmPatch(body.formData, config.assistedConstants,
+  if (canonicalPolicy) Object.assign(config.recoveryManifest, { schemaVersion: 2,
+    phonePolicy: "us-national-e164-v1", phonePolicySourceRevision: REVISION });
+  const patch = buildCrmPatch(claimedData, config.assistedConstants,
     { journeyId: original.journeyId, submittedAt: original.submissionStartedAt });
   let record = { id: RECORD_ID, Intake_Submission_ID: original.journeyId, Modified_Time: VERSION };
   const crm = {
@@ -367,4 +375,111 @@ test("follow-on write ambiguity remains permanently no-PUT on restart", async ()
     else assert.equal((await f.run()).status, 200);
     assert.equal(f.events.filter(event => event === "put").length, 1);
   }
+});
+
+const { loadWithSyntheticRegistry } = require("./recovery-policy-loader");
+function canonicalRegistry(revision = REVISION) {
+  return [{ sourceRevision: revision, phonePolicy: "us-national-e164-v1",
+    policyModuleSha256: "c".repeat(64), handlerModuleSha256: "d".repeat(64),
+    normalizerModuleSha256: "e".repeat(64) }];
+}
+
+test("schema2 canonical recovery is source-pinned and preserves raw evidence with one PUT", async () => {
+  const selected = await fixture("inspect", null, true);
+  const originalBody = structuredClone(selected.body);
+  const runtime = loadWithSyntheticRegistry(canonicalRegistry());
+  const bytes = JSON.stringify(selected.config.recoveryManifest);
+  const loaded = runtime.loadConfig(environment({ SOURCE_REVISION: CURRENT_REVISION,
+    FORM1_RECOVERY_MANIFEST_JSON: bytes }), CURRENT_REVISION);
+  assert.equal(JSON.stringify(loaded.recoveryManifest), bytes);
+  const callRoute = () => runtime.handleRequest({
+    method: "POST", url: selected.config.submissionPath,
+    headers: { "content-type": "application/json",
+      [selected.config.submissionHeaderName]: selected.config.submissionHeaderSecret },
+    rawBody: Buffer.from(JSON.stringify(selected.body)),
+  }, { ...selected.deps, randomBytes: require("node:crypto").randomBytes,
+    randomUUID: require("node:crypto").randomUUID });
+  const inspected = await callRoute();
+  assert.equal(inspected.status, 503);
+  assert.equal(inspected.body.recoveryReady, true);
+  assert.deepEqual(selected.events, ["read", "preflight"]);
+  selected.events.length = 0;
+  selected.config.recoveryManifest.mode = "complete";
+  const result = await callRoute();
+  assert.equal(result.status, 200);
+  assert.equal(selected.events.filter(x => x === "put").length, 1);
+  assert.equal(selected.patch.Mobile, "+12025550109");
+  assert.equal(selected.patch.Main_Business_Phone, "+12025550110");
+  assert.deepEqual(selected.body, originalBody);
+  const terminal = await selected.store.readByPrefillId(PREFILL_ID);
+  assert.equal(terminal.status, "consumed");
+  assert.equal(terminal.submissionFingerprint, selected.original.submissionFingerprint);
+  assert.equal(terminal.sourceRevision, REVISION);
+  assert.equal(terminal.configurationRevision, REVISION);
+});
+
+test("canonical recovery rejects unknown contradictory unproved profiles before dependencies", async () => {
+  for (const change of [
+    m => { m.phonePolicy = "unknown"; },
+    m => { m.phonePolicySourceRevision = "e".repeat(40); },
+    m => { m.originalSourceRevision = m.phonePolicySourceRevision = "e".repeat(40); },
+    m => { delete m.phonePolicy; },
+    m => { m.schemaVersion = 1; },
+  ]) {
+    const selected = await fixture("complete", null, true);
+    change(selected.config.recoveryManifest);
+    const runtime = loadWithSyntheticRegistry(canonicalRegistry());
+    assert.throws(() => runtime.loadConfig(environment({ SOURCE_REVISION: CURRENT_REVISION,
+      FORM1_RECOVERY_MANIFEST_JSON: JSON.stringify(selected.config.recoveryManifest) }), CURRENT_REVISION));
+    await assert.rejects(() => runtime.recover(selected.body, selected.deps));
+    assert.deepEqual(selected.events, []);
+    assert.deepEqual(await selected.store.readByPrefillId(PREFILL_ID), selected.original);
+  }
+  for (const registry of [[], canonicalRegistry("e".repeat(40)),
+    [...canonicalRegistry(), ...canonicalRegistry()],
+    [{ ...canonicalRegistry()[0], policyModuleSha256: "invalid" }]]) {
+    const selected = await fixture("complete", null, true);
+    const runtime = loadWithSyntheticRegistry(registry);
+    await assert.rejects(() => runtime.recover(selected.body, selected.deps));
+    assert.deepEqual(selected.events, []);
+  }
+});
+
+test("default artifact cannot authorize an unregistered canonical predecessor", async () => {
+  const selected = await fixture("complete", null, true);
+  await assert.rejects(() => recoverAssistedSubmission(selected.body, selected.deps));
+  assert.deepEqual(selected.events, []);
+});
+
+test("schema1 legacy packet bytes and raw historical fingerprint are not reinterpreted", async () => {
+  const selected = await fixture("inspect");
+  const bytes = JSON.stringify(selected.config.recoveryManifest);
+  const loaded = loadConfig(environment({ SOURCE_REVISION: CURRENT_REVISION,
+    FORM1_RECOVERY_MANIFEST_JSON: bytes }), CURRENT_REVISION);
+  assert.equal(JSON.stringify(loaded.recoveryManifest), bytes);
+  assert.equal(Object.hasOwn(loaded.recoveryManifest, "phonePolicy"), false);
+  selected.body.formData.mobilePhone = "5555550101";
+  await assert.rejects(() => recoverAssistedSubmission(selected.body, selected.deps),
+    error => error.publicCode === "submission_conflict");
+  assert.deepEqual(selected.events, []);
+  assert.deepEqual(await selected.store.readByPrefillId(PREFILL_ID), selected.original);
+});
+
+test("actual handler keeps national-formatted schema1 recovery on its original raw policy", async () => {
+  const selected = await fixture("complete", null, false, true);
+  const before = structuredClone(selected.body);
+  const result = await require("../lib/handler").handleRequest({
+    method: "POST", url: selected.config.submissionPath,
+    headers: { "content-type": "application/json",
+      [selected.config.submissionHeaderName]: selected.config.submissionHeaderSecret },
+    rawBody: Buffer.from(JSON.stringify(selected.body)),
+  }, { ...selected.deps, randomBytes: require("node:crypto").randomBytes,
+    randomUUID: require("node:crypto").randomUUID });
+  assert.equal(result.status, 200);
+  assert.equal(selected.patch.Mobile, "2025550109");
+  assert.equal(selected.patch.Main_Business_Phone, "202-555-0110");
+  assert.deepEqual(selected.body, before);
+  assert.equal(selected.events.filter(x => x === "put").length, 1);
+  const terminal = await selected.store.readByPrefillId(PREFILL_ID);
+  assert.equal(terminal.submissionFingerprint, selected.original.submissionFingerprint);
 });

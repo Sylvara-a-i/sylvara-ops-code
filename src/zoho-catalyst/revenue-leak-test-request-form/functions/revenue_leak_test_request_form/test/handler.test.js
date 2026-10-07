@@ -977,3 +977,40 @@ test("cross-release binding fails closed", async () => {
     error.status === 404 && error.publicCode === "session_not_found");
   assert.equal(selected.events.filter(([name]) => name === "update").length, 0);
 });
+
+test("current phone profile prefills national values and canonical-equivalent retries write once", async () => {
+  const selected = fixture();
+  const issueResult = await launch(selected);
+  const exchanged = await exchange(selected, journeyTokenFrom(issueResult));
+  const prepared = await prefill(selected, exchanged.prefillHandle);
+  assert.match(prepared.body.mobilePhone, /^[0-9]{10}$/);
+  assert.match(prepared.body.companyPhone, /^[0-9]{10}$/);
+  const original = formData({ mobilePhone: "(202) 555-0109", companyPhone: "202-555-0110" });
+  const accepted = await submit(selected, prepared.body, "phone_profile_001", { formData: original });
+  assert.equal(accepted.status, 200);
+  assert.equal(selected.records.get(RECORD_ID).Mobile, "+12025550109");
+  assert.equal(selected.records.get(RECORD_ID).Main_Business_Phone, "+12025550110");
+  const fingerprint = selected.adapter.rows[0].SUBMISSION_FINGERPRINT;
+  const replay = await submit(selected, prepared.body, "phone_profile_001", {
+    formData: { ...original, mobilePhone: "+12025550109", companyPhone: "12025550110" },
+  });
+  assert.equal(replay.body.replayed, true);
+  assert.equal(selected.adapter.rows[0].SUBMISSION_FINGERPRINT, fingerprint);
+  assert.equal(selected.events.filter(([name]) => name === "update").length, 1);
+});
+
+test("current phone profile rejects ambiguous inputs and old unfinished revisions without mutation", async () => {
+  for (const mobilePhone of ["", "+442071838750", "2025550109x12"]) {
+    const selected = fixture(); const prepared = await prepare(selected);
+    const before = structuredClone(selected.adapter.rows); selected.events.length = 0;
+    await assert.rejects(() => submit(selected, prepared, "phone_invalid", {
+      formData: formData({ mobilePhone }),
+    }), error => error.publicCode === "form_data_invalid");
+    assert.deepEqual(selected.events, []); assert.deepEqual(selected.adapter.rows, before);
+  }
+  const selected = fixture(); const prepared = await prepare(selected);
+  const before = structuredClone(selected.adapter.rows); selected.events.length = 0;
+  selected.dependencies.config = { ...selected.dependencies.config, sourceRevision: "b".repeat(40) };
+  await assert.rejects(() => submit(selected, prepared), error => error.publicCode === "session_not_found");
+  assert.deepEqual(selected.events, []); assert.deepEqual(selected.adapter.rows, before);
+});

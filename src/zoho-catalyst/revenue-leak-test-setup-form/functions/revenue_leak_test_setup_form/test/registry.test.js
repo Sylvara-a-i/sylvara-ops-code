@@ -370,6 +370,8 @@ test("the Catalyst and npm manifests describe one consistent Advanced IO target"
     "lib/destinations.js",
     "lib/form-destination.js",
     "lib/form-contract.js",
+    "lib/phone-contract.js",
+    "lib/us-phone-policy.js",
     "lib/handler.js",
     "lib/http.js",
     "lib/operation-timeout.js",

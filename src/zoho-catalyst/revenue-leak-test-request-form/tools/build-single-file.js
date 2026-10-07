@@ -1,6 +1,8 @@
 "use strict";
 
 const crypto = require("node:crypto");
+const { verifyRegistry } = require("./verify-recovery-phone-policy");
+const recoveryRegistry = require("../functions/revenue_leak_test_request_form/lib/recovery-phone-policy-revisions");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -447,6 +449,7 @@ function main() {
   const { approvedRevision, rawOutputPath } = parseArguments(process.argv.slice(2));
   const repositoryRoot = findRepositoryRoot();
   assertCleanApprovedRevision(repositoryRoot, approvedRevision);
+  verifyRegistry(repositoryRoot, recoveryRegistry);
   const outputPath = validateOutputPath(repositoryRoot, rawOutputPath);
   const isolated = createIsolatedRoot();
   let buildError;
