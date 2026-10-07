@@ -1,5 +1,8 @@
 "use strict";
 
+// Canonical portal test entrypoint also discovers the independent read-only view.
+require("../../billing-plans/test/billing-plan-view-contract.test");
+
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
