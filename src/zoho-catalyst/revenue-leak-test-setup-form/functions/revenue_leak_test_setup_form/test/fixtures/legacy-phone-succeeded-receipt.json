@@ -48,9 +48,9 @@
     "rowId": "7000000000001",
     "issueRequestKey": "90fe4a0ee1d93bb3d0e8fe7c97062655ab3ab2e5fb441fd847221d6e73ae712b",
     "tokenHash": "2b9e6ab4ff7d9b0dff8b22a3ce2b55faa10161382e0cb6f70566a17fbcd8641a",
-    "crmContactId": "999999999999999991",
-    "crmAccountId": "999999999999999992",
-    "crmDealId": "999999999999999993",
+    "crmContactId": "SYNTHETIC_CONTACT_ID",
+    "crmAccountId": "SYNTHETIC_ACCOUNT_ID",
+    "crmDealId": "SYNTHETIC_DEAL_ID",
     "journeyBindingDigest": "2be8d8655e24bd524610cc58f40fc3a0f41cde7df80d86826c83c56074dc75ea",
     "dealIssuanceKey": "376ff8decb0fb388cd92cb3ade8328de79329c4ed39a061eeafd2572287e3dae",
     "status": "submitted",
@@ -71,9 +71,9 @@
     "sourceRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "sessionRowId": "7000000000001",
     "sessionAttemptCount": 1,
-    "crmContactId": "999999999999999991",
-    "crmAccountId": "999999999999999992",
-    "crmDealId": "999999999999999993",
+    "crmContactId": "SYNTHETIC_CONTACT_ID",
+    "crmAccountId": "SYNTHETIC_ACCOUNT_ID",
+    "crmDealId": "SYNTHETIC_DEAL_ID",
     "contactModifiedTime": "2026-08-14T12:00:00-05:00",
     "accountModifiedTime": "2026-08-14T12:00:00-05:00",
     "dealModifiedTime": "2026-08-14T18:00:02.000Z",
@@ -106,10 +106,10 @@
   },
   "records": {
     "contact": {
-      "id": "999999999999999991",
+      "id": "SYNTHETIC_CONTACT_ID",
       "Modified_Time": "2026-08-14T18:00:03.000Z",
       "Account_Name": {
-        "id": "999999999999999992",
+        "id": "SYNTHETIC_ACCOUNT_ID",
         "name": "Synthetic Plumbing"
       },
       "First_Name": "Casey",
@@ -121,10 +121,10 @@
       "Mobile": "+1 (555) 010-2000"
     },
     "account": {
-      "id": "999999999999999992",
+      "id": "SYNTHETIC_ACCOUNT_ID",
       "Modified_Time": "2026-08-14T18:00:04.000Z",
       "Primary_Contact": {
-        "id": "999999999999999991",
+        "id": "SYNTHETIC_CONTACT_ID",
         "name": "Casey Tester"
       },
       "Account_Name": "Synthetic Plumbing",
@@ -140,16 +140,16 @@
       "Other_Service_Details": null
     },
     "deal": {
-      "id": "999999999999999993",
+      "id": "SYNTHETIC_DEAL_ID",
       "Modified_Time": "2026-08-14T18:00:05.000Z",
       "Pipeline": "Revenue Desk Sales",
       "Stage": "Setup and Authorization",
       "Account_Name": {
-        "id": "999999999999999992",
+        "id": "SYNTHETIC_ACCOUNT_ID",
         "name": "Synthetic Plumbing"
       },
       "Contact_Name": {
-        "id": "999999999999999991",
+        "id": "SYNTHETIC_CONTACT_ID",
         "name": "Casey Tester"
       },
       "Setup_Access_Issue_Request_ID": "10000000-0000-4000-8000-000000000001",

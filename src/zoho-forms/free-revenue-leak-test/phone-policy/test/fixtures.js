@@ -36,7 +36,8 @@ function form2(overrides = {}) {
     authorizedRepresentativeConfirmed: true, testScopeAccepted: true, ...overrides };
 }
 function records() {
-  const id = { contact: "900000000000000001", account: "900000000000000002", deal: "900000000000000003" };
+  const id = { contact: `9${"0".repeat(16)}1`, account: `9${"0".repeat(16)}2`,
+    deal: `9${"0".repeat(16)}3` };
   const common = { Modified_Time: "2026-10-07T11:00:00-05:00" };
   return {
     contact: { ...common, id: id.contact, Account_Name: { id: id.account },

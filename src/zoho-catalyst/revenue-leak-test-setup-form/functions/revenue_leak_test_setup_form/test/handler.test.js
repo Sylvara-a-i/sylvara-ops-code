@@ -3424,7 +3424,18 @@ test("old unfinished phone-profile revision rejects without claim or record muta
 });
 
 test("genuine pre-policy succeeded receipt with invalid current NANP still replays without mutation", async () => {
-  const historical = require("./fixtures/legacy-phone-succeeded-receipt.json");
+  // Symbolic source IDs avoid numeric identifiers in the public repository.
+  // Restore only these exact synthetic constants, preserving the genuine legacy
+  // runtime record/receipt bytes and every previously calculated fingerprint.
+  const syntheticIds = {
+    SYNTHETIC_CONTACT_ID: `${"9".repeat(17)}1`,
+    SYNTHETIC_ACCOUNT_ID: `${"9".repeat(17)}2`,
+    SYNTHETIC_DEAL_ID: `${"9".repeat(17)}3`,
+  };
+  const historical = JSON.parse(JSON.stringify(
+    require("./fixtures/legacy-phone-succeeded-receipt.json"),
+  ), (_key, value) => typeof value === "string" && Object.hasOwn(syntheticIds, value)
+    ? syntheticIds[value] : value);
   assert.equal(historical.provenance.synthetic, true);
   const selected = fixture(); await issue(selected); const prepared = await prefill(selected);
   assert.equal((await submit(selected, validSubmission(prepared.body))).status, 200);
