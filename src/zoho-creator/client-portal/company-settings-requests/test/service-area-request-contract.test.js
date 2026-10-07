@@ -148,3 +148,6 @@ test("module import and preparation have zero transport or writer capabilities",
   vm.runInNewContext(`module.exports.preparePendingServiceAreaRequest(${JSON.stringify(input())}, ${JSON.stringify(context())})`, sandbox);
   assert.equal(calls, 0);
 });
+
+// Keep requested-text native parity in the existing canonical/CI entrypoint.
+require("./native-service-area-validation.test");
