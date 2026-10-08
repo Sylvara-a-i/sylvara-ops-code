@@ -73,6 +73,20 @@ Decode only for prefill and comparison with the submitted read-only approved rou
 
 The bounded Development launch that identified this mismatch reached the issue handler and returned `409 setup_conflict` before a session or email proof was created. Its allocation remains consumed; source repair is not another live-test approval. Rebuild and verify an immutable artifact before any separately allocated acceptance attempt. Keep the intentional source-revision hold on uncertainty; no credential restoration, evidence deletion, or approval bypass is a rollback. Full provider activation and its route comparisons remain outside this non-Retell repair.
 
+## Free-Test Preparation Choice Mismatch
+
+Source inspection at revision `54a6cf38d8aae27da57b4a50ad620cec6b2af17b` found that the [Form 2 contract](functions/revenue_leak_test_setup_form/lib/form-contract.js) accepts the choices below and preserves them in CRM, while the [canonical free-test preparation validator](../revenue-desk-call-runtime/functions/revenue_desk_call_gateway/lib/free-test-preparation.js) blocks them. This is source evidence only; it does not establish the current native Forms configuration.
+
+| Form 2 field | Accepted choices blocked by preparation | Preparation result |
+| --- | --- | --- |
+| `urgentCallHandling` | `Attempt Approved Transfer`; `Capture Callback Only` | `FREE_TEST_HANDLING_POLICY_UNSUPPORTED` |
+| `existingCustomerCallHandling` | `Attempt Transfer`; `Capture Callback Only`; `Use Approved Fallback` | `FREE_TEST_HANDLING_POLICY_UNSUPPORTED` |
+| `servicesHandled` | Any selection containing `Other`, even with the required `otherServiceDetails` | `SERVICES_REVIEW_REQUIRED` |
+
+Preparation requires both handling fields to equal `Alert + Capture Callback`. The free-test runtime captures and classifies requests, then queues an alert; it has no transfer/fallback or notification-suppression policy variable. The existing [preparation regression test](../revenue-desk-release/test/free-test-preparation.test.js) explicitly checks rejection of every other Form 2 handling choice. A successful Form 2 submission therefore does not establish that its preferences are supported by free-test preparation.
+
+Deferred follow-up: align the free-test Form 2 handling choices with `Alert + Capture Callback` in the source contract and, after separate approval and readback, the native form. Add offline intake-to-preparation parity coverage. Keep `Other` services pending explicit supported-service review before preparation, and retain rejection of incompatible existing submissions without silently replacing their preferences. This follow-up must preserve the bounded free test rather than add transfer, fallback, or notification-suppression capabilities. The v0.5 acceptance-coverage change documents this mismatch only; native Forms and already built phone artifacts remain outside its scope.
+
 ## Durable State
 
 [`config/datastore-schema.json`](config/datastore-schema.json) defines four new additive Development version-3 tables. Neither existing version-2 store is renamed, updated, deleted, or backfilled.

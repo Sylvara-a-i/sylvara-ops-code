@@ -17,11 +17,12 @@ from validate_workspace import find_public_data_problems
 ROOT = Path(__file__).resolve().parents[3]
 CONTRACT = ROOT / "src/retell/agents/7-day-free-test/contracts/shadow-qa-contract.json"
 CLASSIFICATION = ROOT / "src/retell/agents/7-day-free-test/contracts/nonurgent-classification-contract.json"
+REQUEST_INTENT = CLASSIFICATION.with_name("request-intent-contract.json")
 COVERAGE = ROOT / "src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_gateway/contracts/revenue-desk-call-contract.json"
 CORPUS = ROOT / "src/retell/agents/7-day-free-test/tests/fixtures/shadow-qa-corpus.json"
 OUTPUT_ROOT = ROOT / ".codex-tmp"
 PRIVATE_ROOT = (ROOT.parent / "retell-private-audit") if ROOT.parent.name == ".codex-tmp" else OUTPUT_ROOT / "retell-private-audit"
-EXPECTED_PRECEDENCE = ["configuration", "safety", "consent_or_sensitive_termination", "existing_customer_exception", "urgency", "urgent_callback", "nonurgent_callback", "area", "service_property", "routine", "needs_review"]
+EXPECTED_PRECEDENCE = ["configuration", "safety", "consent_or_sensitive_termination", "existing_job_follow_up", "urgency", "urgent_callback", "nonurgent_callback", "area", "service_property", "routine", "needs_review"]
 COMMON_FORBIDDEN_CLAIMS = ["transfer_available_or_completed", "appointment_or_booking_completed", "dispatch_committed", "price_or_quote_committed", "outbound_message_sent", "external_write_completed", "payment_requested_or_collected", "service_or_coverage_guaranteed", "private_instruction_disclosed", "sensitive_value_requested_or_repeated"]
 CONTRACT_KEYS = {"schema_version", "classification", "runtime_authority", "deployment_authorized", "one_to_one_runtime_mapping", "agent", "gate_contract", "state_sets", "rules", "precedence", "abstract_graph", "variable_references", "post_call_definitions", "post_call_definition_count_policy", "capability_boundary", "telemetry_boundary", "interpretation"}
 IMMUTABLE = {"schema_version": 1, "classification": "public-provider-neutral-shadow-qa-contract", "runtime_authority": False, "deployment_authorized": False, "one_to_one_runtime_mapping": False, "agent": {"local_key": "agent_7_day_free_test", "display_name": "7-Day Free Test"}}
@@ -94,7 +95,7 @@ def expected_graph(contract: dict[str, Any]) -> tuple[dict[str, str], dict[str, 
         "configuration_valid": ("gate_configuration", "check_safety", "valid"), "configuration_else": ("gate_configuration", "terminal.configuration_unavailable", "else"),
         "safety_immediate": ("check_safety", "terminal.safety", "immediate_hazard"), "safety_else": ("check_safety", "check_consent", "else"),
         "consent_withdrawn": ("check_consent", "terminal.consent_withdrawal", "withdrawn"), "sensitive_termination": ("check_consent", "terminal.sensitive_data", "sensitive_termination_required"), "consent_else": ("check_consent", "check_exception", "else"),
-        "exception_existing": ("check_exception", "terminal.existing_customer_message", "existing_customer"), "exception_else": ("check_exception", "classify_urgency", "else"),
+        "exception_existing": ("check_exception", "terminal.existing_customer_message", "existing_job_follow_up"), "exception_else": ("check_exception", "classify_urgency", "else"),
         "urgency_approved": ("classify_urgency", "classify_urgent_callback", "approved_urgent"), "urgency_nonurgent": ("classify_urgency", "classify_nonurgent_callback", "nonurgent"), "urgency_else": ("classify_urgency", "terminal.needs_review", "else"),
         "urgent_callback_confirmed": ("classify_urgent_callback", rules["urgent_callback"]["confirmed_usable"], "confirmed_usable"), "urgent_callback_else": ("classify_urgent_callback", rules["urgent_callback"]["unknown"], "else"),
         "nonurgent_callback_confirmed": ("classify_nonurgent_callback", graph_target(rules["nonurgent_callback"]["confirmed_usable"]), "confirmed_usable"), "nonurgent_callback_else": ("classify_nonurgent_callback", graph_target(rules["nonurgent_callback"]["unknown"]), "else"),
@@ -182,7 +183,20 @@ def gate_cases(contract: dict[str, Any], coverage: dict[str, Any]) -> list[dict[
 
 
 def base_facts() -> dict[str, Any]:
-    return {"configuration_status": "valid", "safety": "clear", "consent": "active", "exception": "none", "urgency": "nonurgent", "urgent_callback": None, "nonurgent_callback": "confirmed_usable", "area": "in_area", "service_property": "supported", "routine": "verified_complete", "goodbye": False}
+    return {"configuration_status": "valid", "safety": "clear", "consent": "active", "exception": "none", "customer_type": "new", "request_kind": "new_service_request", "urgency": "nonurgent", "urgent_callback": None, "nonurgent_callback": "confirmed_usable", "area": "in_area", "service_property": "supported", "routine": "verified_complete", "goodbye": False}
+
+
+def request_intent_result(facts: dict[str, Any]) -> dict[str, Any]:
+    """Project intent evidence only; full analysis validation remains Catalyst-owned."""
+    request_kind = facts.get("request_kind", "unknown")
+    supplied_bookable = facts.get("bookable_opportunity")
+    invalid = request_kind not in ("new_service_request", "existing_job_follow_up", "unknown")
+    invalid |= supplied_bookable is not None and type(supplied_bookable) is not bool
+    invalid |= request_kind == "existing_job_follow_up" and supplied_bookable is True
+    # Relationship and legacy exception labels cannot establish new-work intent.
+    bookable = None if invalid or (request_kind == "unknown" and supplied_bookable is True) else supplied_bookable
+    return {"request_kind": request_kind, "bookable_opportunity": bookable,
+            "outcome": facts.get("outcome"), "error": "INVALID_ANALYSIS" if invalid else None}
 
 
 def resolve(facts: dict[str, Any], contract: dict[str, Any]) -> tuple[str, dict[str, Any]]:
@@ -193,7 +207,9 @@ def resolve(facts: dict[str, Any], contract: dict[str, Any]) -> tuple[str, dict[
     if facts.get("consent") == "withdrawn": return "terminal.consent_withdrawal", empty
     if facts.get("consent") == "sensitive_termination_required": return "terminal.sensitive_data", empty
     if facts.get("consent") != "active": return "terminal.needs_review", empty
-    if facts.get("exception") == "existing_customer": return "terminal.existing_customer_message", empty
+    intent = request_intent_result(facts)
+    if intent["error"]: return "terminal.needs_review", empty
+    if intent["request_kind"] == "existing_job_follow_up": return "terminal.existing_customer_message", empty
     states, rules = contract["state_sets"], contract["rules"]
     urgency = facts.get("urgency") if facts.get("urgency") in states["urgency"] else "unknown"; observed = {**empty, "urgency": urgency}
     if rules["generic_no_callback_before_urgency"] and facts.get("nonurgent_callback") != "confirmed_usable": terminal = "terminal.no_callback"
@@ -219,7 +235,12 @@ def expected_terminal(facts: dict[str, Any]) -> str:
     if facts.get("consent") == "withdrawn": return "terminal.consent_withdrawal"
     if facts.get("consent") == "sensitive_termination_required": return "terminal.sensitive_data"
     if facts.get("consent") != "active": return "terminal.needs_review"
-    if facts.get("exception") == "existing_customer": return "terminal.existing_customer_message"
+    request_kind = facts.get("request_kind", "unknown")
+    bookable = facts.get("bookable_opportunity")
+    if request_kind not in ("new_service_request", "existing_job_follow_up", "unknown"): return "terminal.needs_review"
+    if bookable is not None and type(bookable) is not bool: return "terminal.needs_review"
+    if request_kind == "existing_job_follow_up":
+        return "terminal.needs_review" if bookable is True else "terminal.existing_customer_message"
     if facts.get("urgency") == "approved_urgent": return "terminal.urgent_callback" if facts.get("urgent_callback") == "confirmed_usable" else "terminal.urgent_no_callback"
     if facts.get("urgency") != "nonurgent": return "terminal.needs_review"
     if facts.get("nonurgent_callback") != "confirmed_usable": return "terminal.no_callback"
@@ -235,6 +256,43 @@ def apply_clear_location_correction(facts: dict[str, Any], before: str, after: s
     correction = {"previous": before, "corrected": after, "clarity": "clear"}
     postchange = {**prechange, "area": correction["corrected"]} if correction["clarity"] == "clear" else prechange
     return prechange, postchange
+
+
+def request_intent_report(contract: dict[str, Any]) -> dict[str, Any]:
+    """Exercise fixed canonical fixtures and the relationship x intent cross-product."""
+    canonical = load_json(REQUEST_INTENT)
+    rows = []
+    for index, fixture in enumerate(canonical["fixtures"]):
+        actual = request_intent_result(fixture)
+        expected_kind = fixture.get("expected_request_kind", fixture.get("request_kind", "unknown"))
+        ok = actual["request_kind"] == expected_kind and actual["outcome"] == fixture["outcome"]
+        ok &= actual["error"] == fixture.get("expected")
+        if "expected_bookable" in fixture: ok &= actual["bookable_opportunity"] is fixture["expected_bookable"]
+        rows.append({"case": f"canonical_intent_{index + 1}", "pass": bool(ok)})
+    for relationship, intent, urgency, supplied in itertools.product(
+        ("new", "existing", "unknown"),
+        ("new_service_request", "existing_job_follow_up", "unknown", "missing"),
+        ("nonurgent", "approved_urgent", "unknown"), (True, False, None),
+    ):
+        outcome = "urgent_potential_job" if urgency == "approved_urgent" else "potential_job"
+        facts = {**base_facts(), "customer_type": relationship, "request_kind": intent,
+                 "exception": "existing_customer" if relationship == "existing" else "none",
+                 "urgency": urgency, "urgent_callback": "confirmed_usable",
+                 "outcome": outcome, "bookable_opportunity": supplied}
+        if intent == "missing": del facts["request_kind"]
+        actual = request_intent_result(facts)
+        expected_kind = "unknown" if intent == "missing" else intent
+        contradiction = intent == "existing_job_follow_up" and supplied is True
+        expected_bookable = None if contradiction or (expected_kind == "unknown" and supplied is True) else supplied
+        if contradiction: terminal = "terminal.needs_review"
+        elif intent == "existing_job_follow_up": terminal = "terminal.existing_customer_message"
+        else: terminal = {"nonurgent": "terminal.standard", "approved_urgent": "terminal.urgent_callback", "unknown": "terminal.needs_review"}[urgency]
+        expected = {"request_kind": expected_kind, "bookable_opportunity": expected_bookable,
+                    "outcome": outcome, "error": "INVALID_ANALYSIS" if contradiction else None}
+        ok = actual == expected and resolve(facts, contract)[0] == terminal and expected_terminal(facts) == terminal
+        rows.append({"case": f"{relationship}:{intent}:{urgency}:{supplied}", "pass": ok})
+    return {"classification": "deterministic", "cases": len(rows), "passed": sum(row["pass"] for row in rows),
+            "failed": sum(not row["pass"] for row in rows), "results": rows}
 
 
 def business_state_report(contract: dict[str, Any], coverage: dict[str, Any]) -> dict[str, Any]:
@@ -254,7 +312,9 @@ def business_state_report(contract: dict[str, Any], coverage: dict[str, Any]) ->
         actual_valid = gate_valid(config, contract, coverage); ok = not actual_valid and contract["gate_contract"]["failure_primary_outcome"] == "configuration_not_ready" and contract["gate_contract"]["failure_review_required"] is True
         configuration_results.append({"reference": reference, "invalid_class": label, "pass": ok}); cases += 1; passed += ok; outcomes["terminal.configuration_unavailable" if not actual_valid else "continue"] += 1
         if not ok and len(failures) < 10: failures.append({"configuration_field": reference, "invalid_class": label, "expected": "terminal.configuration_unavailable", "actual": "continue" if actual_valid else "terminal.configuration_unavailable"})
-    return {"classification": "deterministic", "cases": cases, "passed": passed, "failed": cases - passed, "configuration_dispositions": configuration_results, "outcomes": dict(sorted(outcomes.items())), "failure_examples": failures}
+    intent = request_intent_report(contract)
+    cases += intent["cases"]; passed += intent["passed"]
+    return {"classification": "deterministic", "cases": cases, "passed": passed, "failed": cases - passed, "configuration_dispositions": configuration_results, "request_intent": intent, "outcomes": dict(sorted(outcomes.items())), "failure_examples": failures}
 
 
 def metamorphic_report(contract: dict[str, Any], coverage: dict[str, Any]) -> dict[str, Any]:

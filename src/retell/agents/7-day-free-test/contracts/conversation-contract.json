@@ -78,7 +78,7 @@
     "excessive_empathy_language_allowed": false,
     "yield_when_caller_interrupts": true,
     "accept_caller_corrections": true,
-    "confirm_uncertain_callback_number": true,
+    "explicitly_confirm_final_callback_number": true,
     "clarify_ambiguous_service_request": true,
     "prefer_concise_calls": true,
     "rigid_questionnaire_style_allowed": false
@@ -92,7 +92,7 @@
     {
       "key": "callback_number",
       "post_call_key": "callback_number",
-      "collection": "request_once_and_confirm_if_uncertain"
+      "collection": "request_once_and_explicitly_confirm_final_number"
     },
     {
       "key": "customer_relationship",
