@@ -72,16 +72,18 @@ function checkFields(section, expected) {
   return combine(FIELDS.map((name) => {
     const field = fields.get(name);
     if (!field) return result("incompatible", "required_field_missing");
-    if (malformedFlags(field, ["apiUpdate", "readOnly"])) return result("unknown", "field_update_capability_unknown");
-    if (!text(field.dataType)) return result("unknown", "field_type_unknown");
-    if (field.dataType !== "picklist") return result("incompatible", "field_type_mismatch");
+    const checks = [!text(field.dataType) ? result("unknown", "field_type_unknown")
+      : field.dataType === "picklist" ? result("compatible") : result("incompatible", "field_type_mismatch")];
     if (name === "Subscription_Status") {
-      if (typeof field.apiUpdate !== "boolean" || typeof field.readOnly !== "boolean") {
-        return result("unknown", "field_update_capability_unknown");
+      // Each capability is independent: an unknown peer cannot hide a proved denial.
+      for (const [flag, allowed] of [[field.apiUpdate, true], [field.readOnly, false]]) {
+        checks.push(typeof flag !== "boolean" ? result("unknown", "field_update_capability_unknown")
+          : flag === allowed ? result("compatible") : result("incompatible", "field_update_unavailable"));
       }
-      if (!field.apiUpdate || field.readOnly) return result("incompatible", "field_update_unavailable");
+    } else if (malformedFlags(field, ["apiUpdate", "readOnly"])) {
+      checks.push(result("unknown", "field_update_capability_unknown"));
     }
-    return result("compatible");
+    return combine(checks);
   }));
 }
 

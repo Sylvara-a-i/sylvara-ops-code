@@ -343,3 +343,20 @@ test("supplied optional metadata flags must be booleans without requiring Plan w
     assert.equal(validatePaidCrmReadback(evidence, EXPECTED).status, "compatible");
   }
 });
+
+for (const [denied, value, peer] of [["apiUpdate", false, "readOnly"], ["readOnly", true, "apiUpdate"]]) {
+  test(`denied ${denied} remains incompatible alongside an unknown peer capability`, () => {
+    for (const malformed of [undefined, null, "false", 0, {}, []]) {
+      const evidence = fixture();
+      const field = evidence.fields.fields[1];
+      field[denied] = value;
+      if (malformed === undefined) delete field[peer];
+      else field[peer] = malformed;
+      const report = validatePaidCrmReadback(evidence, EXPECTED);
+      assert.equal(report.status, "incompatible");
+      assert.equal(report.checks.fields.status, "incompatible");
+      assert.deepEqual(new Set(report.checks.fields.reasons),
+        new Set(["field_update_unavailable", "field_update_capability_unknown"]));
+    }
+  });
+}
