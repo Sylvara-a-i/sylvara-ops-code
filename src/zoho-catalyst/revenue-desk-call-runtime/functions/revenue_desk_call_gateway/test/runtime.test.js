@@ -1826,9 +1826,13 @@ test('integration: signed provider artifacts are discarded while approved struct
   const marker = 'synthetic-excluded-provider-artifact';
   Object.assign(event.call, {
     transcript: marker, transcript_object: [{ content: marker }],
+    transcript_with_tool_calls: [{ role: 'tool_call_invocation', arguments: marker }],
     recording_url: `https://example.invalid/${marker}`,
     recording_multi_channel_url: `https://example.invalid/${marker}`,
     scrubbed_recording_url: `https://example.invalid/${marker}`,
+    public_log_url: `https://example.invalid/${marker}`,
+    retell_llm_dynamic_variables: { synthetic_private_context: marker },
+    collected_dynamic_variables: { synthetic_private_context: marker },
   });
   event.call.call_analysis.call_summary = marker;
   const accepted = await invoke(fixture.listener, {
@@ -1838,9 +1842,15 @@ test('integration: signed provider artifacts are discarded while approved struct
   const receipt = fixture.store.rows.get('RevenueDeskEventReceipts')
     .find((row) => row.RECEIPT_KIND === 'provider_event');
   assert.deepEqual(fixture.jobQueue, [{ mode: 'process_event', event_key: receipt.EVENT_KEY }]);
+  assert.equal(JSON.stringify([...fixture.store.rows]).includes(marker), false,
+    'provider artifacts are discarded before worker dispatch');
+  // Privacy-mode recording URLs can expire after ten minutes. The worker uses
+  // the minimized receipt, so advancing a fake clock needs no URL or recovery.
+  fixture.clock.value += 11 * 60_000;
   await fixture.listener.processQueuedJobs();
   assert.equal(fixture.workerErrors.length, 0);
   assert.equal(receipt.STATUS, 'Completed');
+  assert.ok(Date.parse(receipt.PROCESSED_AT) - Date.parse(receipt.RECEIVED_AT) > 10 * 60_000);
   const canonical = JSON.parse(fixture.store.rows.get('RevenueDeskCalls')[0].CANONICAL_CALL_JSON);
   assert.equal(canonical.issueSummary, 'Leaking water heater');
   assert.equal(canonical.callbackNumber, '+15551110001');
@@ -2643,3 +2653,260 @@ test('integration: readiness is query-bounded and fails closed on capped or malf
   assert.equal(readiness.terminalReconciliationPendingCount >= 99, true,
     'shallow cloned status rows and the capped evidence page remain explicitly unverified');
 });
+
+// These signed synthetic fixtures exercise source compatibility only. They do
+// not assert the installed provider subscription or fetch retained artifacts.
+const emptyPrivacyAnalysisCases = [
+  ['analysis absent', (call) => { delete call.call_analysis; }],
+  ['analysis null', (call) => { call.call_analysis = null; }],
+  ['analysis empty object', (call) => { call.call_analysis = {}; }],
+  ['custom data absent', (call) => { call.call_analysis = { call_summary: 'synthetic-discarded-summary' }; }],
+  ['custom data null', (call) => { call.call_analysis = { custom_analysis_data: null }; }],
+  ['custom data empty object', (call) => { call.call_analysis = { custom_analysis_data: {} }; }],
+];
+
+function assertUnknownPrivacyAnalysis(analysis) {
+  assert.equal(analysis.outcome, 'unresolved');
+  assert.equal(analysis.coverageTrigger, 'Unknown');
+  for (const field of ['customerType', 'requestKind', 'urgency']) assert.equal(analysis[field], 'unknown', field);
+  for (const field of [
+    'callerName', 'callbackNumber', 'callbackNumberConfirmed', 'callerIntent', 'issueSummary',
+    'cityOrZip', 'specificPersonRequested', 'bookableOpportunity', 'officeFollowUpRequired',
+    'workflowFailureCode', 'workflowFailureText',
+  ]) assert.equal(analysis[field], null, field);
+  assert.equal(analysis.configuredAnalysisComplete, false);
+  assert.equal(analysis.workflowFailureEvidenceComplete, false);
+  assert.deepEqual(analysis.value, {
+    evidenceClass: 'unknown', valueMinorUnits: null, currency: null,
+    methodId: null, methodVersion: null, source: 'retell',
+  });
+}
+
+for (const [name, omit] of emptyPrivacyAnalysisCases) {
+  for (const order of [['call_ended', 'call_analyzed'], ['call_analyzed', 'call_ended']]) {
+    test(`integration: privacy: ${name}, ${order[0]} first preserves incomplete facts`, async () => {
+      const fixture = runtimeFixture();
+      const inbound = await invoke(fixture.listener, { url: '/retell/inbound',
+        payload: payloadInbound('A'), env: fixture.env });
+      const events = order.map((event) => {
+        const payload = eventPayload(event, 'privacy_empty_A', inbound.body.call_inbound.metadata);
+        if (event === 'call_analyzed') omit(payload.call);
+        return payload;
+      });
+      for (const payload of [...events, ...events]) {
+        const accepted = await invoke(fixture.listener, { url: '/retell/events', payload, env: fixture.env });
+        assert.equal(accepted.status, 200);
+      }
+      assert.deepEqual(fixture.workerErrors, []);
+      const receipts = fixture.store.rows.get('RevenueDeskEventReceipts')
+        .filter((row) => row.RECEIPT_KIND === 'provider_event');
+      assert.equal(receipts.length, 2);
+      assert.ok(receipts.every((row) => row.STATUS === 'Completed'));
+      assertUnknownPrivacyAnalysis(JSON.parse(receipts.find((row) => row.EVENT_TYPE === 'call_analyzed')
+        .EVENT_DATA_JSON).analysis);
+      const calls = fixture.store.rows.get('RevenueDeskCalls');
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0].PROCESSING_STATE, 'Completed');
+      assertUnknownPrivacyAnalysis(JSON.parse(calls[0].CANONICAL_CALL_JSON));
+      assert.equal(fixture.store.rows.get('RevenueDeskDeployments')[0].HANDLED_COUNT, 1);
+      const notices = fixture.store.rows.get('RevenueDeskNotifications');
+      assert.equal(notices.length, 1);
+      assert.equal(notices[0].STATUS, 'DryRunRecorded');
+      const notice = JSON.parse(notices[0].PAYLOAD_JSON);
+      assert.equal(notice.callOutcome, 'unresolved');
+      assert.equal(notice.customerType, 'unknown');
+      assert.equal(notice.urgency, 'unknown');
+      assert.equal(notice.callbackNumberConfirmed, false);
+      for (const field of ['callerName', 'callbackNumber', 'cityOrZip', 'issueSummary', 'specificPersonRequested']) {
+        assert.equal(notice[field], null, field);
+      }
+      assert.match(notice.nextAction, /No confirmed callback number is available/);
+      assert.equal(fixture.mailAccesses, 0);
+      const report = await queryClientReport(fixture.store, fixture.config,
+        'client_A', 'deployment_A', fixture.clock.value);
+      assert.equal(report.callsCaptured, 1);
+      assert.equal(report.metrics.unresolvedCalls, 1);
+      assert.equal(report.qualifiedOpportunities, 0);
+      for (const field of ['bookableOpportunities', 'officeFollowUpCalls', 'observedWorkflowFailures',
+        'recommendedPaidCoverage']) assert.equal(report[field], null, field);
+      assert.equal(report.structuredAnalysisComplete, false);
+      assert.equal(report.workflowFailureEvidenceComplete, false);
+      assert.equal(report.calls[0].coverageTrigger, 'Unknown');
+      assert.equal(report.calls[0].evidenceWithheldReason, 'structured_analysis_incomplete');
+      assert.equal(report.calls[0].valueMinorUnits, null);
+      assert.equal(JSON.stringify([...fixture.store.rows]).includes('synthetic-discarded-summary'), false);
+    });
+  }
+}
+
+for (const outcome of [null, '']) {
+  test(`integration: privacy: present ${JSON.stringify(outcome)} outcome is rejected rather than inferred`, async () => {
+    const fixture = runtimeFixture();
+    const inbound = await invoke(fixture.listener, { url: '/retell/inbound',
+      payload: payloadInbound('A'), env: fixture.env });
+    const invalid = eventPayload('call_analyzed', 'privacy_invalid_A', inbound.body.call_inbound.metadata);
+    invalid.call.call_analysis = { custom_analysis_data: { outcome } };
+    const response = await invoke(fixture.listener, { url: '/retell/events', payload: invalid,
+      env: fixture.env, processJobs: false });
+    assert.equal(response.status, 400);
+    assert.equal(response.body.code, 'INVALID_SCHEMA');
+    const receipts = fixture.store.rows.get('RevenueDeskEventReceipts')
+      .filter((row) => row.RECEIPT_KIND === 'provider_event');
+    assert.equal(receipts.length, 1);
+    assert.match(receipts[0].EVENT_KEY, /^evtq_/);
+    assert.equal(receipts[0].EVENT_DATA_JSON, '{}');
+    assert.equal(receipts[0].STATUS, 'TerminalFailure');
+    assert.equal(fixture.jobQueue.length, 0);
+    assert.equal(fixture.store.rows.get('RevenueDeskCalls').length, 0);
+    assert.equal(fixture.store.rows.get('RevenueDeskNotifications').length, 0);
+    assert.equal(fixture.store.rows.get('RevenueDeskDeployments')[0].HANDLED_COUNT, 0);
+    assert.equal(fixture.mailAccesses, 0);
+  });
+}
+
+for (const order of [['call_ended', 'call_analyzed'], ['call_analyzed', 'call_ended']]) {
+  test(`integration: privacy: rejected call_started does not poison ${order[0]} first settlement`, async () => {
+    const fixture = runtimeFixture();
+    const inbound = await invoke(fixture.listener, { url: '/retell/inbound',
+      payload: payloadInbound('A'), env: fixture.env });
+    const metadata = inbound.body.call_inbound.metadata;
+    const started = eventPayload('call_started', 'privacy_started_A', metadata);
+    Object.assign(started.call, { call_status: 'ongoing', end_timestamp: null, duration_ms: 0 });
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const rejected = await invoke(fixture.listener, { url: '/retell/events', payload: started,
+        env: fixture.env, processJobs: false });
+      assert.equal(rejected.status, 400);
+      assert.equal(rejected.body.code, 'INVALID_SCHEMA');
+    }
+    const quarantined = fixture.store.rows.get('RevenueDeskEventReceipts')
+      .filter((row) => row.RECEIPT_KIND === 'provider_event');
+    assert.equal(quarantined.length, 1);
+    assert.match(quarantined[0].EVENT_KEY, /^evtq_/);
+    assert.equal(quarantined[0].DEPLOYMENT_ID, null);
+    assert.equal(quarantined[0].EVENT_DATA_JSON, '{}');
+    assert.equal(quarantined[0].STATUS, 'TerminalFailure');
+    const quarantineBefore = structuredClone(quarantined[0]);
+    assert.equal(fixture.jobQueue.length, 0);
+    assert.equal(fixture.store.rows.get('RevenueDeskCalls').length, 0);
+    assert.equal(fixture.store.rows.get('RevenueDeskNotifications').length, 0);
+    assert.equal(fixture.store.rows.get('RevenueDeskDeployments')[0].HANDLED_COUNT, 0);
+    for (const event of [...order, ...order]) {
+      const accepted = await invoke(fixture.listener, { url: '/retell/events',
+        payload: eventPayload(event, started.call.call_id, metadata), env: fixture.env });
+      assert.equal(accepted.status, 200);
+    }
+    assert.deepEqual(fixture.workerErrors, []);
+    assert.deepEqual(quarantined[0], quarantineBefore);
+    assert.equal(fixture.store.rows.get('RevenueDeskCalls').length, 1);
+    assert.equal(fixture.store.rows.get('RevenueDeskCalls')[0].PROCESSING_STATE, 'Completed');
+    assert.equal(fixture.store.rows.get('RevenueDeskDeployments')[0].HANDLED_COUNT, 1);
+    assert.equal(fixture.store.rows.get('RevenueDeskNotifications').length, 1);
+    fixture.clock.value = Date.parse(fixture.store.rows.get('RevenueDeskDeployments')[0].EXPIRES_AT);
+    const handler = createWorkerJobHandler({
+      catalystSdk: fixture.catalystSdk, environment: fixture.env,
+      now: () => fixture.clock.value, storeFactory: () => fixture.store,
+    });
+    await handler(retryJobRequest(fixture.env, {
+      mode: 'rebuild_report', deployment_id: 'deployment_A',
+    }), retryJobContext());
+    assert.equal(fixture.store.rows.get('AnalyticsSyncOutbox')
+      .filter((row) => row.RECORD_TYPE === 'final_test_result').length, 1,
+    'the unbound started-event quarantine must not hold terminal reporting');
+    assert.equal(fixture.store.rows.get('CRMBillingOperations').length, 1);
+    assert.equal(fixture.mailAccesses, 0);
+  });
+}
+
+for (const delayed of [false, true]) {
+  test(`integration: privacy: ${delayed ? 'delayed' : 'missing'} analyzed event holds terminal reporting`, async () => {
+    const fixture = runtimeFixture();
+    for (const table of ['RevenueDeskDeployments', 'RevenueDeskConfigurationVersions']) {
+      fixture.store.rows.set(table, fixture.store.rows.get(table)
+        .filter((row) => row.DEPLOYMENT_ID === 'deployment_A'));
+    }
+    const inbound = await invoke(fixture.listener, { url: '/retell/inbound',
+      payload: payloadInbound('A'), env: fixture.env });
+    const ended = eventPayload('call_ended', 'privacy_settlement_A', inbound.body.call_inbound.metadata);
+    const accepted = await invoke(fixture.listener, { url: '/retell/events', payload: ended, env: fixture.env });
+    assert.equal(accepted.status, 200);
+    const deployment = fixture.store.rows.get('RevenueDeskDeployments')[0];
+    const call = fixture.store.rows.get('RevenueDeskCalls')[0];
+    const countedKeys = deployment.COUNTED_CALL_KEYS_JSON;
+    assert.equal(deployment.HANDLED_COUNT, 1);
+    assert.equal(call.HANDLED_RECORDED, true);
+    assert.equal(call.PROCESSING_STATE, 'AwaitingAnalysis');
+    assert.equal(fixture.store.rows.get('RevenueDeskNotifications').length, 0);
+    const handler = createWorkerJobHandler({
+      catalystSdk: fixture.catalystSdk, environment: fixture.env,
+      now: () => fixture.clock.value, storeFactory: () => fixture.store,
+    });
+    // Missing analysis has no timeout or partial-delivery policy. A finite pair
+    // of clock advances proves retry/expiry cannot silently release the hold.
+    for (const elapsed of [0, 24 * 60 * 60_000]) {
+      fixture.clock.value = Date.parse(deployment.EXPIRES_AT) + elapsed;
+      const replay = await invoke(fixture.listener, { url: '/retell/events', payload: ended,
+        env: fixture.env, signatureTimestamp: fixture.clock.value });
+      assert.equal(replay.body.duplicate, true);
+      await handler(retryJobRequest(fixture.env), retryJobContext());
+      assert.equal(deployment.TEST_STATUS, 'Completed');
+      assert.equal(deployment.STOP_REASON, 'seven_day_limit_reached');
+      assert.equal(deployment.STOPPED_AT, deployment.EXPIRES_AT);
+      assert.equal(deployment.REPORT_RECONCILIATION_STATUS, 'AwaitingSettlement');
+      assert.equal(deployment.HANDLED_COUNT, 1);
+      assert.equal(deployment.COUNTED_CALL_KEYS_JSON, countedKeys);
+      assert.equal(fixture.store.rows.get('RevenueDeskCalls').length, 1);
+      assert.equal(call.PROCESSING_STATE, 'AwaitingAnalysis');
+      assert.equal(fixture.store.rows.get('RevenueDeskNotifications').length, 0);
+      assert.equal(fixture.store.rows.get('CRMBillingOperations').length, 0);
+      assert.equal(fixture.store.rows.get('AnalyticsSyncOutbox')
+        .filter((row) => row.RECORD_TYPE === 'final_test_result').length, 0);
+    }
+    if (delayed) {
+      const analyzed = eventPayload('call_analyzed', ended.call.call_id, inbound.body.call_inbound.metadata);
+      // Late delivery can itself lack structured content; settling must not
+      // manufacture business facts from the preserved handled-call count.
+      delete analyzed.call.call_analysis;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const response = await invoke(fixture.listener, { url: '/retell/events', payload: analyzed,
+          env: fixture.env, signatureTimestamp: fixture.clock.value });
+        assert.equal(response.status, 200);
+        assert.equal(response.body.duplicate, attempt > 0);
+        const replay = await invoke(fixture.listener, { url: '/retell/events', payload: ended,
+          env: fixture.env, signatureTimestamp: fixture.clock.value });
+        assert.equal(replay.body.duplicate, true);
+        await handler(retryJobRequest(fixture.env), retryJobContext());
+      }
+      assert.equal(call.PROCESSING_STATE, 'Completed');
+      assertUnknownPrivacyAnalysis(JSON.parse(call.CANONICAL_CALL_JSON));
+      assert.equal(deployment.HANDLED_COUNT, 1);
+      assert.equal(deployment.COUNTED_CALL_KEYS_JSON, countedKeys);
+      assert.equal(deployment.REPORT_RECONCILIATION_STATUS, 'Completed');
+      assert.equal(fixture.store.rows.get('RevenueDeskCalls').length, 1);
+      const notices = fixture.store.rows.get('RevenueDeskNotifications');
+      assert.equal(notices.length, 1);
+      assert.equal(notices[0].STATUS, 'DryRunRecorded');
+      const operations = fixture.store.rows.get('CRMBillingOperations');
+      assert.equal(operations.length, 1);
+      assert.equal(operations[0].STATUS, 'completed');
+      const summary = JSON.parse(operations[0].OPERATION_PAYLOAD_JSON);
+      assert.equal(summary.callsCaptured, 1);
+      for (const field of ['bookableOpportunities', 'officeFollowUpCalls', 'observedWorkflowFailures',
+        'recommendedPaidCoverage']) assert.equal(summary[field], null, field);
+      const finalRows = fixture.store.rows.get('AnalyticsSyncOutbox')
+        .filter((row) => row.RECORD_TYPE === 'final_test_result');
+      assert.equal(finalRows.length, 1);
+      const fact = parseOutboxRow(finalRows[0], 'development').fact;
+      assert.equal(fact.CALLS_CAPTURED, 1);
+      assert.equal(fact.QUALIFIED_OPPORTUNITIES, 0);
+      assert.equal(fact.ANALYSIS_EVIDENCE_COMPLETE, false);
+      assert.equal(fact.WORKFLOW_FAILURE_EVIDENCE_COMPLETE, false);
+      for (const field of ['BOOKABLE_OPPORTUNITIES', 'OFFICE_FOLLOW_UP_CALLS',
+        'OBSERVED_WORKFLOW_FAILURES', 'RECOMMENDED_COVERAGE_MODE']) {
+        assert.equal(Object.hasOwn(fact, field), false, field);
+      }
+      assert.equal(fact.TEST_ENDED_AT, deployment.EXPIRES_AT);
+    }
+    assert.deepEqual(fixture.workerErrors, []);
+    assert.equal(fixture.mailAccesses, 0);
+  });
+}
