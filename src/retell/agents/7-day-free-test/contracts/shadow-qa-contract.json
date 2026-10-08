@@ -99,7 +99,7 @@
     "configuration",
     "safety",
     "consent_or_sensitive_termination",
-    "existing_customer_exception",
+    "existing_job_follow_up",
     "urgency",
     "urgent_callback",
     "nonurgent_callback",
@@ -141,7 +141,7 @@
       {"key": "consent_withdrawn", "from_state": "check_consent", "to_state": "terminal.consent_withdrawal", "when": "withdrawn"},
       {"key": "sensitive_termination", "from_state": "check_consent", "to_state": "terminal.sensitive_data", "when": "sensitive_termination_required"},
       {"key": "consent_else", "from_state": "check_consent", "to_state": "check_exception", "when": "else"},
-      {"key": "exception_existing", "from_state": "check_exception", "to_state": "terminal.existing_customer_message", "when": "existing_customer"},
+      {"key": "exception_existing", "from_state": "check_exception", "to_state": "terminal.existing_customer_message", "when": "existing_job_follow_up"},
       {"key": "exception_else", "from_state": "check_exception", "to_state": "classify_urgency", "when": "else"},
       {"key": "urgency_approved", "from_state": "classify_urgency", "to_state": "classify_urgent_callback", "when": "approved_urgent"},
       {"key": "urgency_nonurgent", "from_state": "classify_urgency", "to_state": "classify_nonurgent_callback", "when": "nonurgent"},
@@ -212,5 +212,5 @@
       "existing_customer_transfer_failed"
     ]
   },
-  "interpretation": "Provider-neutral acceptance semantics for zero-cost local QA. The exact ownership tuple is supplied per call by the validated resolver and is never a fixed client literal. The four post-call definitions above are negative capability sentinels, not the Catalyst-aligned extraction schema in conversation-contract.json. This is not runtime topology, extraction proof, spoken-behavior proof, or deployment authorization."
+  "interpretation": "Provider-neutral acceptance semantics for zero-cost local QA. The exact ownership tuple is supplied per call by the validated resolver and is never a fixed client literal. The four post-call definitions above are negative capability sentinels, not the Catalyst-aligned extraction schema in conversation-contract.json. Request intent follows request-intent-contract.json independently of customer relationship; the existing-customer message terminal requires explicit existing_job_follow_up. Missing historical intent remains unknown with original outcome preserved and positive opportunity withheld as null. This is not runtime topology, extraction proof, spoken-behavior proof, or deployment authorization."
 }
