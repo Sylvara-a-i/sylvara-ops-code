@@ -24,6 +24,27 @@ in the private execution record. Source locations are the [CRM callers](README.m
 [Forms manifest](../../zoho-forms/free-revenue-leak-test/forms-manifest.json), and
 [operator runbook](../../zoho-catalyst/revenue-desk-release/free-test-operator-runbook.md).
 
+## Public Native Writer Evidence Boundary
+
+The **2026-10-08 21:43 UTC read-only audit** observed Route B's native integration
+as Leads / Standard, New Record, Upsert unchecked, and Automation & Process
+Management checked. All 30 mappings matched source; `Intake_Submission_ID` mapped
+to native `RandomId`. Match order and blank-overwrite policy were hidden and
+remain **Unknown**. Public sharing and CAPTCHA were untouched and not freshly
+reverified. No cause or approval for the unchecked Upsert setting is inferred.
+
+The intended contract preserves intake/journey identity, company ownership,
+consent and safe duplicate/retry behavior. The earlier intake-ID-only Upsert
+proposal was cancelled because native controls allowed ordering, not exclusion
+of unique Email. Email fallback can replace Company, journey identity and consent;
+blank-overwrite protection does not prevent nonblank replacement. Upsert-off's
+unique-field behavior remains unresolved and is not public acceptance evidence.
+Validate operation, Upsert, match order and blank policy explicitly; hidden,
+missing or unknown controls cannot pass public acceptance. Preserve the public
+hold until a supported writer design, exact saved-state readback and controlled
+acceptance establish these safeguards. Accepted assisted lineage remains accepted;
+G1 remains partial and still requires both routes.
+
 ## Relationship And Retry Rules
 
 - Preserve the original entry and native conversion lineage. Current mutable
