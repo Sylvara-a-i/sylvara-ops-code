@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "status": "Development source baseline",
+  "observed_date": "2026-10-08",
+  "hash_algorithm": "SHA-256",
+  "files": [
+    {
+      "path": "Dashboard.html",
+      "bytes": 9810,
+      "sha256": "26d946a47e0e82d2757c574b01aa11fa44f733753019ffa22115bfcdc95a2369"
+    },
+    {
+      "path": "Dashboard.deluge",
+      "bytes": 167,
+      "sha256": "34f2e0d1bc250cfe44d8aa5c3aa9c5a54f3ff4457e4b0e115ec736acb1c35790"
+    },
+    {
+      "path": "Settings.html",
+      "bytes": 11274,
+      "sha256": "1cd3474e4d8201ce771d83e2e0328bb530bd35e0e62bc2b1cce0e7c937b474aa"
+    },
+    {
+      "path": "Settings.deluge",
+      "bytes": 166,
+      "sha256": "1c813592ba1ded1c016a139c26edb644fecdf6bdda57436709acb99daa896253"
+    },
+    {
+      "path": "Support.html",
+      "bytes": 9751,
+      "sha256": "da92a6b1aa7edf82ae33e7afef4322e70fcc3d653a76e9a376f8be198d27f9b0"
+    },
+    {
+      "path": "Support.deluge",
+      "bytes": 166,
+      "sha256": "1c813592ba1ded1c016a139c26edb644fecdf6bdda57436709acb99daa896253"
+    },
+    {
+      "path": "Client_360.html",
+      "bytes": 9841,
+      "sha256": "cbeeed2b17643cc11a66a1da708635b806e842d936ba27c56c6efd0afab57bb0"
+    },
+    {
+      "path": "Client_360.deluge",
+      "bytes": 166,
+      "sha256": "1c813592ba1ded1c016a139c26edb644fecdf6bdda57436709acb99daa896253"
+    },
+    {
+      "path": "Billing.html",
+      "bytes": 10392,
+      "sha256": "00ab4cbfad2704fbfff5891bafd8f3c78f9d50ed14ad1b5de187888c40858d8f"
+    },
+    {
+      "path": "Billing.deluge",
+      "bytes": 166,
+      "sha256": "1c813592ba1ded1c016a139c26edb644fecdf6bdda57436709acb99daa896253"
+    },
+    {
+      "path": "Operations_Dashboard.html",
+      "bytes": 11034,
+      "sha256": "825997694a60b41039692ff9b72eebb2c390e2f39106fb1db1f0e4f2cb157507"
+    },
+    {
+      "path": "Operations_Dashboard.deluge",
+      "bytes": 166,
+      "sha256": "1c813592ba1ded1c016a139c26edb644fecdf6bdda57436709acb99daa896253"
+    }
+  ]
+}
