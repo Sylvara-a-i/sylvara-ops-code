@@ -6,16 +6,20 @@ This area contains Sylvara-owned, sanitized CRM schema and Lead-conversion docum
 
 ## Evidence Status
 
-- Current snapshot date: **2026-08-14**
+Use the canonical [current Journey-core profile](free-revenue-leak-test/README.md) for the operating contract and its deferred Form 2 workflows and full Blueprint. The 2026-10-08 read-only inventory recorded 13 functions and 14 workflows; both Form 2 workflows were inactive, and the sole `Revenue Desk Free Test v6 - Control Candidate` Blueprint was Draft with zero enrolled records. These observations do not establish live readiness or authorize configuration changes. The 2026-10-07 dependency audit identified zero deletion-ready functions; preserved contracts and rollback assets do not authorize cleanup.
+
+The following schema snapshot observations are historical, as of 2026-08-14:
+
+- Historical snapshot date: **2026-08-14**
 - Historical baseline: **2026-08-05**, retained immutably under the reference root
 - Target: the verified Sylvara CRM organization, with private organization and object identifiers excluded
 - Modules in scope: Leads, Contacts, Accounts, and Deals
-- Current metadata status: 466 fields, every enabled field's Standard-layout placement, the selected Quick Create and Business Card fields/order, publishable choice-field values with restricted sets represented by count/status only, the Revenue Desk pipeline, and 414 Lead-to-target mapping rows verified read-only
-- Current module counts: Leads 138, Contacts 91, Accounts 95, and Deals 142
-- Automation status: four Form 1/Deal workflows plus the Deal delivery Blueprint are active and read back; all four workflows have no recorded execution and the Blueprint has zero enrolled records, so runtime acceptance is blocked; native Lead conversion remains human-approved and manual
-- Current verified remediations: Deal `Intake_Submission_ID` and `Setup_Form_Submission_ID` are case-insensitive unique; the create-only limits workflow also applies `Type = Initial Sale`; and `Close Live Test` requires loss, test-end, and rollback-completion evidence. These are configuration readbacks, not runtime proof.
-- Current known defects: the post-create Type update cannot satisfy pre-save validation, so Deal creation must supply `Type = Initial Sale`; three unconditional Blueprint inputs conflict with valid Form 2 conditions; transitions have no after-actions, so Deal Stage and `Test_Status` can drift; `Confirm Authorization` criterion hardening remains unapplied; Closed Won is under-controlled; two unassociated diagnostic field updates remain inert; and exact Zoho Forms/controller behavior remains unverified.
-- Live changes during the current documentation readback: **none**; separately authorized 2026-08-14 configuration events are recorded in the deployment log.
+- Snapshot metadata status: 466 fields, every enabled field's Standard-layout placement, the selected Quick Create and Business Card fields/order, publishable choice-field values with restricted sets represented by count/status only, the Revenue Desk pipeline, and 414 Lead-to-target mapping rows verified read-only
+- Snapshot module counts: Leads 138, Contacts 91, Accounts 95, and Deals 142
+- Historical automation status: four Form 1/Deal workflows plus the Deal delivery Blueprint were active and read back; all four workflows had no recorded execution and the Blueprint had zero enrolled records, so runtime acceptance was blocked; native Lead conversion remained human-approved and manual
+- Snapshot verified remediations: Deal `Intake_Submission_ID` and `Setup_Form_Submission_ID` are case-insensitive unique; the create-only limits workflow also applies `Type = Initial Sale`; and `Close Live Test` requires loss, test-end, and rollback-completion evidence. These are configuration readbacks, not runtime proof.
+- Snapshot known defects: the post-create Type update cannot satisfy pre-save validation, so Deal creation must supply `Type = Initial Sale`; three unconditional Blueprint inputs conflict with valid Form 2 conditions; transitions have no after-actions, so Deal Stage and `Test_Status` can drift; `Confirm Authorization` criterion hardening remains unapplied; Closed Won is under-controlled; two unassociated diagnostic field updates remain inert; and exact Zoho Forms/controller behavior remains unverified.
+- Live changes during the 2026-08-14 documentation readback: **none**; separately authorized 2026-08-14 configuration events are recorded in the deployment log.
 
 The snapshot proves only what the authorized CRM audit surface returned on the observation date. It does not grant continuing permission to change CRM and does not establish uninspected formula, profile, Forms, controller, or runtime behavior.
 
@@ -24,11 +28,11 @@ The snapshot proves only what the authorized CRM audit surface returned on the o
 | Artifact | Purpose |
 |---|---|
 | [Reference contract](reference/README.md) | Scope, provenance, conversion findings, deployment boundary, and rollback |
-| [Current 2026-08-14 snapshot](reference/snapshots/2026-08-14/README.md) | All current fields, layout order, picklist values, conversion mappings, and Form 1/Form 2 CRM destinations |
+| [Historical 2026-08-14 snapshot](reference/snapshots/2026-08-14/README.md) | Dated fields, layout order, picklist values, conversion mappings, and Form 1/Form 2 CRM destinations |
 | [Historical 2026-08-05 module catalog](reference/modules.csv) | Immutable pre-Free-Test module counts and roles |
 | [Historical 2026-08-05 field dictionary](reference/crm-field-dictionary.csv) | Immutable 374-field baseline |
 | [Historical 2026-08-05 Lead-conversion review](reference/lead-conversion-mapping.csv) | Immutable desired-state review that is no longer current-state evidence |
-| [Historical Form 1/Form 2 MCP allowlist](../../docs/zoho/mcp/proposals/2026-08-14/sylvara-free-test-crm-mcp-allowlist.md) | Superseded least-privilege design record; use the linked effective snapshot for current state |
+| [Historical Form 1/Form 2 MCP allowlist](../../docs/zoho/mcp/proposals/2026-08-14/sylvara-free-test-crm-mcp-allowlist.md) | Superseded least-privilege design record; the linked effective snapshot is historical evidence |
 
 The CSV files are deterministic review artifacts, not import files and not live configuration payloads.
 
