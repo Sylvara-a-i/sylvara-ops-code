@@ -11,6 +11,7 @@ const vm = require("node:vm");
 const {
   validateRequestedServiceArea: validate,
   preparePendingServiceAreaRequest: prepare,
+  assertCompanyIdentity,
 } = require("../service-area-request-contract");
 
 function context() {
@@ -59,6 +60,61 @@ test("deny missing, ambiguous, inactive and cross-company mappings", () => {
     assert.throws(() => prepare(input(), c), TypeError);
   }
   assert.throws(() => prepare({ ...input(), Account: "synthetic-other-company" }, context()), TypeError);
+});
+
+// Exercise the shared identity export directly as well as request preparation.
+function checkCompanyContext(c, identityOnly) {
+  if (!identityOnly) return prepare(input(), c);
+  const { previousServiceArea, ...identity } = c;
+  return assertCompanyIdentity(identity, input().Account);
+}
+
+for (const [name, change] of [
+  ["indexed getter", (rows, touched) => {
+    const mapping = rows[0];
+    Object.defineProperty(rows, "0", { get() { touched(); return mapping; } });
+  }],
+  ["custom iterator", (rows, touched) => {
+    const mapping = rows[0];
+    rows[Symbol.iterator] = function* () { touched(); yield mapping; };
+  }],
+  ["iterator getter", (rows, touched) => {
+    Object.defineProperty(rows, Symbol.iterator, { get() { touched(); return Array.prototype.values; } });
+  }],
+  ["sparse array", (rows) => { rows.length = 2; }],
+  ["hole balanced by an extra key", (rows) => { rows.length = 2; rows.extra = true; }],
+  ["extra string key", (rows) => { rows.extra = true; }],
+  ["nonenumerable key", (rows) => { Object.defineProperty(rows, "extra", { value: true }); }],
+  ["symbol key", (rows) => { rows[Symbol("extra")] = true; }],
+  ["extra getter", (rows, touched) => {
+    Object.defineProperty(rows, "extra", { get() { touched(); return true; } });
+  }],
+  ["custom prototype", (rows) => { Object.setPrototypeOf(rows, Object.create(Array.prototype)); }],
+  ["array subclass", (rows) => { Object.setPrototypeOf(rows, class extends Array {}.prototype); }],
+]) {
+  test(`deny companyMappings ${name} without executing accessors or iterators`, () => {
+    for (const identityOnly of [false, true]) {
+      const c = context();
+      let calls = 0;
+      change(c.companyMappings, () => { calls++; });
+      assert.throws(() => checkCompanyContext(c, identityOnly), {
+        name: "TypeError", message: "Invalid service-area request or verified company context",
+      });
+      assert.equal(calls, 0);
+    }
+  });
+}
+
+test("ordinary JSON and frozen companyMappings preserve selected company and request semantics", () => {
+  for (const frozen of [false, true]) {
+    const c = JSON.parse(JSON.stringify(context()));
+    c.companyMappings.unshift({ creatorAccountId: "synthetic-other-selector", crmAccountId: "synthetic-other-company", active: false });
+    const snapshot = structuredClone(c);
+    if (frozen) Object.freeze(c.companyMappings);
+    assert.equal(checkCompanyContext(c, true), input().Account);
+    assert.deepEqual(checkCompanyContext(c, false), prepare(input(), context()));
+    assert.deepEqual(c, snapshot);
+  }
 });
 
 test("deny unavailable baseline and missing attribution or principal", () => {
