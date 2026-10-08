@@ -57,28 +57,27 @@ function minor(value) {
   if (value !== null && (!Number.isSafeInteger(value) || value < 0 || Object.is(value, -0))) deny();
 }
 
-function money(value, exponents) {
-  record(value, ["totalMinor", "balanceMinor", "amountUnit", "currency"]);
-  minor(value.totalMinor); minor(value.balanceMinor);
+function money(value, exponents, amountFields = ["totalMinor", "balanceMinor"],
+  currencySources = ["invoice-response", "verified-invoice-metadata"]) {
+  record(value, [...amountFields, "amountUnit", "currency"]);
+  for (const field of amountFields) minor(value[field]);
   if (value.amountUnit !== null && value.amountUnit !== "minor") deny();
-  if (value.amountUnit === null && (value.totalMinor !== null || value.balanceMinor !== null)) deny();
+  if (value.amountUnit === null && amountFields.some((field) => value[field] !== null)) deny();
   let currency = null;
   if (value.currency !== null) {
     record(value.currency, ["code", "minorUnitExponent", "source"]);
     const c = value.currency;
     if (typeof c.code !== "string" || !/^[A-Z]{3}$/.test(c.code) ||
         !Number.isSafeInteger(c.minorUnitExponent) || c.minorUnitExponent < 0 || c.minorUnitExponent > 4 ||
-        !["invoice-response", "verified-invoice-metadata"].includes(c.source)) deny();
+        !currencySources.includes(c.source)) deny();
     if (exponents.has(c.code) && exponents.get(c.code) !== c.minorUnitExponent) deny();
     exponents.set(c.code, c.minorUnitExponent);
     currency = Object.freeze({ code: c.code, minorUnitExponent: c.minorUnitExponent, source: c.source });
   }
   const available = currency !== null && value.amountUnit === "minor";
-  return Object.freeze({
-    totalMinor: available ? value.totalMinor : null,
-    balanceMinor: available ? value.balanceMinor : null,
-    amountUnit: available ? "minor" : null, currency,
-  });
+  const projected = {};
+  for (const field of amountFields) projected[field] = available ? value[field] : null;
+  return Object.freeze({ ...projected, amountUnit: available ? "minor" : null, currency });
 }
 
 function collection(value, project, uniqueKey) {
@@ -102,6 +101,16 @@ function collection(value, project, uniqueKey) {
 // mappings, operation permission, bindings and source provenance before calling.
 // Passing these ordinary objects cannot establish any of those prerequisites.
 function prepareBillingCustomerView(input, trusted, evidence, policy) {
+  return projectBillingCustomerView(input, trusted, evidence, policy, false);
+}
+
+// Additive history contract: keeps the original strict input/output unchanged.
+// This is the same pure consistency check, not another source of authority.
+function prepareBillingCustomerHistoryView(input, trusted, evidence, policy) {
+  return projectBillingCustomerView(input, trusted, evidence, policy, true);
+}
+
+function projectBillingCustomerView(input, trusted, evidence, policy, includeHistory) {
   record(input, ["Account"]);
   record(policy, ["expectedEnvironment", "expectedOrganizationId", "asOf", "maxAgeMs",
     "featureCode", "featurePolicyRevision"]);
@@ -123,7 +132,7 @@ function prepareBillingCustomerView(input, trusted, evidence, policy) {
   if (grant.principalId !== trusted.company.principalId || grant.creatorAccountId !== accountId ||
       grant.operation !== "billing.read" || grant.active !== true) deny();
   record(evidence, ["environment", "organizationId", "observedAt", "complete",
-    "customer", "subscriptions", "invoices", "integrations"]);
+    "customer", "subscriptions", "invoices", "integrations", ...(includeHistory ? ["payments"] : [])]);
   if (evidence.environment !== policy.expectedEnvironment ||
       evidence.organizationId !== policy.expectedOrganizationId || evidence.complete !== true) deny();
   fresh(evidence.observedAt, asOf, policy.maxAgeMs);
@@ -142,18 +151,22 @@ function prepareBillingCustomerView(input, trusted, evidence, policy) {
     }
   } else if (evidence.customer !== null) deny();
   // An unresolved customer cannot certify empty or available customer resources.
-  if (customerId === null && [evidence.subscriptions, evidence.invoices, evidence.integrations].some((v) => v !== null)) deny();
+  if (customerId === null && [evidence.subscriptions, evidence.invoices, evidence.integrations,
+    ...(includeHistory ? [evidence.payments] : [])].some((v) => v !== null)) deny();
   const subscriptionIds = new Set();
   const subscriptions = collection(evidence.subscriptions, (item) => {
-    record(item, ["subscriptionId", "customerId", "status", "planCode", "planLabel", "termStart", "termEnd"]);
+    record(item, ["subscriptionId", "customerId", "status", "planCode", "planLabel", "termStart", "termEnd",
+      ...(includeHistory ? ["nextBillingOn"] : [])]);
     id(item.subscriptionId); id(item.planCode); label(item.planLabel);
     if (item.customerId !== customerId || !["active", "live", "trial", "future", "past_due", "unpaid",
       "non_renewing", "cancelled", "expired", "trial_expired", "unknown"].includes(item.status)) deny();
     date(item.termStart); date(item.termEnd);
+    if (includeHistory) date(item.nextBillingOn);
     if (item.termStart !== null && item.termEnd !== null && item.termEnd < item.termStart) deny();
     subscriptionIds.add(item.subscriptionId);
     return Object.freeze({ status: item.status, planLabel: item.planLabel,
-      termStart: item.termStart, termEnd: item.termEnd });
+      termStart: item.termStart, termEnd: item.termEnd,
+      ...(includeHistory ? { nextBillingOn: item.nextBillingOn } : {}) });
   }, (item) => item.subscriptionId);
   const exponents = new Map();
   const invoices = collection(evidence.invoices, (item) => {
@@ -165,6 +178,17 @@ function prepareBillingCustomerView(input, trusted, evidence, policy) {
     return Object.freeze({ number: item.number, status: item.status, issuedOn: item.issuedOn,
       dueOn: item.dueOn, money: money(item.money, exponents) });
   }, (item) => item.invoiceId);
+  const payments = includeHistory ? collection(evidence.payments, (item) => {
+    record(item, ["paymentId", "customerId", "number", "status", "recordedOn", "mode", "money"]);
+    id(item.paymentId);
+    if (item.number !== null) label(item.number);
+    if (item.customerId !== customerId || !["success", "failure", "unknown"].includes(item.status) ||
+        !["check", "cash", "creditcard", "banktransfer", "bankremittance", "autotransaction", "others", "unknown"].includes(item.mode)) deny();
+    date(item.recordedOn);
+    return Object.freeze({ number: item.number, status: item.status, recordedOn: item.recordedOn,
+      mode: item.mode, money: money(item.money, exponents, ["amountMinor"],
+        ["payment-response", "verified-payment-metadata"]) });
+  }, (item) => item.paymentId) : null;
   const integrations = collection(evidence.integrations, (item) => {
     record(item, ["provider", "featureGrant", "connection"]);
     if (!PROVIDERS.includes(item.provider)) deny();
@@ -208,8 +232,8 @@ function prepareBillingCustomerView(input, trusted, evidence, policy) {
   return Object.freeze({
     environment: evidence.environment, observedAt: evidence.observedAt,
     customerState: customerId === null ? "unknown" : "verified",
-    subscriptions, invoices, integrations,
+    subscriptions, invoices, integrations, ...(includeHistory ? { payments } : {}),
   });
 }
 
-module.exports = { prepareBillingCustomerView };
+module.exports = { prepareBillingCustomerView, prepareBillingCustomerHistoryView };

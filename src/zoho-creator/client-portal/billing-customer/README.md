@@ -148,3 +148,124 @@ until its identity, visibility, provenance, permission and acceptance checks pas
 No paid activation, payment collection, provision, OAuth grant, delivery or launch
 is authorized by this module. Rollback is reverting these source files; there is
 no live rollback in this slice.
+
+## Additive billing-history projection
+
+`prepareBillingCustomerHistoryView(input, trusted, evidence, policy)` shares the
+original implementation's checks and accepts an explicit history shape. The
+original `prepareBillingCustomerView` signature, exact accepted shape and output
+are unchanged; it rejects history-only fields. The history export requires:
+
+- `evidence.payments`: null for unknown, or `{ complete: true, items: [...] }`.
+- `nextBillingOn` on every subscription: a provider-observed calendar date or
+  null. It is not inferred from term end, status, plan frequency or today's date.
+- Each payment: `{ paymentId, customerId, number, status, recordedOn, mode, money }`.
+  `number` and `recordedOn` may be null. Status is `success`, `failure`, or
+  `unknown`; the producer deliberately normalizes provider evidence. Mode is
+  `check`, `cash`, `creditcard`, `banktransfer`, `bankremittance`,
+  `autotransaction`, `others`, or `unknown`.
+- Payment money: `{ amountMinor, amountUnit, currency }`, following the existing
+  nonnegative safe-integer-or-null minor-unit rules. Currency uses the same
+  `{ code, minorUnitExponent, source }` shape, with resource-specific source
+  `payment-response` or `verified-payment-metadata`. Invoice provenance cannot
+  be substituted for payment provenance. Conflicting exponents for the same
+  currency across invoices and payments reject; currencies are never summed or
+  converted by the view.
+
+The output adds `payments` and `nextBillingOn` but strips payment/customer IDs,
+provider tokens, payment URLs and raw metadata. Failed/unknown entries are not
+represented as collected revenue. A recorded payment date is not proof of bank
+settlement. No total cash, balance, refund, entitlement or action is inferred.
+Payment history remains independent of subscription availability and is not
+erased by cancellation. Missing customer authority cannot certify empty history.
+
+This is a pure normalized read-model increment, not a live adapter or a rendered
+Creator screen. Input labels must still be safely rendered. The future producer
+must reconcile Billing read facts with the approved Books accounting owner;
+this preparation does not select a second ledger or assume synchronization.
+
+The canonical portal test entrypoint discovers the additive history suite through
+the existing customer suite. It covers strict backward compatibility, unknown
+versus empty, independent collections, explicit dates, owner/identity mismatches,
+duplicate payments, source mutation, immutable outputs, failure statuses,
+currency provenance and suppression, unsafe amounts, exponent conflicts,
+non-enumerable data properties, hostile shapes/accessors, and zero side effects.
+
+## Next source increment: bounded review and confirmation
+
+The following is the implementation contract for a later slice. No endpoint,
+provider-write client, authenticated identity resolver, quote store or payment
+wrapper is implemented by this preparation.
+
+1. Resolve the native portal session on the server, then resolve the current
+   principal, CRM contact/company, Creator account, Billing customer and operation
+   grant from authoritative stores. An account, subscription or plan submitted by
+   the browser is only a selector. Never accept `trusted` JSON, an email match,
+   role label, query-string customer ID or cached view as authentication.
+2. Build the read producer first. It must pin organization/environment, complete
+   each collection's pagination, verify every record owner and refresh source
+   facts. Read failures remain unknown and must not become empty arrays. Use the
+   existing read model for rendering; do not duplicate its money conversion or
+   display contracts. Decimal-to-minor normalization must reject precision loss,
+   unsupported currency metadata and disagreement with the authoritative owner.
+3. Proposed review request: exactly `{ Account, subscriptionSelector,
+   planSelector }`. Resolve both selectors server-side against the bound customer
+   and approved catalog. Reject caller-supplied price, discount, tax, organization,
+   customer, effective date, cancellation, pause or immediate-change overrides.
+   Re-read the selected subscription, current scheduled changes and the allowed
+   end-of-term transition before producing a review.
+4. Obtain authoritative quote terms. The documented Billing Quotes API supports
+   `estimate_type=update_subscription`, `subscription_id`, `end_of_term=true`
+   and an explicit `send=false` option. Creating even an unsent quote is an
+   external mutation, not a read-only calculation. Do not create it in a read-only
+   test or use an undocumented compute endpoint. Availability and side effects
+   must be qualified before implementing the adapter.
+5. A server-stored review binds principal, company, customer, subscription,
+   provider quote, catalog/policy revisions, prestate, expiry and exact proposed
+   changes. Browser output may include an opaque `reviewRef`, expiry, plan labels,
+   authoritative effective date, billing cadence and separately labelled quoted
+   due-now/recurring amounts with resource-specific currency provenance. Reuse the
+   minor-unit and unknown-money rules; do not copy invoice provenance onto a
+   quote. Do not present an unknown tax or amount as zero. `reviewRef` identifies
+   the stored review; possession never grants access or execution authority.
+6. Proposed confirmation request: exactly `{ Account, reviewRef, confirm: true }`.
+   The server re-resolves identity and permission, checks review ownership/expiry,
+   and refreshes quote and subscription prestate. Any material difference requires
+   a new review. Enforce end-of-term-only changes and no cancellation in server
+   policy independently of the native portal's preferences.
+7. Before a future write, atomically claim a durable operation identity bound to
+   the review and exact change. Retain its claim across every outcome. Select one
+   provider execution path only after verifying quote-acceptance semantics;
+   acceptance may itself trigger a change, so never accept and independently
+   update on the assumption that both are required. The update API supports a
+   `subscription_estimate_id` and `end_of_term=true`. After an ambiguous result,
+   reconcile authoritative scheduled changes before retrying. Show success only
+   after independent readback establishes the requested result.
+8. Payment forms, if separately implemented, require the same customer binding.
+   Use provider-hosted entry and server-generated scoped pages rather than raw
+   card data in Creator. A browser return parameter or success screen is not
+   payment proof: verify the hosted page and resulting provider transaction on the
+   server and reconcile the invoice. Do not promise iframe support for every
+   hosted action or treat a page URL as a native-portal SSO token.
+
+Before that next slice is executable, tests must cover unauthenticated/revoked
+principals, cross-company selectors/reviews, quote tampering and expiration,
+changed subscription/catalog/policy prestate, disabled transitions, unknown
+tax/currency, multiple subscriptions, double-clicks/concurrent claims, replay,
+timeout before and after a possible commit, readback mismatch and forged payment
+return parameters. Unit fixtures can model these inputs but cannot qualify the
+actual identity resolver, connection, durable store or provider behavior.
+
+Keep the existing native-portal fallback until authenticated read views and each
+replacement action pass their independent acceptance checks. Production,
+customer delivery, access grants and financial actions remain separately gated.
+
+Official capability references, reviewed 2026-10-07:
+
+- [Subscriptions and scheduled changes](https://www.zoho.com/billing/api/v1/subscription/)
+- [Invoices](https://www.zoho.com/billing/api/v1/invoices/)
+- [Payment history](https://www.zoho.com/billing/api/v1/payments/)
+- [Subscription quotes](https://www.zoho.com/billing/api/v1/quotes/)
+- [Hosted payment pages](https://www.zoho.com/billing/api/v1/hosted-pages/)
+- [Documented plan-checkout embedding](https://www.zoho.com/ca/billing/help/settings/hosted-payment-pages/embedding-and-sharing.html)
+- [Creator managed connections](https://help.zoho.com/portal/en/kb/creator/developer-guide/microservices/understand-connections/articles/understand-connections)
