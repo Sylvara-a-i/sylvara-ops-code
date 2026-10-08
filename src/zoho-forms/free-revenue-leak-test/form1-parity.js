@@ -126,6 +126,7 @@ function verifyCanonicalForm1(manifest, executableContract) {
     const publicBaseline = surfaces.public?.sanitized_live_baseline;
     const expectedPublicBaseline = {
       observed_date: "2026-09-04",
+      status: "historical_not_current_acceptance",
       observed_field_count: 34,
       field_alias_row_count: 1,
       required_visible_field_marker_count: 11,
@@ -167,13 +168,7 @@ function verifyCanonicalForm1(manifest, executableContract) {
       sharing: "public",
       embed_available: true,
       embed_modes_available: ["iframe", "JavaScript"],
-      crm_module: "Leads",
-      crm_layout: "Standard",
-      native_crm_writer: true,
-      crm_automation_and_process_management: true,
-      upsert_enabled: true,
-      upsert_preference_order: ["Intake Submission ID", "Contact Email"],
-      blank_overwrite: false,
+      crm_integration_reference: "crm_integration.historical_live_readback",
       submission_webhook_key_count: 25,
       email_notifications: false,
       sms_notifications: false,
@@ -181,6 +176,35 @@ function verifyCanonicalForm1(manifest, executableContract) {
     };
     if (JSON.stringify(publicBaseline) !== JSON.stringify(expectedPublicBaseline)) {
       add(errors, "PUBLIC_BASELINE_DRIFT", "public", "sanitized_live_baseline");
+    }
+    const crm = form1.crm_integration;
+    if (crm?.intent_status !== "legacy_intent_not_approved_for_public_acceptance" ||
+      crm?.public_acceptance !== "held_pending_safe_writer_design_and_runtime_acceptance" ||
+      crm?.blank_overwrite !== false ||
+      form1.deduplication_contract?.fallback_never_replaces_generated_primary_identity !== true) {
+      add(errors, "PUBLIC_ACCEPTANCE_POLICY_DRIFT", "public", "crm_integration");
+    }
+    const expectedCrmReadback = {
+      observed_at: "2026-10-08T21:43:00Z",
+      mode: "read_only_no_save",
+      module: "Leads",
+      layout: "Standard",
+      operation: "new_record",
+      upsert_enabled: false,
+      upsert_preference_order: null,
+      blank_overwrite: null,
+      hidden_controls: ["upsert_preference_order", "blank_overwrite"],
+      crm_automation_and_process_management_enabled: true,
+      observed_mapping_count: 30,
+      mappings_match_historical_readback: true,
+      intake_submission_id_source: "native_RandomId",
+      public_sharing_freshly_verified: false,
+      captcha_freshly_verified: false,
+      integration_write_or_test_performed: false,
+      status: "new_record_upsert_disabled_match_and_blank_policy_unknown",
+    };
+    if (JSON.stringify(crm?.live_readback) !== JSON.stringify(expectedCrmReadback)) {
+      add(errors, "PUBLIC_CRM_BASELINE_DRIFT", "public", "live_readback");
     }
     const assistedState = surfaces.crm_assisted?.required_state;
     if (assistedState?.native_crm_writer !== false ||
@@ -248,6 +272,39 @@ function verifySurfaceReadback(manifest, surfaceName, observed) {
     if (observed.integrations?.[property] !== value) {
       add(errors, "OBSERVED_INTEGRATION_DRIFT", surfaceName, property);
     }
+  }
+  if (surfaceName === "public") {
+    // These are normalized private observations, never defaults inferred from intent.
+    const settings = observed.crm_integration;
+    const validators = {
+      operation: (value) => ["new_record", "update_record"].includes(value),
+      upsert_enabled: (value) => typeof value === "boolean",
+      upsert_preference_order: (value) => Array.isArray(value) && value.length > 0 &&
+        value.every((key) => typeof key === "string" && key.trim().length > 0) &&
+        new Set(value).size === value.length,
+      blank_overwrite: (value) => typeof value === "boolean",
+    };
+    for (const [property, valid] of Object.entries(validators)) {
+      const value = settings?.[property];
+      if (value === null || value === undefined) {
+        add(errors, "PUBLIC_CRM_SETTING_UNKNOWN", "public", property);
+      } else if (!valid(value)) {
+        add(errors, "PUBLIC_CRM_SETTING_INVALID", "public", property);
+      } else if (property === "blank_overwrite" && value !== false) {
+        add(errors, "PUBLIC_BLANK_OVERWRITE_UNSAFE", "public", property);
+      } else {
+        const baseline = form1.crm_integration?.live_readback?.[property];
+        if (baseline === null || baseline === undefined) {
+          add(errors, "PUBLIC_CRM_POLICY_UNRESOLVED", "public", property);
+        } else if (JSON.stringify(value) !== JSON.stringify(baseline)) {
+          add(errors, "PUBLIC_CRM_OBSERVATION_DRIFT", "public", property);
+        }
+      }
+    }
+    // Neither matching dated observations nor the legacy Email-fallback proposal
+    // resolves public identity/consent safety or proves retry/runtime acceptance.
+    // Lifting this hold needs a separately reviewed source contract and evidence.
+    add(errors, "PUBLIC_ACCEPTANCE_HELD", "public", "crm_integration");
   }
   return Object.freeze({ ok: errors.length === 0, errors: Object.freeze(errors) });
 }
