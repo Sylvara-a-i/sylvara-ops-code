@@ -1,0 +1,157 @@
+<%{
+	%>
+<style>
+.sv {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+  color: #090C0E;
+  background: #F5F8FA;
+  padding: clamp(20px, 3vw, 40px);
+  max-width: 1260px;
+  margin: auto;
+  box-sizing: border-box;
+  line-height: 1.6;
+  font-size: 14px;
+}
+.sv * { box-sizing: border-box; }
+.sv a { color: #006E81; text-decoration: none; }
+.sv a:focus-visible,
+.sv button:focus-visible,
+.sv input:focus-visible,
+.sv select:focus-visible,
+.sv textarea:focus-visible,
+.sv summary:focus-visible {
+  outline: 3px solid #006E81 !important;
+  outline-offset: 3px !important;
+  box-shadow: none !important;
+}
+.sv .sv-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+.sv .sv-wordmark { font-size: 24px; font-weight: 700; letter-spacing: -1px; }
+.sv .sv-dot { color: #00A6C1; }
+.sv .sv-label { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: #536570; }
+.sv .sv-banner {
+  background: #E9F8FB; border: 1px solid #BCE6EE; border-radius: 14px;
+  padding: 14px 18px; color: #315761; font-size: 13px; margin-bottom: 24px;
+}
+.sv .sv-banner strong { display: block; color: #006E81; font-size: 11px; letter-spacing: .08em; margin-bottom: 4px; }
+.sv .sv-nav { display: flex; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid #DCE7EC; padding: 0 0 18px; margin-bottom: 30px; }
+.sv .sv-nav a {
+  display: inline-flex; align-items: center; min-height: 44px; min-width: 44px;
+  max-width: 100%; padding: 10px 14px; border-radius: 10px; font-size: 13px;
+  font-weight: 600; color: #536570; white-space: normal; overflow-wrap: anywhere;
+}
+.sv .sv-nav a[aria-current=page] { background: #090C0E; color: #FFFFFF; }
+.sv .sv-intro { margin-bottom: 30px; }
+.sv h1 { font-size: clamp(28px, 3vw, 38px); font-weight: 600; line-height: 1.18; letter-spacing: -1.1px; margin: 8px 0 12px; }
+.sv h2 { font-size: 18px; font-weight: 600; line-height: 1.35; letter-spacing: -.35px; margin: 0 0 14px; }
+.sv h3 { font-size: 14px; margin: 0 0 8px; }
+.sv p { margin: 0 0 12px; color: #536570; max-width: 780px; }
+.sv .sv-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); gap: 20px; margin-bottom: 24px; }
+.sv .sv-card {
+  background: #FFFFFF; border: 1px solid #D8E4E8; border-radius: 20px;
+  padding: 28px; min-width: 0; box-shadow: 0 2px 8px rgba(11, 61, 70, .04);
+}
+.sv .sv-wide { grid-column: 1/-1; }
+.sv .sv-status {
+  display: inline-block; border-radius: 30px; background: #E8F7FA; color: #006E81;
+  padding: 6px 11px; font-size: 11px; font-weight: 600; letter-spacing: .03em; margin-bottom: 16px;
+}
+.sv .sv-muted { font-size: 13px; color: #536570; }
+.sv .sv-metric { font-size: 31px; font-weight: 500; letter-spacing: -1px; line-height: 1.25; margin: 10px 0 8px; overflow-wrap: anywhere; }
+.sv .sv-small { font-size: 12px; color: #536570; }
+.sv .sv-track { height: 6px; max-width: 650px; background: #EDF2F5; border-radius: 20px; margin: 20px 0 8px; overflow: hidden; }
+.sv .sv-track i { display: block; height: 100%; width: 43%; background: #00A6C1; }
+.sv .sv-split { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; font-size: 13px; }
+.sv .sv-divider { height: 1px; background: #E6EDF0; margin: 20px 0; }
+.sv .sv-row { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; padding: 14px 0; border-bottom: 1px solid #E6EDF0; }
+.sv .sv-row:last-child { border-bottom: 0; }
+.sv .sv-row strong { font-weight: 600; }
+.sv .sv-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+.sv .sv-button,
+.sv .sv-link-button {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 44px; min-width: 44px; max-width: 100%;
+  border: 1px solid #44838D; border-radius: 12px; padding: 11px 16px;
+  font: 600 14px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+  background-color: #BFE9ED; color: #0B3D46 !important;
+  text-align: center; text-decoration: none; white-space: normal; overflow-wrap: anywhere;
+}
+.sv .sv-button:disabled,
+.sv .sv-button[disabled],
+.sv .sv-button[aria-disabled="true"],
+.sv .sv-link-button:disabled,
+.sv .sv-link-button[disabled],
+.sv .sv-link-button[aria-disabled="true"] {
+  background-color: #EDF2F3; color: #5B6E73 !important; border-color: #C6D5D8;
+  box-shadow: none; opacity: 1; cursor: not-allowed;
+}
+.sv .sv-steps { padding-left: 20px; color: #425860; margin: 0; }
+.sv .sv-steps li { margin: 14px 0; }
+.sv .sv-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 20px; margin-top: 20px; }
+.sv .sv-field { display: block; font-size: 12px; font-weight: 600; color: #536570; }
+.sv .sv-field input,
+.sv .sv-field select,
+.sv .sv-field textarea {
+  display: block; width: 100%; min-height: 44px; border: 1px solid #44838D;
+  border-radius: 10px; padding: 11px 12px; font: 14px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+  margin-top: 8px; color: #0B3D46; background: #FFFFFF; white-space: normal; overflow-wrap: anywhere;
+}
+.sv .sv-field textarea { min-height: 130px; resize: vertical; }
+.sv .sv-field input:disabled,
+.sv .sv-field select:disabled,
+.sv .sv-field textarea:disabled {
+  background: #EDF2F3; color: #5B6E73; border-color: #C6D5D8; opacity: 1;
+}
+.sv .sv-form-note { grid-column: 1/-1; font-size: 13px; color: #536570; }
+.sv details { border: 1px solid #D8E4E8; border-radius: 16px; background: #FFFFFF; padding: 12px 20px; margin-top: 16px; }
+.sv summary { min-height: 44px; padding: 11px 0; font-size: 14px; font-weight: 600; cursor: pointer; white-space: normal; overflow-wrap: anywhere; }
+.sv details p { margin-top: 14px; font-size: 13px; }
+.sv .sv-footer {
+  margin-top: 32px; padding-top: 20px; border-top: 1px solid #DCE7EC; font-size: 12px; color: #536570;
+  display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+}
+.sv .sv-table-wrap { overflow-x: auto; }
+.sv table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
+.sv th { color: #536570; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; padding: 12px 10px; border-bottom: 1px solid #DCE7EC; }
+.sv td { padding: 14px 10px; border-bottom: 1px solid #E6EDF0; }
+.sv td:last-child,
+.sv th:last-child { text-align: right; }
+.sv .sv-note { border-left: 3px solid #00A6C1; padding: 3px 0 3px 15px; margin: 18px 0; font-size: 13px; color: #536570; }
+@media (hover: hover) and (pointer: fine) {
+  .sv a:not(.sv-link-button):not(:disabled):not([disabled]):not([aria-disabled="true"]):hover { text-decoration: underline; }
+  .sv .sv-button:not(:disabled):not([disabled]):not([aria-disabled="true"]):hover,
+  .sv .sv-link-button:not(:disabled):not([disabled]):not([aria-disabled="true"]):hover {
+    background-color: #A7DDE3; border-color: #44838D; box-shadow: 0 2px 6px rgba(11, 61, 70, .10);
+  }
+}
+.sv .sv-button:not(:disabled):not([disabled]):not([aria-disabled="true"]):active,
+.sv .sv-link-button:not(:disabled):not([disabled]):not([aria-disabled="true"]):active {
+  background-color: #91D1D9; border-color: #44838D; box-shadow: none;
+}
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .sv .sv-button:not(:disabled):not([disabled]):not([aria-disabled="true"]),
+  .sv .sv-link-button:not(:disabled):not([disabled]):not([aria-disabled="true"]) {
+    transition: background-color 140ms ease-out, border-color 140ms ease-out, box-shadow 140ms ease-out;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sv .sv-button,
+  .sv .sv-link-button { transition: none; }
+}
+@media (max-width: 700px) {
+  .sv { padding: 20px 14px; }
+  .sv .sv-nav { gap: 4px; padding-bottom: 14px; margin-bottom: 24px; }
+  .sv .sv-nav a { padding: 10px; font-size: 13px; }
+  .sv .sv-card { padding: 22px; border-radius: 16px; }
+  .sv .sv-grid { gap: 14px; }
+  .sv .sv-row { gap: 8px; }
+  .sv .sv-footer { display: block; }
+  .sv .sv-footer span { display: block; margin-top: 6px; }
+  .sv .sv-brand { margin-bottom: 18px; }
+  .sv .sv-wordmark { font-size: 22px; }
+  .sv .sv-table-wrap table { min-width: 480px; }
+}
+</style>
+<main class="sv"><section class="sv-intro"><h1>Company Settings</h1><p>One place to review the business details and operating rules behind your Revenue Desk.</p></section><div class="sv-grid"><section class="sv-card"><h2>Company & contacts</h2><span class="sv-status">COMPANY DETAILS NOT CONNECTED</span><p>No submitted intake or live agent configuration has been loaded.</p><div class="sv-form"><label class="sv-field">Company name<input disabled value="Example Plumbing"></label><label class="sv-field">Company phone<input disabled value="Not connected"></label><label class="sv-field">Company email<input disabled value="Not connected"></label><label class="sv-field">Company website<input disabled value="Not connected"></label><label class="sv-field">Primary contact<input disabled value="Not connected"></label><label class="sv-field">Primary timezone<input disabled value="Not connected"></label></div></section><section class="sv-card"><h2>Locations & service area</h2><p>Keep location details and the approved service territory together.</p><div class="sv-form"><label class="sv-field">Locations<input disabled value="Not connected"></label><label class="sv-field">Service area<input disabled value="Not connected"></label><label class="sv-field">Services offered<input disabled value="Mapping pending"></label><label class="sv-field">Business hours & holidays<input disabled value="Mapping pending"></label></div></section></div><div class="sv-grid"><section class="sv-card sv-wide"><h2>Team contacts</h2><span class="sv-status">TEAM CONTACTS NOT CONNECTED</span><h3>No team contacts loaded</h3><p>Company-specific contacts and their service responsibilities will appear here once the approved contact records are connected.</p></section></div><div class="sv-grid"><section class="sv-card"><h2>Coverage & call handling</h2><p>These controls are disabled while their source fields, validation and approval path are being connected.</p><div class="sv-form"><label class="sv-field">Business number<input disabled value="Not connected"></label><label class="sv-field">Coverage window<input disabled value="Mapping pending"></label><label class="sv-field">Approved next step<input disabled value="Mapping pending"></label><label class="sv-field">After-hours / fallback route<input disabled value="Mapping pending"></label><label class="sv-field">Handoff destination<input disabled value="Mapping pending"></label><label class="sv-field">Agent configuration version<input disabled value="Not connected"></label></div></section><section class="sv-card"><h2>Change review</h2><span class="sv-status">CHANGE REQUESTS NOT CONNECTED</span><ol class="sv-steps"><li>Review the proposed changes.</li><li>Validate the settings and confirm their scope.</li><li>Approve the new version and effective time.</li><li>Test before applying any live change.</li></ol><div class="sv-actions"><button class="sv-button" type="button" disabled>Edit company details</button><button class="sv-button" type="button" disabled>Submit for review</button></div><p class="sv-small" style="margin-top:12px">No form submission, runtime update or change to the current approved configuration is enabled.</p></section></div></main>
+<%
+
+}%>

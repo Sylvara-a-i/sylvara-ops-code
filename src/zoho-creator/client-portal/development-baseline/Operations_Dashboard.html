@@ -1,0 +1,213 @@
+<%{
+	company_count = Accounts[ID != 0].count();
+	subscription_count = Subscriptions[ID != 0].count();
+	pending_provision_count = Account_Services[Provisioning_Status == "Pending"].count();
+	failed_provision_count = Account_Services[Provisioning_Status == "Failed"].count();
+	failed_billing_count = Billing_Webhook_Events[Environment == "Development" && Processing_Status == "Failed"].count();
+	pending_request_count = Company_Settings_Requests[Status == "Pending review"].count();
+	last_sync_text = "No billing sync recorded";
+	last_sync_company = "";
+	last_sync_records = Accounts[Last_Billing_Sync_At != null] sort by Last_Billing_Sync_At desc range from 0 to 0;
+	for each  synced_account in last_sync_records
+	{
+		last_sync_text = synced_account.Last_Billing_Sync_At.toString();
+		last_sync_company = ifnull(synced_account.Company_Name,"Unnamed company");
+	}
+	billing_rows = "";
+	billing_dated = Billing_Webhook_Events[Environment == "Development" && Processing_Status == "Failed" && Last_Attempt_At != null] sort by Last_Attempt_At desc range from 0 to 9;
+	for each  billing_event in billing_dated
+	{
+		billing_company = "Unassigned";
+		if(billing_event.Customer_Lookup != null)
+		{
+			billing_account = Accounts[ID == billing_event.Customer_Lookup];
+			if(billing_account.count() > 0)
+			{
+				billing_company = ifnull(billing_account.Company_Name,"Unnamed company");
+			}
+		}
+		billing_subscription = "Unassigned";
+		if(billing_event.Subscription_Lookup != null)
+		{
+			billing_subscription = billing_event.Subscription_Lookup.toString();
+		}
+		billing_attempts = "Not recorded";
+		if(billing_event.Process_Attempts != null)
+		{
+			billing_attempts = billing_event.Process_Attempts.toString();
+		}
+		billing_rows = billing_rows + "<tr><td>" + billing_event.ID.toString().htmlEncode() + "</td><td>" + billing_company.htmlEncode() + "</td><td>" + billing_subscription.htmlEncode() + "</td><td>" + billing_event.Last_Attempt_At.toString().htmlEncode() + "</td><td>" + billing_attempts.htmlEncode() + "</td><td>" + ifnull(billing_event.Last_Error_Category,"Not recorded").htmlEncode() + "</td><td>" + ifnull(billing_event.Last_Error_Code,"Not recorded").htmlEncode() + "</td></tr>";
+	}
+	billing_undated = Billing_Webhook_Events[Environment == "Development" && Processing_Status == "Failed" && Last_Attempt_At == null] sort by ID range from 0 to 4;
+	for each  undated_event in billing_undated
+	{
+		undated_company = "Unassigned";
+		if(undated_event.Customer_Lookup != null)
+		{
+			undated_account = Accounts[ID == undated_event.Customer_Lookup];
+			if(undated_account.count() > 0)
+			{
+				undated_company = ifnull(undated_account.Company_Name,"Unnamed company");
+			}
+		}
+		undated_subscription = "Unassigned";
+		if(undated_event.Subscription_Lookup != null)
+		{
+			undated_subscription = undated_event.Subscription_Lookup.toString();
+		}
+		undated_attempts = "Not recorded";
+		if(undated_event.Process_Attempts != null)
+		{
+			undated_attempts = undated_event.Process_Attempts.toString();
+		}
+		billing_rows = billing_rows + "<tr><td>" + undated_event.ID.toString().htmlEncode() + "</td><td>" + undated_company.htmlEncode() + "</td><td>" + undated_subscription.htmlEncode() + "</td><td>No attempt timestamp</td><td>" + undated_attempts.htmlEncode() + "</td><td>" + ifnull(undated_event.Last_Error_Category,"Not recorded").htmlEncode() + "</td><td>" + ifnull(undated_event.Last_Error_Code,"Not recorded").htmlEncode() + "</td></tr>";
+	}
+	if(billing_rows == "")
+	{
+		billing_rows = "<tr><td colspan='7' class='sv-empty'>No billing failures found.</td></tr>";
+	}
+	provisioning_rows = "";
+	provisioning_records = Account_Services[Provisioning_Status == "Failed" || Provisioning_Status == "Pending"] sort by Provisioning_Status range from 0 to 9;
+	for each  provision in provisioning_records
+	{
+		provision_company = "Unassigned";
+		if(provision.Account != null)
+		{
+			provision_account = Accounts[ID == provision.Account];
+			if(provision_account.count() > 0)
+			{
+				provision_company = ifnull(provision_account.Company_Name,"Unnamed company");
+			}
+		}
+		provision_location = "Unassigned";
+		if(provision.Location != null)
+		{
+			provision_branch = Account_Branches[ID == provision.Location];
+			if(provision_branch.count() > 0)
+			{
+				provision_location = ifnull(provision_branch.Branch_Name,"Unnamed location");
+			}
+		}
+		provision_service = "Unassigned";
+		if(provision.Service != null)
+		{
+			provision_service_record = Services[ID == provision.Service];
+			if(provision_service_record.count() > 0)
+			{
+				provision_service = ifnull(provision_service_record.Service_Name,"Unnamed service");
+			}
+		}
+		provisioning_rows = provisioning_rows + "<tr><td>" + provision.ID.toString().htmlEncode() + "</td><td>" + provision_company.htmlEncode() + "</td><td>" + provision_location.htmlEncode() + "</td><td>" + provision_service.htmlEncode() + "</td><td>" + provision.Provisioning_Status.htmlEncode() + "</td></tr>";
+	}
+	if(provisioning_rows == "")
+	{
+		provisioning_rows = "<tr><td colspan='5' class='sv-empty'>No pending or failed provisioning records found.</td></tr>";
+	}
+	request_rows = "";
+	request_records = Company_Settings_Requests[Status == "Pending review"] sort by ID range from 0 to 9;
+	for each  change_request in request_records
+	{
+		request_company = "Unassigned";
+		if(change_request.Account != null)
+		{
+			request_account = Accounts[ID == change_request.Account];
+			if(request_account.count() > 0)
+			{
+				request_company = ifnull(request_account.Company_Name,"Unnamed company");
+			}
+		}
+		request_rows = request_rows + "<tr><td>" + change_request.ID.toString().htmlEncode() + "</td><td>" + request_company.htmlEncode() + "</td><td>" + change_request.Status.htmlEncode() + "</td></tr>";
+	}
+	if(request_rows == "")
+	{
+		request_rows = "<tr><td colspan='3' class='sv-empty'>No pending company-change requests found.</td></tr>";
+	}
+	%>
+<style>
+#sv-opsdash {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+  color: #090C0E;
+  background: #F5F8FA;
+  padding: 28px;
+  box-sizing: border-box;
+  line-height: 1.6;
+  max-width: 100%;
+  overflow: hidden;
+}
+#sv-opsdash * { box-sizing: border-box; }
+#sv-opsdash h1 { font-size: 30px; font-weight: 600; line-height: 1.2; letter-spacing: -.8px; margin: 8px 0 12px; }
+#sv-opsdash h2 { font-size: 18px; font-weight: 600; line-height: 1.35; letter-spacing: -.3px; margin: 0 0 12px; }
+#sv-opsdash p { margin: 6px 0; color: #536570; }
+#sv-opsdash .sv-badge {
+  display: inline-block; border: 1px solid #BCE6EE; background: #E8F7FA; color: #006E81;
+  border-radius: 30px; padding: 5px 12px; font-size: 12px; font-weight: 600; letter-spacing: .03em;
+}
+#sv-opsdash .sv-counts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin: 24px 0; }
+#sv-opsdash .sv-card,
+#sv-opsdash .sv-section {
+  background: #FFFFFF; border: 1px solid #D8E4E8; border-radius: 20px; padding: 20px; min-width: 0;
+  box-shadow: 0 2px 8px rgba(11, 61, 70, .04);
+}
+#sv-opsdash .sv-label { font-size: 13px; color: #536570; }
+#sv-opsdash .sv-number { display: block; font-size: 32px; line-height: 1.2; font-weight: 500; letter-spacing: -.8px; margin: 8px 0; }
+#sv-opsdash .sv-note { font-size: 13px; color: #536570; }
+#sv-opsdash .sv-section { margin-top: 20px; }
+#sv-opsdash .sv-scroll { overflow-x: auto; width: 100%; margin-top: 16px; }
+#sv-opsdash table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
+#sv-opsdash th { background: #F5F8FA; color: #536570; font-weight: 700; white-space: nowrap; }
+#sv-opsdash th,
+#sv-opsdash td { padding: 12px; border-bottom: 1px solid #E6EDF0; vertical-align: top; }
+#sv-opsdash td { overflow-wrap: anywhere; }
+#sv-opsdash .sv-empty { padding: 22px 12px; color: #536570; }
+#sv-opsdash .sv-caution { padding: 14px 18px; background: #FFF9E9; border: 1px solid #E5D5A3; border-radius: 12px; color: #665B3E; }
+@media (max-width: 600px) {
+  #sv-opsdash { padding: 16px; }
+  #sv-opsdash h1 { font-size: 25px; }
+  #sv-opsdash .sv-counts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  #sv-opsdash .sv-card,
+  #sv-opsdash .sv-section { padding: 14px; }
+  #sv-opsdash .sv-number { font-size: 28px; }
+}
+</style>
+<div id="sv-opsdash">
+<h1>Operations Overview</h1>
+<p>Record inventory and review queues.</p>
+<div class="sv-counts">
+<div class="sv-card"><span class="sv-label">Company records</span><span class="sv-number"><%=company_count%></span><span class="sv-note">All Accounts records</span></div>
+<div class="sv-card"><span class="sv-label">Subscription records</span><span class="sv-number"><%=subscription_count%></span><span class="sv-note">Records, not active paid plans</span></div>
+<div class="sv-card"><span class="sv-label">Pending provisioning</span><span class="sv-number"><%=pending_provision_count%></span><span class="sv-note">Account Services · Pending</span></div>
+<div class="sv-card"><span class="sv-label">Failed provisioning</span><span class="sv-number"><%=failed_provision_count%></span><span class="sv-note">Account Services · Failed</span></div>
+<div class="sv-card"><span class="sv-label">Failed billing events</span><span class="sv-number"><%=failed_billing_count%></span><span class="sv-note">Failed</span></div>
+<div class="sv-card"><span class="sv-label">Pending company changes</span><span class="sv-number"><%=pending_request_count%></span><span class="sv-note">Settings Requests · Pending review</span></div>
+</div>
+<%
+	if(company_count == 0 && subscription_count == 0 && pending_provision_count == 0 && failed_provision_count == 0 && failed_billing_count == 0 && pending_request_count == 0)
+	{
+	}
+	%>
+<section class="sv-section">
+<h2>Latest recorded billing sync</h2>
+<p><strong><%=last_sync_text.htmlEncode()%></strong></p>
+<p><%=last_sync_company.htmlEncode()%></p>
+<p class="sv-note">Dates use the application timezone, America/Chicago.</p>
+</section>
+<section class="sv-section">
+<h2>Billing processing failures</h2>
+<p class="sv-note">Up to 10 dated failures, newest attempt first, followed by up to 5 records without an attempt timestamp.</p>
+<div class="sv-scroll"><table><thead><tr><th>Event record</th><th>Company</th><th>Subscription record</th><th>Last attempt</th><th>Attempts</th><th>Error category</th><th>Error code</th></tr></thead><tbody><%=billing_rows%></tbody></table></div>
+</section>
+<section class="sv-section">
+<h2>Provisioning attention</h2>
+<p class="sv-note">Up to 10 pending or failed records, failed first.</p>
+<div class="sv-scroll"><table><thead><tr><th>Service record</th><th>Company</th><th>Location</th><th>Service</th><th>Provisioning status</th></tr></thead><tbody><%=provisioning_rows%></tbody></table></div>
+</section>
+<section class="sv-section">
+<h2>Pending company changes</h2>
+<p class="sv-note">Up to 10 requests in record-ID order.</p>
+<div class="sv-scroll"><table><thead><tr><th>Request record</th><th>Company</th><th>Status</th></tr></thead><tbody><%=request_rows%></tbody></table></div>
+</section>
+<p class="sv-note">Refresh the page to read current records.</p>
+</div>
+<%
+
+}%>
