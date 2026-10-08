@@ -23,3 +23,39 @@ node --test src/zoho-creator/client-portal/billing-plans/test/billing-plan-view-
 ```
 
 The existing portal test entrypoint imports these tests for canonical and hosted check discovery. Source rollback is removal/reversion of this isolated change; no live rollback is needed.
+
+## Annual management-fee comparison
+
+The separate `annual-management-savings-view-contract.js` exports `prepareAnnualManagementSavingsView(evidence, policy)`. Existing catalog, customer and history exports, signatures and output shapes remain unchanged. This is a source-only display projection with no portal wiring, quote, checkout, permission or plan-change capability.
+
+Inputs are strict ordinary data records (own data properties only; no extra keys, accessors, symbols or custom prototypes):
+
+- Policy uses the existing catalog shape: `{ expectedEnvironment, asOf, maxAgeMs }`.
+- Evidence is `{ environment, observedAt, complete, pairing, monthly, annual }`. The existing environment, canonical UTC timestamp, freshness and completeness rules apply to the entire producer snapshot.
+- Each row is null (unknown) or `{ planId, plan }`. The opaque server-side ID is nonempty text without whitespace/control characters and is never returned. `plan` uses the exact existing catalog row shape and validation, including currency provenance.
+- Pairing is null (unknown) or `{ monthlyPlanId, annualPlanId, equivalent, scope }`. IDs must be distinct and match the designated row IDs exactly. `equivalent` is true/false/null; `scope` is management-fee-only/null. Only true and management-fee-only qualify.
+
+**Producer pairing is a trust-boundary requirement, not proof created by this validator.** A trusted server producer must independently bind the correct tenant/environment, stable authoritative plan IDs and their exact rows, verify equivalent service scope, isolate the recurring management fee from usage/setup/taxes/other charges, reconcile supported currency and exponent, and observe the pairing and rows together under the approved freshness policy. Never pair by display name, suffix, amount similarity or array order. Do not reuse a cached pairing with newly fetched or reordered row data, or relabel stale facts with a new observation time. Matching IDs, source strings, complete and equivalent flags only establish structural consistency; arbitrary objects can fabricate them. Authentication, correct organization mapping, safe visibility and actual source verification remain external prerequisites. Private identifiers stay server-side and out of Git, logs and display output.
+
+For active one-month and one-year rows with the same verified currency/exponent and positive safe-integer recurring minor amounts, the projection returns frozen `{ environment, observedAt, comparison }`. Comparison contains only:
+
+- `monthlyLabel`, `annualLabel` (sanitized display text; escape when rendering);
+- `monthlyAnnualizedMinor` = monthly recurring amount times 12, `annualRecurringMinor`, and `savingsMinor` = their positive difference;
+- `amountUnit: "minor"`, `currency: { code, minorUnitExponent }`, `basisMonths: 12`, and `scope: "management-fee-only"`;
+- `savingsPercentHundredths` and `percentageRounding: "floor"`.
+
+The percentage rule is `floor(savingsMinor * 10000 / monthlyAnnualizedMinor)`, calculated with BigInt intermediates and returned as an integer number of hundredths of a percentage point (1200 means 12%). It is exact when divisible, otherwise conservative to 0.01 percentage points; never round it upward or use a fixed catalog discount. Positive savings below 0.01% return zero percentage hundredths with the exact positive money saving; a renderer can omit the percentage in that case. Annualization must fit a safe integer before arithmetic; there is no float price conversion, currency default or exchange calculation. Both validated input currency sources may differ; the output retains only their matching code/exponent.
+
+Unknown/missing pairing or rows, mismatched IDs, unproven equivalence/scope, inactive rows, unsupported comparison intervals, unknown or differing currencies, unknown/zero recurring amounts, annualization overflow and nonpositive savings return `comparison: null`. Malformed/extra fields, conflicting exponents, invalid amounts/provenance, incomplete/wrong-environment or future/stale snapshots throw TypeError under the existing fail-closed convention. **Both null and validation failure mean suppress the offer; never retain an older successful comparison.** Setup amounts are validated by the existing catalog contract but never included in the calculation, even when unknown or different; usage fields are not accepted. This is a 12-month comparison of recurring management fees, not a total bill, invoice, proration, personalized quote or promised customer saving.
+
+Catalog activity and savings do not establish native portal visibility, customer eligibility or ability to switch. A renderer may place these facts beside separately governed plan options only after its own gates are satisfied; it must not infer `canUpgrade`, `canChangePlan`, a checkout URL or permission from this result. Native portal visibility can be false even for every compared active row. This change does not enable switching or alter customer-specific change flow, native pricing/settings, subscriptions, storage or permissions.
+
+Focused validation (synthetic fixtures only):
+
+```sh
+node --check src/zoho-creator/client-portal/billing-plans/annual-management-savings-view-contract.js
+node --test src/zoho-creator/client-portal/billing-plans/test/annual-management-savings-view-contract.test.js
+node --test src/zoho-creator/client-portal/company-settings-requests/test/service-area-request-contract.test.js
+```
+
+The new suite is imported by the existing billing-plan test file without changing the shared portal entrypoint or customer/history imports. Canonical verification remains `tools/verify.cmd` on Windows (Node 24.19.0, Python 3.12, short TEMP/TMP). No live/provider validation was performed or is implied. Rollback is to revert this isolated source change; no live system rollback or manual Zoho setup is required.
