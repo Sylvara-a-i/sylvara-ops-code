@@ -5,11 +5,12 @@ const { recoverAssistedSubmission } = require("./submission-recovery");
 const { normalizeApprovedCatalystDevelopmentGatewayUrl } = require("./destinations");
 const {
   buildCrmPatch,
-  buildPrefillPayload,
   FORM_KEYS,
   FormContractError,
   normalizeFormData,
 } = require("./form-contract");
+const { PHONE_POLICY, buildNationalForm1Prefill, canonicalizeForm1Submission } =
+  require("./phone-contract");
 const {
   HttpBoundaryError,
   parseJsonObject,
@@ -324,7 +325,9 @@ async function prefill(body, dependencies) {
     session.recordId,
   );
   dependencies.crmClient.assertJourney(record, session.journeyId);
-  const payload = buildPrefillPayload(record, dependencies.config.assistedConstants);
+  const payload = buildNationalForm1Prefill(
+    record, dependencies.config.assistedConstants, PHONE_POLICY,
+  );
   const consumed = await dependencies.sessionStore.consumePrefillHandle(
     session,
     handleHash,
@@ -341,7 +344,7 @@ async function submit(body, dependencies) {
   const submission = normalizeSubmissionEnvelope(body);
   if (exactKeys(submission, PUBLIC_SUBMISSION_KEYS)) {
     normalizeSubmissionId(submission.submissionId);
-    // Public Form 1 remains owned by its existing native CRM upsert. This
+    // Public Form 1 remains owned by its existing native CRM writer. This
     // authenticated webhook acknowledgment carries no CRM or journey binding.
     return response(200, { ok: true, binding: "public_unbound" },
       "submission", "public_unbound");
@@ -370,7 +373,10 @@ async function submit(body, dependencies) {
   dependencies.sessionStore.assertRuntimeBinding(session);
   // Bind durable submission ownership to the complete allowlisted payload so
   // an ambiguous retry cannot change CRM fields under the original identity.
-  const normalizedFormData = normalizeFormData(submission.formData);
+  // The immutable artifact revision selects this policy. Recovery above keeps
+  // the original payload normalization and must never enter this new boundary.
+  const canonicalFormData = canonicalizeForm1Submission(submission.formData, PHONE_POLICY);
+  const normalizedFormData = normalizeFormData(canonicalFormData);
   const fingerprint = submissionFingerprint(
     submissionId,
     prefillId,
@@ -398,7 +404,7 @@ async function submit(body, dependencies) {
     fingerprint,
     dependencies.crmClient.recordVersion(record),
   );
-  const patch = buildCrmPatch(submission.formData, dependencies.config.assistedConstants, {
+  const patch = buildCrmPatch(canonicalFormData, dependencies.config.assistedConstants, {
     journeyId: ownership.row.journeyId,
     submittedAt: ownership.row.submissionStartedAt,
   });

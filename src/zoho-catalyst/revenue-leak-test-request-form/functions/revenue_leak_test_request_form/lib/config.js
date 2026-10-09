@@ -1,6 +1,7 @@
 "use strict";
 
 const crypto = require("node:crypto");
+const { recoveryManifestKeys } = require("./recovery-phone-policy");
 const { normalizeApprovedCatalystDevelopmentGatewayUrl } = require("./destinations");
 const { validateOperatorHash, validateSecret } = require("./security");
 
@@ -124,8 +125,7 @@ function recoveryManifest(environment, sourceRevision) {
     value = JSON.parse(raw);
     // Compact exact JSON rejects duplicate keys and ambiguous configuration.
     // Values identify one approved claim privately; they never enter logs.
-    const keys = ["schemaVersion", "mode", "originalSourceRevision", "claimBindingSha256",
-      "assistedConstantsSha256", "originalSessionVersion", "originalUpdatedAt", "originalLastOutcome"];
+    const keys = recoveryManifestKeys(value);
     const priorOutcome = value?.originalLastOutcome;
     // A separately approved follow-on hashes the complete prior reserved row;
     // the current artifact's own reservation never becomes fresh write authority.
@@ -133,8 +133,8 @@ function recoveryManifest(environment, sourceRevision) {
       (typeof priorOutcome === "string" && RECOVERY_MARKER_PATTERN.test(priorOutcome) &&
         !priorOutcome.startsWith(`r1_${sourceRevision}_`));
     if (!value || Array.isArray(value) || typeof value !== "object" ||
-        JSON.stringify(value) !== raw || Object.keys(value).length !== keys.length ||
-        !keys.every(key => Object.hasOwn(value, key)) || value.schemaVersion !== 1 ||
+        JSON.stringify(value) !== raw || !keys || Object.keys(value).length !== keys.length ||
+        !keys.every(key => Object.hasOwn(value, key)) ||
         !["inspect", "complete"].includes(value.mode) ||
         !/^[a-f0-9]{40}$/.test(value.originalSourceRevision) ||
         value.originalSourceRevision === sourceRevision ||

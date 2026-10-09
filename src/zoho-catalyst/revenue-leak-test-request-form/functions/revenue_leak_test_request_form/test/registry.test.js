@@ -19,6 +19,22 @@ function json(selected) {
   return JSON.parse(fs.readFileSync(selected, "utf8"));
 }
 
+function surfaceReadback(form1, surfaceName) {
+  return {
+    readback_complete: true,
+    shared_fields: form1.shared_field_schema.map((field) => ({
+      ...Object.fromEntries([
+        "key", "type", "required", "maximum_length", "validation", "classification",
+        "crm_destination", "webhook_key",
+      ].map((property) => [property, field[property]])),
+      alias_parity: true,
+      ...(field.choices_reference ? { choice_parity: true } : {}),
+      ...(["email", "mobilePhone"].includes(field.key) ? { no_duplicates: false } : {}),
+    })),
+    integrations: { ...form1.physical_surfaces[surfaceName].required_integrations },
+  };
+}
+
 test("the variable registry and placeholder environment remain in exact lockstep", () => {
   const registry = json(path.join(componentRoot, "config/variables.json"));
   assert.equal(registry.schema_version, 7);
@@ -179,8 +195,10 @@ test("the Forms contract preserves exactly two forms and separates public and as
     form1.assisted_prefill.submission_webhook.provider_transport_keys,
     ["prefillId", "configurationRevision", "submissionId", ...FORM_KEYS],
   );
-  assert.equal(form1.assisted_prefill.submission_lanes.public.writer,
-    "existing native CRM upsert");
+  const publicLane = form1.assisted_prefill.submission_lanes.public;
+  assert.equal(publicLane.writer, "existing native CRM integration");
+  assert.equal(publicLane.crm_contract_reference, "crm_integration");
+  assert.equal(Object.hasOwn(publicLane, "deduplication_order"), false);
   assert.equal(form1.assisted_prefill.submission_lanes.assisted
     .browser_supplied_record_or_journey_identity_accepted, false);
   assert.equal(form1.assisted_prefill.production_enabled, false);
@@ -267,20 +285,9 @@ test("a complete sanitized Form 1 surface readback proves shared-field parity", 
   ));
   const form1 = manifest.forms.find(({ logical_name }) =>
     logical_name === "REVENUE_LEAK_TEST_REQUEST_FORM");
-  const sharedFields = form1.shared_field_schema.map((field) => ({
-    ...Object.fromEntries([
-      "key", "type", "required", "maximum_length", "validation", "classification",
-      "crm_destination", "webhook_key",
-    ].map((property) => [property, field[property]])),
-    alias_parity: true,
-    ...(field.choices_reference ? { choice_parity: true } : {}),
-    ...(["email", "mobilePhone"].includes(field.key) ? { no_duplicates: false } : {}),
-  }));
-  const result = verifySurfaceReadback(manifest, "crm_assisted", {
-    readback_complete: true,
-    shared_fields: sharedFields,
-    integrations: { ...form1.physical_surfaces.crm_assisted.required_integrations },
-  });
+  const readback = surfaceReadback(form1, "crm_assisted");
+  const sharedFields = readback.shared_fields;
+  const result = verifySurfaceReadback(manifest, "crm_assisted", readback);
   assert.deepEqual(result, { ok: true, errors: [] });
 
   for (const key of ["email", "mobilePhone"]) {
@@ -313,6 +320,88 @@ test("a complete sanitized Form 1 surface readback proves shared-field parity", 
     field: "firstName",
     property: "classification",
   });
+});
+
+test("complete public parity preserves explicit unknowns and cannot lift the public hold", () => {
+  const manifest = json(path.join(repositoryRoot, "src/zoho-forms/free-revenue-leak-test/forms-manifest.json"));
+  const readback = surfaceReadback(manifest.forms[0], "public");
+  for (const [settings, expected] of [
+    [undefined, Array(4).fill("PUBLIC_CRM_SETTING_UNKNOWN")],
+    [null, Array(4).fill("PUBLIC_CRM_SETTING_UNKNOWN")],
+    [{ operation: "new_record", upsert_enabled: false, upsert_preference_order: null, blank_overwrite: null },
+      ["PUBLIC_CRM_SETTING_UNKNOWN", "PUBLIC_CRM_SETTING_UNKNOWN"]],
+    [{ operation: "new_record", upsert_enabled: false,
+      upsert_preference_order: ["Intake_Submission_ID", "Email"], blank_overwrite: false },
+    ["PUBLIC_CRM_POLICY_UNRESOLVED", "PUBLIC_CRM_POLICY_UNRESOLVED"]],
+    [{ operation: "new_record", upsert_enabled: true,
+      upsert_preference_order: ["Intake_Submission_ID", "Email"], blank_overwrite: false },
+    ["PUBLIC_CRM_OBSERVATION_DRIFT", "PUBLIC_CRM_POLICY_UNRESOLVED", "PUBLIC_CRM_POLICY_UNRESOLVED"]],
+  ]) {
+    readback.crm_integration = settings;
+    const result = verifySurfaceReadback(manifest, "public", readback);
+    assert.equal(result.ok, false);
+    assert.deepEqual(result.errors.map(({ code }) => code), [...expected, "PUBLIC_ACCEPTANCE_HELD"]);
+  }
+});
+
+test("public CRM settings distinguish unknown, malformed, drifted, and unsafe values", () => {
+  const manifest = json(path.join(repositoryRoot, "src/zoho-forms/free-revenue-leak-test/forms-manifest.json"));
+  const readback = surfaceReadback(manifest.forms[0], "public");
+  const settings = { operation: "new_record", upsert_enabled: false, upsert_preference_order: null, blank_overwrite: null };
+  const malformed = { operation: [false, {}, "upsert"], upsert_enabled: ["false", 0],
+    upsert_preference_order: ["Intake_Submission_ID", [], [""], [null], ["Email", "Email"]],
+    blank_overwrite: ["false", 0] };
+  const cases = Object.entries(malformed).flatMap(([property, values]) => [
+    ...[undefined, null].map((value) => [property, value, "PUBLIC_CRM_SETTING_UNKNOWN"]),
+    ...values.map((value) => [property, value, "PUBLIC_CRM_SETTING_INVALID"]),
+  ]).concat([
+    ["operation", "update_record", "PUBLIC_CRM_OBSERVATION_DRIFT"],
+    ["upsert_enabled", true, "PUBLIC_CRM_OBSERVATION_DRIFT"],
+    ["upsert_preference_order", ["Intake_Submission_ID"], "PUBLIC_CRM_POLICY_UNRESOLVED"],
+    ["blank_overwrite", false, "PUBLIC_CRM_POLICY_UNRESOLVED"],
+    ["blank_overwrite", true, "PUBLIC_BLANK_OVERWRITE_UNSAFE"],
+  ]);
+  for (const [property, value, code] of cases) {
+    readback.crm_integration = { ...settings, [property]: value };
+    if (value === undefined) delete readback.crm_integration[property];
+    const result = verifySurfaceReadback(manifest, "public", readback);
+    assert.equal(result.ok, false);
+    assert.deepEqual(result.errors.filter((error) => error.property === property), [{ code, field: "public", property }]);
+    assert.equal(result.errors.some((error) => error.code === "PUBLIC_ACCEPTANCE_HELD"), true);
+  }
+});
+
+test("canonical Form 1 rejects current CRM baseline drift and removed identity/consent safeguards", () => {
+  const manifest = json(path.join(repositoryRoot, "src/zoho-forms/free-revenue-leak-test/forms-manifest.json"));
+  const executableContract = { fieldSpecs: FIELD_SPECS, formKeys: FORM_KEYS, submissionKeys: ZOHO_FORMS_SUBMISSION_KEYS };
+  for (const [property, value] of Object.entries({ operation: "update_record", upsert_enabled: true,
+    upsert_preference_order: ["Intake_Submission_ID", "Email"], blank_overwrite: false })) {
+    const drifted = structuredClone(manifest);
+    drifted.forms[0].crm_integration.live_readback[property] = value;
+    assert.deepEqual(verifyCanonicalForm1(drifted, executableContract), {
+      ok: false,
+      errors: [{ code: "PUBLIC_CRM_BASELINE_DRIFT", field: "public", property: "live_readback" }],
+    });
+  }
+  for (const mutate of [
+    (form1) => { delete form1.crm_integration.public_acceptance; },
+    (form1) => { form1.crm_integration.public_acceptance = "accepted"; },
+    (form1) => { delete form1.crm_integration.intent_status; },
+    (form1) => { delete form1.crm_integration.blank_overwrite; },
+    (form1) => { form1.crm_integration.blank_overwrite = true; },
+    (form1) => { delete form1.deduplication_contract.fallback_never_replaces_generated_primary_identity; },
+    (form1) => { form1.deduplication_contract.fallback_never_replaces_generated_primary_identity = false; },
+  ]) {
+    const drifted = structuredClone(manifest);
+    mutate(drifted.forms[0]);
+    assert.deepEqual(verifyCanonicalForm1(drifted, executableContract), {
+      ok: false,
+      errors: [{ code: "PUBLIC_ACCEPTANCE_POLICY_DRIFT", field: "public", property: "crm_integration" }],
+    });
+  }
+  const consentDrift = structuredClone(manifest);
+  consentDrift.forms[0].shared_field_schema.find(({ key }) => key === "contactConsent").validation = "allow_prefill";
+  assert.equal(verifyCanonicalForm1(consentDrift, executableContract).errors.some(({ code }) => code === "CONSENT_POLICY_DRIFT"), true);
 });
 
 test("assisted field-entry uniqueness is a bounded exception to preserved public policy", () => {

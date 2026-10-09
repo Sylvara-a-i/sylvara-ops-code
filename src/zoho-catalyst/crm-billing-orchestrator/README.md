@@ -69,6 +69,76 @@ All initial report writes, including retained v1/v2 operations, share a durable 
 
 The temporary `validate_report_summary_contract` action exists only for immutable Development deployment evidence. It accepts exactly one of two built-in synthetic cases: legacy schema v1 with a non-null workflow-failure count, or schema v2 with unavailable workflow-failure evidence represented as null. It requires the report-only credential, the exact artifact-bound Development host/project, and `ENABLE_DEVELOPMENT_COMPATIBILITY_PROBE=true`; it parses and maps the built-in summary, returns only safe schema/mapping enums, and exits before Catalyst SDK, CRM, Billing, Connection, or Data Store initialization. Set the flag back to `false` immediately after both cases and verify the action rejects. It is unavailable in dark Production and is never an authorization path for report synchronization or paid actions.
 
+## Source-only paid CRM compatibility preflight
+
+`tools/validate-paid-crm-readback.js` exports the pure function
+`validatePaidCrmReadback(evidence, expected)`. It compares independently collected
+CRM metadata with the existing `Option 1 -> Launch`, `Option 2 -> Growth`,
+`Pro -> Scale` and `future -> Scheduled`, `live -> Active` crosswalks.
+Behavioral tests pin parity with the runtime without loading its clients or
+configuration into this tool. Display labels never substitute for stored API
+values. Additional valid options are permitted; duplicate API-value rows are
+ambiguous even when identical.
+
+This is a normalized evidence contract, **not a Zoho response adapter**. A trusted
+caller must independently verify the CRM organization, effective layout and
+executing principal and provide the following plain JSON objects. Do not pass
+records, credentials, raw responses or customer data. Unknown keys are rejected;
+private identifiers remain in memory and are never returned.
+
+| Input | Required evidence |
+| --- | --- |
+| `expected` | `organizationId`, `layoutId`, `principalId`, `notBefore`, `evaluatedAt` |
+| Every evidence section | `organizationId`, `moduleApiName: "Deals"`, `source: "independent_readback"`, `complete: true`, `capturedAt` |
+| `evidence.fields` | `fields` rows: `apiName`, `dataType: "picklist"`; `Subscription_Status` also requires `apiUpdate: true`, `readOnly: false` |
+| `evidence.picklists` | `fields` rows: `apiName`, `options` |
+| `evidence.effectiveLayout` | `principalId`, exactly one `matches` row with `layoutId`, `active: true`, `fields`; each field has `apiName`, `options`; `Subscription_Status` requires `readOnly: false` |
+| `evidence.permissions` | `principalId`, `layoutId`, `moduleRead: true`, `moduleUpdate: true`, `fields` rows with `apiName`, `read: true`; `Subscription_Status` also requires `update: true` |
+
+Field arrays must contain one row for each of `Plan` and `Subscription_Status`.
+Every option row contains `actualValue` and boolean `active`; optional
+`displayValue` is descriptive only. Required values must be active in both the
+independent API picklist readback and the effective layout. Completeness means
+the collector proved the relevant inventory, pagination, effective layout
+selection and permission scope; a successful general field response alone
+does not establish those facts. The tool cannot authenticate a collector or
+prove the truth of its assertions.
+
+All timestamps use canonical UTC ISO strings with milliseconds, for example
+`2026-01-01T00:00:00.000Z`. The caller supplies the authorized observation
+interval `notBefore <= capturedAt <= evaluatedAt`; there is no default age,
+clock read, catalog approval window or implied freshness policy. A missing
+interval, malformed timestamp, stale/future section, wrong organization/module,
+wrong layout/principal, partial evidence or ambiguous layout yields `unknown`
+for the affected checks.
+
+The result contains only a fixed schema/scope, `compatible`, `incompatible` or
+`unknown`, and six checks with sanitized reason codes. Any proved mismatch makes
+the overall result `incompatible`; otherwise any unknown check makes it
+`unknown`. `futureStatus` and `liveStatus` remain separate: a complete readback
+containing Active but lacking Scheduled fails the future mapping even when
+the live mapping passes. Missing layout or permission evidence can never
+produce overall compatibility.
+
+Compatibility covers only the two named CRM fields and their access context.
+It is not paid readiness, Billing catalog validation, write authorization,
+runtime acceptance or deployment evidence. The tool has no CLI, network,
+filesystem, environment, credentials, logs or writes and is not wired into any
+runtime path. Report-only v0.5 remains independent of Billing and this preflight.
+No provider setup is required to run it offline. Rollback is removal of these
+source/test additions; no provider rollback exists because nothing is deployed.
+
+Run the focused tests with Node 24.19.0 from the canonical function directory:
+
+```powershell
+node --test test/paid-crm-readback.test.js
+npm run ci
+```
+
+Then run the repository verifier as documented in the root README. Tests use
+synthetic metadata only; private independently collected evidence stays outside
+Git and CI.
+
 ## Approved Commercial Contract
 
 Exact paid amounts are not duplicated in this component. Catalyst Development must provide

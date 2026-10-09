@@ -7,6 +7,7 @@ import json
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -200,7 +201,8 @@ class RetellNonurgentClassificationContractTests(unittest.TestCase):
         self.assertTrue(all(row["pass"] for row in gate))
         self.assertTrue(all(row["primary_outcome"] == "configuration_not_ready" and row["review_required"] and not row["identifiers_spoken"] for row in gate if not row["expected_valid"]))
         business = self.shadow.business_state_report(shadow_contract, coverage)
-        self.assertEqual((3060, 3060, 0), (business["cases"], business["passed"], business["failed"]))
+        self.assertEqual((3172, 3172, 0), (business["cases"], business["passed"], business["failed"]))
+        self.assertEqual((112, 112, 0), (business["request_intent"]["cases"], business["request_intent"]["passed"], business["request_intent"]["failed"]))
         self.assertEqual(36, len(business["configuration_dispositions"]))
         self.assertTrue(all(row["pass"] for row in business["configuration_dispositions"]))
         self.assertEqual(104, self.shadow.metamorphic_report(shadow_contract, coverage)["passed"])
@@ -212,6 +214,105 @@ class RetellNonurgentClassificationContractTests(unittest.TestCase):
         self.assertEqual(15, mutation["detected_variants"])
         self.assertEqual(self.shadow.EXPECTED_TELEMETRY, shadow_contract["telemetry_boundary"])
         self.assertEqual([], self.shadow.differential(shadow_contract, shadow_contract)["tests_affected"])
+
+    def test_shadow_request_intent_matches_canonical_fixtures(self) -> None:
+        canonical = json.loads(self.shadow.REQUEST_INTENT.read_text(encoding="utf-8"))
+        self.assertEqual(["new_service_request", "existing_job_follow_up", "unknown"], canonical["values"])
+        self.assertEqual("unknown", canonical["missing_historical_value"])
+        for fixture in canonical["fixtures"]:
+            with self.subTest(fixture=fixture):
+                before = copy.deepcopy(fixture)
+                actual = self.shadow.request_intent_result(fixture)
+                self.assertEqual(fixture["outcome"], actual["outcome"])
+                self.assertEqual(fixture.get("expected"), actual["error"])
+                if "expected_bookable" in fixture:
+                    self.assertIs(fixture["expected_bookable"], actual["bookable_opportunity"])
+                if "expected_request_kind" in fixture:
+                    self.assertEqual(fixture["expected_request_kind"], actual["request_kind"])
+                self.assertEqual(before, fixture)
+
+    def test_relationship_cannot_override_new_urgent_work(self) -> None:
+        contract = json.loads(SHADOW_CONTRACT_PATH.read_text(encoding="utf-8"))
+        for relationship, callback in itertools.product(
+            ("new", "existing", "unknown"),
+            ("confirmed_usable", "explicitly_unavailable", "unknown"),
+        ):
+            expected = "terminal.urgent_callback" if callback == "confirmed_usable" else "terminal.urgent_no_callback"
+            facts = {**self.shadow.base_facts(), "customer_type": relationship,
+                     "exception": "existing_customer", "request_kind": "new_service_request",
+                     "urgency": "approved_urgent", "urgent_callback": callback,
+                     "bookable_opportunity": True, "outcome": "urgent_potential_job"}
+            with self.subTest(relationship=relationship, callback=callback):
+                self.assertEqual(expected, self.shadow.resolve(facts, contract)[0])
+                self.assertEqual(expected, self.shadow.expected_terminal(facts))
+                self.assertIs(True, self.shadow.request_intent_result(facts)["bookable_opportunity"])
+
+    def test_historical_intent_is_unknown_without_relabeling_or_zero_count(self) -> None:
+        # Valid outcome/urgency combinations; complete payload validation belongs
+        # to the gateway tests, not this request-intent-only projection.
+        historical_cases = (
+            ("potential_job", "nonurgent", True, None),
+            ("urgent_potential_job", "approved_urgent", True, None),
+            ("existing_customer", "nonurgent", False, False),
+        )
+        for relationship, (original_outcome, urgency, supplied, expected_bookable) in itertools.product(
+            ("new", "existing", "unknown"), historical_cases,
+        ):
+            facts = {**self.shadow.base_facts(), "customer_type": relationship,
+                     "exception": "existing_customer", "outcome": original_outcome,
+                     "bookable_opportunity": supplied, "urgency": urgency,
+                     "urgent_callback": "confirmed_usable"}
+            del facts["request_kind"]
+            before = copy.deepcopy(facts)
+            with self.subTest(relationship=relationship, outcome=original_outcome):
+                actual = self.shadow.request_intent_result(facts)
+                self.assertEqual({"request_kind": "unknown", "bookable_opportunity": expected_bookable,
+                                  "outcome": original_outcome, "error": None}, actual)
+                self.assertEqual(before, facts)
+
+    def test_follow_up_opportunity_contradiction_is_held_after_protective_exits(self) -> None:
+        contract = json.loads(SHADOW_CONTRACT_PATH.read_text(encoding="utf-8"))
+        for relationship in ("new", "existing", "unknown"):
+            facts = {**self.shadow.base_facts(), "customer_type": relationship,
+                     "request_kind": "existing_job_follow_up", "bookable_opportunity": True,
+                     "urgency": "approved_urgent", "urgent_callback": "confirmed_usable"}
+            self.assertEqual("INVALID_ANALYSIS", self.shadow.request_intent_result(facts)["error"])
+            self.assertIsNone(self.shadow.request_intent_result(facts)["bookable_opportunity"])
+            for override, terminal in (
+                ({}, "terminal.needs_review"),
+                ({"configuration_status": "invalid"}, "terminal.configuration_unavailable"),
+                ({"safety": "immediate_hazard"}, "terminal.safety"),
+                ({"consent": "withdrawn"}, "terminal.consent_withdrawal"),
+                ({"consent": "sensitive_termination_required"}, "terminal.sensitive_data"),
+            ):
+                with self.subTest(relationship=relationship, override=override):
+                    self.assertEqual(terminal, self.shadow.resolve({**facts, **override}, contract)[0])
+                    self.assertEqual(terminal, self.shadow.expected_terminal({**facts, **override}))
+
+    def test_malformed_intent_or_opportunity_evidence_fails_closed(self) -> None:
+        contract = json.loads(SHADOW_CONTRACT_PATH.read_text(encoding="utf-8"))
+        for field, values in (
+            ("request_kind", (None, "", "new", " new_service_request", True, 1, [], {})),
+            ("bookable_opportunity", ("true", "false", 0, 1, [], {})),
+        ):
+            for value in values:
+                facts = {**self.shadow.base_facts(), field: value}
+                with self.subTest(field=field, value=value):
+                    self.assertEqual("INVALID_ANALYSIS", self.shadow.request_intent_result(facts)["error"])
+                    self.assertIsNone(self.shadow.request_intent_result(facts)["bookable_opportunity"])
+                    self.assertEqual("terminal.needs_review", self.shadow.resolve(facts, contract)[0])
+                    self.assertEqual("terminal.needs_review", self.shadow.expected_terminal(facts))
+
+    def test_relationship_shortcut_regression_is_detected_by_intent_matrix(self) -> None:
+        contract = json.loads(SHADOW_CONTRACT_PATH.read_text(encoding="utf-8"))
+        original = self.shadow.resolve
+        def relationship_shortcut(facts, candidate):
+            terminal, observed = original(facts, candidate)
+            if facts.get("exception") == "existing_customer":
+                terminal = "terminal.existing_customer_message"
+            return terminal, observed
+        with patch.object(self.shadow, "resolve", side_effect=relationship_shortcut):
+            self.assertGreater(self.shadow.request_intent_report(contract)["failed"], 0)
 
     def test_shadow_oracle_fails_closed_and_is_independent(self) -> None:
         shadow_contract = json.loads(SHADOW_CONTRACT_PATH.read_text(encoding="utf-8"))

@@ -62,20 +62,20 @@
       "title": "Free Revenue Leak Test Request",
       "purpose": "Public request intake with a separately authenticated record-bound assisted lane",
       "shared_field_schema": [
-        {"key":"firstName","form_component":"Name - First Name","type":"text","required":true,"maximum_length":100,"validation":"trimmed_control_free_text","classification":"personal","crm_destination":"First_Name","webhook_key":"firstName","alias_reference":"private_provider_alias:firstName","applicable_channels":["public","crm_assisted"]},
-        {"key":"lastName","form_component":"Name - Last Name","type":"text","required":true,"maximum_length":100,"validation":"trimmed_control_free_text","classification":"personal","crm_destination":"Last_Name","webhook_key":"lastName","alias_reference":"private_provider_alias:lastName","applicable_channels":["public","crm_assisted"]},
+        {"key":"firstName","form_component":"Name - First Name","type":"text","required":true,"maximum_length":40,"validation":"trimmed_control_free_text","classification":"personal","crm_destination":"First_Name","webhook_key":"firstName","alias_reference":"private_provider_alias:firstName","applicable_channels":["public","crm_assisted"]},
+        {"key":"lastName","form_component":"Name - Last Name","type":"text","required":true,"maximum_length":80,"validation":"trimmed_control_free_text","classification":"personal","crm_destination":"Last_Name","webhook_key":"lastName","alias_reference":"private_provider_alias:lastName","applicable_channels":["public","crm_assisted"]},
         {"key":"company","form_component":"Company","type":"text","required":true,"maximum_length":200,"validation":"trimmed_control_free_text","classification":"business","crm_destination":"Company","webhook_key":"company","alias_reference":"private_provider_alias:company","applicable_channels":["public","crm_assisted"]},
         {"key":"decisionMakerRole","form_component":"Title","type":"choice","required":true,"maximum_length":120,"validation":"exact_active_choice","classification":"personal","crm_destination":"Decision_Maker_Role","webhook_key":"decisionMakerRole","alias_reference":"private_provider_alias:decisionMakerRole","choices_reference":"fresh_private_forms_and_crm_parity_readback","applicable_channels":["public","crm_assisted"]},
         {"key":"jobTitle","form_component":"Exact Job Title","type":"text","required":false,"maximum_length":100,"validation":"trimmed_control_free_text","classification":"personal","crm_destination":"Designation","webhook_key":"jobTitle","alias_reference":"private_provider_alias:jobTitle","applicable_channels":["public","crm_assisted"]},
-        {"key":"email","form_component":"Email","type":"email","required":true,"maximum_length":254,"validation":"trimmed_email","classification":"personal","crm_destination":"Email","webhook_key":"email","alias_reference":"private_provider_alias:email","applicable_channels":["public","crm_assisted"]},
+        {"key":"email","form_component":"Email","type":"email","required":true,"maximum_length":100,"validation":"trimmed_email","classification":"personal","crm_destination":"Email","webhook_key":"email","alias_reference":"private_provider_alias:email","applicable_channels":["public","crm_assisted"]},
         {"key":"mobilePhone","form_component":"Mobile Phone","type":"phone","required":true,"maximum_length":30,"validation":"trimmed_control_free_text","classification":"personal","crm_destination":"Mobile","webhook_key":"mobilePhone","alias_reference":"private_provider_alias:mobilePhone","applicable_channels":["public","crm_assisted"]},
         {"key":"companyPhone","form_component":"Company Phone","type":"phone","required":true,"maximum_length":30,"validation":"trimmed_control_free_text","classification":"business","crm_destination":"Main_Business_Phone","webhook_key":"companyPhone","alias_reference":"private_provider_alias:companyPhone","applicable_channels":["public","crm_assisted"]},
         {"key":"currentCallHandling","form_component":"Current Call Handling","type":"choice","required":true,"maximum_length":120,"validation":"exact_active_choice","classification":"business","crm_destination":"Current_Call_Handling","webhook_key":"currentCallHandling","alias_reference":"private_provider_alias:currentCallHandling","choices_reference":"fresh_private_forms_and_crm_parity_readback","applicable_channels":["public","crm_assisted"]},
         {"key":"preferredTestRoute","form_component":"Preferred Test Route","type":"choice","required":true,"maximum_length":120,"validation":"exact_active_choice","classification":"business","crm_destination":"Requested_Test_Route","webhook_key":"preferredTestRoute","alias_reference":"private_provider_alias:preferredTestRoute","choices_reference":"fresh_private_forms_and_crm_parity_readback","applicable_channels":["public","crm_assisted"]},
-        {"key":"phoneSystemProvider","form_component":"Phone System Provider","type":"choice","required":false,"maximum_length":150,"validation":"exact_active_choice","classification":"business","crm_destination":"Phone_System_Provider","webhook_key":"phoneSystemProvider","alias_reference":"private_provider_alias:phoneSystemProvider","choices_reference":"fresh_private_forms_and_crm_parity_readback","applicable_channels":["public","crm_assisted"]},
+        {"key":"phoneSystemProvider","form_component":"Phone System Provider","type":"choice","required":false,"maximum_length":120,"validation":"exact_active_choice","classification":"business","crm_destination":"Phone_System_Provider","webhook_key":"phoneSystemProvider","alias_reference":"private_provider_alias:phoneSystemProvider","choices_reference":"fresh_private_forms_and_crm_parity_readback","applicable_channels":["public","crm_assisted"]},
         {"key":"primaryServiceArea","form_component":"Primary Service Area","type":"multiline_text","required":false,"maximum_length":2000,"validation":"trimmed_control_free_text","classification":"business","crm_destination":"Primary_Service_Area","webhook_key":"primaryServiceArea","alias_reference":"private_provider_alias:primaryServiceArea","applicable_channels":["public","crm_assisted"]},
         {"key":"fieldTeamSizeBand","form_component":"Approximate Field Team Size","type":"choice","required":false,"maximum_length":120,"validation":"exact_active_choice","classification":"business","crm_destination":"Field_Team_Size_Band","webhook_key":"fieldTeamSizeBand","alias_reference":"private_provider_alias:fieldTeamSizeBand","choices_reference":"fresh_private_forms_and_crm_parity_readback","applicable_channels":["public","crm_assisted"]},
-        {"key":"additionalNotes","form_component":"Additional Notes","type":"multiline_text","required":false,"maximum_length":4000,"validation":"trimmed_control_free_text","classification":"personal","crm_destination":"Free_Test_Request_Notes","webhook_key":"additionalNotes","alias_reference":"private_provider_alias:additionalNotes","applicable_channels":["public","crm_assisted"]},
+        {"key":"additionalNotes","form_component":"Additional Notes","type":"multiline_text","required":false,"maximum_length":2000,"validation":"trimmed_control_free_text","classification":"personal","crm_destination":"Free_Test_Request_Notes","webhook_key":"additionalNotes","alias_reference":"private_provider_alias:additionalNotes","applicable_channels":["public","crm_assisted"]},
         {"key":"leadSource","form_component":"Lead Source","type":"choice","required":false,"maximum_length":100,"validation":"exact_active_choice","classification":"attribution","crm_destination":"Lead_Source","webhook_key":"leadSource","alias_reference":"private_provider_alias:leadSource","choices_reference":"fresh_private_forms_and_crm_parity_readback","applicable_channels":["public","crm_assisted"],"channel_authority":{"public":"trusted native-writer input configured outside respondent authority","crm_assisted":"browser value ignored; server-owned trusted constant"}},
         {"key":"sourcePage","form_component":"Source Page","type":"text","required":false,"maximum_length":200,"validation":"trimmed_control_free_text","classification":"attribution","crm_destination":"Source_Page","webhook_key":"sourcePage","alias_reference":"private_provider_alias:sourcePage","applicable_channels":["public","crm_assisted"],"channel_authority":{"public":"trusted native-writer input configured outside respondent authority","crm_assisted":"browser value ignored; server-owned trusted constant"}},
         {"key":"utmSource","form_component":"UTM Source","type":"text","required":false,"maximum_length":255,"validation":"trimmed_control_free_text","classification":"attribution","crm_destination":"UTM_Source","webhook_key":"utmSource","alias_reference":"private_provider_alias:utmSource","applicable_channels":["public","crm_assisted"]},
@@ -92,6 +92,7 @@
           "field_entry_uniqueness_policy": "preserve_existing_provider_settings",
           "sanitized_live_baseline": {
             "observed_date": "2026-09-04",
+            "status": "historical_not_current_acceptance",
             "observed_field_count": 34,
             "field_alias_row_count": 1,
             "required_visible_field_marker_count": 11,
@@ -133,13 +134,7 @@
             "sharing": "public",
             "embed_available": true,
             "embed_modes_available": ["iframe", "JavaScript"],
-            "crm_module": "Leads",
-            "crm_layout": "Standard",
-            "native_crm_writer": true,
-            "crm_automation_and_process_management": true,
-            "upsert_enabled": true,
-            "upsert_preference_order": ["Intake Submission ID", "Contact Email"],
-            "blank_overwrite": false,
+            "crm_integration_reference": "crm_integration.historical_live_readback",
             "submission_webhook_key_count": 25,
             "email_notifications": false,
             "sms_notifications": false,
@@ -196,6 +191,8 @@
         }
       },
       "crm_integration": {
+        "intent_status": "legacy_intent_not_approved_for_public_acceptance",
+        "public_acceptance": "held_pending_safe_writer_design_and_runtime_acceptance",
         "module": "Leads",
         "operation": "upsert",
         "deduplication_order": ["Intake_Submission_ID", "Email"],
@@ -205,6 +202,26 @@
         "entry_offer_crm_display_value": "7-Day Revenue Leak Test",
         "entry_offer_customer_label": "Free Revenue Leak Test",
         "live_readback": {
+          "observed_at": "2026-10-08T21:43:00Z",
+          "mode": "read_only_no_save",
+          "module": "Leads",
+          "layout": "Standard",
+          "operation": "new_record",
+          "upsert_enabled": false,
+          "upsert_preference_order": null,
+          "blank_overwrite": null,
+          "hidden_controls": ["upsert_preference_order", "blank_overwrite"],
+          "crm_automation_and_process_management_enabled": true,
+          "observed_mapping_count": 30,
+          "mappings_match_historical_readback": true,
+          "intake_submission_id_source": "native_RandomId",
+          "public_sharing_freshly_verified": false,
+          "captcha_freshly_verified": false,
+          "integration_write_or_test_performed": false,
+          "status": "new_record_upsert_disabled_match_and_blank_policy_unknown"
+        },
+        "historical_live_readback": {
+          "observed_date": "2026-08-28",
           "configured": true,
           "expected_organization_matched_privately": true,
           "module": "Leads",
@@ -268,13 +285,13 @@
           "live_generation_owner": "Zoho Forms",
           "live_generation_mechanism": "non-respondent provider-generated alphanumeric identifier; length 10; repetition restriction enabled",
           "required_invariants": [
-            "generated by an approved non-respondent source before native CRM upsert",
+            "generated by an approved non-respondent source before native CRM write",
             "immutable and not respondent-editable",
             "stable across an exact safe provider retry or re-push",
-            "non-blank and unique before the Email fallback is evaluated"
+            "non-blank and unique; Email alone must not select another company's identity or consent"
           ],
           "required_private_readback": [
-            "fresh exact CRM mapping and first-position upsert-key readback immediately before cutover",
+            "fresh exact CRM mapping, operation, Upsert, match-order, and blank-policy readback against a separately approved safe public writer contract immediately before cutover",
             "synthetic retry and re-push behavior without duplicate Lead creation"
           ],
           "live_change_blocked": true
@@ -455,17 +472,19 @@
         "primary": "Intake_Submission_ID",
         "primary_semantics": "canonical immutable submission idempotency key",
         "fallback": "Email",
-        "fallback_semantics": "case-insensitive secondary match only after no primary match",
+        "fallback_semantics": "legacy unapproved intent: case-insensitive secondary match only after no primary match; Email alone does not prove Company, journey identity, or consent",
+        "native_intake_id_only_upsert_supported": null,
         "fallback_never_replaces_generated_primary_identity": true,
         "blank_overwrite": false,
         "workflow_trigger": true,
         "task_owner": "one CRM workflow action",
         "task_state_for_free_test_journey_core_v1": "preserved_nonblocking",
         "task_required_for_current_acceptance": false,
-        "live_order_observed": ["Intake_Submission_ID", "Email"],
+        "live_observed_at": "2026-10-08T21:43:00Z",
+        "live_order_observed": null,
         "primary_generated_before_upsert_proven": false,
         "retry_duplicate_prevention_proven": false,
-        "live_status": "upsert_order_observed_primary_generation_and_retry_safety_unproven"
+        "live_status": "new_record_upsert_disabled_match_and_blank_policy_unknown"
       },
       "assisted_prefill": {
         "enabled": false,
@@ -571,8 +590,8 @@
         "submission_lanes": {
           "public": {
             "token_required": false,
-            "writer": "existing native CRM upsert",
-            "deduplication_order": ["Intake_Submission_ID", "Email"],
+            "writer": "existing native CRM integration",
+            "crm_contract_reference": "crm_integration",
             "native_crm_integration_condition": "may run only when prefillHandle, prefillId, and configurationRevision are all blank"
           },
           "assisted": {
@@ -595,7 +614,7 @@
         "status": "source_complete_install_and_synthetic_acceptance_pending"
       },
       "required_behavior": [
-        "immutable intake-submission identity is supplied before CRM upsert",
+        "immutable intake-submission identity is supplied before CRM write",
         "contact consent, consent version, and consent time are retained",
         "source and UTM attribution are retained",
         "supported failed-integration recovery preserves the original entry and reconciles one intended CRM result without duplicate effects",

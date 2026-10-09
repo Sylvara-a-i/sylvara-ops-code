@@ -411,7 +411,7 @@ this table is the sanitized operating view, not a new release contract.
 
 | Gate | Current evidence and revision | Remaining action | Cost class | Approval needed | Status |
 | --- | --- | --- | --- | --- | --- |
-| G1 Public/assisted entry and native relationships | Accepted assisted Forms/conversion retained. September 24–25 selected same-entry native recovery, new-business conversion/lineage and delayed duplicate-email non-overwrite facets retained; contained existing-relationship alternative accepted | Route A: iPad handoff and no scheduling dependency. Route B: existing website scheduling, authoritative booking/calendar/CRM correlation and retry behavior. Preserve unresolved public identity/task-effect subchecks | Read-only/local preparation now; execution allowance must be confirmed | Separate exact route/device/appointment effects allocation; no replay of accepted entries or consumed canaries | Partial; both mandatory route subchecks remain explicit; existing public hold retained |
+| G1 Public/assisted entry and native relationships | Accepted assisted Forms/conversion retained. September 24–25 selected same-entry native recovery, new-business conversion/lineage and delayed duplicate-email non-overwrite facets retained; contained existing-relationship alternative accepted | Route A: iPad handoff and no scheduling dependency. Route B: reconcile the dated native writer settings and unknown controls below; existing website scheduling, authoritative booking/calendar/CRM correlation and retry behavior. Preserve unresolved public identity/task-effect subchecks | Read-only/local preparation now; execution allowance must be confirmed | Separate exact route/device/appointment effects allocation; no replay of accepted entries or consumed canaries | Partial; both mandatory route subchecks remain explicit; existing public hold retained |
 | G2 Authenticated configuration review/staging | `20bf11c` controller installed; all 246 downloaded entries verified. Prior staging retained; approved immutable transition and separate internal approval completed with independent storage/CRM readback. Original hold restored; Scheduled/Approved, zero calls, no activation/start/expiry | Preserve exact receipts and configuration. Do not repeat staging or approval for a documentation or utility revision | Consumed execution used confirmed Development/included CRM allowance | Completed block consumed; no automatic replay | Passed for the accepted assisted lineage at `20bf11c` |
 | G3 Coverage and restoration preparation | After-hours fixtures; new owner-attested overflow/combined snapshot contract | Actual originating-provider setting/unit/evidence and later execution binding; preserve original handling | Local preparation only | Owner evidence; separate provider phase for live behavior | Preparation only; overflow/combined execution held |
 | G4 Call-to-owner handoff | H1–H10 source at `c28affd`; Gabriel owns monitoring of the privately approved QA mailbox; separate dry-run/acceptance/delivery meanings | Actual alert adapter/inbox proof and bounded recovery readback in first controlled-call path | No real sending now | Exact owner-only email and controlled-call runtime allocation | Source complete; Development 0/10 |
@@ -512,11 +512,28 @@ redelivery experiment. Credit the later selected recovery receipt and contained
 existing-relationship decision within their recorded limits; they do not pass
 unexercised duplicate-intake execution or the Route B appointment handoff.
 
-The following historical configuration analysis explains retained containment;
-it is not a fresh execution allocation or a replacement for the later receipts.
+The **2026-10-08 21:43 UTC read-only audit** observed the website Form 1 native
+integration as Leads / Standard, New Record, Upsert unchecked, and Automation &
+Process Management checked. All 30 mappings matched source; `Intake_Submission_ID`
+mapped to native `RandomId`. Match-order and blank-overwrite controls were hidden
+and remain **Unknown**. Public sharing and CAPTCHA were untouched and not freshly
+reverified. This observation neither explains why Upsert is unchecked nor approves
+that setting or its runtime behavior.
 
-The current [Forms Upsert order](https://help.zoho.com/portal/en/kb/forms/integrations/zoho-crm/articles/adding-a-new-record-to-a-zoho-crm-module)
-is sequential, not a joint identity condition: generated intake ID, then Email.
+The intended public contract still requires immutable intake/journey identity,
+company isolation, preserved consent and safe duplicate/retry handling. Validate
+operation, Upsert, match order and blank policy explicitly from fresh readback;
+hidden, missing or unknown controls cannot pass public acceptance. The public
+writer design and unique-field behavior remain unresolved. Keep public intake
+held until the supported design, exact saved state and controlled acceptance are
+established; retain the accepted assisted lineage and partial G1 status.
+
+The following historical configuration analysis explains retained containment;
+it is not current-setting evidence, a fresh execution allocation or a replacement
+for the retained receipts.
+
+The previously documented [Forms Upsert order](https://help.zoho.com/portal/en/kb/forms/integrations/zoho-crm/articles/adding-a-new-record-to-a-zoho-crm-module)
+was sequential, not a joint identity condition: generated intake ID, then Email.
 A new ID can miss while Email selects an existing Lead and updates nonblank
 mapped Company, intake identity and consent/request fields. Blank overwrite No
 does not prevent that. This is a documented configuration-level isolation risk;
@@ -524,7 +541,7 @@ no destructive tenant experiment or observed corruption is claimed. The
 manifest's immutable-identity invariant remains a requirement, not proof that
 this fallback enforces it.
 
-The preferred correction is intake-ID-only native matching, retaining Email
+The proposed correction was intake-ID-only native matching, retaining Email
 mapping, actual CRM unique fields, blank policy and writer boundaries. The owner
 approved that exact change, but the fresh native dialog exposed only ordering,
 not removal/deselection of the Email key. The dialog was cancelled without a
@@ -535,12 +552,12 @@ an Upsert match candidate; only its order can change. Intake-ID-only matching is
 therefore unavailable under this native mode while Email remains unique. The
 answer describes Upsert-off New Record as non-overwriting but also says it may
 create duplicates, without explaining enforcement of the verified unique fields.
-Do not treat that as a safe duplicate-rejection contract. Upsert-off is **not
-applied or approved**; resolve its unique-field behavior before allocating the
-configuration change or a fixture. Any supported alternative still needs exact
-saved-state readback and controlled acceptance before public use.
-Current metadata marks Leads Email and Intake_Submission_ID, and Contacts Email,
-case-insensitive unique. Nevertheless, the actual Forms adapter outcome still
+Do not treat that as a safe duplicate-rejection contract. The later October 8
+audit observed Upsert-off; it did not resolve unique-field behavior or establish
+approval for a configuration change or fixture. Any supported alternative still
+needs exact saved-state readback and controlled acceptance before public use.
+Metadata recorded in that investigation marked Leads Email and
+Intake_Submission_ID, and Contacts Email, case-insensitive unique. Nevertheless, the actual Forms adapter outcome still
 requires readback: [CRM Upsert](https://www.zoho.com/crm/developer/docs/api/v8/upsert-records.html)
 distinguishes match keys from unique-field rejection. Do not assume protection
 from a system duplicate field or conversion preference alone. Do not change

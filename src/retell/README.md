@@ -79,3 +79,18 @@ or unclear evidence remains review-needed. Safety, consent withdrawal and sensit
 data minimization take precedence. The complete original export and proposed
 callback-only derivative remain private; no live provider access, import, call,
 simulation or publication is evidenced by these offline checks.
+
+The acceptance callback fixtures declare exact boolean confirmation and matching
+callback availability for extraction and notifications. The gateway's ordinary
+`test:unit` suite runs `callback-confirmation-contract.test.js`, which feeds these
+fixtures through local extraction and notification rendering and rejects missing,
+null, false, or malformed confirmation for an available callback. This proves the
+backend contract against synthetic extraction values, not provider extraction or
+notification delivery.
+
+The shadow classifier uses the canonical `request-intent-contract.json` to keep
+customer relationship separate from request intent. An existing customer can
+request new urgent work. Missing historical intent remains `unknown`, the supplied
+outcome is preserved, and a positive opportunity assertion is withheld as null;
+contradictory follow-up and positive opportunity evidence is held. These offline
+checks grant no new runtime capability or provider authorization.

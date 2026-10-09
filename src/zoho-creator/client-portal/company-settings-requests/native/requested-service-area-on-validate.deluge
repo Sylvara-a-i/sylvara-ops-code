@@ -1,0 +1,40 @@
+// Owner: Zoho Creator / requested service-area text validation only.
+// Target: Company_Settings_Requests; Created or Edited / On Validate, each submit.
+// Input: Requested_Service_Area, existing required MULTI_LINE field (TEXT/null).
+// No connections, external calls, logs, record actions, or durable operation key.
+// Repeated normalization is idempotent; this does not deduplicate submissions.
+// Source-only candidate: no dry-run switch; installation is separately authorized.
+// Containment: disable only this workflow; restore captured prestate; do not alter data.
+// Manual setup, native evidence, limits, and smoke tests: ../NATIVE-VALIDATION.md.
+// Relies on field typing; Deluge isText() rejects numeric strings such as 123.
+if(input.Requested_Service_Area == null)
+{
+    alert "Enter a requested service area.";
+    cancel submit;
+}
+else
+{
+    raw = input.Requested_Service_Area;
+    bs = hexToText("5c");
+    cr = hexToText("0d");
+    lf = hexToText("0a");
+    ws = "[" + bs + "u0009-" + bs + "u000d" + bs + "u0020" + bs + "u00a0" + bs + "u1680" + bs + "u2000-" + bs + "u200a" + bs + "u2028" + bs + "u2029" + bs + "u202f" + bs + "u205f" + bs + "u3000" + bs + "ufeff]";
+    bad = "[" + bs + "u0000-" + bs + "u0008" + bs + "u000b" + bs + "u000c" + bs + "u000e-" + bs + "u001f" + bs + "u007f]";
+    any_char = "[" + bs + "s" + bs + "S]";
+    normalized = raw.replaceAll(cr + lf,lf,true);
+    normalized = normalized.replaceAll(cr,lf,true);
+    normalized = normalized.replaceAll("^" + ws + "+","",false);
+    normalized = normalized.replaceAll(ws + "+" + bs + "z","",false);
+    without_controls = normalized.replaceAll(bad,"",false);
+    marker_count = normalized.replaceAll(any_char,"x",false).length();
+    valid = normalized != "" && without_controls == normalized && marker_count <= 2000;
+    if(!valid)
+    {
+        alert "Enter a requested service area of up to 2,000 characters without unsupported control characters.";
+        cancel submit;
+    }
+    else
+    {
+        input.Requested_Service_Area = normalized;
+    }
+}

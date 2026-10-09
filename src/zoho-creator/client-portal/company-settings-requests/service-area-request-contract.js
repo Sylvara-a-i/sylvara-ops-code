@@ -17,6 +17,16 @@ function assertRecord(value, keys) {
   }
 }
 
+function assertDataArray(value) {
+  if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype ||
+      Reflect.ownKeys(value).length !== value.length + 1) deny();
+  // Validate every index before iteration can invoke an accessor or custom iterator.
+  for (let i = 0; i < value.length; i++) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, String(i));
+    if (!descriptor || !Object.hasOwn(descriptor, "value")) deny();
+  }
+}
+
 function assertIdentifier(value) {
   if (typeof value !== "string" || !value || value !== value.trim() ||
       /[\u0000-\u0020\u007f]/.test(value)) deny();
@@ -34,15 +44,16 @@ function validateRequestedServiceArea(value) {
 
 // Structural assertions only. The adapter must independently authenticate and
 // verify every fact; a caller-created object cannot establish authorization.
-function assertVerifiedCompanyContext(context, accountSelector) {
+function assertCompanyIdentity(context, accountSelector) {
   assertIdentifier(accountSelector);
-  assertRecord(context, ["principalId", "contact", "companyMappings", "previousServiceArea", "auditActorId"]);
+  assertRecord(context, ["principalId", "contact", "companyMappings", "auditActorId"]);
   assertIdentifier(context.principalId);
   assertIdentifier(context.auditActorId);
   assertRecord(context.contact, ["id", "accountId"]);
   assertIdentifier(context.contact.id);
   assertIdentifier(context.contact.accountId);
-  if (!Array.isArray(context.companyMappings) || context.companyMappings.length === 0) deny();
+  assertDataArray(context.companyMappings);
+  if (context.companyMappings.length === 0) deny();
   const matches = [];
   for (const mapping of context.companyMappings) {
     assertRecord(mapping, ["creatorAccountId", "crmAccountId", "active"]);
@@ -53,9 +64,18 @@ function assertVerifiedCompanyContext(context, accountSelector) {
   }
   if (matches.length !== 1 || !matches[0].active ||
       matches[0].crmAccountId !== context.contact.accountId) deny();
+  return matches[0].creatorAccountId;
+}
+
+function assertVerifiedCompanyContext(context, accountSelector) {
+  assertRecord(context, ["principalId", "contact", "companyMappings", "previousServiceArea", "auditActorId"]);
+  const account = assertCompanyIdentity({
+    principalId: context.principalId, contact: context.contact,
+    companyMappings: context.companyMappings, auditActorId: context.auditActorId,
+  }, accountSelector);
   // Validate availability without normalizing the authoritative before-image.
   validateRequestedServiceArea(context.previousServiceArea);
-  return matches[0].creatorAccountId;
+  return account;
 }
 
 function preparePendingServiceAreaRequest(input, verifiedContext) {
@@ -73,5 +93,6 @@ function preparePendingServiceAreaRequest(input, verifiedContext) {
 module.exports = {
   validateRequestedServiceArea,
   assertVerifiedCompanyContext,
+  assertCompanyIdentity,
   preparePendingServiceAreaRequest,
 };

@@ -30,6 +30,42 @@ The historical `288a93c` convergence evidence remains preserved in `free-revenue
 - The two CRM receipt datetime fields use whole-second `+00:00` values, following the [Zoho CRM v8 field contract](https://www.zoho.com/crm/developer/docs/api/v8/insert-records.html) verified on 2026-09-04. Readback compares only these two typed fields as valid timestamps for the same instant; malformed dates fail closed. The stored claim timestamp and fingerprint retain their original values, and the raw CRM `Modified_Time` concurrency fence remains exact.
 - The public lane remains owned by the existing native Forms upsert and cannot manufacture an assisted binding with hidden record fields.
 
+## Form 1 length contract
+
+The 2026-10-06 CRM Leads metadata audit supplied for this correction reports
+`First_Name` 40, `Last_Name` 80, `Email` 100, `Free_Test_Request_Notes` 2000, and
+`Phone_System_Provider` 120. The executable contract and the shared public/assisted
+UI schema in [`forms-manifest.json`](../../zoho-forms/free-revenue-leak-test/forms-manifest.json)
+use those limits. The source trace found no tighter downstream cap: both ordinary
+assisted submission and recovery call `normalizeFormData` / `buildCrmPatch`, and
+`completeAssistedSubmission` sends the resulting respondent values unchanged.
+Oversized ordinary assisted input now fails with `form_data_invalid`. Both paths
+reject it before a CRM read or write or submission-claim mutation; recovery retains
+its existing generic public error response. Prefill also rejects oversized source values.
+
+This preserves existing semantics: length counts JavaScript Unicode code points,
+not UTF-16 code units, bytes, or grapheme clusters; combining marks count separately.
+Input must already be trimmed and control-free. Values are never truncated or
+Unicode-normalized; blank optional values remain omitted and required blanks fail.
+Metadata length alone does not establish CRM or Forms Unicode counting or email
+acceptance. Before enabling a separately approved release, verify exact-limit and
+over-limit ASCII, supplementary-character and combining-sequence cases against
+both providers, including non-destructive UI rejection and unchanged CRM readback.
+
+The provider picklist's 120 limit is a string-length guard, **not enum validation**.
+The desired UI schema still requires `exact_active_choice` and fresh private Forms/
+CRM choice parity. This patch neither invents an active-choice list nor activates
+legacy options; server-side membership enforcement remains a separate gap pending
+an authoritative selection contract.
+
+This is a source correction, not an installed-form or runtime fix. The public lane
+uses native Forms CRM upsert and bypasses Catalyst form-data validation. Both Forms
+surfaces still require separately approved builder-limit/choice readback and
+acceptance; the assisted runtime needs a reviewed immutable artifact installation.
+Do not replay an older oversized submission under a new revision: preserve its
+entry and claim for reconciliation. Source rollback reverts this change; it does
+not change installed Forms or Catalyst behavior or authorize restoring wider limits.
+
 ## Development setup
 
 Install only from the final immutable release. The complete variable-name and classification registry is [`config/variables.json`](config/variables.json); values remain private Catalyst configuration.
@@ -45,9 +81,41 @@ A Forms thank-you page or redirect proves only that Forms captured the entry. Af
 
 Dependency diagnostics retain only fixed writer-credential, writer-organization, CRM-write, and CRM-readback stages, allowlisted provider codes, and actual HTTP status. Provider messages, arguments, bodies, credentials, and stacks never enter logs. Logging cannot change write/retry behavior. The CRM client's read-only writer preflight performs only credential validation and the existing organization GET; it adds no route or recovery authority, and local CLI behavior does not prove deployed runtime behavior.
 
+## Source-bound phone representation
+
+The immutable code profile `us-national-e164-v1` emits ten national digits for
+assisted native US controls and canonical `+1` values for new phone writes.
+`SOURCE_REVISION` remains the exact artifact/session binding; native intake or
+consent version labels do not replace that revision. The shared policy, native
+public-writer boundary, Form2 raw-fingerprint preservation, migration tests and
+rollout gates are documented in
+[`phone-policy/README.md`](../../zoho-forms/free-revenue-leak-test/phone-policy/README.md).
+No historical CRM/Billing/Books record or routing identity is rewritten.
+
 ### Separately approved one-claim recovery
 
 `FORM1_RECOVERY_MANIFEST_JSON` is absent or empty during ordinary operation. A separately approved Development recovery may set one compact, exact JSON object with eight fields: `schemaVersion` (1), `mode` (`inspect` or `complete`), `originalSourceRevision`, `claimBindingSha256`, `assistedConstantsSha256`, `originalSessionVersion`, `originalUpdatedAt`, and `originalLastOutcome`. The initial outcome is `submission_started`; a separately authorized follow-on may instead pin an exact valid reservation marker from a different predecessor artifact. Generate the digests with the recovery module's hash helpers over the complete normalized approved prestate and the five original server-owned constants. Keep the packet and all values outside Git and logs; preserve the original pepper until reconciliation. The deployed artifact retains its honest new source stamp.
+
+Schema 1 remains the exact eight-field legacy protocol and keeps its original
+raw normalization and packet bytes. Canonical-profile recovery requires schema 2:
+add `phonePolicy` (`us-national-e164-v1`) and `phonePolicySourceRevision` (exactly
+`originalSourceRevision`) to those fields. No other profile is accepted. The
+original revision/profile pair must also appear in the reviewed immutable
+`lib/recovery-phone-policy-revisions.js` registry with exact SHA-256 hashes of the
+original `phone-contract.js`, `us-phone-policy.js`, and `handler.js` Git blobs. The manifest alone cannot
+establish provenance, and phone formatting is never used to select a policy.
+
+The registry initially has no canonical predecessors because this candidate has
+not published any. A failed future canonical claim still requires a distinct,
+reviewed recovery artifact, as before. Prepare its sanitized provenance candidate
+with `node tools/verify-recovery-phone-policy.js --prepare <original-commit>` from
+this component; independently review the original artifact/profile and add only
+that exact entry to the new recovery source. Both release builders and the
+repository verifier run the source-provenance check. Preserve the original raw
+entry, signed/private packet, claim, pepper and timestamps; never edit them to fit
+another policy. A synthetic fixture proves schema2 mechanics, not authority to
+recover an unregistered real predecessor. Unknown, contradictory or unregistered
+bindings fail before dependency access.
 
 Recovery uses only the existing authenticated Submission endpoint. Other assisted access and launch paths temporarily fail before SDK access. Public unbound acknowledgments remain non-writing; the public form, its native CRM integration, and its URL are unchanged. Any other claim, changed payload or consent, changed form/organization/actor, or changed original fingerprint fails closed.
 
@@ -101,3 +169,9 @@ node src/zoho-catalyst/revenue-leak-test-request-form/tools/build-single-file.js
 ```
 
 The command fails closed for dirty or mismatched revisions, linked or special Git entries, dependency escape, linked output directories, in-repository output, or an existing destination. Review and read back the resulting artifact before any separately authorized Development upload. The committed checkout keeps the unstamped sentinel and remains unchanged.
+
+Canonical predecessor verification also requires byte-identical original/current
+phone adapter and core modules. Same-profile drift fails closed and needs a new
+profile or an explicitly retained implementation. Provenance Git reads use the
+builders' sanitized environment with replacement objects disabled; inherited Git
+configuration cannot substitute content for a pinned revision.

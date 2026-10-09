@@ -1,20 +1,20 @@
 "use strict";
 
 const FIELD_SPECS = Object.freeze([
-  ["firstName", "First_Name", 100, true],
-  ["lastName", "Last_Name", 100, true],
+  ["firstName", "First_Name", 40, true],
+  ["lastName", "Last_Name", 80, true],
   ["company", "Company", 200, true],
   ["decisionMakerRole", "Decision_Maker_Role", 120, true],
   ["jobTitle", "Designation", 100, false],
-  ["email", "Email", 254, true],
+  ["email", "Email", 100, true],
   ["mobilePhone", "Mobile", 30, true],
   ["companyPhone", "Main_Business_Phone", 30, true],
   ["currentCallHandling", "Current_Call_Handling", 120, true],
   ["preferredTestRoute", "Requested_Test_Route", 120, true],
-  ["phoneSystemProvider", "Phone_System_Provider", 150, false],
+  ["phoneSystemProvider", "Phone_System_Provider", 120, false],
   ["primaryServiceArea", "Primary_Service_Area", 2000, false],
   ["fieldTeamSizeBand", "Field_Team_Size_Band", 120, false],
-  ["additionalNotes", "Free_Test_Request_Notes", 4000, false],
+  ["additionalNotes", "Free_Test_Request_Notes", 2000, false],
   ["leadSource", "Lead_Source", 100, false],
   ["sourcePage", "Source_Page", 200, false],
   ["utmSource", "UTM_Source", 255, false],
@@ -49,6 +49,8 @@ function text(value, key, maximum, required) {
     if (required) throw new FormContractError(`${key} is required`);
     return null;
   }
+  // Preserve the existing code-point limit and reject untrimmed input rather
+  // than rewriting it. Provider Unicode counting needs separate acceptance.
   if (typeof value !== "string" || value !== value.trim() ||
       [...value].length > maximum || /[\u0000-\u001f\u007f]/.test(value)) {
     throw new FormContractError(`${key} is invalid`);

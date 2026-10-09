@@ -8,6 +8,23 @@ Sequence: admission insert/read; empty root precheck; first root insert/read; on
 
 A successful result is `storage_sequential_duplicate_rejected`, with a verified duplicate response, immutable single-row readback, seven requests and `concurrencyProven:false`, `qualificationAuthority:false`, `deliveryAuthority:false`. It proves sequential rejection only. It cannot authorize generation, upload, CRM projection, sending or concurrent ownership. Failure holds preserve all rows and consumption evidence.
 
-Only schema 5 enables additional provider diagnostics. Numeric HTTP status is bounded to 100–599. SDK rejection classification uses only an own data-property `code`: exact `DUPLICATE_VALUE`, exact `INVALID_DATA`, `other` or `unknown`. No messages, values, headers, stacks or arbitrary string parsing are logged. Separate last insert status/code survives later readback. Missing status remains absent rather than borrowing a prior request's status. Existing schema-3/4 diagnostic projection is unchanged.
+Only schema 5 enables additional provider diagnostics. Numeric HTTP status is bounded to 100-599. SDK rejection classification uses only an own data-property `code`: exact `DUPLICATE_VALUE`, exact `INVALID_DATA`, `other` or `unknown`. No messages, values, headers, stacks or arbitrary string parsing are logged. Separate last insert status/code survives later readback. Missing status remains absent rather than borrowing a prior request's status. Existing schema-3/4 provider diagnostics remain unchanged.
 
 This is an offline candidate. Independent review, canonical verification, exact candidate extraction/install parity, fresh protected bindings, approved invocation budget/cost/expiry and parent coordination are prerequisites. No live preparation claim, deployment or invocation is authorized by this document. Preserve consumed operations and installed rollback archives. Containment is to disable the diagnostic admission; package rollback does not remove retained rows or establish uniqueness.
+# Closed response-decode observations
+
+When the existing storage-provider diagnostic switch is enabled, the transport records only closed categories for UTF-8/JSON decoding, root and `data` types, array cardinality, envelope status, content-type class, and deadline state. It never records response bytes, arbitrary header values, row contents, or thrown messages. `requestApiVersion` identifies the installed SDK's fixed v1 request contract; it is not evidence of a response API version.
+
+The immutable `firstDecodeFailure` snapshot retains the first decoding failure and its operation even when reconciliation later receives a valid response. Current-response fields remain separate. Only snapshots issued by the existing tracker/error boundary are eligible for failure logging.
+
+These observations do not change response acceptance, request budgets, cancellation, retries, or execution authority. The expected array envelope follows the official [Catalyst REST reference](https://docs.catalyst.zoho.com/en/api/oauth2/generate-grant-token/) and installed SDK contract; documentation cannot establish the shape of an unread live response. A held or ambiguous attempt remains held and must not be retried without its own authority.
+
+# Exact INT version representation
+
+Independent Development readback observed canonical decimal strings for the INT-schema `SchemaVersion` and `RD_REPORT_VERSION` columns. The original insert acknowledgement representation was not retained, so this observation does not prove an earlier acknowledgement failure's cause or qualify storage.
+
+For these two columns only, acknowledgement and independent readback must equal the submitted positive int32 expectation, either as that exact number or as `String(expected)`. Whitespace, signs, leading zeros, decimal/exponent strings, differing values and noninteger or out-of-range values are rejected. Other columns remain strictly equal. The comparison never rewrites the acknowledgement, stored row, payload bytes or hashes.
+
+The existing successor decoder uses broader numeric coercion for schema projection; this contract deliberately does not adopt it. Parsed JSON numbers retain their numeric value rather than raw token spelling, so numeric `2.0` and `2e0` are indistinguishable from numeric `2`; string forms remain rejected. This compatibility preserves semantic version equality without granting execution, retry, concurrency, qualification or delivery authority.
+
+The immutable first validation failure records only closed location/reason enums for projection, row/creator and field checks. No values, arbitrary field names or identifiers enter this diagnostic.

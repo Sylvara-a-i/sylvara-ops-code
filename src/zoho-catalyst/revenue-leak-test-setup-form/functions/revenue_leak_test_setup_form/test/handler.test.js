@@ -433,7 +433,7 @@ function initialRecords() {
       Title: "Owner",
       Decision_Authority: "Authorized Signer",
       Email: "casey@example.invalid",
-      Mobile: "+1 (555) 010-2000",
+      Mobile: "+1 (202) 555-0109",
     },
     account: {
       id: IDS.account,
@@ -441,7 +441,7 @@ function initialRecords() {
       Primary_Contact: { id: IDS.contact, name: "Casey Tester" },
       Account_Name: "Synthetic Plumbing",
       Legal_Business_Name: "Synthetic Plumbing LLC",
-      Phone: "+1 (555) 010-2100",
+      Phone: "+1 (202) 555-0110",
       Phone_System_Provider: "Synthetic PBX",
       Primary_Service_Area: "Synthetic County",
       Normal_Business_Hours: "Monday-Friday 08:00-17:00",
@@ -544,11 +544,11 @@ function validSubmission(prefillBody, overrides = {}) {
     requestedStartDate: "2026-08-20",
     noAnswerDelay: "5 Rings",
     forwardingAdministratorName: "Synthetic Administrator",
-    forwardingAdministratorMobile: "555-010-2300",
+    forwardingAdministratorMobile: "202-555-0111",
     approvedFallbackDestination: "On-Call Mobile",
-    approvedFallbackNumber: "555-010-2400",
+    approvedFallbackNumber: "202-555-0112",
     rollbackContactName: "Synthetic Rollback Contact",
-    rollbackContactMobile: "555-010-2500",
+    rollbackContactMobile: "202-555-0113",
     urgentCallHandling: "Alert + Capture Callback",
     existingCustomerCallHandling: "Capture Callback Only",
     alertRecipientName: "Synthetic Alert Recipient",
@@ -2659,7 +2659,7 @@ test("reports an independently verified CRM uniqueness replay as a duplicate suc
 test("email and mobile changes fail through the contract before consume or CRM mutation", async () => {
   for (const [submissionId, change] of [
     ["10002", { businessEmail: "different@example.invalid" }],
-    ["10003", { directMobileNumber: "555-010-2999" }],
+    ["10003", { directMobileNumber: "202-555-0199" }],
   ]) {
     const selected = fixture();
     await issue(selected);
@@ -3383,4 +3383,80 @@ test("ambiguous CRM errors reconcile durable state and return only a redacted er
   assert.equal(selected.events.includes("workflow.submission.reconciliation"), true);
   assert.equal(selected.events.includes("workflow.prefill.reconciliation"), true);
   assert.equal(selected.events.includes("session.reconciliation"), true);
+});
+
+test("national prefill profile and canonical write retain raw Form2 replay and locked mobile", async () => {
+  const selected = fixture(); const mobileBefore = selected.records.contact.Mobile;
+  await issue(selected); const prepared = await prefill(selected);
+  assert.match(prepared.body.directMobileNumber, /^[0-9]{10}$/);
+  assert.match(prepared.body.mainBusinessNumber, /^[0-9]{10}$/);
+  assert.equal(prepared.body.mainBusinessNumber.length, 10);
+  const body = validSubmission(prepared.body, { mainBusinessNumber: "202-555-0110" });
+  assert.equal((await submit(selected, body)).status, 200);
+  assert.equal(selected.records.account.Phone, "+12025550110");
+  assert.equal(selected.records.deal.Forwarding_Administrator_Mobile, "+12025550111");
+  assert.equal(selected.records.deal.Approved_Fallback_Number, "+12025550112");
+  assert.equal(selected.records.deal.Rollback_Contact_Mobile, "+12025550113");
+  assert.equal(selected.records.contact.Mobile, mobileBefore);
+  assert.equal((await submit(selected, body)).body.duplicate, true);
+  const receipt = structuredClone(selected.receipt);
+  const changed = await submit(selected, { ...body, mainBusinessNumber: "+12025550110" });
+  assert.equal(changed.status, 409);
+  assert.deepEqual(selected.receipt, receipt);
+  assert.equal(selected.events.filter(x => x === "crm.composite").length, 1);
+});
+
+test("old unfinished phone-profile revision rejects without claim or record mutation", async () => {
+  const selected = fixture(); await issue(selected); const prepared = await prefill(selected);
+  const body = validSubmission(prepared.body);
+  const before = structuredClone({ session: selected.session, prefill: selected.prefill,
+    receipt: selected.receipt, records: selected.records });
+  const dependencies = { ...selected.dependencies,
+    config: { ...selected.dependencies.config, sourceRevision: "b".repeat(40) } };
+  selected.events.length = 0;
+  const result = await handleForm2Request(createRequest(dependencies.config.submissionPath,
+    body, dependencies.config.submissionHeaderSecret), dependencies);
+  assert.equal(result.status, 409);
+  assert.deepEqual({ session: selected.session, prefill: selected.prefill,
+    receipt: selected.receipt, records: selected.records }, before);
+  assert.equal(selected.events.includes("crm.composite"), false);
+  assert.equal(selected.events.includes("workflow.submission.claim"), false);
+});
+
+test("genuine pre-policy succeeded receipt with invalid current NANP still replays without mutation", async () => {
+  // Symbolic source IDs avoid numeric identifiers in the public repository.
+  // Restore only these exact synthetic constants, preserving the genuine legacy
+  // runtime record/receipt bytes and every previously calculated fingerprint.
+  const syntheticIds = {
+    SYNTHETIC_CONTACT_ID: `${"9".repeat(17)}1`,
+    SYNTHETIC_ACCOUNT_ID: `${"9".repeat(17)}2`,
+    SYNTHETIC_DEAL_ID: `${"9".repeat(17)}3`,
+  };
+  const historical = JSON.parse(JSON.stringify(
+    require("./fixtures/legacy-phone-succeeded-receipt.json"),
+  ), (_key, value) => typeof value === "string" && Object.hasOwn(syntheticIds, value)
+    ? syntheticIds[value] : value);
+  assert.equal(historical.provenance.synthetic, true);
+  const selected = fixture(); await issue(selected); const prepared = await prefill(selected);
+  assert.equal((await submit(selected, validSubmission(prepared.body))).status, 200);
+  for (const key of ["contact", "account", "deal"]) {
+    for (const old of Object.keys(selected.records[key])) delete selected.records[key][old];
+    Object.assign(selected.records[key], structuredClone(historical.records[key]));
+  }
+  for (const key of ["session", "prefill", "receipt"]) {
+    for (const old of Object.keys(selected[key])) delete selected[key][old];
+    Object.assign(selected[key], structuredClone(historical[key]));
+  }
+  const before = structuredClone({ records: selected.records, session: selected.session,
+    prefill: selected.prefill, receipt: selected.receipt });
+  const newer = { ...selected.dependencies,
+    config: { ...selected.dependencies.config, sourceRevision: "b".repeat(40) } };
+  selected.events.length = 0;
+  const result = await handleForm2Request(createRequest(newer.config.submissionPath,
+    historical.body, newer.config.submissionHeaderSecret), newer);
+  assert.equal(result.status, 200);
+  assert.equal(result.body.duplicate, true);
+  assert.deepEqual({ records: selected.records, session: selected.session,
+    prefill: selected.prefill, receipt: selected.receipt }, before);
+  assert.equal(selected.events.includes("crm.composite"), false);
 });

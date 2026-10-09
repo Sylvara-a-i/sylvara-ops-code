@@ -398,7 +398,7 @@ test('diagnostic auth timeout remains cancelled with immutable counters and no l
 test('admission projection hold reports two attempted dispatched responses without report effects',async()=>{
  const f=fixture({storageResponseTransform({path,data}){if(path.endsWith('/row'))data[0].CREATORID=null;}});try{
   let error;try{await f.make().handle(f.command,{actor:f.actor});}catch(e){error=e;}
-  assert.deepEqual(storageFailureDiagnostic(error),{lastStage:'admission_verify',lastOperation:'none',attempted:2,dispatchStarted:2,responses:2,counterOverflow:false});
+  assert.deepEqual(storageFailureDiagnostic(error),{lastStage:'admission_verify',lastOperation:'none',attempted:2,dispatchStarted:2,responses:2,counterOverflow:false,firstValidationFailure:{location:'admission_ack',reason:'creator_id'}});
   assert.equal(f.sdk.receipts.size,1);assert.equal(f.sdk.rows.size,0);assert.equal(f.sdk.requests.length,2);
  }finally{f.sdk.restore();}
 });
