@@ -1,0 +1,169 @@
+{
+  "schema_version": 1,
+  "status": "proposed-private-preparation",
+  "source_revision": "55b991b506028d1cdb39755d070557eae18918ed",
+  "scope": "Offline synthetic canonical-claim and versioned-alias foundation; no runtime integration or migration authority.",
+  "authority": {
+    "existing_rotation_contract": "free-revenue-leak-test-key-rotation-contract.json",
+    "existing_runbook": "../runbooks/free-revenue-leak-test-key-rotation.md",
+    "supersedes_existing_gates": false,
+    "publication_authorized": false,
+    "deployment_authorized": false,
+    "credential_rotation_authorized": false,
+    "live_migration_authorized": false
+  },
+  "slice": {
+    "model": "../../src/zoho-catalyst/revenue-desk-call-runtime/migration/test/support/rotation-identity-model.js",
+    "tests": "../../src/zoho-catalyst/revenue-desk-call-runtime/migration/test/rotation-identity.test.js",
+    "interface": "apply(state, expectedRevision, command) -> { state, outcome, canonicalId? }",
+    "state_boundary": "Test-only atomic snapshot. No provider transaction, authentication, signing, fingerprint migration or durable storage is implemented.",
+    "first_future_candidate": "Shadow-only canonical admission/readback at the report-guard boundary using authoritative binding; no second guard or CRM mutation. Any later writing slice requires joint operation/guard/all-reference reconciliation."
+  },
+  "lifecycles": [
+    {
+      "kind": "durable_identity",
+      "key_material": false,
+      "rule": "Persist one opaque canonical ID per tenant/environment/entity-kind/business-operation anchor. Existing HMAC-shaped IDs may remain opaque historical IDs. Allocate once with the durable unique claim; recover the winner on retry. Never derive identity from the current authentication or index key."
+    },
+    {
+      "kind": "privacy_lookup_index",
+      "key_material": true,
+      "rule": "Version HMAC-SHA-256 indexes by purpose/domain, normalization version and key ID. Bind tenant/environment and entity kind into unambiguous authenticated input framing. Resolve all accepted aliases to one common canonical anchor. Never replace keyed privacy lookups with unkeyed hashes of phone, email, Deal IDs or other guessable inputs."
+    },
+    {
+      "kind": "content_equality_and_integrity",
+      "key_material": true,
+      "rule": "Separate from identity, lookup and authentication. Bind canonical ID, scope, schema and immutable semantic payload using purpose-separated versioned protection. Classify each domain's original preimage: exact original bytes versus canonical normalized fields. Rebind only from the required authoritative preimage and exact immutable readback; semantically equivalent reserialized JSON cannot replace original bytes for a legacy raw-body fingerprint. An old digest alone cannot prove equivalence under a new key. Do not use the test model's synthetic binding marker in production."
+    },
+    {
+      "kind": "signing_and_authentication",
+      "key_material": true,
+      "rule": "Use independent purpose-scoped signing/header credentials and explicit key IDs, cryptoperiods, scope, issuance/expiry and retirement rules. Rotation does not allocate new entity/operation IDs or mutate immutable historical configurations. An alias or historical ID is never authentication."
+    },
+    {
+      "kind": "connection_grants",
+      "key_material": true,
+      "rule": "Preserve native least-privilege read/write Connections. Rotate underlying grants independently; a Connection alias is identity, not credential material."
+    }
+  ],
+  "invariants": [
+    "One durable canonical anchor arbitrates all aliases, including disjoint old-only and new-only concurrent requests; two UNIQUE alias namespaces are insufficient.",
+    "Publish canonical claim and alias attachments atomically, or use a proven durable common fence with no side effect until exact commit readback. Provider capability remains unproven.",
+    "Alias pointing to another canonical ID, duplicate historical claims, tenant/environment mismatch or payload-binding conflict fails closed; no last-write-wins merge.",
+    "Persisted operation ID and immutable binding survive retries, authentication rotation, delay and rollback. Changed paid commercial/acceptance state conflicts with the same Deal/action operation and Billing reference.",
+    "Keep tombstones and ambiguous outcomes. Never automatically resume a processing or reconciliation_required paid operation; no time-based reclaim.",
+    "No normalized source means no new equivalent index. Existing trusted canonical references may be resolved without reindexing; unresolved migration stays blocked.",
+    "Retired or compromised key material cannot authenticate fresh traffic. Old alias mappings can remain inaccessible historical evidence without retaining the old key.",
+    "Existing exact CAS, unique claims, domain separation, immutable configuration, exact readback, report sourceVersions and conflict semantics remain mandatory."
+  ],
+  "synthetic_acceptance": [
+    {
+      "id": "routine-authentication-rotation",
+      "expect": "Canonical claim and references unchanged; index and authentication lifecycles are independent."
+    },
+    {
+      "id": "sequential-alias-retry",
+      "expect": "Old/new keyed aliases return the same persisted canonical claim."
+    },
+    {
+      "id": "concurrent-disjoint-alias-claims",
+      "expect": "Same stable anchor and revision fence elect one winner; stale writer rereads the same ID."
+    },
+    {
+      "id": "conflicting-alias-targets",
+      "expect": "Whole transition rejected; neither alias nor claim partially written."
+    },
+    {
+      "id": "changed-immutable-binding",
+      "expect": "Conflict on the original operation; never create a second paid operation."
+    },
+    {
+      "id": "scope-and-domain-isolation",
+      "expect": "Tenant/environment/domain/key-version mismatches cannot resolve another scope."
+    },
+    {
+      "id": "missing-normalized-source",
+      "expect": "No digest-to-new-index fiction; explicit unresolved result, state unchanged."
+    },
+    {
+      "id": "delayed-replay-and-tombstones",
+      "expect": "Stored terminal or ambiguous state wins; no fresh claim or repeat side effect."
+    },
+    {
+      "id": "historical-opaque-id",
+      "expect": "Existing durable ID and downstream reference survive new-index attachment."
+    },
+    {
+      "id": "compromised-key-retirement",
+      "expect": "Reject fresh use and rollback revival; preserve canonical claims and tombstones."
+    },
+    {
+      "id": "trusted-source-recovery",
+      "expect": "New active alias can join the known canonical claim after independent source verification, without old-key authority."
+    },
+    {
+      "id": "malformed-input",
+      "expect": "Unknown states, keys, invalid indexes, revisions and missing evidence fail closed."
+    },
+    {
+      "id": "exact-byte-preimage-unavailable",
+      "expect": "Semantically equivalent JSON can have a different legacy raw-body HMAC. Reconstructed normalized fields cannot authorize rebinding of an exact-byte domain; preserve the old evidence and hold."
+    }
+  ],
+  "future_integration_acceptance": [
+    "Actual parallel clients, both alias versions, separate processes, lost insert responses, partial publication crashes and CAS readback prove at most one canonical claim and side effect.",
+    "Signing validator rejects unknown/expired/compromised kid, forged issuance times, cross-tenant/environment reuse and invalid signatures; delayed delivery never bypasses authentication.",
+    "All-reference migration preserves exact canonical reference sets, private keyed comparisons, counts/statuses/versions and independent downstream readback.",
+    "Per-Deal guard remains unique and preserves confirmed/inflight references, raw binding, idle/busy semantics and sourceVersions; summary-terminal evidence does not prove guard acceptance.",
+    "Unauthorized code deployment, IAM changes, secret reads, service-account impersonation and arbitrary outbound exfiltration are denied at the separately controlled rotation-service boundary.",
+    "Rollback rehearsal preserves claims/tombstones and fails dark on incompatible old code; compromised keys are never restored."
+  ],
+  "implementation_gates": [
+    "Independent privacy/source/design review and owner acceptance of remaining design choices before production-code edits.",
+    "Authoritative stable tenant/entity/operation anchor, normalization specification, retention policy and recoverable-source inventory.",
+    "Datastore UNIQUE/CAS/atomic-alias strategy proven by fault/concurrency tests and independent readback; no presumed cross-row transaction.",
+    "Versioned integrity/equality and ownership-token signing contracts, replay/delay windows and incident retirement policy.",
+    "All graph readers/writers including report guards, analytics partitions/checkpoints and immutable baselines reviewed together.",
+    "Separately controlled deployment/IAM/key custody; provider choice, availability, costs and any new credentials/grants approved separately.",
+    "Exact environment-specific migration, containment, readback and rollback approval; original storage verification remains independent.",
+    "Publication review of public-safe source and evidence; FCC/FTC/state-law applicability remains a separate review."
+  ],
+  "guidance": [
+    {
+      "source": "NIST SP 800-57 Part 1 Rev. 5",
+      "url": "https://csrc.nist.gov/pubs/sp/800/57/pt1/r5/final",
+      "sections": [
+        "5.2",
+        "5.3-5.3.6",
+        "5.5",
+        "7.5",
+        "8.3.5",
+        "9.1-9.4"
+      ],
+      "status": "Final verified 2026-10-08; Rev. 6 remains draft."
+    },
+    {
+      "source": "OWASP Key Management Cheat Sheet",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Key_Management_Cheat_Sheet.html",
+      "sections": [
+        "Key Usage",
+        "Key Compromise and Recovery",
+        "General Guidelines and Considerations"
+      ]
+    },
+    {
+      "source": "OWASP Secrets Management Cheat Sheet",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html",
+      "sections": [
+        "2.3",
+        "2.4",
+        "2.6",
+        "2.7",
+        "3.1-3.3",
+        "4.3",
+        "9.2"
+      ]
+    }
+  ],
+  "claim_limits": "Application design informed by official guidance, not NIST approval, legal certification, HIPAA/SOC 2 certification or a zero-risk guarantee."
+}

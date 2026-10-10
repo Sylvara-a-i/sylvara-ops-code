@@ -6,19 +6,24 @@ const {canonicalJson}=require('../lib/facts');
 const sha=x=>crypto.createHash('sha256').update(typeof x==='string'?x:canonicalJson(x)).digest('hex');
 const json=x=>new Response(JSON.stringify(x),{headers:{'content-type':'application/json'}});
 const {stageReportPackage}=require('./helpers/cold-report-package');
+const {observeColdDelivery}=require('./helpers/cold-delivery-diagnostics');
 const {createReconciledReportFixture}=require('./helpers/reconciled-report-fixture');
 const {createCrmReportDeliveryTransport}=require('./helpers/crm-report-delivery-transport-fixture');
 const {requestEvidence}=require('./helpers/report-recipient-fixture');
 
 // This stages the reviewed release closure, not a deployed artifact. Both protected
-// factories use their defaults; only SDK HTTPS and provider fetch are intercepted.
+// factories execute their defaults; SDK HTTPS and provider fetch are intercepted.
+// Test-only wrappers observe delivery boundaries for failure diagnostics.
 // Seeded recipient approval is prior durable state, not Controller attestation proof.
 async function coldFixture(outcome){
  const ids={deal:'19000000001',account:'19000000002',contact:'19000000003'};
  const f=await createReconciledReportFixture({crmIdentity:ids});
  const pkg=stageReportPackage(f.runtime.config.sourceRevision),at=f.now(),until=at+3600000;
- let sdk,originalFetch;
+ let sdk,originalFetch,diagnostics;
  try{
+ diagnostics=observeColdDelivery({
+  handlers:require(path.join(pkg.analytics,'functions/analytics_sync/lib/report-delivery-handlers')),
+  projection:require(path.join(pkg.analytics,'functions/analytics_sync/lib/report-crm-projection')),now:f.now});
  const b={...f.identity,dealId:ids.deal,accountId:ids.account,contactId:ids.contact,
   configurationVersionId:'configuration_A',configurationVersion:f.scope.CONFIGURATION_VERSION,
   originalLeadId:'19000000004',intakeSubmissionId:'synthetic_journey_A'};
@@ -164,12 +169,12 @@ async function coldFixture(outcome){
  const boot=()=>require(path.join(pkg.controller,'worker-lib/report-bootstrap')).createProtectedWorkerReportOptions(environment,{now:f.now})
   .terminalDraftReconcilerFactory(sdk.app,runtimeConfig,runtimeStore);
  const controller=()=>require(path.join(pkg.controller,'lib/report-bootstrap')).createProtectedReportController({environment,now:f.now,fetchImpl})(sdk.app,runtimeConfig,runtimeStore);
- return {f,b,records,proof,wd,mail,sdk,boot,controller,actor,binding,connections,
-  counters:()=>({queries,checkpointWrites,puts,pdfs}),restore(){globalThis.fetch=originalFetch;sdk.restore();pkg.restore();}};
- }catch(error){if(originalFetch)globalThis.fetch=originalFetch;sdk?.restore();pkg.restore();throw error;}
+ return {f,b,records,proof,wd,mail,sdk,boot,controller,actor,binding,connections,diagnostics,
+  counters:()=>({queries,checkpointWrites,puts,pdfs}),restore(){diagnostics.restore();globalThis.fetch=originalFetch;sdk.restore();pkg.restore();}};
+ }catch(error){diagnostics?.restore();if(originalFetch)globalThis.fetch=originalFetch;sdk?.restore();pkg.restore();throw error;}
 }
 
-test('cold protected worker/default adapters publish private pair and deliver once; new Controller and worker resume exact state',async()=>{
+test('cold protected worker/default adapters publish private pair and deliver once; new Controller and worker resume exact state',async(t)=>{
  for(const outcome of ['accepted','unknown_send']){
   const x=await coldFixture(outcome);
   try{
@@ -201,6 +206,9 @@ test('cold protected worker/default adapters publish private pair and deliver on
    assert.equal((await x.boot()(x.f.identity)).deliveryStatus,'held');
    await assert.rejects(x.controller().handle({profile:'report_delivery_v1',action:'view',dealId:x.b.dealId},{actor:x.actor}));
    assert.equal(x.mail.sends,1);assert.equal(x.mail.uploads,1);
+  }catch(error){
+   t.diagnostic(JSON.stringify({kind:'cold_delivery_diagnostics_v1',outcome,...x.diagnostics.snapshot()}));
+   throw error;
   }finally{x.restore();}
  }
 });

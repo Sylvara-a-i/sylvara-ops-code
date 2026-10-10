@@ -17,6 +17,16 @@ function assertRecord(value, keys) {
   }
 }
 
+function assertDataArray(value) {
+  if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype ||
+      Reflect.ownKeys(value).length !== value.length + 1) deny();
+  // Validate every index before iteration can invoke an accessor or custom iterator.
+  for (let i = 0; i < value.length; i++) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, String(i));
+    if (!descriptor || !Object.hasOwn(descriptor, "value")) deny();
+  }
+}
+
 function assertIdentifier(value) {
   if (typeof value !== "string" || !value || value !== value.trim() ||
       /[\u0000-\u0020\u007f]/.test(value)) deny();
@@ -42,7 +52,8 @@ function assertCompanyIdentity(context, accountSelector) {
   assertRecord(context.contact, ["id", "accountId"]);
   assertIdentifier(context.contact.id);
   assertIdentifier(context.contact.accountId);
-  if (!Array.isArray(context.companyMappings) || context.companyMappings.length === 0) deny();
+  assertDataArray(context.companyMappings);
+  if (context.companyMappings.length === 0) deny();
   const matches = [];
   for (const mapping of context.companyMappings) {
     assertRecord(mapping, ["creatorAccountId", "crmAccountId", "active"]);
