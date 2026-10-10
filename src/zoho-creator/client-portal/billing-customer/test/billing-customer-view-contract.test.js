@@ -1,5 +1,6 @@
 "use strict";
 require("./billing-customer-history-view.test");
+require("./billing-customer-history-producer.test");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { prepareBillingCustomerView: prepare } = require("../billing-customer-view-contract");
