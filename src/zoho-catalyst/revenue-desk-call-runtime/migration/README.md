@@ -204,6 +204,26 @@ The supported public composition path is `executeFixedTargetMigration`. `createF
 
 Before any future apply, privately preserve fresh metadata, permissions, source and target counts, the exact contract, approved input digest, partition digests, dry-run summary, every conflict, fixed-target binding digest, transport revision, mutation approval, rollback owner, and recovery window. Independently capture the exact unique-constraint metadata for every target key and the quarantine conflict key, bind each metadata digest to the approved capture timestamp, and require the audit plane to read back the same current metadata before any write. Create separate mode-bound target bindings and approval digests for `apply` and `reconcile`; neither approval can be replayed across modes or redirected to a different target. Each invocation must begin inside its binding's maximum 15-minute approval window. If that window expires between batches, stop, recapture source and target prestate, recompute and separately approve both digests, and restart from `cursor: null`; the fresh target snapshot makes previously converged rows `already_present`. Implement and test the two private transport planes against the exact authorized Catalyst tools or SDK contracts; this repository does not provide them. After apply, run reconciliation from the beginning with the same immutable input. Preserve every legacy table, row, route, function, Job Pool, and binding until all batches independently match and a separate retirement packet is reviewed. Repository tests are not live migration evidence.
 
+## Offline report-header failure rehearsal
+
+`test/support/rotation-recovery-rehearsal.js` wraps the existing report-header
+rollout model without changing its evidence checks or the canonical-claim model.
+`observe({ phase, epoch, outcome })` records a synthetic `failed` or `ambiguous`
+observation for the next phase. This holds the attempt; ordinary `advance`
+cannot continue. Only explicit `reconcile` with the complete evidence required
+by that same phase can advance it. Rejected evidence alone remains distinct
+from a recorded operational failure. A hold does not prove containment.
+
+`restart()` is an in-memory crash/restart signal: it retains the last accepted
+prefix and holds the next phase for reconciliation, preserving an existing
+failure. It does not implement durable recovery or permit a fresh instance to
+prove prior progress. Outputs contain fixed status enums and `liveAuthority:
+false`, never the input plan, source labels, nested evidence or exception text.
+These test-only files are not package exports or runtime imports. No provider,
+credential, storage, retry, restore, dual-key overlap or activation operation is
+provided; quiesced single-key ordering and separate old-material retirement
+remain unchanged.
+
 ## Verification
 
 ```powershell
