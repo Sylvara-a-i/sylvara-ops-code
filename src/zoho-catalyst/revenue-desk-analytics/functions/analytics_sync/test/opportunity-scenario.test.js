@@ -329,6 +329,28 @@ test('missing or ineligible call evidence cannot be made eligible by a group cla
   }
 });
 
+test('bounded scenario cohorts include the end instant without changing successful totals', () => {
+  // Scenario cohorts use inclusive bounds; they are not adjacent calendar partitions.
+  const original = buildOpportunityScenario(fixture());
+  for (const offsetMs of [-1, 0]) {
+    const input = fixture();
+    input.cohort.qualifiedCalls[0].STARTED_AT = new Date(
+      Date.parse(input.cohort.period.endAtUtc) + offsetMs,
+    ).toISOString();
+    input.cohort.qualifiedCalls[0].SOURCE_MODIFIED_AT = input.evidence.review.reviewedAt;
+    assert.deepEqual(buildOpportunityScenario(bind(input)), original, `end offset ${offsetMs} ms`);
+  }
+});
+
+test('scenario calls starting one millisecond after the cohort end are invalid', () => {
+  const input = fixture();
+  input.cohort.qualifiedCalls[0].STARTED_AT = new Date(
+    Date.parse(input.cohort.period.endAtUtc) + 1,
+  ).toISOString();
+  input.cohort.qualifiedCalls[0].SOURCE_MODIFIED_AT = input.evidence.review.reviewedAt;
+  assert.throws(() => buildOpportunityScenario(input), { code: 'SCENARIO_CALL_INVALID' });
+});
+
 test('period, review and schema evidence must be explicit, valid and current for corrected facts', () => {
   for (const period of [null, {}, { startAtUtc: '2026-02-30T10:00:00.000Z', endAtUtc: '2026-08-31T12:30:00.000Z' },
     { startAtUtc: '2026-08-31T13:00:00.000Z', endAtUtc: '2026-08-31T12:30:00.000Z' }]) {
