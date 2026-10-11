@@ -10,6 +10,15 @@ const {createStorageDiagnostic,recordStorageDiagnostic,storageDiagnosticError,re
 const PROFILE='report_storage_qualification_v1',HASH=/^[a-f0-9]{64}$/,ID=/^[1-9][0-9]{2,29}$/;
 const sha=x=>crypto.createHash('sha256').update(typeof x==='string'?x:canonicalJson(x)).digest('hex');
 const exact=(x,keys)=>x&&typeof x==='object'&&!Array.isArray(x)&&Object.keys(x).sort().join(',')===keys.sort().join(',');
+// Only the ReportRuns insert ACK accepts these schema-pinned Boolean encodings.
+// Compare without rewriting the submitted row, ACK or independent readback.
+const REPORT_ACK_BOOLEAN_FIELDS=Object.freeze(['ActualEstimatedSeparated','CrossClientIsolationPassed',
+ 'DuplicateSendGuardPassed','ReportTotalsReconciled','AutoDeliveryEnabledAtRun']);
+function matchesReportAckField(field,expected,actual){
+ if(!REPORT_ACK_BOOLEAN_FIELDS.includes(field))return matchesStoredReportField(field,expected,actual);
+ if(typeof expected!=='boolean')return false;
+ return actual===expected||actual===(expected?'true':'false');
+}
 function held(){throw Object.assign(new Error('REPORT_STORAGE_QUALIFICATION_HELD'),{code:'REPORT_STORAGE_QUALIFICATION_HELD'});}
 /** Diagnostic only. A permanently consumed unique receipt admits one owner
  * across cold instances. Ambiguous acceptance never grants dispatch. Admission
@@ -125,7 +134,7 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
      if(!Array.isArray(accepted)||accepted.length!==1){validationFailure('report_ack','ack_cardinality');provenanceFailed=true;held();}
      const ack=accepted[0];projection(ack,'reportRuns','report_ack');
      const fields=Object.keys(row);
-     const mismatch=fields.find(k=>!matchesStoredReportField(k,row[k],ack[k]));
+     const mismatch=fields.find(k=>!matchesReportAckField(k,row[k],ack[k]));
      if(mismatch!==undefined){
       const expected=row[mismatch],actual=ack[mismatch];
       const reason=typeof actual===typeof expected&&!(expected===null&&actual!==null)?'field_value'

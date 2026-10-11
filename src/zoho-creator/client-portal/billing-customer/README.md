@@ -1,7 +1,7 @@
 # Billing customer read-context projection
 
 Status: **proposed source-only preparation**, synthetic tests. No authenticated
-portal, server adapter, provider call, durable grant, deployment or customer
+portal, live server adapter, provider call, durable grant, deployment or customer
 delivery is implemented. Passing the checks proves projected-fact consistency
 only. It never proves that an ordinary JavaScript payload is trusted.
 
@@ -190,6 +190,120 @@ versus empty, independent collections, explicit dates, owner/identity mismatches
 duplicate payments, source mutation, immutable outputs, failure statuses,
 currency provenance and suppression, unsafe amounts, exponent conflicts,
 non-enumerable data properties, hostile shapes/accessors, and zero side effects.
+
+## Offline history producer
+
+`billing-customer-history-producer.js` adds
+`produceBillingCustomerHistory(input, trusted, policy, get, limits)`. This is a
+preparatory adapter with a **synthetic transport protocol**, not a working portal
+billing feature or a qualified Zoho connector. It has no route, SDK, credential,
+implicit clock, persistence, logging, retry or write implementation. Evidence
+status: offline synthetic behavior only, 2026-10-10. No live access was tested.
+
+The first three arguments retain the existing history view's exact contracts.
+The producer calls that view with unknown evidence to check independent company,
+`billing.read` grant and organization/customer binding consistency **before any
+transport call**. The server must supply this authority; accepting `trusted`
+JSON from a request or deriving it from provider data remains unsafe. Inputs and
+limits are copied and frozen before asynchronous work. No binding means zero
+reads and an unknown customer. No principal resolver or new grant is supplied.
+
+`limits` is independently supplied server configuration, exactly
+`{ maxPages, pageSize, currencies }`: 1–100 pages per collection, 1–200 rows per
+page, and at most 100 unique `{ code, minorUnitExponent }` currency entries.
+Codes use three uppercase letters, exponents are 0–4. These bounds are local
+guardrails, not claims about provider limits. The currency allowlist must come
+from independently qualified metadata and accounting ownership; neither a
+request nor an invoice can add to it. An empty allowlist certifies no currency.
+
+The injected `get` function receives only a frozen descriptor:
+
+```js
+{
+  method: "GET", resource: "customer", // or "subscriptions", "invoices"
+  environment: "development", organizationId: "synthetic-org",
+  customerId: "synthetic-customer", cursor: null, pageSize: 50
+}
+```
+
+Every request pins the same organization/customer. No unscoped listing, caller
+filter, URL, token, offset or write client can be supplied through this API.
+The injected function itself must be controlled by the server; this module
+cannot enforce the internal behavior of arbitrary JavaScript callbacks.
+
+Every response has exactly `{ state, environment, organizationId, customerId,
+observedAt }` plus the following fields only when `state` is `available`:
+
+- `customer`: exactly `{ customerId, crmAccountId }`, for the customer read.
+- `items` and `nextCursor`, for subscriptions or invoices. A terminal page must
+  explicitly return `nextCursor: null`; a nonterminal cursor is an opaque 1–256
+  character ASCII letter/digit/underscore/hyphen string. This is not a provider
+  cursor schema. An empty nonterminal page rejects.
+
+Other states are `missing`, `unknown` or `error` and carry no rows. All envelopes,
+including failures, must match the pinned environment, organization and customer
+and have a canonical UTC observation within the view's freshness policy. A
+missing/failed customer leaves every collection unknown and stops further reads.
+Customer facts only corroborate the independent binding; they cannot create it.
+
+Each collection row includes its own `organizationId` and `customerId`, both
+checked. Subscription fields otherwise follow the history view: ID, plan code
+and label are required; missing/null status becomes `unknown` and missing/null
+dates become null. No next-billing date is inferred. Invoice ID and number are
+required; missing/null status and dates follow the same rule. Explicit unknown
+status strings outside the view's allowlist reject the collection.
+
+Invoice `money` may be missing/null (all money unknown), or exactly
+`{ unit, currency, total?, balance? }`. `unit` is `major`, `minor` or null.
+`currency` is null or the view's exact resource-specific currency shape and must
+match the independent currency allowlist. Missing/null amounts stay unknown.
+Major amounts are canonical nonnegative decimal **strings**, never floating-point
+numbers. Minor amounts are nonnegative safe integers or canonical integer
+strings. Normalization uses integer arithmetic, rejects unsafe ranges and
+nonzero precision beyond the currency exponent, and permits extra trailing zero
+decimal places only when lossless. Null unit cannot carry known amounts; null
+currency suppresses all money. No default currency, rounding, conversion,
+aggregate balance, ledger assertion or payment status is inferred.
+
+The result is frozen `{ view, outcomes }`. `view` comes from the unchanged
+`prepareBillingCustomerHistoryView`; the producer does not duplicate its display,
+identity or financial assertions. The oldest successful observation timestamp
+is retained. `outcomes` has customer/subscriptions/invoices/payments/integrations
+entries of `{ state, reason }`. It preserves explicit `missing`, `unknown` and
+`error` responses separately; successful complete reads use `complete`. Reasons
+are fixed non-sensitive labels (for example `transport-error`,
+`invalid-evidence`, `page-limit`), never provider messages or response bodies.
+Invalid authority/configuration rejects before reading. Transport exceptions and
+malformed evidence leave the affected view collection unknown. A later-page
+failure discards the entire accumulated collection; it cannot expose partial
+history or certify emptiness. Other collections remain independent. Duplicate
+IDs, repeated cursors/pages, overlong pages and page-budget exhaustion fail
+closed with no retries. Only explicit successful terminal pagination certifies
+an empty collection. Payments and integrations remain unknown/not-requested.
+
+Synthetic verification (also discovered by the canonical portal entrypoint):
+
+```text
+node --check src/zoho-creator/client-portal/billing-customer/billing-customer-history-producer.js
+node --test src/zoho-creator/client-portal/billing-customer/test/billing-customer-history-producer.test.js
+node --test src/zoho-creator/client-portal/company-settings-requests/test/service-area-request-contract.test.js
+```
+
+Before any live transport implementation, independently qualify the exact
+customer-filtered invoice and subscription read contracts, organization routing,
+provider success/error codes, stable complete pagination, per-record ownership,
+response currency provenance, decimal wire format, bounded timeouts/cancellation,
+read budgets, freshness and Books reconciliation. The available invoice
+connector customer-filter schema is limited: this seam deliberately chooses no
+live route or guessed filter. **Do not fetch all invoices and filter locally.**
+If exact customer-scoped reads cannot be proven, leave invoices unknown.
+Customer missing semantics, changes during pagination and permission revocation
+during an in-flight read also require provider/server acceptance. The composition
+root must recheck current authorization before eventual delivery; the frozen
+snapshot here is not a revocation system. Retain server-only visibility and
+renderer escaping gates. No deployment, live reads, grants, payment/integration
+collection, identity changes, rotation changes or storage work is included.
+Rollback is removing the source increment; nothing has been deployed.
 
 ## Next source increment: bounded review and confirmation
 

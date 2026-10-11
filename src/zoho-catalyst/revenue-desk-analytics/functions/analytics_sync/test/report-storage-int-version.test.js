@@ -119,9 +119,9 @@ test('canonical readback must retain exact expected version before duplicate con
   assert.equal(f.sdk.requests.length,5);assert.equal(f.sdk.requests.filter(r=>r.path.endsWith('/table/123456788/row')).length,1);
  }finally{f.sdk.restore();}
 });
-test('non-version boolean representation remains held',async()=>{
+test('noncanonical non-version boolean representation remains held',async()=>{
  const f=sequential({storageSchema:true,storageResponseTransform({path,data}){
-  if(path==='/table/123456788/row'&&Array.isArray(data))data[0].ActualEstimatedSeparated='false';
+  if(path==='/table/123456788/row'&&Array.isArray(data))data[0].ActualEstimatedSeparated='FALSE';
  }});try{await assert.rejects(f.make().handle(f.command,{actor:f.actor}),held);assert.equal(f.sdk.requests.length,4);}
  finally{f.sdk.restore();}
 });

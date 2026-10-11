@@ -5,6 +5,7 @@ const {fixture:network}=require('./helpers/report-run-sdk-fixture');
 const {canonicalJson}=require('../lib/facts');
 const {encodeStorageBinding}=require('../lib/report-storage-binding');
 const {createProtectedStorageQualification}=require('../lib/report-storage-qualification');
+const {createReportRunTransport}=require('../lib/report-run-transport');
 const {storageFailureDiagnostic}=require('../lib/report-storage-diagnostic');
 const {REPORT_FIELDS,RECEIPT_FIELDS,projectionDigest}=require('../lib/report-storage-capability');
 const sha=x=>crypto.createHash('sha256').update(typeof x==='string'?x:canonicalJson(x)).digest('hex');
@@ -21,7 +22,7 @@ function fixture(options={}){
   expectedProjectIdSha256:sha(binding.projectId),operatorIdHash:'operator_'+sha('synthetic')};
  const environment=()=>{const raw=JSON.stringify(binding);return {REPORT_CONTROLLER_FUNCTION_ID:'123456786',REPORT_DEPLOYMENT_ID:'synthetic_controller',DEPLOYMENT_ENVIRONMENT:'development',SOURCE_REVISION:binding.sourceRevision,
   ...(options.multipart?{...encodeStorageBinding(raw,{partSize:options.multipart,format:options.compact?'tuple-v1':'json'}).parts,REPORT_STORAGE_QUALIFICATION_JSON:encodeStorageBinding(raw,{partSize:options.multipart,format:options.compact?'tuple-v1':'json'}).marker}:{REPORT_STORAGE_QUALIFICATION_JSON:raw}),REPORT_STORAGE_QUALIFICATION_SHA256:sha(raw)};};
- const factory=()=>createProtectedStorageQualification({environment:environment(),now:()=>at});
+ const factory=()=>createProtectedStorageQualification({environment:environment(),now:()=>at,transportFactory:options.transportFactory});
  const command={profile:'report_storage_qualification_v1',action:'qualify_storage'},actor={kind:'internal_controller',identity:config.operatorIdHash};
  return {sdk,binding,config,environment,factory,make:()=>factory()(sdk.app,config),command,actor,advance:n=>at+=n};
 }
@@ -47,6 +48,74 @@ test('provider insert rejection survives later readback as closed numeric status
  }finally{f.sdk.restore();}
 });
 function sequential(options={}){const f=fixture(options);f.binding.schemaVersion=5;return f;}
+const booleanFields=['ActualEstimatedSeparated','CrossClientIsolationPassed','DuplicateSendGuardPassed',
+ 'ReportTotalsReconciled','AutoDeliveryEnabledAtRun'];
+// The diagnostic submits false for all five columns. Exercise the decoded ACK
+// boundary as well as the wire so objects cannot hide behind JSON coercion.
+function ackTransport(transform){return options=>{
+ const io=createReportRunTransport(options);
+ return {...io,async insert(row,options){const accepted=await io.insert(row,options);transform(accepted[0],row);return accepted;}};
+};}
+for(const strings of [false,true])test('Boolean ACK preserves payload, acknowledgement and stored row: strings='+strings,async()=>{
+ const submitted=[],observed=[];
+ const f=sequential({storageSchema:true,providerTransport({path,payload}){
+  if(path==='/table/123456788/row')submitted.push(structuredClone(payload[0]));
+ },storageBodyTransform({path,data}){
+  if(strings&&path==='/table/123456788/row'&&Array.isArray(data)){
+   data=structuredClone(data);for(const field of booleanFields)data[0][field]=String(data[0][field]);
+  }
+  return JSON.stringify({data});
+ },transportFactory:ackTransport((ack,row)=>{
+  observed.push({ack,row,ackBefore:structuredClone(ack),rowBefore:structuredClone(row)});
+  Object.freeze(ack);Object.freeze(row);
+ })});
+ try{const result=await f.make().handle(f.command,{actor:f.actor});
+  assert.equal(result.status,'storage_sequential_duplicate_rejected');assert.equal(f.sdk.requests.length,7);
+  assert.equal(result.concurrencyProven,false);assert.equal(result.qualificationAuthority,false);assert.equal(result.deliveryAuthority,false);
+  assert.equal(observed.length,1);assert.equal(submitted.length,2);
+  const {ack,row,ackBefore,rowBefore}=observed[0],stored=[...f.sdk.rows.values()][0];
+  assert.deepEqual(ack,ackBefore);assert.deepEqual(row,rowBefore);assert.deepEqual(row,submitted[0]);
+  for(const field of booleanFields){
+   assert.equal(ack[field],strings?'false':false);assert.equal(row[field],false);assert.equal(stored[field],false);
+   assert.equal(submitted[1][field],false);
+  }
+  assert.equal(stored.ReportPayloadJson,row.ReportPayloadJson);assert.equal(ack.ReportPayloadJson,row.ReportPayloadJson);
+  assert.equal(canonicalJson(JSON.parse(row.ReportPayloadJson)),row.ReportPayloadJson);
+  assert.equal(f.sdk.rows.size,1);assert.equal(f.sdk.receipts.size,1);
+ }finally{f.sdk.restore();}
+});
+const invalidBooleans=[['opposite Boolean',true],['opposite string','true'],['uppercase','FALSE'],['mixed case','False'],
+ ['leading space',' false'],['trailing space','false '],['numeric string','0'],['empty string',''],
+ ['zero',0],['one',1],['null',null],['undefined',undefined],['array',[]],['object',{}],['boxed Boolean',new Boolean(false)]];
+for(const field of booleanFields)for(const [label,value]of invalidBooleans)test('Boolean ACK rejects '+field+': '+label,async()=>{
+ const f=sequential({storageSchema:true,transportFactory:ackTransport(ack=>{ack[field]=value;})});
+ try{const handler=f.make();let failure;try{await handler.handle(f.command,{actor:f.actor});}catch(error){failure=error;}
+  assert.equal(failure?.code,held.code);assert.equal(storageFailureDiagnostic(failure).firstValidationFailure.location,'report_ack');
+  assert.equal(f.sdk.requests.length,4);assert.equal(f.sdk.rows.size,1);assert.equal(f.sdk.receipts.size,1);
+  await assert.rejects(handler.handle(f.command,{actor:f.actor}),held);assert.equal(f.sdk.requests.length,4);
+ }finally{f.sdk.restore();}
+});
+test('Boolean ACK comparison never invokes object coercion',async()=>{
+ let calls=0;const value={[Symbol.toPrimitive](){calls++;throw Error('coercion forbidden');}};
+ const f=sequential({storageSchema:true,transportFactory:ackTransport(ack=>{ack.ActualEstimatedSeparated=value;})});
+ try{await assert.rejects(f.make().handle(f.command,{actor:f.actor}),held);
+  assert.equal(calls,0);assert.equal(f.sdk.requests.length,4);
+ }finally{f.sdk.restore();}
+});
+for(const field of booleanFields)test('lowercase Boolean ACK does not relax independent readback: '+field,async()=>{
+ const f=sequential({storageSchema:true,storageBodyTransform({path,data}){
+  data=structuredClone(data);
+  if(path==='/table/123456788/row'&&Array.isArray(data))for(const name of booleanFields)data[0][name]=String(data[0][name]);
+  if(path==='/query'&&Array.isArray(data))for(const item of data)if(item.ReportRuns)item.ReportRuns[field]='false';
+  return JSON.stringify({data});
+ }});
+ try{const handler=f.make();let failure;try{await handler.handle(f.command,{actor:f.actor});}catch(error){failure=error;}
+  assert.equal(failure?.code,held.code);
+  assert.deepEqual(storageFailureDiagnostic(failure).firstValidationFailure,{location:'report_row',reason:'readback_mismatch'});
+  assert.equal(f.sdk.requests.length,5);assert.equal(f.sdk.requests.filter(r=>r.path.endsWith('/table/123456788/row')).length,1);
+  await assert.rejects(handler.handle(f.command,{actor:f.actor}),held);assert.equal(f.sdk.requests.length,5);
+ }finally{f.sdk.restore();}
+});
 test('protected sequential diagnostic rejects duplicate in seven dispatches without concurrency authority',async()=>{
  const f=sequential({storageSchema:true});try{const result=await f.make().handle(f.command,{actor:f.actor});
   assert.equal(result.status,'storage_sequential_duplicate_rejected');assert.equal(result.concurrencyProven,false);
@@ -155,9 +224,9 @@ test('closed report acknowledgement diagnostic: different creator',async()=>{
   assert.equal(d.decodeFailure,'none');assert.equal(d.decodeDataType,'array');
  }finally{f.sdk.restore();}
 });
-test('closed report acknowledgement diagnostic: string boolean',async()=>{
+test('closed report acknowledgement diagnostic: uppercase boolean',async()=>{
  const f=sequential({storageSchema:true,storageBodyTransform:({path,data})=>{
-  if(path==='/table/123456788/row'){data=structuredClone(data);const row=data[0];row.ActualEstimatedSeparated=String(row.ActualEstimatedSeparated);}
+  if(path==='/table/123456788/row'){data=structuredClone(data);const row=data[0];row.ActualEstimatedSeparated=String(row.ActualEstimatedSeparated).toUpperCase();}
   return JSON.stringify({status:'success',data});
  }});try{let failure;try{await f.make().handle(f.command,{actor:f.actor});}catch(e){failure=e;}
   assert.equal(failure?.code,held.code);const d=storageFailureDiagnostic(failure);
