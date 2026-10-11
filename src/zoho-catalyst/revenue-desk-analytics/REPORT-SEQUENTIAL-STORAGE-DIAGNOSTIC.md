@@ -23,8 +23,14 @@ These observations do not change response acceptance, request budgets, cancellat
 
 Independent Development readback observed canonical decimal strings for the INT-schema `SchemaVersion` and `RD_REPORT_VERSION` columns. The original insert acknowledgement representation was not retained, so this observation does not prove an earlier acknowledgement failure's cause or qualify storage.
 
-For these two columns only, acknowledgement and independent readback must equal the submitted positive int32 expectation, either as that exact number or as `String(expected)`. Whitespace, signs, leading zeros, decimal/exponent strings, differing values and noninteger or out-of-range values are rejected. Other columns remain strictly equal. The comparison never rewrites the acknowledgement, stored row, payload bytes or hashes.
+For these two columns only, acknowledgement and independent readback must equal the submitted positive int32 expectation, either as that exact number or as `String(expected)`. Whitespace, signs, leading zeros, decimal/exponent strings, differing values and noninteger or out-of-range values are rejected. Readback of other columns remains strictly equal. The comparison never rewrites the acknowledgement, stored row, payload bytes or hashes.
 
 The existing successor decoder uses broader numeric coercion for schema projection; this contract deliberately does not adopt it. Parsed JSON numbers retain their numeric value rather than raw token spelling, so numeric `2.0` and `2e0` are indistinguishable from numeric `2`; string forms remain rejected. This compatibility preserves semantic version equality without granting execution, retry, concurrency, qualification or delivery authority.
 
 The immutable first validation failure records only closed location/reason enums for projection, row/creator and field checks. No values, arbitrary field names or identifiers enter this diagnostic.
+
+# Exact Boolean insert acknowledgement representation
+
+The ReportRuns insert acknowledgement accepts the submitted Boolean or its exact lowercase `true`/`false` string for five schema-pinned columns: `ActualEstimatedSeparated`, `CrossClientIsolationPassed`, `DuplicateSendGuardPassed`, `ReportTotalsReconciled` and `AutoDeliveryEnabledAtRun`. The expected value must itself be a Boolean. Opposite values, numbers, whitespace, mixed case, null and object/array forms fail the existing acknowledgement check before further I/O.
+
+This comparison applies only to the insert acknowledgement. Independent readback still requires native Boolean equality; submitted rows, acknowledgement objects, payload bytes and hashes are unchanged. Other acknowledgement fields retain their existing checks. This compatibility does not change operation counts, replay handling, evidence scope or the qualification and delivery holds described above.
