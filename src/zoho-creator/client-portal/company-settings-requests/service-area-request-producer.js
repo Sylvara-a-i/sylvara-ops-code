@@ -169,7 +169,14 @@ async function produceTimedServiceAreaRequest(input, requestId, policy, services
       return readPolicy({ expectedEnvironment: config.expectedEnvironment,
         expectedOrganizationId: config.expectedOrganizationId, maxAgeMs: config.maxAgeMs, asOf });
     }
-    let identity, authorizationObservedAt;
+    let identity, authorizationObservedAt, finalObservations;
+    function finalCheck() {
+      const finalPolicy = limits(clock());
+      for (const observedAt of finalObservations) {
+        checkScopeAndFreshness({ environment: config.expectedEnvironment,
+          organizationId: config.expectedOrganizationId, observedAt }, finalPolicy);
+      }
+    }
     async function authorize() {
       const began = instant(clock());
       const raw = await callbacks.readAuthorization();
@@ -213,18 +220,18 @@ async function produceTimedServiceAreaRequest(input, requestId, policy, services
       const finalAuthorization = await authorize();
       const prepared = prepareOfflineRequestBinding(client, { ...finalAuthorization,
         crmContacts: [contact.fact], crmAccounts: [account.fact] }, { requestId, issuedAt });
-      const finalPolicy = limits(clock());
-      for (const result of [contact, account, { observedAt: authorizationObservedAt }]) {
-        checkScopeAndFreshness({ environment: config.expectedEnvironment,
-          organizationId: config.expectedOrganizationId, observedAt: result.observedAt }, finalPolicy);
-      }
+      finalObservations = Object.freeze([contact.observedAt, account.observedAt, authorizationObservedAt]);
+      finalCheck();
       return prepared;
     }
     const timeout = new Promise((_, reject) => {
       timer = setTimeout(() => { expired = true; reject(new TypeError("Invalid service-area read evidence")); },
         Math.max(0, elapsedDeadline - performance.now()));
     });
-    return await Promise.race([run(), timeout]);
+    const prepared = await Promise.race([run(), timeout]);
+    // Promise resolution introduces another continuation window after run's check.
+    finalCheck();
+    return prepared;
   } catch {
     deny();
   } finally {

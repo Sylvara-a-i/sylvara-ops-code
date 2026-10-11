@@ -165,3 +165,41 @@ test("caller timestamps protocol confusion forged selectors and extra fields fai
     assert.equal(f.reads.length, 0);
   }
 });
+
+test("exported producer rechecks queued deadline clock regression and stale evidence after the race await", async () => {
+  for (const mutate of [
+    f => { f.time = f.start + f.policy.maxDurationMs; },
+    f => { f.time--; },
+    f => { f.time += f.policy.maxAgeMs; },
+  ]) {
+    const f = fixture();
+    let clockCalls = 0;
+    const now = f.services.now;
+    // Receipt builders also call now; detect the synchronous preparation check
+    // using completed authorization count, then queue after its sampled value.
+    f.services.now = () => {
+      const value = now();
+      if (f.authorizations === 3 && ++clockCalls === 3) queueMicrotask(() => mutate(f));
+      return value;
+    };
+    await assert.rejects(f.run, TypeError);
+    assert.equal(f.reads.length, 2);
+  }
+});
+
+test("elapsed deadline includes microtask work between internal preparation and exported return", async () => {
+  const f = fixture();
+  f.policy.maxDurationMs = 100;
+  let finalClockCalls = 0;
+  f.services.now = () => {
+    if (f.authorizations === 3 && ++finalClockCalls === 3) {
+      queueMicrotask(() => {
+        const until = performance.now() + 150;
+        while (performance.now() < until) { /* Synthetic blocked event-loop window. */ }
+      });
+    }
+    return new Date(f.start).toISOString();
+  };
+  await assert.rejects(f.run, TypeError);
+  assert.equal(f.reads.length, 2);
+});
