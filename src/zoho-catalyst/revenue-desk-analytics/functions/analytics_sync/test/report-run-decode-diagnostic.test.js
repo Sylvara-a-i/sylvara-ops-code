@@ -1,16 +1,17 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
 const {Writable,PassThrough}=require('node:stream');
+const {performance}=require('node:perf_hooks');
 const {createReportRunTransport}=require('../lib/report-run-transport');
 const diag=require('../lib/report-storage-diagnostic');
 const key='a'.repeat(64),sql=`SELECT * FROM ReportRuns WHERE IdempotencyKey = 'revenue-desk-report-v1:${key}' LIMIT 2`;
-async function run(body,{headers={'content-type':'application/json'},enabled=true,stall=false,timeoutMs=100,blockMs=0,authorityHeld=false}={}){
+async function run(body,{headers={'content-type':'application/json'},enabled=true,stall=false,timeoutMs=100,afterResponse=()=>{},authorityHeld=false}={}){
  const tracker=diag.createStorageDiagnostic();let dispatches=0,received=false;
  const app={async authenticateRequest(){}};
  const createClient=()=>({send(request){return new Promise(resolve=>{
   const sink=new Writable({write(_chunk,_encoding,done){done();},final(done){dispatches++;done();
    if(stall)return;
-   queueMicrotask(()=>{const stream=new PassThrough();stream.statusCode=200;stream.headers=headers;stream.on('error',()=>{});sink.emit('response',stream);received=true;resolve({statusCode:200,data:stream});stream.end(body);if(blockMs){const end=performance.now()+blockMs;while(performance.now()<end){}}});}});
+   queueMicrotask(()=>{const stream=new PassThrough();stream.statusCode=200;stream.headers=headers;stream.on('error',()=>{});sink.emit('response',stream);received=true;resolve({statusCode:200,data:stream});stream.end(body);afterResponse();});}});
   sink.on('error',()=>{});request.data.pipe(sink);
  });}});
  const transport=createReportRunTransport({app,createClient,timeoutMs,storageDiagnostic:tracker,storageProviderDiagnostics:enabled,storageAssertActive:()=>{if(authorityHeld&&received)throw Error('private guard detail');}});
@@ -26,8 +27,13 @@ for(const [data,bucket]of [[[],'zero'],[[{}],'one'],[[{},{}],'multiple']])test('
 for(const [header,expected]of [['application/json; charset=UTF-8','json'],['text/plain','text'],['text/html','html'],['private-sensitive-header','other']])test('content type maps to '+expected,async()=>{const r=await run('{"data":[]}',{headers:{'content-type':header}});assert.equal(r.diagnostic.responseContentType,expected);assert(!JSON.stringify(r.diagnostic).includes('private-sensitive-header'));assert.equal(r.diagnostic.requestApiVersion,'v1');});
 test('header getters are never called or serialized',async()=>{let called=0;const headers={};Object.defineProperty(headers,'content-type',{get(){called++;throw Error('secret')}});const r=await run('{"data":[]}',{headers});assert.equal(called,0);assert.equal(r.diagnostic.responseContentType,'other');});
 test('missing headers preserve absent classification before response or cancellation',async()=>{const r=await run('',{stall:true,timeoutMs:5});assert.equal(r.diagnostic.responseContentType,'absent');assert.equal(r.diagnostic.firstDecodeFailure.responseContentType,'absent');});
-// Hold the cancellation timer so this case exercises the monotonic expiry guard, not scheduler ordering.
-test('deadline expiry is distinct from response shape',async context=>{context.mock.timers.enable({apis:['setTimeout']});const r=await run('{"data":[]}',{timeoutMs:1,blockMs:10});assert(r.error);assert.equal(r.diagnostic.decodeDeadline,'expired');assert.equal(r.dispatches,1);});
+// Keep both clocks controlled so expiry occurs after the response, never before dispatch.
+test('deadline expiry is distinct from response shape',async context=>{
+ let now=0;context.mock.timers.enable({apis:['setTimeout']});context.mock.method(performance,'now',()=>now);
+ const r=await run('{"data":[]}',{timeoutMs:1,afterResponse:()=>{now=1;}});
+ assert(r.error);assert.equal(r.diagnostic.decodeDeadline,'expired');assert.equal(r.dispatches,1);
+ assert.equal(r.diagnostic.responseContentType,'json');assert.equal(r.diagnostic.decodeJson,'not_attempted');
+});
 test('cancellation stays single dispatch without retry',async()=>{const r=await run('',{timeoutMs:5,stall:true});assert(r.error);assert.equal(r.diagnostic.decodeDeadline,'cancelled');assert.equal(r.dispatches,1);});
 test('authority guard failure is distinct from local timeout',async()=>{const r=await run('{"data":[]}',{authorityHeld:true});assert(r.error);assert.equal(r.diagnostic.decodeDeadline,'authority_held');assert.equal(r.dispatches,1);});
 test('ordinary transport does not emit additional closed diagnostic fields',async()=>{const r=await run('{"data":[]}',{enabled:false});assert.equal(r.diagnostic.decodeUtf8,undefined);assert.equal(r.diagnostic.requestApiVersion,undefined);assert.deepEqual(r.result,[]);});
